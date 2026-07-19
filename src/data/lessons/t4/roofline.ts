@@ -1,0 +1,160 @@
+import type { Lesson } from '../types'
+
+const lesson: Lesson = {
+  id: 't4.l3',
+  slug: 'roofline',
+  trackId: 't4',
+  index: 3,
+  title: 'The Roofline Model',
+  minutes: 30,
+  hook: 'Arithmetic intensity in, bound classification out: why decode is bandwidth-bound, prefill is compute-bound, and how to prove it in 4 lines of math.',
+  exercise: 'sim',
+  simId: 'sim-roofline',
+  blocks: [
+    {
+      type: 'prose',
+      md: `"Is this kernel compute-bound or memory-bound?" is the most useful question in performance engineering, and most engineers answer it by vibes. The **roofline model** answers it with arithmetic: two hardware numbers, one workload number, one division. It's the single most-used analysis in GPU work, the reason T0.L1 could claim "decode is bandwidth-bound" with a straight face — and after this lesson you will be able to classify any workload on any chip in about a minute, on a napkin.
+
+The model (Williams, Waterman, Patterson, 2009): a kernel's performance is limited by whichever runs out first — the chip's peak **compute** or its peak **memory bandwidth**. Plot both limits against **arithmetic intensity** (FLOPs per byte moved) and you get a roof-shaped ceiling: a sloped bandwidth wall on the left, a flat compute ceiling on the right.`,
+    },
+    {
+      type: 'prose',
+      md: `## The three numbers and one division
+
+**Arithmetic intensity (AI)** = \`FLOPs executed / bytes moved from DRAM\`. It is a property of the *kernel and its data layout*, not of the chip. The **ridge point** of the machine is \`peak_FLOPs / peak_bandwidth\` — the AI at which the two limits meet. On an H100 in FP16: \`~990 TFLOPS / 3.35 TB/s ≈ 295 FLOP/byte\`. (For FP8: ~2× that.)
+
+- \`AI < ridge\` → **bandwidth-bound**: attainable performance = \`AI × bandwidth\`. More FLOPs won't help; *fewer bytes or more bytes/second* will.
+- \`AI > ridge\` → **compute-bound**: attainable = \`peak FLOPs\`. Bandwidth is irrelevant; better math (tensor cores, lower precision) is the only lever.
+
+\`\`\`text
+attainable_perf = min( peak_FLOPs , AI × peak_bandwidth )
+\`\`\`
+
+That's the whole model. The craft is computing AI honestly — the bytes are *moved* bytes (cache misses, not loads), which is why tiling (T4.L6) raises AI and why the roofline is really a *cache-efficiency* model in disguise.`,
+    },
+    {
+      type: 'diagram',
+      caption: 'fig 1 — the roof: bandwidth slope meets compute ceiling',
+      height: 54,
+      nodes: [
+        { id: 'slope', x: 2, y: 30, w: 40, h: 8, label: 'perf = AI × BW', sub: 'memory-bound region', color: '#5CA8FF' },
+        { id: 'roof', x: 56, y: 6, w: 40, h: 8, label: 'perf = peak FLOPs', sub: 'compute-bound region', color: '#A78BFA' },
+        { id: 'ridge', x: 44, y: 16, w: 12, h: 10, label: 'ridge', sub: '~295 F/B', color: '#3EF2A4' },
+        { id: 'decode', x: 6, y: 44, w: 26, h: 8, label: 'decode · AI ≈ 0.5–4', sub: 'bandwidth wall', color: '#FB7185' },
+        { id: 'prefill', x: 64, y: 44, w: 30, h: 8, label: 'prefill/matmul · AI ≈ 100+', sub: 'at the compute roof', color: '#3EF2A4' },
+      ],
+      edges: [
+        { from: 'slope', to: 'ridge' },
+        { from: 'ridge', to: 'roof' },
+        { from: 'decode', to: 'slope' },
+        { from: 'prefill', to: 'roof' },
+      ],
+      steps: [
+        { caption: 'Left of the ridge, the bandwidth slope rules: performance is AI × 3.35 TB/s, period. The ALUs are starved.', active: ['slope'] },
+        { caption: 'Right of the ridge, the flat roof: you\'re doing enough math per byte that FLOPs, not bandwidth, are the binding constraint.', active: ['roof'] },
+        { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: ~5 ms/token is physics, not engineering.', active: ['decode'] },
+        { caption: 'PREFILL and big-batch matmul live at the roof: each weight participates in hundreds of MACs (batch × seq), AI ≈ 100–1000+. This is why prefill and decode have different economics, metrics (TTFT vs ITL), and optimizations.', active: ['prefill'] },
+      ],
+    },
+    {
+      type: 'statline',
+      stats: [
+        { value: '~295 F/B', label: 'H100 ridge (FP16)', hint: '990 TFLOPS ÷ 3.35 TB/s. Below this AI you are buying bandwidth; above it, math.' },
+        { value: '~2 FLOP/B', label: 'decode AI @ b=1', hint: '2 FLOPs per parameter per token ÷ 2 bytes per FP16 weight. The wall.' },
+        { value: '~1000+', label: 'big matmul AI', hint: 'Each weight reused batch×seq times — deep compute territory.' },
+        { value: '×N', label: 'batch lever', hint: 'Batching N sequences multiplies decode AI by N — weights amortized across the batch.' },
+      ],
+    },
+    {
+      type: 'prose',
+      md: `## The two case studies that run T5
+
+**Decode, batch 1, 8B FP16 model.** Per token: \`~2 FLOPs × 8e9 params = 16 GFLOPs\` of math against \`~16 GB\` of weight reads (plus KV). AI ≈ 1 FLOP/byte — *300× below* the ridge. Attainable rate = \`3.35 TB/s ÷ 16 GB ≈ 200 tokens/s\` — the ALUs could do the math in microseconds; the memory system takes 5 ms. **This is the entire economics of chat inference.** And now the levers announce themselves: **batching** (N sequences share each weight read → AI × N → the single most important throughput lever), **quantization** (FP8/INT4 cuts bytes per weight 2–4× → directly multiplies the rate, T4.L7), **speculative decoding** (verify K drafted tokens per weight read → AI × K, T5.L7).
+
+**Prefill.** Processing a 2k-token prompt: each weight participates in \`2 × seq_len\` FLOPs (once per token position), so AI ≈ seq_len × (params/bytes) ≈ thousands — far right of the ridge. Prefill is **compute-bound**: it saturates tensor cores beautifully, and its time (TTFT) scales with FLOPs, not bytes. This is also why **chunked prefill** (mixing prefill chunks into decode batches) is a throughput optimization: it backfills the decode batch's idle ALUs with compute-bound work. Different roof, different medicine.`,
+    },
+    {
+      type: 'callout',
+      variant: 'analogy',
+      md: `The roofline is your **Little's Law moment** — the simple queueing formula that answers "why is the system slow: arrivals or service time?" in one division. AI plays the role of utilization: below the ridge, the system is I/O-bound (your classic "the DB is the bottleneck" service); above it, CPU-bound. And like Little's Law, the roofline won't tell you *how* to fix it — it tells you which half of the machine to stop optimizing. That alone kills half the bad ideas in any perf review.`,
+    },
+    {
+      type: 'callout',
+      variant: 'warning',
+      md: `Three honesty checks before quoting a roofline. **(1)** Count *DRAM* bytes, not logical loads — L2 hits change the denominator (tiling's entire purpose). **(2)** Use the *right* peak: vendor TFLOPs assume tensor-core MMA with perfect pipelining; your kernel's real ceiling may be 60% of that. **(3)** The model ignores latency: at small sizes, kernels are *latency/occupancy-bound* below both roofs (launch overheads, too few warps — T4.L4). Roofline classifies regimes; it doesn't model everything.`,
+    },
+    {
+      type: 'prose',
+      md: `## In the playground
+
+The simulator is a live roofline: drag kernels onto the plot, sweep batch size and precision, and watch decode slide along the bandwidth slope while prefill pins itself to the roof. Compute each workload's AI yourself first — the point is to leave with the napkin skill, not the chart.`,
+    },
+    {
+      type: 'exercise',
+      simId: 'sim-roofline',
+      title: 'Roofline playground',
+      tasks: [
+        'Plot decode at batch 1 on the H100 roofline (AI ≈ 1 F/B): read the attainable tokens/s off the bandwidth slope.',
+        'Sweep batch 1 → 256: watch AI (and throughput) ride the slope until the compute roof interrupts — find the knee.',
+        'Switch weights FP16 → FP8 → INT4: note the ridge moves and the decode rate multiplies.',
+        'Plot prefill (seq 2048) and confirm it sits at the compute roof; explain TTFT in FLOPs terms.',
+      ],
+      note: `You have now derived, from two hardware numbers, why batching is the king lever, why quantization is a bandwidth multiplier, why prefill and decode need different metrics, and where chunked prefill comes from. T5 assumes you can do this arithmetic in your head.`,
+    },
+    {
+      type: 'quiz',
+      questions: [
+        {
+          q: 'Arithmetic intensity is defined as…',
+          options: [
+            'FLOPs per second',
+            'FLOPs executed per byte moved from DRAM — a property of the kernel and its data layout',
+            'Bytes per cache line',
+            'Instructions per clock',
+          ],
+          correct: [1],
+          explanation:
+            'AI measures reuse: how much math each fetched byte supports. High AI amortizes the memory system; low AI starves the ALUs. It\'s computed against actual DRAM traffic, so caches/tiling raise it.',
+        },
+        {
+          q: 'On an H100 (~990 FP16 TFLOPS, 3.35 TB/s), a kernel with AI = 1 FLOP/byte is…',
+          options: [
+            'Compute-bound',
+            'Bandwidth-bound: attainable ≈ 1 × 3.35 TFLOP/s — about 0.3% of peak compute',
+            'Latency-bound',
+            'At the ridge point',
+          ],
+          correct: [1],
+          explanation:
+            'The ridge is ~295 F/B; AI=1 is 300× left of it. Performance is the bandwidth slope: AI × BW. This is batch-1 decode — the physics floor behind the 5 ms/token number.',
+        },
+        {
+          q: 'Why does batching multiply decode throughput (up to a point)?',
+          options: [
+            'GPUs prefer even batch sizes',
+            'Each weight read from HBM is amortized across N sequences, multiplying arithmetic intensity N-fold — sliding decode up the bandwidth slope toward the compute roof',
+            'Batching reduces the KV cache size',
+            'It eliminates kernel launch overhead',
+          ],
+          correct: [1],
+          explanation:
+            'Weights dominate decode bytes; serving N sequences per weight read raises AI by N. The "knee" arrives when AI crosses the ridge and you become compute-bound — the batch-size sweet spot every engine hunts.',
+        },
+        {
+          q: 'Prefill is compute-bound while decode is bandwidth-bound because…',
+          options: [
+            'Prefill uses bigger matrices only',
+            'In prefill each weight is reused across all prompt positions (AI ≈ seq_len-scaled, right of the ridge); decode re-reads all weights per single token (AI ≈ 1, far left)',
+            'Decode runs on a different GPU',
+            'Prefill doesn\'t use the KV cache',
+          ],
+          correct: [1],
+          explanation:
+            'Same weights, different reuse. The roofline classifies them into different regimes — hence TTFT (compute-limited) vs ITL (bandwidth-limited) metrics and different optimization playbooks (chunked prefill vs quantization/speculation).',
+        },
+      ],
+    },
+  ],
+}
+
+export default lesson

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 32" width="160" height="32" role="img" aria-label="kernelspace">
+  <text x="5" y="22" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="14" font-weight="500" fill="#E8EEF6">[</text>
+  <rect x="15" y="8" width="9" height="16" rx="1" fill="#3EF2A4"/>
+  <text x="28" y="22" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="14" font-weight="500" fill="#E8EEF6">]_kernelspace</text>
+</svg>

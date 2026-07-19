@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Kernelspace is dark-only: shadcn vars mapped to the palette (design.md §3) */
+    --background: 220 30% 4%;          /* ink */
+    --foreground: 214 44% 94%;         /* text-1 */
+    --card: 218 31% 7%;                /* surface-1 */
+    --card-foreground: 214 44% 94%;
+    --popover: 218 31% 7%;
+    --popover-foreground: 214 44% 94%;
+    --primary: 154 87% 60%;            /* accent mint */
+    --primary-foreground: 159 72% 8%;  /* #06251A */
+    --secondary: 219 33% 10%;          /* surface-2 */
+    --secondary-foreground: 214 44% 94%;
+    --muted: 219 33% 10%;
+    --muted-foreground: 215 20% 70%;   /* text-2 */
+    --accent: 218 33% 14%;             /* surface-3 (shadcn hover surfaces) */
+    --accent-foreground: 214 44% 94%;
+    --destructive: 354 100% 68%;
+    --destructive-foreground: 220 30% 4%;
+    --border: 214 29% 17%;             /* line */
+    --input: 214 29% 17%;
+    --ring: 154 87% 60%;               /* accent mint */
+    --radius: 0.625rem;
+    --sidebar-background: 218 31% 7%;
+    --sidebar-foreground: 214 44% 94%;
+    --sidebar-primary: 154 87% 60%;
+    --sidebar-primary-foreground: 159 72% 8%;
+    --sidebar-accent: 218 33% 14%;
+    --sidebar-accent-foreground: 214 44% 94%;
+    --sidebar-border: 214 29% 17%;
+    --sidebar-ring: 154 87% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ink font-sans text-body text-text-2 antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display text-text-1;
+  }
+
+  ::selection {
+    background: rgba(62, 242, 164, 0.25);
+  }
+
+  :focus-visible {
+    outline: 2px solid #3ef2a4;
+    outline-offset: 2px;
+  }
+
+  /* Noise overlay to kill banding (design.md §3.4) */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0.02;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Wordmark caret blink (used by .wordmark-cursor; emitted unconditionally) */
+@keyframes caret-blink {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+}
+
+@layer components {
+  /* Mono hex-address section label, e.g. `0x01 — the problem` */
+  .section-label {
+    @apply font-mono text-label uppercase tracking-[0.10em] text-accent;
+  }
+
+  /* Wordmark block cursor */
+  .wordmark-cursor {
+    @apply inline-block h-[1em] w-[0.55em] translate-y-[0.12em] rounded-[1px] bg-accent;
+    animation: caret-blink 1.06s step-end infinite;
+  }
+}
+
+@layer utilities {
+  /* Blueprint grid underlay: 64px lines + 8px dots (design.md §3.4) */
+  .bg-blueprint {
+    background-image:
+      radial-gradient(circle, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+    background-size: 8px 8px, 64px 64px, 64px 64px;
+  }
+
+  .text-grad-brand {
+    background-image: linear-gradient(135deg, #3ef2a4 0%, #22d3ee 50%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Edge fade masks for marquees / scroll strips (64px to ink both sides) */
+  .mask-edge-x {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 64px, black calc(100% - 64px), transparent);
+    mask-image: linear-gradient(to right, transparent, black 64px, black calc(100% - 64px), transparent);
+  }
+
+  /* Slim custom scrollbar for horizontal strips */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: #2c3a4f transparent;
+  }
+  .scrollbar-slim::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    background: #2c3a4f;
+    border-radius: 999px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .pause-on-hover:hover * {
+    animation-play-state: paused;
+  }
+
+  /* Scroll-story static fallback: arrows render fully drawn */
+  .static-story .arr {
+    stroke-dashoffset: 0;
+  }
+  .static-story .arrhead {
+    opacity: 1;
+  }
+}
