@@ -198,7 +198,10 @@ function PreviewCanvas({ simId }: { simId: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const [hot, setHot] = useState(false)
   const hotRef = useRef(false)
-  hotRef.current = hot
+
+  useEffect(() => {
+    hotRef.current = hot
+  }, [hot])
 
   useEffect(() => {
     const canvas = ref.current

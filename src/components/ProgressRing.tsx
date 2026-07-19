@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useInView } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -30,15 +30,12 @@ export default function ProgressRing({
 }: ProgressRingProps) {
   const ref = useRef<SVGSVGElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
-  const [display, setDisplay] = useState(0)
+  // Stays 0 until scrolled into view; the CSS transition animates the jump to `value`.
+  const display = inView ? value : 0
 
   const sw = strokeWidth ?? Math.max(2.5, size / 12)
   const r = (size - sw) / 2
   const c = 2 * Math.PI * r
-
-  useEffect(() => {
-    if (inView) setDisplay(value)
-  }, [inView, value])
 
   const clamped = Math.min(100, Math.max(0, display))
   const offset = c - (clamped / 100) * c

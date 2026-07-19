@@ -7,28 +7,12 @@
 
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
-import {
-  Check,
-  ChevronRight,
-  GraduationCap,
-  Activity,
-  Terminal,
-  HelpCircle,
-  BookOpen,
-} from 'lucide-react'
+import { Check, ChevronRight, GraduationCap } from 'lucide-react'
 import { useProgress } from '@/lib/progress'
 import { lessonPath } from '@/data/lessons'
-import type { ExerciseKind, Lesson } from '@/data/lessons/types'
+import type { Lesson } from '@/data/lessons/types'
+import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
-
-export const EXERCISE_META: Record<ExerciseKind, { icon: typeof Activity; label: string }> = {
-  sim: { icon: Activity, label: 'simulator' },
-  code: { icon: Terminal, label: 'code lab' },
-  quiz: { icon: HelpCircle, label: 'quiz' },
-  read: { icon: BookOpen, label: 'guided read' },
-  'quiz+sim': { icon: Activity, label: 'quiz + sim' },
-  'read+quiz': { icon: BookOpen, label: 'read + quiz' },
-}
 
 interface LessonRowProps {
   lesson: Lesson

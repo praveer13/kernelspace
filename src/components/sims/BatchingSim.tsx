@@ -613,9 +613,9 @@ export default function BatchingSim() {
     honestSeed: true,
   })
   const configRef = useRef<EngineConfig>(cfg)
-  const engineRef = useRef<Engine | null>(null)
-  if (!engineRef.current) engineRef.current = createEngine(configRef.current)
-  const [snap, setSnap] = useState<Snap>(() => snapshot(engineRef.current as Engine))
+  const [initialEngine] = useState<Engine>(() => createEngine(cfg))
+  const engineRef = useRef<Engine>(initialEngine)
+  const [snap, setSnap] = useState<Snap>(() => snapshot(initialEngine))
   const [playing, setPlaying] = useState(false)
   const [speedIdx, setSpeedIdx] = useState(2)
   const speedRef = useRef(SPEED_STEPS[2])
@@ -669,7 +669,9 @@ export default function BatchingSim() {
     [log, award],
   )
   const finishRunRef = useRef(finishRun)
-  finishRunRef.current = finishRun
+  useEffect(() => {
+    finishRunRef.current = finishRun
+  }, [finishRun])
 
   /* ---- reset / config helpers ---- */
   const recreateEngine = useCallback((next: EngineConfig) => {

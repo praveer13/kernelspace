@@ -129,7 +129,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
       simId: 'sim-memory',
       title: 'Frame visualizer: grow, call, return, overflow',
       tasks: [
-        'Step through \`main → add → add\` and watch rsp slide; note each frame\'s exact byte layout.',
+        'Step through `main → add → add` and watch rsp slide; note each frame\'s exact byte layout.',
         'Return a pointer to a local, then make another call — watch the "dangling" bytes get overwritten.',
         'Recursion depth 1,000,000: find the guard page and read the SIGSEGV the kernel sends.',
         'Compare the same call in the heap view: what would malloc have cost for the same 8 bytes?',

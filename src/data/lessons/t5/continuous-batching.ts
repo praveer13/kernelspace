@@ -90,7 +90,7 @@ The race-track animation: static batching's convoys vs the continuous scheduler 
         'Sweep arrival rate to 2× capacity: find the preemption-storm cliff (thrashing, T2.L3).',
         'Change preemption policy (youngest-first vs oldest-first): measure fairness vs TTFT.',
       ],
-      note: `The cliff at overload is the deepest serving lesson: past capacity, no scheduling policy saves you — only admission control (queue and reject early) or more HBM. The scheduler\'s job is to make the trade visible and fair, not to repeal physics.`,
+      note: `The cliff at overload is the deepest serving lesson: past capacity, no scheduling policy saves you — only admission control (queue and reject early) or more HBM. The scheduler's job is to make the trade visible and fair, not to repeal physics.`,
     },
     {
       type: 'quiz',

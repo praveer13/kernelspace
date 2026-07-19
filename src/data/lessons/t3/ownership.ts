@@ -113,8 +113,8 @@ The exercise replays ownership scenarios on a live memory diagram: moves, borrow
       simId: 'sim-allocator',
       title: 'Ownership diagrams live',
       tasks: [
-        'Step a move (\`let b = a\`) and verify: one owner, one drop; using \`a\` flags an error.',
-        'Create two shared borrows, then attempt \`push\` on the owner — watch the rejection point.',
+        'Step a move (`let b = a`) and verify: one owner, one drop; using `a` flags an error.',
+        'Create two shared borrows, then attempt `push` on the owner — watch the rejection point.',
         'Return a reference to a stack local; locate the lifetime proof failure.',
         'Refactor the rejected graph case to arena indices; confirm it compiles and runs cache-friendlier.',
       ],

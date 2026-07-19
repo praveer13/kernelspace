@@ -123,7 +123,7 @@ You will perform translations by hand: pick a virtual address, walk the four lev
       simId: 'sim-vm',
       title: 'Translation walk: VPN → frame, faults included',
       tasks: [
-        'Translate \`0x7f3a_b2c4_1000\` by hand through all four levels; verify frame + offset.',
+        'Translate `0x7f3a_b2c4_1000` by hand through all four levels; verify frame + offset.',
         'Prime the TLB, then re-translate: count the memory reads saved (4 → 0).',
         'Touch a lazily-allocated page: watch the minor fault install a frame with zero I/O.',
         'Fork the process and write one page: watch COW copy exactly that page.',

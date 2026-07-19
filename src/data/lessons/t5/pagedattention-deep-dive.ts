@@ -127,7 +127,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         'Drive the free queue to zero: trigger preemption — compare swap-to-CPU vs recompute on TTFT.',
         'Sweep block size 4 → 64: plot tail waste vs table overhead; locate why 16 is the default.',
       ],
-      note: `You have now operated the exact machinery from the SOSP paper: free list (T1), paging (T2.L2), COW sharing (T2.L2), eviction/preemption (T2.L3), admission control (T2.L4) — one Python class\'s worth of logic that doubled the industry\'s effective GPU capacity.`,
+      note: `You have now operated the exact machinery from the SOSP paper: free list (T1), paging (T2.L2), COW sharing (T2.L2), eviction/preemption (T2.L3), admission control (T2.L4) — one Python class's worth of logic that doubled the industry's effective GPU capacity.`,
     },
     {
       type: 'quiz',

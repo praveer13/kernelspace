@@ -110,7 +110,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         'Oversize the tile until shared memory limits occupancy; observe the U-shaped performance curve.',
         'Toggle the attention view: naive (materialize S) vs flash (online softmax); compare HBM bytes at 32k context.',
       ],
-      note: `The U-curve is the whole craft: too small a tile → bandwidth starves; too big → occupancy starves. And the attention comparison is the industry\'s favorite before/after: same math, 10–20× fewer HBM bytes — the definition of a systems win.`,
+      note: `The U-curve is the whole craft: too small a tile → bandwidth starves; too big → occupancy starves. And the attention comparison is the industry's favorite before/after: same math, 10–20× fewer HBM bytes — the definition of a systems win.`,
     },
     {
       type: 'quiz',

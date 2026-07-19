@@ -35,8 +35,9 @@ import {
   lessonPath,
 } from '@/data/lessons'
 import type { Lesson } from '@/data/lessons/types'
-import { RenderBlock, countH2, extractHeadings } from '@/pages/lesson/blocks'
-import { EXERCISE_META } from '@/pages/lesson/LessonRow'
+import { RenderBlock } from '@/pages/lesson/blocks'
+import { countH2, extractHeadings } from '@/pages/lesson/markdown'
+import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */

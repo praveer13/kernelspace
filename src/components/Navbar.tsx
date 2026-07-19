@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X, Search } from 'lucide-react'
 import ProgressRing from '@/components/ProgressRing'
 import { useProgress, selectOverallPct, rankForXp } from '@/lib/progress'
+import { openCommandPalette } from '@/lib/command-palette'
 import { cn } from '@/lib/utils'
 
 const NAV_LINKS = [
@@ -18,10 +19,6 @@ const MOBILE_LINKS = [
   ...NAV_LINKS,
   { to: '/progress', label: 'Progress' },
 ]
-
-export function openCommandPalette() {
-  window.dispatchEvent(new CustomEvent('ks:command-palette'))
-}
 
 /**
  * TopNavbar (design.md §9.1, home.md §0).
@@ -47,7 +44,12 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => setMenuOpen(false), [pathname])
+  // Close the mobile menu on navigation (adjust state during render, not in an effect)
+  const [prevPathname, setPrevPathname] = useState(pathname)
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname)
+    setMenuOpen(false)
+  }
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : ''

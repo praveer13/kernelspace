@@ -26,6 +26,7 @@ jobs:
 
       # Custom domain (kernelspace.naigap.com) is served from / — see public/CNAME
       - run: npm ci
+      - run: npm run lint
       - run: npm run build
 
       # SPA fallback: GitHub Pages serves 404.html for unknown paths,

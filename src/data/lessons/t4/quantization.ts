@@ -111,7 +111,7 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         'Quantize the sample weight tensor per-tensor INT4; inspect the error histogram.',
         'Switch to per-group-128 scales: watch max error drop ~10× for +4 bits/weight.',
       ],
-      note: `You now own the serving engineer\'s quantization intuition: bits buy precision/range, groups buy error locality, calibration buys accuracy — and on a bandwidth-bound decode loop, every bit saved per weight is literal throughput.`,
+      note: `You now own the serving engineer's quantization intuition: bits buy precision/range, groups buy error locality, calibration buys accuracy — and on a bandwidth-bound decode loop, every bit saved per weight is literal throughput.`,
     },
     {
       type: 'quiz',

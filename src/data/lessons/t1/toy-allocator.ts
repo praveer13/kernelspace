@@ -184,9 +184,9 @@ Step back and name what you built: a system that multiplexes a fixed resource am
       simId: 'sim-allocator',
       title: 'Toy allocator: split, coalesce, survive the trace',
       tasks: [
-        'Run \`init → malloc(4 KB) → malloc(1 KB)\` by hand; predict the split before you step.',
+        'Run `init → malloc(4 KB) → malloc(1 KB)` by hand; predict the split before you step.',
         'Free the middle block of three, then the neighbors; watch coalescing fuse the range.',
-        'Replay the alternating \`alloc(1 KB)/free\` trace and measure external fragmentation after 1,000 ops.',
+        'Replay the alternating `alloc(1 KB)/free` trace and measure external fragmentation after 1,000 ops.',
         'Switch policy first-fit → best-fit → size classes; rank them on waste for the same trace.',
         'Cause a double-free in the inspector and watch the same block get issued twice.',
       ],

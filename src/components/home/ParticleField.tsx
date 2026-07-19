@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -16,7 +16,7 @@ function Points() {
   const pointsRef = useRef<THREE.Points>(null)
   const pointer = useRef({ x: 0, y: 0 })
 
-  const { positions, colors, speeds } = useMemo(() => {
+  const [{ positions, colors, speeds }] = useState(() => {
     const positions = new Float32Array(COUNT * 3)
     const colors = new Float32Array(COUNT * 3)
     const speeds = new Float32Array(COUNT)
@@ -34,7 +34,7 @@ function Points() {
       speeds[i] = 4 + Math.random() * 10
     }
     return { positions, colors, speeds }
-  }, [])
+  })
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {

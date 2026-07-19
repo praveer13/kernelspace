@@ -19,6 +19,8 @@ const TTFT_READOUTS = [
   'KV 84% alloc',
 ]
 
+const pickReadout = () => TTFT_READOUTS[Math.floor(Math.random() * TTFT_READOUTS.length)]
+
 /** Tiny 40px sparkline of the last 14 days of lesson completions. */
 function Sparkline({ data }: { data: number[] }) {
   const max = Math.max(1, ...data)
@@ -91,10 +93,13 @@ export default function StatusBar() {
     return latest?.id ?? null
   }, [lessons])
 
-  const ttft = useMemo(
-    () => TTFT_READOUTS[Math.floor(Math.random() * TTFT_READOUTS.length)],
-    [pathname],
-  )
+  // Random playful readout, re-rolled on every route change.
+  const [ttft, setTtft] = useState(pickReadout)
+  const [ttftPath, setTtftPath] = useState(pathname)
+  if (ttftPath !== pathname) {
+    setTtftPath(pathname)
+    setTtft(pickReadout())
+  }
 
   return (
     <motion.aside

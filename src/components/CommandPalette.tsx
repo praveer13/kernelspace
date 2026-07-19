@@ -63,9 +63,14 @@ export default function CommandPalette() {
     const grouped = new Map<Item['group'], Item[]>()
     for (const g of GROUP_ORDER) grouped.set(g, [])
     for (const item of items.slice(0, 12)) grouped.get(item.group)?.push(item)
-    return GROUP_ORDER.map((g) => ({ group: g, items: grouped.get(g) ?? [] })).filter(
+    const groups = GROUP_ORDER.map((g) => ({ group: g, items: grouped.get(g) ?? [] })).filter(
       (g) => g.items.length > 0,
     )
+    // flat row offset of each group's first item (cursor indexes into `flat`)
+    return groups.map((g, i) => ({
+      ...g,
+      start: groups.slice(0, i).reduce((n, x) => n + x.items.length, 0),
+    }))
   }, [query, fuse])
 
   const flat = useMemo(() => results.flatMap((g) => g.items), [results])
@@ -99,8 +104,6 @@ export default function CommandPalette() {
     }
   }, [])
 
-  useEffect(() => setCursor(0), [query])
-
   const jump = (to: string) => {
     setOpen(false)
     navigate(to)
@@ -117,8 +120,6 @@ export default function CommandPalette() {
       jump(flat[cursor].to)
     }
   }
-
-  let rowIndex = -1
 
   return (
     <AnimatePresence>
@@ -148,7 +149,10 @@ export default function CommandPalette() {
               <input
                 autoFocus
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value)
+                  setCursor(0)
+                }}
                 placeholder="Search lessons, tracks, simulators…"
                 className="h-12 w-full bg-transparent font-mono text-sm text-text-1 outline-none placeholder:text-text-3"
               />
@@ -162,15 +166,14 @@ export default function CommandPalette() {
                   no matches — try “paging”, “rust”, “batch”…
                 </p>
               )}
-              {results.map(({ group, items }) => (
+              {results.map(({ group, items, start }) => (
                 <div key={group} className="mb-1">
                   <p className="px-3 pb-1 pt-2 font-mono text-label uppercase text-text-3">
                     {group}
                   </p>
-                  {items.map((item) => {
-                    rowIndex += 1
-                    const active = rowIndex === cursor
-                    const idx = rowIndex
+                  {items.map((item, i) => {
+                    const idx = start + i
+                    const active = idx === cursor
                     return (
                       <button
                         key={item.id}

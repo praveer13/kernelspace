@@ -129,25 +129,25 @@ function useTweened(value: number, reduced: boolean, dur = 400): number {
   const [display, setDisplay] = useState(value)
   const st = useRef({ from: value, raf: 0 })
   useEffect(() => {
+    const s = st.current
     if (reduced) {
-      st.current.from = value
-      setDisplay(value)
+      s.from = value
       return
     }
-    const from = st.current.from
+    const from = s.from
     const start = performance.now()
     const tick = (t: number) => {
       const p = Math.min(1, (t - start) / dur)
       const e = 1 - Math.pow(1 - p, 3)
       const v = from + (value - from) * e
-      st.current.from = v
+      s.from = v
       setDisplay(v)
-      if (p < 1) st.current.raf = requestAnimationFrame(tick)
+      if (p < 1) s.raf = requestAnimationFrame(tick)
     }
-    st.current.raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(st.current.raf)
+    s.raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(s.raf)
   }, [value, reduced, dur])
-  return display
+  return reduced ? value : display
 }
 
 /* ------------------------------------------------------------------ */

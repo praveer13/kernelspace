@@ -580,7 +580,9 @@ export default function WgslSim() {
   const [presetId, setPresetId] = useState<PresetId>('vector-add')
   const preset = PRESETS.find((p) => p.id === presetId) ?? PRESETS[0]
   const [code, setCode] = useState(preset.code)
-  const [backend, setBackend] = useState<'probing' | 'gpu' | 'cpu'>('probing')
+  const [backend, setBackend] = useState<'probing' | 'gpu' | 'cpu'>(() =>
+    (navigator as Navigator & GpuNav).gpu ? 'probing' : 'cpu',
+  )
   const [forceCpu, setForceCpu] = useState(false)
   const [running, setRunning] = useState(false)
   const [errors, setErrors] = useState<CodeError[]>([])
@@ -593,7 +595,6 @@ export default function WgslSim() {
     let alive = true
     const nav = navigator as Navigator & GpuNav
     if (!nav.gpu) {
-      setBackend('cpu')
       log('warn', 'WebGPU not exposed by this browser — CPU simulation mode (same semantics)')
       return
     }

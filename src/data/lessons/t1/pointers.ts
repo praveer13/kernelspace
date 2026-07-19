@@ -19,7 +19,7 @@ C shows you everything, including the ways to hurt yourself. This lesson puts yo
     },
     {
       type: 'prose',
-      md: `## The four operations — that\'s all of it
+      md: `## The four operations — that's all of it
 
 Everything you can do with a pointer is one of four operations:
 
@@ -104,10 +104,10 @@ Notice that all three answers address the *same* question. Manual memory managem
       simId: 'sim-memory',
       title: 'Memory grid: dereference, arithmetic, segfault',
       tasks: [
-        'Allocate \`long vals[4]\` on the grid; read \`*(p+2)\` and confirm it lands exactly 16 bytes along.',
-        'Build a two-level pointer (\`long **pp\`) and follow both hops on the grid.',
+        'Allocate `long vals[4]` on the grid; read `*(p+2)` and confirm it lands exactly 16 bytes along.',
+        'Build a two-level pointer (`long **pp`) and follow both hops on the grid.',
         'Walk one element past the array; inspect the stale bytes you read (mapped ≠ valid).',
-        'Dereference \`NULL\` and read the fault path: MMU → kernel → SIGSEGV → core dumped.',
+        'Dereference `NULL` and read the fault path: MMU → kernel → SIGSEGV → core dumped.',
       ],
       note: `The grid makes the key point visible: memory is a flat array of bytes, and a pointer is just an index into it. The two-hop chase (pp → p → value) is exactly how page tables and block tables work — one indirection resolving to another. And the NULL crash was the *hardware* catching you: the OS left page 0 unmapped precisely so that mistake is loud instead of silent.`,
     },

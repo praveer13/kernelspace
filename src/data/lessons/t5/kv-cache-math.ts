@@ -98,7 +98,7 @@ Plug in any model shape and watch the numbers move: weights vs cache, tokens-per
         'Flip FP16 → FP8 KV and 32 → 8 KV heads: rank the levers by tokens gained.',
         'Find the concurrency limit for 32k-context chat on 2 GPUs; state whether you hit the capacity or bandwidth wall first.',
       ],
-      note: `Six symbols — 2, L, d_kv, b — explain why long context is expensive, why GQA and FP8 KV ship in every engine, and why "how many GPUs" is a cache question as much as a weights question. T5.L5 shows how vLLM manages this memory; T5.L6 how it\'s scheduled.`,
+      note: `Six symbols — 2, L, d_kv, b — explain why long context is expensive, why GQA and FP8 KV ship in every engine, and why "how many GPUs" is a cache question as much as a weights question. T5.L5 shows how vLLM manages this memory; T5.L6 how it's scheduled.`,
     },
     {
       type: 'quiz',
