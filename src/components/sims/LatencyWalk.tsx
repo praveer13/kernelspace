@@ -23,32 +23,8 @@ import {
   usePrefersReducedMotion,
   useSimLog,
 } from '@/components/sims/PlaygroundShell'
-import type { SimTask } from '@/components/sims/PlaygroundShell'
 
 const SIM_ID = 'sim-memory'
-
-export const LATENCY_TASKS: SimTask[] = [
-  {
-    id: 't-lat-l1',
-    text: 'Pointer-chase a ≤32 KB working set — find which cache level answers',
-    xp: 60,
-  },
-  {
-    id: 't-lat-dram',
-    text: 'Grow the working set to 64 MB — watch latency step L1 → L2 → L3 → DRAM',
-    xp: 60,
-  },
-  {
-    id: 't-lat-stride',
-    text: 'Same ≥1 MB buffer, stride ≤64 B vs stride 4096 B — explain the gap',
-    xp: 60,
-  },
-  {
-    id: 't-lat-hbm',
-    text: 'Reveal HBM on the ladder — note its bandwidth vs DRAM',
-    xp: 60,
-  },
-]
 
 /* -------- hierarchy model -------- */
 interface Level {

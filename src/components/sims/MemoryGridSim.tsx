@@ -9,7 +9,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { motion } from 'framer-motion'
 import { Bomb, Dices, MapPin } from 'lucide-react'
-import LatencyWalk, { LATENCY_TASKS } from '@/components/sims/LatencyWalk'
+import LatencyWalk from '@/components/sims/LatencyWalk'
 import type { SimTask } from '@/components/sims/PlaygroundShell'
 import PlaygroundShell, {
   ChipButton,
@@ -48,6 +48,29 @@ const GRID_TASKS: SimTask[] = [
   { id: 't-deref', text: 'Point 0x90 at 0x80 and dereference it', xp: 60 },
   { id: 't-null', text: 'Dereference null and survive (run null deref)', xp: 60 },
   { id: 't-smash', text: 'Overflow the stack into the heap', xp: 60 },
+]
+
+const LATENCY_TASKS: SimTask[] = [
+  {
+    id: 't-lat-l1',
+    text: 'Pointer-chase a ≤32 KB working set — find which cache level answers',
+    xp: 60,
+  },
+  {
+    id: 't-lat-dram',
+    text: 'Grow the working set to 64 MB — watch latency step L1 → L2 → L3 → DRAM',
+    xp: 60,
+  },
+  {
+    id: 't-lat-stride',
+    text: 'Same ≥1 MB buffer, stride ≤64 B vs stride 4096 B — explain the gap',
+    xp: 60,
+  },
+  {
+    id: 't-lat-hbm',
+    text: 'Reveal HBM on the ladder — note its bandwidth vs DRAM',
+    xp: 60,
+  },
 ]
 
 const CODE_END = 0x3f
