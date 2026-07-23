@@ -35,6 +35,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { getProgress, useProgress } from '@/lib/progress'
+import { lessonById } from '@/data/lessons'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -190,6 +191,10 @@ export default function PlaygroundShell({
   const [searchParams] = useSearchParams()
   const embed = searchParams.get('embed') === '1'
   const from = searchParams.get('from')
+  /* ?from carries the originating lesson id (e.g. t0.l2); legacy links sent the
+     literal string "lesson", which produced a dead /lesson/lesson href. Only
+     render the chip when the id resolves to a real lesson. */
+  const fromLesson = lessonById(from ?? undefined)
   const chrome = SIM_CHROME[simId] ?? { num: simId.toUpperCase(), color: '#3EF2A4' }
 
   const recordSimVisit = useProgress((s) => s.recordSimVisit)
@@ -273,12 +278,13 @@ export default function PlaygroundShell({
             </span>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {from && (
+            {fromLesson && (
               <Link
-                to={`/lesson/${from.toLowerCase()}`}
+                to={`/lesson/${fromLesson.id}`}
+                title={fromLesson.title}
                 className="hidden items-center gap-1 rounded-sm border border-line bg-surface-2 px-2 py-1 font-mono text-[10px] text-text-2 transition-colors duration-150 hover:border-line-bright hover:text-accent sm:flex"
               >
-                used in {from}
+                used in {fromLesson.id.toUpperCase()}
                 <ExternalLink size={10} strokeWidth={1.75} />
               </Link>
             )}

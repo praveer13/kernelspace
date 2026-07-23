@@ -537,7 +537,15 @@ function DeepdiveView({ block, trackColor }: { block: DeepdiveBlock; trackColor:
 /* exercise — placeholder embed card → /lab/:simId (lesson.md §2.7)    */
 /* ------------------------------------------------------------------ */
 
-function ExerciseView({ block, trackColor }: { block: ExerciseBlock; trackColor: string }) {
+function ExerciseView({
+  block,
+  trackColor,
+  lessonId,
+}: {
+  block: ExerciseBlock
+  trackColor: string
+  lessonId: string
+}) {
   const sim = SIM_INFO[block.simId]
   const Icon = sim?.icon ?? FlaskConical
   const [noteOpen, setNoteOpen] = useState(false)
@@ -553,7 +561,7 @@ function ExerciseView({ block, trackColor }: { block: ExerciseBlock; trackColor:
           <span className="font-display text-body-sm font-medium text-text-1">{block.title}</span>
         </div>
         <Link
-          to={`/lab/${block.simId}?from=lesson`}
+          to={`/lab/${block.simId}?from=${lessonId}`}
           className="flex items-center gap-1.5 font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-accent"
         >
           open full screen
@@ -577,7 +585,7 @@ function ExerciseView({ block, trackColor }: { block: ExerciseBlock; trackColor:
           the live simulator runs at <span className="text-text-1">/lab/{block.simId}</span>
         </p>
         <Link
-          to={`/lab/${block.simId}?from=lesson`}
+          to={`/lab/${block.simId}?from=${lessonId}`}
           className="rounded-md bg-accent px-5 py-2.5 font-display text-[15px] font-semibold text-accent-foreground transition-all duration-150 hover:-translate-y-px active:scale-[.97]"
         >
           Open the simulator
@@ -701,7 +709,7 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
         </div>
       )
     case 'exercise':
-      return <ExerciseView block={block} trackColor={trackColor} />
+      return <ExerciseView block={block} trackColor={trackColor} lessonId={lesson.id} />
     case 'isomorphism':
       return <IsomorphismView block={block} />
     case 'deepdive':
