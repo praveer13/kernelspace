@@ -146,6 +146,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
     {
       type: 'exercise',
       simId: 'sim-vm',
+      machine: 'contention',
       title: 'Contention lab: mutex vs atomic vs lock-free',
       tasks: [
         'Run the counter benchmark with 1 thread on all three implementations — note they\'re equally fast.',

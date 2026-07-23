@@ -62,10 +62,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       type: 'prose',
       md: `## Reduction: the kernel that teaches cooperation
 
-Sum 16 million floats. One invocation can't do it (serial = T4.L1's cautionary tale); 65,536 independent invocations can't combine their work without coordination. The GPU answer is the **tree reduction**, in two levels:
+Sum 16 million floats. One invocation can't do it (serial = T4.L1's cautionary tale); workgroups must combine their values with coordination. The GPU answer is the **tree reduction**, in two levels:
 
-1. **Inside the workgroup**: each of 256 invocations sums a strided slice into one partial; then a loop halves the active set each round — 128 add pairs, 64, 32… — with \`workgroupBarrier()\` between rounds so every lane sees the previous round's writes. After \`log2(256) = 8\` rounds, invocation 0 holds the workgroup total and writes ONE value out.
-2. **Across workgroups**: 65,536 partials remain — either dispatch a second reduction pass over them (the classic multi-pass approach) or use atomics. The output collapses 16M → 65k → 256 → 1.
+1. **Inside the workgroup**: each of 256 invocations loads one value into shared memory; then a loop halves the active set each round — 128 add pairs, 64, 32… — with \`workgroupBarrier()\` between rounds so every lane sees the previous round's writes. After \`log2(256) = 8\` rounds, invocation 0 holds the workgroup total and writes ONE value out.
+2. **Across workgroups**: 65,536 partials remain. Redispatch the same reduction over those partials: 16,777,216 → 65,536 → 256 → 1. The playground reports that exact logical topology and returns one scalar while bounding physical storage to a representative 65,536-float sample. Available WebGPU executes the bounded passes; the explicitly labeled CPU/model fallback preserves the same logical topology.
 
 This shape — **parallel work, tree combine, multi-pass** — is everywhere: softmax denominators, layer-norm statistics, top-k, histograms. And it's why ` +
         `attention's online-softmax trick (T4.L6 deepdive) exists: reductions over long sequences are the annoying serial-ish part of otherwise-parallel kernels.`,
@@ -117,17 +117,18 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
       type: 'prose',
       md: `## In the playground
 
-The exercise runs both kernels on your real GPU: edit the workgroup size, delete a barrier, swap the reduction stride order, and watch results and timings change live. The fallback path (no WebGPU) executes the same kernels on a CPU simulator with identical semantics — slower, but every lesson point survives.`,
+The playground keeps every WGSL preset editable. The 16M vector-add option executes a bounded representative sample, then honestly models exactly 65,536 logical workgroups and 192 MiB of memory traffic so the UI never allocates hundreds of MiB. Reduction runs a shared-memory tree; delete either executable barrier and its result check exposes the race. The multi-pass option models the logical 16,777,216 → 65,536 → 256 → 1 topology while bounded WebGPU or CPU passes reduce the representative sample to exactly one scalar.`,
     },
     {
       type: 'exercise',
       simId: 'sim-wgsl',
+      machine: 'wgsl',
       title: 'WGSL playground: add & reduce',
       tasks: [
-        'Run vec_add on 16M floats; confirm from GB/s that it saturates HBM bandwidth (memory-bound as predicted).',
-        'Sweep @workgroup_size 64 → 1024: measure the dispatch/occupancy effects.',
-        'Break the reduction by removing a barrier: capture two different wrong sums across runs.',
-        'Finish the multi-pass reduction to a single scalar; verify against the CPU reference.',
+        'Select “vector add (16M modeled)” and run it successfully; inspect the reported 192 MiB traffic and effective GB/s.',
+        'On a vector-add preset, run exactly @workgroup_size(64), then exactly @workgroup_size(1024).',
+        'Select “parallel reduction (sum)”, remove either workgroupBarrier(), run, and observe a mismatched sum.',
+        'Select “reduction (multi-pass → scalar)” with both barriers intact, run, and verify the final output count is one and the scalar matches the CPU reference.',
       ],
       note: `You now have the core GPU craft: map data to invocations, guard tails, stage via SRAM, barrier between rounds, and multi-pass for global reductions. T4.L6 uses exactly this skeleton for tiled matmul — the kernel under everything.`,
     },

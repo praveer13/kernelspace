@@ -1,11 +1,30 @@
 /**
  * SIM-04 `sim-roofline` — Roofline Model Playground (playground.md §7).
  * Hand-rolled canvas log-log chart: bandwidth roof + compute ceiling meeting at
- * the ridge point. Hardware presets with 400ms line morphs, a plottable kernel
- * library (prefill compute-bound vs decode bandwidth-bound), a scrubbing
- * intensity guide, and quantized ceilings that raise the roof.
+ * the ridge point. Hardware presets, quantized ceilings, a plottable kernel
+ * library, and four live extensions:
+ *
+ *   1. Occupancy: warps/SM and registers/thread sliders with a synthetic
+ *      occupancy limiter (register-file budget per SM).
+ *   2. Coalescing / bank conflicts: access-pattern toggle that changes
+ *      effective bytes per warp load, plus a shared-memory 32-way conflict demo
+ *      with a padding fix.
+ *   3. Memory tier probe: working-set slider that steps across shared memory,
+ *      L2, and HBM bandwidths, plus a PCIe transfer mode.
+ *   4. Matmul tiling + attention: tile-size sweep with AI ≈ T/6, and a naive
+ *      vs FlashAttention toggle.
+ *
+ * Documented constants (synthetic but dimensionally faithful):
+ *   - register file: 256 KB/SM  = 65,536 32-bit registers
+ *   - max warp slots: 64/SM
+ *   - shared memory: 228 KB/SM
+ *   - H100-class HBM: 3.35 TB/s
+ *   - L2 bandwidth: ~12 TB/s
+ *   - shared memory bandwidth: ~20 TB/s
+ *   - PCIe x16 Gen4: ~32 GB/s
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Eraser, TrendingUp } from 'lucide-react'
 import PlaygroundShell, {
   ChipButton,
@@ -67,12 +86,16 @@ const Y_MIN = 7 // log2 GFLOP/s
 const Y_MAX = 22
 
 const BATCH_STEPS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+const TILE_CHOICES = Array.from({ length: 16 }, (_, index) => (index + 1) * 16)
 
 const fmtAI = (v: number): string =>
   v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toPrecision(2)
 
 const fmtRate = (g: number): string =>
   g >= 1000 ? `${(g / 1000).toFixed(g >= 100_000 ? 0 : 1)} TFLOP/s` : `${g.toFixed(0)} GFLOP/s`
+
+const fmtBandwidth = (gbs: number): string =>
+  gbs >= 1000 ? `${(gbs / 1000).toFixed(1)} TB/s` : `${gbs.toFixed(gbs >= 100 ? 0 : 1)} GB/s`
 
 const fmtYTick = (p: number): string => {
   const v = 2 ** p
@@ -86,37 +109,264 @@ const fmtXT = (p: number): string => {
   return v >= 1 ? String(v) : v.toPrecision(1)
 }
 
+/* ----------------------------- model constants ---------------------------- */
+const WARP_THREADS = 32
+const MAX_WARP_SLOTS = 64
+const REG_FILE_REGS = (256 * 1024) / 4 // 65,536 32-bit registers per SM
+const SMEM_KB_PER_SM = 228
+const SHARED_BW_GBS = 20_000 // ~20 TB/s
+const L2_BW_GBS = 12_000 // ~12 TB/s
+const PCIE_BW_GBS = 32 // ~32 GB/s
+
+const fmtBytes = (b: number): string => {
+  if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`
+  if (b >= 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${b} B`
+}
+
+const dtypeMultiplier = (dtype: 'fp16' | 'fp8' | 'int4'): number => {
+  if (dtype === 'fp8') return 2
+  if (dtype === 'int4') return 4
+  return 1
+}
+
+const dtypeLabel = (dtype: 'fp16' | 'fp8' | 'int4'): string => {
+  if (dtype === 'fp8') return 'FP8 ×2'
+  if (dtype === 'int4') return 'INT4 ×4'
+  return 'FP16 ×1'
+}
+
+/** Synthetic occupancy: register file is the binding budget. */
+const occupancyModel = (
+  warps: number,
+  regPerThread: number,
+): { resident: number; pct: number; spill: boolean; maxByReg: number } => {
+  const regsPerWarp = regPerThread * WARP_THREADS
+  const maxByReg = Math.max(1, Math.floor(REG_FILE_REGS / regsPerWarp))
+  const resident = Math.min(warps, maxByReg, MAX_WARP_SLOTS)
+  const pct = Math.round((resident / MAX_WARP_SLOTS) * 100)
+  const spill = warps * regsPerWarp > REG_FILE_REGS
+  return { resident, pct, spill, maxByReg }
+}
+
+/** Effective HBM bandwidth multiplier for the access-pattern demo. */
+const coalesceFactor = (pattern: 'coalesced' | 'strided' | 'divergent'): number => {
+  if (pattern === 'coalesced') return 1
+  if (pattern === 'strided') return 1 / 32
+  return 1 / 8 // divergent: serialized warp paths
+}
+type AccessPattern = 'coalesced' | 'strided' | 'divergent' | 'staged'
+
+interface AccessResult {
+  globalEfficiency: number
+  globalTrafficBytes: number
+  sharedEfficiency: number | null
+  sharedTrafficBytes: number
+  effectiveBandwidth: number
+}
+
+/**
+ * Models one warp producing 128 useful bytes. Staging first coalesces the
+ * global load, then pays a shared-memory write and transposed read.
+ */
+const accessResult = (
+  pattern: AccessPattern,
+  hbmBw: number,
+  bankConflict: boolean,
+  bankPadding: boolean,
+): AccessResult => {
+  const globalEfficiency = pattern === 'staged' ? 1 : coalesceFactor(pattern)
+  const globalTrafficBytes = 128 / globalEfficiency
+  if (pattern !== 'staged') {
+    return {
+      globalEfficiency,
+      globalTrafficBytes,
+      sharedEfficiency: null,
+      sharedTrafficBytes: 0,
+      effectiveBandwidth: hbmBw * globalEfficiency,
+    }
+  }
+
+  const sharedEfficiency = bankConflict && !bankPadding ? 1 / 32 : 1
+  const sharedTrafficBytes = 256
+  const secondsPerGb =
+    globalTrafficBytes / 128 / hbmBw +
+    sharedTrafficBytes / 128 / (SHARED_BW_GBS * sharedEfficiency)
+  return {
+    globalEfficiency,
+    globalTrafficBytes,
+    sharedEfficiency,
+    sharedTrafficBytes,
+    effectiveBandwidth: 1 / secondsPerGb,
+  }
+}
+
+type MemoryPath = 'auto' | 'shared' | 'hbm'
+
+/** Effective bandwidth tier for the working-set probe. Explicit paths support the 4 KB comparison. */
+const tierBandwidth = (
+  wsKb: number,
+  pcie: boolean,
+  path: MemoryPath,
+  spilling: boolean,
+  hbmBw: number,
+): number => {
+  if (pcie) return PCIE_BW_GBS
+  if (spilling || path === 'hbm') return hbmBw
+  if (path === 'shared') return SHARED_BW_GBS
+  if (wsKb <= SMEM_KB_PER_SM) return SHARED_BW_GBS
+  if (wsKb <= 50 * 1024) return L2_BW_GBS
+  return hbmBw
+}
+
+const tierName = (
+  wsKb: number,
+  pcie: boolean,
+  path: MemoryPath,
+  spilling: boolean,
+): string => {
+  if (pcie) return 'PCIe'
+  if (spilling) return 'HBM spill'
+  if (path === 'shared') return 'shared'
+  if (path === 'hbm') return 'HBM'
+  if (wsKb <= SMEM_KB_PER_SM) return 'shared'
+  if (wsKb <= 50 * 1024) return 'L2'
+  return 'HBM'
+}
+
+/** Naive loads are ≈2 F/B; tiled reuse raises intensity roughly in proportion to T. */
+const matmulAI = (T: number): number => T / 8
+
+/** Synthetic shared-memory pressure curve: useful reuse wins through T=64, then residency falls. */
+const tileOccupancyFactor = (T: number): number => {
+  const smemPerBlock = 2 * T * T * 4
+  if (smemPerBlock > SMEM_KB_PER_SM * 1024) return 0.08
+  const blocksPerSM = Math.max(1, Math.floor((SMEM_KB_PER_SM * 1024) / smemPerBlock))
+  const residency = Math.min(1, blocksPerSM / 2)
+  const registerPressure = Math.min(1, 64 / T)
+  return Math.max(0.08, residency * registerPressure)
+}
+
 interface RoofCfg {
   m: string // preset name
   bw: number
   peak: number
   batch: number
-  quant: boolean
+  dtype: 'fp16' | 'fp8' | 'int4'
   guide: number // log2 AI
+  warps: number
+  registers: number
+  accessPattern: AccessPattern
+  bankConflict: boolean
+  bankPadding: boolean
+  workingSetKb: number
+  memoryPath: MemoryPath
+  pcieMode: boolean
+  tileT: number
+  attentionMode: 'naive' | 'flash'
+  serialRan: boolean
+  mapRan: boolean
 }
+
+type StoredRoofCfg = Partial<RoofCfg> & { quant?: boolean }
+
+const finiteOr = (value: unknown, fallback: number, min: number, max: number): number =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value))
+    : fallback
+
+const oneOfOr = <T extends string>(value: unknown, options: readonly T[], fallback: T): T =>
+  typeof value === 'string' && options.includes(value as T) ? (value as T) : fallback
+const numberOneOfOr = (
+  value: unknown,
+  options: readonly number[],
+  fallback: number,
+): number => (typeof value === 'number' && options.includes(value) ? value : fallback)
 
 interface PlottedPoint {
   kernelId: string
   at: number // ms timestamp for pop animation
 }
 
+
+type HostMode = 'roofline' | 'cpu-gpu'
+
 export default function RooflineSim() {
   const { embed } = usePlaygroundContext()
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const machine = searchParams.get('machine')
+  const mode: HostMode =
+    machine === 'cpu-gpu' || (machine !== 'roofline' && searchParams.get('from') === 't4.l1')
+      ? 'cpu-gpu'
+      : 'roofline'
+  const selectMode = (nextMode: HostMode) => {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.set('machine', nextMode)
+        return next
+      },
+      { replace: true },
+    )
+  }
 
-  const initialCfg = useInitialCfg<RoofCfg>()
+  const initialCfg = useInitialCfg<StoredRoofCfg>()
   const initialPreset = PRESETS.find((p) => p.name === initialCfg?.m) ?? PRESETS[3]
+  const initialDtype =
+    initialCfg?.dtype === undefined && initialCfg?.quant === true
+      ? 'fp8'
+      : oneOfOr(initialCfg?.dtype, ['fp16', 'fp8', 'int4'] as const, 'fp16')
+  const initialBankConflict = initialCfg?.bankConflict === true
 
   const [preset, setPreset] = useState<string>(initialPreset.name)
-  const [bw, setBw] = useState(initialCfg?.bw ?? initialPreset.bw)
-  const [peak, setPeak] = useState(initialCfg?.peak ?? initialPreset.peak)
-  const [batch, setBatch] = useState(initialCfg?.batch ?? 1)
-  const [quant, setQuant] = useState(initialCfg?.quant ?? false)
-  const [guide, setGuide] = useState(initialCfg?.guide ?? 0) // log2 AI
+  const [bw, setBw] = useState(() => finiteOr(initialCfg?.bw, initialPreset.bw, 1, 100_000))
+  const [peak, setPeak] = useState(() =>
+    finiteOr(initialCfg?.peak, initialPreset.peak, 1, 10_000_000),
+  )
+  const [batch, setBatch] = useState(() => finiteOr(initialCfg?.batch, 1, 1, 512))
+  const [dtype, setDtype] = useState<'fp16' | 'fp8' | 'int4'>(initialDtype)
+  const [guide, setGuide] = useState(() => finiteOr(initialCfg?.guide, 0, X_MIN, X_MAX))
   const [points, setPoints] = useState<PlottedPoint[]>([])
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
+  const [serialRan, setSerialRan] = useState(initialCfg?.serialRan === true)
+  const [mapRan, setMapRan] = useState(initialCfg?.mapRan === true)
+
+  /* ------------------------------- extensions ------------------------------- */
+  const [warpsPerSM, setWarpsPerSM] = useState(() =>
+    finiteOr(initialCfg?.warps, 16, 1, MAX_WARP_SLOTS),
+  )
+  const [regPerThread, setRegPerThread] = useState(() =>
+    finiteOr(initialCfg?.registers, 32, 8, 256),
+  )
+
+  const [accessPattern, setAccessPattern] = useState<AccessPattern>(
+    oneOfOr(
+      initialCfg?.accessPattern,
+      ['coalesced', 'strided', 'divergent', 'staged'] as const,
+      'coalesced',
+    ),
+  )
+  const [bankConflict, setBankConflict] = useState(initialBankConflict)
+  const [bankPadding, setBankPadding] = useState(
+    initialBankConflict && initialCfg?.bankPadding === true,
+  )
+
+  const [workingSetKb, setWorkingSetKb] = useState(() =>
+    finiteOr(initialCfg?.workingSetKb, 4, 4, 2 ** 27),
+  )
+  const [memoryPath, setMemoryPath] = useState<MemoryPath>(
+    oneOfOr(initialCfg?.memoryPath, ['auto', 'shared', 'hbm'] as const, 'auto'),
+  )
+  const [pcieMode, setPcieMode] = useState(initialCfg?.pcieMode === true)
+
+  const [tileT, setTileT] = useState(() => numberOneOfOr(initialCfg?.tileT, TILE_CHOICES, 16))
+  const [attentionMode, setAttentionMode] = useState<'naive' | 'flash'>(
+    oneOfOr(initialCfg?.attentionMode, ['naive', 'flash'] as const, 'naive'),
+  )
 
   const ticksRef = useRef(0)
   const [ticks, setTicks] = useState(0)
@@ -126,7 +376,26 @@ export default function RooflineSim() {
     return ticksRef.current
   }, [])
 
-  useWriteCfg({ m: preset, bw, peak, batch, quant, guide } satisfies RoofCfg)
+  useWriteCfg({
+    m: preset,
+    bw,
+    peak,
+    batch,
+    dtype,
+    guide,
+    warps: warpsPerSM,
+    registers: regPerThread,
+    accessPattern,
+    bankConflict,
+    bankPadding,
+    workingSetKb,
+    memoryPath,
+    pcieMode,
+    tileT,
+    attentionMode,
+    serialRan,
+    mapRan,
+  } satisfies RoofCfg)
 
   /* animated (morphing) machine values */
   const animRef = useRef({ bw: initialPreset.bw, peak: initialPreset.peak })
@@ -134,13 +403,107 @@ export default function RooflineSim() {
   useEffect(() => {
     targetRef.current = { bw, peak }
   }, [bw, peak])
-
-  const ridgeAI = peak / bw
+  const ridgeAI = (peak * dtypeMultiplier(dtype)) / bw
   const guideAI = 2 ** guide
   const guideBound: 'bandwidth' | 'compute' = guideAI < ridgeAI ? 'bandwidth' : 'compute'
 
-  const decodeAI = batch
+  // Decode performs the same FLOPs while lower precision reads fewer weight bytes.
+  const decodeAI = batch * dtypeMultiplier(dtype)
   const decodePlotted = points.some((p) => p.kernelId === 'decode')
+
+  /* --------------------------- derived extension model ---------------------- */
+  const { pct: occupancyPct, spill: regSpill, resident: residentWarps } = occupancyModel(
+    warpsPerSM,
+    regPerThread,
+  )
+  const occupancyLow = occupancyPct < 25
+
+  const access = accessResult(accessPattern, bw, bankConflict, bankPadding)
+  const coalesceEff = access.globalEfficiency
+  const effectiveHbmBw = access.effectiveBandwidth
+  const accessThroughputFactor = effectiveHbmBw / bw
+  const occupancyThroughput = Math.min(1, occupancyPct / 25)
+  const cpuSerialMs = 0.08
+  const gpuSerialMs = 4
+  const cpuMapMs = 128
+  const gpuMapMs = 2.56 / Math.max(0.02, accessThroughputFactor * occupancyThroughput)
+
+  const tierBw = tierBandwidth(workingSetKb, pcieMode, memoryPath, regSpill, bw)
+  const tier = tierName(workingSetKb, pcieMode, memoryPath, regSpill)
+
+  const tileAI = matmulAI(tileT)
+  const tileOccFactor = tileOccupancyFactor(tileT)
+
+  const attentionAI = attentionMode === 'naive' ? 1 : 60
+  const attentionBytes =
+    attentionMode === 'naive' ? 2 * 32_768 ** 2 : 2 * 32_768 * 128 * 3
+
+  /* ------------------------------ task detection ---------------------------- */
+  const sawStridedRef = useRef(false)
+  const sawDivergentRef = useRef(false)
+  const sawBankConflictRef = useRef(false)
+  const sawStagedRef = useRef(false)
+  const sawSharedRef = useRef(false)
+  const sawL2Ref = useRef(false)
+  const sawHbmRef = useRef(false)
+  const sawSmallTileRef = useRef(true)
+  const comparedDtypesRef = useRef(new Set<RoofCfg['dtype']>())
+
+  useEffect(() => {
+    if (occupancyLow) completeSimTask(SIM_ID, 't-roof-occupancy', 60)
+  }, [occupancyLow])
+
+  useEffect(() => {
+    if (accessPattern === 'strided') sawStridedRef.current = true
+    if (accessPattern === 'divergent') sawDivergentRef.current = true
+    if (accessPattern === 'staged') sawStagedRef.current = true
+    if (
+      accessPattern === 'staged' &&
+      sawStagedRef.current &&
+      (sawStridedRef.current || sawDivergentRef.current)
+    ) {
+      completeSimTask(SIM_ID, 't-roof-coalesce', 60)
+    }
+  }, [accessPattern])
+
+  useEffect(() => {
+    if (bankConflict) sawBankConflictRef.current = true
+    if (bankPadding && sawBankConflictRef.current) {
+      completeSimTask(SIM_ID, 't-roof-bank', 60)
+    }
+  }, [bankConflict, bankPadding])
+
+  useEffect(() => {
+    if (tier === 'shared') sawSharedRef.current = true
+    if (tier === 'L2') sawL2Ref.current = true
+    if (tier === 'HBM' || tier === 'HBM spill') sawHbmRef.current = true
+    if (sawSharedRef.current && sawL2Ref.current && sawHbmRef.current) {
+      completeSimTask(SIM_ID, 't-roof-tiers', 60)
+    }
+  }, [tier])
+
+  useEffect(() => {
+    if (pcieMode) completeSimTask(SIM_ID, 't-roof-pcie', 60)
+  }, [pcieMode])
+
+  useEffect(() => {
+    if (tileT === 16) sawSmallTileRef.current = true
+    if (tileT >= 128 && sawSmallTileRef.current) completeSimTask(SIM_ID, 't-roof-tile', 60)
+  }, [tileT])
+
+  useEffect(() => {
+    if (attentionMode === 'flash') completeSimTask(SIM_ID, 't-roof-flash', 60)
+  }, [attentionMode])
+
+  useEffect(() => {
+    if (!decodePlotted) return
+    comparedDtypesRef.current.add(dtype)
+    if (comparedDtypesRef.current.size >= 2) {
+      completeSimTask(SIM_ID, 't-roof-dtype', 60)
+    }
+  }, [decodePlotted, dtype])
+
+  // Comparison credit requires observing decode at two precision settings.
 
   /* ------------------------------ plotting ------------------------------ */
   const plotKernel = useCallback(
@@ -150,9 +513,11 @@ export default function RooflineSim() {
         if (prev.some((p) => p.kernelId === k.id)) return prev
         return [...prev, { kernelId: k.id, at: performance.now() }]
       })
+      if (k.id === 'decode') comparedDtypesRef.current.add(dtype)
       const ai = k.id === 'decode' ? decodeAI : k.ai
-      const roof = Math.min(peak, bw * ai)
-      const bound = ai < peak / bw ? 'bandwidth-bound' : 'compute-bound'
+      const dtypePeak = peak * dtypeMultiplier(dtype)
+      const roof = Math.min(dtypePeak, bw * ai)
+      const bound = ai < dtypePeak / bw ? 'bandwidth-bound' : 'compute-bound'
       log(
         ticksRef.current,
         'PLOT',
@@ -161,9 +526,8 @@ export default function RooflineSim() {
       )
       if (k.id === 'decode') completeSimTask(SIM_ID, 't-decode', 60)
     },
-    [bump, bw, decodeAI, log, peak],
+    [bump, bw, decodeAI, dtype, log, peak],
   )
-
   /* batch moves decode right until it crosses the ridge */
   useEffect(() => {
     if (decodePlotted && decodeAI >= ridgeAI) completeSimTask(SIM_ID, 't-batch', 60)
@@ -187,11 +551,33 @@ export default function RooflineSim() {
 
   const reset = useCallback(() => {
     setPoints([])
+    setSerialRan(false)
+    setMapRan(false)
     setBatch(1)
     setGuide(0)
+    setDtype('fp16')
+    setWarpsPerSM(16)
+    setRegPerThread(32)
+    setAccessPattern('coalesced')
+    setBankConflict(false)
+    setBankPadding(false)
+    setWorkingSetKb(4)
+    setMemoryPath('auto')
+    setPcieMode(false)
+    setTileT(16)
+    setAttentionMode('naive')
     setPlaying(false)
     ticksRef.current = 0
     setTicks(0)
+    sawStridedRef.current = false
+    sawDivergentRef.current = false
+    sawStagedRef.current = false
+    sawBankConflictRef.current = false
+    sawSharedRef.current = false
+    sawL2Ref.current = false
+    sawHbmRef.current = false
+    sawSmallTileRef.current = true
+    comparedDtypesRef.current.clear()
     log(0, 'RESET', 'chart cleared — kernels unplotted')
   }, [log])
 
@@ -217,9 +603,53 @@ export default function RooflineSim() {
   /* ------------------------------ canvas ------------------------------ */
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const stateRef = useRef({ quant, guide, points, batch, decodeAI, reducedMotion, preset })
+  const stateRef = useRef({
+    quant: dtype !== 'fp16',
+    dtype,
+    guide,
+    points,
+    batch,
+    decodeAI,
+    reducedMotion,
+    preset,
+    accessPattern,
+    coalesceEff,
+    effectiveHbmBw,
+    accessThroughputFactor,
+    tierBw,
+    tier,
+    workingSetKb,
+    pcieMode,
+    tileAI,
+    tileOccFactor,
+    attentionAI,
+    attentionMode,
+    occupancyPct,
+  })
   useEffect(() => {
-    stateRef.current = { quant, guide, points, batch, decodeAI, reducedMotion, preset }
+    stateRef.current = {
+      quant: dtype !== 'fp16',
+      dtype,
+      guide,
+      points,
+      batch,
+      decodeAI,
+      reducedMotion,
+      preset,
+      accessPattern,
+      coalesceEff,
+      effectiveHbmBw,
+      accessThroughputFactor,
+      tierBw,
+      tier,
+      workingSetKb,
+      pcieMode,
+      tileAI,
+      tileOccFactor,
+      attentionAI,
+      attentionMode,
+      occupancyPct,
+    }
   })
 
   useEffect(() => {
@@ -276,7 +706,9 @@ export default function RooflineSim() {
         if (Math.abs(anim.peak - target.peak) < 1) anim.peak = target.peak
       }
 
-      const { bw: aBw, peak: aPeak } = anim
+      const mult = dtypeMultiplier(s.dtype)
+      const aBw = anim.bw
+      const aPeak = anim.peak * mult
       const ridge = aPeak / aBw
       const logRidge = Math.log2(ridge)
 
@@ -379,35 +811,40 @@ export default function RooflineSim() {
       }
       ctx.stroke()
 
-      /* quantized ceilings */
-      if (s.quant) {
-        ctx.setLineDash([6, 5])
-        ctx.lineWidth = 1.5
-        const ceilings: [number, string][] = [
-          [aPeak * 2, 'INT8 ×2'],
-          [aPeak * 4, 'INT4 ×4'],
-        ]
-        for (const [ceil, label] of ceilings) {
-          const ly = Math.log2(ceil)
-          if (ly > Y_MAX) continue
-          ctx.strokeStyle = '#A78BFA'
-          ctx.globalAlpha = 0.7
-          ctx.beginPath()
-          ctx.moveTo(xMap(X_MIN), yMap(ly))
-          ctx.lineTo(xMap(X_MAX), yMap(ly))
-          ctx.stroke()
-          ctx.globalAlpha = 1
-          ctx.fillStyle = '#A78BFA'
-          ctx.textAlign = 'left'
-          ctx.fillText(label, xMap(X_MIN) + 6, yMap(ly) - 5)
-        }
-        ctx.setLineDash([])
+      /* dtype ceiling label */
+      ctx.setLineDash([6, 5])
+      ctx.lineWidth = 1.5
+      const ly = Math.log2(aPeak)
+      if (ly <= Y_MAX) {
+        ctx.strokeStyle = '#A78BFA'
+        ctx.globalAlpha = 0.7
+        ctx.beginPath()
+        ctx.moveTo(xMap(X_MIN), yMap(ly))
+        ctx.lineTo(xMap(X_MAX), yMap(ly))
+        ctx.stroke()
+        ctx.globalAlpha = 1
+        ctx.fillStyle = '#A78BFA'
+        ctx.textAlign = 'left'
+        ctx.fillText(dtypeLabel(s.dtype), xMap(X_MIN) + 6, yMap(ly) - 5)
       }
+      ctx.setLineDash([])
 
-      /* ceiling label */
-      ctx.fillStyle = '#5D6B80'
-      ctx.textAlign = 'right'
-      ctx.fillText(`FP16 ceiling · ${fmtRate(aPeak)}`, xMap(X_MAX) - 4, yMap(Math.log2(aPeak)) - 6)
+      /* base FP16 ceiling label (ghosted) */
+      const baseLy = Math.log2(anim.peak)
+      if (Math.abs(baseLy - ly) > 0.2 && baseLy <= Y_MAX) {
+        ctx.setLineDash([3, 6])
+        ctx.strokeStyle = '#5D6B80'
+        ctx.globalAlpha = 0.35
+        ctx.beginPath()
+        ctx.moveTo(xMap(X_MIN), yMap(baseLy))
+        ctx.lineTo(xMap(X_MAX), yMap(baseLy))
+        ctx.stroke()
+        ctx.setLineDash([])
+        ctx.globalAlpha = 1
+        ctx.fillStyle = '#5D6B80'
+        ctx.textAlign = 'right'
+        ctx.fillText(`FP16 base · ${fmtRate(anim.peak)}`, xMap(X_MAX) - 4, yMap(baseLy) - 6)
+      }
 
       /* ridge marker */
       if (logRidge > X_MIN && logRidge < X_MAX) {
@@ -477,6 +914,82 @@ export default function RooflineSim() {
         ctx.fillText(fmtRate(attained), x, y + 16)
       }
 
+      /* dynamic scenario points ------------------------------------------ */
+      const drawPoint = (
+        ai: number,
+        attained: number,
+        color: string,
+        label: string,
+        sublabel: string,
+      ) => {
+        const x = xMap(Math.log2(ai))
+        const y = yMap(Math.log2(Math.max(attained, 2 ** Y_MIN)))
+        ctx.save()
+        ctx.shadowColor = color
+        ctx.shadowBlur = 8
+        ctx.fillStyle = color
+        ctx.beginPath()
+        ctx.arc(x, y, 4.5, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+        ctx.fillStyle = '#07090D'
+        ctx.beginPath()
+        ctx.arc(x, y, 1.6, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = color
+        ctx.textAlign = 'center'
+        ctx.fillText(label, x, y - 10)
+        ctx.fillStyle = '#5D6B80'
+        ctx.fillText(sublabel, x, y + 17)
+      }
+
+      /* coalescing probe — memory-bound load */
+      const coalesceAI = 0.25
+      const coalesceAttained = coalesceAI * s.effectiveHbmBw
+      drawPoint(
+        coalesceAI,
+        coalesceAttained,
+        '#FBBF24',
+        'mem-bound',
+        `${(s.accessThroughputFactor * 100).toFixed(1)}% end-to-end`,
+      )
+
+      /* tier probe — low-intensity streaming load */
+      const tierAI = 0.25
+      const tierAttained = s.tierBw * tierAI
+      drawPoint(tierAI, tierAttained, '#22D3EE', s.tier, fmtBandwidth(s.tierBw))
+
+      /* tiled matmul point */
+      const tileRoof = Math.min(aPeak, aBw * s.tileAI) * s.tileOccFactor
+      drawPoint(
+        s.tileAI,
+        tileRoof,
+        '#3EF2A4',
+        `tile T=${Math.round(s.tileAI * 8)}`,
+        `AI ${fmtAI(s.tileAI)} · occ ${(s.tileOccFactor * 100).toFixed(0)}%`,
+      )
+
+      /* attention point */
+      const attentionRoof = Math.min(aPeak, aBw * s.attentionAI) * 0.8
+      drawPoint(
+        s.attentionAI,
+        attentionRoof,
+        '#A78BFA',
+        s.attentionMode,
+        `AI ${fmtAI(s.attentionAI)}`,
+      )
+
+      /* occupancy annotation near the bandwidth roof */
+      if (s.occupancyPct < 60) {
+        ctx.fillStyle = '#FF5C6C'
+        ctx.textAlign = 'left'
+        ctx.fillText(
+          `low occupancy ${s.occupancyPct}% — latency hiding fails`,
+          L + 6,
+          yMap(Math.log2(aBw)) - 8,
+        )
+      }
+
       /* axis captions */
       ctx.fillStyle = '#5D6B80'
       ctx.textAlign = 'center'
@@ -504,9 +1017,19 @@ export default function RooflineSim() {
       title="Roofline Model"
       subtitle="bandwidth roof · compute ceiling · the ridge point"
       tasks={[
-        { id: 't-decode', text: 'Plot decode @ 70B and name its bound (bandwidth)', xp: 60 },
-        { id: 't-batch', text: 'Batch decode right until it hits the compute roof', xp: 60 },
-        { id: 't-quiz', text: 'Explain why a faster-FLOPs GPU does nothing for decode', xp: 60 },
+        { id: 't-cpu-serial', text: 'Compare the serial dependency chain on CPU and GPU', xp: 60 },
+        { id: 't-gpu-map', text: 'Compare a 64M elementwise map on CPU and GPU', xp: 60 },
+        { id: 't-gpu-divergence', text: 'Compare the 64M map with divergent warp branches', xp: 60 },
+        { id: 't-decode', text: 'Plot decode and observe its bandwidth-bound throughput', xp: 60 },
+        { id: 't-batch', text: 'Batch decode until it crosses the ridge point', xp: 60 },
+        { id: 't-roof-occupancy', text: 'Raise registers until occupancy drops below 25%', xp: 60 },
+        { id: 't-roof-coalesce', text: 'Recover scattered global loads with coalesced shared-memory staging', xp: 60 },
+        { id: 't-roof-bank', text: 'Fix a 32-way shared-memory bank conflict with padding', xp: 60 },
+        { id: 't-roof-tiers', text: 'Sweep working set across shared / L2 / HBM cliffs', xp: 60 },
+        { id: 't-roof-pcie', text: 'Measure the CPU→GPU PCIe transfer cliff', xp: 60 },
+        { id: 't-roof-tile', text: 'Sweep matmul tile T = 16 → 128 and watch AI move', xp: 60 },
+        { id: 't-roof-flash', text: 'Toggle FlashAttention and watch the AI jump', xp: 60 },
+        { id: 't-roof-dtype', text: 'Plot decode, then compare FP16 / FP8 / INT4', xp: 60 },
       ]}
       help={
         <>
@@ -521,12 +1044,21 @@ export default function RooflineSim() {
             AI ≈ 1 FLOP/byte, deep in bandwidth land.{' '}
             <span className="font-mono text-[#A78BFA]">prefill</span> amortizes weights over the
             whole prompt — compute-bound. Batching moves decode right; quantization raises the
-            ceiling. This is the entire economics of LLM serving.
+            ceiling. Tiling raises AI by staging reuse in SRAM; FlashAttention avoids materializing
+            the N² score matrix.
           </p>
         </>
       }
     >
       <div className="flex h-full min-h-0 flex-col">
+        <div className="flex gap-1 border-b border-line bg-surface-1 px-3 py-2">
+          <ChipButton active={mode === 'cpu-gpu'} color="#5CA8FF" onClick={() => selectMode('cpu-gpu')}>
+            CPU vs GPU
+          </ChipButton>
+          <ChipButton active={mode === 'roofline'} color="#A78BFA" onClick={() => selectMode('roofline')}>
+            roofline lab
+          </ChipButton>
+        </div>
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           {/* ------- stage ------- */}
           <div className="relative min-h-[420px] flex-1 bg-ink bg-blueprint">
@@ -538,7 +1070,77 @@ export default function RooflineSim() {
               <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
                 ridge @ {fmtAI(ridgeAI)} F/B
               </span>
+              <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
+                dtype {dtypeLabel(dtype)}
+              </span>
             </div>
+            {mode === 'cpu-gpu' && (
+              <div className="absolute inset-x-4 bottom-4 top-12 z-20 flex flex-col justify-center gap-3">
+                <div className="rounded-sm border border-line bg-surface-1/95 p-4">
+                  <p className="font-display text-base font-semibold text-text-1">Serial dependency chain</p>
+                  <p className="mt-1 font-mono text-[11px] text-text-2">
+                    Each operation depends on the previous result. GPU lanes cannot parallelize the chain,
+                    and launch/synchronization overhead dominates.
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs">
+                    <div className="rounded-sm border border-[#5CA8FF44] p-2">CPU · {cpuSerialMs} ms</div>
+                    <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuSerialMs} ms</div>
+                  </div>
+                  <ChipButton
+                    className="mt-3"
+                    active={serialRan}
+                    color="#5CA8FF"
+                    onClick={() => {
+                      setSerialRan(true)
+                      completeSimTask(SIM_ID, 't-cpu-serial', 60)
+                      log(ticksRef.current, 'COMPARE', 'serial chain — CPU wins latency by 50×', 'ok')
+                    }}
+                  >
+                    run serial comparison
+                  </ChipButton>
+                  {serialRan && <p className="mt-2 font-mono text-[11px] text-[#5CA8FF]">CPU wins 50×</p>}
+                </div>
+                <div className="rounded-sm border border-line bg-surface-1/95 p-4">
+                  <p className="font-display text-base font-semibold text-text-1">64M elementwise map</p>
+                  <p className="mt-1 font-mono text-[11px] text-text-2">
+                    64 million independent elements expose enough uniform work to fill GPU warps.
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs">
+                    <div className="rounded-sm border border-[#5CA8FF44] p-2">CPU · {cpuMapMs} ms</div>
+                    <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuMapMs.toFixed(2)} ms</div>
+                  </div>
+                  <ChipButton
+                    className="mt-3"
+                    active={mapRan}
+                    color="#A78BFA"
+                    onClick={() => {
+                      setMapRan(true)
+                      completeSimTask(SIM_ID, 't-gpu-map', 60)
+                      if (accessPattern === 'divergent') {
+                        completeSimTask(SIM_ID, 't-gpu-divergence', 60)
+                      }
+                      log(
+                        ticksRef.current,
+                        'COMPARE',
+                        `64M map — GPU ${accessPattern === 'coalesced' ? 'wins throughput by 50×' : accessPattern === 'staged' ? 'recovers coalesced global traffic through shared staging' : 'loses efficiency to warp divergence / scattered access'}`,
+                        accessPattern === 'coalesced' || accessPattern === 'staged' ? 'ok' : 'warn',
+                      )
+                    }}
+                  >
+                    run map comparison
+                  </ChipButton>
+                  {mapRan && (
+                    <p className="mt-2 font-mono text-[11px] text-[#A78BFA]">
+                      {accessPattern === 'coalesced'
+                        ? 'GPU wins 50×'
+                        : accessPattern === 'staged'
+                          ? `staging recovers ${Math.round(accessThroughputFactor * 100)}% end-to-end bandwidth`
+                          : `${accessPattern} warps cut effective throughput ${Math.round(1 / coalesceEff)}×`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
             <div ref={wrapRef} className="absolute inset-0">
               <canvas
                 ref={canvasRef}
@@ -588,10 +1190,21 @@ export default function RooflineSim() {
                   setPreset('custom')
                 }}
               />
-              <label className="flex items-center justify-between gap-2 font-mono text-[11px] text-text-2">
-                quantized ceilings
-                <Switch checked={quant} onCheckedChange={setQuant} />
-              </label>
+              <div>
+                <p className="mb-1.5 font-mono text-[11px] text-text-2">precision ceiling</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['fp16', 'fp8', 'int4'] as const).map((d) => (
+                    <ChipButton
+                      key={d}
+                      active={dtype === d}
+                      color="#A78BFA"
+                      onClick={() => setDtype(d)}
+                    >
+                      {dtypeLabel(d)}
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
             </ControlGroup>
 
             <ControlGroup label="kernel library — click to plot">
@@ -621,6 +1234,188 @@ export default function RooflineSim() {
               </div>
             </ControlGroup>
 
+            <ControlGroup label="occupancy & registers">
+              <SliderRow
+                label="warps per SM"
+                value={warpsPerSM}
+                display={`${warpsPerSM} / ${MAX_WARP_SLOTS}`}
+                min={1}
+                max={64}
+                step={1}
+                onChange={setWarpsPerSM}
+              />
+              <SliderRow
+                label="registers per thread"
+                value={regPerThread}
+                display={`${regPerThread}`}
+                min={16}
+                max={255}
+                step={1}
+                onChange={setRegPerThread}
+              />
+              <div
+                className="rounded-sm border px-2 py-1.5 font-mono text-[10px]"
+                style={{
+                  color: occupancyLow ? '#FF5C6C' : '#3EF2A4',
+                  borderColor: occupancyLow ? '#FF5C6C44' : '#3EF2A444',
+                  backgroundColor: occupancyLow ? '#FF5C6C11' : '#3EF2A411',
+                }}
+              >
+                occupancy {occupancyPct}% · resident {residentWarps} warps
+                {regSpill && (
+                  <span className="ml-2 text-[#FF5C6C]">spill: reg file exceeded</span>
+                )}
+              </div>
+            </ControlGroup>
+
+            <ControlGroup label="memory access pattern">
+              <div>
+                <p className="mb-1.5 font-mono text-[11px] text-text-2">access pattern</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['coalesced', 'strided', 'divergent', 'staged'] as const).map((p) => (
+                    <ChipButton
+                      key={p}
+                      active={accessPattern === p}
+                      color="#FBBF24"
+                      onClick={() => setAccessPattern(p)}
+                    >
+                      {p === 'staged' ? 'shared transpose' : p}
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-1 font-mono text-[10px] text-text-2 sm:grid-cols-2">
+                <span>global traffic {Math.round(access.globalTrafficBytes)} B / warp</span>
+                <span>global load {Math.round(access.globalEfficiency * 100)}% coalesced</span>
+                <span>
+                  shared traffic {access.sharedTrafficBytes ? `${Math.round(access.sharedTrafficBytes)} B / warp` : 'none'}
+                </span>
+                <span>
+                  shared banks {access.sharedEfficiency === null ? 'not used' : `${Math.round(access.sharedEfficiency * 100)}% efficient`}
+                </span>
+                <span className="sm:col-span-2">result bandwidth {fmtBandwidth(effectiveHbmBw)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 font-mono text-[11px] text-text-2">
+                <span>32-way bank conflict</span>
+                <Switch
+                  aria-label="Toggle 32-way bank conflict"
+                  checked={bankConflict}
+                  onCheckedChange={(v) => {
+                    setBankConflict(v)
+                    if (!v) setBankPadding(false)
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2 font-mono text-[11px] text-text-2">
+                <span>+1 padding fix</span>
+                <Switch
+                  aria-label="Toggle bank-conflict padding fix"
+                  checked={bankPadding}
+                  onCheckedChange={setBankPadding}
+                  disabled={!bankConflict}
+                />
+              </div>
+              {bankConflict && (
+                <div
+                  className="rounded-sm border px-2 py-1.5 font-mono text-[10px]"
+                  style={{
+                    color: bankPadding ? '#3EF2A4' : '#FF5C6C',
+                    borderColor: bankPadding ? '#3EF2A444' : '#FF5C6C44',
+                    backgroundColor: bankPadding ? '#3EF2A411' : '#FF5C6C11',
+                  }}
+                >
+                  {bankPadding
+                    ? 'conflict-free: column padded to 33 banks'
+                    : 'shared mem serialized 32× — throughput collapsed'}
+                </div>
+              )}
+            </ControlGroup>
+
+            <ControlGroup label="memory tier probe">
+              <SliderRow
+                label="working set"
+                value={Math.log2(workingSetKb)}
+                display={fmtBytes(workingSetKb * 1024)}
+                min={2}
+                max={27}
+                step={0.1}
+                onChange={(v) => setWorkingSetKb(2 ** v)}
+              />
+              <div>
+                <p className="mb-1.5 font-mono text-[11px] text-text-2">4 KB data path</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['auto', 'shared', 'hbm'] as const).map((path) => (
+                    <ChipButton
+                      key={path}
+                      active={memoryPath === path}
+                      color="#22D3EE"
+                      onClick={() => setMemoryPath(path)}
+                    >
+                      {path}
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] text-text-2">
+                <span
+                  className="rounded-sm border px-1.5 py-0.5"
+                  style={{
+                    color: tier === 'shared' ? '#3EF2A4' : tier === 'L2' ? '#22D3EE' : '#FBBF24',
+                    borderColor:
+                      tier === 'shared' ? '#3EF2A444' : tier === 'L2' ? '#22D3EE44' : '#FBBF2444',
+                    backgroundColor:
+                      tier === 'shared' ? '#3EF2A411' : tier === 'L2' ? '#22D3EE11' : '#FBBF2411',
+                  }}
+                >
+                  {tier}
+                </span>
+                <span>bandwidth {fmtBandwidth(tierBw)}</span>
+              </div>
+              <label className="flex items-center justify-between gap-2 font-mono text-[11px] text-text-2">
+                CPU→GPU over PCIe (~32 GB/s)
+                <Switch checked={pcieMode} onCheckedChange={setPcieMode} />
+              </label>
+            </ControlGroup>
+
+            <ControlGroup label="tiling & attention">
+              <SliderRow
+                label="matmul tile T"
+                value={tileT}
+                display={`${tileT}`}
+                min={16}
+                max={256}
+                step={16}
+                onChange={setTileT}
+              />
+              <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] text-text-2">
+                <span>AI ≈ {fmtAI(tileAI)} F/B</span>
+                <span>occupancy {(tileOccFactor * 100).toFixed(0)}%</span>
+              </div>
+              <div className="font-mono text-[10px] text-text-2">
+                HBM traffic {fmtBytes((2 * 4096 ** 3) / tileAI)}
+              </div>
+              <div>
+                <p className="mb-1.5 font-mono text-[11px] text-text-2">attention view</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['naive', 'flash'] as const).map((m) => (
+                    <ChipButton
+                      key={m}
+                      active={attentionMode === m}
+                      color="#A78BFA"
+                      onClick={() => setAttentionMode(m)}
+                    >
+                      {m} attention
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3 font-mono text-[10px] text-text-2">
+                <span>context 32k</span>
+                <span>HBM bytes {fmtBytes(attentionBytes)}</span>
+                <span>{attentionMode === 'flash' ? 'score matrix avoided' : 'N×N scores materialized'}</span>
+              </div>
+            </ControlGroup>
+
             <ControlGroup label="scrub the model">
               <SliderRow
                 label="arithmetic intensity"
@@ -640,7 +1435,7 @@ export default function RooflineSim() {
                 }}
               >
                 bound by: {guideBound.toUpperCase()} — ceiling{' '}
-                {fmtRate(Math.min(peak, bw * guideAI))}
+                {fmtRate(Math.min(peak * dtypeMultiplier(dtype), bw * guideAI))}
               </p>
               <SliderRow
                 label="batch size → (shifts decode)"
@@ -663,7 +1458,6 @@ export default function RooflineSim() {
                 ]}
                 correctIndex={0}
                 onSolved={() => {
-                  completeSimTask(SIM_ID, 't-quiz', 60)
                   log(
                     ticksRef.current,
                     'NOTE',

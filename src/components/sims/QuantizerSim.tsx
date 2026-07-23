@@ -336,10 +336,11 @@ interface RowData {
 const TASKS = [
   { id: 'q-fp16', text: 'Quantize π (3.14159…) to FP16 and read the reconstruction error', xp: 60 },
   { id: 'q-int4-max', text: 'Find the largest exactly-representable INT4 value (zero error at q = ±7)', xp: 60 },
+  { id: 'q-group-compare', text: 'Run per-tensor INT4, then group-128, and compare max error and drift', xp: 60 },
   { id: 'q-outlier', text: 'Inject the 47.3 outlier, then rescue the INT distribution by shrinking group size', xp: 60 },
 ]
 
-const GROUP_SIZES = [128, 64, 32, 16]
+const GROUP_SIZES = [256, 128, 64, 32, 16]
 
 function fmtNum(x: number, digits = 6): string {
   if (!Number.isFinite(x)) return String(x)
@@ -471,6 +472,10 @@ export default function QuantizerSim() {
     return { lo, hi, bins, orig: histCounts(tensor, bins, lo, hi), quant: histCounts(quantTensor, bins, lo, hi) }
   }, [tensor, quantTensor])
   const drift = useMemo(() => symKl(hist.orig, hist.quant), [hist])
+  const tensorMaxError = useMemo(
+    () => tensor.reduce((max, value, i) => Math.max(max, Math.abs(quantTensor[i] - value)), 0),
+    [tensor, quantTensor],
+  )
 
   /* canvases */
   const sparkRef = useRef<HTMLCanvasElement>(null)
@@ -572,27 +577,64 @@ export default function QuantizerSim() {
     }
   }, [x, focus, scale, rows, award])
 
+  const perTensorRunRef = useRef<{
+    tensorKind: TensorKind
+    outlier: boolean
+    maxError: number
+    drift: number
+  } | null>(null)
+  useEffect(() => {
+    if (focus !== 'int4') return
+    if (groupSize === 256) {
+      perTensorRunRef.current = { tensorKind, outlier, maxError: tensorMaxError, drift }
+      return
+    }
+    const perTensor = perTensorRunRef.current
+    if (
+      groupSize === 128 &&
+      perTensor &&
+      perTensor.tensorKind === tensorKind &&
+      perTensor.outlier === outlier
+    ) {
+      award(
+        'q-group-compare',
+        60,
+        `per-tensor→group-128: max error ${fmtNum(perTensor.maxError, 3)}→${fmtNum(tensorMaxError, 3)}, drift ${perTensor.drift.toFixed(2)}→${drift.toFixed(2)} nats`,
+      )
+    }
+  }, [focus, groupSize, tensorKind, outlier, tensorMaxError, drift, award])
+
   useEffect(() => {
     if (outlier && (focus === 'int8' || focus === 'int4') && groupSize <= 16) {
       award('q-outlier', 60, `outlier contained: group ${groupSize} → drift ${drift.toFixed(2)} nats`)
     }
   }, [outlier, focus, groupSize, drift, award])
 
-  /* log drift changes when group size changes under outlier */
-  const prevDriftRef = useRef<{ g: number; d: number } | null>(null)
+  /* log metrics for each integer tensor run */
+  const prevDriftRef = useRef<{
+    g: number
+    d: number
+    e: number
+    tensorKind: TensorKind
+    outlier: boolean
+    focus: 'int8' | 'int4'
+  } | null>(null)
   useEffect(() => {
     if (focus !== 'int8' && focus !== 'int4') return
     const prev = prevDriftRef.current
-    if (!prev || prev.g !== groupSize) {
-      if (prev && outlier) {
+    const sameTensor = prev?.tensorKind === tensorKind && prev.outlier === outlier && prev.focus === focus
+    if (!prev || prev.g !== groupSize || !sameTensor) {
+      const label = groupSize === 256 ? 'per-tensor' : `group-${groupSize}`
+      log('op', `${label}: max error ${fmtNum(tensorMaxError, 3)}, drift ${drift.toFixed(2)} nats`)
+      if (prev && sameTensor && outlier) {
         log(
           drift < prev.d ? 'ok' : 'warn',
-          `GROUP ${prev.g}→${groupSize}  drift ${prev.d.toFixed(2)}→${drift.toFixed(2)} nats ${drift < prev.d ? '✓ rescued' : '✗ worse'}`,
+          `GROUP ${prev.g}→${groupSize}  max error ${fmtNum(prev.e, 3)}→${fmtNum(tensorMaxError, 3)} · drift ${prev.d.toFixed(2)}→${drift.toFixed(2)} nats ${drift < prev.d ? '✓ rescued' : '✗ worse'}`,
         )
       }
-      prevDriftRef.current = { g: groupSize, d: drift }
+      prevDriftRef.current = { g: groupSize, d: drift, e: tensorMaxError, tensorKind, outlier, focus }
     }
-  }, [groupSize, drift, focus, outlier, log])
+  }, [groupSize, drift, tensorMaxError, tensorKind, focus, outlier, log])
 
   const toggleOutlier = () => {
     setOutlier(!outlier)
@@ -762,21 +804,25 @@ export default function QuantizerSim() {
                 outlier 47.3 {outlier ? 'ON' : 'off'}
               </button>
               <div className="flex items-center gap-1">
-                <span className="font-mono text-[10px] text-text-3">group</span>
-                {GROUP_SIZES.map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setGroupSize(g)}
-                    className={cn(
-                      'rounded-sm border px-1.5 py-0.5 font-mono text-[11px] transition-colors duration-180',
-                      groupSize === g
-                        ? 'border-accent bg-accent-dim text-accent'
-                        : 'border-line bg-surface-2 text-text-3 hover:text-text-1',
-                    )}
-                  >
-                    {g}
-                  </button>
-                ))}
+                <span className="font-mono text-[10px] text-text-3">scale</span>
+                {GROUP_SIZES.map((g) => {
+                  const label = g === 256 ? 'tensor' : String(g)
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => setGroupSize(g)}
+                      aria-label={g === 256 ? 'per-tensor scale, group size 256' : `per-group scale, group size ${g}`}
+                      className={cn(
+                        'rounded-sm border px-1.5 py-0.5 font-mono text-[11px] transition-colors duration-180',
+                        groupSize === g
+                          ? 'border-accent bg-accent-dim text-accent'
+                          : 'border-line bg-surface-2 text-text-3 hover:text-text-1',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </section>
@@ -901,10 +947,18 @@ export default function QuantizerSim() {
               })}
             </div>
             <div className="mt-3 border-t border-line pt-3">
-              <div className="mb-1 flex items-center justify-between font-mono text-[11px] text-text-3">
-                <span>tensor: original (mint) vs {focusRow.label}-quantized (amber)</span>
-                <span className="rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 text-amber">
-                  drift {drift.toFixed(2)} nats
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-1 font-mono text-[11px] text-text-3">
+                <span>
+                  tensor: original (mint) vs {focusRow.label}-quantized (amber)
+                  {(focus === 'int8' || focus === 'int4') && ` · ${groupSize === 256 ? 'per-tensor' : `group-${groupSize}`}`}
+                </span>
+                <span className="flex gap-1">
+                  <span className="rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 text-amber">
+                    max error {fmtNum(tensorMaxError, 3)}
+                  </span>
+                  <span className="rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 text-amber">
+                    drift {drift.toFixed(2)} nats
+                  </span>
                 </span>
               </div>
               <canvas ref={histRef} className="h-28 w-full rounded-sm border border-line bg-ink" />

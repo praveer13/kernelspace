@@ -86,19 +86,20 @@ And the formula's blind spot: it prices *residency*. The per-step **bandwidth** 
       type: 'prose',
       md: `## In the calculator
 
-Plug in any model shape and watch the numbers move: weights vs cache, tokens-per-GPU, concurrency vs context trade-offs, and the effect of every lever (GQA, FP8, windowing, prefix sharing). The goal is that by the end you trust your own arithmetic more than any vendor chart.`,
+Plug in any model shape and watch the numbers move: independently choose weight and KV precision, scale from one GPU to a node, and compare aggregate HBM capacity with aggregate bandwidth. The calculator reports both the capacity-limited concurrency and the bandwidth-derived ITL floor, then names which wall arrives first. The goal is that by the end you trust your own arithmetic more than any vendor chart.`,
     },
     {
       type: 'exercise',
       simId: 'sim-kv',
+      machine: 'calc',
       title: 'KV-cache calculator',
       tasks: [
-        'Reproduce the 8B numbers: verify 128 KB/token and ~480k tokens on one 80 GB GPU.',
-        'Model the 70B on 8 GPUs: show weights ≈ 2 GPUs, KV ≈ 6 GPUs of the 8.',
-        'Flip FP16 → FP8 KV and 32 → 8 KV heads: rank the levers by tokens gained.',
-        'Find the concurrency limit for 32k-context chat on 2 GPUs; state whether you hit the capacity or bandwidth wall first.',
+        'Reproduce the 8B numbers: keep FP16 weights and FP16 KV, then verify 128 KB/token and ~480k tokens on one 80 GB GPU.',
+        'Model the 70B on 8 H100s: show FP16 weights at ≈140 GB and the remaining aggregate HBM available to KV.',
+        'Hold weight precision fixed, flip FP16 → FP8 KV, then compare that gain with changing 32 → 8 KV heads.',
+        'Use 2 GPUs and 32k context; read the capacity concurrency and bandwidth/ITL limits, then state which wall arrives first.',
       ],
-      note: `Six symbols — 2, L, d_kv, b — explain why long context is expensive, why GQA and FP8 KV ship in every engine, and why "how many GPUs" is a cache question as much as a weights question. T5.L5 shows how vLLM manages this memory; T5.L6 how it's scheduled.`,
+      note: `Six symbols — 2, L, d_kv, b — explain why long context is expensive, why GQA and FP8 KV ship in every engine, and why "how many GPUs" is a cache question as much as a weights question. Capacity and bandwidth are separate limits: size both before choosing a fix. T5.L5 shows how vLLM manages this memory; T5.L6 how it's scheduled.`,
     },
     {
       type: 'quiz',

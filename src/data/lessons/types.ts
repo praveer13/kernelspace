@@ -116,6 +116,8 @@ export interface QuizBlockData {
 export interface ExerciseBlock {
   type: 'exercise'
   simId: SimId
+  /** Initial simulator machine/mode selected when opening this exercise. */
+  machine?: string
   title: string
   /** guided tasks checklist (3–5 items) */
   tasks: string[]

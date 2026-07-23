@@ -135,6 +135,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
     {
       type: 'exercise',
       simId: 'sim-memory',
+      machine: 'matrix',
       title: 'Row vs column benchmark',
       tasks: [
         'Run the row-major sum on the 8192² matrix; record GB/s effective bandwidth.',

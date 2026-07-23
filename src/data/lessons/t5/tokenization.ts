@@ -84,6 +84,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
     {
       type: 'exercise',
       simId: 'sim-engine',
+      machine: 'tokenizer',
       title: 'Tokenizer lab',
       tasks: [
         'Tokenize "unbelievable" vs a rare surname: count tokens; explain the split via BPE merges.',

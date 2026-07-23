@@ -7,9 +7,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ChevronDown, ChevronUp, Copy, Dices, Pause, Play, RotateCcw, StepForward, Trash2 } from 'lucide-react'
-import PlaygroundShell from '@/components/sims/PlaygroundShell'
+import { useSearchParams } from 'react-router'
+import ContextSwitchLab from '@/components/sims/ContextSwitchLab'
+import PlaygroundShell, { completeSimTask } from '@/components/sims/PlaygroundShell'
+import SchedulerLab from '@/components/sims/SchedulerLab'
+import { CONTEXT_SWITCH_LAB_TASKS } from '@/components/sims/contextSwitchLab.tasks'
+import { SCHEDULER_LAB_TASKS as SCHEDULER_TASKS } from '@/components/sims/schedulerLab.tasks'
 import { Slider } from '@/components/ui/slider'
-import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -112,18 +116,6 @@ function useReducedMotion(): boolean {
   return reduced
 }
 
-function useTaskAward(simId: string, log: (kind: LogKind, text: string) => void) {
-  return useCallback(
-    (taskId: string, xp: number, note: string) => {
-      const st = useProgress.getState()
-      if (st.sims[simId]?.tasksDone.includes(taskId)) return
-      st.recordSimTask(simId, taskId)
-      useProgress.setState((p) => ({ xp: p.xp + xp }))
-      log('ok', `TASK ✓ ${note}  (+${xp} XP)`)
-    },
-    [simId, log],
-  )
-}
 
 function mulberry32(seed: number) {
   let a = seed >>> 0
@@ -142,6 +134,9 @@ function mulberry32(seed: number) {
 
 type Mode = 'static' | 'continuous'
 type PresetId = 'steady' | 'burst' | 'bimodal'
+
+type MachineMode = 'batching' | 'scheduler' | 'context-switch'
+type PreemptionPolicy = 'youngest' | 'oldest'
 
 interface Req {
   id: number
@@ -168,9 +163,25 @@ interface EngineConfig {
   memCapacity: number
   chunked: boolean
   preempt: boolean
+  preemptionPolicy: PreemptionPolicy
   preset: PresetId
   seed: number
   honestSeed: boolean
+  fixedTrace: boolean
+}
+
+function policyWorkloadKey(c: EngineConfig): string {
+  return [
+    c.mode,
+    c.chunked ? 'chunk' : 'nochunk',
+    c.seed,
+    c.preset,
+    c.lambdaPerSec,
+    c.meanOut,
+    c.maxBatch,
+    c.memCapacity,
+    c.preempt,
+  ].join('|')
 }
 
 interface EngineEvent {
@@ -180,6 +191,8 @@ interface EngineEvent {
 
 interface Engine {
   tick: number
+  runWorkload: string
+  runPolicy: PreemptionPolicy
   rng: () => number
   nextId: number
   queue: Req[]
@@ -197,6 +210,8 @@ interface Engine {
   preemptCount: number
   lowUtilStreak: number
   stragglerSeen: boolean
+  fullTraceIdleSlotSteps: number
+  adIdleSlotSteps: number
   series: { util: number[]; batch: number[]; mem: number[] }
   genWindow: number[]
   events: EngineEvent[]
@@ -210,6 +225,8 @@ const SERIES_CAP = 600
 function createEngine(cfg: EngineConfig): Engine {
   return {
     tick: 0,
+    runWorkload: policyWorkloadKey(cfg),
+    runPolicy: cfg.preemptionPolicy,
     rng: mulberry32(cfg.seed),
     nextId: 1,
     queue: [],
@@ -227,6 +244,8 @@ function createEngine(cfg: EngineConfig): Engine {
     preemptCount: 0,
     lowUtilStreak: 0,
     stragglerSeen: false,
+    fullTraceIdleSlotSteps: 0,
+    adIdleSlotSteps: 0,
     series: { util: [], batch: [], mem: [] },
     genWindow: [],
     events: [],
@@ -294,7 +313,7 @@ function memUsed(e: Engine): number {
 function finishIfDone(e: Engine, r: Req): void {
   if (r.generated >= r.out && r.state !== 'done') {
     r.state = 'done'
-    r.doneTick = e.tick
+    r.doneTick = e.tick + 1
     e.done.push(r)
     const ttft = r.firstTokenTick !== null ? (r.firstTokenTick - r.arrival) / 10 : 0
     const itl = r.itlN > 0 ? (r.itlSum / r.itlN) * 100 : 100
@@ -327,15 +346,50 @@ function decodeStep(e: Engine, r: Req): number {
   return 1
 }
 
+const FIXED_TRACE = [
+  { id: 1, prompt: 64, out: 8, arrival: 0 },
+  { id: 2, prompt: 64, out: 12, arrival: 0 },
+  { id: 3, prompt: 64, out: 20, arrival: 0 },
+  { id: 4, prompt: 64, out: 40, arrival: 0 },
+  { id: 5, prompt: 64, out: 12, arrival: 8 },
+  { id: 6, prompt: 64, out: 12, arrival: 12 },
+  { id: 7, prompt: 64, out: 12, arrival: 20 },
+] as const
+
+function enqueueFixedTraceArrivals(e: Engine): void {
+  for (const spec of FIXED_TRACE) {
+    if (spec.arrival !== e.tick) continue
+    const request: Req = {
+      ...spec,
+      state: 'queued',
+      prefilled: 0,
+      generated: 0,
+      firstTokenTick: null,
+      doneTick: null,
+      itlSum: 0,
+      itlN: 0,
+      lastDecodeTick: null,
+      admittedTick: null,
+      protectedUntil: 0,
+    }
+    e.queue.push(request)
+    e.nextId = Math.max(e.nextId, request.id + 1)
+    e.events.push({ kind: 'op', text: `ARRIVE ${String.fromCharCode(64 + request.id)}  p=${request.prompt} out=${request.out} (fixed trace)` })
+  }
+}
+
 function engineTick(e: Engine, cfg: EngineConfig): void {
+  if (cfg.fixedTrace) enqueueFixedTraceArrivals(e)
   /* ---- arrivals (poisson; burst preset modulates λ) ---- */
-  let lam = cfg.lambdaPerSec / 10
-  if (cfg.preset === 'burst' && e.tick % 120 < 20) lam *= 5
-  const k = poisson(e.rng, lam)
-  for (let i = 0; i < k && e.queue.length < 64; i++) {
-    const r = genReq(e, cfg)
-    e.queue.push(r)
-    e.events.push({ kind: 'op', text: `ARRIVE r${r.id}  p=${r.prompt} out≈${r.out} (queue ${e.queue.length})` })
+  if (!cfg.fixedTrace) {
+    let lam = cfg.lambdaPerSec / 10
+    if (cfg.preset === 'burst' && e.tick % 120 < 20) lam *= 5
+    const k = poisson(e.rng, lam)
+    for (let i = 0; i < k && e.queue.length < 64; i++) {
+      const r = genReq(e, cfg)
+      e.queue.push(r)
+      e.events.push({ kind: 'op', text: `ARRIVE r${r.id}  p=${r.prompt} out≈${r.out} (queue ${e.queue.length})` })
+    }
   }
 
   let decodeTokens = 0
@@ -408,7 +462,8 @@ function engineTick(e: Engine, cfg: EngineConfig): void {
       const r = e.queue[0]
       if (memUsed(e) + r.prompt > cfg.memCapacity) {
         if (cfg.preempt) {
-          const victim = [...e.active].reverse().find((v) => v.state === 'decode' && v.protectedUntil <= e.tick)
+          const candidates = e.active.filter((v) => v.state === 'decode' && v.protectedUntil <= e.tick)
+          const victim = cfg.preemptionPolicy === 'youngest' ? candidates[candidates.length - 1] : candidates[0]
           if (victim) {
             victim.state = 'preempted'
             e.preempted.push(victim)
@@ -428,7 +483,7 @@ function engineTick(e: Engine, cfg: EngineConfig): void {
       e.events.push({ kind: 'op', text: `ADMIT r${r.id}  p=${r.prompt} out≈${r.out} → slot ${e.active.length}/${cfg.maxBatch}` })
     }
 
-    if (cfg.chunked) {
+    if (cfg.chunked || cfg.fixedTrace) {
       // SARATHI-ish: one shared token budget per iteration; decodes first
       let budget = CHUNK_BUDGET
       for (const r of e.active) {
@@ -466,10 +521,11 @@ function engineTick(e: Engine, cfg: EngineConfig): void {
       }
     }
 
-    // memory growth pressure → preempt youngest decoders (vLLM-style)
+    // memory growth pressure → apply the selected age policy
     let guard = 0
     while (memUsed(e) > cfg.memCapacity && cfg.preempt && guard++ < 8) {
-      const victim = [...e.active].reverse().find((v) => v.state === 'decode' && v.protectedUntil <= e.tick)
+      const candidates = e.active.filter((v) => v.state === 'decode' && v.protectedUntil <= e.tick)
+      const victim = cfg.preemptionPolicy === 'youngest' ? candidates[candidates.length - 1] : candidates[0]
       if (!victim) break
       victim.state = 'preempted'
       e.preempted.push(victim)
@@ -488,6 +544,14 @@ function engineTick(e: Engine, cfg: EngineConfig): void {
     }
   }
 
+  if (cfg.fixedTrace) {
+    const occupiedSlots = Math.min(cfg.maxBatch, decodeTokens)
+    e.fullTraceIdleSlotSteps += cfg.maxBatch - occupiedSlots
+    if (e.tick < 40) {
+      const adWork = Math.min(4, e.active.filter((r) => r.id <= 4 && r.lastDecodeTick === e.tick).length)
+      e.adIdleSlotSteps += 4 - adWork
+    }
+  }
   /* ---- bookkeeping / series ---- */
   if (cfg.mode === 'continuous') e.active = e.active.filter((r) => r.state !== 'done') // slots free instantly
   const busy = e.active.length > 0
@@ -515,24 +579,46 @@ interface RunRecord {
   meanItl: number
   done: number
   ticks: number
+  fullTraceIdleSlotSteps: number
+  adIdleSlotSteps: number
+  fairness: number
+  adDoneTicks: number[]
+  preemptCount: number
+}
+
+interface PolicyComparison {
+  youngest: RunRecord
+  oldest: RunRecord
+  ttftDelta: number
+  fairnessDelta: number
 }
 
 function recordOf(e: Engine): RunRecord {
   const windowSum = e.genWindow.reduce((a, b) => a + b, 0)
+  const ttfts = e.done
+    .filter((r) => r.firstTokenTick !== null)
+    .map((r) => (r.firstTokenTick as number) - r.arrival)
+  const ttftSum = ttfts.reduce((sum, value) => sum + value, 0)
+  const ttftSquareSum = ttfts.reduce((sum, value) => sum + value * value, 0)
   return {
     throughput: e.tick > 30 ? (e.generatedTotal / e.tick) * 10 : (windowSum / Math.max(1, e.genWindow.length)) * 10,
     meanTtft: e.ttftN > 0 ? e.ttftSum / e.ttftN / 10 : 0,
     meanItl: e.itlN > 0 ? (e.itlSum / e.itlN) * 100 : 0,
     done: e.done.length,
     ticks: e.tick,
+    fullTraceIdleSlotSteps: e.fullTraceIdleSlotSteps,
+    adIdleSlotSteps: e.adIdleSlotSteps,
+    fairness: ttftSquareSum > 0 ? (ttftSum * ttftSum) / (ttfts.length * ttftSquareSum) : ttfts.length > 0 ? 1 : 0,
+    adDoneTicks: e.done.filter((r) => r.id <= 4).sort((a, b) => a.id - b.id).map((r) => r.doneTick ?? -1),
+    preemptCount: e.preemptCount,
   }
 }
 
 const TASKS = [
-  { id: 'batch-straggler', text: 'Reproduce the static-batching straggler cliff (GPU idles on mixed lengths)', xp: 60 },
-  { id: 'batch-continuous', text: 'Same seed, both modes: quantify the continuous-batching throughput gain', xp: 60 },
-  { id: 'batch-preempt', text: 'Enable memory pressure and watch a preemption (≡ OS swap)', xp: 60 },
-  { id: 'batch-chunked', text: 'Enable chunked prefill and cut mean TTFT vs the same-seed baseline', xp: 60 },
+  { id: 'batch-trace-static', text: 'Run the deterministic 8/12/20/40 trace on static batching and measure idle slots and wait.', xp: 60 },
+  { id: 'batch-trace-continuous', text: 'Run the same 8/12/20/40 trace continuously and watch freed slots recycle.', xp: 60 },
+  { id: 'batch-overload', text: 'Sweep arrival rate to 2× capacity and trigger preemption under memory pressure.', xp: 60 },
+  { id: 'batch-policy', text: 'Compare youngest-first and oldest-first preemption policy.', xp: 60 },
 ]
 
 const SPEED_STEPS = [0.25, 0.5, 1, 2, 4]
@@ -596,9 +682,26 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
 }
 
 export default function BatchingSim() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const machineParam = searchParams.get('machine')
+  const fromParam = searchParams.get('from')
+  const desiredMode: MachineMode =
+    machineParam === 'batching' || machineParam === 'scheduler' || machineParam === 'context-switch'
+      ? machineParam
+      : fromParam === 't2.l4'
+        ? 'scheduler'
+        : fromParam === 't2.l1'
+          ? 'context-switch'
+          : 'batching'
+  const machineMode = desiredMode
+  const selectMachine = (mode: MachineMode) => {
+    setPlaying(false)
+    const next = new URLSearchParams(searchParams)
+    next.set('machine', mode)
+    setSearchParams(next, { replace: true })
+  }
   const reduced = useReducedMotion()
   const { lines, log, clear } = useLog('batcher idle — press ▶ to start the arrival stream')
-  const award = useTaskAward('sim-batching', log)
 
   const [cfg, setCfg] = useState<EngineConfig>({
     mode: 'static',
@@ -608,9 +711,11 @@ export default function BatchingSim() {
     memCapacity: 16384,
     chunked: false,
     preempt: false,
+    preemptionPolicy: 'youngest',
     preset: 'steady',
     seed: 0xc0ffee,
     honestSeed: true,
+    fixedTrace: false,
   })
   const configRef = useRef<EngineConfig>(cfg)
   const [initialEngine] = useState<Engine>(() => createEngine(cfg))
@@ -621,6 +726,10 @@ export default function BatchingSim() {
   const speedRef = useRef(SPEED_STEPS[2])
   const accRef = useRef(0)
   const recordsRef = useRef(new Map<string, RunRecord>())
+  const [traceMode, setTraceMode] = useState<Mode | null>(null)
+  const [traceResult, setTraceResult] = useState<RunRecord | null>(null)
+  const [policyComparison, setPolicyComparison] = useState<PolicyComparison | null>(null)
+  const overloadPreemptionSeen = useRef(false)
 
   const drainEvents = useCallback(() => {
     const eng = engineRef.current
@@ -632,41 +741,43 @@ export default function BatchingSim() {
 
   /* ---- run recording + same-seed A/B task evaluation ---- */
   const finishRun = useCallback(
-    (reason: string) => {
+    (reason: string, complete = false) => {
       const e = engineRef.current
       const c = configRef.current
-      if (!e || e.done.length < 8) return
+      if (!e || !complete || c.fixedTrace || c.mode !== 'continuous' || !c.preempt) return
+      const workload = policyWorkloadKey(c)
+      if (e.runWorkload !== workload || e.runPolicy !== c.preemptionPolicy) {
+        log('warn', `RUN NOT RECORDED  config changed during execution; restart for a matched policy comparison`)
+        return
+      }
       const rec = recordOf(e)
-      const phase = c.chunked ? 'chunk' : 'nochunk'
-      const key = `${c.mode}|${phase}|${c.seed}|${c.preset}`
-      recordsRef.current.set(key, rec)
+      if (rec.preemptCount === 0) {
+        log('warn', `RUN NOT RECORDED  ${c.preemptionPolicy}-first selected, but no preemption exercised the policy`)
+        return
+      }
+      recordsRef.current.set(`${workload}|${c.preemptionPolicy}`, rec)
       log(
         'op',
-        `RUN RECORDED  ${c.mode}/${phase} seed 0x${c.seed.toString(16).toUpperCase()}  ${rec.throughput.toFixed(0)} tok/s · TTFT ${rec.meanTtft.toFixed(2)}s · done ${rec.done} (${reason})`,
+        `COMPLETE RUN  ${c.preemptionPolicy}-first seed 0x${c.seed.toString(16).toUpperCase()} · TTFT ${rec.meanTtft.toFixed(2)}s · fairness ${rec.fairness.toFixed(3)} · done ${rec.done} (${reason})`,
       )
-      // task: static vs continuous, same seed + preset + phase
-      const s = recordsRef.current.get(`static|${phase}|${c.seed}|${c.preset}`)
-      const ct = recordsRef.current.get(`continuous|${phase}|${c.seed}|${c.preset}`)
-      if (s && ct && s.done >= 8 && ct.done >= 8) {
-        const gain = ct.throughput / Math.max(1e-9, s.throughput) - 1
-        log(
-          gain > 0 ? 'ok' : 'warn',
-          `A/B (same seed): continuous ${ct.throughput.toFixed(0)} tok/s vs static ${s.throughput.toFixed(0)} tok/s → ${(gain * 100).toFixed(0)}% gain`,
-        )
-        if (gain >= 0.3) award('batch-continuous', 60, `continuous batching: +${(gain * 100).toFixed(0)}% throughput on the identical arrival script`)
-      }
-      // task: chunked prefill TTFT cut (continuous)
-      if (c.mode === 'continuous') {
-        const nc = recordsRef.current.get(`continuous|nochunk|${c.seed}|${c.preset}`)
-        const ch = recordsRef.current.get(`continuous|chunk|${c.seed}|${c.preset}`)
-        if (nc && ch && nc.done >= 8 && ch.done >= 8 && nc.meanTtft > 0 && ch.meanTtft > 0) {
-          const cut = 1 - ch.meanTtft / nc.meanTtft
-          log('op', `A/B chunked prefill: TTFT ${nc.meanTtft.toFixed(2)}s → ${ch.meanTtft.toFixed(2)}s (${(cut * 100).toFixed(0)}% cut)`)
-          if (ch.meanTtft <= 0.8 * nc.meanTtft) award('batch-chunked', 60, `chunked prefill cut mean TTFT by ${(cut * 100).toFixed(0)}% (same seed)`)
+      const youngest = recordsRef.current.get(`${workload}|youngest`)
+      const oldest = recordsRef.current.get(`${workload}|oldest`)
+      if (youngest && oldest) {
+        const comparison = {
+          youngest,
+          oldest,
+          ttftDelta: oldest.meanTtft - youngest.meanTtft,
+          fairnessDelta: oldest.fairness - youngest.fairness,
         }
+        setPolicyComparison(comparison)
+        log(
+          'ok',
+          `MATCHED POLICY A/B  oldest − youngest: TTFT ${comparison.ttftDelta >= 0 ? '+' : ''}${comparison.ttftDelta.toFixed(2)}s · fairness ${comparison.fairnessDelta >= 0 ? '+' : ''}${comparison.fairnessDelta.toFixed(3)}`,
+        )
+        completeSimTask('sim-batching', 'batch-policy', 60)
       }
     },
-    [log, award],
+    [log],
   )
   const finishRunRef = useRef(finishRun)
   useEffect(() => {
@@ -678,6 +789,7 @@ export default function BatchingSim() {
     setCfg(next)
     configRef.current = next
     engineRef.current = createEngine(next)
+    overloadPreemptionSeen.current = false
     setSnap(snapshot(engineRef.current))
   }, [])
 
@@ -685,7 +797,7 @@ export default function BatchingSim() {
     (newSeed?: number) => {
       finishRunRef.current('reset')
       const seed = newSeed ?? configRef.current.seed
-      recreateEngine({ ...configRef.current, seed })
+      recreateEngine({ ...configRef.current, seed, fixedTrace: false })
       log('op', `RESET  seed 0x${seed.toString(16).toUpperCase().padStart(6, '0')} · ${configRef.current.mode} · ${configRef.current.preset}${configRef.current.chunked ? ' · chunked' : ''}`)
     },
     [recreateEngine, log],
@@ -705,7 +817,7 @@ export default function BatchingSim() {
       if (mode === configRef.current.mode) return
       finishRunRef.current('mode switch')
       const seed = configRef.current.honestSeed ? configRef.current.seed : Math.floor(Math.random() * 0xffffff)
-      recreateEngine({ ...configRef.current, mode, seed })
+      recreateEngine({ ...configRef.current, mode, seed, fixedTrace: false })
       log(
         'op',
         `MODE ≡ ${mode.toUpperCase()}  ${configRef.current.honestSeed ? `same seed 0x${seed.toString(16).toUpperCase()} — identical arrival script (honest A/B)` : 'fresh seed — scripts differ (enable honest-seed for A/B)'}`,
@@ -718,11 +830,30 @@ export default function BatchingSim() {
     (preset: PresetId) => {
       if (preset === configRef.current.preset) return
       finishRunRef.current('script change')
-      recreateEngine({ ...configRef.current, preset })
+      recreateEngine({ ...configRef.current, preset, fixedTrace: false })
       log('op', `SCRIPT → ${preset} (seed kept)`)
     },
     [recreateEngine, log],
   )
+  const runFixedTrace = (mode: Mode) => {
+    setPlaying(false)
+    setTraceMode(mode)
+    setTraceResult(null)
+    overloadPreemptionSeen.current = false
+    const next: EngineConfig = {
+      ...configRef.current,
+      mode,
+      maxBatch: 4,
+      lambdaPerSec: 0,
+      memCapacity: 16384,
+      chunked: false,
+      preempt: false,
+      fixedTrace: true,
+    }
+    recreateEngine(next)
+    log('op', `FIXED TRACE START  ${mode.toUpperCase()} · A–D arrive t=0 · E/F/G arrive t=8/12/20`)
+    setPlaying(true)
+  }
 
   /* ---- tick loop: fixed 100ms real, speed = logical ticks/interval ---- */
   useEffect(() => {
@@ -734,9 +865,20 @@ export default function BatchingSim() {
       const steps = Math.min(8, Math.floor(accRef.current))
       accRef.current -= steps
       for (let i = 0; i < steps && eng.tick < MAX_TICKS; i++) engineTick(eng, configRef.current)
-      if (eng.tick >= MAX_TICKS) {
+      const traceComplete =
+        configRef.current.fixedTrace &&
+        eng.done.length === FIXED_TRACE.length &&
+        eng.active.length === 0 &&
+        eng.queue.length === 0
+      if (traceComplete) {
+        const rec = recordOf(eng)
         setPlaying(false)
-        finishRunRef.current('120s logical complete')
+        setTraceResult(rec)
+        completeSimTask('sim-batching', configRef.current.mode === 'static' ? 'batch-trace-static' : 'batch-trace-continuous', 60)
+        log('ok', `FIXED TRACE COMPLETE  ${configRef.current.mode} · ${rec.throughput.toFixed(1)} tok/s · TTFT ${rec.meanTtft.toFixed(2)}s · A–D idle ${rec.adIdleSlotSteps}/160 · full trace idle ${rec.fullTraceIdleSlotSteps} slot-ticks`)
+      } else if (eng.tick >= MAX_TICKS) {
+        setPlaying(false)
+        finishRunRef.current('120s logical complete', true)
         log('ok', `RUN COMPLETE  t=120s logical · ${eng.done.length} seqs finished`)
       }
       drainEvents()
@@ -755,13 +897,19 @@ export default function BatchingSim() {
 
   /* ---- task watchers ---- */
   useEffect(() => {
-    if (engineRef.current?.stragglerSeen) {
-      award('batch-straggler', 60, 'static batch idled at low utilization while one straggler decoded alone')
+    const c = configRef.current
+    const requestCapacity = (c.maxBatch * 10) / Math.max(1, c.meanOut)
+    const explicitOverload = c.lambdaPerSec >= 2 * requestCapacity
+    if (snap.preemptCount > 0) overloadPreemptionSeen.current = true
+    if (
+      c.mode === 'continuous' &&
+      c.preempt &&
+      explicitOverload &&
+      overloadPreemptionSeen.current
+    ) {
+      completeSimTask('sim-batching', 'batch-overload', 60)
     }
-  }, [snap, award])
-  useEffect(() => {
-    if (snap.preemptCount > 0) award('batch-preempt', 60, 'a sequence was preempted → swapped out under memory pressure ≡ OS swap')
-  }, [snap, award])
+  }, [snap.preemptCount, snap.queue.length])
 
   /* ---- utilization chart ---- */
   const chartRef = useRef<HTMLCanvasElement>(null)
@@ -844,10 +992,56 @@ export default function BatchingSim() {
   return (
     <PlaygroundShell
       simId="sim-batching"
-      title="Continuous Batching Simulator"
-      subtitle="the GPU is a CPU; the batcher is a scheduler — watch it context-switch"
-      tasks={TASKS}
+      title={
+        machineMode === 'scheduler'
+          ? 'CPU Scheduler Lab'
+          : machineMode === 'context-switch'
+            ? 'Context Switch Lab'
+            : 'Continuous Batching Simulator'
+      }
+      subtitle={
+        machineMode === 'scheduler'
+          ? 'schedule CPU work, expose convoy effects, and repair priority inversion'
+          : machineMode === 'context-switch'
+            ? 'measure the throughput tax of oversubscription, short quanta, and cold caches'
+            : 'the GPU is a CPU; the batcher is a scheduler — watch it context-switch'
+      }
+      tasks={machineMode === 'scheduler' ? SCHEDULER_TASKS : machineMode === 'context-switch' ? CONTEXT_SWITCH_LAB_TASKS : TASKS}
+      help={
+        machineMode === 'scheduler' ? (
+          <p>
+            Compare FIFO, round-robin, and priority scheduling. Change the workload and
+            controls, then run the model to see how policy affects latency, throughput,
+            and queue growth.
+          </p>
+        ) : (
+          <p>
+            Compare static and continuous batching with the same arrival seed. Use memory
+            pressure and chunked prefill to expose the scheduling trade-offs behind GPU
+            utilization, TTFT, and inter-token latency.
+          </p>
+        )
+      }
     >
+      <div className="mb-4 grid min-w-0 grid-cols-1 gap-1 rounded-md border border-line bg-surface-1 p-1 sm:grid-cols-3">
+        {(['batching', 'scheduler', 'context-switch'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => selectMachine(mode)}
+            aria-pressed={machineMode === mode}
+            className={cn(
+              'min-w-0 truncate rounded-sm border px-2 py-1.5 font-mono text-[11px] transition-all duration-180 active:scale-[.98]',
+              machineMode === mode
+                ? 'border-accent bg-accent-dim text-accent'
+                : 'border-transparent text-text-2 hover:border-line-bright hover:text-text-1',
+            )}
+          >
+            {mode === 'batching' ? 'continuous batching' : mode === 'scheduler' ? 'CPU scheduler' : 'context switch'}
+          </button>
+        ))}
+      </div>
+      {machineMode === 'batching' ? (
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
           {/* ================= controls ================= */}
@@ -990,6 +1184,38 @@ export default function BatchingSim() {
               label="memory pressure (preempt)"
               hint="continuous mode: over-capacity sequences swap out and resume later"
             />
+            <div>
+              <div className="mb-1 font-mono text-[10px] uppercase tracking-[.1em] text-text-3">preemption policy</div>
+              <div className="grid grid-cols-2 gap-1">
+                {(['youngest', 'oldest'] as const).map((policy) => (
+                  <button
+                    key={policy}
+                    type="button"
+                    onClick={() => {
+                      if (policy === configRef.current.preemptionPolicy) return
+                      finishRunRef.current('policy switch')
+                      recreateEngine({ ...configRef.current, preemptionPolicy: policy, fixedTrace: false })
+                      log('op', `PREEMPTION POLICY → ${policy}-first · restarted with identical seed/config/workload`)
+                    }}
+                    className={cn('min-w-0 truncate rounded-sm border px-2 py-1 font-mono text-[10px]', cfg.preemptionPolicy === policy ? 'border-accent bg-accent-dim text-accent' : 'border-line bg-surface-2 text-text-2')}
+                  >
+                    {policy}-first
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-sm border border-line bg-surface-2 px-2.5 py-2 font-mono text-[10px] text-text-3">
+              {policyComparison ? (
+                <>
+                  <div className="text-text-2">matched complete runs · oldest − youngest</div>
+                  <div>TTFT Δ {policyComparison.ttftDelta >= 0 ? '+' : ''}{policyComparison.ttftDelta.toFixed(2)}s</div>
+                  <div>fairness Δ {policyComparison.fairnessDelta >= 0 ? '+' : ''}{policyComparison.fairnessDelta.toFixed(3)}</div>
+                  <div className="mt-1">youngest {policyComparison.youngest.meanTtft.toFixed(2)}s / {policyComparison.youngest.fairness.toFixed(3)} · oldest {policyComparison.oldest.meanTtft.toFixed(2)}s / {policyComparison.oldest.fairness.toFixed(3)}</div>
+                </>
+              ) : (
+                'Policy award: complete the full 120s run under both policies without changing seed, config, or workload.'
+              )}
+            </div>
             <Toggle
               on={cfg.honestSeed}
               onChange={(v) => {
@@ -1016,6 +1242,41 @@ export default function BatchingSim() {
           {/* ================= scene ================= */}
           <div className="flex flex-col gap-4">
             {/* arrival timeline */}
+            <section className="rounded-md border border-line bg-surface-1 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono text-label uppercase tracking-[.1em] text-text-3">deterministic trace · 8 / 12 / 20 / 40</span>
+                <div className="flex gap-1">
+                  {(['static', 'continuous'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => runFixedTrace(mode)}
+                      className={cn('rounded-sm border px-2 py-1 font-mono text-[10px]', traceMode === mode ? 'border-accent bg-accent-dim text-accent' : 'border-line bg-surface-2 text-text-2')}
+                    >
+                      run {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                {[8, 12, 20, 40].map((length, i) => (
+                  <div key={length} className="flex min-w-0 items-center gap-2">
+                    <span className="w-5 font-mono text-[10px] text-text-3">{String.fromCharCode(65 + i)}</span>
+                    <div className="h-4 min-w-0 flex-1 overflow-hidden rounded-[2px] bg-surface-3">
+                      <div className={cn('h-full', traceMode === 'static' ? 'bg-amber/70' : 'bg-accent/70')} style={{ width: `${(length / 40) * 100}%` }} />
+                    </div>
+                    <span className="w-14 text-right font-mono text-[10px] text-text-2">{length} steps</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 font-mono text-[10px] text-text-3">
+                {traceResult
+                  ? `${traceMode === 'static' ? 'Static' : 'Continuous'} observed: A–D completed at [${traceResult.adDoneTicks.join(', ')}] · A–D 40-step idle ${traceResult.adIdleSlotSteps}/160 (static expectation 80/160) · full trace idle ${traceResult.fullTraceIdleSlotSteps} slot-ticks · TTFT ${traceResult.meanTtft.toFixed(2)}s · full trace completed at tick ${traceResult.ticks}.`
+                  : traceMode
+                    ? `${traceMode === 'static' ? 'Static' : 'Continuous'} trace running through the scheduler…`
+                    : 'Run either policy; A–D arrive at tick 0 and E/F/G arrive at ticks 8, 12, and 20.'}
+              </p>
+            </section>
             <section className="rounded-md border border-line bg-surface-1 p-3">
               <div className="mb-2 flex items-center justify-between">
                 <span className="font-mono text-label uppercase tracking-[0.10em] text-text-3">
@@ -1169,6 +1430,11 @@ export default function BatchingSim() {
 
         <LogConsole lines={lines} onClear={clear} />
       </div>
+      ) : machineMode === 'scheduler' ? (
+        <SchedulerLab />
+      ) : (
+        <ContextSwitchLab />
+      )}
     </PlaygroundShell>
   )
 }

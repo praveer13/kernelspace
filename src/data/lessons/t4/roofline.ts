@@ -92,6 +92,7 @@ The simulator is a live roofline: drag kernels onto the plot, sweep batch size a
     {
       type: 'exercise',
       simId: 'sim-roofline',
+      machine: 'roofline',
       title: 'Roofline playground',
       tasks: [
         'Plot decode at batch 1 on the H100 roofline (AI ≈ 1 F/B): read the attainable tokens/s off the bandwidth slope.',

@@ -106,6 +106,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
     {
       type: 'exercise',
       simId: 'sim-batching',
+      machine: 'context-switch',
       title: 'Context-switch burn',
       tasks: [
         'Run 8 workers on 8 slots with pure compute: measure throughput (baseline — near zero overhead).',

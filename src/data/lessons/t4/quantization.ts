@@ -104,12 +104,13 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
     {
       type: 'exercise',
       simId: 'sim-quant',
+      machine: 'quant',
       title: 'The interactive quantizer',
       tasks: [
         'Type 65537.0: watch FP16 overflow (inf) while BF16 survives — range vs precision in one number.',
         'Type 3.14159265: compare mantissa loss across FP16/BF16/FP8-E4M3.',
-        'Quantize the sample weight tensor per-tensor INT4; inspect the error histogram.',
-        'Switch to per-group-128 scales: watch max error drop ~10× for +4 bits/weight.',
+        'Select INT4, then run the 256-value tensor with one per-tensor scale; record its max absolute error and drift.',
+        'Without changing the tensor, run group-128 next; compare both metrics. The guided task completes only after both runs.',
       ],
       note: `You now own the serving engineer's quantization intuition: bits buy precision/range, groups buy error locality, calibration buys accuracy — and on a bandwidth-bound decode loop, every bit saved per weight is literal throughput.`,
     },

@@ -102,7 +102,8 @@ Notice that all three answers address the *same* question. Manual memory managem
     {
       type: 'exercise',
       simId: 'sim-memory',
-      title: 'Memory grid: dereference, arithmetic, segfault',
+      machine: 'pointer',
+      title: 'Pointer lab: arithmetic, indirection, and faults',
       tasks: [
         'Allocate `long vals[4]` on the grid; read `*(p+2)` and confirm it lands exactly 16 bytes along.',
         'Build a two-level pointer (`long **pp`) and follow both hops on the grid.',

@@ -135,6 +135,7 @@ An inference engine's control plane is an async-runtime workload: thousands of S
     {
       type: 'exercise',
       simId: 'sim-engine',
+      machine: 'executor',
       title: 'Build & drive a toy executor',
       tasks: [
         'Spawn 3 timer futures on the toy executor; trace each poll/wake to completion.',

@@ -8,15 +8,16 @@
  * All engine logic lives in ./engine-core (pure TS, deterministic).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useReducedMotion } from 'framer-motion'
+import { useSearchParams } from 'react-router'
 import {
   Pause,
   Play,
   RotateCcw,
   StepForward,
 } from 'lucide-react'
-import PlaygroundShell from './PlaygroundShell'
+import PlaygroundShell, { completeSimTask } from './PlaygroundShell'
 import {
   TOY_MODEL,
   SAMPLE_PROMPTS,
@@ -32,6 +33,7 @@ import {
   EOS_ID,
 } from './engine-core'
 import type { Model } from './engine-core'
+import { ENGINE_EXT_TASKS } from './engineExt.tasks'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 
@@ -43,9 +45,10 @@ const TASKS = [
   { id: 'decode', text: 'Naive-decode 8 tokens and watch the waste counter spin', xp: 60 },
   { id: 'kv', text: 'Enable the KV cache and cut mean ITL by 5× or more', xp: 60 },
   { id: 'batch', text: 'Run 4 concurrent sequences with continuous batching', xp: 60 },
+  ...ENGINE_EXT_TASKS,
 ]
 
-type StageId = 'tokenize' | 'embed' | 'forward' | 'decode' | 'kv' | 'batch'
+type StageId = 'tokenize' | 'embed' | 'forward' | 'decode' | 'kv' | 'batch' | 'context' | 'gqa' | 'executor'
 
 const STAGE_TABS: { id: StageId; label: string }[] = [
   { id: 'tokenize', label: 'tokenize' },
@@ -54,7 +57,30 @@ const STAGE_TABS: { id: StageId; label: string }[] = [
   { id: 'decode', label: 'decode' },
   { id: 'kv', label: 'kv cache' },
   { id: 'batch', label: 'batch' },
+  { id: 'context', label: 'context' },
+  { id: 'gqa', label: 'gqa' },
+  { id: 'executor', label: 'executor' },
 ]
+
+type EngineMachine = 'executor' | 'transformer' | 'tokenizer'
+
+function isEngineMachine(value: string | null): value is EngineMachine {
+  return value === 'executor' || value === 'transformer' || value === 'tokenizer'
+}
+
+const MACHINE_STAGE: Record<EngineMachine, StageId> = {
+  executor: 'executor',
+  transformer: 'forward',
+  tokenizer: 'tokenize',
+}
+
+const STAGE_MACHINE: Partial<Record<StageId, EngineMachine>> = {
+  executor: 'executor',
+  forward: 'transformer',
+  context: 'transformer',
+  gqa: 'transformer',
+  tokenize: 'tokenizer',
+}
 
 /* ------------------------------------------------------------------ */
 /* EngineGlyph — the architecture diagram, reused by the capstone.     */
@@ -199,6 +225,14 @@ function fmtFlops(f: number): string {
   return `${f.toFixed(0)} FLOP`
 }
 
+function fmtBytes(b: number): string {
+  if (b >= 1e12) return `${(b / 1e12).toFixed(2)} TB`
+  if (b >= 1e9) return `${(b / 1e9).toFixed(2)} GB`
+  if (b >= 1e6) return `${(b / 1e6).toFixed(2)} MB`
+  if (b >= 1e3) return `${(b / 1e3).toFixed(2)} KB`
+  return `${b.toFixed(0)} B`
+}
+
 function Chip({ label, value, tone }: { label: string; value: string; tone?: 'mint' | 'amber' }) {
   return (
     <div className="rounded-md border border-line bg-surface-2 px-3 py-2">
@@ -219,22 +253,83 @@ function Chip({ label, value, tone }: { label: string; value: string; tone?: 'mi
 /* Stage panels                                                        */
 /* ------------------------------------------------------------------ */
 
+const COMPARISON_PRESETS = [
+  {
+    key: 'en',
+    label: 'English',
+    text: 'Hello, how are you today?',
+    note: 'ASCII text — tokenized normally',
+  },
+  {
+    key: 'b64',
+    label: 'base64',
+    text: 'SGVsbG8sIGhvdyBhcmUgeW91IHRvZGF5Pw==',
+    note: 'ASCII text in base64 — ~4/3 bytes per token',
+  },
+  {
+    key: 'jp',
+    label: 'Japanese (fallback)',
+    text: 'こんにちは、今日は元気ですか。',
+    note: 'Multilingual bytes — this tokenizer only handles printable ASCII, so we count raw bytes as a fallback',
+  },
+] as const
+
+type ComparisonPreset = (typeof COMPARISON_PRESETS)[number]['key']
+
 function TokenizePanel({
   text,
   shown,
   total,
   ids,
+  comparePreset,
+  setComparePreset,
+  onComparisonViewed,
+  onWordEstimate,
 }: {
   text: string
   shown: number
   total: number
   ids: number[]
+  comparePreset: ComparisonPreset
+  setComparePreset: (p: ComparisonPreset) => void
+  onComparisonViewed: (preset: ComparisonPreset) => void
+  onWordEstimate: () => void
 }) {
   const trace = useMemo(() => tokenizeWithTrace(text), [text])
   const idsNow = shown <= 0 ? [...text].map((c) => c.charCodeAt(0) - 30 + 2) : shown >= total ? ids : trace.events[shown - 1].idsAfter
   const lastEvent = shown > 0 && shown <= total ? trace.events[shown - 1] : null
+  const [sample, setSample] = useState('unbelievable')
+  const [contextCapacity, setContextCapacity] = useState(128_000)
+  const [wordsPerToken, setWordsPerToken] = useState(0.75)
+  const sampleTokens = useMemo(() => tokenizeWithTrace(sample).ids.length, [sample])
+  const spacedTokens = useMemo(() => tokenizeWithTrace(` ${sample}`).ids.length, [sample])
+
+  const comparison = useMemo(() => {
+    const preset = COMPARISON_PRESETS.find((p) => p.key === comparePreset) ?? COMPARISON_PRESETS[0]
+    const bytes = new TextEncoder().encode(preset.text).length
+    if (preset.key === 'jp') {
+      return {
+        preset,
+        tokens: bytes,
+        bytes,
+        tpb: bytes / bytes,
+        fallback: true,
+      }
+    }
+    const toks = tokenizeWithTrace(preset.text).ids.length
+    return {
+      preset,
+      tokens: toks,
+      bytes,
+      tpb: toks / bytes,
+      fallback: false,
+    }
+  }, [comparePreset])
+
+  const wordsEstimate = Math.floor(contextCapacity * wordsPerToken)
+
   return (
-    <div>
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-1.5">
         {idsNow.map((id, i) => (
           <span
@@ -251,7 +346,7 @@ function TokenizePanel({
           </span>
         ))}
       </div>
-      <p className="mt-3 font-mono text-[11px] text-text-3">
+      <p className="font-mono text-[11px] text-text-3">
         merge rounds {Math.min(shown, total)}/{total}
         {lastEvent && (
           <span className="ml-2 text-accent">
@@ -259,6 +354,101 @@ function TokenizePanel({
           </span>
         )}
       </p>
+
+      <div className="rounded-md border border-line bg-surface-2 p-3">
+        <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">token-density comparison</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {COMPARISON_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => {
+                setComparePreset(p.key)
+                onComparisonViewed(p.key)
+              }}
+              className={cn(
+                'rounded-sm border px-2.5 py-1 font-mono text-[11px] transition-colors',
+                comparePreset === p.key
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-line bg-surface-3 text-text-2 hover:border-line-bright',
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 font-mono text-[11px] text-text-2">“{comparison.preset.text}”</p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Chip label="tokens" value={String(comparison.tokens)} />
+          <Chip label="bytes" value={String(comparison.bytes)} />
+          <Chip label="tokens/byte" value={comparison.tpb.toFixed(3)} />
+        </div>
+        <p className={cn('mt-2 font-mono text-[10px]', comparison.fallback ? 'text-amber' : 'text-text-3')}>
+          {comparison.preset.note}
+        </p>
+      </div>
+
+      <div className="rounded-md border border-line bg-surface-2 p-3">
+        <label className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
+          custom BPE / leading-space probe
+          <input
+            value={sample}
+            onChange={(event) => setSample(event.target.value)}
+            className="mt-2 w-full rounded-sm border border-line bg-surface-3 px-2 py-1.5 font-mono text-xs normal-case text-text-1 focus:border-line-bright focus:outline-none"
+          />
+        </label>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Chip label="as typed" value={`${sampleTokens} tokens`} />
+          <Chip label="+ leading space" value={`${spacedTokens} tokens`} tone={sampleTokens !== spacedTokens ? 'amber' : undefined} />
+        </div>
+        <p className="mt-2 font-mono text-[10px] text-text-3">
+          Try “unbelievable”, a rare surname, then hunt for a word whose leading space changes the merge path.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-line bg-surface-2 p-3">
+        <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">context word estimator</p>
+        <label className="mt-2 block font-mono text-[10px] text-text-3">
+          context: {contextCapacity.toLocaleString()} tokens
+          <input
+            type="range"
+            min={8_000}
+            max={128_000}
+            step={8_000}
+            value={contextCapacity}
+            onChange={(event) => {
+              setContextCapacity(Number(event.target.value))
+              onWordEstimate()
+            }}
+            className="mt-1 w-full accent-accent"
+          />
+        </label>
+        <div className="mt-2 flex gap-2">
+          {[0.75, 0.45].map((ratio) => (
+            <button
+              key={ratio}
+              type="button"
+              onClick={() => {
+                setWordsPerToken(ratio)
+                onWordEstimate()
+              }}
+              className={cn(
+                'rounded-sm border px-2.5 py-1 font-mono text-[11px]',
+                wordsPerToken === ratio ? 'border-accent bg-accent/10 text-accent' : 'border-line text-text-2',
+              )}
+            >
+              {ratio === 0.75 ? 'prose · 0.75' : 'source code · 0.45'}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 font-mono text-body-sm text-text-1">
+          {contextCapacity.toLocaleString()} tokens × {wordsPerToken} ≈{' '}
+          <span className="text-accent">{wordsEstimate.toLocaleString()} words</span>
+        </p>
+        <p className="mt-1 font-mono text-[10px] text-text-3">
+          Estimates are workload assumptions: punctuation and syntax make source code denser in tokens than prose.
+        </p>
+      </div>
     </div>
   )
 }
@@ -343,16 +533,72 @@ function EmbedPanel({ model, ids }: { model: Model; ids: number[] }) {
   )
 }
 
-function ForwardPanel({ model, ids }: { model: Model; ids: number[] }) {
+/** Per-token decode FLOP breakdown for an 8B-class model.
+ *  Model dims fixed to the LLaMA-3-8B shape used by the lessons. */
+function forwardFlopShares(ctxLen: number, kvHeads: number) {
+  const d = 4096
+  const layers = 32
+  const headDim = d / 32
+  // QKV: 3 matmuls of size d×d
+  const qkv = 6 * layers * d * d
+  // Attention: scores (2·t·d per layer) + weighted sum (2·t·d per layer)
+  const attn = 4 * layers * ctxLen * d
+  // MLP: up + gate + down projection ≈ 16·d² per layer
+  const mlp = 16 * layers * d * d
+  // Output head and residuals
+  const other = 2 * layers * d * d + d * 100_000
+  const total = qkv + attn + mlp + other
+  return {
+    total,
+    qkvPct: (qkv / total) * 100,
+    attnPct: (attn / total) * 100,
+    mlpPct: (mlp / total) * 100,
+    otherPct: (other / total) * 100,
+    kvBytesPerToken: 2 * kvHeads * headDim * layers * 2,
+  }
+}
+
+function FlopMeter({ label, pct, color }: { label: string; pct: number; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between font-mono text-[10px] text-text-3">
+        <span>{label}</span>
+        <span style={{ color }}>{pct.toFixed(1)}%</span>
+      </div>
+      <div className="mt-1 h-2 overflow-hidden rounded-full bg-surface-3">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function ForwardPanel({ model, ids, ctxLen }: { model: Model; ids: number[]; ctxLen: number }) {
   const [layer, setLayer] = useState(0)
   const [cell, setCell] = useState<{ i: number; j: number } | null>(null)
   const trace = useMemo(() => forwardAll(model, ids), [model, ids])
+  const shares = useMemo(() => forwardFlopShares(ctxLen, 32), [ctxLen])
   const attn = trace.layers[Math.min(layer, trace.layers.length - 1)].attn
   const n = ids.length
   const size = 220
   const cellPx = size / n
   return (
     <div>
+      <div className="mb-3 rounded-md border border-line bg-surface-2 p-3">
+        <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">per-stage FLOP share (decode, ctx={ctxLen.toLocaleString()})</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <FlopMeter label="QKV projections" pct={shares.qkvPct} color="#3EF2A4" />
+          <FlopMeter label="attention scores" pct={shares.attnPct} color="#22D3EE" />
+          <FlopMeter label="MLP (up/gate/down)" pct={shares.mlpPct} color="#A78BFA" />
+          <FlopMeter label="output head + residuals" pct={shares.otherPct} color="#FBBF24" />
+        </div>
+        <p className="mt-2 font-mono text-[10px] text-text-3">
+          total modeled decode FLOPs: {fmtFlops(shares.total)} per token
+        </p>
+      </div>
+
       <div className="mb-2 flex items-center gap-2 font-mono text-[11px] text-text-3">
         <span>layer</span>
         {trace.layers.map((_, li) => (
@@ -547,10 +793,392 @@ function BatchPanel({ iter }: { iter: number }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Extension panels                                                    */
+/* ------------------------------------------------------------------ */
+
+const CONTEXT_POINTS = [1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000, 128_000]
+const WEIGHTS_GB = 16
+const HEAD_DIM = 128
+
+function kvGb(ctx: number, kvHeads: number) {
+  const bytesPerTok = 2 * kvHeads * HEAD_DIM * 32 * 2
+  return (bytesPerTok * ctx) / 1e9
+}
+
+function ContextPanel({ kvHeads, onSweepComplete }: { kvHeads: number; onSweepComplete: () => void }) {
+  const chartH = 220
+  const chartW = 520
+  const pad = { l: 50, r: 20, t: 20, b: 40 }
+  const innerW = chartW - pad.l - pad.r
+  const innerH = chartH - pad.t - pad.b
+
+  const [selectedContext, setSelectedContext] = useState(CONTEXT_POINTS[0])
+  const startedAt1k = useRef(false)
+  const { points, maxGb } = useMemo(() => {
+    const maxGb = Math.max(WEIGHTS_GB, kvGb(128_000, kvHeads))
+    const pts = CONTEXT_POINTS.map((ctx) => {
+      const gb = kvGb(ctx, kvHeads)
+      const x = pad.l + (Math.log2(ctx / 1_000) / Math.log2(128)) * innerW
+      const y = pad.t + innerH - (gb / maxGb) * innerH
+      return { ctx, gb, x, y }
+    })
+    return { points: pts, maxGb }
+  }, [kvHeads, innerW, innerH, pad.l, pad.t])
+
+  const crossover = useMemo(() => {
+    for (let i = 1; i < CONTEXT_POINTS.length; i++) {
+      const prev = kvGb(CONTEXT_POINTS[i - 1], kvHeads)
+      const cur = kvGb(CONTEXT_POINTS[i], kvHeads)
+      if (prev <= WEIGHTS_GB && cur >= WEIGHTS_GB) {
+        const ratio = (WEIGHTS_GB - prev) / (cur - prev)
+        const ctx = Math.round(CONTEXT_POINTS[i - 1] + (CONTEXT_POINTS[i] - CONTEXT_POINTS[i - 1]) * ratio)
+        return ctx
+      }
+    }
+    return null
+  }, [kvHeads])
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+  const weightsY = pad.t + innerH - (WEIGHTS_GB / maxGb) * innerH
+
+  return (
+    <div className="space-y-3">
+      <div className="mb-2 flex flex-wrap items-center gap-3 font-mono text-[11px] text-text-3">
+        <span>model weights</span>
+        <span className="text-accent">{WEIGHTS_GB} GB</span>
+        <span className="text-text-2">·</span>
+        <span>KV-cache ({kvHeads} heads)</span>
+        <span className="text-info">{kvGb(128_000, kvHeads).toFixed(1)} GB @ 128k</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5" aria-label="Context sweep">
+        {CONTEXT_POINTS.map((ctx) => (
+          <button
+            key={ctx}
+            type="button"
+            onClick={() => {
+              if (ctx === CONTEXT_POINTS[0]) startedAt1k.current = true
+              if (ctx === CONTEXT_POINTS[CONTEXT_POINTS.length - 1] && startedAt1k.current) onSweepComplete()
+              setSelectedContext(ctx)
+            }}
+            className={cn(
+              'rounded-sm border px-2 py-1 font-mono text-[10px]',
+              selectedContext === ctx
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-line bg-surface-2 text-text-3 hover:border-line-bright',
+            )}
+          >
+            {ctx / 1_000}k
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Chip label="selected context" value={`${selectedContext.toLocaleString()} tok`} />
+        <Chip label="KV cache" value={`${kvGb(selectedContext, kvHeads).toFixed(2)} GB`} />
+      </div>
+      <svg
+        viewBox={`0 0 ${chartW} ${chartH}`}
+        className="w-full max-w-[520px] rounded-md border border-line bg-ink"
+        role="img"
+        aria-label="KV cache size versus context length"
+      >
+        <line
+          x1={pad.l}
+          y1={weightsY}
+          x2={pad.l + innerW}
+          y2={weightsY}
+          stroke="#FBBF24"
+          strokeWidth={1}
+          strokeDasharray="4 4"
+        />
+        <text x={pad.l + innerW - 4} y={weightsY - 6} textAnchor="end" fontSize={9} className="fill-amber">
+          weights {WEIGHTS_GB} GB
+        </text>
+        <path d={pathD} fill="none" stroke="#22D3EE" strokeWidth={2} />
+        {points.map((p) => (
+          <g key={p.ctx}>
+            <circle cx={p.x} cy={p.y} r={3} fill="#22D3EE" />
+            <text x={p.x} y={pad.t + innerH + 14} textAnchor="middle" fontSize={8} className="fill-text-3">
+              {p.ctx >= 1_000 ? `${p.ctx / 1_000}k` : p.ctx}
+            </text>
+          </g>
+        ))}
+        <text x={pad.l} y={pad.t + innerH + 28} fontSize={9} className="fill-text-3">
+          context length
+        </text>
+        <text x={8} y={pad.t + innerH / 2} fontSize={9} transform={`rotate(-90, 8, ${pad.t + innerH / 2})`} className="fill-text-3">
+          GB
+        </text>
+      </svg>
+      <p className="mt-3 font-mono text-[11px] text-text-2">
+        KV overtakes weights around{' '}
+        <span className="text-accent">{crossover ? `${(crossover / 1_000).toFixed(1)}k tokens` : 'never in this range'}</span>
+        {crossover && (
+          <span className="text-text-3"> — this is the memory cliff that drives T5.L4 and vLLM</span>
+        )}
+      </p>
+    </div>
+  )
+}
+
+function GQAPanel({
+  kvHeads,
+  setKvHeads,
+  ctxLen,
+}: {
+  kvHeads: number
+  setKvHeads: (n: number) => void
+  ctxLen: number
+}) {
+  const shares = useMemo(() => forwardFlopShares(ctxLen, kvHeads), [ctxLen, kvHeads])
+  const kvGbAt128k = kvGb(128_000, kvHeads)
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-line bg-surface-2 p-3">
+        <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">KV-heads selector</p>
+        <div className="mt-2 flex gap-2">
+          {[32, 8].map((h) => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => setKvHeads(h)}
+              className={cn(
+                'rounded-sm border px-3 py-1 font-mono text-[11px] transition-colors',
+                kvHeads === h
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-line bg-surface-3 text-text-2 hover:border-line-bright',
+              )}
+            >
+              {h} heads {h === 32 ? '(MHA)' : '(GQA)'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Chip label="KV size / token" value={fmtBytes(shares.kvBytesPerToken)} />
+        <Chip label="KV @ 128k" value={fmtBytes(shares.kvBytesPerToken * 128_000)} />
+        <Chip label="KV GB @ 128k" value={`${kvGbAt128k.toFixed(1)} GB`} />
+        <Chip label="attn cost share" value={`${shares.attnPct.toFixed(1)}%`} />
+      </div>
+      <p className="font-mono text-[11px] text-text-3">
+        GQA divides KV-cache bytes by 4 (32 → 8 heads) at the cost of slightly less expressive attention.
+        Decode cost is dominated by reading cached K/V, so the cache-size reduction also lowers memory-bandwidth pressure.
+      </p>
+    </div>
+  )
+}
+
+type ExecTaskState = 'pending' | 'running' | 'done' | 'hung' | 'blocked'
+
+interface ExecTask {
+  id: number
+  name: string
+  state: ExecTaskState
+  polls: number
+  wakeAt?: number
+}
+
+function ExecutorPanel({
+  tasks,
+  setTasks,
+  pollCount,
+  setPollCount,
+  markExperiment,
+  resetExperiments,
+}: {
+  tasks: ExecTask[]
+  setTasks: Dispatch<SetStateAction<ExecTask[]>>
+  pollCount: number
+  setPollCount: Dispatch<SetStateAction<number>>
+  markExperiment: (name: string) => void
+  resetExperiments: () => void
+}) {
+  const [running, setRunning] = useState(false)
+  const step = useCallback(() => {
+    setPollCount((count) => count + 1)
+    setTasks((previous) => {
+      const blocker = previous.find(
+        (task) => task.name === 'blocking sleep' && (task.state === 'running' || task.state === 'blocked'),
+      )
+      const now = Date.now()
+      const next: ExecTask[] = blocker
+        ? previous.map((task) =>
+            task.id === blocker.id ? { ...task, polls: task.polls + 1, state: 'blocked' as const } : task,
+          )
+        : previous.map((task) => {
+            if (task.state === 'done' || task.state === 'hung' || task.state === 'blocked') return task
+            const polls = task.polls + 1
+            if (task.name === 'no waker') return { ...task, polls, state: 'hung' }
+            if (task.wakeAt && now >= task.wakeAt) return { ...task, polls, state: 'done' }
+            return { ...task, polls }
+          })
+      if (next.every((task) => task.state === 'done' || task.state === 'hung' || task.state === 'blocked')) {
+        setRunning(false)
+      }
+      return next
+    })
+  }, [setPollCount, setTasks])
+  useEffect(() => {
+    if (!running) return
+    const id = window.setInterval(step, 600)
+    return () => window.clearInterval(id)
+  }, [running, step])
+  const spawnTimers = useCallback(() => {
+    const now = Date.now()
+    setTasks((previous) => {
+      if (previous.some((task) => task.name.startsWith('timer '))) return previous
+      const nextId = previous.reduce((max, task) => Math.max(max, task.id), 0) + 1
+      return [
+        ...previous,
+        { id: nextId, name: 'timer A', state: 'running', polls: 0, wakeAt: now + 1200 },
+        { id: nextId + 1, name: 'timer B', state: 'running', polls: 0, wakeAt: now + 1800 },
+        { id: nextId + 2, name: 'timer C', state: 'running', polls: 0, wakeAt: now + 2400 },
+      ]
+    })
+    setRunning(true)
+    markExperiment('timers')
+  }, [markExperiment, setTasks])
+  const spawnHung = useCallback(() => {
+    setTasks((previous) => {
+      if (previous.some((task) => task.name === 'no waker' || task.name === 'repaired waker')) return previous
+      const nextId = previous.reduce((max, task) => Math.max(max, task.id), 0) + 1
+      return [...previous, { id: nextId, name: 'no waker', state: 'pending', polls: 0 }]
+    })
+    setRunning(true)
+    markExperiment('hung')
+  }, [markExperiment, setTasks])
+  const spawnBlocking = useCallback(() => {
+    setTasks((previous) => {
+      if (previous.some((task) => task.name === 'blocking sleep' || task.name === 'spawn_blocking sleep')) return previous
+      const nextId = previous.reduce((max, task) => Math.max(max, task.id), 0) + 1
+      return [...previous, { id: nextId, name: 'blocking sleep', state: 'running', polls: 0 }]
+    })
+    setRunning(true)
+    markExperiment('blocking')
+  }, [markExperiment, setTasks])
+  const registerMissingWaker = () => {
+    const now = Date.now()
+    setTasks((previous) =>
+      previous.map((task) =>
+        task.name === 'no waker' && task.state === 'hung'
+          ? { ...task, name: 'repaired waker', state: 'running', wakeAt: now + 600 }
+          : task,
+      ),
+    )
+    setRunning(true)
+    markExperiment('repaired')
+  }
+  const moveToBlockingPool = () => {
+    const now = Date.now()
+    setTasks((previous) =>
+      previous.map((task) =>
+        task.name === 'blocking sleep' && task.state === 'blocked'
+          ? { ...task, name: 'spawn_blocking sleep', state: 'running', wakeAt: now + 600 }
+          : task,
+      ),
+    )
+    setRunning(true)
+    markExperiment('moved')
+  }
+  const reset = () => {
+    setTasks([])
+    setPollCount(0)
+    setRunning(false)
+    resetExperiments()
+  }
+  const stateClass: Record<ExecTaskState, string> = {
+    pending: 'text-text-3',
+    running: 'text-accent',
+    done: 'text-info',
+    hung: 'text-danger',
+    blocked: 'text-amber',
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={spawnTimers} className="rounded-sm border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-text-2 hover:border-line-bright">
+          spawn 3 timers
+        </button>
+        <button type="button" onClick={spawnHung} className="rounded-sm border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-text-2 hover:border-line-bright">
+          spawn no-waker future
+        </button>
+        <button type="button" onClick={spawnBlocking} className="rounded-sm border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-text-2 hover:border-line-bright">
+          spawn blocking sleep
+        </button>
+        <button type="button" onClick={step} className="rounded-sm border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-text-2 hover:border-line-bright">
+          poll once
+        </button>
+        <button type="button" onClick={reset} className="rounded-sm border border-danger/50 px-2.5 py-1 font-mono text-[11px] text-danger hover:bg-danger/10">
+          reset
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Chip label="tasks" value={String(tasks.length)} />
+        <Chip label="poll cycles" value={String(pollCount)} />
+        <Chip label="done" value={String(tasks.filter((task) => task.state === 'done').length)} />
+        <Chip label="hung/blocked" value={String(tasks.filter((task) => task.state === 'hung' || task.state === 'blocked').length)} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {tasks.some((task) => task.name === 'no waker' && task.state === 'hung') && (
+          <button type="button" onClick={registerMissingWaker} className="rounded-sm border border-accent/50 bg-accent/10 px-2.5 py-1 font-mono text-[11px] text-accent">
+            register waker + wake
+          </button>
+        )}
+        {tasks.some((task) => task.name === 'blocking sleep' && task.state === 'blocked') && (
+          <button type="button" onClick={moveToBlockingPool} className="rounded-sm border border-info/50 bg-info/10 px-2.5 py-1 font-mono text-[11px] text-info">
+            move to spawn_blocking
+          </button>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        {tasks.length === 0 && <p className="font-mono text-[11px] text-text-3">no tasks — spawn a preset to start</p>}
+        {tasks.map((task) => (
+          <div key={task.id} className="flex items-center justify-between rounded-sm border border-line bg-surface-2 px-2.5 py-1.5">
+            <span className="font-mono text-[11px] text-text-2">{task.name}</span>
+            <div className="flex items-center gap-3 font-mono text-[10px]">
+              <span className={stateClass[task.state]}>{task.state}</span>
+              <span className="text-text-3">polls {task.polls}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="font-mono text-[10px] text-text-3">
+        Pending needs a wake path. Blocking work stalls this executor until it moves to the dedicated blocking pool.
+      </p>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Main sim                                                            */
 /* ------------------------------------------------------------------ */
 
 export default function ToyEngineSim() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const machineParam = searchParams.get('machine')
+  const fromParam = searchParams.get('from')
+  const sourceKey = `${machineParam ?? ''}|${fromParam ?? ''}`
+  const machine = isEngineMachine(machineParam) ? machineParam : null
+  const desiredStage: StageId = machine
+    ? MACHINE_STAGE[machine]
+    : fromParam === 't3.l4'
+      ? 'executor'
+      : fromParam === 't5.l1'
+        ? 'forward'
+        : 'tokenize'
+  const [stageSelection, setStageSelection] = useState<{ sourceKey: string; stage: StageId }>(
+    () => ({ sourceKey, stage: desiredStage }),
+  )
+  const stage = stageSelection.sourceKey === sourceKey ? stageSelection.stage : desiredStage
+  const selectStage = (nextStage: StageId) => {
+    const nextParams = new URLSearchParams(searchParams)
+    const nextMachine = STAGE_MACHINE[nextStage]
+    if (nextMachine) nextParams.set('machine', nextMachine)
+    else nextParams.delete('machine')
+    const nextSourceKey = `${nextParams.get('machine') ?? ''}|${nextParams.get('from') ?? ''}`
+    setStageSelection({ sourceKey: nextSourceKey, stage: nextStage })
+    setSearchParams(nextParams, { replace: true })
+  }
+
   const reduced = useReducedMotion()
   const model = TOY_MODEL
   const recordSimVisit = useProgress((s) => s.recordSimVisit)
@@ -560,7 +1188,6 @@ export default function ToyEngineSim() {
   const [useCache, setUseCache] = useState(true)
   const [batchMode, setBatchMode] = useState(false)
   const [speed, setSpeed] = useState(1)
-  const [stage, setStage] = useState<StageId>('tokenize')
   const [playing, setPlaying] = useState(false)
   const [phase, setPhase] = useState<'idle' | 'tokenizing' | 'decoding' | 'done'>('idle')
   const [mergeShown, setMergeShown] = useState(0)
@@ -568,6 +1195,13 @@ export default function ToyEngineSim() {
   const [batchIter, setBatchIter] = useState(0)
   const [log, setLog] = useState<LogLine[]>([])
   const logId = useRef(0)
+
+  const [kvHeads, setKvHeads] = useState(32)
+  const [comparePreset, setComparePreset] = useState<ComparisonPreset>('en')
+  const [comparisonViews, setComparisonViews] = useState<Set<ComparisonPreset>>(() => new Set(['en']))
+  const [execTasks, setExecTasks] = useState<ExecTask[]>([])
+  const [execPollCount, setExecPollCount] = useState(0)
+  const [execExperiments, setExecExperiments] = useState<Set<string>>(() => new Set())
 
   const prompt = SAMPLE_PROMPTS[promptIdx]
   const tokTrace = useMemo(() => tokenizeWithTrace(prompt.text), [prompt.text])
@@ -591,9 +1225,9 @@ export default function ToyEngineSim() {
     [],
   )
 
-  const pushLog = (text: string, kind: LogLine['kind'] = 'op') => {
-    setLog((l) => [...l.slice(-60), { id: logId.current++, text, kind }])
-  }
+  const pushLog = useCallback((text: string, kind: LogLine['kind'] = 'op') => {
+    setLog((lines) => [...lines.slice(-60), { id: logId.current++, text, kind }])
+  }, [])
 
   useEffect(() => {
     recordSimVisit(SIM_ID)
@@ -615,6 +1249,49 @@ export default function ToyEngineSim() {
     setPlaying(true)
     pushLog(`RUN "${prompt.text}" — ${tokTrace.ids.length} prompt tokens`, 'hit')
   }
+
+  /* task completion side effects */
+  useEffect(() => {
+    if (stage === 'forward') completeSimTask(SIM_ID, 't-eng-flops')
+  }, [stage])
+
+  const viewComparison = useCallback((preset: ComparisonPreset) => {
+    setComparisonViews((previous) => {
+      if (previous.has(preset)) return previous
+      const next = new Set(previous)
+      next.add(preset)
+      return next
+    })
+  }, [])
+
+  const markExecutorExperiment = useCallback((name: string) => {
+    setExecExperiments((previous) => {
+      if (previous.has(name)) return previous
+      const next = new Set(previous)
+      next.add(name)
+      return next
+    })
+  }, [])
+
+  const resetExecutorExperiments = useCallback(() => {
+    setExecExperiments(new Set())
+  }, [])
+
+  useEffect(() => {
+    if (COMPARISON_PRESETS.every((item) => comparisonViews.has(item.key))) {
+      completeSimTask(SIM_ID, 't-eng-tokcmp')
+    }
+  }, [comparisonViews])
+
+  useEffect(() => {
+    if (['timers', 'hung', 'repaired', 'blocking', 'moved'].every((item) => execExperiments.has(item))) {
+      completeSimTask(SIM_ID, 't-eng-exec')
+    }
+  }, [execExperiments])
+
+  useEffect(() => {
+    if (kvHeads !== 32) completeSimTask(SIM_ID, 't-eng-gqa')
+  }, [kvHeads])
 
   /* master clock */
   useEffect(() => {
@@ -696,6 +1373,7 @@ export default function ToyEngineSim() {
     naiveDecode,
     cachedDecode,
     useCache,
+    pushLog,
     recordSimTask,
   ])
 
@@ -764,7 +1442,7 @@ export default function ToyEngineSim() {
                 type="button"
                 role="tab"
                 aria-selected={stage === t.id}
-                onClick={() => setStage(t.id)}
+                onClick={() => selectStage(t.id)}
                 className={cn(
                   'rounded-sm border px-2.5 py-1 font-mono text-[11px] transition-colors duration-150',
                   stage === t.id
@@ -785,10 +1463,14 @@ export default function ToyEngineSim() {
                 shown={mergeShown}
                 total={tokTrace.events.length}
                 ids={tokTrace.ids}
+                comparePreset={comparePreset}
+                setComparePreset={setComparePreset}
+                onComparisonViewed={viewComparison}
+                onWordEstimate={() => completeSimTask(SIM_ID, 't-eng-words')}
               />
             )}
             {stage === 'embed' && <EmbedPanel model={model} ids={[...tokTrace.ids, ...scriptIds]} />}
-            {stage === 'forward' && <ForwardPanel model={model} ids={tokTrace.ids} />}
+            {stage === 'forward' && <ForwardPanel model={model} ids={tokTrace.ids} ctxLen={contextTokens} />}
             {stage === 'decode' && (
               <div>
                 <p className="mb-2 rounded-sm border border-line bg-ink px-3 py-2 font-mono text-body-sm text-text-1">
@@ -824,6 +1506,23 @@ export default function ToyEngineSim() {
             )}
             {stage === 'kv' && <KVPanel tokens={contextTokens} useCache={useCache} />}
             {stage === 'batch' && <BatchPanel iter={batchIter} />}
+            {stage === 'context' && (
+              <ContextPanel
+                kvHeads={kvHeads}
+                onSweepComplete={() => completeSimTask(SIM_ID, 't-eng-ctx')}
+              />
+            )}
+            {stage === 'gqa' && <GQAPanel kvHeads={kvHeads} setKvHeads={setKvHeads} ctxLen={contextTokens} />}
+            {stage === 'executor' && (
+              <ExecutorPanel
+                tasks={execTasks}
+                setTasks={setExecTasks}
+                pollCount={execPollCount}
+                setPollCount={setExecPollCount}
+                markExperiment={markExecutorExperiment}
+                resetExperiments={resetExecutorExperiments}
+              />
+            )}
           </div>
 
           {/* transport */}
@@ -950,7 +1649,7 @@ export default function ToyEngineSim() {
                 onClick={() => {
                   setBatchMode((v) => !v)
                   reset()
-                  setStage('batch')
+                  selectStage('batch')
                 }}
                 className={cn(
                   'relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200',

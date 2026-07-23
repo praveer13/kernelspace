@@ -96,6 +96,7 @@ The exercise wires the three architectures against the same workload and shows y
     {
       type: 'exercise',
       simId: 'sim-allocator',
+      machine: 'rust-concurrency',
       title: 'Concurrency shootout',
       tasks: [
         'Run the pipeline (channel) at 1→4 stages; observe near-linear handoff scaling.',

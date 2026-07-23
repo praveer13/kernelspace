@@ -99,6 +99,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
     {
       type: 'exercise',
       simId: 'sim-engine',
+      machine: 'transformer',
       title: 'Forward pass under the microscope',
       tasks: [
         'Step one token through the 8B model: watch QKV → attention → MLP per layer; note the MLP\'s FLOP share.',

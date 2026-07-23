@@ -9,7 +9,15 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { motion } from 'framer-motion'
 import { Bomb, Dices, MapPin } from 'lucide-react'
+import FrameSim from '@/components/sims/FrameSim'
 import LatencyWalk from '@/components/sims/LatencyWalk'
+import LayoutLab from '@/components/sims/LayoutLab'
+import MatrixBench from '@/components/sims/MatrixBench'
+import PointerLab from '@/components/sims/PointerLab'
+import { FRAME_TASKS } from '@/components/sims/frameSim.tasks'
+import { LAYOUT_TASKS } from '@/components/sims/layoutLab.tasks'
+import { MATRIX_BENCH_TASKS } from '@/components/sims/matrixBench.tasks'
+import { POINTER_LAB_TASKS } from '@/components/sims/pointerLab.tasks'
 import type { SimTask } from '@/components/sims/PlaygroundShell'
 import PlaygroundShell, {
   ChipButton,
@@ -35,13 +43,10 @@ import { cn } from '@/lib/utils'
 const SIM_ID = 'sim-memory'
 
 /**
- * sim-memory hosts two machines:
- *  - 'grid'    — the 256-byte pointer/segfault visualizer (T1 lessons)
- *  - 'latency' — the cache-hierarchy latency walk (T0.L2 "The Memory Hierarchy")
- * Lessons deep-link with ?from=<lessonId>; T0.L2 lands in latency mode, and a
- * manual toggle keeps both machines reachable from /lab/sim-memory directly.
+ * sim-memory hosts six machines: the original byte grid plus focused machines
+ * for pointers, latency, traversal order, data layout, and stack frames.
  */
-type SimMode = 'grid' | 'latency'
+type SimMode = 'grid' | 'pointer' | 'latency' | 'matrix' | 'layout' | 'frames'
 
 const GRID_TASKS: SimTask[] = [
   { id: 't-byte', text: 'Store 0x2A at address 0x80', xp: 60 },
@@ -72,6 +77,63 @@ const LATENCY_TASKS: SimTask[] = [
     xp: 60,
   },
 ]
+
+const MODE_COPY: Record<
+  SimMode,
+  { title: string; subtitle: string; tasks: SimTask[]; lesson: string }
+> = {
+  grid: {
+    title: 'Memory Grid Visualizer',
+    subtitle: 'pointers · segfaults · 256 bytes of truth',
+    tasks: GRID_TASKS,
+    lesson: 'T1 · pointers, heap vs stack, segfaults',
+  },
+  pointer: {
+    title: 'Pointer Lab',
+    subtitle: 'address arithmetic · indirection · mapped ≠ valid',
+    tasks: POINTER_LAB_TASKS,
+    lesson: 'T1.L2 · pointers and manual memory',
+  },
+  latency: {
+    title: 'Latency Walk',
+    subtitle: 'walk the cache hierarchy · L1 → L2 → L3 → DRAM',
+    tasks: LATENCY_TASKS,
+    lesson: 'T0.L2 · the memory hierarchy',
+  },
+  matrix: {
+    title: 'Matrix Bench',
+    subtitle: 'row-major locality · column-major cache misses',
+    tasks: MATRIX_BENCH_TASKS,
+    lesson: 'T0.L3 · row-major vs column-major traversal',
+  },
+  layout: {
+    title: 'Layout Lab',
+    subtitle: 'AoS vs SoA · false sharing · effective bandwidth',
+    tasks: LAYOUT_TASKS,
+    lesson: 'T0.L4 · data layout and false sharing',
+  },
+  frames: {
+    title: 'Frame Visualizer',
+    subtitle: 'stack frames · dangling pointers · guard pages',
+    tasks: FRAME_TASKS,
+    lesson: 'T1.L1 · stack vs heap',
+  },
+}
+
+const MACHINE_MODES: Record<SimMode, true> = {
+  grid: true,
+  pointer: true,
+  latency: true,
+  matrix: true,
+  layout: true,
+  frames: true,
+}
+const LEGACY_MODES: Record<string, SimMode> = {
+  't0.l2': 'latency',
+  't0.l3': 'matrix',
+  't0.l4': 'layout',
+  't1.l1': 'frames',
+}
 
 const CODE_END = 0x3f
 const HEAP_END = 0xbf
@@ -202,10 +264,13 @@ export default function MemoryGridSim() {
   const { embed } = usePlaygroundContext()
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
-  const [searchParams] = useSearchParams()
-  const [mode, setMode] = useState<SimMode>(() =>
-    searchParams.get('from') === 't0.l2' ? 'latency' : 'grid',
-  )
+  const [searchParams, setSearchParams] = useSearchParams()
+  const machine = searchParams.get('machine')
+  const from = searchParams.get('from')
+  const mode: SimMode =
+    machine && MACHINE_MODES[machine as SimMode]
+      ? (machine as SimMode)
+      : (from && LEGACY_MODES[from]) || 'grid'
 
   /* ------- state (ref-mirrored so event-driven ops stay atomic) ------- */
   const initialCfg = useInitialCfg<MemCfg>()
@@ -224,6 +289,27 @@ export default function MemoryGridSim() {
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [faultOpen, setFaultOpen] = useState(false)
+  const gridIntervalRef = useRef<number | null>(null)
+
+  const selectMode = useCallback(
+    (nextMode: SimMode) => {
+      if (gridIntervalRef.current !== null) {
+        window.clearInterval(gridIntervalRef.current)
+        gridIntervalRef.current = null
+      }
+      setScript(null)
+      setPlaying(false)
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current)
+          next.set('machine', nextMode)
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   const ticksRef = useRef(0)
   const [ticks, setTicks] = useState(0)
@@ -421,7 +507,11 @@ export default function MemoryGridSim() {
     const fast = script ? SCENARIOS[script.name]?.fast : false
     const base = fast ? 120 : 650
     const id = window.setInterval(() => applyStepRef.current(), base / speed)
-    return () => window.clearInterval(id)
+    gridIntervalRef.current = id
+    return () => {
+      window.clearInterval(id)
+      if (gridIntervalRef.current === id) gridIntervalRef.current = null
+    }
   }, [playing, speed, script])
 
   const reset = useCallback(() => {
@@ -548,14 +638,17 @@ export default function MemoryGridSim() {
   return (
     <PlaygroundShell
       simId={SIM_ID}
-      title={mode === 'grid' ? 'Memory Grid Visualizer' : 'Latency Walk'}
-      subtitle={
-        mode === 'grid'
-          ? 'pointers · segfaults · 256 bytes of truth'
-          : 'walk the cache hierarchy · L1 → L2 → L3 → DRAM'
-      }
-      tasks={mode === 'grid' ? GRID_TASKS : LATENCY_TASKS}
+      title={MODE_COPY[mode].title}
+      subtitle={MODE_COPY[mode].subtitle}
+      tasks={MODE_COPY[mode].tasks}
       help={
+        mode === 'pointer' ? (
+          <p>
+            Allocate four contiguous 8-byte longs, then watch pointer arithmetic scale by the
+            pointee size. Follow two levels of indirection, contrast mapped memory with valid
+            array bounds, and trace a NULL dereference from the MMU to SIGSEGV.
+          </p>
+        ) :
         mode === 'latency' ? (
           <>
             <p>
@@ -573,51 +666,81 @@ export default function MemoryGridSim() {
               is the expected curve at your current stride; your runs plot as dots on top.
             </p>
           </>
+        ) : mode === 'matrix' ? (
+          <p>
+            Compare contiguous row-major reads with column strides that discard nearly every
+            fetched cache line. Change matrix size and prefetching to see where locality wins.
+          </p>
+        ) : mode === 'layout' ? (
+          <p>
+            Contrast array-of-structs with structure-of-arrays, then isolate false sharing.
+            Useful bytes per cache line—not source-level elegance—determine effective bandwidth.
+          </p>
+        ) : mode === 'frames' ? (
+          <p>
+            Trace calls as stack frames grow downward, follow a pointer after its frame returns,
+            and watch the guard page turn runaway recursion into SIGSEGV.
+          </p>
         ) : (
-        <>
-          <p>
-            One process, 256 bytes of linear memory.{' '}
-            <span className="font-mono text-text-1">0x00–0x3F</span> is the locked .text
-            segment, <span className="font-mono text-text-1">0x40–0xBF</span> is the heap, and{' '}
-            <span className="font-mono text-text-1">0xC0–0xFF</span> is the stack growing
-            downward.
-          </p>
-          <p>
-            Pick a tool: <span className="font-mono text-amber">&p</span> stores an address in a
-            cell (a pointer), <span className="font-mono text-amber">*p</span> reads through it,{' '}
-            <span className="font-mono text-accent">write</span> stores the panel byte, and{' '}
-            <span className="font-mono text-danger">free</span> releases a heap cell. The scenario
-            buttons arm scripted mistakes — each one kills the process so you can watch exactly
-            how.
-          </p>
-        </>
+          <>
+            <p>
+              One process, 256 bytes of linear memory.{' '}
+              <span className="font-mono text-text-1">0x00–0x3F</span> is the locked .text
+              segment, <span className="font-mono text-text-1">0x40–0xBF</span> is the heap, and{' '}
+              <span className="font-mono text-text-1">0xC0–0xFF</span> is the stack growing
+              downward.
+            </p>
+            <p>
+              Pick a tool: <span className="font-mono text-amber">&p</span> stores an address in a
+              cell (a pointer), <span className="font-mono text-amber">*p</span> reads through it,{' '}
+              <span className="font-mono text-accent">write</span> stores the panel byte, and{' '}
+              <span className="font-mono text-danger">free</span> releases a heap cell.
+            </p>
+          </>
         )
       }
     >
       <div className="flex h-full min-h-0 flex-col">
-        {/* ------- machine toggle: memory grid ↔ latency walk ------- */}
+        {/* ------- machine toggle ------- */}
         {!embed && (
-          <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-1 px-4 py-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface-1 px-4 py-2">
             <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
               machine
             </span>
-            <ChipButton active={mode === 'grid'} color="#FFB224" onClick={() => setMode('grid')}>
-              memory grid
-            </ChipButton>
-            <ChipButton
-              active={mode === 'latency'}
-              color="#FBBF24"
-              onClick={() => setMode('latency')}
-            >
-              latency walk
-            </ChipButton>
+            {(
+              [
+                ['grid', 'memory grid', '#FFB224'],
+                ['pointer', 'pointer lab', '#3EF2A4'],
+                ['latency', 'latency walk', '#FBBF24'],
+                ['matrix', 'matrix bench', '#3EF2A4'],
+                ['layout', 'layout lab', '#A78BFA'],
+                ['frames', 'frame visualizer', '#60A5FA'],
+              ] as const
+            ).map(([id, label, color]) => (
+              <ChipButton
+                key={id}
+                active={mode === id}
+                color={color}
+                onClick={() => selectMode(id)}
+              >
+                {label}
+              </ChipButton>
+            ))}
             <span className="ml-auto hidden font-mono text-[10px] text-text-3 sm:inline">
-              {mode === 'grid' ? 'T1 · pointers, heap vs stack, segfaults' : 'T0.L2 · the memory hierarchy'}
+              {MODE_COPY[mode].lesson}
             </span>
           </div>
         )}
-        {mode === 'latency' ? (
+        {mode === 'pointer' ? (
+          <PointerLab />
+        ) : mode === 'latency' ? (
           <LatencyWalk />
+        ) : mode === 'matrix' ? (
+          <MatrixBench />
+        ) : mode === 'layout' ? (
+          <LayoutLab />
+        ) : mode === 'frames' ? (
+          <FrameSim />
         ) : (
         <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

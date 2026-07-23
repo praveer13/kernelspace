@@ -78,11 +78,12 @@ Two refinements complete the picture. **Waiting-queue policy** is a research are
       type: 'prose',
       md: `## In the simulator
 
-The race-track animation: static batching's convoys vs the continuous scheduler editing the batch every iteration, under a Poisson arrival process with heavy-tailed lengths (real traffic). Watch utilization, TTFT distribution, and preemption count as you crank load. Then push past capacity and watch the preemption storm — the thrashing cliff from T2.L3, wearing a GPU.`,
+The simulator includes a deterministic four-request trace — exactly **8/12/20/40 decode steps** — before the stochastic workload. Run it in static mode to see 80 of 160 slot-steps idle and A/B/C held until step 40; run the same trace continuously to see slots recycle at steps 8, 12, and 20. Then use the live workload to push past capacity, and compare **youngest-first** with **oldest-first** preemption under the same pressure.`,
     },
     {
       type: 'exercise',
       simId: 'sim-batching',
+      machine: 'batching',
       title: 'Batching race: static vs continuous',
       tasks: [
         'Run 4 requests (lengths 8/12/20/40) on static: measure GPU idle fraction and per-request wait.',

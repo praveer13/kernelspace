@@ -1,12 +1,15 @@
 /**
  * SIM-02 `sim-allocator` — Toy Allocator Playground (playground.md §5).
  * A 1024-byte heap: malloc/free with first/next/best-fit, split & coalesce,
- * fragmentation meter, and the fixed-64B-block PagedAttention mode
- * (`≡ KV block manager`) that trades internal for external fragmentation.
+ * fragmentation meter, configurable fixed-block PagedAttention mode, long-trace
+ * policy comparison, and an unsafe double-free alias inspector.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Zap } from 'lucide-react'
+import RustLab from '@/components/sims/RustLab'
+import { RUST_LAB_TASKS } from '@/components/sims/rustLab.tasks'
 import PlaygroundShell, {
   ChipButton,
   ControlGroup,
@@ -35,11 +38,22 @@ const HEAP_SIZE = 1024
 const HEADER = 8
 const MIN_SPLIT = 24 // header + min payload
 const ROW_BYTES = 256
-const FIXED_BLOCK = 64
+const DEFAULT_FIXED_BLOCK = 64
 
 const hx4 = (n: number) => `0x${n.toString(16).toUpperCase().padStart(4, '0')}`
 
 type Strategy = 'first' | 'next' | 'best'
+
+type HostMode = 'allocator' | 'rust'
+
+const ALLOCATOR_TASKS = [
+  { id: 't-frag', text: 'Fragment the heap below 25% (largest free / total free)', xp: 60 },
+  { id: 't-coalesce', text: 'Enable coalescing and recover above 75%', xp: 60 },
+  { id: 't-paged', text: 'Observe a fixed-block trace report 0% external fragmentation', xp: 60 },
+  { id: 't-quiz', text: 'Explain the observed internal-for-external fragmentation trade', xp: 60 },
+  { id: 't-trace-lab', text: 'Run a long trace and compare placement policies', xp: 60 },
+  { id: 't-double-free', text: 'Trigger the inspector double-free alias demonstration', xp: 60 },
+]
 
 interface Block {
   id: number
@@ -62,17 +76,17 @@ const blankHeap = (): HeapState => ({
   seq: 1,
 })
 
-const fixedHeap = (): HeapState => ({
-  blocks: Array.from({ length: HEAP_SIZE / FIXED_BLOCK }, (_, i) => ({
+const fixedHeap = (blockSize: number): HeapState => ({
+  blocks: Array.from({ length: HEAP_SIZE / blockSize }, (_, i) => ({
     id: i,
-    start: i * FIXED_BLOCK,
-    size: FIXED_BLOCK,
+    start: i * blockSize,
+    size: blockSize,
     free: true,
     req: 0,
     splinter: 0,
   })),
   rover: 0,
-  seq: HEAP_SIZE / FIXED_BLOCK,
+  seq: HEAP_SIZE / blockSize,
 })
 
 /* ------------------------- pure allocator engine ------------------------- */
@@ -170,7 +184,7 @@ function fragmentation(blocks: Block[]): { totalFree: number; largest: number; r
 
 /* ------------------------------ workload ------------------------------ */
 
-type WorkOp = { type: 'malloc'; size: number } | { type: 'free' }
+type WorkOp = { type: 'malloc'; size: number } | { type: 'free'; slot?: number }
 
 function mulberry32(seed: number) {
   let a = seed
@@ -194,6 +208,106 @@ function genWorkload(seed: number): WorkOp[] {
   )
 }
 
+type AllocationFailureSnapshot = {
+  operationIndex: number
+  requestedSize: number
+  totalFreeBytes: number
+  largestFreeBlock: number
+}
+
+type TraceResult = {
+  history: number[]
+  failureSnapshots: AllocationFailureSnapshot[]
+  finalRatio: number
+  internalWaste: number
+  metadata: number
+}
+
+function makeTrace(length: number, seed: number, alternating: boolean): WorkOp[] {
+  const rng = mulberry32(seed)
+  let live = 0
+  return Array.from({ length }, (_, i) => {
+    if (live > 2 && (i % 5 === 4 || rng() < 0.34)) {
+      const slot = Math.floor(rng() * live)
+      live -= 1
+      return { type: 'free', slot }
+    }
+    live += 1
+    const size = alternating ? (i % 2 === 0 ? 24 : 96) : WORK_SIZES[Math.floor(rng() * WORK_SIZES.length)]
+    return { type: 'malloc', size }
+  })
+}
+
+function simulateTrace(
+  trace: WorkOp[],
+  strategy: Strategy,
+  fixedBlockSize: number | null,
+): TraceResult {
+  let state = fixedBlockSize ? fixedHeap(fixedBlockSize) : blankHeap()
+  let liveIds: number[] = []
+  const failureSnapshots: AllocationFailureSnapshot[] = []
+  const history: number[] = []
+  const sampleEvery = Math.max(1, Math.floor(trace.length / 80))
+
+  const recordFailure = (operationIndex: number, requestedSize: number) => {
+    const free = fragmentation(state.blocks)
+    failureSnapshots.push({
+      operationIndex,
+      requestedSize,
+      totalFreeBytes: free.totalFree,
+      largestFreeBlock: free.largest,
+    })
+  }
+
+  trace.forEach((op, index) => {
+    if (op.type === 'free') {
+      if (liveIds.length > 0) {
+        const liveIndex = (op.slot ?? 0) % liveIds.length
+        const id = liveIds[liveIndex]
+        liveIds = liveIds.filter((_, i) => i !== liveIndex)
+        state = engineFree(state, id, !fixedBlockSize).st
+      }
+    } else if (fixedBlockSize) {
+      const freeIndex = state.blocks.findIndex((block) => block.free)
+      if (freeIndex === -1 || op.size > fixedBlockSize) {
+        recordFailure(index + 1, op.size)
+      } else {
+        const id = state.blocks[freeIndex].id
+        state = {
+          ...state,
+          blocks: state.blocks.map((block, i) =>
+            i === freeIndex ? { ...block, free: false, req: op.size } : block,
+          ),
+        }
+        liveIds.push(id)
+      }
+    } else {
+      const result = engineMalloc(state, op.size, strategy)
+      state = result.st
+      if (result.ptr) liveIds.push(result.ptr.id)
+      else recordFailure(index + 1, op.size)
+    }
+    if (index % sampleEvery === 0 || index === trace.length - 1) {
+      history.push(fixedBlockSize ? 1 : fragmentation(state.blocks).ratio)
+    }
+  })
+
+  const final = fragmentation(state.blocks)
+  const internalWaste = fixedBlockSize
+    ? state.blocks.reduce(
+        (waste, block) => waste + (block.free ? 0 : fixedBlockSize - block.req),
+        0,
+      )
+    : 0
+  return {
+    history,
+    failureSnapshots,
+    finalRatio: fixedBlockSize ? 1 : final.ratio,
+    internalWaste,
+    metadata: state.blocks.length * HEADER,
+  }
+}
+
 /* ------------------------------ URL config ------------------------------ */
 
 interface AllocCfg {
@@ -201,10 +315,11 @@ interface AllocCfg {
   c: boolean
   f: boolean
   b: [number, number, number, number][] // start,size,free,req
+  z?: number
 }
 
-function heapToCfg(h: HeapState, s: Strategy, c: boolean, f: boolean): AllocCfg {
-  return { s, c, f, b: h.blocks.map((b) => [b.start, b.size, b.free ? 1 : 0, b.req]) }
+function heapToCfg(h: HeapState, s: Strategy, c: boolean, f: boolean, z: number): AllocCfg {
+  return { s, c, f, z, b: h.blocks.map((b) => [b.start, b.size, b.free ? 1 : 0, b.req]) }
 }
 
 function cfgToHeap(cfg: AllocCfg | null): HeapState | null {
@@ -231,6 +346,36 @@ export default function AllocatorSim() {
   const { embed } = usePlaygroundContext()
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const machine = searchParams.get('machine')
+  const from = searchParams.get('from')
+  const rustTab =
+    machine === 'rust-concurrency' ||
+    (machine !== 'rust-ownership' && machine !== 'rust' && from === 't3.l3')
+      ? 'concurrency'
+      : 'ownership'
+  const mode: HostMode =
+    machine === 'allocator'
+      ? 'allocator'
+      : machine === 'rust' || machine === 'rust-ownership' || machine === 'rust-concurrency'
+        ? 'rust'
+        : from === 't3.l1' || from === 't3.l3'
+          ? 'rust'
+          : 'allocator'
+  const selectMode = (nextMode: HostMode) => {
+    if (nextMode === 'rust') {
+      setQueue(null)
+      setPlaying(false)
+    }
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.set('machine', nextMode === 'allocator' ? 'allocator' : `rust-${rustTab}`)
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const initialCfg = useInitialCfg<AllocCfg>()
   const [heap, setHeapState] = useState<HeapState>(() => cfgToHeap(initialCfg) ?? blankHeap())
@@ -243,6 +388,11 @@ export default function AllocatorSim() {
   const [strategy, setStrategy] = useState<Strategy>(initialCfg?.s ?? 'first')
   const [coalesceOn, setCoalesceOn] = useState<boolean>(initialCfg?.c ?? true)
   const [fixedMode, setFixedMode] = useState<boolean>(initialCfg?.f ?? false)
+  const [fixedBlockSize, setFixedBlockSize] = useState(initialCfg?.z ?? DEFAULT_FIXED_BLOCK)
+  const [traceHistory, setTraceHistory] = useState<number[]>([])
+  const [traceSummary, setTraceSummary] = useState<TraceResult | null>(null)
+  const [comparison, setComparison] = useState<Record<Strategy, TraceResult> | null>(null)
+  const [aliasOwners, setAliasOwners] = useState<string[]>([])
   const [mallocSize, setMallocSize] = useState('64')
   const [queue, setQueue] = useState<WorkOp[] | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -257,8 +407,33 @@ export default function AllocatorSim() {
     return ticksRef.current
   }, [])
   const sawFragRef = useRef(false)
+  const lastTraceRef = useRef<WorkOp[] | null>(null)
+  const quizCorrectRef = useRef(false)
+  const quizAwardedRef = useRef(false)
 
-  useWriteCfg(heapToCfg(heap, strategy, coalesceOn, fixedMode))
+  const awardQuizIfReady = useCallback(
+    (isFixed: boolean, result: TraceResult | null) => {
+      if (
+        quizAwardedRef.current ||
+        !quizCorrectRef.current ||
+        !isFixed ||
+        !result?.history.every((ratio) => ratio === 1)
+      ) {
+        return
+      }
+      quizAwardedRef.current = true
+      completeSimTask(SIM_ID, 't-quiz', 60)
+      log(
+        ticksRef.current,
+        'NOTE',
+        '≡ PagedAttention: fixed blocks keep external fragmentation at 0%; unused capacity remains internal waste',
+        'ok',
+      )
+    },
+    [log],
+  )
+
+  useWriteCfg(heapToCfg(heap, strategy, coalesceOn, fixedMode, fixedBlockSize))
 
   const frag = fragmentation(heap.blocks)
   const fragPct = Math.round(frag.ratio * 100)
@@ -271,8 +446,12 @@ export default function AllocatorSim() {
       const t = bump()
       if (fixedMode) {
         const idx = heapRef.current.blocks.findIndex((b) => b.free)
-        if (idx === -1) {
-          log(t, 'ALLOC', `${n}B ✗ ENOMEM — all 16 KV blocks in use`, 'err')
+        if (idx === -1 || n > fixedBlockSize) {
+          const reason =
+            n > fixedBlockSize
+              ? `request exceeds ${fixedBlockSize}B block`
+              : `all ${HEAP_SIZE / fixedBlockSize} KV blocks in use`
+          log(t, 'ALLOC', `${n}B ✗ ENOMEM — ${reason}`, 'err')
           setShakeKey((k) => k + 1)
           return
         }
@@ -280,11 +459,11 @@ export default function AllocatorSim() {
           i === idx ? { ...b, free: false, req: n } : b,
         )
         setHeap({ ...heapRef.current, blocks })
-        const waste = FIXED_BLOCK - n
+        const waste = fixedBlockSize - n
         log(
           t,
           'ALLOC',
-          `${n}B @ ${hx4(idx * FIXED_BLOCK)} (64B block${waste > 0 ? `, ${waste}B internal waste` : ''})`,
+          `${n}B @ ${hx4(idx * fixedBlockSize)} (${fixedBlockSize}B block${waste > 0 ? `, ${waste}B internal waste` : ''})`,
           'ok',
         )
         return
@@ -299,7 +478,7 @@ export default function AllocatorSim() {
       setHeap(st)
       log(t, 'ALLOC', `${n}B @ ${hx4(ptr.start)}${note} ✓`, 'ok')
     },
-    [bump, fixedMode, log, setHeap, strategy],
+    [bump, fixedBlockSize, fixedMode, log, setHeap, strategy],
   )
 
   const doFree = useCallback(
@@ -335,7 +514,7 @@ export default function AllocatorSim() {
       else doFreeRandom()
       return rest.length > 0 ? rest : null
     })
-  }, [doFreeRandom, doMalloc])
+  }, [doFreeRandom, doMalloc, setPlaying, setQueue])
 
   const applyRef = useRef(applyWorkloadOp)
   useEffect(() => {
@@ -353,7 +532,65 @@ export default function AllocatorSim() {
     setQueue(genWorkload(seed))
     setPlaying(true)
     log(ticksRef.current, 'WORK', `auto workload — 40 mixed ops (seed ${seed.toString(16)})`, 'warn')
-  }, [log])
+  }, [log, setPlaying, setQueue])
+
+  const runLongTrace = useCallback(
+    (length: number, alternating: boolean) => {
+      const trace = makeTrace(length, alternating ? 0xa11e : 0xc0ffee, alternating)
+      const result = simulateTrace(trace, strategy, fixedMode ? fixedBlockSize : null)
+      lastTraceRef.current = trace
+      setTraceHistory(result.history)
+      setTraceSummary(result)
+      setComparison(null)
+      log(
+        bump(),
+        'TRACE',
+        `${length} ops · ${result.failureSnapshots.length} failed · final usability ${Math.round(result.finalRatio * 100)}%`,
+        result.failureSnapshots.length > 0 ? 'warn' : 'ok',
+      )
+      if (fixedMode && result.history.every((ratio) => ratio === 1)) {
+        completeSimTask(SIM_ID, 't-paged', 60)
+      }
+      awardQuizIfReady(fixedMode, result)
+    },
+    [
+      awardQuizIfReady,
+      bump,
+      fixedBlockSize,
+      fixedMode,
+      log,
+      setComparison,
+      setTraceHistory,
+      setTraceSummary,
+      strategy,
+    ],
+  )
+
+  const comparePolicies = useCallback(() => {
+    const selectedTrace = lastTraceRef.current
+    const trace = selectedTrace ?? makeTrace(1000, 0xa11e, true)
+    const results: Record<Strategy, TraceResult> = {
+      first: simulateTrace(trace, 'first', null),
+      next: simulateTrace(trace, 'next', null),
+      best: simulateTrace(trace, 'best', null),
+    }
+    setComparison(results)
+    setTraceSummary(null)
+    setTraceHistory(results[strategy].history)
+    log(bump(), 'COMPARE', `same ${trace.length}-op trace replayed under first, next, and best fit`, 'ok')
+    if (selectedTrace) completeSimTask(SIM_ID, 't-trace-lab', 60)
+  }, [bump, log, setComparison, setTraceHistory, setTraceSummary, strategy])
+
+  const runAliasDemo = useCallback(() => {
+    setAliasOwners(['owner A → 0x0040', 'owner B → 0x0040'])
+    log(
+      bump(),
+      'CORRUPT',
+      'double-free inserted 0x0040 twice; malloc A and malloc B now alias the same bytes',
+      'err',
+    )
+    completeSimTask(SIM_ID, 't-double-free', 60)
+  }, [bump, log, setAliasOwners])
 
   /* ----------------------------- task checks ----------------------------- */
   useEffect(() => {
@@ -364,37 +601,68 @@ export default function AllocatorSim() {
     if (!fixedMode && coalesceOn && sawFragRef.current && frag.ratio > 0.75) {
       completeSimTask(SIM_ID, 't-coalesce', 60)
     }
-    if (fixedMode && usedCount >= 8) {
-      completeSimTask(SIM_ID, 't-paged', 60)
-    }
-  }, [frag.ratio, frag.totalFree, fixedMode, coalesceOn, usedCount])
+    // Fixed-block observability is credited only after a real trace reports structural usability.
+  }, [frag.ratio, frag.totalFree, fixedMode, coalesceOn])
 
   const reset = useCallback(() => {
-    setHeap(fixedMode ? fixedHeap() : blankHeap())
+    setHeap(fixedMode ? fixedHeap(fixedBlockSize) : blankHeap())
     setQueue(null)
     setPlaying(false)
+    setTraceHistory([])
+    setTraceSummary(null)
+    setComparison(null)
+    setAliasOwners([])
     ticksRef.current = 0
     setTicks(0)
     sawFragRef.current = false
-    log(0, 'RESET', fixedMode ? 'heap re-issued as 16 × 64B KV blocks' : 'heap re-issued — one 1024B free block')
-  }, [fixedMode, log, setHeap])
+    log(
+      0,
+      'RESET',
+      fixedMode
+        ? `heap re-issued as ${HEAP_SIZE / fixedBlockSize} × ${fixedBlockSize}B KV blocks`
+        : 'heap re-issued — one 1024B free block',
+    )
+  }, [
+    fixedBlockSize,
+    fixedMode,
+    log,
+    setAliasOwners,
+    setComparison,
+    setHeap,
+    setPlaying,
+    setQueue,
+    setTicks,
+    setTraceHistory,
+    setTraceSummary,
+  ])
 
   const toggleFixed = useCallback(
     (on: boolean) => {
       setFixedMode(on)
       setQueue(null)
       setPlaying(false)
-      setHeap(on ? fixedHeap() : blankHeap())
+      setHeap(on ? fixedHeap(fixedBlockSize) : blankHeap())
       log(
         ticksRef.current,
         'MODE',
         on
-          ? 'fixed 64B blocks — ≡ KV block manager (no splits, no coalescing, no external frag)'
+          ? `fixed ${fixedBlockSize}B blocks — ≡ KV block manager (no external frag)`
           : 'variable blocks — split & coalesce live',
         'warn',
       )
     },
-    [log, setHeap],
+    [fixedBlockSize, log, setFixedMode, setHeap, setPlaying, setQueue],
+  )
+
+  const changeFixedBlockSize = useCallback(
+    (size: number) => {
+      setFixedBlockSize(size)
+      if (fixedMode) setHeap(fixedHeap(size))
+      setTraceHistory([])
+      setTraceSummary(null)
+      log(ticksRef.current, 'BLOCK', `${size}B fixed blocks · ${HEAP_SIZE / size} entries`, 'warn')
+    },
+    [fixedMode, log, setFixedBlockSize, setHeap, setTraceHistory, setTraceSummary],
   )
 
   const sizeVal = Math.min(512, Math.max(1, parseInt(mallocSize || '0', 10) || 0))
@@ -428,35 +696,84 @@ export default function AllocatorSim() {
   return (
     <PlaygroundShell
       simId={SIM_ID}
-      title="Toy Allocator"
-      subtitle="free lists · split & coalesce · fragmentation"
-      tasks={[
-        { id: 't-frag', text: 'Fragment the heap below 25% (largest free / total free)', xp: 60 },
-        { id: 't-coalesce', text: 'Enable coalescing and recover above 75%', xp: 60 },
-        { id: 't-paged', text: 'In 64B-fixed mode, allocate 8+ blocks — 0 external fragmentation', xp: 60 },
-        { id: 't-quiz', text: 'Explain why fixed blocks trade internal for external fragmentation', xp: 60 },
-      ]}
+      title={mode === 'rust' ? 'Rust Systems Lab' : 'Toy Allocator'}
+      subtitle={
+        mode === 'rust'
+          ? 'ownership · borrowing · concurrency'
+          : 'free lists · split & coalesce · fragmentation'
+      }
+      tasks={mode === 'rust' ? RUST_LAB_TASKS : ALLOCATOR_TASKS}
       help={
-        <>
-          <p>
-            A 1024-byte heap, drawn like a hex editor (4 rows × 256B). Every block pays an{' '}
-            <span className="font-mono text-text-1">8B header</span> (the dark cap).{' '}
-            <span className="font-mono text-text-1">malloc</span> walks the free list with your
-            chosen strategy and splits blocks;{' '}
-            <span className="font-mono text-text-1">free</span> returns them, optionally merging
-            neighbors.
-          </p>
-          <p>
-            The meter watches <span className="font-mono text-text-1">largest free ÷ total
-            free</span> — when it craters, plenty of bytes exist but none are usable. That is
-            external fragmentation. Flip on{' '}
-            <span className="font-mono text-text-1">fixed 64B blocks</span> and it becomes
-            impossible — exactly why vLLM pages the KV cache in uniform 16-token blocks.
-          </p>
-        </>
+        mode === 'rust' ? (
+          <>
+            <p>
+              Step through Rust ownership, borrowing, and lifetime rules as box-and-arrow
+              transitions, then compare synchronization strategies under contention.
+            </p>
+            <p>
+              Use the ownership scenarios to see which bindings remain valid, and the concurrency
+              scenarios to connect channels, mutexes, atomics, and <span className="font-mono text-text-1">Send</span>{' '}
+              constraints to their runtime costs.
+            </p>
+          </>
+        ) : (
+          <>
+            <p>
+              A 1024-byte heap, drawn like a hex editor (4 rows × 256B). Every block pays an{' '}
+              <span className="font-mono text-text-1">8B header</span> (the dark cap).{' '}
+              <span className="font-mono text-text-1">malloc</span> walks the free list with your
+              chosen strategy and splits blocks; <span className="font-mono text-text-1">free</span>{' '}
+              returns them, optionally merging neighbors.
+            </p>
+            <p>
+              The meter watches <span className="font-mono text-text-1">largest free ÷ total free</span>{' '}
+              — when it craters, plenty of bytes exist but none are usable. That is external
+              fragmentation. Flip on <span className="font-mono text-text-1">fixed blocks</span>{' '}
+              and it becomes impossible — exactly why vLLM pages the KV cache in uniform 16-token
+              blocks.
+            </p>
+          </>
+        )
       }
     >
       <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-1 px-4 py-2">
+        <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-text-3">
+          machine
+        </span>
+        <button
+          type="button"
+          aria-pressed={mode === 'allocator'}
+          onClick={() => selectMode('allocator')}
+          className={cn(
+            'rounded-sm border px-2.5 py-1 font-mono text-[11px] transition-colors duration-150',
+            mode === 'allocator'
+              ? 'border-accent/40 bg-accent/10 text-accent'
+              : 'border-line bg-surface-2 text-text-2 hover:text-text-1',
+          )}
+        >
+          Allocator
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === 'rust'}
+          onClick={() => selectMode('rust')}
+          className="rounded-sm border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-text-2 transition-colors duration-150 hover:text-text-1"
+          style={
+            mode === 'rust'
+              ? { borderColor: '#FFB22466', backgroundColor: '#FFB22414', color: '#FFB224' }
+              : undefined
+          }
+        >
+          Rust
+        </button>
+      </div>
+      {mode === 'rust' ? (
+        <div className="min-h-0 flex-1">
+          <RustLab initialTab={rustTab} />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           {/* ------- stage ------- */}
           <div className="relative min-h-[380px] flex-1 overflow-auto bg-ink bg-blueprint p-4">
@@ -468,7 +785,7 @@ export default function AllocatorSim() {
                 </span>
                 {fixedMode && (
                   <span className="rounded-sm border border-[#22D3EE]/50 bg-[#22D3EE]/10 px-2 py-0.5 text-[#22D3EE]">
-                    ≡ KV block manager — 16 × 64B
+                    ≡ KV block manager — {HEAP_SIZE / fixedBlockSize} × {fixedBlockSize}B
                   </span>
                 )}
               </div>
@@ -518,8 +835,8 @@ export default function AllocatorSim() {
                           ? (b.splinter / seg.segLen) * 100
                           : 0
                       const wastePct =
-                        !b.free && seg.isTail && fixedMode && FIXED_BLOCK - b.req > 0
-                          ? ((FIXED_BLOCK - b.req) / seg.segLen) * 100
+                        !b.free && seg.isTail && fixedMode && fixedBlockSize - b.req > 0
+                          ? ((fixedBlockSize - b.req) / seg.segLen) * 100
                           : 0
                       const isSplinterFree = b.free && b.size < MIN_SPLIT && !fixedMode
                       return (
@@ -609,6 +926,77 @@ export default function AllocatorSim() {
                 </div>
               ))}
             </div>
+
+            {traceHistory.length > 0 && (
+              <div className="mt-3 rounded-sm border border-line bg-surface-1 p-3">
+                <div className="mb-2 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.10em] text-text-3">
+                  <span>
+                    {traceSummary && fixedMode
+                      ? 'fixed-block usability · trace'
+                      : 'largest free / total free · trace'}
+                  </span>
+                  <span>
+                    {traceSummary
+                      ? `${traceSummary.failureSnapshots.length} failures · ${fixedMode ? '0% external' : `${Math.round(traceSummary.finalRatio * 100)}% final`}`
+                      : 'policy overlay'}
+                  </span>
+                </div>
+                <svg
+                  viewBox="0 0 320 72"
+                  className="h-20 w-full"
+                  role="img"
+                  aria-label={fixedMode ? 'Fixed-block usability over the selected trace' : 'Fragmentation ratio sparkline over the selected trace'}
+                >
+                  <path d="M0 18H320 M0 36H320 M0 54H320" stroke="#182130" strokeWidth="1" />
+                  <polyline
+                    fill="none"
+                    stroke="#3EF2A4"
+                    strokeWidth="2"
+                    points={traceHistory
+                      .map(
+                        (value, index) =>
+                          `${(index / Math.max(1, traceHistory.length - 1)) * 320},${68 - value * 64}`,
+                      )
+                      .join(' ')}
+                  />
+                </svg>
+                {comparison && (
+                  <div className="grid grid-cols-3 gap-2 font-mono text-[10px]">
+                    {(['first', 'next', 'best'] as Strategy[]).map((policy) => (
+                      <div key={policy} className="rounded-sm bg-surface-2 p-2 text-text-2">
+                        <span className="block text-text-3">{policy}-fit</span>
+                        {Math.round(comparison[policy].finalRatio * 100)}% ·{' '}
+                        {comparison[policy].failureSnapshots.length} fail
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {traceSummary && fixedMode && (
+                  <p className="mt-2 font-mono text-[10px] text-[#22D3EE]">
+                    external fragmentation 0B · usability 100% · internal waste{' '}
+                    {traceSummary.internalWaste}B · metadata {traceSummary.metadata}B
+                  </p>
+                )}
+                {traceSummary && traceSummary.failureSnapshots.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-mono text-[9px] uppercase tracking-[0.10em] text-text-3">
+                      allocation failures · state before failed request
+                    </p>
+                    <div className="mt-1 max-h-28 space-y-1 overflow-y-auto font-mono text-[10px]">
+                      {traceSummary.failureSnapshots.map((failure) => (
+                        <p
+                          key={`${failure.operationIndex}-${failure.requestedSize}`}
+                          className="rounded-sm bg-[#FF5C6C]/10 px-2 py-1 text-[#FF9BA5]"
+                        >
+                          op {failure.operationIndex}: request {failure.requestedSize}B · free{' '}
+                          {failure.totalFreeBytes}B · largest {failure.largestFreeBlock}B
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ------- control panel ------- */}
@@ -666,9 +1054,23 @@ export default function AllocatorSim() {
                 <Switch checked={coalesceOn} onCheckedChange={setCoalesceOn} disabled={fixedMode} />
               </label>
               <label className="flex items-center justify-between gap-2 font-mono text-[11px] text-text-2">
-                fixed 64B blocks only
+                fixed blocks
                 <Switch checked={fixedMode} onCheckedChange={toggleFixed} />
               </label>
+              <div>
+                <p className="mb-1.5 font-mono text-[11px] text-text-2">fixed block size</p>
+                <div className="flex flex-wrap gap-1">
+                  {[16, 32, 64, 128, 256].map((size) => (
+                    <ChipButton
+                      key={size}
+                      onClick={() => changeFixedBlockSize(size)}
+                      active={fixedBlockSize === size}
+                    >
+                      {size}B
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
               <AnimatePresence>
                 {fixedMode && (
                   <motion.p
@@ -684,33 +1086,58 @@ export default function AllocatorSim() {
               </AnimatePresence>
             </ControlGroup>
 
-            <ControlGroup label="stress">
+            <ControlGroup label="stress & traces">
               <ChipButton onClick={startWorkload} className="flex w-full items-center justify-center gap-2">
-                <Zap size={12} strokeWidth={1.75} /> auto workload — 40 ops
+                <Zap size={12} strokeWidth={1.75} /> live workload — 40 ops
+              </ChipButton>
+              <div className="grid grid-cols-2 gap-1.5">
+                <ChipButton onClick={() => runLongTrace(1000, true)}>alternating · 1K</ChipButton>
+                <ChipButton onClick={() => runLongTrace(5000, false)}>adversarial · 5K</ChipButton>
+              </div>
+              <ChipButton onClick={comparePolicies} className="w-full">
+                compare same trace · all policies
               </ChipButton>
               <p className="font-mono text-[10px] leading-relaxed text-text-3">
-                injects mixed mallocs/frees at transport speed. queue:{' '}
+                Long presets execute deterministically and plot fragmentation. queue:{' '}
                 {queue ? `${queue.length} ops left` : 'empty'}.
               </p>
             </ControlGroup>
 
+            <ControlGroup label="unsafe inspector">
+              <ChipButton onClick={runAliasDemo} className="w-full">
+                double-free → allocate twice
+              </ChipButton>
+              {aliasOwners.length > 0 && (
+                <div className="rounded-sm border border-[#FF5C6C]/50 bg-[#FF5C6C]/10 p-2 font-mono text-[10px] text-[#FF5C6C]">
+                  {aliasOwners.map((owner) => (
+                    <p key={owner}>{owner}</p>
+                  ))}
+                  <p className="mt-1 text-text-2">writes alias: two owners, one block</p>
+                </div>
+              )}
+            </ControlGroup>
+
             <ControlGroup label="task · explain" className="border-b-0">
               <InlineQuiz
-                question="Why do fixed 64B blocks trade internal for external fragmentation?"
+                question={`Why do fixed ${fixedBlockSize}B blocks trade internal for external fragmentation?`}
                 options={[
-                  'Every allocation rounds up to a whole block — waste moves inside the block (≤63B) instead of scattering unusable gaps between blocks.',
+                  `Every allocation rounds up to a whole block — waste moves inside the block (≤${fixedBlockSize - 1}B) instead of scattering unusable gaps between blocks.`,
                   'Fixed blocks are faster to search, so the allocator just ignores gaps.',
                   'The MMU forbids coalescing, so fragmentation is hidden rather than removed.',
                 ]}
                 correctIndex={0}
                 onSolved={() => {
-                  completeSimTask(SIM_ID, 't-quiz', 60)
-                  log(
-                    ticksRef.current,
-                    'NOTE',
-                    '≡ PagedAttention: 16-token blocks cap waste at <4% — internal, bounded, never external',
-                    'ok',
-                  )
+                  quizCorrectRef.current = true
+                  if (fixedMode && traceSummary?.history.every((ratio) => ratio === 1)) {
+                    awardQuizIfReady(fixedMode, traceSummary)
+                  } else {
+                    log(
+                      ticksRef.current,
+                      'OBSERVE',
+                      'Correct — now run a fixed-block trace to verify the measurement before XP is logged.',
+                      'warn',
+                    )
+                  }
                 }}
               />
             </ControlGroup>
@@ -728,6 +1155,8 @@ export default function AllocatorSim() {
           idle={!queue}
         />
         {!embed && <LogConsole lines={lines} onClear={clear} />}
+      </div>
+      )}
       </div>
     </PlaygroundShell>
   )

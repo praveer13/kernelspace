@@ -96,6 +96,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
     {
       type: 'exercise',
       simId: 'sim-memory',
+      machine: 'latency',
       title: 'Latency-walk visualizer',
       tasks: [
         'Run the pointer-chase with a 32 KB working set — find which cache level answers (flat, fast).',

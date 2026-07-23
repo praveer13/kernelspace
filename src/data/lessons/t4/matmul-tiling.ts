@@ -103,6 +103,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
     {
       type: 'exercise',
       simId: 'sim-roofline',
+      machine: 'roofline',
       title: 'Tiling playground: matmul to FlashAttention',
       tasks: [
         'Run naive matmul (N=4096): measure AI ≈ 2 F/B and the resulting bandwidth wall.',

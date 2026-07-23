@@ -103,6 +103,7 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
     {
       type: 'exercise',
       simId: 'sim-vm',
+      machine: 'paging',
       title: 'Eviction lab: policies under pressure',
       tasks: [
         'Run the looping trace (working set fits): compare LRU vs Clock fault counts — near-identical.',

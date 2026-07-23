@@ -111,6 +111,7 @@ The exercise replays ownership scenarios on a live memory diagram: moves, borrow
     {
       type: 'exercise',
       simId: 'sim-allocator',
+      machine: 'rust-ownership',
       title: 'Ownership diagrams live',
       tasks: [
         'Step a move (`let b = a`) and verify: one owner, one drop; using `a` flags an error.',

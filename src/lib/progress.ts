@@ -119,6 +119,49 @@ function touchStreak(streakDays: string[]): string[] {
   return [...streakDays, today]
 }
 
+const RETIRED_SIM_TASKS: Readonly<Record<string, Readonly<Record<string, true>>>> = {
+  'sim-wgsl': { 'wgsl-wg1': true, 'wgsl-shared': true, 'wgsl-tiled': true },
+  'sim-batching': {
+    'batch-continuous': true,
+    'batch-chunked': true,
+    'batch-straggler': true,
+    'batch-preempt': true,
+  },
+  'sim-roofline': { 't-quiz': true },
+}
+
+function removeRetiredSimTasks(state: unknown): unknown {
+  if (!state || typeof state !== 'object') return state
+
+  const progress = state as Record<string, unknown>
+  if (!progress.sims || typeof progress.sims !== 'object') return state
+
+  const sims = progress.sims as Record<string, unknown>
+  let nextSims: Record<string, unknown> | undefined
+
+  for (const [simId, retiredTasks] of Object.entries(RETIRED_SIM_TASKS)) {
+    const sim = sims[simId]
+    if (!sim || typeof sim !== 'object') continue
+
+    const tasksDone = (sim as Record<string, unknown>).tasksDone
+    if (!Array.isArray(tasksDone)) continue
+
+    const retainedTasks = tasksDone.filter(
+      (taskId) => typeof taskId !== 'string' || retiredTasks[taskId] !== true,
+    )
+    if (retainedTasks.length === tasksDone.length) continue
+
+    nextSims ??= { ...sims }
+    nextSims[simId] = { ...sim, tasksDone: retainedTasks }
+  }
+
+  return nextSims ? { ...progress, sims: nextSims } : state
+}
+
+export function migrateProgress(persistedState: unknown, persistedVersion: number): unknown {
+  return persistedVersion < 2 ? removeRetiredSimTasks(persistedState) : persistedState
+}
+
 export const useProgress = create<ProgressState>()(
   persist(
     (set) => ({
@@ -242,7 +285,7 @@ export const useProgress = create<ProgressState>()(
           if (data?.version !== 1 || typeof data.lessons !== 'object' || typeof data.xp !== 'number') {
             return false
           }
-          set({ ...initialData, ...data })
+          set({ ...initialData, ...(removeRetiredSimTasks(data) as typeof initialData) })
           return true
         } catch {
           return false
@@ -253,7 +296,8 @@ export const useProgress = create<ProgressState>()(
     }),
     {
       name: 'kernelspace:v1',
-      version: 1,
+      version: 2,
+      migrate: migrateProgress as (persistedState: unknown, version: number) => ProgressState,
     },
   ),
 )

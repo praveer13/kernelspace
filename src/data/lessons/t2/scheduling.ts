@@ -82,6 +82,7 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
     {
       type: 'exercise',
       simId: 'sim-batching',
+      machine: 'scheduler',
       title: 'Scheduler lab: slices, priorities, admission',
       tasks: [
         'Run FIFO with one 60× long job: measure the convoy effect on short-job p99.',

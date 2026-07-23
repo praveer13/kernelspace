@@ -172,6 +172,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
     {
       type: 'exercise',
       simId: 'sim-memory',
+      machine: 'layout',
       title: 'Layout lab: AoS vs SoA vs false sharing',
       tasks: [
         'Run the deadline sweep on the AoS layout; note effective bandwidth (~1/8 of peak).',

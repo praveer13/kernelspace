@@ -6,7 +6,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ChevronDown, ChevronUp, Copy, Trash2 } from 'lucide-react'
+import { useSearchParams } from 'react-router'
+import BlockTableExplorer from '@/components/sims/BlockTableExplorer'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
+import { BLOCK_TABLE_EXPLORER_TASKS as BLOCK_TABLE_TASKS } from '@/components/sims/blockTableExplorer.tasks'
 import { Slider } from '@/components/ui/slider'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
@@ -179,15 +182,17 @@ const DTYPE: { id: Dtype; label: string; bytes: number }[] = [
 ]
 
 const GPUS = [
-  { id: 'h100', name: 'H100', gb: 80 },
-  { id: 'a100-80', name: 'A100 80GB', gb: 80 },
-  { id: 'a100-40', name: 'A100 40GB', gb: 40 },
-  { id: 'rtx4090', name: 'RTX 4090', gb: 24 },
-  { id: 't4', name: 'T4', gb: 16 },
+  { id: 'h100', name: 'H100', gb: 80, bandwidthGbps: 3350 },
+  { id: 'a100-80', name: 'A100 80GB', gb: 80, bandwidthGbps: 2039 },
+  { id: 'a100-40', name: 'A100 40GB', gb: 40, bandwidthGbps: 1555 },
+  { id: 'rtx4090', name: 'RTX 4090', gb: 24, bandwidthGbps: 1008 },
+  { id: 't4', name: 'T4', gb: 16, bandwidthGbps: 320 },
 ]
 
 const CTX_STEPS = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 200000, 262144, 524288, 1048576]
 const BATCH_STEPS = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+const GPU_COUNT_PRESETS = [1, 2, 4, 8]
+const ITL_SLO_MS = 50
 
 const TASKS = [
   { id: 'kv-oom', text: 'Make a 70B FP16 model OOM at 32k context on one H100', xp: 60 },
@@ -208,7 +213,29 @@ function fmtCtx(c: number): string {
 /* component                                                           */
 /* ------------------------------------------------------------------ */
 
+type MachineMode = 'calc' | 'blocks'
+
 export default function KvCacheSim() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const machineParam = searchParams.get('machine')
+  const fromParam = searchParams.get('from')
+  const machineMode: MachineMode =
+    machineParam === 'calc' || machineParam === 'blocks'
+      ? machineParam
+      : fromParam === 't5.l5'
+        ? 'blocks'
+        : 'calc'
+  const selectMachine = (mode: MachineMode) => {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.set('machine', mode)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
   const reduced = useReducedMotion()
   const { lines, log, clear } = useLog('kv-calc ready — memory/token = 2 × L × H_kv × d × bytes')
   const award = useTaskAward('sim-kv', log)
@@ -217,34 +244,61 @@ export default function KvCacheSim() {
   const [layers, setLayers] = useState(32)
   const [kvHeads, setKvHeads] = useState(8)
   const [headDim, setHeadDim] = useState(128)
-  const [dtype, setDtype] = useState<Dtype>('fp16')
+  const [kvDtype, setKvDtype] = useState<Dtype>('fp16')
+  const [weightDtype, setWeightDtype] = useState<Dtype>('fp16')
   const [ctxIdx, setCtxIdx] = useState(3) // 8192
   const [batchIdx, setBatchIdx] = useState(2) // 4
   const [gpuId, setGpuId] = useState('h100')
-  const [paged, setPaged] = useState(true)
+  const [gpuCount, setGpuCount] = useState(1)
   const [prefixShare, setPrefixShare] = useState(0)
+  const [paged, setPaged] = useState<boolean>(true)
   const [hoverTerm, setHoverTerm] = useState<Term>(null)
 
   const isCustom = presetId === 'custom'
   const paramsB = isCustom ? 7 : PRESETS.find((p) => p.id === presetId)?.paramsB ?? 7
-  const bytes = DTYPE.find((d) => d.id === dtype)?.bytes ?? 2
+  const kvBytes = DTYPE.find((d) => d.id === kvDtype)?.bytes ?? 2
+  const weightBytes = DTYPE.find((d) => d.id === weightDtype)?.bytes ?? 2
   const ctx = CTX_STEPS[ctxIdx]
   const batch = BATCH_STEPS[batchIdx]
   const gpu = GPUS.find((g) => g.id === gpuId) ?? GPUS[0]
+  const totalHbmGb = gpu.gb * gpuCount
+  const totalBandwidthGbps = gpu.bandwidthGbps * gpuCount
 
   /* ---- the math: KV bytes = 2 × L × H_kv × d × bytes × ctx × B ---- */
   const calc = useMemo(() => {
-    const kvPerToken = 2 * layers * kvHeads * headDim * bytes // bytes / token / sequence
+    const kvPerToken = 2 * layers * kvHeads * headDim * kvBytes // bytes / token / sequence
     const shareFactor = batch > 1 ? 1 - (prefixShare / 100) * ((batch - 1) / batch) : 1
     const kvUsed = (kvPerToken * ctx * batch * shareFactor) / 1e9 // GB actually needed
     const paFactor = paged ? 1.04 : 1 / 0.3 // static reservation wastes ~70%
     const kvReserved = kvUsed * paFactor
-    const weights = paramsB * bytes
+    const weights = paramsB * weightBytes
     const overhead = 1 + 0.03 * weights
     const total = weights + kvReserved + overhead
-    const oom = total > gpu.gb
-    const perSeqGb = (kvPerToken * ctx * paFactor * (batch > 1 ? shareFactor : 1)) / 1e9
-    const maxBatch = Math.max(0, Math.floor((gpu.gb - weights - overhead) / Math.max(perSeqGb, 1e-9)))
+    const oom = total > totalHbmGb
+    const perSeqGb = (kvPerToken * ctx * paFactor) / 1e9
+    const availableKvGb = Math.max(0, totalHbmGb - weights - overhead)
+    const sharedPrefixGb = perSeqGb * (prefixShare / 100)
+    const unsharedGb = perSeqGb - sharedPrefixGb
+    const maxBatch =
+      availableKvGb < sharedPrefixGb
+        ? 0
+        : Math.max(0, Math.floor((availableKvGb - sharedPrefixGb) / Math.max(unsharedGb, 1e-9)))
+    const itlMs = ((weights + kvUsed) / totalBandwidthGbps) * 1000
+    const bandwidthKvBudgetGb = Math.max(0, (totalBandwidthGbps * ITL_SLO_MS) / 1000 - weights)
+    const bandwidthPerSeqGb = (kvPerToken * ctx) / 1e9
+    const bandwidthSharedPrefixGb = bandwidthPerSeqGb * (prefixShare / 100)
+    const bandwidthUnsharedGb = bandwidthPerSeqGb - bandwidthSharedPrefixGb
+    const bandwidthBatch =
+      bandwidthKvBudgetGb < bandwidthSharedPrefixGb
+        ? 0
+        : Math.max(
+            0,
+            Math.floor(
+              (bandwidthKvBudgetGb - bandwidthSharedPrefixGb) /
+                Math.max(bandwidthUnsharedGb, 1e-9),
+            ),
+          )
+    const limitingWall = maxBatch <= bandwidthBatch ? 'capacity' : 'bandwidth'
     return {
       kvPerToken,
       kvUsed,
@@ -254,11 +308,14 @@ export default function KvCacheSim() {
       total,
       oom,
       maxBatch,
+      bandwidthBatch,
+      limitingWall,
+      itlMs,
       shareFactor,
       paFactor,
       wastePct: paged ? 4 : 70,
     }
-  }, [layers, kvHeads, headDim, bytes, ctx, batch, prefixShare, paged, paramsB, gpu.gb])
+  }, [layers, kvHeads, headDim, kvBytes, weightBytes, ctx, batch, prefixShare, paramsB, totalHbmGb, totalBandwidthGbps, paged])
 
   const heroGb = useTweened(calc.kvReserved, reduced)
 
@@ -268,26 +325,26 @@ export default function KvCacheSim() {
     if (prevOom.current === calc.oom) return
     if (prevOom.current !== null) {
       if (calc.oom)
-        log('err', `OOM  need ${fmtGb(calc.total)}GB > ${gpu.gb}GB HBM (${gpu.name}) — CUDA out of memory`)
-      else log('ok', `FIT  ${fmtGb(calc.total)}GB ≤ ${gpu.gb}GB (${gpu.name}) ✓`)
+        log('err', `OOM  need ${fmtGb(calc.total)}GB > ${totalHbmGb}GB HBM (${gpuCount}× ${gpu.name}) — CUDA out of memory`)
+      else log('ok', `FIT  ${fmtGb(calc.total)}GB ≤ ${totalHbmGb}GB (${gpuCount}× ${gpu.name}) ✓`)
     }
     prevOom.current = calc.oom
-  }, [calc.oom, calc.total, gpu.gb, gpu.name, log])
+  }, [calc.oom, calc.total, totalHbmGb, gpuCount, gpu.name, log])
 
   /* ---- task detection ---- */
   const oomSeen = useRef(false)
   useEffect(() => {
-    if (presetId === 'llama3-70b' && dtype === 'fp16' && ctx >= 32768 && calc.oom) {
+    if (presetId === 'llama3-70b' && weightDtype === 'fp16' && kvDtype === 'fp16' && ctx >= 32768 && calc.oom) {
       oomSeen.current = true
-      award('kv-oom', 60, `70B FP16 @ ${fmtCtx(ctx)}: needs ${fmtGb(calc.total)}GB > ${gpu.gb}GB`)
+      award('kv-oom', 60, `70B FP16 @ ${fmtCtx(ctx)}: needs ${fmtGb(calc.total)}GB > ${totalHbmGb}GB`)
     }
-  }, [presetId, dtype, ctx, calc.oom, calc.total, gpu.gb, award])
+  }, [presetId, weightDtype, kvDtype, ctx, calc.oom, calc.total, totalHbmGb, award])
 
   useEffect(() => {
-    if (oomSeen.current && presetId === 'llama3-70b' && dtype !== 'fp16' && ctx >= 32768 && !calc.oom) {
-      award('kv-rescue', 60, `rescued: 70B ${dtype.toUpperCase()} @ ${fmtCtx(ctx)} fits in ${fmtGb(calc.total)}GB ✓`)
+    if (oomSeen.current && presetId === 'llama3-70b' && kvDtype !== 'fp16' && ctx >= 32768 && !calc.oom) {
+      award('kv-rescue', 60, `rescued: 70B ${kvDtype.toUpperCase()} KV @ ${fmtCtx(ctx)} fits in ${fmtGb(calc.total)}GB ✓`)
     }
-  }, [presetId, dtype, ctx, calc.oom, calc.total, award])
+  }, [presetId, kvDtype, ctx, calc.oom, calc.total, award])
 
   useEffect(() => {
     if (ctx >= 200000 && !calc.oom && batch >= 2) {
@@ -308,8 +365,8 @@ export default function KvCacheSim() {
     }
   }
 
-  const segPct = (gb: number) => Math.min(100, (gb / gpu.gb) * 100)
-  const totalPct = (calc.total / gpu.gb) * 100
+  const segPct = (gb: number) => Math.min(100, (gb / totalHbmGb) * 100)
+  const totalPct = (calc.total / totalHbmGb) * 100
 
   const termBtn = (id: Exclude<Term, null>, label: string) => (
     <button
@@ -354,10 +411,46 @@ export default function KvCacheSim() {
   return (
     <PlaygroundShell
       simId="sim-kv"
-      title="KV-Cache Calculator"
-      subtitle="memory/token = 2 × L × H_kv × d × bytes — a form with live consequences"
-      tasks={TASKS}
+      title={machineMode === 'blocks' ? 'KV Block-Table Explorer' : 'KV-Cache Calculator'}
+      subtitle={
+        machineMode === 'blocks'
+          ? 'trace logical-to-physical KV blocks, prefix sharing, copy-on-write, and preemption'
+          : 'memory/token = 2 × L × H_kv × d × bytes — a form with live consequences'
+      }
+      tasks={machineMode === 'blocks' ? BLOCK_TABLE_TASKS : TASKS}
+      help={
+        machineMode === 'blocks' ? (
+          <p>
+            Explore how PagedAttention maps logical KV blocks onto physical HBM, shares
+            prompt prefixes by reference count, and recovers capacity under pressure.
+          </p>
+        ) : (
+          <p>
+            Configure a model, context, batch, precision, and GPU to see how KV-cache
+            memory determines whether an inference workload fits in HBM.
+          </p>
+        )
+      }
     >
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded-md border border-line bg-surface-1 p-1">
+        {(['calc', 'blocks'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => selectMachine(mode)}
+            aria-pressed={machineMode === mode}
+            className={cn(
+              'rounded-sm border px-3 py-1.5 font-mono text-[11px] transition-all duration-180 active:scale-[.98]',
+              machineMode === mode
+                ? 'border-accent bg-accent-dim text-accent'
+                : 'border-transparent text-text-2 hover:border-line-bright hover:text-text-1',
+            )}
+          >
+            {mode === 'calc' ? 'KV calculator' : 'block tables'}
+          </button>
+        ))}
+      </div>
+      {machineMode === 'calc' ? (
       <div className="grid gap-4 xl:grid-cols-[400px_1fr]">
         {/* ================= left: parameter form ================= */}
         <div className="flex flex-col gap-4 rounded-md border border-line bg-surface-1 p-4">
@@ -367,6 +460,8 @@ export default function KvCacheSim() {
               {PRESETS.map((p) => (
                 <button
                   key={p.id}
+                  type="button"
+                  aria-pressed={presetId === p.id}
                   onClick={() => applyPreset(p.id)}
                   className={cn(
                     'rounded-sm border px-2 py-1.5 text-left transition-all duration-180 active:scale-[.97]',
@@ -378,6 +473,8 @@ export default function KvCacheSim() {
                 </button>
               ))}
               <button
+                type="button"
+                aria-pressed={isCustom}
                 onClick={() => applyPreset('custom')}
                 className={cn(
                   'rounded-sm border px-2 py-1.5 text-left transition-all duration-180 active:scale-[.97]',
@@ -406,27 +503,34 @@ export default function KvCacheSim() {
             </div>
           )}
 
-          <div>
-            {ctrlLabel('bytes', 'precision (weights + KV)', DTYPE.find((d) => d.id === dtype)?.label ?? '')}
-            <div className="flex gap-1">
-              {DTYPE.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => {
-                    setDtype(d.id)
-                    log('op', `PRECISION → ${d.label} (${d.bytes}B/param)`)
-                  }}
-                  className={cn(
-                    'flex-1 rounded-sm border px-2 py-1 font-mono text-[12px] transition-all duration-180 active:scale-[.97]',
-                    dtype === d.id ? 'border-accent bg-accent-dim text-accent' : 'border-line bg-surface-2 text-text-2 hover:border-line-bright',
-                  )}
-                >
-                  {d.label}
-                  <span className="ml-1 text-[10px] text-text-3">{d.bytes}B</span>
-                </button>
-              ))}
+          {([
+            ['weight precision', weightDtype, setWeightDtype],
+            ['KV-cache precision', kvDtype, setKvDtype],
+          ] as const).map(([label, selected, setSelected]) => (
+            <div key={label}>
+              <div className="mb-1 font-mono text-[11px] text-text-3">{label}</div>
+              <div className="flex gap-1">
+                {DTYPE.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    aria-pressed={selected === d.id}
+                    onClick={() => {
+                      setSelected(d.id)
+                      log('op', `${label.toUpperCase()} → ${d.label} (${d.bytes}B)`)
+                    }}
+                    className={cn(
+                      'flex-1 rounded-sm border px-2 py-1 font-mono text-[12px] transition-all duration-180 active:scale-[.97]',
+                      selected === d.id ? 'border-accent bg-accent-dim text-accent' : 'border-line bg-surface-2 text-text-2 hover:border-line-bright',
+                    )}
+                  >
+                    {d.label}
+                    <span className="ml-1 text-[10px] text-text-3">{d.bytes}B</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
 
           <div>
             {ctrlLabel('ctx', 'context length (log)', fmtCtx(ctx))}
@@ -457,6 +561,7 @@ export default function KvCacheSim() {
               setPaged(!paged)
               log('op', !paged ? 'PAGEDATTENTION on — block=16, waste <4% ≡ OS paging' : 'STATIC reservation — reserve max ctx per seq (≈70% waste)')
             }}
+            aria-pressed={paged}
             className={cn(
               'flex items-center justify-between rounded-sm border px-3 py-2 font-mono text-[12px] transition-all duration-180 active:scale-[.98]',
               paged ? 'border-accent/60 bg-accent-dim/40 text-accent' : 'border-amber/50 bg-amber/5 text-amber',
@@ -467,14 +572,16 @@ export default function KvCacheSim() {
           </button>
 
           <div>
-            <div className="mb-1.5 font-mono text-label uppercase tracking-[0.10em] text-text-3">gpu hbm budget</div>
+            <div className="mb-1.5 font-mono text-label uppercase tracking-[0.10em] text-text-3">gpu cluster</div>
             <div className="grid grid-cols-3 gap-1">
               {GPUS.map((g) => (
                 <button
                   key={g.id}
+                  type="button"
+                  aria-pressed={gpuId === g.id}
                   onClick={() => {
                     setGpuId(g.id)
-                    log('op', `GPU → ${g.name} (${g.gb}GB HBM)`)
+                    log('op', `GPU → ${g.name} (${g.gb}GB, ${(g.bandwidthGbps / 1000).toFixed(2)}TB/s each)`)
                   }}
                   className={cn(
                     'rounded-sm border px-1.5 py-1 font-mono text-[11px] transition-all duration-180 active:scale-[.97]',
@@ -484,6 +591,35 @@ export default function KvCacheSim() {
                   {g.name}
                 </button>
               ))}
+            </div>
+            <div className="mt-2 flex items-center gap-1">
+              <label htmlFor="kv-gpu-count" className="mr-1 font-mono text-[11px] text-text-3">GPU count</label>
+              {GPU_COUNT_PRESETS.map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  aria-pressed={gpuCount === count}
+                  onClick={() => setGpuCount(count)}
+                  className={cn(
+                    'min-w-8 rounded-sm border px-2 py-1 font-mono text-[11px]',
+                    gpuCount === count ? 'border-accent bg-accent-dim text-accent' : 'border-line bg-surface-2 text-text-2',
+                  )}
+                >
+                  {count}
+                </button>
+              ))}
+              <input
+                id="kv-gpu-count"
+                type="number"
+                min={1}
+                max={64}
+                value={gpuCount}
+                onChange={(event) => setGpuCount(Math.max(1, Math.min(64, Number(event.target.value) || 1)))}
+                className="min-w-0 flex-1 rounded-sm border border-line bg-ink px-2 py-1 font-mono text-[11px] text-text-1"
+              />
+            </div>
+            <div className="mt-1 font-mono text-[10px] text-text-3">
+              aggregate: {totalHbmGb}GB HBM · {(totalBandwidthGbps / 1000).toFixed(2)}TB/s
             </div>
           </div>
         </div>
@@ -506,7 +642,7 @@ export default function KvCacheSim() {
               <span className="text-text-3">×</span>
               {termBtn('d', `d=${headDim}`)}
               <span className="text-text-3">×</span>
-              {termBtn('bytes', `${bytes}B`)}
+              {termBtn('bytes', `${kvBytes}B KV`)}
               <span className="text-text-3">×</span>
               {termBtn('ctx', fmtCtx(ctx))}
               <span className="text-text-3">×</span>
@@ -539,9 +675,9 @@ export default function KvCacheSim() {
           {/* memory bar */}
           <section className="rounded-md border border-line bg-surface-1 p-4">
             <div className="mb-2 flex items-center justify-between font-mono text-[11px] text-text-3">
-              <span>{gpu.name} · {gpu.gb}GB HBM</span>
+              <span>{gpuCount}× {gpu.name} · {totalHbmGb}GB HBM</span>
               <span className={calc.oom ? 'text-danger' : 'text-text-2'}>
-                {fmtGb(calc.total)} / {gpu.gb}GB ({totalPct.toFixed(0)}%)
+                {fmtGb(calc.total)} / {totalHbmGb}GB ({totalPct.toFixed(0)}%)
               </span>
             </div>
             <div className="relative h-9 overflow-hidden rounded-sm border border-line bg-ink">
@@ -566,7 +702,34 @@ export default function KvCacheSim() {
               <span><i className="mr-1 inline-block h-2 w-2 rounded-[1px] bg-t4" />weights {fmtGb(calc.weights)}GB</span>
               <span><i className="mr-1 inline-block h-2 w-2 rounded-[1px] bg-t5" />kv {fmtGb(calc.kvReserved)}GB{!paged && ' (reserved)'}</span>
               <span><i className="mr-1 inline-block h-2 w-2 rounded-[1px] bg-text-3" />overhead {fmtGb(calc.overhead)}GB</span>
-              <span className="ml-auto text-text-2">max batch @ {fmtCtx(ctx)}: <span className="text-accent">{calc.maxBatch}</span></span>
+              <span className="ml-auto text-text-2">capacity max @ {fmtCtx(ctx)}: <span className="text-accent">{calc.maxBatch}</span></span>
+            </div>
+          </section>
+          <section className="rounded-md border border-line bg-surface-1 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">capacity wall</div>
+                <div className="mt-1 font-display text-[26px] font-bold text-text-1">{calc.maxBatch}</div>
+                <div className="font-mono text-[10px] text-text-3">max concurrent at {fmtCtx(ctx)}</div>
+              </div>
+              <div>
+                <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">bandwidth / ITL</div>
+                <div className="mt-1 font-display text-[26px] font-bold text-text-1">{calc.itlMs.toFixed(1)} ms</div>
+                <div className="font-mono text-[10px] text-text-3">
+                  batch {batch} · {calc.bandwidthBatch} max at {ITL_SLO_MS}ms SLO
+                </div>
+              </div>
+              <div className={cn(
+                'rounded-sm border px-3 py-2 font-mono text-[12px] uppercase',
+                calc.limitingWall === 'capacity'
+                  ? 'border-danger/50 bg-danger/5 text-danger'
+                  : 'border-amber/50 bg-amber/5 text-amber',
+              )}>
+                {calc.limitingWall} wall first
+              </div>
+            </div>
+            <div className="mt-2 font-mono text-[10px] text-text-3">
+              ITL lower bound = (weights + live KV) ÷ {(totalBandwidthGbps / 1000).toFixed(2)}TB/s aggregate bandwidth.
             </div>
           </section>
 
@@ -579,7 +742,7 @@ export default function KvCacheSim() {
                 <span className="ml-1 text-[14px] text-text-3">KB/token</span>
               </div>
               <div className="mt-1 font-mono text-[11px] text-text-3">
-                2 × {layers} × {kvHeads} × {headDim} × {bytes}B — every token, every sequence, forever
+                2 × {layers} × {kvHeads} × {headDim} × {kvBytes}B — every token, every sequence, forever
               </div>
             </section>
             <section className="rounded-md border border-line bg-surface-1 p-4">
@@ -637,6 +800,9 @@ export default function KvCacheSim() {
           <LogConsole lines={lines} onClear={clear} />
         </div>
       </div>
+      ) : (
+        <BlockTableExplorer />
+      )}
     </PlaygroundShell>
   )
 }

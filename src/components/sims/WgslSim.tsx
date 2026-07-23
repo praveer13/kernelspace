@@ -5,6 +5,7 @@
  * and a dispatch/workgroup visualizer linking code ↔ hardware.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import type { ReactNode } from 'react'
 import { Check, ChevronDown, ChevronUp, Copy, Cpu, Play, RotateCcw, Trash2 } from 'lucide-react'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
@@ -234,7 +235,7 @@ async function gpuRun(
   await device.queue.onSubmittedWorkDone()
   const ms = performance.now() - t0
   await readBuf.mapAsync(U_MAP_READ)
-  const out = new Float32Array(readBuf.getMappedRange().slice(0))
+  const out = new Float32Array(readBuf.getMappedRange().slice(0, outBytes))
   readBuf.unmap()
   for (const b of [...inBufs, outBuf, readBuf]) b.destroy()
   return { out, ms, errors: [] }
@@ -244,18 +245,20 @@ async function gpuRun(
 /* WGSL presets                                                        */
 /* ------------------------------------------------------------------ */
 
-type PresetId = 'vector-add' | 'reduction' | 'matmul-naive' | 'matmul-tiled'
+type PresetId = 'vector-add' | 'vector-add-16m' | 'reduction' | 'reduction-multipass' | 'matmul-naive' | 'matmul-tiled'
 
 interface Preset {
   id: PresetId
   name: string
-  kind: 'elementwise' | 'reduce' | 'matmul'
-  /** element count, or matrix N for matmul */
+  kind: 'elementwise' | 'reduce' | 'reduce-multipass' | 'matmul'
+  /** logical element count, or matrix N for matmul */
   n: number
   code: string
 }
 
 const VEC_N = 65536
+const LARGE_VEC_N = 16 * 1024 * 1024
+const SAFE_SAMPLE_N = 65536
 const MAT_N = 512
 
 const PRESETS: Preset[] = [
@@ -279,29 +282,78 @@ fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
 `,
   },
   {
+    id: 'vector-add-16m',
+    name: 'vector add (16M modeled)',
+    kind: 'elementwise',
+    n: LARGE_VEC_N,
+    code: `// VECTOR ADD — modeled 16M-element production workload.
+// The runner executes a safe 65,536-element representative sample and
+// scales dispatch/traffic to 16,777,216 elements: 192 MiB moved (a+b+c).
+@group(0) @binding(0) var<storage, read> a : array<f32>;
+@group(0) @binding(1) var<storage, read> b : array<f32>;
+@group(0) @binding(2) var<storage, read_write> c : array<f32>;
+
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i >= arrayLength(&c)) { return; }
+  c[i] = a[i] + b[i];
+}
+`,
+  },
+  {
     id: 'reduction',
     name: 'parallel reduction (sum)',
     kind: 'reduce',
     n: VEC_N,
-    code: `// PARALLEL REDUCTION — sum 65,536 floats.
-// v1: each thread strides the input and writes ONE partial;
-//     the host sums the few hundred partials. No shared memory yet.
-// TASK: make it use shared memory (var<workgroup>) so each
-//       workgroup tree-reduces to a single partial first.
+    code: `// PARALLEL REDUCTION — shared-memory tree, one partial per workgroup.
+// Delete either workgroupBarrier() and the modeled/result check exposes the race.
 @group(0) @binding(0) var<storage, read> input : array<f32>;
 @group(0) @binding(1) var<storage, read_write> partial : array<f32>;
 
+var<workgroup> tile : array<f32, 64>;
+
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
-  var acc = 0.0;
-  var i = gid.x;
-  let n = arrayLength(&input);
-  let stride = arrayLength(&partial); // == total dispatched threads
-  while (i < n) {
-    acc = acc + input[i];
-    i = i + stride;
+fn main(@builtin(global_invocation_id) gid : vec3<u32>,
+        @builtin(local_invocation_id) lid : vec3<u32>,
+        @builtin(workgroup_id) wid : vec3<u32>) {
+  tile[lid.x] = select(0.0, input[gid.x], gid.x < arrayLength(&input));
+  workgroupBarrier();
+  var stride = 32u;
+  while (stride > 0u) {
+    if (lid.x < stride) { tile[lid.x] = tile[lid.x] + tile[lid.x + stride]; }
+    workgroupBarrier();
+    stride = stride / 2u;
   }
-  partial[gid.x] = acc;
+  if (lid.x == 0u) { partial[wid.x] = tile[0]; }
+}
+`,
+  },
+  {
+    id: 'reduction-multipass',
+    name: 'reduction (multi-pass → scalar)',
+    kind: 'reduce-multipass',
+    n: LARGE_VEC_N,
+    code: `// MULTI-PASS REDUCTION — logically reduces 16,777,216 values through
+// 65,536 → 256 → 1 workgroups while the runner bounds physical storage.
+@group(0) @binding(0) var<storage, read> input : array<f32>;
+@group(0) @binding(1) var<storage, read_write> partial : array<f32>;
+
+var<workgroup> tile : array<f32, 256>;
+
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid : vec3<u32>,
+        @builtin(local_invocation_id) lid : vec3<u32>,
+        @builtin(workgroup_id) wid : vec3<u32>) {
+  tile[lid.x] = select(0.0, input[gid.x], gid.x < arrayLength(&input));
+  workgroupBarrier();
+  var stride = 128u;
+  while (stride > 0u) {
+    if (lid.x < stride) { tile[lid.x] = tile[lid.x] + tile[lid.x + stride]; }
+    workgroupBarrier();
+    stride = stride / 2u;
+  }
+  if (lid.x == 0u) { partial[wid.x] = tile[0]; }
 }
 `,
   },
@@ -468,6 +520,35 @@ function parseWorkgroupSize(code: string): { x: number; y: number } {
   return { x: Math.max(1, parseInt(m[1], 10)), y: m[2] ? Math.max(1, parseInt(m[2], 10)) : 1 }
 }
 
+function executableBarrierCount(code: string): number {
+  let executable = ''
+  let i = 0
+  let blockDepth = 0
+  while (i < code.length) {
+    if (blockDepth > 0) {
+      if (code.startsWith('/*', i)) {
+        blockDepth++
+        i += 2
+      } else if (code.startsWith('*/', i)) {
+        blockDepth--
+        i += 2
+      } else {
+        i++
+      }
+    } else if (code.startsWith('//', i)) {
+      const newline = code.indexOf('\n', i + 2)
+      i = newline < 0 ? code.length : newline
+    } else if (code.startsWith('/*', i)) {
+      blockDepth = 1
+      i += 2
+    } else {
+      executable += code[i]
+      i++
+    }
+  }
+  return (executable.match(/\bworkgroupBarrier\s*\(\s*\)/g) ?? []).length
+}
+
 function parseVecOp(code: string): '+' | '-' | '*' {
   const m = /c\s*\[[^\]]*\]\s*=\s*a\s*\[[^\]]*\]\s*([+\-*])\s*b/.exec(code)
   return m ? (m[1] as '+' | '-' | '*') : '+'
@@ -549,6 +630,7 @@ interface DispatchInfo {
   wgX: number
   wgY: number
   threads: number
+  modeled?: boolean
 }
 interface RunResult {
   ok: boolean
@@ -563,9 +645,10 @@ interface RunResult {
 }
 
 const TASKS = [
-  { id: 'wgsl-wg1', text: 'Set @workgroup_size(1) on vector add, run, and explain the slowdown', xp: 60 },
-  { id: 'wgsl-shared', text: 'Make the reduction use shared memory (var<workgroup>)', xp: 60 },
-  { id: 'wgsl-tiled', text: 'Run the matmul compare and beat naive by 10× with tiling', xp: 60 },
+  { id: 'wgsl-16m', text: 'Run the modeled 16M vector add and inspect its 192 MiB traffic', xp: 45 },
+  { id: 'wgsl-sweep', text: 'Run vector add at workgroup sizes 64 and 1024', xp: 45 },
+  { id: 'wgsl-barrier', text: 'Remove a reduction barrier and observe a wrong sum', xp: 45 },
+  { id: 'wgsl-multipass', text: 'Run multi-pass reduction to one verified scalar', xp: 45 },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -576,6 +659,16 @@ export default function WgslSim() {
   const reduced = useReducedMotion()
   const { lines, log, clear } = useLog('wgsl playground ready — pick a preset, hit ▶ run dispatch')
   const award = useTaskAward('sim-wgsl', log)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const machineParam = searchParams.get('machine')
+  const legacyFrom = searchParams.get('from')
+  const hostMode: 'wgsl' | 'cpu' =
+    machineParam === 'wgsl' || machineParam === 'cpu'
+      ? machineParam
+      : legacyFrom === 'cpu'
+        ? 'cpu'
+        : 'wgsl'
+  const forceCpu = hostMode === 'cpu'
 
   const [presetId, setPresetId] = useState<PresetId>('vector-add')
   const preset = PRESETS.find((p) => p.id === presetId) ?? PRESETS[0]
@@ -583,7 +676,7 @@ export default function WgslSim() {
   const [backend, setBackend] = useState<'probing' | 'gpu' | 'cpu'>(() =>
     (navigator as Navigator & GpuNav).gpu ? 'probing' : 'cpu',
   )
-  const [forceCpu, setForceCpu] = useState(false)
+  const sweepSizesRef = useRef(new Set<number>())
   const [running, setRunning] = useState(false)
   const [errors, setErrors] = useState<CodeError[]>([])
   const [result, setResult] = useState<RunResult | null>(null)
@@ -689,8 +782,11 @@ export default function WgslSim() {
     setErrors([])
     const wg = parseWorkgroupSize(code)
     const device = deviceRef.current
-    const useGpu = backend === 'gpu' && !forceCpu && device !== null
+    const useGpu = backend === 'gpu' && !forceCpu && device !== null && wg.x * wg.y <= 256
     const seed = 0x5eed
+    if (backend === 'gpu' && !forceCpu && wg.x * wg.y > 256) {
+      log('warn', `wg(${wg.x},${wg.y}) exceeds WebGPU's portable 256-invocation limit — running the honest CPU/model path`)
+    }
 
     const failCompile = (msgs: GpuCompilationMessage[]) => {
       const mapped = msgs.slice(0, 3).map((m) => ({ line: m.lineNum, msg: m.message }))
@@ -700,50 +796,56 @@ export default function WgslSim() {
 
     try {
       if (preset.kind === 'elementwise') {
-        const N = VEC_N
-        const a = refData(seed, N)
-        const b = refData(seed ^ 0xffff, N)
-        const rawNx = Math.ceil(N / wg.x)
-        const nx = Math.min(65535, rawNx) // WebGPU per-dimension workgroup limit
-        const covered = Math.min(N, nx * wg.x)
-        if (rawNx > 65535)
-          log('warn', `dispatch clamped to 65,535 workgroups (WebGPU per-dimension limit) — tail ${N - covered} elements skipped`)
-        const dispatch: DispatchInfo = { nx, ny: 1, wgX: wg.x, wgY: 1, threads: covered }
-        log('op', `RUN main dispatch (${nx},1,1) wg(${wg.x}) — ${covered.toLocaleString()} threads [${useGpu ? 'WebGPU' : 'CPU SIM'}]`)
+        const logicalN = preset.n
+        const sampleN = Math.min(logicalN, SAFE_SAMPLE_N)
+        const a = refData(seed, sampleN)
+        const b = refData(seed ^ 0xffff, sampleN)
+        const sampleNx = Math.ceil(sampleN / wg.x)
+        const logicalNx = Math.ceil(logicalN / wg.x)
+        const dispatch: DispatchInfo = { nx: logicalNx, ny: 1, wgX: wg.x, wgY: 1, threads: logicalN, modeled: logicalN > sampleN }
+        const modeled = logicalN > sampleN
+        log(
+          'op',
+          `RUN main wg(${wg.x}) — ${logicalN.toLocaleString()} logical threads, ${sampleN.toLocaleString()} safely executed [${useGpu ? 'WebGPU' : 'CPU SIM'}${modeled ? ' + SCALE MODEL' : ''}]`,
+        )
         const op = parseVecOp(code)
         let ms: number
         let out: Float32Array
         let mismatch = 0
         let note: string | undefined
         if (useGpu) {
-          const r = await gpuRun(device, code, 'main', [a, b], N * 4, [nx, 1, 1])
+          const r = await gpuRun(device, code, 'main', [a, b], sampleN * 4, [sampleNx, 1, 1])
           if (r.errors.length > 0) {
             failCompile(r.errors)
             setRunning(false)
             return
           }
           out = r.out
-          ms = r.ms
-          for (let i = 0; i < N; i += 97) {
-            const exp = op === '+' ? a[i] + b[i] : op === '-' ? a[i] - b[i] : a[i] * b[i]
-            if (Math.abs(out[i] - exp) > 1e-4) mismatch++
-          }
+          ms = modeled ? r.ms * (logicalN / sampleN) : r.ms
+          note = modeled
+            ? `measured ${sampleN.toLocaleString()} elements, linearly modeled to ${logicalN.toLocaleString()}; ${(logicalN * 12 / 2 ** 20).toFixed(0)} MiB traffic without allocating it`
+            : undefined
         } else {
-          out = new Float32Array(N)
+          out = new Float32Array(sampleN)
           const t0 = performance.now()
-          for (let i = 0; i < N; i++)
+          for (let i = 0; i < sampleN; i++)
             out[i] = op === '+' ? a[i] + b[i] : op === '-' ? a[i] - b[i] : a[i] * b[i]
           const jsMs = performance.now() - t0
-          ms = modeledMs(jsMs, nx)
-          note = `reference kernel on CPU (js ${jsMs.toFixed(2)}ms) — timing modeled: waves = ⌈${nx.toLocaleString()} wg / 64 slots⌉`
+          ms = modeledMs(jsMs * (logicalN / sampleN), logicalNx)
+          note = `reference kernel on ${sampleN.toLocaleString()} CPU samples (js ${jsMs.toFixed(2)}ms), scaled to ${logicalN.toLocaleString()}; ${(logicalN * 12 / 2 ** 20).toFixed(0)} MiB traffic`
+        }
+        for (let i = 0; i < sampleN; i += 97) {
+          const exp = op === '+' ? a[i] + b[i] : op === '-' ? a[i] - b[i] : a[i] * b[i]
+          if (Math.abs(out[i] - exp) > 1e-4) mismatch++
         }
         const heats: number[] = []
         let maxAbs = 1e-9
-        for (let i = 0; i < 128; i++) maxAbs = Math.max(maxAbs, Math.abs(out[Math.floor((i * N) / 128)]))
-        for (let i = 0; i < 128; i++) heats.push(out[Math.floor((i * N) / 128)] / maxAbs)
+        for (let i = 0; i < 128; i++) maxAbs = Math.max(maxAbs, Math.abs(out[Math.floor((i * sampleN) / 128)]))
+        for (let i = 0; i < 128; i++) heats.push(out[Math.floor((i * sampleN) / 128)] / maxAbs)
         const ok = mismatch === 0
-        log(ok ? 'ok' : 'err', `VERIFY ${ok ? '✓' : '✗'} sampled ${Math.ceil(N / 97).toLocaleString()} elements · ${mismatch} mismatches`)
-        log('op', `TIME ${ms.toFixed(3)}ms ${useGpu ? '(measured wall, incl. dispatch overhead)' : '(modeled)'}`)
+        const gibPerSec = (logicalN * 12) / Math.max(ms, 1e-6) / 1e6
+        log(ok ? 'ok' : 'err', `VERIFY ${ok ? '✓' : '✗'} sampled ${Math.ceil(sampleN / 97).toLocaleString()} elements · ${mismatch} mismatches`)
+        log('op', `TIME ${ms.toFixed(3)}ms ${modeled || !useGpu ? '(modeled)' : '(measured wall)'} · ${gibPerSec.toFixed(1)} GB/s effective`)
         setResult({
           ok,
           backend: useGpu ? 'gpu' : 'cpu',
@@ -754,72 +856,116 @@ export default function WgslSim() {
           dispatch,
           note,
         })
-        if (wg.x * wg.y === 1) {
-          award('wgsl-wg1', 60, `wg_size=1 → ${nx.toLocaleString()} tiny workgroups: waves=${Math.ceil(nx / 64).toLocaleString()}, occupancy dead`)
+        if (ok && preset.id === 'vector-add-16m') {
+          award('wgsl-16m', 45, '16M vector add verified from a safe sample and modeled as 192 MiB of traffic')
         }
-      } else if (preset.kind === 'reduce') {
-        const N = VEC_N
-        const input = refData(seed, N)
-        const wgCount = Math.ceil(256 / wg.x)
-        const threads = wgCount * wg.x
-        const dispatch: DispatchInfo = { nx: wgCount, ny: 1, wgX: wg.x, wgY: 1, threads }
-        log('op', `RUN main dispatch (${wgCount},1,1) wg(${wg.x}) — ${threads} threads, grid-stride [${useGpu ? 'WebGPU' : 'CPU SIM'}]`)
-        let partial: Float32Array
-        let ms: number
-        let note: string | undefined
-        if (useGpu) {
-          const r = await gpuRun(device, code, 'main', [input], threads * 4, [wgCount, 1, 1])
-          if (r.errors.length > 0) {
-            failCompile(r.errors)
-            setRunning(false)
-            return
+        if (ok && (preset.id === 'vector-add' || preset.id === 'vector-add-16m') && (wg.x === 64 || wg.x === 1024)) {
+          sweepSizesRef.current.add(wg.x)
+          if (sweepSizesRef.current.has(64) && sweepSizesRef.current.has(1024)) {
+            award('wgsl-sweep', 45, 'vector-add workgroup sweep completed at exactly 64 and 1024')
           }
-          partial = r.out
-          ms = r.ms
-        } else {
-          partial = new Float32Array(threads)
+        }
+      } else if (preset.kind === 'reduce' || preset.kind === 'reduce-multipass') {
+        const multiPass = preset.kind === 'reduce-multipass'
+        const logicalN = preset.n
+        const physicalN = multiPass ? Math.min(logicalN, SAFE_SAMPLE_N) : logicalN
+        const input = refData(seed, physicalN)
+        const firstGroups = Math.ceil(logicalN / wg.x)
+        const dispatch: DispatchInfo = {
+          nx: firstGroups,
+          ny: 1,
+          wgX: wg.x,
+          wgY: 1,
+          threads: logicalN,
+          modeled: multiPass && physicalN < logicalN,
+        }
+        const barrierCount = executableBarrierCount(code)
+        const synchronized = barrierCount === 2
+        const reductionGpu = useGpu && synchronized
+        log('op', `RUN ${multiPass ? 'MODELED MULTI-PASS' : 'ONE PASS + HOST'} reduction (${firstGroups},1,1) wg(${wg.x}) [${reductionGpu ? 'WebGPU' : 'CPU MODEL'}]`)
+
+        let current = input
+        let totalMs = 0
+        let pass = 0
+        let logicalValues = logicalN
+        const reduceCpuPass = (values: Float32Array, outputGroups: number, physicalGroups: number): Float32Array => {
+          const next = new Float32Array(outputGroups)
+          for (let group = 0; group < physicalGroups; group++) {
+            let sum = 0
+            const end = Math.min(values.length, (group + 1) * wg.x)
+            for (let i = group * wg.x; i < end; i++) {
+              if (synchronized || ((i - group * wg.x) & 1) === 0) sum += values[i]
+            }
+            next[group] = sum
+          }
+          return next
+        }
+
+        do {
+          const logicalGroups = Math.ceil(logicalValues / wg.x)
+          // The 65,536-workgroup first pass is represented by 256 physical
+          // workgroups over the bounded sample. Unwritten modeled partials are zero.
+          const physicalGroups = Math.min(logicalGroups, Math.ceil(current.length / wg.x))
           const t0 = performance.now()
-          for (let t = 0; t < threads; t++) {
-            let acc = 0
-            for (let i = t; i < N; i += threads) acc += input[i]
-            partial[t] = acc
+          if (reductionGpu) {
+            const r = await gpuRun(device, code, 'main', [current], logicalGroups * 4, [physicalGroups, 1, 1])
+            if (r.errors.length > 0) {
+              failCompile(r.errors)
+              setRunning(false)
+              return
+            }
+            current = r.out
+            totalMs += modeledMs(r.ms, logicalGroups)
+          } else {
+            current = reduceCpuPass(current, logicalGroups, physicalGroups)
+            totalMs += modeledMs(performance.now() - t0, logicalGroups)
           }
-          const jsMs = performance.now() - t0
-          ms = modeledMs(jsMs, wgCount)
-          note = `reference kernel on CPU (js ${jsMs.toFixed(2)}ms) — timing modeled`
-        }
-        let gpuSum = 0
-        for (let i = 0; i < partial.length; i++) gpuSum += partial[i]
+          pass++
+          log('op', `PASS ${pass}${multiPass ? ' (modeled logical)' : ''}: ${logicalValues.toLocaleString()} → ${logicalGroups.toLocaleString()} partial${logicalGroups === 1 ? '' : 's'}`)
+          logicalValues = logicalGroups
+        } while (multiPass && logicalValues > 1)
+
+        let reducedSum = 0
+        for (let i = 0; i < current.length; i++) reducedSum += current[i]
         let refSum = 0
-        for (let i = 0; i < N; i++) refSum += input[i]
-        const relErr = Math.abs(gpuSum - refSum) / (Math.abs(refSum) + 1e-9)
-        const ok = relErr < 5e-3
-        const shared = /var<workgroup>/.test(code)
-        log(ok ? 'ok' : 'err', `VERIFY ${ok ? '✓' : '✗'} Σ=${gpuSum.toFixed(4)} vs ref ${refSum.toFixed(4)} (rel ${relErr.toExponential(1)}) · host reduced ${partial.length} partials`)
-        if (shared) log('ok', 'SHARED MEMORY detected (var<workgroup>) — tree reduction on-chip ✓')
-        log('op', `TIME ${ms.toFixed(3)}ms ${useGpu ? '(measured wall)' : '(modeled)'}`)
+        for (let i = 0; i < input.length; i++) refSum += input[i]
+        const relErr = Math.abs(reducedSum - refSum) / (Math.abs(refSum) + 1e-9)
+        const scalar = current.length === 1
+        const ok = relErr < 5e-3 && (!multiPass || scalar)
+        log(
+          ok ? 'ok' : 'err',
+          `VERIFY ${ok ? '✓' : '✗'} Σ=${reducedSum.toFixed(4)} vs sampled ref ${refSum.toFixed(4)} (rel ${relErr.toExponential(1)}) · ${multiPass ? `${pass} modeled GPU-shaped passes, ${current.length} scalar output` : `host combined ${current.length} partials`}`,
+        )
+        if (!synchronized) log('err', `RACE modeled: expected both workgroup barriers; found ${barrierCount} — stale shared-memory reads dropped contributions`)
         const heats: number[] = []
         let maxAbs = 1e-9
-        for (let i = 0; i < partial.length; i++) maxAbs = Math.max(maxAbs, Math.abs(partial[i]))
-        for (let i = 0; i < 128; i++) heats.push(partial[Math.floor((i * partial.length) / 128)] / maxAbs)
+        for (let i = 0; i < current.length; i++) maxAbs = Math.max(maxAbs, Math.abs(current[i]))
+        for (let i = 0; i < 128; i++) heats.push(current[Math.min(current.length - 1, Math.floor((i * current.length) / 128))] / maxAbs)
         setResult({
           ok,
-          backend: useGpu ? 'gpu' : 'cpu',
-          bars: [{ label: shared ? 'reduction (shared)' : 'reduction (thread-serial)', ms, cls: 'bg-accent' }],
+          backend: reductionGpu ? 'gpu' : 'cpu',
+          bars: [{ label: multiPass ? `${pass}-pass reduction → scalar` : 'shared-tree + host finish', ms: totalMs, cls: 'bg-accent' }],
           heats,
           mismatch: ok ? 0 : 1,
-          checksum: ok ? `Σ ${gpuSum.toFixed(3)}` : 'MISMATCH',
+          checksum: ok ? `Σ ${reducedSum.toFixed(3)}` : 'MISMATCH',
           dispatch,
-          note,
+          note: multiPass
+            ? `modeled logical topology 16,777,216 → 65,536 → 256 → 1; physical storage bounded to ${SAFE_SAMPLE_N.toLocaleString()} floats`
+            : reductionGpu ? undefined : 'CPU executes the same pass topology; shared-memory races are modeled honestly when a barrier is removed',
         })
-        if (shared && ok) award('wgsl-shared', 60, 'reduction stages partials in var<workgroup> shared memory ✓')
+        if (!synchronized && !ok && preset.id === 'reduction') {
+          award('wgsl-barrier', 45, 'removing a workgroup barrier produced a clearly wrong reduction sum')
+        }
+        if (multiPass && synchronized && scalar && ok) {
+          award('wgsl-multipass', 45, `multi-pass reduction returned one verified scalar in ${pass} passes`)
+        }
       } else {
         /* matmul compare — run naive + tiled, side by side */
         const N = MAT_N
         const A = refData(seed, N * N)
         const B = refData(seed ^ 0xffff, N * N)
-        const naiveCode = preset.id === 'matmul-naive' ? code : (PRESETS.find((p) => p.id === 'matmul-naive') ?? PRESETS[2]).code
-        const tiledCode = preset.id === 'matmul-tiled' ? code : (PRESETS.find((p) => p.id === 'matmul-tiled') ?? PRESETS[3]).code
+        const naiveCode = preset.id === 'matmul-naive' ? code : (PRESETS.find((p) => p.id === 'matmul-naive') ?? PRESETS[4]).code
+        const tiledCode = preset.id === 'matmul-tiled' ? code : (PRESETS.find((p) => p.id === 'matmul-tiled') ?? PRESETS[5]).code
         const wgN = parseWorkgroupSize(naiveCode)
         const wgT = parseWorkgroupSize(tiledCode)
         const refSum = matmulChecksum(A, B, N)
@@ -827,21 +973,18 @@ export default function WgslSim() {
         const bars: TimingBar[] = []
         let allOk = true
         let firstDispatch: DispatchInfo | null = null
-
-        const variants: { label: string; code: string; wg: { x: number; y: number }; cls: string; modeled: number }[] = [
+        const variants = [
           { label: 'naive', code: naiveCode, wg: wgN, cls: 'bg-t4', modeled: (2 * N ** 3) / 3e8 },
           { label: 'tiled (shared mem)', code: tiledCode, wg: wgT, cls: 'bg-accent', modeled: ((2 * N ** 3) / 3e8 / 16) * 1.12 },
         ]
         for (const v of variants) {
           const nx = Math.ceil(N / v.wg.x)
           const ny = Math.ceil(N / v.wg.y)
-          if (!firstDispatch)
-            firstDispatch = { nx, ny, wgX: v.wg.x, wgY: v.wg.y, threads: nx * ny * v.wg.x * v.wg.y }
+          firstDispatch ??= { nx, ny, wgX: v.wg.x, wgY: v.wg.y, threads: nx * ny * v.wg.x * v.wg.y }
           let ms: number
           if (useGpu) {
             const r = await gpuRun(device, v.code, 'main', [A, B], N * N * 4, [nx, ny, 1])
             if (r.errors.length > 0) {
-              log('err', `[${v.label}] compile failed:`)
               failCompile(r.errors)
               setRunning(false)
               return
@@ -849,39 +992,31 @@ export default function WgslSim() {
             let gpuSum = 0
             for (let i = 0; i < r.out.length; i++) gpuSum += r.out[i]
             const err = Math.abs(gpuSum - refSum) / scale
-            const ok = err < 0.1
-            if (!ok) allOk = false
-            log(ok ? 'ok' : 'err', `VERIFY [${v.label}] ${ok ? '✓' : '✗'} checksum Σ|C| rel-err ${err.toExponential(1)}`)
+            const valid = err < 0.1
+            allOk &&= valid
+            log(valid ? 'ok' : 'err', `VERIFY [${v.label}] ${valid ? '✓' : '✗'} checksum rel-err ${err.toExponential(1)}`)
             ms = r.ms
           } else {
             ms = modeledMs(v.modeled, nx * ny)
           }
           bars.push({ label: v.label, ms, cls: v.cls })
         }
-        const naiveMs = bars[0].ms
-        const tiledMs = bars[1].ms
-        const speedup = naiveMs / Math.max(tiledMs, 1e-6)
-        log(
-          speedup >= 10 ? 'ok' : 'op',
-          `TIME naive ${naiveMs.toFixed(3)}ms vs tiled ${tiledMs.toFixed(3)}ms → ${speedup.toFixed(1)}× ${useGpu ? '(measured wall)' : '(modeled — CPU cannot stage WGSL shared memory)'}`,
-        )
+        const speedup = bars[0].ms / Math.max(bars[1].ms, 1e-6)
         const sample = matmulSample(A, B, N, 16)
         let maxAbs = 1e-9
         for (let i = 0; i < sample.length; i++) maxAbs = Math.max(maxAbs, Math.abs(sample[i]))
-        const heats: number[] = []
-        for (let i = 0; i < sample.length; i++) heats.push(sample[i] / maxAbs)
         setResult({
           ok: allOk,
           backend: useGpu ? 'gpu' : 'cpu',
           bars,
-          heats,
+          heats: Array.from(sample, (value) => value / maxAbs),
           mismatch: allOk ? 0 : 1,
           checksum: allOk ? 'ΣC match' : 'MISMATCH',
           dispatch: firstDispatch ?? { nx: 32, ny: 32, wgX: 16, wgY: 16, threads: 262144 },
           speedup,
           note: useGpu ? undefined : 'correctness verified via O(N²) checksum identity; timings modeled at 512²',
         })
-        if (speedup >= 10) award('wgsl-tiled', 60, `tiled matmul beats naive by ${speedup.toFixed(1)}× — shared memory reuse wins`)
+        log('op', `TIME naive ${bars[0].ms.toFixed(3)}ms vs tiled ${bars[1].ms.toFixed(3)}ms → ${speedup.toFixed(1)}×`)
       }
     } catch (e) {
       log('err', `dispatch failed: ${e instanceof Error ? e.message : String(e)}`)
@@ -1031,8 +1166,16 @@ export default function WgslSim() {
               <div className="ml-auto flex items-center gap-2">
                 <button
                   onClick={() => {
-                    setForceCpu(!forceCpu)
-                    log('op', !forceCpu ? 'forced CPU simulation (honesty toggle)' : 'backend → auto (WebGPU if available)')
+                    const nextMode = forceCpu ? 'wgsl' : 'cpu'
+                    setSearchParams(
+                      (previous) => {
+                        const next = new URLSearchParams(previous)
+                        next.set('machine', nextMode)
+                        return next
+                      },
+                      { replace: true },
+                    )
+                    log('op', nextMode === 'cpu' ? 'forced CPU simulation (honesty toggle)' : 'backend → auto (WebGPU if available)')
                   }}
                   className={cn(
                     'rounded-sm border px-2 py-1 font-mono text-[10px] uppercase transition-colors duration-180',
@@ -1193,8 +1336,8 @@ export default function WgslSim() {
                 <span className="font-mono text-label uppercase tracking-[0.10em] text-text-3">dispatch grid</span>
                 {result && (
                   <span className="font-mono text-[10px] text-text-3">
-                    {(result.dispatch.nx * result.dispatch.ny).toLocaleString()} workgroups ·{' '}
-                    {result.dispatch.threads.toLocaleString()} threads
+                    {(result.dispatch.nx * result.dispatch.ny).toLocaleString()} {result.dispatch.modeled ? 'modeled ' : ''}workgroups ·{' '}
+                    {result.dispatch.threads.toLocaleString()} logical threads
                   </span>
                 )}
               </div>

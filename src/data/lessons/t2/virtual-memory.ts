@@ -121,6 +121,7 @@ You will perform translations by hand: pick a virtual address, walk the four lev
     {
       type: 'exercise',
       simId: 'sim-vm',
+      machine: 'walk4',
       title: 'Translation walk: VPN → frame, faults included',
       tasks: [
         'Translate `0x7f3a_b2c4_1000` by hand through all four levels; verify frame + offset.',

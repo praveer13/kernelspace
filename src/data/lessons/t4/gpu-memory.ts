@@ -78,9 +78,10 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
     {
       type: 'exercise',
       simId: 'sim-roofline',
+      machine: 'roofline',
       title: 'Tier probe: where does your data live?',
       tasks: [
-        'Run a kernel reading 4 KB per block from shared memory vs direct from HBM: measure the ~20× tier gap.',
+        'Run a kernel reading 4 KB per block from shared memory vs direct from HBM: measure about 6× on H100 (the ratio varies with the selected GPU\'s HBM bandwidth).',
         'Force register spilling (raise per-thread arrays); watch effective bandwidth collapse to HBM speeds.',
         'Sweep working-set size across 228 KB / 50 MB / 80 GB: find the L2 and HBM cliffs.',
         'Measure a PCIe transfer (CPU→GPU) and compare with HBM streaming: the 50× offload cliff.',

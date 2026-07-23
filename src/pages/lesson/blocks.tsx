@@ -549,6 +549,9 @@ function ExerciseView({
   const sim = SIM_INFO[block.simId]
   const Icon = sim?.icon ?? FlaskConical
   const [noteOpen, setNoteOpen] = useState(false)
+  const labSearch = new URLSearchParams({ from: lessonId })
+  if (block.machine) labSearch.set('machine', block.machine)
+  const labUrl = `/lab/${block.simId}?${labSearch.toString()}`
 
   return (
     <section className="my-8 overflow-hidden rounded-lg border border-line bg-surface-1" data-exercise={block.simId}>
@@ -561,7 +564,7 @@ function ExerciseView({
           <span className="font-display text-body-sm font-medium text-text-1">{block.title}</span>
         </div>
         <Link
-          to={`/lab/${block.simId}?from=${lessonId}`}
+          to={labUrl}
           className="flex items-center gap-1.5 font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-accent"
         >
           open full screen
@@ -585,7 +588,7 @@ function ExerciseView({
           the live simulator runs at <span className="text-text-1">/lab/{block.simId}</span>
         </p>
         <Link
-          to={`/lab/${block.simId}?from=${lessonId}`}
+          to={labUrl}
           className="rounded-md bg-accent px-5 py-2.5 font-display text-[15px] font-semibold text-accent-foreground transition-all duration-150 hover:-translate-y-px active:scale-[.97]"
         >
           Open the simulator

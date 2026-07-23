@@ -105,7 +105,7 @@ The stack/heap split also explains three errors every C programmer meets:
 
 - **Stack overflow** — recursion deeper than the 1–8 MB region; the stack pointer walks off the end into a guard page and the OS kills you (the namesake of the website).
 - **Use-after-return** — returning \`&local\`: the memory is silently reused by the next call. UB, heisenbugs, CVEs.
-- **Memory leak** — heap block freed never; RSS climbs until the OOM killer picks you.`,
+- **Memory leak** — heap block never freed; RSS climbs until the OOM killer picks you.`,
     },
     {
       type: 'callout',
@@ -127,6 +127,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
     {
       type: 'exercise',
       simId: 'sim-memory',
+      machine: 'frames',
       title: 'Frame visualizer: grow, call, return, overflow',
       tasks: [
         'Step through `main → add → add` and watch rsp slide; note each frame\'s exact byte layout.',

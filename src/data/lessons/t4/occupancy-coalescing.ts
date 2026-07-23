@@ -75,6 +75,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
     {
       type: 'exercise',
       simId: 'sim-roofline',
+      machine: 'roofline',
       title: 'Occupancy & coalescing lab',
       tasks: [
         'Run the column-walk kernel; record delivered bandwidth vs peak (~1/32).',

@@ -120,6 +120,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
     {
       type: 'exercise',
       simId: 'sim-kv',
+      machine: 'blocks',
       title: 'Block-table explorer',
       tasks: [
         'Run two requests sharing a 48-token prompt: verify prefix blocks show refcount=2 and memory is paid once.',

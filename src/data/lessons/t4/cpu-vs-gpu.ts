@@ -75,6 +75,7 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
     {
       type: 'exercise',
       simId: 'sim-roofline',
+      machine: 'cpu-gpu',
       title: 'Latency machine vs throughput machine',
       tasks: [
         'Run the serial dependency chain on the CPU model vs GPU model: watch the CPU win by 50× (latency wins).',
