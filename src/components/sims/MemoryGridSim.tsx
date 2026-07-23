@@ -6,8 +6,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import { motion } from 'framer-motion'
 import { Bomb, Dices, MapPin } from 'lucide-react'
+import LatencyWalk, { LATENCY_TASKS } from '@/components/sims/LatencyWalk'
+import type { SimTask } from '@/components/sims/PlaygroundShell'
 import PlaygroundShell, {
   ChipButton,
   ControlGroup,
@@ -30,6 +33,22 @@ import {
 import { cn } from '@/lib/utils'
 
 const SIM_ID = 'sim-memory'
+
+/**
+ * sim-memory hosts two machines:
+ *  - 'grid'    — the 256-byte pointer/segfault visualizer (T1 lessons)
+ *  - 'latency' — the cache-hierarchy latency walk (T0.L2 "The Memory Hierarchy")
+ * Lessons deep-link with ?from=<lessonId>; T0.L2 lands in latency mode, and a
+ * manual toggle keeps both machines reachable from /lab/sim-memory directly.
+ */
+type SimMode = 'grid' | 'latency'
+
+const GRID_TASKS: SimTask[] = [
+  { id: 't-byte', text: 'Store 0x2A at address 0x80', xp: 60 },
+  { id: 't-deref', text: 'Point 0x90 at 0x80 and dereference it', xp: 60 },
+  { id: 't-null', text: 'Dereference null and survive (run null deref)', xp: 60 },
+  { id: 't-smash', text: 'Overflow the stack into the heap', xp: 60 },
+]
 
 const CODE_END = 0x3f
 const HEAP_END = 0xbf
@@ -160,6 +179,10 @@ export default function MemoryGridSim() {
   const { embed } = usePlaygroundContext()
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<SimMode>(() =>
+    searchParams.get('from') === 't0.l2' ? 'latency' : 'grid',
+  )
 
   /* ------- state (ref-mirrored so event-driven ops stay atomic) ------- */
   const initialCfg = useInitialCfg<MemCfg>()
@@ -502,15 +525,32 @@ export default function MemoryGridSim() {
   return (
     <PlaygroundShell
       simId={SIM_ID}
-      title="Memory Grid Visualizer"
-      subtitle="pointers · segfaults · 256 bytes of truth"
-      tasks={[
-        { id: 't-byte', text: 'Store 0x2A at address 0x80', xp: 60 },
-        { id: 't-deref', text: 'Point 0x90 at 0x80 and dereference it', xp: 60 },
-        { id: 't-null', text: 'Dereference null and survive (run null deref)', xp: 60 },
-        { id: 't-smash', text: 'Overflow the stack into the heap', xp: 60 },
-      ]}
+      title={mode === 'grid' ? 'Memory Grid Visualizer' : 'Latency Walk'}
+      subtitle={
+        mode === 'grid'
+          ? 'pointers · segfaults · 256 bytes of truth'
+          : 'walk the cache hierarchy · L1 → L2 → L3 → DRAM'
+      }
+      tasks={mode === 'grid' ? GRID_TASKS : LATENCY_TASKS}
       help={
+        mode === 'latency' ? (
+          <>
+            <p>
+              A pointer-chase fires a chain of{' '}
+              <span className="font-mono text-text-1">dependent 8-byte loads</span> through a
+              buffer — each load's address depends on the previous one, so every access pays the
+              full latency of whichever level of the hierarchy answers.
+            </p>
+            <p>
+              Grow the <span className="font-mono text-text-1">working set</span> and the answering
+              level steps down the ladder: L1 (32 KB, ~0.5 ns) → L2 (1 MB, ~5 ns) → L3 (32 MB,
+              ~15 ns) → DRAM (~100 ns). A <span className="font-mono text-text-1">stride</span>{' '}
+              under 64 B shares each cache line across loads; a 4 KB stride puts every load on a
+              new page — no line sharing, no prefetch rescue, plus a TLB miss. The faint staircase
+              is the expected curve at your current stride; your runs plot as dots on top.
+            </p>
+          </>
+        ) : (
         <>
           <p>
             One process, 256 bytes of linear memory.{' '}
@@ -528,9 +568,35 @@ export default function MemoryGridSim() {
             how.
           </p>
         </>
+        )
       }
     >
       <div className="flex h-full min-h-0 flex-col">
+        {/* ------- machine toggle: memory grid ↔ latency walk ------- */}
+        {!embed && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface-1 px-4 py-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
+              machine
+            </span>
+            <ChipButton active={mode === 'grid'} color="#FFB224" onClick={() => setMode('grid')}>
+              memory grid
+            </ChipButton>
+            <ChipButton
+              active={mode === 'latency'}
+              color="#FBBF24"
+              onClick={() => setMode('latency')}
+            >
+              latency walk
+            </ChipButton>
+            <span className="ml-auto hidden font-mono text-[10px] text-text-3 sm:inline">
+              {mode === 'grid' ? 'T1 · pointers, heap vs stack, segfaults' : 'T0.L2 · the memory hierarchy'}
+            </span>
+          </div>
+        )}
+        {mode === 'latency' ? (
+          <LatencyWalk />
+        ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           {/* ------- stage ------- */}
           <div className="relative min-h-[420px] flex-1 overflow-auto bg-ink bg-blueprint p-4">
@@ -814,6 +880,8 @@ export default function MemoryGridSim() {
           idle={!script}
         />
         {!embed && <LogConsole lines={lines} onClear={clear} />}
+        </div>
+        )}
       </div>
 
       {/* ------- segfault modal ------- */}
