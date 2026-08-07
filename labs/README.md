@@ -66,3 +66,22 @@ The site trusts the module you drop; this is the honor system, like every
 problem set you've ever done. Your portfolio artifact is the repo with your
 commit history, not our database. (A verified-badge server path is planned;
 your local pass will be re-gradable retroactively.)
+
+## Don't lose your work (two answers, both trivial)
+
+**Your code → git.** On day one, inside the unzipped folder:
+
+```sh
+git init && git add -A && git commit -m "lab 01: template"
+# then one commit per green check:
+#   git commit -am "boot+align green"
+```
+
+That repo — with its commit history — IS your portfolio artifact. Push it
+to a private GitHub repo and your work survives any laptop.
+
+**Your progress → JSON snapshot.** Everything the site tracks (lessons,
+quizzes, lab completions, XP, achievements, Fleet Week scores + design
+doc) lives in your browser's localStorage. Export a snapshot anytime from
+the **Progress page → data ownership → Export**, and re-import it on any
+device/browser. Local by default, portable on demand.

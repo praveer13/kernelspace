@@ -22,6 +22,7 @@ PACKAGES = [
         "rust-allocator",
         [
             "README.md",
+            ".gitignore",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -36,6 +37,7 @@ PACKAGES = [
         "kv-block-manager",
         [
             "README.md",
+            ".gitignore",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -50,6 +52,7 @@ PACKAGES = [
         "bpe-tokenizer",
         [
             "README.md",
+            ".gitignore",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -64,6 +67,7 @@ PACKAGES = [
         "mpmc-queue",
         [
             "README.md",
+            ".gitignore",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -78,6 +82,7 @@ PACKAGES = [
         "toy-executor",
         [
             "README.md",
+            ".gitignore",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -92,6 +97,7 @@ PACKAGES = [
         "batching-scheduler",
         [
             "README.md",
+            ".gitignore",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",

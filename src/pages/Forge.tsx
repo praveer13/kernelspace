@@ -141,8 +141,13 @@ export default function Forge() {
         <p className="text-body-sm text-text-2">
           <span className="text-text-1">Grading is the honor system.</span> The checks live in the
           crate — read them, that&apos;s allowed. The site trusts the module you drop; your real
-          portfolio artifact is the repo with your commit history. A verified-badge server path
-          re-grades local passes retroactively when it ships.
+          portfolio artifact is the repo with your commit history (README has the two-line
+          `git init` ritual — do it on day one). Your site progress lives in localStorage;
+          snapshot it anytime from{' '}
+          <Link to="/progress" className="text-accent underline">
+            Progress → data ownership
+          </Link>
+          .
         </p>
       </motion.div>
 

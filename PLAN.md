@@ -494,6 +494,15 @@ design doc, incident write-ups, speedrun personal bests.*
 - Remaining from original Phase 4 scope: contribution runway (curated
   good-first-issues list), Field Notes feed (3.8).
 
+**Data ownership (2026-08-03):** nothing is lost by design —
+- Progress: full JSON snapshot export/import on the Progress page
+  (lessons, quizzes, sims, lab completions, Fleet Week scores + design
+  doc, XP, achievements, streaks). Round trip verified: export → wipe →
+  import restores labs + fleetWeek + docText + XP.
+- Lab code: git from day one (README's two-line `git init` ritual +
+  per-green-check commits = the portfolio artifact). Every template zip
+  ships a `.gitignore` (target/).
+
 **Revised-plan items SHIPPED 2026-08-03:**
 - **EPD Fleet mode** (the disaggregation lesson, executable): prefill-only
   engine mode, timed KV transfer between pools, decode-pool headroom
