@@ -33,7 +33,6 @@ import {
   rankForXp,
   nextRank,
   selectStreak,
-  selectActivityMap,
   exportProgress,
   TOTAL_LESSONS,
 } from '@/lib/progress'
@@ -506,7 +505,20 @@ function TrackBreakdown() {
 
 function Heatmap() {
   const streakDays = useProgress((s) => s.streakDays)
-  const activity = useProgress(selectActivityMap)
+  // NOTE: object-returning selectors (selectActivityMap) break zustand's
+  // useSyncExternalStore snapshot stability → infinite re-render loop.
+  // Subscribe to raw state and memoize the derived map instead.
+  const lessons = useProgress((s) => s.lessons)
+  const activity = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const l of Object.values(lessons)) {
+      if (l.completedAt) {
+        const day = l.completedAt.slice(0, 10)
+        map[day] = (map[day] ?? 0) + 1
+      }
+    }
+    return map
+  }, [lessons])
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
   const reduced = useReducedMotion()
