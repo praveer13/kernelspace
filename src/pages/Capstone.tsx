@@ -1492,6 +1492,12 @@ function Hero({
           >
             open in free play ↗
           </Link>
+          <Link
+            to="/week"
+            className="inline-flex items-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-4 py-2 font-mono text-body-sm text-accent transition-colors hover:bg-accent/20"
+          >
+            capstone 2.0: fleet week →
+          </Link>
         </div>
         <p className="mt-4 font-mono text-[10px] text-text-3 lg:hidden">
           best on a wide screen

@@ -35,6 +35,18 @@ export interface CapstoneProgress {
   metrics?: CapstoneMetrics
 }
 
+export interface LabProgress {
+  done: boolean
+  checksDone: string[]
+  completedAt?: string // ISO
+}
+
+export interface FleetWeekProgress {
+  actsDone: string[]
+  scores: Record<string, number>
+  docText?: string
+}
+
 export type CodeLang = 'python' | 'java' | 'rust' | 'c'
 
 export interface ProgressSettings {
@@ -46,6 +58,8 @@ export interface ProgressState {
   version: 1
   lessons: Record<string, LessonProgress>
   sims: Record<string, SimProgress>
+  labs: Record<string, LabProgress>
+  fleetWeek: FleetWeekProgress
   capstone: CapstoneProgress
   xp: number
   streakDays: string[] // ISO dates with any activity
@@ -60,6 +74,9 @@ export interface ProgressState {
   recordSimVisit: (simId: string) => void
   recordSimTask: (simId: string, taskId: string) => void
   setSimConfig: (simId: string, config: unknown) => void
+  recordLabResult: (labId: string, passedCheckIds: string[], totalChecks: number) => void
+  completeFleetWeekAct: (actId: string, score: number) => void
+  setFleetWeekDoc: (text: string) => void
   completeCapstoneStep: (stepId: string, stepIndex: number) => void
   setCapstoneMetrics: (metrics: CapstoneMetrics) => void
   unlockAchievement: (id: string) => void
@@ -73,9 +90,11 @@ export const XP = {
   quiz: 40,
   exercise: 60,
   capstoneStep: 150,
+  lab: 200,
+  fleetWeekAct: 250,
 } as const
 
-export const TOTAL_LESSONS = 40
+export const TOTAL_LESSONS = 55
 
 export interface Rank {
   name: string
@@ -106,6 +125,8 @@ const initialData = {
   version: 1 as const,
   lessons: {} as Record<string, LessonProgress>,
   sims: {} as Record<string, SimProgress>,
+  labs: {} as Record<string, LabProgress>,
+  fleetWeek: { actsDone: [] as string[], scores: {} as Record<string, number> },
   capstone: { step: 0, stepsDone: [] as string[] },
   xp: 0,
   streakDays: [] as string[],
@@ -258,6 +279,48 @@ export const useProgress = create<ProgressState>()(
           return { sims: { ...s.sims, [simId]: { ...prev, lastConfig: config } } }
         }),
 
+      recordLabResult: (labId, passedCheckIds, totalChecks) =>
+        set((s) => {
+          const prev = s.labs[labId] ?? { done: false, checksDone: [] as string[] }
+          const checksDone = [...new Set([...prev.checksDone, ...passedCheckIds])]
+          const nowDone = totalChecks > 0 && checksDone.length >= totalChecks
+          const firstDone = nowDone && !prev.done
+          return {
+            labs: {
+              ...s.labs,
+              [labId]: {
+                done: nowDone || prev.done,
+                checksDone,
+                completedAt: firstDone ? new Date().toISOString() : prev.completedAt,
+              },
+            },
+            xp: s.xp + (firstDone ? XP.lab : 0),
+            streakDays: touchStreak(s.streakDays),
+          }
+        }),
+
+      completeFleetWeekAct: (actId, score) =>
+        set((s) => {
+          const first = !s.fleetWeek.actsDone.includes(actId)
+          const actsDone = first ? [...s.fleetWeek.actsDone, actId] : s.fleetWeek.actsDone
+          const allDone = actsDone.length >= 4
+          return {
+            fleetWeek: {
+              ...s.fleetWeek,
+              actsDone,
+              scores: { ...s.fleetWeek.scores, [actId]: Math.max(score, s.fleetWeek.scores[actId] ?? 0) },
+            },
+            achievements:
+              allDone && !s.achievements.includes('fleet-week')
+                ? [...s.achievements, 'fleet-week']
+                : s.achievements,
+            xp: s.xp + (first ? XP.fleetWeekAct : 0),
+            streakDays: touchStreak(s.streakDays),
+          }
+        }),
+
+      setFleetWeekDoc: (text) => set((s) => ({ fleetWeek: { ...s.fleetWeek, docText: text } })),
+
       completeCapstoneStep: (stepId, stepIndex) =>
         set((s) => {
           if (s.capstone.stepsDone.includes(stepId)) return s
@@ -363,9 +426,10 @@ export function selectActivityMap(s: ProgressState): Record<string, number> {
 
 /** Export the raw store as a JSON download string. */
 export function exportProgress(): string {
-  const { lessons, sims, capstone, xp, streakDays, achievements, settings } = useProgress.getState()
+  const { lessons, sims, labs, fleetWeek, capstone, xp, streakDays, achievements, settings } =
+    useProgress.getState()
   return JSON.stringify(
-    { version: 1, lessons, sims, capstone, xp, streakDays, achievements, settings },
+    { version: 1, lessons, sims, labs, fleetWeek, capstone, xp, streakDays, achievements, settings },
     null,
     2,
   )

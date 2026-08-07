@@ -1,0 +1,121 @@
+import type { Lesson } from '../types'
+
+const lesson: Lesson = {
+  id: 't6.l2',
+  slug: 'wide-ep',
+  trackId: 't6',
+  index: 2,
+  title: 'Wide Expert Parallelism in Production',
+  minutes: 30,
+  hook: 'EP144 means your batch is spread across 144 GPUs and every layer is a distributed transaction. DeepEP, EPLB, and dual-batch overlap are the machinery that keeps it profitable — and SGLang reproduced the whole thing on 96 H100s for you to read.',
+  exercise: 'read+quiz',
+  blocks: [
+    {
+      type: 'prose',
+      md: `T6.L1 gave you the problem: hot experts straggle the combine barrier, and MoE wants huge batches. **Wide EP** is the production answer: spread the experts across *many* GPUs (EP32 for prefill, EP144 for decode in DeepSeek's build), run enormous batches so expert utilization is uniform, and hide the all-to-all behind compute. This lesson is the three mechanisms that make it work — and the one public reproduction you can study line by line.
+
+Why EP32 for prefill but EP144 for decode? The phases have opposite physics again (T5.L3): prefill is compute-bound — moderate EP, big per-GPU chunks, dense tensor-core work. Decode is bandwidth-bound and latency-critical — spread experts maximally (EP144), because each GPU then holds *fewer* experts and reads *less* weight per step... and because only a giant batch keeps 256 experts uniformly fed.`,
+    },
+    {
+      type: 'prose',
+      md: `## Mechanism 1: DeepEP — the dispatch/combine library
+
+The all-to-all is so central that DeepSeek open-sourced a dedicated library for it. Two modes, because the two phases want different things:
+
+- **Normal dispatch** (prefill/training): maximize bandwidth. Aggregate tokens by destination, saturate NVLink/RDMA with big transfers, tolerate microseconds of latency.
+- **Low-latency dispatch** (decode): minimize latency at smaller transfer sizes. RDMA write-with-immediate delivery, pre-registered buffers, no negotiation on the hot path — decode cannot wait for a handshake per layer.
+
+This is a recurring systems lesson: *one fabric, two protocols*. Your TCP vs QUIC instinct, your batch-vs-streaming instinct — same shape. The transport is shared; the protocol is phase-specific.`,
+    },
+    {
+      type: 'prose',
+      md: `## Mechanism 2: EPLB — load balance as a packing problem
+
+The **Expert Parallel Load Balancer** treats hot experts as a bin-packing problem. Count per-expert load over a window; **replicate** the hottest experts onto a second GPU (replication, not migration — the weights are small compared to the KV); **reassign** expert→GPU placement periodically to even out. Result: no GPU is more than a few percent off the mean load, so the combine barrier costs ~the mean, not the max.
+
+Notice what EPLB really is: **consistent hashing with live rebalancing** — your cache-tier instinct again (T3.L6, T5.L8). The differences are instructive: the "keys" are expert ids, the "nodes" are GPUs, and the rebalancing signal is token counts rather than cache misses.`,
+    },
+    {
+      type: 'prose',
+      md: `## Mechanism 3: dual-batch overlap — hide the network under compute
+
+Even with DeepEP, the all-to-all costs real microseconds. The fix is the oldest trick in the latency book (T2.L6): never wait. **Dual-batch overlap** splits the batch into two micro-batches and pipelines them: while micro-batch A does attention/FFN compute, micro-batch B does its dispatch/combine transfer. GPU SMs and the network are both busy, always. Latency of the all-to-all disappears *from the critical path* — not removed, hidden.
+
+The same pattern appears as DualPipe in training and as "PDL" (programmatic dependent launch) in NVIDIA's decode optimizations. When you see compute and communication alternating, overlap them. When you see a barrier, ask what could have been running during it.`,
+    },
+    {
+      type: 'statline',
+      stats: [
+        { value: '96×H100', label: 'SGLang reproduction fleet', hint: 'Open-source reproduction of DeepSeek\'s wide-EP serving (May 2025).' },
+        { value: '52.3k / 22.3k', label: 'input / output tok/s per node', hint: 'SGLang on 96×H100, 2k-token prompts — ~5× output throughput vs TP16 baseline.' },
+        { value: '$0.20', label: 'per M output tokens (est.)', hint: 'The wide-EP economics, computed end-to-end in the reproduction.' },
+        { value: '2.2k tok/s', label: 'vLLM wide-EP per H200', hint: 'Production-like multi-node DeepSeek serving with vLLM (Dec 2025).' },
+      ],
+    },
+    {
+      type: 'callout',
+      variant: 'analogy',
+      md: `Wide EP is **your sharded cache fleet with a fan-out router**, and the three mechanisms map one-to-one: DeepEP ≈ the RPC layer with separate bulk and latency paths (gRPC streaming vs unary), EPLB ≈ consistent hashing + hot-key replication (your memcached tier's hot-key problem, with GPUs), dual-batch overlap ≈ every event-loop lesson from T2.L6 — never block, interleave. The genuinely new thing is only the payload: tokens instead of requests, experts instead of shards.`,
+    },
+    {
+      type: 'quiz',
+      questions: [
+        {
+          q: 'Decode runs at EP144 while prefill runs at EP32 primarily because…',
+          options: [
+            'Decode has fewer FLOPs so needs fewer GPUs',
+            'Decode is bandwidth-bound and needs giant uniform batches plus minimal per-GPU weight reads; prefill is compute-bound and wants big dense chunks per GPU',
+            'Prefill cannot use the network',
+            'EP144 is cheaper hardware',
+          ],
+          correct: [1],
+          explanation:
+            'The T5.L3 phase split applied to experts: decode profits from maximal expert spread (less weight per GPU per step, giant uniform batches) while prefill profits from dense compute chunks. Same model, two optimal topologies — a preview of T6.L4.',
+        },
+        {
+          q: 'EPLB keeps the combine barrier cheap by…',
+          options: [
+            'Quantizing expert weights',
+            'Replicating hot experts onto second GPUs and rebalancing placement so every GPU carries ~mean load',
+            'Reducing batch size',
+            'Routing around slow GPUs',
+          ],
+          correct: [1],
+          explanation:
+            'The barrier costs the MAX load unless balanced. EPLB measures per-expert load and uses replication + reassignment to flatten it — consistent hashing with live rebalancing, for experts.',
+        },
+        {
+          q: 'Dual-batch overlap exists to…',
+          options: [
+            'Double the model size',
+            'Hide all-to-all latency under compute by pipelining two micro-batches — network busy while SMs busy',
+            'Serve two models on one GPU',
+            'Avoid replicating experts',
+          ],
+          correct: [1],
+          explanation:
+            'Compute and communication alternate every layer; overlapping two micro-batches keeps both resources busy. It is T2.L6\'s never-block principle applied to a distributed forward pass.',
+        },
+        {
+          q: 'DeepEP ships two dispatch protocols because…',
+          options: [
+            'One fabric, two workloads: prefill wants max bandwidth with big transfers; decode wants min latency with pre-registered buffers and no handshake on the hot path',
+            'One is for AMD GPUs',
+            'The first version had bugs',
+            'Training and inference use different models',
+          ],
+          correct: [0],
+          explanation:
+            'Phase-specific protocols on a shared fabric — the same reason you use different RPC shapes for bulk vs interactive traffic. Latency-critical decode cannot afford per-layer negotiation.',
+        },
+      ],
+    },
+    {
+      type: 'deepdive',
+      title: 'Read the reproduction',
+      md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers including the 545% margin day and the 56.3% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, 52.3k input / 22.3k output tok/s/node, ~$0.20/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
+    },
+  ],
+}
+
+export default lesson

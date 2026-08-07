@@ -12,7 +12,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `One GPU is never enough — for capacity (T5.L4's 70B arithmetic), for throughput, or for latency isolation. The moment serving spans devices, you inherit a full distributed-systems problem: how to split the model, how to move the bytes, and how to keep tail latency alive across a network. This lesson is the map: the three parallelism axes, the interconnect hierarchy that prices them, **disaggregation** (the big architectural idea of 2024–25), and Mooncake-style distributed KV caches. T3.L6's Dynamo case study slots in as the production implementation.`,
+      md: `One GPU is never enough — for capacity (T5.L4's 70B arithmetic), for throughput, or for latency isolation. The moment serving spans devices, you inherit a full distributed-systems problem: how to split the model, how to move the bytes, and how to keep tail latency alive across a network. This lesson is the map: the three parallelism axes, the interconnect hierarchy that prices them, **disaggregation** (the idea that became the default architecture of 2025–26), and Mooncake-style distributed KV caches. T3.L6's Dynamo case study slots in as the production implementation. (The 2026 state of the art on this exact topic — EPD, NIXL, KVBM, llm-d — is T6.L3.)`,
     },
     {
       type: 'prose',

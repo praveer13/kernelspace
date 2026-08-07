@@ -9,6 +9,10 @@ import Playground from '@/pages/Playground'
 import Glossary from '@/pages/Glossary'
 import Progress from '@/pages/Progress'
 import Capstone from '@/pages/Capstone'
+import Forge from '@/pages/Forge'
+import ForgeLab from '@/pages/ForgeLab'
+import Fleet from '@/pages/Fleet'
+import FleetWeek from '@/pages/FleetWeek'
 import NotFound from '@/pages/NotFound'
 
 /**
@@ -28,6 +32,10 @@ export default function App() {
         <Route path="/glossary" element={<Glossary />} />
         <Route path="/progress" element={<Progress />} />
         <Route path="/capstone" element={<Capstone />} />
+        <Route path="/forge" element={<Forge />} />
+        <Route path="/forge/:labId" element={<ForgeLab />} />
+        <Route path="/fleet" element={<Fleet />} />
+        <Route path="/week" element={<FleetWeek />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

@@ -1,7 +1,7 @@
 /**
  * Lesson registry — the content source of truth for /curriculum, /tracks/:id
- * and the lesson engine. Enumerates all 40 lessons exactly as specified in
- * curriculum.md §3 (T0:5 · T1:6 · T2:7 · T3:6 · T4:7 · T5:9).
+ * and the lesson engine. Enumerates all 54 lessons exactly as specified in
+ * curriculum.md §3 (T0:6 · T1:6 · T2:7 · T3:6 · T4:7 · T5:9 · T6:8 · T7:5).
  *
  * Lookup accepts both canonical ids (`t1.l3`, used by the progress store and
  * pre-existing links) and human slugs (`toy-allocator`, used in /lesson/:lessonId).
@@ -27,6 +27,7 @@ import t0l2 from './t0/memory-hierarchy'
 import t0l3 from './t0/row-vs-column'
 import t0l4 from './t0/aos-vs-soa'
 import t0l5 from './t0/your-runtime'
+import t0l6 from './t0/flame-graphs'
 
 // T1 — C-Level Mental Model
 import t1l1 from './t1/stack-vs-heap'
@@ -52,6 +53,7 @@ import t3l3 from './t3/rust-concurrency'
 import t3l4 from './t3/toy-executor'
 import t3l5 from './t3/rust-wasm'
 import t3l6 from './t3/dynamo-case-study'
+import t3l7 from './t3/rust-zig-c-decision'
 
 // T4 — GPU Architecture
 import t4l1 from './t4/cpu-vs-gpu'
@@ -73,18 +75,37 @@ import t5l7 from './t5/speculative-chunked'
 import t5l8 from './t5/distributed-serving'
 import t5l9 from './t5/production-stack'
 
+// T6 — Mega-Scale Serving (2026)
+import t6l1 from './t6/moe-anatomy'
+import t6l2 from './t6/wide-ep'
+import t6l3 from './t6/epd-disaggregation'
+import t6l4 from './t6/parallelism-zoo'
+import t6l5 from './t6/fp4-blackwell'
+import t6l6 from './t6/speculative-production'
+import t6l7 from './t6/rl-rollout'
+import t6l8 from './t6/agents-structured'
+
+// T7 — Economics & SLO Engineering
+import t7l1 from './t7/objective-function'
+import t7l2 from './t7/benchmarking'
+import t7l3 from './t7/pareto'
+import t7l4 from './t7/unit-economics'
+import t7l5 from './t7/autoscaling-planner'
+
 export const LESSONS_BY_TRACK: Record<TrackId, Lesson[]> = {
-  t0: [t0l1, t0l2, t0l3, t0l4, t0l5],
+  t0: [t0l1, t0l2, t0l3, t0l4, t0l5, t0l6],
   t1: [t1l1, t1l2, t1l3, t1l4, t1l5, t1l6],
   t2: [t2l1, t2l2, t2l3, t2l4, t2l5, t2l6, t2l7],
-  t3: [t3l1, t3l2, t3l3, t3l4, t3l5, t3l6],
+  t3: [t3l1, t3l2, t3l3, t3l4, t3l5, t3l6, t3l7],
   t4: [t4l1, t4l2, t4l3, t4l4, t4l5, t4l6, t4l7],
   t5: [t5l1, t5l2, t5l3, t5l4, t5l5, t5l6, t5l7, t5l8, t5l9],
+  t6: [t6l1, t6l2, t6l3, t6l4, t6l5, t6l6, t6l7, t6l8],
+  t7: [t7l1, t7l2, t7l3, t7l4, t7l5],
 }
 
-export const TRACK_IDS: TrackId[] = ['t0', 't1', 't2', 't3', 't4', 't5']
+export const TRACK_IDS: TrackId[] = ['t0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']
 
-/** All 40 lessons in curriculum order. */
+/** All 54 lessons in curriculum order. */
 export const ALL_LESSONS: Lesson[] = TRACK_IDS.flatMap((id) => LESSONS_BY_TRACK[id])
 
 export const TOTAL_LESSON_COUNT = ALL_LESSONS.length // 40
@@ -213,6 +234,32 @@ export const TRACK_EXTRAS: Record<TrackId, TrackExtras> = {
     ],
     requires: 'requires T4 · roofline & HBM',
     sideNote: '// lesson 4 is the one everyone quotes',
+  },
+  t6: {
+    pitch:
+      'The 2026 canon: MoE and wide expert parallelism, EPD disaggregation, FP4/Blackwell, MTP speculation, RL rollouts, agentic traffic. The physics is unchanged — the payload grew teeth.',
+    outcomes: [
+      'Explain the all-to-all: why MoE serving is a networking discipline, not a kernel one.',
+      'Recompute KV arithmetic for MLA (~70 KB/token) and argue what it enables (giant batches).',
+      'Place DeepEP, EPLB, and dual-batch overlap in a wide-EP decode fleet.',
+      'Compose TP×PP×DP×EP×CP per phase, priced by the interconnect ladder.',
+      'Read the 2026 traffic picture: agents, structured output, RL rollouts, multi-LoRA.',
+    ],
+    requires: 'requires T5 · the serving algorithms',
+    sideNote: '// lesson 2 is the one with the 96-GPU reproduction',
+  },
+  t7: {
+    pitch:
+      'The objective function made operational: goodput, honest benchmarking, the Pareto frontier, $/Mtok, and the Planner. Where “world-class” stops being a vibe and becomes a curve.',
+    outcomes: [
+      'Define goodput and reject raw-throughput claims on sight.',
+      'Run a benchmark that survives review: traffic, warmup, samples, identical stacks.',
+      'Read the Pareto frontier: which dial moved, which region, which hardware.',
+      'Price a serving business on a napkin: $/Mtok, tok/MW, the 545% margin day.',
+      'Design the Planner loop: leading signals, phase-aware scaling, honest shedding.',
+    ],
+    requires: 'requires T6 · the mega-scale machinery',
+    sideNote: '// lesson 4 is the one with the invoice',
   },
 }
 

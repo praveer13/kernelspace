@@ -1,0 +1,16 @@
+[package]
+name = "batching-scheduler"
+version = "0.1.0"
+edition = "2021"
+description = "forge lab 06 — continuous-batching admission policy (kernelspace)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kslab = { path = "../kit" }
+
+[profile.release]
+opt-level = 2
+debug = false

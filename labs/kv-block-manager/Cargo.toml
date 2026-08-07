@@ -1,0 +1,16 @@
+[package]
+name = "kv-block-manager"
+version = "0.1.0"
+edition = "2021"
+description = "forge lab 02 — vLLM's paged block manager (kernelspace)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kslab = { path = "../kit" }
+
+[profile.release]
+opt-level = 2
+debug = false

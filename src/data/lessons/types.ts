@@ -6,7 +6,7 @@
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { CodeTab } from '@/components/CodeBlock'
 
-export type TrackId = 't0' | 't1' | 't2' | 't3' | 't4' | 't5'
+export type TrackId = 't0' | 't1' | 't2' | 't3' | 't4' | 't5' | 't6' | 't7'
 
 /** The nine simulator routes (lab/playground scope). */
 export type SimId =

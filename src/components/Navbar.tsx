@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils'
 const NAV_LINKS = [
   { to: '/curriculum', label: 'Curriculum' },
   { to: '/lab', label: 'Lab' },
+  { to: '/forge', label: 'Forge' },
+  { to: '/fleet', label: 'Fleet' },
   { to: '/capstone', label: 'Capstone' },
   { to: '/glossary', label: 'Glossary' },
 ]

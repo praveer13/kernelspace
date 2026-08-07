@@ -1,0 +1,3 @@
+[workspace]
+members = ["kit", "rust-allocator", "kv-block-manager", "bpe-tokenizer", "mpmc-queue", "toy-executor", "batching-scheduler"]
+resolver = "2"

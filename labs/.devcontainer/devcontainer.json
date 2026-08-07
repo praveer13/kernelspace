@@ -1,0 +1,10 @@
+{
+  "name": "kernelspace-forge",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown",
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer"]
+    }
+  }
+}

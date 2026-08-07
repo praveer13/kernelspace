@@ -20,6 +20,7 @@ import {
   Code2,
   SlidersHorizontal,
   Calculator,
+  Network,
   Rows3,
   Cog,
 } from 'lucide-react'
@@ -48,7 +49,7 @@ export const TRACKS: TrackMeta[] = [
     color: '#34D399',
     glyph: Layers,
     promise: 'The machine under the abstraction: transistors to pointers.',
-    lessons: 5,
+    lessons: 6,
     exercises: 4,
     hours: 3.5,
   },
@@ -59,7 +60,7 @@ export const TRACKS: TrackMeta[] = [
     color: '#FBBF24',
     glyph: Braces,
     promise: 'Memory, pointers, and allocators — no GC to save you.',
-    lessons: 7,
+    lessons: 6,
     exercises: 6,
     hours: 5,
   },
@@ -70,7 +71,7 @@ export const TRACKS: TrackMeta[] = [
     color: '#22D3EE',
     glyph: Cpu,
     promise: 'Virtual memory, scheduling, and races — the 1970s toolkit.',
-    lessons: 8,
+    lessons: 7,
     exercises: 7,
     hours: 6,
   },
@@ -92,7 +93,7 @@ export const TRACKS: TrackMeta[] = [
     color: '#A78BFA',
     glyph: Grid3X3,
     promise: 'SMs, HBM, rooflines — why bandwidth is the whole game.',
-    lessons: 6,
+    lessons: 7,
     exercises: 5,
     hours: 4.5,
   },
@@ -103,9 +104,31 @@ export const TRACKS: TrackMeta[] = [
     color: '#FB7185',
     glyph: Server,
     promise: 'PagedAttention, continuous batching, the vLLM paper end-to-end.',
-    lessons: 7,
+    lessons: 9,
     exercises: 8,
     hours: 6,
+  },
+  {
+    code: 'T6',
+    id: 't6',
+    name: 'Mega-Scale Serving',
+    color: '#5CA8FF',
+    glyph: Network,
+    promise: 'MoE, wide EP, disaggregation, FP4 — the 2026 production canon.',
+    lessons: 8,
+    exercises: 8,
+    hours: 4,
+  },
+  {
+    code: 'T7',
+    id: 't7',
+    name: 'Economics & SLO Engineering',
+    color: '#E879F9',
+    glyph: TrendingUp,
+    promise: 'Goodput, honest benchmarks, the frontier, the invoice.',
+    lessons: 5,
+    exercises: 5,
+    hours: 2,
   },
 ]
 
@@ -225,7 +248,7 @@ export const SIMS: SimMeta[] = [
   },
 ]
 
-/** Ordered lesson ids across tracks (T0.L1 … T5.L7) for next-lesson selectors. */
+/** Ordered lesson ids across tracks (T0.L1 … T7.L5) for next-lesson selectors. */
 export const ORDERED_LESSON_IDS: string[] = TRACKS.flatMap((t) =>
   Array.from({ length: t.lessons }, (_, i) => `${t.id}.l${i + 1}`),
 )

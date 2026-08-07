@@ -1,3 +1,7 @@
 node_modules
 dist
 .DS_Store
+labs/target
+labs/**/target
+labs/_solutions/
+bun.lock

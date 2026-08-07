@@ -1,0 +1,9 @@
+[package]
+name = "kslab"
+version = "0.1.0"
+edition = "2021"
+description = "kernelspace forge lab kit — zero-dependency wasm ABI glue"
+license = "MIT"
+
+[lib]
+crate-type = ["rlib"]
