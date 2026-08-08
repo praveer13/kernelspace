@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils'
 import EnginePanel from '@/pages/fleet/EnginePanel'
 import { validateModule } from '@/pages/fleet/drivers'
 import ClusterPanel from '@/pages/fleet/ClusterPanel'
+import RealEnginePanel from '@/pages/fleet/RealEnginePanel'
 import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet/slots'
 
 /**
@@ -38,7 +39,7 @@ import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet
  *            against the JS reference every tick.
  */
 export default function Fleet() {
-  const [mode, setMode] = useState<'engine' | 'cluster' | 'pool'>('engine')
+  const [mode, setMode] = useState<'engine' | 'cluster' | 'real' | 'pool'>('engine')
   const slots = useSlots((s) => s.slots)
   const setSlot = useSlots((s) => s.setSlot)
   const [slotError, setSlotError] = useState<string | null>(null)
@@ -76,7 +77,7 @@ export default function Fleet() {
           </p>
         </div>
         <div className="flex items-center gap-2 font-mono text-[11px]">
-          {(['engine', 'cluster', 'pool'] as const).map((m) => (
+          {(['engine', 'cluster', 'real', 'pool'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -124,7 +125,7 @@ export default function Fleet() {
       </div>
 
       <div className="mt-6">
-        {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : <PoolMode />}
+        {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
       </div>
     </div>
   )

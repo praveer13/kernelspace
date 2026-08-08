@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react'
 import { XP, rankForXp, selectTrackPct, useProgress } from '@/lib/progress'
+import AgentActions from '@/components/AgentActions'
 import { getTrack, CAPSTONE } from '@/lib/tracks'
 import {
   lessonById,
@@ -697,6 +698,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
               {resumePct !== null && !done && (
                 <span className="font-mono text-[11px] text-text-3">resumed at {resumePct}%</span>
               )}
+              <AgentActions lessonId={lesson.id} title={lesson.title} />
             </div>
           </header>
 

@@ -166,6 +166,25 @@ export function dumpRefMultiset(d: ManagerDump): number[] {
 
 /* --------------------------- traffic gen ---------------------------- */
 
+/** A replayable production trace (public/traces/*.json). */
+export interface TraceArtifact {
+  name: string
+  source: string
+  license: string
+  note: string
+  requests: { t: number; p: number; o: number }[]
+}
+
+/** Load a production trace and adapt it to a request stream. */
+export async function loadTraceStream(url: string): Promise<RequestSpec[]> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`trace fetch failed: ${res.status}`)
+  const data = (await res.json()) as TraceArtifact
+  return data.requests
+    .map((r, i) => ({ id: i + 1, arrival: r.t, prompt: r.p, output: r.o }))
+    .sort((a, b) => a.arrival - b.arrival || a.id - b.id)
+}
+
 export interface FleetOp {
   kind: 'allocate' | 'append' | 'fork' | 'free'
   /** seq ids involved (src for fork) */

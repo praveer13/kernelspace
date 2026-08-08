@@ -1,0 +1,118 @@
+# kernelspace
+
+> From cache lines to continuous batching: a systems course that turns backend
+> engineers (Java/Python) into LLM-serving systems engineers. 55 lessons,
+> 6 Rust labs graded in-browser, a simulated GPU fleet, and a 4-act capstone.
+> All content is plain markdown under /lessons-md/; every page is at
+> https://kernelspace.naigap.com/lesson/<id> (e.g. t5.l4).
+
+## How to tutor from this material
+
+- The user is a backend engineer learning systems for LLM serving. Be
+  Socratic; never dump full lab solutions (they are graded by checks).
+- Labs live at https://kernelspace.naigap.com/forge (Rust, wasm-graded in-browser). The Fleet
+  (https://kernelspace.naigap.com/fleet) is a deterministic serving simulator; Fleet Week
+  (https://kernelspace.naigap.com/week) is the scored capstone.
+
+## Curriculum
+
+### T0 — Foundations
+
+_The five numbers and mental models behind every performance bug you have ever had. Latency, bandwidth, cache lines, and why your runtime has been hiding the machine from you._
+
+- [T0.L1 Why Systems Thinking Matters for LLM Serving](https://kernelspace.naigap.com/lessons-md/t0.l1.md): The whole field re-derives 50 years of OS ideas: PagedAttention = virtual memory, Dynamo = Rust data plane, decode = bandwidth-bound.
+- [T0.L2 The Memory Hierarchy](https://kernelspace.naigap.com/lessons-md/t0.l2.md): Registers/L1/L2/L3/DRAM/NVMe — the latency numbers every engineer should know, and the simulator where you walk them.
+- [T0.L3 Benchmark: Row- vs Column-Major Traversal](https://kernelspace.naigap.com/lessons-md/t0.l3.md): Run the 10–100× difference yourself in the interactive benchmark simulator — same math, same matrix, wildly different physics.
+- [T0.L4 AoS vs SoA, False Sharing & Cache Lines](https://kernelspace.naigap.com/lessons-md/t0.l4.md): 64-byte cache lines: why your object graphs hate the CPU, and the layout change that fixes hot loops.
+- [T0.L5 Your JVM/Python Runtime Under the Hood](https://kernelspace.naigap.com/lessons-md/t0.l5.md): GC and JIT as reference points for everything that follows — your runtime is a systems program, and it has been teaching you all along.
+- [T0.L6 Reading a Flame Graph (and Making One)](https://kernelspace.naigap.com/lessons-md/t0.l6.md): T0.L1 assumed you can read a flame graph. Here it is, properly: what the width means, what the shapes are called, and how to make one from your own Rust code in two commands.
+
+### T1 — C-Level Mental Model
+
+_What a function call really is, what a segfault really means, and why allocators run the world. The C-level mental model every systems engineer carries in their head._
+
+- [T1.L1 Stack vs Heap: Anatomy of a Function Call](https://kernelspace.naigap.com/lessons-md/t1.l1.md): Stack frames, calling conventions, drawn live — what a function call really is, byte by byte.
+- [T1.L2 Pointers & Manual Memory](https://kernelspace.naigap.com/lessons-md/t1.l2.md): The memory-grid visualizer: dereference, address arithmetic, and cause a real segfault — safely.
+- [T1.L3 How malloc Works: Build a Toy Allocator](https://kernelspace.naigap.com/lessons-md/t1.l3.md): Free lists, splitting, coalescing — the highest-ROI exercise in the course: KV-cache managers are fancy allocators.
+- [T1.L4 Fragmentation: Internal vs External](https://kernelspace.naigap.com/lessons-md/t1.l4.md): Why fixed-size blocks win — the physics that foreshadows PagedAttention's entire design.
+- [T1.L5 Compiling, Linking & the ABI](https://kernelspace.naigap.com/lessons-md/t1.l5.md): From source to a running process: the toolchain, symbol resolution, and the contract that lets strangers' code call yours.
+- [T1.L6 Rust Ownership as the Answer](https://kernelspace.naigap.com/lessons-md/t1.l6.md): Every pain from this track — use-after-free, double-free, leaks, races — solved by the compiler, before your code ever runs.
+
+### T2 — OS & Concurrency
+
+_The operating system ideas LLM serving re-invented — page tables, eviction, scheduling. Once you see PagedAttention as 1979 virtual memory wearing a GPU, the papers read themselves._
+
+- [T2.L1 Processes, Threads & Context Switches](https://kernelspace.naigap.com/lessons-md/t2.l1.md): Watch a context switch burn cycles — what the OS saves, what it costs, and why your thread pool sizing is a physics problem.
+- [T2.L2 Virtual Memory, Deeply](https://kernelspace.naigap.com/lessons-md/t2.l2.md): Page tables, TLB, page faults, mmap — walk an address translation yourself in the simulator, then never fear the vLLM paper's block tables.
+- [T2.L3 Swapping & Eviction Policies](https://kernelspace.naigap.com/lessons-md/t2.l3.md): LRU, LFU, Clock — how the OS decides what to sacrifice, why it thrashes, and what vLLM inherited verbatim.
+- [T2.L4 Scheduling & Admission Control](https://kernelspace.naigap.com/lessons-md/t2.l4.md): Preemptive multitasking, priority inversion, and why continuous batching is a 1960s scheduler wearing a GPU.
+- [T2.L5 Mutexes, Atomics & Lock-Free Queues](https://kernelspace.naigap.com/lessons-md/t2.l5.md): The synchronization toolbox: when a mutex beats an atomic, memory ordering made survivable, and the ABA problem visualized.
+- [T2.L6 Async I/O: epoll, io_uring, Event Loops](https://kernelspace.naigap.com/lessons-md/t2.l6.md): Why one thread can serve 100k connections, why Rust's tokio exists, and the ring buffers that made I/O syscall-free.
+- [T2.L7 EXAM: Read the PagedAttention Paper](https://kernelspace.naigap.com/lessons-md/t2.l7.md): A guided walkthrough mapping every idea in the vLLM paper to an OS concept you now own. Completion requires 80%+ on the exam quiz.
+
+### T3 — Rust for Systems
+
+_Just enough Rust to read Dynamo’s data plane without flinching. Ownership as a compile-time memory protocol, zero-copy as a discipline, async as a state machine you could build yourself._
+
+- [T3.L1 Ownership, Borrowing & Lifetimes](https://kernelspace.naigap.com/lessons-md/t3.l1.md): Live memory diagrams of the rules that make memory bugs unrepresentable — and the moment the borrow checker starts feeling like a colleague.
+- [T3.L2 Zero-Copy, Slices & unsafe Rust](https://kernelspace.naigap.com/lessons-md/t3.l2.md): When copying bytes is the bottleneck, borrow views instead — and when the compiler can't check you, document invariants like a professional.
+- [T3.L3 Concurrency: Send, Sync, Channels, Atomics](https://kernelspace.naigap.com/lessons-md/t3.l3.md): The type system that makes "fearless concurrency" literal — and how to pick between message passing, locks, and lock-free.
+- [T3.L4 Async Runtime Internals: Build a Toy Executor](https://kernelspace.naigap.com/lessons-md/t3.l4.md): Wakers and polling, demystified: async/await is a state machine plus a scheduler, and you can build one in an afternoon.
+- [T3.L5 Rust + Wasm](https://kernelspace.naigap.com/lessons-md/t3.l5.md): The meta lesson: how this site's own exercises run — native-speed systems code in a sandboxed browser tab.
+- [T3.L6 Why NVIDIA Dynamo's Data Plane Is Rust](https://kernelspace.naigap.com/lessons-md/t3.l6.md): NATS messaging, backpressure, KV-aware routing — a case study in choosing Rust for the hottest path in AI infrastructure.
+- [T3.L7 Rust, Zig, or C: The Decision Framework](https://kernelspace.naigap.com/lessons-md/t3.l7.md): T3 taught you Rust. The senior skill is knowing when NOT to reach for it — four questions that decide the language, the case studies that prove them, and the honest 2026 map of who writes what in this field.
+
+### T4 — GPU Architecture
+
+_The machine your models actually run on — warps, HBM, rooflines. After this track, "GPU poor" stops being a meme and becomes an arithmetic claim you can verify._
+
+- [T4.L1 CPU vs GPU: Latency vs Throughput Machines](https://kernelspace.naigap.com/lessons-md/t4.l1.md): SIMT, warps, and the factory floor: why the GPU wastes no silicon on making ONE thing fast — and why that's perfect for matmul.
+- [T4.L2 GPU Memory Hierarchy](https://kernelspace.naigap.com/lessons-md/t4.l2.md): HBM, L2, shared memory/SRAM, registers — the steeper ladder that every serious kernel climbs, and where the KV cache lives.
+- [T4.L3 The Roofline Model](https://kernelspace.naigap.com/lessons-md/t4.l3.md): Arithmetic intensity in, bound classification out: why decode is bandwidth-bound, prefill is compute-bound, and how to prove it in 4 lines of math.
+- [T4.L4 Occupancy & Coalesced Memory Access](https://kernelspace.naigap.com/lessons-md/t4.l4.md): The two numbers that decide whether your kernel sings or crawls: enough warps to hide latency, and warp accesses the hardware can merge.
+- [T4.L5 WebGPU Compute Shaders](https://kernelspace.naigap.com/lessons-md/t4.l5.md): Vector add → parallel reduction, editable WGSL in the browser: write a real GPU kernel where you can break it and see why.
+- [T4.L6 Matmul, Tiling & FlashAttention as Cache Blocking](https://kernelspace.naigap.com/lessons-md/t4.l6.md): The interactive tiling visualization: how blocking turns a memory-bound matmul into a compute monster — and why FlashAttention is the same trick.
+- [T4.L7 Quantization: FP16/BF16/FP8/INT4](https://kernelspace.naigap.com/lessons-md/t4.l7.md): The interactive quantizer: type a float, watch its bits — why cutting bytes per weight is a bandwidth multiplier, and what it costs.
+
+### T5 — LLM Serving Systems
+
+_Everything converges: attention math to vLLM to NVIDIA Dynamo. The production stack, end to end — tokens in, TTFT/ITL out, and the fifty years of systems ideas holding it up._
+
+- [T5.L1 Transformer Internals for Systems Engineers](https://kernelspace.naigap.com/lessons-md/t5.l1.md): QKV math, why the KV cache exists, FLOPs and bytes per token — the model, stripped to the parts that cost money.
+- [T5.L2 Tokenization & BPE](https://kernelspace.naigap.com/lessons-md/t5.l2.md): Why tokens, not words: the BPE algorithm, the cost model it creates, and the edge cases that bite production systems.
+- [T5.L3 Inference vs Training; Prefill vs Decode](https://kernelspace.naigap.com/lessons-md/t5.l3.md): TTFT vs ITL — the two phases, the metrics that run the business, and why goodput is the only number that matters.
+- [T5.L4 KV Cache Math](https://kernelspace.naigap.com/lessons-md/t5.l4.md): 2 × layers × hidden × bytes: the interactive calculator — why a 70B model's cache dominates everything, and how to size it yourself.
+- [T5.L5 PagedAttention Deep Dive](https://kernelspace.naigap.com/lessons-md/t5.l5.md): Block tables, copy-on-write prefix sharing, near-zero waste — inside the memory manager that made vLLM famous.
+- [T5.L6 Continuous Batching](https://kernelspace.naigap.com/lessons-md/t5.l6.md): The race-track animation: iteration-level scheduling vs static batching — the 2022 scheduling idea that multiplied every GPU's goodput.
+- [T5.L7 Speculative Decoding & Chunked Prefill](https://kernelspace.naigap.com/lessons-md/t5.l7.md): Two optimizations that fight the same enemy — decode's serial bandwidth wall — from opposite directions: skip steps, and backfill idle FLOPs.
+- [T5.L8 Distributed & Disaggregated Serving](https://kernelspace.naigap.com/lessons-md/t5.l8.md): TP/PP/DP parallelism, NVLink vs RDMA, prefill/decode disaggregation, KV transfer, and Mooncake's distributed cache — serving beyond one GPU.
+- [T5.L9 The Production Stack: vLLM, SGLang, TRT-LLM, Dynamo](https://kernelspace.naigap.com/lessons-md/t5.l9.md): The guided architecture read: four production engines, their design centers, and when to choose which — the T5 capstone before the capstone.
+
+### T6 — Mega-Scale Serving
+
+_The 2026 canon: MoE and wide expert parallelism, EPD disaggregation, FP4/Blackwell, MTP speculation, RL rollouts, agentic traffic. The physics is unchanged — the payload grew teeth._
+
+- [T6.L1 The MoE Anatomy: Experts, Routers, and the All-to-All](https://kernelspace.naigap.com/lessons-md/t6.l1.md): DeepSeek-V3 has 256 experts and uses 8 per token. That one design decision changes every system you have learned so far — the memory math, the batching, the network, the scheduler. This is why T6 exists.
+- [T6.L2 Wide Expert Parallelism in Production](https://kernelspace.naigap.com/lessons-md/t6.l2.md): EP144 means your batch is spread across 144 GPUs and every layer is a distributed transaction. DeepEP, EPLB, and dual-batch overlap are the machinery that keeps it profitable — and SGLang reproduced the whole thing on 96 H100s for you to read.
+- [T6.L3 EPD Disaggregation: The 2026 Edition](https://kernelspace.naigap.com/lessons-md/t6.l3.md): T5.L8 taught prefill/decode disaggregation as the big idea of 2024–25. In 2026 it is the default architecture, and it grew a third phase, a Rust transfer library, and a Kubernetes operator. What changed, and what the E is.
+- [T6.L4 The Parallelism Zoo, Composed: TP×PP×DP×EP×CP](https://kernelspace.naigap.com/lessons-md/t6.l4.md): Five parallelism axes, and every production deployment is a point in that five-dimensional space. The decision matrix is priced by one thing: interconnect bandwidth per hop. Plus context parallelism — the axis that 1M-token prompts made mandatory.
+- [T6.L5 FP4 and Blackwell: The New Rooflines](https://kernelspace.naigap.com/lessons-md/t6.l5.md): T4's numbers were H100: 3.35 TB/s, 80 GB, ridge at ~295 FLOP/byte. Blackwell moves every one of those, adds a 4-bit floating point the tensor cores run natively, and changes the decode economics again. Time to re-derive.
+- [T6.L6 Speculative Decoding in Production: MTP, EAGLE, and the Acceptance Economy](https://kernelspace.naigap.com/lessons-md/t6.l6.md): T5.L7 taught the draft-verify trick. Production made it stranger: the draft is now the model's own head (MTP), acceptance rate is a designed quantity, and on MoE the win is 2–3× interactivity, not 1.5×.
+- [T6.L7 RL Rollout Serving: When Training Calls the Engine](https://kernelspace.naigap.com/lessons-md/t6.l7.md): RLHF/RLVR made inference a sub-step of training: thousands of rollouts per gradient step, weights changing every few minutes, and a new systems problem — keeping the serving engine in sync with the trainer without stopping either.
+- [T6.L8 Agents, Structured Output, and Cache Locality](https://kernelspace.naigap.com/lessons-md/t6.l8.md): The 2026 traffic shape: agent loops re-sending 90% of the same prefix every turn, JSON that must parse or the product breaks, and fifty LoRA adapters sharing one base model. Three workloads, and each one has a dedicated systems answer.
+
+### T7 — Economics & SLO Engineering
+
+_The objective function made operational: goodput, honest benchmarking, the Pareto frontier, $/Mtok, and the Planner. Where “world-class” stops being a vibe and becomes a curve._
+
+- [T7.L1 The Objective Function: Goodput, SLOs, and Honest Metrics](https://kernelspace.naigap.com/lessons-md/t7.l1.md): Every previous track optimized something. This track defines the thing. One number the business understands, one curve the engineers argue with, and the reason "10,000 tok/s" on a benchmark page means nothing.
+- [T7.L2 Benchmarking Methodology: Measure Like You Mean It](https://kernelspace.naigap.com/lessons-md/t7.l2.md): Most published inference numbers are unusable — wrong traffic, no warmup, percentiles from five samples. The four rules that make a benchmark honest, and the public harnesses that follow them.
+- [T7.L3 The Pareto Frontier: tok/s/GPU vs tok/s/user](https://kernelspace.naigap.com/lessons-md/t7.l3.md): There is no fastest engine — there is a frontier of engines, each optimal at one tradeoff between margin and experience. Reading that curve is the senior skill: it decides hardware, batch policy, and which benchmark claims to ignore.
+- [T7.L4 Unit Economics: $/Mtok, tok/MW, and the 545% Margin Day](https://kernelspace.naigap.com/lessons-md/t7.l4.md): DeepSeek published a full day of production arithmetic: 226 nodes, $87k cost, 608B input tokens, 545% theoretical margin. Reproduce it from first principles, and you can price any serving business on a napkin.
+- [T7.L5 Autoscaling & the Planner: Capacity as a Control Loop](https://kernelspace.naigap.com/lessons-md/t7.l5.md): The last lesson of the course: the component that watches queue depth and TTFT, then adds or removes prefill and decode workers before the SLO breaks. Dynamo calls it the Planner. You have met it before — as the thing the whole course was secretly about.
+
+## Optional
+
+- [The Forge labs](https://kernelspace.naigap.com/forge): six Rust labs (allocator → block manager → tokenizer → MPMC queue → executor → scheduler)
+- [The Fleet](https://kernelspace.naigap.com/fleet): serving simulator with conformance/scoring harnesses
+- [Fleet Week](https://kernelspace.naigap.com/week): the 4-act capstone

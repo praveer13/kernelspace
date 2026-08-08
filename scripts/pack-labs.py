@@ -23,6 +23,8 @@ PACKAGES = [
         [
             "README.md",
             ".gitignore",
+            "AGENTS.md",
+            "CLAUDE.md",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -38,6 +40,8 @@ PACKAGES = [
         [
             "README.md",
             ".gitignore",
+            "AGENTS.md",
+            "CLAUDE.md",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -53,6 +57,8 @@ PACKAGES = [
         [
             "README.md",
             ".gitignore",
+            "AGENTS.md",
+            "CLAUDE.md",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -68,6 +74,8 @@ PACKAGES = [
         [
             "README.md",
             ".gitignore",
+            "AGENTS.md",
+            "CLAUDE.md",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -83,6 +91,8 @@ PACKAGES = [
         [
             "README.md",
             ".gitignore",
+            "AGENTS.md",
+            "CLAUDE.md",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",
@@ -98,6 +108,8 @@ PACKAGES = [
         [
             "README.md",
             ".gitignore",
+            "AGENTS.md",
+            "CLAUDE.md",
             ".devcontainer/devcontainer.json",
             "kit/Cargo.toml",
             "kit/src/lib.rs",

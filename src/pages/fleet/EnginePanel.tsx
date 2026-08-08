@@ -4,6 +4,7 @@ import { AlertTriangle, Pause, Play, RotateCcw, StepForward } from 'lucide-react
 import { instantiateLab, LabAbiError, LabTrapError } from '@/lib/wasm-lab'
 import {
   Engine,
+  loadTraceStream,
   makeRefManager,
   makeRefQueue,
   makeRefScheduler,
@@ -15,10 +16,15 @@ import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet
 import type { SlotState } from '@/pages/fleet/slots'
 
 const CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
+/** Real production traffic is ~7× denser — the kimi mode gets a bigger
+ * engine (that jump IS the T7 capacity-planning lesson). */
+const KIMI_CFG = { numBlocks: 2048, blockSize: 16, maxRunning: 64, sloTtft: 40, prefillChunk: 128 }
 const REQ_COUNT = 240
 const SPAN = 900
 const INTAKE_CAP = 32
 const DRAIN_PER_TICK = 8
+const KIMI_INTAKE_CAP = 48
+const KIMI_DRAIN = 16
 
 interface PanelError {
   title: string
@@ -26,6 +32,7 @@ interface PanelError {
 }
 
 export default function EnginePanel({ slots }: { slots: SlotState }) {
+  const [traffic, setTraffic] = useState<'synthetic' | 'kimi'>('synthetic')
   const [tick, setTick] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<PanelError | null>(null)
@@ -37,24 +44,34 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
   const [isDone, setIsDone] = useState(false)
   const mineRef = useRef<Engine | null>(null)
   const refRef = useRef<Engine | null>(null)
+  const totalRef = useRef(REQ_COUNT)
 
-  const buildEngines = useCallback(async (s: SlotState) => {
+  const buildEngines = useCallback(async (s: SlotState, which: 'synthetic' | 'kimi') => {
+    const cfg = which === 'kimi' ? KIMI_CFG : CFG
+    const intakeCap = which === 'kimi' ? KIMI_INTAKE_CAP : INTAKE_CAP
+    const drain = which === 'kimi' ? KIMI_DRAIN : DRAIN_PER_TICK
+    const stream =
+      which === 'kimi'
+        ? await loadTraceStream('/traces/kimi-conversation.json')
+        : makeRequestStream(REQ_COUNT, SPAN, 0x5eed)
+    const total = stream.length
     const schedMine = s.sched ? makeWasmScheduler(await instantiateLab(s.sched.bytes)) : makeRefScheduler()
-    const mgrMine = s.mgr ? makeWasmManager(await instantiateLab(s.mgr.bytes)) : makeRefManager(CFG.numBlocks, CFG.blockSize)
-    const queueMine = s.queue ? makeWasmQueue(await instantiateLab(s.queue.bytes)) : makeRefQueue(INTAKE_CAP)
-    const shadow = s.queue ? makeRefQueue(INTAKE_CAP) : undefined
-    mineRef.current = new Engine(CFG, makeRequestStream(REQ_COUNT, SPAN, 0x5eed), schedMine, mgrMine, {
+    const mgrMine = s.mgr ? makeWasmManager(await instantiateLab(s.mgr.bytes), cfg.numBlocks, cfg.blockSize) : makeRefManager(cfg.numBlocks, cfg.blockSize)
+    const queueMine = s.queue ? makeWasmQueue(await instantiateLab(s.queue.bytes), intakeCap) : makeRefQueue(intakeCap)
+    const shadow = s.queue ? makeRefQueue(intakeCap) : undefined
+    mineRef.current = new Engine(cfg, stream, schedMine, mgrMine, {
       intake: queueMine,
       intakeShadow: shadow,
-      drainPerTick: DRAIN_PER_TICK,
+      drainPerTick: drain,
     })
     refRef.current = new Engine(
-      CFG,
-      makeRequestStream(REQ_COUNT, SPAN, 0x5eed),
+      cfg,
+      which === 'kimi' ? await loadTraceStream('/traces/kimi-conversation.json') : makeRequestStream(REQ_COUNT, SPAN, 0x5eed),
       makeRefScheduler(),
-      makeRefManager(CFG.numBlocks, CFG.blockSize),
-      { intake: makeRefQueue(INTAKE_CAP), drainPerTick: DRAIN_PER_TICK },
+      makeRefManager(cfg.numBlocks, cfg.blockSize),
+      { intake: makeRefQueue(intakeCap), drainPerTick: drain },
     )
+    totalRef.current = total
   }, [])
 
   const reset = useCallback(() => {
@@ -64,16 +81,16 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
     setDivergence(null)
     setIsDone(false)
     setError(null)
-    void buildEngines(slots)
+    void buildEngines(slots, traffic)
     setMine({ met: 0, done: 0, p95: 0, autoPreempts: 0, capMisses: 0, shed: 0, waiting: 0, running: 0 })
     setRef({ met: 0, done: 0, p95: 0 })
     setDump(null)
-  }, [slots, buildEngines])
+  }, [slots, traffic, buildEngines])
 
   useEffect(() => {
     reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots])
+  }, [slots, traffic])
 
   const step = useCallback(() => {
     const me = mineRef.current
@@ -124,8 +141,9 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
   }, [playing, step])
 
   const finished = isDone
-  const myGoodput = mine.done ? Math.round((mine.met / REQ_COUNT) * 1000) / 10 : 0
-  const refGoodput = ref.done ? Math.round((ref.met / REQ_COUNT) * 1000) / 10 : 0
+  const total = totalRef.current
+  const myGoodput = mine.done ? Math.round((mine.met / total) * 1000) / 10 : 0
+  const refGoodput = ref.done ? Math.round((ref.met / total) * 1000) / 10 : 0
 
   const gridCells = (() => {
     if (!dump) return []
@@ -144,6 +162,20 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
         <span className={cn(slots.mgr ? 'text-accent' : '')}>manager: {slots.mgr ? 'yours ✓' : 'reference'}</span>
         <span>·</span>
         <span className={cn(slots.queue ? 'text-accent' : '')}>intake queue: {slots.queue ? 'yours ✓' : 'reference'}</span>
+        <span>·</span>
+        <span>traffic:</span>
+        {(['synthetic', 'kimi'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTraffic(t)}
+            className={cn(
+              'rounded border px-2 py-0.5 transition-colors',
+              traffic === t ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line hover:text-text-1',
+            )}
+          >
+            {t === 'synthetic' ? 'synthetic' : 'kimi-prod'}
+          </button>
+        ))}
         <span className="ml-auto" />
         <button onClick={() => setPlaying((p) => !p)} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1" aria-label={playing ? 'pause' : 'play'}>
           {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
@@ -193,7 +225,7 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
           title={slots.sched || slots.mgr || slots.queue ? 'your engine' : 'your engine (all-reference — upload to change)'}
           goodput={myGoodput}
           rows={[
-            ['SLO-met', `${mine.met}/${REQ_COUNT}`],
+            ['SLO-met', `${mine.met}/${total}`],
             ['completed', `${mine.done}`],
             ['ttft p95', `${mine.p95} iters`],
             ['shed at intake', `${mine.shed}`],
@@ -207,7 +239,7 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
           title="reference engine"
           goodput={refGoodput}
           rows={[
-            ['SLO-met', `${ref.met}/${REQ_COUNT}`],
+            ['SLO-met', `${ref.met}/${total}`],
             ['completed', `${ref.done}`],
             ['ttft p95', `${ref.p95} iters`],
           ]}
