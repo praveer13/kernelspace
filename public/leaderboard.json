@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "benchmarkVersion": "wave4-2026-08-v1",
-  "generatedAt": "2026-08-11T04:00:00.000Z",
+  "generatedAt": "2026-08-11T14:27:38.000Z",
   "scoring": "overall = arithmetic mean(lab goodput, Fleet goodput); descending, then lab, then handle",
   "traces": {
     "burstgptRequestSha256": "b54592773e3e37d3cc8d7e7982727d22c2cc5ec71afe79d95069157786decc86",
