@@ -1,10 +1,10 @@
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
-  id: 't5.l9',
+  id: 't5.l10',
   slug: 'production-stack',
   trackId: 't5',
-  index: 9,
+  index: 10,
   title: 'The Production Stack: vLLM, SGLang, TRT-LLM, Dynamo',
   minutes: 35,
   hook: 'The guided architecture read: four production engines, their design centers, and when to choose which — the T5 capstone before the capstone.',
@@ -20,7 +20,7 @@ The four: **vLLM** (the open-source reference), **SGLang** (the structured-gener
       type: 'prose',
       md: `## vLLM: the reference implementation
 
-**Design center:** make PagedAttention's memory efficiency available to everyone, as a library. Python-first (fast contribution loop), CUDA custom kernels underneath, HuggingFace-native model loading, OpenAI-compatible server. Its architecture is the T5 curriculum in one repo: paged KV manager + continuous batching scheduler (T5.L5–L6) in \`vllm/core\` and the V1 engine's cleaner scheduler; chunked prefill, prefix caching, speculative decoding, FP8 KV, guided decoding all landed there first or early; TP/PP/DP + disaggregation support for scale-out (T5.L8).
+**Design center:** make PagedAttention's memory efficiency available to everyone, as a library. Python-first (fast contribution loop), CUDA custom kernels underneath, HuggingFace-native model loading, OpenAI-compatible server. Its architecture is the T5 curriculum in one repo: paged KV manager + prefix cache + continuous batching scheduler (T5.L5–L7) in \`vllm/core\` and the V1 engine's cleaner scheduler; chunked prefill, speculative decoding, FP8 KV, guided decoding all landed there first or early; TP/PP/DP + disaggregation support for scale-out (T5.L9).
 
 **Trade-offs chosen:** velocity and breadth over peak micro-efficiency. The Python scheduler's overhead drove the **V1 engine rewrite** — which shipped as the default in 2025 with a rewritten scheduler/KV-cache manager and ~2.8× throughput over V0; kernel coverage remains broad rather than maximally fused. **Choose it when:** you need the ecosystem default — every model on day one, every feature, huge community, sane operations. It is the "Postgres of LLM serving": rarely the wrong answer.`,
     },
@@ -46,7 +46,7 @@ The four: **vLLM** (the open-source reference), **SGLang** (the structured-gener
 
 **Design center:** Dynamo (T3.L6) is deliberately **not** an inference engine — it's the distributed layer *around* engines (it runs TRT-LLM, vLLM, or SGLang as workers): KV-aware request routing, prefill/decode disaggregation orchestration, NIXL/UCX-based KV transfer over RDMA/NVLink, planner-driven autoscaling, all with the Rust data plane you studied. Since T3.L6 was written it went GA (v1.3): the **KVBM** — the tiered KV block manager, GPU→CPU→SSD→remote, in Rust — shipped as its memory layer, and **llm-d** (Red Hat/Google/CoreWeave) packages the same architecture Kubernetes-natively. If the engines are databases, Dynamo is the **proxy + replication + sharding tier**.
 
-**Trade-offs chosen:** fleet-scale efficiency (disaggregation, cache-aware routing, per-phase scaling) at the price of operational complexity — another distributed system to run, with NATS, etcd, and transfer fabric of its own. **Choose it when:** you operate a serious multi-node fleet with long contexts or skewed prefill/decode ratios (T5.L8's rule of thumb), and the fleet-level wins exceed the platform cost. Small deployments: one vLLM box with chunked prefill is still the right answer.`,
+**Trade-offs chosen:** fleet-scale efficiency (disaggregation, cache-aware routing, per-phase scaling) at the price of operational complexity — another distributed system to run, with NATS, etcd, and transfer fabric of its own. **Choose it when:** you operate a serious multi-node fleet with long contexts or skewed prefill/decode ratios (T5.L9's rule of thumb), and the fleet-level wins exceed the platform cost. Small deployments: one vLLM box with chunked prefill is still the right answer.`,
     },
     {
       type: 'prose',
@@ -121,7 +121,7 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           ],
           correct: [1],
           explanation:
-            'Operational simplicity wins when the fleet-layer wins (disaggregation, distributed cache) can\'t amortize. The T5.L8 rule: disaggregate at scale/long context; colocate at small scale.',
+            'Operational simplicity wins when the fleet-layer wins (disaggregation, distributed cache) can\'t amortize. The T5.L9 rule: disaggregate at scale/long context; colocate at small scale.',
         },
       ],
     },

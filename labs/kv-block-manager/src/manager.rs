@@ -33,7 +33,15 @@
 //! The CoW trigger, precisely: the last block is PARTIAL (len % block_size
 //! ≠ 0) AND its refcount > 1. A shared FULL block needs no copy — new
 //! tokens land in a fresh block anyway.
+//!
+//! Optional advanced extension (T6.L9): treat LoRA adapter weights as paged
+//! objects in the SAME physical pool. `load_adapter` reserves whole pages,
+//! `adapter_page` exposes its table, and `unload_adapter` returns the pages.
+//! The default methods below fail closed so the original six-check lab still
+//! completes; replace them only after the core manager is green.
 
+#[allow(unused_imports)]
+// used by the intended solution shape; template still builds warning-free
 use std::collections::HashMap;
 
 pub struct BlockManager {
@@ -74,6 +82,26 @@ impl BlockManager {
 
     pub fn free_blocks(&self) -> usize {
         todo!("blocks currently in the pool")
+    }
+
+    /// OPTIONAL(advanced): reserve `pages` blocks for one LoRA adapter from
+    /// the same free pool used by sequence KV. Duplicate ids, zero pages,
+    /// and insufficient capacity return false without changing state.
+    pub fn load_adapter(&mut self, adapter: u32, pages: usize) -> bool {
+        let _ = (adapter, pages);
+        false
+    }
+
+    /// OPTIONAL(advanced): release every page owned by this adapter. Unknown
+    /// ids are a no-op, matching `free(seq)`.
+    pub fn unload_adapter(&mut self, adapter: u32) {
+        let _ = adapter;
+    }
+
+    /// OPTIONAL(advanced): physical page id at the adapter's logical index.
+    pub fn adapter_page(&self, adapter: u32, page: usize) -> Option<usize> {
+        let _ = (adapter, page);
+        None
     }
 
     /// Observability hook — the Fleet page (/fleet) renders your manager

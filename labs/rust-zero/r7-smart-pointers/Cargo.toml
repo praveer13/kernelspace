@@ -1,0 +1,12 @@
+[package]
+name = "rust-zero-r7"
+version = "0.1.0"
+edition = "2021"
+description = "Rust Zero R7 — Box, Rc, and Arc"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rust-zero-harness = { path = "../harness" }

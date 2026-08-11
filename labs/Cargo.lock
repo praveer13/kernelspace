@@ -35,6 +35,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "radix-cache"
+version = "0.1.0"
+dependencies = [
+ "kslab",
+]
+
+[[package]]
 name = "rust-allocator"
 version = "0.1.0"
 dependencies = [
@@ -42,7 +49,91 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-zero-harness"
+version = "0.1.0"
+dependencies = [
+ "kslab",
+]
+
+[[package]]
+name = "rust-zero-r1"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r10"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r2"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r3"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r4"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r5"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r6"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r7"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r8"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
+name = "rust-zero-r9"
+version = "0.1.0"
+dependencies = [
+ "rust-zero-harness",
+]
+
+[[package]]
 name = "toy-executor"
+version = "0.1.0"
+dependencies = [
+ "kslab",
+]
+
+[[package]]
+name = "xgrammar-lite"
 version = "0.1.0"
 dependencies = [
  "kslab",

@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ChevronRight, Loader2, Play } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play } from 'lucide-react'
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
   evalAct3,
+  gradeMeasurementSubmission,
   gradeAct3Doc,
   HW_MENU,
   loadIncident,
@@ -16,6 +17,8 @@ import {
   type ActResult,
   type Act3Eval,
   type Incident,
+  type MeasurementActId,
+  type MeasurementEvidence,
 } from '@/lib/fleet-week'
 import type { RouterKind, TickSample } from '@/lib/fleet-model'
 import { cn } from '@/lib/utils'
@@ -26,6 +29,10 @@ const ACTS = [
   { id: 'business', title: 'Act III — The Business', brief: 'price the hardware, defend the claim — we execute it', xp: XP.fleetWeekAct },
   { id: 'incident', title: 'Act IV — The Incident', brief: 'three broken systems, real telemetry, name the cause', xp: XP.fleetWeekAct },
 ]
+
+const EMPTY_MEASUREMENT_EVIDENCE: NonNullable<
+  ReturnType<typeof useProgress.getState>['fleetWeek']['measurementEvidence']
+>[string] = {}
 
 export default function FleetWeek() {
   const actsDone = useProgress((s) => s.fleetWeek.actsDone)
@@ -100,30 +107,50 @@ function useActRunner(actId: string) {
   const completeAct = useProgress((s) => s.completeFleetWeekAct)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<ActResult | null>(null)
+  const report = useCallback((r: ActResult) => {
+    setResult(r)
+    setRunning(false)
+  }, [])
   const finish = useCallback(
     (r: ActResult) => {
-      setResult(r)
-      setRunning(false)
+      report(r)
       if (r.pass) completeAct(actId, r.score)
     },
-    [actId, completeAct],
+    [actId, completeAct, report],
   )
-  return { running, result, finish, setRunning }
+  return { running, result, report, finish, setRunning }
 }
 
 /* ------------------------------ ACT 1 ------------------------------ */
 
 function ActEngine() {
   const slots = useSlots((s) => s.slots)
-  const { running, result, finish, setRunning } = useActRunner('engine')
+  const { running, result, report, finish, setRunning } = useActRunner('engine')
+  const [traceResult, setTraceResult] = useState<ActResult | null>(null)
   const anyStudent = slots.sched || slots.mgr || slots.queue
   return (
     <div>
       <p className="text-body-sm text-text-2">
         240 requests, flash crowds included. Your uploaded stack ({anyStudent ? 'yours' : 'all-reference for now'}) against the reference engine, full speed. Pass: goodput within 3 points of the reference.
       </p>
-      <RunButton running={running} label="run the trace" onClick={async () => { setRunning(true); finish(await runAct1(slots)) }} />
+      <RunButton
+        running={running}
+        label="run the trace"
+        onClick={async () => {
+          setRunning(true)
+          const trace = await runAct1(slots)
+          setTraceResult(trace)
+          report(trace)
+        }}
+      />
       {result && <ResultPanel result={result} />}
+      {traceResult && (
+        <MeasurementSubmission
+          actId="engine"
+          traceResult={traceResult}
+          onSubmit={(evidence) => finish(gradeMeasurementSubmission('engine', traceResult, evidence))}
+        />
+      )}
     </div>
   )
 }
@@ -132,7 +159,8 @@ function ActEngine() {
 
 function ActFleet() {
   const slots = useSlots((s) => s.slots)
-  const { running, result, finish, setRunning } = useActRunner('fleet')
+  const { running, result, report, finish, setRunning } = useActRunner('fleet')
+  const [traceResult, setTraceResult] = useState<ActResult | null>(null)
   const [workers, setWorkers] = useState<2 | 4>(2)
   const [router, setRouter] = useState<RouterKind>('jsq')
   return (
@@ -151,8 +179,116 @@ function ActFleet() {
           <button key={r} onClick={() => setRouter(r)} className={cn('rounded border px-2.5 py-1', router === r ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>{r === 'rr' ? 'round-robin' : 'jsq'}</button>
         ))}
       </div>
-      <RunButton running={running} label="run with disruption" onClick={async () => { setRunning(true); finish(await runAct2(slots, { workers, router } as Act2Choice)) }} />
+      <RunButton
+        running={running}
+        label="run with disruption"
+        onClick={async () => {
+          setRunning(true)
+          const trace = await runAct2(slots, { workers, router } as Act2Choice)
+          setTraceResult(trace)
+          report(trace)
+        }}
+      />
       {result && <ResultPanel result={result} />}
+      {traceResult && (
+        <MeasurementSubmission
+          actId="fleet"
+          traceResult={traceResult}
+          onSubmit={(evidence) => finish(gradeMeasurementSubmission('fleet', traceResult, evidence))}
+        />
+      )}
+    </div>
+  )
+}
+
+function MeasurementSubmission({
+  actId,
+  traceResult,
+  onSubmit,
+}: {
+  actId: MeasurementActId
+  traceResult: ActResult
+  onSubmit: (evidence: MeasurementEvidence) => void
+}) {
+  const evidence = useProgress(
+    (s) => s.fleetWeek.measurementEvidence?.[actId] ?? EMPTY_MEASUREMENT_EVIDENCE,
+  )
+  const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const analysis = evidence.analysis ?? ''
+  const words = analysis.trim() ? analysis.trim().split(/\s+/).length : 0
+
+  return (
+    <div className="mt-4 rounded-md border border-line bg-ink p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-1">
+            measurement artifact · required
+          </p>
+          <p className="mt-1 max-w-2xl text-body-sm text-text-2">
+            Open the <Link to="/fleet" className="text-accent underline">Fleet dashboard</Link>, run
+            the matching scenario, and capture its six-metric panel. Then explain the measured
+            result and the lever that caused it in 40–150 words.
+          </p>
+        </div>
+        <p className="font-mono text-[10px] text-text-3">
+          rubric · trace 50% · screenshot 15% · analysis 35%
+        </p>
+      </div>
+
+      <label className="mt-3 flex cursor-pointer items-center gap-2 rounded border border-dashed border-line px-3 py-2 font-mono text-[11px] text-text-2 transition-colors hover:border-accent/60 hover:text-text-1">
+        <ImagePlus className="h-4 w-4 text-accent" />
+        {evidence.screenshotName
+          ? `${evidence.screenshotName} · ${Math.ceil((evidence.screenshotBytes ?? 0) / 1024)} KB`
+          : 'attach dashboard screenshot · PNG / JPEG / WebP'}
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (!file) return
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size <= 0) {
+              setFileError('Use a non-empty PNG, JPEG, or WebP screenshot.')
+              return
+            }
+            setFileError(null)
+            setEvidence(actId, { screenshotName: file.name, screenshotBytes: file.size })
+            event.target.value = ''
+          }}
+        />
+      </label>
+      {fileError && <p className="mt-1 font-mono text-[10px] text-danger">{fileError}</p>}
+
+      <textarea
+        value={analysis}
+        onChange={(event) => setEvidence(actId, { analysis: event.target.value })}
+        rows={5}
+        maxLength={1400}
+        placeholder={
+          actId === 'engine'
+            ? 'Name at least two signals, quote a measured number with units, and connect the result to scheduling, admission, batching, headroom, prefill, or intake.'
+            : 'Name at least two signals, quote a measured number with units, and connect the result to routing, workers, redundancy, topology, or node failure.'
+        }
+        className="mt-3 w-full rounded-md border border-line bg-surface-1 p-3 font-mono text-[12px] text-text-1 outline-none placeholder:text-text-3 focus:border-accent/60"
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className={cn('font-mono text-[10px]', words > 150 ? 'text-danger' : 'text-text-3')}>
+          {words}/150 words · ≥2 named signals · ≥1 measured number · ≥1 decision lever
+        </p>
+        <RunButton
+          running={false}
+          label="submit measurement artifact"
+          onClick={() =>
+            onSubmit({
+              analysis,
+              screenshotName: evidence.screenshotName,
+              screenshotBytes: evidence.screenshotBytes,
+            })
+          }
+          disabled={!traceResult.pass}
+        />
+      </div>
     </div>
   )
 }
@@ -288,6 +424,11 @@ function ActIncident() {
 
   return (
     <div>
+      <p className="mb-3 max-w-3xl text-body-sm text-text-2">
+        Diagnose from the same surface you instrumented: TTFT, TPOT, queue delay, KV state,
+        goodput, and cost. The incident sparklines use those timing events plus pressure counters;
+        identify the first metric that moves, not the loudest symptom at the end.
+      </p>
       <div className="flex flex-wrap gap-2 font-mono text-[12px]">
         {INCIDENTS.map((d, i) => (
           <button key={d.id} onClick={() => void open(i)} className={cn('rounded border px-3 py-1.5', idx === i ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>
@@ -335,8 +476,10 @@ function Option({ active, onClick, label }: { active: boolean; onClick: () => vo
 }
 
 const SERIES: { key: keyof TickSample; label: string; color: string }[] = [
-  { key: 'ttftP95', label: 'ttft p95', color: '#FB7185' },
-  { key: 'waiting', label: 'waiting', color: '#FBBF24' },
+  { key: 'ttftP95', label: 'gen_ai · TTFT p95', color: '#FB7185' },
+  { key: 'tpotP95', label: 'gen_ai · TPOT p95', color: '#22D3EE' },
+  { key: 'queueP95', label: 'queue delay p95', color: '#FBBF24' },
+  { key: 'waiting', label: 'waiting requests', color: '#5CA8FF' },
   { key: 'shed', label: 'shed', color: '#FF5C6C' },
   { key: 'autoPreempts', label: 'auto-preempts', color: '#A78BFA' },
 ]

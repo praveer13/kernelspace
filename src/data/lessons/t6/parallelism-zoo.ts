@@ -9,10 +9,11 @@ const lesson: Lesson = {
   minutes: 35,
   hook: 'Five parallelism axes, and every production deployment is a point in that five-dimensional space. The decision matrix is priced by one thing: interconnect bandwidth per hop. Plus context parallelism — the axis that 1M-token prompts made mandatory.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
-      md: `T5.L8 gave you three axes (TP, PP, DP) and T6.L1–L2 added the fourth (EP). The complete 2026 zoo has five, and real deployments compose all of them: DeepSeek decode is EP144 × DP144, Meta's long-context work is CP over 16–32 nodes, and every one of those GPUs is also inside a TP group. The compose-or-die rule: **each axis exists to trade communication cost against a different scarcity** — memory capacity, memory bandwidth, compute utilization, or network latency. Choose by which scarcity is binding, priced by the interconnect that axis forces onto the hot path.`,
+      md: `T5.L9 gave you three axes (TP, PP, DP) and T6.L1–L2 added the fourth (EP). The complete 2026 zoo has five, and real deployments compose all of them: DeepSeek decode is EP144 × DP144, Meta's long-context work is CP over 16–32 nodes, and every one of those GPUs is also inside a TP group. The compose-or-die rule: **each axis exists to trade communication cost against a different scarcity** — memory capacity, memory bandwidth, compute utilization, or network latency. Choose by which scarcity is binding, priced by the interconnect that axis forces onto the hot path.`,
     },
     {
       type: 'prose',

@@ -5,3 +5,4 @@ labs/target
 labs/**/target
 labs/_solutions/
 bun.lock
+var/traces/

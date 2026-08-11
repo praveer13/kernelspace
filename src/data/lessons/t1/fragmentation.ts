@@ -110,6 +110,15 @@ In the exercise you will run adversarial traces against your toy allocator and w
       note: `You have now run the experiment the vLLM authors effectively ran against KV caches: contiguous/variable reservation strands most of the resource; fixed blocks strand a bounded sliver. **Block size is the only knob, and it prices waste against metadata** — remember this when T5 debates 16 vs 32 tokens per block.`,
     },
     {
+      type: 'field-note',
+      title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention',
+      source: 'Kwon et al.',
+      href: 'https://arxiv.org/abs/2309.06180',
+      published: "SOSP '23",
+      verified: '2026-08',
+      md: `This is the payoff paper for fragmentation. Ignore the attention equations on the first pass and audit the allocator: variable-length KV grows one token at a time, contiguous reservation strands capacity, fixed blocks cap internal waste, block tables restore a contiguous logical view, and reference counts make fork and copy-on-write cheap. Lab 02 is the paper's memory invariant reduced to one Rust file.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {

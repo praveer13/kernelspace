@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
   ArrowRight,
+  BadgeCheck,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -689,6 +690,15 @@ function LessonView({ lesson }: { lesson: Lesson }) {
                 <span className="flex items-center gap-1.5 rounded-sm border border-amber/40 bg-amber/10 px-2.5 py-0.5 font-mono text-[10px] uppercase text-amber">
                   <GraduationCap size={11} /> ★ exam · quiz ≥80% to complete
                 </span>
+              )}
+              {lesson.verifiedAt && (
+                <Link
+                  to="/field-notes"
+                  className="flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-0.5 font-mono text-[10px] text-accent transition-colors hover:border-accent/50 hover:bg-accent/10"
+                  title="Landscape-sensitive content; open the quarterly verification log"
+                >
+                  <BadgeCheck size={11} /> last verified {lesson.verifiedAt}
+                </Link>
               )}
               {done && (
                 <span className="flex items-center gap-1.5 font-mono text-[11px] text-accent">

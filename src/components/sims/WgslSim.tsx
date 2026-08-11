@@ -118,7 +118,6 @@ function useTaskAward(simId: string, log: (kind: LogKind, text: string) => void)
       const st = useProgress.getState()
       if (st.sims[simId]?.tasksDone.includes(taskId)) return
       st.recordSimTask(simId, taskId)
-      useProgress.setState((p) => ({ xp: p.xp + xp }))
       log('ok', `TASK ✓ ${note}  (+${xp} XP)`)
     },
     [simId, log],
@@ -645,10 +644,10 @@ interface RunResult {
 }
 
 const TASKS = [
-  { id: 'wgsl-16m', text: 'Run the modeled 16M vector add and inspect its 192 MiB traffic', xp: 45 },
-  { id: 'wgsl-sweep', text: 'Run vector add at workgroup sizes 64 and 1024', xp: 45 },
-  { id: 'wgsl-barrier', text: 'Remove a reduction barrier and observe a wrong sum', xp: 45 },
-  { id: 'wgsl-multipass', text: 'Run multi-pass reduction to one verified scalar', xp: 45 },
+  { id: 'wgsl-16m', text: 'Run the modeled 16M vector add and inspect its 192 MiB traffic', xp: 60 },
+  { id: 'wgsl-sweep', text: 'Run vector add at workgroup sizes 64 and 1024', xp: 60 },
+  { id: 'wgsl-barrier', text: 'Remove a reduction barrier and observe a wrong sum', xp: 60 },
+  { id: 'wgsl-multipass', text: 'Run multi-pass reduction to one verified scalar', xp: 60 },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -857,12 +856,12 @@ export default function WgslSim() {
           note,
         })
         if (ok && preset.id === 'vector-add-16m') {
-          award('wgsl-16m', 45, '16M vector add verified from a safe sample and modeled as 192 MiB of traffic')
+          award('wgsl-16m', 60, '16M vector add verified from a safe sample and modeled as 192 MiB of traffic')
         }
         if (ok && (preset.id === 'vector-add' || preset.id === 'vector-add-16m') && (wg.x === 64 || wg.x === 1024)) {
           sweepSizesRef.current.add(wg.x)
           if (sweepSizesRef.current.has(64) && sweepSizesRef.current.has(1024)) {
-            award('wgsl-sweep', 45, 'vector-add workgroup sweep completed at exactly 64 and 1024')
+            award('wgsl-sweep', 60, 'vector-add workgroup sweep completed at exactly 64 and 1024')
           }
         }
       } else if (preset.kind === 'reduce' || preset.kind === 'reduce-multipass') {
@@ -954,10 +953,10 @@ export default function WgslSim() {
             : reductionGpu ? undefined : 'CPU executes the same pass topology; shared-memory races are modeled honestly when a barrier is removed',
         })
         if (!synchronized && !ok && preset.id === 'reduction') {
-          award('wgsl-barrier', 45, 'removing a workgroup barrier produced a clearly wrong reduction sum')
+          award('wgsl-barrier', 60, 'removing a workgroup barrier produced a clearly wrong reduction sum')
         }
         if (multiPass && synchronized && scalar && ok) {
-          award('wgsl-multipass', 45, `multi-pass reduction returned one verified scalar in ${pass} passes`)
+          award('wgsl-multipass', 60, `multi-pass reduction returned one verified scalar in ${pass} passes`)
         }
       } else {
         /* matmul compare — run naive + tiled, side by side */

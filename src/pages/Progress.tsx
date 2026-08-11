@@ -1,7 +1,7 @@
 /**
  * PROGRESS — /progress (progress.md).
  * "htop for your brain": rank panel, KPI tweens, per-track memory-map bars,
- * GitHub-style heatmap, 12 achievements, export/import/reset with double-confirm.
+ * GitHub-style heatmap, achievement catalog, export/import/reset with double-confirm.
  * Consumes src/lib/progress.ts as-is.
  */
 
@@ -38,6 +38,7 @@ import {
 } from '@/lib/progress'
 import type { ProgressState } from '@/lib/progress'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
+import { ALL_LESSONS } from '@/data/lessons'
 import ProgressRing from '@/components/ProgressRing'
 import { cn } from '@/lib/utils'
 
@@ -68,6 +69,20 @@ const RANK_FLAVOR: Record<string, string> = {
 
 const CAPSTONE_FLAGS_KEY = 'kernelspace:capstone:flags'
 
+const TOTAL_LAB_TASKS = ALL_LESSONS.reduce(
+  (total, lesson) =>
+    total +
+    lesson.blocks.reduce(
+      (lessonTotal, block) => lessonTotal + (block.type === 'exercise' ? block.tasks.length : 0),
+      0,
+    ),
+  0,
+)
+
+const LAST_LESSON_ADDRESS = Math.max(0, TOTAL_LESSONS - 1)
+const MID_LESSON_ADDRESS = Math.floor(LAST_LESSON_ADDRESS / 2)
+const hexAddress = (value: number) => `0x${value.toString(16).toUpperCase().padStart(2, '0')}`
+
 function readCapstoneFlags(): { hints: boolean; optimizer: boolean } {
   try {
     const raw = localStorage.getItem(CAPSTONE_FLAGS_KEY)
@@ -95,6 +110,15 @@ const trackDone = (s: ProgressState, tid: string, n: number) =>
     ([id, l]) => id.startsWith(`${tid}.`) && l.status === 'done',
   ).length >= n
 
+const TRACK_COMPLETION_ACHIEVEMENTS: AchievementDef[] = TRACKS.map((track) => ({
+  id: `track-${track.id}`,
+  name: `${track.code.toLowerCase()} complete`,
+  cond: `complete all ${track.lessons} ${track.code} lessons`,
+  icon: track.glyph,
+  color: track.color,
+  derived: (state) => trackDone(state, track.id, track.lessons),
+}))
+
 const ACHIEVEMENTS: AchievementDef[] = [
   {
     id: 'first-boot',
@@ -106,8 +130,8 @@ const ACHIEVEMENTS: AchievementDef[] = [
   },
   {
     id: 'cache-warm',
-    name: 'cache warm',
-    cond: 'complete T0 — Foundations',
+    name: 'cache primed',
+    cond: 'T0 warm-up · complete 5/6 lessons',
     icon: Layers,
     color: '#34D399',
     derived: (s) => trackDone(s, 't0', 5),
@@ -119,7 +143,7 @@ const ACHIEVEMENTS: AchievementDef[] = [
     icon: Braces,
     color: '#FBBF24',
     derived: (s) =>
-      trackDone(s, 't1', 7) && (s.sims['sim-allocator']?.tasksDone.length ?? 0) > 0,
+      trackDone(s, 't1', 6) && (s.sims['sim-allocator']?.tasksDone.length ?? 0) > 0,
   },
   {
     id: 'kernel-mind',
@@ -127,7 +151,7 @@ const ACHIEVEMENTS: AchievementDef[] = [
     cond: 'T2 done · exam ≥ 80%',
     icon: Cpu,
     color: '#22D3EE',
-    derived: (s) => trackDone(s, 't2', 8) && (s.lessons['t2.l8']?.quizScore ?? 0) >= 0.8,
+    derived: (s) => trackDone(s, 't2', 7) && (s.lessons['t2.l7']?.quizScore ?? 0) >= 0.8,
   },
   {
     id: 'fearless-borrower',
@@ -139,19 +163,36 @@ const ACHIEVEMENTS: AchievementDef[] = [
   },
   {
     id: 'silicon-eye',
-    name: 'silicon eye',
-    cond: 'complete T4 — GPU',
+    name: 'silicon warmup',
+    cond: 'T4 warm-up · complete 6/7 lessons',
     icon: Grid3X3,
     color: '#A78BFA',
     derived: (s) => trackDone(s, 't4', 6),
   },
   {
     id: 'serving-engineer',
-    name: 'serving engineer',
-    cond: 'complete T5 — LLM serving',
+    name: 'serving warmup',
+    cond: 'T5 warm-up · complete 7/10 lessons',
     icon: Server,
     color: '#FB7185',
     derived: (s) => trackDone(s, 't5', 7),
+  },
+  ...TRACK_COMPLETION_ACHIEVEMENTS,
+  {
+    id: 'forge-first',
+    name: 'first forging',
+    cond: 'pass every required check in one Forge lab',
+    icon: Braces,
+    color: '#F97316',
+    derived: (s) => Object.values(s.labs).some((lab) => lab.done),
+  },
+  {
+    id: 'fleet-week',
+    name: 'fleet survivor',
+    cond: 'complete all four Fleet Week acts',
+    icon: Gauge,
+    color: '#5CA8FF',
+    derived: (s) => s.fleetWeek.actsDone.length >= 4,
   },
   {
     id: 'engine-builder',
@@ -176,14 +217,6 @@ const ACHIEVEMENTS: AchievementDef[] = [
     icon: Gauge,
     color: '#FFB224',
     derived: () => readCapstoneFlags().optimizer,
-  },
-  {
-    id: 'polyglot',
-    name: 'polyglot',
-    cond: 'view code in all 4 languages',
-    icon: Flame,
-    color: '#5CA8FF',
-    derived: (s) => s.achievements.includes('polyglot'),
   },
   {
     id: 'week-uptime',
@@ -246,7 +279,7 @@ function RankPanel() {
         </div>
       </div>
       <p className="mt-4 border-t border-line pt-3 font-mono text-[11px] text-text-3">
-        lessons {done}/{TOTAL_LESSONS} · quizzes {quizAvg}% · lab tasks {labTasks}/36
+        lessons {done}/{TOTAL_LESSONS} · quizzes {quizAvg}% · lab tasks {labTasks}/{TOTAL_LAB_TASKS}
       </p>
     </motion.div>
   )
@@ -487,13 +520,13 @@ function TrackBreakdown() {
               })}
             </div>
             <div className="flex h-[240px] flex-col justify-between font-mono text-[10px] text-text-3">
-              <span>0x00</span>
-              <span>0x13</span>
-              <span>0x27</span>
+              <span>{hexAddress(0)}</span>
+              <span>{hexAddress(MID_LESSON_ADDRESS)}</span>
+              <span>{hexAddress(LAST_LESSON_ADDRESS)}</span>
             </div>
           </div>
           <p className="mt-3 font-mono text-[10px] text-text-3">
-            40 lesson blocks · solid = allocated · glow = next instruction
+            {TOTAL_LESSONS} lesson blocks · solid = allocated · glow = next instruction
           </p>
         </motion.div>
       </div>
@@ -613,10 +646,10 @@ function Heatmap() {
         {empty && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-ink/60">
             <p className="font-mono text-body-sm text-text-2">
-              no activity yet — day 0 starts with T0.L1
+              no activity yet — day 0 starts with R.L1
             </p>
             <Link
-              to="/lesson/t0.l1"
+              to="/lesson/r.l1"
               className="pointer-events-auto mt-3 rounded-md bg-accent px-4 py-2 font-display text-[14px] font-semibold text-accent-foreground transition-transform active:scale-[.97]"
             >
               begin →
@@ -788,12 +821,12 @@ function DataOwnership() {
       const json = await file.text()
       const data = JSON.parse(json)
       if (
-        data?.version !== 1 ||
+        (data?.version !== 1 && data?.version !== 2) ||
         typeof data.lessons !== 'object' ||
         data.lessons === null ||
         typeof data.xp !== 'number'
       ) {
-        setImportError('invalid snapshot — expected a kernelspace v1 export')
+        setImportError('invalid snapshot — expected a kernelspace progress export')
         return
       }
       const lessons = Object.values(data.lessons as Record<string, { status?: string }>).filter(

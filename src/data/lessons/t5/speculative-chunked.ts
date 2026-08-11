@@ -1,14 +1,15 @@
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
-  id: 't5.l7',
+  id: 't5.l8',
   slug: 'speculative-chunked',
   trackId: 't5',
-  index: 7,
+  index: 8,
   title: 'Speculative Decoding & Chunked Prefill',
   minutes: 25,
   hook: 'Two optimizations that fight the same enemy — decode\'s serial bandwidth wall — from opposite directions: skip steps, and backfill idle FLOPs.',
   exercise: 'quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
@@ -69,9 +70,9 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
       type: 'prose',
       md: `## Chunked prefill: the other convoy fix
 
-Continuous batching (T5.L6) schedules *sequences*, but prefill is still atomic: one 100k-token prompt's prefill is a multi-second compute-bound job that, run whole, stalls every decode in the batch (ITL spike for all users — a convoy inside the continuous schedule). **Chunked prefill** slices the prefill into fixed-size chunks (e.g. 2k tokens) and interleaves them with decode iterations: each step mixes one prefill chunk + the running decodes.
+Continuous batching (T5.L7) schedules *sequences*, but prefill is still atomic: one 100k-token prompt's prefill is a multi-second compute-bound job that, run whole, stalls every decode in the batch (ITL spike for all users — a convoy inside the continuous schedule). **Chunked prefill** slices the prefill into fixed-size chunks (e.g. 2k tokens) and interleaves them with decode iterations: each step mixes one prefill chunk + the running decodes.
 
-The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: ITL stays smooth for everyone, long prompts get processed without convoying, and total goodput rises. This is why every modern engine (vLLM, SGLang, TRT-LLM) runs mixed prefill+decode batches by default, and why disaggregation (T5.L8) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
+The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: ITL stays smooth for everyone, long prompts get processed without convoying, and total goodput rises. This is why every modern engine (vLLM, SGLang, TRT-LLM) runs mixed prefill+decode batches by default, and why disaggregation (T5.L9) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
     },
     {
       type: 'callout',
@@ -87,7 +88,7 @@ The roofline blessing: decode iterations are bandwidth-bound with idle compute, 
       type: 'prose',
       md: `## The family tree
 
-Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra heads on the target itself (no separate model, better acceptance); **self-speculative** (draft = early-exit layers); **prompt lookup** (draft from the prompt — great for RAG/code editing where outputs repeat inputs); and **tree verification** — verify multiple draft branches per pass. Same draft-verify spine, different drafters. Meanwhile chunked prefill's cousins are **prefill prioritization policies** and, at the limit, full **disaggregation**. T5.L8 next: what happens when the machine itself is distributed across nodes.`,
+Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra heads on the target itself (no separate model, better acceptance); **self-speculative** (draft = early-exit layers); **prompt lookup** (draft from the prompt — great for RAG/code editing where outputs repeat inputs); and **tree verification** — verify multiple draft branches per pass. Same draft-verify spine, different drafters. Meanwhile chunked prefill's cousins are **prefill prioritization policies** and, at the limit, full **disaggregation**. T5.L9 next: what happens when the machine itself is distributed across nodes.`,
     },
     {
       type: 'quiz',

@@ -30,6 +30,7 @@
 //!   * Check 2 is the trap: lowest RANK, not leftmost pair. GPT-2 got
 //!     this right; half of all toy implementations don't.
 
+#[allow(unused_imports)] // import becomes live as the student completes the template
 use std::collections::HashMap;
 
 pub struct Tokenizer {

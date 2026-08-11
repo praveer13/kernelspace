@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 20,
   hook: 'Every previous track optimized something. This track defines the thing. One number the business understands, one curve the engineers argue with, and the reason "10,000 tok/s" on a benchmark page means nothing.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',

@@ -1,10 +1,10 @@
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
-  id: 't5.l6',
+  id: 't5.l7',
   slug: 'continuous-batching',
   trackId: 't5',
-  index: 6,
+  index: 7,
   title: 'Continuous Batching',
   minutes: 25,
   hook: 'The race-track animation: iteration-level scheduling vs static batching — the 2022 scheduling idea that multiplied every GPU\'s goodput.',
@@ -53,7 +53,7 @@ Each iteration, the engine runs the same loop — annotate it with T2 names:
 3. **Run one model step** for the whole batch: one weight read, N sequences advanced (the T4.L3 batching win — arithmetic intensity × N). *The quantum of work.*
 4. **Sample, append tokens, free the finished:** sequences hitting EOS/length limits exit immediately; their blocks' refcounts drop and return to the free queue in O(1). *Reclamation.*
 
-Two refinements complete the picture. **Waiting-queue policy** is a research area by itself (FCFS vs shortest-remaining vs priority — the same taxonomy as T2.L4, with TTFT as the metric). And **prefill chunking** (T5.L7) interleaves sliced prefills into this loop so a 100k-token prompt doesn't become a 5-second convoy inside the "continuous" schedule.`,
+Two refinements complete the picture. **Waiting-queue policy** is a research area by itself (FCFS vs shortest-remaining vs priority — the same taxonomy as T2.L4, with TTFT as the metric). And **prefill chunking** (T5.L8) interleaves sliced prefills into this loop so a 100k-token prompt doesn't become a 5-second convoy inside the "continuous" schedule.`,
     },
     {
       type: 'statline',

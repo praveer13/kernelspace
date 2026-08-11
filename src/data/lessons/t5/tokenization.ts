@@ -79,7 +79,7 @@ def bpe_train(corpus: list[bytes], vocab_size: int):
       type: 'prose',
       md: `## In the simulator
 
-Type anything and watch it tokenize live: merge highlights, token ids, the byte floor for rare strings. Then run the cost experiments — same meaning in English vs CJK vs base64 — and watch token counts (read: latency and dollars) diverge. The toy engine in T5.L9 and the capstone both start here: tokenizer first, because every downstream number is denominated in its output.`,
+Type anything and watch it tokenize live: merge highlights, token ids, the byte floor for rare strings. Then run the cost experiments — same meaning in English vs CJK vs base64 — and watch token counts (read: latency and dollars) diverge. The toy engine in T5.L10 and the capstone both start here: tokenizer first, because every downstream number is denominated in its output.`,
     },
     {
       type: 'exercise',

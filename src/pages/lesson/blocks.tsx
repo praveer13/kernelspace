@@ -21,6 +21,8 @@ import {
   ExternalLink,
   Square,
   FlaskConical,
+  BookOpenText,
+  CalendarClock,
 } from 'lucide-react'
 import CodeBlock from '@/components/CodeBlock'
 import QuizBlock from '@/components/QuizBlock'
@@ -34,6 +36,7 @@ import type {
   DeepdiveBlock,
   DiagramBlock,
   ExerciseBlock,
+  FieldNoteBlock,
   IsomorphismBlock,
   Lesson,
   StatlineBlock,
@@ -534,6 +537,43 @@ function DeepdiveView({ block, trackColor }: { block: DeepdiveBlock; trackColor:
 }
 
 /* ------------------------------------------------------------------ */
+/* field note — dated primary-source reading card (PLAN.md §3.8)      */
+/* ------------------------------------------------------------------ */
+
+function FieldNoteView({ block, trackColor }: { block: FieldNoteBlock; trackColor: string }) {
+  return (
+    <aside className="my-8 overflow-hidden rounded-lg border border-line bg-surface-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-2/50 px-5 py-3">
+        <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: trackColor }}>
+          <BookOpenText size={13} /> field note · paper spine
+        </span>
+        <span className="flex items-center gap-1.5 font-mono text-[10px] text-text-3">
+          <CalendarClock size={12} /> verified {block.verified}
+        </span>
+      </div>
+      <div className="px-5 py-5">
+        <p className="font-display text-h4 text-text-1">{block.title}</p>
+        <p className="mt-1 font-mono text-[11px] text-text-3">
+          {block.source} · {block.published}
+        </p>
+        <div className="mt-4 [&_p]:!text-body [&_p]:!leading-[1.65]">
+          <ProseView md={block.md} trackColor={trackColor} compact />
+        </div>
+        <a
+          href={block.href}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 inline-flex items-center gap-1.5 font-mono text-[11px] underline-offset-4 hover:underline"
+          style={{ color: trackColor }}
+        >
+          read the primary source <ExternalLink size={12} />
+        </a>
+      </div>
+    </aside>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* exercise — placeholder embed card → /lab/:simId (lesson.md §2.7)    */
 /* ------------------------------------------------------------------ */
 
@@ -717,6 +757,8 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
       return <IsomorphismView block={block} />
     case 'deepdive':
       return <DeepdiveView block={block} trackColor={trackColor} />
+    case 'field-note':
+      return <FieldNoteView block={block} trackColor={trackColor} />
     default:
       return null
   }

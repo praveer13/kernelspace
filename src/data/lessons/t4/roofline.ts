@@ -6,7 +6,7 @@ const lesson: Lesson = {
   trackId: 't4',
   index: 3,
   title: 'The Roofline Model',
-  minutes: 30,
+  minutes: 40,
   hook: 'Arithmetic intensity in, bound classification out: why decode is bandwidth-bound, prefill is compute-bound, and how to prove it in 4 lines of math.',
   exercise: 'sim',
   simId: 'sim-roofline',
@@ -69,7 +69,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
       type: 'prose',
       md: `## The two case studies that run T5
 
-**Decode, batch 1, 8B FP16 model.** Per token: \`~2 FLOPs × 8e9 params = 16 GFLOPs\` of math against \`~16 GB\` of weight reads (plus KV). AI ≈ 1 FLOP/byte — *300× below* the ridge. Attainable rate = \`3.35 TB/s ÷ 16 GB ≈ 200 tokens/s\` — the ALUs could do the math in microseconds; the memory system takes 5 ms. **This is the entire economics of chat inference.** And now the levers announce themselves: **batching** (N sequences share each weight read → AI × N → the single most important throughput lever), **quantization** (FP8/INT4 cuts bytes per weight 2–4× → directly multiplies the rate, T4.L7), **speculative decoding** (verify K drafted tokens per weight read → AI × K, T5.L7).
+**Decode, batch 1, 8B FP16 model.** Per token: \`~2 FLOPs × 8e9 params = 16 GFLOPs\` of math against \`~16 GB\` of weight reads (plus KV). AI ≈ 1 FLOP/byte — *300× below* the ridge. Attainable rate = \`3.35 TB/s ÷ 16 GB ≈ 200 tokens/s\` — the ALUs could do the math in microseconds; the memory system takes 5 ms. **This is the entire economics of chat inference.** And now the levers announce themselves: **batching** (N sequences share each weight read → AI × N → the single most important throughput lever), **quantization** (FP8/INT4 cuts bytes per weight 2–4× → directly multiplies the rate, T4.L7), **speculative decoding** (verify K drafted tokens per weight read → AI × K, T5.L8).
 
 **Prefill.** Processing a 2k-token prompt: each weight participates in \`2 × seq_len\` FLOPs (once per token position), so AI ≈ seq_len × (params/bytes) ≈ thousands — far right of the ridge. Prefill is **compute-bound**: it saturates tensor cores beautifully, and its time (TTFT) scales with FLOPs, not bytes. This is also why **chunked prefill** (mixing prefill chunks into decode batches) is a throughput optimization: it backfills the decode batch's idle ALUs with compute-bound work. Different roof, different medicine.`,
     },
@@ -85,9 +85,31 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
     },
     {
       type: 'prose',
+      md: `## The graded pass: Fleet kernels on a B200
+
+Architecture knowledge becomes performance engineering only when you write the numbers down **before** touching the implementation. The playground now gives you the Fleet engine's kernel table, but withholds the two columns that matter: arithmetic intensity and the binding roof.
+
+The B200 worksheet uses one GPU at dense FP16: **2.25 PFLOP/s** and **8 TB/s HBM3e**, derived from NVIDIA's eight-GPU [HGX B200 compute specification](https://www.nvidia.com/en-us/data-center/hgx/) and [DGX B200 memory-bandwidth specification](https://www.nvidia.com/en-us/data-center/dgx-b200/). Your first check is therefore the machine ridge; do the division rather than trusting this paragraph.
+
+| Fleet kernel | Work | HBM traffic | You supply |
+|---|---:|---:|---|
+| router scoring | 0.12 GFLOPs | 0.08 GB | AI + bound |
+| 70B decode, batch 32 | 4,480 GFLOPs | 140 GB | AI + bound |
+| paged attention | 2,048 GFLOPs | 8 GB | AI + bound |
+| 70B prefill, 512 tokens | 71,680 GFLOPs | 140 GB | AI + bound |
+
+The units are deliberately paired: \`GFLOPs / GB = FLOPs / byte\`. Enter each result and classify it. A correct row appears on the B200 roofline; a guessed label without the numeric AI does not pass. Notice the near-ridge case: being "a lot of math" is not the same as being compute-bound.`,
+    },
+    {
+      type: 'callout',
+      variant: 'info',
+      md: `Use the order a performance review expects: **hypothesis → model → measure → explain**. First predict the roof from FLOPs and DRAM bytes. Then measure the real kernel. If the point lands far below its predicted ceiling, investigate occupancy, launch latency, synchronization, or uncoalesced traffic; do not silently rewrite the model after seeing the result.`,
+    },
+    {
+      type: 'prose',
       md: `## In the playground
 
-The simulator is a live roofline: drag kernels onto the plot, sweep batch size and precision, and watch decode slide along the bandwidth slope while prefill pins itself to the roof. Compute each workload's AI yourself first — the point is to leave with the napkin skill, not the chart.`,
+The simulator is a live roofline: complete the graded B200 table, then sweep batch size and precision and watch decode slide along the bandwidth slope while prefill pins itself to the roof. Compute each workload's AI yourself first — the point is to leave with the napkin skill, not the chart.`,
     },
     {
       type: 'exercise',
@@ -95,12 +117,23 @@ The simulator is a live roofline: drag kernels onto the plot, sweep batch size a
       machine: 'roofline',
       title: 'Roofline playground',
       tasks: [
+        'Compute the B200 FP16 ridge from 2.25 PFLOP/s ÷ 8 TB/s; submit the number rather than a regime label.',
+        'Complete all four Fleet kernel rows. Each needs a numeric AI and the correct compute/bandwidth classification before it is plotted.',
         'Plot decode at batch 1 on the H100 roofline (AI ≈ 1 F/B): read the attainable tokens/s off the bandwidth slope.',
         'Sweep batch 1 → 256: watch AI (and throughput) ride the slope until the compute roof interrupts — find the knee.',
         'Switch weights FP16 → FP8 → INT4: note the ridge moves and the decode rate multiplies.',
         'Plot prefill (seq 2048) and confirm it sits at the compute roof; explain TTFT in FLOPs terms.',
       ],
       note: `You have now derived, from two hardware numbers, why batching is the king lever, why quantization is a bandwidth multiplier, why prefill and decode need different metrics, and where chunked prefill comes from. T5 assumes you can do this arithmetic in your head.`,
+    },
+    {
+      type: 'field-note',
+      title: 'Taming the Throughput–Latency Tradeoff with Sarathi-Serve',
+      source: 'Agrawal et al.',
+      href: 'https://arxiv.org/abs/2403.02310',
+      published: "OSDI '24",
+      verified: '2026-08',
+      md: `Sarathi-Serve turns the roofline into a scheduler. A large prefill chunk can occupy the compute roof while many one-token decodes contribute little marginal work; chunking controls how long that compute-heavy guest stalls inter-token latency. Read its decode-maximal batches as a resource-packing argument: arithmetic intensity explains why the combination is efficient, while tail-SLO measurements decide how large a chunk is safe.`,
     },
     {
       type: 'quiz',
@@ -140,6 +173,18 @@ The simulator is a live roofline: drag kernels onto the plot, sweep batch size a
           correct: [1],
           explanation:
             'Weights dominate decode bytes; serving N sequences per weight read raises AI by N. The "knee" arrives when AI crosses the ridge and you become compute-bound — the batch-size sweet spot every engine hunts.',
+        },
+        {
+          q: 'A B200 has 2.25 PFLOP/s dense FP16 compute and 8 TB/s HBM bandwidth. A kernel with AI = 256 FLOP/byte is…',
+          options: [
+            'Compute-bound because 256 is a large arithmetic intensity',
+            'Bandwidth-bound: the ridge is about 281 FLOP/byte, so 256 is still on the slope',
+            'Exactly at the ridge',
+            'Impossible to classify without measuring wall-clock latency',
+          ],
+          correct: [1],
+          explanation:
+            'The machine ridge is 2,250 TFLOP/s ÷ 8 TB/s = 281.25 FLOP/byte. Classification is a comparison, not a vibe: 256 < 281.25, so bandwidth is still the modeled ceiling.',
         },
         {
           q: 'Prefill is compute-bound while decode is bandwidth-bound because…',

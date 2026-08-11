@@ -1,7 +1,7 @@
 /**
  * Lesson registry — the content source of truth for /curriculum, /tracks/:id
- * and the lesson engine. Enumerates all 54 lessons exactly as specified in
- * curriculum.md §3 (T0:6 · T1:6 · T2:7 · T3:6 · T4:7 · T5:9 · T6:8 · T7:5).
+ * and the lesson engine. Enumerates all 68 lessons in curriculum order:
+ * R:10 · T0:6 · T1:6 · T2:7 · T3:7 · T4:7 · T5:10 · T6:10 · T7:5.
  *
  * Lookup accepts both canonical ids (`t1.l3`, used by the progress store and
  * pre-existing links) and human slugs (`toy-allocator`, used in /lesson/:lessonId).
@@ -20,6 +20,18 @@ import {
   Cog,
 } from 'lucide-react'
 import type { Lesson, SimId, TrackId } from './types'
+
+// R — Rust Zero
+import rl1 from './r/bindings-and-expressions'
+import rl2 from './r/functions-and-control-flow'
+import rl3 from './r/ownership-and-moves'
+import rl4 from './r/borrowing-and-slices'
+import rl5 from './r/modeling-and-errors'
+import rl6 from './r/collections-and-closures'
+import rl7 from './r/smart-pointers'
+import rl8 from './r/interior-mutability'
+import rl9 from './r/practical-lifetimes'
+import rl10 from './r/atomics-and-orderings'
 
 // T0 — Foundations
 import t0l1 from './t0/why-systems'
@@ -70,10 +82,11 @@ import t5l2 from './t5/tokenization'
 import t5l3 from './t5/prefill-vs-decode'
 import t5l4 from './t5/kv-cache-math'
 import t5l5 from './t5/pagedattention-deep-dive'
-import t5l6 from './t5/continuous-batching'
-import t5l7 from './t5/speculative-chunked'
-import t5l8 from './t5/distributed-serving'
-import t5l9 from './t5/production-stack'
+import t5l6 from './t5/prefix-caching'
+import t5l7 from './t5/continuous-batching'
+import t5l8 from './t5/speculative-chunked'
+import t5l9 from './t5/distributed-serving'
+import t5l10 from './t5/production-stack'
 
 // T6 — Mega-Scale Serving (2026)
 import t6l1 from './t6/moe-anatomy'
@@ -84,6 +97,8 @@ import t6l5 from './t6/fp4-blackwell'
 import t6l6 from './t6/speculative-production'
 import t6l7 from './t6/rl-rollout'
 import t6l8 from './t6/agents-structured'
+import t6l9 from './t6/multi-lora-serving'
+import t6l10 from './t6/security-boundaries'
 
 // T7 — Economics & SLO Engineering
 import t7l1 from './t7/objective-function'
@@ -93,22 +108,23 @@ import t7l4 from './t7/unit-economics'
 import t7l5 from './t7/autoscaling-planner'
 
 export const LESSONS_BY_TRACK: Record<TrackId, Lesson[]> = {
+  r: [rl1, rl2, rl3, rl4, rl5, rl6, rl7, rl8, rl9, rl10],
   t0: [t0l1, t0l2, t0l3, t0l4, t0l5, t0l6],
   t1: [t1l1, t1l2, t1l3, t1l4, t1l5, t1l6],
   t2: [t2l1, t2l2, t2l3, t2l4, t2l5, t2l6, t2l7],
   t3: [t3l1, t3l2, t3l3, t3l4, t3l5, t3l6, t3l7],
   t4: [t4l1, t4l2, t4l3, t4l4, t4l5, t4l6, t4l7],
-  t5: [t5l1, t5l2, t5l3, t5l4, t5l5, t5l6, t5l7, t5l8, t5l9],
-  t6: [t6l1, t6l2, t6l3, t6l4, t6l5, t6l6, t6l7, t6l8],
+  t5: [t5l1, t5l2, t5l3, t5l4, t5l5, t5l6, t5l7, t5l8, t5l9, t5l10],
+  t6: [t6l1, t6l2, t6l3, t6l4, t6l5, t6l6, t6l7, t6l8, t6l9, t6l10],
   t7: [t7l1, t7l2, t7l3, t7l4, t7l5],
 }
 
-export const TRACK_IDS: TrackId[] = ['t0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']
+export const TRACK_IDS: TrackId[] = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']
 
-/** All 54 lessons in curriculum order. */
+/** All 68 lessons in curriculum order. */
 export const ALL_LESSONS: Lesson[] = TRACK_IDS.flatMap((id) => LESSONS_BY_TRACK[id])
 
-export const TOTAL_LESSON_COUNT = ALL_LESSONS.length // 40
+export const TOTAL_LESSON_COUNT = ALL_LESSONS.length
 
 /** Canonical ids in curriculum order — for next-recommended selectors. */
 export const ORDERED_LESSON_IDS: string[] = ALL_LESSONS.map((l) => l.id)
@@ -158,6 +174,19 @@ export interface TrackExtras {
 }
 
 export const TRACK_EXTRAS: Record<TrackId, TrackExtras> = {
+  r: {
+    pitch:
+      'You already know how to program. This track teaches you how Rust thinks — bindings through atomics, just in time for the forge.',
+    outcomes: [
+      'Read ordinary Rust syntax without translating every line back into Java or Python.',
+      'Predict moves and borrow-checker errors, then fix the ownership design instead of cloning blindly.',
+      'Model fallible systems code with structs, enums, Option, Result, and the ? operator.',
+      'Choose Box, Rc, Arc, RefCell, Mutex, or an atomic from the ownership and concurrency constraints.',
+      'Use Acquire, Release, and Relaxed orderings deliberately before attempting a lock-free queue.',
+    ],
+    requires: 'start here · programming experience, no Rust required',
+    sideNote: '// ten small crates · rustc is the tutor',
+  },
   t0: {
     pitch:
       'The five numbers and mental models behind every performance bug you have ever had. Latency, bandwidth, cache lines, and why your runtime has been hiding the machine from you.',
@@ -167,7 +196,7 @@ export const TRACK_EXTRAS: Record<TrackId, TrackExtras> = {
       'Explain cache lines, false sharing, and why 64 bytes is the atom of performance.',
       'Read your JVM/Python runtime as a set of systems trade-offs, not magic.',
     ],
-    requires: 'base of the stack · no prerequisites',
+    requires: 'requires R · or equivalent Rust fluency',
     sideNote: '// lesson 2 has the numbers that matter',
   },
   t1: {
@@ -298,7 +327,7 @@ export const SIM_INFO: Record<SimId, SimInfo> = {
   'sim-roofline': {
     id: 'sim-roofline',
     name: 'Roofline Model',
-    hook: 'Compute-bound or bandwidth-bound? Plot it.',
+    hook: 'Compute AI, classify Fleet kernels, and place them on a B200 roofline.',
     icon: TrendingUp,
     trackId: 't4',
   },

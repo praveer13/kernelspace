@@ -99,7 +99,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         'Hold weight precision fixed, flip FP16 → FP8 KV, then compare that gain with changing 32 → 8 KV heads.',
         'Use 2 GPUs and 32k context; read the capacity concurrency and bandwidth/ITL limits, then state which wall arrives first.',
       ],
-      note: `Six symbols — 2, L, d_kv, b — explain why long context is expensive, why GQA and FP8 KV ship in every engine, and why "how many GPUs" is a cache question as much as a weights question. Capacity and bandwidth are separate limits: size both before choosing a fix. T5.L5 shows how vLLM manages this memory; T5.L6 how it's scheduled.`,
+      note: `Six symbols — 2, L, d_kv, b — explain why long context is expensive, why GQA and FP8 KV ship in every engine, and why "how many GPUs" is a cache question as much as a weights question. Capacity and bandwidth are separate limits: size both before choosing a fix. T5.L5 shows how vLLM manages this memory; T5.L6 how cached prefixes reuse it; T5.L7 how it is scheduled.`,
     },
     {
       type: 'quiz',

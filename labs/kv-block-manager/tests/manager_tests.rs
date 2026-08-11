@@ -18,3 +18,4 @@ lab_test!(fork_shares, lab::check_fork_shares());
 lab_test!(cow, lab::check_cow());
 lab_test!(free_refcount, lab::check_free_refcount());
 lab_test!(gauntlet, lab::check_gauntlet());
+lab_test!(adapter_unified_paging, lab::check_adapter_unified_paging());

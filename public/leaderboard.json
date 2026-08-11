@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "benchmarkVersion": "wave4-2026-08-v1",
+  "generatedAt": "2026-08-11T04:00:00.000Z",
+  "scoring": "overall = arithmetic mean(lab goodput, Fleet goodput); descending, then lab, then handle",
+  "traces": {
+    "burstgptRequestSha256": "b54592773e3e37d3cc8d7e7982727d22c2cc5ec71afe79d95069157786decc86",
+    "lmsysShapeRequestSha256": "5b5241586197911aa7386f76e7256dbcc44039ec8840ea9fd1daaf53b0a5ca64"
+  },
+  "reference": {
+    "labGoodput": 76.6,
+    "fleetGoodput": 90.6,
+    "overallGoodput": 83.6
+  },
+  "entries": []
+}

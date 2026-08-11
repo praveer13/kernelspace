@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 25,
   hook: 'The last lesson of the course: the component that watches queue depth and TTFT, then adds or removes prefill and decode workers before the SLO breaks. Dynamo calls it the Planner. You have met it before — as the thing the whole course was secretly about.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
@@ -116,7 +117,7 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
     {
       type: 'deepdive',
       title: 'Where the course ends',
-      md: `Look at the Planner's dependencies: the scheduler (T5.L6, lab 06), the block manager (T5.L5, lab 02), the queue (T2.L5, lab 04), the fleets (T6.L3–L4), the frontier (T7.L3), the cost model (T7.L4). The Planner is the course wearing a job title — the loop that turns everything you built into a business. Fleet Week (the plan's capstone 2.0) puts you in its chair: allocate a fleet, pick the split, survive the incident, defend the $/Mtok. You are ready.`,
+      md: `Look at the Planner's dependencies: the scheduler (T5.L7, lab 06), the block manager (T5.L5, lab 02), the queue (T2.L5, lab 04), the fleets (T6.L3–L4), the frontier (T7.L3), the cost model (T7.L4). The Planner is the course wearing a job title — the loop that turns everything you built into a business. Fleet Week (the plan's capstone 2.0) puts you in its chair: allocate a fleet, pick the split, survive the incident, defend the $/Mtok. You are ready.`,
     },
   ],
 }

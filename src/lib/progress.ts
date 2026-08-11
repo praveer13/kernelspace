@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { TOTAL_TRACK_LESSONS } from './tracks'
 
 /**
  * Kernelspace progress store (design.md §10).
@@ -45,6 +46,10 @@ export interface FleetWeekProgress {
   actsDone: string[]
   scores: Record<string, number>
   docText?: string
+  measurementEvidence?: Record<
+    string,
+    { analysis?: string; screenshotName?: string; screenshotBytes?: number }
+  >
 }
 
 export type CodeLang = 'python' | 'java' | 'rust' | 'c'
@@ -55,7 +60,7 @@ export interface ProgressSettings {
 }
 
 export interface ProgressState {
-  version: 1
+  version: 2
   lessons: Record<string, LessonProgress>
   sims: Record<string, SimProgress>
   labs: Record<string, LabProgress>
@@ -77,6 +82,10 @@ export interface ProgressState {
   recordLabResult: (labId: string, passedCheckIds: string[], totalChecks: number) => void
   completeFleetWeekAct: (actId: string, score: number) => void
   setFleetWeekDoc: (text: string) => void
+  setFleetWeekEvidence: (
+    actId: string,
+    patch: { analysis?: string; screenshotName?: string; screenshotBytes?: number },
+  ) => void
   completeCapstoneStep: (stepId: string, stepIndex: number) => void
   setCapstoneMetrics: (metrics: CapstoneMetrics) => void
   unlockAchievement: (id: string) => void
@@ -94,7 +103,7 @@ export const XP = {
   fleetWeekAct: 250,
 } as const
 
-export const TOTAL_LESSONS = 55
+export const TOTAL_LESSONS = TOTAL_TRACK_LESSONS
 
 export interface Rank {
   name: string
@@ -122,7 +131,7 @@ export function nextRank(xp: number): Rank | null {
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
 const initialData = {
-  version: 1 as const,
+  version: 2 as const,
   lessons: {} as Record<string, LessonProgress>,
   sims: {} as Record<string, SimProgress>,
   labs: {} as Record<string, LabProgress>,
@@ -179,8 +188,36 @@ function removeRetiredSimTasks(state: unknown): unknown {
   return nextSims ? { ...progress, sims: nextSims } : state
 }
 
+const T5_LESSON_ID_MIGRATION = [
+  ['t5.l6', 't5.l7'],
+  ['t5.l7', 't5.l8'],
+  ['t5.l8', 't5.l9'],
+  ['t5.l9', 't5.l10'],
+] as const
+
+/** Wave 2 inserted prefix caching at T5.L6. Move old lesson records once,
+ * from a snapshot, so adjacent ids cannot overwrite one another. */
+export function migrateT5LessonIds(state: unknown): unknown {
+  if (!state || typeof state !== 'object') return state
+  const progress = state as Record<string, unknown>
+  if (!progress.lessons || typeof progress.lessons !== 'object') {
+    return { ...progress, version: 2 }
+  }
+
+  const oldLessons = progress.lessons as Record<string, unknown>
+  const lessons = { ...oldLessons }
+  for (const [oldId] of T5_LESSON_ID_MIGRATION) delete lessons[oldId]
+  for (const [oldId, newId] of T5_LESSON_ID_MIGRATION) {
+    if (oldLessons[oldId] !== undefined) lessons[newId] = oldLessons[oldId]
+  }
+  return { ...progress, version: 2, lessons }
+}
+
 export function migrateProgress(persistedState: unknown, persistedVersion: number): unknown {
-  return persistedVersion < 2 ? removeRetiredSimTasks(persistedState) : persistedState
+  let next = persistedState
+  if (persistedVersion < 2) next = removeRetiredSimTasks(next)
+  if (persistedVersion < 3) next = migrateT5LessonIds(next)
+  return next
 }
 
 export const useProgress = create<ProgressState>()(
@@ -269,6 +306,7 @@ export const useProgress = create<ProgressState>()(
           if (prev.tasksDone.includes(taskId)) return s
           return {
             sims: { ...s.sims, [simId]: { ...prev, tasksDone: [...prev.tasksDone, taskId] } },
+            xp: s.xp + XP.exercise,
             streakDays: touchStreak(s.streakDays),
           }
         }),
@@ -321,6 +359,17 @@ export const useProgress = create<ProgressState>()(
 
       setFleetWeekDoc: (text) => set((s) => ({ fleetWeek: { ...s.fleetWeek, docText: text } })),
 
+      setFleetWeekEvidence: (actId, patch) =>
+        set((s) => ({
+          fleetWeek: {
+            ...s.fleetWeek,
+            measurementEvidence: {
+              ...s.fleetWeek.measurementEvidence,
+              [actId]: { ...s.fleetWeek.measurementEvidence?.[actId], ...patch },
+            },
+          },
+        })),
+
       completeCapstoneStep: (stepId, stepIndex) =>
         set((s) => {
           if (s.capstone.stepsDone.includes(stepId)) return s
@@ -345,10 +394,16 @@ export const useProgress = create<ProgressState>()(
       importProgress: (json) => {
         try {
           const data = JSON.parse(json)
-          if (data?.version !== 1 || typeof data.lessons !== 'object' || typeof data.xp !== 'number') {
+          if (
+            (data?.version !== 1 && data?.version !== 2) ||
+            typeof data.lessons !== 'object' ||
+            typeof data.xp !== 'number'
+          ) {
             return false
           }
-          set({ ...initialData, ...(removeRetiredSimTasks(data) as typeof initialData) })
+          const cleaned = removeRetiredSimTasks(data)
+          const migrated = data.version === 1 ? migrateT5LessonIds(cleaned) : cleaned
+          set({ ...initialData, ...(migrated as typeof initialData), version: 2 })
           return true
         } catch {
           return false
@@ -359,7 +414,7 @@ export const useProgress = create<ProgressState>()(
     }),
     {
       name: 'kernelspace:v1',
-      version: 2,
+      version: 3,
       migrate: migrateProgress as (persistedState: unknown, version: number) => ProgressState,
     },
   ),
@@ -429,7 +484,7 @@ export function exportProgress(): string {
   const { lessons, sims, labs, fleetWeek, capstone, xp, streakDays, achievements, settings } =
     useProgress.getState()
   return JSON.stringify(
-    { version: 1, lessons, sims, labs, fleetWeek, capstone, xp, streakDays, achievements, settings },
+    { version: 2, lessons, sims, labs, fleetWeek, capstone, xp, streakDays, achievements, settings },
     null,
     2,
   )

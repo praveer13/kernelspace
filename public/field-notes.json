@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "quarter": "2026-Q3",
+  "generatedAt": "2026-08-11T00:00:00.000Z",
+  "entries": [
+    {
+      "id": "xgrammar-2-agentic-constraints",
+      "title": "XGrammar 2 moves grammar dispatch closer to agent protocols",
+      "summary": "TagDispatch, just-in-time compilation, cross-grammar caching, and an Earley-based path target dynamic tool protocols rather than one fixed JSON schema. The durable lesson is unchanged: compile invariant grammar work once, preserve a per-sequence parser state, and validate whole model tokens.",
+      "source": "XGrammar 2 paper",
+      "href": "https://arxiv.org/abs/2601.04426",
+      "published": "2026-01",
+      "verified": "2026-08",
+      "lessons": ["t6.l8"],
+      "tags": ["structured output", "agents", "decoding"]
+    },
+    {
+      "id": "vllm-multi-lora-controls",
+      "title": "Multi-LoRA serving is an admission and trust-control problem",
+      "summary": "Current vLLM controls separate adapters active in one batch, the larger CPU-resident adapter catalog, and maximum supported rank. Runtime adapter updating remains a trusted-environment feature; a production control plane should authenticate, hash-pin, and namespace every adapter.",
+      "source": "vLLM LoRA documentation",
+      "href": "https://docs.vllm.ai/en/stable/features/lora/",
+      "published": "living documentation",
+      "verified": "2026-08",
+      "lessons": ["t6.l9", "t6.l10"],
+      "tags": ["LoRA", "multi-tenancy", "security"]
+    },
+    {
+      "id": "prefix-cache-privacy",
+      "title": "Prefix reuse needs an explicit privacy namespace",
+      "summary": "Cache-hit latency can reveal whether a guessed prefix was already processed. New selective-sharing work explores recovering reuse without returning to one global namespace, but strict tenant scoping remains the safe baseline for prompts, retrieved data, and tool results.",
+      "source": "PrefixWall / CacheSolidarity paper",
+      "href": "https://arxiv.org/abs/2603.10726",
+      "published": "2026-03",
+      "verified": "2026-08",
+      "lessons": ["t5.l6", "t6.l10"],
+      "tags": ["prefix cache", "privacy", "multi-tenancy"]
+    },
+    {
+      "id": "firecracker-boundary-ownership",
+      "title": "Firecracker isolates execution; the host still owns egress policy",
+      "summary": "The VMM, jailer, seccomp filters, cgroups, and namespaces form a compact containment stack for hostile tool execution. Firecracker deliberately does not filter guest network traffic, so a production sandbox must enforce allowlisted egress and metadata/control-plane denial outside the guest.",
+      "source": "Firecracker security design",
+      "href": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md",
+      "published": "living design document",
+      "verified": "2026-08",
+      "lessons": ["t6.l10"],
+      "tags": ["sandboxing", "microVM", "agents"]
+    },
+    {
+      "id": "confidential-gpu-platform-matrix",
+      "title": "Confidential GPU inference is a measured platform, not a boolean",
+      "summary": "Supported CPU, GPU, firmware, driver, and container combinations determine the attested boundary. Published overhead varies materially by model, batch mix, and software stack, so capacity claims belong to a pinned platform benchmark rather than one universal percentage.",
+      "source": "NVIDIA confidential containers documentation",
+      "href": "https://docs.nvidia.com/datacenter/cloud-native/confidential-containers/latest/supported-platforms.html",
+      "published": "living documentation",
+      "verified": "2026-08",
+      "lessons": ["t6.l10"],
+      "tags": ["confidential computing", "GPU", "attestation"]
+    },
+    {
+      "id": "mooncake-fast25",
+      "title": "Mooncake makes KV transfer a distributed cache problem",
+      "summary": "The FAST '25 version connects prefill/decode disaggregation to a CPU, DRAM, SSD, and RDMA-backed KV cache. Read it as storage-system design: placement, transfer scheduling, eviction, and locality sit between the model scheduler and the network.",
+      "source": "USENIX FAST '25 paper",
+      "href": "https://www.usenix.org/conference/fast25/presentation/qin",
+      "published": "2025-02",
+      "verified": "2026-08",
+      "lessons": ["t5.l9", "t6.l3"],
+      "tags": ["disaggregation", "KV cache", "RDMA"]
+    },
+    {
+      "id": "deepseek-open-infra-index",
+      "title": "DeepSeek's open-infra index is a cross-layer serving case study",
+      "summary": "The index ties model architecture to wide expert parallelism, communication kernels, load balancing, low-precision compute, and production telemetry. Treat the components as one composed system; no isolated kernel explains the published fleet behavior.",
+      "source": "DeepSeek open-infra index",
+      "href": "https://github.com/deepseek-ai/open-infra-index",
+      "published": "living repository",
+      "verified": "2026-08",
+      "lessons": ["t6.l1", "t6.l2", "t6.l3", "t6.l5", "t6.l6", "t7.l4"],
+      "tags": ["MoE", "expert parallelism", "production"]
+    },
+    {
+      "id": "distserve-goodput",
+      "title": "DistServe evaluates disaggregation through goodput under SLO",
+      "summary": "Separating prefill and decode is useful only when the resulting placement raises requests completed inside both TTFT and TPOT objectives. That evaluation frame connects the disaggregated serving architecture directly to T7's objective function and planner.",
+      "source": "DistServe paper",
+      "href": "https://arxiv.org/abs/2401.09670",
+      "published": "2024-01",
+      "verified": "2026-08",
+      "lessons": ["t5.l9", "t7.l1", "t7.l2", "t7.l5"],
+      "tags": ["goodput", "SLO", "disaggregation"]
+    }
+  ]
+}

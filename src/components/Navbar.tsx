@@ -12,6 +12,8 @@ const NAV_LINKS = [
   { to: '/lab', label: 'Lab' },
   { to: '/forge', label: 'Forge' },
   { to: '/fleet', label: 'Fleet' },
+  { to: '/leaderboard', label: 'Scores' },
+  { to: '/field-notes', label: 'Notes' },
   { to: '/capstone', label: 'Capstone' },
   { to: '/glossary', label: 'Glossary' },
 ]
@@ -85,7 +87,7 @@ export default function Navbar() {
           </Link>
 
           {/* Center: primary links (lg+) */}
-          <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary">
+          <nav className="hidden items-center gap-7 xl:flex" aria-label="Primary">
             {NAV_LINKS.map((link) => (
               <NavLink
                 key={link.to}
@@ -141,7 +143,7 @@ export default function Navbar() {
 
             <button
               type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-text-2 transition-colors hover:border-line-bright hover:text-text-1 lg:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-text-2 transition-colors hover:border-line-bright hover:text-text-1 xl:hidden"
               onClick={() => setMenuOpen((v) => !v)}
               aria-label={menuOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={menuOpen}
@@ -160,7 +162,7 @@ export default function Navbar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-40 flex flex-col bg-ink/95 pt-16 backdrop-blur-md lg:hidden"
+            className="fixed inset-0 z-40 flex flex-col bg-ink/95 pt-16 backdrop-blur-md xl:hidden"
           >
             <nav className="flex flex-col gap-1 px-6 pt-8" aria-label="Mobile">
               {MOBILE_LINKS.map((link, i) => (

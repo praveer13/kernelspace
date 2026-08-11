@@ -1,14 +1,15 @@
 import type { Lesson } from '../types'
 
 const lesson: Lesson = {
-  id: 't5.l8',
+  id: 't5.l9',
   slug: 'distributed-serving',
   trackId: 't5',
-  index: 8,
+  index: 9,
   title: 'Distributed & Disaggregated Serving',
   minutes: 30,
   hook: 'TP/PP/DP parallelism, NVLink vs RDMA, prefill/decode disaggregation, KV transfer, and Mooncake\'s distributed cache — serving beyond one GPU.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
@@ -65,7 +66,7 @@ The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SK
 
 Moonshot AI's Mooncake (2024, production at Kimi scale) pushes the idea one level further: the KV cache is not per-worker state — it's a **distributed object store** spanning the cluster's GPU HBM *and* CPU DRAM. A central scheduler places requests to maximize **prefix-cache reuse across the whole cluster** (route to whoever holds the most of your prefix — KV-aware routing, T3.L6), prefill fills blocks into the shared pool, decode workers *pull* blocks over RDMA as needed. The design is explicitly a storage system: cache tiers (HBM hot, DRAM warm), transfer scheduling, eviction — T2's memory hierarchy running across a datacenter.
 
-This is the end-state of the course's thesis: the KV cache is the payload (T5.L4), so the mature architecture is a **database cluster for KV blocks** — placement, replication, eviction, transfer scheduling — with GPU workers as its query engines. The 50-year-old ideas, reincarnated one final time: page tables (T5.L5), swap (T2.L3), schedulers (T5.L6), now distributed storage and caching. The stack is complete.`,
+This is the end-state of the course's thesis: the KV cache is the payload (T5.L4), so the mature architecture is a **database cluster for KV blocks** — placement, replication, eviction, transfer scheduling — with GPU workers as its query engines. The 50-year-old ideas, reincarnated one final time: page tables (T5.L5), swap (T2.L3), schedulers (T5.L7), now distributed storage and caching. The stack is complete.`,
     },
     {
       type: 'callout',

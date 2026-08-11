@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 25,
   hook: 'T4\'s numbers were H100: 3.35 TB/s, 80 GB, ridge at ~295 FLOP/byte. Blackwell moves every one of those, adds a 4-bit floating point the tensor cores run natively, and changes the decode economics again. Time to re-derive.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',

@@ -94,6 +94,15 @@ Systems languages (C, C++, Rust, Zig) decline the contract and hand you the bill
 T0 is done when these five things feel like home: the latency ladder (0.5 ns → 100 µs), the 20× row/column gap, the 64-byte line and false sharing, the managed-runtime contract — and the conviction that LLM serving reuses every one of them. T1 takes off the guardrails: real stack frames, real pointers, a real segfault, and an allocator you build with your own hands. That toy allocator, it turns out, is the direct ancestor of the KV-cache manager that made vLLM famous. See you at the bottom of the stack.`,
     },
     {
+      type: 'field-note',
+      title: 'Orca: A Distributed Serving System for Transformer-Based Generative Models',
+      source: 'Yu et al.',
+      href: 'https://www.usenix.org/conference/osdi22/presentation/yu',
+      published: "OSDI '22",
+      verified: '2026-08',
+      md: `Read Orca here because it names the runtime mismatch this track has prepared you to see: generative requests are long-lived state machines, not one-shot inference calls. Iteration-level scheduling lets the runtime rebuild the batch after every decode step, while selective batching keeps only compatible operators together. As you read, mark every place a language-runtime abstraction would hide a lifecycle or synchronization cost.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {

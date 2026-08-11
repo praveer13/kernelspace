@@ -49,6 +49,8 @@ function blockToMd(b: ContentBlock): string {
         .join('\n\n')
     case 'exercise':
       return `**Exercise: ${b.title}**\n\n${b.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}${b.note ? `\n\n_${b.note}_` : ''}`
+    case 'field-note':
+      return `> **Field note · ${b.title}**\n> ${b.source} · ${b.published} · verified ${b.verified}\n>\n> ${b.md.replace(/\n/g, '\n> ')}\n>\n> [Read the primary source](${b.href})`
     default:
       return ''
   }
@@ -87,8 +89,9 @@ const byTrack = TRACKS.map((t) => {
 const llmsTxt = `# kernelspace
 
 > From cache lines to continuous batching: a systems course that turns backend
-> engineers (Java/Python) into LLM-serving systems engineers. 55 lessons,
-> 6 Rust labs graded in-browser, a simulated GPU fleet, and a 4-act capstone.
+> engineers (Java/Python) into LLM-serving systems engineers. ${ALL_LESSONS.length} lessons,
+> 10 Rust Zero drill crates + 8 systems labs graded in-browser, a simulated
+> GPU fleet with licensed trace replay, an opt-in CI-verified leaderboard, and a 4-act capstone.
 > All content is plain markdown under /lessons-md/; every page is at
 > ${SITE}/lesson/<id> (e.g. t5.l4).
 
@@ -106,8 +109,10 @@ ${byTrack}
 
 ## Optional
 
-- [The Forge labs](${SITE}/forge): six Rust labs (allocator → block manager → tokenizer → MPMC queue → executor → scheduler)
+- [The Forge](${SITE}/forge): ten Rust Zero drills, then eight systems labs (allocator → block manager → tokenizer → MPMC queue → executor → scheduler → radix cache → constrained decoder)
 - [The Fleet](${SITE}/fleet): serving simulator with conformance/scoring harnesses
+- [Goodput Leaderboard](${SITE}/leaderboard): local personal best by default; opt-in public scores re-run by CI
+- [Quarterly Field Notes](${SITE}/field-notes): dated primary-source updates for landscape-sensitive lessons
 - [Fleet Week](${SITE}/week): the 4-act capstone
 `
 

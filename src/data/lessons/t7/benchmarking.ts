@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 25,
   hook: 'Most published inference numbers are unusable — wrong traffic, no warmup, percentiles from five samples. The four rules that make a benchmark honest, and the public harnesses that follow them.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
@@ -45,6 +46,15 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
       type: 'callout',
       variant: 'analogy',
       md: `This is **JMH discipline transplanted**: the JVM world learned years ago that benchmarks without warmup measure the interpreter, that percentiles need samples, and that "it worked on my machine" is a config diff. Same rules, new victim. If you've ever written a JMH harness with @Warmup and @Measurement, you're home.`,
+    },
+    {
+      type: 'field-note',
+      title: 'DistServe: Disaggregating Prefill and Decoding for Goodput-Optimized Serving',
+      source: 'Zhong et al.',
+      href: 'https://arxiv.org/abs/2401.09670',
+      published: "OSDI '24",
+      verified: '2026-08',
+      md: `DistServe belongs in the benchmarking track because its objective is not raw tokens per second: it asks for the maximum arrival rate that satisfies both TTFT and TPOT constraints. Audit the evaluation as you read — workload distributions, phase-specific parallelism, KV-transfer topology, percentile targets, and the baseline's tuning budget. The paper is a worked example of goodput turning an architectural claim into a falsifiable curve.`,
     },
     {
       type: 'quiz',

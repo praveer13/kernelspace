@@ -1,6 +1,10 @@
 # NEXT — The 10x Beyond (research + POC, 2026-08-03)
 
-The plan in PLAN.md is built: 55 lessons, 6 Rust labs, the Fleet, Fleet Week.
+The base plan in PLAN.md and World-Class Waves 0–6 are built: 68 lessons, 10 Rust
+Zero drill crates, 8 systems labs, a cache-aware Fleet, and a graded measurement
+loop from B200 roofline predictions through Fleet dashboards and incident diagnosis,
+plus licensed production replay, opt-in CI-verified standing, the paper spine,
+security boundaries, and quarterly Field Notes.
 This document is the answer to "what takes it 10x FURTHER" — every direction
 verified against 2026 sources or proven by a working POC, all compatible
 with the zero-server constraint.
@@ -15,7 +19,7 @@ traffic**, **real stakes** — without adding a server.
 
 ## 1. The Real Engine Path ⭐ (the headline)
 
-**What:** the student's own Rust engine (labs 01–06) stops driving a simulated
+**What:** the student's own Rust engine (labs 01–08) stops driving a simulated
 decode loop and starts driving a REAL model, in the browser tab.
 
 **Proof it works (POC executed, this machine, 2026-08-03):** a static page
@@ -41,14 +45,23 @@ with WebGPU the same page runs 10–50× faster (see benchmarks below).
 - Gotchas: WebGPU needs a real GPU (headless CI gets SwiftShader — works,
   slow); 400MB first download → Cache API persistence makes it once-ever.
 
-**What it unlocks:** lab 07 "serve a real model" — the student's scheduler +
-block manager + queue drive actual Qwen3 generation, measured with real TTFT/
-ITL. Fleet Week Act 1 becomes "your engine, real model, real trace."
+**What it unlocks:** a final integration lab, “serve a real model” — the
+student's scheduler + block manager + queue drive actual Qwen3 generation,
+measured with real TTFT/ITL. Fleet Week Act 1 becomes “your engine, real model,
+real trace.”
 
 ## 2. Production Trace Replay ⭐ (biggest teaching payoff per effort)
 
 **What:** replay REAL production traffic through the Fleet instead of
 synthetic generators.
+
+**Shipped in Wave 4:** Kimi/Mooncake and a deterministically sampled BurstGPT
+v2 busiest-hour slice run in Fleet and lab 06 with checksum-pinned provenance
+and measured pass floors. The LMSYS audit found that its gated agreement
+prohibits third-party transfer and its schema has no timestamps, so the repo
+ships an honestly labelled published-aggregate synthetic shape plus a
+local-only adapter for users who independently accept the terms—no LMSYS row
+is redistributed.
 
 **Proof the data exists (RealTraces agent):**
 - **Mooncake FAST'25 traces** (Apache-2.0, ~3MB files): JSONL with
@@ -79,6 +92,12 @@ instead of a backend. Student PRs a result artifact (JSON + wasm hash +
 source commit); a GitHub Action re-runs the artifact against the fixed
 public trace, validates, and commits an updated `leaderboard.json` that the
 static site reads.
+
+**Shipped in Wave 4:** `/leaderboard` defaults to a browser-only personal best.
+Explicit opt-in produces a paired JSON + WASM PR artifact. A read-only PR
+workflow runs trusted-base validator code against the candidate WASM as data,
+independently ports all six lab checks, reruns Fleet, verifies hash + claims,
+and a separate merged-branch workflow publishes `public/leaderboard.json`.
 
 **Proof the pattern works (ZeroServerSocial agent):** OpenAI Parameter Golf
 (2026-03) runs exactly this with independent re-evaluation; RouterArena does

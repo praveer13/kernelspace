@@ -7,14 +7,15 @@ const lesson: Lesson = {
   index: 6,
   title: 'Speculative Decoding in Production: MTP, EAGLE, and the Acceptance Economy',
   minutes: 25,
-  hook: 'T5.L7 taught the draft-verify trick. Production made it stranger: the draft is now the model\'s own head (MTP), acceptance rate is a designed quantity, and on MoE the win is 2–3× interactivity, not 1.5×.',
+  hook: 'T5.L8 taught the draft-verify trick. Production made it stranger: the draft is now the model\'s own head (MTP), acceptance rate is a designed quantity, and on MoE the win is 2–3× interactivity, not 1.5×.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
-      md: `T5.L7's mechanics stand: draft K tokens cheaply, verify in one parallel pass, accept the longest agreeing prefix, lose nothing. What production changed is the *draft*. Three shapes now:
+      md: `T5.L8's mechanics stand: draft K tokens cheaply, verify in one parallel pass, accept the longest agreeing prefix, lose nothing. What production changed is the *draft*. Three shapes now:
 
-- **Draft model** (T5.L7's version): a small sibling model. Simple, but the drafter is a second model to host, version, and keep distribution-aligned — and it doesn't share the target's KV cache, so verify cost includes extra bookkeeping.
+- **Draft model** (T5.L8's version): a small sibling model. Simple, but the drafter is a second model to host, version, and keep distribution-aligned — and it doesn't share the target's KV cache, so verify cost includes extra bookkeeping.
 - **Medusa heads**: small extra output heads on the target model predicting tokens t+1..t+K in parallel. One model, one cache — but the heads are shallow predictors; acceptance drops on hard text.
 - **MTP (Multi-Token Prediction, DeepSeek)**: train the model *itself* with extra MTP modules — full transformer-depth mini-layers sharing the target's trunk and KV. The draft is the same distribution as the target because it almost *is* the target. Highest acceptance rates of the three; this is what DeepSeek-R1's production stack runs (MTP-3) and what every 2026 engine integrated (vLLM/SGLang/TRT-LLM all ship MTP and EAGLE-class heads).`,
     },

@@ -1,3 +1,24 @@
 [workspace]
-members = ["kit", "rust-allocator", "kv-block-manager", "bpe-tokenizer", "mpmc-queue", "toy-executor", "batching-scheduler"]
+members = [
+  "kit",
+  "rust-zero/harness",
+  "rust-zero/r1-bindings",
+  "rust-zero/r2-control-flow",
+  "rust-zero/r3-ownership",
+  "rust-zero/r4-borrowing",
+  "rust-zero/r5-modeling",
+  "rust-zero/r6-collections",
+  "rust-zero/r7-smart-pointers",
+  "rust-zero/r8-interior-mutability",
+  "rust-zero/r9-lifetimes",
+  "rust-zero/r10-atomics",
+  "rust-allocator",
+  "kv-block-manager",
+  "bpe-tokenizer",
+  "mpmc-queue",
+  "toy-executor",
+  "batching-scheduler",
+  "radix-cache",
+  "xgrammar-lite",
+]
 resolver = "2"

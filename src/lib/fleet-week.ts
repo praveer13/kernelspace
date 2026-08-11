@@ -14,6 +14,7 @@ import {
   makeRefScheduler,
   makeRequestStream,
   makeRng,
+  routerLabel,
   type RouterKind,
   type SchedView,
   type TickSample,
@@ -29,6 +30,14 @@ export interface ActResult {
   detail: string
   metrics: [string, string][]
 }
+
+export interface MeasurementEvidence {
+  analysis: string
+  screenshotName?: string
+  screenshotBytes?: number
+}
+
+export type MeasurementActId = 'engine' | 'fleet'
 
 const CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
 const WORKER_CFG = { numBlocks: 128, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128 }
@@ -87,6 +96,8 @@ export async function runAct1(slots: SlotState): Promise<ActResult> {
       ['shed', `${ms.shed}`],
       ['auto-preempts', `${ms.autoPreempts}`],
       ['ttft p95', `${mine.ttftP95()} iters`],
+      ['tpot p95', `${mine.tpotP95().toFixed(1)} iters`],
+      ['queue p95', `${mine.queueP95()} iters`],
     ],
   }
 }
@@ -144,12 +155,93 @@ export async function runAct2(slots: SlotState, choice: Act2Choice): Promise<Act
       ? 'the fleet absorbed a node death and a flash crowd. Topology and routing did their job.'
       : 'the disruption won: check worker count (redundancy), router (JSQ rebalances), and whether your scheduler wasted the surviving capacity.',
     metrics: [
-      ['topology', `${choice.workers} workers · ${choice.router === 'rr' ? 'round-robin' : 'join-shortest-queue'}`],
+      ['topology', `${choice.workers} workers · ${routerLabel(choice.router)}`],
       ['completed', `${agg.completed}/${total} (${completedPct}%)`],
       ['goodput', `${goodput}%`],
       ['shed (node + intake)', `${agg.shed}`],
       ['auto-preempts', `${agg.autoPreempts}`],
+      ['ttft p95', `${agg.ttftP95} iters`],
+      ['tpot p95', `${agg.tpotP95.toFixed(1)} iters`],
+      ['queue p95', `${agg.queueP95} iters`],
       ...events.map((e) => ['event', e] as [string, string]),
+    ],
+  }
+}
+
+/**
+ * Acts I–II are portfolio artifacts, not just benchmark buttons. The trace
+ * still supplies half the score; the rest requires visual evidence and a
+ * short causal analysis grounded in named metrics and the chosen lever.
+ */
+export function gradeMeasurementSubmission(
+  actId: MeasurementActId,
+  traceResult: ActResult,
+  evidence: MeasurementEvidence,
+): ActResult {
+  const analysis = evidence.analysis.trim()
+  const lower = analysis.toLowerCase()
+  const words = analysis ? analysis.split(/\s+/).length : 0
+  const metricTerms = [
+    'ttft',
+    'tpot',
+    'queue',
+    'kv hit',
+    'cache hit',
+    'goodput',
+    'slo',
+    '$/mtok',
+    'cost',
+    'shed',
+    'preempt',
+  ]
+  const decisionTerms =
+    actId === 'engine'
+      ? ['scheduler', 'admission', 'headroom', 'batch', 'prefill', 'intake']
+      : ['router', 'routing', 'worker', 'redundancy', 'jsq', 'round-robin', 'prefix', 'topology', 'node']
+  const metricHits = new Set(metricTerms.filter((term) => lower.includes(term)))
+  const decisionHits = new Set(decisionTerms.filter((term) => lower.includes(term)))
+  const numericClaim = /(?:\d+(?:\.\d+)?\s*(?:%|ms|s\b|iters?\b|workers?\b|tokens?\b)|\$\s*\d)/i.test(
+    analysis,
+  )
+  const screenshotOk =
+    Boolean(evidence.screenshotName?.match(/\.(?:png|jpe?g|webp)$/i)) &&
+    (evidence.screenshotBytes ?? 0) > 0
+  const lengthOk = words >= 40 && words <= 150
+  const analysisOk = lengthOk && metricHits.size >= 2 && decisionHits.size >= 1 && numericClaim
+  const pass = traceResult.pass && screenshotOk && analysisOk
+  const analysisScore =
+    (lengthOk ? 0.35 : Math.min(words / 40, 1) * 0.15) +
+    Math.min(metricHits.size / 2, 1) * 0.25 +
+    Math.min(decisionHits.size, 1) * 0.2 +
+    (numericClaim ? 0.2 : 0)
+  const problems = [
+    !traceResult.pass ? 'the executable trace gate is not green' : null,
+    !screenshotOk ? 'attach a PNG, JPEG, or WebP dashboard screenshot' : null,
+    !lengthOk ? `analysis is ${words} words; required range is 40–150` : null,
+    metricHits.size < 2 ? `name at least two measured signals (${metricHits.size}/2)` : null,
+    decisionHits.size < 1 ? 'connect the result to the engine or fleet lever you chose' : null,
+    !numericClaim ? 'include at least one measured number with a unit' : null,
+  ].filter(Boolean) as string[]
+
+  return {
+    pass,
+    score:
+      Math.min(1, traceResult.score) * 0.5 +
+      (screenshotOk ? 0.15 : 0) +
+      Math.min(1, analysisScore) * 0.35,
+    headline: pass
+      ? `measurement artifact accepted — ${words} words, ${metricHits.size} named signals`
+      : problems[0] ?? 'measurement artifact needs another pass',
+    detail: pass
+      ? 'The executable result, dashboard evidence, and causal explanation now travel together as one portfolio artifact.'
+      : problems.join(' · '),
+    metrics: [
+      ['trace gate', traceResult.pass ? 'pass' : 'not yet'],
+      ['dashboard', screenshotOk ? evidence.screenshotName ?? 'attached' : 'missing'],
+      ['analysis', `${words}/150 words`],
+      ['named signals', `${metricHits.size} (need 2)`],
+      ['decision lever', `${decisionHits.size} (need 1)`],
+      ['measured number', numericClaim ? 'present' : 'missing'],
     ],
   }
 }
@@ -310,7 +402,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry'>[] = [
     id: 'kv-thrash',
     title: 'incident 01 — the p99 that climbed all shift',
     briefing:
-      'A chat deployment’s TTFT p95 has been climbing for hours. Auto-preempts are nonzero and rising. Free blocks hover near zero. Nothing was deployed today — but the traffic got longer-context this week.',
+      'gen_ai.server.time_to_first_token p95 has been climbing for hours while TPOT stays comparatively flat. Auto-preempts are nonzero and rising; free blocks hover near zero. Nothing was deployed today — but the traffic got longer-context this week.',
     causes: [
       { id: 'sched-bug', label: 'scheduler bug — it admits nothing', correct: false },
       { id: 'pool-small', label: 'capacity wall: the KV pool is too small for the new context lengths — allocation failures force recompute preemption', correct: true },
@@ -328,7 +420,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry'>[] = [
     id: 'intake-stall',
     title: 'incident 02 — shed climbing, GPUs idle',
     briefing:
-      'Shed count is climbing steadily, yet workers sit half-empty: running is low, waiting is near zero, completions trickle. The intake queue is not full on average.',
+      'The queue-delay p95 and shed count climb steadily, yet workers sit half-empty: running is low, the scheduler waiting list is near zero, and completions trickle. TPOT is normal once a request starts. The intake queue is not full on average.',
     causes: [
       { id: 'drain', label: 'intake drain rate misconfigured — the queue is being emptied far slower than arrivals, so it fills and sheds despite idle capacity', correct: true },
       { id: 'pool-small', label: 'KV pool too small', correct: false },
@@ -346,7 +438,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry'>[] = [
     id: 'no-admission',
     title: 'incident 03 — goodput fell off a cliff at launch',
     briefing:
-      'Launch day: concurrency 4× normal. TTFT p95 is enormous, ttft for admitted requests is fine but most requests never start, and the batch is enormous while completions crawl.',
+      'Launch day: concurrency is 4× normal. Goodput falls first, then queue-delay and TTFT p95 explode; TPOT for requests that already started is comparatively stable. The batch is enormous while completions crawl.',
     causes: [
       { id: 'no-admission', label: 'no admission control — everything is admitted at once, the batch overcommits, KV pressure and queueing collapse the SLO', correct: true },
       { id: 'pool-small', label: 'pool too small', correct: false },

@@ -9,25 +9,10 @@ import {
   parseDump,
   type ManagerDriver,
   type QueueDriver,
-  type SchedulerDriver,
 } from '@/lib/fleet-model'
+export { makeWasmScheduler } from '@/lib/wasm-scheduler'
 
 export type Mod = LabModule & { hasInvoke: boolean }
-
-export function makeWasmScheduler(mod: Mod): SchedulerDriver {
-  mod.invoke('init')
-  return {
-    name: 'yours',
-    schedule(v) {
-      const w = v.waiting.map((r) => `W ${r.id} ${r.arrival} ${r.prompt}`).join(' ; ')
-      const r = v.running.map((x) => `R ${x.id} ${x.arrival} ${x.prompt} ${x.decoded} ${x.prefillLeft}`).join(' ; ')
-      const reply = mod.invoke(`schedule ${v.iter} ${v.maxRunning} ${v.memCap} ${v.memUsed}\n${w}\n${r}`)
-      const num = (s: string | undefined) =>
-        s ? s.split(',').map(Number).filter((n) => Number.isFinite(n)) : []
-      return { admit: num(/admit (.*)/.exec(reply)?.[1]), preempt: num(/preempt (.*)/.exec(reply)?.[1]) }
-    },
-  }
-}
 
 const DEFAULT_BLOCKS = 256
 const DEFAULT_BLOCK_SIZE = 16

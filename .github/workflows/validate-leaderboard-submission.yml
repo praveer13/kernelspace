@@ -1,0 +1,61 @@
+name: Validate leaderboard submission
+
+on:
+  pull_request:
+    paths:
+      - 'submissions/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: leaderboard-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      # The validator and traces come from the trusted base revision. The PR
+      # checkout is data only; no script, dependency, or workflow from it runs.
+      - name: Check out trusted validator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Check out candidate data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pinned Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - name: Re-run changed submission artifacts
+        working-directory: trusted
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          KS_SUBMISSIONS_DIR: ${{ github.workspace }}/candidate/submissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' changed < <(
+            git -C ../candidate diff --name-only -z --diff-filter=ACMR \
+              "$BASE_SHA" "$HEAD_SHA" -- submissions
+          )
+          if (( ${#changed[@]} == 0 )); then
+            echo 'No added or modified submission artifacts found.' >&2
+            exit 1
+          fi
+          ulimit -v 2097152
+          timeout --signal=KILL 180s \
+            bun scripts/validate-submissions.ts "${changed[@]}"

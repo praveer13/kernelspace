@@ -1,9 +1,9 @@
 /**
  * Curriculum overview (curriculum.md): progress header with 120px ring,
- * the address-space stack (capstone on top → T0 base; mobile reverses to
- * T0→T5 via flex-col-reverse), expandable track layers with LessonRows,
+ * the address-space stack (capstone on top → Rust Zero base; mobile reverses
+ * into curriculum order), expandable track layers with LessonRows,
  * dashed connectors with `requires` notes, "not sure where to start" strip
- * with a 5-question placement modal.
+ * with an 8-question placement modal spanning T0–T7.
  */
 
 import { useMemo, useState } from 'react'
@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react'
 import ProgressRing from '@/components/ProgressRing'
-import { rankForXp, selectStreak, useProgress } from '@/lib/progress'
+import { rankForXp, selectStreak, TOTAL_LESSONS, useProgress } from '@/lib/progress'
 import { getTrack, TRACKS, CAPSTONE } from '@/lib/tracks'
 import {
   ALL_LESSONS,
@@ -77,10 +77,40 @@ const PLACEMENT: { q: string; options: string[]; correct: number }[] = [
     ],
     correct: 1,
   },
+  {
+    q: 'A kernel below the roofline ridge point is usually limited by…',
+    options: [
+      'Arithmetic units only',
+      'Memory bandwidth because it performs too few FLOPs per byte moved',
+      'The operating-system scheduler',
+      'Tokenizer vocabulary size',
+    ],
+    correct: 1,
+  },
+  {
+    q: 'In a wide expert-parallel MoE layer, the all-to-all moves…',
+    options: [
+      'Model checkpoints to object storage',
+      'Tokens to their routed expert devices, then results back to their home devices',
+      'Only optimizer gradients',
+      'HTTP requests between API gateways',
+    ],
+    correct: 1,
+  },
+  {
+    q: 'Serving goodput counts…',
+    options: [
+      'Every generated token regardless of latency',
+      'Only requests or tokens delivered inside the defined latency SLO',
+      'GPU utilization above 90%',
+      'The cheapest requests in the batch',
+    ],
+    correct: 1,
+  },
 ]
 
 function recommendFor(score: number): TrackId {
-  return (['t0', 't1', 't2', 't3', 't4', 't5'] as TrackId[])[Math.min(score, 5)]
+  return (['t0', 't1', 't2', 't3', 't4', 't5', 't6', 't7'] as TrackId[])[Math.min(score, 7)]
 }
 
 function PlacementModal({ onClose }: { onClose: () => void }) {
@@ -356,8 +386,8 @@ export default function CurriculumPage() {
             <p className="font-mono text-label uppercase text-text-3">0x02 — address space map</p>
             <h1 className="mt-3 font-display text-display-lg text-text-1">Curriculum</h1>
             <p className="mt-4 max-w-measure text-body-lg text-text-2">
-              Six tracks, forty lessons, one capstone. The stack reads bottom to top: memory physics at the
-              base, production serving at the summit. Every layer is unlocked — the order is the point.
+              {TRACKS.length} tracks, {TOTAL_LESSONS} lessons, one capstone. The stack starts with a Rust ramp, builds from
+              memory physics, and ends at production serving. Every layer is unlocked — the order is the point.
             </p>
             {/* legend */}
             <div className="mt-6 flex flex-wrap items-center gap-4 font-mono text-[11px] text-text-3">
@@ -386,7 +416,7 @@ export default function CurriculumPage() {
             {doneCount === 0 && (
               <p className="mt-5 inline-flex items-center gap-2 rounded-md border border-line bg-surface-1 px-3 py-2 font-mono text-[11px] text-text-2">
                 <span className="h-2 w-2 animate-pulse rounded-sm bg-accent" />
-                nothing allocated yet — the address space is all yours. Start at T0.L1.
+                nothing allocated yet — the address space is all yours. Start at R.L1.
               </p>
             )}
           </motion.div>
@@ -404,7 +434,7 @@ export default function CurriculumPage() {
                 <div>
                   <p className="font-display text-stat text-text-1">
                     {doneCount}
-                    <span className="text-h4 text-text-3">/40</span>
+                    <span className="text-h4 text-text-3">/{TOTAL_LESSONS}</span>
                   </p>
                   <p className="font-mono text-[11px] text-text-3">lessons allocated</p>
                 </div>
@@ -425,7 +455,7 @@ export default function CurriculumPage() {
 
       {/* --------------------------- the stack --------------------------- */}
       <section className="mx-auto max-w-app px-6 py-12 lg:px-12">
-        {/* DOM order T0..T5,capstone; desktop reverses → capstone on top */}
+        {/* DOM order R..T7,capstone; desktop reverses → capstone on top */}
         <div className="flex flex-col gap-2 lg:flex-col-reverse">
           {TRACKS.map((t) => (
             <TrackLayer key={t.id} trackId={t.id as TrackId} open={open.has(t.id as TrackId)} onToggle={() => toggle(t.id as TrackId)} />
@@ -435,7 +465,7 @@ export default function CurriculumPage() {
           <div className="relative">
             <div className="flex items-center gap-3 py-1 pl-6">
               <span className="h-6 border-l border-dashed border-line-bright" />
-              <span className="font-mono text-[10px] text-text-3">requires T5 · the whole stack</span>
+              <span className="font-mono text-[10px] text-text-3">unlocks after T5 · best after T7</span>
             </div>
             <Link
               to="/capstone"
@@ -471,7 +501,7 @@ export default function CurriculumPage() {
               className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-4 py-2 font-display text-body-sm font-medium text-text-1 transition-colors duration-150 hover:border-line-bright"
             >
               <Compass size={14} className="text-accent" />
-              take the 2-min placement check
+              take the 3-min placement check
             </button>
           </div>
           <div className="grid gap-4 md:grid-cols-3">

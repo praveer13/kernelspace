@@ -1,0 +1,16 @@
+[package]
+name = "xgrammar-lite"
+version = "0.1.0"
+edition = "2021"
+description = "forge lab 08 — JSON Schema pushdown matching and tokenizer-aware masks (kernelspace)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kslab = { path = "../kit" }
+
+[profile.release]
+opt-level = 2
+debug = false

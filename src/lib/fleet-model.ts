@@ -166,24 +166,8 @@ export function dumpRefMultiset(d: ManagerDump): number[] {
 
 /* --------------------------- traffic gen ---------------------------- */
 
-/** A replayable production trace (public/traces/*.json). */
-export interface TraceArtifact {
-  name: string
-  source: string
-  license: string
-  note: string
-  requests: { t: number; p: number; o: number }[]
-}
-
-/** Load a production trace and adapt it to a request stream. */
-export async function loadTraceStream(url: string): Promise<RequestSpec[]> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`trace fetch failed: ${res.status}`)
-  const data = (await res.json()) as TraceArtifact
-  return data.requests
-    .map((r, i) => ({ id: i + 1, arrival: r.t, prompt: r.p, output: r.o }))
-    .sort((a, b) => a.arrival - b.arrival || a.id - b.id)
-}
+export { loadTraceArtifact, loadTraceStream, traceToRequestStream } from './traces'
+export type { TraceArtifact, TraceKind, TraceRequest } from './traces'
 
 export interface FleetOp {
   kind: 'allocate' | 'append' | 'fork' | 'free'
@@ -212,6 +196,12 @@ export interface RequestSpec {
   arrival: number
   prompt: number
   output: number
+  /** Exact prompt token ids when a trace models prefix locality. */
+  tokens?: number[]
+  /** Filled by Cluster routing: reusable prompt tokens on the chosen worker. */
+  cachedPrefix?: number
+  /** First-admission queue delay, preserved across preemption and EPD transfer. */
+  observedQueueDelay?: number
 }
 
 /**
@@ -236,6 +226,42 @@ export function makeRequestStream(count: number, span: number, seed: number): Re
     out[i].arrival = burstAt[Math.floor(i / 45)] + (i % 2)
   }
   return out.sort((a, b) => a.arrival - b.arrival || a.id - b.id)
+}
+
+/**
+ * The shared cluster benchmark: twelve interleaved chat products/agents,
+ * each with a stable 256–512-token system+tool prefix and a unique user
+ * tail. Arrival times and outputs come from the ordinary fleet trace so
+ * RR, JSQ, and prefix affinity see byte-for-byte identical traffic.
+ */
+export function makePrefixSharedRequestStream(
+  count: number,
+  span: number,
+  seed: number,
+): RequestSpec[] {
+  const stream = makeRequestStream(count, span, seed)
+  const rng = makeRng(seed ^ 0xa9c4e)
+  const below = (n: number) => Math.floor((rng() / 0x1_0000_0000) * n)
+  const systemLengths = [256, 320, 384, 448, 512, 288, 352, 416, 272, 336, 400, 464]
+
+  return stream.map((request) => {
+    // Twelve independently deployed products/agents are interleaved. No
+    // policy receives a frequency-skew shortcut: locality must come from
+    // worker placement, not one globally hot prompt.
+    const family = below(12)
+    const systemLen = systemLengths[family]
+    const tailLen = 48 + below(129)
+    const systemBase = 100_000 + family * 2_000
+    const tailBase = 1_000_000 + request.id * 256
+    const tokens = [
+      ...Array.from({ length: systemLen }, (_, i) => systemBase + i),
+      ...Array.from({ length: tailLen }, (_, i) => tailBase + i),
+    ]
+    // Chat/tool turns are shorter than the generic hidden-output trace;
+    // keeping decode bounded lets prefill reuse show up in TTFT rather than
+    // disappear behind thousands of ticks of unrelated decode backlog.
+    return { ...request, prompt: tokens.length, output: 12 + below(25), tokens }
+  })
 }
 
 export interface SchedViewReq { id: number; arrival: number; prompt: number }
@@ -338,6 +364,10 @@ export interface EngineStats {
   completed: number
   sloMet: number
   ttfts: number[]
+  tpots: number[]
+  queueDelays: number[]
+  completedInputTokens: number
+  completedOutputTokens: number
   autoPreempts: number
   capacityMisses: number
   waitingNow: number
@@ -357,12 +387,15 @@ export interface TickSample {
   capMisses: number
   freeBlocks: number
   ttftP95: number
+  tpotP95: number
+  queueP95: number
 }
 
 interface EngineSeq {
   spec: RequestSpec
   prefillLeft: number
   decoded: number
+  queueDelay: number
   ttft?: number
   firstTokenTick?: number
   lastDecodeTick?: number
@@ -371,6 +404,63 @@ interface EngineSeq {
 
 const p95 = (xs: number[]) =>
   xs.length ? [...xs].sort((a, b) => a - b)[Math.max(0, Math.ceil(xs.length * 0.95) - 1)] : 0
+
+export const SIM_TICK_SECONDS = 0.05
+export const FLEET_WORKER_HOURLY_USD = 7.5
+
+/** Canonical OTel GenAI names where the convention defines one; the
+ * remaining metrics are explicitly namespaced course extensions. */
+export const SERVING_METRIC_NAMES = {
+  ttft: 'gen_ai.server.time_to_first_token',
+  tpot: 'gen_ai.server.time_per_output_token',
+  queue: 'kernelspace.gen_ai.server.queue.duration',
+  kvHit: 'kernelspace.gen_ai.server.kv_cache.hit_ratio',
+  goodput: 'kernelspace.gen_ai.server.goodput',
+  cost: 'kernelspace.gen_ai.server.cost_per_million_tokens',
+} as const
+
+export interface ServingMetricsSnapshot {
+  ttftP95Ms: number
+  tpotP95Ms: number
+  queueP95Ms: number
+  kvHitRate: number
+  goodput: number
+  costPerMtok: number | null
+  deliveredTokens: number
+}
+
+export interface ServingMetricsSource {
+  totalRequests: number
+  sloMet: number
+  ttftP95Ticks: number
+  tpotP95Ticks: number
+  queueP95Ticks: number
+  kvHitRate: number
+  completedInputTokens: number
+  completedOutputTokens: number
+  elapsedTicks: number
+  workers: number
+  hourlyUsdPerWorker?: number
+}
+
+/** Convert simulator counters into the six metrics shown by Fleet. Cost is
+ * worker-time divided by successfully delivered input + output tokens. */
+export function makeServingMetrics(source: ServingMetricsSource): ServingMetricsSnapshot {
+  const deliveredTokens = source.completedInputTokens + source.completedOutputTokens
+  const workerHours = (source.elapsedTicks * SIM_TICK_SECONDS * source.workers) / 3600
+  const cost = workerHours * (source.hourlyUsdPerWorker ?? FLEET_WORKER_HOURLY_USD)
+  return {
+    ttftP95Ms: source.ttftP95Ticks * SIM_TICK_SECONDS * 1000,
+    tpotP95Ms: source.tpotP95Ticks * SIM_TICK_SECONDS * 1000,
+    queueP95Ms: source.queueP95Ticks * SIM_TICK_SECONDS * 1000,
+    kvHitRate: source.kvHitRate,
+    goodput: source.totalRequests
+      ? Math.round((source.sloMet / source.totalRequests) * 1000) / 10
+      : 0,
+    costPerMtok: deliveredTokens > 0 ? (cost / deliveredTokens) * 1_000_000 : null,
+    deliveredTokens,
+  }
+}
 
 /**
  * The engine simulator. One instance per stack under test; same traffic,
@@ -394,6 +484,10 @@ export class Engine {
   private waiting: RequestSpec[] = []
   private running: EngineSeq[] = []
   private ttfts: number[] = []
+  private tpots: number[] = []
+  private queueDelays: number[] = []
+  private completedInputTokens = 0
+  private completedOutputTokens = 0
   private completed = 0
   private sloMet = 0
   private autoPreempts = 0
@@ -403,6 +497,8 @@ export class Engine {
   recorder: ((s: TickSample) => void) | null = null
   /** prefillOnly mode: specs whose prefill completed, ready for transfer */
   prefillDoneOut: RequestSpec[] = []
+  /** cluster mode: prompts that just became warm on this worker */
+  cacheReadyOut: RequestSpec[] = []
   violations: string[] = []
 
   constructor(
@@ -459,7 +555,12 @@ export class Engine {
     const need = Math.ceil(r.prompt / this.cfg.blockSize) + Math.ceil(HEADROOM_TOKENS / this.cfg.blockSize)
     if (this.mgr.freeBlocks() < need) return false
     if (!this.mgr.allocate(r.id, r.prompt)) return false
-    this.running.push({ spec: r, prefillLeft: 0, decoded: 0 })
+    this.running.push({
+      spec: r,
+      prefillLeft: 0,
+      decoded: 0,
+      queueDelay: r.observedQueueDelay ?? Math.max(0, this.tick - r.arrival),
+    })
     return true
   }
 
@@ -556,7 +657,15 @@ export class Engine {
       const spec = this.waiting[i]
       if (this.mgr.allocate(id, spec.prompt)) {
         this.waiting.splice(i, 1)
-        this.running.push({ spec, prefillLeft: Math.ceil(spec.prompt / this.cfg.prefillChunk), decoded: 0 })
+        const uncachedPrompt = Math.max(0, spec.prompt - (spec.cachedPrefix ?? 0))
+        const queueDelay = spec.observedQueueDelay ?? Math.max(0, t - spec.arrival)
+        spec.observedQueueDelay = queueDelay
+        this.running.push({
+          spec,
+          prefillLeft: Math.ceil(uncachedPrompt / this.cfg.prefillChunk),
+          decoded: 0,
+          queueDelay,
+        })
       } else {
         this.capacityMisses++
       }
@@ -575,6 +684,7 @@ export class Engine {
       if (s.prefillLeft > 0) {
         s.prefillLeft -= 1
         if (s.prefillLeft === 0) {
+          if (s.spec.tokens) this.cacheReadyOut.push(s.spec)
           if (this.cfg.prefillOnly) {
             // EPD: KV goes on the wire — the prefill pool frees now, the
             // decode pool pays the block cost when the transfer lands
@@ -615,6 +725,14 @@ export class Engine {
         this.mgr.free(s.spec.id)
         this.completed++
         this.ttfts.push(s.ttft ?? Number.MAX_SAFE_INTEGER)
+        this.tpots.push(
+          s.spec.output > 1
+            ? Math.max(0, t - (s.firstTokenTick ?? t)) / (s.spec.output - 1)
+            : 0,
+        )
+        this.queueDelays.push(s.queueDelay)
+        this.completedInputTokens += s.spec.prompt
+        this.completedOutputTokens += s.spec.output
         const ttftOk = (s.ttft ?? Infinity) <= this.cfg.sloTtft
         const itlOk = this.cfg.sloItl === undefined || (s.maxGap ?? 0) <= this.cfg.sloItl
         if (ttftOk && itlOk) this.sloMet++
@@ -635,6 +753,8 @@ export class Engine {
       capMisses: this.capacityMisses,
       freeBlocks: this.mgr.freeBlocks(),
       ttftP95: this.ttftP95(),
+      tpotP95: this.tpotP95(),
+      queueP95: this.queueP95(),
     })
   }
 
@@ -643,6 +763,10 @@ export class Engine {
       completed: this.completed,
       sloMet: this.sloMet,
       ttfts: this.ttfts,
+      tpots: this.tpots,
+      queueDelays: this.queueDelays,
+      completedInputTokens: this.completedInputTokens,
+      completedOutputTokens: this.completedOutputTokens,
       autoPreempts: this.autoPreempts,
       capacityMisses: this.capacityMisses,
       waitingNow: this.waiting.length,
@@ -658,24 +782,137 @@ export class Engine {
   ttftP95(): number {
     return p95(this.ttfts)
   }
+
+  tpotP95(): number {
+    return p95(this.tpots)
+  }
+
+  queueP95(): number {
+    return p95(this.queueDelays)
+  }
 }
 
 /* ------------------------------ cluster ------------------------------ */
 
-export type RouterKind = 'rr' | 'jsq'
+export type RouterKind = 'rr' | 'jsq' | 'prefix'
+
+export function routerLabel(router: RouterKind): string {
+  if (router === 'rr') return 'round-robin'
+  if (router === 'jsq') return 'join-shortest-queue'
+  return 'prefix affinity'
+}
+
+const PREFIX_CACHE_ENTRIES = 6
+const PREFIX_LOAD_GUARD = 3
+const COMPACT_SHARED_ROOT = 128
+
+function tokenPrefixLength(a: readonly number[], b: readonly number[]): number {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  return i
+}
+
+interface PrefixEntry {
+  tokens: number[]
+  lastUsed: number
+}
+
+/**
+ * Routing-side view of one worker's radix cache. Keeping one representative
+ * leaf per long shared root models a compressed radix branch without
+ * duplicating every chat turn in this fleet-level simulator.
+ */
+class WorkerPrefixCache {
+  private clock = 0
+  private entries: PrefixEntry[] = []
+  private readonly capacity: number
+
+  constructor(capacity: number) {
+    this.capacity = capacity
+  }
+
+  get size(): number {
+    return this.entries.length
+  }
+
+  match(tokens: readonly number[], touch = false): number {
+    let bestIndex = -1
+    let bestLength = 0
+    for (let i = 0; i < this.entries.length; i++) {
+      const length = tokenPrefixLength(tokens, this.entries[i].tokens)
+      if (length > bestLength) {
+        bestLength = length
+        bestIndex = i
+      }
+    }
+    if (touch && bestIndex >= 0) {
+      this.clock++
+      this.entries[bestIndex].lastUsed = this.clock
+    }
+    return bestLength
+  }
+
+  install(tokens: readonly number[]): void {
+    this.clock++
+    const exact = this.entries.find((entry) => tokenPrefixLength(tokens, entry.tokens) === tokens.length && entry.tokens.length === tokens.length)
+    if (exact) {
+      exact.lastUsed = this.clock
+      return
+    }
+
+    // A radix tree stores the shared root once. Replace its representative
+    // terminal rather than charging every unique user tail as another root.
+    const sameRoot = this.entries.findIndex(
+      (entry) => tokenPrefixLength(tokens, entry.tokens) >= COMPACT_SHARED_ROOT,
+    )
+    if (sameRoot >= 0) {
+      this.entries[sameRoot] = { tokens: [...tokens], lastUsed: this.clock }
+      return
+    }
+
+    this.entries.push({ tokens: [...tokens], lastUsed: this.clock })
+    if (this.entries.length > this.capacity) {
+      let victim = 0
+      for (let i = 1; i < this.entries.length; i++) {
+        if (this.entries[i].lastUsed < this.entries[victim].lastUsed) victim = i
+      }
+      this.entries.splice(victim, 1)
+    }
+  }
+}
+
+export interface ClusterStats {
+  completed: number
+  sloMet: number
+  shed: number
+  autoPreempts: number
+  capMisses: number
+  cacheHitTokens: number
+  promptTokens: number
+  kvHitRate: number
+  ttftSloMet: number
+  ttftSloPct: number
+  ttftP95: number
+  tpotP95: number
+  queueP95: number
+  completedInputTokens: number
+  completedOutputTokens: number
+}
 
 /**
  * A fleet of engines behind a router. Each worker is a full Engine (its
- * own scheduler, block manager, intake queue); the router assigns each
- * arrival to a worker — round-robin or join-shortest-queue (by
- * waiting+running depth). The mega-scale lesson: what the routing layer
- * knows determines what the workers waste.
+ * own scheduler, block manager, intake queue, and warm-prefix view).
+ * Round-robin knows only identity, JSQ knows backlog, and prefix affinity
+ * scores longest cached prefix subject to a bounded load imbalance.
  */
 export class Cluster {
   tick = 0
   private streamIdx = 0
   private rrCursor = 0
+  private cacheHitTokens = 0
+  private promptTokens = 0
   private stream: RequestSpec[]
+  private prefixCaches: WorkerPrefixCache[]
   public workers: Engine[]
   public router: RouterKind
 
@@ -683,32 +920,63 @@ export class Cluster {
     this.stream = stream
     this.workers = workers
     this.router = router
+    this.prefixCaches = workers.map(() => new WorkerPrefixCache(PREFIX_CACHE_ENTRIES))
   }
 
   get done(): boolean {
     return this.streamIdx >= this.stream.length && this.workers.every((w) => w.done)
   }
 
-  private pick(): Engine {
+  cacheEntries(workerIndex: number): number {
+    return this.prefixCaches[workerIndex]?.size ?? 0
+  }
+
+  private load(index: number): number {
+    const stats = this.workers[index].stats()
+    return stats.waitingNow + stats.runningNow
+  }
+
+  private pick(request: RequestSpec): { index: number; hit: number } {
+    const alive = this.workers
+      .map((worker, index) => ({ worker, index, load: this.load(index) }))
+      .filter(({ worker }) => !worker.killed)
+
     if (this.router === 'rr') {
-      const alive = this.workers.filter((w) => !w.killed)
-      const w = alive[this.rrCursor % alive.length]
+      const chosen = alive[this.rrCursor % alive.length]
       this.rrCursor++
-      return w
-    }
-    // jsq: shallowest backlog (waiting + running)
-    let best = this.workers[0]
-    let bestLoad = Infinity
-    for (const w of this.workers) {
-      if (w.killed) continue
-      const s = w.stats()
-      const load = s.waitingNow + s.runningNow
-      if (load < bestLoad) {
-        bestLoad = load
-        best = w
+      return {
+        index: chosen.index,
+        hit: request.tokens ? this.prefixCaches[chosen.index].match(request.tokens, true) : 0,
       }
     }
-    return best
+
+    if (this.router === 'jsq' || !request.tokens) {
+      const chosen = alive.reduce((best, candidate) =>
+        candidate.load < best.load ? candidate : best,
+      )
+      return {
+        index: chosen.index,
+        hit: request.tokens ? this.prefixCaches[chosen.index].match(request.tokens, true) : 0,
+      }
+    }
+
+    const minLoad = Math.min(...alive.map((candidate) => candidate.load))
+    const eligible = alive.filter((candidate) => candidate.load <= minLoad + PREFIX_LOAD_GUARD)
+    let chosen = eligible[0]
+    let chosenHit = this.prefixCaches[chosen.index].match(request.tokens)
+    for (const candidate of eligible.slice(1)) {
+      const hit = this.prefixCaches[candidate.index].match(request.tokens)
+      if (
+        hit > chosenHit ||
+        (hit === chosenHit && candidate.load < chosen.load) ||
+        (hit === chosenHit && candidate.load === chosen.load && candidate.index < chosen.index)
+      ) {
+        chosen = candidate
+        chosenHit = hit
+      }
+    }
+    this.prefixCaches[chosen.index].match(request.tokens, true)
+    return { index: chosen.index, hit: chosenHit }
   }
 
   /** optional per-tick disruption hook (Fleet Week): called before arrivals */
@@ -718,24 +986,69 @@ export class Cluster {
     const t = this.tick
     this.disrupt?.(this, t)
     for (; this.streamIdx < this.stream.length && this.stream[this.streamIdx].arrival <= t; this.streamIdx++) {
-      const alive = this.workers.some((w) => !w.killed)
-      if (alive) this.pick().inject(this.stream[this.streamIdx])
+      if (!this.workers.some((worker) => !worker.killed)) continue
+      const request = this.stream[this.streamIdx]
+      const { index, hit } = this.pick(request)
+      this.promptTokens += request.prompt
+      this.cacheHitTokens += hit
+      this.workers[index].inject({ ...request, cachedPrefix: hit })
     }
-    for (const w of this.workers) if (!w.killed) w.step()
+    for (let index = 0; index < this.workers.length; index++) {
+      const worker = this.workers[index]
+      if (worker.killed) continue
+      worker.step()
+      for (const warmed of worker.cacheReadyOut.splice(0)) {
+        if (warmed.tokens) this.prefixCaches[index].install(warmed.tokens)
+      }
+    }
     this.tick++
   }
 
-  aggregate(): { completed: number; sloMet: number; shed: number; autoPreempts: number; capMisses: number } {
-    const a = { completed: 0, sloMet: 0, shed: 0, autoPreempts: 0, capMisses: 0 }
-    for (const w of this.workers) {
-      const s = w.stats()
-      a.completed += s.completed
-      a.sloMet += s.sloMet
-      a.shed += s.shed
-      a.autoPreempts += s.autoPreempts
-      a.capMisses += s.capacityMisses
+  aggregate(): ClusterStats {
+    const aggregate = {
+      completed: 0,
+      sloMet: 0,
+      shed: 0,
+      autoPreempts: 0,
+      capMisses: 0,
+      cacheHitTokens: this.cacheHitTokens,
+      promptTokens: this.promptTokens,
+      kvHitRate: 0,
+      ttftSloMet: 0,
+      ttftSloPct: 0,
+      ttftP95: 0,
+      tpotP95: 0,
+      queueP95: 0,
+      completedInputTokens: 0,
+      completedOutputTokens: 0,
     }
-    return a
+    const ttfts: number[] = []
+    const tpots: number[] = []
+    const queueDelays: number[] = []
+    for (const worker of this.workers) {
+      const stats = worker.stats()
+      aggregate.completed += stats.completed
+      aggregate.sloMet += stats.sloMet
+      aggregate.shed += stats.shed
+      aggregate.autoPreempts += stats.autoPreempts
+      aggregate.capMisses += stats.capacityMisses
+      aggregate.ttftSloMet += stats.ttfts.filter((ttft) => ttft <= worker.cfg.sloTtft).length
+      aggregate.completedInputTokens += stats.completedInputTokens
+      aggregate.completedOutputTokens += stats.completedOutputTokens
+      ttfts.push(...stats.ttfts)
+      tpots.push(...stats.tpots)
+      queueDelays.push(...stats.queueDelays)
+    }
+    aggregate.kvHitRate = this.promptTokens
+      ? Math.round((this.cacheHitTokens / this.promptTokens) * 1000) / 10
+      : 0
+    aggregate.ttftSloPct = ttfts.length
+      ? Math.round((aggregate.ttftSloMet / ttfts.length) * 1000) / 10
+      : 0
+    aggregate.ttftP95 = p95(ttfts)
+    aggregate.tpotP95 = p95(tpots)
+    aggregate.queueP95 = p95(queueDelays)
+    return aggregate
   }
 }
 

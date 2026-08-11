@@ -1,0 +1,8 @@
+[package]
+name = "rust-zero-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+kslab = { path = "../../kit" }

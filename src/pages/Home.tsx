@@ -20,7 +20,7 @@ import SimShowcase from '@/components/home/SimShowcase'
 import TrackCard from '@/components/TrackCard'
 import CodeBlock from '@/components/CodeBlock'
 import { LinkButton } from '@/components/Button'
-import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS } from '@/lib/tracks'
+import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
 import {
   useProgress,
   selectDoneLessons,
@@ -61,7 +61,12 @@ const H1_WORDS: Array<{ w: string; grad: boolean }> = [
   { w: 'batching.', grad: true },
 ]
 
-const META_CHIPS = ['6 tracks', '40 lessons', '9 simulators', '100% in-browser']
+const META_CHIPS = [
+  `${TRACKS.length} tracks`,
+  `${TOTAL_LESSONS} lessons`,
+  `${SIMS.length} simulators`,
+  '100% in-browser',
+]
 
 function Hero() {
   const reduced = useReducedMotion()
@@ -72,7 +77,7 @@ function Hero() {
   const nextId = ORDERED_LESSON_IDS.find((id) => lessons[id]?.status !== 'done') ?? null
   const returning = done > 0
 
-  const [nextTrack, nextLesson] = nextId ? nextId.split('.') : ['t0', 'l1']
+  const [nextTrack, nextLesson] = nextId ? nextId.split('.') : ['r', 'l1']
   const nextTrackMeta = TRACKS.find((t) => t.id === nextTrack)
 
   const showParticles =
@@ -171,11 +176,11 @@ function Hero() {
             <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }}>
               {returning && nextId ? (
                 <LinkButton to={`/lesson/${nextId}`} icon={Play}>
-                  {`Resume: ${nextTrackMeta?.code ?? 'T0'} · Lesson ${nextLesson?.slice(1) ?? '1'}`}
+                  {`Resume: ${nextTrackMeta?.code ?? 'R'} · Lesson ${nextLesson?.slice(1) ?? '1'}`}
                 </LinkButton>
               ) : (
-                <LinkButton to="/tracks/t0" icon={ArrowRight}>
-                  Start at Track 0
+                <LinkButton to="/tracks/r" icon={ArrowRight}>
+                  Start at Rust Zero
                 </LinkButton>
               )}
             </motion.div>
@@ -438,7 +443,7 @@ function CurriculumPreview() {
           The full stack, bottom to top.
         </h2>
         <p className="mt-4 text-body text-text-2">
-          Six tracks. One address space. Start wherever your gaps are — everything is
+          {TRACKS.length} tracks. One address space. Start wherever your gaps are — everything is
           unlocked, but the order is the point.
         </p>
       </div>
@@ -671,7 +676,7 @@ function CodeTeaser() {
 const FAQS = [
   {
     q: 'I only know Python/TypeScript. Is this for me?',
-    a: 'Yes. Track 0 assumes zero systems knowledge; every analogy anchors to the GC/JIT runtimes you already use every day.',
+    a: 'Yes. Rust Zero assumes programming experience but no Rust, then Track 0 assumes zero systems knowledge. Every analogy anchors to runtimes you already use.',
   },
   {
     q: 'Do I need a GPU?',
@@ -679,7 +684,7 @@ const FAQS = [
   },
   {
     q: 'How long does it take?',
-    a: 'Roughly 40–60 hours for all six tracks plus the capstone. Most learners do 2–3 lessons a week.',
+    a: 'Roughly 45–65 hours for all nine tracks plus the capstone. Most learners do 2–3 lessons a week.',
   },
   {
     q: 'Is my progress private?',
@@ -771,10 +776,10 @@ function FinalCta() {
           transition={{ delay: 0.2, duration: 0.5, ease: EASE }}
         >
           <p className="mt-4 text-body-lg text-text-2">
-            Free. Static. Yours. Open Track 0 and touch your first cache line.
+            Free. Static. Yours. Open Rust Zero and make rustc your tutor.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <LinkButton to="/tracks/t0" icon={ArrowRight}>
+            <LinkButton to="/tracks/r" icon={ArrowRight}>
               Start learning
             </LinkButton>
             <LinkButton to="/curriculum" variant="secondary">

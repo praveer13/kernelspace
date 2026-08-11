@@ -1,0 +1,12 @@
+[package]
+name = "rust-zero-r6"
+version = "0.1.0"
+edition = "2021"
+description = "Rust Zero R6 — collections, closures, and iterators"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rust-zero-harness = { path = "../harness" }

@@ -37,9 +37,13 @@
 
 use std::future::Future;
 
+#[allow(unused_imports)] // imports become live as the student completes the template
 use crate::{make_waker, Task, TaskQueue};
+#[allow(unused_imports)]
 use std::cell::RefCell;
+#[allow(unused_imports)]
 use std::rc::Rc;
+#[allow(unused_imports)]
 use std::task::{Context, Poll};
 
 pub struct Executor {

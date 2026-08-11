@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 25,
   hook: 'There is no fastest engine — there is a frontier of engines, each optimal at one tradeoff between margin and experience. Reading that curve is the senior skill: it decides hardware, batch policy, and which benchmark claims to ignore.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',

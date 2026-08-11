@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle,
   ArrowLeft,
+  BookOpenCheck,
   Check,
   ChevronRight,
   Download,
@@ -72,8 +73,13 @@ export default function ForgeLab() {
           return
         }
         setRun({ kind: 'report', report })
-        const passedIds = report.checks.filter((c) => c.pass).map((c) => c.id)
-        recordLabResult(lab.id, passedIds, lab.checks.length)
+        const requiredIds = new Set(
+          lab.checks.filter((check) => !check.optional).map((check) => check.id),
+        )
+        const passedIds = report.checks
+          .filter((check) => check.pass && requiredIds.has(check.id))
+          .map((check) => check.id)
+        recordLabResult(lab.id, passedIds, requiredIds.size)
         const nowDone = useProgress.getState().labs[lab.id]?.done
         if (nowDone && !labDone) {
           unlockAchievement('forge-first')
@@ -105,8 +111,18 @@ export default function ForgeLab() {
 
   const track = getTrack(lab.trackId)
   const lesson = lessonById(lab.lessonId)
+  const readinessLessons =
+    lab.readiness?.lessonIds.map((id) => lessonById(id)).filter((item) => item !== undefined) ?? []
   const done = labState?.done ?? false
   const report = run.kind === 'report' ? run.report : null
+  const requiredChecks = lab.checks.filter((check) => !check.optional)
+  const optionalChecks = lab.checks.filter((check) => check.optional)
+  const requiredReportChecks = report?.checks.filter((check) =>
+    requiredChecks.some((expected) => expected.id === check.id),
+  )
+  const requiredReportPassed =
+    requiredReportChecks?.length === requiredChecks.length &&
+    requiredReportChecks.every((check) => check.pass)
 
   return (
     <div className="mx-auto max-w-app px-6 pb-24 pt-16 lg:px-12">
@@ -121,7 +137,10 @@ export default function ForgeLab() {
       <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">
-            lab {String(lab.index).padStart(2, '0')} · {track?.code ?? lab.trackId}
+            {lab.trackId === 'r'
+              ? `drill R${lab.index}`
+              : `lab ${String(lab.index).padStart(2, '0')}`}{' '}
+            · {track?.code ?? lab.trackId}
             {lesson && (
               <>
                 {' '}
@@ -139,7 +158,10 @@ export default function ForgeLab() {
         </div>
         <div className="flex flex-col items-end gap-1.5 font-mono text-[11px] text-text-3">
           <span>~{lab.minutes} min</span>
-          <span>{lab.checks.length} checks</span>
+          <span>
+            {requiredChecks.length} checks
+            {optionalChecks.length > 0 ? ` + ${optionalChecks.length} advanced` : ''}
+          </span>
           <span className="text-accent">+{XP.lab} XP</span>
           {done && (
             <span className="mt-1 inline-flex items-center gap-1 rounded border border-accent/60 bg-accent/10 px-2 py-0.5 text-accent">
@@ -148,6 +170,43 @@ export default function ForgeLab() {
           )}
         </div>
       </div>
+
+      {lab.readiness && (
+        <div
+          className={cn(
+            'mt-8 flex max-w-3xl items-start gap-3 rounded-lg border p-4',
+            lab.readiness.required
+              ? 'border-amber/50 bg-amber/10'
+              : 'border-line bg-surface-1',
+          )}
+        >
+          <BookOpenCheck
+            className={cn(
+              'mt-0.5 h-4 w-4 shrink-0',
+              lab.readiness.required ? 'text-amber' : 'text-accent',
+            )}
+          />
+          <div>
+            <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">
+              {lab.readiness.label}
+            </p>
+            <p className="mt-1 text-body-sm text-text-2">
+              Complete{' '}
+              {readinessLessons.map((item, index) => (
+                <span key={item.id}>
+                  {index > 0 && (index === readinessLessons.length - 1 ? ' and ' : ', ')}
+                  <Link to={`/lesson/${item.id}`} className="text-accent underline">
+                    {item.id.replace('.l', '').toUpperCase()} · {item.title}
+                  </Link>
+                </span>
+              ))}
+              {lab.readiness.required
+                ? ' before starting this lab.'
+                : ' first if any of the Rust vocabulary in the brief is unfamiliar.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* brief */}
       <div className="mt-10 max-w-3xl space-y-4">
@@ -195,9 +254,9 @@ export default function ForgeLab() {
             <Terminal className="h-3.5 w-3.5" /> in the crate
           </div>
           <pre className="mt-3 overflow-x-auto rounded border border-line bg-ink p-4 font-mono text-[12px] leading-relaxed text-text-1">
-{`cd ${lab.id}
+{`cd ${lab.crateDir ?? lab.id}
 $EDITOR ${lab.editFile}${' '.repeat(Math.max(1, 20 - lab.editFile.length))}# the only file with TODO(you)
-cargo test                    # six checks, same as this page
+cargo test                    # ${requiredChecks.length} required${optionalChecks.length > 0 ? ` + ${optionalChecks.length} advanced` : ''}
 cargo build --release --target wasm32-unknown-unknown`}
           </pre>
           <p className="mt-3 text-body-sm text-text-2">
@@ -290,36 +349,48 @@ cargo build --release --target wasm32-unknown-unknown`}
               <p
                 className={cn(
                   'font-mono text-[11px]',
-                  report.checks.every((c) => c.pass) ? 'text-accent' : 'text-amber',
+                  requiredReportPassed ? 'text-accent' : 'text-amber',
                 )}
               >
-                {report.checks.filter((c) => c.pass).length}/{report.checks.length} passing
+                {requiredReportChecks?.filter((check) => check.pass).length ?? 0}/
+                {requiredChecks.length} required
+                {optionalChecks.length > 0 &&
+                  ` · ${report.checks.filter((check) => check.pass && optionalChecks.some((expected) => expected.id === check.id)).length}/${optionalChecks.length} advanced`}
               </p>
             </div>
             <div className="mt-3 space-y-1.5">
-              {report.checks.map((c, i) => (
-                <motion.p
-                  key={c.id}
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className={cn(
-                    'flex items-start gap-2 font-mono text-[12px]',
-                    c.pass ? 'text-text-2' : 'text-danger',
-                  )}
-                >
-                  {c.pass ? (
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-                  ) : (
-                    <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  )}
-                  <span>
-                    <span className="text-text-3">{c.id}</span> — {c.msg}
-                  </span>
-                </motion.p>
-              ))}
+              {report.checks.map((c, i) => {
+                const optional = lab.checks.find((check) => check.id === c.id)?.optional ?? false
+                return (
+                  <motion.p
+                    key={c.id}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className={cn(
+                      'flex items-start gap-2 font-mono text-[12px]',
+                      c.pass ? 'text-text-2' : optional ? 'text-amber' : 'text-danger',
+                    )}
+                  >
+                    {c.pass ? (
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+                    ) : (
+                      <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span>
+                      <span className="text-text-3">{c.id}</span>
+                      {optional && (
+                        <span className="ml-1 rounded border border-amber/40 px-1 py-0.5 text-[9px] uppercase text-amber">
+                          advanced
+                        </span>
+                      )}{' '}
+                      — {c.msg}
+                    </span>
+                  </motion.p>
+                )
+              })}
             </div>
-            {report.checks.every((c) => c.pass) && (
+            {requiredReportPassed && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -336,6 +407,23 @@ cargo build --release --target wasm32-unknown-unknown`}
                   </Link>{' '}
                   <ChevronRight className="inline h-3.5 w-3.5" />
                 </p>
+                {lab.profile && (
+                  <div className="mt-4 border-t border-accent/20 pt-4">
+                    <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-text-1">
+                      <Terminal className="h-3.5 w-3.5 text-accent" /> profile this · measurement pass
+                    </p>
+                    <pre className="mt-2 overflow-x-auto rounded border border-line bg-ink px-3 py-2 font-mono text-[11px] text-text-1">
+                      {lab.profile.command}
+                    </pre>
+                    <p className="mt-2 text-body-sm text-text-2">{lab.profile.question}</p>
+                    <Link
+                      to="/lesson/t0.l6"
+                      className="mt-2 inline-flex items-center gap-1 font-mono text-[10px] text-accent underline"
+                    >
+                      read the flame-graph workflow <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                )}
               </motion.div>
             )}
           </div>

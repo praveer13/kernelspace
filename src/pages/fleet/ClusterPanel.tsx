@@ -8,13 +8,17 @@ import {
   makeRefManager,
   makeRefQueue,
   makeRefScheduler,
-  makeRequestStream,
+  makePrefixSharedRequestStream,
+  makeServingMetrics,
+  routerLabel,
+  type ClusterStats,
   type ManagerDump,
   type RouterKind,
 } from '@/lib/fleet-model'
 import { cn } from '@/lib/utils'
 import EpdPanel from '@/pages/fleet/EpdPanel'
 import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet/drivers'
+import MetricsDashboard from '@/pages/fleet/MetricsDashboard'
 import type { SlotState } from '@/pages/fleet/slots'
 
 const WORKER_CFG = { numBlocks: 128, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128 }
@@ -25,6 +29,24 @@ const SPAN = 900
 
 const HUES = [162, 200, 265, 20, 330, 90, 45, 285, 150, 0]
 
+const emptyAggregate = (): ClusterStats => ({
+  completed: 0,
+  sloMet: 0,
+  shed: 0,
+  autoPreempts: 0,
+  capMisses: 0,
+  cacheHitTokens: 0,
+  promptTokens: 0,
+  kvHitRate: 0,
+  ttftSloMet: 0,
+  ttftSloPct: 0,
+  ttftP95: 0,
+  tpotP95: 0,
+  queueP95: 0,
+  completedInputTokens: 0,
+  completedOutputTokens: 0,
+})
+
 export default function ClusterPanel({ slots }: { slots: SlotState }) {
   const [topology, setTopology] = useState<'colocated' | 'epd'>('colocated')
   const [workerCount, setWorkerCount] = useState(2)
@@ -32,8 +54,10 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
   const [tick, setTick] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [agg, setAgg] = useState({ completed: 0, sloMet: 0, shed: 0, autoPreempts: 0, capMisses: 0 })
-  const [workerRows, setWorkerRows] = useState<{ waiting: number; running: number; util: number; dump: ManagerDump }[]>([])
+  const [agg, setAgg] = useState<ClusterStats>(emptyAggregate)
+  const [workerRows, setWorkerRows] = useState<
+    { waiting: number; running: number; util: number; cacheEntries: number; dump: ManagerDump }[]
+  >([])
   const clusterRef = useRef<Cluster | null>(null)
 
   const build = useCallback(async () => {
@@ -50,14 +74,18 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
         new Engine(WORKER_CFG, [], sched, mgr, { intake: queue, drainPerTick: DRAIN_PER_TICK }),
       )
     }
-    clusterRef.current = new Cluster(makeRequestStream(REQ_COUNT, SPAN, 0x5eed), workers, router)
+    clusterRef.current = new Cluster(
+      makePrefixSharedRequestStream(REQ_COUNT, SPAN, 0x5eed),
+      workers,
+      router,
+    )
   }, [workerCount, router, slots])
 
   const reset = useCallback(() => {
     setPlaying(false)
     setTick(0)
     setError(null)
-    setAgg({ completed: 0, sloMet: 0, shed: 0, autoPreempts: 0, capMisses: 0 })
+    setAgg(emptyAggregate())
     setWorkerRows([])
     void build()
   }, [build])
@@ -72,13 +100,14 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
     if (!c) return
     setAgg(c.aggregate())
     setWorkerRows(
-      c.workers.map((w) => {
+      c.workers.map((w, index) => {
         const s = w.stats()
         const dump = w.mgrDump()
         return {
           waiting: s.waitingNow,
           running: s.runningNow,
           util: Math.round(((dump.numBlocks - dump.free) / dump.numBlocks) * 100),
+          cacheEntries: c.cacheEntries(index),
           dump,
         }
       }),
@@ -113,6 +142,18 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
 
   const goodput = Math.round((agg.sloMet / REQ_COUNT) * 1000) / 10
   const done = clusterRef.current?.done ?? false
+  const observability = makeServingMetrics({
+    totalRequests: REQ_COUNT,
+    sloMet: agg.sloMet,
+    ttftP95Ticks: agg.ttftP95,
+    tpotP95Ticks: agg.tpotP95,
+    queueP95Ticks: agg.queueP95,
+    kvHitRate: agg.kvHitRate,
+    completedInputTokens: agg.completedInputTokens,
+    completedOutputTokens: agg.completedOutputTokens,
+    elapsedTicks: tick,
+    workers: workerCount,
+  })
 
   return (
     <div className="space-y-4">
@@ -155,7 +196,7 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
         </div>
         <div className="flex items-center gap-2 font-mono text-[11px]">
           <span className="text-text-3">router</span>
-          {(['rr', 'jsq'] as const).map((r) => (
+          {(['rr', 'jsq', 'prefix'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRouter(r)}
@@ -164,7 +205,7 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
                 router === r ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1',
               )}
             >
-              {r === 'rr' ? 'round-robin' : 'join-shortest-queue'}
+              {routerLabel(r)}
             </button>
           ))}
         </div>
@@ -183,6 +224,9 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
           </button>
         </div>
       </div>
+      <p className="font-mono text-[10px] leading-relaxed text-text-3">
+        shared trace · 12 interleaved system+tool prefixes (256–512 tokens) · identical arrivals for every policy
+      </p>
 
       <AnimatePresence>
         {error && (
@@ -193,10 +237,14 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
         )}
       </AnimatePresence>
 
-      {/* aggregate */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+      <MetricsDashboard
+        metrics={observability}
+        scope={`cluster · ${workerCount} workers · ${routerLabel(router)}`}
+      />
+
+      {/* operational counters */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {[
-          ['goodput', `${goodput}%`],
           ['completed', `${agg.completed}/${REQ_COUNT}`],
           ['shed', `${agg.shed}`],
           ['auto-preempts', `${agg.autoPreempts}`],
@@ -217,7 +265,7 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
             <div className="flex items-center justify-between">
               <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">worker {i}</p>
               <p className="font-mono text-[11px] text-text-3">
-                <span className={w.util > 90 ? 'text-danger' : w.util > 70 ? 'text-amber' : 'text-accent'}>{w.util}%</span> · w {w.waiting} / r {w.running}
+                <span className={w.util > 90 ? 'text-danger' : w.util > 70 ? 'text-amber' : 'text-accent'}>{w.util}%</span> · cache {w.cacheEntries}/6 · w {w.waiting} / r {w.running}
               </p>
             </div>
             <div className="mt-3 grid gap-[2px]" style={{ gridTemplateColumns: 'repeat(32, minmax(0, 1fr))' }}>
@@ -251,11 +299,11 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
       {done && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border border-accent/50 bg-accent/10 p-4">
           <p className="font-mono text-sm text-accent">
-            cluster drained — {agg.completed}/{REQ_COUNT} completed, {agg.sloMet} within SLO ({goodput}% goodput, {router === 'rr' ? 'round-robin' : 'join-shortest-queue'}, {workerCount} worker{workerCount > 1 ? 's' : ''}).
+            cluster drained — {agg.completed}/{REQ_COUNT} completed, {agg.sloMet} within SLO ({goodput}% goodput, {agg.kvHitRate}% KV hit, {routerLabel(router)}, {workerCount} worker{workerCount > 1 ? 's' : ''}).
           </p>
           <p className="mt-1 text-body-sm text-text-2">
-            flip the router or the worker count, reset, and compare. Watch the per-worker utilization
-            imbalance under round-robin — that variance is why KV-aware routers exist.
+            hold the worker count fixed, flip the router, and reset. Prefix affinity trades a bounded
+            queue imbalance for warm KV; the TTFT-SLO card says whether that trade actually paid.
           </p>
         </motion.div>
       )}

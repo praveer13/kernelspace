@@ -6,12 +6,14 @@ const LEARN_LINKS = [
   { to: '/capstone', label: 'Capstone' },
   { to: '/glossary', label: 'Glossary' },
   { to: '/progress', label: 'Progress' },
+  { to: '/leaderboard', label: 'Scores' },
+  { to: '/field-notes', label: 'Field Notes' },
 ]
 
 const META_LINKS = [
   { href: '#method', label: 'Method' },
   { href: '#faq', label: 'FAQ' },
-  { href: 'https://github.com', label: 'GitHub', external: true },
+  { href: 'https://github.com/praveer13/kernelspace', label: 'GitHub', external: true },
 ]
 
 /**

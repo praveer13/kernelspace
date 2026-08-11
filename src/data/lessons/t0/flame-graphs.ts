@@ -54,7 +54,7 @@ That's the whole grammar. The skill is recognizing *shapes*: the allocator plate
       type: 'prose',
       md: `## Making one: two commands, no ceremony
 
-On your Forge lab code (any of labs 01–06 — they all have hot loops worth looking at):
+On your Forge lab code (any of labs 01–08 — they all have hot loops worth looking at):
 
 \`\`\`sh
 # Linux + Rust, the inferno way (Rust-native, no perl):
@@ -76,7 +76,12 @@ Same reflex elsewhere: **Java** → async-profiler (\`-e cpu\`, \`-f profile.htm
 
 LLM serving profiles have a recurring cast. The **Python scheduler tax** — vLLM's V0 loop spent visible milliseconds per iteration in Python bookkeeping; the V1 rewrite exists because of flame graphs showing exactly that plateau. The **detokenizer drip** — per-token detokenization on the hot path instead of incremental/streaming. The **NCCL stall** — wide \`ncclAllReduce\`/cuda-sync bars on every rank except the slow one: the profile can't see the network, but it shows you who's *waiting* and, by absence, who's *late*. And the **KV-copy surprise** — memcpy bars that mean your KV transfer path took a detour through pageable memory instead of RDMA.
 
-Homework, honor system: profile your lab 06 scheduler's fleet scenario (\`cargo flamegraph --example calibrate\`) and find the widest bar. Then ask the senior-engineer question: is that bar *supposed* to be wide?`,
+The later Forge labs now put an exact **profile this** command on the all-green panel. For lab 06, run \`cargo flamegraph --example calibrate\`, name the widest honest bar, and ask the senior-engineer question: is that bar *supposed* to be wide? Green checks prove correctness; the profile begins the performance argument.`,
+    },
+    {
+      type: 'callout',
+      variant: 'info',
+      md: `The same workflow returns in Fleet Week Act IV. There, the first profile is the metrics surface: \`gen_ai.server.time_to_first_token\`, \`gen_ai.server.time_per_output_token\`, queue delay, KV hit rate, goodput, and $/Mtok. Use the first signal that moves to choose the subsystem, then use a flame graph to find the frame inside it. Dashboard → profile → fix is one diagnostic chain, not two observability hobbies.`,
     },
     {
       type: 'quiz',

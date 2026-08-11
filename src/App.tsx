@@ -13,6 +13,8 @@ import Forge from '@/pages/Forge'
 import ForgeLab from '@/pages/ForgeLab'
 import Fleet from '@/pages/Fleet'
 import FleetWeek from '@/pages/FleetWeek'
+import Leaderboard from '@/pages/Leaderboard'
+import FieldNotes from '@/pages/FieldNotes'
 import NotFound from '@/pages/NotFound'
 
 /**
@@ -36,6 +38,8 @@ export default function App() {
         <Route path="/forge/:labId" element={<ForgeLab />} />
         <Route path="/fleet" element={<Fleet />} />
         <Route path="/week" element={<FleetWeek />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/field-notes" element={<FieldNotes />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

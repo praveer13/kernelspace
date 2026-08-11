@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 
 export interface TrackMeta {
-  /** Memory-segment style code: T0–T5, capstone = T* */
+  /** Memory-segment style code: R, T0–T7, capstone = T* */
   code: string
   /** Route id used in /tracks/:trackId and lesson id prefixes */
   id: string
@@ -42,6 +42,17 @@ export interface TrackMeta {
 }
 
 export const TRACKS: TrackMeta[] = [
+  {
+    code: 'R',
+    id: 'r',
+    name: 'Rust Zero',
+    color: '#E7A66A',
+    glyph: Code2,
+    promise: 'You know how to program. Now learn how Rust thinks.',
+    lessons: 10,
+    exercises: 10,
+    hours: 5,
+  },
   {
     code: 'T0',
     id: 't0',
@@ -103,10 +114,10 @@ export const TRACKS: TrackMeta[] = [
     name: 'LLM Serving Systems',
     color: '#FB7185',
     glyph: Server,
-    promise: 'PagedAttention, continuous batching, the vLLM paper end-to-end.',
-    lessons: 9,
-    exercises: 8,
-    hours: 6,
+    promise: 'PagedAttention, prefix caching, continuous batching — the serving stack end-to-end.',
+    lessons: 10,
+    exercises: 9,
+    hours: 6.5,
   },
   {
     code: 'T6',
@@ -115,9 +126,9 @@ export const TRACKS: TrackMeta[] = [
     color: '#5CA8FF',
     glyph: Network,
     promise: 'MoE, wide EP, disaggregation, FP4 — the 2026 production canon.',
-    lessons: 8,
-    exercises: 8,
-    hours: 4,
+    lessons: 10,
+    exercises: 10,
+    hours: 5,
   },
   {
     code: 'T7',
@@ -144,7 +155,7 @@ export const CAPSTONE: TrackMeta = {
   hours: 8,
 }
 
-export const TOTAL_TRACK_LESSONS = TRACKS.reduce((n, t) => n + t.lessons, 0) // 40
+export const TOTAL_TRACK_LESSONS = TRACKS.reduce((n, t) => n + t.lessons, 0)
 
 export function getTrack(id: string): TrackMeta | undefined {
   if (id === 'capstone' || id === 't*') return CAPSTONE
@@ -198,7 +209,7 @@ export const SIMS: SimMeta[] = [
     hook: 'Is your kernel compute- or bandwidth-bound?',
     icon: TrendingUp,
     trackId: 't4',
-    usedIn: 'T4.L2',
+    usedIn: 'T4.L3',
     difficulty: 2,
   },
   {
@@ -207,7 +218,7 @@ export const SIMS: SimMeta[] = [
     hook: 'Write a GPU kernel in your browser tab.',
     icon: Code2,
     trackId: 't4',
-    usedIn: 'T4.L4',
+    usedIn: 'T4.L5',
     difficulty: 3,
   },
   {
@@ -216,7 +227,7 @@ export const SIMS: SimMeta[] = [
     hook: 'FP16 → INT8 → INT4. Watch quality bend.',
     icon: SlidersHorizontal,
     trackId: 't4',
-    usedIn: 'T4.L5',
+    usedIn: 'T4.L7',
     difficulty: 2,
   },
   {
@@ -225,7 +236,7 @@ export const SIMS: SimMeta[] = [
     hook: 'How many tokens fit in 80 GB of HBM?',
     icon: Calculator,
     trackId: 't5',
-    usedIn: 'T5.L2',
+    usedIn: 'T5.L4',
     difficulty: 1,
   },
   {
@@ -234,7 +245,7 @@ export const SIMS: SimMeta[] = [
     hook: 'Continuous batching vs the 1962 scheduler.',
     icon: Rows3,
     trackId: 't5',
-    usedIn: 'T5.L4',
+    usedIn: 'T5.L7',
     difficulty: 2,
   },
   {
@@ -243,12 +254,12 @@ export const SIMS: SimMeta[] = [
     hook: 'The whole serving loop, ticking live.',
     icon: Cog,
     trackId: 't5',
-    usedIn: 'T5.L6',
+    usedIn: 'capstone',
     difficulty: 3,
   },
 ]
 
-/** Ordered lesson ids across tracks (T0.L1 … T7.L5) for next-lesson selectors. */
+/** Ordered lesson ids across tracks (R.L1 … T7.L5) for next-lesson selectors. */
 export const ORDERED_LESSON_IDS: string[] = TRACKS.flatMap((t) =>
   Array.from({ length: t.lessons }, (_, i) => `${t.id}.l${i + 1}`),
 )

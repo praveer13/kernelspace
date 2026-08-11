@@ -559,7 +559,7 @@ return { decodeCached }`,
       'Static batching locks the batch until every sequence finishes (the stragglers waste the GPU alone). Continuous batching refills a slot the iteration after it frees. Same hardware, same requests, very different utilization.',
     ],
     analogy: 'This is the 1962 runqueue with tokens instead of time slices. Admission control is just saying no early enough that the machine never thrashes.',
-    iso: { os: 'scheduler / runqueue', llm: 'continuous batcher', lesson: 't5.l6' },
+    iso: { os: 'scheduler / runqueue', llm: 'continuous batcher', lesson: 't5.l7' },
     template: `// STEP 6 — admission policy for the continuous batcher
 // The harness calls YOUR function once per iteration:
 //   waiting: sequences ready to run  { id, promptTokens, estBlocks }
@@ -1445,7 +1445,7 @@ function Hero({
           your browser; every stage is visible.
         </p>
         <div className="mt-5 flex flex-wrap justify-center gap-2 font-mono text-[11px] text-text-3">
-          {['7 steps', '~4h', `+${XP.capstoneStep} XP/step`, 'prereq: T0–T5 (recommended)'].map(
+          {['7 steps', '~4h', `+${XP.capstoneStep} XP/step`, 'unlocks after T5 · best after T7'].map(
             (c) => (
               <span key={c} className="rounded-full border border-line bg-surface-2 px-3 py-1">
                 {c}

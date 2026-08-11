@@ -14,10 +14,11 @@ except nothing at all.
 
 ```sh
 rustup target add wasm32-unknown-unknown   # one time
-cd rust-allocator
+cd <crate directory shown on the Forge page>
+# examples: rust-allocator · rust-zero/r1-bindings
 cargo test                                  # red → green
 cargo build --release --target wasm32-unknown-unknown
-# drop target/wasm32-unknown-unknown/release/rust_allocator.wasm
+# drop target/wasm32-unknown-unknown/release/<crate_name>.wasm
 # onto the lab page
 ```
 
@@ -39,7 +40,7 @@ quota, not ours.
 
 1. **Read the brief** on the lab page.
 2. **Edit the one file** with `TODO(you)` markers. Nothing else.
-3. `cargo test` until all six checks are green. The terminal and the site
+3. `cargo test` until every check is green. The terminal and the site
    run the identical suite — if it's green here, it's green there.
 4. **Build the wasm** (`--release`, target `wasm32-unknown-unknown`).
 5. **Drop the `.wasm` onto the lab page.** It runs in your browser, in a
@@ -48,7 +49,22 @@ quota, not ours.
 A `todo!()` left in your code makes the module trap — the site shows
 "not implemented yet". That's a feature, not a bug.
 
-## Labs
+## Rust Zero drills
+
+| lesson | crate | focus |
+|---|---|---|
+| R1 | `rust-zero/r1-bindings/` | bindings, types, expressions |
+| R2 | `rust-zero/r2-control-flow/` | functions, loops, match |
+| R3 | `rust-zero/r3-ownership/` | moves, clones, drops |
+| R4 | `rust-zero/r4-borrowing/` | references and slices |
+| R5 | `rust-zero/r5-modeling/` | structs, enums, Option, Result |
+| R6 | `rust-zero/r6-collections/` | Vec, HashMap, iterators |
+| R7 | `rust-zero/r7-smart-pointers/` | Box, Rc, Arc |
+| R8 | `rust-zero/r8-interior-mutability/` | Cell, RefCell, Mutex |
+| R9 | `rust-zero/r9-lifetimes/` | practical lifetime contracts |
+| R10 | `rust-zero/r10-atomics/` | atomics and orderings |
+
+## Systems labs
 
 | # | lab | track | you build |
 |---|-----|-------|-----------|
@@ -58,6 +74,38 @@ A `todo!()` left in your code makes the module trap — the site shows
 | 04 | `mpmc-queue/` | T2 | Vyukov MPMC: sequence numbers, CAS cursors, + a native race fuzzer |
 | 05 | `toy-executor/` | T3 | async executor: wakers, poll loop, block_on, nested spawn |
 | 06 | `batching-scheduler/` | T5 | admission policy: goodput under SLO, convoys, aging, headroom |
+| 07 | `radix-cache/` | T5 | automatic prefix caching: longest match, CoW sharing, leaf LRU, hit rate |
+| 08 | `xgrammar-lite/` | T6 | JSON Schema → pushdown matcher → whole-BPE-token masks + compile cache |
+
+### Lab 08 structured-output contract
+
+`xgrammar-lite` deliberately separates tokenizer tokens from grammar bytes.
+The harness parses a practical JSON Schema subset; the student compiles it to
+a pushdown matcher and speculates each complete lab-03-style BPE token through
+that machine. A token may cross a quote, colon, comma, and value boundary, so
+checking only its first byte is wrong. The native overhead check calibrates a
+512-token mask in microseconds; the WASM check runs the same semantic workload
+without relying on a browser clock. Equivalent normalized schemas must reuse
+one compiled program through the cache.
+
+### Lab 06 trace calibration
+
+`batching-scheduler` keeps six checks, but its final goodput check now races
+the policy across three fixed distributions. These numbers were measured with
+`cargo run -p batching-scheduler --example calibrate` against the exact tables
+shipped in the crate; the reference column uses the private reference policy.
+
+| scored trace | requests | FCFS | pure SJF | reference | pass floor |
+|---|---:|---:|---:|---:|---:|
+| synthetic fleet overload | 400 | 10.0% | 62.5% | 62.5% | 55.0% |
+| BurstGPT v2 busiest-hour slice | 480 | 55.0% | 91.5% | 90.6% | 85.0% |
+| LMSYS published-aggregate shape | 360 | 54.2% | 76.7% | 76.7% | 70.0% |
+
+The reference mean is 76.6%. BurstGPT and the response-heavy LMSYS shape both
+separate FCFS from size-aware admission, while the independent starvation
+check prevents pure SJF from passing the lab. Trace provenance and the LMSYS
+redistribution constraint are documented in `public/traces/README.md` in the
+full repository and encoded in the JSON artifacts used by Fleet.
 
 ## How grading works (honesty box)
 

@@ -15,15 +15,26 @@ fn fit(s: &State, order: &mut Vec<&lab::ReqView>) -> Action {
     let mut slots = s.max_running - s.running.len();
     let mut admit = vec![];
     for r in order.drain(..) {
-        if slots == 0 { break }
-        if used + r.prompt_tokens > s.mem_cap { continue }
-        admit.push(r.id); slots -= 1; used += r.prompt_tokens;
+        if slots == 0 {
+            break;
+        }
+        if used + r.prompt_tokens > s.mem_cap {
+            continue;
+        }
+        admit.push(r.id);
+        slots -= 1;
+        used += r.prompt_tokens;
     }
-    Action { admit, preempt: vec![] }
+    Action {
+        admit,
+        preempt: vec![],
+    }
 }
 
 /// First-come-first-served, admit while anything fits.
-fn fcfs(s: &State) -> Action { fit(s, &mut s.waiting.iter().collect()) }
+fn fcfs(s: &State) -> Action {
+    fit(s, &mut s.waiting.iter().collect())
+}
 
 /// Smallest-prompt-first, no aging. Watch what happens to the longs.
 fn sjf(s: &State) -> Action {
@@ -33,7 +44,15 @@ fn sjf(s: &State) -> Action {
 }
 
 fn main() {
-    let scns = [lab::scn_light(), lab::scn_burst(), lab::scn_convoy(), lab::scn_starvation(), lab::scn_fleet()];
+    let scns = [
+        lab::scn_light(),
+        lab::scn_burst(),
+        lab::scn_convoy(),
+        lab::scn_starvation(),
+        lab::scn_fleet(),
+        lab::scn_burstgpt(),
+        lab::scn_lmsys_shape(),
+    ];
     let policies: [(&str, fn(&State) -> Action); 2] = [("fcfs", fcfs), ("sjf", sjf)];
     for scn in &scns {
         for (name, pol) in &policies {
@@ -41,10 +60,29 @@ fn main() {
             match lab::simulate(scn, &mut p) {
                 Ok(s) => println!(
                     "{:>10} {:>9}: goodput {:5.1}%  met {}/{}  completed {}  ttft_p95 {}",
-                    scn.name, name, s.goodput() * 100.0, s.slo_met, s.total, s.completed, s.ttft_p95
+                    scn.name,
+                    name,
+                    s.goodput() * 100.0,
+                    s.slo_met,
+                    s.total,
+                    s.completed,
+                    s.ttft_p95
                 ),
                 Err(e) => println!("{:>10} {:>9}: ILLEGAL — {}", scn.name, name, e),
             }
+        }
+    }
+    if std::env::args().any(|arg| arg == "--mine") {
+        println!("\nstudent policy (fresh scheduler per scored trace):");
+        match lab::score_goodput_traces() {
+            Ok(scores) => println!(
+                "synthetic {:5.1}%  BurstGPT {:5.1}%  LMSYS-shape {:5.1}%  mean {:5.1}%",
+                scores.synthetic.goodput() * 100.0,
+                scores.burstgpt.goodput() * 100.0,
+                scores.lmsys_shape.goodput() * 100.0,
+                scores.mean() * 100.0,
+            ),
+            Err(error) => println!("ILLEGAL — {error}"),
         }
     }
 }

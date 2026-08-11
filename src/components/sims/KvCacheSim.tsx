@@ -120,7 +120,6 @@ function useTaskAward(simId: string, log: (kind: LogKind, text: string) => void)
       const st = useProgress.getState()
       if (st.sims[simId]?.tasksDone.includes(taskId)) return
       st.recordSimTask(simId, taskId)
-      useProgress.setState((p) => ({ xp: p.xp + xp }))
       log('ok', `TASK ✓ ${note}  (+${xp} XP)`)
     },
     [simId, log],

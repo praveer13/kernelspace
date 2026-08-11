@@ -48,6 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
 const SIM_ID = 'sim-roofline'
 
@@ -62,6 +63,7 @@ const PRESETS: Machine[] = [
   { name: 'RTX 4090', bw: 1008, peak: 165_000 },
   { name: 'A100', bw: 1555, peak: 312_000 },
   { name: 'H100', bw: 3350, peak: 989_000 },
+  { name: 'B200', bw: 8000, peak: 2_250_000 },
 ]
 
 interface KernelDef {
@@ -79,6 +81,58 @@ const KERNELS: KernelDef[] = [
   { id: 'prefill', label: 'prefill @ 70B', ai: 400, frac: 0.9, color: '#A78BFA' },
   { id: 'matmul', label: 'matmul-tiled', ai: 512, frac: 0.88, color: '#3EF2A4' },
 ]
+
+interface FleetKernelDef extends KernelDef {
+  flopsG: number
+  bytesG: number
+}
+
+/**
+ * A dimensionally consistent worksheet derived from the Fleet serving loop.
+ * GFLOPs / GB reduces directly to FLOPs / byte, so no hidden unit conversion
+ * can rescue a guessed answer.
+ */
+const FLEET_KERNELS: FleetKernelDef[] = [
+  {
+    id: 'fleet-router',
+    label: 'router scoring',
+    flopsG: 0.12,
+    bytesG: 0.08,
+    ai: 1.5,
+    frac: 0.72,
+    color: '#FBBF24',
+  },
+  {
+    id: 'fleet-decode',
+    label: '70B decode · b32',
+    flopsG: 4480,
+    bytesG: 140,
+    ai: 32,
+    frac: 0.82,
+    color: '#FB7185',
+  },
+  {
+    id: 'fleet-paged-attn',
+    label: 'paged attention',
+    flopsG: 2048,
+    bytesG: 8,
+    ai: 256,
+    frac: 0.78,
+    color: '#22D3EE',
+  },
+  {
+    id: 'fleet-prefill',
+    label: '70B prefill · 512',
+    flopsG: 71_680,
+    bytesG: 140,
+    ai: 512,
+    frac: 0.88,
+    color: '#A78BFA',
+  },
+]
+
+const ALL_KERNELS: KernelDef[] = [...KERNELS, ...FLEET_KERNELS]
+const B200_RIDGE_AI = 2_250_000 / 8000
 
 const X_MIN = -7 // log2 FLOPs/byte
 const X_MAX = 10
@@ -289,6 +343,19 @@ interface PlottedPoint {
   at: number // ms timestamp for pop animation
 }
 
+type Bound = 'bandwidth' | 'compute'
+
+interface FleetAnswer {
+  ai: string
+  bound: Bound | ''
+}
+
+const blankFleetAnswers = (): Record<string, FleetAnswer> =>
+  Object.fromEntries(FLEET_KERNELS.map((kernel) => [kernel.id, { ai: '', bound: '' }]))
+
+const numericClose = (actual: number, expected: number): boolean =>
+  Number.isFinite(actual) && Math.abs(actual - expected) <= Math.max(0.05, expected * 0.02)
+
 
 type HostMode = 'roofline' | 'cpu-gpu'
 
@@ -367,6 +434,14 @@ export default function RooflineSim() {
   const [attentionMode, setAttentionMode] = useState<'naive' | 'flash'>(
     oneOfOr(initialCfg?.attentionMode, ['naive', 'flash'] as const, 'naive'),
   )
+  const [ridgeAnswer, setRidgeAnswer] = useState('')
+  const [fleetAnswers, setFleetAnswers] = useState<Record<string, FleetAnswer>>(
+    blankFleetAnswers,
+  )
+  const [ridgeFeedback, setRidgeFeedback] = useState<boolean | null>(null)
+  const [fleetFeedback, setFleetFeedback] = useState<
+    Record<string, { ai: boolean; bound: boolean }> | null
+  >(null)
 
   const ticksRef = useRef(0)
   const [ticks, setTicks] = useState(0)
@@ -549,6 +624,44 @@ export default function RooflineSim() {
     [log],
   )
 
+  const gradeFleetPractice = useCallback(() => {
+    const ridgeOk = numericClose(Number(ridgeAnswer), B200_RIDGE_AI)
+    const feedback: Record<string, { ai: boolean; bound: boolean }> = {}
+    const newlyPlotted: PlottedPoint[] = []
+
+    if (ridgeOk) completeSimTask(SIM_ID, 't-roof-b200-ridge', 60)
+    for (const kernel of FLEET_KERNELS) {
+      const answer = fleetAnswers[kernel.id]
+      const expectedBound: Bound = kernel.ai < B200_RIDGE_AI ? 'bandwidth' : 'compute'
+      const aiOk = numericClose(Number(answer.ai), kernel.ai)
+      const boundOk = answer.bound === expectedBound
+      feedback[kernel.id] = { ai: aiOk, bound: boundOk }
+      if (aiOk && boundOk) {
+        completeSimTask(SIM_ID, `t-roof-${kernel.id}`, 60)
+        newlyPlotted.push({ kernelId: kernel.id, at: performance.now() })
+      }
+    }
+
+    setRidgeFeedback(ridgeOk)
+    setFleetFeedback(feedback)
+    setPreset('B200')
+    setBw(8000)
+    setPeak(2_250_000)
+    setDtype('fp16')
+    setPoints((previous) => {
+      const ids = new Set(previous.map((point) => point.kernelId))
+      return [...previous, ...newlyPlotted.filter((point) => !ids.has(point.kernelId))]
+    })
+
+    const correctRows = Object.values(feedback).filter((row) => row.ai && row.bound).length
+    log(
+      ticksRef.current,
+      'GRADE',
+      `B200 worksheet — ridge ${ridgeOk ? 'correct' : 'retry'} · ${correctRows}/${FLEET_KERNELS.length} kernels placed`,
+      ridgeOk && correctRows === FLEET_KERNELS.length ? 'ok' : 'warn',
+    )
+  }, [fleetAnswers, log, ridgeAnswer])
+
   const reset = useCallback(() => {
     setPoints([])
     setSerialRan(false)
@@ -566,6 +679,10 @@ export default function RooflineSim() {
     setPcieMode(false)
     setTileT(16)
     setAttentionMode('naive')
+    setRidgeAnswer('')
+    setFleetAnswers(blankFleetAnswers())
+    setRidgeFeedback(null)
+    setFleetFeedback(null)
     setPlaying(false)
     ticksRef.current = 0
     setTicks(0)
@@ -886,7 +1003,7 @@ export default function RooflineSim() {
 
       /* plotted kernels */
       for (const p of s.points) {
-        const k = KERNELS.find((kk) => kk.id === p.kernelId)
+        const k = ALL_KERNELS.find((kk) => kk.id === p.kernelId)
         if (!k) continue
         const ai = k.id === 'decode' ? s.decodeAI : k.ai
         const attained = k.frac * Math.min(aPeak, aBw * ai)
@@ -1030,6 +1147,11 @@ export default function RooflineSim() {
         { id: 't-roof-tile', text: 'Sweep matmul tile T = 16 → 128 and watch AI move', xp: 60 },
         { id: 't-roof-flash', text: 'Toggle FlashAttention and watch the AI jump', xp: 60 },
         { id: 't-roof-dtype', text: 'Plot decode, then compare FP16 / FP8 / INT4', xp: 60 },
+        { id: 't-roof-b200-ridge', text: 'Compute the B200 FP16 ridge point', xp: 60 },
+        { id: 't-roof-fleet-router', text: 'Classify and place Fleet router scoring', xp: 60 },
+        { id: 't-roof-fleet-decode', text: 'Classify and place 70B batch-32 decode', xp: 60 },
+        { id: 't-roof-fleet-paged-attn', text: 'Classify and place paged attention', xp: 60 },
+        { id: 't-roof-fleet-prefill', text: 'Classify and place 512-token prefill', xp: 60 },
       ]}
       help={
         <>
@@ -1171,7 +1293,7 @@ export default function RooflineSim() {
                 value={bw}
                 display={`${bw} GB/s`}
                 min={100}
-                max={4000}
+                max={10_000}
                 step={10}
                 onChange={(v) => {
                   setBw(v)
@@ -1232,6 +1354,108 @@ export default function RooflineSim() {
                   <Eraser size={11} strokeWidth={1.75} /> clear
                 </ChipButton>
               </div>
+            </ControlGroup>
+
+            <ControlGroup label="graded · B200 fleet table">
+              <p className="font-mono text-[10px] leading-relaxed text-text-3">
+                B200 FP16 dense · 2,250,000 GFLOP/s · 8,000 GB/s. Compute the ridge and
+                each row&apos;s AI; a fully correct row is placed on the chart.
+              </p>
+              <label className="block font-mono text-[10px] text-text-2">
+                ridge = peak / bandwidth (FLOP/B)
+                <input
+                  aria-label="B200 ridge point in FLOPs per byte"
+                  inputMode="decimal"
+                  value={ridgeAnswer}
+                  onChange={(event) => setRidgeAnswer(event.target.value)}
+                  placeholder="?"
+                  className={cn(
+                    'mt-1 w-full rounded border bg-ink px-2 py-1.5 text-[12px] text-text-1 outline-none',
+                    ridgeFeedback === null
+                      ? 'border-line focus:border-accent/60'
+                      : ridgeFeedback
+                        ? 'border-accent/60'
+                        : 'border-danger/60',
+                  )}
+                />
+              </label>
+              <div className="space-y-2">
+                {FLEET_KERNELS.map((kernel) => {
+                  const answer = fleetAnswers[kernel.id]
+                  const feedback = fleetFeedback?.[kernel.id]
+                  return (
+                    <div key={kernel.id} className="rounded border border-line bg-ink p-2">
+                      <div className="flex items-start justify-between gap-2 font-mono text-[10px]">
+                        <span style={{ color: kernel.color }}>{kernel.label}</span>
+                        <span className="text-right text-text-3">
+                          {kernel.flopsG.toLocaleString()} GF / {kernel.bytesG.toLocaleString()} GB
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <input
+                          aria-label={`${kernel.label} arithmetic intensity`}
+                          inputMode="decimal"
+                          value={answer.ai}
+                          onChange={(event) =>
+                            setFleetAnswers((previous) => ({
+                              ...previous,
+                              [kernel.id]: { ...previous[kernel.id], ai: event.target.value },
+                            }))
+                          }
+                          placeholder="AI F/B"
+                          className={cn(
+                            'min-w-0 flex-1 rounded border bg-surface-1 px-2 py-1 font-mono text-[11px] text-text-1 outline-none',
+                            feedback === undefined
+                              ? 'border-line focus:border-accent/60'
+                              : feedback.ai
+                                ? 'border-accent/60'
+                                : 'border-danger/60',
+                          )}
+                        />
+                        {(['bandwidth', 'compute'] as const).map((bound) => (
+                          <ChipButton
+                            key={bound}
+                            active={answer.bound === bound}
+                            color={bound === 'bandwidth' ? '#FBBF24' : '#3EF2A4'}
+                            onClick={() =>
+                              setFleetAnswers((previous) => ({
+                                ...previous,
+                                [kernel.id]: { ...previous[kernel.id], bound },
+                              }))
+                            }
+                          >
+                            {bound === 'bandwidth' ? 'BW' : 'compute'}
+                          </ChipButton>
+                        ))}
+                      </div>
+                      {feedback && (
+                        <p
+                          className={cn(
+                            'mt-1.5 font-mono text-[9px]',
+                            feedback.ai && feedback.bound ? 'text-accent' : 'text-danger',
+                          )}
+                        >
+                          {feedback.ai && feedback.bound
+                            ? `placed · AI ${fmtAI(kernel.ai)} · ${kernel.ai < B200_RIDGE_AI ? 'bandwidth' : 'compute'}-bound`
+                            : `${feedback.ai ? 'AI ✓' : 'AI retry'} · ${feedback.bound ? 'bound ✓' : 'bound retry'}`}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={gradeFleetPractice}
+                className="w-full rounded border border-accent/60 bg-accent/10 px-3 py-2 font-mono text-[11px] text-accent transition-colors hover:bg-accent/20"
+              >
+                grade + place on B200
+              </button>
+              {ridgeFeedback !== null && (
+                <p className={cn('font-mono text-[10px]', ridgeFeedback ? 'text-accent' : 'text-danger')}>
+                  ridge {ridgeFeedback ? `✓ ${fmtAI(B200_RIDGE_AI)} F/B` : 'retry: divide the two hardware numbers'}
+                </p>
+              )}
             </ControlGroup>
 
             <ControlGroup label="occupancy & registers">

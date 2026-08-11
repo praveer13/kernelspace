@@ -6,7 +6,7 @@
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { CodeTab } from '@/components/CodeBlock'
 
-export type TrackId = 't0' | 't1' | 't2' | 't3' | 't4' | 't5' | 't6' | 't7'
+export type TrackId = 'r' | 't0' | 't1' | 't2' | 't3' | 't4' | 't5' | 't6' | 't7'
 
 /** The nine simulator routes (lab/playground scope). */
 export type SimId =
@@ -145,6 +145,20 @@ export interface DeepdiveBlock {
   md: string
 }
 
+/** Dated primary-source reading card used by the per-track paper spine. */
+export interface FieldNoteBlock {
+  type: 'field-note'
+  title: string
+  source: string
+  href: string
+  /** Publication label, e.g. `OSDI '22` or `arXiv 2024`. */
+  published: string
+  /** Last curriculum verification in YYYY-MM form. */
+  verified: string
+  /** One paragraph explaining why this source belongs at this exact point. */
+  md: string
+}
+
 export type ContentBlock =
   | ProseBlock
   | CodeBlockData
@@ -155,6 +169,7 @@ export type ContentBlock =
   | ExerciseBlock
   | IsomorphismBlock
   | DeepdiveBlock
+  | FieldNoteBlock
 
 /* ------------------------------ lesson ------------------------------ */
 
@@ -175,6 +190,8 @@ export interface Lesson {
   simId?: SimId
   /** T2.L7-style exam lesson (amber chip, quiz-gated completion). */
   exam?: boolean
+  /** Landscape-sensitive lesson freshness marker, YYYY-MM. */
+  verifiedAt?: string
   blocks: ContentBlock[]
 }
 

@@ -100,11 +100,13 @@ export function usePlaygroundContext(): PlaygroundContextValue {
 /* Idempotent; awards XP once and lets the shell toast via store diff. */
 /* ------------------------------------------------------------------ */
 
-export function completeSimTask(simId: string, taskId: string, xp = 60): void {
+export function completeSimTask(simId: string, taskId: string, legacyXp = 60): void {
+  // XP is now fixed and awarded atomically by the progress store. Keep the
+  // argument until simulator call sites migrate off the old helper contract.
+  void legacyXp
   const state = getProgress()
   if (state.sims[simId]?.tasksDone.includes(taskId)) return
   state.recordSimTask(simId, taskId)
-  useProgress.setState((s) => ({ xp: s.xp + xp }))
 }
 
 /* ------------------------------------------------------------------ */

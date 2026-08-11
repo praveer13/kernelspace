@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ChevronDown, RotateCcw, Search } from 'lucide-react'
 import { useProgress } from '@/lib/progress'
+import { SIMS } from '@/lib/tracks'
 import { usePrefersReducedMotion } from '@/components/sims/PlaygroundShell'
 import { cn } from '@/lib/utils'
 
@@ -34,8 +35,7 @@ interface SimCardDef {
   track: string
   trackColor: string
   difficulty: 1 | 2 | 3
-  usedIn: string
-  usedInHref: string
+  metaId: string
   preview: PreviewKind
   concepts: string
 }
@@ -45,63 +45,63 @@ const SIM_CARDS: SimCardDef[] = [
     id: 'sim-memory', num: 'SIM-01', title: 'Memory Grid Visualizer',
     hook: 'Point at a byte. Own a segfault.',
     track: 'T1', trackColor: '#FBBF24', difficulty: 1,
-    usedIn: 'T1.L2', usedInHref: '/lesson/t1.l2', preview: 'memory',
+    metaId: 'memory-grid', preview: 'memory',
     concepts: 'pointers segfault stack heap addresses deref null',
   },
   {
     id: 'sim-allocator', num: 'SIM-02', title: 'Toy Allocator',
     hook: 'malloc, free, split, coalesce — your hands on the heap.',
     track: 'T1', trackColor: '#FBBF24', difficulty: 2,
-    usedIn: 'T1.L3', usedInHref: '/lesson/t1.l3', preview: 'allocator',
+    metaId: 'allocator', preview: 'allocator',
     concepts: 'malloc free split coalesce fragmentation pagedattention kv block',
   },
   {
     id: 'sim-vm', num: 'SIM-03', title: 'VM Paging Simulator',
     hook: 'Walk a page table. Miss the TLB. Fault. Repeat.',
     track: 'T2', trackColor: '#22D3EE', difficulty: 2,
-    usedIn: 'T2.L2', usedInHref: '/lesson/t2.l2', preview: 'vm',
+    metaId: 'paging', preview: 'vm',
     concepts: 'page table tlb hit miss fault eviction lru fifo pagedattention',
   },
   {
     id: 'sim-roofline', num: 'SIM-04', title: 'Roofline Model',
     hook: 'One chart that explains every GPU benchmark.',
     track: 'T4', trackColor: '#A78BFA', difficulty: 1,
-    usedIn: 'T4.L3', usedInHref: '/lesson/t4.l3', preview: 'roofline',
+    metaId: 'roofline', preview: 'roofline',
     concepts: 'bandwidth compute flops hbm ridge prefill decode intensity',
   },
   {
     id: 'sim-wgsl', num: 'SIM-05', title: 'WGSL Playground',
     hook: 'Write a compute shader. Feed it 65,536 floats.',
     track: 'T4', trackColor: '#A78BFA', difficulty: 3,
-    usedIn: 'T4.L5', usedInHref: '/lesson/t4.l5', preview: 'wgsl',
+    metaId: 'wgsl', preview: 'wgsl',
     concepts: 'webgpu compute shader workgroup threads dispatch gpu',
   },
   {
     id: 'sim-quant', num: 'SIM-06', title: 'The Quantizer',
     hook: 'Type 3.14159. Watch it become 4 bits.',
     track: 'T4', trackColor: '#A78BFA', difficulty: 1,
-    usedIn: 'T4.L7', usedInHref: '/lesson/t4.l7', preview: 'quant',
+    metaId: 'quantizer', preview: 'quant',
     concepts: 'fp32 fp16 bf16 fp8 int8 int4 bits quantization error',
   },
   {
     id: 'sim-kv', num: 'SIM-07', title: 'KV-Cache Calculator',
     hook: 'Where did 40 GB of GPU memory go? Do the math.',
     track: 'T5', trackColor: '#FB7185', difficulty: 1,
-    usedIn: 'T5.L4', usedInHref: '/lesson/t5.l4', preview: 'kv',
+    metaId: 'kv-calc', preview: 'kv',
     concepts: 'kv cache hbm memory context length batch gqa oom',
   },
   {
     id: 'sim-batching', num: 'SIM-08', title: 'Continuous Batching Sim',
     hook: 'Schedule tokens like an OS schedules threads.',
     track: 'T5', trackColor: '#FB7185', difficulty: 2,
-    usedIn: 'T5.L6', usedInHref: '/lesson/t5.l6', preview: 'batching',
+    metaId: 'batching', preview: 'batching',
     concepts: 'continuous batching scheduler throughput utilization ttft itl prefill decode',
   },
   {
     id: 'sim-engine', num: 'SIM-09', title: 'Toy Inference Engine',
     hook: 'The whole stack, running at 1 token per second — gloriously visible.',
     track: 'T*', trackColor: '#3EF2A4', difficulty: 3,
-    usedIn: 'capstone', usedInHref: '/capstone', preview: 'engine',
+    metaId: 'engine', preview: 'engine',
     concepts: 'inference engine pipeline tokens tokenizer capstone serving',
   },
 ]
@@ -111,6 +111,8 @@ const TRACK_COLORS: Record<string, string> = {
   T0: '#34D399', T1: '#FBBF24', T2: '#22D3EE', T3: '#F97316',
   T4: '#A78BFA', T5: '#FB7185', 'T*': '#3EF2A4',
 }
+
+const SIM_META_BY_ID = new Map(SIMS.map((sim) => [sim.id, sim]))
 
 /* ------------------------------------------------------------------ */
 /* Live miniature previews — canned demo loops of the real engines     */
@@ -515,6 +517,8 @@ function SimCard({ def, index }: { def: SimCardDef; index: number }) {
   const visits = useProgress((s) => s.sims[def.id]?.visits ?? 0)
   const isEngine = def.id === 'sim-engine'
   const active = hover || tapped
+  const usedIn = SIM_META_BY_ID.get(def.metaId)?.usedIn ?? 'curriculum'
+  const usedInHref = usedIn === 'capstone' ? '/capstone' : `/lesson/${usedIn.toLowerCase()}`
 
   const body = (
     <>
@@ -562,11 +566,11 @@ function SimCard({ def, index }: { def: SimCardDef; index: number }) {
           </span>
           <DifficultyDots level={def.difficulty} color={def.trackColor} />
           <Link
-            to={def.usedInHref}
+            to={usedInHref}
             onClick={(e) => e.stopPropagation()}
             className="rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] text-text-3 transition-colors hover:border-line-bright hover:text-accent"
           >
-            used in {def.usedIn} ↗
+            used in {usedIn} ↗
           </Link>
         </div>
       </div>

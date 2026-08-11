@@ -1,8 +1,9 @@
 //! batching-scheduler — forge lab 06.
 //!
-//! The last piece of the engine: who runs, who waits, who gets preempted.
+//! The admission valve of the engine: who runs, who waits, who gets preempted.
 //! You are graded on what the industry grades on — GOODPUT UNDER SLO —
-//! across four deterministic traffic scenarios. T5.L6, with your hands on
+//! across synthetic overloads and licensed production-shape replays. T5.L7,
+//! with your hands on
 //! the admission valve.
 //!
 //! ┌─────────────────────────────────────────────────────────────────┐
@@ -28,9 +29,10 @@
 //!     Goodput = met / total. Raw throughput is not the metric.
 
 mod scheduler;
+mod trace_scenarios;
 
-use scheduler::Scheduler;
 use kslab::{Check, Report};
+use scheduler::Scheduler;
 
 pub const CHUNK: u32 = 128; // prefill tokens per iteration
 
@@ -65,8 +67,8 @@ pub struct Action {
 
 /* ----------------------------- simulator ---------------------------- */
 /* Everything below is pub so you can build your own baselines
-   (examples/ or tests/) and race them against your policy on the same
-   deterministic scenarios. The graded checks call exactly these. */
+(examples/ or tests/) and race them against your policy on the same
+deterministic scenarios. The graded checks call exactly these. */
 
 pub struct ReqSpec {
     pub id: u32,
@@ -117,20 +119,35 @@ impl Stats {
 
 /// Run one scenario against a policy. Err = illegal action (engine
 /// invariant violated). Deterministic: scenarios are fixed tables.
-pub fn simulate<F: FnMut(&State) -> Action>(scn: &Scenario, policy: &mut F) -> Result<Stats, String> {
+pub fn simulate<F: FnMut(&State) -> Action>(
+    scn: &Scenario,
+    policy: &mut F,
+) -> Result<Stats, String> {
     let mut waiting: Vec<ReqSpec> = Vec::new();
     let mut running: Vec<Seq> = Vec::new();
     let mut ttfts: Vec<u32> = Vec::new();
-    let mut stats = Stats { total: scn.reqs.len(), ..Default::default() };
+    let mut stats = Stats {
+        total: scn.reqs.len(),
+        ..Default::default()
+    };
 
     for t in 0..scn.iters {
         for r in scn.reqs.iter().filter(|r| r.arrival == t) {
-            waiting.push(ReqSpec { id: r.id, arrival: r.arrival, prompt: r.prompt, output: r.output });
+            waiting.push(ReqSpec {
+                id: r.id,
+                arrival: r.arrival,
+                prompt: r.prompt,
+                output: r.output,
+            });
         }
 
         let wviews: Vec<ReqView> = waiting
             .iter()
-            .map(|r| ReqView { id: r.id, arrival: r.arrival, prompt_tokens: r.prompt })
+            .map(|r| ReqView {
+                id: r.id,
+                arrival: r.arrival,
+                prompt_tokens: r.prompt,
+            })
             .collect();
         let rviews: Vec<RunView> = running
             .iter()
@@ -163,7 +180,10 @@ pub fn simulate<F: FnMut(&State) -> Action>(scn: &Scenario, policy: &mut F) -> R
         }
         let post_running = running.len() - action.preempt.len() + action.admit.len();
         if post_running > scn.max_running {
-            return Err(format!("iter {t}: {post_running} running > max_running {}", scn.max_running));
+            return Err(format!(
+                "iter {t}: {post_running} running > max_running {}",
+                scn.max_running
+            ));
         }
         let preempted_mem: u32 = running
             .iter()
@@ -181,13 +201,21 @@ pub fn simulate<F: FnMut(&State) -> Action>(scn: &Scenario, policy: &mut F) -> R
         // Passive growth (decode appending tokens) is handled below by
         // automatic preemption — vLLM's recompute-on-allocation-failure.
         if post_mem > scn.mem_cap && post_mem > cur_mem {
-            return Err(format!("iter {t}: action pushed resident to {post_mem} tokens > mem_cap {}", scn.mem_cap));
+            return Err(format!(
+                "iter {t}: action pushed resident to {post_mem} tokens > mem_cap {}",
+                scn.mem_cap
+            ));
         }
 
         // apply preempt (progress discarded — recompute mode)
         running.retain(|s| {
             if action.preempt.contains(&s.spec.id) {
-                waiting.push(ReqSpec { id: s.spec.id, arrival: s.spec.arrival, prompt: s.spec.prompt, output: s.spec.output });
+                waiting.push(ReqSpec {
+                    id: s.spec.id,
+                    arrival: s.spec.arrival,
+                    prompt: s.spec.prompt,
+                    output: s.spec.output,
+                });
                 false
             } else {
                 true
@@ -200,7 +228,12 @@ pub fn simulate<F: FnMut(&State) -> Action>(scn: &Scenario, policy: &mut F) -> R
                     prefill_left: r.prompt.div_ceil(CHUNK),
                     decoded: 0,
                     ttft: None,
-                    spec: ReqSpec { id: r.id, arrival: r.arrival, prompt: r.prompt, output: r.output },
+                    spec: ReqSpec {
+                        id: r.id,
+                        arrival: r.arrival,
+                        prompt: r.prompt,
+                        output: r.output,
+                    },
                 });
                 false
             } else {
@@ -294,7 +327,14 @@ pub fn scn_light() -> Scenario {
             output: 16 + rng.below(48),
         });
     }
-    Scenario { name: "light", reqs, max_running: 8, mem_cap: 8192, slo_ttft: 40, iters: 800 }
+    Scenario {
+        name: "light",
+        reqs,
+        max_running: 8,
+        mem_cap: 8192,
+        slo_ttft: 40,
+        iters: 800,
+    }
 }
 
 /// A synchronized burst: 48 requests in the first 6 iterations, memory
@@ -311,7 +351,14 @@ pub fn scn_burst() -> Scenario {
             output: 32 + rng.below(64),
         });
     }
-    Scenario { name: "burst", reqs, max_running: 24, mem_cap: 8192, slo_ttft: 90, iters: 1200 }
+    Scenario {
+        name: "burst",
+        reqs,
+        max_running: 24,
+        mem_cap: 8192,
+        slo_ttft: 90,
+        iters: 1200,
+    }
 }
 
 /// The convoy: 88 short requests + one whale with an 8192-token prompt.
@@ -319,11 +366,28 @@ pub fn scn_burst() -> Scenario {
 /// prompt is reserved at admission. Who enters first decides everything.
 pub fn scn_convoy() -> Scenario {
     let mut reqs = Vec::new();
-    reqs.push(ReqSpec { id: 0, arrival: 0, prompt: 8192, output: 24 });
+    reqs.push(ReqSpec {
+        id: 0,
+        arrival: 0,
+        prompt: 8192,
+        output: 24,
+    });
     for i in 1..=88u32 {
-        reqs.push(ReqSpec { id: i, arrival: 0, prompt: 128, output: 24 });
+        reqs.push(ReqSpec {
+            id: i,
+            arrival: 0,
+            prompt: 128,
+            output: 24,
+        });
     }
-    Scenario { name: "convoy", reqs, max_running: 96, mem_cap: 12288, slo_ttft: 40, iters: 1200 }
+    Scenario {
+        name: "convoy",
+        reqs,
+        max_running: 96,
+        mem_cap: 12288,
+        slo_ttft: 40,
+        iters: 1200,
+    }
 }
 
 /// Starvation watch: an effectively endless short stream (arrivals run
@@ -333,7 +397,12 @@ pub fn scn_starvation() -> Scenario {
     let mut rng = Rng(0x57A1);
     let mut reqs = Vec::new();
     for i in 0..3u32 {
-        reqs.push(ReqSpec { id: i, arrival: 0, prompt: 1024, output: 32 });
+        reqs.push(ReqSpec {
+            id: i,
+            arrival: 0,
+            prompt: 1024,
+            output: 32,
+        });
     }
     for i in 3..403u32 {
         reqs.push(ReqSpec {
@@ -345,7 +414,14 @@ pub fn scn_starvation() -> Scenario {
             output: 24 + rng.below(32),
         });
     }
-    Scenario { name: "starvation", reqs, max_running: 5, mem_cap: 12288, slo_ttft: 250, iters: 2500 }
+    Scenario {
+        name: "starvation",
+        reqs,
+        max_running: 5,
+        mem_cap: 12288,
+        slo_ttft: 250,
+        iters: 2500,
+    }
 }
 
 /// The big one: 400 requests over 800 iterations at 2.4× offered load —
@@ -359,11 +435,76 @@ pub fn scn_fleet() -> Scenario {
         reqs.push(ReqSpec {
             id: i,
             arrival: rng.below(1400),
-            prompt: if heavy { 1024 + rng.below(2048) } else { 64 + rng.below(448) },
+            prompt: if heavy {
+                1024 + rng.below(2048)
+            } else {
+                64 + rng.below(448)
+            },
             output: 16 + rng.below(80),
         });
     }
-    Scenario { name: "fleet", reqs, max_running: 12, mem_cap: 16384, slo_ttft: 50, iters: 2500 }
+    Scenario {
+        name: "fleet",
+        reqs,
+        max_running: 12,
+        mem_cap: 16384,
+        slo_ttft: 50,
+        iters: 2500,
+    }
+}
+
+fn scenario_from_trace(
+    name: &'static str,
+    rows: &[(u32, u32, u32)],
+    max_running: usize,
+    mem_cap: u32,
+    slo_ttft: u32,
+    iters: u32,
+) -> Scenario {
+    let reqs = rows
+        .iter()
+        .enumerate()
+        .map(|(id, &(arrival, prompt, output))| ReqSpec {
+            id: id as u32,
+            arrival,
+            prompt,
+            output,
+        })
+        .collect();
+    Scenario {
+        name,
+        reqs,
+        max_running,
+        mem_cap,
+        slo_ttft,
+        iters,
+    }
+}
+
+/// BurstGPT v2.0, busiest aligned hour: 480 recorded requests, replayed
+/// with the exact transformations documented in public/traces/README.md.
+pub fn scn_burstgpt() -> Scenario {
+    scenario_from_trace(
+        "burstgpt",
+        trace_scenarios::BURSTGPT_REQUESTS,
+        8,
+        4_096,
+        40,
+        2_200,
+    )
+}
+
+/// Response-heavy LMSYS shape built only from the public 69.5/214.5-token
+/// means. This is explicitly synthetic timing, not redistributed LMSYS data.
+pub fn scn_lmsys_shape() -> Scenario {
+    scenario_from_trace(
+        "lmsys-shape",
+        trace_scenarios::LMSYS_SHAPE_REQUESTS,
+        64,
+        32_768,
+        120,
+        5_000,
+    )
 }
 
 /* ------------------------------ checks ------------------------------ */
@@ -384,7 +525,10 @@ pub fn check_runs_clean() -> Check {
         Ok(s) if s.completed < s.total => Check::fail(
             ID,
             LABEL,
-            format!("{} of {} requests completed on LIGHT load — is your admit list ever non-empty?", s.completed, s.total),
+            format!(
+                "{} of {} requests completed on LIGHT load — is your admit list ever non-empty?",
+                s.completed, s.total
+            ),
         ),
         Ok(_) => Check::pass(ID, LABEL, "20/20 completed, zero illegal actions"),
     }
@@ -401,9 +545,17 @@ pub fn check_slo_light() -> Check {
         Ok(s) => {
             let g = s.goodput();
             if g < 0.95 {
-                Check::fail(ID, LABEL, format!("goodput {:.1}% < 95% on light load", g * 100.0))
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!("goodput {:.1}% < 95% on light load", g * 100.0),
+                )
             } else {
-                Check::pass(ID, LABEL, format!("goodput {:.1}% (ttft p95 {} iters)", g * 100.0, s.ttft_p95))
+                Check::pass(
+                    ID,
+                    LABEL,
+                    format!("goodput {:.1}% (ttft p95 {} iters)", g * 100.0, s.ttft_p95),
+                )
             }
         }
     }
@@ -419,9 +571,20 @@ pub fn check_burst() -> Check {
         Ok(s) => {
             let g = s.goodput();
             if g < 0.90 {
-                Check::fail(ID, LABEL, format!("goodput {:.1}% < 90% under burst — admit-what-fits beats admit-all", g * 100.0))
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!(
+                        "goodput {:.1}% < 90% under burst — admit-what-fits beats admit-all",
+                        g * 100.0
+                    ),
+                )
             } else {
-                Check::pass(ID, LABEL, format!("goodput {:.1}% under a 48-request burst", g * 100.0))
+                Check::pass(
+                    ID,
+                    LABEL,
+                    format!("goodput {:.1}% under a 48-request burst", g * 100.0),
+                )
             }
         }
     }
@@ -432,7 +595,7 @@ pub fn check_burst() -> Check {
 ///    plain FCFS meets 54 of 89.)
 pub fn check_convoy() -> Check {
     const ID: &str = "convoy";
-    const LABEL: &str = "convoy: shorts survive the whale (â¥ 85 of 89 SLO-met)";
+    const LABEL: &str = "convoy: shorts survive the whale (≥ 85 of 89 SLO-met)";
     let scn = scn_convoy();
     match run(&scn) {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
@@ -444,9 +607,23 @@ pub fn check_convoy() -> Check {
                     format!("{} of {} met SLO — either the whale went first, or decode growth thrashed the pool (leave headroom!)", s.slo_met, s.total),
                 )
             } else if s.completed < s.total {
-                Check::fail(ID, LABEL, format!("{} of {} completed — starving the whale is also wrong", s.completed, s.total))
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!(
+                        "{} of {} completed — starving the whale is also wrong",
+                        s.completed, s.total
+                    ),
+                )
             } else {
-                Check::pass(ID, LABEL, format!("{} of {} met SLO, whale completed, no thrash", s.slo_met, s.total))
+                Check::pass(
+                    ID,
+                    LABEL,
+                    format!(
+                        "{} of {} met SLO, whale completed, no thrash",
+                        s.slo_met, s.total
+                    ),
+                )
             }
         }
     }
@@ -461,7 +638,10 @@ pub fn check_starvation() -> Check {
     match run(&scn) {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
         Ok(s) => {
-            let longs_done = [0u32, 1, 2].iter().filter(|id| s.completed_ids.contains(id)).count();
+            let longs_done = [0u32, 1, 2]
+                .iter()
+                .filter(|id| s.completed_ids.contains(id))
+                .count();
             if longs_done < 3 {
                 Check::fail(
                     ID,
@@ -469,32 +649,105 @@ pub fn check_starvation() -> Check {
                     format!("{longs_done} of 3 longs completed — your size bias starves them. Add aging: priority must grow with wait time"),
                 )
             } else if s.completed < 100 {
-                Check::fail(ID, LABEL, format!("only {} requests completed — the engine is gridlocked", s.completed))
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!(
+                        "only {} requests completed — the engine is gridlocked",
+                        s.completed
+                    ),
+                )
             } else {
-                Check::pass(ID, LABEL, format!("all 3 longs completed; {} total finished in the window", s.completed))
+                Check::pass(
+                    ID,
+                    LABEL,
+                    format!(
+                        "all 3 longs completed; {} total finished in the window",
+                        s.completed
+                    ),
+                )
             }
         }
     }
 }
 
-/// 6. goodput_score: the fleet trace at 2.4Ã offered load — the SLO
-///    cannot be saved for everyone, so goodput IS scheduling quality.
-///    (Calibrated: plain FCFS 5.0%, pure SJF 39.0%.)
+pub const SYNTHETIC_GOODPUT_FLOOR: f64 = 0.55;
+pub const BURSTGPT_GOODPUT_FLOOR: f64 = 0.85;
+pub const LMSYS_SHAPE_GOODPUT_FLOOR: f64 = 0.70;
+
+pub struct GoodputScores {
+    pub synthetic: Stats,
+    pub burstgpt: Stats,
+    pub lmsys_shape: Stats,
+}
+
+impl GoodputScores {
+    pub fn mean(&self) -> f64 {
+        (self.synthetic.goodput() + self.burstgpt.goodput() + self.lmsys_shape.goodput()) / 3.0
+    }
+}
+
+pub fn score_goodput_traces() -> Result<GoodputScores, String> {
+    Ok(GoodputScores {
+        synthetic: run(&scn_fleet())?,
+        burstgpt: run(&scn_burstgpt())?,
+        lmsys_shape: run(&scn_lmsys_shape())?,
+    })
+}
+
+/// 6. goodput_score: one synthetic overload plus the recorded BurstGPT
+///    slice and the licensed-safe LMSYS aggregate shape. Each distribution
+///    has its own calibrated floor; the numeric mean is the leaderboard score.
 pub fn check_goodput_score() -> Check {
     const ID: &str = "goodput_score";
-    const LABEL: &str = "fleet trace: goodput ≥ 55% of 400 requests";
-    let scn = scn_fleet();
-    match run(&scn) {
+    const LABEL: &str = "three replay traces clear calibrated goodput floors";
+    match score_goodput_traces() {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
-        Ok(s) => {
-            let g = s.goodput();
-            if g < 0.55 {
-                Check::fail(ID, LABEL, format!("goodput {:.1}% < 40% on the fleet trace (plain FCFS gets 10%, pure SJF 63% — but SJF starves, check 5)", g * 100.0))
+        Ok(scores) => {
+            let synthetic = scores.synthetic.goodput();
+            let burstgpt = scores.burstgpt.goodput();
+            let lmsys = scores.lmsys_shape.goodput();
+            if synthetic < SYNTHETIC_GOODPUT_FLOOR {
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!(
+                        "synthetic goodput {:.1}% < {:.1}% floor",
+                        synthetic * 100.0,
+                        SYNTHETIC_GOODPUT_FLOOR * 100.0,
+                    ),
+                )
+            } else if burstgpt < BURSTGPT_GOODPUT_FLOOR {
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!(
+                        "BurstGPT goodput {:.1}% < {:.1}% floor",
+                        burstgpt * 100.0,
+                        BURSTGPT_GOODPUT_FLOOR * 100.0,
+                    ),
+                )
+            } else if lmsys < LMSYS_SHAPE_GOODPUT_FLOOR {
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!(
+                        "LMSYS-shape goodput {:.1}% < {:.1}% floor",
+                        lmsys * 100.0,
+                        LMSYS_SHAPE_GOODPUT_FLOOR * 100.0,
+                    ),
+                )
             } else {
                 Check::pass(
                     ID,
                     LABEL,
-                    format!("goodput {:.1}% · {}/{} SLO-met · ttft p95 {} iters", g * 100.0, s.slo_met, s.total, s.ttft_p95),
+                    format!(
+                        "mean {:.1}% · synthetic {:.1}% · BurstGPT {:.1}% · LMSYS-shape {:.1}%",
+                        scores.mean() * 100.0,
+                        synthetic * 100.0,
+                        burstgpt * 100.0,
+                        lmsys * 100.0,
+                    ),
                 )
             }
         }
@@ -517,7 +770,11 @@ pub fn self_checks() -> Vec<Check> {
 
 #[no_mangle]
 pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report { lab: "batching-scheduler", version: 1, checks: self_checks() };
+    let report = Report {
+        lab: "batching-scheduler",
+        version: 2,
+        checks: self_checks(),
+    };
     kslab::emit(&report)
 }
 
@@ -525,6 +782,7 @@ pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
 /* The Fleet page (/fleet, engine mode) drives YOUR scheduler live:
 
      init                                   → ok   (fresh Scheduler)
+     score                                  → four numeric score lines
      schedule <iter> <max_running> <mem_cap> <mem_used>
        W <id> <arrival> <prompt> ; …        waiting view (id arrival prompt)
        R <id> <arrival> <prompt> <decoded> <prefill_left> ; …
@@ -547,15 +805,29 @@ pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
 
 fn bridge(slot: &mut Option<Scheduler>, input: &str) -> String {
     let mut lines = input.lines();
-    let Some(head) = lines.next() else { return "err empty".into() };
+    let Some(head) = lines.next() else {
+        return "err empty".into();
+    };
     let parts: Vec<&str> = head.split_whitespace().collect();
     match parts.first().copied() {
         Some("init") => {
             *slot = Some(Scheduler::new());
             "ok".into()
         }
+        Some("score") if parts.len() == 1 => match score_goodput_traces() {
+            Ok(scores) => format!(
+                "synthetic {:.6}\nburstgpt {:.6}\nlmsys-shape {:.6}\nmean {:.6}",
+                scores.synthetic.goodput() * 100.0,
+                scores.burstgpt.goodput() * 100.0,
+                scores.lmsys_shape.goodput() * 100.0,
+                scores.mean() * 100.0,
+            ),
+            Err(error) => format!("err {error}"),
+        },
         Some("schedule") if parts.len() == 5 => {
-            let Some(sch) = slot.as_mut() else { return "err not initialized".into() };
+            let Some(sch) = slot.as_mut() else {
+                return "err not initialized".into();
+            };
             let (Ok(iter), Ok(max_running), Ok(mem_cap), Ok(mem_used)) = (
                 parts[1].parse::<u32>(),
                 parts[2].parse::<usize>(),
@@ -575,18 +847,34 @@ fn bridge(slot: &mut Option<Scheduler>, input: &str) -> String {
                             if let (Ok(id), Ok(arrival), Ok(prompt_tokens)) =
                                 (f[1].parse(), f[2].parse(), f[3].parse())
                             {
-                                waiting.push(ReqView { id, arrival, prompt_tokens });
+                                waiting.push(ReqView {
+                                    id,
+                                    arrival,
+                                    prompt_tokens,
+                                });
                             }
                         }
                         Some("R") if f.len() == 6 => {
-                            if let (Ok(id), Ok(arrival), Ok(prompt_tokens), Ok(decoded), Ok(prefill_left)) = (
+                            if let (
+                                Ok(id),
+                                Ok(arrival),
+                                Ok(prompt_tokens),
+                                Ok(decoded),
+                                Ok(prefill_left),
+                            ) = (
                                 f[1].parse(),
                                 f[2].parse(),
                                 f[3].parse(),
                                 f[4].parse(),
                                 f[5].parse(),
                             ) {
-                                running.push(RunView { id, arrival, prompt_tokens, decoded, prefill_left });
+                                running.push(RunView {
+                                    id,
+                                    arrival,
+                                    prompt_tokens,
+                                    decoded,
+                                    prefill_left,
+                                });
                             }
                         }
                         _ => {}
@@ -601,7 +889,11 @@ fn bridge(slot: &mut Option<Scheduler>, input: &str) -> String {
                 running: &running,
             });
             let csv = |v: Vec<u32>| v.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
-            format!("admit {}\npreempt {}", csv(action.admit), csv(action.preempt))
+            format!(
+                "admit {}\npreempt {}",
+                csv(action.admit),
+                csv(action.preempt)
+            )
         }
         _ => "err unknown command".into(),
     }

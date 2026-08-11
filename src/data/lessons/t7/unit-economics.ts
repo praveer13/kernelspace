@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 30,
   hook: 'DeepSeek published a full day of production arithmetic: 226 nodes, $87k cost, 608B input tokens, 545% theoretical margin. Reproduce it from first principles, and you can price any serving business on a napkin.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',

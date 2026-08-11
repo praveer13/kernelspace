@@ -9,7 +9,9 @@
 //! done: a synchronized burst (admission control), an 8192-token whale
 //! arriving with 88 shorts (the convoy), a never-ending short stream
 //! with three longs inside (starvation), and a 400-request fleet trace
-//! at 1.2× offered load.
+//! at 2.4× offered load. The final score also replays the recorded BurstGPT
+//! slice and a response-heavy LMSYS published-aggregate shape. The exact
+//! provenance, time scaling, and clamps live in public/traces/README.md.
 //!
 //! What you know at each call (see src/lib.rs for the types):
 //!   * waiting: id, arrival, prompt_tokens  (output length is HIDDEN —

@@ -43,6 +43,7 @@
 //! ordering wrong and the native `stress_threads` test will find it — maybe
 //! not on your first run. Run it ten times.
 
+#[allow(unused_imports)] // imports become live as the student completes the template
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 
 pub struct Queue {

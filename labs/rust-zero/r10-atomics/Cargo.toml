@@ -1,0 +1,12 @@
+[package]
+name = "rust-zero-r10"
+version = "0.1.0"
+edition = "2021"
+description = "Rust Zero R10 — atomics and memory orderings"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rust-zero-harness = { path = "../harness" }

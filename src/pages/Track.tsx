@@ -3,7 +3,7 @@
  * outcomes, full lesson list with hooks, linked-sim cards, prev/next track.
  */
 
-import { Link, useParams } from 'react-router'
+import { Link, Navigate, useParams } from 'react-router'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -45,8 +45,11 @@ function TrackNotFound({ id }: { id?: string }) {
 
 export default function TrackPage() {
   const { trackId } = useParams()
+  if (trackId === 'capstone' || trackId === 't*') {
+    return <Navigate to="/capstone" replace />
+  }
   const track = trackId ? getTrack(trackId) : undefined
-  if (!track) return <TrackNotFound id={trackId} />
+  if (!track || !(track.id in TRACK_EXTRAS)) return <TrackNotFound id={trackId} />
   return <TrackView key={track.id} trackId={track.id as TrackId} />
 }
 
@@ -164,7 +167,7 @@ function TrackView({ trackId }: { trackId: TrackId }) {
                   <Play size={15} />
                   {started ? `Resume · L${resume.index} ${resume.title}` : 'Start track'}
                 </Link>
-                {trackId !== 't0' && (
+                {trackId !== 'r' && (
                   <Link
                     to="/curriculum?placement=1"
                     className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-4 py-2.5 font-display text-body-sm font-medium text-text-1 transition-colors duration-150 hover:border-line-bright"

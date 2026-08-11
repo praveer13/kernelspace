@@ -139,7 +139,6 @@ function useTaskAward(simId: string, log: (kind: LogKind, text: string) => void)
       const st = useProgress.getState()
       if (st.sims[simId]?.tasksDone.includes(taskId)) return
       st.recordSimTask(simId, taskId)
-      useProgress.setState((p) => ({ xp: p.xp + xp }))
       log('ok', `TASK ✓ ${note}  (+${xp} XP)`)
     },
     [simId, log],
@@ -336,8 +335,8 @@ interface RowData {
 const TASKS = [
   { id: 'q-fp16', text: 'Quantize π (3.14159…) to FP16 and read the reconstruction error', xp: 60 },
   { id: 'q-int4-max', text: 'Find the largest exactly-representable INT4 value (zero error at q = ±7)', xp: 60 },
-  { id: 'q-group-compare', text: 'Run per-tensor INT4, then group-128, and compare max error and drift', xp: 60 },
-  { id: 'q-outlier', text: 'Inject the 47.3 outlier, then rescue the INT distribution by shrinking group size', xp: 60 },
+  { id: 'q-group-compare', text: 'Calibrate per-tensor INT4, then group-128; compare max error and distribution drift', xp: 60 },
+  { id: 'q-outlier', text: 'Run the AWQ-style challenge: inject the 47.3 salient outlier, then rescue its group', xp: 60 },
 ]
 
 const GROUP_SIZES = [256, 128, 64, 32, 16]
