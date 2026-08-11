@@ -29,9 +29,10 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-      # SPA fallback: GitHub Pages serves 404.html for unknown paths,
-      # and React Router takes over from there.
-      - run: cp dist/index.html dist/404.html
+      # Known BrowserRouter URLs receive real index documents (HTTP 200 after
+      # Pages' canonical trailing-slash redirect). Unknown URLs retain the SPA
+      # fallback so React Router can render its own not-found experience.
+      - run: node scripts/prepare-pages.mjs
 
       - uses: actions/upload-pages-artifact@v3
         with:
