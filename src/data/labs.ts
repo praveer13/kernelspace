@@ -12,6 +12,8 @@ import type { TrackId } from '@/data/lessons/types'
 export interface ForgeLabCheck {
   id: string
   label: string
+  /** Plain-language behavior contract shown before the first run. */
+  expectation?: string
   /** Advanced extension that is reported but does not gate lab completion. */
   optional?: boolean
 }
@@ -35,6 +37,8 @@ export interface ForgeLab {
   editFile: string
   /** directory entered from the extracted workspace root; defaults to id */
   crateDir?: string
+  /** Authoritative syntax references for concepts used by the student file. */
+  syntaxReferences?: { label: string; href: string }[]
   /** Rust Zero lessons expected before a systems lab */
   readiness?: {
     label: string
@@ -61,20 +65,59 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r1.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r1-bindings',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · variables, mutability, and shadowing',
+        href: 'https://doc.rust-lang.org/book/ch03-01-variables-and-mutability.html',
+      },
+      {
+        label: 'Rust Book · scalar types and tuples',
+        href: 'https://doc.rust-lang.org/book/ch03-02-data-types.html',
+      },
+      {
+        label: 'Rust Book · if expressions and for loops',
+        href: 'https://doc.rust-lang.org/book/ch03-05-control-flow.html',
+      },
+    ],
     completion: {
       title: 'six green — Rust syntax has stopped being scenery.',
       next: 'next: R2 turns the same expression model into functions, loops, and match.',
     },
     checks: [
-      { id: 'mut_accumulate', label: 'mutable accumulation' },
-      { id: 'shadow_convert', label: 'shadow a value into a new type' },
-      { id: 'typed_average', label: 'explicit numeric conversion' },
-      { id: 'block_value', label: 'return a block expression' },
-      { id: 'branch_value', label: 'if as a value' },
-      { id: 'destructure', label: 'tuple destructuring' },
+      {
+        id: 'mut_accumulate',
+        label: 'mutable accumulation',
+        expectation: 'sum every item in the input slice, including negative values',
+      },
+      {
+        id: 'shadow_convert',
+        label: 'shadow a value into a new type',
+        expectation: 'convert KiB to bytes (1 KiB = 1024 bytes) and return a u64',
+      },
+      {
+        id: 'typed_average',
+        label: 'explicit numeric conversion',
+        expectation: 'return a floating-point average without doing integer division first',
+      },
+      {
+        id: 'block_value',
+        label: 'return a block expression',
+        expectation: 'return blocks × items per block as the value of an inner block',
+      },
+      {
+        id: 'branch_value',
+        label: 'if as a value',
+        expectation: 'label the load "open" below capacity and "full" otherwise',
+      },
+      {
+        id: 'destructure',
+        label: 'tuple destructuring',
+        expectation: 'return the two members of the input pair in reverse order',
+      },
     ],
     brief: [
-      'This is rustlings in the same harness as the systems Forge: six single-purpose functions, each small enough that the compiler message is the lesson. Replace the todo bodies in src/exercises.rs; do not change the signatures.',
+      'This is rustlings in the same harness as the systems Forge: six single-purpose functions. Replace the todo bodies in src/exercises.rs one at a time; do not change the signatures.',
+      'The todo!() bodies deliberately compile, so the first cargo test only reports that they are unfinished. Read the contracts below and the examples in src/lib.rs first. Compiler feedback becomes useful after you start replacing a body.',
       'The checks establish the syntax every later crate assumes: immutable-by-default bindings, deliberate mutability, shadowing, typed arithmetic, and expression-valued blocks.',
     ],
   },
@@ -90,6 +133,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r2.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r2-control-flow',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · if, while, loop, for, and break values',
+        href: 'https://doc.rust-lang.org/book/ch03-05-control-flow.html',
+      },
+      {
+        label: 'Rust Book · match expressions and guards',
+        href: 'https://doc.rust-lang.org/book/ch06-02-match.html',
+      },
+    ],
     completion: {
       title: 'six green — ordinary control flow is now ordinary Rust.',
       next: 'next: R3 adds the rule that changes how values cross those function boundaries.',
@@ -119,6 +172,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r3.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r3-ownership',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · ownership, moves, and clone',
+        href: 'https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html',
+      },
+      {
+        label: 'std::mem::replace · move a field while replacing it',
+        href: 'https://doc.rust-lang.org/std/mem/fn.replace.html',
+      },
+    ],
     completion: {
       title: 'six green — you can follow the single drop obligation.',
       next: 'next: R4 lends values across functions without transferring that obligation.',
@@ -148,6 +211,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r4.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r4-borrowing',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · references and mutable borrowing',
+        href: 'https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html',
+      },
+      {
+        label: 'Rust std · slice methods, indexing, and split_at_mut',
+        href: 'https://doc.rust-lang.org/std/primitive.slice.html',
+      },
+    ],
     completion: {
       title: 'six green — many readers or one writer is now muscle memory.',
       next: 'next: R5 uses those references inside real domain types and fallible APIs.',
@@ -177,6 +250,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r5.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r5-modeling',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · enums, Option, and pattern matching',
+        href: 'https://doc.rust-lang.org/book/ch06-00-enums.html',
+      },
+      {
+        label: 'Rust Book · Result, recoverable errors, and ?',
+        href: 'https://doc.rust-lang.org/book/ch09-00-error-handling.html',
+      },
+    ],
     completion: {
       title: 'six green — invalid and fallible states are visible in your types.',
       next: 'next: R6 fills those models with Vec, HashMap, closures, and iterator pipelines.',
@@ -206,6 +289,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r6.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r6-collections',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · iterator adapters and closure capture',
+        href: 'https://doc.rust-lang.org/book/ch13-02-iterators.html',
+      },
+      {
+        label: 'Rust std · HashMap Entry API',
+        href: 'https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html',
+      },
+    ],
     completion: {
       title: 'six green — the Forge data paths are now familiar.',
       next: 'next: R7 chooses explicit heap and shared-ownership policies.',
@@ -235,6 +328,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r7.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r7-smart-pointers',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · Box, Rc, reference cycles, and Weak',
+        href: 'https://doc.rust-lang.org/book/ch15-00-smart-pointers.html',
+      },
+      {
+        label: 'Rust std · Arc methods and strong-count behavior',
+        href: 'https://doc.rust-lang.org/std/sync/struct.Arc.html',
+      },
+    ],
     completion: {
       title: 'six green — pointer types now read as ownership policies.',
       next: 'next: R8 adds controlled mutation behind shared access.',
@@ -264,6 +367,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r8.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r8-interior-mutability',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · RefCell and interior mutability',
+        href: 'https://doc.rust-lang.org/book/ch15-05-interior-mutability.html',
+      },
+      {
+        label: 'Rust std · Mutex and MutexGuard',
+        href: 'https://doc.rust-lang.org/std/sync/struct.Mutex.html',
+      },
+    ],
     completion: {
       title: 'six green — shared mutation has an explicit enforcement mechanism.',
       next: 'next: R9 makes reference validity relationships explicit in APIs and structs.',
@@ -293,6 +406,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r9.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r9-lifetimes',
+    syntaxReferences: [
+      {
+        label: 'Rust Book · lifetime syntax and relationships',
+        href: 'https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html',
+      },
+      {
+        label: 'Rust std · borrowed slice operations',
+        href: 'https://doc.rust-lang.org/std/primitive.slice.html',
+      },
+    ],
     completion: {
       title: 'six green — lifetime syntax now describes contracts, not incantations.',
       next: 'next: R10 closes the ramp with the ordering protocol required by lock-free code.',
@@ -322,6 +445,16 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
     artifact: 'target/wasm32-unknown-unknown/release/rust_zero_r10.wasm',
     editFile: 'src/exercises.rs',
     crateDir: 'rust-zero/r10-atomics',
+    syntaxReferences: [
+      {
+        label: 'Rust std · atomic Ordering',
+        href: 'https://doc.rust-lang.org/std/sync/atomic/enum.Ordering.html',
+      },
+      {
+        label: 'Rust Atomics and Locks · practical memory ordering',
+        href: 'https://marabos.nl/atomics/',
+      },
+    ],
     completion: {
       title: 'six green — you can name the happens-before edge.',
       next: 'next: MPMC queue lab 04 is unlocked; its cursor and slot protocol uses this vocabulary directly.',

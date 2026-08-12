@@ -29,7 +29,7 @@ const LAB_GROUPS = [
     id: 'rust-zero',
     eyebrow: 'Track R · Rust Zero',
     title: 'Compiler-driven micro-drills',
-    body: 'Ten small crates, one per lesson. Finish the TODO functions and let rustc teach the ownership rule at the exact line that breaks it.',
+    body: 'Ten small crates, one per lesson. The lesson supplies the syntax, each page states the behavior contract, and rustc checks your implementation one function at a time.',
     labs: RUST_ZERO_LABS,
   },
   {

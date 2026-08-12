@@ -12,10 +12,13 @@ except nothing at all.
 
 **Lane A — your own machine (fastest if you have Rust)**
 
+Open any Forge drill or lab page and copy its **one-command workspace** line.
+It creates a fresh directory, downloads that exercise's standalone ZIP,
+extracts it, and enters the correct crate. The command stops rather than
+overwriting the directory if you already started that exercise. Then:
+
 ```sh
 rustup target add wasm32-unknown-unknown   # one time
-cd <crate directory shown on the Forge page>
-# examples: rust-allocator · rust-zero/r1-bindings
 cargo test                                  # red → green
 cargo build --release --target wasm32-unknown-unknown
 # drop target/wasm32-unknown-unknown/release/<crate_name>.wasm

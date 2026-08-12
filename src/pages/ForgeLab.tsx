@@ -7,6 +7,7 @@ import {
   BookOpenCheck,
   Check,
   ChevronRight,
+  Copy,
   Download,
   FileCode,
   Terminal,
@@ -55,6 +56,7 @@ export default function ForgeLab() {
 
   const [run, setRun] = useState<RunState>({ kind: 'idle' })
   const [dragOver, setDragOver] = useState(false)
+  const [setupCopied, setSetupCopied] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -117,6 +119,15 @@ export default function ForgeLab() {
   const report = run.kind === 'report' ? run.report : null
   const requiredChecks = lab.checks.filter((check) => !check.optional)
   const optionalChecks = lab.checks.filter((check) => check.optional)
+  const archiveName = lab.zip.split('/').pop() ?? `${lab.id}.zip`
+  const downloadUrl = new URL(lab.zip, window.location.origin).href
+  const workspaceDir = lab.id
+  const setupCommand =
+    `test ! -e ${workspaceDir} && ` +
+    `curl -fsSL ${downloadUrl} -o ${archiveName} && ` +
+    `mkdir ${workspaceDir} && ` +
+    `unzip -q ${archiveName} -d ${workspaceDir} && ` +
+    `cd ${workspaceDir}/${lab.crateDir ?? lab.id}`
   const requiredReportChecks = report?.checks.filter((check) =>
     requiredChecks.some((expected) => expected.id === check.id),
   )
@@ -217,6 +228,107 @@ export default function ForgeLab() {
         ))}
       </div>
 
+      {/* start here */}
+      <section className="mt-8 max-w-3xl overflow-hidden rounded-lg border border-line bg-surface-1">
+        <div className="border-b border-line px-5 py-4">
+          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">
+            start here · the contract before the compiler
+          </p>
+          <p className="mt-1 text-body-sm text-text-2">
+            A remaining <span className="font-mono text-[12px] text-text-1">todo!()</span> is
+            expected to panic. It is a placeholder, not a useful compiler diagnostic.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-[0.9fr_1.1fr]">
+          <div className="border-b border-line p-5 md:border-b-0 md:border-r">
+            <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">
+              <BookOpenCheck className="h-3.5 w-3.5" /> before editing
+            </p>
+            <ol className="mt-3 space-y-3 text-body-sm text-text-2">
+              {lesson && (
+                <li>
+                  <span className="mr-2 font-mono text-accent">1.</span>
+                  Read{' '}
+                  <Link to={`/lesson/${lesson.id}`} className="text-accent underline">
+                    {lesson.id.toUpperCase()} · {lesson.title}
+                  </Link>
+                  .{' '}
+                  {lab.trackId === 'r'
+                    ? 'Its examples are the first syntax reference for this exercise.'
+                    : 'It explains the system this lab asks you to implement.'}
+                </li>
+              )}
+              <li>
+                <span className="mr-2 font-mono text-accent">{lesson ? '2.' : '1.'}</span>
+                Open <span className="font-mono text-[12px] text-text-1">src/lib.rs</span> and
+                read the check inputs and expected outputs. That file is the read-only spec.
+              </li>
+              <li>
+                <span className="mr-2 font-mono text-accent">{lesson ? '3.' : '2.'}</span>
+                Edit only{' '}
+                <span className="font-mono text-[12px] text-text-1">{lab.editFile}</span>, one
+                function at a time, without changing its signature.
+              </li>
+            </ol>
+            {lab.trackId === 'r' && requiredChecks[0] && (
+              <div className="mt-4 rounded border border-line bg-ink p-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-3">
+                  run only the first check
+                </p>
+                <code className="mt-1 block overflow-x-auto font-mono text-[12px] text-text-1">
+                  cargo test {requiredChecks[0].id}
+                </code>
+              </div>
+            )}
+          </div>
+          <div className="p-5">
+            <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">
+              <Check className="h-3.5 w-3.5" /> what green means
+            </p>
+            <ol className="mt-3 space-y-2.5">
+              {lab.checks.map((check, index) => (
+                <li key={check.id} className="flex items-start gap-2.5 text-body-sm text-text-2">
+                  <span className="mt-0.5 font-mono text-[10px] text-text-3">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <span>
+                    <span className="text-text-1">{check.label}</span>
+                    {check.optional && (
+                      <span className="ml-1.5 rounded border border-amber/40 px-1 py-0.5 font-mono text-[9px] uppercase text-amber">
+                        advanced
+                      </span>
+                    )}
+                    {check.expectation && (
+                      <span className="block text-text-3">{check.expectation}</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+        {lab.syntaxReferences && lab.syntaxReferences.length > 0 && (
+          <div className="border-t border-line px-5 py-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
+              syntax references · use these when a method name is unfamiliar
+            </p>
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
+              {lab.syntaxReferences.map((reference) => (
+                <a
+                  key={reference.href}
+                  href={reference.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-body-sm text-accent underline"
+                >
+                  {reference.label} <ChevronRight className="h-3 w-3" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* get the lab */}
       <section className="mt-12">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-3">
@@ -235,13 +347,50 @@ export default function ForgeLab() {
             </div>
           ))}
         </div>
-        <a
-          href={lab.zip}
-          download
-          className="mt-4 inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-4 py-2 font-mono text-sm text-accent transition-colors hover:bg-accent/20"
-        >
-          <Download className="h-4 w-4" /> download {lab.id}.zip
-        </a>
+        <div className="mt-4 overflow-hidden rounded-lg border border-line bg-surface-1">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-1">
+                one-command workspace
+              </p>
+              <p className="mt-0.5 text-body-sm text-text-3">
+                macOS, Linux, or WSL · requires curl and unzip
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(setupCommand).catch(() => undefined)
+                setSetupCopied(true)
+                window.setTimeout(() => setSetupCopied(false), 1200)
+              }}
+              className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-text-3 transition-colors hover:text-text-1"
+              aria-label="Copy workspace setup command"
+            >
+              {setupCopied ? (
+                <Check className="h-3.5 w-3.5 text-accent" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              {setupCopied ? 'copied' : 'copy'}
+            </button>
+          </div>
+          <pre className="overflow-x-auto bg-ink p-4 font-mono text-[12px] leading-relaxed text-text-1">
+            {setupCommand}
+          </pre>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
+            <p className="text-body-sm text-text-3">
+              Creates a fresh folder and enters the exercise crate. It stops if that folder already exists.
+            </p>
+            <a
+              href={lab.zip}
+              download
+              className="inline-flex shrink-0 items-center gap-2 font-mono text-[11px] text-accent underline"
+            >
+              <Download className="h-3.5 w-3.5" /> download ZIP instead
+            </a>
+          </div>
+        </div>
       </section>
 
       {/* make it green */}

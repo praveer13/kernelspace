@@ -41,9 +41,31 @@ let label = if admitted < capacity {
 
 ---
 
+## The two small shapes the drill also uses
+
+R1 asks you to accumulate values from a slice and swap a tuple. A **for** loop visits each item; a **let pattern** names tuple members. These are ordinary bindings, not two new systems concepts:
+
+---
+
+```rust
+let samples = [3, -1, 4];
+let mut total = 0;
+for sample in samples {
+    total += sample;
+}
+
+let point = (12, 7);
+let (x, y) = point;            // destructure the tuple
+let transposed = (y, x);
+```
+
+---
+
 ## Make rustc prove the basics
 
-The [R1 Forge drill](/forge/rust-zero-r1) contains six small functions: mutable accumulation, shadowing, explicit conversion, block expressions, conditional values, and tuple destructuring. Download it, replace every **todo!()**, then upload the Wasm artifact. Keep the compiler output open; it is part of the lesson.
+The [R1 Forge drill](/forge/rust-zero-r1) contains six small functions: mutable accumulation, shadowing, explicit conversion, block expressions, conditional values, and tuple destructuring. Its page now lists each behavior contract. Inside the workspace, read **src/lib.rs** for the exact example inputs and outputs, but edit only **src/exercises.rs**.
+
+The starter **todo!()** bodies deliberately compile and then panic, so the first test run only says “unfinished.” That is expected. Once you replace one body, rustc's type errors become specific feedback about that attempt. Work one function and one check at a time.
 
 ---
 
