@@ -120,7 +120,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
     {
       type: 'deepdive',
       title: 'HiCache: one cache becomes three tiers',
-      md: `HBM is fast and scarce; host DRAM is larger; local or remote storage is larger again. **HiCache-style tiering** treats prefix KV like a database buffer hierarchy: L1 GPU for the hottest branches, L2 host memory for warm prefixes, L3 storage for durable or fleet-wide reuse. A lower-tier hit still avoids model prefill, but it pays transfer latency — so promotion, admission, and eviction use recompute cost as well as recency. Long prefixes are expensive to recompute and deserve different treatment from tiny ones. T6.L3's NIXL/KVBM transfer fabric is what makes this hierarchy a fleet primitive rather than an engine trick.`,
+      md: `HBM is fast and scarce; host DRAM is larger; local or remote storage is larger again. **HiCache-style tiering** treats prefix KV like a database buffer hierarchy: L1 GPU for the hottest branches, L2 host memory for warm prefixes, L3 storage for durable or fleet-wide reuse. A lower-tier hit still avoids model prefill, but it pays transfer latency — so promotion, admission, and eviction use recompute cost as well as recency. Long prefixes are expensive to recompute and deserve different treatment from tiny ones. T6.L3's transfer layer (NIXL, Mooncake's transfer engine) is what makes this hierarchy a fleet primitive rather than an engine trick. Dynamo's KVBM tier manager was deprecated in v1.5.0 in favor of engine-native offload: tiering belongs to the cache owner, transport stays a separate layer.`,
     },
     {
       type: 'callout',
