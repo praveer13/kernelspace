@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, X, RotateCcw } from 'lucide-react'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
@@ -29,7 +29,9 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E']
 
 /**
  * QuizBlock — inline lesson checkpoint (design.md §9.10).
- * Submit → per-option feedback (mint wash + check / danger wash + shake),
+ * Submit → per-option feedback (mint wash + check / danger wash + shake, no shake under
+ * reduced motion). The option letter stays visible after submit, beside the verdict icon,
+ * so the per-option `why` list always resolves to a visible option.
  * explanation expands, score persists to the progress store. Pass ≥80%
  * lights the checkpoint mint. Retry resets with a staggered fade.
  * Options are shuffled per attempt (PLAN-100X §5.1 V1): letters label display
@@ -40,6 +42,7 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
   const [selected, setSelected] = useState<Record<number, Set<number>>>({})
   const [submitted, setSubmitted] = useState(false)
   const [seed, setSeed] = useState(freshSeed)
+  const reducedMotion = useReducedMotion()
 
   // order[qi][displayPosition] = authored option index; new seed → new order
   const orders = useMemo(
@@ -151,7 +154,7 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                       type="button"
                       onClick={() => toggle(qi, oi, q.multi)}
                       disabled={submitted}
-                      animate={wrongPick ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
+                      animate={wrongPick && !reducedMotion ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
                       transition={{ duration: 0.3 }}
                       className={cn(
                         'flex w-full items-center gap-3 rounded-md border px-3.5 py-2.5 text-left text-body-sm transition-colors duration-150',
@@ -170,16 +173,23 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                           'flex h-5 w-5 shrink-0 items-center justify-center rounded border font-mono text-[10px]',
                           rightPick
                             ? 'border-accent bg-accent text-accent-foreground'
-                            : isSel
-                              ? 'border-line-bright bg-surface-1 text-text-1'
-                              : 'border-line text-text-3',
+                            : wrongPick
+                              ? 'border-danger bg-danger/10 text-danger'
+                              : isSel
+                                ? 'border-line-bright bg-surface-1 text-text-1'
+                                : 'border-line text-text-3',
                         )}
                       >
-                        {rightPick ? <Check size={11} /> : LETTERS[di]}
+                        {LETTERS[di]}
                       </span>
                       <span className="flex-1">{opt}</span>
-                      {wrongPick && <X size={14} className="shrink-0 text-danger" />}
-                      {rightPick && <Check size={14} className="shrink-0 text-accent" />}
+                      {wrongPick && <X size={14} className="shrink-0 text-danger" aria-hidden />}
+                      {rightPick && <Check size={14} className="shrink-0 text-accent" aria-hidden />}
+                      {showVerdict && (rightPick || wrongPick) && (
+                        <span className="sr-only">
+                          {rightPick ? (isSel ? 'your pick, correct' : 'correct answer') : 'your pick, wrong'}
+                        </span>
+                      )}
                     </motion.button>
                   )
                 })}
