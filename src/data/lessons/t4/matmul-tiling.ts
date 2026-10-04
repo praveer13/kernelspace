@@ -106,7 +106,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
       machine: 'roofline',
       title: 'Tiling playground: matmul to FlashAttention',
       tasks: [
-        'Run naive matmul (N=4096): measure AI ≈ 0.5 F/B at FP16 and the resulting bandwidth wall.',
+        'Start at the smallest tile, T = 16: read AI = T/2 = 8 F/B and the HBM traffic. Naive matmul is the T = 1 case, 0.5 F/B at FP16, below the slider, so compute it by hand and compare.',
         'Sweep tile T = 16 → 128: plot HBM traffic (∝ 1/T) and delivered TFLOPs; locate the compute roof.',
         'Oversize the tile until shared memory limits occupancy; observe the U-shaped performance curve.',
         'Toggle the attention view: naive (materialize S) vs flash (online softmax); compare HBM bytes at 32k context.',
