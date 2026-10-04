@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import {
   applyImport,
   buildExportV3,
@@ -17,7 +17,9 @@ import { IMPORT_MAX_BYTES, SCHEMA_VERSION } from '../../src/lib/ledger/constants
 import { derive } from '../../src/lib/ledger/fold'
 import { mergeLedgers, type Ledger } from '../../src/lib/ledger/merge'
 import type { LedgerEvent } from '../../src/lib/ledger/types'
-import { evt, forSeeds, ledgerKey, runOps } from './gen'
+import { evt, forSeeds, ledgerKey, runOps, PROPERTY_TIMEOUT_MS } from './gen'
+
+setDefaultTimeout(PROPERTY_TIMEOUT_MS)
 
 const T1 = '2026-09-01T09:00:00.000Z'
 const T2 = '2026-09-02T09:00:00.000Z'

@@ -3,7 +3,7 @@
  * export and import (merge or replace), undo, reset, and the end-to-end properties P3 (double import),
  * P5 (two-device merge) and P9 (undo) run through real engines on MemoryStore (Addendum A1, A4).
  */
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { ChannelLike } from '../../src/lib/ledger/channel'
 import { buildExportV3, serializeExport } from '../../src/lib/ledger/codec'
 import { SCHEMA_VERSION } from '../../src/lib/ledger/constants'
@@ -15,7 +15,9 @@ import { OUTBOX_PREFIX, SNAPSHOT_KEY } from '../../src/lib/ledger/names'
 import { appendToOutbox, outboxKey, readOutbox } from '../../src/lib/ledger/outbox'
 import { stableStringify } from '../../src/lib/ledger/stable'
 import type { ChannelMessage, LedgerEvent, StoreTx, VisitEvent, WorkingRecord } from '../../src/lib/ledger/types'
-import { forSeeds, ledgerKey, OPS, runOps, evt, SEEDS } from './gen'
+import { forSeeds, ledgerKey, OPS, runOps, evt, SEEDS, PROPERTY_TIMEOUT_MS } from './gen'
+
+setDefaultTimeout(PROPERTY_TIMEOUT_MS)
 import { makeProfile, startTab, tick, T0, type Profile } from './env'
 
 const iso = (ms: number) => new Date(ms).toISOString()

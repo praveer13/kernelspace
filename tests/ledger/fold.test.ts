@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { derive, emptyAggregate, fold } from '../../src/lib/ledger/fold'
 import { refMatchesKind } from '../../src/lib/ledger/refs'
 import { canonicalRef, parseQuizItemRef, parseSimTaskRef } from '../../src/lib/ledger/refs'
@@ -7,7 +7,9 @@ import { dayOf } from '../../src/lib/ledger/time'
 import { factXp, summary, toProgressData, workingMap, xpOf } from '../../src/lib/ledger/view'
 import type { LedgerEvent, WorkingRecord } from '../../src/lib/ledger/types'
 import { XP, nextRank, rankForXp } from '../../src/lib/economy'
-import { evt, forSeeds, runOps, shuffle } from './gen'
+import { evt, forSeeds, runOps, shuffle, PROPERTY_TIMEOUT_MS } from './gen'
+
+setDefaultTimeout(PROPERTY_TIMEOUT_MS)
 
 const T1 = '2026-09-01T09:00:00.000Z'
 const T2 = '2026-09-02T09:00:00.000Z'

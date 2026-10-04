@@ -3,7 +3,7 @@
  * path through the outbox, read-only mode, and P7 (optimistic agreement) through the real engine on a
  * MemoryStore. Start fresh (Addendum A1) is asserted throughout: `kernelspace:v1` is never touched.
  */
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { derive } from '../../src/lib/ledger/fold'
 import { SCHEMA_VERSION } from '../../src/lib/ledger/constants'
 import { MemoryStore } from '../../src/lib/ledger/memory-store'
@@ -16,7 +16,9 @@ import { parseImport } from '../../src/lib/ledger/codec'
 import { createProgressStore, selectDoneLessons, selectStreak } from '../../src/lib/progress'
 import { splitmix32 } from '../../src/lib/rng'
 import { dataOf, makeProfile, startTab, tick } from './env'
-import { ACTS, int, LABS, LESSONS, pick, SEEDS, SIM, SIM_TASKS, STEPS, chance } from './gen'
+import { ACTS, int, LABS, LESSONS, pick, SEEDS, SIM, SIM_TASKS, STEPS, chance, PROPERTY_TIMEOUT_MS } from './gen'
+
+setDefaultTimeout(PROPERTY_TIMEOUT_MS)
 
 const V1_VALUE = JSON.stringify({
   state: {

@@ -1,10 +1,12 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { derive } from '../../src/lib/ledger/fold'
 import { canonicalEvent, lwwWorking, mergeLedgers, normalizeLedger, type Ledger } from '../../src/lib/ledger/merge'
 import { stableStringify } from '../../src/lib/ledger/stable'
 import { dayOf } from '../../src/lib/ledger/time'
 import type { LedgerEvent, WorkingRecord } from '../../src/lib/ledger/types'
-import { evt, forSeeds, ledgerKey, runOps } from './gen'
+import { evt, forSeeds, ledgerKey, runOps, PROPERTY_TIMEOUT_MS } from './gen'
+
+setDefaultTimeout(PROPERTY_TIMEOUT_MS)
 
 const T1 = '2026-09-01T09:00:00.000Z'
 const T2 = '2026-09-02T09:00:00.000Z'

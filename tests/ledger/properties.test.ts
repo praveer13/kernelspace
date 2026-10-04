@@ -3,7 +3,7 @@
  * P3 double-import, P5 two-device merge, P6 order-insensitivity (fold.test.ts), P7's pure half,
  * I7 (fold.test.ts) and P8 the 12-month round trip. Seeds x ops: LEDGER_SEEDS x LEDGER_OPS.
  */
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { applyImport, buildExportV3, parseImport, serializeExport } from '../../src/lib/ledger/codec'
 import { IMPORT_MAX_BYTES } from '../../src/lib/ledger/constants'
@@ -12,7 +12,9 @@ import { mergeLedgers, type Ledger } from '../../src/lib/ledger/merge'
 import { dayOf } from '../../src/lib/ledger/time'
 import { toProgressData, workingMap } from '../../src/lib/ledger/view'
 import type { LedgerEvent } from '../../src/lib/ledger/types'
-import { forSeeds, int, ledgerKey, OPS, pick, runOps, shuffle, syntheticYear, TZS } from './gen'
+import { forSeeds, int, ledgerKey, OPS, pick, runOps, shuffle, syntheticYear, TZS, PROPERTY_TIMEOUT_MS } from './gen'
+
+setDefaultTimeout(PROPERTY_TIMEOUT_MS)
 
 const EXPORTED_AT = '2026-10-04T12:00:00.000Z'
 

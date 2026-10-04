@@ -22,6 +22,12 @@ import { splitmix32 } from '../../src/lib/rng'
 
 export const SEEDS = Number(process.env.LEDGER_SEEDS ?? 100)
 export const OPS = Number(process.env.LEDGER_OPS ?? 40)
+/**
+ * Per-test timeout for files that run seeded properties. Bun's 5 s default is
+ * per test, and one property test spans every seed: a hosted CI runner took
+ * 5.2 s for a three-device merge that runs in ~2 s locally. Scales with SEEDS.
+ */
+export const PROPERTY_TIMEOUT_MS = Math.max(60_000, SEEDS * 600)
 const ONLY_SEED = process.env.LEDGER_SEED === undefined ? null : Number(process.env.LEDGER_SEED)
 
 export const LESSONS = ['t0.l1', 't0.l2', 't0.l3', 't0.l4', 't0.l5', 't0.l6', 't5.l1', 't5.l2', 't5.l3', 't5.l4']
