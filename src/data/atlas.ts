@@ -48,6 +48,52 @@ export const ATLAS: HardwareRow[] = [
     claims: { hbmBwGBs: 'hw.b300.hbm-bw' },
   },
   {
+    id: 'a100-80',
+    name: 'A100 80GB',
+    hbmGb: claimNumber('hw.a100-80-sxm.hbm-capacity'),
+    hbmBwGBs: claimNumber('hw.a100-80-sxm.hbm-bw'),
+    bf16DenseGflops: claimNumber('hw.a100.bf16-dense', 1000),
+    claims: {
+      hbmGb: 'hw.a100-80-sxm.hbm-capacity',
+      hbmBwGBs: 'hw.a100-80-sxm.hbm-bw',
+      bf16DenseGflops: 'hw.a100.bf16-dense',
+    },
+  },
+  {
+    id: 'a100-40',
+    name: 'A100 40GB',
+    hbmGb: claimNumber('hw.a100-40.hbm-capacity'),
+    hbmBwGBs: claimNumber('hw.a100-40.hbm-bw'),
+    bf16DenseGflops: claimNumber('hw.a100.bf16-dense', 1000),
+    claims: {
+      hbmGb: 'hw.a100-40.hbm-capacity',
+      hbmBwGBs: 'hw.a100-40.hbm-bw',
+      bf16DenseGflops: 'hw.a100.bf16-dense',
+    },
+  },
+  {
+    // GDDR6X, not HBM: the field names say hbm* but hold the card's memory figures.
+    id: 'rtx4090',
+    name: 'RTX 4090',
+    hbmGb: claimNumber('hw.rtx4090.mem-capacity'),
+    hbmBwGBs: claimNumber('hw.rtx4090.mem-bw'),
+    bf16DenseGflops: claimNumber('hw.rtx4090.bf16-dense', 1000),
+    claims: {
+      hbmGb: 'hw.rtx4090.mem-capacity',
+      hbmBwGBs: 'hw.rtx4090.mem-bw',
+      bf16DenseGflops: 'hw.rtx4090.bf16-dense',
+    },
+  },
+  {
+    // GDDR6, and Turing has no BF16: the compute field holds the dense FP16 Tensor figure.
+    id: 't4',
+    name: 'T4',
+    hbmGb: claimNumber('hw.t4.mem-capacity'),
+    hbmBwGBs: claimNumber('hw.t4.mem-bw'),
+    bf16DenseGflops: claimNumber('hw.t4.fp16', 1000),
+    claims: { hbmGb: 'hw.t4.mem-capacity', hbmBwGBs: 'hw.t4.mem-bw', bf16DenseGflops: 'hw.t4.fp16' },
+  },
+  {
     id: 'tpu7x',
     name: 'TPU7x',
     hbmBwGBs: claimNumber('hw.tpu7x.hbm-bw'),

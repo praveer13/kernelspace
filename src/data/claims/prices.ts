@@ -4,23 +4,25 @@ const H100_PRICES = { url: 'https://getdeploying.com/reference/cloud-gpu/nvidia-
 const B200_PRICES = { url: 'https://getdeploying.com/reference/cloud-gpu/nvidia-b200', title: 'GetDeploying: NVIDIA B200 cloud GPU pricing' }
 
 /**
- * Rental prices (2026-10) and the three constants the course made up. The two medians carry
- * the serving-landscape dossier's verified figures with no quote: the pages read differently
- * when re-opened on 2026-10-04 (see each discrepancy), so a quote would contradict the value.
+ * Rental prices (2026-10) and the three constants the course made up. Every GetDeploying
+ * figure was re-read from the live page on 2026-10-04 (WebFetch extraction, so re-check wording
+ * before treating a quote as exact). The medians move daily: the dossier's earlier readings
+ * ($3.39 H100, $6.25 B200) are history, not a discrepancy, so they are not kept as notes.
  */
 export const PRICE_CLAIMS: Claim[] = [
   {
     id: 'price.h100.median',
     kind: 'price',
-    value: 3.39,
+    value: 3.49,
     unit: 'USD/GPU-hr',
     label: 'H100 on-demand median rental price',
-    source: { ...H100_PRICES, row: 'Median price (current), on-demand' },
+    source: {
+      ...H100_PRICES,
+      quote: 'the median on-demand price is $3.49 per GPU per hour across 41 providers with a priced on-demand config',
+    },
     verifiedAt: '2026-10-04',
     ttlDays: 90,
-    boundary: 'Median of priced on-demand configs across providers; flat over 90 days at the time of check.',
-    discrepancy:
-      'Re-opened on 2026-10-04 the page reads "the median on-demand price is $3.38 per GPU per hour across 40 providers". The dossier recorded $3.39. The median moves daily.',
+    boundary: 'Median of priced on-demand configs across 41 providers; flat over 90 days at the time of check. It moves daily.',
   },
   {
     id: 'price.h100.cheapest',
@@ -45,7 +47,7 @@ export const PRICE_CLAIMS: Claim[] = [
     source: { ...H100_PRICES, quote: 'GetDeploying currently tracks H100 configs from 57 providers' },
     verifiedAt: '2026-10-04',
     ttlDays: 90,
-    boundary: 'Tracked configs, not providers with a priced on-demand config (the median covers 40).',
+    boundary: 'Tracked configs, not providers with a priced on-demand config (the median covers 41).',
   },
   {
     id: 'price.h100.yoy',
@@ -61,15 +63,16 @@ export const PRICE_CLAIMS: Claim[] = [
   {
     id: 'price.b200.median',
     kind: 'price',
-    value: 6.25,
+    value: 7.01,
     unit: 'USD/GPU-hr',
     label: 'B200 on-demand median rental price',
-    source: { ...B200_PRICES, row: 'Median price (current), on-demand' },
-    verifiedAt: '2026-10-03',
+    source: {
+      ...B200_PRICES,
+      quote: 'the median on-demand price is $7.01 per GPU per hour across 20 providers with a priced on-demand config',
+    },
+    verifiedAt: '2026-10-04',
     ttlDays: 90,
-    boundary: 'Median of priced on-demand configs across providers.',
-    discrepancy:
-      'Re-opened on 2026-10-04 the page reads $6.79 per GPU-hour (median across 19 providers with a priced on-demand config, flat over 90 days), not the $6.25 in the dossier verification log. Re-verify before relying on either.',
+    boundary: 'Median of priced on-demand configs across 20 providers; flat over 90 days at the time of check. It moves daily.',
   },
   {
     id: 'price.b200.yoy',
@@ -84,7 +87,7 @@ export const PRICE_CLAIMS: Claim[] = [
   {
     id: 'price.act3.b200-node-hourly',
     kind: 'derived',
-    value: 25,
+    value: 28.04,
     unit: 'USD/hr',
     label: 'Act III 4x B200 node, $/hr',
     verifiedAt: '2026-10-04',
@@ -101,7 +104,7 @@ export const PRICE_CLAIMS: Claim[] = [
     verifiedAt: '2026-10-04',
     ttlDays: 365,
     boundary:
-      'No source: a round number chosen for the exercise. Eight GPUs at the dated H100 median would be 8 x $3.39 = $27.12/hr.',
+      'No source: a round number chosen for the exercise. Eight GPUs at the dated H100 median would be 8 x $3.49 = $27.92/hr.',
   },
   {
     id: 'synthetic.act3.gb200-nvl72-hourly',

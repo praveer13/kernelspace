@@ -4,7 +4,7 @@
  */
 import { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { formatClaimValue, getClaim, staleSince, type Claim } from '@/data/claims'
+import { byId, formatClaimValue, getClaim, staleSince, type Claim } from '@/data/claims'
 import { cn } from '@/lib/utils'
 
 const KIND_NOTE: Record<Claim['kind'], string> = {
@@ -14,6 +14,39 @@ const KIND_NOTE: Record<Claim['kind'], string> = {
   status: 'status',
   derived: 'derived',
   synthetic: 'synthetic, no real-world source',
+}
+
+function SourceLink({ source }: { source: NonNullable<Claim['source']> }) {
+  return (
+    <>
+      <a href={source.url} target="_blank" rel="noreferrer" className="text-info underline underline-offset-2">
+        {source.title}
+      </a>
+      {source.row && <span className="text-text-3"> · {source.row}</span>}
+      {source.quote && <q className="mt-1 block text-text-3">{source.quote}</q>}
+    </>
+  )
+}
+
+/** One input of a derived claim: its label, value, source link and any discrepancy. */
+function DerivedInput({ id }: { id: string }) {
+  const input = byId[id]
+  if (!input) return <li className="text-amber">{id} (unknown claim)</li>
+  return (
+    <li className="space-y-0.5 border-l border-line pl-2">
+      <p>
+        <span className="text-text-2">{input.label}</span> <span className="text-accent">{formatClaimValue(input)}</span>
+      </p>
+      {input.source ? (
+        <p>
+          <SourceLink source={input.source} />
+        </p>
+      ) : (
+        <p className="text-text-3">{KIND_NOTE[input.kind]}</p>
+      )}
+      {input.discrepancy && <p className="text-amber">Discrepancy: {input.discrepancy}</p>}
+    </li>
+  )
 }
 
 export function ClaimDetails({ claim }: { claim: Claim }) {
@@ -32,22 +65,20 @@ export function ClaimDetails({ claim }: { claim: Claim }) {
       </p>
       {claim.source && (
         <p>
-          <a
-            href={claim.source.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-info underline underline-offset-2"
-          >
-            {claim.source.title}
-          </a>
-          {claim.source.row && <span className="text-text-3"> · {claim.source.row}</span>}
-          {claim.source.quote && <q className="mt-1 block text-text-3">{claim.source.quote}</q>}
+          <SourceLink source={claim.source} />
         </p>
       )}
       {claim.derived && (
-        <p className="text-text-3">
-          <span className="text-text-2">{claim.derived.formula}</span> from {claim.derived.from.join(', ')}
-        </p>
+        <div className="space-y-1 text-text-3">
+          <p>
+            <span className="text-text-2">{claim.derived.formula}</span> from
+          </p>
+          <ul className="space-y-1.5">
+            {claim.derived.from.map((id) => (
+              <DerivedInput key={id} id={id} />
+            ))}
+          </ul>
+        </div>
       )}
       {claim.boundary && <p className="text-text-3">Holds for: {claim.boundary}</p>}
       {claim.discrepancy && <p className="text-amber">Discrepancy: {claim.discrepancy}</p>}
