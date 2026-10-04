@@ -60,16 +60,17 @@ interface Machine {
   peak: number // GFLOP/s
 }
 
-// H100, B200 and TPU7x come from the hardware atlas (sourced claims); T4, RTX 4090 and A100 are not yet sourced.
-function atlasMachine(id: string): Machine {
+// Every preset comes from the hardware atlas (sourced claims). `name` is the saved-config key, so A100 keeps its short name.
+// T4 peak is dense FP16 (Turing has no BF16) and RTX 4090 peak is dense BF16 with FP32 accumulate.
+function atlasMachine(id: string, name?: string): Machine {
   const row = atlasRow(id)
-  return { name: row.name, bw: row.hbmBwGBs ?? 0, peak: row.bf16DenseGflops ?? 0 }
+  return { name: name ?? row.name, bw: row.hbmBwGBs ?? 0, peak: row.bf16DenseGflops ?? 0 }
 }
 
 const PRESETS: Machine[] = [
-  { name: 'T4', bw: 320, peak: 65_000 },
-  { name: 'RTX 4090', bw: 1008, peak: 165_000 },
-  { name: 'A100', bw: 1555, peak: 312_000 },
+  atlasMachine('t4'),
+  atlasMachine('rtx4090'),
+  atlasMachine('a100-40', 'A100'),
   atlasMachine('h100'),
   atlasMachine('b200'),
   atlasMachine('tpu7x'),

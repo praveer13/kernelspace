@@ -65,6 +65,178 @@
       "boundary": "Dense is half the sparse figure; this is the roofline compute ceiling the course uses."
     },
     {
+      "id": "hw.a100-80-sxm.hbm-capacity",
+      "kind": "spec",
+      "value": 80,
+      "unit": "GB",
+      "label": "A100 80GB SXM HBM capacity",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/a100/",
+        "title": "NVIDIA A100 Tensor Core GPU",
+        "quote": "80GB HBM2e",
+        "row": "A100 80GB SXM > GPU Memory"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "SXM4 module (HBM2e); the PCIe 80GB card has the same capacity but less bandwidth."
+    },
+    {
+      "id": "hw.a100-80-sxm.hbm-bw",
+      "kind": "spec",
+      "value": 2039,
+      "unit": "GB/s",
+      "label": "A100 80GB SXM HBM bandwidth",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/a100/",
+        "title": "NVIDIA A100 Tensor Core GPU",
+        "quote": "2,039 GB/s",
+        "row": "A100 80GB SXM > GPU Memory Bandwidth"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "SXM4 module; the PCIe 80GB card is lower. Peak datasheet figure."
+    },
+    {
+      "id": "hw.a100-40.hbm-capacity",
+      "kind": "spec",
+      "value": 40,
+      "unit": "GB",
+      "label": "A100 40GB HBM capacity",
+      "source": {
+        "url": "https://developer.nvidia.com/blog/nvidia-ampere-architecture-in-depth/",
+        "title": "NVIDIA Ampere Architecture In-Depth (A100 40GB)",
+        "quote": "The A100 GPU includes 40 GB of fast HBM2 DRAM memory on its SXM4-style circuit board."
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "SXM4 module (HBM2)."
+    },
+    {
+      "id": "hw.a100-40.hbm-bw",
+      "kind": "spec",
+      "value": 1555,
+      "unit": "GB/s",
+      "label": "A100 40GB HBM bandwidth",
+      "source": {
+        "url": "https://developer.nvidia.com/blog/nvidia-ampere-architecture-in-depth/",
+        "title": "NVIDIA Ampere Architecture In-Depth (A100 40GB)",
+        "quote": "With a 1215 MHz (DDR) data rate the A100 HBM2 delivers 1555 GB/sec memory bandwidth"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Peak datasheet figure."
+    },
+    {
+      "id": "hw.a100.bf16-dense",
+      "kind": "spec",
+      "value": 312,
+      "unit": "TFLOPS",
+      "label": "A100 BF16 Tensor Core, dense",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/a100/",
+        "title": "NVIDIA A100 Tensor Core GPU",
+        "quote": "312 TFLOPS | 624 TFLOPS*",
+        "row": "A100 80GB SXM > BFLOAT16 Tensor Core (* With sparsity)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "The first figure is dense and the second (624) is with sparsity. The 40GB and 80GB SXM parts share it (Ampere blog: \"Peak BF16 Tensor Core 312 TFLOPS | 624 TFLOPS\")."
+    },
+    {
+      "id": "hw.rtx4090.mem-capacity",
+      "kind": "spec",
+      "value": 24,
+      "unit": "GB",
+      "label": "RTX 4090 GDDR6X capacity",
+      "source": {
+        "url": "https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf",
+        "title": "NVIDIA Ada GPU Architecture whitepaper v2.1 (RTX 4090 and T4 tables)",
+        "quote": "24 GB GDDR6X",
+        "row": "Table 2 > Frame Buffer Memory Size and Type"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.rtx4090.mem-bw",
+      "kind": "spec",
+      "value": 1008,
+      "unit": "GB/s",
+      "label": "RTX 4090 memory bandwidth",
+      "source": {
+        "url": "https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf",
+        "title": "NVIDIA Ada GPU Architecture whitepaper v2.1 (RTX 4090 and T4 tables)",
+        "quote": "1008 GB/sec",
+        "row": "Table 2 > Memory Bandwidth"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Peak: 384-bit interface at 21 Gbps. NVIDIA rounds it to \"1 TB/sec\" in the text."
+    },
+    {
+      "id": "hw.rtx4090.bf16-dense",
+      "kind": "spec",
+      "value": 165.2,
+      "unit": "TFLOPS",
+      "label": "RTX 4090 BF16 Tensor Core, dense (FP32 accumulate)",
+      "source": {
+        "url": "https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf",
+        "title": "NVIDIA Ada GPU Architecture whitepaper v2.1 (RTX 4090 and T4 tables)",
+        "quote": "165.2/330.4",
+        "row": "Table 2 > Peak BF16 Tensor TFLOPS with FP32 Accumulate (second figure uses the Sparsity feature)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Peak at the 2.52 GHz boost clock; the first figure is dense. A consumer card, so no ECC and no HBM."
+    },
+    {
+      "id": "hw.t4.mem-capacity",
+      "kind": "spec",
+      "value": 16,
+      "unit": "GB",
+      "label": "T4 GDDR6 capacity",
+      "source": {
+        "url": "https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf",
+        "title": "NVIDIA Ada GPU Architecture whitepaper v2.1 (RTX 4090 and T4 tables)",
+        "quote": "16GB GDDR6 w/ECC",
+        "row": "Table 5 > GPU Memory (NVIDIA T4)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.t4.mem-bw",
+      "kind": "spec",
+      "value": 320,
+      "unit": "GB/s",
+      "label": "T4 memory bandwidth",
+      "source": {
+        "url": "https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf",
+        "title": "NVIDIA Ada GPU Architecture whitepaper v2.1 (RTX 4090 and T4 tables)",
+        "quote": "320 GB/s",
+        "row": "Table 5 > GPU Memory Bandwidth (NVIDIA T4)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "The T4 product page says \"320+ GB/s\"."
+    },
+    {
+      "id": "hw.t4.fp16",
+      "kind": "spec",
+      "value": 65,
+      "unit": "TFLOPS",
+      "label": "T4 FP16 Tensor Core",
+      "source": {
+        "url": "https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf",
+        "title": "NVIDIA Ada GPU Architecture whitepaper v2.1 (RTX 4090 and T4 tables)",
+        "quote": "65 TFLOPS",
+        "row": "Table 5 > FP16 Tensor Core Performance (NVIDIA T4)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Turing has no BF16 or sparsity, so FP16 is the dense compute ceiling the course uses for T4. The T4 product page lists \"65 FP16 TFLOPS\"."
+    },
+    {
       "id": "hw.dgx-b200.hbm-total",
       "kind": "spec",
       "value": 1440,
@@ -438,18 +610,17 @@
     {
       "id": "price.h100.median",
       "kind": "price",
-      "value": 3.39,
+      "value": 3.49,
       "unit": "USD/GPU-hr",
       "label": "H100 on-demand median rental price",
       "source": {
         "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-h100",
         "title": "GetDeploying: NVIDIA H100 cloud GPU pricing",
-        "row": "Median price (current), on-demand"
+        "quote": "the median on-demand price is $3.49 per GPU per hour across 41 providers with a priced on-demand config"
       },
       "verifiedAt": "2026-10-04",
       "ttlDays": 90,
-      "boundary": "Median of priced on-demand configs across providers; flat over 90 days at the time of check.",
-      "discrepancy": "Re-opened on 2026-10-04 the page reads \"the median on-demand price is $3.38 per GPU per hour across 40 providers\". The dossier recorded $3.39. The median moves daily."
+      "boundary": "Median of priced on-demand configs across 41 providers; flat over 90 days at the time of check. It moves daily."
     },
     {
       "id": "price.h100.cheapest",
@@ -479,7 +650,7 @@
       },
       "verifiedAt": "2026-10-04",
       "ttlDays": 90,
-      "boundary": "Tracked configs, not providers with a priced on-demand config (the median covers 40)."
+      "boundary": "Tracked configs, not providers with a priced on-demand config (the median covers 41)."
     },
     {
       "id": "price.h100.yoy",
@@ -499,18 +670,17 @@
     {
       "id": "price.b200.median",
       "kind": "price",
-      "value": 6.25,
+      "value": 7.01,
       "unit": "USD/GPU-hr",
       "label": "B200 on-demand median rental price",
       "source": {
         "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-b200",
         "title": "GetDeploying: NVIDIA B200 cloud GPU pricing",
-        "row": "Median price (current), on-demand"
+        "quote": "the median on-demand price is $7.01 per GPU per hour across 20 providers with a priced on-demand config"
       },
-      "verifiedAt": "2026-10-03",
+      "verifiedAt": "2026-10-04",
       "ttlDays": 90,
-      "boundary": "Median of priced on-demand configs across providers.",
-      "discrepancy": "Re-opened on 2026-10-04 the page reads $6.79 per GPU-hour (median across 19 providers with a priced on-demand config, flat over 90 days), not the $6.25 in the dossier verification log. Re-verify before relying on either."
+      "boundary": "Median of priced on-demand configs across 20 providers; flat over 90 days at the time of check. It moves daily."
     },
     {
       "id": "price.b200.yoy",
@@ -529,7 +699,7 @@
     {
       "id": "price.act3.b200-node-hourly",
       "kind": "derived",
-      "value": 25,
+      "value": 28.04,
       "unit": "USD/hr",
       "label": "Act III 4x B200 node, $/hr",
       "verifiedAt": "2026-10-04",
@@ -550,7 +720,7 @@
       "label": "Act III 8x H100 node, $/hr (course stand-in)",
       "verifiedAt": "2026-10-04",
       "ttlDays": 365,
-      "boundary": "No source: a round number chosen for the exercise. Eight GPUs at the dated H100 median would be 8 x $3.39 = $27.12/hr."
+      "boundary": "No source: a round number chosen for the exercise. Eight GPUs at the dated H100 median would be 8 x $3.49 = $27.92/hr."
     },
     {
       "id": "synthetic.act3.gb200-nvl72-hourly",
