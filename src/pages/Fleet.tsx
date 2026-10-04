@@ -11,7 +11,8 @@ import {
   StepForward,
   Upload,
 } from 'lucide-react'
-import { instantiateLab, LabAbiError, LabTrapError, type LabModule } from '@/lib/wasm-lab'
+import { instantiateLab, LabAbiError, LabTimeoutError, LabTrapError, type LabModule } from '@/lib/wasm-lab'
+import { validateLabInWorker } from '@/lib/lab-worker'
 import {
   dumpRefMultiset,
   makeScript,
@@ -313,21 +314,24 @@ function PoolMode() {
   const onFile = useCallback(async (file: File) => {
     setError(null)
     try {
-      const mod = await instantiateLab(await file.arrayBuffer())
-      if (!mod.hasInvoke) {
+      const bytes = await file.arrayBuffer()
+      /* untrusted bytes are checked in the lab worker first; only a module that passed runs here */
+      const { report, hasInvoke } = await validateLabInWorker(bytes)
+      if (!hasInvoke || !report) {
         setError('this module predates the fleet bridge (no ks_invoke) — pull the latest lab template and rebuild.')
         return
       }
-      const report = mod.runChecks()
       if (report.lab !== 'kv-block-manager') {
         setError(`this module is for "${report.lab}" — pool mode drives kv-block-manager (lab 02).`)
         return
       }
+      const mod = await instantiateLab(bytes)
       const passed = report.checks.filter((x) => x.pass).length
       setDriver({ kind: 'wasm', mod, checksPassed: passed, checksTotal: report.checks.length })
       setDivergence(null)
     } catch (e) {
       if (e instanceof LabTrapError) setError('the module trapped — a todo!() is still open (the fleet needs dump() implemented too).')
+      else if (e instanceof LabTimeoutError) setError(e.message)
       else if (e instanceof LabAbiError) setError(e.message)
       else setError(String(e))
     }
