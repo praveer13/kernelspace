@@ -132,7 +132,7 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                   </span>
                 )}
               </p>
-              <div className="space-y-2">
+              <div className="space-y-2" data-answered={sel.size > 0}>
                 {orders[qi].map((oi, di) => {
                   const opt = q.options[oi]
                   const isSel = sel.has(oi)
@@ -209,6 +209,7 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
           <button
             type="button"
             onClick={submit}
+            data-quiz-submit
             disabled={!allAnswered}
             className={cn(
               'rounded-md px-5 py-2.5 font-display text-[15px] font-semibold transition-all duration-150 active:scale-[.97]',
