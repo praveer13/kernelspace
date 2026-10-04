@@ -63,7 +63,11 @@ export async function validateModule(bytes: ArrayBuffer, wantLab: string): Promi
     }
     return { ok: true }
   } catch (e) {
-    if (e instanceof LabTrapError) return { ok: false, title: 'module trapped', detail: 'a todo!() is still open in this crate.' }
+    if (e instanceof LabTrapError) {
+      return e.phase === 'invoke'
+        ? { ok: false, title: 'ks_invoke trapped', detail: 'the self-checks passed, but the fleet bridge panicked on its first calls — check init and command handling.' }
+        : { ok: false, title: 'module trapped', detail: 'a todo!() is still open in this crate.' }
+    }
     if (e instanceof LabTimeoutError) return { ok: false, title: e.title, detail: e.message }
     if (e instanceof LabAbiError) return { ok: false, title: 'not a lab module', detail: e.message }
     return { ok: false, title: 'unexpected error', detail: String(e) }

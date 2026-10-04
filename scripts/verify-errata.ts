@@ -87,6 +87,14 @@ for (const [stem, entry] of entries) {
     continue
   }
   if (entry.supersedes === stem) fail('supersedes itself')
+  // the "superseded by" chip links within a lesson group, so the two must share a lesson
+  const mine = Array.isArray(entry.lessons) ? entry.lessons : []
+  const theirs = Array.isArray(target.lessons) ? target.lessons : []
+  if (!mine.some((id) => theirs.includes(id))) fail(`supersedes ${entry.supersedes}, but they share no lesson`)
+  // the page keeps one superseder per erratum
+  for (const [other, o] of entries) {
+    if (other < stem && o.supersedes === entry.supersedes) fail(`${other}.ts also supersedes ${entry.supersedes}; supersede the newest one in a chain instead`)
+  }
   if (typeof entry.date === 'string' && typeof target.date === 'string' && entry.date < target.date) {
     fail(`supersedes ${entry.supersedes}, which is dated later (${target.date})`)
   }

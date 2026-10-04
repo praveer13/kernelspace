@@ -25,11 +25,16 @@ export interface LabReport {
 
 /** The module panicked (todo!(), unreachable!, assert) — expected while unfinished. */
 export class LabTrapError extends Error {
-  constructor(cause?: unknown) {
+  /** 'invoke': the self-checks passed, then the ks_invoke bridge /fleet drives trapped */
+  readonly phase: 'checks' | 'invoke'
+  constructor(cause?: unknown, phase: 'checks' | 'invoke' = 'checks') {
     super(
-      'the module trapped while running — this usually means a todo!() or panic in your code. Finish the implementation and rebuild.',
+      phase === 'invoke'
+        ? 'the self-checks passed, but ks_invoke (the bridge /fleet drives) trapped on its first calls — check init and command handling for a panic, then rebuild.'
+        : 'the module trapped while running — this usually means a todo!() or panic in your code. Finish the implementation and rebuild.',
     )
     this.name = 'LabTrapError'
+    this.phase = phase
     this.cause = cause
   }
 }
@@ -46,10 +51,10 @@ export class LabAbiError extends Error {
 export class LabTimeoutError extends Error {
   /** short headline for result panels; the message is the detail beneath it */
   readonly title: string
-  constructor(ms: number, phase: 'checks' | 'invoke' = 'checks') {
+  constructor(ms: number, phase: 'checks' | 'invoke' = 'checks', checksPassed = true) {
     super(
       phase === 'invoke'
-        ? 'the self-checks passed, but the module never returned from ks_invoke (the bridge /fleet drives), so the grader stopped it. Look for an infinite loop in your init or command handling.'
+        ? `${checksPassed ? 'the self-checks passed, but the' : 'the'} module never returned from ks_invoke (the bridge /fleet drives), so the grader stopped it. Look for an infinite loop in your init or command handling.`
         : 'the module was still running, so the grader stopped it. Look for an infinite loop in your code.',
     )
     this.name = 'LabTimeoutError'
@@ -219,7 +224,7 @@ const INVOKE_PROBES: Record<string, { init: string; then: string[] }> = {
   'batching-scheduler': { init: 'init', then: ['schedule 0 4 256 0\nW 1 0 16\n'] },
 }
 
-/** Run the canned ks_invoke exchange for `lab`. Throws LabTrapError or LabAbiError; a spin is the caller's timeout. */
+/** Run the canned ks_invoke exchange for `lab`. Throws LabTrapError (phase 'checks' — the caller relabels it) or LabAbiError; a spin is the caller's timeout. */
 export function probeInvoke(mod: LabModule, lab: string): void {
   const probe = INVOKE_PROBES[lab]
   if (!probe) return

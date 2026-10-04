@@ -16,8 +16,8 @@ export interface LabWorkerRequest {
 
 export type LabWorkerReply =
   | { type: 'ready' }
-  /** 'validate' only: the self-checks passed and the ks_invoke probe is starting (names the stage a timeout hit) */
-  | { type: 'phase'; id: number; phase: 'invoke' }
+  /** 'validate' only: the ks_invoke probe is starting (names the stage a timeout hit; it runs even after failing checks) */
+  | { type: 'phase'; id: number; phase: 'invoke'; checksPassed: boolean }
   | {
       type: 'done'
       id: number
@@ -25,4 +25,5 @@ export type LabWorkerReply =
       report: LabReport | null
       hasInvoke: boolean
     }
-  | { type: 'failed'; id: number; kind: 'trap' | 'abi' | 'error'; message: string }
+  /** `phase: 'invoke'` marks a trap in the ks_invoke probe after green checks */
+  | { type: 'failed'; id: number; kind: 'trap' | 'abi' | 'error'; message: string; phase?: 'invoke' }

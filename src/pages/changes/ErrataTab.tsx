@@ -63,6 +63,8 @@ function KindBadge({ kind }: { kind: Erratum['kind'] }) {
   )
 }
 
+const chipClass = 'rounded-sm border border-line px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-text-3'
+
 function ErratumCard({ erratum, groupId }: { erratum: Erratum; groupId: string }) {
   const newer = SUPERSEDED_BY.get(erratum.id)
   return (
@@ -72,14 +74,16 @@ function ErratumCard({ erratum, groupId }: { erratum: Erratum; groupId: string }
         <time dateTime={erratum.date} className="font-mono text-[11px] text-text-3">
           {erratum.date}
         </time>
-        {newer && (
-          <a
-            href={`#${groupId}-${newer.id}`}
-            className="rounded-sm border border-line px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-text-3 hover:text-text-1"
-          >
-            superseded by {newer.date} · {newer.title}
-          </a>
-        )}
+        {newer &&
+          (newer.lessons.includes(groupId) ? (
+            <a href={`#${groupId}-${newer.id}`} className={chipClass + ' hover:text-text-1'}>
+              superseded by {newer.date} · {newer.title}
+            </a>
+          ) : (
+            <span className={chipClass}>
+              superseded by {newer.date} · {newer.title}
+            </span>
+          ))}
       </div>
       <h3 className="mt-3 text-lg font-semibold leading-snug text-text-1">{erratum.title}</h3>
       <dl className="mt-4 space-y-3 text-body leading-relaxed">
