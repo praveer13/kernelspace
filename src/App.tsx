@@ -20,6 +20,7 @@ const Fleet = lazy(() => import('@/pages/Fleet'))
 const FleetWeek = lazy(() => import('@/pages/FleetWeek'))
 const Leaderboard = lazy(() => import('@/pages/Leaderboard'))
 const Changes = lazy(() => import('@/pages/Changes'))
+const Boot = lazy(() => import('@/pages/Boot'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 /**
@@ -36,6 +37,7 @@ export default function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/boot" element={<Boot />} />
             <Route path="/curriculum" element={<Curriculum />} />
             <Route path="/tracks/:trackId" element={<Track />} />
             <Route path="/lesson/:lessonId" element={<Lesson />} />
