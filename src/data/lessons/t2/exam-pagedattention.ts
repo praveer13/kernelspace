@@ -15,7 +15,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `This is the T2 exam, and it is not a test of memory — it is a test of *translation*. You are going to read the paper that kicked off modern LLM serving, **"Efficient Memory Management for Large Language Model Serving with PagedAttention"** (Kwon et al., SOSP 2023), the way a systems engineer reads it: every section mapped to an OS primitive you learned in this track. You will not need any ML background beyond one idea (the KV cache), which the paper itself introduces and which T5 will dissect fully.
 
-The exam rule: the quiz at the end is worth double XP, and the lesson's *Mark complete* unlocks only at **80% or better**. Take the guided read seriously and the quiz will feel like a formality.`,
+The exam rule: the lesson's *Mark complete* unlocks only at **80% or better** on the quiz at the end. Take the guided read seriously and the quiz will feel like a formality.`,
     },
     {
       type: 'prose',
@@ -103,7 +103,7 @@ Also note §5's distributed bits: for models spanning GPUs, the block manager is
       type: 'prose',
       md: `## Exam briefing
 
-You are ready for the checkpoint when you can answer, without notes: What three wastes does §2 diagnose, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why does the block-table indirection cost so little compared to what it buys? The quiz is five questions, needs 80%, and pays double XP. Then T3: Rust — the language the next generation of this stack is written in.`,
+You are ready for the checkpoint when you can answer, without notes: What three wastes does §2 diagnose, and what are their allocator names? Why do fixed-size blocks eliminate external fragmentation but not internal? Walk the fork()/COW mapping for beam search. Contrast swap vs recompute preemption with the OS analog. Why does the block-table indirection cost so little compared to what it buys? The quiz is five questions and needs 80%. Then T3: Rust — the language the next generation of this stack is written in.`,
     },
     {
       type: 'quiz',
