@@ -4,8 +4,10 @@
  * FAILS on: (1) structural defects in any item, (2) a per-track increase in
  * the count of items whose key is strictly the longest option (ratchet against
  * scripts/baselines/verify-items.json), (3) a broken per-attempt shuffle, (4) exported
- * keys piling onto one option id, (5) a shuffled surface that stopped calling shuffledOrder.
- * REPORTS (never fails): longest-key rates and a blind-strategy simulation.
+ * keys piling onto one option id, (5) a shuffled surface that stopped calling shuffledOrder,
+ * (6) a malformed per-option `why` (length must equal options, no empty entries) or a missing
+ * `why` in a track listed in the baseline's `whyRequired`.
+ * REPORTS (never fails): longest-key rates, `why` coverage and a blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
  *   bun scripts/verify-items.ts --update-baseline [--force]
@@ -34,6 +36,8 @@ interface Item {
 
 interface Baseline {
   longestKeyByTrack: Record<string, number>
+  /** Track ids in which every item must carry a per-option `why`. */
+  whyRequired?: string[]
 }
 
 const args = process.argv.slice(2)
@@ -99,7 +103,7 @@ const failures: string[] = []
 /* ------------------------- (1) structure ------------------------- */
 
 function structureErrors(item: Item): string[] {
-  const { options, correct, multi, explanation } = item.q
+  const { options, correct, multi, explanation, why } = item.q
   const errs: string[] = []
   if (!Array.isArray(options) || options.length < 2) errs.push('fewer than 2 options')
   const texts = (options ?? []).map((o) => o.trim())
@@ -113,6 +117,13 @@ function structureErrors(item: Item): string[] {
     if (correct.length > 1 && !multi) errs.push('more than one correct index without multi: true')
   }
   if (item.needsExplanation && !explanation?.trim()) errs.push('missing or empty explanation')
+  if (why !== undefined) {
+    if (!Array.isArray(why) || why.length !== (options?.length ?? 0)) {
+      errs.push(`why has ${Array.isArray(why) ? why.length : 'no'} entries for ${options?.length ?? 0} options`)
+    } else if (why.some((w) => typeof w !== 'string' || !w.trim())) {
+      errs.push('why has an empty entry')
+    }
+  }
   return errs
 }
 
@@ -174,7 +185,7 @@ if (updateBaseline) {
   if (baseline && increases.length && !force) {
     failures.push(`ratchet: refusing to update baseline, longest-key count increased (${increases.join(', ')}); pass --force to override`)
   } else {
-    const next: Baseline = { longestKeyByTrack: longestByTrack }
+    const next: Baseline = { longestKeyByTrack: longestByTrack, whyRequired: baseline?.whyRequired ?? [] }
     await writeFile(BASELINE_URL, `${JSON.stringify(next, null, 2)}\n`)
     baselineWritten = true
   }
@@ -182,6 +193,19 @@ if (updateBaseline) {
   failures.push('ratchet: scripts/baselines/verify-items.json is missing or unreadable; run with --update-baseline')
 } else if (increases.length) {
   failures.push(`ratchet: key-is-longest count increased (${increases.join(', ')}); rewrite distractors, do not raise the baseline`)
+}
+
+/* ------------------------- (2b) why coverage ------------------------- */
+
+const hasWhy = (q: QuizQuestion) => q.why !== undefined
+const whyRequired = baseline?.whyRequired ?? []
+for (const t of whyRequired) {
+  if (!trackKeys.includes(t)) failures.push(`why: whyRequired lists unknown track '${t}'`)
+}
+for (const item of validItems) {
+  if (whyRequired.includes(item.track) && !hasWhy(item.q)) {
+    failures.push(`why: ${item.ref}: track ${item.track} requires per-option why`)
+  }
 }
 
 /* ------------------------- (3) shuffle sanity ------------------------- */
@@ -277,6 +301,16 @@ for (const t of trackKeys) {
   )
 }
 console.log(`  ${'all'.padEnd(11)}${String(totalItems).padStart(6)}${String(totalLongest).padStart(13)}${pct(totalItems ? totalLongest / totalItems : 0).padStart(8)}`)
+
+console.log('')
+console.log('why coverage per track (items with per-option why / items)')
+for (const t of trackKeys) {
+  const rows = validItems.filter((i) => i.track === t)
+  const withWhy = rows.filter((i) => hasWhy(i.q)).length
+  console.log(
+    `  ${t.padEnd(11)}${`${withWhy}/${rows.length}`.padStart(9)}${pct(rows.length ? withWhy / rows.length : 0).padStart(8)}${whyRequired.includes(t) ? '  required' : ''}`,
+  )
+}
 
 // Blind strategies on lesson quizzes under per-attempt shuffling. A lesson passes
 // when correct / total >= PASS_BAR. Probabilities are per question and independent,
