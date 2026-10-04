@@ -15,7 +15,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Plot two axes: **throughput per GPU** (the provider's margin) against **tokens per second per user** (the user's experience). Every engine configuration is a point; the best achievable points form a **Pareto frontier**, and everything real sits below it. The frontier is concave: low concurrency gives you blazing interactivity at pitiful utilization; high concurrency gives you fleet-leading tok/s/GPU at "is it frozen?" latencies. You cannot have both ends. Nobody can. The game is choosing *where* on the curve to live.
 
-This is why contradictory benchmark claims are both true: NVIDIA's "60k tok/s/GPU on gpt-oss" and "1k tok/s/user on GB200 NVL72" are *different points on the same frontier* (InferenceMAX, Oct 2025). GB200 wins the low-interactivity/high-throughput region (its NVL72 fabric amortizes MoE weights across giant batches); a single B200 node can win the *high-interactivity* region, where MTP gives 2–3× per-user rate and giant batches are impossible anyway. Same hardware family, opposite ends of the curve.`,
+This is why contradictory benchmark claims are both true: NVIDIA's "60k tok/s/GPU on gpt-oss" and "1k tok/s/user on GB200 NVL72" are *different points on the same frontier*, per InferenceX (formerly InferenceMAX), Oct 2025. GB200 wins the low-interactivity/high-throughput region (its NVL72 fabric amortizes MoE weights across giant batches); a single B200 node can win the *high-interactivity* region, where MTP gives 2–3× per-user rate and giant batches are impossible anyway. Same hardware family, opposite ends of the curve.`,
     },
     {
       type: 'prose',
@@ -31,7 +31,7 @@ This is why contradictory benchmark claims are both true: NVIDIA's "60k tok/s/GP
 - **Disaggregation** (T6.L3): shifts the middle — better ITL at given throughput via phase isolation.
 - **Better kernels and hardware** (T4, T6.L5): the boring, reliable shifter.
 
-When a vendor shows you a point, ask: which dial did they turn? If the answer is batch size, the frontier didn't move. If it's MTP/FP4/disaggregation, it did — for that region. Frontier literacy is how you read InferenceMAX (T7.L2) in ten seconds: their dashboard plots exactly these two axes, per engine, per GPU.`,
+When a vendor shows you a point, ask: which dial did they turn? If the answer is batch size, the frontier didn't move. If it's MTP/FP4/disaggregation, it did — for that region. Frontier literacy is how you read InferenceX (T7.L2) in ten seconds: their dashboard plots exactly these two axes, per engine, per GPU.`,
     },
     {
       type: 'diagram',
@@ -116,7 +116,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
     {
       type: 'deepdive',
       title: 'Numbers to recite',
-      md: `InferenceMAX v1 (Oct 2025), the frontier in figures: gpt-oss on B200 — **60k tok/s/GPU** and **1k tok/s/user** as the two ends; DeepSeek-R1 — GB200 NVL72 leads on TCO/token at low interactivity, B200 node wins high-interactivity configs, MTP worth 2–3× interactivity; Llama-3.3-70B — >10k tok/s/GPU at 50 tok/s/user on Blackwell, ~4× H200. Keep these as your sanity anchors for any vendor claim: if a number beats these regions decisively, ask which dial was turned and on which traffic.`,
+      md: `InferenceX v1 (Oct 2025), the frontier in figures: gpt-oss on B200 — **60k tok/s/GPU** and **1k tok/s/user** as the two ends; DeepSeek-R1 — GB200 NVL72 leads on TCO/token at low interactivity, B200 node wins high-interactivity configs, MTP worth 2–3× interactivity; Llama-3.3-70B — >10k tok/s/GPU at 50 tok/s/user on Blackwell, ~4× H200. Keep these as your sanity anchors for any vendor claim: if a number beats these regions decisively, ask which dial was turned and on which traffic.`,
     },
   ],
 }

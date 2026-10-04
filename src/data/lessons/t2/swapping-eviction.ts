@@ -85,7 +85,7 @@ The two defenses appear everywhere in this course: **admission control** (don't 
           os: 'thrashing',
           osLine: 'Working set > RAM: the system pages more than it computes; throughput cliffs.',
           llm: 'preemption storm',
-          llmLine: 'KV demand > HBM: the engine shuffles blocks more than it decodes; TTFT/ITL cliff.',
+          llmLine: 'KV demand > HBM: the engine re-prefills more than it decodes; TTFT/ITL cliff.',
           breaks: 'OS thrashing comes from many processes\' working sets; here one growing decode batch drives it, and recompute preemption burns GPU FLOPs rather than disk bandwidth.',
         },
         {
@@ -186,7 +186,7 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
             'Same trade: pay I/O to preserve state vs recompute from source. File-backed clean pages get dropped (re-readable); anonymous pages must be swapped. The paper weighs PCIe bandwidth against prefill FLOPs — the identical equation at GPU speeds — and V1 settled on recompute.',
           why: [
             'Misconception: it is a waiting-policy choice. Spin versus sleep concerns how to wait for a lock; vLLM is deciding how to give up memory, which is a storage choice.',
-            'Right: dropping a clean file-backed page and re-reading it is recompute; swapping an anonymous page preserves unrecoverable state at the cost of I/O. the paper faces the same swap versus recompute choice, and V1 chose recompute.',
+            'Right: dropping a clean file-backed page and re-reading it is recompute; swapping an anonymous page preserves unrecoverable state at the cost of I/O. The paper faces the same swap versus recompute choice, and V1 chose recompute.',
             'Misconception: it is a page-size choice. Huge versus base pages trade TLB reach against internal waste; vLLM already fixes the block size and is choosing what to do with evicted state.',
             'Misconception: it is a scheduling-class choice. Fair-share versus real-time decides who runs; swap versus recompute decides how an already-preempted sequence\'s memory is restored.',
           ],

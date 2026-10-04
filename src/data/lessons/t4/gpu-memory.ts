@@ -61,7 +61,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
         { caption: 'Each SM owns registers and shared memory outright — other SMs can\'t see them. Fast because local; small because SRAM.', active: ['sm0', 'sm1', 'sm2'] },
         { caption: 'L2 sits between every SM and HBM: hot weights/KV blocks get second chances here. Cross-SM communication (atomics, block cooperation) also flows through it.', active: ['l2'], edges: ['sm0->l2', 'l2->hbm'] },
         { caption: 'HBM: the 80 GB main stage. Weights stream from here every forward pass; the KV cache grows here every decode step. 3.35 TB/s sounds like a lot until 16 GB of weights must move per token.', active: ['hbm'], edges: ['l2->hbm'] },
-        { caption: 'Below HBM, the cliff: CPU RAM over PCIe at ~64 GB/s — 50× slower. This is where KV offload and model streaming go, and it was V0\'s swap tier for preempted sequences (V1 recomputes instead; T2.L3). Offload decisions are expensive.', active: ['cpu'], edges: ['hbm->cpu'] },
+        { caption: 'Below HBM, the cliff: CPU RAM over PCIe at ~64 GB/s — 50× slower. This is where KV offload and model streaming go, and V0 could use it as a swap tier for preempted sequences (V1 recomputes instead; T2.L3). Offload decisions are expensive.', active: ['cpu'], edges: ['hbm->cpu'] },
       ],
     },
     {
@@ -131,13 +131,13 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
           q: 'CPU RAM plays which role in the GPU serving stack?',
           options: [
             'A faster tier than HBM for hot data',
-            'The offload tier: ~50× slower over PCIe, used for offloaded KV blocks (V0 swapped preempted sequences here) and model streaming',
+            'The offload tier: ~50× slower over PCIe, used for offloaded KV blocks (V0 could swap preempted sequences here) and model streaming',
             'It is unused during inference',
             'Only for tokenization',
           ],
           correct: [1],
           explanation:
-            'The hierarchy extends one more level down: HBM → PCIe → host RAM. V0\'s swap-out path was the OS swap story (T2.L3) running on this cliff; V1 recomputes instead, but KV offload and weight streaming still pay it — usable, but priced.',
+            'The hierarchy extends one more level down: HBM → PCIe → host RAM. V0\'s optional swap path was the OS swap story (T2.L3) running on this cliff; V1 recomputes instead, but KV offload and weight streaming still pay it — usable, but priced.',
         },
       ],
     },

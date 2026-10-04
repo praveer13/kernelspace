@@ -106,7 +106,7 @@ Hold the pattern: **trap → kernel inspects → fix mapping → transparent ret
           osLine: 'Cold frames evicted under pressure; faulted back on touch.',
           llm: 'KV offload to CPU RAM',
           llmLine: 'Cold sequences\' blocks evicted from HBM; reloaded or recomputed on resume.',
-          breaks: 'Swapped KV is not demand-faulted back page by page: a sequence must be fully resident to decode, so it is restored whole before it can run.',
+          breaks: 'Offloaded KV is not demand-faulted back page by page: a sequence must be fully resident to decode, so it is restored whole before it can run.',
         },
       ],
     },

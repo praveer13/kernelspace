@@ -86,9 +86,9 @@ When switches get expensive, engineers stop switching. Three great escapes, all 
         {
           os: 'context switch',
           osLine: 'Save/restore state per thread; cache+TLB warmth is the hidden cost.',
-          llm: 'sequence swap / preemption',
+          llm: 'sequence preemption',
           llmLine: 'vLLM pauses a sequence by evicting its KV; resuming recomputes or reloads it.',
-          breaks: 'A thread switch saves a few hundred bytes of registers; a sequence swap moves or regenerates megabytes to gigabytes of KV, so it is rarer and far costlier.',
+          breaks: 'A thread switch saves a few hundred bytes of registers; preempting a sequence offloads or regenerates megabytes to gigabytes of KV, so it is rarer and far costlier.',
         },
         {
           os: 'runqueue / timeslice',

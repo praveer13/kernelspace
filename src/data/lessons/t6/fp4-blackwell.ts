@@ -98,7 +98,7 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
     {
       type: 'deepdive',
       title: 'The AMD footnote',
-      md: `The roofline is vendor-neutral, and so is this lesson's question: "bandwidth and capacity per dollar?" MI300X/MI355X compete exactly there — 192–288 GB HBM3e, and AMD's inference path of choice is SGLang with aiter kernels (their published claim: MI355X slightly cheaper per token than B200 TRT-LLM on specific MoE configs, 2026). The framework from T6.L4 and this lesson — bytes, bandwidth, interconnect — is what lets you evaluate that claim in a meeting instead of believing it. InferenceMAX (T7.L2) publishes the measured versions nightly.`,
+      md: `The roofline is vendor-neutral, and so is this lesson's question: "bandwidth and capacity per dollar?" MI300X/MI355X compete exactly there — 192–288 GB HBM3e, and AMD's inference path of choice is SGLang with aiter kernels (their published claim: MI355X slightly cheaper per token than B200 TRT-LLM on specific MoE configs, 2026). The framework from T6.L4 and this lesson — bytes, bandwidth, interconnect — is what lets you evaluate that claim in a meeting instead of believing it. InferenceX (formerly InferenceMAX), covered in T7.L2, publishes the measured versions nightly.`,
     },
   ],
 }
