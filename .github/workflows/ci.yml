@@ -41,6 +41,7 @@ jobs:
       - run: bun run verify:leaderboard
       - run: bun run verify:field-notes
       - run: bun run verify:errata
+      - run: bun run verify:claims
 
       - run: npm run build
 

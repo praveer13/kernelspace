@@ -1,8 +1,12 @@
-import type { KeyboardEvent } from 'react'
+import { Suspense, lazy, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import ErrataTab from '@/pages/changes/ErrataTab'
 import FieldNotesTab from '@/pages/changes/FieldNotesTab'
+import RouteFallback from '@/components/RouteFallback'
 import { cn } from '@/lib/utils'
+
+// The registry table pulls in the whole claims dataset; load it only when the tab opens.
+const ClaimsTable = lazy(() => import('@/components/ClaimsTable'))
 
 /**
  * Changes surface (PLAN-100X §5.2 S1, §7.3): `/freshness`. The active tab lives in `?tab=`
@@ -11,8 +15,7 @@ import { cn } from '@/lib/utils'
 const TABS = [
   { id: 'errata', label: 'Errata' },
   { id: 'field-notes', label: 'Field Notes' },
-  // INTEGRATOR SLOT (third tab): add { id: 'claims', label: 'Claims' } here and render
-  // <ClaimsTable /> (src/components/ClaimsTable.tsx) for it in the tabpanel below.
+  { id: 'claims', label: 'Claims' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -38,7 +41,7 @@ export default function Changes() {
   return (
     <div className="mx-auto max-w-app px-6 pb-24 pt-16 lg:px-12">
       <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">
-        changes · errata and field notes
+        changes · errata, field notes and claims
       </p>
       <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight text-text-1 sm:text-5xl">
         What changed, and which lesson it changes
@@ -76,7 +79,11 @@ export default function Changes() {
       >
         {active === 'errata' && <ErrataTab />}
         {active === 'field-notes' && <FieldNotesTab />}
-        {/* INTEGRATOR SLOT (third tab): {active === 'claims' && <ClaimsTable />} */}
+        {active === 'claims' && (
+          <Suspense fallback={<RouteFallback label="loading claims" />}>
+            <ClaimsTable />
+          </Suspense>
+        )}
       </div>
     </div>
   )
