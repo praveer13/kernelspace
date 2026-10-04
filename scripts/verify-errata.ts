@@ -22,6 +22,50 @@ const latestAllowed = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().s
 const problems: string[] = []
 const entries = new Map<string, Record<string, unknown>>()
 
+/** Retrieval items on a change card (ledger spec §12.2): small single-answer MC items with a `why` per option. */
+const MAX_ITEMS = 2
+let itemCount = 0
+let keyLongest = 0
+let keyShortest = 0
+
+function lintItems(items: unknown, fail: (message: string) => void): void {
+  if (!Array.isArray(items) || items.length === 0) return fail('items, when present, must be a non-empty array')
+  if (items.length > MAX_ITEMS) fail(`items has ${items.length} entries (max ${MAX_ITEMS})`)
+  items.forEach((raw, i) => {
+    const where = `items[${i}]`
+    if (!raw || typeof raw !== 'object') return fail(`${where} must be an object`)
+    const item = raw as Record<string, unknown>
+    itemCount++
+    if (typeof item.q !== 'string' || item.q.trim() === '') fail(`${where}.q must be a non-empty string`)
+    const options = item.options
+    if (!Array.isArray(options) || options.length < 2 || options.length > 5 || options.some((o) => typeof o !== 'string' || o.trim() === '')) {
+      return fail(`${where}.options must be 2 to 5 non-empty strings`)
+    }
+    const texts = (options as string[]).map((o) => o.trim())
+    if (new Set(texts).size !== texts.length) fail(`${where} has duplicate option text`)
+    if (item.multi !== undefined) fail(`${where} must be single-answer (no multi)`)
+    const correct = item.correct
+    if (!Array.isArray(correct) || correct.length !== 1 || !Number.isInteger(correct[0]) || correct[0] < 0 || correct[0] >= options.length) {
+      return fail(`${where}.correct must be exactly one valid option index`)
+    }
+    const why = item.why
+    if (!Array.isArray(why) || why.length !== options.length) {
+      return fail(`${where}.why must have one entry per option (${options.length}), got ${Array.isArray(why) ? why.length : 'none'}`)
+    }
+    if (why.some((w) => typeof w !== 'string' || w.trim() === '')) fail(`${where}.why has an empty entry`)
+    // no length cue: the key must not be strictly the longest option (the shortest is reported)
+    const lens = texts.map((t) => t.length)
+    const key = correct[0] as number
+    const rankedLongest = lens.filter((l) => l > lens[key]).length === 0 && lens.filter((l) => l === lens[key]).length === 1
+    const rankedShortest = lens.filter((l) => l < lens[key]).length === 0 && lens.filter((l) => l === lens[key]).length === 1
+    if (rankedLongest) {
+      keyLongest++
+      fail(`${where}: the key is strictly the longest option; rewrite the distractors`)
+    }
+    if (rankedShortest) keyShortest++
+  })
+}
+
 for (const file of files) {
   const stem = file.slice(0, -'.ts'.length)
   const fail = (message: string) => problems.push(`${file}: ${message}`)
@@ -63,6 +107,8 @@ for (const file of files) {
     if (typeof entry.why !== 'string' || entry.why.trim() === '') fail('why, when present, must be a non-empty string')
     else if (entry.why.trim().split(/\s+/).length > MAX_WHY_WORDS) fail(`why is over ${MAX_WHY_WORDS} words`)
   }
+
+  if (entry.items !== undefined) lintItems(entry.items, fail)
 
   if (entry.source !== undefined) {
     const source = entry.source as Record<string, unknown> | null
@@ -114,4 +160,4 @@ if (problems.length > 0) {
   throw new Error(`${problems.length} erratum problem(s)`)
 }
 
-console.log(`errata ok: ${files.length} entries`)
+console.log(`errata ok: ${files.length} entries, ${itemCount} retrieval items (key strictly longest: ${keyLongest}, strictly shortest: ${keyShortest})`)
