@@ -79,12 +79,12 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
 
 Memory management is half the paper; the other half is a **scheduler**, and you own this too. vLLM batches at *iteration* granularity (continuous batching — T5.L7 goes deep) and must decide: which waiting sequences to **admit** (is there enough free block space?), and which running sequences to **preempt** when blocks run out.
 
-On preemption the paper evaluates two policies that should give you déjà vu: **swapping** (copy the victim's blocks to CPU RAM, copy back on resume — the OS's swap-to-disk, with PCIe as the disk) and **recomputation** (drop the blocks, re-run prefill on resume — the OS's drop-and-reread of file-backed pages). It even models the trade the same way: swap costs bandwidth, recompute costs compute, and the right choice depends on sequence length and load. Admission is FCFS; preemption is last-in-first-out among the running set. It is a timesharing system: the GPU is the CPU, the iteration is the quantum, and HBM is the RAM.`,
+On preemption the paper evaluates two policies that should give you déjà vu: **swapping** (copy the victim's blocks to CPU RAM, copy back on resume — the OS's swap-to-disk, with host RAM, over PCIe, as the disk) and **recomputation** (drop the blocks, re-run prefill on resume — the OS's drop-and-reread of file-backed pages). It even models the trade the same way: swap costs bandwidth, recompute costs compute, and the right choice depends on sequence length and load. Admission is FCFS; preemption is last-in-first-out among the running set. It is a timesharing system: the GPU is the CPU, the iteration is the quantum, and HBM is the RAM.`,
     },
     {
       type: 'callout',
       variant: 'analogy',
-      md: `If you've operated a JVM under memory pressure you already feel §4 in your bones: admission control = "don't start what you can't heap," swapping = the OS paging cold heap out to disk, which is literally what the paper's swap policy does with PCIe as the disk. The cleanest analogy is your database: buffer pool (HBM) too small for the working set (KV demand), so pages spill — and the DBA answer is never a better eviction policy, it's admission control and more RAM. The paper's throughput curves are that DBA lesson at 2 TB/s.`,
+      md: `If you've operated a JVM under memory pressure you already feel §4 in your bones: admission control = "don't start what you can't heap," swapping = the OS paging cold heap out to disk, which is literally what the paper's swap policy does with host RAM, over PCIe, as the disk. The cleanest analogy is your database: buffer pool (HBM) too small for the working set (KV demand), so pages spill — and the DBA answer is never a better eviction policy, it's admission control and more RAM. The paper's throughput curves are that DBA lesson at 2 TB/s.`,
     },
     {
       type: 'prose',
