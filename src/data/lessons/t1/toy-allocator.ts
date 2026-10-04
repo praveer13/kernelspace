@@ -238,7 +238,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
           q: 'Why do jemalloc/tcmalloc/glibc use segregated size classes?',
           options: [
             'So threads can allocate without locking, since each thread owns exactly one size class',
-            'O(1) fit search and bounded internal waste, with far less fragmentation than one free list',
+            'O(1) fit search and bounded slack, with less fragmentation than a single free list',
             'To eliminate internal fragmentation, because every request gets a block of exactly its size',
             'To allow allocations larger than one page, which a single free list cannot represent',
           ],
@@ -257,7 +257,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
           options: [
             'It always segfaults at the second free, so the bug is loud and easy to find',
             'The block enters the free list twice, so two future mallocs receive the same memory',
-            'It overwrites the free list head, so every later malloc returns NULL',
+            'It overwrites the free list head with a stale pointer, so every later malloc returns NULL',
             'It returns the pages to the kernel twice, which makes the kernel kill the whole process',
           ],
           correct: [1],

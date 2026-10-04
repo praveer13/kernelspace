@@ -124,10 +124,10 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
         {
           q: 'The defining difference between a process and a thread is…',
           options: [
-            'A process has its own execution context scheduled by the kernel, while threads are scheduled by the language runtime inside it',
+            'A process has its own execution context scheduled by the kernel, while threads are scheduled by the language runtime inside that process',
             'A process owns a private address space and resource bundle, while its threads share that one address space and those resources',
             'A thread gets a private stack and heap and shares only code and globals with its siblings, while a process shares nothing at all',
-            'A process is the unit the scheduler places on a core, while a thread is only a queue of work items the process consumes',
+            'A process is the unit the scheduler places on a core, while a thread is only a queue of work items that the process itself consumes',
           ],
           correct: [1],
           explanation:
@@ -142,7 +142,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
         {
           q: 'The largest hidden cost of a context switch is usually…',
           options: [
-            'Saving and restoring the register file, which takes thousands of cycles because every register is written out to memory',
+            'Saving and restoring the register file, which takes thousands of cycles because every register is written out to main memory',
             'The user-to-kernel trap itself, since entering supervisor mode flushes the pipeline and costs microseconds on every switch',
             'Cache and TLB cold-start for the incoming thread: thousands of instructions run at DRAM latency while the caches refill',
             'Updating the runqueue data structure, whose tree rebalancing gets slower as the number of runnable threads grows',
@@ -181,7 +181,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
             'Pinning each logical thread to a hardware core so the kernel scheduler never has to switch it out for another',
             'Multiplexing many logical threads onto few OS threads in userspace, so most parks and resumes never enter the kernel',
             'Using SMT hardware thread contexts to keep each logical thread\'s registers resident on the core, so switches skip save and restore',
-            'Running each logical thread on its own kernel thread with a shrunken stack, so every kernel switch moves less memory',
+            'Running each logical thread on its own kernel thread with a shrunken stack, so every kernel context switch moves less memory',
           ],
           correct: [1],
           explanation:

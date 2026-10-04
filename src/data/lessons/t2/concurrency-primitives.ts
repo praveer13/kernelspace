@@ -165,7 +165,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'A system call plus a context switch (~1 µs), because the kernel must record the owner before granting the lock',
             'One userspace atomic operation (~20 ns); the kernel is entered only when a waiter must sleep or be woken',
             'A full memory fence plus a cache-line transfer (~500 ns), since acquiring any lock must synchronise every core',
-            'Essentially nothing: an uncontended lock is plain loads and stores, so adding one never slows a hot path',
+            'Essentially nothing: an uncontended lock is plain loads and stores, so adding one never slows down a hot path',
           ],
           correct: [1],
           explanation:
@@ -183,7 +183,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'Atomic operations generate too much coherence traffic by default, so weaker orderings let a core opt out of coherence for extra speed',
             'CPUs and compilers reorder memory operations, so without ordering another core can see the flag set before the data it guards',
             'Without an explicit fence instruction on every core a mutex cannot lock at all, because lock acquisition needs the fence to be atomic',
-            'Stores to nearby addresses from two cores can be lost entirely, so ordering is needed to keep each write from vanishing',
+            'Stores to nearby addresses from two cores can be lost entirely, so ordering is needed to keep each write from silently vanishing',
           ],
           correct: [1],
           explanation:
@@ -219,7 +219,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'Replacing the CAS retry loop with a hardware fetch-and-add instruction, so each increment completes in one step without any retry',
             'Striping the count across per-core padded cells and summing on read, which removes the single contended cache line',
             'Locking finer-grained segments of the counter so threads rarely wait on the same lock, as ConcurrentHashMap does',
-            'Dropping memory-ordering guarantees so the CPU can batch increments in store buffers without cache-line transfers',
+            'Dropping memory-ordering guarantees so the CPU can batch increments in per-core store buffers without any cache-line transfers',
           ],
           correct: [1],
           explanation:

@@ -127,7 +127,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
             'Internal fragmentation, wasted space hidden inside blocks that are already allocated to callers',
             'External fragmentation: free memory is scattered in pieces too small for the request',
             'A memory leak, where unreachable blocks were never returned to the allocator',
-            'Heap corruption, where damaged headers make the allocator ignore large free blocks',
+            'Heap corruption, where overwritten block headers make the allocator ignore large free blocks',
           ],
           correct: [1],
           explanation:
@@ -143,7 +143,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
           q: 'Rounding a 33-byte request up to a 48-byte block is an example of…',
           options: [
             'External fragmentation, since the 15 leftover bytes can never be reused by any other caller',
-            'Internal fragmentation: allocated but unused bytes inside the block (padding or rounding)',
+            'Internal fragmentation: bytes allocated but unused inside the block',
             'Coalescing, because the allocator merged the request with a neighboring free block',
             'Splitting, because the allocator carved a 48-byte block out of a larger free one',
           ],
@@ -160,7 +160,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'Why do fixed-size-block designs eliminate external fragmentation?',
           options: [
-            'They coalesce more aggressively, so adjacent holes never persist',
+            'They coalesce more aggressively on every free, so adjacent holes never persist',
             'They compact live blocks periodically, as ZGC does, to squeeze the holes out',
             'Every free block is identical, so any free block satisfies any request',
             'They place blocks in sorted order, so free blocks always end up adjacent',
@@ -196,7 +196,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'vLLM\'s reported <4% KV-cache waste comes primarily from…',
           options: [
-            'Compressing the KV tensors to FP8, which halves the bytes each token needs',
+            'Compressing the KV tensors to FP8, which halves the bytes each token needs for its keys and values',
             'Fixed-size token blocks, so waste is only the partly filled tail block of each sequence',
             'Evicting idle sequences to CPU RAM, which frees the GPU blocks stranded by waiting requests',
             'Sharing one copy of the model weights across all concurrent requests',
