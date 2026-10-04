@@ -5,7 +5,7 @@
  * shortcuts (←/→ j/k e m ? esc), quiz-gated exam completion, XP toast flow.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Flag,
   GraduationCap,
   Keyboard,
   List,
@@ -36,7 +37,7 @@ import {
   prevLesson,
   lessonPath,
 } from '@/data/lessons'
-import type { Lesson } from '@/data/lessons/types'
+import type { ContentBlock, Lesson } from '@/data/lessons/types'
 import { RenderBlock } from '@/pages/lesson/blocks'
 import { countH2, extractHeadings } from '@/pages/lesson/markdown'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
@@ -45,6 +46,43 @@ import { cn } from '@/lib/utils'
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
 /* ------------------------------------------------------------------ */
+
+const CONTENT_ERROR_FORM = 'https://github.com/praveer13/kernelspace/issues/new'
+
+function contentErrorUrl(lessonId: string, section: string): string {
+  const query = new URLSearchParams({ template: 'content-error.yml', lesson_id: lessonId, section })
+  return `${CONTENT_ERROR_FORM}?${query.toString()}`
+}
+
+/**
+ * A section runs from one H2 to the next. For each block, the plain heading of the section it
+ * ends, or null when the block is mid-section; blocks before the first H2 count as "Intro".
+ */
+function sectionEnds(blocks: ContentBlock[]): (string | null)[] {
+  const startsSection = (b: ContentBlock) => b.type === 'prose' && countH2(b.md) > 0
+  let section = 'Intro'
+  return blocks.map((b, i) => {
+    if (b.type === 'prose') {
+      const h2 = b.md.split('\n').filter((l) => l.startsWith('## '))
+      if (h2.length > 0) section = h2[h2.length - 1].slice(3).replace(/[`*]/g, '').trim()
+    }
+    const next = blocks[i + 1]
+    return !next || startsSection(next) ? section : null
+  })
+}
+
+function ReportError({ lessonId, section }: { lessonId: string; section: string }) {
+  return (
+    <a
+      href={contentErrorUrl(lessonId, section)}
+      target="_blank"
+      rel="noreferrer"
+      className="mb-2 mt-1 flex w-fit items-center gap-1.5 font-mono text-[11px] text-text-3 transition-colors hover:text-text-2 focus-visible:text-text-2"
+    >
+      <Flag size={11} /> report an error<span className="sr-only"> in the section {section}</span>
+    </a>
+  )
+}
 
 function scrollPctNow(): number {
   const doc = document.documentElement
@@ -479,6 +517,8 @@ function LessonView({ lesson }: { lesson: Lesson }) {
     })
   }, [lesson])
 
+  const reportSections = useMemo(() => sectionEnds(lesson.blocks), [lesson])
+
   const [activeId, setActiveId] = useState<string | null>(headings[0]?.id ?? null)
   const [toast, setToast] = useState<ToastData | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -714,7 +754,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
               )}
               {lesson.verifiedAt && (
                 <Link
-                  to="/field-notes"
+                  to="/freshness?tab=field-notes"
                   className="flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/5 px-2.5 py-0.5 font-mono text-[10px] text-accent transition-colors hover:border-accent/50 hover:bg-accent/10"
                   title="Landscape-sensitive content; open the quarterly verification log"
                 >
@@ -735,7 +775,10 @@ function LessonView({ lesson }: { lesson: Lesson }) {
 
           {/* blocks */}
           {lesson.blocks.map((b, i) => (
-            <RenderBlock key={i} block={b} lesson={lesson} trackColor={track.color} h2Start={blockOffsets[i]} />
+            <Fragment key={i}>
+              <RenderBlock block={b} lesson={lesson} trackColor={track.color} h2Start={blockOffsets[i]} />
+              {reportSections[i] && <ReportError lessonId={lesson.id} section={reportSections[i]} />}
+            </Fragment>
           ))}
 
           {/* prev / next (lesson.md §7) */}

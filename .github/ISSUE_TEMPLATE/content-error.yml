@@ -1,0 +1,46 @@
+name: Report a content error
+description: A lesson says something that is wrong, outdated or misleading.
+title: "[content error] "
+labels: ["content-error"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for catching this. Confirmed fixes are published on the [Changes page](https://kernelspace.naigap.com/freshness) with the before and after text.
+  - type: input
+    id: lesson_id
+    attributes:
+      label: Lesson id
+      description: The id shown in the lesson URL or the left rail, for example `t0.l4`.
+      placeholder: t0.l4
+    validations:
+      required: true
+  - type: input
+    id: section
+    attributes:
+      label: Block or section
+      description: The heading of the section, or the block (quiz question, code, diagram, callout) where the problem is.
+      placeholder: "Which fraction of the line is useful?"
+    validations:
+      required: true
+  - type: textarea
+    id: what_is_wrong
+    attributes:
+      label: What is wrong
+      description: Quote the text as it appears, then say why it is wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: suggested_fix
+    attributes:
+      label: Suggested fix
+      description: What the text should say instead. Leave blank if you are not sure.
+    validations:
+      required: false
+  - type: textarea
+    id: source
+    attributes:
+      label: Source
+      description: A primary source (spec, paper, vendor documentation, source code) that supports the fix, with a link.
+    validations:
+      required: false
