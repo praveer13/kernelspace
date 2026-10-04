@@ -3,6 +3,8 @@
  * src/data/errata/<YYYY-MM-DD>-<slug>.ts, default-exporting `{ … } satisfies Erratum`,
  * so tsc checks every entry and the Changes page can glob them without an index.
  */
+import type { QuizQuestion } from '@/components/QuizBlock'
+
 export interface Erratum {
   /** `<YYYY-MM-DD>-<slug>`, identical to the file name without `.ts`. */
   id: string
@@ -24,4 +26,10 @@ export interface Erratum {
   supersedes?: string
   /** Primary source for the corrected claim. */
   source?: { url: string; title: string }
+  /**
+   * At most 2 retrieval items for the "For you" change card (ledger spec §12.2): small single-answer
+   * multiple-choice questions on the corrected claim, each with a `why` for every option (parallel to
+   * `options`). Answers are written as `item card:<id>#<i>` events. `verify:errata` lints them.
+   */
+  items?: QuizQuestion[]
 }

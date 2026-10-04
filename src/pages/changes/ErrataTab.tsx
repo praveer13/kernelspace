@@ -1,18 +1,11 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { ExternalLink } from 'lucide-react'
+import ChangeCards from '@/components/changes/ChangeCards'
+import { ERRATA } from '@/data/errata'
 import type { Erratum } from '@/data/errata/schema'
 import { lessonById, lessonPath } from '@/data/lessons'
 import { cn } from '@/lib/utils'
-
-// Date-prefixed modules only, so schema.ts (types, no default export) is never picked up.
-const modules = import.meta.glob<Erratum>('/src/data/errata/[0-9]*.ts', {
-  eager: true,
-  import: 'default',
-})
-
-const newestFirst = (a: Erratum, b: Erratum) =>
-  b.date.localeCompare(a.date) || b.id.localeCompare(a.id)
 
 /** Newest first, except an erratum always lands before the one it supersedes (same-day fixes would otherwise sort by id). */
 function supersedingFirst(sorted: Erratum[]): Erratum[] {
@@ -28,11 +21,12 @@ function supersedingFirst(sorted: Erratum[]): Erratum[] {
   return out
 }
 
-const ERRATA = supersedingFirst(Object.values(modules).sort(newestFirst))
+// ERRATA is already newest first (same-day fixes by id).
+const ORDERED = supersedingFirst([...ERRATA])
 
 /** erratum id -> the erratum that replaces it */
 const SUPERSEDED_BY = new Map<string, Erratum>()
-for (const erratum of ERRATA) if (erratum.supersedes) SUPERSEDED_BY.set(erratum.supersedes, erratum)
+for (const erratum of ORDERED) if (erratum.supersedes) SUPERSEDED_BY.set(erratum.supersedes, erratum)
 
 interface LessonGroup {
   lessonId: string
@@ -118,10 +112,12 @@ function ErratumCard({ erratum, groupId }: { erratum: Erratum; groupId: string }
 }
 
 export default function ErrataTab() {
-  const groups = useMemo(() => groupByLesson(ERRATA), [])
+  const groups = useMemo(() => groupByLesson(ORDERED), [])
 
   return (
     <div>
+      <ChangeCards />
+
       <p className="max-w-2xl text-body-lg leading-relaxed text-text-2">
         Every correction to a published lesson, newest first, grouped by the lesson it touches. An{' '}
         <KindBadge kind="error" /> means the course was wrong; a <KindBadge kind="changed" /> means the

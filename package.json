@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "bun test ./tests",
     "verify:traces": "bun scripts/verify-traces.ts",
     "verify:leaderboard": "bun scripts/verify-leaderboard.ts",
     "verify:field-notes": "bun scripts/verify-field-notes.ts",

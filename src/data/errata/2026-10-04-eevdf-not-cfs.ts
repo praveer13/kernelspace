@@ -15,4 +15,38 @@ export default {
     url: 'https://docs.kernel.org/scheduler/sched-eevdf.html',
     title: 'Linux kernel documentation: EEVDF Scheduler',
   },
+  items: [
+    {
+      q: 'Since Linux 6.6, which runnable thread does the fair scheduling class pick next?',
+      options: [
+        'The eligible thread (lag >= 0) with the earliest virtual deadline',
+        'The runnable thread with the smallest vruntime, exactly as CFS did',
+        'The thread with the largest positive lag, whether eligible or not',
+        'The thread with the shortest requested slice, whatever its lag is',
+      ],
+      correct: [0],
+      why: [
+        'Right. EEVDF only considers eligible threads (lag of zero or more) and runs the one whose virtual deadline is earliest.',
+        'That is the CFS rule. EEVDF replaced it in 6.6 with eligibility plus earliest virtual deadline.',
+        'Lag decides eligibility, not the pick. Among eligible threads the choice is by virtual deadline.',
+        'A short requested slice gives an earlier deadline, but a thread must be eligible first, so slice alone does not pick.',
+      ],
+    },
+    {
+      q: 'Under EEVDF, what can still starve ordinary fair-class threads?',
+      options: [
+        'A fair-class thread that requests a very long time slice',
+        'Nothing: the fair class guarantees that no thread ever starves',
+        'A real-time (SCHED_FIFO) thread that never blocks or yields',
+        'A fair-class thread whose lag stays negative for a long time',
+      ],
+      correct: [2],
+      why: [
+        'A long requested slice gives a later virtual deadline, so that thread waits longer; it does not take the CPU from others.',
+        'That was the old CFS claim. Real-time and deadline classes sit above the fair class and can starve it.',
+        'Right. Real-time and deadline classes outrank the fair class, so a real-time thread that never blocks can starve ordinary threads.',
+        'Negative lag makes that thread ineligible, which delays it. It does not stop other fair threads from running.',
+      ],
+    },
+  ],
 } satisfies Erratum
