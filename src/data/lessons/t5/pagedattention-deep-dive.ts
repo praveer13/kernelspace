@@ -19,7 +19,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## The data structures, concretely
 
-The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KB/token… wait, per-block bytes = 16 × 128 KB = 2 MB per block), a pool of N blocks is the entire serving capacity. Two structures run the show:
+The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KB of KV per token, so one block holds 16 × 128 KB = 2 MB), a pool of N blocks is the entire serving capacity. Two structures run the show:
 
 - **The free-block queue** — exactly your T1.L3 free list, minus the fit search (all blocks identical): \`alloc()\` pops, \`free()\` pushes, O(1), no fragmentation between blocks ever.
 - **Per-sequence block tables** — a growable array of physical block ids: logical block \`i\` (tokens \`16i..16i+15\`) lives in physical block \`table[i]\`. The attention kernel translates per block as it reads — the MMU walk, one level deep.
