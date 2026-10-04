@@ -184,6 +184,45 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                   )
                 })}
               </div>
+              {submitted && q.why && q.why.length === q.options.length && (
+                <ul className="mt-2 space-y-1.5" aria-label="Why each answer is right or wrong">
+                  {/* wrong picks first (their misconception), then the key(s) */}
+                  {[
+                    ...orders[qi].filter((oi) => sel.has(oi) && !q.correct.includes(oi)),
+                    ...orders[qi].filter((oi) => q.correct.includes(oi)),
+                  ].map((oi) => {
+                    const right = q.correct.includes(oi)
+                    const picked = sel.has(oi)
+                    return (
+                      <li
+                        key={oi}
+                        className={cn(
+                          'flex items-start gap-2 rounded-md border-l-2 bg-surface-2 px-3.5 py-2.5 text-body-sm text-text-2',
+                          right ? 'border-accent' : 'border-danger',
+                        )}
+                      >
+                        {right ? (
+                          <Check size={14} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+                        ) : (
+                          <X size={14} className="mt-0.5 shrink-0 text-danger" aria-hidden />
+                        )}
+                        <span>
+                          <span
+                            className={cn(
+                              'mr-1.5 font-mono text-[10px] uppercase',
+                              right ? 'text-accent' : 'text-danger',
+                            )}
+                          >
+                            {LETTERS[orders[qi].indexOf(oi)]} ·{' '}
+                            {right ? (picked ? 'your pick, correct' : 'correct answer') : 'your pick, wrong'}
+                          </span>
+                          {q.why?.[oi]}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
               <AnimatePresence>
                 {submitted && q.explanation && (
                   <motion.div
