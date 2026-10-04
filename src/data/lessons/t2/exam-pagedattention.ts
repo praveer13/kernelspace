@@ -84,7 +84,7 @@ On preemption the paper evaluates two policies that should give you déjà vu: *
     {
       type: 'callout',
       variant: 'analogy',
-      md: `If you've operated a JVM under memory pressure you already feel §4 in your bones: admission control = "don't start what you can't heap," swapping = GC's old-gen overflow to compressed oops… no wait — swapping is literally *swapping*. The cleanest analogy is your database: buffer pool (HBM) too small for the working set (KV demand), so pages spill — and the DBA answer is never a better eviction policy, it's admission control and more RAM. The paper's throughput curves are that DBA lesson at 2 TB/s.`,
+      md: `If you've operated a JVM under memory pressure you already feel §4 in your bones: admission control = "don't start what you can't heap," swapping = the OS paging cold heap out to disk, which is literally what the paper's swap policy does with PCIe as the disk. The cleanest analogy is your database: buffer pool (HBM) too small for the working set (KV demand), so pages spill — and the DBA answer is never a better eviction policy, it's admission control and more RAM. The paper's throughput curves are that DBA lesson at 2 TB/s.`,
     },
     {
       type: 'prose',
