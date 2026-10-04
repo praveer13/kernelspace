@@ -1,12 +1,13 @@
 /**
  * lab.worker — runs untrusted learner wasm off the main thread.
  *
- * The module is instantiated and its self-check suite executed here, so an
+ * The module is instantiated and its self-check suite (and, for Fleet admission, its
+ * ks_invoke bridge) executed here, so an
  * infinite loop or runaway allocation can only stall this worker — the page
  * stays responsive and lab-worker.ts terminates the worker after 2 s.
  */
 
-import { instantiateLab, LabAbiError, LabTrapError, runLabWasm } from '../lib/wasm-lab'
+import { instantiateLab, LabAbiError, LabTrapError, probeInvoke, runLabWasm } from '../lib/wasm-lab'
 import type { LabWorkerReply, LabWorkerRequest } from './lab-protocol'
 
 /* The app tsconfig has the DOM lib, not WebWorker — type just what we use. */
@@ -24,6 +25,11 @@ scope.onmessage = async (ev) => {
     }
     const mod = await instantiateLab(bytes)
     const report = mod.hasInvoke ? mod.runChecks() : null
+    if (report && report.checks.every((c) => c.pass)) {
+      /* ks_run only exercises the suite; /fleet drives ks_invoke, so a spin there must be caught here */
+      scope.postMessage({ type: 'phase', id, phase: 'invoke' })
+      probeInvoke(mod, report.lab)
+    }
     scope.postMessage({ type: 'done', id, report, hasInvoke: mod.hasInvoke })
   } catch (e) {
     const kind = e instanceof LabTrapError ? 'trap' : e instanceof LabAbiError ? 'abi' : 'error'

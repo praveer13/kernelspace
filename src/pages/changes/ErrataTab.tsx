@@ -14,7 +14,25 @@ const modules = import.meta.glob<Erratum>('/src/data/errata/[0-9]*.ts', {
 const newestFirst = (a: Erratum, b: Erratum) =>
   b.date.localeCompare(a.date) || b.id.localeCompare(a.id)
 
-const ERRATA = Object.values(modules).sort(newestFirst)
+/** Newest first, except an erratum always lands before the one it supersedes (same-day fixes would otherwise sort by id). */
+function supersedingFirst(sorted: Erratum[]): Erratum[] {
+  const out: Erratum[] = []
+  const placed = new Set<string>()
+  const place = (erratum: Erratum) => {
+    if (placed.has(erratum.id)) return
+    placed.add(erratum.id)
+    for (const other of sorted) if (other.supersedes === erratum.id) place(other)
+    out.push(erratum)
+  }
+  sorted.forEach(place)
+  return out
+}
+
+const ERRATA = supersedingFirst(Object.values(modules).sort(newestFirst))
+
+/** erratum id -> the erratum that replaces it */
+const SUPERSEDED_BY = new Map<string, Erratum>()
+for (const erratum of ERRATA) if (erratum.supersedes) SUPERSEDED_BY.set(erratum.supersedes, erratum)
 
 interface LessonGroup {
   lessonId: string
@@ -46,6 +64,7 @@ function KindBadge({ kind }: { kind: Erratum['kind'] }) {
 }
 
 function ErratumCard({ erratum, groupId }: { erratum: Erratum; groupId: string }) {
+  const newer = SUPERSEDED_BY.get(erratum.id)
   return (
     <article id={`${groupId}-${erratum.id}`} className="scroll-mt-24 rounded-xl border border-line bg-surface-1 p-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -53,6 +72,14 @@ function ErratumCard({ erratum, groupId }: { erratum: Erratum; groupId: string }
         <time dateTime={erratum.date} className="font-mono text-[11px] text-text-3">
           {erratum.date}
         </time>
+        {newer && (
+          <a
+            href={`#${groupId}-${newer.id}`}
+            className="rounded-sm border border-line px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-text-3 hover:text-text-1"
+          >
+            superseded by {newer.date} · {newer.title}
+          </a>
+        )}
       </div>
       <h3 className="mt-3 text-lg font-semibold leading-snug text-text-1">{erratum.title}</h3>
       <dl className="mt-4 space-y-3 text-body leading-relaxed">

@@ -272,8 +272,9 @@ function MeasurementSubmission({
           </p>
           <p className="mt-1 max-w-2xl text-body-sm text-text-2">
             Open the <Link to="/fleet" className="text-accent underline">Fleet dashboard</Link>, run
-            the matching scenario, and capture its six-metric panel. Then explain the measured
-            result and the lever that caused it in 40–150 words.
+            its practice seed, and capture its six-metric panel (graded seeds are shown with each
+            result here; the Fleet does not replay them). Then explain the measured result and the
+            lever that caused it in 40–150 words.
           </p>
         </div>
         <p className="font-mono text-[10px] text-text-3">

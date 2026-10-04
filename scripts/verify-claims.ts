@@ -68,6 +68,8 @@ for (const c of CLAIMS) {
     else {
       if (!validUrl(c.source.url)) fail(c.id, `source.url is not an https URL: ${c.source.url}`)
       if (!c.source.title.trim()) fail(c.id, 'source.title is empty')
+      // a spec or a price is only as good as the words it was read from
+      if ((c.kind === 'spec' || c.kind === 'price') && !c.source.quote?.trim()) fail(c.id, `kind ${c.kind} needs source.quote (the source's own words)`)
     }
   }
   if (c.kind === 'synthetic' && c.source) fail(c.id, 'synthetic claims must not carry a source')

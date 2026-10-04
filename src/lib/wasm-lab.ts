@@ -46,8 +46,12 @@ export class LabAbiError extends Error {
 export class LabTimeoutError extends Error {
   /** short headline for result panels; the message is the detail beneath it */
   readonly title: string
-  constructor(ms: number) {
-    super('the module was still running, so the grader stopped it. Look for an infinite loop in your code.')
+  constructor(ms: number, phase: 'checks' | 'invoke' = 'checks') {
+    super(
+      phase === 'invoke'
+        ? 'the self-checks passed, but the module never returned from ks_invoke (the bridge /fleet drives), so the grader stopped it. Look for an infinite loop in your init or command handling.'
+        : 'the module was still running, so the grader stopped it. Look for an infinite loop in your code.',
+    )
     this.name = 'LabTimeoutError'
     this.title = `timed out after ${ms / 1000} s`
   }
@@ -202,4 +206,24 @@ export async function instantiateLab(bytes: ArrayBuffer): Promise<LabModule & { 
     },
     dispose() {},
   }
+}
+
+/**
+ * The ks_invoke calls /fleet makes first, one short canned exchange per lab. Fleet admission runs
+ * them in the lab worker so a ks_invoke that spins or traps is caught there, not on the main thread.
+ * A lab with no entry (not a Fleet slot) is not probed.
+ */
+const INVOKE_PROBES: Record<string, { init: string; then: string[] }> = {
+  'mpmc-queue': { init: 'init 4', then: ['push 1', 'pop'] },
+  'kv-block-manager': { init: 'init 16 4', then: ['allocate 1 6', 'free_blocks', 'dump', 'free 1'] },
+  'batching-scheduler': { init: 'init', then: ['schedule 0 4 256 0\nW 1 0 16\n'] },
+}
+
+/** Run the canned ks_invoke exchange for `lab`. Throws LabTrapError or LabAbiError; a spin is the caller's timeout. */
+export function probeInvoke(mod: LabModule, lab: string): void {
+  const probe = INVOKE_PROBES[lab]
+  if (!probe) return
+  const init = mod.invoke(probe.init).trim()
+  if (init !== 'ok') throw new LabAbiError(`ks_invoke('${probe.init}') answered "${init.slice(0, 60)}", not "ok" — the fleet cannot drive this module.`)
+  for (const cmd of probe.then) mod.invoke(cmd)
 }

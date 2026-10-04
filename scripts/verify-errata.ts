@@ -19,6 +19,7 @@ const isRealDate = (value: string): boolean => {
 const latestAllowed = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 const problems: string[] = []
+const entries = new Map<string, Record<string, unknown>>()
 
 for (const file of files) {
   const stem = file.slice(0, -'.ts'.length)
@@ -30,6 +31,7 @@ for (const file of files) {
     continue
   }
   const entry = value as Record<string, unknown>
+  entries.set(stem, entry)
 
   if (entry.id !== stem) fail(`id ${JSON.stringify(entry.id)} must equal the file name "${stem}"`)
 
@@ -72,6 +74,29 @@ for (const file of files) {
     ) {
       fail('source, when present, needs an https url and a title')
     }
+  }
+}
+
+// supersedes must name another erratum that is not newer, with no cycles
+for (const [stem, entry] of entries) {
+  if (entry.supersedes === undefined) continue
+  const fail = (message: string) => problems.push(`${stem}.ts: ${message}`)
+  const target = typeof entry.supersedes === 'string' ? entries.get(entry.supersedes) : undefined
+  if (!target) {
+    fail(`supersedes ${JSON.stringify(entry.supersedes)} is not the id of an erratum`)
+    continue
+  }
+  if (entry.supersedes === stem) fail('supersedes itself')
+  if (typeof entry.date === 'string' && typeof target.date === 'string' && entry.date < target.date) {
+    fail(`supersedes ${entry.supersedes}, which is dated later (${target.date})`)
+  }
+  const seen = new Set([stem])
+  for (let at = entry.supersedes as string | undefined; at !== undefined; at = entries.get(at)?.supersedes as string | undefined) {
+    if (seen.has(at)) {
+      fail(`supersedes chain loops back through ${at}`)
+      break
+    }
+    seen.add(at)
   }
 }
 

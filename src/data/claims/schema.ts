@@ -13,7 +13,7 @@ export interface Claim {
   unit?: string
   /** Short human label, e.g. "H100 SXM HBM bandwidth". */
   label: string
-  /** Required unless `kind` is `derived` or `synthetic`. `quote` is the source's own words. */
+  /** Required unless `kind` is `derived` or `synthetic`. `quote` (the source's own words) is required for `spec` and `price` claims. */
   source?: { url: string; title: string; quote?: string; row?: string }
   /** Last time a person checked the value against the source, YYYY-MM-DD. */
   verifiedAt: string
