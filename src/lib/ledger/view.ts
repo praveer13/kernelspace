@@ -1,6 +1,7 @@
 import { XP_UNITS, type XpUnitPrefix } from './constants'
 import { lwwWorking } from './merge'
 import { refTail } from './refs'
+import { getOwn, setOwn } from './stable'
 import type {
   Aggregate,
   FactKey,
@@ -58,7 +59,7 @@ export function toProgressData(agg: Aggregate, working: Partial<Record<WorkingKe
     if (L.completedAt !== undefined) view.completedAt = L.completedAt
     const scroll = working[`scroll:${id}`]
     if (typeof scroll === 'number') view.scrollPct = scroll
-    lessons[id] = view
+    setOwn(lessons, id, view)
   }
 
   const sims: ProgressData['sims'] = {}
@@ -68,17 +69,18 @@ export function toProgressData(agg: Aggregate, working: Partial<Record<WorkingKe
     if (simId !== null) simIds.add(simId)
   }
   for (const id of simIds) {
-    const S = agg.sims[id]
+    const S = getOwn(agg.sims, id)
     const sim: ProgressData['sims'][string] = { visits: S?.visits ?? 0, tasksDone: S ? sortedKeys(S.tasks) : [] }
     const config = working[`sim-config:${id}`]
     if (config !== undefined) sim.lastConfig = config
-    sims[id] = sim
+    setOwn(sims, id, sim)
   }
 
   const labs: ProgressData['labs'] = {}
   for (const [id, L] of Object.entries(agg.labs)) {
-    labs[id] = { done: !!L.done, checksDone: sortedKeys(L.checks) }
-    if (L.completedAt !== undefined) labs[id].completedAt = L.completedAt
+    const lab: ProgressData['labs'][string] = { done: !!L.done, checksDone: sortedKeys(L.checks) }
+    if (L.completedAt !== undefined) lab.completedAt = L.completedAt
+    setOwn(labs, id, lab)
   }
 
   const fleetWeek: ProgressData['fleetWeek'] = {
@@ -91,7 +93,7 @@ export function toProgressData(agg: Aggregate, working: Partial<Record<WorkingKe
   for (const key of Object.keys(working).sort()) {
     const actId = refTail(key, 'fw:evidence:')
     const value = working[key as WorkingKey]
-    if (actId !== null && isPlainObject(value)) evidence[actId] = value as (typeof evidence)[string]
+    if (actId !== null && isPlainObject(value)) setOwn(evidence, actId, value as (typeof evidence)[string])
   }
   if (Object.keys(evidence).length > 0) fleetWeek.measurementEvidence = evidence
 
@@ -105,7 +107,7 @@ export function toProgressData(agg: Aggregate, working: Partial<Record<WorkingKe
   const settings: ProgressData['settings'] = {}
   for (const key of Object.keys(working).sort()) {
     const field = refTail(key, 'settings:')
-    if (field !== null) (settings as Record<string, unknown>)[field] = working[key as WorkingKey]
+    if (field !== null) setOwn(settings as Record<string, unknown>, field, working[key as WorkingKey])
   }
 
   return {

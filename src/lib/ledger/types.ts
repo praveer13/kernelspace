@@ -543,7 +543,7 @@ export interface LedgerStatus {
 export interface LedgerFacadeState {
   ledger: LedgerStatus
   acks: Record<string, IsoInstant>
-  completions: Record<string, IsoInstant | null>
+  completions: Record<string, IsoInstant>
   working: Partial<Record<WorkingKey, Json>>
 }
 

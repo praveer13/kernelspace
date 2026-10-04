@@ -319,3 +319,69 @@ describe('fold properties', () => {
     expect(agg).toEqual(frozen)
   })
 })
+
+describe('prototype-unsafe ids (fold and view cope even if validation is bypassed)', () => {
+  const UNSAFE = ['__proto__', 'constructor', 'toString', 'hasOwnProperty']
+  const clean = () => {
+    for (const name of ['done', 'completedAt', 'visits', 'total', 'lastAt', 'tasks', 'checks', 'polluted']) {
+      expect(({} as Record<string, unknown>)[name]).toBeUndefined()
+      expect((Function.prototype as unknown as Record<string, unknown>)[name]).toBeUndefined()
+    }
+  }
+
+  const events = (id: string): LedgerEvent[] => [
+    evt('visit', `lesson:${id}`, T1),
+    evt('complete', `lesson:${id}`, T1),
+    evt('exercise', `lesson:${id}`, T1),
+    evt('quiz', `lesson:${id}`, T1, { score: 1, ok: true }),
+    evt('visit', `sim:${id}`, T1),
+    evt('sim-task', `sim:${id}/a`, T1),
+    evt('sim-task', `sim:s/${id}`, T1),
+    evt('lab-check', `lab:${id}`, T1, { data: { passed: [id, 'c1'], total: 2 } }),
+    evt('fleet-act', `fw:${id}`, T1),
+    evt('capstone-step', `cap:${id}`, T1, { data: { index: 1 } }),
+    evt('achievement', `ach:${id}`, T1),
+    evt('ack', `erratum:${id}`, T1),
+    evt('complete', `lesson:${id}`, T2),
+  ]
+  const working = (id: string): WorkingRecord[] =>
+    [`settings:${id}`, `fw:evidence:${id}`, `scroll:${id}`, `sim-config:${id}`].map((key) => ({
+      key,
+      value: key.startsWith('scroll:') ? 0.5 : { polluted: true },
+      at: T1,
+      dev: 'hand',
+    })) as WorkingRecord[]
+
+  for (const id of UNSAFE) {
+    test(`id ${id} stays an ordinary key`, () => {
+      const agg = derive(events(id))
+      clean()
+      expect(Object.hasOwn(agg.lessons, id)).toBe(true)
+      expect(agg.lessons[id].done).toBe(true)
+      expect(agg.lessons[id].completedAt).toBe(T1)
+      expect(Object.hasOwn(agg.sims, id)).toBe(true)
+      expect(agg.sims[id].visits).toBe(1)
+      expect(Object.hasOwn(agg.labs, id)).toBe(true)
+      expect(agg.labs[id].total).toBe(2)
+      expect(Object.hasOwn(agg.labs[id].checks, id)).toBe(true)
+      expect(Object.hasOwn(agg.fleetWeek.acts, id)).toBe(true)
+      expect(Object.hasOwn(agg.achievements, id)).toBe(true)
+      expect(Object.hasOwn(agg.acks, `erratum:${id}`)).toBe(true)
+
+      // The clone fold() makes keeps an own `__proto__` key as an own key.
+      const next = fold(agg, evt('visit', `lesson:${id}`, T3))
+      expect(Object.hasOwn(next.lessons, id)).toBe(true)
+      expect(next.lessons[id].lastAt).toBe(T3)
+
+      const data = toProgressData(agg, workingMap(working(id)))
+      clean()
+      expect(Object.hasOwn(data.lessons, id)).toBe(true)
+      expect(Object.hasOwn(data.sims, id)).toBe(true)
+      expect(Object.hasOwn(data.labs, id)).toBe(true)
+      expect(Object.hasOwn(data.settings, id)).toBe(true)
+      expect(Object.hasOwn(data.fleetWeek.measurementEvidence ?? {}, id)).toBe(true)
+      expect(Object.getPrototypeOf(data.settings)).toBe(Object.prototype)
+      expect(Object.getPrototypeOf(data.fleetWeek.measurementEvidence)).toBe(Object.prototype)
+    })
+  }
+})

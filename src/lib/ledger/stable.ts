@@ -26,6 +26,24 @@ export function stableStringify(value: unknown): string {
   return 'null'
 }
 
+/**
+ * Record helpers for maps keyed by imported ids. A plain `rec[id]` reads or writes through the
+ * prototype for `__proto__`, `constructor` and friends; these touch own properties only, and
+ * `setOwn` defines the key as an own data property, so `__proto__` is just another id.
+ * Own `__proto__` keys survive `structuredClone`, `Object.keys` and JSON.
+ */
+export const getOwn = <K extends string, T>(rec: Partial<Record<K, T>>, key: K): T | undefined =>
+  Object.hasOwn(rec, key) ? rec[key] : undefined
+
+export function setOwn<K extends string, T>(rec: Partial<Record<K, T>>, key: K, value: T): T {
+  Object.defineProperty(rec, key, { value, enumerable: true, writable: true, configurable: true })
+  return value
+}
+
+/** The own entry for `key`, created from `make()` when absent. */
+export const ensureOwn = <K extends string, T>(rec: Partial<Record<K, T>>, key: K, make: () => T): T =>
+  Object.hasOwn(rec, key) ? (rec[key] as T) : setOwn(rec, key, make())
+
 /** Lowercase hex SHA-256 (async: `crypto.subtle` exists in browsers and Bun). */
 export async function sha256Hex(data: string | ArrayBuffer | Uint8Array): Promise<string> {
   const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data

@@ -60,6 +60,9 @@ const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Num
 const isNonEmptyString = (v: unknown, max = MAX_ID_LENGTH): v is string =>
   typeof v === 'string' && v.length > 0 && v.length <= max
 
+/** `__proto__` as an id segment of a ref or key (`lesson:__proto__`, `sim:x/__proto__`). Fold and view cope with it, but nothing legitimate uses it. */
+const hasProtoSegment = (s: string): boolean => s.split(/[:/#]/).includes('__proto__')
+
 const fail = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
 
 /** Kind-specific `data` shape: only what fold and the selectors read. */
@@ -98,7 +101,9 @@ export function validateEvent(x: unknown): Checked<LedgerEvent> {
   if (x.v !== 1) return fail(`unknown event version ${JSON.stringify(x.v)}`)
   if (!isKnownKind(x.kind)) return fail(`unknown kind ${JSON.stringify(x.kind)}`)
   const kind = x.kind
-  if (typeof x.ref !== 'string' || !refMatchesKind(kind, x.ref)) return fail(`ref ${JSON.stringify(x.ref)} does not fit kind ${kind}`)
+  if (typeof x.ref !== 'string' || !refMatchesKind(kind, x.ref) || hasProtoSegment(x.ref)) {
+    return fail(`ref ${JSON.stringify(x.ref)} does not fit kind ${kind}`)
+  }
   if (!isIsoInstant(x.at)) return fail('at must be an ISO instant')
   if (!Number.isInteger(x.tz) || Math.abs(x.tz as number) > MAX_TZ_MINUTES) return fail('tz must be whole minutes within a day')
   if (!isLocalDay(x.day) || x.day !== dayOf(x.at, x.tz as number)) return fail('day does not match at and tz')
@@ -124,7 +129,7 @@ const WORKING_EXACT = new Set(['fw:doc', 'capstone:metrics', 'boot:path', 'boot:
 const WORKING_PREFIXES = ['scroll:', 'sim-config:', 'fw:evidence:', 'settings:']
 
 export function isWorkingKey(key: unknown): key is WorkingRecord['key'] {
-  if (typeof key !== 'string' || key.length > MAX_ID_LENGTH) return false
+  if (typeof key !== 'string' || key.length > MAX_ID_LENGTH || hasProtoSegment(key)) return false
   return WORKING_EXACT.has(key) || WORKING_PREFIXES.some((p) => key.length > p.length && key.startsWith(p))
 }
 

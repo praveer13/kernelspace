@@ -30,6 +30,44 @@ const bad = (e: unknown) => {
   return r.ok ? null : r.reason
 }
 
+describe('prototype-unsafe ids at the import boundary', () => {
+  const good = () => evt('quiz', 'lesson:t0.l1', T1, { score: 0.5, ok: false })
+
+  test('events whose ref has a __proto__ segment are refused', () => {
+    for (const [kind, ref] of [
+      ['visit', 'lesson:__proto__'],
+      ['sim-task', 'sim:__proto__/a'],
+      ['sim-task', 'sim:s/__proto__'],
+      ['lab-check', 'lab:__proto__'],
+      ['fleet-act', 'fw:__proto__'],
+      ['achievement', 'ach:__proto__'],
+    ] as const) {
+      expect(validateEvent(evt(kind, ref, T1, kind === 'lab-check' ? { data: { passed: [] } } : {})).ok).toBe(false)
+    }
+    expect(validateEvent(good()).ok).toBe(true)
+  })
+
+  test('working keys with a __proto__ tail are refused', () => {
+    for (const key of ['settings:__proto__', 'fw:evidence:__proto__', 'scroll:__proto__', 'sim-config:__proto__']) {
+      expect(validateWorkingRecord({ key, value: {}, at: T1, dev: 'd' }).ok).toBe(false)
+    }
+    expect(validateWorkingRecord({ key: 'settings:theme', value: 'dark', at: T1, dev: 'd' }).ok).toBe(true)
+  })
+
+  test('an import carrying them is refused and leaves Object.prototype alone', () => {
+    const file = exportOf({ events: [good()], working: [] })
+    const text = serializeExport({
+      ...file,
+      events: [...file.events, evt('sim-task', 'sim:__proto__/a', T1), evt('complete', 'lesson:__proto__', T1)],
+    })
+    const parsed = parseImport(text)
+    expect(parsed.ok).toBe(false)
+    expect(parsed.ok || parsed.error).toBe('invalid')
+    expect(({} as Record<string, unknown>).done).toBeUndefined()
+    expect(() => derive([good()])).not.toThrow()
+  })
+})
+
 describe('validateEvent (spec §4.9)', () => {
   const good = () => evt('quiz', 'lesson:t0.l1', T1, { score: 0.5, ok: false })
 
