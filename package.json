@@ -11,6 +11,7 @@
     "verify:traces": "bun scripts/verify-traces.ts",
     "verify:leaderboard": "bun scripts/verify-leaderboard.ts",
     "verify:field-notes": "bun scripts/verify-field-notes.ts",
+    "verify:items": "bun scripts/verify-items.ts",
     "leaderboard:build": "bun scripts/build-leaderboard.ts"
   },
   "dependencies": {
