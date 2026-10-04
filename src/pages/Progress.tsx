@@ -33,10 +33,10 @@ import {
   rankForXp,
   nextRank,
   selectStreak,
+  localDateKey,
   exportProgress,
   TOTAL_LESSONS,
 } from '@/lib/progress'
-import { localDateKey } from '@/lib/progress'
 import type { ProgressState } from '@/lib/progress'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
 import { ALL_LESSONS } from '@/data/lessons'

@@ -55,7 +55,7 @@ export default function StatusBar() {
     const map: Record<string, number> = {}
     for (const l of Object.values(lessons)) {
       if (l.completedAt) {
-        const day = l.completedAt.slice(0, 10)
+        const day = localDateKey(new Date(l.completedAt))
         map[day] = (map[day] ?? 0) + 1
       }
     }

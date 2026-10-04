@@ -595,14 +595,19 @@ function LessonView({ lesson }: { lesson: Lesson }) {
   /* m: navigate to the completion area (quiz, else the complete control); never completes */
   const focusCompletion = useCallback(() => {
     const quiz = document.querySelector<HTMLElement>('section[aria-label="Checkpoint quiz"]')
+    // the right rail is display:none below lg, and the sticky bar is fixed (no offsetParent), so test client rects
+    const controls = [...document.querySelectorAll<HTMLElement>('[data-complete-control]')].filter(
+      (c) => c.getClientRects().length > 0,
+    )
     const el =
       quiz?.querySelector<HTMLElement>('button:not(:disabled)') ??
-      document.querySelector<HTMLElement>('[data-complete-control]:not(:disabled)') ??
+      controls.find((c) => !(c as HTMLButtonElement).disabled) ??
       quiz ??
-      document.querySelector<HTMLElement>('[data-complete-control]')
+      controls[0]
     if (!el) return
-    const anchor = quiz ?? el
-    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (el === quiz && !quiz.hasAttribute('tabindex')) quiz.setAttribute('tabindex', '-1')
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ;(quiz ?? el).scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
     el.focus({ preventScroll: true })
   }, [])
 
