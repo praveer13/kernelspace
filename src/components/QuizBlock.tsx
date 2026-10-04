@@ -12,6 +12,11 @@ export interface QuizQuestion {
   correct: number[]
   explanation?: string
   multi?: boolean
+  /**
+   * Per-option feedback, parallel to `options` (authored order): why this option is
+   * right, or which misconception it encodes and why it is wrong. Shown after submit.
+   */
+  why?: string[]
 }
 
 interface QuizBlockProps {
