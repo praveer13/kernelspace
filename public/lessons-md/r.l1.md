@@ -71,23 +71,23 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
 
 **Q1. What does let x = x + 1 do when x already exists?**
 
-- (o1) Mutates the original binding
-- (o2) Creates a new binding that shadows the old one
+- (o1) Fails in every case
+- (o2) Mutates the original binding
 - (o3) Allocates x on the heap
-- (o4) Fails in every case
+- (o4) Creates a new binding that shadows the old one
 
 **Q2. Why does removing the final semicolon from a Rust block matter?**
 
-- (o1) It makes the block asynchronous
+- (o1) It disables type checking
 - (o2) The final expression becomes the block value
 - (o3) It makes the value mutable
-- (o4) It disables type checking
+- (o4) It makes the block asynchronous
 
 **Q3. Which integer type is normally used for collection indexes?**
 
-- (o1) i8
-- (o2) f64
-- (o3) usize
-- (o4) char
+- (o1) f64
+- (o2) i8
+- (o3) char
+- (o4) usize
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

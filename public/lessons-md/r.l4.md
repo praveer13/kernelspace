@@ -49,23 +49,23 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 
 **Q1. Which combination may exist at the same time for one value?**
 
-- (o1) One &mut T and any number of &T
-- (o2) Many &T, or exactly one &mut T
+- (o1) References are never allowed together
+- (o2) One &mut T and any number of &T
 - (o3) Any number of &mut T
-- (o4) References are never allowed together
+- (o4) Many &T, or exactly one &mut T
 
 **Q2. Why prefer &[T] to &Vec<T> in a read-only function parameter?**
 
-- (o1) Slices are always heap allocated
-- (o2) A slice accepts more contiguous owners and exposes only the needed capability
-- (o3) Vec cannot be borrowed
-- (o4) Slices copy all elements
+- (o1) A slice accepts more contiguous owners and exposes only the needed capability
+- (o2) Slices are always heap allocated
+- (o3) Slices copy all elements
+- (o4) Vec cannot be borrowed
 
 **Q3. Why can Vec::push conflict with a live element reference?**
 
 - (o1) push is asynchronous
-- (o2) push may reallocate and invalidate the referenced address
-- (o3) References cannot point to integers
-- (o4) push consumes the Vec
+- (o2) References cannot point to integers
+- (o3) push consumes the Vec
+- (o4) push may reallocate and invalidate the referenced address
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

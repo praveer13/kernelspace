@@ -36,6 +36,25 @@ export function shuffledOrder(n: number, seed: number): number[] {
   return order
 }
 
+/** FNV-1a, 32-bit: a stable string -> uint32 hash (integer-only, so identical in every runtime). */
+export function hash32(s: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return h >>> 0
+}
+
+/**
+ * The fixed option order used by the markdown export: `order[exportedPosition] = authoredIndex`.
+ * Seeded by lesson and question so it is stable across runs, and the exporter and
+ * verify-items share it. Without it the authored order leaks where the keys sit.
+ */
+export function exportOrder(lessonId: string, questionIndex: number, n: number): number[] {
+  return shuffledOrder(n, hash32(`${lessonId}:${questionIndex}`))
+}
+
 /** A fresh 32-bit seed for a new attempt. */
 export function freshSeed(): number {
   const buf = new Uint32Array(1)

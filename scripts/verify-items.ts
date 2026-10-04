@@ -3,7 +3,8 @@
  *
  * FAILS on: (1) structural defects in any item, (2) a per-track increase in
  * the count of items whose key is strictly the longest option (ratchet against
- * scripts/baselines/verify-items.json), (3) a broken per-attempt shuffle.
+ * scripts/baselines/verify-items.json), (3) a broken per-attempt shuffle, (4) exported
+ * keys piling onto one option id, (5) a shuffled surface that stopped calling shuffledOrder.
  * REPORTS (never fails): longest-key rates and a blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
@@ -14,7 +15,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import type { QuizQuestion } from '../src/components/QuizBlock'
 import { ALL_LESSONS, TRACK_IDS } from '../src/data/lessons'
 import { INCIDENTS } from '../src/lib/fleet-week'
-import { shuffledOrder } from '../src/lib/rng'
+import { exportOrder, shuffledOrder } from '../src/lib/rng'
 
 const BASELINE_URL = new URL('./baselines/verify-items.json', import.meta.url)
 const PASS_BAR = 0.8 // QuizBlock.tsx: score = correct / total >= 0.8
@@ -23,6 +24,8 @@ const FLEET_TRACK = 'fleet-week'
 interface Item {
   track: string
   lessonId: string | null // null for items that are not lesson quizzes
+  /** 0-based question index within the lesson, as the markdown exporter counts it. */
+  qi: number
   ref: string
   q: QuizQuestion
   /** Fleet Week incidents have no authored `explanation`; they are graded on telemetry. */
@@ -61,6 +64,7 @@ for (const lesson of ALL_LESSONS) {
         track: lesson.trackId,
         lessonId: lesson.id,
         ref: `${lesson.id} q${n}`,
+        qi: n - 1,
         q,
         needsExplanation: true,
       })
@@ -77,6 +81,7 @@ for (const incident of INCIDENTS) {
     items.push({
       track: FLEET_TRACK,
       lessonId: null,
+      qi: -1,
       ref: `fleet-week ${incident.id} ${kind}`,
       q: {
         q: `${incident.id} ${kind}`,
@@ -121,6 +126,7 @@ for (const item of items) {
 /* ------------------------- helpers ------------------------- */
 
 const len = (s: string) => s.trim().length
+const pct = (x: number) => `${(x * 100).toFixed(1)}%`
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 
 function median(xs: number[]): number {
@@ -207,9 +213,48 @@ for (let authored = 0; authored < N; authored++) {
   }
 }
 
-/* ------------------------- report ------------------------- */
+/* ------------------------- (4) exported key position ------------------------- */
 
-const pct = (x: number) => `${(x * 100).toFixed(1)}%`
+// The markdown export permutes options with exportOrder; the keys must not pile onto one id.
+const MAX_EXPORT_SHARE = 0.4
+const exportedKeys: number[] = [] // exportedKeys[p] = keys exported at id o(p+1)
+for (const item of validItems) {
+  if (!item.lessonId) continue
+  const order = exportOrder(item.lessonId, item.qi, item.q.options.length)
+  order.forEach((authored, pos) => {
+    if (item.q.correct.includes(authored)) exportedKeys[pos] = (exportedKeys[pos] ?? 0) + 1
+  })
+}
+const totalExportedKeys = exportedKeys.reduce((a, b) => a + (b ?? 0), 0)
+for (let pos = 0; pos < exportedKeys.length; pos++) {
+  const share = totalExportedKeys ? (exportedKeys[pos] ?? 0) / totalExportedKeys : 0
+  if (share > MAX_EXPORT_SHARE) {
+    failures.push(`export: ${pct(share)} of keys sit at o${pos + 1} (limit ${MAX_EXPORT_SHARE * 100}%); the exported order leaks the key`)
+  }
+}
+
+/* ------------------------- (5) surface guard ------------------------- */
+
+const SHUFFLED_SURFACES = [
+  'src/components/QuizBlock.tsx',
+  'src/components/sims/PlaygroundShell.tsx',
+  'src/pages/Curriculum.tsx',
+  'src/pages/FleetWeek.tsx',
+]
+const importsShuffle = /import\s*\{[^}]*\bshuffledOrder\b[^}]*\}\s*from\s*'@\/lib\/rng'/
+for (const file of SHUFFLED_SURFACES) {
+  let src = ''
+  try {
+    src = await readFile(new URL(`../${file}`, import.meta.url), 'utf8')
+  } catch {
+    failures.push(`surface: ${file} is missing or unreadable`)
+    continue
+  }
+  if (!importsShuffle.test(src)) failures.push(`surface: ${file} does not import shuffledOrder from '@/lib/rng'`)
+  if (!src.includes('shuffledOrder(')) failures.push(`surface: ${file} never calls shuffledOrder(; options would render in authored order`)
+}
+
+/* ------------------------- report ------------------------- */
 
 console.log('verify-items report')
 console.log('')
@@ -281,6 +326,12 @@ console.log(
 console.log(`  always pick the longest option   lessons passed ${longestMean.toFixed(2)}  (ties broken at random)`)
 console.log(`  chance + 2 SD is the bar: ${(bMean + 2 * bSd).toFixed(2)} lessons`)
 console.log('  note: shuffling does NOT defeat the longest-option cue; the Wave 0b distractor rewrite does.')
+
+console.log('')
+console.log(`exported key position (${totalExportedKeys} keys across lesson quizzes, limit ${MAX_EXPORT_SHARE * 100}% per id)`)
+console.log(
+  `  ${exportedKeys.map((c, pos) => `o${pos + 1} ${pct(totalExportedKeys ? (c ?? 0) / totalExportedKeys : 0)} (${c ?? 0})`).join('  ')}`,
+)
 
 console.log('')
 console.log(`shuffle sanity: ${SEEDS} seeds, n=${N}, worst deviation from 25% is ${(worst * 100).toFixed(2)} points`)
