@@ -309,7 +309,8 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
       <p className="font-mono text-[10px] leading-relaxed text-text-3">
         {trafficDescription} · {trafficProfile.config.maxRunning} slots ·{' '}
         {trafficProfile.config.numBlocks * trafficProfile.config.blockSize} token capacity · TTFT SLO{' '}
-        {trafficProfile.config.sloTtft} ticks · practice run, fixed seed 0x{PRACTICE_SEED.toString(16)}, not graded
+        {trafficProfile.config.sloTtft} ticks · practice run,{' '}
+        {traffic === 'synthetic' ? `fixed seed 0x${PRACTICE_SEED.toString(16)}, ` : ''}not graded
       </p>
 
       <AnimatePresence>

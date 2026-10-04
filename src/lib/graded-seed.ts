@@ -7,7 +7,8 @@
  * below. Because the baselines are re-simulated on the same seed, a pass bar
  * measures the learner against a machine that saw the same traffic.
  *
- * The practice views keep PRACTICE_SEED (fleet-model.ts) and the frozen makeRng.
+ * The practice views keep PRACTICE_SEED (fleet-model.ts) and the frozen makeRng; they
+ * are labelled as practice, with the seed shown only where it is actually used.
  * Leaderboard seeds from an Actions secret are out of scope: the leaderboard has
  * 0 entries today, so there is nothing to protect yet.
  *
@@ -35,6 +36,7 @@
 
 import {
   ACT2_BAR,
+  HW_MENU,
   referenceFleet,
   referenceGoodput,
   type FleetBaseline,
@@ -57,7 +59,8 @@ export const SEED_BAND = {
   fleet2: { completedPct: 80, goodput: 25 },
 }
 
-const B200_CFG = { numBlocks: 512, blockSize: 16, maxRunning: 32, sloTtft: 40, prefillChunk: 256 }
+/** Act III's B200 option, taken from the menu so the band cannot drift from the hardware the learner is offered. */
+const B200_CFG = (HW_MENU.find((h) => h.id === 'b200') ?? HW_MENU[1]).cfg
 
 export interface BandOutcome {
   refGoodput: number
@@ -129,7 +132,7 @@ export function checkBand(seeds: FleetWeekSeeds): { violations: string[]; outcom
   return { violations: [], outcome: { refGoodput: refG, b200Goodput, fleet4, fleet2 } }
 }
 
-/** Give up after this many rejected candidates (at 79 % acceptance, even 8 in a row is a 1-in-300,000 event). */
+/** Give up after this many rejected candidates: at ~78 % acceptance a run of 256 rejections is impossible in practice, so hitting the cap means the band no longer fits the scenario. */
 export const MAX_DRAWS = 256
 
 export interface GradedDraw {

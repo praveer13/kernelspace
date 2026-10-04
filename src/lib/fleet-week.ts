@@ -10,7 +10,6 @@ import {
   Cluster,
   Engine,
   HEADROOM_TOKENS,
-  PRACTICE_SEED,
   makeRefManager,
   makeRefQueue,
   makeRefScheduler,
@@ -53,7 +52,7 @@ export type MeasurementActId = 'engine' | 'fleet'
  *
  * Graded runs draw `seed` at grade time (src/lib/graded-seed.ts), derive the rest
  * from it with splitmix32, and keep it only if the reference baselines land in
- * the calibrated difficulty band. The practice scenario below has `seed: null`:
+ * the calibrated difficulty band. A practice scenario has `seed: null`:
  * it keeps the frozen makeRng streams and today's death (worker 0 at t400), so it
  * is reproducible and never graded.
  */
@@ -65,14 +64,6 @@ export interface FleetWeekSeeds {
   deathPick: number
   /** the cluster tick of the node death */
   deathTick: number
-}
-
-export const PRACTICE_SEEDS: FleetWeekSeeds = {
-  seed: null,
-  trace: PRACTICE_SEED,
-  faults: 0xd15,
-  deathPick: 0,
-  deathTick: 400,
 }
 
 /** The request trace for these seeds: frozen makeRng when practising, splitmix32 when graded. */

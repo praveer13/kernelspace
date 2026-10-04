@@ -160,7 +160,7 @@ export default function EpdPanel({ slots }: { slots: SlotState }) {
           Run both topologies on the same traffic and watch the crossover — EPD wins when the ITL
           SLO is tight (decode isolation beats the transfer tax), colocated wins when it's loose
           (the tax is pure overhead). Pools are sized equal-total per trace. This is a practice
-          run on a fixed seed (0x{PRACTICE_SEED.toString(16)}), not graded.
+          run on fixed seeds (chat 0x{PRACTICE_SEED.toString(16)}, long-context 0x10c5), not graded.
         </p>
       )}
 
