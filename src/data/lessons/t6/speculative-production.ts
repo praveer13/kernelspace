@@ -13,27 +13,28 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T5.L8's mechanics stand: draft K tokens cheaply, verify in one parallel pass, accept the longest agreeing prefix, lose nothing. What production changed is the *draft*. Three shapes now:
+      md: `T5.L8's mechanics stand: draft k tokens cheaply, verify in one parallel pass, accept the longest agreeing prefix, lose nothing. What production changed is the *draft*. Three shapes now:
 
 - **Draft model** (T5.L8's version): a small sibling model. Simple, but the drafter is a second model to host, version, and keep distribution-aligned — and it doesn't share the target's KV cache, so verify cost includes extra bookkeeping.
-- **Medusa heads**: small extra output heads on the target model predicting tokens t+1..t+K in parallel. One model, one cache — but the heads are shallow predictors; acceptance drops on hard text.
+- **Medusa heads**: small extra output heads on the target model predicting tokens t+1..t+k in parallel. One model, one cache — but the heads are shallow predictors; acceptance drops on hard text.
 - **MTP (Multi-Token Prediction, DeepSeek)**: train the model *itself* with extra MTP modules — full transformer-depth mini-layers sharing the target's trunk and KV. The draft is the same distribution as the target because it almost *is* the target. Highest acceptance rates of the three; this is what DeepSeek-R1's production stack runs (MTP-3) and what every 2026 engine integrated (vLLM/SGLang/TRT-LLM all ship MTP and EAGLE-class heads).`,
     },
     {
       type: 'prose',
       md: `## The acceptance economy
 
-The speedup math is one line: expected tokens per verify = 1 + Σ acceptanceᵢ (geometric-ish), and the win is capped by (1 + Σ acc) / (1 + draft_cost). The engineering consequences:
+The speedup math is T5.L8's one line. With per-token acceptance α and draft length k, expected tokens per verification step is **E = (1 − α^(k+1)) / (1 − α)** (= 1 + α + … + α^k: the accepted prefix plus the bonus token), and the win is capped by E / (1 + draft_cost). α = 0.85, k = 3 (MTP-3) gives E ≈ 3.2. The engineering consequences:
 
-- **Acceptance rate is a metric you design for, not observe.** Domain drafters (a code-tuned head for a code product), temperature coupling (low temperature → higher acceptance), K tuning per workload (K=2–4 typical; each extra draft token costs draft time and verify FLOPs).
-- **Verify is prefill-shaped, and that's the point.** T4.L3: decode wastes the compute roof; verification backfills it — K tokens per weight-read instead of 1. The win disappears when the batch is already compute-saturated: speculative decoding is an *interactivity* technology (small batches, single-user streams), not a throughput one. SemiAnalysis on InferenceMAX: MTP gives **2–3× interactivity**, and high-interactivity configs are where B200 single-node can beat GB200 NVL72 (which wins at low interactivity / max throughput).
+- **Acceptance rate is a metric you design for, not observe.** Domain drafters (a code-tuned head for a code product), temperature coupling (low temperature → higher acceptance), k tuning per workload (k=2–4 typical; each extra draft token costs draft time and verify FLOPs).
+- **Why k here is smaller than T5.L8's k ≈ 4–8.** Same E, different setting. A separate draft model is a cheap, independent predictor, so on predictable text you can run it further out. MTP depth is built in at training time: each extra module is another layer of compute on the critical path, and the deeper modules predict tokens further ahead, so α falls with depth and the α^(k+1) term you gain per step shrinks faster than your cost. The ranges overlap near k ≈ 4; they are not a contradiction.
+- **Verify is prefill-shaped, and that's the point.** T4.L3: decode wastes the compute roof; verification backfills it — k tokens per weight-read instead of 1. The win disappears when the batch is already compute-saturated: speculative decoding is an *interactivity* technology (small batches, single-user streams), not a throughput one. SemiAnalysis on InferenceMAX: MTP gives **2–3× interactivity**, and high-interactivity configs are where B200 single-node can beat GB200 NVL72 (which wins at low interactivity / max throughput).
 - **MoE makes it bigger.** On a 37B-active-param MoE, a target step reads little weight, so the verify pass's marginal cost is low and acceptance on structured text (code, JSON, tool calls) runs high. 2–3× on MoE vs ~1.5–2× on dense, per NVIDIA's and SemiAnalysis' published numbers.`,
     },
     {
       type: 'statline',
       stats: [
         { value: '2–3×', label: 'MTP interactivity gain on MoE', hint: 'NVIDIA + SemiAnalysis InferenceMAX numbers, DeepSeek-class models.' },
-        { value: 'K = 2–4', label: 'typical draft length', hint: 'Each extra token costs draft time + verify FLOPs; K is tuned per workload.' },
+        { value: 'k = 2–4', label: 'typical draft length', hint: 'MTP depth. Each extra token costs draft time + verify FLOPs, and E = (1 − α^(k+1)) / (1 − α) flattens; a separate draft model (T5.L8) runs k ≈ 4–8.' },
         { value: '0%', label: 'quality loss', hint: 'Rejection sampling keeps output distributionally identical to the target model — speed, not approximation.' },
         { value: 'MTP-3', label: 'DeepSeek-R1 production drafter', hint: 'Three MTP modules sharing the target trunk — drafter as the model itself.' },
       ],
@@ -76,7 +77,7 @@ The speedup math is one line: expected tokens per verify = 1 + Σ acceptanceᵢ 
             'About 1%',
             'About 5%',
             'Zero — the accept/reject rule (rejection sampling) keeps the output distributionally identical to the target',
-            'Proportional to K',
+            'Proportional to k',
           ],
           correct: [2],
           explanation:
