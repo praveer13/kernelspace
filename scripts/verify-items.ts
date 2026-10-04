@@ -6,7 +6,8 @@
  * scripts/baselines/verify-items.json), (3) a broken per-attempt shuffle, (4) exported
  * keys piling onto one option id, (5) a shuffled surface that stopped calling shuffledOrder,
  * (6) a malformed per-option `why` (length must equal options, no empty entries) or a missing
- * `why` in a track listed in the baseline's `whyRequired`.
+ * `why` in a track listed in the baseline's `whyRequired`, (7) more than MAX_SHORTEST_PASSES lessons
+ * in a `whyRequired` track that a blind "always pick the shortest option" strategy passes.
  * REPORTS (never fails): longest-key rates, `why` coverage and a blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
@@ -22,6 +23,8 @@ import { exportOrder, shuffledOrder } from '../src/lib/rng'
 const BASELINE_URL = new URL('./baselines/verify-items.json', import.meta.url)
 const PASS_BAR = 0.8 // QuizBlock.tsx: score = correct / total >= 0.8
 const FLEET_TRACK = 'fleet-week'
+/** In a whyRequired track, at most this many lessons may be passed by always picking the shortest option. */
+const MAX_SHORTEST_PASSES = 1
 
 interface Item {
   track: string
@@ -152,6 +155,13 @@ function longestIndices(q: QuizQuestion): number[] {
   const lens = q.options.map(len)
   const max = Math.max(...lens)
   return lens.flatMap((l, i) => (l === max ? [i] : []))
+}
+
+/** Indices of the shortest option(s); more than one on a tie. */
+function shortestIndices(q: QuizQuestion): number[] {
+  const lens = q.options.map(len)
+  const min = Math.min(...lens)
+  return lens.flatMap((l, i) => (l === min ? [i] : []))
 }
 
 /** The key is strictly the longest option: a unique longest option that is correct. */
@@ -338,10 +348,18 @@ const pickLongest = (q: QuizQuestion) => {
   return q.correct.length === 1 && top.includes(q.correct[0]) ? 1 / top.length : 0
 }
 
+// Same for the shortest option: a lone-key item is hit only when the key is among the shortest.
+const pickShortest = (q: QuizQuestion) => {
+  const low = shortestIndices(q)
+  return q.correct.length === 1 && low.includes(q.correct[0]) ? 1 / low.length : 0
+}
+
 const byLesson = new Map<string, QuizQuestion[]>()
+const trackOfLesson = new Map<string, string>()
 for (const item of validItems) {
   if (!item.lessonId) continue
   byLesson.set(item.lessonId, [...(byLesson.get(item.lessonId) ?? []), item.q])
+  trackOfLesson.set(item.lessonId, item.track)
 }
 const lessonPass = (strategy: (q: QuizQuestion) => number) =>
   [...byLesson.values()].map((qs) => passProbability(qs.map(strategy)))
@@ -351,6 +369,30 @@ const bMean = bPass.reduce((a, b) => a + b, 0)
 const bSd = Math.sqrt(bPass.reduce((a, p) => a + p * (1 - p), 0))
 const longestPass = lessonPass(pickLongest)
 const longestMean = longestPass.reduce((a, b) => a + b, 0)
+const shortestPass = lessonPass(pickShortest)
+const shortestMean = shortestPass.reduce((a, b) => a + b, 0)
+
+// (7) A lesson counts as passed by always-shortest when its pass probability is at least 50%
+// (ties at random). Expected passes are reported per track alongside.
+const lessonIds = [...byLesson.keys()]
+const shortestPassedByTrack: Record<string, number> = {}
+const shortestExpectedByTrack: Record<string, number> = {}
+for (const t of trackKeys) {
+  shortestPassedByTrack[t] = 0
+  shortestExpectedByTrack[t] = 0
+}
+lessonIds.forEach((id, i) => {
+  const t = trackOfLesson.get(id) as string
+  shortestExpectedByTrack[t] += shortestPass[i]
+  if (shortestPass[i] >= 0.5) shortestPassedByTrack[t]++
+})
+for (const t of whyRequired) {
+  if (shortestPassedByTrack[t] > MAX_SHORTEST_PASSES) {
+    failures.push(
+      `shortest: track ${t} has ${shortestPassedByTrack[t]} lessons passed by always picking the shortest option (limit ${MAX_SHORTEST_PASSES}); lengthen the key or shorten a distractor`,
+    )
+  }
+}
 
 console.log('')
 console.log(`blind-strategy simulation: ${byLesson.size} lessons with a quiz, per-attempt shuffling, pass at >= ${PASS_BAR * 100}%`)
@@ -358,6 +400,13 @@ console.log(
   `  always pick display position B   expected lessons passed ${bMean.toFixed(2)}  (2-SD band ${Math.max(0, bMean - 2 * bSd).toFixed(2)} to ${(bMean + 2 * bSd).toFixed(2)})`,
 )
 console.log(`  always pick the longest option   lessons passed ${longestMean.toFixed(2)}  (ties broken at random)`)
+console.log(`  always pick the shortest option  lessons passed ${shortestMean.toFixed(2)}  (ties broken at random)`)
+console.log(
+  `  shortest, lessons passed (p >= 50%) / expected, per track: ${trackKeys
+    .filter((t) => t !== FLEET_TRACK)
+    .map((t) => `${t} ${shortestPassedByTrack[t]}/${shortestExpectedByTrack[t].toFixed(2)}${whyRequired.includes(t) ? '*' : ''}`)
+    .join('  ')}  (* limit ${MAX_SHORTEST_PASSES})`,
+)
 console.log(`  chance + 2 SD is the bar: ${(bMean + 2 * bSd).toFixed(2)} lessons`)
 console.log('  note: shuffling does NOT defeat the longest-option cue; the Wave 0b distractor rewrite does.')
 
