@@ -143,7 +143,7 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           options: [
             'Each level mirrors one cache tier (L1, L2, L3, DRAM), so a four-level walk matches the hardware memory hierarchy',
             'A flat table for a 48-bit space would need ~512 GB of entries per process; the radix tree allocates only mapped regions',
-            'Splitting the address into four fields lets the kernel give each x86 privilege ring its own table, one per ring',
+            'Each level is a 512-entry table sized to one 4 KB page, so the hardware walker fetches a whole level in one cache line',
             'Smaller tables make context switches cheaper, since only the top level is saved and the lower levels stay in the TLB',
           ],
           correct: [1],
@@ -152,8 +152,8 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           why: [
             'Misconception: levels match the cache tiers. Each level just consumes 9 address bits; the number of levels falls out of the 48-bit space and 4 KB pages, not the cache hierarchy.',
             'Right: 2^36 pages at 8 B each is ~512 GB if flat. A radix tree allocates lower levels only for mapped regions, so a sparse address space costs a few KB of page tables.',
-            'Misconception: one table per ring. Kernel and user share one page-table tree per address space and are separated by a permission bit in each entry, not by separate tables.',
-            'Misconception: shallower saves means cheaper switches. A switch loads one root pointer (CR3) regardless of depth, and the TLB is flushed or PCID-tagged, not preserved level by level.',
+            'Misconception: a level is fetched in one cache line. A 4 KB table spans 64 lines and the walker reads one 8 B entry per level; four levels follow from 48-bit addresses and 9 bits per level.',
+            'Misconception: smaller tables make switches cheaper. A switch loads one root pointer (CR3) regardless of depth, and the TLB is flushed or PCID-tagged, not preserved level by level.',
           ],
         },
         {

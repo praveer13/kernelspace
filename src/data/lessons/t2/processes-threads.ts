@@ -126,7 +126,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
           options: [
             'A process has its own execution context scheduled by the kernel, while threads are scheduled by the language runtime inside it',
             'A process owns a private address space and resource bundle, while its threads share that one address space and those resources',
-            'Threads share code and globals but each keeps a private heap, while processes share one heap through the kernel',
+            'A thread gets a private stack and heap and shares only code and globals with its siblings, while a process shares nothing at all',
             'A process is the unit the scheduler places on a core, while a thread is only a queue of work items the process consumes',
           ],
           correct: [1],
@@ -135,7 +135,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
           why: [
             'Misconception: threads are always user-level. Linux threads are kernel-scheduled entities, just like processes; the runtime-scheduled kind (green threads, goroutines) is a separate design.',
             'Right: isolation comes from the private address space and resources; sharing comes from threads living inside one. Every safety versus communication-cost trade-off follows from that single fact.',
-            'Misconception: private heaps. Sibling threads share one heap, which is exactly why they can pass pointers for free and why every data race in this track exists.',
+            'Misconception: threads have private heaps. Only stacks are private; sibling threads share one heap, which is exactly why they can pass pointers for free and why every data race in this track exists.',
             'Misconception: a thread is a work queue. A thread is a schedulable execution context (registers, stack, program counter); a thread pool is the work queue built on top of such threads.',
           ],
         },
@@ -180,7 +180,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
           options: [
             'Pinning each logical thread to a hardware core so the kernel scheduler never has to switch it out for another',
             'Multiplexing many logical threads onto few OS threads in userspace, so most parks and resumes never enter the kernel',
-            'Making kernel switches cheaper by saving fewer registers, since the runtime tells the kernel which ones are live',
+            'Using SMT hardware thread contexts to keep each logical thread\'s registers resident on the core, so switches skip save and restore',
             'Running each logical thread on its own kernel thread with a shrunken stack, so every kernel switch moves less memory',
           ],
           correct: [1],
@@ -189,7 +189,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
           why: [
             'Misconception: pinning removes switches. A hardware core runs one thing at a time, so thousands of logical threads cannot each own one; multiplexing them is the entire point.',
             'Right: a logical thread parks by saving a small continuation in userspace and the carrier OS thread picks another. No trap, no CR3 reload, no TLB flush, so the cost is a function call.',
-            'Misconception: the kernel is told what is live. The kernel saves the full architectural state on every switch; the savings come from not asking the kernel to switch at all.',
+            'Misconception: logical threads map to hardware thread contexts. SMT offers two per core, not thousands; virtual threads and goroutines park in userspace, so there is no kernel switch to speed up.',
             'Misconception: smaller stacks make kernel switches cheap. The kernel switch cost is dominated by trap and cache effects, not stack bytes, and one kernel thread per task still caps scale.',
           ],
         },
