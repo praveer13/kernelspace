@@ -245,8 +245,8 @@ export const STEP5_REFERENCE_SOLUTION = STEP5_TEMPLATE.replace(
 /** Three rungs, each more specific; none is the full solution. */
 export const STEP5_HINTS: [string, string, string] = [
   'Concept: a token\'s K and V never change once computed, and every later step attends over all of them. forwardStep computes the new row but does not keep it, so without your append the next step sees a cache that is one token short.',
-  'Where to look: appendKV. kv[li] holds layer li\'s new { k, v } rows; cache.layers[li].k and .v are the growing per-position arrays. Prefill goes through appendKV too, so every layer must gain exactly one k row and one v row per token.',
-  'Pseudo-fragment:\nfor each layer li in kv:\n  push kv[li].k onto cache.layers[li].k\n  push kv[li].v onto cache.layers[li].v',
+  'Where to look: appendKV. forwardStep hands it one new key row and one new value row for every layer, and the cache keeps a growing list of each per layer. Prefill goes through appendKV too, so no layer may be skipped.',
+  'Shape: per token, every layer\'s cache gets exactly one k entry and one v entry, during prefill too. Fewer leaves a layer short; more shifts every later position.',
 ]
 
 /* ------------------------------------------------------------------ */
