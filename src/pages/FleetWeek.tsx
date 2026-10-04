@@ -21,6 +21,7 @@ import {
   type MeasurementEvidence,
 } from '@/lib/fleet-week'
 import type { RouterKind, TickSample } from '@/lib/fleet-model'
+import { freshSeed, shuffledOrder } from '@/lib/rng'
 import { cn } from '@/lib/utils'
 
 const ACTS = [
@@ -383,9 +384,13 @@ function ActIncident() {
   const { running, result, finish, setRunning } = useActRunner('incident')
   const [idx, setIdx] = useState(0)
   const [incident, setIncident] = useState<Incident | null>(null)
-  const [cause, setCause] = useState<string | null>(null)
-  const [mitigation, setMitigation] = useState<string | null>(null)
+  // cause / mitigation are authored indices; the display order is reshuffled per attempt
+  const [cause, setCause] = useState<number | null>(null)
+  const [mitigation, setMitigation] = useState<number | null>(null)
   const [solved, setSolved] = useState<string[]>([])
+  const [seed, setSeed] = useState(freshSeed)
+  const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
+  const mitigationOrder = useMemo(() => (incident ? shuffledOrder(incident.mitigations.length, seed ^ 0x9e3779b1) : []), [incident, seed])
 
   const open = useCallback(async (i: number) => {
     setRunning(true)
@@ -393,17 +398,22 @@ function ActIncident() {
     setCause(null)
     setMitigation(null)
     setIdx(i)
+    setSeed(freshSeed())
     setIncident(loadIncident(INCIDENTS[i].id))
     setRunning(false)
   }, [setRunning])
 
   const submit = useCallback(() => {
-    if (!incident || !cause || !mitigation) return
-    const causeOk = incident.causes.find((c) => c.id === cause)?.correct
-    const mitOk = incident.mitigations.find((m) => m.id === mitigation)?.correct
+    if (!incident || cause === null || mitigation === null) return
+    const causeOk = incident.causes[cause].correct
+    const mitOk = incident.mitigations[mitigation].correct
     const ok = causeOk && mitOk
     const newSolved = ok && !solved.includes(incident.id) ? [...solved, incident.id] : solved
     setSolved(newSolved)
+    // every retry gets a fresh order and a clean selection, so positions can't be memorised
+    setSeed(freshSeed())
+    setCause(null)
+    setMitigation(null)
     const allDone = newSolved.length >= INCIDENTS.length
     finish({
       pass: allDone,
@@ -445,21 +455,21 @@ function ActIncident() {
             <div>
               <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">root cause</p>
               <div className="mt-2 space-y-1.5">
-                {incident.causes.map((c) => (
-                  <Option key={c.id} active={cause === c.id} onClick={() => setCause(c.id)} label={c.label} />
+                {causeOrder.map((ai, pos) => (
+                  <Option key={incident.causes[ai].id} tag={String.fromCharCode(65 + pos)} active={cause === ai} onClick={() => setCause(ai)} label={incident.causes[ai].label} />
                 ))}
               </div>
             </div>
             <div>
               <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">mitigation</p>
               <div className="mt-2 space-y-1.5">
-                {incident.mitigations.map((m) => (
-                  <Option key={m.id} active={mitigation === m.id} onClick={() => setMitigation(m.id)} label={m.label} />
+                {mitigationOrder.map((ai, pos) => (
+                  <Option key={incident.mitigations[ai].id} tag={String.fromCharCode(65 + pos)} active={mitigation === ai} onClick={() => setMitigation(ai)} label={incident.mitigations[ai].label} />
                 ))}
               </div>
             </div>
           </div>
-          <RunButton running={false} label="call it" onClick={submit} disabled={!cause || !mitigation} />
+          <RunButton running={false} label="call it" onClick={submit} disabled={cause === null || mitigation === null} />
         </div>
       )}
       {result && <ResultPanel result={result} />}
@@ -467,9 +477,10 @@ function ActIncident() {
   )
 }
 
-function Option({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function Option({ active, onClick, label, tag }: { active: boolean; onClick: () => void; label: string; tag?: string }) {
   return (
     <button onClick={onClick} className={cn('block w-full rounded border px-3 py-2 text-left font-mono text-[12px] transition-colors', active ? 'border-accent/60 bg-accent/10 text-text-1' : 'border-line bg-ink text-text-2 hover:border-text-3')}>
+      {tag && <span className="mr-2 text-text-3">{tag}.</span>}
       {label}
     </button>
   )
