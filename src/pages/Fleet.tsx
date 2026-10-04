@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -21,11 +21,14 @@ import {
   type ManagerDump,
 } from '@/lib/fleet-model'
 import { cn } from '@/lib/utils'
-import EnginePanel from '@/pages/fleet/EnginePanel'
 import { validateModule } from '@/pages/fleet/drivers'
-import ClusterPanel from '@/pages/fleet/ClusterPanel'
-import RealEnginePanel from '@/pages/fleet/RealEnginePanel'
 import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet/slots'
+import RouteFallback from '@/components/RouteFallback'
+
+// The three panels are the heavy part of this page; fetch only the active mode's.
+const EnginePanel = lazy(() => import('@/pages/fleet/EnginePanel'))
+const ClusterPanel = lazy(() => import('@/pages/fleet/ClusterPanel'))
+const RealEnginePanel = lazy(() => import('@/pages/fleet/RealEnginePanel'))
 
 /**
  * The Fleet — Phase 2's home. Three modes over one deterministic request
@@ -125,7 +128,9 @@ export default function Fleet() {
       </div>
 
       <div className="mt-6">
-        {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+        <Suspense fallback={<RouteFallback label="loading panel" />}>
+          {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+        </Suspense>
       </div>
     </div>
   )
