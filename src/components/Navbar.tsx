@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { to: '/lab', label: 'Lab' },
   { to: '/forge', label: 'Forge' },
   { to: '/fleet', label: 'Fleet' },
-  { to: '/leaderboard', label: 'Scores' },
+  { to: '/week', label: 'Fleet Week' },
   { to: '/field-notes', label: 'Notes' },
   { to: '/capstone', label: 'Capstone' },
   { to: '/glossary', label: 'Glossary' },
@@ -75,7 +75,7 @@ export default function Navbar() {
         <div className="mx-auto flex h-full max-w-app items-center justify-between gap-4 px-6 lg:px-12">
           {/* Left: wordmark */}
           <Link to="/" className="group flex items-center gap-2.5" aria-label="kernelspace home">
-            <span className="font-mono text-[15px] font-medium text-text-1">
+            <span className="whitespace-nowrap font-mono text-[15px] font-medium text-text-1">
               [<span className="wordmark-cursor" />]_
               <span className="group-hover:text-accent transition-colors duration-150">
                 kernelspace
@@ -87,14 +87,14 @@ export default function Navbar() {
           </Link>
 
           {/* Center: primary links (lg+) */}
-          <nav className="hidden items-center gap-7 xl:flex" aria-label="Primary">
+          <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary">
             {NAV_LINKS.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
                   cn(
-                    'relative py-1 text-body-sm font-medium transition-colors duration-150',
+                    'relative whitespace-nowrap py-1 text-body-sm font-medium transition-colors duration-150',
                     isActive ? 'text-text-1' : 'text-text-2 hover:text-text-1',
                   )
                 }
@@ -136,7 +136,7 @@ export default function Navbar() {
               aria-label={`Progress ${overallPct}% — rank ${rank.name}`}
             >
               <ProgressRing value={overallPct} size={28} showLabel={false} strokeWidth={3} />
-              <span className="hidden rounded-full border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-accent md:inline-block">
+              <span className="hidden whitespace-nowrap rounded-full border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-accent md:inline-block">
                 {rank.name}
               </span>
             </Link>

@@ -50,22 +50,24 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
 ---
 
 **Q1. What does Option<T> communicate that a nullable reference does not?**
-   A. The value is mutable
-   B. Absence is an explicit variant that must be handled
-   C. The value lives on the heap
-   D. The function cannot fail
-   Answer: B — Some and None are part of the static type, so callers cannot accidentally dereference absence without handling it.
+
+- (o1) The value lives on the heap
+- (o2) Absence is an explicit variant that must be handled
+- (o3) The function cannot fail
+- (o4) The value is mutable
 
 **Q2. Inside a Result-returning function, what does expr? do when expr is Err?**
-   A. Panics immediately
-   B. Ignores the error
-   C. Returns that error from the current function, converting it when supported
-   D. Retries the expression
-   Answer: C — The ? operator is concise typed propagation, not an exception or hidden retry.
+
+- (o1) Retries the expression
+- (o2) Panics immediately
+- (o3) Ignores the error
+- (o4) Returns that error from the current function, converting it when supported
 
 **Q3. When should ordinary input validation return Result instead of panic?**
-   A. When the caller can reasonably handle invalid input
-   B. Never
-   C. Only in unsafe code
-   D. Only when allocating
-   Answer: A — Expected, recoverable failure belongs in the signature. Panic is for broken invariants or unrecoverable programmer mistakes.
+
+- (o1) Only in unsafe code
+- (o2) Never
+- (o3) When the caller can reasonably handle invalid input
+- (o4) Only when allocating
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._

@@ -34,6 +34,7 @@ import {
 import type { TrackId } from '@/data/lessons/types'
 import LessonRow from '@/pages/lesson/LessonRow'
 import { cn } from '@/lib/utils'
+import { freshSeed, shuffledOrder } from '@/lib/rng'
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number]
 
@@ -117,6 +118,11 @@ function PlacementModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0)
   const [score, setScore] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
+  // fresh option order per attempt (the modal remounts on each open); order[displayPosition] = authored index
+  const [orders] = useState(() => {
+    const seed = freshSeed()
+    return PLACEMENT.map((p, qi) => shuffledOrder(p.options.length, (seed ^ Math.imul(qi + 1, 0x85ebca6b)) | 0))
+  })
   const finished = step >= PLACEMENT.length
   const rec = recommendFor(score)
   const recTrack = getTrack(rec)!
@@ -156,9 +162,11 @@ function PlacementModal({ onClose }: { onClose: () => void }) {
             </div>
             <p className="font-display text-h4 text-text-1">{PLACEMENT[step].q}</p>
             <div className="mt-5 space-y-2">
-              {PLACEMENT[step].options.map((opt, i) => {
-                const isCorrect = picked !== null && i === PLACEMENT[step].correct
-                const isWrongPick = picked === i && i !== PLACEMENT[step].correct
+              {orders[step].map((authored, i) => {
+                const opt = PLACEMENT[step].options[authored]
+                const right = authored === PLACEMENT[step].correct
+                const isCorrect = picked !== null && right
+                const isWrongPick = picked === i && !right
                 return (
                   <button
                     key={i}
@@ -166,7 +174,7 @@ function PlacementModal({ onClose }: { onClose: () => void }) {
                     disabled={picked !== null}
                     onClick={() => {
                       setPicked(i)
-                      if (i === PLACEMENT[step].correct) setScore((s) => s + 1)
+                      if (right) setScore((s) => s + 1)
                       setTimeout(() => {
                         setPicked(null)
                         setStep((s) => s + 1)

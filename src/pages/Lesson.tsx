@@ -228,6 +228,7 @@ function RightRail({
         <button
           type="button"
           onClick={onComplete}
+          data-complete-control
           disabled={done || !canComplete}
           title={examGate ? 'Requires ≥80% on the checkpoint quiz' : undefined}
           className={cn(
@@ -327,7 +328,7 @@ function ShortcutsModal({ onClose }: { onClose: () => void }) {
     ['← / →', 'previous / next lesson'],
     ['j / k', 'next / previous section'],
     ['e', 'jump to exercise'],
-    ['m', 'mark complete'],
+    ['m', 'jump to quiz / complete'],
     ['?', 'this cheat sheet'],
     ['esc', 'close panels'],
   ]
@@ -591,6 +592,26 @@ function LessonView({ lesson }: { lesson: Lesson }) {
     [headings],
   )
 
+  /* m: navigate to the completion area (the complete control once enabled, else the quiz); never completes */
+  const focusCompletion = useCallback(() => {
+    const quiz = document.querySelector<HTMLElement>('section[aria-label="Checkpoint quiz"]')
+    // the right rail is display:none below lg, and the sticky bar is fixed (no offsetParent), so test client rects
+    const controls = [...document.querySelectorAll<HTMLElement>('[data-complete-control]')].filter(
+      (c) => c.getClientRects().length > 0,
+    )
+    const el =
+      controls.find((c) => !(c as HTMLButtonElement).disabled) ??
+      quiz?.querySelector<HTMLElement>('[data-answered="false"] button:not(:disabled)') ??
+      quiz?.querySelector<HTMLElement>('[data-quiz-submit]:not(:disabled)') ??
+      quiz ??
+      controls[0]
+    if (!el) return
+    if (el === quiz && !quiz.hasAttribute('tabindex')) quiz.setAttribute('tabindex', '-1')
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ;(quiz?.contains(el) ? quiz : el).scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
+    el.focus({ preventScroll: true })
+  }, [])
+
   /* keyboard shortcuts (lesson.md §6) */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -614,7 +635,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
           document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
           break
         case 'm':
-          complete()
+          focusCompletion()
           break
         case '?':
           setShortcutsOpen((v) => !v)
@@ -628,7 +649,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [prev, next, navigate, stepSection, complete])
+  }, [prev, next, navigate, stepSection, focusCompletion])
 
   const exerciseMeta = EXERCISE_META[lesson.exercise]
   const ExIcon = exerciseMeta.icon
@@ -800,6 +821,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
               <button
                 type="button"
                 onClick={complete}
+                data-complete-control
                 disabled={!canComplete}
                 className={cn(
                   'shrink-0 rounded-md px-4 py-2 font-display text-body-sm font-semibold transition-all duration-150 active:scale-[.97]',

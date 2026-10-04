@@ -70,22 +70,24 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
 ---
 
 **Q1. What does let x = x + 1 do when x already exists?**
-   A. Mutates the original binding
-   B. Creates a new binding that shadows the old one
-   C. Allocates x on the heap
-   D. Fails in every case
-   Answer: B — Shadowing creates a fresh binding. It can change both the value and the type without making the original binding mutable.
+
+- (o1) Fails in every case
+- (o2) Mutates the original binding
+- (o3) Allocates x on the heap
+- (o4) Creates a new binding that shadows the old one
 
 **Q2. Why does removing the final semicolon from a Rust block matter?**
-   A. It makes the block asynchronous
-   B. The final expression becomes the block value
-   C. It makes the value mutable
-   D. It disables type checking
-   Answer: B — A trailing expression is returned by the block. A semicolon turns it into a statement whose value is discarded.
+
+- (o1) It disables type checking
+- (o2) The final expression becomes the block value
+- (o3) It makes the value mutable
+- (o4) It makes the block asynchronous
 
 **Q3. Which integer type is normally used for collection indexes?**
-   A. i8
-   B. f64
-   C. usize
-   D. char
-   Answer: C — usize matches the platform pointer width and is the index type used by slices and collections.
+
+- (o1) f64
+- (o2) i8
+- (o3) char
+- (o4) usize
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._

@@ -50,22 +50,24 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
 ---
 
 **Q1. Which iterator consumes a Vec and yields owned elements?**
-   A. iter()
-   B. iter_mut()
-   C. into_iter()
-   D. windows()
-   Answer: C — into_iter takes ownership of the collection. iter and iter_mut only borrow it.
+
+- (o1) iter_mut()
+- (o2) windows()
+- (o3) iter()
+- (o4) into_iter()
 
 **Q2. When do lazy iterator adapters actually perform work?**
-   A. As soon as map is called
-   B. When a consuming operation such as collect or sum drives them
-   C. Only on another thread
-   D. At compile time
-   Answer: B — Adapters describe a pipeline. A consumer repeatedly requests the next item and drives the chain.
+
+- (o1) As soon as map is called
+- (o2) At compile time
+- (o3) When a consuming operation such as collect or sum drives them
+- (o4) Only on another thread
 
 **Q3. Why use HashMap::entry for a counter?**
-   A. It sorts the map
-   B. It combines lookup/insertion and returns mutable access to the value
-   C. It clones every key
-   D. It makes the map lock-free
-   Answer: B — The entry API expresses insert-if-absent followed by mutation with a single table lookup.
+
+- (o1) It clones every key
+- (o2) It makes the map lock-free
+- (o3) It sorts the map
+- (o4) It combines lookup/insertion and returns mutable access to the value
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._

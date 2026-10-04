@@ -230,7 +230,7 @@ function TrackView({ trackId }: { trackId: TrackId }) {
         {hasExam && (
           <p className="mt-3 flex items-center gap-2 font-mono text-[11px] text-amber">
             <GraduationCap size={12} />
-            the exam lesson requires ≥80% on its checkpoint quiz to mark complete — double XP.
+            the exam lesson requires ≥80% on its checkpoint quiz to mark complete.
           </p>
         )}
       </section>

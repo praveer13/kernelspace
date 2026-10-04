@@ -48,22 +48,24 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 ---
 
 **Q1. Which combination may exist at the same time for one value?**
-   A. One &mut T and any number of &T
-   B. Many &T, or exactly one &mut T
-   C. Any number of &mut T
-   D. References are never allowed together
-   Answer: B — Readers may share; a writer must be exclusive. The compiler uses this invariant to prevent mutation races and invalidation.
+
+- (o1) References are never allowed together
+- (o2) One &mut T and any number of &T
+- (o3) Any number of &mut T
+- (o4) Many &T, or exactly one &mut T
 
 **Q2. Why prefer &[T] to &Vec<T> in a read-only function parameter?**
-   A. Slices are always heap allocated
-   B. A slice accepts more contiguous owners and exposes only the needed capability
-   C. Vec cannot be borrowed
-   D. Slices copy all elements
-   Answer: B — Arrays, Vecs, and subslices can all coerce to &[T]. It is a zero-copy view with a smaller API contract.
+
+- (o1) A slice accepts more contiguous owners and exposes only the needed capability
+- (o2) Slices are always heap allocated
+- (o3) Slices copy all elements
+- (o4) Vec cannot be borrowed
 
 **Q3. Why can Vec::push conflict with a live element reference?**
-   A. push is asynchronous
-   B. push may reallocate and invalidate the referenced address
-   C. References cannot point to integers
-   D. push consumes the Vec
-   Answer: B — Growing a Vec may move its buffer. The borrow checker prevents keeping an address into the old buffer across that mutation.
+
+- (o1) push is asynchronous
+- (o2) References cannot point to integers
+- (o3) push consumes the Vec
+- (o4) push may reallocate and invalidate the referenced address
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._
