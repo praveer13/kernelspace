@@ -21,7 +21,7 @@ The answers are all systems answers. Not ML answers — **systems** answers. The
       stats: [
         { value: '1962', label: 'virtual memory', hint: 'The Atlas computer at Manchester introduces paging and one-level stores.' },
         { value: '2023', label: 'PagedAttention', hint: 'vLLM re-implements paging for KV caches — block tables, sharing, near-zero waste.' },
-        { value: '2024', label: 'Dynamo', hint: 'NVIDIA ships a disaggregated serving stack with a Rust data plane.' },
+        { value: '2025', label: 'Dynamo', hint: 'NVIDIA launches (GTC, March 2025) a disaggregated serving stack with a Rust data plane.' },
         { value: '~50y', label: 'idea half-life', hint: 'The concepts outlive every framework you have ever learned.' },
       ],
     },
@@ -48,8 +48,8 @@ Once you see the isomorphism, the papers stop being alien. They become *familiar
         {
           os: 'swap / eviction',
           osLine: 'Cold pages move to disk under memory pressure; LRU decides who.',
-          llm: 'KV offload & preemption',
-          llmLine: 'Cold sequences\' KV cache swaps to CPU RAM when HBM fills up.',
+          llm: 'KV preemption & offload',
+          llmLine: 'When HBM fills up, vLLM V1 preempts a sequence: its blocks are freed and recomputed later (V0 swapped them to CPU RAM).',
         },
         {
           os: 'scheduler',

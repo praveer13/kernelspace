@@ -60,7 +60,7 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
       type: 'statline',
       stats: [
         { value: '~295 F/B', label: 'H100 ridge (FP16)', hint: '990 TFLOPS ÷ 3.35 TB/s. Below this AI you are buying bandwidth; above it, math.' },
-        { value: '~2 FLOP/B', label: 'decode AI @ b=1', hint: '2 FLOPs per parameter per token ÷ 2 bytes per FP16 weight. The wall.' },
+        { value: '≈1 FLOP/B', label: 'decode AI @ b=1', hint: '2 FLOPs per parameter per token ÷ 2 bytes per FP16 weight. The wall.' },
         { value: '~1000+', label: 'big matmul AI', hint: 'Each weight reused batch×seq times — deep compute territory.' },
         { value: '×N', label: 'batch lever', hint: 'Batching N sequences multiplies decode AI by N — weights amortized across the batch.' },
       ],

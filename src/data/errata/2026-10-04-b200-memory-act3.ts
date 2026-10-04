@@ -9,6 +9,6 @@ export default {
   before: 'Fleet Week Act III offered "Blackwell · 192 GB HBM3e ×4, 2.4× bandwidth".',
   after:
     'A shipped DGX/HGX B200 carries 1,440 GB across 8 GPUs, about 180 GB each; HBM bandwidth is 8 TB/s per GPU, 2.4× the H100.',
-  why: 'Capacity decides which model fits and how much KV cache a batch gets. NVIDIA lists 1,440 GB for 8 GPUs; no spec row backs 192 GB.',
+  why: 'Capacity decides which model fits and how much KV cache a batch gets. The shipped DGX/HGX B200 rows list 1,440 GB per 8 GPUs.',
   source: { url: 'https://www.nvidia.com/en-us/data-center/dgx-b200/', title: 'NVIDIA DGX B200' },
 } satisfies Erratum
