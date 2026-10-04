@@ -13,7 +13,7 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTask[] = [
   },
   {
     id: 't-blk-preempt',
-    text: 'Drive the free queue to zero: trigger preemption — compare swap-to-CPU vs recompute on TTFT.',
+    text: 'Drive the free queue to zero: trigger preemption — compare swap-to-CPU (the V0 option) vs recompute (all V1 does) on TTFT.',
     xp: 60,
   },
   {
