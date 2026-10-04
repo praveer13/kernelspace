@@ -1,11 +1,50 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { XP, localDateKey } from './economy'
+import type { StoreApi, UseBoundStore } from 'zustand'
+import { AGGREGATE_VERSION, EXPORT_FORMAT, QUIZ_PASS_SCORE, SCHEMA_VERSION } from './ledger/constants'
+import { browserEnv, loadDeviceId, onLedgerClientRequest } from './ledger/client'
+import { emptyAggregate, foldInto } from './ledger/fold'
+import { checkSnapshot } from './ledger/guard'
+import { lwwWorking } from './ledger/merge'
+import { SNAPSHOT_KEY } from './ledger/names'
+import { appendToOutbox, outboxKey } from './ledger/outbox'
+import { getOwn, setOwn, stableStringify } from './ledger/stable'
+import { dayOf } from './ledger/time'
+import { toProgressData, workingMap } from './ledger/view'
+import type {
+  Aggregate,
+  AckRef,
+  BootRef,
+  EventKind,
+  FacadeEnv,
+  ItemResponse,
+  Json,
+  JsonObject,
+  LabRunMeta,
+  LedgerEngine,
+  LedgerEvent,
+  LedgerFacadeActions,
+  LedgerFacadeState,
+  LedgerStatus,
+  LessonRef,
+  Provenance,
+  QuizAttempt,
+  ReadOnlyReason,
+  SimRef,
+  SnapshotV2,
+  WorkingKey,
+  WorkingRecord,
+} from './ledger/types'
+import { localDateKey } from './economy'
 import { TOTAL_TRACK_LESSONS } from './tracks'
 
 /**
- * Kernelspace progress store (design.md §10).
- * Single localStorage namespace: `kernelspace:v1`.
+ * Kernelspace progress store (design.md §10; docs/specs/ledger-v3.md §8).
+ *
+ * `useProgress` keeps its exact shape, but its data is now the fold of an append-only event ledger
+ * (the aggregate). The store hydrates synchronously from the derived snapshot under `kernelspace:v2`,
+ * folds each action's events into the aggregate synchronously, and hands them to the lazily loaded
+ * engine, which commits them to IndexedDB and keeps other tabs in step. The façade never reads or
+ * writes `kernelspace:v1` (Addendum A1: v3 starts fresh).
  */
 
 export type LessonStatus = 'unstarted' | 'reading' | 'done'
@@ -60,7 +99,7 @@ export interface ProgressSettings {
   codeLang?: CodeLang
 }
 
-export interface ProgressState {
+export interface ProgressState extends LedgerFacadeState, LedgerFacadeActions {
   version: 2
   lessons: Record<string, LessonProgress>
   sims: Record<string, SimProgress>
@@ -80,7 +119,12 @@ export interface ProgressState {
   recordSimVisit: (simId: string) => void
   recordSimTask: (simId: string, taskId: string) => void
   setSimConfig: (simId: string, config: unknown) => void
-  recordLabResult: (labId: string, passedCheckIds: string[], totalChecks: number) => void
+  recordLabResult: (
+    labId: string,
+    passedCheckIds: string[],
+    totalChecks: number,
+    meta?: LabRunMeta,
+  ) => void
   completeFleetWeekAct: (actId: string, score: number) => void
   setFleetWeekDoc: (text: string) => void
   setFleetWeekEvidence: (
@@ -101,291 +145,652 @@ export type { Rank } from './economy'
 
 export const TOTAL_LESSONS = TOTAL_TRACK_LESSONS
 
-const initialData = {
-  version: 2 as const,
-  lessons: {} as Record<string, LessonProgress>,
-  sims: {} as Record<string, SimProgress>,
-  labs: {} as Record<string, LabProgress>,
-  fleetWeek: { actsDone: [] as string[], scores: {} as Record<string, number> },
-  capstone: { step: 0, stepsDone: [] as string[] },
-  xp: 0,
-  streakDays: [] as string[],
-  achievements: [] as string[],
-  settings: {} as ProgressSettings,
+
+/* ---------------- Ledger façade (spec §8) ---------------- */
+
+export interface FacadeOptions {
+  /** How the engine boot is scheduled after hydration (§8.2 step 4). Defaults to an idle callback (2 s timeout); never runs outside a browser. */
+  scheduleBoot?: (run: () => void) => void
+  /** Debounce for snapshot writes (§8.5 step 4). */
+  snapshotDelayMs?: number
 }
 
-/** Streak days come only from graded work (quiz, sim task, lab check, Fleet Week act, capstone step). */
-function touchStreak(streakDays: string[]): string[] {
-  const today = localDateKey()
-  if (streakDays.includes(today)) return streakDays
-  return [...streakDays, today]
+export interface ProgressControls {
+  /** Persist everything now: deferred working writes and the snapshot, then wait for in-flight engine writes. */
+  flush(): Promise<void>
+  /** Boot the engine now; resolves with it once this store is subscribed to it. */
+  engine(): Promise<LedgerEngine>
+  /** Stop timers and listeners. The app never calls this; tests do. */
+  dispose(): void
 }
 
-const RETIRED_SIM_TASKS: Readonly<Record<string, Readonly<Record<string, true>>>> = {
-  'sim-wgsl': { 'wgsl-wg1': true, 'wgsl-shared': true, 'wgsl-tiled': true },
-  'sim-batching': {
-    'batch-continuous': true,
-    'batch-chunked': true,
-    'batch-straggler': true,
-    'batch-preempt': true,
-  },
-  'sim-roofline': { 't-quiz': true },
+export type ProgressStore = UseBoundStore<StoreApi<ProgressState>> & { controls: ProgressControls }
+
+const SNAPSHOT_DELAY_MS = 250
+/** Scroll position is device-local and changes constantly: commit it at most this often (§5). */
+const SCROLL_DELAY_MS = 2000
+/** Free-text fields (Fleet Week notes) commit after typing pauses. */
+const TEXT_DELAY_MS = 400
+
+type DataKey = 'version' | 'lessons' | 'sims' | 'labs' | 'fleetWeek' | 'capstone' | 'xp' | 'streakDays' | 'achievements' | 'settings'
+const DATA_KEYS: readonly DataKey[] = [
+  'version',
+  'lessons',
+  'sims',
+  'labs',
+  'fleetWeek',
+  'capstone',
+  'xp',
+  'streakDays',
+  'achievements',
+  'settings',
+]
+
+type Actions = Omit<ProgressState, DataKey | keyof LedgerFacadeState>
+
+const workingDelay = (key: WorkingKey): number =>
+  key.startsWith('scroll:') ? SCROLL_DELAY_MS : key === 'fw:doc' || key.startsWith('fw:evidence:') ? TEXT_DELAY_MS : 0
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+const isRec = (v: unknown): v is Record<string, unknown> => isObj(v) && !Array.isArray(v)
+
+/**
+ * `next` with every part that equals `prev` replaced by `prev`'s own object. Actions rebuild the whole
+ * view from the aggregate, and this keeps references stable for the parts an action did not touch, so
+ * selectors such as `(s) => s.lessons` re-render exactly when they did before the ledger existed.
+ */
+function reuse<T>(prev: unknown, next: T): T {
+  if (Object.is(prev, next) || !isObj(prev) || !isObj(next) || Array.isArray(prev) !== Array.isArray(next)) return next
+  const keys = Object.keys(next)
+  let same = Object.keys(prev).length === keys.length
+  const out: Record<string, unknown> = Array.isArray(next) ? ([] as unknown as Record<string, unknown>) : {}
+  for (const key of keys) {
+    const had = Object.hasOwn(prev, key)
+    const before = had ? prev[key] : undefined
+    const value = reuse(before, next[key])
+    setOwn(out, key, value)
+    if (!had || value !== before) same = false
+  }
+  return (same ? prev : out) as T
 }
 
-function removeRetiredSimTasks(state: unknown): unknown {
-  if (!state || typeof state !== 'object') return state
+/** A clone that survives JSON, so memory holds what a reload would give back. */
+function toJson(value: unknown): Json | undefined {
+  try {
+    const text = JSON.stringify(value)
+    return text === undefined ? undefined : (JSON.parse(text) as Json)
+  } catch {
+    return undefined
+  }
+}
 
-  const progress = state as Record<string, unknown>
-  if (!progress.sims || typeof progress.sims !== 'object') return state
+const sameValue = (a: Json | undefined, b: Json): boolean => a !== undefined && stableStringify(a) === stableStringify(b)
+const clamp01 = (n: number): number => Math.min(1, Math.max(0, n))
+const withDefined = <T extends object>(o: T): Partial<T> =>
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
 
-  const sims = progress.sims as Record<string, unknown>
-  let nextSims: Record<string, unknown> | undefined
+function isAggregate(a: unknown): a is Aggregate {
+  if (!isRec(a) || a.v !== AGGREGATE_VERSION || typeof a.events !== 'number') return false
+  for (const key of ['lessons', 'sims', 'labs', 'facts', 'days', 'achievements', 'acks', 'completions']) {
+    if (!isRec(a[key])) return false
+  }
+  const fw = a.fleetWeek
+  const cap = a.capstone
+  return isRec(fw) && isRec(fw.acts) && isRec(fw.scores) && isRec(cap) && isRec(cap.steps) && typeof cap.step === 'number'
+}
 
-  for (const [simId, retiredTasks] of Object.entries(RETIRED_SIM_TASKS)) {
-    const sim = sims[simId]
-    if (!sim || typeof sim !== 'object') continue
+const isWorkingShape = (w: unknown): w is WorkingRecord =>
+  isRec(w) && typeof w.key === 'string' && 'value' in w && typeof w.at === 'string' && typeof w.dev === 'string'
 
-    const tasksDone = (sim as Record<string, unknown>).tasksDone
-    if (!Array.isArray(tasksDone)) continue
+/** §8.2 steps 1 and 3: the snapshot, or an empty ledger. A corrupt or foreign-format snapshot is ignored (§9.8). */
+function hydrate(storage: FacadeEnv['storage']): { aggregate: Aggregate; working: WorkingRecord[]; readOnly?: ReadOnlyReason } {
+  const empty = { aggregate: emptyAggregate(), working: [] as WorkingRecord[] }
+  let raw: string | null = null
+  try {
+    raw = storage ? storage.getItem(SNAPSHOT_KEY) : null
+  } catch {
+    // blocked storage: start empty
+  }
+  if (raw === null) return empty
+  try {
+    const snap = JSON.parse(raw) as Partial<SnapshotV2>
+    const readOnly = checkSnapshot(SCHEMA_VERSION, snap) ?? undefined
+    if (snap.aggregateVersion !== AGGREGATE_VERSION || !isAggregate(snap.aggregate) || !Array.isArray(snap.working)) {
+      return readOnly ? { ...empty, readOnly } : empty
+    }
+    const working = snap.working.filter(isWorkingShape)
+    toProgressData(snap.aggregate, workingMap(working)) // throws on a malformed aggregate: fall through to empty
+    return { aggregate: snap.aggregate, working, readOnly }
+  } catch {
+    return empty
+  }
+}
 
-    const retainedTasks = tasksDone.filter(
-      (taskId) => typeof taskId !== 'string' || retiredTasks[taskId] !== true,
-    )
-    if (retainedTasks.length === tasksDone.length) continue
+/** Export v3 only (Addendum A1): the marker, the version and the two lists. */
+function looksLikeExportV3(json: string): boolean {
+  try {
+    const d: unknown = JSON.parse(json)
+    return isRec(d) && d.format === EXPORT_FORMAT && d.version === 3 && Array.isArray(d.events) && Array.isArray(d.working)
+  } catch {
+    return false
+  }
+}
 
-    nextSims ??= { ...sims }
-    nextSims[simId] = { ...sim, tasksDone: retainedTasks }
+function idleBoot(run: () => void): void {
+  if (typeof window === 'undefined') return
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(run, { timeout: 2000 })
+  else setTimeout(run, 0)
+}
+
+declare global {
+  interface Window {
+    /** Dev builds only (spec §7): runs the store conformance suite on this browser's IndexedDB. */
+    __ledgerSelfTest?: () => Promise<unknown>
+  }
+}
+
+export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {}): ProgressStore {
+  const { storage, clock, newId, tabId } = env
+  const device = loadDeviceId(storage, newId)
+
+  /* ---- hydrate (§8.2) ---- */
+  const hydrated = hydrate(storage)
+  let agg: Aggregate = hydrated.aggregate
+  const workingRecs = new Map<WorkingKey, WorkingRecord>(hydrated.working.map((w) => [w.key, w]))
+  /** Set by the schema guard (§8.7): the snapshot or the engine says a newer bundle owns the data. */
+  let readOnlyReason: ReadOnlyReason | undefined = hydrated.readOnly
+  let ledgerStatus: LedgerStatus = {
+    ready: false,
+    readOnly: readOnlyReason !== undefined,
+    backend: 'snapshot-only',
+    ...(readOnlyReason ? { reason: readOnlyReason } : {}),
   }
 
-  return nextSims ? { ...progress, sims: nextSims } : state
-}
+  /* ---- engine glue ---- */
+  let engine: LedgerEngine | null = null
+  let booting: Promise<void> | null = null
+  let offAggregate: (() => void) | null = null
+  /** Written locally before the engine existed; delivered to it when it loads. */
+  const unconfirmed = new Map<string, LedgerEvent>()
+  const unconfirmedWorking = new Map<WorkingKey, WorkingRecord>()
+  const inflight = new Set<Promise<unknown>>()
+  /** Scroll and typing writes whose state is applied but whose commit is still waiting (§5). */
+  const deferred = new Map<WorkingKey, { rec: WorkingRecord; timer: ReturnType<typeof setTimeout> }>()
 
-const T5_LESSON_ID_MIGRATION = [
-  ['t5.l6', 't5.l7'],
-  ['t5.l7', 't5.l8'],
-  ['t5.l8', 't5.l9'],
-  ['t5.l9', 't5.l10'],
-] as const
-
-/** Wave 2 inserted prefix caching at T5.L6. Move old lesson records once,
- * from a snapshot, so adjacent ids cannot overwrite one another. */
-export function migrateT5LessonIds(state: unknown): unknown {
-  if (!state || typeof state !== 'object') return state
-  const progress = state as Record<string, unknown>
-  if (!progress.lessons || typeof progress.lessons !== 'object') {
-    return { ...progress, version: 2 }
+  let setState: (patch: Partial<ProgressState>) => void = () => {}
+  let getState: () => ProgressState = () => {
+    throw new Error('progress store is not initialised')
   }
 
-  const oldLessons = progress.lessons as Record<string, unknown>
-  const lessons = { ...oldLessons }
-  for (const [oldId] of T5_LESSON_ID_MIGRATION) delete lessons[oldId]
-  for (const [oldId, newId] of T5_LESSON_ID_MIGRATION) {
-    if (oldLessons[oldId] !== undefined) lessons[newId] = oldLessons[oldId]
+  const track = (p: Promise<unknown>): void => {
+    inflight.add(p)
+    void p.catch(() => undefined).finally(() => inflight.delete(p))
   }
-  return { ...progress, version: 2, lessons }
-}
 
-export function migrateProgress(persistedState: unknown, persistedVersion: number): unknown {
-  let next = persistedState
-  if (persistedVersion < 2) next = removeRetiredSimTasks(next)
-  if (persistedVersion < 3) next = migrateT5LessonIds(next)
-  return next
-}
+  /* ---- view ---- */
+  const workingValues = () => workingMap(workingRecs.values())
 
-export const useProgress = create<ProgressState>()(
-  persist(
-    (set) => ({
-      ...initialData,
+  /** Recompute the consumer view and set only what changed, keeping untouched references stable. */
+  function publish(): void {
+    const working = workingValues()
+    const data = toProgressData(agg, working)
+    const cur = getState() as unknown as Record<string, unknown>
+    const patch: Record<string, unknown> = {}
+    const consider = (key: string, value: unknown) => {
+      const v = reuse(cur[key], value)
+      if (v !== cur[key]) patch[key] = v
+    }
+    for (const key of DATA_KEYS) consider(key, data[key])
+    consider('acks', agg.acks)
+    consider('completions', agg.completions)
+    consider('working', working)
+    consider('ledger', ledgerStatus)
+    if (Object.keys(patch).length > 0) setState(patch as Partial<ProgressState>)
+  }
 
-      markLessonStatus: (lessonId, status) =>
-        set((s) => {
-          const prev = s.lessons[lessonId]
-          const wasDone = prev?.status === 'done'
-          const nowDone = status === 'done'
-          return {
-            lessons: {
-              ...s.lessons,
-              [lessonId]: {
-                ...prev,
-                status,
-                completedAt: nowDone && !wasDone ? new Date().toISOString() : prev?.completedAt,
-                lastVisitedAt: new Date().toISOString(),
-              },
-            },
-            xp: s.xp + (nowDone && !wasDone ? XP.lesson : 0),
-          }
-        }),
+  /* ---- snapshot (§8.5 step 4) ---- */
+  let snapTimer: ReturnType<typeof setTimeout> | null = null
+  let lastSnapshot = ''
 
-      setLessonScroll: (lessonId, scrollPct) =>
-        set((s) => {
-          const prev = s.lessons[lessonId]
-          if (!prev) return s
-          return { lessons: { ...s.lessons, [lessonId]: { ...prev, scrollPct } } }
-        }),
-
-      recordQuizScore: (lessonId, score) =>
-        set((s) => {
-          const prev = s.lessons[lessonId]
-          const best = Math.max(prev?.quizScore ?? 0, score)
-          const firstPass = (prev?.quizScore ?? 0) < 0.8 && score >= 0.8
-          return {
-            lessons: {
-              ...s.lessons,
-              [lessonId]: {
-                ...prev,
-                status: prev?.status ?? 'reading',
-                quizScore: best,
-                lastVisitedAt: new Date().toISOString(),
-              },
-            },
-            xp: s.xp + (firstPass ? XP.quiz : 0),
-            streakDays: touchStreak(s.streakDays),
-          }
-        }),
-
-      markExerciseDone: (lessonId) =>
-        set((s) => {
-          const prev = s.lessons[lessonId]
-          if (prev?.exerciseDone) return s
-          return {
-            lessons: {
-              ...s.lessons,
-              [lessonId]: {
-                ...prev,
-                status: prev?.status ?? 'reading',
-                exerciseDone: true,
-                lastVisitedAt: new Date().toISOString(),
-              },
-            },
-            xp: s.xp + XP.exercise,
-          }
-        }),
-
-      recordSimVisit: (simId) =>
-        set((s) => {
-          const prev = s.sims[simId] ?? { visits: 0, tasksDone: [] as string[] }
-          return { sims: { ...s.sims, [simId]: { ...prev, visits: prev.visits + 1 } } }
-        }),
-
-      recordSimTask: (simId, taskId) =>
-        set((s) => {
-          const prev = s.sims[simId] ?? { visits: 0, tasksDone: [] as string[] }
-          if (prev.tasksDone.includes(taskId)) return s
-          return {
-            sims: { ...s.sims, [simId]: { ...prev, tasksDone: [...prev.tasksDone, taskId] } },
-            xp: s.xp + XP.exercise,
-            streakDays: touchStreak(s.streakDays),
-          }
-        }),
-
-      setSimConfig: (simId, config) =>
-        set((s) => {
-          const prev = s.sims[simId] ?? { visits: 0, tasksDone: [] as string[] }
-          return { sims: { ...s.sims, [simId]: { ...prev, lastConfig: config } } }
-        }),
-
-      recordLabResult: (labId, passedCheckIds, totalChecks) =>
-        set((s) => {
-          const prev = s.labs[labId] ?? { done: false, checksDone: [] as string[] }
-          const checksDone = [...new Set([...prev.checksDone, ...passedCheckIds])]
-          const nowDone = totalChecks > 0 && checksDone.length >= totalChecks
-          const firstDone = nowDone && !prev.done
-          return {
-            labs: {
-              ...s.labs,
-              [labId]: {
-                done: nowDone || prev.done,
-                checksDone,
-                completedAt: firstDone ? new Date().toISOString() : prev.completedAt,
-              },
-            },
-            xp: s.xp + (firstDone ? XP.lab : 0),
-            streakDays: passedCheckIds.length > 0 ? touchStreak(s.streakDays) : s.streakDays,
-          }
-        }),
-
-      completeFleetWeekAct: (actId, score) =>
-        set((s) => {
-          const first = !s.fleetWeek.actsDone.includes(actId)
-          const actsDone = first ? [...s.fleetWeek.actsDone, actId] : s.fleetWeek.actsDone
-          const allDone = actsDone.length >= 4
-          return {
-            fleetWeek: {
-              ...s.fleetWeek,
-              actsDone,
-              scores: { ...s.fleetWeek.scores, [actId]: Math.max(score, s.fleetWeek.scores[actId] ?? 0) },
-            },
-            achievements:
-              allDone && !s.achievements.includes('fleet-week')
-                ? [...s.achievements, 'fleet-week']
-                : s.achievements,
-            xp: s.xp + (first ? XP.fleetWeekAct : 0),
-            streakDays: touchStreak(s.streakDays),
-          }
-        }),
-
-      setFleetWeekDoc: (text) => set((s) => ({ fleetWeek: { ...s.fleetWeek, docText: text } })),
-
-      setFleetWeekEvidence: (actId, patch) =>
-        set((s) => ({
-          fleetWeek: {
-            ...s.fleetWeek,
-            measurementEvidence: {
-              ...s.fleetWeek.measurementEvidence,
-              [actId]: { ...s.fleetWeek.measurementEvidence?.[actId], ...patch },
-            },
-          },
-        })),
-
-      completeCapstoneStep: (stepId, stepIndex) =>
-        set((s) => {
-          if (s.capstone.stepsDone.includes(stepId)) return s
-          return {
-            capstone: {
-              ...s.capstone,
-              step: Math.max(s.capstone.step, stepIndex + 1),
-              stepsDone: [...s.capstone.stepsDone, stepId],
-            },
-            xp: s.xp + XP.capstoneStep,
-            streakDays: touchStreak(s.streakDays),
-          }
-        }),
-
-      setCapstoneMetrics: (metrics) => set((s) => ({ capstone: { ...s.capstone, metrics } })),
-
-      unlockAchievement: (id) =>
-        set((s) => (s.achievements.includes(id) ? s : { achievements: [...s.achievements, id] })),
-
-      updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-
-      importProgress: (json) => {
-        try {
-          const data = JSON.parse(json)
-          if (
-            (data?.version !== 1 && data?.version !== 2) ||
-            typeof data.lessons !== 'object' ||
-            typeof data.xp !== 'number'
-          ) {
-            return false
-          }
-          const cleaned = removeRetiredSimTasks(data)
-          const migrated = data.version === 1 ? migrateT5LessonIds(cleaned) : cleaned
-          set({ ...initialData, ...(migrated as typeof initialData), version: 2 })
-          return true
-        } catch {
-          return false
+  function writeSnapshot(): void {
+    if (snapTimer !== null) clearTimeout(snapTimer)
+    snapTimer = null
+    if (!storage || readOnlyReason) return
+    const working = [...workingRecs.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    const content = stableStringify({ aggregate: agg, working })
+    if (content === lastSnapshot) return
+    try {
+      const raw = storage.getItem(SNAPSHOT_KEY)
+      if (raw !== null) {
+        const stored = JSON.parse(raw) as Partial<SnapshotV2>
+        // I6: never overwrite a newer bundle's snapshot.
+        const newer = checkSnapshot(SCHEMA_VERSION, stored)
+        if (newer) {
+          enterReadOnly(newer)
+          return
         }
-      },
+        // Another tab already wrote this exact content: skip, which also ends any storage-event echo.
+        if (stableStringify({ aggregate: stored.aggregate, working: stored.working }) === content) {
+          lastSnapshot = content
+          return
+        }
+      }
+      const snapshot: SnapshotV2 = {
+        schemaVersion: SCHEMA_VERSION,
+        aggregateVersion: AGGREGATE_VERSION,
+        writtenAt: clock.nowIso(),
+        tab: tabId,
+        aggregate: agg,
+        working,
+      }
+      storage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot))
+      lastSnapshot = content
+    } catch {
+      // quota or blocked: the next boot derives from IndexedDB instead (§9.8)
+    }
+  }
 
-      resetProgress: () => set({ ...initialData }),
-    }),
-    {
-      name: 'kernelspace:v1',
-      version: 3,
-      migrate: migrateProgress as (persistedState: unknown, version: number) => ProgressState,
+  function scheduleSnapshot(): void {
+    if (!storage || readOnlyReason || snapTimer !== null) return
+    snapTimer = setTimeout(writeSnapshot, options.snapshotDelayMs ?? SNAPSHOT_DELAY_MS)
+  }
+
+  /* ---- read-only (§8.7) ---- */
+  function enterReadOnly(reason: ReadOnlyReason): void {
+    readOnlyReason ??= reason
+    ledgerStatus = { ...ledgerStatus, readOnly: true, reason: readOnlyReason }
+    for (const [key, d] of deferred) {
+      clearTimeout(d.timer)
+      deferred.delete(key)
+    }
+    publish()
+  }
+
+  /* ---- engine ---- */
+  function onEngineAggregate(next: Aggregate, working: WorkingRecord[], st: LedgerStatus): void {
+    if (st.readOnly) {
+      // A newer bundle owns the data: show the banner, keep what the snapshot gave us, write nothing.
+      ledgerStatus = { ...st }
+      enterReadOnly(st.reason ?? 'newer-schema')
+      return
+    }
+    ledgerStatus = readOnlyReason ? { ...st, readOnly: true, reason: readOnlyReason } : { ...st }
+    agg = next
+    workingRecs.clear()
+    for (const w of working) workingRecs.set(w.key, w)
+    // Deferred writes are newer than anything the engine has seen.
+    for (const { rec } of deferred.values()) {
+      const prev = workingRecs.get(rec.key)
+      workingRecs.set(rec.key, prev ? lwwWorking(prev, rec) : rec)
+    }
+    publish()
+    scheduleSnapshot()
+  }
+
+  function bootEngine(): Promise<void> {
+    booting ??= env
+      .loadEngine()
+      .then(async (eng) => {
+        // Deliver what was written while it loaded, then subscribe; nothing awaits between the last check and `engine = eng`.
+        for (;;) {
+          const evs = [...unconfirmed.values()]
+          const ws = [...unconfirmedWorking.values()]
+          if (evs.length === 0 && ws.length === 0) break
+          unconfirmed.clear()
+          unconfirmedWorking.clear()
+          await eng.append(evs, ws)
+        }
+        engine = eng
+        offAggregate = eng.onAggregate(onEngineAggregate)
+      })
+      .catch(() => {
+        booting = null // the engine could not load (offline chunk fetch); the next write retries, and the outbox keeps the data
+      })
+    return booting
+  }
+
+  function toEngine(evs: LedgerEvent[], ws: WorkingRecord[]): void {
+    if (engine) {
+      track(engine.append(evs, ws))
+      return
+    }
+    for (const e of evs) unconfirmed.set(e.id, e)
+    for (const w of ws) unconfirmedWorking.set(w.key, w)
+    void bootEngine()
+  }
+
+  /* ---- write path (§8.5) ---- */
+  function applyLocal(evs: LedgerEvent[], ws: WorkingRecord[]): void {
+    if (evs.length > 0) {
+      const next = structuredClone(agg)
+      for (const e of evs) foldInto(next, e)
+      agg = next
+    }
+    for (const w of ws) workingRecs.set(w.key, w)
+    publish()
+  }
+
+  /** Outbox first (I9), then the synchronous fold, the snapshot timer and the engine. */
+  function record(evs: LedgerEvent[], ws: WorkingRecord[]): void {
+    if (readOnlyReason || (evs.length === 0 && ws.length === 0)) return
+    appendToOutbox(storage, tabId, evs, ws, clock.nowIso())
+    applyLocal(evs, ws)
+    scheduleSnapshot()
+    toEngine(evs, ws)
+  }
+
+  function flushDeferred(only?: WorkingKey): void {
+    const recs: WorkingRecord[] = []
+    for (const [key, d] of [...deferred]) {
+      if (only !== undefined && key !== only) continue
+      clearTimeout(d.timer)
+      deferred.delete(key)
+      recs.push(d.rec)
+    }
+    if (recs.length === 0 || readOnlyReason) return
+    appendToOutbox(storage, tabId, [], recs, clock.nowIso())
+    toEngine([], recs) // the state already shows them
+  }
+
+  function deferWrite(rec: WorkingRecord, delay: number): void {
+    applyLocal([], [rec])
+    scheduleSnapshot()
+    const prev = deferred.get(rec.key)
+    if (prev) clearTimeout(prev.timer)
+    deferred.set(rec.key, { rec, timer: setTimeout(() => flushDeferred(rec.key), delay) })
+  }
+
+  /* ---- event construction ---- */
+  const stamp = () => {
+    const at = clock.nowIso()
+    const tz = clock.tzOffsetMinutes(at)
+    return { at, tz, day: dayOf(at, tz) }
+  }
+  type Stamp = ReturnType<typeof stamp>
+
+  const ev = (s: Stamp, kind: EventKind, ref: string, extra: object = {}): LedgerEvent =>
+    ({ id: newId(), v: 1, kind, ref, at: s.at, tz: s.tz, day: s.day, dev: device, ...extra }) as unknown as LedgerEvent
+
+  const graded = (score: number, ok: boolean, provenance: Provenance, extra: object = {}) => ({
+    score,
+    ok,
+    provenance,
+    ...extra,
+  })
+
+  function writeWorking(entries: [WorkingKey, Json][]): void {
+    if (readOnlyReason) return
+    const s = stamp()
+    const now: WorkingRecord[] = []
+    for (const [key, value] of entries) {
+      if (sameValue(workingRecs.get(key)?.value, value)) continue
+      const rec: WorkingRecord = { key, value, at: s.at, dev: device }
+      const delay = workingDelay(key)
+      if (delay === 0) now.push(rec)
+      else deferWrite(rec, delay)
+    }
+    record([], now)
+  }
+
+  /** One visit per lesson per local day (§8.3). */
+  function visitLesson(lessonId: string): void {
+    const s = stamp()
+    const lastAt = getOwn(agg.lessons, lessonId)?.lastAt
+    if (lastAt !== undefined && dayOf(lastAt, clock.tzOffsetMinutes(lastAt)) === s.day) return
+    record([ev(s, 'visit', `lesson:${lessonId}`)], [])
+  }
+
+  const currentWorking = (key: WorkingKey): Json | undefined => workingRecs.get(key)?.value
+
+  /* ---- actions ---- */
+  const actions: Actions = {
+    markLessonStatus: (lessonId, status) => {
+      if (status === 'done') {
+        if (getOwn(agg.lessons, lessonId)?.done) return
+        record([ev(stamp(), 'complete', `lesson:${lessonId}`)], [])
+      } else if (status === 'reading') {
+        visitLesson(lessonId)
+      } // 'unstarted': status never goes backwards
     },
-  ),
-)
+
+    setLessonScroll: (lessonId, scrollPct) => {
+      if (!getOwn(agg.lessons, lessonId)) return // as before: only a lesson that already has a record
+      writeWorking([[`scroll:${lessonId}`, scrollPct]])
+    },
+
+    recordQuizScore: (lessonId, score) => {
+      if (!Number.isFinite(score)) return
+      const clamped = clamp01(score)
+      record([ev(stamp(), 'quiz', `lesson:${lessonId}`, graded(clamped, clamped >= QUIZ_PASS_SCORE, 'practice'))], [])
+    },
+
+    markExerciseDone: (lessonId) => {
+      if (getOwn(agg.lessons, lessonId)?.exercise) return
+      record([ev(stamp(), 'exercise', `lesson:${lessonId}`)], [])
+    },
+
+    recordSimVisit: (simId) => record([ev(stamp(), 'visit', `sim:${simId}`)], []),
+
+    recordSimTask: (simId, taskId) => {
+      const sim = getOwn(agg.sims, simId)
+      if (sim && getOwn(sim.tasks, taskId)) return
+      record([ev(stamp(), 'sim-task', `sim:${simId}/${taskId}`, graded(1, true, 'practice'))], [])
+    },
+
+    setSimConfig: (simId, config) => {
+      const value = toJson(config)
+      if (value !== undefined) writeWorking([[`sim-config:${simId}`, value]])
+    },
+
+    recordLabResult: (labId, passedCheckIds, totalChecks, meta) => {
+      const prev = getOwn(agg.labs, labId)
+      const checks = new Set([...Object.keys(prev?.checks ?? {}), ...passedCheckIds])
+      const done = (totalChecks > 0 && checks.size >= totalChecks) || !!prev?.done
+      const score = totalChecks > 0 ? clamp01(passedCheckIds.length / totalChecks) : 0
+      const extra = withDefined({ wasmSha256: meta?.wasmSha256, seed: meta?.seed })
+      record(
+        [
+          ev(stamp(), 'lab-check', `lab:${labId}`, {
+            ...graded(score, done, meta?.provenance ?? 'lab-green', extra),
+            data: { passed: [...passedCheckIds], total: totalChecks },
+          }),
+        ],
+        [],
+      )
+    },
+
+    completeFleetWeekAct: (actId, score) => {
+      if (!Number.isFinite(score)) return
+      const s = stamp()
+      const evs = [ev(s, 'fleet-act', `fw:${actId}`, graded(clamp01(score), true, 'practice'))]
+      const acts = new Set([...Object.keys(agg.fleetWeek.acts), actId])
+      if (acts.size >= 4 && getOwn(agg.achievements, 'fleet-week') === undefined) {
+        evs.push(ev(s, 'achievement', 'ach:fleet-week'))
+      }
+      record(evs, [])
+    },
+
+    setFleetWeekDoc: (text) => writeWorking([['fw:doc', text]]),
+
+    setFleetWeekEvidence: (actId, patch) => {
+      const current = currentWorking(`fw:evidence:${actId}`)
+      const merged = toJson({ ...(isRec(current) ? current : {}), ...patch })
+      if (merged !== undefined) writeWorking([[`fw:evidence:${actId}`, merged]])
+    },
+
+    completeCapstoneStep: (stepId, stepIndex) => {
+      if (getOwn(agg.capstone.steps, stepId)) return
+      record(
+        [ev(stamp(), 'capstone-step', `cap:${stepId}`, { ...graded(1, true, 'practice'), data: { index: stepIndex } })],
+        [],
+      )
+    },
+
+    setCapstoneMetrics: (metrics) => {
+      const value = toJson(metrics)
+      if (value !== undefined) writeWorking([['capstone:metrics', value]])
+    },
+
+    unlockAchievement: (id) => {
+      if (getOwn(agg.achievements, id) !== undefined) return
+      record([ev(stamp(), 'achievement', `ach:${id}`)], [])
+    },
+
+    updateSettings: (patch) => {
+      const entries: [WorkingKey, Json][] = []
+      for (const [field, value] of Object.entries(patch)) {
+        const json = value === undefined ? undefined : toJson(value)
+        if (json !== undefined) entries.push([`settings:${field}` as WorkingKey, json])
+      }
+      writeWorking(entries)
+    },
+
+    importProgress: (json) => {
+      if (readOnlyReason) return false
+      // Shape-check here so the caller gets its answer now. The engine validates every record before it
+      // applies a replace with an undo checkpoint (§8.3, §10.4), which keeps the codec out of the entry chunk.
+      if (!looksLikeExportV3(json)) return false
+      track(bootEngine().then(() => engine?.importFile(json, 'replace')))
+      return true
+    },
+
+    resetProgress: () => {
+      if (readOnlyReason) return
+      // Drop this tab's unsent writes first: the engine's reset clears the store, snapshot and outboxes behind them.
+      for (const d of deferred.values()) clearTimeout(d.timer)
+      deferred.clear()
+      unconfirmed.clear()
+      unconfirmedWorking.clear()
+      try {
+        storage?.removeItem(outboxKey(tabId))
+      } catch {
+        // blocked storage
+      }
+      agg = emptyAggregate()
+      workingRecs.clear()
+      publish()
+      scheduleSnapshot()
+      track(bootEngine().then(() => engine?.reset()))
+    },
+
+    /* additive actions (§8.4) */
+
+    recordQuizAttempt: (attempt: QuizAttempt) => {
+      const n = attempt.responses.length
+      if (n === 0) return
+      const s = stamp()
+      const grp = newId()
+      const correct = attempt.responses.filter((r) => r.ok).length
+      const score = correct / n
+      const evs = attempt.responses.map((r) =>
+        ev(s, 'item', `quiz:${attempt.lessonId}#${r.qi}`, {
+          ...graded(r.ok ? 1 : 0, r.ok, 'practice', withDefined({ conf: r.conf, seed: attempt.seed })),
+          rev: r.rev,
+          data: { src: 'quiz', pick: r.pick, grp, lessonId: attempt.lessonId },
+        }),
+      )
+      evs.push(
+        ev(s, 'quiz', `lesson:${attempt.lessonId}`, {
+          ...graded(score, score >= QUIZ_PASS_SCORE, 'practice', withDefined({ seed: attempt.seed, ms: attempt.ms })),
+          data: { grp, n },
+        }),
+      )
+      record(evs, [])
+    },
+
+    recordItems: (items: ItemResponse[]) => {
+      const s = stamp()
+      record(
+        items.map((it) =>
+          ev(s, it.kind, it.ref, {
+            ...graded(clamp01(it.score), it.ok, it.provenance ?? 'practice', withDefined({ conf: it.conf, seed: it.seed, ms: it.ms })),
+            rev: it.rev,
+            data: it.data,
+          }),
+        ),
+        [],
+      )
+    },
+
+    acknowledge: (ref: AckRef, data?: { via?: string }) => {
+      if (getOwn(agg.acks, ref) !== undefined) return
+      record([ev(stamp(), 'ack', ref, data ? { data } : {})], [])
+    },
+
+    completeRef: (ref: BootRef, data?: JsonObject) => record([ev(stamp(), 'complete', ref, data ? { data } : {})], []),
+
+    recordVisit: (ref: LessonRef | SimRef | BootRef) => {
+      if (ref.startsWith('lesson:')) visitLesson(ref.slice('lesson:'.length))
+      else record([ev(stamp(), 'visit', ref)], [])
+    },
+
+    setWorking: (key: WorkingKey, value: Json) => writeWorking([[key, value]]),
+  }
+
+  /* ---- create the store ---- */
+  const initialData = toProgressData(agg, workingValues())
+  const store = create<ProgressState>()((set, get) => {
+    setState = set
+    getState = get
+    return {
+      ...initialData,
+      ledger: ledgerStatus,
+      acks: agg.acks,
+      completions: agg.completions,
+      working: workingValues(),
+      ...actions,
+    }
+  })
+
+  /* ---- lifecycle ---- */
+  const onHide = () => {
+    flushDeferred()
+    writeSnapshot()
+  }
+  const onVisibility = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') onHide()
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', onHide)
+    document.addEventListener('visibilitychange', onVisibility)
+  }
+
+  // §8.2 step 4: the engine starts when the browser is idle, or on the first write. A read-only snapshot needs no engine.
+  if (!readOnlyReason) (options.scheduleBoot ?? idleBoot)(() => void bootEngine())
+
+  const controls: ProgressControls = {
+    async flush() {
+      flushDeferred()
+      writeSnapshot()
+      if (booting) await booting
+      while (inflight.size > 0) await Promise.allSettled([...inflight])
+    },
+    async engine() {
+      await bootEngine()
+      if (!engine) throw new Error('the ledger engine could not load')
+      return engine
+    },
+    dispose() {
+      if (snapTimer !== null) clearTimeout(snapTimer)
+      snapTimer = null
+      for (const d of deferred.values()) clearTimeout(d.timer)
+      deferred.clear()
+      offAggregate?.()
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pagehide', onHide)
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+    },
+  }
+  return Object.assign(store, { controls })
+}
+
+export const useProgress = createProgressStore(browserEnv())
+onLedgerClientRequest(() => useProgress.controls.engine())
+
+if (import.meta.env?.DEV && typeof window !== 'undefined') {
+  window.__ledgerSelfTest = () => import('./ledger/idb-store').then((m) => m.selfTestIdb())
+}
 
 /* ---------------- Derived selectors (design.md §10) ---------------- */
 
@@ -446,7 +851,10 @@ export function selectActivityMap(s: ProgressState): Record<string, number> {
   return map
 }
 
-/** Export the raw store as a JSON download string. */
+/**
+ * Deprecated, kept for compatibility (spec §8.1): the v2-shaped JSON of the current data. It is not an
+ * export v3 file, so `importProgress` refuses it; L4 moves /progress to `getLedgerClient().exportV3()`.
+ */
 export function exportProgress(): string {
   const { lessons, sims, labs, fleetWeek, capstone, xp, streakDays, achievements, settings } =
     useProgress.getState()
