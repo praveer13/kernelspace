@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { to: '/lab', label: 'Lab' },
   { to: '/forge', label: 'Forge' },
   { to: '/fleet', label: 'Fleet' },
-  { to: '/leaderboard', label: 'Scores' },
+  { to: '/week', label: 'Fleet Week' },
   { to: '/field-notes', label: 'Notes' },
   { to: '/capstone', label: 'Capstone' },
   { to: '/glossary', label: 'Glossary' },
