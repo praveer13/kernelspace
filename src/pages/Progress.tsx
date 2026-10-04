@@ -40,7 +40,8 @@ import {
 import type { ProgressState } from '@/lib/progress'
 import { getLedgerClient } from '@/lib/ledger/client'
 import { IMPORT_MAX_BYTES } from '@/lib/ledger/constants'
-import type { LedgerClient, LedgerStatus, ReadOnlyReason } from '@/lib/ledger/types'
+import { readOnlyNote } from '@/lib/ledger/read-only'
+import type { LedgerClient, LedgerStatus } from '@/lib/ledger/types'
 import ImportPreviewDialog, { DialogFrame } from '@/components/ledger/ImportPreview'
 import type { ImportFile } from '@/components/ledger/ImportPreview'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
@@ -753,13 +754,6 @@ function formatBytes(n: number): string {
   return `${(n / 1024 ** 3).toFixed(1)} GB`
 }
 
-const READ_ONLY_REASONS: Record<ReadOnlyReason, string> = {
-  'newer-schema': 'A newer version of kernelspace is using your data in another tab, so this tab is read-only. Reload to update.',
-  'snapshot-newer': 'A newer version of kernelspace has saved to this browser, so this tab is read-only. Reload to update.',
-  'newer-idb': "This browser's database was upgraded by a newer version of kernelspace, so this tab is read-only. Reload to update.",
-  versionchange: 'Another tab upgraded the database, so this tab is read-only. Reload to keep saving.',
-}
-
 const UNDO_LABELS: Record<NonNullable<LedgerStatus['undo']>['reason'], string> = {
   'import-merge': 'import (merge)',
   'import-replace': 'import (replace)',
@@ -802,7 +796,7 @@ function DataOwnership() {
   }
 
   const readOnly = ledger.readOnly
-  const readOnlyReason = readOnly ? READ_ONLY_REASONS[ledger.reason ?? 'newer-schema'] : null
+  const readOnlyReason = readOnly ? readOnlyNote(ledger.reason) : null
   const undoAt = ledger.undo?.at
 
   // The storage line: the engine's own count plus the browser's quota. It refreshes whenever an import,

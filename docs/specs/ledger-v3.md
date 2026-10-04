@@ -506,7 +506,7 @@ After `engine.append` commits:
 
 Set by the schema guard (§9.3).
 - Actions are no-ops.
-- `ledger.readOnly` and `reason` are set; L6's `ReadOnlyBanner` reads "A newer version of kernelspace is open in another tab. Reload to keep saving."
+- `ledger.readOnly` and `reason` are set; L6's `ReadOnlyBanner` says which reason latched the guard, in the plain words of `src/lib/ledger/read-only.ts` that the /progress note also uses (for a newer snapshot: "A newer version of kernelspace has saved to this browser, so this tab is read-only. Reload to update.").
 - Nothing is written: no snapshot, outbox or IndexedDB commit.
 - A write already queued when the guard latches (a `hello` can land between an action and its commit) is not committed. Its entries stay in the outbox (§8.6), and the newer bundle commits them when it boots.
 

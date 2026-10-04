@@ -178,8 +178,8 @@ export default function Forge() {
           <span className="text-text-1">Grading is the honor system.</span> The checks live in the
           crate — read them, that&apos;s allowed. The site trusts the module you drop; your real
           portfolio artifact is the repo with your commit history (README has the two-line
-          `git init` ritual — do it on day one). Your site progress lives in localStorage;
-          snapshot it anytime from{' '}
+          `git init` ritual — do it on day one). Your site progress stays in this browser on
+          this device (IndexedDB) and is never sent anywhere; export it anytime from{' '}
           <Link to="/progress" className="text-accent underline">
             Progress → data ownership
           </Link>
@@ -189,7 +189,7 @@ export default function Forge() {
 
       <p className="mt-8 text-center font-mono text-[11px] text-text-3">
         <HardDrive className="mr-1.5 inline h-3.5 w-3.5" />
-        everything runs locally — progress lives in your browser&apos;s localStorage
+        everything runs locally — progress stays in this browser on this device (IndexedDB)
       </p>
     </div>
   )

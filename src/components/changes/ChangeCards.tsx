@@ -42,6 +42,10 @@ interface ItemProps {
  * One retrieval item. Pick, optionally say how sure, check: the verdict and the `why` for every option
  * show at once and one `item card:<id>#<i>` event is written. There is no retry, so the answer stays a
  * first-try retrieval. Options are shuffled per view; the pick is stored by authored index.
+ *
+ * Keyboard and screen reader (as in Boot's StepForm): the check button stays mounted and reads "Answer
+ * checked", so focus never falls to <body>, and the verdict arrives through a polite live region that
+ * was already in the page before the answer.
  */
 function CardItem({ erratum, index, item, onAnswered }: ItemProps) {
   const recordItems = useProgress((s) => s.recordItems)
@@ -52,6 +56,7 @@ function CardItem({ erratum, index, item, onAnswered }: ItemProps) {
   const startedAt = useRef<number | null>(null)
   const order = useMemo(() => shuffledOrder(item.options.length, seed), [item.options.length, seed])
   const ok = pick !== null && item.correct.includes(pick)
+  const rightLetters = order.flatMap((oi, di) => (item.correct.includes(oi) ? [LETTERS[di]] : []))
 
   const choose = (oi: number) => {
     if (checked) return
@@ -142,50 +147,63 @@ function CardItem({ erratum, index, item, onAnswered }: ItemProps) {
 
       {pick !== null && !checked && <ConfidencePicker className="mt-3" value={conf} onChange={setConf} />}
 
-      {!checked ? (
-        <button
-          type="button"
-          onClick={check}
-          disabled={pick === null}
-          className={cn(
-            'mt-4 rounded-md px-4 py-2 font-display text-[14px] font-semibold transition-all duration-150 active:scale-[.97]',
-            pick === null ? 'cursor-not-allowed bg-surface-3 text-text-3' : 'bg-accent text-accent-foreground hover:-translate-y-px',
-          )}
-        >
-          Check answer
-        </button>
-      ) : (
-        item.why &&
-        item.why.length === item.options.length && (
-          <ul className="mt-3 space-y-1.5" aria-label="Why each answer is right or wrong">
-            {/* the wrong pick first (its misconception), then the key */}
-            {[...order.filter((oi) => oi === pick && !item.correct.includes(oi)), ...order.filter((oi) => item.correct.includes(oi))].map((oi) => {
-              const right = item.correct.includes(oi)
-              return (
-                <li
-                  key={oi}
-                  className={cn(
-                    'flex items-start gap-2 rounded-md border-l-2 bg-surface-2 px-3.5 py-2.5 text-body-sm text-text-2',
-                    right ? 'border-accent' : 'border-danger',
-                  )}
-                >
-                  {right ? (
-                    <Check size={14} className="mt-0.5 shrink-0 text-accent" aria-hidden />
-                  ) : (
-                    <X size={14} className="mt-0.5 shrink-0 text-danger" aria-hidden />
-                  )}
-                  <span>
-                    <span className={cn('mr-1.5 font-mono text-[10px] uppercase', right ? 'text-accent' : 'text-danger')}>
-                      {LETTERS[order.indexOf(oi)]} · {right ? (oi === pick ? 'your pick, correct' : 'correct answer') : 'your pick, wrong'}
-                    </span>
-                    {item.why?.[oi]}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        )
-      )}
+      <button
+        type="button"
+        onClick={check}
+        disabled={pick === null}
+        aria-disabled={checked || undefined}
+        tabIndex={checked ? -1 : undefined} // inert once checked: it holds focus for now, but is no stop on the next pass
+        className={cn(
+          'mt-4 rounded-md px-4 py-2 font-display text-[14px] font-semibold transition-all duration-150 active:scale-[.97]',
+          checked
+            ? 'cursor-default bg-surface-3 text-text-2 active:scale-100'
+            : pick === null
+              ? 'cursor-not-allowed bg-surface-3 text-text-3'
+              : 'bg-accent text-accent-foreground hover:-translate-y-px',
+        )}
+      >
+        {checked ? 'Answer checked' : 'Check answer'}
+      </button>
+
+      <div role="status" aria-live="polite">
+        {checked && (
+          <>
+            <p className={cn('mt-3 text-body-sm font-semibold', ok ? 'text-accent' : 'text-text-1')}>
+              {ok ? 'Correct.' : `Not quite. ${rightLetters.length === 1 ? 'Right answer' : 'Right answers'}: ${rightLetters.join(', ')}.`}
+            </p>
+            {item.why && item.why.length === item.options.length && (
+              <ul className="mt-2 space-y-1.5" aria-label="Why each answer is right or wrong">
+                {/* the wrong pick first (its misconception), then the key */}
+                {[...order.filter((oi) => oi === pick && !item.correct.includes(oi)), ...order.filter((oi) => item.correct.includes(oi))].map((oi) => {
+                  const right = item.correct.includes(oi)
+                  return (
+                    <li
+                      key={oi}
+                      className={cn(
+                        'flex items-start gap-2 rounded-md border-l-2 bg-surface-2 px-3.5 py-2.5 text-body-sm text-text-2',
+                        right ? 'border-accent' : 'border-danger',
+                      )}
+                    >
+                      {right ? (
+                        <Check size={14} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+                      ) : (
+                        <X size={14} className="mt-0.5 shrink-0 text-danger" aria-hidden />
+                      )}
+                      <span>
+                        {/* a trailing space, not a margin: a screen reader would otherwise run "wrong" into the why */}
+                        <span className={cn('font-mono text-[10px] uppercase', right ? 'text-accent' : 'text-danger')}>
+                          {LETTERS[order.indexOf(oi)]} · {right ? (oi === pick ? 'your pick, correct' : 'correct answer') : 'your pick, wrong'}{' '}
+                        </span>
+                        {item.why?.[oi]}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -298,19 +316,28 @@ function Card({ card, startedAcked }: { card: ChangeCard; startedAcked: boolean 
       )}
 
       <div className="mt-5">
-        {card.acked ? (
-          <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-accent">
-            <Check size={12} aria-hidden /> marked as seen
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => ack('got-it')}
-            className="min-h-11 rounded-md border border-line bg-surface-2 px-4 py-2 text-body-sm text-text-1 transition-colors duration-150 hover:border-line-bright active:scale-[.97]"
-          >
-            Got it
-          </button>
-        )}
+        {/* One button for both states, so pressing Got it does not drop keyboard focus to <body>; once seen it is inert and out of the tab order. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!card.acked) ack('got-it')
+          }}
+          aria-disabled={card.acked || undefined}
+          tabIndex={card.acked ? -1 : undefined}
+          className={
+            card.acked
+              ? 'inline-flex cursor-default items-center gap-1.5 font-mono text-[11px] text-accent'
+              : 'min-h-11 rounded-md border border-line bg-surface-2 px-4 py-2 text-body-sm text-text-1 transition-colors duration-150 hover:border-line-bright active:scale-[.97]'
+          }
+        >
+          {card.acked ? (
+            <>
+              <Check size={12} aria-hidden /> marked as seen
+            </>
+          ) : (
+            'Got it'
+          )}
+        </button>
       </div>
     </li>
   )

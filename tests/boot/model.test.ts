@@ -60,6 +60,14 @@ describe('derived numbers (spec §12.4 table)', () => {
     expect(fmt.kTokens(BOOT.kvTokens)).toBe('≈488k')
   })
 
+  test('KV cache per token reads 128 KiB: the claim in binary units', () => {
+    expect(bootInputs().kvPerToken).toBe(131_072)
+    expect(fmt.kib(bootInputs().kvPerToken)).toBe('128 KiB')
+    expect(fmt.kib(262_144)).toBe('256 KiB')
+    expect(fmt.kib(1_048_576)).toBe('1,024 KiB')
+    expect(fmt.kib(131_072 + 512)).toBe('128.5 KiB') // a claim that is not a whole number of KiB keeps its half
+  })
+
   test('chats of 4k: 119, "about 120"', () => {
     expect(BOOT.chats).toBeGreaterThanOrEqual(118)
     expect(BOOT.chats).toBeLessThanOrEqual(121)

@@ -265,6 +265,8 @@ const groups = (n: number): string => Math.round(n).toLocaleString('en-US')
 export const fmt = {
   /** 16.06 GB → "16 GB" */
   gb: (bytes: number): string => `${Math.round(bytes / 1e9)} GB`,
+  /** 131,072 B → "128 KiB": the KV-cache-per-token claim in binary units, one decimal at most */
+  kib: (bytes: number): string => `${Number((bytes / 1024).toFixed(1)).toLocaleString('en-US')} KiB`,
   /** 208.6 → "≈209 tok/s" */
   tps: (v: number): string => `≈${groups(v)} tok/s`,
   /** 0.0034 → "≈0.3%" */

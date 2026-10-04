@@ -700,7 +700,7 @@ const FAQS = [
   },
   {
     q: 'Is my progress private?',
-    a: 'It never leaves your browser. Progress lives in localStorage only; export or import it as JSON anytime from the Progress page.',
+    a: 'Yes. Progress stays in this browser on this device (IndexedDB) and is never sent anywhere. Export or import it as JSON anytime from the Progress page.',
   },
   {
     q: 'Why Rust?',

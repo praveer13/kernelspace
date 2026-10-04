@@ -17,7 +17,7 @@ export default function LedgerNotices() {
 
   return (
     <>
-      {ledger.readOnly && <ReadOnlyBanner />}
+      {ledger.readOnly && <ReadOnlyBanner reason={ledger.reason} />}
       {ledger.backend === 'memory' && (
         <Notice>
           Storage is limited here: export your progress regularly.{' '}

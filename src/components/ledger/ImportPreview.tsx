@@ -219,7 +219,7 @@ export default function ImportPreviewDialog({
               <thead>
                 <tr className="text-left text-[11px] text-text-3">
                   <th scope="col" className="pb-1 font-normal">
-                    &nbsp;
+                    <span className="sr-only">measure</span>
                   </th>
                   <th scope="col" className="pb-1 text-right font-normal">
                     now
