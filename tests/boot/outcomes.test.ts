@@ -12,7 +12,7 @@ const base = (at: string, over: Record<string, unknown>): LedgerEvent => {
 const visit = (at: string) => base(at, { kind: 'visit', ref: 'boot' })
 const step = (at: string, name: string, ok: boolean, kind: 'item' | 'predict' = 'item') =>
   base(at, { kind, ref: `boot:${name}`, rev: 'r', score: ok ? 1 : 0, ok, provenance: 'practice', data: { src: 'boot' } })
-const complete = (at: string) => base(at, { kind: 'complete', ref: 'boot' })
+const complete = (at: string, data?: Record<string, unknown>) => base(at, { kind: 'complete', ref: 'boot', ...(data ? { data } : {}) })
 const quiz = (at: string, ok = true) =>
   base(at, { kind: 'quiz', ref: 'lesson:t0.l1', score: ok ? 1 : 0, ok, provenance: 'practice' })
 
@@ -93,6 +93,34 @@ describe('selectBootOutcome', () => {
     expect(both).toEqual({ ...alone, returnedWithin7Days: both.returnedWithin7Days })
     expect(both.correct).toBe(0)
     expect(both.completedAt).toBe(T('09:03:00'))
+  })
+
+  test('an abandoned visit does not stretch the session: timing starts at the last visit before the first answer', () => {
+    const o = selectBootOutcome([
+      visit(T('09:00:00')), // opened /boot, left
+      visit(T('09:00:00', '2026-10-09')), // came back five days later
+      step(T('09:01:00', '2026-10-09'), 'faded-decode', true),
+      step(T('09:02:00', '2026-10-09'), 'ridge', true),
+      complete(T('09:04:00', '2026-10-09')),
+    ])
+    expect(o.firstSuccessMs).toBe(60_000)
+    expect(o.totalMs).toBe(4 * 60_000)
+    expect(o).toMatchObject({ correct: 2, graded: 2 })
+  })
+
+  test('the figures the page wrote on completion win over the event gaps', () => {
+    const o = selectBootOutcome([
+      visit(T('09:00:00')),
+      visit(T('09:00:00', '2026-10-09')),
+      step(T('09:01:00', '2026-10-09'), 'ridge', true),
+      complete(T('09:05:00', '2026-10-09'), { totalMs: 270_000, firstSuccessMs: 55_000, correct: 1, graded: 5 }),
+    ])
+    expect(o.firstSuccessMs).toBe(55_000)
+    expect(o.totalMs).toBe(270_000)
+    // junk in the data falls back to the event times
+    const junk = selectBootOutcome([visit(T('09:00:00')), step(T('09:01:00'), 'ridge', true), complete(T('09:05:00'), { totalMs: 'x', firstSuccessMs: -1 })])
+    expect(junk.firstSuccessMs).toBe(60_000)
+    expect(junk.totalMs).toBe(5 * 60_000)
   })
 
   test('a step answered twice in one session counts once, by its first answer', () => {

@@ -7,11 +7,20 @@ import { useEffect, useId, useRef } from 'react'
 import { Button } from '@/components/Button'
 import { cn } from '@/lib/utils'
 
-export function StepTitle({ kicker, children }: { kicker: string; children: React.ReactNode }) {
+/**
+ * The step heading takes focus when it mounts, not when the step number changes: steps 3 to 6 are lazy,
+ * so on the change the heading does not exist yet and focus would fall to <body>. The opening screen
+ * passes `focus={false}` so landing on /boot does not steal focus from the page.
+ */
+export function StepTitle({ kicker, children, focus = true }: { kicker: string; children: React.ReactNode; focus?: boolean }) {
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (focus) heading.current?.focus({ preventScroll: true })
+  }, [focus])
   return (
     <header>
       <p className="section-label">{kicker}</p>
-      <h2 id="boot-step-title" tabIndex={-1} className="mt-2 font-display text-h3 text-text-1 outline-none sm:text-h2">
+      <h2 ref={heading} id="boot-step-title" tabIndex={-1} className="mt-2 font-display text-h3 text-text-1 outline-none sm:text-h2">
         {children}
       </h2>
     </header>

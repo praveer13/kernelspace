@@ -25,8 +25,8 @@ export default function Catch({ model, commit, next }: StepProps) {
       <p className="mt-3 text-body text-text-2">
         Every conversation keeps a KV cache: the keys and values of every token so far, which the GPU re-reads on each step. The card has{' '}
         <ClaimChip id={BOOT_CLAIMS.capacity} />. The weights take <DerivedChip of="weightsBytes">{fmt.gb(model.weightsBytes)}</DerivedChip> of it, leaving
-        roughly {fmt.gb(capacity - model.weightsBytes)} for caches. Llama-3-8B needs <ClaimChip id={BOOT_CLAIMS.kvPerToken} /> (128 KiB) per token
-        of context.
+        roughly {fmt.gb(capacity - model.weightsBytes)} for caches. Llama-3-8B needs <ClaimChip id={BOOT_CLAIMS.kvPerToken} /> (128 KiB) of cache for
+        each token of context.
       </p>
 
       <StepForm

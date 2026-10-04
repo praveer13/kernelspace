@@ -29,9 +29,12 @@ export interface BootOutcomeOptions {
 }
 
 /**
- * - The session starts at the earliest Boot event and ends at the earliest `complete boot` (or never).
+ * - The session ends at the earliest `complete boot` (or never). It starts at the last `visit boot` at or
+ *   before the first graded Boot event, so a learner who bounced and came back days later is not timed
+ *   across the idle gap (the page writes a `visit boot` on every mount until Boot is complete).
  * - Each graded step counts once, by its first answer in the session.
- * - `firstSuccessMs` runs from the first Boot event to the first correct graded step.
+ * - `firstSuccessMs` and `totalMs` prefer the figures the page wrote on `complete boot` (its own run
+ *   clock); without them they run from the session start to the first correct step and to completion.
  * - A return is a graded event outside Boot on a later local day, at most 7 days after completion.
  */
 export function selectBootOutcome(events: Iterable<LedgerEvent>, opts: BootOutcomeOptions = {}): BootOutcome {
@@ -46,7 +49,6 @@ export function selectBootOutcome(events: Iterable<LedgerEvent>, opts: BootOutco
   }
   if (boot.length === 0) return none
 
-  const start = boot[0]
   const done = boot.find((e) => e.kind === 'complete' && e.ref === 'boot')
   const inSession = (e: LedgerEvent): boolean => done === undefined || e.at <= done.at
 
@@ -57,13 +59,22 @@ export function selectBootOutcome(events: Iterable<LedgerEvent>, opts: BootOutco
   const answered = [...steps.values()]
   const firstOk = answered.find((e) => e.ok)
 
+  const firstGraded = boot.find((e) => isBootGraded(e))
+  const visits = boot.filter((e) => e.kind === 'visit' && e.ref === 'boot' && (firstGraded === undefined || e.at <= firstGraded.at))
+  const start = visits.length > 0 ? visits[visits.length - 1] : boot[0]
+  const own: Record<string, unknown> | undefined = done?.kind === 'complete' ? done.data : undefined
+  const reported = (key: 'firstSuccessMs' | 'totalMs'): number | null => {
+    const v = own?.[key]
+    return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null
+  }
+
   const completedAt = done?.at ?? null
   return {
     completedAt,
     correct: answered.filter((e) => e.ok).length,
     graded: answered.length,
-    firstSuccessMs: firstOk ? Math.max(0, ms(firstOk.at) - ms(start.at)) : null,
-    totalMs: completedAt ? Math.max(0, ms(completedAt) - ms(start.at)) : null,
+    firstSuccessMs: firstOk ? (reported('firstSuccessMs') ?? Math.max(0, ms(firstOk.at) - ms(start.at))) : null,
+    totalMs: completedAt ? (reported('totalMs') ?? Math.max(0, ms(completedAt) - ms(start.at))) : null,
     returnedWithin7Days: completedAt ? returned(events, done!, opts.now) : null,
   }
 }

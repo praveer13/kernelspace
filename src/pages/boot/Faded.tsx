@@ -45,13 +45,13 @@ export default function Faded({ model, guess, commit, next }: StepProps) {
         <li>
           <span className="font-mono text-text-3">3 · time for one pass</span>
           <br />
-          {(model.weightsBytes / 1e9).toFixed(2)} GB ÷ <ClaimChip id={BOOT_CLAIMS.bandwidth} /> = <DerivedChip of="tokenSeconds">{(model.tokenSeconds * 1000).toFixed(2)} ms</DerivedChip>{' '}
+          <DerivedChip of="weightsBytes">{(model.weightsBytes / 1e9).toFixed(2)} GB</DerivedChip> ÷ <ClaimChip id={BOOT_CLAIMS.bandwidth} /> = <DerivedChip of="tokenSeconds">{(model.tokenSeconds * 1000).toFixed(2)} ms</DerivedChip>{' '}
           per token.
         </li>
         <li className="font-semibold text-text-1">
           <span className="font-mono font-normal text-text-3">4 · your turn</span>
           <br />
-          One token every {(model.tokenSeconds * 1000).toFixed(2)} ms is how many tokens per second?
+          One token every <DerivedChip of="tokenSeconds">{(model.tokenSeconds * 1000).toFixed(2)} ms</DerivedChip> is how many tokens per second?
         </li>
       </ol>
 
@@ -64,7 +64,7 @@ export default function Faded({ model, guess, commit, next }: StepProps) {
           done && (
             <Verdict tone={done.ok ? 'good' : 'miss'} lead={done.ok ? 'Yes.' : `Not quite: it is ${fmt.tps(model.decodeTps)}.`}>
               <p>
-                1 ÷ {(model.tokenSeconds * 1000).toFixed(2)} ms ={' '}
+                1 ÷ <DerivedChip of="tokenSeconds">{(model.tokenSeconds * 1000).toFixed(2)} ms</DerivedChip> ={' '}
                 <DerivedChip of="decodeTps">{fmt.tps(model.decodeTps)}</DerivedChip>. That is the ceiling for one user: batch-1 decode waits on
                 memory, not on arithmetic.
               </p>

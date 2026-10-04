@@ -57,7 +57,7 @@ function Progress({ step }: { step: number }) {
 function Intro({ completedAt, onStart }: { completedAt: string | undefined; onStart: () => void }) {
   return (
     <section aria-labelledby="boot-step-title">
-      <StepTitle kicker="0x00 — boot">Ten minutes, any device</StepTitle>
+      <StepTitle kicker="0x00 — boot" focus={false}>Ten minutes, any device</StepTitle>
       <div className="mt-4 space-y-3 text-body text-text-2">
         {completedAt ? (
           <p>
@@ -74,7 +74,7 @@ function Intro({ completedAt, onStart }: { completedAt: string | undefined; onSt
           </>
         )}
         <p className="text-body-sm text-text-3">
-          Scenario: Llama-3-8B in BF16 (2 bytes per weight) on one H100 SXM, chats of 4,096 tokens. Every other number is a tappable chip with its source.
+          Scenario: Llama-3-8B in BF16 (2 bytes per weight) on one H100 SXM, chats of 4,096 tokens. Every other number is a tappable chip with its source, or is worked out from the chips next to it.
         </p>
       </div>
       <StepForm done={false} canCheck onCheck={onStart} onNext={onStart} checkLabel={completedAt ? 'Replay Boot' : 'Start'}>
@@ -157,14 +157,14 @@ export default function Boot() {
     return () => window.clearTimeout(id)
   }, [])
 
-  // Each step moves focus to its heading, so a screen reader starts at the top and a keyboard user is already inside the step.
+  // Each step starts at the top of the page. Focus moves to the step's heading when the heading mounts
+  // (StepTitle), because steps 3 to 6 are lazy and their heading does not exist yet when `step` changes.
   useEffect(() => {
     if (!mounted.current) {
       mounted.current = true
       return
     }
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
-    document.getElementById('boot-step-title')?.focus({ preventScroll: true })
   }, [step, phase, run])
 
   const start = () => {
@@ -222,23 +222,29 @@ export default function Boot() {
       <h1 className="sr-only">Boot: your first ten minutes</h1>
       {phase === 'flow' && step > 0 && <Progress step={step} />}
       <Suspense fallback={<p role="status" className="font-mono text-body-sm text-text-3">loading the next step…</p>}>
-      {phase === 'done' ? (
-        <Done session={session.current} onReplay={() => { setPhase('flow'); start() }} />
-      ) : step === 0 ? (
-        <Intro completedAt={completedAt} onStart={start} />
-      ) : step === 1 ? (
-        <Guess key={`g${run}`} {...props} onGuess={setGuess} />
-      ) : step === 2 ? (
-        <Faded key={`f${run}`} {...props} />
-      ) : step === 3 ? (
-        <Roofline key={`r${run}`} {...props} />
-      ) : step === 4 ? (
-        <Catch key={`c${run}`} {...props} />
-      ) : step === 5 ? (
-        <Reveal key={`v${run}`} {...props} />
-      ) : (
-        <You key={`y${run}`} onFinish={finish} />
-      )}
+        {phase === 'done' ? (
+          <Done
+            session={session.current}
+            onReplay={() => {
+              setPhase('flow')
+              start()
+            }}
+          />
+        ) : step === 0 ? (
+          <Intro completedAt={completedAt} onStart={start} />
+        ) : step === 1 ? (
+          <Guess key={`g${run}`} {...props} onGuess={setGuess} />
+        ) : step === 2 ? (
+          <Faded key={`f${run}`} {...props} />
+        ) : step === 3 ? (
+          <Roofline key={`r${run}`} {...props} />
+        ) : step === 4 ? (
+          <Catch key={`c${run}`} {...props} />
+        ) : step === 5 ? (
+          <Reveal key={`v${run}`} {...props} />
+        ) : (
+          <You key={`y${run}`} onFinish={finish} />
+        )}
       </Suspense>
     </div>
   )

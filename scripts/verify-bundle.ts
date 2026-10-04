@@ -16,7 +16,11 @@ import { gzipSync } from 'node:zlib'
 const BUDGET_KB = 250
 const KB = 1000
 
-/** Routes with their own budget: the JS + CSS closure, gzip. */
+/**
+ * Routes with their own budget: the JS + CSS closure, gzip.
+ * /boot sits at about 198 KB of 200 KB, with steps 3 to 6 split into an on-demand chunk (about 8 KB, printed
+ * but not counted; 206 KB with it). Any growth in the entry chunk or the shared CSS trips this gate.
+ */
 const ROUTE_BUDGETS: { route: string; src: string; budgetKb: number }[] = [{ route: '/boot', src: 'src/pages/Boot.tsx', budgetKb: 200 }]
 
 const dist = new URL('../dist/', import.meta.url)
