@@ -23,17 +23,17 @@ This lesson is the bridge of the whole course: the ideas here — time slices, p
 
 **FIFO/round-robin** is the floor: run to completion (or quantum expiry), next in line. Simple, fair-ish, and poisoned by **head-of-line blocking** — one 60-second job ahead of your 5 ms job and your p99 is 60 seconds. The **convoy effect** is why nobody serves latency-sensitive traffic FIFO.
 
-**Preemptive multitasking** (the default world you live in) fixes it with the time slice: any thread can be interrupted at quantum end (~1–10 ms) so the runqueue rotates. Short jobs no longer wait behind long ones; the cost is context-switch overhead — the T2.L1 tax, now spent deliberately to buy responsiveness.
+**Preemptive multitasking** (the default world you live in) fixes it with the time slice: any thread can be interrupted when its slice ends (EEVDF's base slice is ~0.75–3 ms) so the runqueue rotates. Short jobs no longer wait behind long ones; the cost is context-switch overhead — the T2.L1 tax, now spent deliberately to buy responsiveness.
 
 **Priority scheduling** layers intent on top: important threads preempt unimportant ones. Linux gives you \`nice\` values and, for the brave, real-time classes (\`SCHED_FIFO\`/\`SCHED_RR\`) that preempt *everything* below them. Priorities introduce two famous failure modes: **starvation** (low priority never runs under load) and **priority inversion** (high waits on a lock held by low, while medium hogs the CPU — high effectively runs *below* medium). The canonical fix is **priority inheritance**: the lock-holder temporarily borrows the waiter's priority. The 1997 Mars Pathfinder reset loop was fixed remotely this way — priority inversion is not trivia, it is a spacecraft bug.
 
-**Linux EEVDF** (Earliest Eligible Virtual Deadline First — what has scheduled ordinary processes since 6.6, replacing CFS) doesn't use strict priorities either. Each thread still accrues **vruntime**, weighted CPU time consumed, and nice values just change the weight (the clock speed of your vruntime). EEVDF turns that into **lag**: how much CPU a thread is owed against its fair share. A thread with lag ≥ 0 is **eligible**; among eligible threads the scheduler runs the one with the earliest **virtual deadline** (eligible time + requested slice ÷ weight), found in an augmented red-black tree in O(log n). A shorter requested slice means an earlier deadline, so a latency-sensitive thread is picked sooner without being given more total CPU. Result: proportional fairness with good latency for interactive/sleep-heavy threads, and no starvation among ordinary threads — only the real-time and deadline classes above them can starve them.`,
+**Linux EEVDF** (Earliest Eligible Virtual Deadline First — what has scheduled ordinary processes since 6.6, replacing CFS; see the [kernel EEVDF documentation](https://docs.kernel.org/scheduler/sched-eevdf.html)) doesn't use strict priorities either. Each thread still accrues **vruntime**, weighted CPU time consumed, and nice values just change the weight (the clock speed of your vruntime). EEVDF turns that into **lag**: how much CPU a thread is owed against its fair share. A thread with lag ≥ 0 is **eligible**; among eligible threads the scheduler runs the one with the earliest **virtual deadline** (eligible time + requested slice ÷ weight), found in an augmented red-black tree in O(log n). A shorter requested slice means an earlier deadline, so a latency-sensitive thread is picked sooner without being given more total CPU. Result: proportional fairness with good latency for interactive/sleep-heavy threads, and no starvation among ordinary threads — only the real-time and deadline classes above them can starve them.`,
     },
     {
       type: 'statline',
       stats: [
         { value: 'O(log n)', label: 'EEVDF pick', hint: 'Earliest virtual deadline among eligible threads, found in an augmented red-black tree.' },
-        { value: '~1–10 ms', label: 'quantum', hint: 'Typical preemption slice at low load; shrinks as runnable threads grow.' },
+        { value: '~0.75–3 ms', label: 'base slice', hint: 'Default EEVDF slice since 6.6; scales with CPU count, tunable, and a thread can request a shorter one.' },
         { value: '1997', label: 'Mars Pathfinder', hint: 'Priority inversion caused watchdog resets on Mars; fixed by enabling priority inheritance.' },
         { value: 'p99', label: 'the real metric', hint: 'Schedulers are judged at the tail, not the mean.' },
       ],
@@ -58,7 +58,7 @@ Every scheduler has a silent partner deciding what enters the runqueue at all. T
           osLine: 'Interrupt at quantum end; another runnable thread gets the core.',
           llm: 'iteration-level scheduling',
           llmLine: 'After EVERY decode step, the engine re-picks which sequences occupy the batch.',
-          breaks: 'A decode step is not an interchangeable time slice: a sequence carries growing KV state, so evicting it costs a swap or a recompute, not a register save.',
+          breaks: 'A decode step is not an interchangeable time slice: a sequence carries growing KV state, so evicting it costs a recompute of that state, not a register save.',
         },
         {
           os: 'runqueue → running set',
@@ -78,7 +78,7 @@ Every scheduler has a silent partner deciding what enters the runqueue at all. T
           os: 'priority inversion',
           osLine: 'High-priority waits on a lock held by low-priority under medium load.',
           llm: 'priority admission blocked by KV holders',
-          llmLine: 'A high-priority request waits for KV blocks held by lower-priority running sequences; vLLM preempts them (swap/recompute).',
+          llmLine: 'A high-priority request waits for KV blocks held by lower-priority running sequences; when blocks run out, the engine evicts a lowest-priority sequence (recompute in V1).',
           breaks: 'KV blocks are not a lock: the engine can reclaim them by force for a price, so there is no inheritance protocol, only a paid eviction.',
         },
       ],
@@ -154,7 +154,7 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
         {
           q: 'Linux\'s default scheduler for ordinary threads (EEVDF, since 6.6) shares the CPU fairly by…',
           options: [
-            'Always running the thread with the smallest vruntime, taken as the leftmost node of a red-black tree, exactly as CFS did before Linux 6.6',
+            'Always running the thread with the smallest vruntime, taken as the leftmost node of a red-black tree, with no eligibility test',
             'Tracking each thread\'s lag against its weighted fair share and running the eligible thread (lag ≥ 0) with the earliest virtual deadline',
             'Cycling the runqueue in strict round-robin where every runnable thread gets the same fixed slice regardless of its nice value',
             'Handing each thread its weighted share of an epoch up front and letting it run until that budget is spent',
@@ -166,7 +166,7 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
             'Stale answer: CFS picked the smallest vruntime with no eligibility test or per-thread deadline. EEVDF replaced it in 6.6; vruntime remains, but lag and virtual deadlines now decide the pick.',
             'Right: lag measures CPU owed versus fair share, eligibility is lag ≥ 0, and the earliest virtual deadline among eligible threads wins. A shorter slice gives an earlier deadline, helping latency.',
             'Misconception: fixed equal slices. Linux weights threads by nice value, so a nice -5 thread earns proportionally more CPU; fixed round-robin would ignore weights and slice requests.',
-            'Misconception: epoch budgets. That resembles the older O(1) scheduler; EEVDF has no epoch, and decides continuously from lag and deadlines, so a sleeping thread cannot hoard a budget.',
+            'Misconception: epoch budgets. That resembles the older O(1) scheduler; EEVDF has no epoch, and decides continuously from lag and deadlines, so a sleeping thread\'s lag decays rather than accumulating a budget.',
           ],
         },
         {

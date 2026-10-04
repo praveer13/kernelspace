@@ -225,7 +225,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
           explanation:
             'One hot counter = one cache line ping-ponging between cores. Striping gives each core its own padded cell (T0.L4 false sharing, weaponized for good); reads pay a sum. The classic trade of write-scalability for read-cost.',
           why: [
-            'Misconception: a faster instruction. AtomicLong already uses a hardware atomic add on x86; the cost under contention is the cache line bouncing between cores, not retries.',
+            'Misconception: a faster instruction. AtomicLong\'s cost under contention is the single cache line bouncing between cores either way; a different atomic instruction would not remove that.',
             'Right: threads increment separate padded cells, so no line is shared on the write path. A read sums the cells, trading cheaper writes for a more expensive read.',
             'Misconception: finer locks. LongAdder takes no locks; it stripes atomic cells. Lock-per-segment is a different technique for maps, with locks rather than cells on the path.',
             'Misconception: weaker ordering. Increments are still atomic with ordering; store buffers do not combine atomic updates to a shared line, and contention remains until the line stops being shared.',

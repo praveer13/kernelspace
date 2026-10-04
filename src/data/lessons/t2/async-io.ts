@@ -135,7 +135,7 @@ You should now be able to trace a request through a modern async server: NIC int
             'epoll is readiness notification for sockets (you still syscall per read/write, and files are always "ready"). io_uring is a completion model for ANY I/O through mmap\'d SQ/CQ rings: batch submissions, batch completions, ~zero syscalls.',
           why: [
             'Right: epoll only reports readiness, mostly useful for sockets, and you still syscall per operation. io_uring submits work and reports completions through shared SQ/CQ rings for files and sockets alike.',
-            'Misconception: epoll for files. Regular files always report ready, so readiness never reflects disk latency; io_uring changes the model to completion instead of adding readiness for files.',
+            'Misconception: epoll for files. Regular files are always ready for poll/select and epoll refuses them (EPERM), so readiness never reflects disk latency; io_uring changes the model to completion instead of adding readiness for files.',
             'Misconception: no async needed. Operations complete later, so code still needs a loop or runtime to reap completions and continue; io_uring is a mechanism under async, not a replacement.',
             'Misconception: hardware-bound. The advantage is in the submission and completion interface between userspace and kernel, and it works on sockets and ordinary disks too.',
           ],
