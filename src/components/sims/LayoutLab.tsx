@@ -412,6 +412,7 @@ export default function LayoutLab() {
 
   useEffect(() => {
     if (!sweepResult) return
+    // AoS models ~1/4 of the roof (8 of every 32 bytes fetched); 0.3 leaves room for jitter
     if (
       sweepResult.layout === 'aos' &&
       sweepResult.effectiveGbps <= DRAM_ROOF_GBPS * 0.3
@@ -520,8 +521,8 @@ export default function LayoutLab() {
           {mode === 'sweep' && (
             <p className="mt-4 max-w-xl font-mono text-[10px] leading-relaxed text-text-3">
               AoS streams every 32-byte record (two per 64-byte cache line) but only reads the
-              8-byte deadline, so one quarter of each line is useful. SoA reads the deadline array densely, so nearly every fetched byte is
-              useful.
+              8-byte deadline, so one quarter of each line is useful. SoA reads the deadline
+              array densely, so nearly every fetched byte is useful.
             </p>
           )}
           {mode === 'false' && (

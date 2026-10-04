@@ -104,7 +104,7 @@ final class Requests {
 // (Valhalla value types aim to fix this — someday)`,
         },
       ],
-      chips: ['64 B line = 8 deadlines', 'bandwidth ×8', 'SIMD-friendly'],
+      chips: ['64 B line = 8 deadlines', 'bandwidth ×4', 'SIMD-friendly'],
     },
     {
       type: 'prose',
