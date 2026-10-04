@@ -469,7 +469,7 @@ function engineTick(e: Engine, cfg: EngineConfig): void {
             e.preempted.push(victim)
             e.active = e.active.filter((a) => a !== victim)
             e.preemptCount++
-            e.events.push({ kind: 'warn', text: `PREEMPT r${victim.id}  KV swapped out for r${r.id} ≡ OS swap` })
+            e.events.push({ kind: 'warn', text: `PREEMPT r${victim.id}  KV swapped out for r${r.id} ≡ OS swap (V0 / paper model; V1 frees + recomputes)` })
             continue
           }
         }
@@ -531,7 +531,7 @@ function engineTick(e: Engine, cfg: EngineConfig): void {
       e.preempted.push(victim)
       e.active = e.active.filter((a) => a !== victim)
       e.preemptCount++
-      e.events.push({ kind: 'warn', text: `PREEMPT r${victim.id}  KV over capacity mid-decode → swap out` })
+      e.events.push({ kind: 'warn', text: `PREEMPT r${victim.id}  KV over capacity mid-decode → swap out (V0 / paper model; V1 recomputes)` })
     }
     // resume when space frees
     while (e.preempted.length > 0 && memUsed(e) + 256 <= cfg.memCapacity) {
@@ -540,7 +540,7 @@ function engineTick(e: Engine, cfg: EngineConfig): void {
       r.state = 'decode'
       r.protectedUntil = e.tick + 10
       e.active.push(r)
-      e.events.push({ kind: 'op', text: `RESUME r${r.id}  swapped back in — decode continues at ${r.generated}/${r.out}` })
+      e.events.push({ kind: 'op', text: `RESUME r${r.id}  swapped back in (V0 model) — decode continues at ${r.generated}/${r.out}` })
     }
   }
 
@@ -1179,10 +1179,10 @@ export default function BatchingSim() {
                   preempt: v,
                   memCapacity: v ? Math.min(configRef.current.memCapacity, 6144) : configRef.current.memCapacity,
                 })
-                log('warn', v ? 'MEMORY PRESSURE on — KV budget squeezed, preemption enabled ≡ OS swap' : 'memory pressure off')
+                log('warn', v ? 'MEMORY PRESSURE on — KV budget squeezed, preemption enabled ≡ OS swap (V0 / paper model; V1 recomputes)' : 'memory pressure off')
               }}
               label="memory pressure (preempt)"
-              hint="continuous mode: over-capacity sequences swap out and resume later"
+              hint="continuous mode: over-capacity sequences swap out and resume later (V0 / paper model; V1 recomputes instead)"
             />
             <div>
               <div className="mb-1 font-mono text-[10px] uppercase tracking-[.1em] text-text-3">preemption policy</div>
@@ -1376,7 +1376,7 @@ export default function BatchingSim() {
               {(snap.preempted.length > 0 || cfg.preempt) && (
                 <div className="mt-2 border-t border-dashed border-amber/30 pt-2">
                   <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.10em] text-amber">
-                    swapped / waiting ({snap.preempted.length}) ≡ swap space
+                    swapped / waiting ({snap.preempted.length}) ≡ swap space (V0 model)
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {snap.preempted.map((r) => (
