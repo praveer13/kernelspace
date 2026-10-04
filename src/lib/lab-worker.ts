@@ -56,6 +56,8 @@ async function dispatch(
     throw e
   }
   const id = nextId++
+  let phase: 'checks' | 'invoke' = 'checks'
+  let checksPassed = true
   return new Promise((resolve, reject) => {
     const settle = () => {
       clearTimeout(timer)
@@ -65,11 +67,16 @@ async function dispatch(
     const onMessage = (ev: MessageEvent<LabWorkerReply>) => {
       const m = ev.data
       if (m.type === 'ready' || m.id !== id) return
+      if (m.type === 'phase') {
+        phase = m.phase
+        checksPassed = m.checksPassed
+        return
+      }
       settle()
       if (m.type === 'done') {
         resolve({ report: m.report, hasInvoke: m.hasInvoke })
       } else if (m.kind === 'trap') {
-        reject(new LabTrapError())
+        reject(new LabTrapError(undefined, m.phase))
       } else if (m.kind === 'abi') {
         reject(new LabAbiError(m.message))
       } else {
@@ -84,7 +91,7 @@ async function dispatch(
     const timer = setTimeout(() => {
       settle()
       discard(h)
-      reject(new LabTimeoutError(LAB_TIMEOUT_MS))
+      reject(new LabTimeoutError(LAB_TIMEOUT_MS, phase, checksPassed))
     }, LAB_TIMEOUT_MS)
     h.worker.addEventListener('message', onMessage)
     h.worker.addEventListener('error', onError)
@@ -107,7 +114,10 @@ export async function runLabInWorker(bytes: ArrayBuffer): Promise<LabReport> {
 }
 
 /**
- * Fleet admission: instantiate, check for the ks_invoke bridge, run the suite.
+ * Fleet admission: instantiate, check for the ks_invoke bridge, run the suite, then exercise ks_invoke
+ * with the lab's canned calls — all inside the one LAB_TIMEOUT_MS budget. A red module is probed too
+ * (a spin is caught; a trap is left for the caller's own check handling); a green one that traps or
+ * misanswers in the probe is rejected with a LabTrapError (phase 'invoke') or LabAbiError.
  * `report` is null (checks not run) when the module has no bridge. Throws like runLabInWorker.
  */
 export function validateLabInWorker(bytes: ArrayBuffer): Promise<{ report: LabReport | null; hasInvoke: boolean }> {

@@ -338,7 +338,11 @@ function PoolMode() {
       setDriver({ kind: 'wasm', mod, checksPassed: passed, checksTotal: report.checks.length })
       setDivergence(null)
     } catch (e) {
-      if (e instanceof LabTrapError) setError('the module trapped — a todo!() is still open (the fleet needs dump() implemented too).')
+      if (e instanceof LabTrapError) {
+        setError(e.phase === 'invoke'
+          ? 'ks_invoke trapped after the checks passed — the fleet bridge panicked on its first calls (check init and command handling).'
+          : 'the module trapped — a todo!() is still open (the fleet needs dump() implemented too).')
+      }
       else if (e instanceof LabTimeoutError) setError(`${e.title} — ${e.message}`)
       else if (e instanceof LabAbiError) setError(e.message)
       else setError(String(e))

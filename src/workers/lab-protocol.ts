@@ -5,7 +5,7 @@ import type { LabReport } from '../lib/wasm-lab'
 export type LabRunMode =
   /** Forge grading: run the self-check suite and return its report */
   | 'grade'
-  /** Fleet admission: check the ks_invoke bridge first, then run the suite */
+  /** Fleet admission: check the ks_invoke bridge exists, run the suite, then exercise ks_invoke */
   | 'validate'
 
 export interface LabWorkerRequest {
@@ -16,6 +16,8 @@ export interface LabWorkerRequest {
 
 export type LabWorkerReply =
   | { type: 'ready' }
+  /** 'validate' only: the ks_invoke probe is starting (names the stage a timeout hit; it runs even after failing checks) */
+  | { type: 'phase'; id: number; phase: 'invoke'; checksPassed: boolean }
   | {
       type: 'done'
       id: number
@@ -23,4 +25,5 @@ export type LabWorkerReply =
       report: LabReport | null
       hasInvoke: boolean
     }
-  | { type: 'failed'; id: number; kind: 'trap' | 'abi' | 'error'; message: string }
+  /** `phase: 'invoke'` marks a trap in the ks_invoke probe after green checks */
+  | { type: 'failed'; id: number; kind: 'trap' | 'abi' | 'error'; message: string; phase?: 'invoke' }

@@ -20,6 +20,8 @@ export interface Erratum {
   after: string
   /** At most 40 words: why it changed and why it matters. */
   why?: string
+  /** Id of the earlier erratum this one replaces, when the fix moved again. /freshness lists this entry first and marks the older card superseded. */
+  supersedes?: string
   /** Primary source for the corrected claim. */
   source?: { url: string; title: string }
 }
