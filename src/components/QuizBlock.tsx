@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Check, X, RotateCcw } from 'lucide-react'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
+import { freshSeed, shuffledOrder } from '@/lib/rng'
 
 export interface QuizQuestion {
   q: string
@@ -26,11 +27,23 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E']
  * Submit → per-option feedback (mint wash + check / danger wash + shake),
  * explanation expands, score persists to the progress store. Pass ≥80%
  * lights the checkpoint mint. Retry resets with a staggered fade.
+ * Options are shuffled per attempt (PLAN-100X §5.1 V1): letters label display
+ * position, while selection and grading stay on authored indices.
  */
 export default function QuizBlock({ lessonId, questions, className }: QuizBlockProps) {
   const recordQuizScore = useProgress((s) => s.recordQuizScore)
   const [selected, setSelected] = useState<Record<number, Set<number>>>({})
   const [submitted, setSubmitted] = useState(false)
+  const [seed, setSeed] = useState(freshSeed)
+
+  // order[qi][displayPosition] = authored option index; new seed → new order
+  const orders = useMemo(
+    () =>
+      questions.map((q, qi) =>
+        shuffledOrder(q.options.length, seed ^ Math.imul(qi + 1, 0x9e3779b9)),
+      ),
+    [questions, seed],
+  )
 
   const correctCount = useMemo(() => {
     if (!submitted) return 0
@@ -75,6 +88,7 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
   const retry = () => {
     setSubmitted(false)
     setSelected({})
+    setSeed(freshSeed())
   }
 
   const allAnswered = questions.every((_, qi) => (selected[qi]?.size ?? 0) > 0)
@@ -119,7 +133,8 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                 )}
               </p>
               <div className="space-y-2">
-                {q.options.map((opt, oi) => {
+                {orders[qi].map((oi, di) => {
+                  const opt = q.options[oi]
                   const isSel = sel.has(oi)
                   const isCorrectOpt = q.correct.includes(oi)
                   const showVerdict = submitted
@@ -155,7 +170,7 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                               : 'border-line text-text-3',
                         )}
                       >
-                        {rightPick ? <Check size={11} /> : LETTERS[oi]}
+                        {rightPick ? <Check size={11} /> : LETTERS[di]}
                       </span>
                       <span className="flex-1">{opt}</span>
                       {wrongPick && <X size={14} className="shrink-0 text-danger" />}
