@@ -1,40 +1,13 @@
 import { useMemo, useState } from 'react'
 import ConfidencePicker from '@/components/learner/ConfidencePicker'
 import { CHAT_TOKENS, fmt, guessMatchesAggregate } from '@/lib/boot/model'
-import type { BootModel } from '@/lib/boot/model'
 import type { Confidence } from '@/lib/ledger/types'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
 import { cn } from '@/lib/utils'
 import { DerivedChip } from './Chip'
 import { confidenceKey, useStepClock, type StepProps } from './session'
 import { StepForm, StepTitle, Verdict } from './ui'
-
-interface Option {
-  text: string
-  why: (m: BootModel) => string
-}
-
-/** Authored order. The right answer is index 1; what the learner sees is shuffled per visit and the pick is stored by this index. */
-const OPTIONS: Option[] = [
-  {
-    text: 'The GPU runs at a higher clock when more users are connected, so every user is served faster.',
-    why: () => 'Clock speed does not depend on how many people are connected. The gain comes from sharing memory reads, not from running faster.',
-  },
-  {
-    text: 'One pass over the weights now serves every user in the batch, so total tokens per step grow. Each user still gets one token per step.',
-    why: (m) =>
-      `Right: a step still reads the weights once (plus every cache), and each user receives one token from it. With ${m.chats} users that is ${fmt.tpsRound(m.aggregateTps)} in total, but each user gets about ${Math.round(m.perUserTps)} tok/s, below the ${fmt.tps(m.decodeTps)} of one user alone.`,
-  },
-  {
-    text: 'Batching splits the weights between users, so each user needs less memory bandwidth and runs faster.',
-    why: () => 'The weights are not split. Every step reads all of them once; what the users share is that single read, not a slice of the weights.',
-  },
-  {
-    text: 'Each user is served by their own set of math units, so every user decodes many times faster.',
-    why: () => 'There is one GPU, and the users share its units. Per-user speed actually falls as the batch grows, because each step now reads more bytes and takes longer.',
-  },
-]
-const CORRECT = 1
+import { CORRECT, OPTIONS } from './whyBatching'
 
 export default function Reveal({ model, guess, commit, next }: StepProps) {
   const clock = useStepClock()
@@ -60,7 +33,7 @@ export default function Reveal({ model, guess, commit, next }: StepProps) {
 
       <div className="mt-3 space-y-3 text-body text-text-2">
         <p>
-          That <DerivedChip of="aggregateTps">{fmt.tpsRound(model.aggregateTps)}</DerivedChip> is what batching buys: <DerivedChip of="chats">{model.chats}</DerivedChip> chats, one token each per step of{' '}
+          That <DerivedChip of="aggregateTps">{fmt.tpsRound(model.aggregateTps)}</DerivedChip> is what batching buys: <DerivedChip of="chats">{fmt.chats(model.kvTokens / CHAT_TOKENS)}</DerivedChip> chats, one token each per step of{' '}
           <DerivedChip of="stepSeconds">{fmt.ms(model.stepSeconds)}</DerivedChip>. Divided among them, each user gets about{' '}
           <DerivedChip of="perUserTps">{Math.round(model.perUserTps)} tok/s</DerivedChip>, less than the <DerivedChip of="decodeTps">{fmt.tps(model.decodeTps)}</DerivedChip> a
           lone user gets.

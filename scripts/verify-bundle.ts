@@ -120,9 +120,14 @@ for (const { route, src, budgetKb } of ROUTE_BUDGETS) {
   // Information only: what the route fetches on demand after first load (not part of the budget).
   const counted = new Set(unique.map((f) => f.file))
   const onDemand: string[] = []
+  let onDemandKb = 0
   for (const dyn of manifest[key].dynamicImports ?? []) {
     const chunk = manifest[dyn]
-    if (chunk && !counted.has(chunk.file)) onDemand.push(`${chunk.file.split('/').pop()} ${((await gzipSize(chunk.file)) / KB).toFixed(1)} KB`)
+    if (chunk && !counted.has(chunk.file)) {
+      const kb = (await gzipSize(chunk.file)) / KB
+      onDemandKb += kb
+      onDemand.push(`${chunk.file.split('/').pop()} ${kb.toFixed(1)} KB`)
+    }
   }
   if (onDemand.length > 0) console.log(`  on demand, not counted: ${onDemand.join(', ')}`)
   if (totalKb > budgetKb) {
@@ -130,6 +135,10 @@ for (const { route, src, budgetKb } of ROUTE_BUDGETS) {
     failed = true
   } else {
     console.log(`ok   ${route} closure is ${totalKb.toFixed(1)} KB gzip (budget ${budgetKb} KB)`)
+    // Soft: the full flow, first load plus on-demand chunks. Never fails; it keeps the split visible.
+    if (onDemandKb > 0 && totalKb + onDemandKb > budgetKb) {
+      console.log(`warn ${route} full flow with on-demand chunks is ${(totalKb + onDemandKb).toFixed(1)} KB gzip (not gated)`)
+    }
   }
 }
 

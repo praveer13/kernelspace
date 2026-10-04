@@ -67,14 +67,14 @@ export default function You({ onFinish }: YouProps) {
     <section aria-labelledby="boot-step-title">
       <StepTitle kicker="0x06 — you">Now, how do you want to use this?</StepTitle>
 
-      <aside className="mt-4 rounded-md border border-line bg-surface-1 p-4 text-body-sm text-text-2">
+      <div className="mt-4 rounded-md border border-line bg-surface-1 p-4 text-body-sm text-text-2">
         <p className="font-semibold text-text-1">A 30-second heads-up: this will feel harder than reading.</p>
         <p className="mt-1">
           The course asks you to guess before it shows you, and to say how sure you are. That feels slower than reading a chapter. In a 2019
           classroom study (Deslauriers et al.), students taught with active methods felt they had learned less and scored higher. When it feels
           hard, that is usually the point.
         </p>
-      </aside>
+      </div>
 
       <form
         className="mt-6 space-y-8"
@@ -84,7 +84,7 @@ export default function You({ onFinish }: YouProps) {
         }}
       >
         <fieldset className="space-y-3">
-          <legend className="text-body text-text-1">What is this for? <span className="text-text-3">Optional, and it stays on this device.</span></legend>
+          <legend className="text-body text-text-1">What is this for? <span className="text-text-3">Optional. It stays in this browser unless you export it.</span></legend>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Your situation">
             {[
               { v: true, label: 'I work in software' },
@@ -216,13 +216,13 @@ export default function You({ onFinish }: YouProps) {
         </div>
 
         {showInstall && !installDismissed && (
-          <aside className="rounded-md border border-line bg-surface-1 p-4 text-body-sm text-text-2">
+          <div className="rounded-md border border-line bg-surface-1 p-4 text-body-sm text-text-2">
             <p className="font-semibold text-text-1">Keep it on your phone</p>
             <p className="mt-1">Browsers can clear a site's saved data when you stay away for a while. Tap Share, then Add to Home Screen, and your progress is safer.</p>
             <StepBtn className="mt-3" onClick={() => setWorking('boot:install-dismissed', true)}>
               Not now
             </StepBtn>
-          </aside>
+          </div>
         )}
 
         <Button type="submit" className="w-full sm:w-auto">
