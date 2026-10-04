@@ -1,10 +1,14 @@
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import StatusBar from '@/components/StatusBar'
 import CommandPalette from '@/components/CommandPalette'
+import { useProgress } from '@/lib/progress'
+
+// Only fetched when the ledger has something to say (read-only tab, memory backend, cleared storage).
+const LedgerNotices = lazy(() => import('@/components/ledger/LedgerNotices'))
 
 /**
  * Shared app shell. Children pattern (react-dev.md routing contract A):
@@ -17,6 +21,9 @@ import CommandPalette from '@/components/CommandPalette'
 export default function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const isMarketing = pathname === '/'
+  const hasNotice = useProgress(
+    (s) => s.ledger.readOnly || s.ledger.backend === 'memory' || s.ledger.cleared !== undefined,
+  )
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
@@ -31,6 +38,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         skip to content
       </a>
       <Navbar />
+      {hasNotice && (
+        <Suspense fallback={null}>
+          <LedgerNotices />
+        </Suspense>
+      )}
       <main id="main">{children}</main>
       {isMarketing && <Footer />}
       <StatusBar />

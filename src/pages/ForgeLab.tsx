@@ -20,6 +20,7 @@ import { getTrack } from '@/lib/tracks'
 import { useProgress, XP } from '@/lib/progress'
 import { LabAbiError, LabTimeoutError, LabTrapError, type LabReport } from '@/lib/wasm-lab'
 import { runLabInWorker } from '@/lib/lab-worker'
+import { sha256Hex } from '@/lib/ledger/stable'
 import { cn } from '@/lib/utils'
 
 type RunState =
@@ -66,7 +67,8 @@ export default function ForgeLab() {
       if (!lab) return
       setRun({ kind: 'running' })
       try {
-        const report = await runLabInWorker(await file.arrayBuffer())
+        const bytes = await file.arrayBuffer()
+        const report = await runLabInWorker(bytes)
         if (report.lab !== lab.id) {
           setRun({
             kind: 'error',
@@ -82,7 +84,9 @@ export default function ForgeLab() {
         const passedIds = report.checks
           .filter((check) => check.pass && requiredIds.has(check.id))
           .map((check) => check.id)
-        recordLabResult(lab.id, passedIds, requiredIds.size)
+        // The ledger records which module earned the result. crypto.subtle is absent on insecure origins.
+        const wasmSha256 = await sha256Hex(bytes).catch(() => undefined)
+        recordLabResult(lab.id, passedIds, requiredIds.size, wasmSha256 ? { wasmSha256 } : undefined)
         const nowDone = useProgress.getState().labs[lab.id]?.done
         if (nowDone && !labDone) {
           unlockAchievement('forge-first')
