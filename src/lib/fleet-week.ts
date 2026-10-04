@@ -9,16 +9,22 @@
 import {
   Cluster,
   Engine,
+  HEADROOM_TOKENS,
+  PRACTICE_SEED,
   makeRefManager,
   makeRefQueue,
   makeRefScheduler,
   makeRequestStream,
   makeRng,
   routerLabel,
+  type ClusterStats,
   type RouterKind,
+  type SchedulerDriver,
+  type SchedAction,
   type SchedView,
   type TickSample,
 } from '@/lib/fleet-model'
+import { splitmix32u } from '@/lib/rng'
 import { instantiateLab } from '@/lib/wasm-lab'
 import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet/drivers'
 import type { LabKind } from '@/pages/fleet/slots'
@@ -29,6 +35,8 @@ export interface ActResult {
   headline: string
   detail: string
   metrics: [string, string][]
+  /** The graded seed this run drew (null for the fixed practice scenario); the same seed replays it exactly. */
+  seed?: number | null
 }
 
 export interface MeasurementEvidence {
@@ -41,17 +49,45 @@ export type MeasurementActId = 'engine' | 'fleet'
 
 /**
  * The only place Fleet Week seeds live. Every act's trace and fault stream is a
- * pure function of these; the sim worker receives them with each job.
+ * pure function of these; the sim worker draws them afresh for each job.
+ *
+ * Graded runs draw `seed` at grade time (src/lib/graded-seed.ts), derive the rest
+ * from it with splitmix32, and keep it only if the reference baselines land in
+ * the calibrated difficulty band. The practice scenario below has `seed: null`:
+ * it keeps the frozen makeRng streams and today's death (worker 0 at t400), so it
+ * is reproducible and never graded.
  */
 export interface FleetWeekSeeds {
+  seed: number | null
   trace: number
   faults: number
+  /** which worker dies, as a raw draw: the run takes it modulo its own worker count */
+  deathPick: number
+  /** the cluster tick of the node death */
+  deathTick: number
 }
 
-const DEFAULT_SEEDS: FleetWeekSeeds = { trace: 0x5eed, faults: 0xd15 }
+export const PRACTICE_SEEDS: FleetWeekSeeds = {
+  seed: null,
+  trace: PRACTICE_SEED,
+  faults: 0xd15,
+  deathPick: 0,
+  deathTick: 400,
+}
 
-export function fleetWeekSeeds(): FleetWeekSeeds {
-  return DEFAULT_SEEDS
+/** The request trace for these seeds: frozen makeRng when practising, splitmix32 when graded. */
+export function traceFor(seeds: FleetWeekSeeds) {
+  return makeRequestStream(REQ_COUNT, SPAN, seeds.trace, seeds.seed === null ? undefined : splitmix32u(seeds.trace))
+}
+
+/** The flash-crowd draw stream for these seeds (uint32s), same split as the trace. */
+function faultRng(seeds: FleetWeekSeeds): () => number {
+  return seeds.seed === null ? makeRng(seeds.faults) : splitmix32u(seeds.faults)
+}
+
+/** The seed as shown to the learner, so a run can be quoted and replayed. */
+export function seedLabel(seed: number | null): string {
+  return seed === null ? 'practice (fixed)' : `0x${seed.toString(16).padStart(8, '0')}`
 }
 
 /** Uploaded lab modules as raw bytes — all a worker needs to instantiate them. */
@@ -68,16 +104,20 @@ export type FaultSpec =
   | { kind: 'node-death'; worker: number; atTick: number }
   | { kind: 'flash-crowd'; fromTick: number; toTick: number; every: number }
 
-/** Act II: worker 0 dies at t400, then a hot window slams the survivors at t600–750. */
-export const ACT2_FAULTS: FaultSpec[] = [
-  { kind: 'node-death', worker: 0, atTick: 400 },
-  { kind: 'flash-crowd', fromTick: 600, toTick: 750, every: 3 },
-]
+/**
+ * Act II: a seed-drawn worker dies at a seed-drawn tick (practice: worker 0 at t400),
+ * then a hot window slams the survivors at t600–750.
+ */
+export function act2Faults(seeds: FleetWeekSeeds, workers: number): FaultSpec[] {
+  return [
+    { kind: 'node-death', worker: seeds.deathPick % workers, atTick: seeds.deathTick },
+    { kind: 'flash-crowd', fromTick: 600, toTick: 750, every: 3 },
+  ]
+}
 
 /** Interpret FaultSpecs as a Cluster.disrupt hook; `events` and `injected()` report what fired. */
-export function makeFaultInjector(faults: FaultSpec[], seed: number) {
+export function makeFaultInjector(faults: FaultSpec[], rng: () => number) {
   const events: string[] = []
-  const rng = makeRng(seed)
   let injected = 0
   const disrupt = (c: Cluster, tick: number) => {
     for (const f of faults) {
@@ -123,6 +163,100 @@ function drain(e: Engine, total: number, onProgress?: ProgressFn): number {
   return guard
 }
 
+/* ------------------------ baselines on a seed ------------------------ */
+
+/**
+ * FCFS and SJF with the reference's headroom-aware fit, so the three policies
+ * differ only in order. The reference is SJF plus an age guard.
+ */
+function admitInOrder(v: SchedView, order: SchedView['waiting']): SchedAction {
+  let used = v.running.reduce((a, r) => a + r.prompt + r.decoded + HEADROOM_TOKENS, 0)
+  let slots = v.maxRunning - v.running.length
+  const admit: number[] = []
+  for (const r of order) {
+    if (slots === 0) break
+    const cost = r.prompt + HEADROOM_TOKENS
+    if (used + cost > v.memCap) continue
+    admit.push(r.id)
+    slots -= 1
+    used += cost
+  }
+  return { admit, preempt: [] }
+}
+
+const FCFS_SCHEDULER: SchedulerDriver = {
+  name: 'fcfs',
+  schedule: (v) => admitInOrder(v, [...v.waiting].sort((a, b) => a.arrival - b.arrival || a.id - b.id)),
+}
+
+const SJF_SCHEDULER: SchedulerDriver = {
+  name: 'sjf',
+  schedule: (v) => admitInOrder(v, [...v.waiting].sort((a, b) => a.prompt - b.prompt || a.arrival - b.arrival)),
+}
+
+/** One reference-stack engine on this seed's trace, run to completion (the Act I/III machine). */
+function simulateEngine(seeds: FleetWeekSeeds, cfg = CFG, sched = makeRefScheduler()): Engine {
+  const e = new Engine(cfg, traceFor(seeds), sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
+    intake: makeRefQueue(32),
+    drainPerTick: 8,
+  })
+  drain(e, REQ_COUNT)
+  return e
+}
+
+export interface PolicyOutcome {
+  goodput: number
+  completed: number
+  shed: number
+  ttftP95: number
+  queueP95: number
+}
+
+/** FCFS, SJF and the reference on the SAME seed (Act I's machine): the seed's discrimination between policies. */
+export function policyBaselines(seeds: FleetWeekSeeds): Record<'fcfs' | 'sjf' | 'reference', PolicyOutcome> {
+  const outcome = (sched: SchedulerDriver): PolicyOutcome => {
+    const e = simulateEngine(seeds, CFG, sched)
+    const st = e.stats()
+    return { goodput: e.goodput(REQ_COUNT), completed: st.completed, shed: st.shed, ttftP95: e.ttftP95(), queueP95: e.queueP95() }
+  }
+  return { fcfs: outcome(FCFS_SCHEDULER), sjf: outcome(SJF_SCHEDULER), reference: outcome(makeRefScheduler()) }
+}
+
+/** The reference engine's goodput on this seed with this hardware (Act I's reference; Act III's option). */
+export function referenceGoodput(seeds: FleetWeekSeeds, cfg = CFG): number {
+  return simulateEngine(seeds, cfg).goodput(REQ_COUNT)
+}
+
+export interface FleetBaseline {
+  completedPct: number
+  goodput: number
+  injected: number
+  /** the node death actually fired (it needs a live target on a multi-worker fleet) */
+  deathFired: boolean
+}
+
+/** The all-reference fleet (JSQ) through this seed's node death and flash crowd: Act II's baseline. */
+export function referenceFleet(seeds: FleetWeekSeeds, workers: 2 | 4): FleetBaseline {
+  const engines = Array.from(
+    { length: workers },
+    () =>
+      new Engine(WORKER_CFG, [], makeRefScheduler(), makeRefManager(WORKER_CFG.numBlocks, WORKER_CFG.blockSize), {
+        intake: makeRefQueue(32),
+        drainPerTick: 6,
+      }),
+  )
+  const cluster = new Cluster(traceFor(seeds), engines, 'jsq')
+  const faults = makeFaultInjector(act2Faults(seeds, workers), faultRng(seeds))
+  cluster.disrupt = faults.disrupt
+  let guard = 0
+  while (!cluster.done && guard < 20000) {
+    cluster.step()
+    guard++
+  }
+  const { completedPct, goodput } = fleetOutcome(cluster.aggregate(), faults.injected())
+  return { completedPct, goodput, injected: faults.injected(), deathFired: faults.events.some((e) => e.includes('NODE DEATH')) }
+}
+
 async function buildStack(modules: ModuleBytes, numBlocks: number, blockSize: number) {
   const sched = modules.sched ? makeWasmScheduler(await instantiateLab(modules.sched)) : makeRefScheduler()
   const mgr = modules.mgr
@@ -137,13 +271,13 @@ async function buildStack(modules: ModuleBytes, numBlocks: number, blockSize: nu
 /** The Engine: your stack vs the reference on the fleet trace. */
 export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onProgress?: ProgressFn): Promise<ActResult> {
   const s = await buildStack(modules, CFG.numBlocks, CFG.blockSize)
-  const mine = new Engine(CFG, makeRequestStream(REQ_COUNT, SPAN, seeds.trace), s.sched, s.mgr, {
+  const mine = new Engine(CFG, traceFor(seeds), s.sched, s.mgr, {
     intake: s.queue,
     drainPerTick: 8,
   })
   const ref = new Engine(
     CFG,
-    makeRequestStream(REQ_COUNT, SPAN, seeds.trace),
+    traceFor(seeds),
     makeRefScheduler(),
     makeRefManager(CFG.numBlocks, CFG.blockSize),
     { intake: makeRefQueue(32), drainPerTick: 8 },
@@ -178,11 +312,26 @@ export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onPro
       ['ttft p95', `${mine.ttftP95()} iters`],
       ['tpot p95', `${mine.tpotP95().toFixed(1)} iters`],
       ['queue p95', `${mine.queueP95()} iters`],
+      ['graded seed', seedLabel(seeds.seed)],
     ],
+    seed: seeds.seed,
   }
 }
 
 /* ------------------------------ ACT 2 ------------------------------ */
+
+/** Act II's pass bar: the survivors' completed share and SLO-met share, over arrivals plus the flash crowd. */
+export const ACT2_BAR = { completedPct: 92, goodput: 40 }
+
+/** The completed and goodput shares Act II grades (one decimal), shared with the seed-band baselines. */
+export function fleetOutcome(agg: ClusterStats, injected: number) {
+  const total = REQ_COUNT + injected
+  return {
+    total,
+    completedPct: Math.round((agg.completed / total) * 1000) / 10,
+    goodput: Math.round((agg.sloMet / total) * 1000) / 10,
+  }
+}
 
 export interface Act2Choice {
   workers: 2 | 4
@@ -202,8 +351,8 @@ export async function runAct2(
     const s = await buildStack(modules, cfg.numBlocks, cfg.blockSize)
     workers.push(new Engine(cfg, [], s.sched, s.mgr, { intake: s.queue, drainPerTick: 6 }))
   }
-  const cluster = new Cluster(makeRequestStream(REQ_COUNT, SPAN, seeds.trace), workers, choice.router)
-  const faults = makeFaultInjector(ACT2_FAULTS, seeds.faults)
+  const cluster = new Cluster(traceFor(seeds), workers, choice.router)
+  const faults = makeFaultInjector(act2Faults(seeds, choice.workers), faultRng(seeds))
   cluster.disrupt = faults.disrupt
   let guard = 0
   while (!cluster.done && guard < 20000) {
@@ -215,10 +364,8 @@ export async function runAct2(
     }
   }
   const agg = cluster.aggregate()
-  const total = REQ_COUNT + faults.injected()
-  const completedPct = Math.round((agg.completed / total) * 1000) / 10
-  const goodput = Math.round((agg.sloMet / total) * 1000) / 10
-  const pass = completedPct >= 92 && goodput >= 40
+  const { total, completedPct, goodput } = fleetOutcome(agg, faults.injected())
+  const pass = completedPct >= ACT2_BAR.completedPct && goodput >= ACT2_BAR.goodput
   return {
     pass,
     score: Math.min(1, (completedPct / 100) * 0.5 + Math.min(1, goodput / 60) * 0.5),
@@ -235,8 +382,10 @@ export async function runAct2(
       ['ttft p95', `${agg.ttftP95} iters`],
       ['tpot p95', `${agg.tpotP95.toFixed(1)} iters`],
       ['queue p95', `${agg.queueP95} iters`],
+      ['graded seed', seedLabel(seeds.seed)],
       ...faults.events.map((e) => ['event', e] as [string, string]),
     ],
+    seed: seeds.seed,
   }
 }
 
@@ -353,6 +502,7 @@ export const HW_MENU: HwOption[] = [
 ]
 
 export interface Act3Eval {
+  seed: number | null
   perOption: {
     id: string
     goodput: number
@@ -370,7 +520,7 @@ export function evalAct3(seeds: FleetWeekSeeds, onProgress?: ProgressFn): Act3Ev
   for (const [i, opt] of HW_MENU.entries()) {
     const e = new Engine(
       opt.cfg,
-      makeRequestStream(REQ_COUNT, SPAN, seeds.trace),
+      traceFor(seeds),
       makeRefScheduler(),
       makeRefManager(opt.cfg.numBlocks, opt.cfg.blockSize),
       { intake: makeRefQueue(32), drainPerTick: 8 },
@@ -394,7 +544,7 @@ export function evalAct3(seeds: FleetWeekSeeds, onProgress?: ProgressFn): Act3Ev
   }
   const viable = perOption.filter((o) => o.meetsSlo)
   const best = (viable.length ? viable : perOption).reduce((a, b) => (a.costPerMtok <= b.costPerMtok ? a : b))
-  return { perOption, bestValue: best.id }
+  return { seed: seeds.seed, perOption, bestValue: best.id }
 }
 
 /** Rubric for the design doc: claims must survive arithmetic and vocabulary. */
@@ -433,13 +583,16 @@ export function gradeAct3Doc(choiceId: string, claimCost: number, doc: string, e
       ['goodput', `${chosen.goodput}%`],
       ['best value', evaluation.bestValue],
       ['doc', `${words} words · vocab ${hits.size}/3`],
+      ['graded seed', seedLabel(evaluation.seed)],
     ],
+    seed: evaluation.seed,
   }
 }
 
 /* ------------------------------ ACT 4 ------------------------------ */
 
 export interface Incident {
+  seed: number | null
   id: string
   title: string
   briefing: string
@@ -449,7 +602,7 @@ export interface Incident {
 }
 
 function runIncidentEngine(seeds: FleetWeekSeeds, cfg = CFG, sched = makeRefScheduler()): TickSample[] {
-  const e = new Engine(cfg, makeRequestStream(REQ_COUNT, SPAN, seeds.trace), sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
+  const e = new Engine(cfg, traceFor(seeds), sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
     intake: makeRefQueue(32),
     drainPerTick: 8,
   })
@@ -465,7 +618,7 @@ function runIncidentEngine(seeds: FleetWeekSeeds, cfg = CFG, sched = makeRefSche
   return series
 }
 
-export const INCIDENTS: Omit<Incident, 'telemetry'>[] = [
+export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
   {
     id: 'kv-thrash',
     title: 'incident 01 — the p99 that climbed all shift',
@@ -549,7 +702,7 @@ export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null
     telemetry = runIncidentEngine(seeds, { ...CFG, numBlocks: 96 }, naiveSjf)
   } else if (id === 'intake-stall') {
     // drain misconfigured: intake empties at a crawl
-    const e = new Engine(CFG, makeRequestStream(REQ_COUNT, SPAN, seeds.trace), makeRefScheduler(), makeRefManager(CFG.numBlocks, CFG.blockSize), {
+    const e = new Engine(CFG, traceFor(seeds), makeRefScheduler(), makeRefManager(CFG.numBlocks, CFG.blockSize), {
       intake: makeRefQueue(32),
       drainPerTick: 1,
     })
@@ -571,5 +724,5 @@ export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null
     }
     telemetry = runIncidentEngine(seeds, CFG, greedy)
   }
-  return { ...def, telemetry }
+  return { ...def, seed: seeds.seed, telemetry }
 }

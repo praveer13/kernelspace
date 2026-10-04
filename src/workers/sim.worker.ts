@@ -5,15 +5,18 @@
  */
 
 import { evalAct3, loadIncident, runAct1, runAct2 } from '@/lib/fleet-week'
+import { drawGradedSeeds } from '@/lib/graded-seed'
 import type { SimJob, SimRequest, SimResponse, SimResults } from '@/workers/sim-protocol'
 
 const ctx = self as unknown as { postMessage(message: SimResponse): void }
 
 async function run(
   job: SimJob,
-  seeds: SimRequest['seeds'],
+  entropy: number,
   onProgress: (fraction: number) => void,
 ): Promise<SimResults[SimJob['kind']]> {
+  // every job is graded: it gets its own in-band seed, drawn here (rejection sampling simulates baselines)
+  const { seeds } = drawGradedSeeds(entropy)
   switch (job.kind) {
     case 'act1':
       return runAct1(job.modules, seeds, onProgress)
@@ -27,8 +30,8 @@ async function run(
 }
 
 self.addEventListener('message', (event: MessageEvent<SimRequest>) => {
-  const { id, job, seeds } = event.data
-  run(job, seeds, (fraction) => ctx.postMessage({ id, type: 'progress', fraction }))
+  const { id, job, entropy } = event.data
+  run(job, entropy, (fraction) => ctx.postMessage({ id, type: 'progress', fraction }))
     .then((result) => ctx.postMessage({ id, type: 'result', result }))
     .catch((e: unknown) => ctx.postMessage({ id, type: 'error', message: e instanceof Error ? e.message : String(e) }))
 })

@@ -1,9 +1,11 @@
 /**
  * sim-client — the page's handle on sim.worker: one lazily-started worker,
- * jobs multiplexed by id. Seeds are attached here, once, from fleetWeekSeeds().
+ * jobs multiplexed by id. Every job carries fresh entropy; the worker draws the
+ * graded seed from it at grade time.
  */
 
-import { fleetWeekSeeds, type ModuleBytes } from '@/lib/fleet-week'
+import type { ModuleBytes } from '@/lib/fleet-week'
+import { freshSeed } from '@/lib/rng'
 import type { SlotState } from '@/pages/fleet/slots'
 import type { SimJob, SimRequest, SimResponse, SimResults } from '@/workers/sim-protocol'
 
@@ -50,7 +52,7 @@ export function runSim<K extends SimJob['kind']>(
   onProgress?: (fraction: number) => void,
 ): Promise<SimResults[K]> {
   const id = nextId++
-  const request: SimRequest = { id, job, seeds: fleetWeekSeeds() }
+  const request: SimRequest = { id, job, entropy: freshSeed() }
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve: resolve as Pending['resolve'], reject, onProgress })
     getWorker().postMessage(request)

@@ -1,14 +1,13 @@
 /**
  * sim-protocol — the structured-clone messages between the Fleet Week page and
- * sim.worker. Specs go in (module bytes, topology choice, seeds), results and
- * progress come out; nothing here holds a function.
+ * sim.worker. Specs go in (module bytes, topology choice, fresh entropy for the
+ * graded seed), results and progress come out; nothing here holds a function.
  */
 
 import type {
   Act2Choice,
   Act3Eval,
   ActResult,
-  FleetWeekSeeds,
   Incident,
   ModuleBytes,
 } from '@/lib/fleet-week'
@@ -29,7 +28,8 @@ export interface SimResults {
 export interface SimRequest {
   id: number
   job: SimJob
-  seeds: FleetWeekSeeds
+  /** fresh entropy: the worker draws the in-band graded seed from it at grade time */
+  entropy: number
 }
 
 export type SimResponse =

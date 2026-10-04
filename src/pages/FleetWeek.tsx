@@ -9,6 +9,7 @@ import {
   gradeAct3Doc,
   HW_MENU,
   INCIDENTS,
+  seedLabel,
   type Act2Choice,
   type ActResult,
   type Act3Eval,
@@ -130,7 +131,7 @@ function ActEngine() {
   return (
     <div>
       <p className="text-body-sm text-text-2">
-        240 requests, flash crowds included. Your uploaded stack ({anyStudent ? 'yours' : 'all-reference for now'}) against the reference engine, full speed. Pass: goodput within 3 points of the reference.
+        240 requests, flash crowds included. Your uploaded stack ({anyStudent ? 'yours' : 'all-reference for now'}) against the reference engine, full speed. Pass: goodput within 3 points of the reference. Every run draws a fresh graded seed (shown in the result) and the reference re-runs on the same one.
       </p>
       <RunButton
         running={running}
@@ -167,7 +168,7 @@ function ActFleet() {
   return (
     <div>
       <p className="text-body-sm text-text-2">
-        At t=400 a node dies with its in-flight requests; at t=600 a flash crowd slams the survivors.
+        A seeded node dies with its in-flight requests somewhere in t=300–500 (which worker and when come from the run's graded seed); at t=600 a flash crowd slams the survivors.
         Pick the redundancy and the routing. Pass: ≥92% completed and ≥40% goodput under disruption.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3 font-mono text-[12px]">
@@ -321,7 +322,7 @@ function ActBusiness() {
   return (
     <div>
       <p className="text-body-sm text-text-2">
-        The trace is the Fleet's. Three hardware offers are on the table. First execute all three, then pick
+        The trace is the Fleet's, drawn fresh for each execution{evaluation ? ` (graded seed ${seedLabel(evaluation.seed)})` : ''}. Three hardware offers are on the table. First execute all three, then pick
         one, state your expected $/Mtok, and defend it in ≥60 words. We recompute your claim — ±25% tolerance,
         and the option must meet the SLO.
       </p>
@@ -452,6 +453,7 @@ function ActIncident() {
       {running && <p className="mt-3 font-mono text-[12px] text-text-3"><Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />loading telemetry…</p>}
       {incident && (
         <div className="mt-4 space-y-4">
+          <p className="font-mono text-[11px] text-text-3">graded seed {seedLabel(incident.seed)}</p>
           <p className="max-w-3xl text-body-sm text-text-2">{incident.briefing}</p>
           <TelemetryGrid series={incident.telemetry} />
           <div className="grid gap-4 sm:grid-cols-2">

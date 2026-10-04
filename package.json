@@ -13,6 +13,7 @@
     "verify:field-notes": "bun scripts/verify-field-notes.ts",
     "verify:items": "bun scripts/verify-items.ts",
     "verify:capstone": "bun scripts/verify-capstone.ts",
+    "verify:seeds": "bun scripts/verify-seeds.ts",
     "leaderboard:build": "bun scripts/build-leaderboard.ts"
   },
   "dependencies": {

@@ -4,8 +4,8 @@
  * seed yields the same sequence in every browser.
  */
 
-/** splitmix32: a small, fast, well-distributed 32-bit PRNG returning [0, 1). */
-export function splitmix32(seed: number): () => number {
+/** splitmix32 as raw uint32s: the graded-seed paths take their draws from this. */
+export function splitmix32u(seed: number): () => number {
   let a = seed | 0
   return () => {
     a = (a + 0x9e3779b9) | 0
@@ -14,8 +14,14 @@ export function splitmix32(seed: number): () => number {
     t = t ^ (t >>> 15)
     t = Math.imul(t, 0x735a2d97)
     t = t ^ (t >>> 15)
-    return (t >>> 0) / 4294967296
+    return t >>> 0
   }
+}
+
+/** splitmix32: a small, fast, well-distributed 32-bit PRNG returning [0, 1). */
+export function splitmix32(seed: number): () => number {
+  const next = splitmix32u(seed)
+  return () => next() / 4294967296
 }
 
 /**
