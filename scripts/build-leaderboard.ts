@@ -1,6 +1,7 @@
 /** Re-verify every opt-in submission and publish the static leaderboard JSON. */
 import { readdir } from 'node:fs/promises'
 import path from 'node:path'
+import { disposeLabWorker } from '../src/lib/lab-worker'
 import {
   LEADERBOARD_BENCHMARK_VERSION,
   LEADERBOARD_SCHEMA_VERSION,
@@ -42,23 +43,31 @@ if (JSON.stringify(stems) !== JSON.stringify(wasmStems)) {
 }
 const unique = new Set<string>()
 const entries: LeaderboardEntry[] = []
-for (const stem of stems) {
-  const result = await validateSubmission(stem, traces)
-  if (unique.has(result.manifest.handle)) throw new Error(`duplicate handle: ${result.manifest.handle}`)
-  unique.add(result.manifest.handle)
-  const scores = {
-    labGoodput: result.verified.labGoodput,
-    fleetGoodput: result.verified.fleetGoodput,
+try {
+  for (const stem of stems) {
+    const result = await validateSubmission(stem, traces)
+    if (unique.has(result.manifest.handle)) throw new Error(`duplicate handle: ${result.manifest.handle}`)
+    unique.add(result.manifest.handle)
+    const scores = {
+      labGoodput: result.verified.labGoodput,
+      fleetGoodput: result.verified.fleetGoodput,
+    }
+    entries.push({
+      rank: 0,
+      handle: result.manifest.handle,
+      ...(result.manifest.displayName ? { displayName: result.manifest.displayName } : {}),
+      sourceCommit: result.manifest.sourceCommit,
+      wasmSha256: result.verified.wasmSha256,
+      ...scores,
+      overallGoodput: overallGoodput(scores),
+    })
   }
-  entries.push({
-    rank: 0,
-    handle: result.manifest.handle,
-    ...(result.manifest.displayName ? { displayName: result.manifest.displayName } : {}),
-    sourceCommit: result.manifest.sourceCommit,
-    wasmSha256: result.verified.wasmSha256,
-    ...scores,
-    overallGoodput: overallGoodput(scores),
-  })
+} catch (cause) {
+  /* bun cannot terminate a worker spinning inside wasm; a timed-out run would keep the process alive */
+  console.error(cause)
+  process.exit(1)
+} finally {
+  disposeLabWorker()
 }
 entries.sort(
   (a, b) =>
