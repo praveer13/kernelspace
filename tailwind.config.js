@@ -14,7 +14,7 @@ module.exports = {
         'line-bright': '#2C3A4F',
         'text-1': '#E8EEF6',
         'text-2': '#A3B0C2',
-        'text-3': '#7A889C',
+        'text-3': '#7B899D',
         accent: {
           DEFAULT: '#3EF2A4',
           dim: '#173B2E',
