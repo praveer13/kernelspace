@@ -3,7 +3,8 @@ import { ALL_LESSONS } from '../src/data/lessons'
 
 const dir = new URL('../src/data/errata/', import.meta.url)
 const lessonIds = new Set(ALL_LESSONS.map((lesson) => lesson.id))
-const files = (await readdir(dir)).filter((name) => name.endsWith('.ts') && name !== 'schema.ts').sort()
+// Date-prefixed modules only, as index.ts globs them: schema.ts and index.ts are not errata.
+const files = (await readdir(dir)).filter((name) => name.endsWith('.ts') && /^\d/.test(name)).sort()
 
 const MAX_FIELD = 240
 const MAX_WHY_WORDS = 40

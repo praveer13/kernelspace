@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { XP, localDateKey } from './economy'
 import { TOTAL_TRACK_LESSONS } from './tracks'
 
 /**
@@ -94,46 +95,11 @@ export interface ProgressState {
   resetProgress: () => void
 }
 
-export const XP = {
-  lesson: 100,
-  quiz: 40,
-  exercise: 60,
-  capstoneStep: 150,
-  lab: 200,
-  fleetWeekAct: 250,
-} as const
+// The economy lives in economy.ts so the pure ledger core can use it without zustand.
+export { XP, RANKS, rankForXp, nextRank, localDateKey } from './economy'
+export type { Rank } from './economy'
 
 export const TOTAL_LESSONS = TOTAL_TRACK_LESSONS
-
-export interface Rank {
-  name: string
-  minXp: number
-}
-
-/** XP → Rank: progress rendered as privilege escalation (design.md §10). */
-export const RANKS: Rank[] = [
-  { name: 'ROOT', minXp: 5000 },
-  { name: 'RING 0', minXp: 3000 },
-  { name: 'RING 1', minXp: 1500 },
-  { name: 'RING 2', minXp: 500 },
-  { name: 'RING 3', minXp: 0 },
-]
-
-export function rankForXp(xp: number): Rank {
-  return RANKS.find((r) => xp >= r.minXp) ?? RANKS[RANKS.length - 1]
-}
-
-export function nextRank(xp: number): Rank | null {
-  const sorted = [...RANKS].sort((a, b) => a.minXp - b.minXp)
-  return sorted.find((r) => r.minXp > xp) ?? null
-}
-
-/** YYYY-MM-DD from the learner's LOCAL calendar fields (not UTC), so a day rolls over at their midnight. */
-export function localDateKey(d: Date = new Date()): string {
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${dd}`
-}
 
 const initialData = {
   version: 2 as const,

@@ -19,7 +19,7 @@ export type IsoInstant = string
 /** The learner's local calendar day `YYYY-MM-DD`, computed from `at` and `tz` and frozen at write time. */
 export type LocalDay = string
 export type EventId = string
-/** Random id per browser profile (meta `device`); `'legacy'` on events projected from kernelspace:v1. */
+/** Random id per browser profile (meta `device`); unique to one device's events. */
 export type DeviceId = string
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
@@ -39,7 +39,7 @@ export type CardItemRef = `card:${string}#${number}`
 export type BootRef = 'boot' | `boot:${string}`
 /** `sim:<simId>` for visits, `sim:<simId>/<taskId>` for tasks. */
 export type SimRef = `sim:${string}`
-/** `lab:<labId>` for a run, `lab:<labId>/<checkId>` for one legacy check. */
+/** `lab:<labId>`: one lab run. */
 export type LabRef = `lab:${string}`
 /** `fw:<actId>` (Fleet Week act). */
 export type FleetActRef = `fw:${string}`
@@ -49,11 +49,6 @@ export type CapstoneRef = `cap:${string}`
 export type AchievementRef = `ach:${string}`
 /** `erratum:<erratumId>` (a change card was acknowledged) or `screen:<screenId>` (a one-time screen was seen). */
 export type AckRef = `erratum:${string}` | `screen:${string}`
-/** Legacy only: `day:YYYY-MM-DD` (one kernelspace:v1 streak day). */
-export type DayRef = `day:${string}`
-/** Legacy only: `scalar:xp`, `scalar:capstone-step`, `scalar:sim-visits:<simId>`. */
-export type ScalarRef = `scalar:${string}`
-
 export type ItemRef = QuizItemRef | CardItemRef | BootRef
 
 export type Ref =
@@ -67,8 +62,6 @@ export type Ref =
   | CapstoneRef
   | AchievementRef
   | AckRef
-  | DayRef
-  | ScalarRef
 
 /* ------------------------------------------------------------------ */
 /* Provenance (V6) and confidence (V2)                                 */
@@ -76,9 +69,9 @@ export type Ref =
 
 /**
  * `proved` and `unseen` credit KCs at w=1.0; `lab-green`, `practice` and `assisted` at w<=0.3;
- * `field` marks field labs; `legacy` (projected from kernelspace:v1 or a v1/v2 export) is uncredited.
+ * `field` marks field labs. Ledger v3 starts fresh (Addendum A1), so there is no `legacy` provenance.
  */
-export type Provenance = 'proved' | 'unseen' | 'lab-green' | 'practice' | 'assisted' | 'field' | 'legacy'
+export type Provenance = 'proved' | 'unseen' | 'lab-green' | 'practice' | 'assisted' | 'field'
 
 /** Guess / think-so / sure, on keys 1-3. Stored categorically; mapped to a probability at read time. */
 export type Confidence = 'guess' | 'think' | 'sure'
@@ -89,7 +82,6 @@ export type Confidence = 'guess' | 'think' | 'sure'
 
 /**
  * Fields every event carries (V3: `{id, v, at, tz, day, kind, ref, rev, ...}`).
- * `at`, `tz` and `day` are null only on legacy events whose time kernelspace:v1 never stored.
  */
 interface Envelope<K extends string, R extends Ref> {
   id: EventId
@@ -97,10 +89,11 @@ interface Envelope<K extends string, R extends Ref> {
   v: 1
   kind: K
   ref: R
-  at: IsoInstant | null
+  at: IsoInstant
   /** Minutes east of UTC at `at` (`-new Date(at).getTimezoneOffset()`). */
-  tz: number | null
-  day: LocalDay | null
+  tz: number
+  /** `dayOf(at, tz)`, frozen at write time so travel never rewrites history. */
+  day: LocalDay
   dev: DeviceId
   /** Content fingerprint graded against (spec §4.5). Required on item-like events, optional elsewhere. */
   rev?: string
@@ -121,14 +114,9 @@ interface Graded {
   wasmSha256?: string
 }
 
-/** Trace kinds earn nothing; the only provenance they can carry is `legacy`. */
-interface Trace {
-  provenance?: 'legacy'
-}
-
 export interface ItemData {
   /** Surface that served the item. */
-  src: 'quiz' | 'boot' | 'card' | 'cold' | 'recertify'
+  src: 'quiz' | 'boot' | 'card' | 'cold'
   /** Chosen option(s) by AUTHORED index (MCQ). */
   pick?: number[]
   /** Numeric answer (numeric items). */
@@ -137,23 +125,23 @@ export interface ItemData {
   grp?: string
   /** Owning lesson, so grouping never parses refs. */
   lessonId?: string
-  /** Probes only: whole days since the learner last met this lesson; absent when unknown (pre-v3). */
+  /** Probes only: whole days since the learner last met this lesson; absent when unknown. */
   sinceDays?: number
 }
 
-/** One response to one item (quiz question, Boot step, change-card item, Recertify sweep). */
+/** One response to one item (quiz question, Boot step, change-card item). */
 export interface ItemEvent extends Envelope<'item', ItemRef>, Graded {
   rev: string
   data: ItemData
 }
 
-/** A cold check (baseline in Wave 0b, Today's cold checks later): same shape, never reviewed first. */
+/** A cold check (arrives with K2/K5 in Wave 1): same shape as an item, never reviewed first. */
 export interface ProbeEvent extends Envelope<'probe', ItemRef>, Graded {
   rev: string
   data: ItemData
 }
 
-/** One checkpoint submission (or a legacy best score): `score` = fraction correct, `ok` = score >= 0.8. */
+/** One checkpoint submission: `score` = fraction correct, `ok` = score >= 0.8. */
 export interface QuizEvent extends Envelope<'quiz', LessonRef>, Graded {
   data?: { grp?: string; n?: number }
 }
@@ -169,7 +157,6 @@ export interface SimTaskEvent extends Envelope<'sim-task', SimRef>, Graded {}
 /**
  * One lab run (`lab:<labId>`): `passed` = required check ids that passed in this run, `total` = required
  * checks, `ok` = the lab is done after this run (cumulative, as recordLabResult computes it today).
- * Legacy per-check events use `lab:<labId>/<checkId>` with `passed: [checkId]`.
  */
 export interface LabCheckEvent extends Envelope<'lab-check', LabRef>, Graded {
   data: { passed: string[]; total?: number }
@@ -186,30 +173,19 @@ export interface ReservedGradedEvent extends Envelope<'play' | 'incident' | 'fle
   data?: JsonObject
 }
 
-export interface VisitEvent extends Envelope<'visit', LessonRef | SimRef | BootRef>, Trace {}
+export type VisitEvent = Envelope<'visit', LessonRef | SimRef | BootRef>
 
 /** A lesson marked complete (the click), or a non-lesson flow finished (`boot`). Never credit. */
-export interface CompleteEvent extends Envelope<'complete', LessonRef | BootRef>, Trace {
+export interface CompleteEvent extends Envelope<'complete', LessonRef | BootRef> {
   data?: JsonObject
 }
 
-export interface ExerciseEvent extends Envelope<'exercise', LessonRef>, Trace {}
+export type ExerciseEvent = Envelope<'exercise', LessonRef>
 
-export interface AchievementEvent extends Envelope<'achievement', AchievementRef>, Trace {}
+export type AchievementEvent = Envelope<'achievement', AchievementRef>
 
-export interface AckEvent extends Envelope<'ack', AckRef>, Trace {
+export interface AckEvent extends Envelope<'ack', AckRef> {
   data?: { via?: string }
-}
-
-/** Legacy only: one kernelspace:v1 streak day. `day` is the day; `at` is null. */
-export interface LegacyDayEvent extends Envelope<'day', DayRef> {
-  provenance: 'legacy'
-}
-
-/** Legacy only: a max-merged number from kernelspace:v1 (xp, capstone.step, a sim's visit count). */
-export interface LegacyScalarEvent extends Envelope<'scalar', ScalarRef> {
-  provenance: 'legacy'
-  data: { value: number }
 }
 
 export type LedgerEvent =
@@ -227,8 +203,6 @@ export type LedgerEvent =
   | ExerciseEvent
   | AchievementEvent
   | AckEvent
-  | LegacyDayEvent
-  | LegacyScalarEvent
 
 export type EventKind = LedgerEvent['kind']
 export type GradedEvent = Extract<LedgerEvent, { score: number }>
@@ -270,7 +244,7 @@ export interface WorkingRecord {
 }
 
 /* ------------------------------------------------------------------ */
-/* Legacy input and OD1 policy (spec §9, §11)                          */
+/* Consumer view (spec §6.2)                                           */
 /* ------------------------------------------------------------------ */
 
 /** Consumer-facing progress data: the non-action fields of today's ProgressState, unchanged. */
@@ -288,31 +262,6 @@ export type ProgressData = Pick<
   | 'settings'
 >
 
-/** kernelspace:v1 after the existing persist migrations (state version 2, persist version 3). */
-export type LegacyStateV2 = ProgressData
-
-/** Where legacy input came from; both normalise to LegacyStateV2. */
-export type LegacySource =
-  | { from: 'persist'; persistVersion: number }
-  | { from: 'export'; exportVersion: 1 | 2 }
-
-/** OD1: (a) `freeze` = pre-v3 badge + Recertify; (b) `recompute`; (c) `live`. A read-time switch only. */
-export type LegacyPolicy = 'freeze' | 'recompute' | 'live'
-
-/** The frozen pre-v3 record shown under OD1 (a). */
-export interface LegacyBadge {
-  xp: number
-  rank: string
-  /** Latched kernelspace:v1 achievement ids, sorted. */
-  achievements: string[]
-  lessonsDone: number
-  quizPasses: number
-  simTasks: number
-  labsDone: number
-  actsDone: number
-  capstoneSteps: number
-}
-
 /* ------------------------------------------------------------------ */
 /* Aggregate: the order-insensitive fold of the ledger (spec §6)       */
 /* ------------------------------------------------------------------ */
@@ -328,26 +277,20 @@ export type FactKey =
   | `cap:${string}`
 
 export interface LessonAgg {
-  /** Any `complete` event, legacy or v3. */
+  /** A `complete` event exists. */
   done?: true
-  /** A non-legacy `complete` event exists. */
-  doneV3?: true
-  /** A legacy completion exists whose time kernelspace:v1 never stored. */
-  doneAtUnknown?: true
-  /** Earliest known completion. */
+  /** Earliest completion. Always set when `done` is. */
   completedAt?: IsoInstant
   /** Latest known instant of any event on this lesson or its checkpoint items. */
   lastAt?: IsoInstant
-  /** Best quiz score, legacy or v3. */
+  /** Best quiz score. */
   quizBest?: number
   exercise?: true
 }
 
 export interface SimAgg {
-  /** Count of v3 `visit` events. */
-  visitsV3: number
-  /** Max of legacy `scalar:sim-visits:<simId>`. */
-  visitsLegacy: number
+  /** Count of distinct `visit` events. */
+  visits: number
   tasks: Record<string, true>
 }
 
@@ -355,7 +298,7 @@ export interface LabAgg {
   checks: Record<string, true>
   done?: true
   completedAt?: IsoInstant
-  /** Largest `total` seen on a v3 run. */
+  /** Largest `total` seen on a run. */
   total?: number
 }
 
@@ -369,18 +312,16 @@ export interface Aggregate {
   labs: Record<string, LabAgg>
   fleetWeek: { acts: Record<string, true>; scores: Record<string, number> }
   capstone: { steps: Record<string, true>; step: number }
-  facts: { v3: Partial<Record<FactKey, true>>; legacy: Partial<Record<FactKey, true>> }
-  /** Max over legacy `scalar:xp` (legacyXp is the maximum across devices, §7.1). */
-  legacyXp: number
-  /** Graded local days: legacy `day` events plus the `day` of every non-legacy streak event. */
+  /** Each fact pays its XP unit once, however many events or devices assert it. */
+  facts: Partial<Record<FactKey, true>>
+  /** Graded local days (the `day` of every streak event). */
   days: Record<LocalDay, true>
-  achievements: { v3: Record<string, IsoInstant>; legacy: Record<string, true> }
+  /** Earliest `achievement` per id. */
+  achievements: Record<string, IsoInstant>
   /** Earliest `ack` per ref. */
   acks: Record<string, IsoInstant>
-  /** Earliest `complete` per non-lesson ref (e.g. `boot`); null when only a legacy time-less one exists. */
-  completions: Record<string, IsoInstant | null>
-  /** Any event with provenance `legacy`. */
-  hasLegacy: boolean
+  /** Earliest `complete` per non-lesson ref (e.g. `boot`). */
+  completions: Record<string, IsoInstant>
 }
 
 /** The derived snapshot under localStorage `kernelspace:v2`. Rebuildable from IndexedDB at any time. */
@@ -418,18 +359,6 @@ export interface ComponentRecord extends ComponentMeta {
 export interface MetaRecords {
   schema: { version: number; at: IsoInstant; build?: string }
   device: { id: DeviceId; createdAt: IsoInstant }
-  migration: {
-    from: 'kernelspace:v1'
-    persistVersion: number | null
-    at: IsoInstant
-    /** SHA-256 of the raw kernelspace:v1 string that was migrated. */
-    sourceHash: string
-    eventCount: number
-  }
-  /** Last kernelspace:v1 value projected, for idempotent re-projection and working-state diffs. */
-  legacy: { lastHash: string; lastRaw: string; at: IsoInstant }
-  /** Copy of kernelspace:v1 taken before the first migration (pre-migration backup, §7.1.5). */
-  legacyRaw: { raw: string; at: IsoInstant }
   backup: { at: IsoInstant; via: 'auto' | 'manual'; bytes: number; claimedBy: string }
   lastExport: { at: IsoInstant; events: number }
   persist: { checkedAt: IsoInstant; persisted: boolean; requestedAt?: IsoInstant }
@@ -483,9 +412,9 @@ export interface StoreTx {
   putComponents?: ComponentRecord[]
   putMeta?: Partial<MetaRecords>
   putCheckpoint?: Checkpoint
-  /** Write each meta key only when absent (claims, first-migration records). */
+  /** Write each meta key only when absent (claims such as the backup nudge). */
   putMetaIfAbsent?: Partial<MetaRecords>
-  /** Write each working record only when its key is absent (first migration). */
+  /** Write each working record only when its key is absent (first claim). */
   putWorkingIfAbsent?: WorkingRecord[]
 }
 
@@ -543,19 +472,22 @@ export interface ExportV3 {
     capstoneFlags?: { hints?: boolean; optimizer?: boolean }
     leaderboardPersonal?: Json
   }
-  /** The kernelspace:v1 string this device migrated, if any (provenance; re-projects to the same ids). */
-  legacy?: { raw: string; sourceHash: string }
 }
 
 export type ImportMode = 'merge' | 'replace'
 
-export type ImportFormat =
-  | { kind: 'export-v1' }
-  | { kind: 'export-v2' }
-  | { kind: 'export-v3'; schemaVersion: number }
-  | { kind: 'persist-envelope'; persistVersion: number }
+/** Import accepts export v3 only (Addendum A1). */
+export type ImportFormat = { kind: 'export-v3'; schemaVersion: number }
 
-export type ImportErrorCode = 'parse' | 'unknown-format' | 'newer-schema' | 'too-large' | 'invalid' | 'read-only'
+/** `older-export`: a v1/v2 export or a copied localStorage value ("this export is from an earlier version of kernelspace and can't be imported"). */
+export type ImportErrorCode =
+  | 'parse'
+  | 'unknown-format'
+  | 'older-export'
+  | 'newer-schema'
+  | 'too-large'
+  | 'invalid'
+  | 'read-only'
 
 export interface ProgressSummary {
   lessonsDone: number
@@ -600,7 +532,6 @@ export interface LedgerStatus {
   reason?: ReadOnlyReason
   /** `snapshot-only` until the engine loads; `memory` = IndexedDB unavailable, outbox-backed (spec §9.8). */
   backend: 'idb' | 'memory' | 'snapshot-only'
-  hasLegacy: boolean
   persisted?: boolean
   lastExportAt?: IsoInstant
   undo?: { reason: Checkpoint['reason']; at: IsoInstant }
@@ -611,8 +542,6 @@ export interface LedgerStatus {
 /** Additive state on useProgress. Existing fields and actions keep their exact shapes. */
 export interface LedgerFacadeState {
   ledger: LedgerStatus
-  /** The pre-v3 badge under policy `freeze`; null when there is no legacy or the policy is not `freeze`. */
-  legacy: LegacyBadge | null
   acks: Record<string, IsoInstant>
   completions: Record<string, IsoInstant | null>
   working: Partial<Record<WorkingKey, Json>>
@@ -672,7 +601,6 @@ export interface EventFilter {
   kinds?: EventKind[]
   refPrefix?: string
   since?: IsoInstant
-  includeLegacy?: boolean
 }
 
 /** Async API of the lazily loaded engine (src/lib/ledger/client.ts re-exports it). */
@@ -684,7 +612,6 @@ export interface LedgerClient {
   reset(): Promise<void>
   events(filter?: EventFilter): Promise<LedgerEvent[]>
   storageEstimate(): Promise<{ events: number; approxBytes: number; usage?: number; quota?: number }>
-  downloadLegacyBackup(): Promise<boolean>
 }
 
 /** The engine as the façade sees it (src/lib/ledger/engine.ts). */
@@ -706,7 +633,6 @@ export interface FacadeEnv {
   clock: LedgerClock
   newId: IdFactory
   tabId: string
-  policy: LegacyPolicy
   loadEngine: () => Promise<LedgerEngine>
 }
 
@@ -717,7 +643,7 @@ export type ChannelMessage =
       t: 'reload'
       from: string
       schemaVersion: number
-      reason: 'import' | 'undo' | 'reset' | 'migration' | 'legacy-reproject'
+      reason: 'import' | 'undo' | 'reset'
     }
   | { t: 'hello'; from: string; schemaVersion: number }
 
@@ -738,8 +664,8 @@ export interface ChangeCard {
   erratum: Erratum
   /** Lessons the erratum touches that the learner completed on or before its date. */
   lessonIds: string[]
-  /** Earliest such completion; null = a pre-v3 completion at an unknown time. */
-  learnedAt: IsoInstant | null
+  /** Earliest such completion. */
+  learnedAt: IsoInstant
   acked: boolean
 }
 
@@ -771,23 +697,6 @@ export interface CalibrationReport {
   bias: number | null
   /** Count of sure-and-wrong responses (they come first in feedback). */
   sureWrong: number
-}
-
-/** Baseline cold check: one planned item. */
-export interface ColdCheckItem {
-  lessonId: string
-  /** Authored question index in that lesson's checkpoint. */
-  qi: number
-  /** Whole days since last exposure; null when only a pre-v3 completion at an unknown time exists. */
-  sinceDays: number | null
-  /** Option-shuffle seed for this item. */
-  seed: number
-}
-
-export interface ColdCheckPlan {
-  seed: number
-  items: ColdCheckItem[]
-  eligibleLessons: number
 }
 
 /** K4 activation metrics, computed from Boot's events. */
