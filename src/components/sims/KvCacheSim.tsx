@@ -11,6 +11,7 @@ import BlockTableExplorer from '@/components/sims/BlockTableExplorer'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
 import { BLOCK_TABLE_EXPLORER_TASKS as BLOCK_TABLE_TASKS } from '@/components/sims/blockTableExplorer.tasks'
 import { Slider } from '@/components/ui/slider'
+import { atlasRow } from '@/data/atlas'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 
@@ -180,8 +181,15 @@ const DTYPE: { id: Dtype; label: string; bytes: number }[] = [
   { id: 'int4', label: 'INT4', bytes: 0.5 },
 ]
 
+// H100 and B200 come from the hardware atlas (sourced claims); the older cards are not yet sourced.
+function atlasGpu(id: string) {
+  const row = atlasRow(id)
+  return { id: row.id, name: row.name, gb: row.hbmGb ?? 0, bandwidthGbps: row.hbmBwGBs ?? 0 }
+}
+
 const GPUS = [
-  { id: 'h100', name: 'H100', gb: 80, bandwidthGbps: 3350 },
+  atlasGpu('h100'),
+  atlasGpu('b200'),
   { id: 'a100-80', name: 'A100 80GB', gb: 80, bandwidthGbps: 2039 },
   { id: 'a100-40', name: 'A100 40GB', gb: 40, bandwidthGbps: 1555 },
   { id: 'rtx4090', name: 'RTX 4090', gb: 24, bandwidthGbps: 1008 },

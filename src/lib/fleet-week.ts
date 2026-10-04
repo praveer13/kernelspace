@@ -20,6 +20,8 @@ import {
   type TickSample,
 } from '@/lib/fleet-model'
 import { instantiateLab } from '@/lib/wasm-lab'
+import { atlasRow } from '@/data/atlas'
+import { claimNumber } from '@/data/claims'
 import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet/drivers'
 import type { SlotState } from '@/pages/fleet/slots'
 
@@ -253,32 +255,46 @@ export interface HwOption {
   name: string
   desc: string
   hourlyUsd: number
+  /** The claim behind `hourlyUsd`: dated for B200, labelled synthetic for the other two. */
+  hourlyClaimId: string
   cfg: { numBlocks: number; blockSize: number; maxRunning: number; sloTtft: number; prefillChunk: number }
 }
+
+const H100_HW = atlasRow('h100')
+const B200_HW = atlasRow('b200')
+const H100_NODE_USD = 'synthetic.act3.h100-node-hourly'
+const B200_NODE_USD = 'price.act3.b200-node-hourly'
+const GB200_RACK_USD = 'synthetic.act3.gb200-nvl72-hourly'
 
 export const HW_MENU: HwOption[] = [
   {
     id: 'h100',
     name: '8× H100 node',
-    desc: 'last-gen workhorse · 80 GB HBM3 ×8 · $25/hr',
-    hourlyUsd: 25,
+    desc: `last-gen workhorse · ${H100_HW.hbmGb} GB HBM3 ×8 · $${claimNumber(H100_NODE_USD)}/hr (synthetic)`,
+    hourlyUsd: claimNumber(H100_NODE_USD),
+    hourlyClaimId: H100_NODE_USD,
     cfg: { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 },
   },
   {
     id: 'b200',
     name: '4× B200 node',
-    desc: 'Blackwell · 192 GB HBM3e ×4, 2.4× bandwidth · $60/hr',
-    hourlyUsd: 60,
+    desc: `Blackwell · ≈${B200_HW.hbmGb} GB HBM3e per GPU as shipped ×4, ${((B200_HW.hbmBwGBs ?? 0) / (H100_HW.hbmBwGBs ?? 1)).toFixed(1)}× bandwidth · $${claimNumber(B200_NODE_USD)}/hr (4 × dated median, 2026-10)`,
+    hourlyUsd: claimNumber(B200_NODE_USD),
+    hourlyClaimId: B200_NODE_USD,
     cfg: { numBlocks: 512, blockSize: 16, maxRunning: 32, sloTtft: 40, prefillChunk: 256 },
   },
   {
     id: 'gb200',
     name: 'GB200 NVL72 rack',
-    desc: 'one NVLink domain · 72 GPUs · $900/hr',
-    hourlyUsd: 900,
+    desc: `one NVLink domain · 72 GPUs · $${claimNumber(GB200_RACK_USD)}/hr (synthetic)`,
+    hourlyUsd: claimNumber(GB200_RACK_USD),
+    hourlyClaimId: GB200_RACK_USD,
     cfg: { numBlocks: 2048, blockSize: 16, maxRunning: 96, sloTtft: 40, prefillChunk: 512 },
   },
 ]
+
+/** The sim's $/Mtok is not a market price: flat 50 ms ticks, a fixed trace and a fixed cache-hit assumption. */
+export const ACT3_COST_LABEL = '[derived, v1 flat-tick physics; not a real-world $/Mtok]'
 
 export interface Act3Eval {
   perOption: {
