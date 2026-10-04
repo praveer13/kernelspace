@@ -1,9 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, X, RotateCcw } from 'lucide-react'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
+import { rev32 } from '@/lib/ledger/stable'
+import { getLedgerClient } from '@/lib/ledger/client'
+import type { Confidence } from '@/lib/ledger/types'
+import { CONFIDENCE_CHOICES, selectCalibration, sureSummary } from '@/lib/learner/calibration'
+import ConfidencePicker from '@/components/learner/ConfidencePicker'
 
 export interface QuizQuestion {
   q: string
@@ -27,6 +32,9 @@ interface QuizBlockProps {
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E']
 
+const isRight = (q: QuizQuestion, sel: Set<number>) =>
+  sel.size === q.correct.length && q.correct.every((c) => sel.has(c))
+
 /**
  * QuizBlock — inline lesson checkpoint (design.md §9.10).
  * Submit → per-option feedback (mint wash + check / danger wash + shake, no shake under
@@ -36,10 +44,20 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E']
  * lights the checkpoint mint. Retry resets with a staggered fade.
  * Options are shuffled per attempt (PLAN-100X §5.1 V1): letters label display
  * position, while selection and grading stay on authored indices.
+ * Confidence (V2, ledger spec §12.1): after a pick, an optional guess / think so / sure row;
+ * keys 1-3 set it on the question that holds focus. It never gates Submit. Answers rated
+ * sure and wrong are summarised first after submit. Each submit writes one ledger item event per
+ * question plus one quiz event (`recordQuizAttempt`), with the item fingerprint, shuffle seed and
+ * the authored pick.
  */
 export default function QuizBlock({ lessonId, questions, className }: QuizBlockProps) {
-  const recordQuizScore = useProgress((s) => s.recordQuizScore)
+  const recordQuizAttempt = useProgress((s) => s.recordQuizAttempt)
   const [selected, setSelected] = useState<Record<number, Set<number>>>({})
+  const [conf, setConf] = useState<Record<number, Confidence>>({})
+  const [sureLine, setSureLine] = useState<{ correct: number; n: number } | null>(null)
+  const startedAt = useRef<number | null>(null)
+  const questionRefs = useRef<(HTMLLIElement | null)[]>([])
+  const uid = useId()
   const [submitted, setSubmitted] = useState(false)
   const [seed, setSeed] = useState(freshSeed)
   const reducedMotion = useReducedMotion()
@@ -55,19 +73,26 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
 
   const correctCount = useMemo(() => {
     if (!submitted) return 0
-    return questions.filter((q, qi) => {
-      const sel = selected[qi] ?? new Set<number>()
-      return (
-        sel.size === q.correct.length && q.correct.every((c) => sel.has(c))
-      )
-    }).length
+    return questions.filter((q, qi) => isRight(q, selected[qi] ?? new Set<number>())).length
   }, [submitted, questions, selected])
+
+  // sure and wrong, in authored question order (after submit only)
+  const confidentMisses = useMemo(
+    () =>
+      submitted
+        ? questions.flatMap((q, qi) =>
+            conf[qi] === 'sure' && (selected[qi]?.size ?? 0) > 0 && !isRight(q, selected[qi]) ? [qi] : [],
+          )
+        : [],
+    [submitted, questions, selected, conf],
+  )
 
   const score = questions.length ? correctCount / questions.length : 0
   const passed = score >= 0.8
 
   const toggle = (qi: number, oi: number, multi?: boolean) => {
     if (submitted) return
+    startedAt.current ??= Date.now()
     setSelected((prev) => {
       const next = new Set(prev[qi] ?? [])
       if (multi) {
@@ -83,21 +108,70 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
 
   const submit = () => {
     setSubmitted(true)
-    recordQuizScore(lessonId, questions.length ? correctCountNow() / questions.length : 0)
+    recordQuizAttempt({
+      lessonId,
+      seed,
+      ...(startedAt.current === null ? {} : { ms: Date.now() - startedAt.current }),
+      responses: questions.map((q, qi) => {
+        const sel = selected[qi] ?? new Set<number>()
+        return {
+          qi,
+          rev: rev32({ q: q.q, options: q.options, correct: q.correct }),
+          pick: [...sel].sort((a, b) => a - b),
+          ok: isRight(q, sel),
+          ...(conf[qi] ? { conf: conf[qi] } : {}),
+        }
+      }),
+    })
   }
-
-  // compute score at submit time (state may lag one render)
-  const correctCountNow = () =>
-    questions.filter((q, qi) => {
-      const sel = selected[qi] ?? new Set<number>()
-      return sel.size === q.correct.length && q.correct.every((c) => sel.has(c))
-    }).length
 
   const retry = () => {
     setSubmitted(false)
     setSelected({})
+    setConf({})
+    setSureLine(null)
+    startedAt.current = null
     setSeed(freshSeed())
   }
+
+  // Keys 1-3 rate the question that holds focus. Digits are unbound on the lesson page.
+  const onQuestionKey = (qi: number, e: React.KeyboardEvent) => {
+    if (submitted || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat) return
+    const choice = CONFIDENCE_CHOICES[Number(e.key) - 1]
+    if (!choice || e.key.length !== 1 || (selected[qi]?.size ?? 0) === 0) return
+    e.preventDefault()
+    setConf((prev) => ({ ...prev, [qi]: choice.value }))
+  }
+
+  const setQuestionConf = (qi: number, value: Confidence | undefined) =>
+    setConf((prev) => {
+      const next = { ...prev }
+      if (value) next[qi] = value
+      else delete next[qi]
+      return next
+    })
+
+  const jumpTo = (qi: number) => {
+    const el = questionRefs.current[qi]
+    if (!el) return
+    el.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
+    el.focus({ preventScroll: true })
+  }
+
+  // One quiet line once enough rated answers exist: the ledger read is async and best-effort.
+  useEffect(() => {
+    if (!submitted) return
+    let live = true
+    getLedgerClient()
+      .then((client) => client.events({ kinds: ['item', 'probe', 'predict'] }))
+      .then((events) => {
+        if (live) setSureLine(sureSummary(selectCalibration(events)))
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [submitted])
 
   const allAnswered = questions.every((_, qi) => (selected[qi]?.size ?? 0) > 0)
 
@@ -124,13 +198,49 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
         )}
       </div>
 
+      {confidentMisses.length > 0 && (
+        <div
+          role="region"
+          aria-label="Confident misses"
+          className="mb-6 rounded-md border-l-2 border-danger bg-danger/10 px-3.5 py-3 text-body-sm text-text-2"
+        >
+          <p className="font-medium text-text-1">
+            Confident {confidentMisses.length === 1 ? 'miss' : 'misses'} · {confidentMisses.length}
+          </p>
+          <p className="mt-0.5">You were sure and wrong. These are the ones worth a second look first.</p>
+          <ul className="mt-2 space-y-1">
+            {confidentMisses.map((qi) => (
+              <li key={qi}>
+                <button
+                  type="button"
+                  onClick={() => jumpTo(qi)}
+                  className="text-left underline decoration-danger/50 underline-offset-2 hover:text-text-1"
+                >
+                  <span className="mr-2 font-mono text-text-3">{String(qi + 1).padStart(2, '0')}</span>
+                  {questions[qi].q}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <ol className="space-y-6">
         {questions.map((q, qi) => {
           const sel = selected[qi] ?? new Set<number>()
-          const isCorrectQ =
-            submitted && sel.size === q.correct.length && q.correct.every((c) => sel.has(c))
+          const isCorrectQ = submitted && isRight(q, sel)
+          const rated = conf[qi]
           return (
-            <li key={qi}>
+            <li
+              key={qi}
+              id={`${uid}-q${qi}`}
+              ref={(el) => {
+                questionRefs.current[qi] = el
+              }}
+              tabIndex={-1}
+              onKeyDown={(e) => onQuestionKey(qi, e)}
+              className="scroll-mt-24 focus:outline-none"
+            >
               <p className="mb-3 text-body-sm font-medium text-text-1">
                 <span className="mr-2 font-mono text-text-3">{String(qi + 1).padStart(2, '0')}</span>
                 {q.q}
@@ -138,6 +248,9 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                   <span className="ml-2 font-mono text-[10px] uppercase text-text-3">
                     select all
                   </span>
+                )}
+                {submitted && confidentMisses.includes(qi) && (
+                  <span className="ml-2 font-mono text-[10px] uppercase text-danger">confident miss</span>
                 )}
               </p>
               <div className="space-y-2" data-answered={sel.size > 0}>
@@ -194,6 +307,14 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
                   )
                 })}
               </div>
+              {sel.size > 0 && (!submitted || rated) && (
+                <ConfidencePicker
+                  className="mt-3"
+                  value={rated}
+                  onChange={(v) => setQuestionConf(qi, v)}
+                  disabled={submitted}
+                />
+              )}
               {submitted && q.why && q.why.length === q.options.length && (
                 <ul className="mt-2 space-y-1.5" aria-label="Why each answer is right or wrong">
                   {/* wrong picks first (their misconception), then the key(s) */}
@@ -289,6 +410,11 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
         )}
         {!submitted && !allAnswered && (
           <span className="font-mono text-[11px] text-text-3">answer all questions to submit</span>
+        )}
+        {submitted && sureLine && (
+          <span className="font-mono text-[11px] text-text-3">
+            Your <em className="not-italic text-text-2">sure</em> answers: {sureLine.correct}/{sureLine.n} right
+          </span>
         )}
       </div>
     </section>
