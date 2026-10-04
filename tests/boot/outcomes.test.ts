@@ -63,6 +63,31 @@ describe('selectBootOutcome', () => {
     expect(a.firstSuccessMs).toBe(2 * 60_000)
   })
 
+  test('any iterable reads like an array, including one that can only be walked once', () => {
+    const events = [
+      visit(T('09:00:00')),
+      step(T('09:01:00'), 'faded-decode', true),
+      complete(T('09:02:00')),
+      quiz(T('08:00:00', '2026-10-05')), // the return, on a later day
+    ]
+    // Without `now` a missed return reads null, and well after the week it reads false: an array says true either way.
+    for (const opts of [{}, { now: T('09:00:00', '2026-10-20') }]) {
+      const fromArray = selectBootOutcome(events, opts)
+      expect(fromArray.returnedWithin7Days).toBe(true)
+      // Map.values() and a generator are spent after one pass: the return check must not need a second one.
+      expect(selectBootOutcome(new Map(events.map((e) => [e.id, e])).values(), opts)).toEqual(fromArray)
+      expect(
+        selectBootOutcome(
+          (function* () {
+            yield* events
+          })(),
+          opts,
+        ),
+      ).toEqual(fromArray)
+      expect(selectBootOutcome(new Set(events), opts)).toEqual(fromArray)
+    }
+  })
+
   test('a step that was never answered is not counted as graded; an unfinished Boot has no completion', () => {
     const o = selectBootOutcome([visit(T('09:00:00')), step(T('09:01:00'), 'faded-decode', true)])
     expect(o).toMatchObject({ correct: 1, graded: 1, completedAt: null, totalMs: null, returnedWithin7Days: null })

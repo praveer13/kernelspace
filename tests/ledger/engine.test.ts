@@ -4,6 +4,7 @@
  * P5 (two-device merge) and P9 (undo) run through real engines on MemoryStore (Addendum A1, A4).
  */
 import { describe, expect, test } from 'bun:test'
+import type { ChannelLike } from '../../src/lib/ledger/channel'
 import { buildExportV3, serializeExport } from '../../src/lib/ledger/codec'
 import { SCHEMA_VERSION } from '../../src/lib/ledger/constants'
 import { createEngine, type BootedEngine } from '../../src/lib/ledger/engine'
@@ -31,6 +32,22 @@ function engineOn(p: Profile, opts: { tabId?: string; schemaVersion?: number; du
     schemaVersion: opts.schemaVersion,
     durability: opts.durability ?? null,
   })
+}
+
+/** A channel the test drives by hand: incoming messages arrive synchronously, so one can land between a write and its commit. */
+function handChannel() {
+  const listeners = new Set<(ev: { data: unknown }) => void>()
+  const sent: ChannelMessage[] = []
+  return {
+    sent,
+    deliver: (data: unknown) => listeners.forEach((l) => l({ data })),
+    factory: (): ChannelLike => ({
+      postMessage: (m) => sent.push(m as ChannelMessage),
+      addEventListener: (_type, l) => listeners.add(l),
+      removeEventListener: (_type, l) => listeners.delete(l),
+      close: () => listeners.clear(),
+    }),
+  }
 }
 
 const visit = (id: string, at = iso(T0), dev = 'device-0'): VisitEvent => ({
@@ -296,6 +313,82 @@ describe('schema guard (§9.3, P10)', () => {
     const before = (await q.store.readAll()).events.length
     await e2.append([visit('x')], [])
     expect((await q.store.readAll()).events).toHaveLength(before)
+  })
+
+  test('a write queued just before a newer hello is not committed; it waits in the outbox for the newer bundle (§8.7, I6)', async () => {
+    const p = makeProfile()
+    const wire = handChannel()
+    const engine = await createEngine({ store: p.store, storage: p.storage, clock: p.clock, tabId: 'tab-x', device: p.device, channelFactory: wire.factory })
+    let commits = 0
+    const commit = p.store.commit.bind(p.store)
+    p.store.commit = (tx, r) => {
+      commits += 1
+      return commit(tx, r)
+    }
+
+    const queued = visit('queued')
+    appendToOutbox(p.storage, 'tab-x', [queued], [working('boot:path', 'x')], iso(T0)) // the façade writes the outbox first (§8.5)
+    p.storage.log = []
+    wire.sent.length = 0
+    const done = engine.append([queued], [working('boot:path', 'x')]) // queued, not yet run
+    wire.deliver({ t: 'hello', from: 'tab-new', schemaVersion: SCHEMA_VERSION + 1 }) // a newer bundle announces itself first
+    await done
+
+    expect(engine.status()).toMatchObject({ readOnly: true, reason: 'newer-schema' })
+    expect(commits).toBe(0)
+    expect(await p.store.readAll()).toMatchObject({ events: [], working: [] })
+    expect(p.storage.writes()).toEqual([]) // nothing written, the outbox included: it is the only copy now
+    expect(readOutbox(p.storage, 'tab-x')?.events.map((e) => e.id)).toEqual(['queued'])
+    expect(wire.sent.filter((m) => m.t === 'append')).toEqual([]) // and nothing announced as saved
+
+    // The newer bundle's own boot commits what this tab left behind (§8.6).
+    const newer = await engineOn(p, { tabId: 'tab-new', schemaVersion: SCHEMA_VERSION + 1 })
+    expect((await newer.events()).map((e) => e.id)).toEqual(['queued'])
+    expect((await p.store.readAll()).events.map((e) => e.id)).toEqual(['queued'])
+  })
+
+  test('a persistence answer that arrives after a newer hello is shown but not recorded (I6)', async () => {
+    const p = makeProfile()
+    const wire = handChannel()
+    let answer!: (granted: boolean) => void
+    const durability = {
+      persisted: async () => false,
+      persist: () => new Promise<boolean>((resolve) => (answer = resolve)), // the browser's permission prompt, still open
+    }
+    const engine = await createEngine({ store: p.store, storage: p.storage, clock: p.clock, tabId: 'tab-x', device: p.device, channelFactory: wire.factory, durability })
+    await engine.append([evt('sim-task', 'sim:sim-kv/a', iso(T0), { provenance: 'practice' }) as LedgerEvent], []) // the first graded event asks
+    wire.deliver({ t: 'hello', from: 'tab-new', schemaVersion: SCHEMA_VERSION + 1 })
+    answer(true)
+    await tick(5)
+    expect(engine.status()).toMatchObject({ readOnly: true, persisted: true })
+    expect((await p.store.readAll()).meta.persist).toBeUndefined()
+  })
+
+  test('an export whose record waits behind a slow commit is not recorded once a newer hello has arrived (I6)', async () => {
+    const p = makeProfile()
+    const wire = handChannel()
+    const engine = await createEngine({ store: p.store, storage: p.storage, clock: p.clock, tabId: 'tab-x', device: p.device, channelFactory: wire.factory })
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const commit = p.store.commit.bind(p.store)
+    let slow = true
+    p.store.commit = async (tx, r) => {
+      if (slow) {
+        slow = false
+        await gate
+      }
+      return commit(tx, r)
+    }
+    const saving = engine.append([visit('a')], [])
+    const exporting = engine.exportV3() // its lastExport write queues behind the slow one
+    await tick()
+    wire.deliver({ t: 'hello', from: 'tab-new', schemaVersion: SCHEMA_VERSION + 1 })
+    release()
+    const [, file] = await Promise.all([saving, exporting])
+    expect(file.events.map((e) => e.id)).toEqual(['a']) // the file itself is still good
+    expect(engine.status()).toMatchObject({ readOnly: true })
+    expect(engine.status().lastExportAt).toBeUndefined()
+    expect((await p.store.readAll()).meta.lastExport).toBeUndefined()
   })
 })
 

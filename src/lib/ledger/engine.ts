@@ -34,10 +34,11 @@ import { SCHEMA_VERSION } from './constants'
 import { derive, foldInto, GRADED_KINDS } from './fold'
 import { createGuard } from './guard'
 import { IdbStore } from './idb-store'
-import { MemoryStore, sameJson } from './memory-store'
+import { MemoryStore } from './memory-store'
 import { canonicalEvent, compareEvents, lwwWorking } from './merge'
 import { SNAPSHOT_KEY } from './names'
 import { collectOutboxes, pendingFrom, removeFromOutbox, settleOutboxes } from './outbox'
+import { sameJson } from './stable'
 import type { Ledger } from './merge'
 import type {
   Aggregate,
@@ -258,6 +259,16 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     queue = run.catch(() => undefined)
     return run
   }
+  /**
+   * A queued meta write. A task can wait here while a newer bundle's `hello` latches the guard, so each write
+   * rechecks `guard.readOnly` when it runs, not only when it was queued (I6, §8.7). False: it was skipped.
+   */
+  const commitMeta = (tx: StoreTx): Promise<boolean> =>
+    enqueue(async () => {
+      if (guard.readOnly) return false
+      await store.commit(tx, resolvers)
+      return true
+    })
 
   /* ---------------- memory helpers ---------------- */
 
@@ -502,8 +513,7 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
       const granted = await durability.persist()
       const at = now()
       const rec: MetaRecords['persist'] = { checkedAt: at, persisted: granted, requestedAt: at }
-      await enqueue(() => store.commit({ putMeta: { persist: rec } }, resolvers))
-      meta.persist = rec
+      if (await commitMeta({ putMeta: { persist: rec } })) meta.persist = rec
       base.persisted = granted
       emit()
     } catch {
@@ -513,6 +523,9 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
 
   /** Commit everything in `pending` (this call's writes and any earlier failures), then tidy up. */
   async function commitPending(sent: LedgerEvent[], sentWorking: WorkingRecord[]): Promise<void> {
+    // Once read-only nothing is written, the outbox included (§8.7, I6). What the façade put there before the
+    // latch stays for the newer bundle, which commits every outbox it finds when it boots (§8.6).
+    if (guard.readOnly) return
     const evs = [...pendingEvents.values()]
     const ws = [...pendingWorking.values()]
     try {
@@ -561,10 +574,11 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     if (!guard.readOnly) {
       const rec: MetaRecords['lastExport'] = { at, events: file.events.length }
       try {
-        await enqueue(() => store.commit({ putMeta: { lastExport: rec } }, resolvers))
-        meta.lastExport = rec
-        base.lastExportAt = at
-        emit()
+        if (await commitMeta({ putMeta: { lastExport: rec } })) {
+          meta.lastExport = rec
+          base.lastExportAt = at
+          emit()
+        }
       } catch {
         // the file is still good; only the backup nudge misses this export
       }

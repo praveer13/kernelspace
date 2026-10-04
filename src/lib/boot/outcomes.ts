@@ -38,7 +38,9 @@ export interface BootOutcomeOptions {
  * - A return is a graded event outside Boot on a later local day, at most 7 days after completion.
  */
 export function selectBootOutcome(events: Iterable<LedgerEvent>, opts: BootOutcomeOptions = {}): BootOutcome {
-  const boot = [...events].filter((e) => isBootRef(e.ref)).sort(byTime)
+  // Read the input once: a Map.values() or a generator is spent after one pass, and the return check needs a second look.
+  const all = [...events]
+  const boot = all.filter((e) => isBootRef(e.ref)).sort(byTime)
   const none: BootOutcome = {
     completedAt: null,
     correct: 0,
@@ -75,11 +77,11 @@ export function selectBootOutcome(events: Iterable<LedgerEvent>, opts: BootOutco
     graded: answered.length,
     firstSuccessMs: firstOk ? (reported('firstSuccessMs') ?? Math.max(0, ms(firstOk.at) - ms(start.at))) : null,
     totalMs: completedAt ? (reported('totalMs') ?? Math.max(0, ms(completedAt) - ms(start.at))) : null,
-    returnedWithin7Days: completedAt ? returned(events, done!, opts.now) : null,
+    returnedWithin7Days: completedAt ? returned(all, done!, opts.now) : null,
   }
 }
 
-function returned(events: Iterable<LedgerEvent>, done: LedgerEvent, now?: IsoInstant): boolean | null {
+function returned(events: readonly LedgerEvent[], done: LedgerEvent, now?: IsoInstant): boolean | null {
   const deadline = ms(done.at) + WEEK_MS
   for (const e of events) {
     if (isBootRef(e.ref) || !('score' in e) || typeof e.score !== 'number') continue

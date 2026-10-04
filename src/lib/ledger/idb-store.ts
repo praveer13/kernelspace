@@ -24,7 +24,8 @@ import {
   STORE_META,
   STORE_WORKING,
 } from './names'
-import { componentMeta, sameJson } from './memory-store'
+import { componentMeta } from './memory-store'
+import { sameJson } from './stable'
 import type {
   Checkpoint,
   CommitResult,

@@ -18,7 +18,7 @@
  */
 
 import { OUTBOX_PREFIX } from './names'
-import { sameJson } from './memory-store'
+import { sameJson } from './stable'
 import type { EventId, IsoInstant, KeyValueStorage, LedgerEvent, Outbox, WorkingRecord } from './types'
 
 /** A foreign outbox older than this is abandoned (its tab is gone) and may be deleted after commit. */

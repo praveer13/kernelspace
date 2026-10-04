@@ -508,6 +508,7 @@ Set by the schema guard (§9.3).
 - Actions are no-ops.
 - `ledger.readOnly` and `reason` are set; L6's `ReadOnlyBanner` reads "A newer version of kernelspace is open in another tab. Reload to keep saving."
 - Nothing is written: no snapshot, outbox or IndexedDB commit.
+- A write already queued when the guard latches (a `hello` can land between an action and its commit) is not committed. Its entries stay in the outbox (§8.6), and the newer bundle commits them when it boots.
 
 ### 8.8 Consumers (unchanged)
 

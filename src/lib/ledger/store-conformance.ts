@@ -6,10 +6,10 @@
  * drives it against IdbStore in a real browser.
  *
  * The suite brings its own conflict resolvers, a small copy of the canonical rules (§4.8, §5).
- * The adapters never import L1, and neither does this file.
+ * The adapters import no fold, merge or codec code (only the pure JSON helpers in `stable.ts`), and neither does this file.
  */
 
-import { stableJson } from './memory-store'
+import { stableJson } from './stable'
 import type {
   Checkpoint,
   ComponentRecord,

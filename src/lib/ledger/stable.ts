@@ -27,6 +27,27 @@ export function stableStringify(value: unknown): string {
 }
 
 /**
+ * Plain `JSON.stringify` with object keys sorted: a canonical text for the stores' equality checks and
+ * conflict ordering. It lives here, with no store code, so the outbox (entry chunk) and the adapters
+ * (lazy engine chunk) can share it without the entry chunk carrying `MemoryStore`.
+ */
+export function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const src = v as Record<string, unknown>
+      const out: Record<string, unknown> = {}
+      for (const k of Object.keys(src).sort()) out[k] = src[k]
+      return out
+    }
+    return v
+  })
+}
+
+export function sameJson(a: unknown, b: unknown): boolean {
+  return a === b || stableJson(a) === stableJson(b)
+}
+
+/**
  * Record helpers for maps keyed by imported ids. A plain `rec[id]` reads or writes through the
  * prototype for `__proto__`, `constructor` and friends; these touch own properties only, and
  * `setOwn` defines the key as an own data property, so `__proto__` is just another id.

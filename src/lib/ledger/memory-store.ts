@@ -6,6 +6,7 @@
  * No merge policy lives here: conflicts are settled by the injected `ConflictResolvers`.
  */
 
+import { sameJson } from './stable'
 import type {
   Checkpoint,
   CommitResult,
@@ -23,23 +24,6 @@ import type {
   WorkingKey,
   WorkingRecord,
 } from './types'
-
-/** JSON with sorted object keys: a canonical text for equality checks. Not L1's `stableStringify`; the adapters stay independent of L1. */
-export function stableJson(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) => {
-    if (v && typeof v === 'object' && !Array.isArray(v)) {
-      const src = v as Record<string, unknown>
-      const out: Record<string, unknown> = {}
-      for (const k of Object.keys(src).sort()) out[k] = src[k]
-      return out
-    }
-    return v
-  })
-}
-
-export function sameJson(a: unknown, b: unknown): boolean {
-  return a === b || stableJson(a) === stableJson(b)
-}
 
 /** A component record without its bytes. */
 export function componentMeta(rec: ComponentRecord): ComponentMeta {
