@@ -2,9 +2,11 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play } from 'lucide-react'
+import { ClaimValue } from '@/components/ClaimValue'
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
+  ACT3_COST_LABEL,
   evalAct3,
   gradeMeasurementSubmission,
   gradeAct3Doc,
@@ -338,7 +340,7 @@ function ActBusiness() {
                   return (
                     <tr key={o.id} className={cn('border-b border-line/60', choice === o.id && 'bg-accent/5 text-accent')}>
                       <td className="p-2.5">{hw?.name ?? o.id}{o.id === evaluation.bestValue ? ' ★' : ''}</td>
-                      <td className="p-2.5">{hw?.hourlyUsd}</td>
+                      <td className="p-2.5">{hw ? <ClaimValue id={hw.hourlyClaimId} format={(c) => `$${c.value}`} /> : null}</td>
                       <td className="p-2.5">{o.goodput}%</td>
                       <td className="p-2.5">{o.sloMet}/240</td>
                       <td className="p-2.5">{Number.isFinite(o.costPerMtok) ? `$${o.costPerMtok}` : '—'}</td>
@@ -348,6 +350,10 @@ function ActBusiness() {
               </tbody>
             </table>
           </div>
+          <p className="font-mono text-[10px] leading-relaxed text-text-3">
+            $/hr: B200 is four GPUs at the dated 2026-10 median rental price; the other two are synthetic
+            stand-ins (tap a value for its source). $/Mtok (sim) {ACT3_COST_LABEL}.
+          </p>
           <div className="flex flex-wrap items-center gap-2 font-mono text-[12px]">
             <span className="text-text-3">your pick</span>
             {HW_MENU.map((h) => (

@@ -1,0 +1,576 @@
+{
+  "claims": [
+    {
+      "id": "hw.h100-sxm.hbm-capacity",
+      "kind": "spec",
+      "value": 80,
+      "unit": "GB",
+      "label": "H100 SXM HBM capacity",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/h100/",
+        "title": "NVIDIA H100 Tensor Core GPU",
+        "quote": "80GB",
+        "row": "H100 SXM > GPU Memory"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "SXM5 module (HBM3); the PCIe and NVL variants differ."
+    },
+    {
+      "id": "hw.h100-sxm.hbm-bw",
+      "kind": "spec",
+      "value": 3.35,
+      "unit": "TB/s",
+      "label": "H100 SXM HBM bandwidth",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/h100/",
+        "title": "NVIDIA H100 Tensor Core GPU",
+        "quote": "3.35TB/s",
+        "row": "H100 SXM > GPU Memory Bandwidth"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Peak datasheet figure; real kernels reach roughly 80-90% of it."
+    },
+    {
+      "id": "hw.h100-sxm.bf16-sparse",
+      "kind": "spec",
+      "value": 1979,
+      "unit": "TFLOPS",
+      "label": "H100 SXM BF16 Tensor Core, with sparsity",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/h100/",
+        "title": "NVIDIA H100 Tensor Core GPU",
+        "quote": "1,979 teraFLOPS",
+        "row": "H100 SXM > BFLOAT16 Tensor Core (* With sparsity)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "The datasheet footnote says \"With sparsity\" (2:4 structured). Dense work gets half."
+    },
+    {
+      "id": "hw.h100-sxm.bf16-dense",
+      "kind": "derived",
+      "value": 989,
+      "unit": "TFLOPS",
+      "label": "H100 SXM BF16 Tensor Core, dense",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.h100-sxm.bf16-sparse"
+        ],
+        "formula": "floor(bf16Sparse / 2)"
+      },
+      "boundary": "Dense is half the sparse figure; this is the roofline compute ceiling the course uses."
+    },
+    {
+      "id": "hw.dgx-b200.hbm-total",
+      "kind": "spec",
+      "value": 1440,
+      "unit": "GB",
+      "label": "DGX B200 total GPU memory (8 GPUs)",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/dgx-b200/",
+        "title": "NVIDIA DGX B200",
+        "quote": "1,440 GB total, 64 TB/s HBM3e bandwidth",
+        "row": "DGX B200 > GPU Memory"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.dgx-b200.hbm-bw",
+      "kind": "spec",
+      "value": 64,
+      "unit": "TB/s",
+      "label": "DGX B200 aggregate HBM bandwidth (8 GPUs)",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/dgx-b200/",
+        "title": "NVIDIA DGX B200",
+        "quote": "1,440 GB total, 64 TB/s HBM3e bandwidth",
+        "row": "DGX B200 > GPU Memory"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.hgx-b200.bf16-sparse-system",
+      "kind": "spec",
+      "value": 36,
+      "unit": "PFLOPS",
+      "label": "HGX B200 FP16/BF16, with sparsity, 8 GPUs",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/hgx/",
+        "title": "NVIDIA HGX Platform",
+        "quote": "36 PFLOPS",
+        "row": "HGX B200 > FP16/BF16"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Per 8-GPU baseboard and with sparsity, per the serving-landscape dossier (§2.1)."
+    },
+    {
+      "id": "hw.b200.hbm-capacity",
+      "kind": "derived",
+      "value": 180,
+      "unit": "GB",
+      "label": "B200 HBM capacity per GPU, as shipped",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.dgx-b200.hbm-total"
+        ],
+        "formula": "dgxTotalGb / 8"
+      },
+      "boundary": "Usable memory per GPU in a shipped DGX/HGX B200.",
+      "discrepancy": "The course and many sources say 192 GB. NVIDIA lists 1,440 GB for 8 GPUs (180 GB each) and rounds to 1.4 TB on the HGX page. Whether 192 GB is raw stack capacity is unverified."
+    },
+    {
+      "id": "hw.b200.hbm-bw",
+      "kind": "derived",
+      "value": 8,
+      "unit": "TB/s",
+      "label": "B200 HBM bandwidth per GPU",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.dgx-b200.hbm-bw"
+        ],
+        "formula": "dgxTbps / 8"
+      }
+    },
+    {
+      "id": "hw.b200.bf16-dense",
+      "kind": "derived",
+      "value": 2250,
+      "unit": "TFLOPS",
+      "label": "B200 BF16 Tensor Core, dense, per GPU",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.hgx-b200.bf16-sparse-system"
+        ],
+        "formula": "sparsePflops * 1000 / 8 / 2"
+      },
+      "boundary": "Sparse system figure divided across 8 GPUs, then halved for dense."
+    },
+    {
+      "id": "hw.hgx-b300.hbm-total",
+      "kind": "spec",
+      "value": 2.1,
+      "unit": "TB",
+      "label": "HGX B300 total GPU memory (8 GPUs)",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/hgx/",
+        "title": "NVIDIA HGX Platform",
+        "quote": "2.1 TB",
+        "row": "HGX B300 > Total memory"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Rounded system figure; do not divide it into a per-GPU capacity."
+    },
+    {
+      "id": "hw.gb300-nvl72.hbm-total",
+      "kind": "spec",
+      "value": 20,
+      "unit": "TB",
+      "label": "GB300 NVL72 GPU memory (72 GPUs)",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/gb300-nvl72/",
+        "title": "NVIDIA GB300 NVL72",
+        "quote": "20 TB | Up to 576 TB/s",
+        "row": "GB300 NVL72 > GPU Memory | Bandwidth"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.gb300-nvl72.hbm-bw",
+      "kind": "spec",
+      "value": 576,
+      "unit": "TB/s",
+      "label": "GB300 NVL72 aggregate HBM bandwidth (72 GPUs)",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/gb300-nvl72/",
+        "title": "NVIDIA GB300 NVL72",
+        "quote": "20 TB | Up to 576 TB/s",
+        "row": "GB300 NVL72 > GPU Memory | Bandwidth"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.b300.hbm-bw",
+      "kind": "derived",
+      "value": 8,
+      "unit": "TB/s",
+      "label": "B300 (GB300) HBM bandwidth per GPU",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.gb300-nvl72.hbm-bw"
+        ],
+        "formula": "rackTbps / 72"
+      }
+    },
+    {
+      "id": "hw.tpu7x.hbm-capacity",
+      "kind": "spec",
+      "value": 192,
+      "unit": "GiB",
+      "label": "TPU7x (Ironwood) HBM capacity per chip",
+      "source": {
+        "url": "https://docs.cloud.google.com/tpu/docs/tpu7x",
+        "title": "Google Cloud TPU7x (Ironwood)",
+        "quote": "192 GiB",
+        "row": "Per-chip specs > HBM capacity"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "GiB (2^30 bytes), unlike the GB used for GPUs."
+    },
+    {
+      "id": "hw.tpu7x.hbm-bw",
+      "kind": "spec",
+      "value": 7380,
+      "unit": "GB/s",
+      "label": "TPU7x (Ironwood) HBM bandwidth per chip",
+      "source": {
+        "url": "https://docs.cloud.google.com/tpu/docs/tpu7x",
+        "title": "Google Cloud TPU7x (Ironwood)",
+        "quote": "7380 GBps",
+        "row": "Per-chip specs > HBM bandwidth"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.tpu7x.bf16",
+      "kind": "spec",
+      "value": 2307,
+      "unit": "TFLOPS",
+      "label": "TPU7x (Ironwood) peak BF16 per chip",
+      "source": {
+        "url": "https://docs.cloud.google.com/tpu/docs/tpu7x",
+        "title": "Google Cloud TPU7x (Ironwood)",
+        "quote": "2307 TFLOPs",
+        "row": "Per-chip specs > Peak compute (BF16)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Google lists it as peak compute without a sparsity qualifier."
+    },
+    {
+      "id": "hw.tpu7x.fp8",
+      "kind": "spec",
+      "value": 4614,
+      "unit": "TFLOPS",
+      "label": "TPU7x (Ironwood) peak FP8 per chip",
+      "source": {
+        "url": "https://docs.cloud.google.com/tpu/docs/tpu7x",
+        "title": "Google Cloud TPU7x (Ironwood)",
+        "quote": "4614 TFLOPs",
+        "row": "Per-chip specs > Peak compute (FP8)"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "hw.tpu7x.pod-chips",
+      "kind": "spec",
+      "value": 9216,
+      "unit": "chips",
+      "label": "TPU7x (Ironwood) chips per pod",
+      "source": {
+        "url": "https://docs.cloud.google.com/tpu/docs/tpu7x",
+        "title": "Google Cloud TPU7x (Ironwood)",
+        "quote": "9,216-chip footprint per Pod",
+        "row": "Per-chip specs > Pod size"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-8b.layers",
+      "kind": "spec",
+      "value": 32,
+      "label": "Llama-3-8B layers",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-8B/raw/main/config.json",
+        "title": "Meta-Llama-3-8B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_hidden_layers\": 32",
+        "row": "num_hidden_layers"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-8b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "label": "Llama-3-8B KV heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-8B/raw/main/config.json",
+        "title": "Meta-Llama-3-8B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_key_value_heads\": 8",
+        "row": "num_key_value_heads"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-8b.attn-heads",
+      "kind": "spec",
+      "value": 32,
+      "label": "Llama-3-8B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-8B/raw/main/config.json",
+        "title": "Meta-Llama-3-8B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_attention_heads\": 32",
+        "row": "num_attention_heads"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-8b.hidden-size",
+      "kind": "spec",
+      "value": 4096,
+      "label": "Llama-3-8B hidden size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-8B/raw/main/config.json",
+        "title": "Meta-Llama-3-8B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"hidden_size\": 4096",
+        "row": "hidden_size"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-8b.ffn-size",
+      "kind": "spec",
+      "value": 14336,
+      "label": "Llama-3-8B FFN intermediate size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-8B/raw/main/config.json",
+        "title": "Meta-Llama-3-8B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"intermediate_size\": 14336",
+        "row": "intermediate_size"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-8b.vocab",
+      "kind": "spec",
+      "value": 128256,
+      "label": "Llama-3-8B vocabulary size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-8B/raw/main/config.json",
+        "title": "Meta-Llama-3-8B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"vocab_size\": 128256",
+        "row": "vocab_size"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "Embedding and output head are untied (\"tie_word_embeddings\": false)."
+    },
+    {
+      "id": "model.llama3-8b.head-dim",
+      "kind": "derived",
+      "value": 128,
+      "label": "Llama-3-8B head dimension",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-8b.hidden-size",
+          "model.llama3-8b.attn-heads"
+        ],
+        "formula": "hiddenSize / attnHeads"
+      }
+    },
+    {
+      "id": "model.llama3-8b.params",
+      "kind": "derived",
+      "value": 8.03,
+      "unit": "B params",
+      "label": "Llama-3-8B parameters",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-8b.layers",
+          "model.llama3-8b.kv-heads",
+          "model.llama3-8b.hidden-size",
+          "model.llama3-8b.ffn-size",
+          "model.llama3-8b.vocab",
+          "model.llama3-8b.head-dim"
+        ],
+        "formula": "2 * vocab * hidden + layers * (2 * hidden * hidden + 2 * hidden * kvHeads * headDim + 3 * hidden * ffn + 2 * hidden) + hidden"
+      },
+      "boundary": "Counted from the config (untied embeddings, RMSNorm weights included); rounded to two decimals."
+    },
+    {
+      "id": "model.llama3-8b.kv-bytes-per-token",
+      "kind": "derived",
+      "value": 131072,
+      "unit": "bytes/token",
+      "label": "Llama-3-8B KV cache per token",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-8b.layers",
+          "model.llama3-8b.kv-heads",
+          "model.llama3-8b.head-dim"
+        ],
+        "formula": "2 * layers * kvHeads * headDim * 2"
+      },
+      "boundary": "One sequence, 16-bit (BF16/FP16) K and V: 2 (K and V) x layers x KV heads x head dim x 2 bytes."
+    },
+    {
+      "id": "price.h100.median",
+      "kind": "price",
+      "value": 3.39,
+      "unit": "USD/GPU-hr",
+      "label": "H100 on-demand median rental price",
+      "source": {
+        "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-h100",
+        "title": "GetDeploying: NVIDIA H100 cloud GPU pricing",
+        "row": "Median price (current), on-demand"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 90,
+      "boundary": "Median of priced on-demand configs across providers; flat over 90 days at the time of check.",
+      "discrepancy": "Re-opened on 2026-10-04 the page reads \"the median on-demand price is $3.38 per GPU per hour across 40 providers\". The dossier recorded $3.39. The median moves daily."
+    },
+    {
+      "id": "price.h100.cheapest",
+      "kind": "price",
+      "value": 1.3,
+      "unit": "USD/GPU-hr",
+      "label": "H100 cheapest verified in-stock on-demand price",
+      "source": {
+        "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-h100",
+        "title": "GetDeploying: NVIDIA H100 cloud GPU pricing",
+        "quote": "The cheapest verified in-stock on-demand H100 tracked by GetDeploying is $1.30 per GPU per hour from Lium"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 90,
+      "boundary": "One provider, in stock at the time of check."
+    },
+    {
+      "id": "price.h100.providers",
+      "kind": "price",
+      "value": 57,
+      "unit": "providers",
+      "label": "Providers tracked for H100",
+      "source": {
+        "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-h100",
+        "title": "GetDeploying: NVIDIA H100 cloud GPU pricing",
+        "quote": "GetDeploying currently tracks H100 configs from 57 providers"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 90,
+      "boundary": "Tracked configs, not providers with a priced on-demand config (the median covers 40)."
+    },
+    {
+      "id": "price.h100.yoy",
+      "kind": "price",
+      "value": 12,
+      "unit": "% vs a year ago",
+      "label": "H100 median rental price change, year over year",
+      "source": {
+        "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-h100",
+        "title": "GetDeploying: NVIDIA H100 cloud GPU pricing",
+        "quote": "about 12% above where it was a year ago"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 90,
+      "boundary": "Flat over the preceding 90 days."
+    },
+    {
+      "id": "price.b200.median",
+      "kind": "price",
+      "value": 6.25,
+      "unit": "USD/GPU-hr",
+      "label": "B200 on-demand median rental price",
+      "source": {
+        "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-b200",
+        "title": "GetDeploying: NVIDIA B200 cloud GPU pricing",
+        "row": "Median price (current), on-demand"
+      },
+      "verifiedAt": "2026-10-03",
+      "ttlDays": 90,
+      "boundary": "Median of priced on-demand configs across providers.",
+      "discrepancy": "Re-opened on 2026-10-04 the page reads $6.79 per GPU-hour (median across 19 providers with a priced on-demand config, flat over 90 days), not the $6.25 in the dossier verification log. Re-verify before relying on either."
+    },
+    {
+      "id": "price.b200.yoy",
+      "kind": "price",
+      "value": 17,
+      "unit": "% vs a year ago",
+      "label": "B200 median rental price change, year over year",
+      "source": {
+        "url": "https://getdeploying.com/reference/cloud-gpu/nvidia-b200",
+        "title": "GetDeploying: NVIDIA B200 cloud GPU pricing",
+        "quote": "about 17% above where it was a year ago"
+      },
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 90
+    },
+    {
+      "id": "price.act3.b200-node-hourly",
+      "kind": "derived",
+      "value": 25,
+      "unit": "USD/hr",
+      "label": "Act III 4x B200 node, $/hr",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 90,
+      "derived": {
+        "from": [
+          "price.b200.median"
+        ],
+        "formula": "4 * b200Median"
+      },
+      "boundary": "Four GPUs at the B200 median rental price; a dated stand-in for a node quote."
+    },
+    {
+      "id": "synthetic.act3.h100-node-hourly",
+      "kind": "synthetic",
+      "value": 25,
+      "unit": "USD/hr",
+      "label": "Act III 8x H100 node, $/hr (course stand-in)",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "No source: a round number chosen for the exercise. Eight GPUs at the dated H100 median would be 8 x $3.39 = $27.12/hr."
+    },
+    {
+      "id": "synthetic.act3.gb200-nvl72-hourly",
+      "kind": "synthetic",
+      "value": 900,
+      "unit": "USD/hr",
+      "label": "Act III GB200 NVL72 rack, $/hr (course stand-in)",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "No source: a round number chosen for the exercise. The evidence base has no rack rental price."
+    },
+    {
+      "id": "synthetic.fleet.worker-hourly",
+      "kind": "synthetic",
+      "value": 7.5,
+      "unit": "USD/worker-hr",
+      "label": "Fleet dashboard cost per worker-hour (course stand-in)",
+      "verifiedAt": "2026-10-04",
+      "ttlDays": 365,
+      "boundary": "No source: it only makes the Fleet cost card produce a plausible $/Mtok."
+    }
+  ]
+}

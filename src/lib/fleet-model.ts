@@ -12,6 +12,8 @@
  * free returns blocks at refcount 0, all-or-nothing on failure.
  */
 
+import { claimNumber } from '@/data/claims'
+
 export interface RefSeq {
   len: number
   blocks: number[]
@@ -406,7 +408,8 @@ const p95 = (xs: number[]) =>
   xs.length ? [...xs].sort((a, b) => a - b)[Math.max(0, Math.ceil(xs.length * 0.95) - 1)] : 0
 
 export const SIM_TICK_SECONDS = 0.05
-export const FLEET_WORKER_HOURLY_USD = 7.5
+/** Synthetic: registered as a claim so it is labelled, not sourced. */
+export const FLEET_WORKER_HOURLY_USD = claimNumber('synthetic.fleet.worker-hourly')
 
 /** Canonical OTel GenAI names where the convention defines one; the
  * remaining metrics are explicitly namespaced course extensions. */
