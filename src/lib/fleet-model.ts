@@ -12,6 +12,8 @@
  * free returns blocks at refcount 0, all-or-nothing on failure.
  */
 
+import { claimNumber } from '@/data/claims'
+
 export interface RefSeq {
   len: number
   blocks: number[]
@@ -177,7 +179,19 @@ export interface FleetOp {
   n?: number
 }
 
-/** Deterministic xorshift — same stream every run. */
+/** The fixed seed of every practice and demo view: reproducible on purpose, and never graded. */
+export const PRACTICE_SEED = 0x5eed
+
+/**
+ * Deterministic xorshift — same stream every run.
+ *
+ * FROZEN: the v1 benchmark traces, the committed leaderboard entries and the
+ * practice views (PRACTICE_SEED) are all pure functions of this exact stream,
+ * so changing one bit of it would silently re-grade every past result. It has
+ * weak spots (31 fixed-point seeds below 2^22), which is why graded runs do
+ * not seed it directly: they draw from splitmix32 (src/lib/rng.ts) and pass
+ * that stream in where a generator takes an `rng`.
+ */
 export function makeRng(seed: number): () => number {
   let x = seed >>> 0 || 1
   return () => {
@@ -207,9 +221,14 @@ export interface RequestSpec {
 /**
  * Chat-ish request stream: mixed prompts, ~12% heavy, hidden outputs —
  * plus three sharp arrival bursts (the intake queue's reason to exist).
+ * `rng` defaults to the frozen makeRng(seed); graded runs pass a splitmix32 stream.
  */
-export function makeRequestStream(count: number, span: number, seed: number): RequestSpec[] {
-  const rng = makeRng(seed)
+export function makeRequestStream(
+  count: number,
+  span: number,
+  seed: number,
+  rng: () => number = makeRng(seed),
+): RequestSpec[] {
   const out: RequestSpec[] = []
   for (let i = 0; i < count; i++) {
     const heavy = rng() % 100 < 12
@@ -406,7 +425,8 @@ const p95 = (xs: number[]) =>
   xs.length ? [...xs].sort((a, b) => a - b)[Math.max(0, Math.ceil(xs.length * 0.95) - 1)] : 0
 
 export const SIM_TICK_SECONDS = 0.05
-export const FLEET_WORKER_HOURLY_USD = 7.5
+/** Synthetic: registered as a claim so it is labelled, not sourced. */
+export const FLEET_WORKER_HOURLY_USD = claimNumber('synthetic.fleet.worker-hourly')
 
 /** Canonical OTel GenAI names where the convention defines one; the
  * remaining metrics are explicitly namespaced course extensions. */

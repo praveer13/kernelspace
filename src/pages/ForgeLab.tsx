@@ -18,7 +18,8 @@ import { FORGE_LABS } from '@/data/labs'
 import { lessonById } from '@/data/lessons'
 import { getTrack } from '@/lib/tracks'
 import { useProgress, XP } from '@/lib/progress'
-import { LabAbiError, LabTrapError, runLabWasm, type LabReport } from '@/lib/wasm-lab'
+import { LabAbiError, LabTimeoutError, LabTrapError, type LabReport } from '@/lib/wasm-lab'
+import { runLabInWorker } from '@/lib/lab-worker'
 import { cn } from '@/lib/utils'
 
 type RunState =
@@ -65,7 +66,7 @@ export default function ForgeLab() {
       if (!lab) return
       setRun({ kind: 'running' })
       try {
-        const report = await runLabWasm(await file.arrayBuffer())
+        const report = await runLabInWorker(await file.arrayBuffer())
         if (report.lab !== lab.id) {
           setRun({
             kind: 'error',
@@ -91,6 +92,8 @@ export default function ForgeLab() {
       } catch (e) {
         if (e instanceof LabTrapError) {
           setRun({ kind: 'error', title: 'not implemented yet', detail: e.message })
+        } else if (e instanceof LabTimeoutError) {
+          setRun({ kind: 'error', title: e.title, detail: e.message })
         } else if (e instanceof LabAbiError) {
           setRun({ kind: 'error', title: 'not a lab module', detail: e.message })
         } else {

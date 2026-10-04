@@ -40,8 +40,13 @@ jobs:
       - run: bun run verify:traces
       - run: bun run verify:leaderboard
       - run: bun run verify:field-notes
+      - run: bun run verify:errata
+      - run: bun run verify:claims
 
       - run: npm run build
+
+      # Bundle budget (PLAN-100X §7.3): the entry chunk must stay <= 250 KB gzip.
+      - run: bun run verify:bundle
 
       - name: Export freshness (if this fails the committed export is stale; run bun scripts/export-lessons-md.ts and commit)
         run: bun scripts/export-lessons-md.ts && git diff --exit-code -- public/lessons-md public/llms.txt

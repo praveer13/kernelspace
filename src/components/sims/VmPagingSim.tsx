@@ -828,7 +828,7 @@ export default function VmPagingSim() {
           /* load from disk into a free frame */
           const freeFrame = prev.frames.findIndex((f) => f === null)
           if (freeFrame === -1) {
-            log(t, 'FAULT', `seq ${seq} block ${block} — HBM full, vLLM would preempt/swap`, 'err')
+            log(t, 'FAULT', `seq ${seq} block ${block} — HBM full, vLLM V1 would preempt and recompute (V0 could swap)`, 'err')
             return prev
           }
           const frames = prev.frames.map((f, i) =>

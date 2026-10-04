@@ -3,7 +3,7 @@
  *
  * A hands-on block manager: fixed-size physical blocks, per-sequence logical
  * block tables, refcounted prefix sharing, copy-on-write beam divergence,
- * preemption (swap vs recompute), and a block-size tradeoff sweep.
+ * preemption (swap-to-CPU as in V0 / the paper vs recompute as in V1), and a block-size tradeoff sweep.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -329,7 +329,7 @@ export default function BlockTableExplorer() {
       log(
         t,
         'PREEMPT',
-        `victim ${victimId}: ${mode === 'swap' ? 'swap to CPU DRAM' : 'recompute on demand'} — freed ${freed} block(s)`,
+        `victim ${victimId}: ${mode === 'swap' ? 'swap to CPU DRAM (V0 / paper option)' : 'recompute on demand (V1)'} — freed ${freed} block(s)`,
         mode === 'swap' ? 'ok' : 'warn',
       )
 
@@ -608,8 +608,8 @@ export default function BlockTableExplorer() {
                 </legend>
                 <div className="grid grid-cols-2 gap-2">
                   {([
-                    ['swap', 'swap to CPU', '#22D3EE'],
-                    ['recompute', 'recompute', '#FBBF24'],
+                    ['swap', 'swap to CPU (V0 option)', '#22D3EE'],
+                    ['recompute', 'recompute (V1)', '#FBBF24'],
                   ] as const).map(([mode, label, color]) => (
                     <label
                       key={mode}
@@ -727,16 +727,17 @@ export default function BlockTableExplorer() {
             />
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
               spawning a 64-token request needs 4 free blocks. if the free queue hits zero mid-way,
-              the preemption dialog opens.
+              the preemption dialog opens. swap is the V0 / paper option; V1 only recomputes. TTFT
+              values are illustrative.
             </p>
             {(preemptResults.swap !== undefined || preemptResults.recompute !== undefined) && (
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-md border border-line bg-surface-2 p-2 font-mono text-[10px]">
-                  <p className="text-text-3">swap TTFT</p>
+                  <p className="text-text-3">swap (V0) TTFT</p>
                   <p className="text-cyan-300">{preemptResults.swap ?? '—'}{preemptResults.swap !== undefined ? ' ms' : ''}</p>
                 </div>
                 <div className="rounded-md border border-line bg-surface-2 p-2 font-mono text-[10px]">
-                  <p className="text-text-3">recompute TTFT</p>
+                  <p className="text-text-3">recompute (V1) TTFT</p>
                   <p className="text-amber-300">{preemptResults.recompute ?? '—'}{preemptResults.recompute !== undefined ? ' ms' : ''}</p>
                 </div>
               </div>

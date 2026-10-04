@@ -21,11 +21,11 @@ const lesson: Lesson = {
 
 The observation: many tokens are *easy* — function words, boilerplate, code punctuation — and a tiny "draft" model (or a cheap heuristic head) predicts them with high accuracy. The method:
 
-1. **Draft** the next K tokens with a small/fast model (e.g. a 100M-param drafter next to your 70B target) — K serial steps, but each ~100× cheaper than a target step.
-2. **Verify all K in one parallel forward pass of the target model** — one *prefill-shaped* (compute-bound, wide) pass over the K drafted tokens instead of K serial decode steps.
+1. **Draft** the next k tokens with a small/fast model (e.g. a 100M-param drafter next to your 70B target) — k serial steps, but each ~100× cheaper than a target step.
+2. **Verify all k in one parallel forward pass of the target model** — one *prefill-shaped* (compute-bound, wide) pass over the k drafted tokens instead of k serial decode steps.
 3. **Accept the longest prefix where the target's distribution agrees** (with a rejection-sampling rule that keeps the output *exactly* as the target model would have produced — this is lossless, not approximate), and resume from the first mismatch.
 
-The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; verification reuses those idle FLOPs to check K tokens per weight-read instead of 1 — **arithmetic intensity × K on the same bandwidth.** Typical acceptance rates (60–80% on predictable text) yield **1.5–2.5× decode speedups** with bit-identical output. And you've met the pattern before: it's the JIT's speculate-and-deopt (T0.L5), branch prediction (T4.L1), and optimistic concurrency control — optimism + cheap validation + safe rollback.`,
+The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; verification reuses those idle FLOPs to check k tokens per weight-read instead of 1 — **arithmetic intensity × k on the same bandwidth.** Model the acceptance of each drafted token as a probability α (a simplification: independent per position). The pass emits the accepted prefix plus one bonus token from the target itself, so the expected tokens per verification step is **E = (1 − α^(k+1)) / (1 − α)** — α = 0.7, k = 4 gives E ≈ 2.8. E is capped at 1/(1 − α) however long you draft, and each extra draft token adds only α^(k+1) to it. Typical acceptance rates (60–80% on predictable text) yield **1.5–2.5× decode speedups** once draft and verify costs are paid, with bit-identical output. And you've met the pattern before: it's the JIT's speculate-and-deopt (T0.L5), branch prediction (T4.L1), and optimistic concurrency control — optimism + cheap validation + safe rollback.`,
     },
     {
       type: 'diagram',
@@ -62,7 +62,7 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
       stats: [
         { value: '1.5–2.5×', label: 'typical speedup', hint: 'Acceptance-rate dependent; boilerplate/code accepts better than creative text.' },
         { value: '0', label: 'quality delta', hint: 'Rejection sampling makes output distributionally identical to the target model.' },
-        { value: 'K ≈ 4–8', label: 'draft length', hint: 'Sweet spot: longer drafts cost more verification and reject more.' },
+        { value: 'k ≈ 4–8', label: 'draft length', hint: 'Separate draft model, cheap per token. E = (1 − α^(k+1)) / (1 − α) flattens as k grows; T6.L6 shows why MTP stops at k ≈ 2–4.' },
         { value: '~free', label: 'verify FLOPs', hint: 'The wide pass uses ALUs that decode was leaving idle — the roofline pays you back.' },
       ],
     },
@@ -97,7 +97,7 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
           q: 'Speculative decoding speeds up decode without quality loss because…',
           options: [
             'The draft model is secretly as good as the target',
-            'Verification uses rejection sampling against the target\'s distributions, so accepted sequences are distributionally identical — speed comes from checking K tokens per weight-read',
+            'Verification uses rejection sampling against the target\'s distributions, so accepted sequences are distributionally identical — speed comes from checking k tokens per weight-read',
             'It quantizes the target model',
             'It skips the softmax',
           ],
@@ -106,16 +106,16 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
             'Losslessness is the point: the target model verifies, and mismatches are resampled from an adjusted distribution. The speedup is a roofline conversion — idle ALUs traded for fewer serial steps.',
         },
         {
-          q: 'Verifying K drafted tokens costs about as much as ONE decode step because…',
+          q: 'Verifying k drafted tokens costs about as much as ONE decode step because…',
           options: [
             'The target model caches the drafts',
-            'One parallel pass over K positions re-reads the weights once — decode was bandwidth-bound with idle ALUs, so the extra math is nearly free',
+            'One parallel pass over k positions re-reads the weights once — decode was bandwidth-bound with idle ALUs, so the extra math is nearly free',
             'Drafts are verified on the CPU',
-            'K is always 1',
+            'k is always 1',
           ],
           correct: [1],
           explanation:
-            'The weight read dominates the step and happens once regardless; scoring K positions is compute the bandwidth-bound regime wasn\'t using. AI × K on the same bytes — the whole trick.',
+            'The weight read dominates the step and happens once regardless; scoring k positions is compute the bandwidth-bound regime wasn\'t using. AI × k on the same bytes — the whole trick.',
         },
         {
           q: 'Chunked prefill improves goodput by…',

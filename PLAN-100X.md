@@ -581,6 +581,8 @@ F5 (trace your own wasm) and F6 (lab 10) wait in Wave 4.
 
 **v3:** truth moves to IndexedDB (`ledger`, `components`, `meta.schemaVersion`), with a derived snapshot under a **new key, `kernelspace:v2`**. Static content (KC graph, items, claims, atlas) is CI-verified; the learner model is always derived.
 
+> **Superseded by OD1 (decided 2026-10-04): start fresh.** The ledger starts empty under the new key and old `kernelspace:v1` data is ignored. The schema guard, cross-tab sync and import/export rules below still apply; the legacy-migration points (1, 2, 5) and the pre-v3 badge/Recertify do not.
+
 **Migration (idempotent, mixed-version safe):**
 1. **Deterministic legacy ids.** Legacy events get ids `legacy:<kind>:<ref>:<completedAt>`, so re-migration and re-import dedupe. Labs become `legacy` `lab-check` events; clicks become "introduced"; best scores become "practiced". `legacyXp` is the maximum across devices.
 2. **Read-only old key.** `kernelspace:v1` becomes read-only legacy input, re-projected idempotently on change, so stale-tab writes are captured. zustand 5.0.14 migrates on any version mismatch, including downgrades; hence the new key.
@@ -812,7 +814,7 @@ It gates only after validation on ~50 hand-labelled items, with false rejects re
 
 | # | Decision | Options | Trade-offs | Recommendation |
 |---|---|---|---|---|
-| OD1 | Legacy progress | frozen pre-v3 badge plus Recertify; recompute; keep XP live | honest vs feels like deletion vs keeps click-earned ROOT | badge + Recertify |
+| OD1 | Legacy progress | frozen pre-v3 badge plus Recertify; recompute; keep XP live; start fresh | honest vs feels like deletion vs keeps click-earned ROOT vs simplest | **Decided 2026-10-04: start fresh.** kernelspace is new, so there is no legacy cohort to protect. v3 ignores `kernelspace:v1`; no migration, pre-v3 badge or Recertify |
 | OD2 | Where LLM triage runs | locally; in Actions with a secret | attention vs spend and key custody | locally |
 | OD3 | Outcome channel | public issue form; anonymous endpoint | identity-linked vs breaks zero-server | bucketed issue form, n ≥30 |
 | OD4 | Build bot | offer opt-in; don't | zero-install vs public solutions | Wave 4, opt-in |

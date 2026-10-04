@@ -4,7 +4,8 @@
  * component files to export only components.
  */
 
-import { instantiateLab, LabAbiError, LabTrapError, type LabModule } from '@/lib/wasm-lab'
+import { LabAbiError, LabTimeoutError, LabTrapError, type LabModule } from '@/lib/wasm-lab'
+import { validateLabInWorker } from '@/lib/lab-worker'
 import {
   parseDump,
   type ManagerDriver,
@@ -43,14 +44,16 @@ export function makeWasmQueue(mod: Mod, cap = 32): QueueDriver {
   }
 }
 
-/** Validate an uploaded module: loadable, has the bridge, right lab, green checks. */
+/**
+ * Validate an uploaded module: loadable, has the bridge, right lab, green checks.
+ * Runs in the lab worker with a timeout — the panels only instantiate modules that passed.
+ */
 export async function validateModule(bytes: ArrayBuffer, wantLab: string): Promise<{ ok: true } | { ok: false; title: string; detail: string }> {
   try {
-    const mod = await instantiateLab(bytes)
-    if (!mod.hasInvoke) {
+    const { report, hasInvoke } = await validateLabInWorker(bytes)
+    if (!hasInvoke || !report) {
       return { ok: false, title: 'module predates the fleet bridge', detail: 'rebuild with the latest lab template (adds ks_invoke).' }
     }
-    const report = mod.runChecks()
     if (report.lab !== wantLab) {
       return { ok: false, title: 'wrong lab module', detail: `this slot wants ${wantLab}, got "${report.lab}".` }
     }
@@ -60,7 +63,12 @@ export async function validateModule(bytes: ArrayBuffer, wantLab: string): Promi
     }
     return { ok: true }
   } catch (e) {
-    if (e instanceof LabTrapError) return { ok: false, title: 'module trapped', detail: 'a todo!() is still open in this crate.' }
+    if (e instanceof LabTrapError) {
+      return e.phase === 'invoke'
+        ? { ok: false, title: 'ks_invoke trapped', detail: 'the self-checks passed, but the fleet bridge panicked on its first calls — check init and command handling.' }
+        : { ok: false, title: 'module trapped', detail: 'a todo!() is still open in this crate.' }
+    }
+    if (e instanceof LabTimeoutError) return { ok: false, title: e.title, detail: e.message }
     if (e instanceof LabAbiError) return { ok: false, title: 'not a lab module', detail: e.message }
     return { ok: false, title: 'unexpected error', detail: String(e) }
   }

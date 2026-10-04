@@ -35,7 +35,7 @@ The raw mechanics are fast — a few microseconds at worst. The *real* cost is t
         { value: '~1–3 µs', label: 'thread switch', hint: 'Same address space: registers + scheduler bookkeeping.' },
         { value: '~3–10 µs', label: 'process switch', hint: 'Plus page-table switch, TLB shootdown, cold caches.' },
         { value: '~50–100 ns', label: 'syscall', hint: 'User→kernel transition without a thread change. Cheap but not free.' },
-        { value: '~10 ms', label: 'CFS timeslice', hint: 'Rough preemption quantum for Linux\'s default scheduler at low load.' },
+        { value: '~0.75–3 ms', label: 'EEVDF base slice', hint: 'Default slice of Linux\'s scheduler since 6.6; scales with CPU count and is tunable.' },
       ],
     },
     {
@@ -60,7 +60,7 @@ The raw mechanics are fast — a few microseconds at worst. The *real* cost is t
       steps: [
         { caption: 'Thread A is executing. The timer interrupt fires (or A blocks on I/O); the CPU traps to kernel mode. A\'s remaining timeslice is forfeit.', active: ['t1'], edges: ['t1->save'] },
         { caption: 'The kernel saves A\'s entire register file into its process control block — a few hundred bytes, deterministic cost.', active: ['save'], edges: ['save->sched'] },
-        { caption: 'The scheduler consults the runqueue (Linux: CFS red-black tree ordered by vruntime) and picks the next thread. Fairness is the goal; latency is the casualty.', active: ['sched'], edges: ['sched->load'] },
+        { caption: 'The scheduler consults the runqueue (Linux: EEVDF — earliest virtual deadline among eligible threads, kept in a red-black tree) and picks the next thread. Fairness is the goal; latency is the casualty.', active: ['sched'], edges: ['sched->load'] },
         { caption: 'B\'s registers are restored; the CPU resumes — but B\'s data is not in this core\'s caches. The next few thousand instructions run at DRAM speed while caches refill. THIS is the hidden tax.', active: ['load', 't2', 'cache'], edges: ['load->t2', 't2->cache'] },
       ],
     },
@@ -86,14 +86,16 @@ When switches get expensive, engineers stop switching. Three great escapes, all 
         {
           os: 'context switch',
           osLine: 'Save/restore state per thread; cache+TLB warmth is the hidden cost.',
-          llm: 'sequence swap / preemption',
+          llm: 'sequence preemption',
           llmLine: 'vLLM pauses a sequence by evicting its KV; resuming recomputes or reloads it.',
+          breaks: 'A thread switch saves a few hundred bytes of registers; preempting a sequence offloads or regenerates megabytes to gigabytes of KV, so it is rarer and far costlier.',
         },
         {
           os: 'runqueue / timeslice',
           osLine: 'Runnable threads wait for a quantum on a core.',
           llm: 'waiting queue / iteration',
           llmLine: 'Waiting requests get a slot in the next GPU iteration — the batch is the timeslice.',
+          breaks: 'A core runs one thread per slice; a GPU iteration serves the whole batch at once, so the slice is shared by many sequences rather than owned by one.',
         },
       ],
     },
@@ -122,45 +124,74 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
         {
           q: 'The defining difference between a process and a thread is…',
           options: [
-            'Processes are faster to create',
-            'A process owns a private address space and resource bundle; threads share their process\'s address space',
-            'Threads cannot access the heap',
-            'Processes cannot be scheduled',
+            'A process has its own execution context scheduled by the kernel, while threads are scheduled by the language runtime inside that process',
+            'A process owns a private address space and resource bundle, while its threads share that one address space and those resources',
+            'A thread gets a private stack and heap and shares only code and globals with its siblings, while a process shares nothing at all',
+            'A process is the unit the scheduler places on a core, while a thread is only a queue of work items that the process itself consumes',
           ],
           correct: [1],
           explanation:
             'Process = address space + resources (isolation); thread = execution context within it (sharing). Every trade-off — safety vs communication cost — follows from that single fact.',
+          why: [
+            'Misconception: threads are always user-level. Linux threads are kernel-scheduled entities, just like processes; the runtime-scheduled kind (green threads, goroutines) is a separate design.',
+            'Right: isolation comes from the private address space and resources; sharing comes from threads living inside one. Every safety versus communication-cost trade-off follows from that single fact.',
+            'Misconception: threads have private heaps. Only stacks are private; sibling threads share one heap, which is exactly why they can pass pointers for free and why every data race in this track exists.',
+            'Misconception: a thread is a work queue. A thread is a schedulable execution context (registers, stack, program counter); a thread pool is the work queue built on top of such threads.',
+          ],
         },
         {
           q: 'The largest hidden cost of a context switch is usually…',
           options: [
-            'Saving the registers',
-            'The kernel trap itself',
-            'Cache and TLB cold-start for the incoming thread — thousands of instructions at DRAM latency',
-            'Updating the runqueue',
+            'Saving and restoring the register file, which takes thousands of cycles because every register is written out to main memory',
+            'The user-to-kernel trap itself, since entering supervisor mode flushes the pipeline and costs microseconds on every switch',
+            'Cache and TLB cold-start for the incoming thread: thousands of instructions run at DRAM latency while the caches refill',
+            'Updating the runqueue data structure, whose tree rebalancing gets slower as the number of runnable threads grows',
           ],
           correct: [2],
           explanation:
             'Register save/restore is microseconds at worst; the aftermath is the tax. Warm caches are a thread\'s most valuable possession, and the switch throws them away — especially across processes (CR3 switch → TLB flush).',
+          why: [
+            'Misconception: register traffic dominates. The register file is a few hundred bytes and saves in tens to hundreds of cycles; the cost that matters comes afterward, in the caches.',
+            'Misconception: the trap is the tax. A syscall round trip is roughly 50–100 ns; it does not flush the cache hierarchy and is far smaller than the cache refill that follows a switch.',
+            'Right: the incoming thread finds cold L1/L2 and, across processes, a flushed TLB, so its next thousands of instructions run at DRAM latency. That aftermath dwarfs the mechanical switch.',
+            'Misconception: runqueue bookkeeping dominates. Picking and requeueing a thread is O(log n) with tiny constants, a small fraction of a microsecond next to the cache refill penalty.',
+          ],
         },
         {
           q: 'A CPU-bound service with 8 cores should run about how many busy threads?',
-          options: ['64 — more parallelism is always better', '8 — matching cores minimizes wasted switches', '1 — avoid contention entirely', 'It depends only on RAM'],
+          options: [
+            'About 64, because more runnable threads keep every core busy during cache misses, so throughput keeps rising with thread count',
+            'About 8, because past the core count extra compute-bound threads only timeslice, adding switch and cache cost without throughput',
+            'About 1, because a single thread has no contention or switching, so latency is optimal and throughput is unaffected by core count',
+            'It depends only on RAM, because each thread needs a stack and heap and memory is the first resource a thread pool exhausts',
+          ],
           correct: [1],
           explanation:
             'Beyond core count, extra compute-bound threads only timeslice: same total CPU, minus context-switch and cache overhead. The classic formula (cores × utilization targeting) only exceeds cores when threads block on I/O.',
+          why: [
+            'Misconception: parallelism hides stalls. That works only if threads block (I/O); compute-bound threads beyond the core count just wait for a slice and pay switch and cache costs.',
+            'Right: with no blocking, each core is already saturated by one thread. More threads add switching and cache pollution while total CPU time stays fixed, so throughput flattens or falls.',
+            'Misconception: avoid concurrency entirely. One thread uses one core, so seven of eight cores idle and throughput drops roughly eightfold; the goal is to match cores, not to eliminate switches.',
+            'Misconception: memory is the limit. Stacks are cheap next to cores; at 8 cores the binding constraint on compute-bound work is CPU time, and RAM only matters at thousands of threads.',
+          ],
         },
         {
           q: 'Java virtual threads (Loom) and goroutines reduce switch cost by…',
           options: [
-            'Using more CPU cores',
-            'Multiplexing many logical threads onto few OS threads in userspace — most "switches" never enter the kernel',
-            'Disabling the garbage collector',
-            'Pinning each thread to a NUMA node',
+            'Pinning each logical thread to a hardware core so the kernel scheduler never has to switch it out for another',
+            'Multiplexing many logical threads onto few OS threads in userspace, so most parks and resumes never enter the kernel',
+            'Using SMT hardware thread contexts to keep each logical thread\'s registers resident on the core, so switches skip save and restore',
+            'Running each logical thread on its own kernel thread with a shrunken stack, so every kernel context switch moves less memory',
           ],
           correct: [1],
           explanation:
             'M:N scheduling makes parking/resuming a userspace operation (stack copy, no trap, no TLB flush). It is the event-loop idea with thread syntax — the same reason tokio exists (T2.L6, T3.L4).',
+          why: [
+            'Misconception: pinning removes switches. A hardware core runs one thing at a time, so thousands of logical threads cannot each own one; multiplexing them is the entire point.',
+            'Right: a logical thread parks by saving a small continuation in userspace and the carrier OS thread picks another. No trap, no CR3 reload, no TLB flush, so the cost is a function call.',
+            'Misconception: logical threads map to hardware thread contexts. SMT offers two per core, not thousands; virtual threads and goroutines park in userspace, so there is no kernel switch to speed up.',
+            'Misconception: smaller stacks make kernel switches cheap. The kernel switch cost is dominated by trap and cache effects, not stack bytes, and one kernel thread per task still caps scale.',
+          ],
         },
       ],
     },

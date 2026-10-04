@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Link } from 'react-router'
 import { motion, useReducedMotion } from 'framer-motion'
 import Lenis from 'lenis'
@@ -17,9 +17,11 @@ import {
 import MemoryGrid from '@/components/home/MemoryGrid'
 import ScrollStory from '@/components/home/ScrollStory'
 import SimShowcase from '@/components/home/SimShowcase'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import TrackCard from '@/components/TrackCard'
 import CodeBlock from '@/components/CodeBlock'
 import { LinkButton } from '@/components/Button'
+import { lazyDecoration } from '@/lib/lazy-decoration'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
 import {
   useProgress,
@@ -34,7 +36,8 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 
-const ParticleField = lazy(() => import('@/components/home/ParticleField'))
+// Decoration only: if this chunk fails to load the hero renders without it, and the page is not reloaded.
+const ParticleField = lazyDecoration(() => import('@/components/home/ParticleField'))
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
@@ -88,9 +91,11 @@ function Hero() {
       {/* background layers */}
       <div aria-hidden className="absolute inset-0 bg-blueprint" />
       {showParticles && (
-        <Suspense fallback={null}>
-          <ParticleField />
-        </Suspense>
+        <ErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <ParticleField />
+          </Suspense>
+        </ErrorBoundary>
       )}
       <div aria-hidden className="absolute inset-0 bg-grad-radial-glow" />
 

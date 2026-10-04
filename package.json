@@ -11,8 +11,12 @@
     "verify:traces": "bun scripts/verify-traces.ts",
     "verify:leaderboard": "bun scripts/verify-leaderboard.ts",
     "verify:field-notes": "bun scripts/verify-field-notes.ts",
+    "verify:errata": "bun scripts/verify-errata.ts",
     "verify:items": "bun scripts/verify-items.ts",
     "verify:capstone": "bun scripts/verify-capstone.ts",
+    "verify:claims": "bun scripts/verify-claims.ts",
+    "verify:bundle": "bun scripts/verify-bundle.ts",
+    "verify:seeds": "bun scripts/verify-seeds.ts",
     "leaderboard:build": "bun scripts/build-leaderboard.ts"
   },
   "dependencies": {

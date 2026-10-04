@@ -84,12 +84,14 @@ The payoff profile is why systems teams keep choosing it: C-level control of lay
           osLine: 'Safety at runtime: trace reachability, pay CPU + pauses + headers.',
           llm: '—',
           llmLine: 'Python orchestration in serving stacks: fine off the hot path.',
+          breaks: 'There is no KV-cache counterpart to a collector: GC covers the host\'s orchestration objects, while KV blocks are freed explicitly by the block manager and are never traced.',
         },
         {
           os: 'ownership (Rust)',
           osLine: 'Safety at compile time: prove one owner per value, zero runtime cost.',
           llm: 'Dynamo data plane',
-          llmLine: 'KV bytes move between nodes at line rate; no GC pause is affordable.',
+          llmLine: 'Rust orchestrates the KV transfers that NIXL (C++) performs between nodes; no GC pause is affordable on that path.',
+          breaks: 'Ownership is checked at compile time inside one process; it does not cover bytes in flight on the network or in device memory, where unsafe and FFI code still carry the invariants.',
         },
       ],
     },
@@ -97,7 +99,7 @@ The payoff profile is why systems teams keep choosing it: C-level control of lay
       type: 'prose',
       md: `## The through-line
 
-T1 took you from "a function call is magic" to building an allocator. Along the way you met every classic memory bug personally. Ownership is the claim that all of them were *one* bug — uncontrolled aliasing plus unclear lifetimes — and that the bug class is solvable. When T5 shows you NVIDIA's choice of Rust for Dynamo's KV-moving data plane, you will read it not as fashion but as a conclusion: **the hot path of AI infrastructure is exactly where C++ used to win by default, and exactly where memory bugs cost the most.**
+T1 took you from "a function call is magic" to building an allocator. Along the way you met every classic memory bug personally. Ownership is the claim that all of them were *one* bug — uncontrolled aliasing plus unclear lifetimes — and that the bug class is solvable. When T5 shows you NVIDIA's choice of Rust for the Dynamo code that orchestrates KV transfers (NIXL, a C++ library, does the byte-moving), you will read it not as fashion but as a conclusion: **the hot path of AI infrastructure is exactly where C++ used to win by default, and exactly where memory bugs cost the most.**
 
 Next track: the operating system. You have built memory management by hand; now you get to see how the kernel does it for every process at once — and why PagedAttention is that story wearing a GPU.`,
     },
@@ -107,50 +109,74 @@ Next track: the operating system. You have built memory management by hand; now 
         {
           q: 'Rust\'s ownership rule is best stated as…',
           options: [
-            'Every value is reference-counted at runtime',
-            'Every value has exactly one owner; when the owner goes out of scope the value is dropped deterministically',
-            'All memory must be allocated on the stack',
-            'The compiler garbage-collects at build time',
+            'Every value is reference-counted at runtime and freed when the count reaches zero',
+            'Each value has one owner, and it is dropped deterministically when that owner leaves scope',
+            'Every value must live on the stack, so leaving a scope frees it automatically',
+            'A compile-time garbage collector scans the program and frees unreachable values',
           ],
           correct: [1],
           explanation:
             'One owner → one drop. Double-free and leaks die immediately; moves make assignment transfer the obligation. It is RAII made universal and checked — with no runtime bookkeeping.',
+          why: [
+            'Describes Rc/Arc, which is opt-in. Default ownership has no count: a single owner exists, and the value is dropped deterministically when the single owner leaves scope, with no reference count.',
+            'Right: one owner means one drop. A move transfers the obligation, and the value is dropped at a deterministic point when the owner leaves scope.',
+            'Heap values like Box and Vec are owned too. Ownership governs lifetimes, not placement, and an owner on the stack frees its heap data on drop.',
+            'Rust has no collector. The compiler checks ownership and inserts drops; it does not trace reachability, and nothing runs to find garbage at build or run time.',
+          ],
         },
         {
           q: 'The borrow rules ("many &T XOR one &mut T, never outliving the owner") primarily eliminate…',
           options: [
-            'Stack overflow',
-            'Integer overflow',
-            'Dangling pointers and data races, statically — readers-vs-writer enforced at compile time',
-            'Memory leaks from cyclic references',
+            'Stack overflow, because borrowed values are never copied onto the stack',
+            'All runtime panics, such as out-of-bounds indexing, integer overflow or unwrap on None',
+            'Dangling pointers and data races, enforced statically as readers-versus-one-writer',
+            'Memory leaks from cyclic references, since borrows can never form a cycle',
           ],
           correct: [2],
           explanation:
             'Exclusive mutable access is exactly what both use-after-free and data races violate. The compiler proves the discipline; the binary pays nothing. (Cycles can still leak under Rc — ownership prevents most, not literally all, leaks.)',
+          why: [
+            'Unrelated to the stack. Deep recursion still overflows it; borrowing only constrains who may read or write a value and how long a reference lives.',
+            'Rust still panics at run time on out-of-bounds indexing, unwrap on None, and overflow in debug builds. Borrow rules address aliasing and lifetimes, not these checks.',
+            'Right: use-after-free and data races both need a writer overlapping other access. One writer or many readers, never outliving the owner, rules both out at compile time.',
+            'Cycles are made with Rc or Arc, which are owned values and not borrows, so the rules do not stop them. Rc cycles can still leak.',
+          ],
         },
         {
           q: 'When Rust code needs shared ownership or cycles, the idiomatic escape is…',
           options: [
-            'Global variables',
-            'unsafe everywhere',
-            'Rc/Arc reference counting, or arena allocation with index handles instead of pointers',
-            'It is impossible — such programs cannot be written in Rust',
+            'static mut globals, which every function can reach without owning them',
+            'Wrapping the whole program in an unsafe block so the borrow checker is switched off',
+            'Rc/Arc reference counting, or an arena with index handles in place of pointers',
+            'There is none; Rust cannot express graphs or cycles without a garbage collector',
           ],
           correct: [2],
           explanation:
             'Graphs and cycles are real; Rust offers opt-in runtime counting (Rc/Arc) or the arena pattern — allocate in one owner and pass indices. Both keep the unsafe surface tiny and auditable.',
+          why: [
+            'Mutable globals need unsafe to touch and give up the aliasing guarantees entirely. They are a last resort, not the idiomatic way to share ownership.',
+            'Block-wide unsafe does not turn the borrow checker off; it only unlocks a few extra operations. Idiomatic code keeps unsafe small and wrapped behind safe types.',
+            'Right: Rc/Arc add runtime counting only where sharing is needed, and an arena has one owner while nodes refer to each other by index.',
+            'Graphs, trees with parent links, and cyclic structures are routine in Rust through Rc, Arc, arenas, and crates built on them. No collector is required.',
+          ],
         },
         {
-          q: 'Why did NVIDIA choose Rust for Dynamo\'s KV-moving data plane over C++?',
+          q: 'Dynamo\'s Rust code orchestrates KV transfers that NIXL (C++) performs. Why Rust for that layer over C++?',
           options: [
-            'Rust has more mature CUDA tooling than C++',
-            'C-level performance and layout control with compile-time memory safety — no GC pauses, far fewer memory bugs on the hottest path',
-            'Rust binaries are smaller',
-            'Python interop is impossible from C++',
+            'Rust has more mature CUDA tooling and kernel libraries than C++, so GPU work is easier',
+            'C-class speed and control, with compile-time memory safety and no GC pauses',
+            'Rust binaries are smaller and start faster, which matters when scaling out replicas',
+            'C++ cannot interoperate with Python at all, whereas Rust has first-class bindings',
           ],
           correct: [1],
           explanation:
-            'The data plane moves gigabytes of KV cache under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (70% CVE stat) or GC pauses. Rust is the only mainstream language offering both halves.',
+            'The data plane coordinates gigabytes of KV-cache transfers under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (70% CVE stat) or GC pauses. Rust is the only mainstream language offering both halves.',
+          why: [
+            'Reverses the ecosystem. CUDA toolchains, kernel libraries, and NVIDIA\'s own libraries are C++-first; Rust reaches them through bindings, so tooling is not the motive.',
+            'Right: it keeps the control and speed of C++ and removes the memory-bug class at compile time, with no GC pauses to blow tail-latency budgets.',
+            'Binary size and startup are not the deciding trade-off for a data plane moving gigabytes under tail-latency budgets; safety and control are.',
+            'C++ binds to Python well through pybind11 and nanobind, so interop does not separate the two languages.',
+          ],
         },
       ],
     },

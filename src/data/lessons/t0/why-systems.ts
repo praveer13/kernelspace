@@ -21,7 +21,7 @@ The answers are all systems answers. Not ML answers — **systems** answers. The
       stats: [
         { value: '1962', label: 'virtual memory', hint: 'The Atlas computer at Manchester introduces paging and one-level stores.' },
         { value: '2023', label: 'PagedAttention', hint: 'vLLM re-implements paging for KV caches — block tables, sharing, near-zero waste.' },
-        { value: '2024', label: 'Dynamo', hint: 'NVIDIA ships a disaggregated serving stack with a Rust data plane.' },
+        { value: '2025', label: 'Dynamo', hint: 'NVIDIA launches (GTC, March 2025) a disaggregated serving stack with a Rust data plane.' },
         { value: '~50y', label: 'idea half-life', hint: 'The concepts outlive every framework you have ever learned.' },
       ],
     },
@@ -31,7 +31,7 @@ The answers are all systems answers. Not ML answers — **systems** answers. The
 
 Here is the thesis of the entire course, stated once, up front: **modern LLM serving is operating systems, reincarnated on accelerators.** When the vLLM authors needed to manage the key-value cache — the per-token attention state that eats GPU memory alive — they reached for the exact machinery an OS uses to manage RAM: fixed-size blocks, a block table per sequence, copy-on-write sharing, and near-zero fragmentation. They named it PagedAttention, and said so in the title of the paper.
 
-When serving clusters needed to move gigabytes of KV state between prefill nodes and decode nodes without stalls, engineers reached for zero-copy networking, backpressure, and message queues — and wrote it in Rust for the same reasons operating systems are written in C and Rust: predictable latency, no garbage collector, direct control of memory layout.
+When serving clusters needed to move gigabytes of KV state between prefill nodes and decode nodes without stalls, engineers reached for zero-copy networking, backpressure, and message queues. NVIDIA wrote Dynamo's orchestration of those transfers in Rust (the transfer library underneath, NIXL, is C++), for the same reasons operating systems are written in C and Rust: predictable latency, no garbage collector, direct control of memory layout.
 
 Once you see the isomorphism, the papers stop being alien. They become *familiar ideas with new variable names.*`,
     },
@@ -44,18 +44,21 @@ Once you see the isomorphism, the papers stop being alien. They become *familiar
           osLine: 'Maps virtual pages → physical frames so processes share RAM safely.',
           llm: 'KV block table',
           llmLine: 'Maps a sequence\'s logical tokens → physical KV blocks in GPU memory.',
+          breaks: 'A page table also isolates processes from each other; the block table only lets one sequence\'s tokens sit in scattered blocks, and every sequence\'s blocks live in one shared KV pool with no protection boundary between them.',
         },
         {
           os: 'swap / eviction',
           osLine: 'Cold pages move to disk under memory pressure; LRU decides who.',
-          llm: 'KV offload & preemption',
-          llmLine: 'Cold sequences\' KV cache swaps to CPU RAM when HBM fills up.',
+          llm: 'KV preemption & offload',
+          llmLine: 'When HBM fills up, vLLM V1 preempts a sequence: its blocks are freed and recomputed later (V0 could swap them to CPU RAM).',
+          breaks: 'A swapped-out page keeps its contents on disk and returns on a fault; in V1 a preempted sequence loses its blocks and the engine recomputes its prefill on resume, so the price is GPU compute rather than I/O.',
         },
         {
           os: 'scheduler',
           osLine: 'Preemptive multitasking packs runnable processes onto cores.',
           llm: 'continuous batcher',
           llmLine: 'Iteration-level scheduling packs running requests onto the GPU.',
+          breaks: 'The OS preempts a running thread when its time quantum expires; continuous batching has no quantum, so a sequence normally stays in the batch until it finishes and is preempted mainly when KV blocks run out.',
         },
       ],
     },
@@ -100,38 +103,74 @@ Everything is unlocked. The order is the point. Each lesson is 15–35 minutes, 
         {
           q: 'PagedAttention (vLLM) is best understood as a direct port of which OS idea?',
           options: [
-            'Virtual memory paging — fixed-size blocks, per-sequence block tables, copy-on-write sharing',
-            'Round-robin CPU scheduling with time slices',
-            'Journaling filesystems with write-ahead logs',
-            'Interrupt-driven I/O with DMA',
+            'Virtual memory paging: fixed-size blocks mapped through per-sequence KV block tables, with copy-on-write sharing',
+            'Round-robin CPU scheduling: sequences take fixed time slices on the GPU so no single request starves the others',
+            'Journaling filesystems: KV blocks are written ahead to a log so an interrupted request can be replayed after a crash',
+            'Interrupt-driven I/O with DMA: the GPU copies KV state into memory without involving the CPU in each transfer',
           ],
           correct: [0],
           explanation:
             'The vLLM paper frames KV-cache management explicitly as paging: logical token blocks map to physical KV blocks through a block table, sequences share prefixes copy-on-write, and fragmentation drops to near zero.',
+          why: [
+            'Right: the vLLM paper treats KV cache like virtual memory: fixed-size blocks, a per-sequence block table from logical to physical blocks, and copy-on-write for shared prefixes. Fragmentation drops to near zero.',
+            'Mixes up memory management with scheduling. Time slicing decides who runs next; PagedAttention decides where each sequence\'s KV bytes live. Continuous batching is the scheduling side, a separate idea.',
+            'Journaling protects on-disk metadata across crashes. KV cache is volatile GPU memory that is simply recomputed if lost, so there is no log to replay and no durability problem for PagedAttention to solve.',
+            'DMA and interrupts are about moving bytes without the CPU. PagedAttention solves allocation and fragmentation of KV memory, not how bytes get transferred, so this describes a different layer of the system.',
+          ],
         },
         {
           q: 'During single-token decode of an 8B FP16 model (~16 GB of weights), what fundamentally limits tokens/second?',
           options: [
-            'The GPU\'s FP16 TFLOPs rating',
-            'HBM bandwidth — every token must re-read all weights plus the KV cache',
-            'PCIe bandwidth between CPU and GPU',
-            'The tokenizer\'s merge table size',
+            'The GPU\'s peak FP16 TFLOPs: an 8B model needs about 16 GFLOPs per token, so the math units set the pace',
+            'HBM bandwidth: every token streams all ~16 GB of weights, plus the whole KV cache, out of GPU memory',
+            'PCIe bandwidth: weights live in host RAM and cross the PCIe link to the GPU again for every token',
+            'CPU-side tokenization: converting between text and token ids costs more per step than the GPU forward pass',
           ],
           correct: [1],
           explanation:
             'Decode is memory-bound: ~16 GB moved per token against ~3.35 TB/s HBM3 gives a ~5 ms/token physics floor. Compute units sit idle waiting for bytes; that is why batching and quantization (fewer bytes) are the big levers.',
+          why: [
+            'Confuses compute-bound with memory-bound. 16 GFLOPs is trivial next to hundreds of TFLOPs; at small batch the math units idle waiting for weights. Compute only binds at large batch sizes.',
+            'Right: decode does about 1 FLOP per byte read, so moving ~16 GB per token at ~3.35 TB/s HBM3 gives a ~5 ms floor. Batching and quantization help because they cut bytes moved per token.',
+            'Weights stay resident in HBM after loading; PCIe carries prompts and sampled tokens. Streaming 16 GB per token over PCIe (roughly 64 GB/s) would be far slower than HBM at 3.35 TB/s.',
+            'Tokenization is a microsecond-scale CPU step, overlapped with GPU work. It affects front-end latency, not the per-token decode floor, which is set by bytes read from HBM.',
+          ],
         },
         {
           q: 'Why did NVIDIA implement Dynamo\'s data plane in Rust rather than Python?',
           options: [
-            'Rust has better GPU driver support than Python',
-            'Predictable latency, no GC pauses, and direct memory control for moving KV state between nodes',
-            'Python cannot express async I/O',
-            'Rust compiles to CUDA natively',
+            'Rust has better GPU driver support: its bindings reach the hardware directly while Python goes through slower wrappers',
+            'Predictable tail latency with no GC pauses, plus tight memory control in the code that orchestrates KV transfers',
+            'Python cannot express async I/O, so a networked data plane written in it would block on every KV transfer',
+            'Rust compiles to CUDA natively, so the data plane and the GPU kernels can share one codebase and one toolchain',
           ],
           correct: [1],
           explanation:
-            'A serving data plane shuffles gigabytes of KV cache with tight tail-latency budgets. GC pauses and interpreter overhead are exactly what you cannot afford; Rust gives C-level control with memory safety — the same rationale as OS kernels.',
+            'A serving data plane coordinates gigabytes of KV-cache transfers under tight tail-latency budgets (NIXL, a C++ library, moves the bytes; Dynamo\'s Rust code orchestrates it). GC pauses and interpreter overhead are exactly what you cannot afford; Rust gives C-level control with memory safety, the same rationale as OS kernels.',
+          why: [
+            'Driver access is not the issue. CUDA drivers expose C APIs, and Rust and Python both call them through bindings. The GPU executes the same CUDA kernels either way.',
+            'Right: a data plane that orchestrates gigabytes of KV transfers runs under tight p99 budgets. Interpreter overhead and unpredictable pauses hurt there; Rust gives C-level control with memory safety, the same rationale as OS kernels.',
+            'Python has asyncio and mature async libraries. The real cost is interpreter overhead and the GIL under heavy transfer concurrency, not missing async syntax.',
+            'Production GPU kernels are written in CUDA C++ or similar, not compiled from Rust. Rust in Dynamo is host-side code orchestrating transfers, so a shared-toolchain argument does not apply.',
+          ],
+        },
+        {
+          q: 'An 8B FP16 model streams ~16 GB of weights every decode step. Why can adding requests to the batch raise throughput almost for free, yet eventually cause an OOM?',
+          options: [
+            'Every request brings its own compute units, so throughput scales linearly until the chip has no free cores left to run on',
+            'All requests in a batch share one KV cache, so memory stays flat and only the longest prompt can trigger an OOM',
+            'The weights are streamed once per step and shared by the whole batch; each sequence adds only its own KV cache',
+            'Idle compute units absorb extra requests for free, and the OOM hits once the batch exceeds peak GPU FLOPs',
+          ],
+          correct: [2],
+          explanation:
+            'Decode is memory-bound: the weights are read once per step, so a bigger batch spreads the same ~16 GB over more tokens. But every sequence needs its own KV cache, so HBM capacity becomes the cap. That is the opening question of this lesson, answered.',
+          why: [
+            'A GPU has a fixed number of compute units, and extra requests bring none with them. The free ride comes from reusing weights already streamed, and a failed allocation is a memory event, not a core count.',
+            'Each sequence owns a KV cache that grows by one entry per token, apart from shared prefixes. Memory therefore grows with batch size and context length, and that growth is the usual cause of OOM.',
+            'Right: the ~16 GB of weights are read once per step whatever the batch size, so extra sequences reuse those bytes. Each one adds only its own KV cache, which grows with context and eventually fills HBM.',
+            'Idle compute is real at small batch, which is why batching is cheap, but an OOM is an out-of-memory error, not a FLOPs limit. Running short of FLOPs makes steps slower; running short of HBM makes allocation fail.',
+          ],
         },
       ],
     },

@@ -10,6 +10,7 @@ import {
   makeRefScheduler,
   makeRequestStream,
   makeServingMetrics,
+  PRACTICE_SEED,
   type ManagerDump,
 } from '@/lib/fleet-model'
 import {
@@ -83,7 +84,7 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
             })()
         : profile.artifactUrl
           ? await loadTraceStream(profile.artifactUrl)
-          : makeRequestStream(REQ_COUNT, SPAN, 0x5eed)
+          : makeRequestStream(REQ_COUNT, SPAN, PRACTICE_SEED)
     const referenceStream = stream.map((request) => ({
       ...request,
       ...(request.tokens ? { tokens: [...request.tokens] } : {}),
@@ -308,7 +309,8 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
       <p className="font-mono text-[10px] leading-relaxed text-text-3">
         {trafficDescription} · {trafficProfile.config.maxRunning} slots ·{' '}
         {trafficProfile.config.numBlocks * trafficProfile.config.blockSize} token capacity · TTFT SLO{' '}
-        {trafficProfile.config.sloTtft} ticks
+        {trafficProfile.config.sloTtft} ticks · practice run,{' '}
+        {traffic === 'synthetic' ? `fixed seed 0x${PRACTICE_SEED.toString(16)}, ` : ''}not graded
       </p>
 
       <AnimatePresence>

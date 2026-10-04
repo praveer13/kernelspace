@@ -13,13 +13,13 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **LLMPerf** (Ray's reference load generator), **GenAI-Perf** (NVIDIA's Triton analyzer), **InferenceMAX** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. The methodology below is what separates them from a blog screenshot.`,
+      md: `You can now compute the numbers (T4–T6) and name the objective (T7.L1). The remaining skill is measuring them on real systems without fooling yourself. The public harnesses to know: **LLMPerf** (Ray's reference load generator), **GenAI-Perf** (NVIDIA's Triton analyzer), **InferenceX (formerly InferenceMAX)** (SemiAnalysis' open nightly benchmark across vLLM/SGLang/TRT-LLM on H100/H200/B200/GB200 and AMD), and **ArtificialAnalysis** for provider-level comparisons. The methodology below is what separates them from a blog screenshot.`,
     },
     {
       type: 'prose',
       md: `## Rule 1: The traffic is the benchmark
 
-Results are properties of the workload, not the engine. Every number must ship with: **input/output length distributions** (fixed 1k/1k is a different universe from lognormal 4k/500), **arrival process** (Poisson for open-loop truth, closed-loop concurrency for saturation curves), **prefix sharing ratio** (agentic traffic with 90% shared prefix is a different engine — T6.L8), and **temperature/sampling** (affects output length and acceptance rates). InferenceMAX publishes DeepSeek-R1 and Llama shapes explicitly for this reason; when a vendor number lacks the shape, assume the friendliest one.
+Results are properties of the workload, not the engine. Every number must ship with: **input/output length distributions** (fixed 1k/1k is a different universe from lognormal 4k/500), **arrival process** (Poisson for open-loop truth, closed-loop concurrency for saturation curves), **prefix sharing ratio** (agentic traffic with 90% shared prefix is a different engine — T6.L8), and **temperature/sampling** (affects output length and acceptance rates). InferenceX publishes DeepSeek-R1 and Llama shapes explicitly for this reason; when a vendor number lacks the shape, assume the friendliest one.
 
 ## Rule 2: Warmup and steady state, or it never happened
 
@@ -31,13 +31,13 @@ A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 
 
 ## Rule 4: Compare stacks on identical everything
 
-Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quantization), same traffic seed, same engine version, and both warmed. InferenceMAX's value is procedural: nightly runs, pinned versions, published configs — the difference between "SGLang beats vLLM by 12%" and "your harness differed by 12%."`,
+Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quantization), same traffic seed, same engine version, and both warmed. InferenceX's value is procedural: nightly runs, pinned versions, published configs — the difference between "SGLang beats vLLM by 12%" and "your harness differed by 12%."`,
     },
     {
       type: 'statline',
       stats: [
         { value: '4 rules', label: 'traffic, warmup, samples, identical stacks', hint: 'The whole methodology. Most published numbers break rule 1 or 4.' },
-        { value: 'nightly', label: 'InferenceMAX cadence', hint: 'SemiAnalysis open benchmark: vLLM/SGLang/TRT-LLM, NVIDIA + AMD, nightly.' },
+        { value: 'nightly', label: 'InferenceX cadence', hint: 'SemiAnalysis open benchmark: vLLM/SGLang/TRT-LLM, NVIDIA + AMD, nightly.' },
         { value: 'hundreds', label: 'requests per load step', hint: 'Below that, your p95 is a rumor.' },
         { value: '2 harnesses', label: 'LLMPerf + GenAI-Perf', hint: 'The two load generators worth knowing by name.' },
       ],

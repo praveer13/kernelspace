@@ -1,6 +1,6 @@
 import { Activity } from 'lucide-react'
+import { ClaimValue } from '@/components/ClaimValue'
 import {
-  FLEET_WORKER_HOURLY_USD,
   SERVING_METRIC_NAMES,
   type ServingMetricsSnapshot,
 } from '@/lib/fleet-model'
@@ -74,7 +74,8 @@ export default function MetricsDashboard({ metrics, scope }: MetricsDashboardPro
           </p>
         </div>
         <p className="max-w-md text-right font-mono text-[9px] leading-relaxed text-text-3">
-          Capture this panel for Fleet Week. Cost uses ${FLEET_WORKER_HOURLY_USD.toFixed(2)} per
+          Capture this panel for Fleet Week. Cost uses{' '}
+          <ClaimValue id="synthetic.fleet.worker-hourly" format={(c) => `$${Number(c.value).toFixed(2)}`} /> per
           worker-hour; input + output tokens are the denominator.
         </p>
       </div>

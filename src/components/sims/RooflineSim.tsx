@@ -11,7 +11,7 @@
  *      with a padding fix.
  *   3. Memory tier probe: working-set slider that steps across shared memory,
  *      L2, and HBM bandwidths, plus a PCIe transfer mode.
- *   4. Matmul tiling + attention: tile-size sweep with AI ≈ T/6, and a naive
+ *   4. Matmul tiling + attention: tile-size sweep with AI = T/2 (FP16), and a naive
  *      vs FlashAttention toggle.
  *
  * Documented constants (synthetic but dimensionally faithful):
@@ -48,7 +48,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { atlasRow } from '@/data/atlas'
 import { cn } from '@/lib/utils'
+import { tiledIntensity } from '@/lib/roofline'
 
 const SIM_ID = 'sim-roofline'
 
@@ -58,12 +60,20 @@ interface Machine {
   peak: number // GFLOP/s
 }
 
+// Every preset comes from the hardware atlas (sourced claims). `name` is the saved-config key, so A100 keeps its short name.
+// T4 peak is dense FP16 (Turing has no BF16) and RTX 4090 peak is dense BF16 with FP32 accumulate.
+function atlasMachine(id: string, name?: string): Machine {
+  const row = atlasRow(id)
+  return { name: name ?? row.name, bw: row.hbmBwGBs ?? 0, peak: row.bf16DenseGflops ?? 0 }
+}
+
 const PRESETS: Machine[] = [
-  { name: 'T4', bw: 320, peak: 65_000 },
-  { name: 'RTX 4090', bw: 1008, peak: 165_000 },
-  { name: 'A100', bw: 1555, peak: 312_000 },
-  { name: 'H100', bw: 3350, peak: 989_000 },
-  { name: 'B200', bw: 8000, peak: 2_250_000 },
+  atlasMachine('t4'),
+  atlasMachine('rtx4090'),
+  atlasMachine('a100-40', 'A100'),
+  atlasMachine('h100'),
+  atlasMachine('b200'),
+  atlasMachine('tpu7x'),
 ]
 
 interface KernelDef {
@@ -289,8 +299,8 @@ const tierName = (
   return 'HBM'
 }
 
-/** Naive loads are ≈2 F/B; tiled reuse raises intensity roughly in proportion to T. */
-const matmulAI = (T: number): number => T / 8
+/** Tiled reuse raises intensity in proportion to T: T/2 F/B for FP16 operands (see tiledIntensity). */
+const matmulAI = (T: number): number => tiledIntensity(T, 2)
 
 /** Synthetic shared-memory pressure curve: useful reuse wins through T=64, then residency falls. */
 const tileOccupancyFactor = (T: number): number => {
@@ -737,6 +747,7 @@ export default function RooflineSim() {
     tier,
     workingSetKb,
     pcieMode,
+    tileT,
     tileAI,
     tileOccFactor,
     attentionAI,
@@ -761,6 +772,7 @@ export default function RooflineSim() {
       tier,
       workingSetKb,
       pcieMode,
+      tileT,
       tileAI,
       tileOccFactor,
       attentionAI,
@@ -1082,7 +1094,7 @@ export default function RooflineSim() {
         s.tileAI,
         tileRoof,
         '#3EF2A4',
-        `tile T=${Math.round(s.tileAI * 8)}`,
+        `tile T=${s.tileT}`,
         `AI ${fmtAI(s.tileAI)} · occ ${(s.tileOccFactor * 100).toFixed(0)}%`,
       )
 

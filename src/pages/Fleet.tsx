@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -11,7 +11,8 @@ import {
   StepForward,
   Upload,
 } from 'lucide-react'
-import { instantiateLab, LabAbiError, LabTrapError, type LabModule } from '@/lib/wasm-lab'
+import { instantiateLab, LabAbiError, LabTimeoutError, LabTrapError, type LabModule } from '@/lib/wasm-lab'
+import { validateLabInWorker } from '@/lib/lab-worker'
 import {
   dumpRefMultiset,
   makeScript,
@@ -21,11 +22,15 @@ import {
   type ManagerDump,
 } from '@/lib/fleet-model'
 import { cn } from '@/lib/utils'
-import EnginePanel from '@/pages/fleet/EnginePanel'
 import { validateModule } from '@/pages/fleet/drivers'
-import ClusterPanel from '@/pages/fleet/ClusterPanel'
-import RealEnginePanel from '@/pages/fleet/RealEnginePanel'
 import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet/slots'
+import ErrorBoundary from '@/components/ErrorBoundary'
+import RouteFallback from '@/components/RouteFallback'
+
+// The three panels are the heavy part of this page; fetch only the active mode's.
+const EnginePanel = lazy(() => import('@/pages/fleet/EnginePanel'))
+const ClusterPanel = lazy(() => import('@/pages/fleet/ClusterPanel'))
+const RealEnginePanel = lazy(() => import('@/pages/fleet/RealEnginePanel'))
 
 /**
  * The Fleet — Phase 2's home. Three modes over one deterministic request
@@ -125,7 +130,11 @@ export default function Fleet() {
       </div>
 
       <div className="mt-6">
-        {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+        <ErrorBoundary label="this panel" resetKey={mode}>
+          <Suspense fallback={<RouteFallback label="loading panel" />}>
+            {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </div>
   )
@@ -313,21 +322,28 @@ function PoolMode() {
   const onFile = useCallback(async (file: File) => {
     setError(null)
     try {
-      const mod = await instantiateLab(await file.arrayBuffer())
-      if (!mod.hasInvoke) {
+      const bytes = await file.arrayBuffer()
+      /* untrusted bytes are checked in the lab worker first; only a module that passed runs here */
+      const { report, hasInvoke } = await validateLabInWorker(bytes)
+      if (!hasInvoke || !report) {
         setError('this module predates the fleet bridge (no ks_invoke) — pull the latest lab template and rebuild.')
         return
       }
-      const report = mod.runChecks()
       if (report.lab !== 'kv-block-manager') {
         setError(`this module is for "${report.lab}" — pool mode drives kv-block-manager (lab 02).`)
         return
       }
+      const mod = await instantiateLab(bytes)
       const passed = report.checks.filter((x) => x.pass).length
       setDriver({ kind: 'wasm', mod, checksPassed: passed, checksTotal: report.checks.length })
       setDivergence(null)
     } catch (e) {
-      if (e instanceof LabTrapError) setError('the module trapped — a todo!() is still open (the fleet needs dump() implemented too).')
+      if (e instanceof LabTrapError) {
+        setError(e.phase === 'invoke'
+          ? 'ks_invoke trapped after the checks passed — the fleet bridge panicked on its first calls (check init and command handling).'
+          : 'the module trapped — a todo!() is still open (the fleet needs dump() implemented too).')
+      }
+      else if (e instanceof LabTimeoutError) setError(`${e.title} — ${e.message}`)
       else if (e instanceof LabAbiError) setError(e.message)
       else setError(String(e))
     }

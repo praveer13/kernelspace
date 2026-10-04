@@ -17,7 +17,7 @@ const lesson: Lesson = {
 
 - **$/Mtok** — cost per million tokens (input and output priced separately; outputs cost ~3–5× inputs because decode is serial and cache-hit input is nearly free).
 - **tok/s/$** and **tok/MW** — throughput per dollar and per megawatt. The second is the datacenter's real constraint: power, not GPUs, is what you can't buy more of this decade. NVIDIA's Blackwell pitch is literally "10× tokens per megawatt for MoE."
-- **Cost stack** — GPU-hours (dominant: a H100-class GPU is $2–3/hr rented, ~$0.7–1/hr amortized owned), power+cooling (~15–25% on top), CPU/network/storage (~10%), people (you don't price in yet).
+- **Cost stack** — GPU-hours (dominant: an H100 rents on demand at a median $3.49 per GPU-hour across 41 providers on 2026-10-04 per [GetDeploying](https://getdeploying.com/reference/cloud-gpu/nvidia-h100), a dated price that moves daily; ~$0.7–1/hr amortized owned), power+cooling (~15–25% on top), CPU/network/storage (~10%), people (you don't price in yet).
 
 Reproduce DeepSeek's day (open-infra index, Feb 2025): **226.75 nodes avg (8×H800 each), peak 278** → 1,814 GPUs avg × $2/GPU/hr × 24 h = **$87,072 cost**. Served **608B input tokens** (56.3% KV-cache hit) and **168B output tokens**. R1 list prices: $0.14/M input hit, $0.55/M input miss, $2.19/M output → revenue = 608e9×(0.563×0.14 + 0.437×0.55)/1e6 + 168e9×2.19/1e6 = $562,027. Margin: **545%** — before noting this is *list-price theoretical* (real revenue was lower; the point is the shape).`,
     },
@@ -105,7 +105,7 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
     {
       type: 'deepdive',
       title: 'Do the arithmetic yourself',
-      md: `The skill being certified: given a model's per-token KV bytes (T5.L4/T6.L1), a hardware point (T6.L5), and an operating point on the frontier (T7.L3), produce $/Mtok and required goodput for a target margin — in a meeting, on a napkin. DeepSeek's open-infra page, SGLang's $0.20/M estimate, and InferenceMAX's TCO dashboards are your answer keys. If you can reproduce all three from first principles, you have the job already.`,
+      md: `The skill being certified: given a model's per-token KV bytes (T5.L4/T6.L1), a hardware point (T6.L5), and an operating point on the frontier (T7.L3), produce $/Mtok and required goodput for a target margin — in a meeting, on a napkin. DeepSeek's open-infra page, SGLang's $0.20/M estimate, and the TCO dashboards on InferenceX (formerly InferenceMAX) are your answer keys. If you can reproduce all three from first principles, you have the job already.`,
     },
   ],
 }

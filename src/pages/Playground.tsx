@@ -1,14 +1,19 @@
+import { Suspense, lazy } from 'react'
 import { useParams } from 'react-router'
 import NotFound from '@/pages/NotFound'
-import MemoryGridSim from '@/components/sims/MemoryGridSim'
-import AllocatorSim from '@/components/sims/AllocatorSim'
-import VmPagingSim from '@/components/sims/VmPagingSim'
-import RooflineSim from '@/components/sims/RooflineSim'
-import WgslSim from '@/components/sims/WgslSim'
-import QuantizerSim from '@/components/sims/QuantizerSim'
-import KvCacheSim from '@/components/sims/KvCacheSim'
-import BatchingSim from '@/components/sims/BatchingSim'
-import ToyEngineSim from '@/components/sims/ToyEngineSim'
+import ErrorBoundary from '@/components/ErrorBoundary'
+import RouteFallback from '@/components/RouteFallback'
+
+// Each simulator is its own chunk; only the one being opened is fetched.
+const MemoryGridSim = lazy(() => import('@/components/sims/MemoryGridSim'))
+const AllocatorSim = lazy(() => import('@/components/sims/AllocatorSim'))
+const VmPagingSim = lazy(() => import('@/components/sims/VmPagingSim'))
+const RooflineSim = lazy(() => import('@/components/sims/RooflineSim'))
+const WgslSim = lazy(() => import('@/components/sims/WgslSim'))
+const QuantizerSim = lazy(() => import('@/components/sims/QuantizerSim'))
+const KvCacheSim = lazy(() => import('@/components/sims/KvCacheSim'))
+const BatchingSim = lazy(() => import('@/components/sims/BatchingSim'))
+const ToyEngineSim = lazy(() => import('@/components/sims/ToyEngineSim'))
 
 /**
  * /lab/:simId registry. Accepts both the canonical `sim-*` ids used by the
@@ -39,5 +44,11 @@ export default function Playground() {
   const { simId = '' } = useParams()
   const Sim = REGISTRY[simId]
   if (!Sim) return <NotFound />
-  return <Sim />
+  return (
+    <ErrorBoundary label="this simulator" resetKey={simId}>
+      <Suspense fallback={<RouteFallback label="loading simulator" />}>
+        <Sim />
+      </Suspense>
+    </ErrorBoundary>
+  )
 }

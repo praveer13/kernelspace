@@ -603,7 +603,7 @@ export interface ScheduleConfig {
 /**
  * Iteration-level scheduler. Each iteration every running sequence decodes
  * exactly one scripted token. Continuous mode admits at every iteration;
- * under memory pressure it preempts (swaps out) the most recent admission.
+ * under memory pressure it preempts (frees the blocks and recomputes on resume, as vLLM V1 does) the most recent admission.
  */
 export function simulateSchedule(requests: SchedRequest[], cfg: ScheduleConfig): ScheduleResult {
   const reqs = requests.map((r) => ({
@@ -654,7 +654,7 @@ export function simulateSchedule(requests: SchedRequest[], cfg: ScheduleConfig):
     for (const r of [...running]) {
       const nextTok = r.scriptIds[r.generated.length] ?? EOS_ID
       if (!ensureCapacity(alloc, r.id, tokensOf(r) + 1)) {
-        // Memory pressure: preempt (swap out) this sequence.
+        // Memory pressure: preempt this sequence. V1-style: free its blocks and recompute later (no swap).
         freeSeq(alloc, r.id)
         r.state = 'preempted'
         r.generated = []

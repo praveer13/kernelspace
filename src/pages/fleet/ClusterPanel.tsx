@@ -10,6 +10,7 @@ import {
   makeRefScheduler,
   makePrefixSharedRequestStream,
   makeServingMetrics,
+  PRACTICE_SEED,
   routerLabel,
   type ClusterStats,
   type ManagerDump,
@@ -75,7 +76,7 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
       )
     }
     clusterRef.current = new Cluster(
-      makePrefixSharedRequestStream(REQ_COUNT, SPAN, 0x5eed),
+      makePrefixSharedRequestStream(REQ_COUNT, SPAN, PRACTICE_SEED),
       workers,
       router,
     )
@@ -225,7 +226,7 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
         </div>
       </div>
       <p className="font-mono text-[10px] leading-relaxed text-text-3">
-        shared trace · 12 interleaved system+tool prefixes (256–512 tokens) · identical arrivals for every policy
+        shared trace · 12 interleaved system+tool prefixes (256–512 tokens) · identical arrivals for every policy · practice run, fixed seed 0x{PRACTICE_SEED.toString(16)}, not graded
       </p>
 
       <AnimatePresence>

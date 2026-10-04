@@ -1,21 +1,23 @@
 /**
  * verify-wasm-lab — run the SAME ABI client the site uses against a built
  * lab module, headless. Proves the template traps cleanly and a solution
- * reports all-pass, without a browser.
+ * reports all-pass, without a browser. Runs through the lab worker, exactly
+ * as the Forge does, so a spinning module proves the 2 s timeout too.
  *
- *   bun scripts/verify-wasm-lab.ts <path-to.wasm> [expect-pass|expect-trap]
+ *   bun scripts/verify-wasm-lab.ts <path-to.wasm> [expect-pass|expect-trap|expect-timeout]
  */
-import { runLabWasm, LabAbiError, LabTrapError } from '../src/lib/wasm-lab'
+import { LabAbiError, LabTimeoutError, LabTrapError } from '../src/lib/wasm-lab'
+import { disposeLabWorker, runLabInWorker } from '../src/lib/lab-worker'
 
 const [wasmPath, expect] = [process.argv[2], process.argv[3] ?? 'expect-pass']
 if (!wasmPath) {
-  console.error('usage: bun scripts/verify-wasm-lab.ts <module.wasm> [expect-pass|expect-trap]')
+  console.error('usage: bun scripts/verify-wasm-lab.ts <module.wasm> [expect-pass|expect-trap|expect-timeout]')
   process.exit(2)
 }
 
 const bytes = await Bun.file(wasmPath).arrayBuffer()
 try {
-  const report = await runLabWasm(bytes)
+  const report = await runLabInWorker(bytes)
   const failed = report.checks.filter((c) => !c.pass)
   console.log(`lab=${report.lab} v${report.version} — ${report.checks.length} checks`)
   for (const c of report.checks) {
@@ -25,8 +27,8 @@ try {
     console.error(`FAIL: ${failed.length} check(s) failed`)
     process.exit(1)
   }
-  if (expect === 'expect-trap') {
-    console.error('FAIL: expected a trap but the module ran clean')
+  if (expect !== 'expect-pass') {
+    console.error(`FAIL: ${expect} but the module ran clean`)
     process.exit(1)
   }
   console.log('OK: all checks pass over the wasm ABI')
@@ -35,9 +37,15 @@ try {
     console.log(`TRAP (as designed): ${e.message}`)
     process.exit(expect === 'expect-trap' ? 0 : 1)
   }
+  if (e instanceof LabTimeoutError) {
+    console.log(`TIMEOUT (as designed): ${e.message}`)
+    process.exit(expect === 'expect-timeout' ? 0 : 1)
+  }
   if (e instanceof LabAbiError) {
     console.error(`ABI ERROR: ${e.message}`)
     process.exit(1)
   }
   throw e
+} finally {
+  disposeLabWorker()
 }

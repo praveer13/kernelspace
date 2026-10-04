@@ -79,14 +79,20 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
         {
           q: 'An object file (.o) contains machine code plus…',
           options: [
-            'The full standard library',
-            'A symbol table (defined/undefined names) and relocation entries (addresses to patch at link time)',
-            'The process page table',
-            'Debug printf statements',
+            'Copies of every library function it calls, so the linker only has to concatenate the files together',
+            'A symbol table of defined and undefined names, plus relocation entries for link-time patches',
+            'The final virtual address of every function, already resolved by the compiler',
+            'A page table telling the kernel which sections of the file are readable, writable or executable',
           ],
           correct: [1],
           explanation:
             'Objects are incomplete by design: they record which symbols they define (T in nm) and which they need (U), plus where external addresses must be patched. The linker is the matchmaker that completes them.',
+          why: [
+            'Assumes the compiler pulls in library code. A .o holds only your translation unit and lists unresolved names; the linker finds the definitions in other objects and libraries.',
+            'Right: the object lists what it defines and what it still needs, plus relocation entries marking where the linker must patch in final addresses.',
+            'Addresses are not final at compile time. The compiler leaves placeholders with relocations; the linker assigns addresses, and the loader may shift them again with ASLR.',
+            'Page tables belong to a running process and live in the kernel. An object file has sections with flags, but no page table and nothing mapped yet.',
+          ],
         },
         {
           q: '"undefined reference to `foo\'`" occurs at which stage?',
@@ -94,30 +100,48 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
           correct: [2],
           explanation:
             'The compiler was satisfied by a declaration (header); the linker then searched every object and library for the definition and found none — add the defining .o or -l library. Load-time failures ("cannot open shared object") happen later, when the .so can\'t be found at startup.',
+          why: [
+            'Preprocessing only expands #include and macros. It never looks up function definitions, so it cannot report a missing one.',
+            'The compiler works per file and accepts a header declaration, trusting that the definition exists elsewhere. A missing definition is invisible to it.',
+            'Right: the linker searches all objects and libraries for a definition of foo, finds none, and reports undefined reference. Fix by adding the .o or -l library.',
+            'Load-time failures look different, such as "cannot open shared object file", when the dynamic loader cannot find a .so. This message comes from the static linker.',
+          ],
         },
         {
           q: 'The System V AMD64 ABI specifies, among other things…',
           options: [
-            'How Python objects are laid out',
-            'Argument registers (rdi, rsi, rdx…), return register (rax), stack alignment, and caller/callee-saved registers',
-            'The order of sections in an ELF file',
-            'How the kernel schedules threads',
+            'What each instruction does: the opcode encodings and the exact effect of an AVX add on its vector registers',
+            'Argument registers (rdi, rsi, rdx…), return register rax, stack alignment, and register-saving rules',
+            'How the kernel schedules threads across cores when a call blocks on I/O or a lock',
+            'The in-memory layout of objects for managed languages such as Java and Python',
           ],
           correct: [1],
           explanation:
             'The ABI is the binary calling contract: where arguments and returns live, who preserves which registers, alignment rules. It is what makes cross-language, cross-compiler calls possible at all.',
+          why: [
+            'Describes the ISA. The psABI does name a baseline feature set and optional micro-architecture levels (x86-64-v2 and up), but opcode encodings and semantics live in the Intel and AMD processor manuals. The ABI covers how compiled code calls other compiled code.',
+            'Right: the ABI fixes where arguments and results live, stack alignment, and caller-saved versus callee-saved registers, so separately compiled code can call each other.',
+            'Scheduling is an OS policy, not part of a calling convention. The ABI says how a call is made, not which thread or core runs it.',
+            'Managed-language object layouts belong to each runtime. The C ABI covers only plain C types, which is why runtimes bridge through C-compatible structs.',
+          ],
         },
         {
           q: 'Why is the C ABI the lingua franca of language interop?',
           options: [
-            'C is the fastest language',
-            'It is simple and stable — functions by name, plain-data structs with agreed layout — so every runtime can generate and consume it',
-            'The C standard requires all languages to support it',
-            'It automatically prevents memory bugs',
+            'C is the fastest language, so every other runtime wraps it to get native speed',
+            'It is simple and stable, with named functions and plain structs',
+            'The C standard requires every language implementation to expose a C-compatible interface',
+            'Calls through it are checked by the compiler, which rules out memory bugs across the boundary',
           ],
           correct: [1],
           explanation:
             'ctypes, JNI, Rust extern "C", CUDA host APIs — all converge on the C ABI because it is the smallest common denominator with decades of stability. C++ can\'t even interoperate with itself across compilers without extern "C" (name mangling).',
+          why: [
+            'Speed is not the reason. Languages adopt the C ABI because it is a stable common interface, and Rust or C++ code behind the same interface runs just as fast.',
+            'Right: unmangled function names and plain data layouts are easy to generate and consume, and the convention has been stable for decades, so every runtime can speak it.',
+            'No standard imposes this. The C standard covers the C language only; languages offer C interop by their own choice.',
+            'The C ABI carries raw pointers and no checking, so memory bugs cross the boundary freely. Safe wrappers have to be added on top.',
+          ],
         },
       ],
     },

@@ -131,6 +131,8 @@ export interface IsomorphismPair {
   osLine: string
   llm: string
   llmLine: string
+  /** Where the analogy stops holding — one sentence, shown under the pair. */
+  breaks?: string
 }
 
 export interface IsomorphismBlock {

@@ -11,6 +11,7 @@ import {
   makeRefScheduler,
   makeRequestStream,
   makeRng,
+  PRACTICE_SEED,
   type EngineConfig,
   type ManagerDump,
   type RequestSpec,
@@ -56,7 +57,7 @@ export default function EpdPanel({ slots }: { slots: SlotState }) {
   const runIdRef = useRef(0)
 
   const streamFor = useCallback(() => {
-    return traffic === 'chat' ? makeRequestStream(REQ_CHAT, SPAN, 0x5eed) : longCtxStream(REQ_LONG, SPAN)
+    return traffic === 'chat' ? makeRequestStream(REQ_CHAT, SPAN, PRACTICE_SEED) : longCtxStream(REQ_LONG, SPAN)
   }, [traffic])
 
   const run = useCallback(async () => {
@@ -158,7 +159,8 @@ export default function EpdPanel({ slots }: { slots: SlotState }) {
           The T5.L9 rule, executable: disaggregation pays for ITL isolation and costs a KV transfer.
           Run both topologies on the same traffic and watch the crossover — EPD wins when the ITL
           SLO is tight (decode isolation beats the transfer tax), colocated wins when it's loose
-          (the tax is pure overhead). Pools are sized equal-total per trace.
+          (the tax is pure overhead). Pools are sized equal-total per trace. This is a practice
+          run on fixed seeds (chat 0x{PRACTICE_SEED.toString(16)}, long-context 0x10c5), not graded.
         </p>
       )}
 

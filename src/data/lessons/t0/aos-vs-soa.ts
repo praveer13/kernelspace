@@ -187,46 +187,75 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
       questions: [
         {
           q: 'A deadline-sweep reads one u64 field per record from an AoS array of 32-byte structs. What fraction of each fetched cache line is useful?',
-          options: ['1/2', '1/4', '1/8', 'all of it'],
+          options: [
+            '1/2: a 64-byte line holds two 32-byte structs, and the sweep touches one whole struct per fetch',
+            '1/4: the sweep uses 8 bytes of each 32-byte struct, so 16 useful bytes in every 64-byte line',
+            '1/8: the sweep needs 8 bytes out of every 64-byte line, because only one struct is fetched per line',
+            'All of it: the hardware fetches just the 8-byte field the loop reads, so no bytes are wasted',
+          ],
           correct: [1],
           explanation:
             'AoS packs whole 32-byte structs, so each 64-byte line holds 2 of them and the sweep uses 8 bytes of each: 16 useful bytes out of 64 = 1/4. In SoA the deadline array is contiguous, so 100% of each line is useful.',
+          why: [
+            'Counts structs instead of bytes. A line does hold two structs, but the sweep reads 8 bytes from each, so 16 of 64 bytes are used, not 32.',
+            'Right: each line holds two 32-byte structs and the loop reads one 8-byte field from each: 16 useful bytes of 64. In SoA the deadline array is contiguous and every fetched byte is used.',
+            'Assumes one struct per line. Structs are 32 bytes, so two share a line and both deadlines are read: 16 of 64, i.e. 1/4. One-eighth would need 64-byte structs.',
+            'Only SoA gets this. The memory system moves whole 64-byte lines regardless of the 8 bytes requested, and AoS interleaves other fields into every line, so they are fetched but unused.',
+          ],
         },
         {
           q: 'Eight threads increment eight independent counters stored contiguously in one cache line. Throughput collapses because…',
           options: [
-            'The OS serializes the threads on one runqueue',
-            'Atomic increments are always slow regardless of layout',
-            'Every write invalidates the shared line on all other cores (false sharing / coherence ping-pong)',
-            'The counters overflow into each other',
+            'The OS serializes the threads onto one runqueue, so only one counter can be incremented at a time',
+            'Atomic increments are always slow, so eight threads on eight counters scale no better than one would',
+            'Every write invalidates the line in all other cores\' caches, so ownership ping-pongs between cores (false sharing)',
+            'The counters overflow into each other: adjacent 8-byte values share one line, so an increment can corrupt its neighbors',
           ],
           correct: [2],
           explanation:
             'Coherence works at line granularity, not variable granularity. Independent data in one line is still ONE line: each write forces ownership transfer, costing hundreds of cycles per increment.',
+          why: [
+            'The scheduler places threads on separate cores that run in parallel; nothing serializes them. The slowdown is cache-coherence traffic, and the same threads with padded counters scale almost linearly.',
+            'An atomic costs tens of cycles when the line is already owned. With padded counters eight threads run near full speed each; the collapse comes from line ownership transfers, not the instruction.',
+            'Right: coherence works per line, not per variable. Independent counters in one line still force an ownership transfer on every write, costing hundreds of cycles per increment. Padding gives each its own line.',
+            'Sharing a line does not corrupt data: each counter owns distinct bytes and the hardware keeps writes to different addresses independent. The cost is purely performance, from coherence traffic.',
+          ],
         },
         {
           q: 'The standard fix for false sharing is…',
           options: [
-            'Add a mutex around each counter',
-            'Pad/align each hot variable to its own 64-byte cache line',
-            'Switch to volatile reads',
-            'Use a linked list of counters instead of an array',
+            'Wrap each counter in its own mutex so threads take turns touching the shared cache line',
+            'Pad and align each hot variable so it occupies its own 64-byte cache line, giving every writer a private line',
+            'Mark the counters volatile so each core re-reads from memory and stops holding stale copies of the line',
+            'Replace the array with a linked list of separately allocated counters so no two sit next to each other',
           ],
           correct: [1],
           explanation:
             'Padding gives each writer a private line, so coherence traffic disappears. Java\'s @Contended and Rust\'s #[repr(align(64))] exist for exactly this; LongAdder is the canonical success story.',
+          why: [
+            'A mutex serializes the increments and the lock word itself sits in a line that bounces between cores. It adds contention instead of removing the shared-line traffic that causes the problem.',
+            'Right: padding gives each writer a private line, so coherence traffic disappears. Java\'s @Contended and Rust\'s #[repr(align(64))] exist for this, and LongAdder is the canonical success story.',
+            'volatile controls compiler optimization and ordering, not cache-line ownership. Writes still invalidate the line on every other core, so the ping-pong remains.',
+            'Separately allocated nodes can still land in one 64-byte line, since allocators promise no such spacing, and traversal adds pointer chasing. Only explicit alignment makes the separation deterministic.',
+          ],
         },
         {
           q: 'When does AoS beat SoA?',
           options: [
-            'Never — SoA is strictly superior',
-            'When the hot path reads most fields of a few records at a time (one line fetch serves the whole record)',
-            'When records are larger than one page',
-            'When the workload is single-threaded',
+            'Never: SoA is strictly superior because it always fetches fewer bytes per record than AoS',
+            'When the hot path reads most fields of a few records at a time, so one line fetch serves the whole record',
+            'When the records are small, because one array of small structs takes less memory than several parallel arrays',
+            'When the workload is single-threaded, because SoA only pays off once several cores read the data',
           ],
           correct: [1],
           explanation:
             'Layout must match the access pattern: row-wise access (whole record) favors AoS — one or two lines deliver everything; column-wise access (one field, many records) favors SoA. Workload first, dogma never.',
+          why: [
+            'Dogma. SoA wastes bandwidth when you need all fields of a record: reading six fields touches six lines against one for AoS. Layout should follow the access pattern.',
+            'Right: row-wise access favors AoS: one or two lines deliver the whole record. Column-wise access (one field, many records) favors SoA. Match layout to workload; neither wins in general.',
+            'The same fields take the same total bytes in either layout; only the grouping differs. Record size alone does not decide, access pattern does.',
+            'SoA\'s gain is useful bytes per fetched line, which helps a single thread too: the deadline sweep runs at full bandwidth on one core. Threads matter for false sharing, a different problem.',
+          ],
         },
       ],
     },
