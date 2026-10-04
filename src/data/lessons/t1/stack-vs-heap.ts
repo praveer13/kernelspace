@@ -162,7 +162,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
           q: 'The `call` instruction on x86-64 does exactly two things:',
           options: [
             'Saves all general-purpose registers to the stack, then jumps to the target',
-            'Pushes the return address onto the stack, then jumps to the target',
+            'Pushes the return address, then jumps to the target',
             'Allocates the callee\'s stack frame, then jumps to the target',
             'Switches to kernel mode to set up the call, then jumps to the target',
           ],
@@ -198,7 +198,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
           q: 'A JVM thread stack and the GC heap differ fundamentally in that…',
           options: [
             'Frames hold primitives and references; the objects themselves live on the heap',
-            'The heap is private to each thread, while the stack is shared by all of them',
+            'The heap is private to each thread, while the stack is shared by every thread in the process',
             'Stack memory is never cached by the CPU, so it is slower to access than the heap',
             'The heap is managed in LIFO order, so objects are freed in reverse allocation order',
           ],

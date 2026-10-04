@@ -48,7 +48,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
         { id: 'sm2', x: 2, y: 42, w: 20, h: 12, label: 'SM …131', sub: '×132 total' },
         { id: 'l2', x: 34, y: 20, w: 24, h: 14, label: 'L2 · ~50 MB', sub: 'shared, all SMs', color: '#A78BFA' },
         { id: 'hbm', x: 70, y: 20, w: 26, h: 14, label: 'HBM · 80 GB', sub: '3.35 TB/s', color: '#3EF2A4' },
-        { id: 'cpu', x: 70, y: 42, w: 26, h: 10, label: 'CPU RAM (PCIe)', sub: '~64 GB/s · the swap tier', color: '#FFB224' },
+        { id: 'cpu', x: 70, y: 42, w: 26, h: 10, label: 'CPU RAM (PCIe)', sub: '~64 GB/s · the offload tier', color: '#FFB224' },
       ],
       edges: [
         { from: 'sm0', to: 'l2' },
@@ -61,7 +61,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
         { caption: 'Each SM owns registers and shared memory outright — other SMs can\'t see them. Fast because local; small because SRAM.', active: ['sm0', 'sm1', 'sm2'] },
         { caption: 'L2 sits between every SM and HBM: hot weights/KV blocks get second chances here. Cross-SM communication (atomics, block cooperation) also flows through it.', active: ['l2'], edges: ['sm0->l2', 'l2->hbm'] },
         { caption: 'HBM: the 80 GB main stage. Weights stream from here every forward pass; the KV cache grows here every decode step. 3.35 TB/s sounds like a lot until 16 GB of weights must move per token.', active: ['hbm'], edges: ['l2->hbm'] },
-        { caption: 'Below HBM, the cliff: CPU RAM over PCIe at ~64 GB/s — 50× slower. This is vLLM\'s swap tier for preempted sequences (T2.L3) and why offload decisions are expensive.', active: ['cpu'], edges: ['hbm->cpu'] },
+        { caption: 'Below HBM, the cliff: CPU RAM over PCIe at ~64 GB/s — 50× slower. This is where KV offload and model streaming go, and it was V0\'s swap tier for preempted sequences (V1 recomputes instead; T2.L3). Offload decisions are expensive.', active: ['cpu'], edges: ['hbm->cpu'] },
       ],
     },
     {
@@ -73,7 +73,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       type: 'prose',
       md: `## Why capacity is the serving bottleneck
 
-One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of weights** — already 2 GPUs before a single request. Per request, the KV cache grows \`2 × layers × hidden × bytes\` per token; for 70B-class (80 layers, 8192 hidden) that's **~2.6 MB per token in FP16** — a 4k-token conversation eats ~10 GB. Ten such conversations and an 80 GB H100 is *full of cache*, weights elsewhere. Capacity, not compute, caps concurrent requests; bandwidth, not FLOPs, caps tokens/s. The GPU memory hierarchy isn't background knowledge for serving — it **is** serving.`,
+One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of weights** — already 2 GPUs before a single request. Per request, the KV cache grows \`2 × layers × kv_width × bytes\` per token. Take a 70B-class model with full multi-head attention (80 layers, 8192 wide, no GQA): that's **~2.6 MB per token in FP16** — a 4k-token conversation eats ~10 GB. Ten such conversations and an 80 GB H100 is *full of cache*, weights elsewhere. Real Llama-3-70B uses GQA with 8 KV heads (1024 wide), which cuts this 8× to **320 KB per token** (T5.L4); the bottleneck is the same, only the headcount of conversations moves. Capacity, not compute, caps concurrent requests; bandwidth, not FLOPs, caps tokens/s. The GPU memory hierarchy isn't background knowledge for serving — it **is** serving.`,
     },
     {
       type: 'exercise',
@@ -116,7 +116,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
             'Per-thread arrays or too many live values overflow the 255-register budget; the overflow silently lands in device memory. Compiler warnings about spills are bandwidth warnings.',
         },
         {
-          q: 'For a 70B FP16 model, the first-order capacity problem on 80 GB GPUs is…',
+          q: 'For a 70B FP16 model with full multi-head attention (no GQA), the first-order capacity problem on 80 GB GPUs is…',
           options: [
             'The model cannot be tokenized',
             '140 GB of weights needs ≥2 GPUs before serving anything, and each 4k-token KV cache adds ~10 GB more — capacity, not compute, caps concurrency',
@@ -125,19 +125,19 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
           ],
           correct: [1],
           explanation:
-            'Weights alone exceed one HBM; KV caches (~2.6 MB/token here) consume the rest. This arithmetic is why quantization, multi-GPU parallelism, and KV paging are survival features, not optimizations.',
+            'Weights alone exceed one HBM; KV caches (~2.6 MB/token for MHA; Llama-3-70B\'s GQA is 8× smaller at 320 KB/token) consume the rest. This arithmetic is why quantization, multi-GPU parallelism, and KV paging are survival features, not optimizations.',
         },
         {
           q: 'CPU RAM plays which role in the GPU serving stack?',
           options: [
             'A faster tier than HBM for hot data',
-            'The swap tier: ~50× slower over PCIe, used for offloaded KV blocks (vLLM preemption) and model streaming',
+            'The offload tier: ~50× slower over PCIe, used for offloaded KV blocks (V0 swapped preempted sequences here) and model streaming',
             'It is unused during inference',
             'Only for tokenization',
           ],
           correct: [1],
           explanation:
-            'The hierarchy extends one more level down: HBM → PCIe → host RAM. vLLM\'s swap-out path is the OS swap story (T2.L3) running on this cliff — usable, but priced.',
+            'The hierarchy extends one more level down: HBM → PCIe → host RAM. V0\'s swap-out path was the OS swap story (T2.L3) running on this cliff; V1 recomputes instead, but KV offload and weight streaming still pay it — usable, but priced.',
         },
       ],
     },

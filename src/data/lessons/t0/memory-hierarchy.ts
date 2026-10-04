@@ -70,7 +70,7 @@ These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200�
         { caption: 'A load executes. The address is checked against L1 — the closest, smallest store. Hit: done in ~0.5 ns. This is the common case when your data layout is kind.', active: ['cpu', 'l1'], edges: ['cpu->l1'] },
         { caption: 'L1 miss → L2. L2 miss → L3. Each step is bigger and ~3–10× slower. Still on-chip; still fast. The caches work because programs reuse data and touch neighboring bytes.', active: ['l1', 'l2', 'l3'], edges: ['l1->l2', 'l2->l3'] },
         { caption: 'L3 miss → DRAM. ~100 ns, ~200 L1-equivalents. The memory controller fetches a full 64-byte cache line, not just the 8 bytes you asked for — remember this; T0.L4 is built on it.', active: ['dram'], edges: ['l3->dram'] },
-        { caption: 'If the OS swapped the page out, the CPU takes a page fault and reads from NVMe: ~100 µs, about 200,000× slower than L1. In T5 you will watch vLLM swap KV cache the same way.', active: ['ssd'], edges: ['dram->ssd'] },
+        { caption: 'If the OS swapped the page out, the CPU takes a page fault and reads from NVMe: ~100 µs, about 200,000× slower than L1. In T2 and T5 you will see why vLLM V1 avoids that trip for KV cache and recomputes instead.', active: ['ssd'], edges: ['dram->ssd'] },
         { caption: 'GPUs have their own version: HBM instead of DRAM. Enormous bandwidth (~3.35 TB/s on H100) but still finite — and it is the wall LLM decode runs into every single token.', active: ['hbm'] },
       ],
     },

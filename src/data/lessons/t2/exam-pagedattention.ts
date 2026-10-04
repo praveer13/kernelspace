@@ -72,7 +72,7 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
           os: 'swap + eviction',
           osLine: 'Cold frames to disk under pressure; refault on access.',
           llm: 'preemption: swap / recompute',
-          llmLine: 'Victim sequences\' blocks to CPU RAM — or discarded and recomputed on resume.',
+          llmLine: 'Victim sequences\' blocks to CPU RAM (the paper) — or discarded and recomputed on resume (all V1 does).',
           breaks: 'Swap targets are about 100 µs and page-granular; KV blocks cross PCIe in bulk, and recompute is an option only because prefill can regenerate the dropped state.',
         },
       ],
@@ -83,7 +83,7 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
 
 Memory management is half the paper; the other half is a **scheduler**, and you own this too. vLLM batches at *iteration* granularity (continuous batching — T5.L7 goes deep) and must decide: which waiting sequences to **admit** (is there enough free block space?), and which running sequences to **preempt** when blocks run out.
 
-On preemption the paper evaluates two policies that should give you déjà vu: **swapping** (copy the victim's blocks to CPU RAM, copy back on resume — the OS's swap-to-disk, with host RAM, over PCIe, as the disk) and **recomputation** (drop the blocks, re-run prefill on resume — the OS's drop-and-reread of file-backed pages). It even models the trade the same way: swap costs bandwidth, recompute costs compute, and the right choice depends on sequence length and load. Admission is FCFS; preemption is last-in-first-out among the running set. It is a timesharing system: the GPU is the CPU, the iteration is the quantum, and HBM is the RAM.`,
+On preemption the paper evaluates two policies that should give you déjà vu: **swapping** (copy the victim's blocks to CPU RAM, copy back on resume — the OS's swap-to-disk, with host RAM, over PCIe, as the disk) and **recomputation** (drop the blocks, re-run prefill on resume — the OS's drop-and-reread of file-backed pages). It even models the trade the same way: swap costs bandwidth, recompute costs compute, and the right choice depends on sequence length and load. (That is the 2023 paper's menu: vLLM V1 later kept only recomputation.) Admission is FCFS; preemption is last-in-first-out among the running set. It is a timesharing system: the GPU is the CPU, the iteration is the quantum, and HBM is the RAM.`,
     },
     {
       type: 'callout',

@@ -82,7 +82,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
             'Copies of every library function it calls, so the linker only has to concatenate the files together',
             'A symbol table of defined and undefined names, plus relocation entries for link-time patches',
             'The final virtual address of every function, already resolved by the compiler',
-            'A page table telling the kernel which sections are readable, writable or executable',
+            'A page table telling the kernel which sections of the file are readable, writable or executable',
           ],
           correct: [1],
           explanation:
@@ -129,7 +129,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
           q: 'Why is the C ABI the lingua franca of language interop?',
           options: [
             'C is the fastest language, so every other runtime wraps it to get native speed',
-            'It is simple and stable, with named functions and plain structs, so any runtime can use it',
+            'It is simple and stable, with named functions and plain structs',
             'The C standard requires every language implementation to expose a C-compatible interface',
             'Calls through it are checked by the compiler, which rules out memory bugs across the boundary',
           ],

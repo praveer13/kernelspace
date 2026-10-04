@@ -15,7 +15,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Memory fills up. Not "might" — *will*, because every caching layer in computing is a bet that demand will exceed capacity eventually. When the OS runs out of free frames, something must be evicted: written to swap (if dirty) or dropped (if clean and file-backed). The policy that chooses the victim is one of the most-studied decisions in systems, because it directly prices your latency tail: evict the wrong page and you just scheduled a ~100 µs major fault into someone's request path.
 
-You already know the application-level version of this decision — Redis \`maxmemory-policy\`, your HTTP cache, your JVM's choice of what to keep in the old generation. This lesson is the general theory, and T5 will show it running inside vLLM, where the "pages" are KV blocks and the "swap" is CPU RAM.`,
+You already know the application-level version of this decision — Redis \`maxmemory-policy\`, your HTTP cache, your JVM's choice of what to keep in the old generation. This lesson is the general theory, and T5 will show it running inside vLLM, where the "pages" are KV blocks and the victim is a whole sequence.`,
     },
     {
       type: 'prose',
@@ -72,14 +72,14 @@ The two defenses appear everywhere in this course: **admission control** (don't 
     },
     {
       type: 'isomorphism',
-      title: 'swap ≡ KV offload, eviction ≡ preemption',
+      title: 'eviction ≡ preemption, thrashing ≡ preemption storm',
       pairs: [
         {
           os: 'swap out (LRU/Clock)',
           osLine: 'Cold frames → disk under pressure; touch faults them back at ~100 µs.',
-          llm: 'KV swap-out (vLLM)',
-          llmLine: 'Preempted sequences\' blocks → CPU RAM; resume reloads (swap) or recomputes (recompute).',
-          breaks: 'The OS evicts single cold pages chosen by recency; vLLM evicts all blocks of a whole sequence at once and has the recompute option, which a dirty anonymous page lacks.',
+          llm: 'KV preemption (vLLM V1)',
+          llmLine: 'Preempted sequence\'s blocks are freed; on resume it is recomputed. (V0 and the paper could also swap them to CPU RAM.)',
+          breaks: 'The OS evicts single cold pages chosen by recency and can write them to swap; V1 evicts all blocks of a whole sequence at once and keeps nothing, because KV can be regenerated and a dirty anonymous page cannot.',
         },
         {
           os: 'thrashing',
@@ -101,7 +101,7 @@ The two defenses appear everywhere in this course: **admission control** (don't 
       type: 'prose',
       md: `## The vLLM footnote you are now ready for
 
-When the vLLM engine cannot allocate blocks for the next token of *some* sequence, it must preempt: the scheduler picks victims (typically FCFS — last arrived, first preempted), and either **swaps** their KV blocks to CPU RAM or **discards** them for later recompute. Swap costs PCIe bandwidth; recompute costs prefill FLOPs; the paper analyzes both. Sound familiar? It is the swap-vs-reread decision the OS makes for file-backed pages versus anonymous pages, running at 3 TB/s inside a GPU cluster. In the simulator you will drive an eviction trace to thrashing and back — feel the cliff, then build the instinct for the admission control that prevents it.`,
+When the vLLM engine cannot allocate blocks for the next token of *some* sequence, it must preempt: the scheduler picks victims (typically FCFS — last arrived, first preempted) and takes their memory back. The PagedAttention paper (SOSP '23, §4) describes two ways: **swap** the victim's KV blocks to CPU RAM, or **discard** them for later recompute. Swap costs PCIe bandwidth; recompute costs prefill FLOPs; the paper analyzes both, and vLLM V0 shipped both. **V1, the current engine, is recompute-only:** \`_preempt_request\` frees the victim's blocks and resets its computed-token count to zero, so the sequence is prefilled again when rescheduled (prefix-cache hits or engine KV offload can shorten that). Sound familiar? It is the swap-vs-reread decision the OS makes for anonymous pages versus file-backed pages, running at 3 TB/s inside a GPU cluster, with V1 on the drop-and-reread side. In the simulator you will drive an eviction trace to thrashing and back — feel the cliff, then build the instinct for the admission control that prevents it.`,
     },
     {
       type: 'exercise',
@@ -174,7 +174,7 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
           ],
         },
         {
-          q: 'vLLM\'s preemption choices (swap KV to CPU RAM vs discard-and-recompute) most closely mirror the OS decision between…',
+          q: 'The PagedAttention paper\'s two preemption options (swap KV to CPU RAM vs discard-and-recompute; vLLM V1 keeps only recompute) most closely mirror the OS decision between…',
           options: [
             'Spinning versus sleeping on a lock: keep holding the core while waiting, or yield it and pay a wake-up later',
             'Swapping anonymous pages to disk versus dropping clean file-backed pages that can be re-read from their source',
@@ -183,10 +183,10 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
           ],
           correct: [1],
           explanation:
-            'Same trade: pay I/O to preserve state vs recompute from source. File-backed clean pages get dropped (re-readable); anonymous pages must be swapped. vLLM weighs PCIe bandwidth against prefill FLOPs — the identical equation at GPU speeds.',
+            'Same trade: pay I/O to preserve state vs recompute from source. File-backed clean pages get dropped (re-readable); anonymous pages must be swapped. The paper weighs PCIe bandwidth against prefill FLOPs — the identical equation at GPU speeds — and V1 settled on recompute.',
           why: [
             'Misconception: it is a waiting-policy choice. Spin versus sleep concerns how to wait for a lock; vLLM is deciding how to give up memory, which is a storage choice.',
-            'Right: dropping a clean file-backed page and re-reading it is recompute; swapping an anonymous page preserves unrecoverable state at the cost of I/O. vLLM faces the same swap versus recompute choice.',
+            'Right: dropping a clean file-backed page and re-reading it is recompute; swapping an anonymous page preserves unrecoverable state at the cost of I/O. the paper faces the same swap versus recompute choice, and V1 chose recompute.',
             'Misconception: it is a page-size choice. Huge versus base pages trade TLB reach against internal waste; vLLM already fixes the block size and is choosing what to do with evicted state.',
             'Misconception: it is a scheduling-class choice. Fair-share versus real-time decides who runs; swap versus recompute decides how an already-preempted sequence\'s memory is restored.',
           ],

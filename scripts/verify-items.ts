@@ -7,7 +7,10 @@
  * keys piling onto one option id, (5) a shuffled surface that stopped calling shuffledOrder,
  * (6) a malformed per-option `why` (length must equal options, no empty entries) or a missing
  * `why` in a track listed in the baseline's `whyRequired`, (7) more than MAX_SHORTEST_PASSES lessons
- * in a `whyRequired` track that a blind "always pick the shortest option" strategy passes.
+ * in a `whyRequired` track that a blind "always pick the shortest option" strategy passes, (8) in a
+ * `whyRequired` track, a length-rank strategy (1st-longest, 2nd-longest, 2nd-shortest, shortest) whose
+ * expected lessons passed exceeds MAX_RANK_EXPECTED or that passes any single lesson with probability
+ * >= MAX_RANK_LESSON.
  * REPORTS (never fails): longest-key rates, `why` coverage and a blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
@@ -25,6 +28,10 @@ const PASS_BAR = 0.8 // QuizBlock.tsx: score = correct / total >= 0.8
 const FLEET_TRACK = 'fleet-week'
 /** In a whyRequired track, at most this many lessons may be passed by always picking the shortest option. */
 const MAX_SHORTEST_PASSES = 1
+/** In a whyRequired track, no length-rank strategy may pass more than this many lessons in expectation... */
+const MAX_RANK_EXPECTED = 1.0
+/** ...or pass any single lesson with at least this probability. */
+const MAX_RANK_LESSON = 0.5
 
 interface Item {
   track: string
@@ -354,6 +361,26 @@ const pickShortest = (q: QuizQuestion) => {
   return q.correct.length === 1 && low.includes(q.correct[0]) ? 1 / low.length : 0
 }
 
+/**
+ * Pick the option at a length rank (0 = longest when `fromLongest`, else 0 = shortest). Ties are broken
+ * uniformly, so the pick is uniform over the options sharing the length at that rank. Lengths do not move
+ * when options are shuffled. A multi-select needs the full set, so one pick never passes it.
+ */
+function pickRank(q: QuizQuestion, rank: number, fromLongest: boolean): number {
+  if (q.correct.length !== 1 || rank >= q.options.length) return 0
+  const lens = q.options.map(len).sort((a, b) => (fromLongest ? b - a : a - b))
+  const at = lens[rank]
+  const group = q.options.flatMap((o, i) => (len(o) === at ? [i] : []))
+  return group.includes(q.correct[0]) ? 1 / group.length : 0
+}
+
+const RANK_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] = [
+  { name: '1st-longest', pick: (q) => pickRank(q, 0, true) },
+  { name: '2nd-longest', pick: (q) => pickRank(q, 1, true) },
+  { name: '2nd-shortest', pick: (q) => pickRank(q, 1, false) },
+  { name: 'shortest', pick: (q) => pickRank(q, 0, false) },
+]
+
 const byLesson = new Map<string, QuizQuestion[]>()
 const trackOfLesson = new Map<string, string>()
 for (const item of validItems) {
@@ -393,6 +420,42 @@ for (const t of whyRequired) {
     )
   }
 }
+
+// (8) Length-rank strategies, per whyRequired track: expected lessons passed and the worst single lesson.
+console.log('')
+console.log('length-rank strategies per track: expected lessons passed (worst single lesson p)')
+for (const strat of RANK_STRATEGIES) {
+  const pass = lessonPass(strat.pick)
+  const cells: string[] = []
+  for (const t of trackKeys.filter((k) => k !== FLEET_TRACK)) {
+    let expected = 0
+    let worstP = 0
+    let worstId = ''
+    lessonIds.forEach((id, i) => {
+      if (trackOfLesson.get(id) !== t) return
+      expected += pass[i]
+      if (pass[i] > worstP) {
+        worstP = pass[i]
+        worstId = id
+      }
+    })
+    const gated = whyRequired.includes(t)
+    cells.push(`${t} ${expected.toFixed(2)}${gated ? '*' : ''}${worstP > 0 ? ` (${worstP.toFixed(2)} ${worstId})` : ''}`)
+    if (!gated) continue
+    if (expected > MAX_RANK_EXPECTED) {
+      failures.push(
+        `rank: track ${t} expects ${expected.toFixed(2)} lessons passed by always picking the ${strat.name} option (limit ${MAX_RANK_EXPECTED}); rebalance option lengths`,
+      )
+    }
+    if (worstP >= MAX_RANK_LESSON) {
+      failures.push(
+        `rank: ${worstId} is passed with p=${worstP.toFixed(2)} by always picking the ${strat.name} option (limit < ${MAX_RANK_LESSON}); rebalance option lengths`,
+      )
+    }
+  }
+  console.log(`  ${strat.name.padEnd(13)}${cells.join('  ')}`)
+}
+console.log(`  (* gated: expected <= ${MAX_RANK_EXPECTED}, every lesson p < ${MAX_RANK_LESSON})`)
 
 console.log('')
 console.log(`blind-strategy simulation: ${byLesson.size} lessons with a quiz, per-attempt shuffling, pass at >= ${PASS_BAR * 100}%`)

@@ -107,7 +107,7 @@ You should now be able to trace a request through a modern async server: NIC int
         {
           q: 'epoll beat select/poll for C10k because…',
           options: [
-            'It hands socket buffers to userspace without copying, so each readable connection costs no kernel-to-user data copy',
+            'It hands socket buffers to userspace without copying, so each connection that becomes readable costs no kernel-to-user data copy',
             'Interest is registered once and each wake returns only the ready fds, so work scales with ready events, not total connections',
             'It spawns a kernel thread per connection, so waiting on 10k sockets proceeds in parallel instead of in one single-threaded scan loop',
             'It signals readiness through shared memory without any system call, so the loop never traps into the kernel to wait',
@@ -144,7 +144,7 @@ You should now be able to trace a request through a modern async server: NIC int
           q: 'A suspended tokio task costs ~hundreds of bytes instead of ~1 MB because…',
           options: [
             'Rust stacks start tiny and grow on demand, so an idle task keeps only a few hundred bytes of stack committed while it waits',
-            'An async fn compiles to a state-machine struct holding only the locals live across each await, with no dedicated stack or OS thread',
+            'An async fn compiles to a state machine holding only the locals live across each await, with no stack or OS thread',
             'The runtime compresses suspended tasks and decompresses them on wake, trading some CPU cycles for a smaller resident memory footprint',
             'Suspended tasks all share the worker thread\'s single stack, so only each task\'s registers are saved when it parks',
           ],

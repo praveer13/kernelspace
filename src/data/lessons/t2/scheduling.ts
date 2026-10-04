@@ -173,9 +173,9 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
           q: 'Continuous batching maps to preemptive scheduling because…',
           options: [
             'It spreads one batch across many GPU cores, the way a multicore scheduler spreads runnable threads across cores to hide memory latency',
-            'It re-decides the running set after every iteration (quantum), letting sequences join and leave without draining the device',
+            'It re-decides the running set after every iteration (quantum), so sequences join and leave without draining the device',
             'It lets a running sequence temporarily borrow the priority of a waiting one so the waiting one is never blocked behind it',
-            'It groups requests of similar prompt length into one batch, so they finish together and no batch slot sits idle',
+            'It groups requests of similar prompt length into one batch, so they finish together and no batch slot sits idle waiting for a straggler',
           ],
           correct: [1],
           explanation:

@@ -146,7 +146,7 @@ Next track: the operating system. You have built memory management by hand; now 
           q: 'When Rust code needs shared ownership or cycles, the idiomatic escape is…',
           options: [
             'static mut globals, which every function can reach without owning them',
-            'Wrapping the whole program in unsafe so the borrow checker is switched off',
+            'Wrapping the whole program in an unsafe block so the borrow checker is switched off',
             'Rc/Arc reference counting, or an arena with index handles in place of pointers',
             'There is none; Rust cannot express graphs or cycles without a garbage collector',
           ],
@@ -163,8 +163,8 @@ Next track: the operating system. You have built memory management by hand; now 
         {
           q: 'Dynamo\'s Rust code orchestrates KV transfers that NIXL (C++) performs. Why Rust for that layer over C++?',
           options: [
-            'Rust has more mature CUDA tooling and kernel libraries than C++ does',
-            'C-class speed and layout control, with compile-time memory safety and no GC pauses',
+            'Rust has more mature CUDA tooling and kernel libraries than C++, so GPU work is easier',
+            'C-class speed and control, with compile-time memory safety and no GC pauses',
             'Rust binaries are smaller and start faster, which matters when scaling out replicas',
             'C++ cannot interoperate with Python at all, whereas Rust has first-class bindings',
           ],

@@ -151,7 +151,7 @@ Notice that all three answers address the *same* question. Manual memory managem
         {
           q: 'Why is reading one element past an array more dangerous than crashing?',
           options: [
-            'It is not more dangerous; reading past the end of an array always crashes at once',
+            'It is not more dangerous; C checks every array bound, so reading past the end always crashes at once',
             'Neighboring memory is usually mapped, so the program keeps running on silently wrong data',
             'The read always damages the allocator metadata, so the whole heap is corrupted at that moment',
             'The TLB caches the failed lookup, so later accesses to that address keep faulting',
