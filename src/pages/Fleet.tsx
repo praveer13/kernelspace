@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils'
 import { validateModule } from '@/pages/fleet/drivers'
 import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet/slots'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import RouteFallback from '@/components/RouteFallback'
 
 // The three panels are the heavy part of this page; fetch only the active mode's.
@@ -129,9 +130,11 @@ export default function Fleet() {
       </div>
 
       <div className="mt-6">
-        <Suspense fallback={<RouteFallback label="loading panel" />}>
-          {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
-        </Suspense>
+        <ErrorBoundary label="this panel" resetKey={mode}>
+          <Suspense fallback={<RouteFallback label="loading panel" />}>
+            {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </div>
   )

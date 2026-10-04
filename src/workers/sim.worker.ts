@@ -35,3 +35,5 @@ self.addEventListener('message', (event: MessageEvent<SimRequest>) => {
     .then((result) => ctx.postMessage({ id, type: 'result', result }))
     .catch((e: unknown) => ctx.postMessage({ id, type: 'error', message: e instanceof Error ? e.message : String(e) }))
 })
+
+ctx.postMessage({ type: 'ready' })

@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { useParams } from 'react-router'
 import NotFound from '@/pages/NotFound'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import RouteFallback from '@/components/RouteFallback'
 
 // Each simulator is its own chunk; only the one being opened is fetched.
@@ -44,8 +45,10 @@ export default function Playground() {
   const Sim = REGISTRY[simId]
   if (!Sim) return <NotFound />
   return (
-    <Suspense fallback={<RouteFallback label="loading simulator" />}>
-      <Sim />
-    </Suspense>
+    <ErrorBoundary label="this simulator" resetKey={simId}>
+      <Suspense fallback={<RouteFallback label="loading simulator" />}>
+        <Sim />
+      </Suspense>
+    </ErrorBoundary>
   )
 }

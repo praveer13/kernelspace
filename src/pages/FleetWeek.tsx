@@ -21,7 +21,7 @@ import {
 } from '@/lib/fleet-week'
 import type { RouterKind, TickSample } from '@/lib/fleet-model'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
-import { moduleBytes, runSim } from '@/workers/sim-client'
+import { moduleBytes, runSim, SimTimeoutError } from '@/workers/sim-client'
 import { cn } from '@/lib/utils'
 
 const ACTS = [
@@ -104,11 +104,29 @@ function ResultPanel({ result }: { result: ActResult }) {
   )
 }
 
+/** What a failed job tells the learner: a timeout already says what to fix; anything else is the worker's own message. */
+function describeError(e: unknown): string {
+  if (e instanceof SimTimeoutError) return e.message
+  const detail = (e instanceof Error ? e.message : String(e)).replace(/[.\s]+$/, '')
+  return `execution failed: ${detail}. Fix the cause and run again.`
+}
+
+function ActError({ message }: { message: string | null }) {
+  if (!message) return null
+  return (
+    <p role="alert" className="mt-4 rounded-md border border-danger/50 bg-danger/5 p-3 font-mono text-[12px] text-danger">
+      {message}
+    </p>
+  )
+}
+
 function useActRunner(actId: string) {
   const completeAct = useProgress((s) => s.completeFleetWeekAct)
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<ActResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const busyRef = useRef(false)
   const report = useCallback((r: ActResult) => {
     setResult(r)
     setRunning(false)
@@ -120,14 +138,33 @@ function useActRunner(actId: string) {
     },
     [actId, completeAct, report],
   )
-  return { running, progress, result, report, finish, setRunning, setProgress }
+  /**
+   * Run one act job. A module that traps or spins rejects (the sim client times spinners out), so
+   * the busy flag and the "executing…" state are cleared in finally and the act can be re-run.
+   */
+  const execute = useCallback(async (job: () => Promise<void>) => {
+    if (busyRef.current) return
+    busyRef.current = true
+    setRunning(true)
+    setProgress(0)
+    setError(null)
+    try {
+      await job()
+    } catch (e) {
+      setError(describeError(e))
+    } finally {
+      busyRef.current = false
+      setRunning(false)
+    }
+  }, [])
+  return { running, progress, result, error, report, finish, execute, setRunning, setProgress, setError }
 }
 
 /* ------------------------------ ACT 1 ------------------------------ */
 
 function ActEngine() {
   const slots = useSlots((s) => s.slots)
-  const { running, progress, result, report, finish, setRunning, setProgress } = useActRunner('engine')
+  const { running, progress, result, error, report, finish, execute, setProgress } = useActRunner('engine')
   const [traceResult, setTraceResult] = useState<ActResult | null>(null)
   const anyStudent = slots.sched || slots.mgr || slots.queue
   return (
@@ -139,14 +176,15 @@ function ActEngine() {
         running={running}
         progress={progress}
         label="run the trace"
-        onClick={async () => {
-          setRunning(true)
-          setProgress(0)
-          const trace = await runSim({ kind: 'act1', modules: moduleBytes(slots) }, setProgress)
-          setTraceResult(trace)
-          report(trace)
-        }}
+        onClick={() =>
+          void execute(async () => {
+            const trace = await runSim({ kind: 'act1', modules: moduleBytes(slots) }, setProgress)
+            setTraceResult(trace)
+            report(trace)
+          })
+        }
       />
+      <ActError message={error} />
       {result && <ResultPanel result={result} />}
       {traceResult && (
         <MeasurementSubmission
@@ -163,7 +201,7 @@ function ActEngine() {
 
 function ActFleet() {
   const slots = useSlots((s) => s.slots)
-  const { running, progress, result, report, finish, setRunning, setProgress } = useActRunner('fleet')
+  const { running, progress, result, error, report, finish, execute, setProgress } = useActRunner('fleet')
   const [traceResult, setTraceResult] = useState<ActResult | null>(null)
   const [workers, setWorkers] = useState<2 | 4>(2)
   const [router, setRouter] = useState<RouterKind>('jsq')
@@ -187,14 +225,15 @@ function ActFleet() {
         running={running}
         progress={progress}
         label="run with disruption"
-        onClick={async () => {
-          setRunning(true)
-          setProgress(0)
-          const trace = await runSim({ kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress)
-          setTraceResult(trace)
-          report(trace)
-        }}
+        onClick={() =>
+          void execute(async () => {
+            const trace = await runSim({ kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress)
+            setTraceResult(trace)
+            report(trace)
+          })
+        }
       />
+      <ActError message={error} />
       {result && <ResultPanel result={result} />}
       {traceResult && (
         <MeasurementSubmission
@@ -302,24 +341,21 @@ function MeasurementSubmission({
 /* ------------------------------ ACT 3 ------------------------------ */
 
 function ActBusiness() {
-  const { running, progress, result, finish, setRunning, setProgress } = useActRunner('business')
+  const { running, progress, result, error, finish, execute, setProgress } = useActRunner('business')
   const [evaluation, setEvaluation] = useState<Act3Eval | null>(null)
   const [choice, setChoice] = useState<string>('b200')
   const [claim, setClaim] = useState('')
   const doc = useProgress((s) => s.fleetWeek.docText ?? '')
   const setDoc = useProgress((s) => s.setFleetWeekDoc)
-  const evaluatingRef = useRef(false)
 
-  const evaluate = useCallback(async () => {
-    if (evaluatingRef.current) return
-    evaluatingRef.current = true
-    setRunning(true)
-    setProgress(0)
-    const ev = await runSim({ kind: 'act3' }, setProgress)
-    setEvaluation(ev)
-    setRunning(false)
-    evaluatingRef.current = false
-  }, [setRunning, setProgress])
+  // the runner's busy ref guards double-clicks and is reset in its finally, so a failed run can be repeated
+  const evaluate = useCallback(
+    () =>
+      execute(async () => {
+        setEvaluation(await runSim({ kind: 'act3' }, setProgress))
+      }),
+    [execute, setProgress],
+  )
 
   return (
     <div>
@@ -328,7 +364,8 @@ function ActBusiness() {
         one, state your expected $/Mtok, and defend it in ≥60 words. We recompute your claim — ±25% tolerance,
         and the option must meet the SLO.
       </p>
-      <RunButton running={running} progress={progress} label="execute all three options" onClick={evaluate} />
+      <RunButton running={running} progress={progress} label="execute all three options" onClick={() => void evaluate()} />
+      <ActError message={error} />
       {evaluation && (
         <div className="mt-4 space-y-4">
           <div className="overflow-x-auto rounded-md border border-line">
@@ -391,7 +428,7 @@ function ActBusiness() {
 /* ------------------------------ ACT 4 ------------------------------ */
 
 function ActIncident() {
-  const { running, result, finish, setRunning } = useActRunner('incident')
+  const { running, result, error, finish, setRunning, setError } = useActRunner('incident')
   const [idx, setIdx] = useState(0)
   const [incident, setIncident] = useState<Incident | null>(null)
   // cause / mitigation are authored indices; the display order is reshuffled per attempt
@@ -402,16 +439,26 @@ function ActIncident() {
   const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
   const mitigationOrder = useMemo(() => (incident ? shuffledOrder(incident.mitigations.length, seed ^ 0x9e3779b1) : []), [incident, seed])
 
+  // only the latest click may touch state, so a slow or failed earlier load cannot overwrite or strand a newer one
+  const openSeq = useRef(0)
   const open = useCallback(async (i: number) => {
+    const seq = ++openSeq.current
     setRunning(true)
+    setError(null)
     setIncident(null)
     setCause(null)
     setMitigation(null)
     setIdx(i)
     setSeed(freshSeed())
-    setIncident(await runSim({ kind: 'incident', id: INCIDENTS[i].id }))
-    setRunning(false)
-  }, [setRunning])
+    try {
+      const loaded = await runSim({ kind: 'incident', id: INCIDENTS[i].id })
+      if (seq === openSeq.current) setIncident(loaded)
+    } catch (e) {
+      if (seq === openSeq.current) setError(describeError(e))
+    } finally {
+      if (seq === openSeq.current) setRunning(false)
+    }
+  }, [setRunning, setError])
 
   const submit = useCallback(() => {
     if (!incident || cause === null || mitigation === null) return
@@ -457,6 +504,7 @@ function ActIncident() {
         ))}
       </div>
       {running && <p className="mt-3 font-mono text-[12px] text-text-3"><Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />loading telemetry…</p>}
+      <ActError message={error} />
       {incident && (
         <div className="mt-4 space-y-4">
           <p className="font-mono text-[11px] text-text-3">graded seed {seedLabel(incident.seed)}</p>

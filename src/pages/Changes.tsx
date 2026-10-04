@@ -2,6 +2,7 @@ import { Suspense, lazy, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import ErrataTab from '@/pages/changes/ErrataTab'
 import FieldNotesTab from '@/pages/changes/FieldNotesTab'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import RouteFallback from '@/components/RouteFallback'
 import { cn } from '@/lib/utils'
 
@@ -80,9 +81,11 @@ export default function Changes() {
         {active === 'errata' && <ErrataTab />}
         {active === 'field-notes' && <FieldNotesTab />}
         {active === 'claims' && (
-          <Suspense fallback={<RouteFallback label="loading claims" />}>
-            <ClaimsTable />
-          </Suspense>
+          <ErrorBoundary label="the claims table">
+            <Suspense fallback={<RouteFallback label="loading claims" />}>
+              <ClaimsTable />
+            </Suspense>
+          </ErrorBoundary>
         )}
       </div>
     </div>

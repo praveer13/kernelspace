@@ -17,6 +17,7 @@ import {
 import MemoryGrid from '@/components/home/MemoryGrid'
 import ScrollStory from '@/components/home/ScrollStory'
 import SimShowcase from '@/components/home/SimShowcase'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import TrackCard from '@/components/TrackCard'
 import CodeBlock from '@/components/CodeBlock'
 import { LinkButton } from '@/components/Button'
@@ -88,9 +89,11 @@ function Hero() {
       {/* background layers */}
       <div aria-hidden className="absolute inset-0 bg-blueprint" />
       {showParticles && (
-        <Suspense fallback={null}>
-          <ParticleField />
-        </Suspense>
+        <ErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <ParticleField />
+          </Suspense>
+        </ErrorBoundary>
       )}
       <div aria-hidden className="absolute inset-0 bg-grad-radial-glow" />
 

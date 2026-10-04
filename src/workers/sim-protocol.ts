@@ -33,6 +33,8 @@ export interface SimRequest {
 }
 
 export type SimResponse =
+  /** posted once when the worker's module has loaded, so startup stays out of a job's time budget */
+  | { type: 'ready' }
   | { id: number; type: 'progress'; fraction: number }
   | { id: number; type: 'result'; result: SimResults[SimJob['kind']] }
   | { id: number; type: 'error'; message: string }
