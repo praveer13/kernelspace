@@ -23,7 +23,7 @@ Naive matmul \`C = A × B\` (N×N): for each of N² outputs, dot a row of A with
 
 The insight: a \`T × T\` output tile \`C_tile\` only needs a \`T × K\` slab of A and a \`K × T\` slab of B. Choose \`T\` and \`K\` so those slabs fit in **shared memory** (T4.L2's 228 KB scratchpad), and the algorithm becomes: cooperatively load both slabs (coalesced, T4.L4), barrier, then compute from SRAM at ~20–30× HBM's bandwidth, accumulating into registers. March the slabs along the K dimension and repeat.
 
-Now count bytes: with \`T = 128\`, each element of A and B loaded from HBM is reused **T times** from SRAM before being discarded. Arithmetic intensity jumps from ~2 to ~\`T\` FLOP/byte — comfortably right of the H100's ridge (~295 F/B at FP16 with \`T\` large enough). **Same 2N³ FLOPs, same math, ~100× delivered throughput.** Tiling didn't change the algorithm; it changed which tier of the hierarchy the algorithm *lives* in.`,
+Now count bytes. Marching K steps, the tile does \`2·T²·K\` FLOPs and loads \`2·T·K\` elements — \`2·T·K·b\` bytes at \`b\` bytes each — so intensity is \`T / b\`: **\`T/2\` FLOP/byte at FP16**. With \`T = 128\` each element of A and B loaded from HBM is reused **T times** from SRAM, and intensity jumps from ~2 to 64 FLOP/byte — a 32× lift, and growing linearly with \`T\` toward the H100's ridge (~295 F/B at FP16, reached near \`T ≈ 590\` on HBM traffic alone; real kernels close the gap with L2 reuse across blocks). **Same 2N³ FLOPs, same math, far more delivered throughput.** Tiling didn't change the algorithm; it changed which tier of the hierarchy the algorithm *lives* in.`,
     },
     {
       type: 'diagram',
@@ -47,7 +47,7 @@ Now count bytes: with \`T = 128\`, each element of A and B loaded from HBM is re
       steps: [
         { caption: 'Goal: compute a T×T tile of C. Instead of streaming whole rows/columns from HBM per output element (AI ≈ 2), stage slabs through shared memory.', active: ['a', 'b'] },
         { caption: 'The block cooperatively loads a T×K slab of A and a K×T slab of B into SRAM — wide, coalesced transactions, every byte fetched once.', active: ['aslab', 'bslab'], edges: ['a->aslab', 'b->bslab'] },
-        { caption: 'Compute: each SRAM element is read T times from the fast tier (AI ≈ T). Barrier, march K, repeat. HBM traffic collapses by a factor of T; tensor cores stay fed.', active: ['ctile', 'tc'], edges: ['aslab->ctile', 'bslab->ctile'] },
+        { caption: 'Compute: each SRAM element is read T times from the fast tier (AI = T/2 at FP16). Barrier, march K, repeat. HBM traffic collapses by a factor of T; tensor cores stay fed.', active: ['ctile', 'tc'], edges: ['aslab->ctile', 'bslab->ctile'] },
       ],
     },
     {
@@ -74,7 +74,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
     }
     store_tile(C, acc, wid);                // one HBM write per element
 }`,
-      chips: ['AI: 2 → ~T', 'HBM traffic ÷ T', 'barriers bracket the tile'],
+      chips: ['AI: 2 → T/2 (FP16)', 'HBM traffic ÷ T', 'barriers bracket the tile'],
     },
     {
       type: 'prose',

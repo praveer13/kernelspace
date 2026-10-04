@@ -11,7 +11,7 @@
  *      with a padding fix.
  *   3. Memory tier probe: working-set slider that steps across shared memory,
  *      L2, and HBM bandwidths, plus a PCIe transfer mode.
- *   4. Matmul tiling + attention: tile-size sweep with AI ≈ T/6, and a naive
+ *   4. Matmul tiling + attention: tile-size sweep with AI = T/2 (FP16), and a naive
  *      vs FlashAttention toggle.
  *
  * Documented constants (synthetic but dimensionally faithful):
@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { tiledIntensity } from '@/lib/roofline'
 
 const SIM_ID = 'sim-roofline'
 
@@ -289,8 +290,8 @@ const tierName = (
   return 'HBM'
 }
 
-/** Naive loads are ≈2 F/B; tiled reuse raises intensity roughly in proportion to T. */
-const matmulAI = (T: number): number => T / 8
+/** Tiled reuse raises intensity in proportion to T: T/2 F/B for FP16 operands (see tiledIntensity). */
+const matmulAI = (T: number): number => tiledIntensity(T, 2)
 
 /** Synthetic shared-memory pressure curve: useful reuse wins through T=64, then residency falls. */
 const tileOccupancyFactor = (T: number): number => {
@@ -737,6 +738,7 @@ export default function RooflineSim() {
     tier,
     workingSetKb,
     pcieMode,
+    tileT,
     tileAI,
     tileOccFactor,
     attentionAI,
@@ -761,6 +763,7 @@ export default function RooflineSim() {
       tier,
       workingSetKb,
       pcieMode,
+      tileT,
       tileAI,
       tileOccFactor,
       attentionAI,
@@ -1082,7 +1085,7 @@ export default function RooflineSim() {
         s.tileAI,
         tileRoof,
         '#3EF2A4',
-        `tile T=${Math.round(s.tileAI * 8)}`,
+        `tile T=${s.tileT}`,
         `AI ${fmtAI(s.tileAI)} · occ ${(s.tileOccFactor * 100).toFixed(0)}%`,
       )
 
