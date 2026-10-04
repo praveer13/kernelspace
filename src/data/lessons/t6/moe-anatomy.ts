@@ -21,7 +21,7 @@ The deal: dense-model quality at a fraction of the per-token weight bandwidth. T
       type: 'prose',
       md: `## What the router costs you: the all-to-all
 
-Here is the systems bill, and it is paid in *network*, not FLOPs. With more experts than one GPU holds, each expert lives on a specific device. After the router decides, **every token must be physically moved to the GPUs hosting its k experts**, computed there, and moved back. Per layer, per batch: a **dispatch** all-to-all (tokens → expert devices) and a **combine** all-to-all (results → home devices). A 256-expert model at expert parallelism 144 (EP144, DeepSeek's decode config) runs this across 144 GPUs — twice per layer, 61 layers.
+Here is the systems bill, and it is paid in *network*, not FLOPs. With more experts than one GPU holds, each expert lives on a specific device. After the router decides, **every token must be physically moved to the GPUs hosting its k experts**, computed there, and moved back. Per layer, per batch: a **dispatch** all-to-all (tokens → expert devices) and a **combine** all-to-all (results → home devices). A 256-expert model at expert parallelism 144 (EP144, DeepSeek's decode config) runs this across 144 GPUs — twice per MoE layer. DeepSeek-V3 has 61 layers, but the first 3 are dense FFNs with no router, so that is 58 MoE layers and 2 × 58 = 116 all-to-alls per forward pass.
 
 This is why MoE serving is a *scheduling and networking* discipline:
 - **Load balance is the whole game.** If 30% of tokens pick expert #7, expert #7's GPU is the straggler and 143 others wait at the combine barrier. Hot experts are the NCCL stall of T0.L6 writ large.
@@ -33,7 +33,7 @@ This is why MoE serving is a *scheduling and networking* discipline:
       stats: [
         { value: '671B / 37B', label: 'DeepSeek-V3 params: total / per-token', hint: 'MoE buys ~18× fewer weight bytes per token for the FFN path.' },
         { value: '256 + 1', label: 'routed experts + shared', hint: 'Top-8 of 256 chosen per token by the router; the shared expert always runs.' },
-        { value: '2 × 61', label: 'all-to-alls per forward', hint: 'Dispatch + combine, every layer. MoE inference is a network workload.' },
+        { value: '2 × 58', label: 'all-to-alls per forward', hint: 'Dispatch + combine, every MoE layer (58 of 61; the first 3 are dense). MoE inference is a network workload.' },
         { value: 'EP144', label: 'DeepSeek decode EP width', hint: 'Experts spread across 144 GPUs in production decode (Feb 2025).' },
       ],
     },
@@ -94,7 +94,7 @@ Run T5.L4's arithmetic again with 70 KB: the "cache is the payload" conclusion i
           ],
           correct: [1],
           explanation:
-            'Dispatch (tokens → experts) and combine (results → home), every layer. At EP144 this spans 144 devices; latency floor = 2 × round-trip × layers. It is why MoE serving is a networking discipline, not a kernel one.',
+            'Dispatch (tokens → experts) and combine (results → home), every MoE layer. At EP144 this spans 144 devices; latency floor = 2 × round-trip × layers. It is why MoE serving is a networking discipline, not a kernel one.',
         },
         {
           q: 'MLA\'s contribution to serving economics is…',
@@ -125,7 +125,7 @@ Run T5.L4's arithmetic again with 70 KB: the "cache is the payload" conclusion i
     {
       type: 'deepdive',
       title: 'DeepSeek-V3 as the reference architecture',
-      md: `Keep one concrete instance in your head for the rest of T6: **61 layers, hidden 7168, 256 routed experts (top-8) + 1 shared, MLA with 576-dim latent KV**. Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, BF16 for MLA/combine. Published cost day: 226–278 H800 nodes serving 608B input / 168B output tokens, 56.3% KV-cache hit rate, $87k cost vs $562k theoretical revenue — the 545% margin T7.L4 dissects. Every lesson in this track generalizes from this one build.`,
+      md: `Keep one concrete instance in your head for the rest of T6: **61 layers (3 dense + 58 MoE), hidden 7168, 256 routed experts (top-8) + 1 shared, MLA with 576-dim latent KV**. Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, BF16 for MLA/combine. Published cost day: 226–278 H800 nodes serving 608B input / 168B output tokens, 56.3% KV-cache hit rate, $87k cost vs $562k theoretical revenue — the 545% margin T7.L4 dissects. Every lesson in this track generalizes from this one build.`,
     },
   ],
 }
