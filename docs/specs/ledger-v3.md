@@ -4,7 +4,46 @@
 **Implements:** PLAN-100X §5.1 V3, §7.1, and the part-2 items V2 (confidence), S4 (change cards), baseline cold checks (§1) and K4 (Boot, §4.A).
 **Types:** `src/lib/ledger/types.ts` (types only, committed with this spec). Section numbers below are cited from that file.
 
-**Owner decision pending.** OD1 (legacy progress) is not confirmed. This spec implements option (a), a frozen "pre-v3" badge plus Recertify, as the default. OD1 is a read-time switch (`LegacyPolicy`, §6.4): the stored data is identical under (a), (b) and (c), so changing the decision later needs no migration.
+**Owner decisions recorded (2026-10-04).** OD1 is decided: **start fresh**. kernelspace is new, so there is no legacy cohort to migrate. Addendum A below takes precedence over every section it names.
+
+---
+
+## Addendum A: owner decisions, 2026-10-04 (read first; supersedes conflicting text)
+
+**A1. Start fresh (PLAN-100X OD1).**
+- v3 never reads or writes `kernelspace:v1`. The first v3 load starts with an empty ledger.
+- There are no legacy ids, no legacy projection, no `LegacyPolicy` or `LEGACY_POLICY` switch, no pre-v3 badge, no What-changed screen, no Recertify and no pre-migration backup.
+- `reset()` clears v3 state only: the `kernelspace:v2` snapshot, the IndexedDB database and the outbox.
+- Import accepts **export version 3 only**. An older file gets a clear message: "this export is from an earlier version of kernelspace and can't be imported".
+- **Superseded:** §6.4–6.5; §9.1, §9.2, §9.5; the legacy steps of §9.6 and §9.8; §10.2 for v1/v2 detection; §10.6; all of §11; Appendix A; and every property, fixture or acceptance item that exists only for migration (double-migrate, stale *pre-v3* tab, golden v1 fixture).
+- **Kept:**
+  - the ledger, fold, merge and codec, plus the outbox;
+  - the `kernelspace:v2` snapshot for first paint;
+  - the BroadcastChannel sync and the schema guard (§9.3–9.4), for a stale tab running an *older v3* bundle;
+  - export v3 / import with merge or replace and undo, and the backup nudge after 30 days without an export;
+  - the double-import, two-device merge, stale-v3-tab write and 12-month round-trip properties.
+
+**A2. Baseline cold checks (§12.3)** are dropped from Wave 0b. They were for learners carrying v2 history. Cold checks arrive with K2/K5 in Wave 1.
+
+**A3. Answers to §17:**
+- Q2: the service worker is deferred to Wave 1, so Boot is not offline-capable in Wave 0b. Accepted.
+- Q3: confidence is **optional** and never gates Submit. Unrated answers are excluded from calibration.
+- Q4: the mapping `{guess: 0.33, think: 0.67, sure: 0.95}` is accepted.
+- Q5: `Erratum.items` is approved (at most 2 retrieval items per erratum).
+- Q6: the Home hero CTA points to `/boot`. There is **no** auto-redirect from `/`.
+- Q7: Boot paying 0 XP is fine; XP becomes graded minutes with V5 in Wave 1.
+- Q9: manual matrix plus dev self-test. Add `fake-indexeddb` only if a bug class slips through.
+- Q1, Q8 and Q10–Q12 are moot under A1.
+
+**A4. Revised tasks (§16).** Order: **{L1 ∥ L2} → L3 → {L4 ∥ L5 ∥ L6} → {L7 ∥ L8}.**
+- **L1, ledger core:** without `legacy.ts`, `tests/ledger/legacy.test.ts` and the `v1-*` fixtures. `progress.ts` re-exports `XP`, `RANKS`, `rankForXp`, `nextRank` and `localDateKey`; no migration helpers.
+- **L2, storage, outbox and sync:** without `backup.ts` and its test.
+- **L3, engine and façade:** no migration or re-projection, and no backup claim. The manual matrix is: first load (empty ledger), reload, two tabs, an older v3 bundle in a stale tab (schema guard → read-only), and a private window. No consumer file changes, and the same bundle budgets.
+- **L4, data ownership on /progress:** export v3, import preview (merge or replace) with undo, the storage line, the backup nudge and reset copy. An older export shows the unsupported message. There is no pre-v3 record link.
+- **L5, V2 confidence:** as §16, with optional picks.
+- **L6, ledger notices (was "Legacy UX"):** the read-only banner (schema guard), the storage notices from §9.8 that still apply (memory-backend fallback), and passing the Forge module's `wasmSha256` to `recordLabResult`. No WhatChanged, PreV3Badge, RecertifyList, BaselineCheck or cold-check modules.
+- **L7, S4 change cards:** a card shows when an erratum's `date` is later than the learner's completion event for an affected lesson. There is no pre-v3 seeding. Test fixture: a ledger with a t6 lesson completed before the KVBM erratum's date shows that card. A learner who completed it after the fix does not.
+- **L8, K4 Boot:** as §16, with the CTA only (A3).
 
 ---
 
