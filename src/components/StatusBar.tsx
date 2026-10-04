@@ -5,6 +5,7 @@ import {
   useProgress,
   selectDoneLessons,
   selectStreak,
+  localDateKey,
   TOTAL_LESSONS,
 } from '@/lib/progress'
 
@@ -78,7 +79,7 @@ export default function StatusBar() {
     for (let i = 13; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      out.push(activity[d.toISOString().slice(0, 10)] ?? 0)
+      out.push(activity[localDateKey(d)] ?? 0)
     }
     return out
   }, [activity])

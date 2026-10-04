@@ -67,7 +67,7 @@ export interface ProgressState {
   fleetWeek: FleetWeekProgress
   capstone: CapstoneProgress
   xp: number
-  streakDays: string[] // ISO dates with any activity
+  streakDays: string[] // local YYYY-MM-DD dates with graded work
   achievements: string[]
   settings: ProgressSettings
 
@@ -128,7 +128,12 @@ export function nextRank(xp: number): Rank | null {
   return sorted.find((r) => r.minXp > xp) ?? null
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+/** YYYY-MM-DD from the learner's LOCAL calendar fields (not UTC), so a day rolls over at their midnight. */
+export function localDateKey(d: Date = new Date()): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
 
 const initialData = {
   version: 2 as const,
@@ -143,8 +148,9 @@ const initialData = {
   settings: {} as ProgressSettings,
 }
 
+/** Streak days come only from graded work (quiz, sim task, lab check, Fleet Week act, capstone step). */
 function touchStreak(streakDays: string[]): string[] {
-  const today = todayISO()
+  const today = localDateKey()
   if (streakDays.includes(today)) return streakDays
   return [...streakDays, today]
 }
@@ -241,7 +247,6 @@ export const useProgress = create<ProgressState>()(
               },
             },
             xp: s.xp + (nowDone && !wasDone ? XP.lesson : 0),
-            streakDays: touchStreak(s.streakDays),
           }
         }),
 
@@ -287,17 +292,13 @@ export const useProgress = create<ProgressState>()(
               },
             },
             xp: s.xp + XP.exercise,
-            streakDays: touchStreak(s.streakDays),
           }
         }),
 
       recordSimVisit: (simId) =>
         set((s) => {
           const prev = s.sims[simId] ?? { visits: 0, tasksDone: [] as string[] }
-          return {
-            sims: { ...s.sims, [simId]: { ...prev, visits: prev.visits + 1 } },
-            streakDays: touchStreak(s.streakDays),
-          }
+          return { sims: { ...s.sims, [simId]: { ...prev, visits: prev.visits + 1 } } }
         }),
 
       recordSimTask: (simId, taskId) =>
@@ -333,7 +334,7 @@ export const useProgress = create<ProgressState>()(
               },
             },
             xp: s.xp + (firstDone ? XP.lab : 0),
-            streakDays: touchStreak(s.streakDays),
+            streakDays: passedCheckIds.length > 0 ? touchStreak(s.streakDays) : s.streakDays,
           }
         }),
 
@@ -457,10 +458,10 @@ export function selectStreak(s: ProgressState): number {
   const days = new Set(s.streakDays)
   let streak = 0
   const cursor = new Date()
-  if (!days.has(cursor.toISOString().slice(0, 10))) {
+  if (!days.has(localDateKey(cursor))) {
     cursor.setDate(cursor.getDate() - 1) // allow streak to end yesterday
   }
-  while (days.has(cursor.toISOString().slice(0, 10))) {
+  while (days.has(localDateKey(cursor))) {
     streak += 1
     cursor.setDate(cursor.getDate() - 1)
   }
@@ -472,7 +473,7 @@ export function selectActivityMap(s: ProgressState): Record<string, number> {
   const map: Record<string, number> = {}
   for (const l of Object.values(s.lessons)) {
     if (l.completedAt) {
-      const day = l.completedAt.slice(0, 10)
+      const day = localDateKey(new Date(l.completedAt))
       map[day] = (map[day] ?? 0) + 1
     }
   }

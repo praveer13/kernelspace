@@ -36,6 +36,7 @@ import {
   exportProgress,
   TOTAL_LESSONS,
 } from '@/lib/progress'
+import { localDateKey } from '@/lib/progress'
 import type { ProgressState } from '@/lib/progress'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
 import { ALL_LESSONS } from '@/data/lessons'
@@ -325,7 +326,7 @@ function KpiBand() {
     return Array.from({ length: 14 }, (_, i) => {
       const d = new Date()
       d.setDate(d.getDate() - (13 - i))
-      return set.has(d.toISOString().slice(0, 10))
+      return set.has(localDateKey(d))
     })
   }, [streakDays])
 
@@ -546,7 +547,7 @@ function Heatmap() {
     const map: Record<string, number> = {}
     for (const l of Object.values(lessons)) {
       if (l.completedAt) {
-        const day = l.completedAt.slice(0, 10)
+        const day = localDateKey(new Date(l.completedAt))
         map[day] = (map[day] ?? 0) + 1
       }
     }
@@ -575,7 +576,7 @@ function Heatmap() {
       for (let d = 0; d < 7; d++) {
         const cur = new Date(start)
         cur.setDate(start.getDate() + w * 7 + d)
-        const iso = cur.toISOString().slice(0, 10)
+        const iso = localDateKey(cur)
         col.push({
           date: iso,
           n: days.has(iso) ? (counts.get(iso) ?? 1) : (counts.get(iso) ?? 0),
