@@ -34,9 +34,9 @@ Say you serve a million requests and track each one's state:
 | *(padding)* | — | 6 |
 | **total** | | **32** |
 
-In AoS, you allocate an array of these structs: request 0's 32 bytes, then request 1's, and so on. Two requests per cache line, perfectly packed. Now ask: *which requests are past their deadline?* The loop reads **8 bytes of \`deadline_ns\` per 64-byte line** — one eighth of every fetch is useful, the rest is payload you did not ask for. You have divided your effective memory bandwidth by eight.
+In AoS, you allocate an array of these structs: request 0's 32 bytes, then request 1's, and so on. Two requests per cache line, perfectly packed. Now ask: *which requests are past their deadline?* The loop reads **8 bytes of \`deadline_ns\` from each 32-byte struct** — 16 useful bytes in every 64-byte line, so one quarter of every fetch is useful and the rest is payload you did not ask for. You have divided your effective memory bandwidth by four.
 
-Flip the layout to SoA: one array per field. \`deadline_ns[]\` is a flat, contiguous array of eight million deadline values. Now every 64-byte line contains **8 deadlines you actually use**. The deadline sweep runs at full bandwidth, eight times fewer DRAM trips, and the prefetcher streams happily. Nothing else changed — not the algorithm, not the arithmetic, not the language.`,
+Flip the layout to SoA: one array per field. \`deadline_ns[]\` is a flat, contiguous array of eight million deadline values. Now every 64-byte line contains **8 deadlines you actually use**. The deadline sweep runs at full bandwidth, four times fewer DRAM trips, and the prefetcher streams happily. Nothing else changed — not the algorithm, not the arithmetic, not the language.`,
     },
     {
       type: 'code',
@@ -57,7 +57,7 @@ struct Request {
 }
 
 fn count_expired_aos(reqs: &[Request], now: u64) -> usize {
-    // reads 64 B of line for every 8 B of deadline → 1/8 bandwidth
+    // reads 8 B of deadline from each 32 B struct → 16 of 64 B per line, 1/4 bandwidth
     reqs.iter().filter(|r| r.deadline_ns < now).count()
 }
 
@@ -104,7 +104,7 @@ final class Requests {
 // (Valhalla value types aim to fix this — someday)`,
         },
       ],
-      chips: ['64 B line = 8 deadlines', 'bandwidth ×8', 'SIMD-friendly'],
+      chips: ['64 B line = 8 deadlines', 'bandwidth ×4', 'SIMD-friendly'],
     },
     {
       type: 'prose',
@@ -175,7 +175,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
       machine: 'layout',
       title: 'Layout lab: AoS vs SoA vs false sharing',
       tasks: [
-        'Run the deadline sweep on the AoS layout; note effective bandwidth (~1/8 of peak).',
+        'Run the deadline sweep on the AoS layout; note effective bandwidth (~1/4 of peak).',
         'Switch to SoA and rerun — watch bandwidth approach the DRAM roof.',
         'Run the 8-thread counter without padding; watch the line ping-pong counter explode.',
         'Enable 64-byte padding and rerun: same code, 10–50× throughput.',
@@ -188,9 +188,9 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
         {
           q: 'A deadline-sweep reads one u64 field per record from an AoS array of 32-byte structs. What fraction of each fetched cache line is useful?',
           options: ['1/2', '1/4', '1/8', 'all of it'],
-          correct: [2],
+          correct: [1],
           explanation:
-            '64-byte line ÷ 8-byte field = 8 fields per line… but AoS packs whole 32-byte structs, so each line holds 2 structs and you use 8 bytes of each: 16 useful bytes of 64 only if you touch both — in a pure single-field sweep the SoA comparison is the point: contiguous field arrays make 100% of each line useful.',
+            'AoS packs whole 32-byte structs, so each 64-byte line holds 2 of them and the sweep uses 8 bytes of each: 16 useful bytes out of 64 = 1/4. In SoA the deadline array is contiguous, so 100% of each line is useful.',
         },
         {
           q: 'Eight threads increment eight independent counters stored contiguously in one cache line. Throughput collapses because…',
