@@ -37,6 +37,7 @@ import {
 import { getProgress, useProgress } from '@/lib/progress'
 import { lessonById } from '@/data/lessons'
 import { cn } from '@/lib/utils'
+import { freshSeed, shuffledOrder } from '@/lib/rng'
 import {
   Dialog,
   DialogContent,
@@ -834,28 +835,46 @@ export function InlineQuiz({
   correctIndex: number
   onSolved: () => void
 }) {
+  // `picked` and `correctIndex` are authored indices; `order[position]` maps display -> authored.
+  // A wrong pick flashes, then reshuffles under a new seed so position memory can't solve it.
+  const [seed, setSeed] = useState(freshSeed)
   const [picked, setPicked] = useState<number | null>(null)
   const [shakeKey, setShakeKey] = useState(0)
+  const reshuffleTimer = useRef<number | undefined>(undefined)
+  const order = useMemo(() => shuffledOrder(options.length, seed), [options.length, seed])
   const solved = picked === correctIndex
+
+  useEffect(() => () => window.clearTimeout(reshuffleTimer.current), [])
+
+  const pick = (i: number) => {
+    if (picked !== null) return
+    setPicked(i)
+    if (i === correctIndex) {
+      onSolved()
+    } else {
+      setShakeKey((k) => k + 1)
+      reshuffleTimer.current = window.setTimeout(() => {
+        setSeed(freshSeed())
+        setPicked(null)
+      }, 700)
+    }
+  }
 
   return (
     <div className="rounded-md border border-line bg-surface-2 p-3">
       <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">checkpoint</p>
       <p className="mt-1.5 text-body-sm leading-snug text-text-1">{question}</p>
       <div className="mt-2.5 space-y-1.5">
-        {options.map((opt, i) => {
+        {order.map((i, pos) => {
+          const opt = options[i]
           const isPicked = picked === i
           const isCorrect = i === correctIndex
           return (
             <motion.button
-              key={`${i}-${isPicked && !isCorrect ? shakeKey : 0}`}
+              key={`${seed}-${pos}-${isPicked && !isCorrect ? shakeKey : 0}`}
               type="button"
               disabled={solved}
-              onClick={() => {
-                setPicked(i)
-                if (i === correctIndex) onSolved()
-                else setShakeKey((k) => k + 1)
-              }}
+              onClick={() => pick(i)}
               animate={isPicked && !isCorrect ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
               transition={{ duration: 0.3 }}
               className={cn(
@@ -868,7 +887,7 @@ export function InlineQuiz({
                 solved && !isCorrect && 'opacity-50',
               )}
             >
-              <span className="font-mono text-[10px] text-text-3">{String.fromCharCode(65 + i)}</span>
+              <span className="font-mono text-[10px] text-text-3">{String.fromCharCode(65 + pos)}</span>
               {opt}
             </motion.button>
           )
