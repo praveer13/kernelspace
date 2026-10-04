@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `You passed the T2 exam, so you already *recognize* PagedAttention. This lesson is the owner's manual: the actual data structures, the allocation lifecycle of a sequence, how prefix caching falls out of refcounted blocks, what the CUDA kernel pays for indirection, and where the design's limits are. T2.L7 taught you *that* it's paging; T5.L5 teaches you *how* — enough to read vLLM's \`block_manager\` source without a guide.`,
+      md: `You passed the T2 exam, so you already *recognize* PagedAttention. This lesson is the owner's manual: the actual data structures, the allocation lifecycle of a sequence, how prefix caching falls out of refcounted blocks, what the CUDA kernel pays for indirection, and where the design's limits are. T2.L7 taught you *that* it's paging; T5.L5 teaches you *how* — enough to read vLLM's V1 KV-cache manager (\`vllm/v1/core\`) without a guide.`,
     },
     {
       type: 'prose',
@@ -21,10 +21,10 @@ const lesson: Lesson = {
 
 The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KB of KV per token, so one block holds 16 × 128 KB = 2 MB), a pool of N blocks is the entire serving capacity. Two structures run the show:
 
-- **The free-block queue** — exactly your T1.L3 free list, minus the fit search (all blocks identical): \`alloc()\` pops, \`free()\` pushes, O(1), no fragmentation between blocks ever.
+- **The free-block queue** — your T1.L3 free list, minus the fit search (all blocks identical), kept in eviction order: \`alloc()\` pops the head, \`free()\` pushes the tail, O(1), no fragmentation between blocks ever.
 - **Per-sequence block tables** — a growable array of physical block ids: logical block \`i\` (tokens \`16i..16i+15\`) lives in physical block \`table[i]\`. The attention kernel translates per block as it reads — the MMU walk, one level deep.
 
-Blocks also carry a **refcount** for sharing. When refcount hits zero, the block returns to the free queue. That refcount is the entire machinery behind the features that made vLLM a product.`,
+Blocks also carry a **refcount** for sharing. When refcount hits zero, the block joins the free queue, but it is *not* erased: its contents and its hash stay valid, so it remains in the prefix cache as an **evictable** block until \`alloc()\` pops it for something new. A prefix hit on a refcount-0 block pulls it back out of the queue. That refcount is the entire machinery behind the features that made vLLM a product.`,
     },
     {
       type: 'diagram',
@@ -51,7 +51,7 @@ Blocks also carry a **refcount** for sharing. When refcount hits zero, the block
         { caption: 'Both sequences begin with the same 48-token prompt: three full blocks. Instead of two copies, the manager maps BOTH tables to the same physical blocks with refcount=2. Memory for the prefix: paid once.', active: ['seqA', 'seqB', 'b7', 'b3', 'b12'], edges: ['seqA->b7', 'seqB->b7'] },
         { caption: 'Generations diverge. A\'s next tokens land in a fresh block 9 (ref=1); B\'s in block 21. Sharing costs nothing until someone WRITES a shared block…', active: ['b9', 'b21'], edges: ['seqA->b9', 'seqB->b21'] },
         { caption: '…e.g. beam search forks INSIDE a full block: the writer triggers copy-on-write — allocate a new block, copy 16 tokens of KV, update the table, decrement the source refcount. The fork() trick from T2.L2, per block.', active: ['b12'] },
-        { caption: 'Sequence A finishes: decrement all its blocks\' refcounts; ref=0 blocks rejoin the free queue in O(1). No compaction, no fragmentation — the T1.L4 fixed-block maneuver, live in production.', active: ['free'], edges: ['b9->free'] },
+        { caption: 'Sequence A finishes: decrement all its blocks\' refcounts; ref=0 blocks join the free queue in O(1) but stay cached, evictable and reusable on a prefix hit until reallocated. No compaction, no fragmentation — the T1.L4 fixed-block maneuver, live in production.', active: ['free'], edges: ['b9->free'] },
       ],
     },
     {
@@ -62,38 +62,45 @@ Watch one request through the manager:
 
 1. **Prefill:** prompt token count \`p\` → need \`⌈p/16⌉\` blocks. The scheduler admits only if the free queue can cover it (admission control, T2.L4 — otherwise the request waits). A cached prefix (below) may make most of those blocks *already mapped*: refcount bumps instead of allocations.
 2. **Decode:** each new token appends to the tail block. Every 16th token, the tail fills: allocate one fresh block, append its id to the table. Amortized allocation cost per token: ~zero — this is why fixed blocks beat per-token bookkeeping.
-3. **Finish/preempt:** decrement refcounts along the table; zero-ref blocks return to the free queue. Preemption (T2.L3) swaps the blocks to CPU RAM or drops them for recompute; the block table makes either operation a metadata update, not a memory defrag.
+3. **Finish/preempt:** decrement refcounts along the table; zero-ref blocks join the free queue, still cached and evictable. When the queue runs dry, the V1 scheduler preempts a victim by freeing its blocks and **recomputing** its prefill later (V1 dropped the CPU swap path; the old V0 engine could also swap blocks to CPU RAM, T2.L3); the block table makes this a metadata update, not a memory defrag. If the victim's blocks are still cached when it resumes, the recompute is mostly prefix hits.
 
-**Prefix caching** is then almost free as a feature: hash the *token blocks* of common prefixes; a hit maps the cached physical blocks into the new sequence's table with refcount+1. Your 2k-token system prompt is stored once and shared by every request — a 100× memory multiplier at 100 concurrent users, from the same refcount byte.`,
+**Prefix caching** is then almost free as a feature: hash the *token blocks* of common prefixes; a hit maps the cached physical blocks into the new sequence's table with refcount+1. Your 2k-token system prompt is stored once and shared by every request — a 100× memory multiplier at 100 concurrent users, from the same refcount byte. Because freed blocks stay hashed, it also survives the gaps between requests: the cache only forgets a block when it is *evicted* (popped off the free queue head to serve a new allocation), oldest first.`,
     },
     {
       type: 'code',
-      filename: 'block_manager.py — the manager in 40 lines (simplified vLLM)',
+      filename: 'block_manager.py — the manager in 40 lines (simplified vLLM V1)',
       lang: 'python',
-      code: `BLOCK = 16                      # tokens per block (vLLM default)
+      code: `from collections import OrderedDict
+
+BLOCK = 16                      # tokens per block (vLLM default)
 
 class BlockManager:
     def __init__(self, num_blocks: int):
-        self.free: list[int] = list(range(num_blocks))
+        self.free = OrderedDict.fromkeys(range(num_blocks))  # eviction order: head first
         self.refcount = [0] * num_blocks
+        self.key: list[bytes | None] = [None] * num_blocks   # phys block -> its hash
         self.cache: dict[bytes, int] = {}   # token-block hash -> phys block
 
     def alloc(self) -> int:
         if not self.free:
-            raise OutOfBlocks              # → scheduler preempts (swap/recompute)
-        b = self.free.pop()
+            raise OutOfBlocks              # → scheduler preempts (V1: recompute)
+        b, _ = self.free.popitem(last=False)
+        if self.key[b] is not None:         # evict: only now is the cached data forgotten
+            del self.cache[self.key[b]]
+            self.key[b] = None
         self.refcount[b] = 1
         return b
 
     def share(self, b: int) -> int:         # prefix hit / beam fork
+        if self.refcount[b] == 0:
+            del self.free[b]                # revive a cached-but-free block
         self.refcount[b] += 1
         return b
 
     def free_block(self, b: int) -> None:
         self.refcount[b] -= 1
         if self.refcount[b] == 0:
-            self.cache = {k: v for k, v in self.cache.items() if v != b}
-            self.free.append(b)             # O(1), no fragmentation, ever
+            self.free[b] = None             # O(1), evictable, still in self.cache
 
     def append_token(self, table: list[int], pos: int) -> None:
         if pos % BLOCK == 0:                # tail full → one new block
@@ -125,7 +132,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
       tasks: [
         'Run two requests sharing a 48-token prompt: verify prefix blocks show refcount=2 and memory is paid once.',
         'Fork a beam inside a full block: watch the COW allocate one block and copy 16 tokens of KV.',
-        'Drive the free queue to zero: trigger preemption — compare swap-to-CPU vs recompute on TTFT.',
+        'Drive the free queue to zero: trigger preemption — compare swap-to-CPU (the V0 option) vs recompute (all V1 does) on TTFT.',
         'Sweep block size 4 → 64: plot tail waste vs table overhead; locate why 16 is the default.',
       ],
       note: `You have now operated the exact machinery from the SOSP paper: free list (T1), paging (T2.L2), COW sharing (T2.L2), eviction/preemption (T2.L3), admission control (T2.L4) — one Python class's worth of logic that doubled the industry's effective GPU capacity.`,
@@ -161,13 +168,13 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
           q: 'When the free-block queue empties during decode, vLLM…',
           options: [
             'Crashes with OOM',
-            'Preempts victim sequences — swap their blocks to CPU RAM or drop them for recompute — then admits/resumes by priority',
+            'Has already evicted every cached free block, so it preempts victim sequences — frees their blocks and recomputes them on resume (V1 has no CPU swap path) — then admits/resumes by priority',
             'Pauses all generation permanently',
             'Allocates from the CPU transparently at full speed',
           ],
           correct: [1],
           explanation:
-            'Admission control + eviction, T2.L3 verbatim. The block table makes preemption a metadata operation; swap vs recompute mirrors anonymous vs file-backed pages.',
+            'Admission control + eviction, T2.L3 verbatim. The block table makes preemption a metadata operation; V1 always recomputes (V0 could also swap), like dropping file-backed pages rather than writing them out.',
         },
         {
           q: 'The PagedAttention kernel\'s block-table indirection is affordable because…',

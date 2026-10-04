@@ -7,13 +7,13 @@ const lesson: Lesson = {
   index: 3,
   title: 'EPD Disaggregation: The 2026 Edition',
   minutes: 30,
-  hook: 'T5.L9 taught prefill/decode disaggregation as the big idea of 2024–25. In 2026 it is the default architecture, and it grew a third phase, a Rust transfer library, and a Kubernetes operator. What changed, and what the E is.',
+  hook: 'T5.L9 taught prefill/decode disaggregation as the big idea of 2024–25. In 2026 it is the default architecture, and it grew a third phase, a standard transfer library (NIXL: C++ with Rust bindings), and a Kubernetes operator. What changed, and what the E is.',
   exercise: 'read+quiz',
   verifiedAt: '2026-08',
   blocks: [
     {
       type: 'prose',
-      md: `T5.L9's rule still holds: disaggregate at scale and long context, colocate at small scale. What changed since that lesson was written is that the industry *standardized* the disaggregated shape. Three data points: **SGLang shipped EPD disaggregation** (Dec 2025) with Mooncake as the transfer backend; **NVIDIA Dynamo reached v1.3** with NIXL and the Rust KV-block manager (KVBM) as generally-available plumbing; and **llm-d** (Red Hat/Google/CoreWeave) packaged the same architecture as a Kubernetes-native project. When three independent stacks converge on one shape, the shape is the curriculum.
+      md: `T5.L9's rule still holds: disaggregate at scale and long context, colocate at small scale. What changed since that lesson was written is that the industry *standardized* the disaggregated shape. Three data points: **SGLang shipped EPD disaggregation** (Dec 2025) with Mooncake as the transfer backend; **NVIDIA Dynamo** (v1.3 when this lesson was written, v1.5 now) packaged NIXL transfer and a tiered KV-block manager (KVBM, since deprecated; see below) as its disaggregation plumbing; and **llm-d** (Red Hat/Google/CoreWeave) packaged the same architecture as a Kubernetes-native project. When three independent stacks converge on one shape, the shape is the curriculum.
 
 The new letter: **E — encode.** Multimodal models need a third worker class: the vision/audio encoder that turns pixels and waveforms into embeddings. Encode workers have their own physics (massively parallel vision transformers, zero KV), their own scaling curve, and no reason to share GPUs with prefill. EPD = encode, prefill, decode — three fleets, three hardware mixes, one transfer fabric.`,
     },
@@ -23,9 +23,11 @@ The new letter: **E — encode.** Multimodal models need a third worker class: t
 
 Disaggregation lives or dies on KV transfer (T5.L9's ~25 ms budget line). Two artifacts turned that from a custom project into plumbing:
 
-**NIXL** (NVIDIA Inter-node Xfer Library): point-to-point KV-cache transfer over RDMA/InfiniBand/RoCE/UCX/NVLink/SSD. Abstract descriptor lists, one-sided RDMA reads of KV blocks between workers, GPU-direct where the fabric allows. The interface inference stacks actually call; the thing T2.L6's zero-copy lesson becomes at cluster scale.
+**NIXL** (NVIDIA Inference Xfer Library; a C++ library with Rust bindings, not a Rust one): point-to-point KV-cache transfer over RDMA/InfiniBand/RoCE/UCX/NVLink/SSD. Abstract descriptor lists, one-sided RDMA reads of KV blocks between workers, GPU-direct where the fabric allows. The interface inference stacks actually call; the thing T2.L6's zero-copy lesson becomes at cluster scale.
 
-**KVBM** (KV Block Manager): Dynamo's block manager — the lab-02 data structure, industrialized — handling **tiering**: GPU HBM ↔ CPU DRAM ↔ SSD ↔ remote object store. Written in Rust (the T3.L6 decision, shipped). Your paged block manager manages one pool; KVBM manages a *hierarchy* of pools with placement, eviction, and migration between tiers. T2.L3's swap lesson, third incarnation.`,
+**KVBM** (KV Block Manager): Dynamo's block manager — the lab-02 data structure, industrialized — handling **tiering**: GPU HBM ↔ CPU DRAM ↔ SSD ↔ remote object store. Written in Rust (the T3.L6 decision, shipped). Your paged block manager manages one pool; KVBM managed a *hierarchy* of pools with placement, eviction, and migration between tiers. T2.L3's swap lesson, third incarnation.
+
+**Status change: KVBM is deprecated.** Dynamo v1.5.0 (2026-09-21) deprecated it, with removal targeted for v1.6.0; the migration path is to use the engine's native KV offloading for host and disk tiering. llm-d made the same move (v0.10 deprecated its fs-connector for vLLM's in-tree \`OffloadingConnector\`). The durable lesson is the one KVBM taught: **tiering is a feature of whoever owns the cache**, while transport (NIXL, Mooncake's transfer engine) and routing (the endpoint picker) stay separate layers. Reading a deprecation notice as an architecture signal is a skill worth keeping.`,
     },
     {
       type: 'prose',
@@ -95,7 +97,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
             'NIXL is the transport plumbing disaggregated stacks call: descriptor-based, GPU-direct where possible, backend-agnostic. T2.L6\'s zero-copy at cluster scale.',
         },
         {
-          q: 'KVBM adds what to the lab-02 block manager design?',
+          q: 'Dynamo\'s KVBM (deprecated in v1.5.0 in favor of engine-native offload) added what to the lab-02 block manager design?',
           options: [
             'CUDA kernels',
             'A tiered hierarchy — GPU HBM ↔ CPU DRAM ↔ SSD ↔ remote store, with placement/eviction/migration across tiers, in Rust',
@@ -104,7 +106,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           ],
           correct: [1],
           explanation:
-            'Your paged block manager manages one pool; KVBM manages a hierarchy of pools. Same block tables and refcounts, plus tier placement and migration — T2.L3\'s swap lesson industrialized.',
+            'Your paged block manager manages one pool; KVBM manages a hierarchy of pools. Same block tables and refcounts, plus tier placement and migration — T2.L3\'s swap lesson industrialized. The idea outlived the product: engines now ship the tiering themselves.',
         },
         {
           q: 'llm-d vs Dynamo is closest to…',
