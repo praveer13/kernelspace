@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react'
-import { Routes, Route, Navigate } from 'react-router'
+import { Routes, Route, Navigate, useLocation } from 'react-router'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import Layout from '@/components/Layout'
 import RouteFallback from '@/components/RouteFallback'
 
@@ -28,29 +29,32 @@ const NotFound = lazy(() => import('@/pages/NotFound'))
  * page chunk loads.
  */
 export default function App() {
+  const { pathname } = useLocation()
   return (
     <Layout>
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/curriculum" element={<Curriculum />} />
-          <Route path="/tracks/:trackId" element={<Track />} />
-          <Route path="/lesson/:lessonId" element={<Lesson />} />
-          <Route path="/lab" element={<Lab />} />
-          <Route path="/lab/:simId" element={<Playground />} />
-          <Route path="/glossary" element={<Glossary />} />
-          <Route path="/progress" element={<Progress />} />
-          <Route path="/capstone" element={<Capstone />} />
-          <Route path="/forge" element={<Forge />} />
-          <Route path="/forge/:labId" element={<ForgeLab />} />
-          <Route path="/fleet" element={<Fleet />} />
-          <Route path="/week" element={<FleetWeek />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/freshness" element={<Changes />} />
-          <Route path="/field-notes" element={<Navigate to="/freshness?tab=field-notes" replace />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
+      <ErrorBoundary resetKey={pathname}>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/curriculum" element={<Curriculum />} />
+            <Route path="/tracks/:trackId" element={<Track />} />
+            <Route path="/lesson/:lessonId" element={<Lesson />} />
+            <Route path="/lab" element={<Lab />} />
+            <Route path="/lab/:simId" element={<Playground />} />
+            <Route path="/glossary" element={<Glossary />} />
+            <Route path="/progress" element={<Progress />} />
+            <Route path="/capstone" element={<Capstone />} />
+            <Route path="/forge" element={<Forge />} />
+            <Route path="/forge/:labId" element={<ForgeLab />} />
+            <Route path="/fleet" element={<Fleet />} />
+            <Route path="/week" element={<FleetWeek />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/freshness" element={<Changes />} />
+            <Route path="/field-notes" element={<Navigate to="/freshness?tab=field-notes" replace />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </Layout>
   )
 }
