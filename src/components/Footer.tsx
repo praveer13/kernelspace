@@ -7,7 +7,7 @@ const LEARN_LINKS = [
   { to: '/glossary', label: 'Glossary' },
   { to: '/progress', label: 'Progress' },
   { to: '/leaderboard', label: 'Scores' },
-  { to: '/field-notes', label: 'Field Notes' },
+  { to: '/freshness', label: 'Changes' },
 ]
 
 const META_LINKS = [

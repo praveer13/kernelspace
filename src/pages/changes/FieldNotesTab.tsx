@@ -5,7 +5,7 @@ import { ArrowRight, BookOpenText, CalendarCheck2, ExternalLink, RefreshCw } fro
 import { lessonById, lessonPath } from '@/data/lessons'
 import { loadFieldNotes, type FieldNotesDocument } from '@/lib/field-notes'
 
-export default function FieldNotes() {
+export default function FieldNotesTab() {
   const [document, setDocument] = useState<FieldNotesDocument | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,21 +29,13 @@ export default function FieldNotes() {
   )
 
   return (
-    <div className="mx-auto max-w-app px-6 pb-24 pt-16 lg:px-12">
+    <div>
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-end">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">
-            field notes · quarterly review
-          </p>
-          <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight text-text-1 sm:text-5xl">
-            What changed, and which lesson it changes
-          </h1>
-          <p className="mt-5 max-w-2xl text-body-lg leading-relaxed text-text-2">
-            A static, source-linked maintenance log for the fast-moving half of the course. Each
-            note records the primary source, affected lessons, and the month a human rechecked the
-            claim.
-          </p>
-        </div>
+        <p className="max-w-2xl text-body-lg leading-relaxed text-text-2">
+          A static, source-linked maintenance log for the fast-moving half of the course. Each
+          note records the primary source, affected lessons, and the month a human rechecked the
+          claim.
+        </p>
         <div className="rounded-xl border border-line bg-surface-1 p-5">
           <div className="flex items-center gap-2 text-accent">
             <CalendarCheck2 className="h-4 w-4" />

@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router'
+import { Routes, Route, Navigate } from 'react-router'
 import Layout from '@/components/Layout'
 import Home from '@/pages/Home'
 import Curriculum from '@/pages/Curriculum'
@@ -14,7 +14,7 @@ import ForgeLab from '@/pages/ForgeLab'
 import Fleet from '@/pages/Fleet'
 import FleetWeek from '@/pages/FleetWeek'
 import Leaderboard from '@/pages/Leaderboard'
-import FieldNotes from '@/pages/FieldNotes'
+import Changes from '@/pages/Changes'
 import NotFound from '@/pages/NotFound'
 
 /**
@@ -39,7 +39,8 @@ export default function App() {
         <Route path="/fleet" element={<Fleet />} />
         <Route path="/week" element={<FleetWeek />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
-        <Route path="/field-notes" element={<FieldNotes />} />
+        <Route path="/freshness" element={<Changes />} />
+        <Route path="/field-notes" element={<Navigate to="/freshness?tab=field-notes" replace />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

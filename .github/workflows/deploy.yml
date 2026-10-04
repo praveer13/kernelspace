@@ -41,6 +41,7 @@ jobs:
       - run: bun run verify:traces
       - run: bun run verify:leaderboard
       - run: bun run verify:field-notes
+      - run: bun run verify:errata
 
       - name: Export freshness (if this fails the committed export is stale; run bun scripts/export-lessons-md.ts and commit)
         run: bun scripts/export-lessons-md.ts && git diff --exit-code -- public/lessons-md public/llms.txt

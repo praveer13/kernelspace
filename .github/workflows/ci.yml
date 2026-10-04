@@ -40,6 +40,7 @@ jobs:
       - run: bun run verify:traces
       - run: bun run verify:leaderboard
       - run: bun run verify:field-notes
+      - run: bun run verify:errata
 
       - run: npm run build
 

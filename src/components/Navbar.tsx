@@ -13,7 +13,7 @@ const NAV_LINKS = [
   { to: '/forge', label: 'Forge' },
   { to: '/fleet', label: 'Fleet' },
   { to: '/week', label: 'Fleet Week' },
-  { to: '/field-notes', label: 'Notes' },
+  { to: '/freshness', label: 'Notes' },
   { to: '/capstone', label: 'Capstone' },
   { to: '/glossary', label: 'Glossary' },
 ]
