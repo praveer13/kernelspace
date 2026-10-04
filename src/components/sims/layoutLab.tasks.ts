@@ -3,7 +3,7 @@ import type { SimTask } from '@/components/sims/PlaygroundShell'
 export const LAYOUT_TASKS: SimTask[] = [
   {
     id: 't-layout-aos',
-    text: 'Run the deadline sweep on the AoS layout; note effective bandwidth (~1/8 of peak)',
+    text: 'Run the deadline sweep on the AoS layout; note effective bandwidth (~1/4 of peak)',
     xp: 60,
   },
   {

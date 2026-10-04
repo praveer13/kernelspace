@@ -3,7 +3,8 @@
  * Sharing & Cache Lines"). Two synthetic benchmarks that make the 64-byte
  * cache-line rule concrete:
  *   1. AoS vs SoA deadline sweep — shows effective bandwidth collapse when
- *      only 8 useful bytes are fetched inside a 64-byte line.
+ *      only 8 useful bytes are read out of each 32-byte record (1/4 of every
+ *      64-byte line).
  *   2. False-sharing counter — shows 8 independent counters in one line
  *      ping-ponging ownership and killing throughput.
  */
@@ -24,7 +25,6 @@ const SIM_ID = 'sim-memory'
 
 const RECORD_SIZE = 32 // bytes: struct { u64 deadline; u64 a; u64 b; u64 c }
 const U64 = 8
-const LINE = 64
 const DRAM_ROOF_GBPS = 40 // synthetic peak
 
 const COUNT_MIN = 0
@@ -66,10 +66,10 @@ const jitter = (seed: number): number => {
 }
 
 function runSweepModel(layout: 'aos' | 'soa', n: number, seed: number): SweepResult {
-  // AoS: each record access brings in a full 64-byte line but only 8 bytes are used.
+  // AoS: the sweep streams every 32-byte record (two per 64-byte line) but uses only 8 bytes of each.
   // SoA: the deadline array is dense — 8 useful bytes per 8 bytes fetched.
   const bytesUsed = n * U64
-  const bytesFetched = layout === 'aos' ? n * LINE : n * U64
+  const bytesFetched = layout === 'aos' ? n * RECORD_SIZE : n * U64
   const j = jitter(seed)
   const timeS = (bytesFetched / (DRAM_ROOF_GBPS * 1e9)) * j
   const effectiveGbps = bytesUsed / timeS / 1e9
@@ -346,7 +346,7 @@ export default function LayoutLab() {
       res.layout === 'aos' ? 'warn' : 'ok',
     )
     if (res.layout === 'aos') {
-      log(t, 'LAYOUT', 'AoS pulls a whole 64-byte line per record but only reads the 8-byte deadline', 'warn')
+      log(t, 'LAYOUT', 'AoS pulls every 32-byte record (two per 64-byte line) but only reads the 8-byte deadline — 1/4 useful', 'warn')
     } else {
       log(t, 'LAYOUT', 'SoA streams dense deadline values — nearly every fetched byte is useful', 'ok')
     }
@@ -414,7 +414,7 @@ export default function LayoutLab() {
     if (!sweepResult) return
     if (
       sweepResult.layout === 'aos' &&
-      sweepResult.effectiveGbps <= DRAM_ROOF_GBPS * 0.2
+      sweepResult.effectiveGbps <= DRAM_ROOF_GBPS * 0.3
     ) {
       completeSimTask(SIM_ID, 't-layout-aos', 60)
     }
@@ -519,8 +519,8 @@ export default function LayoutLab() {
 
           {mode === 'sweep' && (
             <p className="mt-4 max-w-xl font-mono text-[10px] leading-relaxed text-text-3">
-              AoS fetches a whole 64-byte cache line for every record but only reads the 8-byte
-              deadline. SoA reads the deadline array densely, so nearly every fetched byte is
+              AoS streams every 32-byte record (two per 64-byte cache line) but only reads the
+              8-byte deadline, so one quarter of each line is useful. SoA reads the deadline array densely, so nearly every fetched byte is
               useful.
             </p>
           )}
