@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `There is no such thing as "memory" on a modern machine. There is a **hierarchy** — a stack of progressively larger, slower, cheaper stores, from a few hundred registers at the top to terabytes of flash at the bottom. Every load instruction you have ever written starts at the top of that stack and walks down until it finds the data. The walk can take half a nanosecond or a fifth of a millisecond, and the difference is entirely about *where the bytes happen to be*.
+      md: `There is no such thing as "memory" on a modern machine. There is a **hierarchy** — a stack of progressively larger, slower, cheaper stores, from a few hundred registers at the top to terabytes of flash at the bottom. Every load instruction you have ever written starts at the top of that stack and walks down until it finds the data. The walk can take half a nanosecond or a tenth of a millisecond, and the difference is entirely about *where the bytes happen to be*.
 
 This is the single most consequential performance fact in computing, and it is invisible in every language you write. Python will not tell you. Java will not tell you. The hardware just quietly makes the same code run 1,000× faster or slower depending on your data's location and layout.`,
     },
@@ -24,7 +24,7 @@ This is the single most consequential performance fact in computing, and it is i
         { value: '~5 ns', label: 'L2 cache', hint: '~10 cycles. 256 KB–2 MB per core.' },
         { value: '~15 ns', label: 'L3 cache', hint: '~40 cycles. Tens of MB shared across cores.' },
         { value: '~100 ns', label: 'DRAM', hint: '~300 cycles. This is the "×200 vs L1" number that runs the course.' },
-        { value: '~100 µs', label: 'NVMe SSD', hint: 'Random read. One million L1 accesses could have happened instead.' },
+        { value: '~100 µs', label: 'NVMe SSD', hint: 'Random read. About 200,000 L1 accesses (100 µs ÷ 0.5 ns) could have happened instead.' },
       ],
     },
     {
@@ -42,7 +42,9 @@ Every performance instinct you want is already in that paragraph. When a profile
 | L2 cache | 0.5–2 MB per core | ~5 ns | 10 seconds |
 | L3 cache | 16–64 MB shared | ~15 ns | 30 seconds |
 | DRAM | 32–512 GB | ~100 ns | ~3.5 minutes |
-| NVMe SSD | 1–8 TB | ~100 µs | ~2.5 days |`,
+| NVMe SSD | 1–8 TB | ~100 µs | ~2.5 days |
+
+These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200× L1) come from the Jeff Dean / Peter Norvig latency table; the ~100 µs random SSD read comes from Eskildsen's [napkin-math](https://github.com/sirupsen/napkin-math) (Dean's 2012 table lists 150 µs). L2 and L3 are typical rounded values (Dean lists L2 at 7 ns). Everything in this lesson, from the 200× DRAM ratio to the 200,000× NVMe ratio, uses this one set.`,
     },
     {
       type: 'diagram',
@@ -68,7 +70,7 @@ Every performance instinct you want is already in that paragraph. When a profile
         { caption: 'A load executes. The address is checked against L1 — the closest, smallest store. Hit: done in ~0.5 ns. This is the common case when your data layout is kind.', active: ['cpu', 'l1'], edges: ['cpu->l1'] },
         { caption: 'L1 miss → L2. L2 miss → L3. Each step is bigger and ~3–10× slower. Still on-chip; still fast. The caches work because programs reuse data and touch neighboring bytes.', active: ['l1', 'l2', 'l3'], edges: ['l1->l2', 'l2->l3'] },
         { caption: 'L3 miss → DRAM. ~100 ns, ~200 L1-equivalents. The memory controller fetches a full 64-byte cache line, not just the 8 bytes you asked for — remember this; T0.L4 is built on it.', active: ['dram'], edges: ['l3->dram'] },
-        { caption: 'If the OS swapped the page out, the CPU takes a page fault and reads from NVMe: ~100 µs, a million times slower than L1. In T5 you will watch vLLM swap KV cache the same way.', active: ['ssd'], edges: ['dram->ssd'] },
+        { caption: 'If the OS swapped the page out, the CPU takes a page fault and reads from NVMe: ~100 µs, about 200,000× slower than L1. In T5 you will watch vLLM swap KV cache the same way.', active: ['ssd'], edges: ['dram->ssd'] },
         { caption: 'GPUs have their own version: HBM instead of DRAM. Enormous bandwidth (~3.35 TB/s on H100) but still finite — and it is the wall LLM decode runs into every single token.', active: ['hbm'] },
       ],
     },
@@ -121,9 +123,9 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
           explanation:
             '~0.5 ns vs ~100 ns — about two orders of magnitude. On the "L1 = 1 second" scale, DRAM is a 3–4 minute wait. This is the ratio behind nearly every cache optimization you will ever make.',
           why: [
-            'Treats DRAM as part of the cache family. DRAM is off-chip, behind a memory controller: ~100 ns against ~0.5 ns for L1. Two hits is roughly L1 to L2, not L1 to DRAM.',
+            'Treats DRAM as part of the cache family. DRAM is off-chip, behind a memory controller: ~100 ns against ~0.5 ns for L1. Even the hop from L1 to L2 is about 10x, so 2x is smaller than a single cache-level step.',
             'Matches the L2-to-L3 step, which is 3x to 10x. Each cache level is only a few times slower than the one above; the jump to DRAM is a much larger cliff.',
-            'About 100 ns against about 0.5 ns. On the "L1 = 1 second" scale DRAM is a 3 to 4 minute wait, the ratio behind nearly every cache optimization you will make.',
+            'Right: about 100 ns against about 0.5 ns. On the "L1 = 1 second" scale DRAM is a 3 to 4 minute wait, the ratio behind nearly every cache optimization you will make.',
             'Overshoots by two orders of magnitude. Tens of microseconds is closer to flash than DRAM; an NVMe read at ~100 µs is the roughly 200,000x case. DRAM stays near 100 ns.',
           ],
         },
@@ -140,7 +142,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             'The atom of the memory system is the 64-byte cache line. If you use any of the neighboring 56 bytes soon, the fetch was free; if not, you wasted 8× the bandwidth. AoS-vs-SoA layout (T0.L4) is entirely about this number.',
           why: [
             'Addresses are byte-granular but transfers are not. Caches and the memory controller move whole lines, so an 8-byte load costs a 64-byte transfer. Assuming byte precision hides the wasted bandwidth.',
-            'The 64-byte cache line is the atom of the memory system. Use the neighbors soon and the fetch was free; otherwise you wasted 8x the bandwidth. AoS-vs-SoA layout is built on this number.',
+            'Right: the 64-byte cache line is the atom of the memory system. Use the neighbors soon and the fetch was free; otherwise you wasted 8x the bandwidth. AoS-vs-SoA layout is built on this number.',
             '4 KB is the virtual-memory page size, a unit of translation and OS paging, not of cache fills. CPU caches fill 64-byte lines, so a miss does not drag in a whole page.',
             'Prefetch hints only request extra lines; every demand miss still fetches a full line. Hardware prefetchers also run without any hints, so software requests do not set the fetch size.',
           ],
@@ -158,7 +160,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             'Each list iteration runs several bytecodes (~20–50 ns/op), updates reference counts, and allocates a boxed int for the result; numpy runs one compiled loop over raw, contiguous values, often with SIMD. Cache misses add cost on a fragmented heap, but ints created in sequence usually sit close together, so they are rarely the dominant term.',
           why: [
             'Overstated. Ints created in a loop are usually allocated near each other, small ints are cached, and prefetching helps. Cache misses add cost on a fragmented heap but rarely dominate a simple sum.',
-            'Each element pays bytecode dispatch (~20–50 ns/op), a refcount update and a boxed int result. numpy runs one compiled, often SIMD, loop over raw values. Memory layout is secondary here.',
+            'Right: each element pays bytecode dispatch (~20–50 ns/op), a refcount update and a boxed int result. numpy runs one compiled, often SIMD, loop over raw values. Memory layout is secondary here.',
             'Elementwise numpy operations run on one thread by default; only some BLAS-backed routines use several cores. The gap exists on a single core, so parallelism is not the main cause.',
             'CPython ints do use arbitrary-precision digits, but a value under 2^30 occupies one digit with a fast path. The cost is the boxed object and interpreter overhead around the add, not bignum arithmetic.',
           ],
@@ -176,7 +178,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             'It is pure economics and physics: 6T per bit vs ~1T+1C. Fast memory is big, hot, and expensive per bit, so we buy a little of it and let locality do the rest.',
           why: [
             'Large SRAM is buildable: Groq LPUs carry ~500 MB each and Cerebras WSE-3 has 44 GB on one wafer. It just costs enormous area and money per bit, which is the real constraint.',
-            'The cost argument: 6T per bit against ~1T+1C means SRAM is big, hot and expensive per bit. So we buy a little of it and let locality do the rest.',
+            'Right: 6T per bit against ~1T+1C makes SRAM big, hot and expensive per bit, so we buy a little of it and let locality do the rest.',
             'Backwards. SRAM is the faster technology and DRAM the denser, cheaper one. The hierarchy exists for cost and capacity reasons, and programmers do not choose between them; hardware moves lines automatically.',
             'Power density is part of the cost story, but it is not a controller defect. The fundamental limit is transistors, area and dollars per bit, which would be prohibitive well before any thermal limit.',
           ],

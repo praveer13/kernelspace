@@ -118,7 +118,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'Bump allocation works only when free memory is contiguous. Copying/compacting collectors guarantee that, so the fast path is "increment a thread-local pointer." Reclamation pays the cost later, in bulk — the reverse of malloc\'s free-list design.',
           why: [
             'Escape analysis removes only allocations the JIT proves do not escape, and only in compiled hot code. Most objects still reach the heap, so it cannot explain cheap allocation in general.',
-            'Bump allocation needs contiguous free space. Thread-local buffers make it lock-free and compacting collectors keep space contiguous, so the fast path is a pointer increment. Reclamation pays later, in bulk.',
+            'Right: bump allocation needs contiguous free space. Thread-local buffers make it lock-free and compacting collectors keep space contiguous, so the fast path is a pointer increment. Reclamation pays later, in bulk.',
             'Objects have different classes and sizes and are created on demand, so nothing can be pre-built per object. Allocation is fast because the region is contiguous and thread-private.',
             'The JVM does free memory, via GC in bulk. Modern malloc also uses per-thread arenas; its cost is searching free lists for a fitting block, which bump allocation skips entirely.',
           ],
@@ -136,7 +136,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'Reference counting is everywhere — every name binding mutates a count. Making that race-free with atomics or fine locks measurably slowed single-threaded programs, so CPython chose one global lock. (PEP 703 is now, decades later, attempting free-threaded CPython with biased reference counting.)',
           why: [
             'Each thread has its own frame and evaluation stack, so pushes never collide. What is shared is object state, above all the refcounts that every name binding mutates.',
-            'Refcounting is everywhere: every name binding changes a count. Making that race-free with atomics or fine locks slowed single-threaded code, so CPython chose one global lock (PEP 703 now tries biased refcounting).',
+            'Right: refcounting is everywhere, because every name binding changes a count. Making that race-free with atomics or fine locks slowed single-threaded code, so CPython chose one global lock (PEP 703 now tries biased refcounting).',
             'The cycle collector also runs under the GIL, but it is a secondary client layered on refcounting. The lock chiefly guards the counts that every assignment updates.',
             'Imports use their own per-module locks and caches. A global interpreter lock exists because every object access touches a shared reference count, not because of module loading.',
           ],
@@ -154,7 +154,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'Both run an optimistic fast path built on an assumption (monomorphic call site / drafted tokens) with a cheap check and a safe rollback to the slow path. Optimism + verification + fallback is a systems pattern, not a coincidence.',
           why: [
             'Quantization permanently trades precision for fewer bytes, with no per-use check or rollback. Deoptimization is guarded speculation with a safe fallback, which quantization lacks.',
-            'Both run an optimistic fast path built on an assumption (monomorphic call site, drafted tokens) with a cheap check and safe rollback. Optimism, verification and fallback form a recurring systems pattern.',
+            'Right: both run an optimistic fast path built on an assumption (monomorphic call site, drafted tokens) with a cheap check and safe rollback. Optimism, verification and fallback form a recurring systems pattern.',
             'Continuous batching schedules requests at token boundaries to keep the GPU full. It makes no speculative assumption, so it has nothing to verify or roll back.',
             'Caching reuses results known to be identical; it holds no unverified assumption. Deoptimization exists because compiled code may become wrong when an assumption breaks, which reuse never risks.',
           ],
@@ -172,7 +172,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'The managed-runtime contract costs exactly what decode cannot spare: unpredictable pauses, pointer-chasing layouts, serialized threads. Orchestration stays in Python; the byte-moving plane drops to C++/Rust/CUDA — Dynamo being the clean recent example.',
           why: [
             'PyTorch and CUDA Python bindings call the GPU from Python daily. Orchestration, tokenization and scheduling stay in Python; the problem is runtime cost in the byte-moving plane.',
-            'The managed-runtime contract costs what decode cannot spare: unpredictable pauses, pointer-chasing layouts, serialized threads. Orchestration stays in Python; byte-moving drops to C++, Rust and CUDA.',
+            'Right: the managed-runtime contract costs what decode cannot spare, namely unpredictable pauses, pointer-chasing layouts, serialized threads. Orchestration stays in Python; byte-moving drops to C++, Rust and CUDA.',
             'The GPU does the heavy math in CUDA kernels, so Python adds per-launch overhead, not per-FLOP slowdown. Python is kept out for tail latency and data movement, not a blanket 100x penalty.',
             'asyncio and similar libraries overlap I/O fine in most services. The limit is interpreter and GIL cost under heavy concurrency, not missing async syntax.',
           ],

@@ -110,7 +110,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
         {
           q: 'The System V AMD64 ABI specifies, among other things…',
           options: [
-            'Which CPU instructions a compiler may emit, such as whether AVX and other extensions are permitted',
+            'What each instruction does: the opcode encodings and the exact effect of an AVX add on its vector registers',
             'Argument registers (rdi, rsi, rdx…), return register rax, stack alignment, and register-saving rules',
             'How the kernel schedules threads across cores when a call blocks on I/O or a lock',
             'The in-memory layout of objects for managed languages such as Java and Python',
@@ -119,7 +119,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
           explanation:
             'The ABI is the binary calling contract: where arguments and returns live, who preserves which registers, alignment rules. It is what makes cross-language, cross-compiler calls possible at all.',
           why: [
-            'Confuses ABI with ISA. The instruction set defines what the CPU can execute; the ABI defines how compiled code calls other compiled code.',
+            'Describes the ISA. The psABI does name a baseline feature set and optional micro-architecture levels (x86-64-v2 and up), but opcode encodings and semantics live in the Intel and AMD processor manuals. The ABI covers how compiled code calls other compiled code.',
             'Right: the ABI fixes where arguments and results live, stack alignment, and caller-saved versus callee-saved registers, so separately compiled code can call each other.',
             'Scheduling is an OS policy, not part of a calling convention. The ABI says how a call is made, not which thread or core runs it.',
             'Managed-language object layouts belong to each runtime. The C ABI covers only plain C types, which is why runtimes bridge through C-compatible structs.',
