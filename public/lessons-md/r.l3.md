@@ -45,23 +45,23 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
 
 **Q1. After let b = a for a String, what happened?**
 
-- (o1) The heap buffer was deep-copied
-- (o2) b owns the buffer and a is no longer usable
-- (o3) a and b are garbage-collected aliases
-- (o4) The string was dropped immediately
+- (o1) b owns the buffer and a is no longer usable
+- (o2) The heap buffer was deep-copied
+- (o3) The string was dropped immediately
+- (o4) a and b are garbage-collected aliases
 
 **Q2. Why is clone() intentionally explicit?**
 
 - (o1) It always uses unsafe code
-- (o2) It can represent real allocation and copying cost
+- (o2) It disables Drop
 - (o3) It changes a value to mutable
-- (o4) It disables Drop
+- (o4) It can represent real allocation and copying cost
 
 **Q3. What does Drop provide?**
 
-- (o1) Nondeterministic garbage collection
-- (o2) Deterministic resource cleanup at the end of ownership
-- (o3) Automatic deep copying
-- (o4) A way to skip the type checker
+- (o1) A way to skip the type checker
+- (o2) Nondeterministic garbage collection
+- (o3) Deterministic resource cleanup at the end of ownership
+- (o4) Automatic deep copying
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

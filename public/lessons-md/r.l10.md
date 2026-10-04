@@ -49,23 +49,23 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
 
 **Q1. When is Ordering::Relaxed sufficient?**
 
-- (o1) Whenever multiple atomics coordinate a data structure
+- (o1) For publishing initialized non-atomic data
 - (o2) For an independent atomic counter with no other data to publish
 - (o3) For unlocking a mutex
-- (o4) For publishing initialized non-atomic data
+- (o4) Whenever multiple atomics coordinate a data structure
 
 **Q2. What relationship does Release/Acquire establish when the Acquire observes the Release?**
 
-- (o1) It deep-copies shared data
-- (o2) Earlier writes before Release become visible after Acquire
-- (o3) It prevents all thread scheduling
-- (o4) It makes every future operation sequentially consistent
+- (o1) It makes every future operation sequentially consistent
+- (o2) It prevents all thread scheduling
+- (o3) It deep-copies shared data
+- (o4) Earlier writes before Release become visible after Acquire
 
 **Q3. Why must compare_exchange code handle failure?**
 
-- (o1) CAS always fails once
-- (o2) Another thread may change the value between observation and the attempted update
-- (o3) Atomics can tear
+- (o1) Atomics can tear
+- (o2) CAS always fails once
+- (o3) Another thread may change the value between observation and the attempted update
 - (o4) Failure means memory corruption
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

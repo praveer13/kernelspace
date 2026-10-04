@@ -11,11 +11,12 @@
 import { writeFileSync, mkdirSync } from 'fs'
 import { ALL_LESSONS, TRACK_EXTRAS } from '../src/data/lessons'
 import type { ContentBlock, Lesson } from '../src/data/lessons/types'
+import { exportOrder } from '../src/lib/rng'
 import { TRACKS } from '../src/lib/tracks'
 
 const SITE = 'https://kernelspace.naigap.com'
 
-function blockToMd(b: ContentBlock): string {
+function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number): string {
   switch (b.type) {
     case 'prose':
     case 'deepdive':
@@ -41,10 +42,12 @@ function blockToMd(b: ContentBlock): string {
         .join('\n')}`
     case 'quiz': {
       // Answer keys are withheld: tutors fed this markdown must not see them.
-      // Options use stable ids (o1, o2, …) in authored order — on-screen letters are shuffled per attempt.
+      // Options use stable ids (o1, o2, …) in a fixed per-question permutation, not authored
+      // order, which would leak the key position. On-screen letters are shuffled per attempt.
       const qs = b.questions
         .map((q, i) => {
-          const opts = q.options.map((o, j) => `- (o${j + 1}) ${o}`).join('\n')
+          const order = exportOrder(lessonId, firstQuestion + i, q.options.length)
+          const opts = order.map((authored, j) => `- (o${j + 1}) ${q.options[authored]}`).join('\n')
           return `**Q${i + 1}. ${q.q}**\n\n${opts}`
         })
         .join('\n\n')
@@ -69,7 +72,15 @@ function lessonToMd(l: Lesson): string {
     `> ${l.hook}`,
     '',
   ].join('\n')
-  const body = l.blocks.map(blockToMd).filter(Boolean).join('\n\n---\n\n')
+  let questions = 0 // lesson-wide question index, the same count verify-items uses
+  const body = l.blocks
+    .map((b) => {
+      const md = blockToMd(b, l.id, questions)
+      if (b.type === 'quiz') questions += b.questions.length
+      return md
+    })
+    .filter(Boolean)
+    .join('\n\n---\n\n')
   return `${header}${body}\n`
 }
 

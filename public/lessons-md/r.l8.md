@@ -49,22 +49,22 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
 **Q1. What happens when RefCell::borrow_mut conflicts with a live shared borrow?**
 
 - (o1) It blocks until the borrow ends
-- (o2) It panics at runtime
-- (o3) It silently clones the value
-- (o4) It creates a data race
+- (o2) It creates a data race
+- (o3) It panics at runtime
+- (o4) It silently clones the value
 
 **Q2. What releases a std::sync::Mutex lock?**
 
-- (o1) A manual unlock call is always required
+- (o1) The next lock attempt
 - (o2) Dropping the MutexGuard
 - (o3) Cloning the mutex
-- (o4) The next lock attempt
+- (o4) A manual unlock call is always required
 
 **Q3. Which type best fits a single-threaded shared counter whose value is Copy?**
 
-- (o1) Cell<usize>
-- (o2) Arc<usize>
-- (o3) Box<Mutex<usize>>
-- (o4) Weak<usize>
+- (o1) Arc<usize>
+- (o2) Cell<usize>
+- (o3) Weak<usize>
+- (o4) Box<Mutex<usize>>
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

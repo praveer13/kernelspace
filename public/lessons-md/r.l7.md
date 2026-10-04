@@ -50,16 +50,16 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
 
 **Q1. What does Arc::clone(&x) copy?**
 
-- (o1) The entire inner value
-- (o2) Only a shared-ownership handle while incrementing the atomic count
-- (o3) The current thread
-- (o4) A mutable reference
+- (o1) The current thread
+- (o2) The entire inner value
+- (o3) A mutable reference
+- (o4) Only a shared-ownership handle while incrementing the atomic count
 
 **Q2. Why can Rc<T> not normally be sent to another thread?**
 
 - (o1) T is always mutable
-- (o2) Its reference count is non-atomic
-- (o3) It always points to the stack
+- (o2) It always points to the stack
+- (o3) Its reference count is non-atomic
 - (o4) It has no Drop implementation
 
 **Q3. Which type expresses a non-owning edge that does not keep an Rc/Arc allocation alive?**
