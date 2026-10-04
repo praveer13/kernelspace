@@ -10,8 +10,10 @@
  * in a `whyRequired` track that a blind "always pick the shortest option" strategy passes, (8) in a
  * `whyRequired` track, a length-rank strategy (1st-longest, 2nd-longest, 2nd-shortest, shortest) whose
  * expected lessons passed exceeds MAX_RANK_EXPECTED or that passes any single lesson with probability
- * >= MAX_RANK_LESSON.
- * REPORTS (never fails): longest-key rates, `why` coverage and a blind-strategy simulation.
+ * >= MAX_RANK_LESSON, (9) across all `whyRequired` tracks together, a length-rank strategy whose expected
+ * lessons passed, summed over those tracks, exceeds MAX_RANK_AGGREGATE (the PLAN-100X exit criterion is at
+ * most 1 of the 19 T0-T2 lessons; the per-track bars alone would allow one per track).
+ * REPORTS (never fails): longest-key rates, `why` coverage, the length-rank aggregate and a blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
  *   bun scripts/verify-items.ts --update-baseline [--force]
@@ -32,6 +34,8 @@ const MAX_SHORTEST_PASSES = 1
 const MAX_RANK_EXPECTED = 1.0
 /** ...or pass any single lesson with at least this probability. */
 const MAX_RANK_LESSON = 0.5
+/** Summed over every whyRequired track together, no length-rank strategy may pass more than this many lessons in expectation. */
+const MAX_RANK_AGGREGATE = 1.0
 
 interface Item {
   track: string
@@ -422,11 +426,17 @@ for (const t of whyRequired) {
 }
 
 // (8) Length-rank strategies, per whyRequired track: expected lessons passed and the worst single lesson.
+// (9) The same expectation summed over all whyRequired tracks: each track may stay under its own limit
+// while the total exceeds the exit criterion (at most 1 of the 19 T0-T2 lessons).
+const gatedTracks = trackKeys.filter((k) => k !== FLEET_TRACK && whyRequired.includes(k))
+const gatedLessons = lessonIds.filter((id) => gatedTracks.includes(trackOfLesson.get(id) as string)).length
+const rankAggregates: { name: string; expected: number }[] = []
 console.log('')
 console.log('length-rank strategies per track: expected lessons passed (worst single lesson p)')
 for (const strat of RANK_STRATEGIES) {
   const pass = lessonPass(strat.pick)
   const cells: string[] = []
+  let aggregate = 0
   for (const t of trackKeys.filter((k) => k !== FLEET_TRACK)) {
     let expected = 0
     let worstP = 0
@@ -442,6 +452,7 @@ for (const strat of RANK_STRATEGIES) {
     const gated = whyRequired.includes(t)
     cells.push(`${t} ${expected.toFixed(2)}${gated ? '*' : ''}${worstP > 0 ? ` (${worstP.toFixed(2)} ${worstId})` : ''}`)
     if (!gated) continue
+    aggregate += expected
     if (expected > MAX_RANK_EXPECTED) {
       failures.push(
         `rank: track ${t} expects ${expected.toFixed(2)} lessons passed by always picking the ${strat.name} option (limit ${MAX_RANK_EXPECTED}); rebalance option lengths`,
@@ -453,9 +464,20 @@ for (const strat of RANK_STRATEGIES) {
       )
     }
   }
+  rankAggregates.push({ name: strat.name, expected: aggregate })
+  if (aggregate > MAX_RANK_AGGREGATE) {
+    failures.push(
+      `rank: the gated tracks together (${gatedTracks.join(' + ')}, ${gatedLessons} lessons) expect ${aggregate.toFixed(2)} lessons passed by always picking the ${strat.name} option (limit ${MAX_RANK_AGGREGATE} in total); rebalance option lengths`,
+    )
+  }
   console.log(`  ${strat.name.padEnd(13)}${cells.join('  ')}`)
 }
 console.log(`  (* gated: expected <= ${MAX_RANK_EXPECTED}, every lesson p < ${MAX_RANK_LESSON})`)
+console.log(
+  `  aggregate over the gated tracks (${gatedTracks.join(' + ') || 'none'}, ${gatedLessons} lessons; limit <= ${MAX_RANK_AGGREGATE} in total): ${rankAggregates
+    .map((a) => `${a.name} ${a.expected.toFixed(2)}`)
+    .join('  ')}`,
+)
 
 console.log('')
 console.log(`blind-strategy simulation: ${byLesson.size} lessons with a quiz, per-attempt shuffling, pass at >= ${PASS_BAR * 100}%`)

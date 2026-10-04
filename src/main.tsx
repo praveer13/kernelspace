@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import './index.css'
 import App from './App.tsx'
+import { isDecorationFailure } from './lib/lazy-decoration'
 
 /*
  * A deploy replaces the hashed chunks under an open tab, so a lazy import can 404 ("Failed to
@@ -9,18 +10,26 @@ import App from './App.tsx'
  * sessionStorage flag stops a chunk that is still missing after the reload from looping, and it
  * is cleared once the reloaded page has stayed up, so a later deploy gets its own one reload.
  * Without the reload, the ErrorBoundary around each Suspense shows a Reload button instead.
+ *
+ * Purely decorative chunks (lazyDecoration, e.g. the Home particle field) are exempt: Vite fires
+ * this event before the failed import() rejects, so the handler waits one task for such a loader
+ * to claim its own failure, and a claimed failure is dropped instead of reloading the page.
  */
 const RELOAD_FLAG = 'ks:preload-reloaded'
 const HEALTHY_AFTER_MS = 30_000
 
-window.addEventListener('vite:preloadError', () => {
-  try {
-    if (sessionStorage.getItem(RELOAD_FLAG)) return
-    sessionStorage.setItem(RELOAD_FLAG, String(Date.now()))
-  } catch {
-    return // no storage means no loop guard, so leave recovery to the ErrorBoundary
-  }
-  window.location.reload()
+window.addEventListener('vite:preloadError', (event) => {
+  const failure = event.payload
+  window.setTimeout(() => {
+    if (isDecorationFailure(failure)) return
+    try {
+      if (sessionStorage.getItem(RELOAD_FLAG)) return
+      sessionStorage.setItem(RELOAD_FLAG, String(Date.now()))
+    } catch {
+      return // no storage means no loop guard, so leave recovery to the ErrorBoundary
+    }
+    window.location.reload()
+  }, 0)
 })
 
 window.setTimeout(() => {
