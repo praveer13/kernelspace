@@ -8,7 +8,8 @@ import {
   type SchedView,
 } from './fleet-model'
 import { getFleetTrafficProfile, traceToRequestStream, type TraceArtifact, type TraceRequest } from './traces'
-import { instantiateLab } from './wasm-lab'
+import { validateLabInWorker } from './lab-worker'
+import { instantiateLab, LabTimeoutError } from './wasm-lab'
 import { makeWasmScheduler } from './wasm-scheduler'
 
 export const LEADERBOARD_SCHEMA_VERSION = 1 as const
@@ -430,13 +431,21 @@ export async function verifyAndScoreScheduler(
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_SUBMISSION_WASM_BYTES) {
     throw new Error(`WASM must be 1..${MAX_SUBMISSION_WASM_BYTES.toLocaleString()} bytes`)
   }
-  const module = await instantiateLab(bytes)
-  if (!module.hasInvoke) throw new Error('WASM lacks the lab 06 scheduler bridge')
-  const report = module.runChecks()
+  /* Untrusted bytes first run in the worker (2 s budget); the main thread only sees a module that has already returned. */
+  let validated
+  try {
+    validated = await validateLabInWorker(bytes)
+  } catch (cause) {
+    if (cause instanceof LabTimeoutError) throw new Error(`${cause.title} — ${cause.message}`, { cause })
+    throw cause
+  }
+  const { report, hasInvoke } = validated
+  if (!hasInvoke || !report) throw new Error('WASM lacks the lab 06 scheduler bridge')
   if (report.lab !== 'batching-scheduler' || report.version < 2) {
     throw new Error(`expected batching-scheduler ABI v2+, got ${report.lab} v${report.version}`)
   }
 
+  const module = await instantiateLab(bytes.slice(0))
   const lab = runCanonicalLabHarness(() => makeWasmScheduler(module), burstgpt, lmsysShape)
   if (!lab.pass) {
     const failed = lab.checks.filter((check) => !check.pass).map((check) => `${check.id}: ${check.message}`)

@@ -93,7 +93,7 @@ export default function ForgeLab() {
         if (e instanceof LabTrapError) {
           setRun({ kind: 'error', title: 'not implemented yet', detail: e.message })
         } else if (e instanceof LabTimeoutError) {
-          setRun({ kind: 'error', title: 'timed out after 2 s', detail: e.message })
+          setRun({ kind: 'error', title: e.title, detail: e.message })
         } else if (e instanceof LabAbiError) {
           setRun({ kind: 'error', title: 'not a lab module', detail: e.message })
         } else {

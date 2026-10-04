@@ -44,11 +44,12 @@ export class LabAbiError extends Error {
 
 /** The module ran past the per-run budget (infinite loop); its worker was terminated. */
 export class LabTimeoutError extends Error {
+  /** short headline for result panels; the message is the detail beneath it */
+  readonly title: string
   constructor(ms: number) {
-    super(
-      `timed out after ${ms / 1000} s — the module was still running, so the grader stopped it. Look for an infinite loop in your code.`,
-    )
+    super('the module was still running, so the grader stopped it. Look for an infinite loop in your code.')
     this.name = 'LabTimeoutError'
+    this.title = `timed out after ${ms / 1000} s`
   }
 }
 

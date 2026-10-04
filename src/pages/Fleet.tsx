@@ -331,7 +331,7 @@ function PoolMode() {
       setDivergence(null)
     } catch (e) {
       if (e instanceof LabTrapError) setError('the module trapped — a todo!() is still open (the fleet needs dump() implemented too).')
-      else if (e instanceof LabTimeoutError) setError(e.message)
+      else if (e instanceof LabTimeoutError) setError(`${e.title} — ${e.message}`)
       else if (e instanceof LabAbiError) setError(e.message)
       else setError(String(e))
     }

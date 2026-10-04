@@ -114,7 +114,11 @@ export function validateLabInWorker(bytes: ArrayBuffer): Promise<{ report: LabRe
   return run('validate', bytes)
 }
 
-/** Release the worker (scripts; the app keeps it for the page's lifetime). */
+/**
+ * Release the worker (scripts; the app keeps it for the page's lifetime).
+ * Under bun, terminate() cannot interrupt a wasm infinite loop, so a script that saw a
+ * LabTimeoutError must also call process.exit — the spinning worker thread keeps bun alive.
+ */
 export function disposeLabWorker() {
   if (handle) discard(handle)
 }
