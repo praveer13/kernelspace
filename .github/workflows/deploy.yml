@@ -47,6 +47,9 @@ jobs:
 
       - run: npm run build
 
+      # Bundle budget (PLAN-100X §7.3): the entry chunk must stay <= 250 KB gzip.
+      - run: bun run verify:bundle
+
       # Known BrowserRouter URLs receive real index documents (HTTP 200 after
       # Pages' canonical trailing-slash redirect). Unknown URLs retain the SPA
       # fallback so React Router can render its own not-found experience.
