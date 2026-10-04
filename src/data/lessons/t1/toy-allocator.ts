@@ -15,7 +15,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Every heap allocation you have ever made — every Java object, every Python list, every \`malloc\` — was served by a piece of code with exactly the same job description: *given a big slab of memory, hand out variable-size pieces, take them back in any order, and do not waste too much or take too long.* That code is the **allocator**, and in this lesson you will build a working one in about 60 lines of C.
 
-This is the highest-ROI lesson in the course, so be present for it. The allocator you are about to write — a free list with block headers, splitting, and coalescing — is not a toy version of some distant production system. It **is** the production design, miniaturized. glibc's malloc is this plus per-thread caches and size classes. jemalloc is this plus arenas. And the KV-cache manager in vLLM is this with GPU blocks instead of bytes: same split, same coalesce, same fragmentation physics, same policy questions.`,
+This is the highest-ROI lesson in the course, so be present for it. The allocator you are about to write — a free list with block headers, splitting, and coalescing — is not a toy version of some distant production system. It **is** the production design, miniaturized. glibc's malloc is this plus per-thread caches and size classes. jemalloc is this plus arenas. And the KV-cache manager in vLLM is this with fixed-size GPU blocks instead of bytes: the same alloc/free recycle loop and the same fragmentation physics, but with one block size there is nothing to split or coalesce.`,
     },
     {
       type: 'prose',

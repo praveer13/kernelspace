@@ -118,7 +118,7 @@ Next track: the operating system. You have built memory management by hand; now 
           explanation:
             'One owner → one drop. Double-free and leaks die immediately; moves make assignment transfer the obligation. It is RAII made universal and checked — with no runtime bookkeeping.',
           why: [
-            'Describes Rc/Arc, which is opt-in. Default ownership has no count: a single owner exists, and the drop is a compile-time-known point, so there is no runtime bookkeeping.',
+            'Describes Rc/Arc, which is opt-in. Default ownership has no count: a single owner exists, and the value is dropped deterministically when the single owner leaves scope, with no reference count.',
             'Right: one owner means one drop. A move transfers the obligation, and the value is dropped at a deterministic point when the owner leaves scope.',
             'Heap values like Box and Vec are owned too. Ownership governs lifetimes, not placement, and an owner on the stack frees its heap data on drop.',
             'Rust has no collector. The compiler checks ownership and inserts drops; it does not trace reachability, and nothing runs to find garbage at build or run time.',
