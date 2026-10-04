@@ -30,7 +30,7 @@ Production serving mixes all three: TP within the node, PP across a few nodes fo
       stats: [
         { value: '3.35 TB/s', label: 'HBM (intra-GPU)', hint: 'The reference speed everything else is measured against.' },
         { value: '900 GB/s', label: 'NVLink (GPU↔GPU)', hint: 'NVL72-class: makes tensor parallelism inside a node practical.' },
-        { value: '~64 GB/s', label: 'PCIe gen5 x16', hint: 'The CPU-attach tier — vLLM\'s swap path lives here.' },
+        { value: '~64 GB/s', label: 'PCIe gen5 x16', hint: 'The CPU-attach tier — the old vLLM V0 swap path crossed it; V1 recomputes instead.' },
         { value: '25–100 GB/s', label: 'RDMA (node↔node)', hint: 'RoCE/InfiniBand: the disaggregation highway for KV transfer.' },
       ],
     },

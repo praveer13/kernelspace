@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T4.L3's roofline doesn't care about marketing; it cares about two numbers. Blackwell changes both, and adds a third lever. **B200**: ~180 GB HBM3e per GPU as shipped in HGX/DGX B200 (1,440 GB across 8 GPUs; 192 GB is the raw stack) at **~8 TB/s** (2.4× H100's bandwidth, ~2.25× the capacity). **GB200 NVL72**: 72 Blackwell GPUs in one NVLink domain at ~1.8 TB/s per GPU bidirectional — the "one giant GPU" fiction made physical, and the reason EP144 and CP-over-32-nodes are routine (T6.L2, T6.L4). And **FP4**: a native 4-bit floating point format the tensor cores execute, doubling FP8 throughput per FLOP and halving the bytes again.
+      md: `T4.L3's roofline doesn't care about marketing; it cares about two numbers. Blackwell changes both, and adds a third lever. **B200**: ~180 GB HBM3e per GPU as shipped in HGX/DGX B200 (1,440 GB across 8 GPUs; many sources cite 192 GB per GPU, but the shipped spec lists 1,440 GB per 8) at **~8 TB/s** (2.4× H100's bandwidth, ~2.25× the capacity). **GB200 NVL72**: 72 Blackwell GPUs in one NVLink domain at ~1.8 TB/s per GPU bidirectional — the "one giant GPU" fiction made physical, and the reason EP144 and CP-over-32-nodes are routine (T6.L2, T6.L4). And **FP4**: a native 4-bit floating point format the tensor cores execute, doubling FP8 throughput per FLOP and halving the bytes again.
 
 Run T4's decode arithmetic: tokens/s ≈ bandwidth ÷ bytes-per-token. B200 alone roughly doubles the H100 decode rate at FP8; FP4 halves the weight bytes again for models quantized to it. NVIDIA's B200 DeepSeek-R1 demo: **368 tok/s/user** on 8×B200 with NVFP4 weights + MTP-3 speculative + fused kernels — up from a 67 tok/s baseline, 5.5×, on the heaviest open model in production.`,
     },
@@ -31,7 +31,7 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
     {
       type: 'statline',
       stats: [
-        { value: '~180 GB', label: 'B200 HBM3e (as shipped)', hint: '~2.25× H100 capacity (192 GB is the raw stack) — a 70B FP16 model (140 GB) + ~125k tokens of KV at 320 KB/token in one GPU.' },
+        { value: '~180 GB', label: 'B200 HBM3e (as shipped)', hint: '~2.25× H100 capacity (many sources cite 192 GB; shipped DGX/HGX B200 lists 1,440 GB per 8 GPUs) — a 70B FP16 model (140 GB) + ~125k tokens of KV at 320 KB/token in one GPU.' },
         { value: '~8 TB/s', label: 'B200 HBM bandwidth', hint: '2.4× H100\'s 3.35 TB/s. Decode rates scale with it.' },
         { value: '~1.8 TB/s', label: 'NVLink 5 per GPU', hint: 'GB200 NVL72: 72 GPUs, one domain. TP/EP/CP territory (T6.L4).' },
         { value: '368 tok/s', label: 'DeepSeek-R1 per user on 8×B200', hint: 'NVFP4 + MTP3 + fused kernels, min-latency config (NVIDIA TRT-LLM blog).' },
