@@ -7,6 +7,7 @@ const distRoot = path.join(repoRoot, 'dist')
 const indexHtml = await readFile(path.join(distRoot, 'index.html'), 'utf8')
 
 const staticRoutes = [
+  'boot',
   'curriculum',
   'lab',
   'glossary',

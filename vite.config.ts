@@ -9,6 +9,10 @@ export default defineConfig({
   // project sites; user/org sites (*.github.io) and local dev use "/".
   base: process.env.VITE_BASE ?? '/',
   plugins: [inspectAttr(), react()],
+  build: {
+    // verify:bundle walks dist/.vite/manifest.json to measure each route's static JS + CSS closure.
+    manifest: true,
+  },
   server: {
     port: 3000,
   },
