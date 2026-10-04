@@ -152,7 +152,7 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           why: [
             'Misconception: levels match the cache tiers. Each level just consumes 9 address bits; the number of levels falls out of the 48-bit space and 4 KB pages, not the cache hierarchy.',
             'Right: 2^36 pages at 8 B each is ~512 GB if flat. A radix tree allocates lower levels only for mapped regions, so a sparse address space costs a few KB of page tables.',
-            'Misconception: a level is fetched in one cache line. A 4 KB table spans 64 lines; the walker reads one 8 B entry per level, and four levels follow from 48 address bits at 9 per level.',
+            'Misconception: one cache line per level. A 4 KB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from 48 address bits at 9 each.',
             'Misconception: smaller tables make switches cheaper. A switch loads one root pointer (CR3) regardless of depth, and the TLB is flushed or PCID-tagged, not preserved level by level.',
           ],
         },
