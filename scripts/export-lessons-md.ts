@@ -39,14 +39,17 @@ function blockToMd(b: ContentBlock): string {
       return `_${b.title ?? 'isomorphism'}_\n\n${b.pairs
         .map((p) => `- **${p.os}** (${p.osLine}) ≡ **${p.llm}** (${p.llmLine})`)
         .join('\n')}`
-    case 'quiz':
-      return b.questions
+    case 'quiz': {
+      // Answer keys are withheld: tutors fed this markdown must not see them.
+      // Options use stable ids (o1, o2, …) in authored order — on-screen letters are shuffled per attempt.
+      const qs = b.questions
         .map((q, i) => {
-          const opts = q.options.map((o, j) => `   ${String.fromCharCode(65 + j)}. ${o}`).join('\n')
-          const correct = q.correct.map((c) => String.fromCharCode(65 + c)).join(', ')
-          return `**Q${i + 1}. ${q.q}**\n${opts}\n   Answer: ${correct} — ${q.explanation}`
+          const opts = q.options.map((o, j) => `- (o${j + 1}) ${o}`).join('\n')
+          return `**Q${i + 1}. ${q.q}**\n\n${opts}`
         })
         .join('\n\n')
+      return `${qs}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`
+    }
     case 'exercise':
       return `**Exercise: ${b.title}**\n\n${b.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}${b.note ? `\n\n_${b.note}_` : ''}`
     case 'field-note':

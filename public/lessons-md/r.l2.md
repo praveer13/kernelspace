@@ -49,22 +49,24 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
 ---
 
 **Q1. What property makes match especially useful with enums?**
-   A. It runs arms in parallel
-   B. It must cover every possible variant
-   C. It allocates no stack
-   D. It accepts truthy values
-   Answer: B — Exhaustive matching means a new variant produces useful compiler errors at every decision point that needs updating.
+
+- (o1) It runs arms in parallel
+- (o2) It must cover every possible variant
+- (o3) It allocates no stack
+- (o4) It accepts truthy values
 
 **Q2. What values does 0..4 produce?**
-   A. 0, 1, 2, 3
-   B. 0, 1, 2, 3, 4
-   C. 1, 2, 3, 4
-   D. Only 0 and 4
-   Answer: A — Standard ranges exclude the upper bound. Use 0..=4 for an inclusive range.
+
+- (o1) 0, 1, 2, 3
+- (o2) 0, 1, 2, 3, 4
+- (o3) 1, 2, 3, 4
+- (o4) Only 0 and 4
 
 **Q3. How can an infinite loop compute a value?**
-   A. return is mandatory
-   B. break can carry the loop result
-   C. All loops evaluate to true
-   D. Only by mutating a global
-   Answer: B — A loop expression can end with break value; the loop then evaluates to that value.
+
+- (o1) return is mandatory
+- (o2) break can carry the loop result
+- (o3) All loops evaluate to true
+- (o4) Only by mutating a global
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._

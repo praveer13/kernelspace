@@ -47,22 +47,24 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
 ---
 
 **Q1. What happens when RefCell::borrow_mut conflicts with a live shared borrow?**
-   A. It blocks until the borrow ends
-   B. It panics at runtime
-   C. It silently clones the value
-   D. It creates a data race
-   Answer: B — RefCell enforces the borrow law dynamically. try_borrow_mut returns an error when panic is not appropriate.
+
+- (o1) It blocks until the borrow ends
+- (o2) It panics at runtime
+- (o3) It silently clones the value
+- (o4) It creates a data race
 
 **Q2. What releases a std::sync::Mutex lock?**
-   A. A manual unlock call is always required
-   B. Dropping the MutexGuard
-   C. Cloning the mutex
-   D. The next lock attempt
-   Answer: B — The guard owns the lock obligation. RAII releases it deterministically when the guard leaves scope.
+
+- (o1) A manual unlock call is always required
+- (o2) Dropping the MutexGuard
+- (o3) Cloning the mutex
+- (o4) The next lock attempt
 
 **Q3. Which type best fits a single-threaded shared counter whose value is Copy?**
-   A. Cell<usize>
-   B. Arc<usize>
-   C. Box<Mutex<usize>>
-   D. Weak<usize>
-   Answer: A — Cell provides simple get/set interior mutability for Copy values without borrow guards.
+
+- (o1) Cell<usize>
+- (o2) Arc<usize>
+- (o3) Box<Mutex<usize>>
+- (o4) Weak<usize>
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._

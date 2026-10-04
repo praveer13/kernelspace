@@ -50,22 +50,24 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
 ---
 
 **Q1. What does a lifetime annotation do at runtime?**
-   A. Extends heap allocation lifetime
-   B. Adds reference counting
-   C. Nothing; it supplies a compile-time relationship
-   D. Runs a destructor later
-   Answer: C — Lifetimes are proof metadata erased after type checking. They never keep a referenced value alive.
+
+- (o1) Extends heap allocation lifetime
+- (o2) Adds reference counting
+- (o3) Nothing; it supplies a compile-time relationship
+- (o4) Runs a destructor later
 
 **Q2. Why must struct Block<'a> declare a lifetime for its &[u32] field?**
-   A. Slices always allocate
-   B. The type must state that Block cannot outlive the borrowed slice
-   C. The field is mutable
-   D. All structs require lifetimes
-   Answer: B — A type that stores a reference must expose the validity relationship as part of its own type.
+
+- (o1) Slices always allocate
+- (o2) The type must state that Block cannot outlive the borrowed slice
+- (o3) The field is mutable
+- (o4) All structs require lifetimes
 
 **Q3. What is the right fix when data truly must outlive the input it came from?**
-   A. Invent a longer lifetime annotation
-   B. Return or store owned data
-   C. Use a wildcard lifetime
-   D. Disable Drop
-   Answer: B — Annotations can describe valid relationships, not create them. Ownership is required when independent lifetime is required.
+
+- (o1) Invent a longer lifetime annotation
+- (o2) Return or store owned data
+- (o3) Use a wildcard lifetime
+- (o4) Disable Drop
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._
