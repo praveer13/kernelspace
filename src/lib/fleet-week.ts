@@ -21,7 +21,7 @@ import {
 } from '@/lib/fleet-model'
 import { instantiateLab } from '@/lib/wasm-lab'
 import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet/drivers'
-import type { SlotState } from '@/pages/fleet/slots'
+import type { LabKind } from '@/pages/fleet/slots'
 
 export interface ActResult {
   pass: boolean
@@ -39,32 +39,111 @@ export interface MeasurementEvidence {
 
 export type MeasurementActId = 'engine' | 'fleet'
 
+/**
+ * The only place Fleet Week seeds live. Every act's trace and fault stream is a
+ * pure function of these; the sim worker receives them with each job.
+ */
+export interface FleetWeekSeeds {
+  trace: number
+  faults: number
+}
+
+const DEFAULT_SEEDS: FleetWeekSeeds = { trace: 0x5eed, faults: 0xd15 }
+
+export function fleetWeekSeeds(): FleetWeekSeeds {
+  return DEFAULT_SEEDS
+}
+
+/** Uploaded lab modules as raw bytes — all a worker needs to instantiate them. */
+export type ModuleBytes = Record<LabKind, ArrayBuffer | null>
+
+/** Reports 0..1 while a batch runs; the worker forwards it to the page. */
+export type ProgressFn = (fraction: number) => void
+
+/**
+ * A fault the fleet suffers, as data: it crosses the worker boundary and is
+ * interpreted inside the run (`makeFaultInjector`). Ticks are cluster ticks.
+ */
+export type FaultSpec =
+  | { kind: 'node-death'; worker: number; atTick: number }
+  | { kind: 'flash-crowd'; fromTick: number; toTick: number; every: number }
+
+/** Act II: worker 0 dies at t400, then a hot window slams the survivors at t600–750. */
+export const ACT2_FAULTS: FaultSpec[] = [
+  { kind: 'node-death', worker: 0, atTick: 400 },
+  { kind: 'flash-crowd', fromTick: 600, toTick: 750, every: 3 },
+]
+
+/** Interpret FaultSpecs as a Cluster.disrupt hook; `events` and `injected()` report what fired. */
+export function makeFaultInjector(faults: FaultSpec[], seed: number) {
+  const events: string[] = []
+  const rng = makeRng(seed)
+  let injected = 0
+  const disrupt = (c: Cluster, tick: number) => {
+    for (const f of faults) {
+      if (f.kind === 'node-death') {
+        // in-flight work on the dying worker is lost
+        if (tick === f.atTick && c.workers.length > 1 && !c.workers[f.worker].killed) {
+          const lost = c.workers[f.worker].kill()
+          events.push(`t${f.atTick}: NODE DEATH — worker ${f.worker} lost with ${lost} in-flight requests`)
+        }
+      } else if (tick >= f.fromTick && tick <= f.toTick && tick % f.every === 0) {
+        // extra arrivals slammed into the surviving fleet
+        const alive = c.workers.filter((w) => !w.killed)
+        if (alive.length > 0) {
+          const w = alive[rng() % alive.length]
+          w.inject({ id: 10000 + tick * 10 + (rng() % 10), arrival: tick, prompt: 64 + (rng() % 193), output: 16 + (rng() % 33) })
+          injected++
+        }
+      }
+    }
+  }
+  return { disrupt, events, injected: () => injected }
+}
+
 const CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
 const WORKER_CFG = { numBlocks: 128, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128 }
 const REQ_COUNT = 240
 const SPAN = 900
 
-async function buildStack(slots: SlotState, numBlocks: number, blockSize: number) {
-  const sched = slots.sched ? makeWasmScheduler(await instantiateLab(slots.sched.bytes)) : makeRefScheduler()
-  const mgr = slots.mgr
-    ? makeWasmManager(await instantiateLab(slots.mgr.bytes), numBlocks, blockSize)
+/** Requests finished or shed so far, as 0..1 of `total` (cheap enough to poll every few ticks). */
+function drained(e: Engine, total: number): number {
+  const s = e.stats()
+  return Math.min(1, (s.completed + s.shed) / total)
+}
+
+/** Step an engine to completion (same 20000-tick guard everywhere); returns the ticks it took. */
+function drain(e: Engine, total: number, onProgress?: ProgressFn): number {
+  let guard = 0
+  while (!e.done && guard < 20000) {
+    e.step()
+    guard++
+    if (onProgress && guard % 50 === 0) onProgress(drained(e, total))
+  }
+  return guard
+}
+
+async function buildStack(modules: ModuleBytes, numBlocks: number, blockSize: number) {
+  const sched = modules.sched ? makeWasmScheduler(await instantiateLab(modules.sched)) : makeRefScheduler()
+  const mgr = modules.mgr
+    ? makeWasmManager(await instantiateLab(modules.mgr), numBlocks, blockSize)
     : makeRefManager(numBlocks, blockSize)
-  const queue = slots.queue ? makeWasmQueue(await instantiateLab(slots.queue.bytes), 32) : makeRefQueue(32)
+  const queue = modules.queue ? makeWasmQueue(await instantiateLab(modules.queue), 32) : makeRefQueue(32)
   return { sched, mgr, queue }
 }
 
 /* ------------------------------ ACT 1 ------------------------------ */
 
 /** The Engine: your stack vs the reference on the fleet trace. */
-export async function runAct1(slots: SlotState): Promise<ActResult> {
-  const s = await buildStack(slots, CFG.numBlocks, CFG.blockSize)
-  const mine = new Engine(CFG, makeRequestStream(REQ_COUNT, SPAN, 0x5eed), s.sched, s.mgr, {
+export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onProgress?: ProgressFn): Promise<ActResult> {
+  const s = await buildStack(modules, CFG.numBlocks, CFG.blockSize)
+  const mine = new Engine(CFG, makeRequestStream(REQ_COUNT, SPAN, seeds.trace), s.sched, s.mgr, {
     intake: s.queue,
     drainPerTick: 8,
   })
   const ref = new Engine(
     CFG,
-    makeRequestStream(REQ_COUNT, SPAN, 0x5eed),
+    makeRequestStream(REQ_COUNT, SPAN, seeds.trace),
     makeRefScheduler(),
     makeRefManager(CFG.numBlocks, CFG.blockSize),
     { intake: makeRefQueue(32), drainPerTick: 8 },
@@ -74,12 +153,13 @@ export async function runAct1(slots: SlotState): Promise<ActResult> {
     if (!mine.done) mine.step()
     if (!ref.done) ref.step()
     guard++
+    if (onProgress && guard % 50 === 0) onProgress(Math.min(drained(mine, REQ_COUNT), drained(ref, REQ_COUNT)))
   }
   const myG = mine.goodput(REQ_COUNT)
   const refG = ref.goodput(REQ_COUNT)
   const ms = mine.stats()
   const pass = myG >= refG - 3
-  const anyStudent = slots.sched || slots.mgr || slots.queue
+  const anyStudent = modules.sched || modules.mgr || modules.queue
   return {
     pass,
     score: Math.min(1, myG / Math.max(1, refG)),
@@ -110,40 +190,32 @@ export interface Act2Choice {
 }
 
 /** The Fleet: survive a node death + a hot window with your topology choice. */
-export async function runAct2(slots: SlotState, choice: Act2Choice): Promise<ActResult> {
+export async function runAct2(
+  modules: ModuleBytes,
+  choice: Act2Choice,
+  seeds: FleetWeekSeeds,
+  onProgress?: ProgressFn,
+): Promise<ActResult> {
   const workerCfgs = Array.from({ length: choice.workers }, () => WORKER_CFG)
   const workers: Engine[] = []
   for (const cfg of workerCfgs) {
-    const s = await buildStack(slots, cfg.numBlocks, cfg.blockSize)
+    const s = await buildStack(modules, cfg.numBlocks, cfg.blockSize)
     workers.push(new Engine(cfg, [], s.sched, s.mgr, { intake: s.queue, drainPerTick: 6 }))
   }
-  const cluster = new Cluster(makeRequestStream(REQ_COUNT, SPAN, 0x5eed), workers, choice.router)
-  const events: string[] = []
-  const rng = makeRng(0xd15)
-  let injected = 0
-  cluster.disrupt = (c, tick) => {
-    // node death at tick 400: worker 0 dies, in-flight work lost
-    if (tick === 400 && c.workers.length > 1 && !c.workers[0].killed) {
-      const lost = c.workers[0].kill()
-      events.push(`t400: NODE DEATH — worker 0 lost with ${lost} in-flight requests`)
-    }
-    // hot window at 600–750: extra arrivals slammed into the surviving fleet
-    if (tick >= 600 && tick <= 750 && tick % 3 === 0) {
-      const alive = c.workers.filter((w) => !w.killed)
-      if (alive.length > 0) {
-        const w = alive[rng() % alive.length]
-        w.inject({ id: 10000 + tick * 10 + (rng() % 10), arrival: tick, prompt: 64 + (rng() % 193), output: 16 + (rng() % 33) })
-        injected++
-      }
-    }
-  }
+  const cluster = new Cluster(makeRequestStream(REQ_COUNT, SPAN, seeds.trace), workers, choice.router)
+  const faults = makeFaultInjector(ACT2_FAULTS, seeds.faults)
+  cluster.disrupt = faults.disrupt
   let guard = 0
   while (!cluster.done && guard < 20000) {
     cluster.step()
     guard++
+    if (onProgress && guard % 50 === 0) {
+      const a = cluster.aggregate()
+      onProgress(Math.min(1, (a.completed + a.shed) / (REQ_COUNT + faults.injected())))
+    }
   }
   const agg = cluster.aggregate()
-  const total = REQ_COUNT + injected
+  const total = REQ_COUNT + faults.injected()
   const completedPct = Math.round((agg.completed / total) * 1000) / 10
   const goodput = Math.round((agg.sloMet / total) * 1000) / 10
   const pass = completedPct >= 92 && goodput >= 40
@@ -163,7 +235,7 @@ export async function runAct2(slots: SlotState, choice: Act2Choice): Promise<Act
       ['ttft p95', `${agg.ttftP95} iters`],
       ['tpot p95', `${agg.tpotP95.toFixed(1)} iters`],
       ['queue p95', `${agg.queueP95} iters`],
-      ...events.map((e) => ['event', e] as [string, string]),
+      ...faults.events.map((e) => ['event', e] as [string, string]),
     ],
   }
 }
@@ -293,21 +365,17 @@ export interface Act3Eval {
 }
 
 /** The Business: execute every hardware option, price it, compare to the claim. */
-export async function evalAct3(): Promise<Act3Eval> {
+export function evalAct3(seeds: FleetWeekSeeds, onProgress?: ProgressFn): Act3Eval {
   const perOption: Act3Eval['perOption'] = []
-  for (const opt of HW_MENU) {
+  for (const [i, opt] of HW_MENU.entries()) {
     const e = new Engine(
       opt.cfg,
-      makeRequestStream(REQ_COUNT, SPAN, 0x5eed),
+      makeRequestStream(REQ_COUNT, SPAN, seeds.trace),
       makeRefScheduler(),
       makeRefManager(opt.cfg.numBlocks, opt.cfg.blockSize),
       { intake: makeRefQueue(32), drainPerTick: 8 },
     )
-    let guard = 0
-    while (!e.done && guard < 20000) {
-      e.step()
-      guard++
-    }
+    const guard = drain(e, REQ_COUNT, onProgress && ((f) => onProgress((i + f) / HW_MENU.length)))
     const stats = e.stats()
     // tokens produced = completed outputs (est. avg 56) + inputs (cache hit 40%)
     const ticks = guard
@@ -380,8 +448,8 @@ export interface Incident {
   mitigations: { id: string; label: string; correct: boolean }[]
 }
 
-function runIncidentEngine(cfg = CFG, sched = makeRefScheduler()): TickSample[] {
-  const e = new Engine(cfg, makeRequestStream(REQ_COUNT, SPAN, 0x5eed), sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
+function runIncidentEngine(seeds: FleetWeekSeeds, cfg = CFG, sched = makeRefScheduler()): TickSample[] {
+  const e = new Engine(cfg, makeRequestStream(REQ_COUNT, SPAN, seeds.trace), sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
     intake: makeRefQueue(32),
     drainPerTick: 8,
   })
@@ -454,7 +522,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry'>[] = [
   },
 ]
 
-export function loadIncident(id: string): Incident | null {
+export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null {
   const def = INCIDENTS.find((i) => i.id === id)
   if (!def) return null
   let telemetry: TickSample[]
@@ -478,10 +546,10 @@ export function loadIncident(id: string): Incident | null {
         return { admit, preempt: [] }
       },
     }
-    telemetry = runIncidentEngine({ ...CFG, numBlocks: 96 }, naiveSjf)
+    telemetry = runIncidentEngine(seeds, { ...CFG, numBlocks: 96 }, naiveSjf)
   } else if (id === 'intake-stall') {
     // drain misconfigured: intake empties at a crawl
-    const e = new Engine(CFG, makeRequestStream(REQ_COUNT, SPAN, 0x5eed), makeRefScheduler(), makeRefManager(CFG.numBlocks, CFG.blockSize), {
+    const e = new Engine(CFG, makeRequestStream(REQ_COUNT, SPAN, seeds.trace), makeRefScheduler(), makeRefManager(CFG.numBlocks, CFG.blockSize), {
       intake: makeRefQueue(32),
       drainPerTick: 1,
     })
@@ -501,7 +569,7 @@ export function loadIncident(id: string): Incident | null {
       name: 'greedy',
       schedule: (v: SchedView) => ({ admit: v.waiting.map((r) => r.id), preempt: [] }),
     }
-    telemetry = runIncidentEngine(CFG, greedy)
+    telemetry = runIncidentEngine(seeds, CFG, greedy)
   }
   return { ...def, telemetry }
 }

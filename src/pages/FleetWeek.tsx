@@ -5,13 +5,9 @@ import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play } from 'lucide
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
-  evalAct3,
   gradeMeasurementSubmission,
   gradeAct3Doc,
   HW_MENU,
-  loadIncident,
-  runAct1,
-  runAct2,
   INCIDENTS,
   type Act2Choice,
   type ActResult,
@@ -22,6 +18,7 @@ import {
 } from '@/lib/fleet-week'
 import type { RouterKind, TickSample } from '@/lib/fleet-model'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
+import { moduleBytes, runSim } from '@/workers/sim-client'
 import { cn } from '@/lib/utils'
 
 const ACTS = [
@@ -107,6 +104,7 @@ function ResultPanel({ result }: { result: ActResult }) {
 function useActRunner(actId: string) {
   const completeAct = useProgress((s) => s.completeFleetWeekAct)
   const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<ActResult | null>(null)
   const report = useCallback((r: ActResult) => {
     setResult(r)
@@ -119,14 +117,14 @@ function useActRunner(actId: string) {
     },
     [actId, completeAct, report],
   )
-  return { running, result, report, finish, setRunning }
+  return { running, progress, result, report, finish, setRunning, setProgress }
 }
 
 /* ------------------------------ ACT 1 ------------------------------ */
 
 function ActEngine() {
   const slots = useSlots((s) => s.slots)
-  const { running, result, report, finish, setRunning } = useActRunner('engine')
+  const { running, progress, result, report, finish, setRunning, setProgress } = useActRunner('engine')
   const [traceResult, setTraceResult] = useState<ActResult | null>(null)
   const anyStudent = slots.sched || slots.mgr || slots.queue
   return (
@@ -136,10 +134,12 @@ function ActEngine() {
       </p>
       <RunButton
         running={running}
+        progress={progress}
         label="run the trace"
         onClick={async () => {
           setRunning(true)
-          const trace = await runAct1(slots)
+          setProgress(0)
+          const trace = await runSim({ kind: 'act1', modules: moduleBytes(slots) }, setProgress)
           setTraceResult(trace)
           report(trace)
         }}
@@ -160,7 +160,7 @@ function ActEngine() {
 
 function ActFleet() {
   const slots = useSlots((s) => s.slots)
-  const { running, result, report, finish, setRunning } = useActRunner('fleet')
+  const { running, progress, result, report, finish, setRunning, setProgress } = useActRunner('fleet')
   const [traceResult, setTraceResult] = useState<ActResult | null>(null)
   const [workers, setWorkers] = useState<2 | 4>(2)
   const [router, setRouter] = useState<RouterKind>('jsq')
@@ -182,10 +182,12 @@ function ActFleet() {
       </div>
       <RunButton
         running={running}
+        progress={progress}
         label="run with disruption"
         onClick={async () => {
           setRunning(true)
-          const trace = await runAct2(slots, { workers, router } as Act2Choice)
+          setProgress(0)
+          const trace = await runSim({ kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress)
           setTraceResult(trace)
           report(trace)
         }}
@@ -297,7 +299,7 @@ function MeasurementSubmission({
 /* ------------------------------ ACT 3 ------------------------------ */
 
 function ActBusiness() {
-  const { running, result, finish, setRunning } = useActRunner('business')
+  const { running, progress, result, finish, setRunning, setProgress } = useActRunner('business')
   const [evaluation, setEvaluation] = useState<Act3Eval | null>(null)
   const [choice, setChoice] = useState<string>('b200')
   const [claim, setClaim] = useState('')
@@ -309,11 +311,12 @@ function ActBusiness() {
     if (evaluatingRef.current) return
     evaluatingRef.current = true
     setRunning(true)
-    const ev = await evalAct3()
+    setProgress(0)
+    const ev = await runSim({ kind: 'act3' }, setProgress)
     setEvaluation(ev)
     setRunning(false)
     evaluatingRef.current = false
-  }, [setRunning])
+  }, [setRunning, setProgress])
 
   return (
     <div>
@@ -322,7 +325,7 @@ function ActBusiness() {
         one, state your expected $/Mtok, and defend it in ≥60 words. We recompute your claim — ±25% tolerance,
         and the option must meet the SLO.
       </p>
-      <RunButton running={running} label="execute all three options" onClick={evaluate} />
+      <RunButton running={running} progress={progress} label="execute all three options" onClick={evaluate} />
       {evaluation && (
         <div className="mt-4 space-y-4">
           <div className="overflow-x-auto rounded-md border border-line">
@@ -399,7 +402,7 @@ function ActIncident() {
     setMitigation(null)
     setIdx(i)
     setSeed(freshSeed())
-    setIncident(loadIncident(INCIDENTS[i].id))
+    setIncident(await runSim({ kind: 'incident', id: INCIDENTS[i].id }))
     setRunning(false)
   }, [setRunning])
 
@@ -530,7 +533,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   )
 }
 
-function RunButton({ running, label, onClick, disabled }: { running: boolean; label: string; onClick: () => void; disabled?: boolean }) {
+function RunButton({ running, progress, label, onClick, disabled }: { running: boolean; progress?: number; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -538,7 +541,7 @@ function RunButton({ running, label, onClick, disabled }: { running: boolean; la
       className="mt-3 inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-4 py-2 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
     >
       {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-      {running ? 'executing…' : label}
+      {running ? `executing…${progress ? ` ${Math.round(progress * 100)}%` : ''}` : label}
       <ChevronRight className="h-3.5 w-3.5" />
     </button>
   )
