@@ -15,7 +15,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `Matrix multiplication is the most important kernel in the world right now — a transformer is, numerically, matmuls with garnish. It is also the perfect capstone for this track, because writing a *fast* one forces you to use every lesson so far: the hierarchy (T0), strides (T0.L3), SRAM staging and coalescing (T4.L4), roofline arithmetic (T4.L3). And the punchline is beautiful: **FlashAttention, the algorithm that made long-context LLMs practical, is not an attention trick — it is a cache-blocking trick.** This lesson earns you that sentence.
 
-Naive matmul \`C = A × B\` (N×N): for each of N² outputs, dot a row of A with a column of B — N multiply-adds, walking a full row and a full column per output. Total: \`2N³\` FLOPs against \`~N³\` elements *touched* if you naively re-read from DRAM: arithmetic intensity ≈ 2 FLOP/byte — deep in bandwidth-bound territory. The GPU's tensor cores could do this 100× faster than its memory can feed it. The fix is the oldest trick in numerical computing: **tiling**.`,
+Naive matmul \`C = A × B\` (N×N): for each of N² outputs, dot a row of A with a column of B — N multiply-adds, walking a full row and a full column per output. Total: \`2N³\` FLOPs against \`~2N³\` elements *touched* (a row and a column per output) if you naively re-read from DRAM: that is \`1/b\` FLOP/byte for \`b\`-byte elements, **≈ 0.5 FLOP/byte at FP16** — deep in bandwidth-bound territory. The GPU's tensor cores could do this 100× faster than its memory can feed it. The fix is the oldest trick in numerical computing: **tiling**.`,
     },
     {
       type: 'prose',
@@ -23,7 +23,7 @@ Naive matmul \`C = A × B\` (N×N): for each of N² outputs, dot a row of A with
 
 The insight: a \`T × T\` output tile \`C_tile\` only needs a \`T × K\` slab of A and a \`K × T\` slab of B. Choose \`T\` and \`K\` so those slabs fit in **shared memory** (T4.L2's 228 KB scratchpad), and the algorithm becomes: cooperatively load both slabs (coalesced, T4.L4), barrier, then compute from SRAM at ~20–30× HBM's bandwidth, accumulating into registers. March the slabs along the K dimension and repeat.
 
-Now count bytes. Marching K steps, the tile does \`2·T²·K\` FLOPs and loads \`2·T·K\` elements — \`2·T·K·b\` bytes at \`b\` bytes each — so intensity is \`T / b\`: **\`T/2\` FLOP/byte at FP16**. With \`T = 128\` each element of A and B loaded from HBM is reused **T times** from SRAM, and intensity jumps from ~2 to 64 FLOP/byte — a 32× lift, and growing linearly with \`T\` toward the H100's ridge (~295 F/B at FP16, reached near \`T ≈ 590\` on HBM traffic alone; real kernels close the gap with L2 reuse across blocks). **Same 2N³ FLOPs, same math, far more delivered throughput.** Tiling didn't change the algorithm; it changed which tier of the hierarchy the algorithm *lives* in.`,
+Now count bytes. Marching K steps, the tile does \`2·T²·K\` FLOPs and loads \`2·T·K\` elements — \`2·T·K·b\` bytes at \`b\` bytes each — so intensity is \`T / b\`: **\`T/2\` FLOP/byte at FP16**. With \`T = 128\` each element of A and B loaded from HBM is reused **T times** from SRAM, and intensity jumps from 0.5 (the naive case is just \`T = 1\`) to 64 FLOP/byte — a 128× lift — and keeps growing linearly with \`T\` toward the H100's ridge (~295 F/B at FP16, reached near \`T ≈ 590\` on HBM traffic alone; real kernels close the gap with L2 reuse across blocks). **Same 2N³ FLOPs, same math, far more delivered throughput.** Tiling didn't change the algorithm; it changed which tier of the hierarchy the algorithm *lives* in.`,
     },
     {
       type: 'diagram',
@@ -45,7 +45,7 @@ Now count bytes. Marching K steps, the tile does \`2·T²·K\` FLOPs and loads \
         { from: 'ctile', to: 'tc' },
       ],
       steps: [
-        { caption: 'Goal: compute a T×T tile of C. Instead of streaming whole rows/columns from HBM per output element (AI ≈ 2), stage slabs through shared memory.', active: ['a', 'b'] },
+        { caption: 'Goal: compute a T×T tile of C. Instead of streaming whole rows/columns from HBM per output element (AI ≈ 0.5 at FP16), stage slabs through shared memory.', active: ['a', 'b'] },
         { caption: 'The block cooperatively loads a T×K slab of A and a K×T slab of B into SRAM — wide, coalesced transactions, every byte fetched once.', active: ['aslab', 'bslab'], edges: ['a->aslab', 'b->bslab'] },
         { caption: 'Compute: each SRAM element is read T times from the fast tier (AI = T/2 at FP16). Barrier, march K, repeat. HBM traffic collapses by a factor of T; tensor cores stay fed.', active: ['ctile', 'tc'], edges: ['aslab->ctile', 'bslab->ctile'] },
       ],
@@ -74,7 +74,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
     }
     store_tile(C, acc, wid);                // one HBM write per element
 }`,
-      chips: ['AI: 2 → T/2 (FP16)', 'HBM traffic ÷ T', 'barriers bracket the tile'],
+      chips: ['AI: 0.5 → T/2 (FP16)', 'HBM traffic ÷ T', 'barriers bracket the tile'],
     },
     {
       type: 'prose',
@@ -106,7 +106,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
       machine: 'roofline',
       title: 'Tiling playground: matmul to FlashAttention',
       tasks: [
-        'Run naive matmul (N=4096): measure AI ≈ 2 F/B and the resulting bandwidth wall.',
+        'Run naive matmul (N=4096): measure AI ≈ 0.5 F/B at FP16 and the resulting bandwidth wall.',
         'Sweep tile T = 16 → 128: plot HBM traffic (∝ 1/T) and delivered TFLOPs; locate the compute roof.',
         'Oversize the tile until shared memory limits occupancy; observe the U-shaped performance curve.',
         'Toggle the attention view: naive (materialize S) vs flash (online softmax); compare HBM bytes at 32k context.',
