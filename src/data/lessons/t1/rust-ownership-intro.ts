@@ -90,7 +90,7 @@ The payoff profile is why systems teams keep choosing it: C-level control of lay
           os: 'ownership (Rust)',
           osLine: 'Safety at compile time: prove one owner per value, zero runtime cost.',
           llm: 'Dynamo data plane',
-          llmLine: 'KV bytes move between nodes at line rate; no GC pause is affordable.',
+          llmLine: 'Rust orchestrates the KV transfers that NIXL (C++) performs between nodes; no GC pause is affordable on that path.',
           breaks: 'Ownership is checked at compile time inside one process; it does not cover bytes in flight on the network or in device memory, where unsafe and FFI code still carry the invariants.',
         },
       ],
@@ -99,7 +99,7 @@ The payoff profile is why systems teams keep choosing it: C-level control of lay
       type: 'prose',
       md: `## The through-line
 
-T1 took you from "a function call is magic" to building an allocator. Along the way you met every classic memory bug personally. Ownership is the claim that all of them were *one* bug — uncontrolled aliasing plus unclear lifetimes — and that the bug class is solvable. When T5 shows you NVIDIA's choice of Rust for Dynamo's KV-moving data plane, you will read it not as fashion but as a conclusion: **the hot path of AI infrastructure is exactly where C++ used to win by default, and exactly where memory bugs cost the most.**
+T1 took you from "a function call is magic" to building an allocator. Along the way you met every classic memory bug personally. Ownership is the claim that all of them were *one* bug — uncontrolled aliasing plus unclear lifetimes — and that the bug class is solvable. When T5 shows you NVIDIA's choice of Rust for the Dynamo code that orchestrates KV transfers (NIXL, a C++ library, does the byte-moving), you will read it not as fashion but as a conclusion: **the hot path of AI infrastructure is exactly where C++ used to win by default, and exactly where memory bugs cost the most.**
 
 Next track: the operating system. You have built memory management by hand; now you get to see how the kernel does it for every process at once — and why PagedAttention is that story wearing a GPU.`,
     },
@@ -161,7 +161,7 @@ Next track: the operating system. You have built memory management by hand; now 
           ],
         },
         {
-          q: 'Why did NVIDIA choose Rust for Dynamo\'s KV-moving data plane over C++?',
+          q: 'Dynamo\'s Rust code orchestrates KV transfers that NIXL (C++) performs. Why Rust for that layer over C++?',
           options: [
             'Rust has more mature CUDA tooling and kernel libraries than C++ does',
             'C-class speed and layout control, with compile-time memory safety and no GC pauses',
@@ -170,7 +170,7 @@ Next track: the operating system. You have built memory management by hand; now 
           ],
           correct: [1],
           explanation:
-            'The data plane moves gigabytes of KV cache under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (70% CVE stat) or GC pauses. Rust is the only mainstream language offering both halves.',
+            'The data plane coordinates gigabytes of KV-cache transfers under tail-latency budgets. It needs C++-class control but cannot afford C++-class memory bugs (70% CVE stat) or GC pauses. Rust is the only mainstream language offering both halves.',
           why: [
             'Reverses the ecosystem. CUDA toolchains, kernel libraries, and NVIDIA\'s own libraries are C++-first; Rust reaches them through bindings, so tooling is not the motive.',
             'Right: it keeps the control and speed of C++ and removes the memory-bug class at compile time, with no GC pauses to blow tail-latency budgets.',

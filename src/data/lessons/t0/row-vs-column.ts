@@ -161,7 +161,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
             'Stride = 8192 × 8 B = 64 KB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8× the DRAM traffic, zero spatial locality, plus TLB thrash across 8192 pages.',
           why: [
             'Predictors handle loop-exit branches well, and one mispredict per 8192 iterations costs about 20 cycles. That cannot explain a ~20x gap that comes from a DRAM miss on every access.',
-            'Stride is 8192 × 8 B = 64 KB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8x the DRAM traffic, no spatial locality, and TLB thrash.',
+            'Right: stride is 8192 × 8 B = 64 KB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8x the DRAM traffic, no spatial locality, and TLB thrash.',
             'Compilers reduce the index math to an add, and it costs about the same in both loop orders. A few cycles of arithmetic cannot compete with ~100 ns per DRAM miss.',
             'Missing SIMD costs at most 4–8x on arithmetic, but this loop is memory-bound, so vector units would still sit idle waiting for lines. Stride, not vectorization, is the root cause.',
           ],
@@ -180,7 +180,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
           why: [
             'There is one path to DRAM. Small arrays are fast because they never go there: they are served by L2 on-chip, not through a special bus.',
             'Hardware does not reorder loops; the instruction stream keeps its order. Compilers can interchange loops at -O3, but that is a compile-time change and would help the large matrix too.',
-            'The ~20x gap is the cost of missing to DRAM on every access. With everything in L2, both orders hit cache and run at similar speed: proof that layout penalties are hierarchy effects.',
+            'Right: the ~20x gap is the cost of missing to DRAM on every access. With everything in L2, both orders hit cache and run at similar speed: proof that layout penalties are hierarchy effects.',
             'Prefetchers work at any size, including on large arrays. Row order benefits from them on big matrices, which is part of why the gap exists there but disappears in L2.',
           ],
         },
@@ -197,7 +197,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
             'Prefetchers learn streams: sequential and modest constant strides get data in flight before the load executes, hiding DRAM latency. Wide strides and pointer chases are unpredictable, so every access is a cold miss.',
           why: [
             'Streamers track ascending or descending line addresses, not whole pages, and random order gives no pattern. Fetching 4 KB per touch would waste bandwidth, so hardware does not do it.',
-            'Prefetchers learn streams: sequential and modest constant strides get data in flight before the load executes, hiding DRAM latency. Wide strides and pointer chases defeat them.',
+            'Right: prefetchers learn streams, so sequential and modest constant strides get data in flight before the load executes, hiding DRAM latency. Wide strides and pointer chases defeat them.',
             'Regular is not enough: hardware prefetchers generally stop at 4 KB page boundaries and track small strides, so a one-page stride never trains a stream and every access is a cold miss.',
             'The next address is known only after the current node loads, and mainstream prefetchers do not follow pointers. Each hop is a serialized miss, which is why linked lists are slow.',
           ],
@@ -215,7 +215,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
             'double[][] is an array of references to row objects. Column access hops between row objects that may live anywhere on the heap — the pointer-chasing tax stacked on top of the stride tax.',
           why: [
             'HotSpot compiles and unrolls nested loops well, and treats a flat double[] the same way. The difference is how double[][] sits in memory, not whether it is compiled.',
-            'double[][] is an array of references to row objects. A column walk hops between rows that may sit anywhere on the heap: the pointer-chasing tax stacked on top of the stride tax.',
+            'Right: double[][] is an array of references to row objects. A column walk hops between rows that may sit anywhere on the heap: the pointer-chasing tax stacked on top of the stride tax.',
             'Object headers are padded so element data stays 8-byte aligned, and an aligned double never straddles lines. The header costs a few bytes per row, not extra misses per access.',
             'Bounds checks are predictable compare-and-branch operations that the JIT often hoists out of loops. They cost cycles, while a DRAM miss costs hundreds, so checks cannot dominate.',
           ],

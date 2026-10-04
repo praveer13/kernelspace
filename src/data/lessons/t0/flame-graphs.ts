@@ -99,7 +99,7 @@ The later Forge labs now put an exact **profile this** command on the all-green 
             'Width is sample frequency = share of total time. The x-axis is not chronological (that\'s a flame chart) and says nothing about per-call latency — a bar can be wide because it\'s called often, or because each call is slow. Width alone doesn\'t distinguish; the tree shape around it usually does.',
           why: [
             'Flame graphs merge identical stacks, so width does not count calls or consecutive runs. Many fast calls and a few slow ones can draw the same width; only sample count matters.',
-            'Width is the fraction of samples containing that stack, i.e. its share of total time. It cannot say whether time came from many cheap calls or a few slow ones; the surrounding tree shape can.',
+            'Right: width is the fraction of samples containing that stack, i.e. its share of total time. It cannot say whether time came from many cheap calls or a few slow ones; the surrounding tree shape can.',
             'Width does not count callees. Fan-out shows up as many narrow children side by side above a frame, and is unrelated to how wide the frame itself is.',
             'Width aggregates all samples, not one call. A bar is wide because it is called often or because each call is slow; per-call latency needs separate timing data.',
           ],
@@ -117,7 +117,7 @@ The later Forge labs now put an exact **profile this** command on the all-green 
             'Mutex-wait frames at the top of many towers = threads paying for a contended critical section. This is the profile-signature of the lock convoy from T2.L5 — and the argument for the lock-free structures you built in lab 04.',
           why: [
             'A CPU that is simply slow or saturated shows threads in compute frames. A futex wait means the thread chose to sleep for a lock; it needed no core at all.',
-            'Mutex-wait frames atop many stacks mean threads are paying for a contended critical section. This is the T2.L5 lock convoy\'s profile signature, and the case for the lock-free structures in lab 04.',
+            'Right: mutex-wait frames atop many stacks mean threads are paying for a contended critical section. This is the T2.L5 lock convoy\'s profile signature, and the case for the lock-free structures in lab 04.',
             'Samples are taken uniformly in time, so a wide wait bar is genuine wait time. Taking more samples would resolve it more precisely, not create it.',
             'Samplers run at around 99 Hz with roughly 1% overhead and do not take application locks. A stalled profiler would not appear as futex waits on your own lock.',
           ],
@@ -136,7 +136,7 @@ The later Forge labs now put an exact **profile this** command on the all-green 
           why: [
             'Timers can be precise; it is a sampler that cannot resolve a function shorter than its sampling period. Sampling wins by aggregating thousands of stacks, not by finer resolution.',
             'Rust can be instrumented with tracing spans or manual timers. The cost is code edits, overhead and blind spots, not impossibility, and sampling avoids all three.',
-            'Sampling attaches from outside, costs about 1% overhead and sees every frame, even ones nobody thought to wrap. Timers add code, add overhead and perturb the timing you are measuring.',
+            'Right: sampling attaches from outside, costs about 1% overhead and sees every frame, even ones nobody thought to wrap. Timers add code, add overhead and perturb the timing you are measuring.',
             'A default CPU sampler records on-CPU stacks, not allocations. Allocation profiling is a separate mode with its own hooks, so it is not why sampling beats timers.',
           ],
         },
@@ -152,7 +152,7 @@ The later Forge labs now put an exact **profile this** command on the all-green 
           explanation:
             'A collective is a barrier: everyone waits for the last arrival. Three wide wait bars + one absent = rank 4 is the straggler; the others\' profiles show the *cost*, not the *cause*. Reading absence is a real flame-graph skill.',
           why: [
-            'A collective is a barrier: everyone waits for the last arrival. Three wide wait bars and one missing means rank 4 is the straggler; the others\' profiles show the cost of waiting, not its cause.',
+            'Right: a collective is a barrier: everyone waits for the last arrival. Three wide wait bars and one missing means rank 4 is the straggler; the others\' profiles show the cost of waiting, not its cause.',
             'A rank that skipped the collective would hang the job, since NCCL needs every rank to participate. The absent bar means rank 4 spent no time waiting, because it arrived last.',
             'The time in NCCL is mostly waiting for rank 4, not data movement. Blaming the library treats the symptom; ask why one rank reaches the collective late.',
             'Early arrivals wait longest, so wide bars mark ranks that were fast enough. A throttling GPU would be late, making it the straggler with the thin bar, not one of the waiting ranks.',

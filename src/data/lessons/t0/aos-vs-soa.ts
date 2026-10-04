@@ -198,7 +198,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'AoS packs whole 32-byte structs, so each 64-byte line holds 2 of them and the sweep uses 8 bytes of each: 16 useful bytes out of 64 = 1/4. In SoA the deadline array is contiguous, so 100% of each line is useful.',
           why: [
             'Counts structs instead of bytes. A line does hold two structs, but the sweep reads 8 bytes from each, so 16 of 64 bytes are used, not 32.',
-            'Each line holds two 32-byte structs and the loop reads one 8-byte field from each: 16 useful bytes of 64. In SoA the deadline array is contiguous and every fetched byte is used.',
+            'Right: each line holds two 32-byte structs and the loop reads one 8-byte field from each: 16 useful bytes of 64. In SoA the deadline array is contiguous and every fetched byte is used.',
             'Assumes one struct per line. Structs are 32 bytes, so two share a line and both deadlines are read: 16 of 64, i.e. 1/4. One-eighth would need 64-byte structs.',
             'Only SoA gets this. The memory system moves whole 64-byte lines regardless of the 8 bytes requested, and AoS interleaves other fields into every line, so they are fetched but unused.',
           ],
@@ -217,7 +217,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
           why: [
             'The scheduler places threads on separate cores that run in parallel; nothing serializes them. The slowdown is cache-coherence traffic, and the same threads with padded counters scale almost linearly.',
             'An atomic costs tens of cycles when the line is already owned. With padded counters eight threads run near full speed each; the collapse comes from line ownership transfers, not the instruction.',
-            'Coherence works per line, not per variable. Independent counters in one line still force an ownership transfer on every write, costing hundreds of cycles per increment. Padding gives each its own line.',
+            'Right: coherence works per line, not per variable. Independent counters in one line still force an ownership transfer on every write, costing hundreds of cycles per increment. Padding gives each its own line.',
             'Sharing a line does not corrupt data: each counter owns distinct bytes and the hardware keeps writes to different addresses independent. The cost is purely performance, from coherence traffic.',
           ],
         },
@@ -234,7 +234,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'Padding gives each writer a private line, so coherence traffic disappears. Java\'s @Contended and Rust\'s #[repr(align(64))] exist for exactly this; LongAdder is the canonical success story.',
           why: [
             'A mutex serializes the increments and the lock word itself sits in a line that bounces between cores. It adds contention instead of removing the shared-line traffic that causes the problem.',
-            'Padding gives each writer a private line, so coherence traffic disappears. Java\'s @Contended and Rust\'s #[repr(align(64))] exist for this, and LongAdder is the canonical success story.',
+            'Right: padding gives each writer a private line, so coherence traffic disappears. Java\'s @Contended and Rust\'s #[repr(align(64))] exist for this, and LongAdder is the canonical success story.',
             'volatile controls compiler optimization and ordering, not cache-line ownership. Writes still invalidate the line on every other core, so the ping-pong remains.',
             'Separately allocated nodes can still land in one 64-byte line, since allocators promise no such spacing, and traversal adds pointer chasing. Only explicit alignment makes the separation deterministic.',
           ],
@@ -252,7 +252,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'Layout must match the access pattern: row-wise access (whole record) favors AoS — one or two lines deliver everything; column-wise access (one field, many records) favors SoA. Workload first, dogma never.',
           why: [
             'Dogma. SoA wastes bandwidth when you need all fields of a record: reading six fields touches six lines against one for AoS. Layout should follow the access pattern.',
-            'Row-wise access favors AoS: one or two lines deliver the whole record. Column-wise access (one field, many records) favors SoA. Match layout to workload; neither wins in general.',
+            'Right: row-wise access favors AoS: one or two lines deliver the whole record. Column-wise access (one field, many records) favors SoA. Match layout to workload; neither wins in general.',
             'The same fields take the same total bytes in either layout; only the grouping differs. Record size alone does not decide, access pattern does.',
             'SoA\'s gain is useful bytes per fetched line, which helps a single thread too: the deadline sweep runs at full bandwidth on one core. Threads matter for false sharing, a different problem.',
           ],
