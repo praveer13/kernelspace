@@ -34,8 +34,6 @@ import {
   scriptIdsFor,
   greedyDecode,
   forwardAll,
-  forwardCached,
-  createCache,
   matvec,
   dot,
   softmax,
@@ -48,6 +46,17 @@ import {
   SAMPLE_PROMPTS,
   KV_BLOCK_SIZE,
 } from '@/components/sims/engine-core'
+import {
+  STEP5_CHECKS,
+  STEP5_HINTS,
+  STEP5_TEMPLATE,
+  REF_DECODE,
+  SAMPLE_PROMPT_IDS,
+  SAMPLE_SCRIPT_IDS,
+  eq,
+  noTodo,
+  runStep5Harness,
+} from '@/lib/capstone-checks'
 import { useProgress, XP } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 
@@ -67,8 +76,6 @@ const HARNESS_LIB = {
   geluVec,
   argmax,
   forwardAll,
-  forwardCached,
-  createCache,
   scriptIds: scriptIdsFor(SAMPLE_PROMPTS[0].script),
   promptIds: tokenize(SAMPLE_PROMPTS[0].text),
   percentile,
@@ -96,28 +103,22 @@ interface StepDef {
   analogy: string
   iso: { os: string; llm: string; lesson: string }
   template: string
-  solution: string
+  /** full solution reveal; steps with `hints` use the ladder instead */
+  solution?: string
+  /** three rungs: concept, where to look, a pseudo-fragment; never the full solution */
+  hints?: [string, string, string]
+  /** runs learner code for this step's checks; defaults to runHarness */
+  harness?: (code: string) => Record<string, unknown>
   checks: CheckDef[]
 }
 
-const noTodo = (code: string) =>
-  code.includes('TODO(you)') ? 'one or more // TODO(you) slots are still open' : null
-
-const eq = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((x, i) => x === b[i])
-
-const SAMPLE_SCRIPT_IDS = scriptIdsFor(SAMPLE_PROMPTS[0].script)
-const SAMPLE_PROMPT_IDS = tokenize(SAMPLE_PROMPTS[0].text)
-const REF_DECODE = greedyDecode(TOY_MODEL, SAMPLE_PROMPT_IDS, {
-  useCache: false,
-  scriptIds: SAMPLE_SCRIPT_IDS,
-  maxTokens: SAMPLE_SCRIPT_IDS.length,
-})
 const REF_CACHED = greedyDecode(TOY_MODEL, SAMPLE_PROMPT_IDS, {
   useCache: true,
   scriptIds: SAMPLE_SCRIPT_IDS,
   maxTokens: SAMPLE_SCRIPT_IDS.length,
 })
 
+/** The reference engine's speedup (stage + dashboard); step 5 measures the learner's own code. */
 function speedup(): number {
   const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length)
   const naive = mean(REF_DECODE.tokens.map((t) => t.itlMs))
@@ -470,85 +471,10 @@ return { decode }`,
     ],
     analogy: 'You built this allocator in T1; now it holds KV blocks. malloc with fixed-size blocks never fragments — which is why vLLM wastes <4% instead of 60–80%.',
     iso: { os: 'page table + free list', llm: 'block table + KV allocator', lesson: 't5.l5' },
-    template: `// STEP 5 — greedy decode with a KV cache
-const { model, createCache, forwardCached, argmax, EOS_ID, scriptIds } = lib
-// forwardCached(model, id, cache) appends ONE token and returns its logits.
-
-function decodeCached(promptIds, maxTokens) {
-  const cache = createCache(model)
-  const out = []
-  let logits = null
-  for (const id of promptIds) {
-    logits = forwardCached(model, id, cache).logits // prefill
-  }
-  for (let t = 0; t < maxTokens; t++) {
-    const biased = [...logits]
-    if (t < scriptIds.length) biased[scriptIds[t]] += 1000
-    // TODO(you): argmax the biased logits, append the token to
-    // out AND to the cache, and stop on EOS_ID.
-    const next = 0
-    out.push(next)
-    if (next === EOS_ID) break
-    logits = forwardCached(model, next, cache).logits
-  }
-  return out
-}
-return { decodeCached }`,
-    solution: `// STEP 5 — greedy decode with a KV cache
-const { model, createCache, forwardCached, argmax, EOS_ID, scriptIds } = lib
-
-function decodeCached(promptIds, maxTokens) {
-  const cache = createCache(model)
-  const out = []
-  let logits = null
-  for (const id of promptIds) {
-    logits = forwardCached(model, id, cache).logits
-  }
-  for (let t = 0; t < maxTokens; t++) {
-    const biased = [...logits]
-    if (t < scriptIds.length) biased[scriptIds[t]] += 1000
-    const next = argmax(biased)
-    out.push(next)
-    if (next === EOS_ID) break
-    logits = forwardCached(model, next, cache).logits
-  }
-  return out
-}
-return { decodeCached }`,
-    checks: [
-      {
-        id: 'todos',
-        label: 'all TODO slots filled',
-        run: (_api, code) =>
-          noTodo(code) ?? (code.includes('const next = 0') ? 'next token is hard-coded to 0' : null),
-      },
-      {
-        id: 'bitwise',
-        label: 'bitwise-identical output to the naive loop',
-        run: (api) => {
-          const decodeCached = api.decodeCached as (ids: number[], n: number) => number[]
-          const out = decodeCached(SAMPLE_PROMPT_IDS, SAMPLE_SCRIPT_IDS.length)
-          const ref = REF_DECODE.tokens.map((t) => t.id)
-          return eq(out, ref)
-            ? null
-            : 'cached output differs from naive — prefixes must be independent'
-        },
-      },
-      {
-        id: 'accounting',
-        label: `cache grows exactly 1 position per appended token`,
-        run: (api) => {
-          const decodeCached = api.decodeCached as (ids: number[], n: number) => number[]
-          const out = decodeCached([2, 3, 4], 5)
-          return out.length > 0 ? null : 'no tokens generated'
-        },
-      },
-      {
-        id: 'speedup',
-        label: `measured speedup ≥ 10× (this run: ${speedup().toFixed(1)}×)`,
-        run: () => (speedup() >= 10 ? null : `only ${speedup().toFixed(1)}×`),
-      },
-    ],
+    template: STEP5_TEMPLATE,
+    hints: STEP5_HINTS,
+    harness: runStep5Harness,
+    checks: STEP5_CHECKS,
   },
   {
     id: 'batch',
@@ -1090,7 +1016,10 @@ function Wizard({
      initializers are the draft loader — no reset effect needed. */
   const [code, setCode] = useState<string>(() => {
     try {
-      return localStorage.getItem(draftKey(step.id)) ?? step.template
+      const saved = localStorage.getItem(draftKey(step.id))
+      // drafts from the old step 5 call forwardCached, which no longer exists
+      const stale = step.id === 'kv-cache' && saved?.includes('forwardCached')
+      return saved != null && !stale ? saved : step.template
     } catch {
       return step.template
     }
@@ -1099,6 +1028,7 @@ function Wizard({
   const [runError, setRunError] = useState<string | null>(null)
   const [showSolution, setShowSolution] = useState(false)
   const [solutionConfirmed, setSolutionConfirmed] = useState(false)
+  const [hintRung, setHintRung] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
 
   const saveDraft = (next: string) => {
@@ -1115,7 +1045,7 @@ function Wizard({
   const runChecks = () => {
     setRunError(null)
     try {
-      const api = runHarness(code)
+      const api = (step.harness ?? runHarness)(code)
       const res: Record<string, CheckResult> = {}
       for (const c of step.checks) {
         try {
@@ -1135,6 +1065,12 @@ function Wizard({
   const revealSolution = () => {
     setSolutionConfirmed(true)
     writeFlags({ hints: true })
+  }
+
+  const revealHint = () => {
+    if (!step.hints) return
+    if (hintRung === 0) writeFlags({ hints: true })
+    setHintRung((r) => Math.min(step.hints!.length, r + 1))
   }
 
   const completeStep = () => {
@@ -1295,13 +1231,31 @@ function Wizard({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowSolution((v) => !v)}
-                    className="flex items-center gap-1.5 rounded-sm border border-line bg-surface-3 px-3 py-1.5 font-mono text-[11px] text-text-2 transition-colors hover:border-line-bright"
+                    onClick={step.hints ? revealHint : () => setShowSolution((v) => !v)}
+                    disabled={step.hints != null && hintRung >= step.hints.length}
+                    className="flex items-center gap-1.5 rounded-sm border border-line bg-surface-3 px-3 py-1.5 font-mono text-[11px] text-text-2 transition-colors hover:border-line-bright disabled:opacity-45"
                   >
-                    <Eye size={11} /> show solution
+                    <Eye size={11} />{' '}
+                    {step.hints
+                      ? hintRung >= step.hints.length
+                        ? 'no more hints'
+                        : `hint ${hintRung + 1}/${step.hints.length}`
+                      : 'show solution'}
                   </button>
                 </div>
-                {showSolution && (
+                {step.hints && hintRung > 0 && (
+                  <ol className="space-y-2 border-t border-line p-4">
+                    {step.hints.slice(0, hintRung).map((h, i) => (
+                      <li key={i} className="flex gap-2.5">
+                        <span className="font-mono text-[10px] text-amber">{i + 1}/3</span>
+                        <p className="whitespace-pre-line font-mono text-[11px] leading-relaxed text-text-3">
+                          {h}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {showSolution && step.solution && (
                   <div className="relative border-t border-line">
                     {!solutionConfirmed && (
                       <button
