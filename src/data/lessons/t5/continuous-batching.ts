@@ -15,7 +15,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `T2.L4 ended with a promise: continuous batching is a 1960s scheduler wearing a GPU. This lesson pays it off. The problem it solves is the **convoy effect** you met in the scheduling lab: with *static* batching, a batch of sequences runs together until the **longest** finishes — a 500-token generation convoying 20-token generations, the GPU idling on padding and finished slots. Utilization numbers for naive static serving were dreadful (often <30%), and every finished request sat in the batch, burning KV space and compute, until the slowest sibling completed.
 
-The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at iteration granularity.** After *every single decode step*, the engine re-evaluates the batch: finished sequences leave immediately (freeing their blocks), waiting sequences join if memory allows, preempted ones swap out and back. No one waits for anyone. The batch is the timeslice; the iteration is the quantum; the KV block manager is the admission controller. You learned this machine in T2 — here it is running the world's inference.`,
+The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at iteration granularity.** After *every single decode step*, the engine re-evaluates the batch: finished sequences leave immediately (freeing their blocks), waiting sequences join if memory allows, preempted ones are evicted and later resumed by recomputation. No one waits for anyone. The batch is the timeslice; the iteration is the quantum; the KV block manager is the admission controller. You learned this machine in T2 — here it is running the world's inference.`,
     },
     {
       type: 'diagram',
@@ -39,7 +39,7 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
         { caption: 'Static batching: A (8 tokens) finishes at step 8 but its slot — and KV blocks — are held hostage until D finishes at step 40. GPU rows idle; waiting requests watch.', active: ['s1'] },
         { caption: 'Continuous: after EVERY step the scheduler edits the batch. Step 9: A, B, C are gone (blocks freed instantly); E and F are admitted mid-flight.', active: ['c1', 'c2'], edges: ['c1->c2'] },
         { caption: 'The batch is always full of *live* work: utilization tracks demand, not the longest sequence. Same GPU, same model — 2–8× goodput in real deployments (paper: up to ~24× vs naive).', active: ['c3', 'legend'], edges: ['c2->c3'] },
-        { caption: 'When blocks run out mid-flight, the scheduler PREEMPTS (swap/recompute from T5.L5) and resumes later — timesharing with HBM as the RAM. You have seen this OS before: it\'s T2, at 3 TB/s.', active: ['c4'], edges: ['c3->c4'] },
+        { caption: 'When blocks run out mid-flight, the scheduler PREEMPTS (vLLM V1 frees the victim\'s blocks and recomputes its prefill on resume, T5.L5) and resumes later — timesharing with HBM as the RAM. You have seen this OS before: it\'s T2, at 3 TB/s.', active: ['c4'], edges: ['c3->c4'] },
       ],
     },
     {
@@ -49,7 +49,7 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
 Each iteration, the engine runs the same loop — annotate it with T2 names:
 
 1. **Pick the running set** for this step: the running queue (already admitted) plus admissions from the waiting queue — FCFS by default, priorities possible. *Scheduling decision.*
-2. **Check capacity:** free blocks must cover every running sequence's potential next block (one per sequence, worst case). If not, **preempt** the lowest-priority/youngest sequences — swap their KV to CPU or drop for recompute. *Eviction under pressure.*
+2. **Check capacity:** free blocks must cover every running sequence's potential next block (one per sequence, worst case). If not, **preempt** the lowest-priority/youngest sequences — free their KV blocks and recompute their prefill when they resume (vLLM V1; the older V0 engine could also swap KV to CPU RAM, trading PCIe bandwidth for compute). *Eviction under pressure.*
 3. **Run one model step** for the whole batch: one weight read, N sequences advanced (the T4.L3 batching win — arithmetic intensity × N). *The quantum of work.*
 4. **Sample, append tokens, free the finished:** sequences hitting EOS/length limits exit immediately; their blocks' refcounts drop and return to the free queue in O(1). *Reclamation.*
 
@@ -67,7 +67,7 @@ Two refinements complete the picture. **Waiting-queue policy** is a research are
     {
       type: 'callout',
       variant: 'analogy',
-      md: `If static batching is the **charter bus** (leaves when the slowest passenger boards, everyone rides to the last stop), continuous batching is the **subway**: doors open at every station (iteration), whoever's done gets off, whoever fits gets on, the train never idles. You have also built the primitive version: a Java thread pool with \`take()\` from a bounded queue is iteration-level *admission*; what you never had was safe *preemption* mid-task — which is what the KV block manager (swappable state!) uniquely enables. State you can evict is what makes this scheduler better than a thread pool.`,
+      md: `If static batching is the **charter bus** (leaves when the slowest passenger boards, everyone rides to the last stop), continuous batching is the **subway**: doors open at every station (iteration), whoever's done gets off, whoever fits gets on, the train never idles. You have also built the primitive version: a Java thread pool with \`take()\` from a bounded queue is iteration-level *admission*; what you never had was safe *preemption* mid-task — which is what the KV block manager (evictable, recomputable state!) uniquely enables. State you can evict is what makes this scheduler better than a thread pool.`,
     },
     {
       type: 'callout',
@@ -124,13 +124,13 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
           q: 'What makes preemption practical in an inference engine (vs a thread pool)?',
           options: [
             'GPUs support hardware preemption',
-            'Sequence state is pageable KV blocks: swap to CPU RAM or recompute from the prompt — evictable state enables timesharing',
+            'Sequence state is pageable KV blocks: a victim\'s blocks are freed and its prefill recomputed on resume (vLLM V1; V0 could also swap to CPU RAM) — evictable state enables timesharing',
             'Threads are cheaper than sequences',
             'The scheduler runs on the CPU',
           ],
           correct: [1],
           explanation:
-            'You cannot preempt a thread and swap its mind to disk cheaply; you CAN with KV blocks (T5.L5). Pageable state is what turns an executor into a timesharing system — T2.L3\'s swap, repurposed.',
+            'You cannot preempt a thread and park its mind cheaply; you CAN with KV blocks (T5.L5): free them and recompute the prefill later. V1 does exactly that (V0 could also swap to host RAM). Evictable state is what turns an executor into a timesharing system — T2.L3\'s paging, repurposed.',
         },
         {
           q: 'Under sustained overload (arrivals > capacity), the correct system response is…',
