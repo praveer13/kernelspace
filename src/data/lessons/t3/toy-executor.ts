@@ -114,7 +114,7 @@ impl Executor {
       type: 'prose',
       md: `## From the toy to tokio
 
-Everything tokio adds is scale and ergonomics on this exact skeleton: **multi-threaded work-stealing** (each worker has a local queue; steal from peers on empty — the CFS-style balancing of async), a **reactor** (epoll/kqueue/IOCP, io_uring increasingly) turning OS events into waker calls, **timers** (a hierarchical timer wheel feeding the same wake mechanism), and \`spawn_blocking\` for the sync-code escape hatch (T2.L6's "never block the loop," institutionalized). Python note: \`asyncio\` is the same architecture with a green-thread flavor — an event loop, callbacks, and tasks — minus the compile-time Send/Sync proof that makes Rust's version data-race-free.`,
+Everything tokio adds is scale and ergonomics on this exact skeleton: **multi-threaded work-stealing** (each worker has a local queue; steal from peers on empty — the same pull-toward-idle idea as the kernel's per-CPU load balancer), a **reactor** (epoll/kqueue/IOCP, io_uring increasingly) turning OS events into waker calls, **timers** (a hierarchical timer wheel feeding the same wake mechanism), and \`spawn_blocking\` for the sync-code escape hatch (T2.L6's "never block the loop," institutionalized). Python note: \`asyncio\` is the same architecture with a green-thread flavor — an event loop, callbacks, and tasks — minus the compile-time Send/Sync proof that makes Rust's version data-race-free.`,
     },
     {
       type: 'callout',
@@ -194,7 +194,7 @@ An inference engine's control plane is an async-runtime workload: thousands of S
           ],
           correct: [1],
           explanation:
-            'Same skeleton, production muscle: worker pools balancing like CFS, OS event sources translated into waker calls, timer wheels, and a dedicated pool so blocking code never stalls async workers.',
+            'Same skeleton, production muscle: worker pools balancing like per-CPU kernel runqueues, OS event sources translated into waker calls, timer wheels, and a dedicated pool so blocking code never stalls async workers.',
         },
       ],
     },
