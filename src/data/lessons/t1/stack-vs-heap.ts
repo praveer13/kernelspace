@@ -10,7 +10,78 @@ const lesson: Lesson = {
   hook: 'Stack frames, calling conventions, drawn live — what a function call really is, byte by byte.',
   exercise: 'sim',
   simId: 'sim-memory',
+  kcs: ['t1.stack-frames', 't1.stack-vs-heap'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain why returning a pointer to a local variable is a bug, in terms of what the stack does when the function returns.',
+        model:
+          'On return, ret pops the return address and rsp moves back up, so the frame is abandoned, not erased. The pointer still holds the old address, but the next call reuses that region for its own frame. Reads and writes through the pointer then touch another function\'s data, silently.',
+        ideas: [
+          'ret moves rsp back up, so the frame is abandoned, not erased',
+          'A later call reuses the same bytes for its own frame',
+          'The stale pointer then reads or writes another frame\'s data, silently',
+        ],
+        kcs: ['t1.stack-vs-heap', 't1.stack-frames'],
+      },
+      {
+        prompt: 'A request object is built in one function and read later by another thread. Say where it should live, and why.',
+        model:
+          'It belongs on the heap. A stack frame dies in strict last-in, first-out order when its function returns, so anything that must outlive its creator cannot live there. The heap allows any lifetime, at the price of an allocator that tracks free ranges and a decision about who frees the block.',
+        ideas: [
+          'Stack memory dies when the function that made it returns',
+          'A value that must outlive its creator goes on the heap',
+          'The heap costs an allocator, plus a decision about who frees',
+        ],
+        kcs: ['t1.stack-vs-heap'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'main calls f, and f calls g. As the calls return, whose stack memory is released first?',
+          options: [
+            'The frame of f, the middle call, which links the other two frames together',
+            'The frame of g, the newest call, which was pushed after the other two',
+            'The frame of main, the oldest call, which holds the most data of the three',
+            'All three frames together, once the program reaches the end of main',
+          ],
+          correct: [1],
+          why: [
+            'The middle position gives no priority. Frames are released strictly newest first, whichever one calls which.',
+            'Right: the stack is last in, first out. g was pushed last, so g is released first, then f, then main.',
+            'Backwards. The oldest frame sits at the bottom of the stack and is released last, whatever it holds.',
+            'Frames do not wait for the program to end. Each is released the moment its function returns, with one subtract.',
+          ],
+          revealAt: 'The stack: memory with a discipline',
+          kcs: ['t1.stack-frames'],
+        },
+        {
+          kind: 'choice',
+          q: 'Which fact about a value most directly forces it onto the heap instead of the stack?',
+          options: [
+            'It holds several fields, more than a single register can carry along',
+            'It is read by more than one function while the program is running',
+            'It is created inside a loop body and is made over again on each pass',
+            'It has to stay alive after the function that created it has returned',
+          ],
+          correct: [3],
+          why: [
+            'Structs with many fields live on the stack all the time. Register pressure decides nothing about stack or heap.',
+            'Callees read their callers\' stack data through pointers constantly. Sharing between functions is fine while the owner is alive.',
+            'Loop bodies create stack values on every pass at no cost. Repetition does not change the lifetime that matters.',
+            'Right: a stack frame dies when its function returns, so a value that must outlive its creator needs memory with a lifetime of its own.',
+          ],
+          revealAt: 'The heap: memory without a curfew',
+          kcs: ['t1.stack-vs-heap'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `You have called functions a million times. Here is what actually happens, at the level of registers and bytes: the caller places arguments in agreed-upon registers, executes a \`call\` instruction that **pushes the return address onto the stack**, and jumps. The callee pushes the old frame pointer, moves the stack pointer down to reserve space for locals, does its work, restores everything, and executes \`ret\` — which pops the return address and jumps back. That entire ceremony typically costs **2–5 nanoseconds**. No allocation, no bookkeeping, no runtime. Just a pointer sliding down and back up.
@@ -51,6 +122,24 @@ The price for this perfection is a strict contract: **last in, first out.** Memo
         { caption: 'ret pops the return address and jumps back. add\'s frame is instantly "gone" — not zeroed, just abandoned below rsp, ready to be overwritten by the next call.', active: ['main'], edges: [] },
         { caption: 'Meanwhile the heap is a separate region where lifetimes are manual (C) or owned (Rust) — bytes that may outlive any frame, at the price of real allocation machinery. Next two lessons.', active: ['heap'] },
       ],
+      predictAt: {
+        step: 3,
+        prompt: 'add executes ret. What happens to the bytes of add\'s frame?',
+        options: [
+          'They are zeroed by the CPU, and the next call starts from clean memory',
+          'They are copied to the heap, and main can still read add\'s locals later',
+          'They stay where they are below rsp, until a later call overwrites them',
+          'They are unmapped by the kernel, and any later access to them faults',
+        ],
+        correct: [2],
+        why: [
+          'The CPU never clears a frame on return. Zeroing on every call would cost far more than the one instruction a return takes.',
+          'Nothing is copied. A frame that outlives its call would need the heap, and a return does no heap work at all.',
+          'Right: ret only pops the return address, and rsp moves up. Nothing is erased, and the old frame is simply free space for the next call.',
+          'The kernel is not involved in a return. The stack pages stay mapped, which is why a dangling pointer into them reads without faulting.',
+        ],
+        kcs: ['t1.stack-frames'],
+      },
     },
     {
       type: 'code',
@@ -157,6 +246,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
             'Describes the heap. The stack has no free list or fit search; locals are placed by moving one register.',
             'Lazy mapping means a fault only on first touch of a new page, once. Reused stack pages are already resident, so ordinary calls take no fault.',
           ],
+          kcs: ['t1.stack-frames', 't1.stack-vs-heap'],
         },
         {
           q: 'The `call` instruction on x86-64 does exactly two things:',
@@ -175,6 +265,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
             'Frame setup belongs to the callee prologue, which subtracts from rsp and may save rbp. The call instruction itself does neither.',
             'An ordinary call stays in user mode. Entering the kernel takes a separate instruction such as syscall, which is far more expensive.',
           ],
+          kcs: ['t1.stack-frames'],
         },
         {
           q: 'Returning the address of a local variable is catastrophic because…',
@@ -193,6 +284,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
             'Right: the region below rsp is free for the next call, so the pointer ends up reading and writing some unrelated later frame.',
             'The CPU does not track frames. Moving rsp changes no page permissions, so the old addresses stay mapped and accessible with no fault.',
           ],
+          kcs: ['t1.stack-vs-heap'],
         },
         {
           q: 'A JVM thread stack and the GC heap differ fundamentally in that…',
@@ -211,6 +303,7 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
             'Stack memory goes through the CPU caches like any other, and it is usually the hottest memory in the program, so it is not slower.',
             'LIFO is the stack\'s discipline. The GC heap frees objects in any order, whenever they become unreachable.',
           ],
+          kcs: ['t1.stack-vs-heap'],
         },
       ],
     },

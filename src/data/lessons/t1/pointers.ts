@@ -10,7 +10,78 @@ const lesson: Lesson = {
   hook: 'The memory-grid visualizer: dereference, address arithmetic, and cause a real segfault — safely.',
   exercise: 'sim',
   simId: 'sim-memory',
+  kcs: ['t1.pointers', 't1.memory-errors'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Walk through what happens, from the CPU to the process dying, when C code dereferences NULL.',
+        model:
+          'The CPU issues a load from address 0. The first page of the address space is deliberately left unmapped, so the MMU cannot translate it and raises a page fault. The kernel finds no valid mapping and sends the process SIGSEGV, which kills it. C itself performed no check.',
+        ideas: [
+          'Address 0 lies in a page the OS left unmapped on purpose',
+          'The MMU faults and the kernel finds no valid mapping',
+          'The kernel delivers SIGSEGV, and C added no check of its own',
+        ],
+        kcs: ['t1.memory-errors'],
+      },
+      {
+        prompt: 'For `long *p` at the start of an array, explain what `p + 2` and `p[2]` mean and how they relate.',
+        model:
+          '`p + 2` is the address two elements along: p plus 2 times sizeof(long), which is 16 bytes. `p[2]` is defined as `*(p + 2)`, the value stored at that address. Pointer arithmetic scales by the pointee size, so stepping and indexing are one rule.',
+        ideas: [
+          'p + 2 adds 2 times sizeof(long), 16 bytes and not 2 bytes',
+          'p[2] is defined as *(p + 2), the value at that address',
+          'One scaling rule underlies both indexing and stepping',
+        ],
+        kcs: ['t1.pointers'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'In C, what does `p[3]` mean for any pointer `p`?',
+          options: [
+            'A bounds-checked read of the fourth element, failing if the array ends',
+            'The address of the fourth element, a pointer and not the value stored there',
+            'The value stored three elements past the one p points to, read from memory',
+            'A call to a library routine that looks the index up in a table of slots',
+          ],
+          correct: [2],
+          why: [
+            'C does no bounds check on indexing. Reading past the end is undefined behavior, not an error the language reports.',
+            'That describes p + 3. The brackets also dereference, so p[3] is the value at that address and not the address itself.',
+            'Right: p[i] is defined as *(p + i). The index is scaled by the element size, and the result is the value stored there.',
+            'Indexing is plain arithmetic plus a load. No library routine or table is involved, and the compiler emits the address math inline.',
+          ],
+          revealAt: 'The four operations — that\'s all of it',
+          kcs: ['t1.pointers'],
+        },
+        {
+          kind: 'choice',
+          q: 'A C program dereferences NULL. Which component first notices the problem?',
+          options: [
+            'The memory-management hardware, which has no mapping to translate address zero',
+            'The C compiler, which inserted a check on the pointer before each load of memory',
+            'The C library, which keeps a table of every pointer that is still valid',
+            'The linker, which reserved address zero as unusable when it laid out the program',
+          ],
+          correct: [0],
+          why: [
+            'Right: the OS leaves the first page unmapped, so the MMU cannot translate address zero and raises a fault for the kernel to handle.',
+            'Normal builds emit a bare load with no inserted check. Sanitizers can add checks on request, but they are not the default.',
+            'The C library does not track pointers. It has no table of valid addresses, so it cannot see the bad load coming.',
+            'The linker lays out sections but does not guard address zero. The protection comes from an unmapped page, set up by the OS.',
+          ],
+          revealAt: 'The segfault, demystified forever',
+          kcs: ['t1.memory-errors'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `A pointer is a number. Not a magic reference, not an object — an integer that names a byte in memory. On a 64-bit machine it is a 64-bit integer, and \`0x7ffc_9a3e_41b0\` means "the byte at this address." Everything else — arrays, strings, structs, objects, vtables, closures, the \`this\` you use daily — is a convention built on that one idea. Languages differ only in whether they let you *see* the number.
@@ -129,6 +200,7 @@ Notice that all three answers address the *same* question. Manual memory managem
             'Right: p + 3 advances three elements of 8 bytes each, so 3 × 8 = 24 = 0x18, giving 0x1018.',
             'Scales by 64 as if a double were 64 bits: 3 × 64 = 192 = 0xC0. The scale factor is in bytes, and a 64-bit double is 8 bytes.',
           ],
+          kcs: ['t1.pointers'],
         },
         {
           q: 'Dereferencing NULL crashes your process because…',
@@ -147,6 +219,7 @@ Notice that all three answers address the *same* question. Manual memory managem
             'The CPU has no special rule for address 0. It faults only because the page is not mapped; on some embedded systems address 0 is valid memory.',
             'C compilers emit no implicit null checks. Sanitizers such as UBSan can add them on request, but a normal build just emits the load.',
           ],
+          kcs: ['t1.memory-errors'],
         },
         {
           q: 'Why is reading one element past an array more dangerous than crashing?',
@@ -165,6 +238,7 @@ Notice that all three answers address the *same* question. Manual memory managem
             'Mixes up reads and writes. A read does not modify anything, so it cannot damage allocator metadata; corruption comes from writing past the end.',
             'Wrong about the TLB. It caches successful translations, and the adjacent address usually has one already, so there is no fault to cache.',
           ],
+          kcs: ['t1.memory-errors'],
         },
         {
           q: 'Which statement is true of both a Java reference and a C pointer?',
@@ -183,6 +257,7 @@ Notice that all three answers address the *same* question. Manual memory managem
             'Right: both can hold null, and using one fails loudly. Java throws NullPointerException from a runtime check; C faults in the MMU and raises SIGSEGV.',
             'True only for C. A compacting JVM collector may move objects and rewrite references, which it can do because references are managed addresses.',
           ],
+          kcs: ['t1.pointers', 't1.memory-errors'],
         },
       ],
     },
