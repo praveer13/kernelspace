@@ -86,7 +86,7 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
           explanation:
             'Rust keeps potentially expensive duplication visible at the call site rather than hiding it behind assignment.',
           why: [
-            'Mixes up moves with clones. clone() builds a separate buffer, so each owner drops its own. A move, not a copy, is what prevents the double free.',
+            'Bitwise implicit copies are why String is not Copy, but not why clone is explicit. A clone builds a separate buffer, so no double drop arises. Explicitness exposes cost.',
             'Right: a clone may allocate and copy arbitrary amounts of data. Rust leaves cheap bit copies to Copy types and makes every costly duplicate visible.',
             'Clone is an ordinary trait method, and implementations like String\'s are safe code. Unsafe is not what the explicit call signals.',
             'The type itself decides, by implementing Clone or Copy. The compiler knows which types allow duplication, so no programmer vouching is involved.',
