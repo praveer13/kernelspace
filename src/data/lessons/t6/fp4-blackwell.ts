@@ -26,7 +26,7 @@ T4.L7's cliffs apply with interest. FP4 (NVFP4, E2M1 with **per-16-element micro
 - **Decode of huge models** — the bandwidth-bound path (T4.L3): bytes-per-token is the denominator, and MoE already spends it carefully (T6.L1). DeepSeek-R1 at NVFP4 was the flagship demo for a reason.
 - **Capacity** — a 671B-param MoE at FP4 weights. NVFP4 is not a flat 4 bits: each 16-element block carries an FP8 scale, so ~4.5 bits per weight. 671B × 4.5 bits ÷ 8 = ~377 GB of weights [derived]. One 8×B200 node holds 8 × 180 = 1,440 GB, so the weights take about a quarter of it and the rest goes to KV cache and activations. At FP8 the same model is ~671 GB, more than one 8×H100 node's 640 GB. (An NVL72 is a 72-GPU rack, not a node; you don't need one just to hold the weights.) Fleet composition changes (T7.L4 prices this).
 
-Where it bites: **activations and outliers**, same as T4.L7 but with less mantissa to hide behind. Weight-only FP4 with BF16/FP8 activations is the production recipe; end-to-end FP4 is where accuracy work is still happening. The quantization ladder you learned — weights tolerate 4 bits, activations want 8 — didn't change; the floor just dropped a rung.`,
+Where it bites: **activations and outliers**, same as T4.L7 but with less mantissa to hide behind. Recipes differ in how far they push it: vLLM's Blackwell default is NVFP4 W4A16 (BF16 activations), Kimi K3 pairs MXFP4 weights with MXFP8 activations, and NVIDIA's DeepSeek-R1-FP4 checkpoint quantizes both the weights and the activations of the linear operators inside the transformer blocks to FP4. The quantization ladder you learned — weights tolerate low precision first, activations cost more accuracy risk — didn't change; the floor just dropped a rung.`,
     },
     {
       type: 'statline',
@@ -55,11 +55,11 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
           ],
           correct: [1],
           explanation:
-            'On the bandwidth slope, shrinking weight bytes raises the rate in proportion (T4.L3). NVFP4 is ~4.5 bits per weight with its block scales, so ~1.8× fewer bytes than FP8, not a clean 2×. The flagship demo was DeepSeek-R1 at NVFP4 on B200. Accuracy work lives in the microscaling (per-16-element FP8 scales) and keeping activations at higher precision.',
+            'On the bandwidth slope, shrinking weight bytes raises the rate in proportion (T4.L3). NVFP4 is ~4.5 bits per weight with its block scales, so ~1.8× fewer bytes than FP8, not a clean 2×. The flagship demo was DeepSeek-R1 at NVFP4 on B200. Accuracy work lives in the microscaling (per-16-element FP8 scales) and in choosing which tensors can drop to 4 bits.',
           why: [
             'The production win is inference: weights read on every decode step. Training updates need higher-precision accumulation and master weights, so 4-bit weights are not a training-speed story.',
             'Right: on the bandwidth-bound decode path, rate scales with fewer bytes per token. NVFP4 is ~4.5 bits with scales, ~1.8× fewer weight bytes than FP8, so big MoEs need less fleet.',
-            'Microscaling narrows the accuracy gap but 4 bits still carry less precision than FP8. FP4 trades a small accuracy risk for bytes, and activations stay wider to protect quality.',
+            'Microscaling narrows the accuracy gap but 4 bits still carry less precision than FP8. FP4 trades a small accuracy risk for bytes, and recipes keep outlier-sensitive tensors wider to protect quality.',
             'FP4 adds block scales and extra handling in the kernels, so they get more intricate, not simpler. The payoff is fewer bytes moved, not less code.',
           ],
         },
@@ -82,21 +82,21 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
           ],
         },
         {
-          q: 'The production quantization recipe on Blackwell is…',
+          q: 'Production quantization recipes on Blackwell are…',
           options: [
             'Everything in FP4, including weights, activations and KV cache, because the tensor cores run FP4 natively',
-            'FP4 weights with microscaling and wider activations: weights tolerate 4 bits, activations and outliers still want 8 bits or more',
+            'Block-scaled FP4 weights, with activations at FP4, FP8 or BF16 depending on the recipe, and the outlier-sensitive tensors kept wider',
             'INT4 everywhere with one per-tensor scale, since an integer grid gives uniform resolution and avoids FP4\'s coarse spacing',
-            'BF16 throughout, because weights are cheap to store and quantization only pays off when the model no longer fits in HBM',
+            'Weight-only FP4 with BF16 activations everywhere, because no shipped recipe quantizes activations and they are always too fragile for 4 bits',
           ],
           correct: [1],
           explanation:
-            'The cliff didn\'t move: activations and outliers remain the fragile path. Weight-only FP4 + FP8/BF16 activations is what ships; end-to-end FP4 is still research-grade.',
+            'The cliff didn\'t move: activations and outliers remain the fragile path, so recipes differ in how far they push it. vLLM\'s default is W4A16, Kimi K3 pairs MXFP4 weights with MXFP8 activations, and NVIDIA\'s DeepSeek-R1-FP4 quantizes the weights and activations of its linear operators to FP4.',
           why: [
-            'Native FP4 execution does not remove outlier sensitivity. Activations and KV keep wider formats in the shipped recipes; end-to-end FP4 is still being worked out.',
-            'Right: weights tolerate 4 bits when block scales absorb the range, but activations and outliers are the fragile path, so they stay at 8 bits or wider.',
+            'Native FP4 execution does not make every tensor safe at 4 bits. NVIDIA\'s DeepSeek-R1-FP4 card quantizes only the weights and activations of the linear operators in transformer blocks; the rest stays wider.',
+            'Right: weights tolerate 4 bits when block scales absorb the range. Activations vary by recipe (FP4 in NVIDIA\'s R1-FP4, FP8 in Kimi K3, BF16 in vLLM\'s W4A16), and outlier-sensitive tensors stay wider.',
             'One per-tensor scale lets outliers wreck 4-bit accuracy; the per-block scale is what makes 4 bits survivable. Blackwell\'s native path is NVFP4, not INT4 everywhere.',
-            'Decode is bandwidth-bound even when the model fits, so fewer bytes per token raises tokens/s. Quantization is a speed lever as well as a capacity one.',
+            'Weight-only W4A16 is one recipe, but NVIDIA\'s DeepSeek-R1-FP4 card also quantizes the activations of the linear operators to FP4. Activations are a risk to manage, not a ban.',
           ],
         },
         {

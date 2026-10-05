@@ -27,7 +27,7 @@ export default {
       correct: [1],
       why: [
         'KVBM is deprecated as of v1.5.0 and removal is targeted for v1.6.0, so it is not a path to build on.',
-        'Right. v1.5.0 points host and disk tiering at the engine native KV offloading: tiering moved to whoever owns the cache.',
+        'Right: v1.5.0 points host and disk tiering at the engine native KV offloading: tiering moved to whoever owns the cache.',
         'NIXL is the transfer layer. It moves bytes between memories and nodes, but it does not own block placement or eviction.',
         'The router picks which worker serves a request. It does not move blocks between memory tiers.',
       ],
@@ -44,7 +44,7 @@ export default {
       why: [
         'Offloading cold blocks to host memory or disk can beat recompute for long prefixes, which is why engines now ship it themselves.',
         'KVBM is deprecated, and NIXL is a separate transport library. KVBM never ran inside NIXL.',
-        'Right. Tiering GPU to CPU to SSD stays; the deprecation moved who implements it. Transport (NIXL, Mooncake) and routing remain separate layers.',
+        'Right: tiering GPU to CPU to SSD stays; the deprecation moved who implements it. Transport (NIXL, Mooncake) and routing remain separate layers.',
         'A cached block that sits in a lower tier can still be reused on a prefix hit, after it is brought back to the GPU.',
       ],
     },

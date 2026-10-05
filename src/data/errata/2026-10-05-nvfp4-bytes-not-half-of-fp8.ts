@@ -20,7 +20,7 @@ export default {
       q: 'NVFP4 stores a 4-bit value plus one FP8 scale per 16 values. Versus FP8 weights, how much does decode gain on the bandwidth-bound path from the byte reduction alone?',
       options: [
         'About 2×, because 4 bits is exactly half of the 8 bits FP8 uses per weight',
-        'About 1.8×, because 4.5 bits per weight is 8 / 4.5 of the FP8 bytes',
+        'About 1.8×, because 4.5 bits per weight is 8 / 4.5 of the FP8 weight bytes',
         'About 1.1×, because the per-block scale factors cancel most of the saving',
         'About 4×, because FP4 also halves the activation bytes on top of the weights',
       ],
@@ -29,7 +29,7 @@ export default {
         'This ignores the block scales. Each 16 values carry an 8-bit scale, adding about 0.5 bit per weight, so the saving is a little under 2×.',
         'Right: 4 + 8/16 = 4.5 bits per weight, and 8 / 4.5 is about 1.78, so weight bytes fall ~1.8× against FP8.',
         'The scales add 0.5 bit to 4, not 4. The saving is reduced from 2× to ~1.8×, not erased.',
-        'Decode weight bytes dominate the bandwidth-bound path, and activations stay wider in shipped recipes. Neither fact gives 4×.',
+        'Weight bytes dominate the bandwidth-bound decode path, so halving activation bytes adds little, and the block scales keep the weight gain under 2×. Nothing here reaches 4×.',
       ],
     },
   ],

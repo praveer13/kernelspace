@@ -121,10 +121,10 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           ],
           correct: [1],
           explanation:
-            'Dynamo deliberately runs other engines as workers. Its product is fleet-level goodput: routing for cache reuse, phase disaggregation, and Rust-speed KV movement (T3.L6).',
+            'Dynamo deliberately runs other engines as workers. Its product is fleet-level goodput: routing for cache reuse, phase disaggregation, and a Rust data plane that orchestrates KV transfers, with NIXL (C++) moving the bytes (T3.L6).',
           why: [
             'Dynamo is not an engine. It runs vLLM, SGLang or TRT-LLM as workers; Rust covers its data plane (routing, transfer), not the model execution loop.',
-            'Right: Dynamo\'s product is fleet-level goodput. Routing for cache reuse, phase disaggregation and fast KV movement make it the proxy and sharding tier that turns engines into a cluster.',
+            'Right: Dynamo\'s product is fleet-level goodput. Routing for cache reuse, phase disaggregation and orchestrated KV transfers make it the proxy and sharding tier that turns engines into a cluster.',
             'Quantization belongs to engine tooling and model-optimization libraries. Dynamo\'s concern is how requests and KV move across engines, not the numeric format of the weights.',
             'Registries manage artifacts, not live traffic. Dynamo works at serving time: routing requests, moving KV between workers and scaling prefill and decode pools.',
           ],

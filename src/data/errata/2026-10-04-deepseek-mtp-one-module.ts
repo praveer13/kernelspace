@@ -27,7 +27,7 @@ export default {
       correct: [1],
       why: [
         'The checkpoint config has num_nextn_predict_layers = 1, so there is a single trained module.',
-        'Right. Draft length is a serving choice. Each extra step reruns the module on the critical path, further ahead than it was trained for, so alpha drops.',
+        'Right: draft length is a serving choice. Each extra step reruns the module on the critical path, further ahead than it was trained for, so alpha drops.',
         'The module predicts one token per application. Longer drafts come from applying it repeatedly, not from a wider output.',
         'The drafter is the MTP module, not borrowed trunk layers.',
       ],

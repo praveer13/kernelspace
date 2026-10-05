@@ -133,13 +133,13 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
           q: 'Chunked prefill improves goodput by…',
           options: [
             'Truncating or summarizing long prompts into fewer tokens before prefill, so each iteration finishes sooner for every running sequence',
-            'Slicing long prefills and interleaving chunks with decode steps, so compute-bound chunks use decode\'s idle ALUs and no prompt stalls ITL',
+            'Slicing long prefills and interleaving chunks with decode steps, so compute-bound chunks use decode\'s idle ALUs and any ITL stall is capped at one chunk',
             'Moving a long prompt\'s prefill to idle CPU cores while the GPU keeps decoding, then copying its K/V back before that prompt decodes',
             'Skipping attention over the oldest chunks of a long prompt, which cuts the prefill FLOPs that were blocking other sequences',
           ],
           correct: [1],
           explanation:
-            'Mixed batches raise arithmetic intensity from both sides: decode supplies spare FLOPs, prefill chunks supply spare bandwidth demand. ITL smooths out and total throughput rises — the default in modern engines.',
+            'Mixed batches raise arithmetic intensity from both sides: decode supplies spare FLOPs, prefill chunks supply spare bandwidth demand. ITL smooths out, with the stall per step capped by the chunk size, and total throughput rises — the default in modern engines.',
           why: [
             'Chunking does not change how many tokens are processed; every prompt token is still prefilled, only spread over several iterations. Total prefill work is unchanged.',
             'Right: mixed batches raise arithmetic intensity from both sides. Decode leaves compute idle, chunks add compute-bound work, and the stall per iteration is bounded by the chunk size.',

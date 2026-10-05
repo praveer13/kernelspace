@@ -121,7 +121,7 @@ Run T5.L4's arithmetic again with 70 KB: the "cache is the payload" conclusion i
             'MLA caches one low-rank latent vector per token instead of per-head K/V. It shrinks the cache 4.6×, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
           why: [
             'MLA changes what is cached, not how fast it is read. Faster kernels do not shrink KV bytes per token, so they do not raise how many sequences fit in HBM.',
-            'Right: caching one ~576-element latent per token instead of per-head K/V gives ~70 KB (BF16), about 4.6× less than Llama-3-70B, so the cache admits much bigger batches.',
+            'Right: the ~576-element latent is cached per layer (576 × 2 B ≈ 1.15 KB), so 61 layers give ≈ 70 KB per token, about 4.6× less than Llama-3-70B, and much bigger batches fit.',
             'MLA skips no heads. It keeps all of them and rebuilds each head\'s K and V from the shared latent with up-projections; the saving is stored bytes, not skipped compute.',
             'FP8 KV is a precision change that halves bytes. MLA changes the cached object itself to a low-rank latent, and the two choices are independent of each other.',
           ],

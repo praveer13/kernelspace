@@ -29,7 +29,7 @@ export default {
         'This has it backwards. The GitHub language breakdown shows far more C++ than Rust.',
         'NIXL is not pure Rust. Dynamo Rust code calls it, but the library itself is mostly C++.',
         'NIXL is a C++ library with Rust bindings, not a Go one.',
-        'Right. About 3.6 MB of C++ and 0.24 MB of Rust bindings. Rust wins orchestration; the transfer layer and kernels are still C++.',
+        'Right: about 3.6 MB of C++ and 0.24 MB of Rust bindings. Rust wins orchestration; the transfer layer and kernels are still C++.',
       ],
     },
   ],

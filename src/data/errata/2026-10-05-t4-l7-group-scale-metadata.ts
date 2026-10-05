@@ -25,7 +25,7 @@ export default {
       correct: [1],
       why: [
         'That would make the metadata as big as the weight itself, so INT4 would save nothing. The scale is shared by 128 weights.',
-        'Right. 16 bits divided across 128 weights is 0.125 bits per weight, so a 4-bit weight costs about 4.1 bits in total.',
+        'Right: 16 bits divided across 128 weights is 0.125 bits per weight, so a 4-bit weight costs about 4.1 bits in total.',
         'That divides by 32, not 128. With a group of 128 the share is a quarter of that.',
         'That is the size of one scale. Per weight it is divided by the group size.',
       ],

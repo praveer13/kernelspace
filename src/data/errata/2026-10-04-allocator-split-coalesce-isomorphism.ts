@@ -27,7 +27,7 @@ export default {
       why: [
         'KV blocks never coalesce, so no background merging exists to do it.',
         'Copy-on-write is a separate mechanism for sharing blocks. It does not merge anything.',
-        'Right. One fixed block size removes external fragmentation: a freed block is reusable as is and goes back to the pool whole.',
+        'Right: one fixed block size removes external fragmentation: a freed block is reusable as is and goes back to the pool whole.',
         'Blocks are freed as sequences finish, and preempted sequences give theirs back too.',
       ],
     },

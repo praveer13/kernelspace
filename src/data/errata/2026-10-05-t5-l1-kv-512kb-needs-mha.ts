@@ -19,17 +19,17 @@ export default {
     {
       q: 'Llama-3-8B has 32 layers, 8 KV heads (GQA), head dimension 128 and an FP16 cache. How much KV cache does one token take?',
       options: [
-        'About 512 KB, which is what a model with 32 KV heads and no grouped sharing would need',
-        'About 128 KB: 2 x 32 layers x 8 KV heads x 128 x 2 B',
-        'About 64 KB, because FP16 stores each K or V element in a single byte',
-        'About 256 KB, because only K is stored and V is rebuilt from it when needed',
+        'About 512 KB: 2 x 32 layers x 4096 x 2 B, as if all 32 heads kept their own K and V',
+        'About 128 KB: 2 x 32 layers x 8 KV heads x 128 x 2 B, because GQA shares K and V heads',
+        'About 64 KB: 2 x 32 layers x 8 KV heads x 128 x 1 B, because FP16 uses one byte per element',
+        'About 256 KB: 32 layers x 32 KV heads x 128 x 2 B, because V is rebuilt from K, not stored',
       ],
       correct: [1],
       why: [
         'That is full multi-head attention: 2 x 32 x 4096 x 2 B. Llama-3-8B has 8 KV heads, a quarter as many.',
-        'Right. 2 (K and V) x 32 layers x 8 KV heads x 128 x 2 B = 131,072 B, about 128 KB.',
+        'Right: 2 (K and V) x 32 layers x 8 KV heads x 128 x 2 B = 131,072 B, about 128 KB.',
         'That would be right for one-byte elements such as FP8. An FP16 cache uses two bytes per element, so this halves the true figure.',
-        'V comes from its own projection and cannot be rebuilt from K, so both tensors are stored. That would also ignore GQA.',
+        'V comes from its own projection and cannot be rebuilt from K, so both tensors are stored. It also counts 32 KV heads, which ignores GQA.',
       ],
     },
   ],

@@ -22,7 +22,7 @@ export default {
       correct: [1],
       why: [
         'That is 1 + k * alpha. It treats each acceptance as independent, but a rejection ends the run, so the terms are alpha^i.',
-        'Right. (1 - 0.8^4) / 0.2 = (1 - 0.4096) / 0.2 = 2.952, which is 1 + 0.8 + 0.64 + 0.512.',
+        'Right: (1 - 0.8^4) / 0.2 = (1 - 0.4096) / 0.2 = 2.952, which is 1 + 0.8 + 0.64 + 0.512.',
         'That sums alpha + alpha^2 + alpha^3 and leaves out the token the target always produces, the alpha^0 term.',
         'That is k * alpha. It drops the guaranteed token and the compounding of acceptances.',
       ],

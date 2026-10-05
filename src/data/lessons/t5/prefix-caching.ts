@@ -170,14 +170,14 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           why: [
             'Size is not the criterion. A leaf can be small; the rule exists because of dependency, not capacity, and eviction still takes the least-recently-used eligible leaf.',
             'Right: tree topology is an ownership constraint. Evict a cold leaf, release its block references, and prune ancestors only when nothing below them remains.',
-            'Wrong: each node owns the KV blocks for its edge\'s tokens, so interior nodes hold real memory. Descendants depend on that memory, so it cannot be freed first.',
+            'Each node owns the KV blocks for its edge\'s tokens, so interior nodes hold real memory. Descendants depend on that memory, so it cannot be freed first.',
             'Interior nodes are touched whenever a lookup walks through them, so they do have recency metadata. The leaf-only rule comes from dependency, not missing timestamps.',
           ],
         },
         {
           q: 'Why is pure longest-prefix routing insufficient?',
           options: [
-            'Round-robin keeps related chats together on one worker, so it already reaches a higher hit rate than prefix matching',
+            'A cache hit only skips the attention work, so the MLP still recomputes every cached token and the saving is too small to route for',
             'It herds traffic onto one warm worker until queueing outweighs the saved prefill; a load guard bounds that skew',
             'Cached K/V is bound to the request that created it, so no router can reuse it for a later request',
             'A longer match means more K/V to move to the chosen worker, so the router should prefer short matches over long ones',
@@ -185,7 +185,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           correct: [1],
           explanation: 'The objective is TTFT under load, not hit rate alone. Prefix affinity scores locality subject to a bounded imbalance, then falls back to least-loaded placement.',
           why: [
-            'Round-robin scatters related requests across workers, so each cache sees only a slice of the traffic. Its hit rate is typically lower than affinity routing, not higher.',
+            'A hit reuses K/V for every layer, so the engine skips all forward work for the cached tokens, MLP included. The lesson\'s 2,048-of-2,176-token example is 94% reusable input.',
             'Right: the goal is TTFT under load, not hit rate alone. Affinity scores locality within a bounded load imbalance, then falls back to the least-loaded worker.',
             'Cached K/V is immutable and refcounted, so any later request with the same prefix can map it read-only. Cross-request reuse is exactly what APC provides.',
             'Affinity routing sends the request to the worker that already holds the prefix, so no K/V moves. Preferring longer matches is the point; the risk is overload.',

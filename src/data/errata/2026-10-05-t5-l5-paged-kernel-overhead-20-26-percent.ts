@@ -27,7 +27,7 @@ export default {
       correct: [1],
       why: [
         'The lookup is done in software inside the kernel, with extra branches, and it shows up in measured latency.',
-        'Right. The paper reports 20-26% higher attention latency, yet 2-4x higher end-to-end throughput because memory reclaimed from waste grows the batch.',
+        'Right: the paper reports 20-26% higher attention latency, yet 2-4x higher end-to-end throughput because memory reclaimed from waste grows the batch.',
         'The measured figure is several times larger than a few percent. The cost is real and is justified by the throughput gain, not absent.',
         '2-4x is the throughput gain over FasterTransformer and Orca, not the kernel penalty. Prefix caching is a separate feature.',
       ],

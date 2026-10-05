@@ -28,7 +28,7 @@ export default {
       why: [
         'That is what the old code sample did, and it defeats automatic prefix caching: a freed system prompt should still hit a moment later.',
         'V1 dropped CPU swap. A free block stays in GPU memory, hashed, until something reuses the slot.',
-        'Right. The block is evictable, and a request with the same prefix can reuse it until the allocator hands the slot to someone else.',
+        'Right: the block is evictable, and a request with the same prefix can reuse it until the allocator hands the slot to someone else.',
         'Pinned blocks could never be reclaimed. A refcount-0 block is on the free queue and can be reallocated.',
       ],
     },

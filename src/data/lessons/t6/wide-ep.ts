@@ -128,7 +128,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
           q: 'DeepEP ships two dispatch protocols because…',
           options: [
             'One fabric, two workloads: prefill wants bandwidth through large transfers; decode wants low latency through pre-registered buffers and no per-layer handshake',
-            'One mode targets NVIDIA GPUs over NVLink and the other targets AMD GPUs over PCIe, since the vendors\' collectives are incompatible',
+            'One mode moves tokens inside a node over NVLink and the other moves them between nodes over RDMA, since the two fabrics need different protocols',
             'The low-latency mode replaced a buggy original, and the older mode stays only for compatibility with earlier deployments',
             'Training and inference use different expert layouts, so each needs a dispatch routine matched to its model\'s weight format',
           ],
@@ -137,7 +137,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
             'Phase-specific protocols on a shared fabric — the same reason you use different RPC shapes for bulk vs interactive traffic. Latency-critical decode cannot afford per-layer negotiation.',
           why: [
             'Right: the same fabric serves two workloads. Prefill saturates links with big batched transfers; decode uses pre-registered buffers and no handshake so each layer\'s latency stays small.',
-            'The modes are not split by vendor. They differ in whether they optimize prefill bandwidth or decode latency, and both are used in one deployment.',
+            'The split is by phase, not by fabric tier. The modes differ in whether they optimize prefill bandwidth or decode latency, and one deployment uses both over the same cluster.',
             'Both modes are first-class paths. The split reflects physics: large transfers amortize overheads, while decode needs registered buffers and no handshake on every layer.',
             'The split is by phase, not by train versus serve. The same model dispatches differently in prefill and decode because the bandwidth and latency tradeoff differs.',
           ],

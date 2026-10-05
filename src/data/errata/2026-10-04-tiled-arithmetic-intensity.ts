@@ -27,7 +27,7 @@ export default {
       correct: [1],
       why: [
         'That counts elements, not bytes. FP16 elements are 2 bytes, so the figure halves.',
-        'Right. A tile does 2 T^2 K FLOPs on 2 T K b bytes, which is T / b. With b = 2 that is 128 / 2 = 64.',
+        'Right: a tile does 2 T^2 K FLOPs on 2 T K b bytes, which is T / b. With b = 2 that is 128 / 2 = 64.',
         'That is T / 8, an earlier formula in the Roofline Playground that did not match the lesson.',
         'That is T / 4, which would be the FP32 figure, not FP16.',
       ],

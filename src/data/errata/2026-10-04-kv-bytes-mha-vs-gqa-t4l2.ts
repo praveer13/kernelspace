@@ -27,7 +27,7 @@ export default {
         'That is full multi-head attention: 80 x 8192 x 2 x 2 B, i.e. 64 KV heads where Llama-3-70B has 8.',
         'That drops one of the two tensors. Both K and V are stored, so there is a factor of 2.',
         'That uses 4 bytes per element. FP16 is 2 bytes.',
-        'Right. 80 layers x 8 KV heads x 128 x 2 (K and V) x 2 B = 327,680 B, about 320 KB.',
+        'Right: 80 layers x 8 KV heads x 128 x 2 (K and V) x 2 B = 327,680 B, about 320 KB.',
       ],
     },
   ],

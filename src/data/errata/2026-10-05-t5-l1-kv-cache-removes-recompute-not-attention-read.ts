@@ -23,7 +23,7 @@ export default {
       correct: [1],
       why: [
         'The cached entries are read at every step: attention for the new token uses all of them, so the read grows with context length.',
-        'Right. Only the new token is projected and sent through the MLP; attention still reads every cached K and V entry, which grows linearly with t.',
+        'Right: only the new token is projected and sent through the MLP; attention still reads every cached K and V entry, which grows linearly with t.',
         'That is decode without a cache. With one, past K and V are reused and only the new token is computed.',
         'Past tokens do not attend again. Only the new token attends, over t cached entries, so per-step attention is linear in t.',
       ],

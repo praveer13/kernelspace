@@ -26,7 +26,7 @@ export default {
       ],
       correct: [0],
       why: [
-        'Right. EEVDF only considers eligible threads (lag of zero or more) and runs the one whose virtual deadline is earliest.',
+        'Right: EEVDF only considers eligible threads (lag of zero or more) and runs the one whose virtual deadline is earliest.',
         'That is the CFS rule. EEVDF replaced it in 6.6 with eligibility plus earliest virtual deadline.',
         'Lag decides eligibility, not the pick. Among eligible threads the choice is by virtual deadline.',
         'A short requested slice gives an earlier deadline, but a thread must be eligible first, so slice alone does not pick.',
@@ -44,7 +44,7 @@ export default {
       why: [
         'A long requested slice gives a later virtual deadline, so that thread waits longer; it does not take the CPU from others.',
         'That was the old CFS claim. Real-time and deadline classes sit above the fair class and can starve it.',
-        'Right. Real-time and deadline classes outrank the fair class, so a real-time thread that never blocks can starve ordinary threads.',
+        'Right: real-time and deadline classes outrank the fair class, so a real-time thread that never blocks can starve ordinary threads.',
         'Negative lag makes that thread ineligible, which delays it. It does not stop other fair threads from running.',
       ],
     },

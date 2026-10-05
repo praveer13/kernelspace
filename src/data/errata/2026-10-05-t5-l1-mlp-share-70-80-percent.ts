@@ -19,9 +19,9 @@ export default {
     {
       q: 'In Llama-3-8B (hidden 4096, SwiGLU intermediate 14336, 8 KV heads), roughly what share of one layer\'s parameters sits in the MLP?',
       options: [
-        'About 81%: 3 x 4096 x 14336 is about 176M of roughly 218M layer parameters',
-        'About 67%: the MLP is two thirds of a layer, and attention holds the other third',
-        'About 50%: the MLP and attention each hold half, since each has about the same number of matrices',
+        'About 81%: 3 x 4096 x 14336 is about 176M of the roughly 218M parameters in a single layer',
+        'About 67%: the MLP is two thirds of a layer, so attention holds the remaining third of it',
+        'About 50%: the MLP and attention hold half each, since both have a similar number of matrices',
         'About 25%: attention has four projections and the MLP only a few, so most weights are in attention',
       ],
       correct: [0],
