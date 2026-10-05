@@ -2,6 +2,10 @@
 //! ONE native-only test: the real race fuzzer. It compiles only for your
 //! host target (std::thread), so the wasm module never sees it.
 //!
+//! Each check runs on its default seed, and the two seeded gauntlets also run
+//! on 32 extra seeds, so a solution green here is green on the site's fresh
+//! seeds.
+//!
 //! A Mutex-based queue will pass everything here too — behaviorally
 //! correct, wrong lesson. If you reached for one, go back: the point is
 //! the sequence-number protocol, and `stress_threads` is where a wrong
@@ -10,21 +14,36 @@
 use mpmc_queue as lab;
 
 macro_rules! lab_test {
-    ($name:ident, $check:expr) => {
+    ($name:ident) => {
         #[test]
         fn $name() {
-            let c = $check;
+            let c = lab::LAB.run_check(stringify!($name), None).expect("check id is in CHECKS");
             assert!(c.pass, "[{}] {} — {}", c.id, c.label, c.msg);
         }
     };
 }
 
-lab_test!(fifo, lab::check_fifo());
-lab_test!(backpressure, lab::check_backpressure());
-lab_test!(wraparound, lab::check_wraparound());
-lab_test!(model_gauntlet, lab::check_model_gauntlet());
-lab_test!(slot_conservation, lab::check_slot_conservation());
-lab_test!(burst_model, lab::check_burst_model());
+lab_test!(fifo);
+lab_test!(backpressure);
+lab_test!(wraparound);
+lab_test!(model_gauntlet);
+lab_test!(slot_conservation);
+lab_test!(burst_model);
+
+/// 32 fixed seeds, spread over the u32 range (a Weyl sequence).
+fn extra_seeds() -> impl Iterator<Item = u32> {
+    (1..=32u32).map(|i| i.wrapping_mul(0x9E37_79B9))
+}
+
+#[test]
+fn seeded_checks_pass_on_32_extra_seeds() {
+    for def in lab::CHECKS.iter().filter(|c| c.seeded) {
+        for seed in extra_seeds() {
+            let c = lab::LAB.run_check(def.id, Some(seed)).expect("check id is in CHECKS");
+            assert!(c.pass, "[{} seed {}] {} — {}", c.id, seed, c.label, c.msg);
+        }
+    }
+}
 
 /// The race fuzzer: 4 producers × 4 consumers, 100k unique values.
 /// Conservation (count + sum + xor) over a shared Queue<1024>.

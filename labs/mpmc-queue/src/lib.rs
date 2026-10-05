@@ -30,82 +30,105 @@
 //! native-only: `cargo test` also runs `stress_threads` — 4 producers,
 //! 4 consumers, 100k items, conservation checked — which compiles only
 //! for your host target. Both suites must pass.
+//!
+//! The same checks run in `cargo test` (on their default seeds and on 32
+//! extra seeds) and in the browser, where each runs on its own (template v2)
+//! and the two shadowed gauntlets draw their capacity, mix and ops from a
+//! fresh seed. A `todo!()` in your code traps that check; the site shows it
+//! as "not implemented yet" with the panic text, and the others still run.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   fifo               a stack, or any order but first-in first-out
+//!   backpressure       a push into a full ring that succeeds, or that
+//!                      hands back a different value than the caller's
+//!   wraparound         cursors that jam after the first lap
+//!   slot_conservation  a slot the ring loses on every fill and drain
+//!   model_gauntlet     random pushes and pops at 4–32 slots on a fresh
+//!                      seed: every Ok/Err and value matches a VecDeque
+//!   burst_model        floods and dry spells at 8–32 slots, the same way
+//! ```
 
 mod queue;
 
 pub use queue::Queue;
-use kslab::{Check, Report};
+use kslab::{Check, CheckDef, Ctx, Lab, Rng};
 
-/* --------------------------- determinism ---------------------------- */
+#[cfg(not(feature = "reference"))]
+const LAB_ID: &str = "mpmc-queue";
+/// A `--features reference` build names itself, and earns no credit anywhere.
+#[cfg(feature = "reference")]
+const LAB_ID: &str = "mpmc-queue@reference";
 
-struct Rng(u64);
+/// The checks, in grading order. Ids and labels match `src/data/labs.ts`.
+pub static CHECKS: [CheckDef; 6] = [
+    CheckDef { id: "fifo", label: FIFO, stage: 1, seeded: false, default_seed: 0, run: check_fifo },
+    CheckDef { id: "backpressure", label: BACKPRESSURE, stage: 2, seeded: false, default_seed: 0, run: check_backpressure },
+    CheckDef { id: "wraparound", label: WRAPAROUND, stage: 3, seeded: false, default_seed: 0, run: check_wraparound },
+    CheckDef { id: "model_gauntlet", label: MODEL_GAUNTLET, stage: 4, seeded: true, default_seed: 0x44C4, run: check_model_gauntlet },
+    CheckDef { id: "slot_conservation", label: SLOT_CONSERVATION, stage: 3, seeded: false, default_seed: 0, run: check_slot_conservation },
+    CheckDef { id: "burst_model", label: BURST_MODEL, stage: 4, seeded: true, default_seed: 0xB47, run: check_burst_model },
+];
 
-impl Rng {
-    fn next(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x >> 12;
-        x ^= x << 25;
-        x ^= x >> 27;
-        self.0 = x;
-        x.wrapping_mul(0x2545_F491_4F6C_DD1D)
-    }
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-}
+pub static LAB: Lab = Lab { id: LAB_ID, version: 2, checks: &CHECKS };
+
+const FIFO: &str = "strict FIFO order";
+const BACKPRESSURE: &str = "full ring returns Err(v); freed slots recycle";
+const WRAPAROUND: &str = "1000 cycles through a 4-slot ring";
+const MODEL_GAUNTLET: &str = "3000 random ops vs a reference model";
+const SLOT_CONSERVATION: &str = "fill/drain × 100: every slot returns every time";
+const BURST_MODEL: &str = "bursty traffic vs the model (2000 ops)";
 
 /* ------------------------------ checks ------------------------------ */
 
 /// 1. fifo: order is the contract.
-pub fn check_fifo() -> Check {
+pub fn check_fifo(_: &Ctx) -> Check {
     const ID: &str = "fifo";
-    const LABEL: &str = "strict FIFO order";
     let q = Queue::new(8);
     for v in 1..=8u64 {
         if q.push(v).is_err() {
-            return Check::fail(ID, LABEL, format!("push({v}) failed into an 8-slot ring after {} pushes", v - 1));
+            return Check::fail(ID, FIFO, format!("push({v}) failed into an 8-slot ring after {} pushes", v - 1));
         }
     }
     for want in 1..=8u64 {
         match q.pop() {
             Some(got) if got == want => {}
-            other => return Check::fail(ID, LABEL, format!("pop = {other:?}, want Some({want})")),
+            other => return Check::fail(ID, FIFO, format!("pop = {other:?}, want Some({want})")),
         }
     }
     if q.pop().is_some() {
-        return Check::fail(ID, LABEL, "pop on a drained ring must be None");
+        return Check::fail(ID, FIFO, "pop on a drained ring must be None");
     }
-    Check::pass(ID, LABEL, "8 in, 8 out, exact order, empty says None")
+    Check::pass(ID, FIFO, "8 in, 8 out, exact order, empty says None")
 }
 
 /// 2. backpressure: a full ring hands the value back; space recycles.
-pub fn check_backpressure() -> Check {
+pub fn check_backpressure(_: &Ctx) -> Check {
     const ID: &str = "backpressure";
-    const LABEL: &str = "full ring returns Err(v); freed slots recycle";
     let q = Queue::new(4);
     for v in 10..14u64 {
         if q.push(v).is_err() {
-            return Check::fail(ID, LABEL, format!("push({v}) failed before the ring was full"));
+            return Check::fail(ID, BACKPRESSURE, format!("push({v}) failed before the ring was full"));
         }
     }
     match q.push(99) {
         Err(99) => {}
-        Err(v) => return Check::fail(ID, LABEL, format!("full ring returned Err({v}) — the caller's value was swapped")),
-        Ok(()) => return Check::fail(ID, LABEL, "5th push into a 4-slot ring succeeded — slot from nowhere"),
+        Err(v) => return Check::fail(ID, BACKPRESSURE, format!("full ring returned Err({v}) — the caller's value was swapped")),
+        Ok(()) => return Check::fail(ID, BACKPRESSURE, "5th push into a 4-slot ring succeeded — slot from nowhere"),
     }
     if q.pop() != Some(10) {
-        return Check::fail(ID, LABEL, "pop after overflow lost the head value");
+        return Check::fail(ID, BACKPRESSURE, "pop after overflow lost the head value");
     }
     if q.push(99).is_err() {
-        return Check::fail(ID, LABEL, "push after pop failed — freed slot was not recycled");
+        return Check::fail(ID, BACKPRESSURE, "push after pop failed — freed slot was not recycled");
     }
-    Check::pass(ID, LABEL, "overflow is honest, recycling works")
+    Check::pass(ID, BACKPRESSURE, "overflow is honest, recycling works")
 }
 
 /// 3. wraparound: cursors cycle forever; the ring never "fills up" over time.
-pub fn check_wraparound() -> Check {
+pub fn check_wraparound(_: &Ctx) -> Check {
     const ID: &str = "wraparound";
-    const LABEL: &str = "1000 cycles through a 4-slot ring";
     let q = Queue::new(4);
     let mut next_in = 0u64;
     let mut next_out = 0u64;
@@ -113,130 +136,174 @@ pub fn check_wraparound() -> Check {
         for _ in 0..4 {
             next_in += 1;
             if q.push(next_in).is_err() {
-                return Check::fail(ID, LABEL, format!("cycle {cycle}: push({next_in}) failed — cursors stuck?"));
+                return Check::fail(ID, WRAPAROUND, format!("cycle {cycle}: push({next_in}) failed — cursors stuck?"));
             }
         }
         for _ in 0..4 {
             next_out += 1;
             match q.pop() {
                 Some(v) if v == next_out => {}
-                other => return Check::fail(ID, LABEL, format!("cycle {cycle}: pop = {other:?}, want Some({next_out})")),
+                other => return Check::fail(ID, WRAPAROUND, format!("cycle {cycle}: pop = {other:?}, want Some({next_out})")),
             }
         }
     }
-    Check::pass(ID, LABEL, "4000 ops, order intact after 1000 full wraps")
+    Check::pass(ID, WRAPAROUND, "4000 ops, order intact after 1000 full wraps")
 }
 
 /// 4. model_gauntlet: 3000 random ops shadowed by a VecDeque — every
 ///    Ok/Err decision and every value must match the model exactly.
-pub fn check_model_gauntlet() -> Check {
+pub fn check_model_gauntlet(ctx: &Ctx) -> Check {
     const ID: &str = "model_gauntlet";
-    const LABEL: &str = "3000 random ops vs a reference model";
-    let q = Queue::new(8);
+    let mut rng = Rng::seeded(ctx.seed);
+    // 4, 8, 16 or 32 slots; 40–64 % of the ops are pushes, so the ring sits
+    // anywhere from mostly empty to mostly full
+    let cap = 4usize << rng.below(4);
+    let push_pct = 40 + rng.below(25);
+    let q = Queue::new(cap);
     let mut model: std::collections::VecDeque<u64> = Default::default();
-    let mut rng = Rng(0x44C4);
     for op in 0..3000 {
-        if rng.below(100) < 55 {
+        if rng.below(100) < push_pct {
             let v = rng.next();
-            let want = model.len() < 8;
+            let want = model.len() < cap;
             match (q.push(v), want) {
                 (Ok(()), true) => {
                     model.push_back(v);
                 }
                 (Err(e), false) => {
                     if e != v {
-                        return Check::fail(ID, LABEL, format!("op {op}: Err({e}) returned a different value than pushed ({v})"));
+                        return Check::fail(ID, MODEL_GAUNTLET, format!("op {op}: Err({e}) returned a different value than pushed ({v})"));
                     }
                 }
-                (Ok(()), false) => return Check::fail(ID, LABEL, format!("op {op}: push succeeded with a full ring (model has 8)")),
-                (Err(_), true) => return Check::fail(ID, LABEL, format!("op {op}: push failed with {} items in the model", model.len())),
+                (Ok(()), false) => return Check::fail(ID, MODEL_GAUNTLET, format!("op {op}: push succeeded with a full ring (model has {cap})")),
+                (Err(_), true) => return Check::fail(ID, MODEL_GAUNTLET, format!("op {op}: push failed with {} items in the model", model.len())),
             }
         } else {
             let want = model.pop_front();
             if q.pop() != want {
-                return Check::fail(ID, LABEL, format!("op {op}: pop disagreed with model (want {want:?})"));
+                return Check::fail(ID, MODEL_GAUNTLET, format!("op {op}: pop disagreed with model (want {want:?})"));
             }
         }
     }
-    Check::pass(ID, LABEL, "3000/3000 decisions match the model")
+    Check::pass(ID, MODEL_GAUNTLET, format!("3000/3000 decisions match the model ({cap} slots, {push_pct}% pushes)"))
 }
 
 /// 5. slot_conservation: fill → drain → refill, 100 times. A ring that
 ///    loses a slot per cycle dies here.
-pub fn check_slot_conservation() -> Check {
+pub fn check_slot_conservation(_: &Ctx) -> Check {
     const ID: &str = "slot_conservation";
-    const LABEL: &str = "fill/drain × 100: every slot returns every time";
     let q = Queue::new(16);
     for cycle in 0..100 {
         for v in 0..16u64 {
             if q.push(v).is_err() {
-                return Check::fail(ID, LABEL, format!("cycle {cycle}: slot {v} unavailable — the ring is leaking slots"));
+                return Check::fail(ID, SLOT_CONSERVATION, format!("cycle {cycle}: slot {v} unavailable — the ring is leaking slots"));
             }
         }
         for _ in 0..16 {
             if q.pop().is_none() {
-                return Check::fail(ID, LABEL, format!("cycle {cycle}: ring dried up early"));
+                return Check::fail(ID, SLOT_CONSERVATION, format!("cycle {cycle}: ring dried up early"));
             }
         }
     }
-    Check::pass(ID, LABEL, "1600 ops, 16 slots, zero leaks")
+    Check::pass(ID, SLOT_CONSERVATION, "1600 ops, 16 slots, zero leaks")
 }
 
 /// 6. burst_model: serving traffic is bursty — floods then dry spells,
 ///    shadowed by the model.
-pub fn check_burst_model() -> Check {
+pub fn check_burst_model(ctx: &Ctx) -> Check {
     const ID: &str = "burst_model";
-    const LABEL: &str = "bursty traffic vs the model (2000 ops)";
-    let q = Queue::new(16);
+    let mut rng = Rng::seeded(ctx.seed);
+    let cap = 8usize << rng.below(3); // 8, 16 or 32 slots
+    let q = Queue::new(cap);
     let mut model: std::collections::VecDeque<u64> = Default::default();
-    let mut rng = Rng(0xB47);
     let mut ops = 0usize;
     while ops < 2000 {
-        // a burst of 1..24 pushes
-        for _ in 0..(1 + rng.below(24)) {
+        // a burst of 1..=1.5 × capacity pushes, so a flood can overshoot
+        for _ in 0..(1 + rng.below(cap * 3 / 2)) {
             let v = rng.next();
-            match (q.push(v), model.len() < 16) {
+            match (q.push(v), model.len() < cap) {
                 (Ok(()), true) => model.push_back(v),
                 (Err(e), false) => {
                     if e != v {
-                        return Check::fail(ID, LABEL, format!("op {ops}: Err returned the wrong value"));
+                        return Check::fail(ID, BURST_MODEL, format!("op {ops}: Err returned the wrong value"));
                     }
                 }
-                (Ok(()), false) => return Check::fail(ID, LABEL, format!("op {ops}: phantom slot")),
-                (Err(_), true) => return Check::fail(ID, LABEL, format!("op {ops}: false full at {} items", model.len())),
+                (Ok(()), false) => return Check::fail(ID, BURST_MODEL, format!("op {ops}: phantom slot")),
+                (Err(_), true) => return Check::fail(ID, BURST_MODEL, format!("op {ops}: false full at {} items", model.len())),
             }
             ops += 1;
         }
-        // drain 0..half
-        for _ in 0..rng.below(9) {
+        // drain 0..=half
+        for _ in 0..rng.below(cap / 2 + 1) {
             let want = model.pop_front();
             if q.pop() != want {
-                return Check::fail(ID, LABEL, format!("op {ops}: pop disagreed with model"));
+                return Check::fail(ID, BURST_MODEL, format!("op {ops}: pop disagreed with model"));
             }
             ops += 1;
         }
     }
-    Check::pass(ID, LABEL, "bursts absorbed, every decision matched")
+    Check::pass(ID, BURST_MODEL, format!("bursts absorbed at {cap} slots, every decision matched"))
 }
 
-/// The full suite, in grading order.
+/// The full suite on default seeds, in grading order (v1 report order).
 pub fn self_checks() -> Vec<Check> {
-    vec![
-        check_fifo(),
-        check_backpressure(),
-        check_wraparound(),
-        check_model_gauntlet(),
-        check_slot_conservation(),
-        check_burst_model(),
-    ]
+    CHECKS.iter().map(|c| (c.run)(&Ctx { seed: c.default_seed, fresh: false })).collect()
+}
+
+/* ------------------------------ probe ------------------------------- */
+
+/// `probe <seed>`: 300 seeded pushes and pops on your queue (8 slots),
+/// shadowed by a VecDeque, summarised in one line: pushes accepted, pops that
+/// returned a value, pushes refused as full, pops that found it empty, the
+/// final length and the ops where your queue disagreed with the model.
+/// Deterministic for a given seed and queue.
+pub fn probe(seed: u32) -> String {
+    const CAP: usize = 8;
+    let mut rng = Rng::seeded(seed);
+    let q = Queue::new(CAP);
+    let mut model: std::collections::VecDeque<u64> = Default::default();
+    let (mut pushed, mut popped, mut full, mut empty, mut wrong) = (0, 0, 0, 0, 0);
+    for _ in 0..300 {
+        if rng.below(100) < 55 {
+            let v = rng.next();
+            let accept = model.len() < CAP;
+            match q.push(v) {
+                Ok(()) => {
+                    pushed += 1;
+                    if accept {
+                        model.push_back(v);
+                    } else {
+                        wrong += 1;
+                    }
+                }
+                Err(e) => {
+                    full += 1;
+                    if accept || e != v {
+                        wrong += 1;
+                    }
+                }
+            }
+        } else {
+            let want = model.pop_front();
+            let got = q.pop();
+            match got {
+                Some(_) => popped += 1,
+                None => empty += 1,
+            }
+            if got != want {
+                wrong += 1;
+            }
+        }
+    }
+    format!("ops=300 pushed={pushed} popped={popped} full={full} empty={empty} len={} wrong={wrong}", model.len())
 }
 
 /* ------------------------------ wasm ABI ---------------------------- */
 
+kslab::export_abi_v2!();
+
 #[no_mangle]
-pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report { lab: "mpmc-queue", version: 1, checks: self_checks() };
-    kslab::emit(&report)
+pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
 }
 
 /* --------------------------- fleet bridge --------------------------- */
@@ -246,6 +313,8 @@ pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
      init <capacity>     → ok
      push <v>            → ok | full      (full = shed the request)
      pop                 → <v> | empty
+     probe <seed>        → one summary line of a seeded 300-op scenario
+                           (see `probe`); its own queue, the Fleet's is untouched
 */
 
 use std::cell::RefCell;
@@ -256,9 +325,16 @@ thread_local! {
 
 #[no_mangle]
 pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
-    let bytes = unsafe { std::slice::from_raw_parts(in_ptr as *const u8, in_len as usize) };
+    kslab::install_panic_hook();
+    let bytes = unsafe { kslab::input(in_ptr, in_len) };
     let cmd = String::from_utf8_lossy(bytes).into_owned();
-    let reply = FLEET_QUEUE.with(|q| dispatch(&mut q.borrow_mut(), cmd.trim()));
+    let reply = match cmd.split_whitespace().collect::<Vec<_>>()[..] {
+        ["probe", seed] => match seed.parse::<u32>() {
+            Ok(seed) => probe(seed),
+            Err(_) => format!("err bad seed '{}'", kslab::clip(seed, 20)),
+        },
+        _ => FLEET_QUEUE.with(|q| dispatch(&mut q.borrow_mut(), cmd.trim())),
+    };
     kslab::emit_str(&reply)
 }
 

@@ -23,11 +23,62 @@
 //!   * decode: expand ids back to bytes (merge ids expand to their
 //!     children, recursively), then UTF-8. Unknown ids decode to U+FFFD
 //!     — a tokenizer must never kill the server on bad input.
+//!
+//! The checks below are the single source of truth:
+//!   * `cargo test` runs them on your machine, on their default seeds and on
+//!     32 extra seeds.
+//!   * `cargo build --release --target wasm32-unknown-unknown` bakes them
+//!     into the .wasm you drop into kernelspace → the site runs each check on
+//!     its own (template v2), with fresh seeds for the two seeded ones, and
+//!     renders exactly these results.
+//!
+//! A `todo!()` in your code traps that check; the site shows it as "not
+//! implemented yet" with the panic text, and the other checks still run.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   bytes_are_ids         a base vocabulary that is not "byte b is id b"
+//!   merge_priority        merging the leftmost pair instead of the lowest rank
+//!   leftmost_nonoverlap   a run `aaa` merged right-to-left or overlapping
+//!   roundtrip             a decode that loses a byte, or stops expanding a
+//!                         merge id after one level: a seeded table (16–48
+//!                         merges) and seeded UTF-8 text
+//!   robust_decode         an unknown id that panics or vanishes
+//!   contract              the wrong ids on a fixed unseen text, or an encode
+//!                         that stops while a merge rule still applies (the
+//!                         seeded part: six fresh texts must be fully merged)
+//! ```
 
 pub mod tokenizer;
 
 pub use tokenizer::Tokenizer;
-use kslab::{Check, Report};
+use kslab::{Check, CheckDef, Ctx, Lab, Rng};
+
+#[cfg(not(feature = "reference"))]
+const LAB_ID: &str = "bpe-tokenizer";
+/// A `--features reference` build names itself, and earns no credit anywhere.
+#[cfg(feature = "reference")]
+const LAB_ID: &str = "bpe-tokenizer@reference";
+
+/// The checks, in grading order. Ids and labels match `src/data/labs.ts`.
+pub static CHECKS: [CheckDef; 6] = [
+    CheckDef { id: "bytes_are_ids", label: BYTES_ARE_IDS, stage: 1, seeded: false, default_seed: 0, run: check_bytes_are_ids },
+    CheckDef { id: "merge_priority", label: MERGE_PRIORITY, stage: 2, seeded: false, default_seed: 0, run: check_merge_priority },
+    CheckDef { id: "leftmost_nonoverlap", label: LEFTMOST_NONOVERLAP, stage: 2, seeded: false, default_seed: 0, run: check_leftmost_nonoverlap },
+    CheckDef { id: "roundtrip", label: ROUNDTRIP, stage: 3, seeded: true, default_seed: 0x0B9E, run: check_roundtrip },
+    CheckDef { id: "robust_decode", label: ROBUST_DECODE, stage: 3, seeded: false, default_seed: 0, run: check_robust_decode },
+    CheckDef { id: "contract", label: CONTRACT, stage: 4, seeded: true, default_seed: 0xC0DE, run: check_contract },
+];
+
+pub static LAB: Lab = Lab { id: LAB_ID, version: 2, checks: &CHECKS };
+
+const BYTES_ARE_IDS: &str = "base vocab: byte b ↔ id b";
+const MERGE_PRIORITY: &str = "lowest-rank pair merges first (not leftmost)";
+const LEFTMOST_NONOVERLAP: &str = "repeated pairs merge left-to-right, non-overlapping";
+const ROUNDTRIP: &str = "decode∘encode is identity over UTF-8";
+const ROBUST_DECODE: &str = "unknown ids decode to U+FFFD, empty stays empty";
+const CONTRACT: &str = "exact ids on unseen text (the model’s contract)";
 
 /* --------------------- a trainer, for realism ---------------------- */
 /* Checks 4 and 6 use a table TRAINED on this corpus — the same 15-line
@@ -75,26 +126,24 @@ pub fn train_bpe(corpus: &str, num_merges: usize) -> Vec<(u32, u32, u32)> {
 /* ------------------------------ checks ------------------------------ */
 
 /// 1. bytes_are_ids: with no merges, encode is the identity over bytes.
-pub fn check_bytes_are_ids() -> Check {
+pub fn check_bytes_are_ids(_: &Ctx) -> Check {
     const ID: &str = "bytes_are_ids";
-    const LABEL: &str = "base vocab: byte b ↔ id b";
     let tk = Tokenizer::new(vec![]);
     let ids = tk.encode("hello");
     let want: Vec<u32> = b"hello".iter().map(|&b| u32::from(b)).collect();
     if ids != want {
-        return Check::fail(ID, LABEL, format!("encode(\"hello\") = {ids:?}, want {want:?}"));
+        return Check::fail(ID, BYTES_ARE_IDS, format!("encode(\"hello\") = {ids:?}, want {want:?}"));
     }
     if tk.decode(&ids) != "hello" {
-        return Check::fail(ID, LABEL, "decode did not invert the identity encoding");
+        return Check::fail(ID, BYTES_ARE_IDS, "decode did not invert the identity encoding");
     }
-    Check::pass(ID, LABEL, "empty table → identity over bytes")
+    Check::pass(ID, BYTES_ARE_IDS, "empty table → identity over bytes")
 }
 
 /// 2. merge_priority: LOWEST RANK wins, not leftmost pair. A left-greedy
 ///    implementation fails this.
-pub fn check_merge_priority() -> Check {
+pub fn check_merge_priority(_: &Ctx) -> Check {
     const ID: &str = "merge_priority";
-    const LABEL: &str = "lowest-rank pair merges first (not leftmost)";
     // rank 0: (b,c)→256 · rank 1: (a,b)→257
     let tk = Tokenizer::new(vec![(98, 99, 256), (97, 98, 257)]);
     let ids = tk.encode("abc");
@@ -102,18 +151,17 @@ pub fn check_merge_priority() -> Check {
     if ids != vec![97, 256] {
         return Check::fail(
             ID,
-            LABEL,
+            MERGE_PRIORITY,
             format!("encode(\"abc\") = {ids:?}, want [97, 256] — rank decides, not position"),
         );
     }
-    Check::pass(ID, LABEL, "rank beats position")
+    Check::pass(ID, MERGE_PRIORITY, "rank beats position")
 }
 
 /// 3. leftmost_nonoverlap: repeated pairs merge left-to-right,
 ///    non-overlapping.
-pub fn check_leftmost_nonoverlap() -> Check {
+pub fn check_leftmost_nonoverlap(_: &Ctx) -> Check {
     const ID: &str = "leftmost_nonoverlap";
-    const LABEL: &str = "repeated pairs merge left-to-right, non-overlapping";
     let tk = Tokenizer::new(vec![(97, 97, 256)]);
     let cases: [(&str, Vec<u32>); 3] = [
         ("aaaa", vec![256, 256]),
@@ -123,62 +171,103 @@ pub fn check_leftmost_nonoverlap() -> Check {
     for (s, want) in cases {
         let got = tk.encode(s);
         if got != want {
-            return Check::fail(ID, LABEL, format!("encode({s:?}) = {got:?}, want {want:?}"));
+            return Check::fail(ID, LEFTMOST_NONOVERLAP, format!("encode({s:?}) = {got:?}, want {want:?}"));
         }
     }
-    Check::pass(ID, LABEL, "aa-runs merge cleanly")
+    Check::pass(ID, LEFTMOST_NONOVERLAP, "aa-runs merge cleanly")
+}
+
+/// Text for the seeded checks: words from the training corpus, chunks it never
+/// saw (emoji, CJK, accents, quotes, a newline) and single scalars from a few
+/// Unicode blocks, so every table sees both merged and raw multi-byte runs.
+fn seeded_text(rng: &mut Rng, pieces: usize) -> String {
+    const WORDS: [&str; 14] = [
+        "the", "scheduler", "batch", "tokens", "keys", "values", "decode", "loop", "stream", "user", "first", "token",
+        "cache", "blocks",
+    ];
+    const CHUNKS: [&str; 9] = ["🦀", "推し活", "naïve", "café", "—", "“quoted”", "\n", "日本語", "ß"];
+    const BLOCKS: [(usize, usize); 5] = [(0x20, 0x7E), (0xA1, 0xFF), (0x400, 0x4FF), (0x4E00, 0x9FFF), (0x1F300, 0x1F64F)];
+    let mut s = String::new();
+    for _ in 0..pieces {
+        match rng.below(10) {
+            0..=5 => s.push_str(WORDS[rng.below(WORDS.len())]),
+            6 | 7 => s.push_str(CHUNKS[rng.below(CHUNKS.len())]),
+            _ => {
+                let (lo, hi) = BLOCKS[rng.below(BLOCKS.len())];
+                s.push(char::from_u32(rng.range(lo, hi) as u32).unwrap_or('?'));
+            }
+        }
+        if rng.below(4) != 0 {
+            s.push(' ');
+        }
+    }
+    s
 }
 
 /// 4. roundtrip: decode(encode(x)) == x over multi-byte UTF-8 — the
-///    property that makes byte-level BPE the production default.
-pub fn check_roundtrip() -> Check {
+///    property that makes byte-level BPE the production default. The table
+///    (16–48 merges) and eight of the twelve texts come from the seed.
+pub fn check_roundtrip(ctx: &Ctx) -> Check {
     const ID: &str = "roundtrip";
-    const LABEL: &str = "decode∘encode is identity over UTF-8";
-    let tk = Tokenizer::new(train_bpe(CORPUS, 48));
-    let corpus = [
+    let mut rng = Rng::seeded(ctx.seed);
+    let merges = 16 + rng.below(33);
+    let tk = Tokenizer::new(train_bpe(CORPUS, merges));
+    let mut texts: Vec<String> = [
         "the scheduler schedules the batch.",
         "hello world, hello world, hello",
         "emoji: 🦀🚀 and cjk: 推し活 and accents: naïve café",
         "— em-dash, “quotes”, and a newline\ninside",
-    ];
-    for s in corpus {
-        let back = tk.decode(&tk.encode(s));
-        if back != s {
-            return Check::fail(ID, LABEL, format!("roundtrip failed for {s:?}: got {back:?}"));
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    for _ in 0..8 {
+        let pieces = 4 + rng.below(21);
+        texts.push(seeded_text(&mut rng, pieces));
+    }
+    for s in &texts {
+        let ids = tk.encode(s);
+        let back = tk.decode(&ids);
+        if back != *s {
+            return Check::fail(
+                ID,
+                ROUNDTRIP,
+                format!("roundtrip failed with a {merges}-merge table for {s:?}: got {back:?}"),
+            );
         }
     }
-    Check::pass(ID, LABEL, "byte-perfect over emoji, CJK, accents, punctuation")
+    Check::pass(ID, ROUNDTRIP, format!("byte-perfect over {} texts with a {merges}-merge table", texts.len()))
 }
 
 /// 5. robust_decode: garbage in, replacement char out — never a panic.
-pub fn check_robust_decode() -> Check {
+pub fn check_robust_decode(_: &Ctx) -> Check {
     const ID: &str = "robust_decode";
-    const LABEL: &str = "unknown ids decode to U+FFFD, empty stays empty";
     let tk = Tokenizer::new(vec![(97, 98, 256)]);
     if tk.decode(&[]) != "" {
-        return Check::fail(ID, LABEL, "decode([]) must be the empty string");
+        return Check::fail(ID, ROBUST_DECODE, "decode([]) must be the empty string");
     }
     let s = tk.decode(&[9999]);
     if s != "\u{FFFD}" {
-        return Check::fail(ID, LABEL, format!("decode([9999]) = {s:?}, want \"\\u{{FFFD}}\""));
+        return Check::fail(ID, ROBUST_DECODE, format!("decode([9999]) = {s:?}, want \"\\u{{FFFD}}\""));
     }
     // a valid merge id still expands inside an otherwise-bogus sequence
     let s = tk.decode(&[256, 9999, 97]);
     if s != "ab\u{FFFD}a" {
-        return Check::fail(ID, LABEL, format!("decode([256, 9999, 97]) = {s:?}, want \"ab\\u{{FFFD}}a\""));
+        return Check::fail(ID, ROBUST_DECODE, format!("decode([256, 9999, 97]) = {s:?}, want \"ab\\u{{FFFD}}a\""));
     }
-    Check::pass(ID, LABEL, "bad ids degrade, never crash")
+    Check::pass(ID, ROBUST_DECODE, "bad ids degrade, never crash")
 }
 
 /// 6. contract: a trained table applied to unseen text must produce the
 ///    EXACT reference ids. The ids are the model's contract — "close"
-///    does not exist.
-pub fn check_contract() -> Check {
+///    does not exist. Then, on texts drawn from the seed, encode must not
+///    stop while a merge rule still applies, and decode must give the text back.
+pub fn check_contract(ctx: &Ctx) -> Check {
     const ID: &str = "contract";
-    const LABEL: &str = "exact ids on unseen text (the model's contract)";
     const TEXT: &str = "the user waits for the first token while the scheduler batches the stream";
     const EXPECTED: &[u32] = &EXPECTED_IDS;
-    let tk = Tokenizer::new(train_bpe(CORPUS, 48));
+    let merges = train_bpe(CORPUS, 48);
+    let tk = Tokenizer::new(merges.clone());
     let ids = tk.encode(TEXT);
     if ids != EXPECTED {
         let diff = ids
@@ -187,29 +276,75 @@ pub fn check_contract() -> Check {
             .position(|(a, b)| a != b)
             .map(|i| format!("first diff at index {i}"))
             .unwrap_or_else(|| format!("length {} ≠ {}", ids.len(), EXPECTED.len()));
-        return Check::fail(ID, LABEL, format!("encode produced wrong ids ({diff})"));
+        return Check::fail(ID, CONTRACT, format!("encode produced wrong ids ({diff})"));
     }
-    Check::pass(ID, LABEL, format!("{} tokens, bit-exact vs reference", ids.len()))
+    let mut rng = Rng::seeded(ctx.seed);
+    for n in 0..6 {
+        let pieces = 6 + rng.below(15);
+        let text = seeded_text(&mut rng, pieces);
+        let ids = tk.encode(&text);
+        if let Some(i) = (0..ids.len().saturating_sub(1)).find(|&i| merges.iter().any(|m| (m.0, m.1) == (ids[i], ids[i + 1]))) {
+            return Check::fail(
+                ID,
+                CONTRACT,
+                format!("text {n}: ids {} and {} at index {i} still have a merge rule — encode stopped early", ids[i], ids[i + 1]),
+            );
+        }
+        if tk.decode(&ids) != text {
+            return Check::fail(ID, CONTRACT, format!("text {n}: decode(encode(text)) is not the text"));
+        }
+    }
+    Check::pass(ID, CONTRACT, format!("{} tokens, bit-exact vs reference; 6 fresh texts fully merged", ids.len()))
 }
 
-/// The full suite, in grading order.
+/// The full suite on default seeds, in grading order (v1 report order).
 pub fn self_checks() -> Vec<Check> {
-    vec![
-        check_bytes_are_ids(),
-        check_merge_priority(),
-        check_leftmost_nonoverlap(),
-        check_roundtrip(),
-        check_robust_decode(),
-        check_contract(),
-    ]
+    CHECKS.iter().map(|c| (c.run)(&Ctx { seed: c.default_seed, fresh: false })).collect()
+}
+
+/* ------------------------------ probe ------------------------------- */
+
+/// `probe <seed>`: your tokenizer on one seeded text under the 48-merge
+/// table, summarised in one line: input bytes, ids out, how many ids are
+/// merges, distinct ids, bytes per token and whether the text came back.
+/// Deterministic for a given seed and tokenizer.
+pub fn probe(seed: u32) -> String {
+    let mut rng = Rng::seeded(seed);
+    let tk = Tokenizer::new(train_bpe(CORPUS, 48));
+    let pieces = 24 + rng.below(25);
+    let text = seeded_text(&mut rng, pieces);
+    let ids = tk.encode(&text);
+    let merged = ids.iter().filter(|&&i| i >= 256).count();
+    let distinct = ids.iter().collect::<std::collections::BTreeSet<_>>().len();
+    let ratio = if ids.is_empty() { 0.0 } else { text.len() as f64 / ids.len() as f64 };
+    let back = tk.decode(&ids) == text;
+    format!(
+        "bytes={} tokens={} merged={merged} distinct={distinct} ratio={ratio:.2} roundtrip={back}",
+        text.len(),
+        ids.len()
+    )
 }
 
 /* ------------------------------ wasm ABI ---------------------------- */
 
+kslab::export_abi_v2!();
+
 #[no_mangle]
-pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report { lab: "bpe-tokenizer", version: 1, checks: self_checks() };
-    kslab::emit(&report)
+pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
+}
+
+/// The runtime bridge: `probe <seed>` (see `probe`).
+#[no_mangle]
+pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::install_panic_hook();
+    let cmd = std::str::from_utf8(unsafe { kslab::input(in_ptr, in_len) }).unwrap_or("");
+    let mut it = cmd.split_whitespace();
+    let reply = match (it.next(), it.next().map(str::parse::<u32>)) {
+        (Some("probe"), Some(Ok(seed))) => probe(seed),
+        _ => format!("err unknown command {:?} (try: probe <seed>)", kslab::clip(cmd.trim(), 40)),
+    };
+    kslab::emit_str(&reply)
 }
 
 /// Reference ids for check_contract — computed from the reference

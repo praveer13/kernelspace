@@ -1,0 +1,216 @@
+{
+  "lab": "kv-block-manager",
+  "abi": 2,
+  "version": 3,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "223bdf1ea8f3debfa7974c42cf03da1dc64b7d51c86ff4c369a3d95a5ae0e4ef",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "paging": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "cow-leak": 0,
+        "eager-fork": 0,
+        "floor-blocks": 1,
+        "free-leak": 0,
+        "free-shared": 0,
+        "no-cow": 0,
+        "partial-alloc": 0,
+        "partial-append": 0,
+        "translate-unbounded": 1
+      }
+    },
+    "capacity": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "cow-leak": 0,
+        "eager-fork": 0,
+        "floor-blocks": 0,
+        "free-leak": 0,
+        "free-shared": 0,
+        "no-cow": 0,
+        "partial-alloc": 0,
+        "partial-append": 0,
+        "translate-unbounded": 0
+      }
+    },
+    "fork_shares": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "cow-leak": 0,
+        "eager-fork": 1,
+        "floor-blocks": 0,
+        "free-leak": 0,
+        "free-shared": 0,
+        "no-cow": 0,
+        "partial-alloc": 0,
+        "partial-append": 0,
+        "translate-unbounded": 0
+      }
+    },
+    "cow": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "cow-leak": 0,
+        "eager-fork": 1,
+        "floor-blocks": 1,
+        "free-leak": 0,
+        "free-shared": 0,
+        "no-cow": 1,
+        "partial-alloc": 0,
+        "partial-append": 0,
+        "translate-unbounded": 0
+      }
+    },
+    "free_refcount": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "cow-leak": 0,
+        "eager-fork": 1,
+        "floor-blocks": 1,
+        "free-leak": 1,
+        "free-shared": 1,
+        "no-cow": 0,
+        "partial-alloc": 0,
+        "partial-append": 0,
+        "translate-unbounded": 0
+      }
+    },
+    "gauntlet": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "cow-leak": 1,
+        "eager-fork": 0,
+        "floor-blocks": 1,
+        "free-leak": 1,
+        "free-shared": 1,
+        "no-cow": 0,
+        "partial-alloc": 1,
+        "partial-append": 1,
+        "translate-unbounded": 0
+      }
+    },
+    "adapter_unified_paging": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "cow-leak": 0,
+        "eager-fork": 0,
+        "floor-blocks": 0,
+        "free-leak": 0,
+        "free-shared": 0,
+        "no-cow": 0,
+        "partial-alloc": 1,
+        "partial-append": 0,
+        "translate-unbounded": 0
+      }
+    }
+  },
+  "mutants": {
+    "cow-leak": {
+      "defaultSeedFails": [
+        "gauntlet"
+      ],
+      "caughtBy": [
+        "gauntlet"
+      ]
+    },
+    "eager-fork": {
+      "defaultSeedFails": [
+        "fork_shares",
+        "cow",
+        "free_refcount"
+      ],
+      "caughtBy": [
+        "fork_shares",
+        "cow",
+        "free_refcount"
+      ]
+    },
+    "floor-blocks": {
+      "defaultSeedFails": [
+        "paging",
+        "cow",
+        "free_refcount",
+        "gauntlet"
+      ],
+      "caughtBy": [
+        "paging",
+        "cow",
+        "free_refcount",
+        "gauntlet"
+      ]
+    },
+    "free-leak": {
+      "defaultSeedFails": [
+        "free_refcount",
+        "gauntlet"
+      ],
+      "caughtBy": [
+        "free_refcount",
+        "gauntlet"
+      ]
+    },
+    "free-shared": {
+      "defaultSeedFails": [
+        "free_refcount",
+        "gauntlet"
+      ],
+      "caughtBy": [
+        "free_refcount",
+        "gauntlet"
+      ]
+    },
+    "no-cow": {
+      "defaultSeedFails": [
+        "cow"
+      ],
+      "caughtBy": [
+        "cow"
+      ]
+    },
+    "partial-alloc": {
+      "defaultSeedFails": [
+        "gauntlet"
+      ],
+      "caughtBy": [
+        "gauntlet"
+      ]
+    },
+    "partial-append": {
+      "defaultSeedFails": [
+        "gauntlet"
+      ],
+      "caughtBy": [
+        "gauntlet"
+      ]
+    },
+    "translate-unbounded": {
+      "defaultSeedFails": [
+        "paging"
+      ],
+      "caughtBy": [
+        "paging"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "ops=200 seqs=7 free=5 used=27 shared=1 refused=15"
+  }
+}
