@@ -59,10 +59,10 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
         {
           q: 'After let b = a for a String, what happened?',
           options: [
-            'The heap buffer was deep-copied, so a and b are now independent owners',
-            'b owns the buffer, and a is no longer usable after the move',
+            'The buffer was deep-copied and a and b are independent owners',
+            'b becomes the sole owner of the buffer and a is no longer usable',
             'a and b both point at the buffer and the last one to leave scope frees it',
-            'The buffer was freed at once and a now holds an empty String that is still usable',
+            'The buffer was freed at once and a holds an empty String that is still usable',
           ],
           correct: [1],
           explanation:
@@ -77,10 +77,10 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
         {
           q: 'Why is clone() intentionally explicit?',
           options: [
-            'Implicit duplication would run Drop twice on one buffer, so the call must be spelled out',
-            'Duplicating a heap value can allocate and copy a lot of data, so the cost is visible at the call site',
-            'clone() is built on unsafe pointer copies, so Rust makes each use deliberate and auditable',
-            'The compiler cannot tell whether a type is safe to duplicate, so the programmer must vouch for it each time',
+            'Implicit duplication would call drop() twice on the same buffer and corrupt it',
+            'Duplicating a heap value can copy a lot of data and clone() shows the cost',
+            'clone() is built on unsafe pointer copies and each use must be audited',
+            'The compiler cannot tell if a type is safe to clone() and the programmer vouches',
           ],
           correct: [1],
           explanation:
@@ -95,10 +95,10 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
         {
           q: 'What does Drop provide?',
           options: [
-            'Cleanup run by a background collector, some time after the owner leaves scope, as Java does, via finalizers',
-            'Deterministic cleanup of whatever the value owns, such as memory, a file or a lock, when its owner ends',
-            'Cleanup that happens only when code calls drop() explicitly, like close() in C',
-            'Cleanup of heap memory only, since files, sockets and locks still need a manual close call',
+            'Cleanup run by a background collector some time after the owner leaves scope',
+            'Deterministic cleanup of what the value owns such as memory or a file or a lock',
+            'Cleanup that runs when the code calls drop by hand as it would call close in C',
+            'Cleanup of heap memory with files and sockets and locks left to a manual close call',
           ],
           correct: [1],
           explanation:

@@ -64,10 +64,10 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
         {
           q: 'What property makes match especially useful with enums?',
           options: [
-            'Arms fall through to the next one unless each ends with a break, as in a C switch',
-            'It must cover every variant, so a newly added variant breaks incomplete matches',
-            'It requires a trailing default arm, as a Java switch often does, to stay safe',
-            'It raises a runtime error when no arm matches, so tests must exercise every variant',
+            'Arms fall through to the next arm unless each ends with a break',
+            'It must cover each variant and a new variant breaks incomplete matches',
+            'It requires a trailing default arm in the way a Java switch does',
+            'It raises a runtime error when no arm matches the value',
           ],
           correct: [1],
           explanation:
@@ -82,10 +82,10 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
         {
           q: 'What values does 0..4 produce?',
           options: [
-            '0, 1, 2, 3, because the upper bound is excluded unless you write the inclusive form 0..=4',
-            '0, 1, 2, 3, 4, because Rust ranges include both ends, as in Ruby',
-            '1, 2, 3, 4, because Rust ranges count from one, like Lua or Fortran arrays',
-            '0, 1, 2, 3 in a for loop, but v[0..4] as a slice index includes element 4',
+            '0, 1, 2, 3 and the upper bound 4 is excluded',
+            '0, 1, 2, 3, 4 and both ends are included',
+            '1, 2, 3, 4 and counting starts at one',
+            '0, 1, 2, 3 in a for loop and up to 4 in a slice index',
           ],
           correct: [0],
           explanation:
@@ -100,10 +100,10 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
         {
           q: 'How can an infinite loop compute a value?',
           options: [
-            'Only through return, since every loop evaluates to the unit value',
-            'break can carry the loop\'s result, as in break n',
-            'Its last body expression becomes the value, as with the tail of a block',
-            'It needs a declared type, as in loop -> u32, before break may carry a value',
+            'A return statement is the way a loop hands back a value',
+            'A break can carry the result of the loop as in break n',
+            'Its last body expression becomes the loop value like a block tail',
+            'It needs a declared type on the loop before break carries a value',
           ],
           correct: [1],
           explanation:
