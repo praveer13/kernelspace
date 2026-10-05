@@ -17,10 +17,10 @@ export default {
     {
       q: 'INT4 weights share one 16-bit scale per group of 128 weights. How much scale metadata is that per weight?',
       options: [
-        '4 bits, the same as each weight',
-        '0.125 bits',
-        '0.5 bits',
-        '16 bits',
+        '4.000 bits per weight',
+        '0.125 bits per weight',
+        '0.500 bits per weight',
+        '16.00 bits per weight',
       ],
       correct: [1],
       why: [

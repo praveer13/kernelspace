@@ -38,6 +38,8 @@ export interface ActResult {
   metrics: [string, string][]
   /** The graded seed this run drew (null for the fixed practice scenario); the same seed replays it exactly. */
   seed?: number | null
+  /** An uncredited practice call: informational, not a verdict on the act. */
+  practice?: boolean
 }
 
 export interface MeasurementEvidence {
@@ -646,25 +648,25 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     causes: [
       {
         id: 'sched-bug',
-        label: 'scheduler regression: a recent change makes it admit too few requests per step, so batches stay small, TTFT climbs and the pool sits mostly idle',
+        label: 'scheduler regression that admits too few requests per step and leaves the pool mostly idle',
         correct: false,
         why: 'The pool is not idle: free blocks sit near zero. Preemption only hits requests that were already admitted, so rising auto-preempts show the scheduler is admitting plenty and memory is the constraint.',
       },
       {
         id: 'pool-small',
-        label: 'capacity wall: the KV pool is too small for the new context lengths, so allocation failures force recompute preemption',
+        label: 'capacity wall with a pool too small for new context lengths and failed allocations',
         correct: true,
         why: 'Right: near-zero free blocks plus rising auto-preempts mean allocations fail and preempted requests restart by recompute. Longer contexts take more blocks each, so the same pool holds fewer sequences and TTFT climbs.',
       },
       {
         id: 'net-stall',
-        label: 'network stall between workers: transfers delay the first token while decode on each worker stays normal',
+        label: 'network stall between workers that delays the first token while decode stays normal',
         correct: false,
         why: 'A transfer stall would delay first tokens, but by itself it would not explain near-zero free blocks together with rising auto-preempts. Those are KV-allocation signals, so the pool is the better-supported cause.',
       },
       {
         id: 'queue-lie',
-        label: 'intake queue silently dropping requests, so clients retry in bursts and each burst waits behind the last',
+        label: 'intake queue silently dropping requests with clients retrying in bursts behind each other',
         correct: false,
         why: 'Retry bursts would raise queue delay, but they do not explain free blocks near zero together with nonzero, rising auto-preempts. That signature points at the KV pool, not at intake.',
       },
@@ -672,25 +674,25 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     mitigations: [
       {
         id: 'restart',
-        label: 'restart workers on a schedule (every hour) so leaked KV blocks are reclaimed before p95 climbs',
+        label: 'restart workers on an hourly schedule to reclaim leaked blocks and clear stale state over time',
         correct: false,
         why: 'Nothing is leaking: blocks return to the pool when requests finish. The pressure is live demand from long contexts, so a restart drops in-flight work and the preempt storm returns as traffic refills the pool.',
       },
       {
         id: 'bigger-pool',
-        label: 'grow the pool with more memory, quantized KV or an offload tier, and cap admitted context',
+        label: 'grow the pool with more memory or quantized blocks or an offload tier and cap admitted context',
         correct: true,
         why: 'Right: more usable blocks (HBM, FP8 KV at half the bytes of 16-bit, or an offload tier) remove the capacity wall, and a cap on admitted context stops one long request from evicting many others.',
       },
       {
         id: 'smaller-batch',
-        label: 'lower max_running to cut preemptions, leave the pool and context caps as they are, and accept a throughput ceiling',
+        label: 'lower max_running to cut preemptions and accept a throughput ceiling in the meantime',
         correct: false,
         why: 'Fewer concurrent sequences does cut preemptions, but it only caps throughput: the pool stays too small for the new contexts and the cause is untouched. Adding blocks and capping context is what removes it.',
       },
       {
         id: 'chunked-prefill',
-        label: 'enable chunked prefill so long prompts stop blocking decode steps of running requests',
+        label: 'enable chunked prefill to stop long prompts blocking the decode steps of running requests',
         correct: false,
         why: 'Chunked prefill smooths prefill-decode interference, which shows up as TPOT spikes. TPOT is flat here; the pain is preemption from block exhaustion, which chunking does not relieve.',
       },
@@ -704,25 +706,25 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     causes: [
       {
         id: 'drain',
-        label: 'intake drain is misconfigured: the queue empties far slower than arrivals, so it fills and sheds despite idle capacity',
+        label: 'intake drain misconfigured to empty the queue slower than arrivals and shed with idle capacity',
         correct: true,
         why: 'Right: the scheduler has nothing waiting and running is low, so requests are held upstream. A drain slower than arrivals fills intake and sheds, while TPOT stays normal and GPUs idle.',
       },
       {
         id: 'pool-small',
-        label: 'KV pool too small: blocks run out and preempted requests re-queue until the backlog sheds new arrivals',
+        label: 'pool too small with blocks running out and preempted requests re-queuing until the backlog sheds',
         correct: false,
         why: 'A full pool shows near-zero free blocks, preemptions and a long scheduler waiting list. Workers here are half-empty with nothing waiting, so memory is not the constraint.',
       },
       {
         id: 'hot-expert',
-        label: 'hot expert straggler: one overloaded expert gates every MoE step, so the whole worker finishes slowly while it looks underfilled',
+        label: 'hot expert straggler where one overloaded expert gates each step and slows the whole worker',
         correct: false,
         why: 'A straggler stretches step time, so TPOT would rise for requests already running. TPOT is normal once a request starts, which places the stall before the engine, not inside a step.',
       },
       {
         id: 'sched-bug',
-        label: 'scheduler stuck: its admit step returns nothing, so requests pile up in the queue while the workers sit with free capacity',
+        label: 'scheduler stuck with an admit step that returns nothing while workers sit idle',
         correct: false,
         why: 'A stuck scheduler would show a long waiting list, because requests reach it and are not admitted. The waiting list is near zero, so the bottleneck sits upstream, at the intake drain.',
       },
@@ -730,25 +732,25 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     mitigations: [
       {
         id: 'bigger-pool',
-        label: 'grow the KV pool so every worker holds more sequences once the backlog arrives',
+        label: 'grow the pool to let each worker hold more sequences once the backlog finally arrives',
         correct: false,
         why: 'Memory is not short: nothing is waiting at the scheduler and workers are half-empty. More blocks add capacity that already sits idle and leave the drain bottleneck, and the shedding, untouched.',
       },
       {
         id: 'fix-drain',
-        label: 'fix the drain configuration so it matches what admission can absorb, then rerun the flash crowd test',
+        label: 'fix the drain configuration to match what admission absorbs then rerun the test',
         correct: true,
         why: 'Right: the bottleneck is the drain rate, so match it to what admission can absorb. Re-running the flash-crowd test confirms shed and queue delay recover rather than assuming they do.',
       },
       {
         id: 'restart',
-        label: 'restart the router to flush the queue, then watch whether the shed count returns',
+        label: 'restart the router to flush the queue and watch whether the shed count comes back',
         correct: false,
         why: 'A restart may clear the backlog briefly, but the drain is still slower than arrivals, so the queue refills and sheds again. It treats a configuration fault as a transient hang.',
       },
       {
         id: 'bigger-queue',
-        label: 'enlarge the intake queue so a flash crowd is buffered rather than shed, and revisit the drain rate later',
+        label: 'enlarge the intake queue to buffer a flash crowd instead of shedding and revisit the drain later',
         correct: false,
         why: 'A larger buffer postpones shedding but adds queue delay, because arrivals still outpace the drain. Under sustained load it still fills, and buffered requests miss the SLO instead of being shed.',
       },
@@ -762,25 +764,25 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     causes: [
       {
         id: 'no-admission',
-        label: 'no admission control: everything is admitted at once, the batch overcommits, and KV pressure and queueing collapse the SLO',
+        label: 'no admission control with everything admitted at once and the batch overcommitting memory until queueing hurts latency',
         correct: true,
         why: 'Right: with no gate, 4× concurrency lands in one huge batch that overcommits KV. Completions crawl, queue delay and TTFT p95 explode and goodput falls, while TPOT for started requests holds.',
       },
       {
         id: 'pool-small',
-        label: 'KV pool sized too small for launch-day contexts, so blocks run out and requests are preempted and recomputed repeatedly on each GPU',
+        label: 'pool sized too small for launch-day contexts with blocks running out and requests preempted and recomputed repeatedly',
         correct: false,
         why: 'Pool size adds pressure but is not the root cause: an admit-everything policy overruns any finite pool at some load. The enormous batch with crawling completions points at missing admission control.',
       },
       {
         id: 'net-stall',
-        label: 'network partition between router and workers that delays first tokens for every launch-day request, even short prompts',
+        label: 'network partition between router and workers that delays first tokens for each launch-day request including short prompts',
         correct: false,
         why: 'A partition would stall or fail requests already in flight, so TPOT would not be stable. The batch is huge and workers are busy, so the engine is overloaded rather than disconnected.',
       },
       {
         id: 'quant',
-        label: 'quantization regression: a recent FP8 build or CUDA kernel change slows every decode step, so goodput drops under load',
+        label: 'quantization regression from a recent build or kernel change that slows each decode step and drops goodput under load',
         correct: false,
         why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable, so no per-step slowdown explains the collapse; the damage is in queueing and batch size, not the model build.',
       },
@@ -788,25 +790,25 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     mitigations: [
       {
         id: 'bigger-pool',
-        label: 'grow the KV pool so the oversized launch-day batch fits without any preemption',
+        label: 'grow the pool to fit the oversized launch-day batch without any preemption at all',
         correct: false,
         why: 'More blocks raise the ceiling but not the policy. Admit-everything still overcommits a bigger pool at some load, and queue delay stays unbounded. A larger pool cannot replace a gate and a shed path.',
       },
       {
         id: 'admission',
-        label: 'add admission control that sizes each admit to KV headroom plus an honest shed path as in lab 06',
+        label: 'add admission control that sizes each admit to memory headroom and sheds the rest honestly',
         correct: true,
         why: 'Right: a size- and headroom-aware gate admits only what fits and sheds the rest honestly, so KV never overcommits and admitted requests keep meeting the SLO. Lab 06 builds this shape.',
       },
       {
         id: 'smaller-model',
-        label: 'switch to a smaller model for launch week so each decode step is cheaper and the batch drains faster',
+        label: 'switch to a smaller model for launch week to make each decode step cheaper and the batch drain faster',
         correct: false,
         why: 'A smaller model lowers per-step cost but changes quality and means a deploy mid-incident. Every request is still admitted at once, so the batch still overcommits and the missing gate remains.',
       },
       {
         id: 'more-nodes',
-        label: 'double the fleet tonight and spread the 4× concurrency across twice as many workers behind the router',
+        label: 'double the fleet tonight and spread the extra concurrency across twice as many workers behind the router',
         correct: false,
         why: 'Extra nodes spread load only as well as the router balances it, and each still admits everything. Provisioning takes time and money, and any burst past the new capacity collapses the same way.',
       },
@@ -864,4 +866,89 @@ export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null
     telemetry = runIncidentEngine(seeds, CFG, greedy)
   }
   return { ...def, seed: seeds.seed, telemetry }
+}
+
+/**
+ * Act IV credits only a learner's first call on each incident. The WhyList reveals the right
+ * cause and mitigation after any call and the same incident can be re-opened, so a later call
+ * proves recall of that reveal, not diagnosis from the telemetry. Later calls are practice:
+ * graded and explained, but never counted toward the act or its XP.
+ */
+export interface IncidentLedger {
+  /** Incident ids with at least one call (the first call is the only one that counts). */
+  attempted: string[]
+  /** Incident ids whose first call named the right cause and the right mitigation. */
+  credited: string[]
+}
+
+export const EMPTY_INCIDENT_LEDGER: IncidentLedger = { attempted: [], credited: [] }
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+/**
+ * The ledger is kept in the progress store's working state (`fw:evidence:incident`), not in component
+ * state, so a reload or leaving the page cannot hand a learner a fresh first call on an incident whose
+ * answer they have already seen.
+ */
+export function incidentLedgerFrom(stored: { attempted?: unknown; credited?: unknown } | undefined): IncidentLedger {
+  if (!stored) return EMPTY_INCIDENT_LEDGER
+  const attempted = strings(stored.attempted)
+  return { attempted, credited: strings(stored.credited).filter((id) => attempted.includes(id)) }
+}
+
+export function gradeIncidentCall(
+  ledger: IncidentLedger,
+  incident: { id: string; title: string },
+  causeOk: boolean,
+  mitigationOk: boolean,
+  total: number = INCIDENTS.length,
+): { ledger: IncidentLedger; practice: boolean; result: ActResult } {
+  const ok = causeOk && mitigationOk
+  const practice = ledger.attempted.includes(incident.id)
+  const next: IncidentLedger = practice
+    ? ledger
+    : {
+        attempted: [...ledger.attempted, incident.id],
+        credited: ok ? [...ledger.credited, incident.id] : ledger.credited,
+      }
+  const name = incident.title.split('—')[0].trim()
+  const missed = next.attempted.length - next.credited.length
+  const metrics: [string, string][] = [
+    ['credited', `${next.credited.length}/${total}`],
+    ['cause', causeOk ? 'correct' : 'wrong'],
+    ['mitigation', mitigationOk ? 'correct' : 'wrong'],
+  ]
+  const verdict = `cause ${causeOk ? '✓' : '✗'} · mitigation ${mitigationOk ? '✓' : '✗'}`
+  if (practice) {
+    return {
+      ledger: next,
+      practice,
+      result: {
+        pass: false,
+        practice: true,
+        score: next.credited.length / total,
+        headline: ok ? `${name} diagnosed, not credited` : 'not diagnosed',
+        detail: `${verdict}. Only the first call on an incident counts toward the act and XP; this one was practice.`,
+        metrics,
+      },
+    }
+  }
+  const allDone = next.credited.length >= total
+  const left = total - next.attempted.length
+  let detail: string
+  if (allDone) detail = 'all three incidents diagnosed with the right fix on the first call. The Planner would hire you.'
+  else if (!ok) detail = `${verdict}. This incident is now practice only: the right answer is shown below, and a later call here will not count toward the act or XP.`
+  else if (left > 0) detail = `${left} incident(s) left to call for the first time.`
+  else detail = `every incident has had its first call, but ${missed} missed it, so the act cannot be credited from this progress. Further calls are practice.`
+  return {
+    ledger: next,
+    practice,
+    result: {
+      pass: allDone,
+      score: next.credited.length / total,
+      headline: ok ? `correct — ${name} diagnosed` : 'wrong call — look at the telemetry again',
+      detail,
+      metrics,
+    },
+  }
 }

@@ -19,10 +19,10 @@ export default {
     {
       q: 'Against FasterTransformer, what does PagedAttention\'s block-table indirection cost the attention kernel itself?',
       options: [
-        'Nothing measurable, because the GPU resolves the table lookup in hardware like a TLB, so the kernel matches a contiguous cache',
-        'About 20-26% higher latency, which the larger batches enabled by freed memory more than repay',
-        'A few percent, which is why paging is usually described as nearly free at the kernel level and costly only in memory',
-        'About 2-4x higher latency, which only prefix caching can then offset in production',
+        'About 0% higher latency from the GPU resolving the table lookup in hardware',
+        'About 20-26% higher latency repaid by larger GPU batches from freed memory',
+        'About 3% higher latency which makes paging nearly free at the GPU kernel level overall',
+        'About 2-4x higher latency that GPU prefix caching can offset in production',
       ],
       correct: [1],
       why: [

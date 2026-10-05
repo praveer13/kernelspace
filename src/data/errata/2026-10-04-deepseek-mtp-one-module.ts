@@ -19,10 +19,10 @@ export default {
     {
       q: 'DeepSeek-V3 and R1 ship one MTP module. What does MTP-3 mean in production?',
       options: [
-        'Three separately trained MTP modules that all share the target trunk weights',
-        'One trained module applied for 3 draft steps, with acceptance falling',
-        'One module trained to emit three tokens at once in one forward pass',
-        'Three layers of the trunk are reused as the drafters at serving time',
+        'Three separately trained MTP modules that share the target trunk weights',
+        'One trained MTP module reused for three draft steps as acceptance falls off',
+        'One MTP module trained to emit three tokens at once in a single forward pass',
+        'Three trunk layers reused as MTP drafters at serving time',
       ],
       correct: [1],
       why: [

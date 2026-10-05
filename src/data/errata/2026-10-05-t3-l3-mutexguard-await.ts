@@ -19,10 +19,10 @@ export default {
     {
       q: 'A task holds a std::sync::MutexGuard across an .await. Which tasks are blocked while it is parked?',
       options: [
-        'Every task on the runtime, because a held lock pauses the whole thread pool',
-        'Only tasks that call lock() on that mutex, each blocking its worker thread',
-        'No task, because the await releases the guard at the suspension point',
-        'Only the holder, because other tasks are woken once its future is dropped',
+        'Tasks on the whole runtime, with a held lock pausing the thread pool',
+        'Tasks that call lock on that mutex, each blocking its worker thread',
+        'No task, with the await releasing the guard at the suspension point',
+        'The holder alone, with other tasks woken once its future is dropped',
       ],
       correct: [1],
       why: [

@@ -19,10 +19,10 @@ export default {
     {
       q: 'In Dynamo, which language orchestrates KV transfers and which one performs them?',
       options: [
-        'Python orchestrates the transfers, and Rust performs them',
-        'Rust does both, moving the bytes at line rate with no C++ library',
-        'Rust orchestrates the transfers, and NIXL (C++) performs them',
-        'A C++ router orchestrates, and Rust kernels move the bytes',
+        'Python orchestrates the transfers and Rust performs them',
+        'Rust does both jobs and no C++ library is involved',
+        'Rust orchestrates the transfers and C++ moves them',
+        'A C++ router orchestrates the transfers and Rust performs them',
       ],
       correct: [2],
       why: [

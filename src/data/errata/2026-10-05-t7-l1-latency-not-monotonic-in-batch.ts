@@ -16,15 +16,15 @@ export default {
     {
       q: 'A vendor page reports peak tok/s with no latency figures. As batch size grows, what do throughput and latency do, and why does that peak figure mislead?',
       options: [
-        'Throughput climbs without limit while latency stays flat, so the peak is the best case the engine can offer at any load',
-        'Throughput climbs and then collapses while latency stays flat, so the peak is a brief spike that sustained load erases',
-        'Throughput flattens while latency keeps rising and turns vertical past the knee, so the peak sits where users had left',
-        'Both stay flat until the KV cache fills, so the peak is trustworthy right up to the point where requests start failing',
+        'Throughput climbs without limit while latency stays flat with the peak a best case at any load',
+        'Throughput climbs then collapses while latency stays flat with the peak a brief spike that load erases',
+        'Throughput flattens while latency keeps rising past the knee with the peak where users had left',
+        'Both stay flat until the cache fills with the peak trustworthy until requests start failing',
       ],
       correct: [2],
       why: [
         'Throughput saturates against the compute and bandwidth roofs, and latency does not stay flat: bigger batches lengthen every step and deepen the queue. A peak taken at the limit hides that cost.',
-        'Throughput flattens rather than collapsing, and latency is the metric that blows up. Treating latency as flat is the exact contrast the old lesson text got wrong.',
+        'Throughput flattens rather than collapsing, and latency keeps rising with batch size and blows up past the knee. It does not stay flat. The old lesson called latency non-monotonic.',
         'Right: past the knee more batch adds almost no tokens, but queueing and longer steps push p99 vertical. A bare peak number is usually taken in that region, so ask for the latency.',
         'Latency climbs well before any memory limit is hit, because queueing and per-step time grow with batch. A figure with no TTFT or TPOT hides that long before requests fail.',
       ],

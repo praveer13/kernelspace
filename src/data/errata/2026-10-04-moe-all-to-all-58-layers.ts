@@ -14,10 +14,10 @@ export default {
     {
       q: 'DeepSeek-V3 has 61 layers and the first 3 are dense FFNs. How many all-to-alls (dispatch plus combine) does one forward pass do?',
       options: [
-        '122: dispatch and combine in every one of the 61 layers',
-        '116: dispatch and combine in each of the 58 MoE layers',
-        '58: one all-to-all per MoE layer',
-        '118: dispatch and combine, taking only 2 layers as dense',
+        '122 from dispatch and combine in each of the 61 layers',
+        '116 from dispatch and combine in each of the 58 MoE layers',
+        '58 from a single exchange in each of the 58 MoE layers',
+        '118 from dispatch and combine with 2 layers counted as dense',
       ],
       correct: [1],
       why: [

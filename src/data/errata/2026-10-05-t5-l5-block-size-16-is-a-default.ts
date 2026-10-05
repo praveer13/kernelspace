@@ -19,10 +19,10 @@ export default {
     {
       q: 'In vLLM\'s block-size ablation, what did the PagedAttention paper find?',
       options: [
-        'Block size 16 was the single best setting on every workload, and every larger size was slower on both datasets',
-        'On ShareGPT, sizes 16 to 128 performed best, while on short-sequence Alpaca the larger sizes did noticeably worse',
-        'Block size made no measurable difference on either dataset, so 16 was chosen as an arbitrary power of two',
-        'Larger blocks always won, because fewer table entries beat the extra tail waste, so 128 was best on both datasets',
+        'Block size 16 was the best setting on both datasets and larger sizes were slower',
+        'Sizes 16 to 128 did best on ShareGPT while larger sizes did worse on short Alpaca',
+        'Block size made no measurable difference on either dataset and 16 was an arbitrary choice',
+        'Larger blocks won on both datasets with 128 the best size',
       ],
       correct: [1],
       why: [

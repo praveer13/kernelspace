@@ -64,9 +64,9 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
           q: 'When is Ordering::Relaxed sufficient?',
           options: [
             'A ready flag set after filling a non-atomic buffer, because the flag store is itself atomic',
-            'A standalone ticket or metrics counter that guards no other data',
-            'The store that unlocks a spin lock since only one atomic bool changes',
-            'Every compare_exchange loop because the compare and swap happen as one atomic step',
+            'A standalone ticket or metrics counter, which guards no other data',
+            'The store that unlocks a spin lock, since only one atomic bool changes',
+            'Every compare_exchange loop, because the compare and swap happen as one atomic step',
           ],
           correct: [1],
           explanation:
@@ -83,7 +83,7 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
           options: [
             'Every thread sees the writes at once and not only the thread that performed the Acquire',
             'Writes made before the Release are visible to the thread whose Acquire load observes it',
-            'The Acquire blocks until the releasing thread leaves its critical section as with a lock',
+            'The Acquire blocks until the releasing thread leaves its critical section, as with a lock',
             'Both operations become SeqCst, so every atomic in the program gets one global order',
           ],
           correct: [1],
