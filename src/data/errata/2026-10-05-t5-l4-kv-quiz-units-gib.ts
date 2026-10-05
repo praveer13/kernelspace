@@ -1,19 +1,19 @@
 import type { Erratum } from './schema'
 
 export default {
-  id: '2026-10-05-t5-l4-kv-quiz-units-and-d2-why',
+  id: '2026-10-05-t5-l4-kv-quiz-units-gib',
   date: '2026-10-05',
   kind: 'error',
   lessons: ['t5.l4'],
-  title: 'T5.L4 quiz: the 128k-context cache is 40 GiB (about 43 GB), and one distractor was mis-explained',
+  title: 'T5.L4 quiz: the 128k-context cache is 40 GiB (about 43 GB), not "40 GB"',
   before:
-    'The context-cost quiz keyed "about 40 GB" next to decimal-GB figures, and a distractor explanation said putting context length in the per-token formula "counts length twice".',
+    'The T5.L4 context-cost quiz keyed "40 GB — 320 KB × 131,072" and explained "×131,072 ≈ 40 GB", with decimal labels on binary quantities.',
   after:
-    'The 128k-context options now use one binary unit (20, 40 and 320 GiB; weights about 130 GiB). That distractor is a per-sequence total built from hidden size, which overcounts under GQA; it does not count length twice.',
-  why: 'A GiB is 2^30 bytes and a GB is 10^9, about 7% apart. Mixing them in one question made the figures disagree, and the old explanation named the wrong flaw.',
+    'The 128k-context options now use one binary unit (20, 40 and 320 GiB; weights about 130 GiB). 320 KiB per token × 131,072 tokens is exactly 40 GiB, about 43 GB.',
+  why: 'A GiB is 2^30 bytes and a GB is 10^9, about 7% apart. Mixing them in one question made the figures disagree.',
   source: {
-    url: 'https://huggingface.co/meta-llama/Meta-Llama-3-70B/blob/main/config.json',
-    title: 'Llama-3-70B config.json (80 layers, hidden 8192, 64 attention heads, num_key_value_heads: 8)',
+    url: 'https://physics.nist.gov/cuu/Units/binary.html',
+    title: 'NIST: Prefixes for binary multiples (kibi, mebi, gibi)',
   },
   items: [
     {
