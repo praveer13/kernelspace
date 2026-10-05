@@ -94,7 +94,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
             'The warp slot count on the SM alone; registers and shared memory change speed per warp, but not residency',
             'The tightest of three budgets: registers per SM, shared memory per SM, and the block and warp slot limits on the SM',
             'L2 cache capacity, since resident warps share the L2 and each needs a slice (a portion) for its working set',
-            'The memory clock, since faster HBM lets an SM keep more loads in flight (more bytes moving), and therefore more warps resident',
+            'The memory clock, since faster HBM lets an SM keep more loads in flight (each load completes sooner and frees the registers it holds), and therefore more warps resident',
           ],
           correct: [1],
           explanation:
@@ -145,7 +145,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'A 32-way shared-memory bank conflict occurs when…',
           options: [
-            'More than 32 warps are resident on one SM (a hard limit), so their shared-memory requests queue at the memory controller',
+            'More than 32 warps are resident on one SM (beyond what the four warp schedulers can track), so their shared-memory requests queue at the memory controller',
             'All 32 lanes hit different addresses in the same SRAM bank, serializing the access 32-fold; padding rows usually fixes it',
             'A block uses more than 1024 threads, so the hardware splits it into serialized waves (reusing the same banks)',
             'Two kernels write the same array in global memory at once, so their writes serialize on one cache line',

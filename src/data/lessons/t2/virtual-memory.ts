@@ -21,9 +21,9 @@ It is also, not coincidentally, the exact design vLLM copied for KV-cache manage
       type: 'prose',
       md: `## Translation: pages, frames, and the walk
 
-Virtual and physical memory are both cut into fixed-size chunks: **pages** (virtual, 4 KB typically) and **frames** (physical, same size). The page table maps *page number → frame number*; the offset within the page passes through unchanged. A 48-bit virtual address on x86-64 is really \`[VPN 36 bits | offset 12 bits]\`, and translation is: look up the VPN, get a frame, keep the offset.
+Virtual and physical memory are both cut into fixed-size chunks: **pages** (virtual, 4 KiB typically) and **frames** (physical, same size). The page table maps *page number → frame number*; the offset within the page passes through unchanged. A 48-bit virtual address on x86-64 is really \`[VPN 36 bits | offset 12 bits]\`, and translation is: look up the VPN, get a frame, keep the offset.
 
-One table can't hold 2³⁶ entries per process — that's 512 GB of metadata. So x86-64 uses a **4-level radix tree**: each level is a 4 KB page of 512 8-byte entries, and the walk descends \`PML4 → PDPT → PD → PT → data\`. Entries are allocated lazily, so a process pays page-table memory only for regions it actually maps. The register \`CR3\` points at the root; a context switch to another process means loading a different \`CR3\`.`,
+One table can't hold 2³⁶ entries per process — that's 512 GiB of metadata. So x86-64 uses a **4-level radix tree**: each level is a 4 KiB page of 512 8-byte entries, and the walk descends \`PML4 → PDPT → PD → PT → data\`. Entries are allocated lazily, so a process pays page-table memory only for regions it actually maps. The register \`CR3\` points at the root; a context switch to another process means loading a different \`CR3\`.`,
     },
     {
       type: 'diagram',
@@ -59,7 +59,7 @@ One table can't hold 2³⁶ entries per process — that's 512 GB of metadata. S
 
 Notice the horror: a 4-level walk is **four extra memory reads per memory access**. Unmitigated, virtual memory would quarter your effective bandwidth. The mitigation is the **TLB** (translation lookaside buffer): a small, fast cache of recent VPN→frame translations — tens to a few thousand entries, ~1 cycle lookup. TLB hit: translation is free. TLB miss: the walk (hardware "page walker" does it, ~10–100 ns) and the entry is cached.
 
-TLB reach matters: \`entries × page_size\`. With 1536 L2-TLB entries and 4 KB pages, that's 6 MB — smaller than your matrix from T0.L3, which is why that column walk thrashed *both* the data caches and the TLB. This is also the entire case for **huge pages** (2 MB/1 GB): same TLB, 512× the reach per entry. Databases and JVMs use \`-XX:+UseLargePages\`; GPU runtimes allocate HBM in huge pages for the same reason.`,
+TLB reach matters: \`entries × page_size\`. With 1536 L2-TLB entries and 4 KiB pages, that's 6 MiB — smaller than your matrix from T0.L3, which is why that column walk thrashed *both* the data caches and the TLB. This is also the entire case for **huge pages** (2 MiB/1 GiB): same TLB, 512× the reach per entry. Databases and JVMs use \`-XX:+UseLargePages\`; GPU runtimes allocate HBM in huge pages for the same reason.`,
     },
     {
       type: 'statline',
@@ -142,17 +142,17 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           q: 'A 4-level page walk on x86-64 exists because…',
           options: [
             'Each level mirrors one cache tier (L1, L2, L3, DRAM), so a four-level walk matches the hardware memory hierarchy',
-            'A flat table for a 48-bit space would need ~512 GB of entries per process; the radix tree allocates only mapped regions',
-            'Each level is a 512-entry table sized to one 4 KB page, so the hardware walker fetches a whole level in one cache line',
+            'A flat table for a 48-bit space would need ~512 GiB of entries per process; the radix tree allocates only mapped regions',
+            'Each level is a 512-entry table sized to one 4 KiB page, so the hardware walker fetches a whole level in one cache line',
             'Smaller tables make context switches cheaper, since only the top level is saved and the lower levels stay in the TLB',
           ],
           correct: [1],
           explanation:
-            '2^36 pages × 8 B entries is untenable flat. The tree allocates lower levels on demand, so sparse address spaces cost a few KB of page tables. CR3 points at the root; the walk consumes the VPN 9 bits at a time.',
+            '2^36 pages × 8 B entries is untenable flat. The tree allocates lower levels on demand, so sparse address spaces cost a few KiB of page tables. CR3 points at the root; the walk consumes the VPN 9 bits at a time.',
           why: [
-            'Misconception: levels match the cache tiers. Each level just consumes 9 address bits; the number of levels falls out of the 48-bit space and 4 KB pages, not the cache hierarchy.',
-            'Right: 2^36 pages at 8 B each is ~512 GB if flat. A radix tree allocates lower levels only for mapped regions, so a sparse address space costs a few KB of page tables.',
-            'Misconception: one cache line per level. A 4 KB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from 48 address bits at 9 each.',
+            'Misconception: levels match the cache tiers. Each level just consumes 9 address bits; the number of levels falls out of the 48-bit space and 4 KiB pages, not the cache hierarchy.',
+            'Right: 2^36 pages at 8 B each is ~512 GiB if flat. A radix tree allocates lower levels only for mapped regions, so a sparse address space costs a few KiB of page tables.',
+            'Misconception: one cache line per level. A 4 KiB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from 48 address bits at 9 each.',
             'Misconception: smaller tables make switches cheaper. A switch loads one root pointer (CR3) regardless of depth, and the TLB is flushed or PCID-tagged, not preserved level by level.',
           ],
         },
@@ -166,11 +166,11 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           ],
           correct: [1],
           explanation:
-            'Without it every load would cost 4 extra memory reads. With ~1k entries at 4 KB pages, TLB reach is a few MB — which is why huge pages (2 MB/1 GB) multiply reach 512× and why wide-stride access patterns thrash it.',
+            'Without it every load would cost 4 extra memory reads. With ~1k entries at 4 KiB pages, TLB reach is a few MiB — which is why huge pages (2 MiB/1 GiB) multiply reach 512× and why wide-stride access patterns thrash it.',
           why: [
             'Misconception: the TLB caches data. Data lines live in L1/L2/L3; the TLB stores only address translations, which is why a TLB hit can still be followed by a cache miss.',
             'Right: translation lookaside means the hardware keeps recent VPN-to-frame mappings. A hit skips the walk (about four dependent loads), so most accesses translate in about a cycle.',
-            'Misconception: the TLB holds all entries. It has roughly a thousand entries, covering a few MB at 4 KB pages; the full mapping lives in page tables, and walks happen on a miss.',
+            'Misconception: the TLB holds all entries. It has roughly a thousand entries, covering a few MiB at 4 KiB pages; the full mapping lives in page tables, and walks happen on a miss.',
             'Misconception: the TLB records fault outcomes. It caches valid translations; a page that is evicted later faults again, and the TLB entry is invalidated when the mapping changes.',
           ],
         },

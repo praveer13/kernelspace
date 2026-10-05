@@ -106,7 +106,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         'Compare stride-1 vs stride-4096 traversal of the same buffer; explain the difference using 64-byte cache lines.',
         'Locate HBM on the ladder and note its bandwidth vs DRAM — the number decode lives and dies by.',
       ],
-      note: `The step pattern you just saw is the memory hierarchy measured directly. Each plateau is a level: while the working set fits in L1 you pay ~0.5 ns; once it spills, latency jumps to the next level. **Stride-4096 defeats the prefetcher and the TLB at once** — every access lands in a new 4 KB page and a new cache line. This exact experiment, run on a GPU against HBM, is why LLM inference engineers obsess over memory access patterns.`,
+      note: `The step pattern you just saw is the memory hierarchy measured directly. Each plateau is a level: while the working set fits in L1 you pay ~0.5 ns; once it spills, latency jumps to the next level. **Stride-4096 defeats the prefetcher and the TLB at once** — every access lands in a new 4 KiB page and a new cache line. This exact experiment, run on a GPU against HBM, is why LLM inference engineers obsess over memory access patterns.`,
     },
     {
       type: 'quiz',
@@ -152,7 +152,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
           options: [
             'Every list element is a pointer to a scattered heap object (not inline data), so each iteration is a guaranteed DRAM cache miss',
             'Per-element interpreter work: bytecode dispatch, refcounting and a boxed int for every add, with no SIMD loop',
-            'numpy releases the GIL and spreads the loop across all cores (threads) while the list loop is stuck on one core',
+            'numpy releases the GIL and spreads the loop across all cores (every add calls a parallel BLAS routine) while the list loop is stuck on one core',
             'Python integers are arbitrary-precision, so even a small add has to walk a multi-word bignum representation',
           ],
           correct: [1],
@@ -170,7 +170,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
           options: [
             'Large SRAM arrays cannot be fabricated at all: past a few MB, the cells stop holding their state reliably',
             'SRAM needs ~6 transistors per bit vs 1 transistor plus a capacitor for DRAM: area, power and cost make it infeasible',
-            'DRAM cells are intrinsically faster than SRAM but harder to program, so designers put SRAM caches in front (for convenience)',
+            'DRAM cells are intrinsically faster than SRAM but harder to program, so designers put SRAM caches in front (a hardware-software split chosen for ease of compilation, not for cost)',
             'A 128 GB array would be too hot to cool: the memory controller would overheat, and throttle the whole chip',
           ],
           correct: [1],

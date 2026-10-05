@@ -64,7 +64,7 @@ Read those numbers again: to serve 70B with serious context, you need **8 GPUs �
 
 Every KV optimization is a multiplier on that formula. Price them:
 
-- **GQA/MQA** — fewer KV heads: ÷4 (8 vs 32) to ÷8. Free-ish (baked into the model, small quality cost paid at training time). Already counted above; *without* GQA our 70B would need 2.6 MB/token.
+- **GQA/MQA** — fewer KV heads: ÷4 (8 vs 32) to ÷8. Free-ish (baked into the model, small quality cost paid at training time). Already counted above; *without* GQA our 70B would need 2.5 MiB/token.
 - **KV quantization (FP8/INT4)** — b: 2 B → 1 B → 0.5 B: ×2 to ×4 tokens, tiny quality cost (T4.L7). Decode reads the whole cache per token, so this *also* multiplies decode bandwidth.
 - **Sliding-window attention** — cap the effective context (Mistral-style): cache stops growing at the window. Changes the model, not just the system.
 - **Prefix sharing** — share the system prompt's blocks across all requests (T5.L5): one copy of your 2k-token system prompt instead of one per request. At 100 concurrent requests: ~100× on the shared part.
@@ -143,10 +143,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'GQA reduces KV-cache size by…',
           options: [
-            'Compressing stored K and V with a lossless codec (such as zlib level 6) after each write, and decompressing inside the attention kernel',
+            'Compressing stored K and V with a lossless codec (such as zstd or zlib) after each write, and decompressing inside the attention kernel',
             'Sharing K/V across groups of query heads, so the KV dimension shrinks by the group factor (32 to 8 heads is 4x) and the cache with it',
             'Storing K and V in FP8 instead of FP16 (a per-tensor scale), which halves the bytes per element and is applied when the model is loaded',
-            'Skipping a fixed fraction of layers (every 2nd layer) when writing the cache, so only some layers contribute K and V for each token',
+            'Skipping a fixed fraction of layers (for example alternate layers) when writing the cache, so only some layers contribute K and V for each token',
           ],
           correct: [1],
           explanation:

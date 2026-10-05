@@ -49,10 +49,10 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
       pairs: [
         {
           os: 'page / frame',
-          osLine: 'Fixed 4 KB units of virtual/physical memory; any frame backs any page.',
+          osLine: 'Fixed 4 KiB units of virtual/physical memory; any frame backs any page.',
           llm: 'KV block',
           llmLine: 'Fixed 16-token units of logical/physical KV; any physical block serves any sequence.',
-          breaks: 'A page is sized by hardware (4 KB) and backs bytes; a KV block is a software choice (16 tokens) whose byte size depends on the model\'s layers, heads and dtype.',
+          breaks: 'A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (16 tokens) whose byte size depends on the model\'s layers, heads and dtype.',
         },
         {
           os: 'page table + MMU',

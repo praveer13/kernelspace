@@ -19,7 +19,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## The data structures, concretely
 
-The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KB of KV per token, so one block holds 16 × 128 KB = 2 MB), a pool of N blocks is the entire serving capacity. Two structures run the show:
+The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KiB of KV per token, so one block holds 16 × 128 KiB = 2 MiB), a pool of N blocks is the entire serving capacity. Two structures run the show:
 
 - **The free-block queue** — your T1.L3 free list, minus the fit search (all blocks identical), kept in eviction order: \`alloc()\` pops the head, \`free()\` pushes the tail, O(1), no fragmentation between blocks ever.
 - **Per-sequence block tables** — a growable array of physical block ids: logical block \`i\` (tokens \`16i..16i+15\`) lives in physical block \`table[i]\`. The attention kernel translates per block as it reads — the MMU walk, one level deep.
@@ -197,10 +197,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'The PagedAttention kernel\'s block-table indirection is affordable because…',
           options: [
-            'Modern GPUs resolve the block-table lookup in hardware (like a TLB with 64 entries), so the indirection adds no measurable cost and memory savings are a pure gain',
+            'Modern GPUs resolve the block-table lookup in hardware (the way a hardware TLB caches translations), so the indirection adds no measurable cost and memory savings are a pure gain',
             'The kernel is slower (20-26% higher attention latency than FasterTransformer in the paper), but reclaimed memory grows batches and gives 2-4x the throughput',
             'The kernel first gathers the blocks into one contiguous buffer (a 16-token copy per block), so attention runs on contiguous memory and pays one extra copy',
-            'The table is small enough to live in registers (under 1 KiB per sequence), so lookups never touch HBM and the kernel runs as fast as a contiguous-cache kernel',
+            'The table is small enough to live in registers (only a few entries per sequence), so lookups never touch HBM and the kernel runs as fast as a contiguous-cache kernel',
           ],
           correct: [1],
           explanation:

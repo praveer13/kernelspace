@@ -466,7 +466,7 @@ export default function MatrixBench() {
               <span className="font-mono text-[10px] text-text-2">column-major · stride N·8 B</span>
             </div>
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
-              at 8192² the column stride is 64 KB: one useful double per fetched line, a new page
+              at 8192² the column stride is 64 KiB: one useful double per fetched line, a new page
               every access, and no prefetcher rescue.
             </p>
           </ControlGroup>

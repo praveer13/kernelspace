@@ -187,9 +187,9 @@ An inference engine's control plane is an async-runtime workload: thousands of S
         {
           q: 'A task that returns Poll::Pending without arranging a wake will…',
           options: [
-            'Be polled again on the next loop turn (a busy retry), because the executor retries every Pending task',
+            'Be polled again on the next loop turn (the executor spins on it in a busy loop), because the executor retries every Pending task',
             'Never be polled again: the task hangs silently and permanently, with no error and no panic',
-            'Panic the executor (a debug assertion), since a missing waker registration is detected at run time',
+            'Panic the executor (an assertion in debug builds that checks for a registered waker), since a missing waker registration is detected at run time',
             'Be polled again once a default retry interval elapses, since runtimes fall back to timed polling',
           ],
           correct: [1],

@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `Here is a puzzle. Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MB of data. Identical algorithm, identical arithmetic, identical output. One finishes in about **0.4 seconds**; the other takes **8 seconds**. Twenty times slower, and the slow one is arguably the more "natural" way to write it.
+      md: `Here is a puzzle. Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MiB of data. Identical algorithm, identical arithmetic, identical output. One finishes in about **0.4 seconds**; the other takes **8 seconds**. Twenty times slower, and the slow one is arguably the more "natural" way to write it.
 
 The difference is a single loop-ordering decision: whether consecutive iterations touch consecutive *memory addresses*. This lesson makes you run that experiment yourself, then explains exactly why the hardware cares so much — cache lines, prefetchers, and the shape of 2D arrays in memory. It is the first time in the course you will feel a 20× penalty with your own hands, and it will not be the last.`,
     },
@@ -23,12 +23,12 @@ The difference is a single loop-ordering decision: whether consecutive iteration
 
 Your matrix is an illusion. RAM knows only addresses 0 to N, so every 2D array is *projected* onto a line. **Row-major** order (C, C++, Rust, numpy default, Java by convention) lays row 0 end-to-end, then row 1, then row 2. **Column-major** order (Fortran, MATLAB, R, Julia default) lays column 0 end-to-end, then column 1.
 
-For a row-major matrix, element \`A[i][j]\` lives at address \`base + (i * ncols + j) * elem_size\`. Walk \`j\` upward and you advance 8 bytes per step — beautifully sequential. Walk \`i\` upward and you *jump* \`ncols * 8\` bytes per step: 64 KB per hop for our 8192-column matrix. Each hop lands in a brand-new cache line, and by the time you come back around to the next column, the line you touched has long been evicted. Every single access pays full DRAM latency.
+For a row-major matrix, element \`A[i][j]\` lives at address \`base + (i * ncols + j) * elem_size\`. Walk \`j\` upward and you advance 8 bytes per step — beautifully sequential. Walk \`i\` upward and you *jump* \`ncols * 8\` bytes per step: 64 KiB per hop for our 8192-column matrix. Each hop lands in a brand-new cache line, and by the time you come back around to the next column, the line you touched has long been evicted. Every single access pays full DRAM latency.
 
-| Traversal | Addresses touched | Cache lines used per 64 B fetched | DRAM trips for 512 MB |
+| Traversal | Addresses touched | Cache lines used per 64 B fetched | DRAM trips for 512 MiB |
 |---|---|---|---|
 | Row-major (sequential) | consecutive 8 B steps | 8 of 8 doubles | ~8 M (minimum possible) |
-| Column-major (stride 64 KB) | jumps of 65,536 B | 1 of 8 doubles | ~67 M (8× waste, no reuse) |`,
+| Column-major (stride 64 KiB) | jumps of 65,536 B | 1 of 8 doubles | ~67 M (8× waste, no reuse) |`,
     },
     {
       type: 'code',
@@ -52,7 +52,7 @@ def col_sum(A):
     total = 0.0
     for j in range(A.shape[1]):
         for i in range(A.shape[0]):
-            total += A[i, j]        # 64 KB stride — cache killer
+            total += A[i, j]        # 64 KiB stride — cache killer
     return total
 
 # (in practice: A.sum() — vectorized, sequential, ~100x faster
@@ -99,7 +99,7 @@ double col_sum(const double *A) {
     double total = 0;
     for (long j = 0; j < N; j++)
         for (long i = 0; i < N; i++)
-            total += A[i * N + j];   // stride 64 KB: every load misses
+            total += A[i * N + j];   // stride 64 KiB: every load misses
     return total;
 }`,
         },
@@ -112,9 +112,9 @@ double col_sum(const double *A) {
 
 **Cache lines (64 B).** A column walk uses 8 bytes of every 64-byte line it drags in from DRAM, then never touches the other 56. You are paying 8× the memory traffic for the same math — before any other effect.
 
-**The prefetcher.** Modern CPUs detect sequential (and constant-stride) access streams and fetch upcoming lines *before* you ask. A row-major walk gets effectively lower-than-DRAM latency because the data arrives just in time. A 64 KB stride is too wide and too irregular to help: every access is a cold miss.
+**The prefetcher.** Modern CPUs detect sequential (and constant-stride) access streams and fetch upcoming lines *before* you ask. A row-major walk gets effectively lower-than-DRAM latency because the data arrives just in time. A 64 KiB stride is too wide and too irregular to help: every access is a cold miss.
 
-**The TLB, again.** Pages are 4 KB. Our matrix row is 64 KB — 16 pages *per row*. The column walk touches 8192 different pages in rapid succession, thrashing the TLB (usually ~64–1536 entries) on top of the data caches. You will meet the TLB properly in T2; for now, note that bad strides punish you twice.`,
+**The TLB, again.** Pages are 4 KiB. Our matrix row is 64 KiB — 16 pages *per row*. The column walk touches 8192 different pages in rapid succession, thrashing the TLB (usually ~64–1536 entries) on top of the data caches. You will meet the TLB properly in T2; for now, note that bad strides punish you twice.`,
     },
     {
       type: 'callout',
@@ -143,7 +143,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
         'Shrink the matrix to 512² (fits L2) and rerun — watch the gap nearly vanish, then explain why.',
         'Enable the prefetcher toggle and observe which traversal it rescues (and which it cannot).',
       ],
-      note: `When the whole matrix fits in cache, both orders run at cache speed and the gap disappears — proof that the penalty is a *hierarchy* effect, not an instruction-count effect. At 512 MB, the column walk issues ~8× the DRAM traffic of the row walk *and* gets no prefetch rescue. This is the exact experiment that motivates tiling, SoA layouts, and FlashAttention later in the course.`,
+      note: `When the whole matrix fits in cache, both orders run at cache speed and the gap disappears — proof that the penalty is a *hierarchy* effect, not an instruction-count effect. At 512 MiB, the column walk issues ~8× the DRAM traffic of the row walk *and* gets no prefetch rescue. This is the exact experiment that motivates tiling, SoA layouts, and FlashAttention later in the course.`,
     },
     {
       type: 'quiz',
@@ -152,16 +152,16 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
           q: 'A row-major 8192×8192 matrix of doubles is summed column-by-column (outer loop over columns). The slowdown vs the row-major sum is primarily caused by…',
           options: [
             'Branch misprediction at the inner loop exit: each column ends with a mispredicted branch that stalls the whole pipeline',
-            'Every access jumping 64 KB, so each 64-byte line fetched yields 8 useful bytes and is evicted before reuse',
+            'Every access jumping 64 KiB, so each 64-byte line fetched yields 8 useful bytes and is evicted before reuse',
             'Index arithmetic: computing row * 8192 + col for every access costs far more multiplies than the contiguous sum',
             'The compiler failing to vectorize column loops, so each add runs as scalar code instead of SIMD',
           ],
           correct: [1],
           explanation:
-            'Stride = 8192 × 8 B = 64 KB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8× the DRAM traffic, zero spatial locality, plus TLB thrash across 8192 pages.',
+            'Stride = 8192 × 8 B = 64 KiB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8× the DRAM traffic, zero spatial locality, plus TLB thrash across 8192 pages.',
           why: [
             'Predictors handle loop-exit branches well, and one mispredict per 8192 iterations costs about 20 cycles. That cannot explain a ~20x gap that comes from a DRAM miss on every access.',
-            'Right: stride is 8192 × 8 B = 64 KB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8x the DRAM traffic, no spatial locality, and TLB thrash.',
+            'Right: stride is 8192 × 8 B = 64 KiB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8x the DRAM traffic, no spatial locality, and TLB thrash.',
             'Compilers reduce the index math to an add, and it costs about the same in both loop orders. A few cycles of arithmetic cannot compete with ~100 ns per DRAM miss.',
             'Missing SIMD costs at most 4–8x on arithmetic, but this loop is memory-bound, so vector units would still sit idle waiting for lines. Stride, not vectorization, is the root cause.',
           ],
@@ -187,18 +187,18 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
         {
           q: 'The hardware prefetcher helps most when your access pattern is…',
           options: [
-            'Random within a 4 KB page, because the prefetcher fetches the whole page once it sees any access inside it',
+            'Random within a 4 KiB page, because the prefetcher fetches the whole page once it sees any access inside it',
             'Sequential or small constant stride, so it can predict upcoming lines and fetch them before the load executes',
-            'Strided by exactly one page (4 KB), because a perfectly regular stride gives the prefetcher a pattern to follow',
+            'Strided by exactly one page (4 KiB), because a perfectly regular stride gives the prefetcher a pattern to follow',
             'Pointer-based, chasing linked nodes, because it reads each node and follows the next pointer ahead of time',
           ],
           correct: [1],
           explanation:
             'Prefetchers learn streams: sequential and modest constant strides get data in flight before the load executes, hiding DRAM latency. Wide strides and pointer chases are unpredictable, so every access is a cold miss.',
           why: [
-            'Streamers track ascending or descending line addresses, not whole pages, and random order gives no pattern. Fetching 4 KB per touch would waste bandwidth, so hardware does not do it.',
+            'Streamers track ascending or descending line addresses, not whole pages, and random order gives no pattern. Fetching 4 KiB per touch would waste bandwidth, so hardware does not do it.',
             'Right: prefetchers learn streams, so sequential and modest constant strides get data in flight before the load executes, hiding DRAM latency. Wide strides and pointer chases defeat them.',
-            'Regular is not enough: hardware prefetchers generally stop at 4 KB page boundaries and track small strides, so a one-page stride never trains a stream and every access is a cold miss.',
+            'Regular is not enough: hardware prefetchers generally stop at 4 KiB page boundaries and track small strides, so a one-page stride never trains a stream and every access is a cold miss.',
             'The next address is known only after the current node loads, and mainstream prefetchers do not follow pointers. Each hop is a serialized miss, which is why linked lists are slow.',
           ],
         },

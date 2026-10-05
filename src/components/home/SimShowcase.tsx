@@ -145,7 +145,7 @@ function drawPreview(ctx: CanvasRenderingContext2D, id: string, t: number, w: nu
       ctx.fillRect(16, 58, (w - 32) * (0.4 + 0.5 * pct), 12)
       ctx.fillStyle = DIM
       ctx.font = '9px "JetBrains Mono", monospace'
-      ctx.fillText('0.31 MB/token @ 70B', 16, 92)
+      ctx.fillText('0.31 MiB/token @ 70B', 16, 92)
       break
     }
     case 'batching': {

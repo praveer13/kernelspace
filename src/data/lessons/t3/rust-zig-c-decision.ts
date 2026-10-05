@@ -122,7 +122,7 @@ Run the four questions down the stack you've built in this course: **Router / AP
           options: [
             'Rust (CubeCL, rust-cuda), because memory safety matters most where kernels process untrusted tensors and weights',
             'Zig on NVIDIA, AMD and Intel GPUs, because comptime can specialise kernels per architecture with no runtime cost',
-            'CUDA C++ plus Python DSLs such as CuTe DSL, Triton/Gluon and TileLang, because the vendor ecosystem and its profilers decide',
+            'CUDA C++ plus Python DSLs such as CuTe DSL, Triton/Gluon and TileLang, because the vendor ecosystem and its libraries decide',
             'Triton alone, because it has replaced hand-written CUDA C++ in every production attention kernel (FlashAttention) and MoE path',
           ],
           correct: [2],
@@ -130,7 +130,7 @@ Run the four questions down the stack you've built in this course: **Router / AP
             'The four questions are per-component, not per-project. Router: Rust. Scheduler: Rust. Kernels: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang). io_uring glue: C. CLI tools: whatever ships. Ideology appears nowhere — that\'s the point of the framework.',
           why: [
             'Safety is why Rust owns host code like the router and scheduler. Rust GPU projects such as CubeCL and rust-cuda exist but are marginal in production kernels, and cudarc only wraps the host-side CUDA API.',
-            'Comptime specialises Zig code at build time, but GPU kernels reach the device through toolchains from the GPU vendor ecosystem, and there the libraries and profilers live.',
+            'Comptime specialises Zig code at build time, but GPU kernels reach the device through toolchains from the GPU vendor ecosystem, and there the vendor libraries and tooling live.',
             'Right: kernels follow the vendor ecosystem, which means CUDA C++ plus Python DSLs such as CuTe DSL (FlashAttention-4), Triton/Gluon and TileLang. Rust and Zig serve the host side.',
             'FlashAttention-4 is written in CuTe DSL, and vLLM v0.30 defaults to a FlashInfer CuTe DSL NVFP4 path on SM100. Triton is one DSL among several, and CUDA C++ remains.',
           ],

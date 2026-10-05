@@ -133,7 +133,7 @@ export default function LatencyWalk() {
       level.name === 'DRAM' ? 'warn' : 'ok',
     )
     if (strideB >= 4096)
-      log(t, 'TLB', 'stride ≥ 4 KB — every load a new page; prefetcher cannot help', 'warn')
+      log(t, 'TLB', 'stride ≥ 4 KiB — every load a new page; prefetcher cannot help', 'warn')
 
     /* guided-task detection (t0.l2) */
     if (wsKb <= 32) completeSimTask(SIM_ID, 't-lat-l1', 60)

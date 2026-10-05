@@ -76,7 +76,7 @@ The metric that matters is: \`largest_free_block / total_free\`. When that ratio
 
 So: variable sizes give you external fragmentation you cannot fully control; fixed sizes give you bounded internal waste you *can*. Systems that must run for months without a heap restart almost always move toward fixed or few-size designs:
 
-- **OS page frames** — RAM is managed as 4 KB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
+- **OS page frames** — RAM is managed as 4 KiB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
 - **Slab/slab-like allocators** — one object size per cache; freeing is O(1); the slab *is* a fixed-block design.
 - **Database buffer pools** — everything is an 8 KB page, full stop.
 - **vLLM KV blocks** — every block holds the same number of tokens (default 16). A 300-token sequence needs ⌈300/16⌉ = 19 blocks; waste is at most 15 tokens of KV in the tail, under 4% in practice. Before this, engines reserved *contiguous* KV per sequence sized to max length: 60%+ of HBM stranded. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
@@ -89,7 +89,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
     {
       type: 'callout',
       variant: 'warning',
-      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is a balance, not a proven optimum: the PagedAttention paper's sweep found 16 to 128 tokens best on ShareGPT). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KB frames fragments huge (2 MB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
+      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is a balance, not a proven optimum: the PagedAttention paper's sweep found 16 to 128 tokens best on ShareGPT). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KiB frames fragments huge (2 MiB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
     },
     {
       type: 'prose',

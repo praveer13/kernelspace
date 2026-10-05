@@ -29,7 +29,7 @@
  * MAX_RANK_LESSON, or whose expected passes summed over all gated tracks exceed MAX_SURFACE_AGGREGATE. Act IV also
  * runs every feature strategy except the stem-overlap pair (its stem is telemetry, not text) through the per-incident
  * and pseudo-lesson gates of (12).
- * REPORTS (never fails): longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
+ * REPORTS (never fails): the item-level hit rate of each surface-feature strategy against chance, longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
  * surface-feature expectations per track and a blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
@@ -655,7 +655,9 @@ console.log(
   const lessonTracks = trackKeys.filter((k) => k !== FLEET_TRACK)
   console.log('')
   console.log('surface-feature strategies per track: expected lessons passed (worst single lesson p)')
-  const totals: { name: string; expected: number; worstP: number; worstId: string }[] = []
+  const singleKeyQs = [...byLesson.values()].flat().filter((q) => q.correct.length === 1)
+  const chance = singleKeyQs.reduce((a, q) => a + 1 / q.options.length, 0) / singleKeyQs.length
+  const totals: { name: string; expected: number; worstP: number; worstId: string; hit: number }[] = []
   const watch = new Map<string, string[]>() // lesson id -> strategies passing it with p >= WATCH_P
   for (const strat of SURFACE_STRATEGIES) {
     const pass = lessonPass(strat.pick)
@@ -692,7 +694,8 @@ console.log(
         )
       }
     }
-    totals.push({ name: strat.name, expected: aggregate, worstP: overallWorstP, worstId: overallWorstId })
+    const hit = singleKeyQs.reduce((a, q) => a + strat.pick(q), 0) / singleKeyQs.length
+    totals.push({ name: strat.name, expected: aggregate, worstP: overallWorstP, worstId: overallWorstId, hit })
     if (aggregate > MAX_SURFACE_AGGREGATE) {
       failures.push(
         `surface: the gated tracks together expect ${aggregate.toFixed(2)} lessons passed by the strategy '${strat.name}' (limit ${MAX_SURFACE_AGGREGATE} in total); rewrite the options so the feature does not separate the key`,
@@ -705,6 +708,10 @@ console.log(
   for (const t of totals) {
     console.log(`    ${t.name.padEnd(24)}${t.expected.toFixed(2).padStart(6)}   worst ${t.worstP.toFixed(2)} ${t.worstId}`)
   }
+  console.log(
+    `  item-level hit rate over ${singleKeyQs.length} single-key lesson items (chance ${(chance * 100).toFixed(1)}%; reported, not gated; the lesson gates above need 4 of 4 right):`,
+  )
+  for (const t of totals) console.log(`    ${t.name.padEnd(24)}${(t.hit * 100).toFixed(1).padStart(5)}%`)
   console.log(`  lessons passed with p >= ${WATCH_P} by some surface-feature strategy (watch list, ${watch.size}):`)
   for (const [id, hits] of watch) console.log(`    ${id.padEnd(8)}${hits.join(', ')}`)
   const top = totals.reduce((a, b) => (b.expected > a.expected ? b : a))
