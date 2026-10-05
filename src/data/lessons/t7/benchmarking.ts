@@ -109,7 +109,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
           why: [
             'A single max-batch run lands past the knee and reveals nothing about where the cliff is. It reports throughput at a point where users already see SLO violations.',
             'That is a roofline upper bound. It ignores queueing, scheduling, KV capacity and the latency contract, so real capacity under SLO sits far below it.',
-            'Latency is flat and then goes vertical at the knee, so a linear extrapolation from one point hides the cliff. One point cannot locate a knee.',
+            'At low offered load there is little queueing and latency stays low; as load nears capacity queues build and latency goes vertical at the knee. A linear extrapolation from one point hides that cliff, and one point cannot locate a knee.',
             'Right: rule 3. Percentiles need hundreds of requests per step and load needs steps. The knee where the SLO first breaks is the capacity, and the curve is the deliverable.',
           ],
         },
