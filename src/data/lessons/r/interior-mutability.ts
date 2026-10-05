@@ -61,21 +61,57 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
       questions: [
         {
           q: 'What happens when RefCell::borrow_mut conflicts with a live shared borrow?',
-          options: ['It blocks until the borrow ends', 'It panics at runtime', 'It silently clones the value', 'It creates a data race'],
+          options: [
+            'It blocks the thread until the shared borrow ends, as a Mutex lock would',
+            'It panics at runtime, because RefCell enforces the borrow rule dynamically instead of statically',
+            'It returns an Err value that the caller must handle, so the program carries on',
+            'It creates a data race, since two references now alias the same value',
+          ],
           correct: [1],
-          explanation: 'RefCell enforces the borrow law dynamically. try_borrow_mut returns an error when panic is not appropriate.',
+          explanation:
+            'RefCell enforces the borrow law dynamically. try_borrow_mut returns an error when panic is not appropriate.',
+          why: [
+            'RefCell never blocks. It is single-threaded, and waiting for a borrow held by the same thread would never end. That is Mutex behaviour.',
+            'Right: borrow_mut panics with an already borrowed error when a guard is live. try_borrow_mut is the variant that returns an Err instead.',
+            'That is try_borrow_mut, not borrow_mut. The plain method has no error return, so a conflict panics and the caller never gets a value to handle.',
+            'RefCell is not Sync and the conflict is caught first, so no aliasing write happens. A panic stops the program before any race could occur.',
+          ],
         },
         {
           q: 'What releases a std::sync::Mutex lock?',
-          options: ['A manual unlock call is always required', 'Dropping the MutexGuard', 'Cloning the mutex', 'The next lock attempt'],
+          options: [
+            'Calling unlock() on the Mutex once the critical section ends, as with a Java lock',
+            'Dropping the MutexGuard that lock() returned, usually at the end of scope or via drop',
+            'The end of the statement that called lock(), whether or not the guard was bound to a name',
+            'The scheduler, once the holding thread blocks or sleeps inside the critical section',
+          ],
           correct: [1],
-          explanation: 'The guard owns the lock obligation. RAII releases it deterministically when the guard leaves scope.',
+          explanation:
+            'The guard owns the lock obligation. RAII releases it deterministically when the guard leaves scope.',
+          why: [
+            'std::sync::Mutex has no unlock method. The lock is released by dropping the guard, either at scope end or with an early drop(guard).',
+            'Right: the guard owns the lock, and dropping it unlocks. That happens at scope end or on an explicit drop(guard), even during a panic.',
+            'A guard bound with let lives until its scope ends. Only an unbound temporary, as in lock().unwrap().push(1), drops at the end of its statement.',
+            'A sleeping or blocked thread keeps holding the lock, which is how deadlocks happen. Nothing releases it until the guard is dropped.',
+          ],
         },
         {
-          q: 'Which type best fits a single-threaded shared counter whose value is Copy?',
-          options: ['Cell<usize>', 'Arc<usize>', 'Box<Mutex<usize>>', 'Weak<usize>'],
+          q: 'Which type lets a single-threaded counter of Copy values change through a shared reference, with no guard and no lock?',
+          options: [
+            'Cell<usize>, which sets and gets the value by copy, with no borrow tracking',
+            'Rc<usize>, which shares ownership of the counter and lets every owner update it',
+            'RefCell<usize>, since it also mutates through a shared reference and is the general choice',
+            'Arc<Mutex<usize>>, the standard way to share a mutable counter',
+          ],
           correct: [0],
-          explanation: 'Cell provides simple get/set interior mutability for Copy values without borrow guards.',
+          explanation:
+            'Cell provides simple get/set interior mutability for Copy values without borrow guards.',
+          why: [
+            'Right: Cell copies values in and out with get and set, so no reference into it exists. It needs no guard, borrow flag or lock.',
+            'Rc shares ownership but only hands out shared access, so nobody can update the counter through it. Rc alone gives no mutation.',
+            'RefCell works but hands out Ref and RefMut guards and keeps a runtime borrow flag that can panic. The question rules out guards.',
+            'It works but pays for atomic counting and a lock a single thread never needs, and it hands out a guard. It is overkill here.',
+          ],
         },
       ],
     },

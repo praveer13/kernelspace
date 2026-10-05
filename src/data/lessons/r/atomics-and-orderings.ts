@@ -62,21 +62,57 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
       questions: [
         {
           q: 'When is Ordering::Relaxed sufficient?',
-          options: ['Whenever multiple atomics coordinate a data structure', 'For an independent atomic counter with no other data to publish', 'For unlocking a mutex', 'For publishing initialized non-atomic data'],
+          options: [
+            'A ready flag set after filling a non-atomic buffer, because the flag store is itself atomic',
+            'A standalone ticket or metrics counter that guards no other data',
+            'The store that unlocks a spin lock, since only one atomic bool changes',
+            'Every compare_exchange loop, because the compare and swap happen as one atomic step',
+          ],
           correct: [1],
-          explanation: 'Relaxed guarantees atomic updates to the counter itself but establishes no visibility relationship for surrounding memory.',
+          explanation:
+            'Relaxed guarantees atomic updates to the counter itself but establishes no visibility relationship for surrounding memory.',
+          why: [
+            'A Relaxed flag does not order the buffer writes before it, so the reader may see the flag set and stale data. Publication needs Release and Acquire.',
+            'Right: Relaxed keeps the update atomic but orders nothing else. When no other memory depends on the counter, such as a ticket id, that is enough.',
+            'The unlocking store must be Release so the critical section\'s writes are visible to the next Acquire locker. Relaxed would let them be missed.',
+            'Atomicity does not give ordering. A CAS that publishes or consumes other data needs Acquire or Release, so Relaxed fits only independent values.',
+          ],
         },
         {
           q: 'What relationship does Release/Acquire establish when the Acquire observes the Release?',
-          options: ['It deep-copies shared data', 'Earlier writes before Release become visible after Acquire', 'It prevents all thread scheduling', 'It makes every future operation sequentially consistent'],
+          options: [
+            'Every thread sees the writes at once, not only the thread that performed the Acquire',
+            'Writes made before the Release are visible to the thread whose Acquire load observes it',
+            'The Acquire blocks until the releasing thread leaves its critical section, as with a lock',
+            'Both operations become SeqCst, so every atomic in the program gets one global order',
+          ],
           correct: [1],
-          explanation: 'The pair creates the happens-before edge used to publish initialized state safely.',
+          explanation:
+            'The pair creates the happens-before edge used to publish initialized state safely.',
+          why: [
+            'Visibility is guaranteed only to a thread whose Acquire reads the released value. Other threads get no such edge from this pair.',
+            'Right: the pair creates a happens-before edge. Everything the releasing thread wrote before its Release store is visible after the Acquire load that reads it.',
+            'Acquire never blocks or waits. It is a load that either reads the released value or does not, and then the thread must retry or proceed.',
+            'Orderings are chosen per operation. Release and Acquire do not upgrade other operations, and only SeqCst operations join the single global order.',
+          ],
         },
         {
           q: 'Why must compare_exchange code handle failure?',
-          options: ['CAS always fails once', 'Another thread may change the value between observation and the attempted update', 'Atomics can tear', 'Failure means memory corruption'],
+          options: [
+            'A failed CAS means the Acquire ordering was too weak, and a stronger one removes failures',
+            'Another thread can change the value after your load, so Err returns what it saw',
+            'A failed CAS poisons the atomic, as with a Mutex, and it must be reset before reuse',
+            'A failed CAS can tear the value, so the caller must restore the old one',
+          ],
           correct: [1],
-          explanation: 'Contention is normal. A CAS loop recomputes from the newly observed state until it succeeds or chooses to stop.',
+          explanation:
+            'Contention is normal. A CAS loop recomputes from the newly observed state until it succeeds or chooses to stop.',
+          why: [
+            'Failure is about the value, not the ordering. A stronger ordering does not stop another thread from winning the race, so the code must still handle Err.',
+            'Right: the value can change between your load and the CAS. A failure returns Err with the value actually found, which a loop recomputes from.',
+            'Atomics have no poisoning; that is a Mutex feature. After a failed CAS the atomic is intact and can be used again at once.',
+            'Atomic operations never tear. A failed CAS leaves the value untouched, with only the observed value returned, so nothing needs restoring.',
+          ],
         },
       ],
     },
