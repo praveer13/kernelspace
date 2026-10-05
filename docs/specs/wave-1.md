@@ -27,6 +27,22 @@
 | D11 | **QR handoff is deferred to Wave 2.** A file-based delta handoff ships, reusing export v3 and merge import. | §6.6 |
 | D12 | **Two PRs on one foundation.** PR 1b's level 0 (ledger contract, scaffold, entry diet, claims) merges into `wave-1b` first. `wave-1c` branches from that commit, so the two PRs never edit the same file. | §18 |
 
+### Owner answers (2026-10-05). These take precedence over §19 and any conflicting text.
+
+| # | Question (§19) | Decision |
+|---|---|---|
+| O1 | Reference solutions for F1 calibration and the mutant matrices | **Agents write them locally** under `labs/_solutions/`, which is gitignored and never committed or packed. Only calibration results (`calibration.json`) are committed. The zip audit in `pack-labs.py` must keep failing on any `_solutions` path. |
+| O2 | giscus | **The owner will set it up:** enable Discussions on praveer13/kernelspace, install the giscus app, and create the categories "Lessons" (Announcements) and "Labs" (Q&A). C16 ships with `src/data/community.ts` ids empty, and **the button stays hidden until the ids are filled in**. Until then, "Ask a human" in H3 falls back to the GitHub issue form. |
+| O3 | XP v2 table (§8.4) | **Approved as specified**, to be revisited at the Wave 2 exit with partner data. |
+| O4 | "Read, not passed" | **Navigation only.** Track percentages, badges, achievements and RING 2 count *done* lessons only. |
+| O5 | Does a checkpoint pass of ≥ 80% count as passed for R and T3–T7 before their tickets exist? | **Yes.** The Wave 1a rewrite makes those items valid evidence. |
+| O6 | Returning learners | **No redirect from `/`.** For returning learners, Home's hero becomes a "Today · N items · ~M min" card, and Today is first in the nav and the bottom tabs. |
+| O7 | Test-out bar | The ticket's rule (≥ 2 of 3, including the non-MCQ) **plus** the day-7 confirmation. |
+| O8 | Seeded R drills | **Accepted.** New checks run on random inputs per seed; RING 2 requires a template-v2 rebuild. |
+| O9 | Sandbox fallback | **Accepted.** Where an opaque-origin iframe cannot host a Blob worker, fall back to worker-only isolation, labelled "sandbox: worker only". |
+
+**Item-validity rule for all new items (from Wave 1a):** every learner-facing multiple-choice item added in Wave 1 must pass `bun run verify:items` with the generalized blind-strategy gates. That covers prequestions, exit-ticket MCQs, generator MCQs, errata items, Act IV and play debrief checks, and the gates are: length ranks, lexical cues, the surface-feature family, and no lesson with p ≥ 0.5. Every such item also needs a why for each option.
+
 ---
 
 ## 0. Summary
