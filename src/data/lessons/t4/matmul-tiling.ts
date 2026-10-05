@@ -82,7 +82,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
 
 Standard attention materializes the \`N × N\` score matrix \`S = QKᵀ\` in HBM — for a 128k-context model that matrix is *terabytes*-scale traffic and tens of GB of capacity. The 2022 FlashAttention paper (Tri Dao et al.) noticed two things: (1) attention is three matmul-shaped ops around a softmax, and (2) the softmax denominator is just a **reduction** (T4.L5), which can be computed *incrementally*. So: tile Q, K, V into SRAM-sized blocks; for each KV block, compute the partial scores *in SRAM*, update the softmax statistics **online** (rescaling the running max and sum — the "online softmax"), and accumulate the output — never writing the N×N matrix to HBM at all.
 
-The result: HBM traffic drops from \`O(N²)\` to \`O(N)\`-ish, memory capacity stops scaling quadratically, and the kernel gets *faster* despite doing extra rescaling math — because it was bandwidth-bound, and bytes dropped 10–20×. **FlashAttention is cache blocking applied to attention.** The transformer papers gave you the math; the systems move was recognizing the roofline regime and tiling the problem to fit SRAM. (This is also why "flash" kernels exist for everything now — it's a general recipe: fuse, tile, keep the working set in the fast tier.)`,
+The result: the extra memory drops from \`O(N²)\` to \`O(N)\`, HBM accesses fall from \`Θ(Nd + N²)\` to \`Θ(N²d²/M)\` (head dimension \`d\`, SRAM size \`M\`, Theorem 2 of the paper), and the kernel gets *faster* despite doing extra rescaling math — because it was bandwidth-bound: the extra memory is 10–20× smaller and HBM accesses are several times fewer (about 9× in Dao et al., Fig. 2). **FlashAttention is cache blocking applied to attention.** The transformer papers gave you the math; the systems move was recognizing the roofline regime and tiling the problem to fit SRAM. (This is also why "flash" kernels exist for everything now — it's a general recipe: fuse, tile, keep the working set in the fast tier.)`,
     },
     {
       type: 'callout',
@@ -111,7 +111,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         'Oversize the tile until shared memory limits occupancy; observe the U-shaped performance curve.',
         'Toggle the attention view: naive (materialize S) vs flash (online softmax); compare HBM bytes at 32k context.',
       ],
-      note: `The U-curve is the whole craft: too small a tile → bandwidth starves; too big → occupancy starves. And the attention comparison is the industry's favorite before/after: same math, 10–20× fewer HBM bytes — the definition of a systems win.`,
+      note: `The U-curve is the whole craft: too small a tile → bandwidth starves; too big → occupancy starves. And the attention comparison is the industry's favorite before/after: same math, several times fewer HBM accesses (about 9× in Dao et al., Fig. 2) — the definition of a systems win.`,
     },
     {
       type: 'quiz',
@@ -119,50 +119,74 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         {
           q: 'Tiling raises matmul performance primarily by…',
           options: [
-            'Reducing the FLOP count',
-            'Raising arithmetic intensity: each element staged into SRAM is reused ~T times, so HBM traffic drops ∝ 1/T and the kernel moves from bandwidth-bound to compute-bound',
-            'Using more SMs',
-            'Increasing clock frequency',
+            'Reducing the FLOP count, since blocking lets the kernel skip tile products that contribute little to the final output',
+            'Raising arithmetic intensity: each tile element staged in SRAM is reused about T times, so HBM traffic falls as 1/T',
+            'Spreading the multiply over more SMs, because small tiles create more thread blocks and so more hardware in use',
+            'Running the tensor cores at a higher clock, since data staged in SRAM lets the cores run faster than when fed from HBM',
           ],
           correct: [1],
           explanation:
             'The 2N³ FLOPs are fixed; what changes is which tier feeds them. Reuse from the fast tier is the whole game — the roofline, weaponized.',
+          why: [
+            'Tiling does exactly the same 2N³ FLOPs. Only the number of bytes fetched from HBM changes.',
+            'Right: the FLOPs are fixed, but each element staged into SRAM is reused about T times. Intensity is T/2 at FP16, so the kernel rides up toward the compute roof.',
+            'A naive kernel can already launch blocks on every SM. The limit was bytes per FLOP, not SM count, and smaller tiles lower reuse.',
+            'Clock speed is fixed by the part and its power limit. Tiling feeds the existing compute better; it does not change the clock.',
+          ],
         },
         {
           q: 'FlashAttention\'s core insight is that…',
           options: [
-            'Attention can skip the softmax',
-            'The N×N score matrix never needs to live in HBM: tile Q/K/V into SRAM and fold the softmax denominator in incrementally (online softmax) while accumulating the output',
-            'GPUs have special attention units',
-            'Quantizing scores to INT4 is lossless',
+            'Most attention scores are near zero, so keys can be dropped from the N×N matrix and attention computed approximately, at a small accuracy cost',
+            'The N×N score matrix never needs to live in HBM: tile Q, K and V in SRAM and fold in the softmax incrementally (online softmax)',
+            'Recent GPUs have dedicated attention units that compute softmax(QKᵀ)V in one instruction, so a kernel only has to launch it',
+            'Quantizing the score matrix to INT4 is lossless for softmax, so the N×N scores fit in a quarter of the space',
           ],
           correct: [1],
           explanation:
-            'It is a memory-traffic optimization, not an approximation: exact attention with O(N) HBM traffic instead of O(N²) — cache blocking plus a streaming reduction (T4.L5) for the softmax.',
+            'It is a memory-traffic optimization, not an approximation: exact attention that never writes the N×N matrix to HBM. HBM accesses fall from Θ(Nd + N²) to Θ(N²d²/M), and the extra memory is O(N), not O(N²) — cache blocking plus a streaming reduction (T4.L5) for the softmax.',
+          why: [
+            'FlashAttention is exact, not approximate: every score is computed. The saving comes from where the scores live (SRAM, not HBM), not from dropping any.',
+            'Right: exact attention that tiles Q, K and V into SRAM and updates the softmax online, so the N×N matrix is never written to HBM.',
+            'GPUs have no single attention instruction. FlashAttention runs on ordinary tensor-core matmul and SIMT code, restructured to cut HBM traffic.',
+            'FlashAttention does not quantize the scores; its output matches standard attention up to floating-point rounding. It never stores the matrix at all.',
+          ],
         },
         {
           q: 'Why can\'t tiles simply be as large as possible?',
           options: [
-            'The compiler rejects large arrays',
-            'Large tiles consume the SRAM/register budget per SM, crushing occupancy — too few resident warps to hide latency, so performance falls again (the U-curve)',
-            'Bigger tiles cause bank conflicts',
-            'HBM refuses large transactions',
+            'The compiler rejects shared-memory arrays above a few kilobytes, so a larger tile fails to compile at all',
+            'Big tiles use up per-SM SRAM and registers, leaving too few resident warps to hide latency',
+            'Bigger tiles need more HBM transactions per output, since each tile crosses more memory segments and loses coalescing',
+            'Larger tiles make bank conflicts unavoidable, since a bigger tile always maps more lanes onto the same banks',
           ],
           correct: [1],
           explanation:
             'Reuse (favors big T) fights residency (favors small footprint). cuBLAS/CUTLASS tune per-GPU shapes precisely because the optimum sits in the middle of the U.',
+          why: [
+            'Blocks can opt in to well over 48 KB (about 227 KB on H100), so a few-KB cap is false. The real constraint is per-SM residency: big tiles leave room for fewer blocks.',
+            'Right: reuse favors big tiles, but each tile claims SRAM and registers, so fewer warps stay resident and latency hiding suffers.',
+            'Bigger tiles do less HBM traffic per FLOP (it falls as 1/T), and slab loads stay coalesced. The cost is on-chip residency, not HBM efficiency.',
+            'Bank conflicts depend on access stride, and padding fixes them at any tile size. They are not what limits tile growth.',
+          ],
         },
         {
           q: 'The closest database analog to matmul tiling is…',
           options: [
-            'A covering index',
-            'The block nested-loop join: chunk both inputs to fit the buffer pool and reuse each chunk from memory instead of re-reading per row',
-            'Query memoization',
-            'Write-ahead logging',
+            'A covering index, which answers a query from the index alone so base table pages are never fetched',
+            'The block nested-loop join: chunk both inputs to fit the buffer pool and reuse each chunk',
+            'Query memoization, which caches the output of an expensive subquery so identical requests skip recomputation',
+            'An index nested-loop join, which replaces each inner scan with a logarithmic B-tree probe per outer row',
           ],
           correct: [1],
           explanation:
             'Same move at a different layer: bound the working set to the fast tier and multiply reuse. It\'s also Spark\'s broadcast-join decision and Welford\'s streaming variance — one pattern, many hats.',
+          why: [
+            'A covering index avoids table lookups by storing the needed columns. It does not reorder a loop nest so each fetched block serves many operations.',
+            'Right: the block nested-loop join loads chunks of both inputs into the buffer pool and reuses each chunk, the same reuse argument as SRAM tiles.',
+            'Memoization stores results to skip repeated work. Tiling still computes every product; it reorders them so each loaded element serves many.',
+            'Each probe cuts the rows touched, but pages are still re-read per outer row. Tiling keeps a chunk resident and reuses it.',
+          ],
         },
       ],
     },

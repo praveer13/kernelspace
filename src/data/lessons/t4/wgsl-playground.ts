@@ -42,7 +42,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 }
 // host: dispatchWorkgroups(ceil(N / 256)) — e.g. 65,536 groups for 16M floats
-// NOTE: AI = 2 FLOP / 12 B ≈ 0.17 → memory-bound. The GPU will
+// NOTE: AI = 1 FLOP / 12 B ≈ 0.08 → memory-bound. The GPU will
 // saturate HBM bandwidth, not FLOPs. (T4.L3 called this shot.)`,
         },
         {
@@ -138,50 +138,74 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
         {
           q: 'In WGSL, @builtin(global_invocation_id) gid.x corresponds to which CUDA expression?',
           options: [
-            'threadIdx.x only',
-            'blockIdx.x * blockDim.x + threadIdx.x — the invocation\'s global index in the whole grid',
-            'warp id',
-            'gridDim.x',
+            'threadIdx.x, because global_invocation_id numbers each invocation within its own workgroup from zero',
+            'blockIdx.x * blockDim.x + threadIdx.x, the index of the invocation across the whole dispatch',
+            'blockIdx.x * gridDim.x + threadIdx.x, the workgroup index scaled by the number of workgroups in the grid',
+            'The id of the warp running the invocation, which WGSL exposes so kernels can pick a lane within it',
           ],
           correct: [1],
           explanation:
             'Both compute "which copy of the kernel am I" across the entire dispatch. Workgroups ≡ blocks, local ids ≡ threadIdx, global ids ≡ the flattened global index.',
+          why: [
+            'That is local_invocation_id. global_invocation_id adds the workgroup offset, so it is unique across the whole dispatch.',
+            'Right: workgroup index times workgroup size plus the local index gives each invocation a unique position across the dispatch.',
+            'The workgroup index is scaled by workgroup size (blockDim), not by the number of workgroups. Scaling by gridDim would collide and skip elements.',
+            'It indexes invocations, not warps. Warp-scoped ids come from a separate, optional subgroup feature, not from this built-in.',
+          ],
         },
         {
           q: 'workgroupBarrier() exists to…',
           options: [
-            'Pause the GPU for power saving',
-            'Guarantee all invocations in the workgroup have reached the barrier AND their shared-memory writes are visible before anyone proceeds',
-            'Synchronize all workgroups in the grid',
-            'Flush L2 to HBM',
+            'Make every workgroup in the grid wait for the others, so a later pass can safely read earlier results',
+            'Make every invocation in the workgroup arrive, and their workgroup-memory writes visible, before any one proceeds',
+            'Flush the workgroup\'s writes out to L2 and HBM so other workgroups can read the partial sums right away',
+            'Pause the invocations of the workgroup for a fixed delay, which gives slower lanes time to finish their loads',
           ],
           correct: [1],
           explanation:
             'It is __syncthreads(): execution + memory visibility sync for ONE workgroup (grids can\'t sync globally mid-kernel — that\'s what multi-pass is for). Removing it is the canonical GPU race.',
+          why: [
+            'It synchronizes one workgroup only. A kernel cannot wait on other workgroups mid-dispatch; global results need a second pass, as in the multi-pass reduction.',
+            'Right: it is __syncthreads() for one workgroup. All invocations must arrive and their workgroup-memory writes become visible before any continues.',
+            'It orders memory within the workgroup only and does not make writes visible to other workgroups. Cross-group results wait for another dispatch.',
+            'A barrier waits for arrival, not for elapsed time. Slower lanes simply hold the others until they reach it.',
+          ],
         },
         {
           q: 'The tree reduction\'s advantage over "everyone atomicAdds one output" is…',
           options: [
-            'It uses fewer registers',
-            'log2(n) combine rounds with disjoint SRAM accesses instead of n-way serialized contention on one address',
-            'It avoids the need for barriers',
-            'Atomics are unsupported in WGSL',
+            'The tree needs fewer registers, since each invocation holds one partial while atomics need a private accumulator per lane',
+            'log2(n) rounds of conflict-free pair sums, instead of n updates queueing on one hot address',
+            'Atomic adds on a shared address can lose updates under contention, so the final sum would come out wrong',
+            'The tree removes the need for barriers, since each round reads only values earlier rounds have already finished',
           ],
           correct: [1],
           explanation:
             'An atomic counter is a single contended address — the T0.L4/T2.L5 hot line. The tree reduces 256 values in 8 rounds of conflict-free pairs; atomics reserve themselves for the tiny cross-workgroup tail.',
+          why: [
+            'Register use is similar either way. The difference is serialization: atomics on one address queue, while tree rounds touch disjoint SRAM slots in parallel.',
+            'Right: each round halves the active set with disjoint pairs, so n values take log2(n) rounds. Atomics on one address serialize all n updates.',
+            'Atomics are exact; contention only serializes them. The sum is correct, so the cost is throughput rather than correctness.',
+            'The tree needs a barrier after every round so each round sees the previous round\'s writes. Dropping one is the canonical race.',
+          ],
         },
         {
-          q: 'vec_add (2 FLOPs per 12 bytes) will always be limited by…',
+          q: 'vec_add does one add per element and moves 12 bytes (two 4-byte reads, one 4-byte write). It will always be limited by…',
           options: [
-            'Compute throughput',
-            'Memory bandwidth — its arithmetic intensity (~0.17 F/B) sits far left of any GPU\'s ridge point',
-            'Workgroup size',
-            'The barrier count',
+            'Compute throughput, because adding 16 million floats saturates the ALUs once the workgroups fill every SM of the GPU',
+            'Memory bandwidth: its arithmetic intensity of about 0.08 FLOP/byte sits far left of any GPU\'s ridge point',
+            'Workgroup size, because 256 invocations per group leaves too few warps to hide the latency of each load',
+            'Barrier count, because every group synchronizes before it writes its output elements back to memory',
           ],
           correct: [1],
           explanation:
-            'Elementwise ops are pure bandwidth exercises: the roofline puts them on the slope regardless of kernel cleverness. The only wins are fusion (do more per byte) and coalescing.',
+            'One add per 12 bytes is about 0.08 FLOP/byte. Elementwise ops are pure bandwidth exercises: the roofline puts them on the slope regardless of kernel cleverness. The only wins are fusion (do more per byte) and coalescing.',
+          why: [
+            'The ALUs finish a single add far faster than the loads arrive. At one FLOP per 12 bytes the kernel sits on the bandwidth slope.',
+            'Right: one FLOP over 12 bytes is about 0.08 FLOP/byte, far left of any ridge. Delivered bandwidth caps the kernel however it is launched.',
+            'Workgroup size can change occupancy but not the ceiling. Even with perfect occupancy the kernel is held to AI × bandwidth, far below the compute roof.',
+            'vec_add has no barriers at all; each invocation is independent. Barriers matter in the reduction kernel, not here.',
+          ],
         },
       ],
     },
