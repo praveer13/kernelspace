@@ -7,3 +7,5 @@ labs/_solutions/
 bun.lock
 var/traces/
 .claude/worktrees/
+test-results
+playwright-report
