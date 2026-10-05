@@ -121,7 +121,7 @@ Run the four questions down the stack you've built in this course: **Router / AP
           options: [
             'Rust, because memory safety matters most where kernels process untrusted tensors and model weights in production',
             'Zig, because comptime can specialise kernels for each GPU architecture at build time with no runtime cost',
-            'CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang), because the vendor ecosystem decides',
+            'CUDA C++ plus Python DSLs such as CuTe DSL, Triton/Gluon and TileLang, because the vendor ecosystem decides',
             'Triton alone, because it has replaced hand-written CUDA C++ in every production attention kernel and MoE path',
           ],
           correct: [2],
