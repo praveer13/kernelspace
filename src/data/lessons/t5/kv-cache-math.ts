@@ -75,7 +75,7 @@ And the formula's blind spot: it prices *residency*. The per-step **bandwidth** 
     {
       type: 'callout',
       variant: 'analogy',
-      md: `This is your **JVM heap sizing**, one layer down: \`-Xmx\` is HBM capacity; live objects are weights; the cache is your session store growing per user; GZIP session compression is FP8 KV; and "sessions × bytes/session > heap ⇒ OOM" is exactly "concurrent × context × 2Ld > HBM ⇒ preemption." You have done this capacity review before. The only new part is that the sessions cost 320 KB per *token*.`,
+      md: `This is your **JVM heap sizing**, one layer down: \`-Xmx\` is HBM capacity; live objects are weights; the cache is your session store growing per user; GZIP session compression is FP8 KV; and "sessions × bytes/session > heap ⇒ OOM" is exactly "concurrent × context × 2Ld > HBM ⇒ preemption." You have done this capacity review before. The only new part is that the sessions cost 320 KiB per *token*.`,
     },
     {
       type: 'callout',
@@ -94,7 +94,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
       machine: 'calc',
       title: 'KV-cache calculator',
       tasks: [
-        'Reproduce the 8B numbers: keep FP16 weights and FP16 KV, then verify 128 KB/token and ~480k tokens on one 80 GB GPU.',
+        'Reproduce the 8B numbers: keep FP16 weights and FP16 KV, then verify 128 KiB/token and ~480k tokens on one 80 GB GPU.',
         'Model the 70B on 8 H100s: show FP16 weights at ≈140 GB and the remaining aggregate HBM available to KV.',
         'Hold weight precision fixed, flip FP16 → FP8 KV, then compare that gain with changing 32 → 8 KV heads.',
         'Use 2 GPUs and 32k context; read the capacity concurrency and bandwidth/ITL limits, then state which wall arrives first.',

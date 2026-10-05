@@ -7,7 +7,7 @@ export default {
   lessons: ['t5.l1'],
   title: '512 KiB of KV per token is the no-GQA figure; Llama-3-8B needs 128 KiB',
   before:
-    'The T5.L1 quiz asked for KV cache per token of "an 8B FP16 model (32 layers, d=4096)" and keyed about 512 KiB, while T5.L4 gives 128 KiB for Llama-3-8B.',
+    'The T5.L1 quiz asked for KV cache per token of "an 8B FP16 model (32 layers, d=4096)" and keyed about 512 KB, while T5.L4 gives 128 KB for Llama-3-8B.',
   after:
     '512 KiB is 2 x 32 layers x 4096 x 2 B with 32 KV heads (full multi-head attention). Llama-3-8B has 8 KV heads: 2 x 32 x 8 x 128 x 2 B = 131,072 B = 128 KiB. The question now states 32 KV heads.',
   why: 'Two lessons gave two numbers for one model name. GQA is a 4x cut here, so an unlabelled 512 KiB overstates the cache of the real model.',
