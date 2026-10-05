@@ -129,6 +129,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
       simId: 'sim-kv',
       machine: 'blocks',
       title: 'Block-table explorer',
+      taskIds: ['t-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep'],
       tasks: [
         'Run two requests sharing a 48-token prompt: verify prefix blocks show refcount=2 and memory is paid once.',
         'Fork a beam inside a full block: watch the COW allocate one block and copy 16 tokens of KV.',
