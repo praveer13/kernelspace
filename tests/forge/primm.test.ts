@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { PrimmPanel } from '../../src/components/forge/PrimmPanel'
+import { ReferenceRun } from '../../src/components/forge/ReferenceRun'
 import { KC } from '../../src/data/kc/ids'
 import { FORGE_LABS } from '../../src/data/labs'
 import {
@@ -21,6 +25,7 @@ import {
   itemResponse,
   makeChurnTrace,
   mergedGap,
+  predictGraded,
   primmRef,
   runChurn,
   runResponse,
@@ -373,5 +378,71 @@ describe('ledger responses (item:lab01.primm.*)', () => {
     expect(refMatchesKind(r.kind, r.ref)).toBe(true)
     expect(r.data).toMatchObject({ src: 'practice', value: runChurn(BUMP).survived, truth: runChurn(BUMP).total })
     expect(r.ms).toBe(1500)
+  })
+
+  test('the Run step is an observation, not mastery evidence: no KCs', () => {
+    const data = runResponse(runChurn(REFERENCE)).data as { kcs?: string[] }
+    expect(data.kcs).toEqual([])
+    // Every graded item still names the KCs it is evidence for.
+    for (const i of PRIMM_ITEMS) expect((itemResponse({ item: i, grade: { ok: true, score: 1, feedback: '' } }).data as { kcs: string[] }).kcs.length).toBeGreaterThan(0)
+  })
+})
+
+describe('the peek (show me anyway) withholds credit', () => {
+  test('after a peek the Predict step takes no new graded answer; one given before it stands', () => {
+    expect(predictGraded(false, false)).toBe(true)
+    expect(predictGraded(true, false)).toBe(false)
+    expect(predictGraded(true, true)).toBe(true)
+  })
+
+  test('the button no longer promises something the page does not do', () => {
+    expect(read('src/components/forge/PrimmPanel.tsx')).not.toContain('no credit for predicting')
+  })
+})
+
+describe('item wording', () => {
+  test('p2 says stage order, and i5 names every seeded check', () => {
+    const p2 = PRIMM_ITEMS.find((i) => i.id === 'lab01.primm.p2')
+    const i5 = PRIMM_ITEMS.find((i) => i.id === 'lab01.primm.i5')
+    if (p2?.kind !== 'choice' || i5?.kind !== 'choice') throw new Error('p2 or i5 missing')
+    expect(p2.item.q.q).toContain('in stage order')
+    // The harness seeds these three (allocator.rs header); the item must not name fewer.
+    for (const id of ['align', 'no_overlap', 'fragmentation']) {
+      expect(checks.some((c) => c.id === id)).toBe(true)
+      expect(i5.item.q.q).toContain(`\`${id}\``)
+    }
+  })
+})
+
+/** Server renders only: there is no DOM in this suite, so interaction (focus after submit, the peek click) is checked in a browser. */
+describe('the panel as rendered (ARIA and focus structure)', () => {
+  const panel = (initial: 'predict' | 'run' | 'investigate' | 'modify' | 'make') =>
+    renderToStaticMarkup(createElement(PrimmPanel, { checks, passed: new Set<string>(), initial }))
+
+  test('every graded item mounts an empty live region the verdict is written into, and no result yet', () => {
+    for (const step of ['predict', 'investigate'] as const) {
+      const html = panel(step)
+      const items = html.match(/data-item="lab01\.primm\.[a-z0-9]+"/g) ?? []
+      const regions = html.match(/<p role="status" class="sr-only" data-verdict="true"><\/p>/g) ?? []
+      expect(items.length).toBeGreaterThan(0)
+      expect(regions.length).toBe(items.length)
+      expect(html).not.toContain('data-feedback')
+    }
+  })
+
+  test('the step lead-in is a focus target, and the Predict step is gated before the Run step', () => {
+    expect(panel('predict')).toContain('data-step-lead')
+    expect(panel('predict')).toMatch(/<p[^>]*tabindex="-1"[^>]*data-step-lead/)
+    const gate = panel('run')
+    expect(gate).toContain('Go predict')
+    expect(gate).toContain('Show me anyway')
+    expect(gate).not.toContain('data-reference-run')
+  })
+
+  test('the reference run has one persistent button and a status region that starts empty', () => {
+    const html = renderToStaticMarkup(createElement(ReferenceRun, { config: REFERENCE, title: 'Reference' }))
+    expect(html.match(/<button/g)?.length).toBe(1)
+    expect(html).toContain('data-run-button="idle"')
+    expect(html).toMatch(/<p role="status" aria-live="polite"[^>]*data-caption="true"><\/p>/)
   })
 })

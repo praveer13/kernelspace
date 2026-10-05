@@ -401,7 +401,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
       'A bump pointer only moves up, and a free gives nothing back. Filling the heap to 75% takes a couple of hundred allocations, and every alloc after that pushes the pointer further, so the top of the heap is reached within a few hundred ops while the freed stretches below it sit unused.',
   },
   choice('lab01.primm.p2', 'predict', [KC.allocatorContract], {
-    q: 'You build a bump allocator that rounds each start up to the alignment, hands out the next unused span and never takes a freed block back, then drop it on this page. Taking the four stages in order, which check goes red first?',
+    q: 'You build a bump allocator that rounds each start up to the alignment, hands out the next unused span and never takes a freed block back, then drop it on this page. Going through the stages in stage order (1, 2, 3, 4), which check goes red first?',
     options: [
       '`boot` in stage 1, because it has no free list yet',
       '`no_overlap` in stage 2, because each start can land inside the last span',
@@ -488,7 +488,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     explanation: 'The harness is an honest referee: it knows which bytes are live, so it knows which stretches were free.',
   }),
   choice('lab01.primm.i5', 'investigate', [KC.allocatorContract], {
-    q: 'Your allocator passes `cargo test`. The page grades `align` and `no_overlap` on seeds it draws when you drop the file. What does that change for a correct allocator?',
+    q: 'Your allocator passes `cargo test`. The page grades the seeded checks (`align`, `no_overlap` and `fragmentation`) on seeds it draws when you drop the file. What does that change for a correct allocator?',
     options: [
       'Nothing, because a correct allocator passes any seed and a tuned one fails',
       'Each drop needs a fresh `cargo build`, because the seed is baked into the module',
@@ -535,8 +535,15 @@ export const PRIMM_STEPS = [
 
 export type PrimmStepId = (typeof PRIMM_STEPS)[number]['id']
 
-/** The Run step's own item: the reference run's observed value. */
-export const RUN_ITEM = { id: 'lab01.primm.r1', nsec: 45, kcs: [KC.externalFrag, KC.splitCoalesce] as KcList }
+/**
+ * The Run step's own item: the reference run's observed value. Watching a strip is not an answer, so it carries
+ * no KCs (nothing for a KC aggregate to credit, and the empty list is how a reader tells it from an answer); only the
+ * time and the observed value are evidence.
+ */
+export const RUN_ITEM = { id: 'lab01.primm.r1', nsec: 45 }
+
+/** Whether the Predict step still takes graded answers: not after the run was shown first (the "show me anyway" peek). */
+export const predictGraded = (peeked: boolean, alreadyAnswered: boolean) => alreadyAnswered || !peeked
 
 /* ------------------------------------------------------------------ */
 /* Grading and the ledger                                               */
@@ -629,7 +636,7 @@ export function itemResponse(a: PrimmAnswer): ItemResponse {
   }
 }
 
-/** The Run step's evidence: what the reference run observed (ops served of the trace). Always a pass: it is an observation. */
+/** The Run step's evidence: what the reference run observed (ops served of the trace). An observation, not a graded answer: no KCs. */
 export function runResponse(run: ChurnRun, ms?: number): ItemResponse {
   return {
     kind: 'item',
@@ -639,7 +646,7 @@ export function runResponse(run: ChurnRun, ms?: number): ItemResponse {
     ok: true,
     provenance: 'practice',
     ...(ms !== undefined ? { ms } : {}),
-    data: { src: 'practice', kcs: [...RUN_ITEM.kcs], nsec: RUN_ITEM.nsec, value: run.survived, truth: run.total },
+    data: { src: 'practice', kcs: [], nsec: RUN_ITEM.nsec, value: run.survived, truth: run.total },
   }
 }
 

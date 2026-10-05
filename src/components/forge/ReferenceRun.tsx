@@ -29,15 +29,18 @@ export interface ReferenceRunProps {
   onFinished?(run: ChurnRun): void
   /** Start as soon as the component mounts. Default false. */
   autoPlay?: boolean
+  /** Put keyboard focus on the run button when the component mounts (the control the learner is walked to next). */
+  focusRun?: boolean
 }
 
-export function ReferenceRun({ config, title, onFinished, autoPlay = false }: ReferenceRunProps) {
+export function ReferenceRun({ config, title, onFinished, autoPlay = false, focusRun = false }: ReferenceRunProps) {
   // The whole run is computed up front (tens of ms); the strip only walks its samples.
   const run = useMemo(() => runChurn(config), [config])
   const last = run.samples.length - 1
   const [frame, setFrame] = useState(0)
   const [phase, setPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const finished = useRef(onFinished)
+  const button = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     finished.current = onFinished
   }, [onFinished])
@@ -64,6 +67,7 @@ export function ReferenceRun({ config, title, onFinished, autoPlay = false }: Re
   }, [run])
 
   useEffect(() => {
+    if (focusRun) button.current?.focus()
     if (autoPlay) start()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
   }, [])
@@ -130,33 +134,35 @@ export function ReferenceRun({ config, title, onFinished, autoPlay = false }: Re
       </dl>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {phase === 'idle' && (
-          <button
-            type="button"
-            onClick={start}
-            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-display text-[13px] font-semibold text-accent-foreground transition-all duration-150 hover:-translate-y-px active:scale-[.97] [@media(pointer:coarse)]:min-h-11"
-          >
-            <Play size={13} aria-hidden /> Run it
-          </button>
-        )}
-        {phase === 'playing' && (
-          <button
-            type="button"
-            onClick={finish}
-            className="inline-flex items-center gap-1.5 rounded-sm border border-line px-3 py-1.5 font-mono text-[11px] text-text-2 hover:text-text-1 [@media(pointer:coarse)]:min-h-11"
-          >
-            <SkipForward size={13} aria-hidden /> Skip to the end
-          </button>
-        )}
-        {phase === 'done' && (
-          <button
-            type="button"
-            onClick={start}
-            className="inline-flex items-center gap-1.5 rounded-sm border border-line px-3 py-1.5 font-mono text-[11px] text-text-2 hover:text-text-1 [@media(pointer:coarse)]:min-h-11"
-          >
-            <RotateCcw size={13} aria-hidden /> Replay
-          </button>
-        )}
+        {/* One button for the whole run: its label and handler follow the phase, so activating it never drops focus. */}
+        <button
+          ref={button}
+          type="button"
+          onClick={phase === 'playing' ? finish : start}
+          data-run-button={phase}
+          className={cn(
+            'inline-flex items-center gap-1.5 [@media(pointer:coarse)]:min-h-11',
+            phase === 'idle'
+              ? 'rounded-md bg-accent px-3 py-1.5 font-display text-[13px] font-semibold text-accent-foreground transition-all duration-150 hover:-translate-y-px active:scale-[.97]'
+              : 'rounded-sm border border-line px-3 py-1.5 font-mono text-[11px] text-text-2 hover:text-text-1',
+          )}
+        >
+          {phase === 'idle' && (
+            <>
+              <Play size={13} aria-hidden /> Run it
+            </>
+          )}
+          {phase === 'playing' && (
+            <>
+              <SkipForward size={13} aria-hidden /> Skip to the end
+            </>
+          )}
+          {phase === 'done' && (
+            <>
+              <RotateCcw size={13} aria-hidden /> Replay
+            </>
+          )}
+        </button>
       </div>
 
       <p role="status" aria-live="polite" className="mt-2 min-h-[2.5em] text-body-sm text-text-2" data-caption>
