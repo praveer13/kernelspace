@@ -19,10 +19,10 @@ export default {
     {
       q: 'With a KV cache, what does one decode step cost as the context grows from 1k to 100k tokens?',
       options: [
-        'Constant work, because the cached K and V are never touched again after they are written, so cost no longer depends on context',
-        'One new token through the projections and MLP, plus an attention read over all cached K/V that grows with t',
-        'A forward pass over the whole prefix, because attention needs the hidden states of every earlier token at every layer',
-        'Work that grows with t squared, since each cached token must attend to every other cached token again',
+        'Constant work with the cached K and V left untouched after they are written',
+        'One new token through the projections plus an attention read that grows with t',
+        'A forward pass over the whole prefix with attention rebuilding the hidden states of earlier tokens at each layer',
+        'Work that grows with t squared as each cached token attends to the other cached tokens again',
       ],
       correct: [1],
       why: [

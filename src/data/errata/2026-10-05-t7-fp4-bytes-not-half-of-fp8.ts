@@ -19,17 +19,17 @@ export default {
     {
       q: 'A team moves a bandwidth-bound decode fleet from FP8 weights to NVFP4. By the byte reduction alone, how far can its cost per token fall?',
       options: [
-        'By up to about 2×, because 4 bits is exactly half of the 8 bits that FP8 spends on every weight',
-        'By up to about 4×, because FP4 also halves the activation bytes on top of halving the weights',
-        'By up to about 1.1×, because the per-block scale factors cancel almost all of the saving in bytes',
-        'By up to about 1.8×, because 4.5 bits per weight leaves 4.5 / 8, about 56%, of FP8\'s weight bytes',
+        'By up to about 2×, from 4 bits being half of FP8\'s 8 bits per weight',
+        'By up to about 4×, from FP4 also halving the activation bytes',
+        'By up to about 1.1×, from FP4 scale factors cancelling most of the saving',
+        'By up to about 1.8×, from 4.5 bits per weight against FP8\'s 8 bits',
       ],
       correct: [3],
       why: [
         'This ignores the block scales. Each group of 16 values carries an FP8 scale, adding about half a bit per weight, so the saving is a little under 2×.',
         'Weight bytes dominate bandwidth-bound decode, so activation bytes add little, and the block scales keep the weight gain under 2×. Nothing here reaches 4×.',
         'The scales add 0.5 bit to a 4-bit value, not 4 bits. They trim the saving from 2× to ~1.8× instead of cancelling it.',
-        'Right: 4 + 8/16 = 4.5 bits per weight, so NVFP4 keeps 4.5 / 8, about 56%, of FP8\'s weight bytes. That is ~1.8× fewer (8 / 4.5 is about 1.78), so a bandwidth-bound fleet gains up to that much per GPU-hour.',
+        'Right: 4 + 8/16 = 4.5 bits per weight, so NVFP4 keeps 4.5 / 8, about 56%, of FP8\'s weight bytes. That is about 1.8× fewer, so a bandwidth-bound fleet gains up to that much.',
       ],
     },
   ],

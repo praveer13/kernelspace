@@ -19,10 +19,10 @@ export default {
     {
       q: 'Which description of how production GPU kernels are written fits the corrected T3.L7 lesson?',
       options: [
-        'CUDA C and Triton only, because ecosystem gravity leaves the kernel layer with exactly two languages and no exceptions',
-        'Mostly Rust, because memory safety on untrusted tensors has pushed the major engines off CUDA C++ for their kernels',
-        'CUDA C++ plus Python DSLs like CuTe DSL (FlashAttention-4), Triton/Gluon and TileLang, following the vendor ecosystem',
-        'Mostly Zig, because comptime specialization per architecture beats the vendor toolchains for kernels in serving stacks',
+        'CUDA C and Triton alone, following ecosystem gravity toward two languages',
+        'Mostly Rust, driven by memory safety over untrusted GPU tensors in the major engines',
+        'CUDA C++ plus Python DSLs such as CuTe DSL and Triton, following the vendors',
+        'Mostly Zig, driven by comptime specialization per GPU architecture in serving stacks',
       ],
       correct: [2],
       why: [
@@ -35,10 +35,10 @@ export default {
     {
       q: 'A teammate lists cudarc as a Rust GPU kernel project. What does cudarc actually do?',
       options: [
-        'It is a Rust kernel language, so kernels are written in Rust instead of CUDA C++ and compiled for the GPU device',
-        'It is a safe-Rust attention library whose kernels match hand-written CUDA C++ speed in production serving stacks',
-        'It reimplements the CUDA runtime in pure Rust, so programs run on any GPU vendor without the CUDA toolkit installed',
-        'It wraps the host-side CUDA API for Rust, so Rust code manages devices and launches kernels written in other tools',
+        'It is a Rust kernel language that writes GPU kernels in Rust instead of CUDA C++',
+        'It is a safe-Rust attention library with kernels matching hand-written CUDA C++ speed',
+        'It reimplements the CUDA runtime in pure Rust and runs on any GPU vendor',
+        'It wraps the host-side CUDA API for Rust and launches kernels written elsewhere',
       ],
       correct: [3],
       why: [

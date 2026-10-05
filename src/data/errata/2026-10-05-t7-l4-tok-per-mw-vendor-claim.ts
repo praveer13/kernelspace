@@ -16,10 +16,10 @@ export default {
     {
       q: 'NVIDIA quotes a headline tokens-per-megawatt multiplier for a new platform. How should a learner treat that number?',
       options: [
-        'As a claim at one stated interactivity point, to decompose into precision, software vintage and operating point first',
-        'As a measured result that transfers to any site, since a megawatt is the same unit for every operator, model and workload',
-        'As meaningless, because power is a small cost line and tokens per megawatt never changes what a site can sell',
-        'As a guarantee for every workload, because each hardware generation scales tokens per megawatt in a fixed ratio',
+        'As a claim at one interactivity point to decompose by precision and software',
+        'As a measured result that transfers to any site and workload as a megawatt is one unit',
+        'As meaningless given that power is a small cost line for a site and its revenue',
+        'As a guarantee for any workload from a fixed ratio between hardware generations',
       ],
       correct: [0],
       why: [

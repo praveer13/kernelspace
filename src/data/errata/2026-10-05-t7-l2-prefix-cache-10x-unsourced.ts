@@ -16,10 +16,10 @@ export default {
     {
       q: 'Traffic is dominated by prefix-cache hits. What can a lesson responsibly say about its cost per request compared with independent traffic?',
       options: [
-        'It is a stable 10× cheaper, a factor that holds for any model and engine once cache hits dominate the traffic mix',
-        'It is cheaper only for the first few requests, since cached blocks are evicted almost immediately under real production load',
-        'It costs about the same, because every request still pays for a full prefill and caching only shortens the response',
-        'It is cheaper by an amount set by hit rate, prompt length and engine, so the gap has to be measured on your workload',
+        'It is a fixed multiple cheaper for any model and engine once cache hits dominate',
+        'It is cheaper for the first few requests and then cached blocks are evicted under load',
+        'It costs about the same as each request still pays for a full prefill',
+        'It is cheaper by an amount that depends on hit rate and prompt length and engine',
       ],
       correct: [3],
       why: [
