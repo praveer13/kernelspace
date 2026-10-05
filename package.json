@@ -18,6 +18,14 @@
     "verify:claims": "bun scripts/verify-claims.ts",
     "verify:bundle": "bun scripts/verify-bundle.ts",
     "verify:seeds": "bun scripts/verify-seeds.ts",
+    "verify:kc": "bun scripts/verify-kc.ts",
+    "verify:generators": "bun scripts/verify-generators.ts",
+    "verify:determinism": "bun scripts/verify-determinism.ts",
+    "verify:plays": "bun scripts/verify-plays.ts",
+    "verify:guardrails": "bun scripts/verify-guardrails.ts",
+    "verify:mentor": "bun scripts/lint-mentor.ts",
+    "verify:labs": "bun scripts/verify-labs.ts",
+    "verify:search-index": "bun scripts/verify-search-index.ts",
     "leaderboard:build": "bun scripts/build-leaderboard.ts"
   },
   "dependencies": {

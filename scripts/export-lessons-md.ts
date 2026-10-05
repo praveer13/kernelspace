@@ -16,7 +16,7 @@ import { TRACKS } from '../src/lib/tracks'
 
 const SITE = 'https://kernelspace.naigap.com'
 
-function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number): string {
+function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number, firstDiagram: number): string {
   switch (b.type) {
     case 'prose':
     case 'deepdive':
@@ -33,8 +33,15 @@ function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number): st
       return b.stats.map((s) => `- **${s.value}** — ${s.label}${s.hint ? ` (${s.hint})` : ''}`).join('\n')
     case 'diagram': {
       const nodes = b.nodes.map((n) => `${n.label}${n.sub ? ` (${n.sub})` : ''}`).join(' · ')
-      const steps = (b.steps ?? []).map((s, i) => `${i + 1}. ${s.caption}`).join('\n')
-      return `_${b.caption}_\n\nComponents: ${nodes}${steps ? `\n\nSteps:\n${steps}` : ''}`
+      // P1 predictAt: the captions from `step` on are the answer, so they are withheld like a quiz key.
+      const gate = b.predictAt
+      const shown = gate ? (b.steps ?? []).slice(0, gate.step) : (b.steps ?? [])
+      const steps = shown.map((s, i) => `${i + 1}. ${s.caption}`).join('\n')
+      const head = `_${b.caption}_\n\nComponents: ${nodes}${steps ? `\n\nSteps:\n${steps}` : ''}`
+      if (!gate) return head
+      const order = exportOrder(`${lessonId}#dia`, firstDiagram, gate.options.length)
+      const opts = order.map((authored, j) => `- (o${j + 1}) ${gate.options[authored]}`).join('\n')
+      return `${head}\n\n**Predict before step ${gate.step + 1}: ${gate.prompt}**\n\n${opts}\n\n_Later steps and answers withheld: ask the learner to commit to a prediction and explain it before discussing._`
     }
     case 'isomorphism':
       return `_${b.title ?? 'isomorphism'}_\n\n${b.pairs
@@ -53,6 +60,21 @@ function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number): st
         .join('\n\n')
       return `${qs}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`
     }
+    case 'predict': {
+      // P1 prequestions: the key and the numeric truth are withheld, like a quiz. Option order uses a salt
+      // of its own so these never shift the lesson-wide quiz permutations above.
+      const qs = b.items
+        .map((item, i) => {
+          if (item.kind === 'numeric') return `**P${i + 1}. ${item.q}** _(numeric, answer in ${item.unit})_`
+          const order = exportOrder(`${lessonId}#pre`, i, item.options.length)
+          const opts = order.map((authored, j) => `- (o${j + 1}) ${item.options[authored]}`).join('\n')
+          return `**P${i + 1}. ${item.q}**\n\n${opts}`
+        })
+        .join('\n\n')
+      return `**Before you read: prequestions**\n\n${qs}\n\n_Answers withheld: ask the learner to commit to a guess before discussing._`
+    }
+    case 'play':
+      return `**Play: ${b.title}**\n\n_Interactive: ${SITE}/play/${b.playId}. Ask the learner to play it before discussing; the reference run stays hidden until the debrief._`
     case 'exercise':
       return `**Exercise: ${b.title}**\n\n${b.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}${b.note ? `\n\n_${b.note}_` : ''}`
     case 'field-note':
@@ -73,10 +95,12 @@ function lessonToMd(l: Lesson): string {
     '',
   ].join('\n')
   let questions = 0 // lesson-wide question index, the same count verify-items uses
+  let diagrams = 0 // diagram index, salts the option order of predictAt gates
   const body = l.blocks
     .map((b) => {
-      const md = blockToMd(b, l.id, questions)
+      const md = blockToMd(b, l.id, questions, diagrams)
       if (b.type === 'quiz') questions += b.questions.length
+      if (b.type === 'diagram') diagrams++
       return md
     })
     .filter(Boolean)

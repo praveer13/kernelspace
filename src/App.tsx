@@ -21,6 +21,8 @@ const FleetWeek = lazy(() => import('@/pages/FleetWeek'))
 const Leaderboard = lazy(() => import('@/pages/Leaderboard'))
 const Changes = lazy(() => import('@/pages/Changes'))
 const Boot = lazy(() => import('@/pages/Boot'))
+const Today = lazy(() => import('@/pages/Today'))
+const Play = lazy(() => import('@/pages/Play'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 /**
@@ -38,6 +40,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/boot" element={<Boot />} />
+            <Route path="/today" element={<Today />} />
+            <Route path="/play/:playId" element={<Play />} />
             <Route path="/curriculum" element={<Curriculum />} />
             <Route path="/tracks/:trackId" element={<Track />} />
             <Route path="/lesson/:lessonId" element={<Lesson />} />
