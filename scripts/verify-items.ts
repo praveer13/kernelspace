@@ -388,7 +388,8 @@ for (let pos = 0; pos < exportedKeys.length; pos++) {
 const SHUFFLED_SURFACES = [
   'src/components/QuizBlock.tsx',
   'src/components/sims/PlaygroundShell.tsx',
-  'src/pages/Curriculum.tsx',
+  // the placement walk replaced Curriculum's own modal: its items are shuffled by the item player's model
+  'src/lib/items/play.ts',
   'src/pages/FleetWeek.tsx',
 ]
 const importsShuffle = /import\s*\{[^}]*\bshuffledOrder\b[^}]*\}\s*from\s*'@\/lib\/rng'/
