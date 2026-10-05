@@ -62,10 +62,10 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
         {
           q: 'Two engine comparisons report opposite winners. The most common cause is…',
           options: [
-            'Run-to-run noise, so the rankings flip at random and the test should be repeated until one winner appears',
-            'Unpinned builds: once both reports use the same vLLM or SGLang version and kernels, any two harnesses must agree',
-            'A different traffic shape, warmup or stack configuration: results belong to the workload and harness',
-            'Hardware generation, since an engine\'s ranking is fixed per GPU and the two reports must have used different chips',
+            'Run-to-run noise that flips rankings at random, fixed by repeating the test until a winner appears',
+            'Unpinned builds, where matching engine versions and kernels would make any harness agree',
+            'Different traffic shapes, warmup states or stack configurations that belong to workload and harness',
+            'Hardware generation, as each engine\'s ranking is fixed per chip and the reports used different chips',
           ],
           correct: [2],
           explanation:
@@ -80,10 +80,10 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
         {
           q: 'Warmup exists in benchmarking protocol because…',
           options: [
-            'Cold GPUs run at reduced clocks until they heat up, so early samples understate peak performance',
-            'Engines hold state: cold prefix caches, uncaptured CUDA graphs and JIT make early samples measure start-up',
-            'Dropping the first samples lowers variance, which statistically stabilizes any metric whatever the cause',
-            'Load generators need time to open connections, so the first requests are throttled by the client',
+            'Cold chips run at reduced clocks until they heat up, and early samples understate peak performance',
+            'Engines hold state like cold prefix caches and compilation, and early samples measure start-up',
+            'Dropping the first samples lowers variance, and that stabilizes any metric whatever the cause',
+            'Load generators need time to open connections, and the first requests are throttled by the client',
           ],
           correct: [1],
           explanation:
@@ -98,10 +98,10 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
         {
           q: 'The capacity number of a serving system is found by…',
           options: [
-            'Running once at maximum batch size and reading the peak tokens per second that the engine sustains under load',
-            'Dividing the GPU\'s peak FLOPS by the model\'s FLOPs per token, which gives the ceiling the engine can reach',
-            'Taking mean latency at one moderate concurrency and extrapolating it linearly to much higher request rates',
-            'Stepping concurrency up, hundreds of requests per step, and finding the knee where the SLO first breaks',
+            'Running once at maximum batch size, then reading the peak tokens per second the engine sustains',
+            'Dividing the chip\'s peak compute by the model\'s compute per token, giving the ceiling the engine can reach',
+            'Taking mean latency at one moderate concurrency, then extrapolating it linearly to much higher request rates',
+            'Stepping concurrency upward with hundreds of requests per step, then finding the latency knee',
           ],
           correct: [3],
           explanation:
@@ -116,10 +116,10 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
         {
           q: 'Prefix sharing ratio must be reported because…',
           options: [
-            'Shared prefixes are tokenized once and then reused by later requests, so the ratio sets the tokenizer\'s CPU cost',
-            'A high ratio means prefix-cache hits that skip most prefill, so the same engine behaves as a different system',
-            'The ratio only matters for sizing the cache memory, so it is a deployment detail rather than a benchmark variable',
-            'It is a quality metric: shared prefixes reduce answer diversity, so it is disclosed beside accuracy',
+            'The ratio sets tokenizer host cost, and shared prefixes are tokenized once and reused by later requests',
+            'A high ratio means prefix-cache hits that skip most prefill, and the same engine behaves like a different system',
+            'The ratio matters just for sizing cache memory, and it is a deployment detail rather than a benchmark variable',
+            'It is a quality metric, with shared prefixes reducing answer diversity and being disclosed beside accuracy',
           ],
           correct: [1],
           explanation:

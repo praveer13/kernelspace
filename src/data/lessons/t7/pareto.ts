@@ -67,10 +67,10 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'In SemiAnalysis\'s InferenceMAX launch (Oct 2025, now InferenceX), DeepSeek-R1 FP4 has a GB200 NVL72 leading at 30 tok/s/user while a B200 on TRT-LLM beats it above 90 tok/s/user. These results are…',
           options: [
-            'In conflict: one model on one hardware family cannot have two winners, so one of the results used a flawed harness',
-            'Both true: they sit in different regions of one frontier, its throughput end and its interactivity end',
-            'About different models: DeepSeek-R1 favors the rack and a smaller model favors the node, so nothing conflicts',
-            'Both marketing: vendor-chosen configurations and workloads make neither claim informative about the frontier',
+            'In conflict, with one model on one hardware family unable to have two winners and one harness flawed',
+            'Both true, sitting in different regions of one frontier at its throughput end and interactivity end',
+            'About different models, with a large model favoring the rack and a small model favoring the node',
+            'Both marketing, with vendor-chosen configurations and workloads making neither claim informative',
           ],
           correct: [1],
           explanation:
@@ -85,9 +85,9 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'Which of these moves the FRONTIER, rather than sliding along it?',
           options: [
-            'Raising batch size or concurrency, which lifts tokens per second per GPU at the cost of per-user speed',
-            'FP4 quantization, speculative decoding, disaggregation or better hardware: changes to bytes, bandwidth or overlap',
-            'Moving the SLO floor to a looser latency target, which makes more operating points along the curve sellable',
+            'Raising batch size or concurrency, which lifts tokens per second per chip at the cost of per-user speed',
+            'Quantized weights, speculative decoding or disaggregated phases that change the bytes moved or overlap',
+            'Loosening the latency target the product promises, which makes more operating points sellable',
             'Adding replicas behind the load balancer, which multiplies fleet tokens per second at the same per-user speed',
           ],
           correct: [1],
@@ -103,10 +103,10 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'MTP speculative decoding shifts…',
           options: [
-            'The whole frontier uniformly, since fewer forward passes per token help at every batch size',
-            'Only TTFT, since the extra draft tokens are produced during prefill and shorten the wait for the first token',
-            'The interactivity end by roughly 2–3× by spending idle decode FLOPs, while barely moving the throughput end',
-            'The throughput end most, since verifying several tokens per step raises tokens per second per GPU at large batch',
+            'The whole frontier uniformly, with fewer forward passes per token helping at each batch size',
+            'The first-token latency alone, with extra draft tokens produced during prefill to shorten the wait',
+            'The interactivity end most, spending idle decode compute while barely moving the throughput end',
+            'The throughput end most, with several tokens verified per step lifting tokens per second at large batch',
           ],
           correct: [2],
           explanation:
@@ -121,10 +121,10 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'Your product\'s SLO determines…',
           options: [
-            'Only the frontend\'s timeout and retry settings; the engine\'s operating point comes from a batch-size flag',
-            'Which region of the frontier is sellable: the latency contract fixes the operating point, hardware class and margin',
-            'The frontier itself, since a stricter SLO forces the vendor to find faster kernels and newer hardware',
-            'Nothing about hardware: GPU choice follows model size, and the SLO is met afterward by adding more replicas',
+            'The frontend\'s timeout and retry settings, while the engine\'s operating point comes from a batch-size flag',
+            'Which region of the frontier is sellable, with the latency contract setting the operating point',
+            'The frontier itself, with a stricter target forcing the vendor to find faster kernels and newer hardware',
+            'Nothing about hardware, with chip choice following model size and replicas added to meet the target',
           ],
           correct: [1],
           explanation:
