@@ -96,27 +96,37 @@ export function createObservationBus(): ObservationBus {
   }
 }
 
-/** Which tasks finished a predict → run → explain cycle in this mount, miss or hit. */
+/**
+ * Which tasks finished a predict → run → explain cycle in this mount, and which of those passed (a right
+ * prediction). A miss finishes the cycle, so its note unlocks, but it is not passed: the ledger fold needs an
+ * `ok` outcome (§3.4), so the panel and the list show "finished, not yet passed" until a later try is right.
+ */
 export interface FinishedStore {
-  add(taskId: string): void
+  /** `passed` is the prediction's verdict; a later passing try upgrades an earlier miss. */
+  add(taskId: string, passed: boolean): void
   has(taskId: string): boolean
+  passed(taskId: string): boolean
   subscribe(listener: () => void): () => void
-  /** Bumps on every add (the useSyncExternalStore snapshot). */
+  /** Bumps on every change (the useSyncExternalStore snapshot). */
   version(): number
 }
 
 export function createFinishedStore(): FinishedStore {
   const done = new Set<string>()
+  const passed = new Set<string>()
   const listeners = new Set<() => void>()
   let version = 0
   return {
-    add(taskId) {
-      if (done.has(taskId)) return
+    add(taskId, ok) {
+      const grew = !done.has(taskId) || (ok && !passed.has(taskId))
       done.add(taskId)
+      if (ok) passed.add(taskId)
+      if (!grew) return
       version += 1
       for (const l of [...listeners]) l()
     },
     has: (taskId) => done.has(taskId),
+    passed: (taskId) => passed.has(taskId),
     subscribe(listener) {
       listeners.add(listener)
       return () => void listeners.delete(listener)
@@ -164,23 +174,34 @@ const NOOP_SUBSCRIBE = (): (() => void) => NOOP
 const ZERO = (): number => 0
 
 /**
- * Whether each of one sim's tasks counts as finished: an `ok` outcome in the ledger or a cycle finished in
- * this mount (outcome tasks), a recorded task (legacy). A phone-mode record is neither, by design.
+ * Whether each of one sim's tasks is passed: an `ok` outcome in the ledger or a right prediction in this
+ * mount (outcome tasks), a recorded task (legacy). A phone-mode record is neither, by design.
  */
 export function useTasksDone(tasks: readonly SimTaskDef[]): Record<string, boolean> {
+  return useTaskStates(tasks).done
+}
+
+/**
+ * `done` as in `useTasksDone`; `finished` also counts a cycle finished with a missed prediction in this mount,
+ * which is what opens "what just happened".
+ */
+export function useTaskStates(tasks: readonly SimTaskDef[]): { done: Record<string, boolean>; finished: Record<string, boolean> } {
   const host = useSimHost()
   const simId = tasks[0]?.simId ?? ''
   const outcomes = useProgress((s) => s.aggregate.sims[simId]?.outcomes)
   const tasksDone = useProgress((s) => s.sims[simId]?.tasksDone)
   const version = useFinishedVersion(host)
   return useMemo(() => {
-    void version // a cycle finished in this mount re-derives the map
-    const out: Record<string, boolean> = {}
+    void version // a cycle finished in this mount re-derives the maps
+    const done: Record<string, boolean> = {}
+    const finished: Record<string, boolean> = {}
     for (const t of tasks) {
-      out[t.id] =
-        t.kind === 'legacy' ? tasksDone?.includes(t.id) === true : outcomes?.[t.id] === true || host?.finished.has(t.id) === true
+      const d =
+        t.kind === 'legacy' ? tasksDone?.includes(t.id) === true : outcomes?.[t.id] === true || host?.finished.passed(t.id) === true
+      done[t.id] = d
+      finished[t.id] = d || host?.finished.has(t.id) === true
     }
-    return out
+    return { done, finished }
   }, [tasks, outcomes, tasksDone, host, version])
 }
 

@@ -33,6 +33,7 @@ import {
 } from '@/lib/sims/host'
 import type { Prediction, RunAction, RunPhase, SimHostInternal, TaskRun } from '@/lib/sims/host'
 import { resolveTasks } from '@/lib/sims/registry'
+import { ProseView } from '@/pages/lesson/prose'
 
 // Phone mode is its own chunk: a laptop reader never fetches it.
 const PhoneOutcome = lazy(() => import('@/components/sims/PhoneOutcome'))
@@ -222,7 +223,7 @@ export function PredictFields({
           {spec.kind === 'numeric' ? `Enter ${spec.log === true ? 'a positive ' : 'a '}number in ${spec.unit}.` : 'Pick one answer.'}
         </p>
       )}
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="How sure are you? (optional)">
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5" role="group" aria-label="How sure are you? (optional)">
         <span className="mr-1 font-mono text-[10px] uppercase text-text-3">how sure</span>
         {CONFIDENCE.map((c) => {
           const on = shownConf === c.id
@@ -230,8 +231,7 @@ export function PredictFields({
             <button
               key={c.id}
               type="button"
-              role="radio"
-              aria-checked={on}
+              aria-pressed={on}
               onClick={() => onDraft({ ...draft, conf: on ? undefined : c.id })}
               className={cn(
                 'inline-flex items-center justify-center rounded-xs border px-2.5 py-1 font-mono text-[10px] transition-colors duration-150 disabled:cursor-default',
@@ -290,7 +290,9 @@ export function TaskPanel({ task, host }: { task: SimTaskDef; host: SimHostInter
 
   if (spec === undefined || task.explain === undefined) return null
 
-  const done = ledgerDone || run.phase === 'done'
+  // Three states, as in the ledger view: not done, finished without passing (a miss), done (a right prediction).
+  const done = ledgerDone || (run.phase === 'done' && run.observed?.grade.ok === true)
+  const missed = !done && run.phase === 'done'
   const locked = run.phase !== 'predict'
   const step = run.phase === 'predict' ? 0 : run.phase === 'run' ? 1 : 2
   const grade = run.observed?.grade
@@ -319,7 +321,7 @@ export function TaskPanel({ task, host }: { task: SimTaskDef; host: SimHostInter
     const ms = run.committedAt === undefined ? undefined : Date.now() - run.committedAt
     if (!completeTask(recordOutcome, task, run, { ms })) return
     saved.current = true
-    host.finished.add(task.id)
+    host.finished.add(task.id, run.observed?.grade.ok === true)
     dispatch({ type: 'finish' })
   }
 
@@ -336,6 +338,7 @@ export function TaskPanel({ task, host }: { task: SimTaskDef; host: SimHostInter
       data-task-id={task.id}
       data-phase={ledgerDone && run.phase === 'predict' ? 'done' : run.phase}
       data-done={done}
+      data-finished={done || missed}
       aria-labelledby={`${uid}-title`}
     >
       <header className="flex items-start gap-2">
@@ -346,11 +349,11 @@ export function TaskPanel({ task, host }: { task: SimTaskDef; host: SimHostInter
           )}
           aria-hidden
         >
-          {done && <Check size={10} strokeWidth={3} />}
+          {done ? <Check size={10} strokeWidth={3} /> : missed && <CircleDashed size={10} strokeWidth={2.5} className="text-text-3" />}
         </span>
         <h4 id={`${uid}-title`} ref={titleRef} tabIndex={-1} className="text-body-sm font-medium leading-snug text-text-1 outline-none">
           {task.title}
-          <span className="sr-only">{done ? ' (done)' : ''}</span>
+          <span className="sr-only">{done ? ' (done)' : missed ? ' (finished, not yet passed)' : ''}</span>
         </h4>
       </header>
 
@@ -529,7 +532,7 @@ export function TaskPanel({ task, host }: { task: SimTaskDef; host: SimHostInter
           {run.phase === 'done' && (
             <div className="mt-3 space-y-2 text-body-sm text-text-2">
               <p ref={savedRef} tabIndex={-1} className="text-text-1 outline-none">
-                Saved{grade?.ok ? '.' : '. A correct prediction on a later try completes this task.'}
+                Saved{grade?.ok ? '.' : '. Finished, not yet passed: a correct prediction on a later try passes this task.'}
               </p>
               {task.explain && (
                 <p>
@@ -565,16 +568,14 @@ function describeActual(spec: PredictSpec, observed: NonNullable<TaskRun['observ
   return spec.kind === 'choice' ? (spec.options.find((o) => o.id === actual)?.text ?? actual) : actual
 }
 
-/** "What just happened": only rendered once the task is complete, so it never spoils the discovery. */
+/** "What just happened": only rendered once the cycle is finished, so it never spoils the discovery. Markdown, as in an exercise note. */
 export function Note({ text }: { text: string }) {
   return (
     <div className="rounded-sm border border-line bg-surface-1 px-2.5 py-2" data-task-note>
       <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-text-3">What just happened</p>
-      {text.split(/\n{2,}/).map((para, i) => (
-        <p key={i} className={i > 0 ? 'mt-1.5' : undefined}>
-          {para}
-        </p>
-      ))}
+      <div className="text-body-sm text-text-2">
+        <ProseView md={text} trackColor="hsl(var(--primary))" compact />
+      </div>
     </div>
   )
 }

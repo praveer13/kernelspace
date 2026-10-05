@@ -17,7 +17,7 @@ import type { SimId } from '@/data/lessons/types'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import RouteFallback from '@/components/RouteFallback'
 import { TaskList } from '@/components/sims/TaskPanel'
-import { SimHostContext, createFinishedStore, createObservationBus, decodeCfg, useTasksDone } from '@/lib/sims/host'
+import { SimHostContext, createFinishedStore, createObservationBus, decodeCfg, useTaskStates } from '@/lib/sims/host'
 import type { SimHostInternal } from '@/lib/sims/host'
 import { resolveTasks } from '@/lib/sims/registry'
 import type { SimHostProps } from '@/lib/sims/types'
@@ -156,8 +156,10 @@ function InlineBody({
   children,
 }: Pick<SimHostComponentProps, 'simId' | 'mode' | 'taskIds' | 'renderNote' | 'children'> & { machine?: string }) {
   const tasks = useMemo(() => resolveTasks(simId, machine, taskIds), [simId, machine, taskIds])
-  const done = useTasksDone(tasks)
-  const unlocked = tasks.length > 0 && tasks.every((t) => done[t.id])
+  const { finished } = useTaskStates(tasks)
+  // A cycle with a missed prediction is finished too. No resolved tasks means nothing to wait for: the
+  // lesson test fails an unresolvable `taskIds`, so a learner is never locked out by a typo.
+  const unlocked = tasks.every((t) => finished[t.id])
   return (
     <div data-sim-host={simId} data-mode={mode}>
       {mode !== 'phone' && (

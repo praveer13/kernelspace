@@ -9,7 +9,7 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import PhoneOutcome, { OutcomeChart } from '../../src/components/sims/PhoneOutcome'
 import SimMirror from '../../src/components/sims/SimMirror'
-import { TaskPanel } from '../../src/components/sims/TaskPanel'
+import { Note, TaskPanel } from '../../src/components/sims/TaskPanel'
 import {
   MAX_EXPLAIN_CHARS,
   SimHostContext,
@@ -266,6 +266,21 @@ describe('the panel', () => {
     expect(html.match(/type="radio"/g)).toHaveLength(2)
     expect(html).toContain('Memory')
     expect(html).toContain('Lock in my prediction')
+  })
+
+  test('the "how sure" chips are toggle buttons, not radios', () => {
+    const html = render(TASK)
+    expect(html).toContain('role="group" aria-label="How sure are you? (optional)"')
+    expect(html.match(/aria-pressed="false"/g)).toHaveLength(3)
+    expect(html).not.toContain('role="radio')
+  })
+
+  test('a task note goes through the markdown renderer', () => {
+    const html = renderToString(createElement(Note, { text: 'The ridge is `295` FLOP/B.\n\nSecond **paragraph**.' }))
+    expect(html).toContain('What just happened')
+    expect(html).toContain('<code')
+    expect(html).not.toContain('`295`')
+    expect(html).not.toContain('**')
   })
 
   test('an outcome task with no predict or explain renders nothing', () => {

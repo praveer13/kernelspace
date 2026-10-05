@@ -51,6 +51,12 @@ export interface Observation {
   key: string
   value: number | string
   unit?: string
+  /**
+   * Optional: the config the value was measured under (spec §10.3). Not used yet: the panel grades the
+   * first observation of its key after the commit and does not compare hashes, so a sim must not re-emit
+   * for a config it has already left.
+   */
+  configHash?: string
 }
 
 export type PredictSpec =

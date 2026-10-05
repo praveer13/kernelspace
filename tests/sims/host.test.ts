@@ -235,6 +235,12 @@ describe('what a sim reads (§10.1)', () => {
     expect(markup).toContain('data-mode="phone"')
   })
 
+  test('the note unlocks when no listed task resolves, so a typo never locks it', () => {
+    const note = (unlocked: boolean) => createElement('i', { 'data-unlocked': String(unlocked) })
+    const el = createElement(SimHost, { simId: 'sim-kv', mode: 'embed', taskIds: ['no.such.task'], renderNote: note }, createElement(Probe))
+    expect(html(el, url)).toContain('data-unlocked="true"')
+  })
+
   test('embed with no config reads null, not the URL', () => {
     const el = createElement(SimHost, { simId: 'sim-kv', mode: 'embed' }, createElement(Probe))
     expect(probed(html(el, url))).toEqual({ cfg: null, machine: null, from: null })
@@ -295,14 +301,18 @@ describe('observation bus', () => {
     expect(seen).toEqual([1, 2, 2])
   })
 
-  test('the finished store notifies once per task and bumps its version', () => {
+  test('the finished store notifies once per task, tracks passed apart from finished, and a pass upgrades a miss', () => {
     const s = createFinishedStore()
     let n = 0
     s.subscribe(() => n++)
-    s.add('a')
-    s.add('a')
-    s.add('b')
+    s.add('a', true)
+    s.add('a', true)
+    s.add('b', false)
+    s.add('b', false)
     expect([n, s.version(), s.has('a'), s.has('c')]).toEqual([2, 2, true, false])
+    expect([s.passed('a'), s.passed('b'), s.has('b')]).toEqual([true, false, true])
+    s.add('b', true)
+    expect([n, s.passed('b')]).toEqual([3, true])
   })
 })
 
