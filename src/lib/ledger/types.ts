@@ -469,9 +469,16 @@ export type FactKey =
   | `lab:${string}`
   | `fw:${string}`
   | `cap:${string}`
+  /* Wave 1 (spec §3.4): evidence facts. XP v1 pays nothing for them; XP v2 (B7) prices them. */
+  | `simo:${string}`
+  | `labc:${string}`
+  | `play:${string}`
+  | `prove:${string}`
+  | 'boot'
+  | 'placement'
 
 export interface LessonAgg {
-  /** A `complete` event exists. */
+  /** A `complete` event exists (v1 meaning; see `read` and `passedAt` for what it is evidence of). */
   done?: true
   /** Earliest completion. Always set when `done` is. */
   completedAt?: IsoInstant
@@ -480,12 +487,20 @@ export interface LessonAgg {
   /** Best quiz score. */
   quizBest?: number
   exercise?: true
+  /** v2: earliest `ok` quiz event, any form. The lesson is *done* (passed) once set. */
+  passedAt?: IsoInstant
+  /** v2: the form of that earliest pass; `checkpoint` when the event carries none. */
+  passVia?: TicketForm | 'checkpoint'
+  /** v2: a `complete` whose `data.via` is `read` or absent: finished, not passed. */
+  read?: true
 }
 
 export interface SimAgg {
   /** Count of distinct `visit` events. */
   visits: number
   tasks: Record<string, true>
+  /** v2: tasks with an `ok` outcome-graded `sim-task`. */
+  outcomes: Record<string, true>
 }
 
 export interface LabAgg {
@@ -494,11 +509,25 @@ export interface LabAgg {
   completedAt?: IsoInstant
   /** Largest `total` seen on a run. */
   total?: number
+  /** v2: check ids passed on seeds drawn at grade time, from `unseen` runs. */
+  unseen: Record<string, true>
+  /** v2: end of the latest H3 bottom-out window (24 h after the `#bottom` hint). */
+  assistedUntil?: IsoInstant
+}
+
+/** v2: what the learner did in one play (`plays[id]`). */
+export interface PlayAgg {
+  /** An `ok` result on phase `play` (debriefed). */
+  done?: true
+  /** An `ok` result on phase `compose`. */
+  composed?: true
+  /** Best score over every result. */
+  best: number
 }
 
 export interface Aggregate {
-  /** Aggregate format version; a mismatch means "rebuild from the ledger". */
-  v: 1
+  /** Aggregate format version; a mismatch means "rebuild from the ledger" (version 1 is upgraded in place, spec §3.1). */
+  v: 2
   /** Number of distinct events folded. */
   events: number
   lessons: Record<string, LessonAgg>
@@ -514,14 +543,30 @@ export interface Aggregate {
   achievements: Record<string, IsoInstant>
   /** Earliest `ack` per ref. */
   acks: Record<string, IsoInstant>
-  /** Earliest `complete` per non-lesson ref (e.g. `boot`). */
+  /** Earliest `complete` per non-lesson ref (e.g. `boot`, `placement`). */
   completions: Record<string, IsoInstant>
+  /** v2 (spec §3.4): per play id. */
+  plays: Record<string, PlayAgg>
+  /** v2: earliest `ok` Prove-it per lab id. */
+  proves: Record<string, IsoInstant>
+  /** v2: nominal seconds of graded items per local day (XP v2 caps the minutes per day). */
+  itemSec: Record<LocalDay, number>
+}
+
+/** The Wave 0b aggregate under a version-1 snapshot; `upgradeAggregate` makes it an `Aggregate`. */
+export interface AggregateV1
+  extends Omit<Aggregate, 'v' | 'lessons' | 'sims' | 'labs' | 'plays' | 'proves' | 'itemSec'> {
+  v: 1
+  lessons: Record<string, Omit<LessonAgg, 'passedAt' | 'passVia' | 'read'>>
+  sims: Record<string, Omit<SimAgg, 'outcomes'>>
+  labs: Record<string, Omit<LabAgg, 'unseen' | 'assistedUntil'>>
 }
 
 /** The derived snapshot under localStorage `kernelspace:v2`. Rebuildable from IndexedDB at any time. */
 export interface SnapshotV2 {
   schemaVersion: number
-  aggregateVersion: Aggregate['v']
+  /** 2 now; a version-1 snapshot is upgraded at hydrate (spec §3.1). */
+  aggregateVersion: number
   writtenAt: IsoInstant
   /** Tab that wrote it. */
   tab: string
@@ -736,6 +781,8 @@ export interface LedgerStatus {
 /** Additive state on useProgress. Existing fields and actions keep their exact shapes. */
 export interface LedgerFacadeState {
   ledger: LedgerStatus
+  /** The full aggregate (spec §3.4), for selectors the consumer view does not carry: rings, plays, itemSec. */
+  aggregate: Aggregate
   acks: Record<string, IsoInstant>
   completions: Record<string, IsoInstant>
   working: Partial<Record<WorkingKey, Json>>
@@ -750,6 +797,8 @@ export interface QuizResponse {
   pick: number[]
   ok: boolean
   conf?: Confidence
+  /** KCs of the question (`QuizQuestion.kcs`), written to the item's `data.kcs`. */
+  kcs?: string[]
 }
 
 export interface QuizAttempt {
@@ -781,8 +830,8 @@ export interface LabRunMeta {
   provenance?: Extract<Provenance, 'lab-green' | 'unseen' | 'proved'>
 }
 
-/** New façade actions (additive). Existing actions keep their signatures (spec §8.3). */
-export interface LedgerFacadeActions {
+/** New façade actions (additive). Existing actions keep their signatures (spec §8.3); the Wave 1 actions are merged in (spec §3.3). */
+export interface LedgerFacadeActions extends LedgerFacadeActionsV31 {
   recordQuizAttempt(attempt: QuizAttempt): void
   recordItems(items: ItemResponse[]): void
   acknowledge(ref: AckRef, data?: { via?: string }): void
@@ -791,7 +840,7 @@ export interface LedgerFacadeActions {
   setWorking(key: WorkingKey, value: Json): void
 }
 
-/* ---- Wave 1 façade additions (spec §3.3). Task B0 adds these to ProgressState. ---- */
+/* ---- Wave 1 façade additions (spec §3.3), merged into LedgerFacadeActions above. ---- */
 
 /** One exit ticket, spiral checkpoint or test-out: its item responses plus the verdict of its pass rule. */
 export interface TicketAttempt {
@@ -854,10 +903,7 @@ export interface ProveResult {
   data: ProveData
 }
 
-/**
- * New actions. Kept apart from LedgerFacadeActions until B0 implements them, so this commit
- * changes no runtime contract; B0 merges them into ProgressState.
- */
+/** The Wave 1 actions (spec §3.3). Each skip rule is the façade's, so a repeat never writes a second event. */
 export interface LedgerFacadeActionsV31 {
   /** n `item` events + one `quiz` summary (`data.form`); on `ok`, also `complete lesson:<id>` with `via`. */
   recordTicket(attempt: TicketAttempt): void
@@ -873,6 +919,13 @@ export interface LedgerFacadeActionsV31 {
   completePlacement(result: JsonObject): void
 }
 
+/** Options of the delta export (spec §6.6). */
+export interface ExportOptions {
+  includeComponentBytes?: boolean
+  /** Only events and working records with `at` at or after this instant; no components or extras (a handoff, not a backup). */
+  sinceAt?: IsoInstant
+}
+
 export interface EventFilter {
   kinds?: EventKind[]
   refPrefix?: string
@@ -881,7 +934,7 @@ export interface EventFilter {
 
 /** Async API of the lazily loaded engine (src/lib/ledger/client.ts re-exports it). */
 export interface LedgerClient {
-  exportV3(opts?: { includeComponentBytes?: boolean }): Promise<ExportV3>
+  exportV3(opts?: ExportOptions): Promise<ExportV3>
   previewImport(text: string, mode: ImportMode): Promise<ImportPreview | { error: ImportErrorCode; detail?: string }>
   importFile(text: string, mode: ImportMode): Promise<ImportResult>
   undo(): Promise<boolean>

@@ -1,10 +1,16 @@
 import { XP } from '../economy'
 
-/** Logical data-model version (spec §3). Bump when event semantics or required fields change. */
-export const SCHEMA_VERSION = 3
+/**
+ * Logical data-model version (spec §3). Bump when event semantics or required fields change.
+ * 4 = Wave 1 (wave-1.md §3.1): new refs, data shapes and lesson states. A Wave 0b bundle goes read-only on it.
+ */
+export const SCHEMA_VERSION = 4
 
-/** Aggregate format version; a mismatch means "rebuild from the ledger". */
-export const AGGREGATE_VERSION = 1
+/**
+ * Aggregate format version; an unknown one means "rebuild from the ledger". Version 1 (Wave 0b) is
+ * upgraded in place at hydrate, so the first Wave 1 paint is never empty (`upgradeAggregate`).
+ */
+export const AGGREGATE_VERSION = 2
 
 /** Export file marker (spec §10.1). */
 export const EXPORT_FORMAT = 'kernelspace-progress'

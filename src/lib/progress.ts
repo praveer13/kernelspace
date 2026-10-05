@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { AGGREGATE_VERSION, EXPORT_FORMAT, QUIZ_PASS_SCORE, SCHEMA_VERSION } from './ledger/constants'
 import { browserEnv, loadDeviceId, onLedgerClientRequest } from './ledger/client'
-import { emptyAggregate, foldInto } from './ledger/fold'
+import { emptyAggregate, foldInto, upgradeAggregate } from './ledger/fold'
 import { checkSnapshot } from './ledger/guard'
 import { lwwWorking } from './ledger/merge'
 import { SNAPSHOT_KEY } from './ledger/names'
@@ -12,6 +12,7 @@ import { dayOf } from './ledger/time'
 import { toProgressData, workingMap } from './ledger/view'
 import type {
   Aggregate,
+  AggregateV1,
   AckRef,
   BootRef,
   EventKind,
@@ -20,17 +21,22 @@ import type {
   Json,
   JsonObject,
   LabRunMeta,
+  LabRunV2,
   LedgerEngine,
   LedgerEvent,
   LedgerFacadeActions,
   LedgerFacadeState,
   LedgerStatus,
   LessonRef,
+  PlayResult,
   Provenance,
+  ProveResult,
   QuizAttempt,
   ReadOnlyReason,
+  SimOutcome,
   SimRef,
   SnapshotV2,
+  TicketAttempt,
   WorkingKey,
   WorkingRecord,
 } from './ledger/types'
@@ -47,7 +53,11 @@ import { TOTAL_TRACK_LESSONS } from './tracks'
  * writes `kernelspace:v1` (Addendum A1: v3 starts fresh).
  */
 
-export type LessonStatus = 'unstarted' | 'reading' | 'done'
+/**
+ * `read` = finished without passing (a click, or "continue anyway"); `done` = passed (ticket, spiral,
+ * checkpoint or test-out). Percentages, badges and rings count `done` only (wave-1.md §8.3, owner answer O4).
+ */
+export type LessonStatus = 'unstarted' | 'reading' | 'read' | 'done'
 
 export interface LessonProgress {
   status: LessonStatus
@@ -167,6 +177,8 @@ export interface ProgressControls {
 export type ProgressStore = UseBoundStore<StoreApi<ProgressState>> & { controls: ProgressControls }
 
 const SNAPSHOT_DELAY_MS = 250
+/** The codec rejects an item with more KCs than this (wave-1.md §3.2), and a rejected event is lost at flush. */
+const MAX_KCS = 6
 /** Scroll position is device-local and changes constantly: commit it at most this often (§5). */
 const SCROLL_DELAY_MS = 2000
 /** Free-text fields (Fleet Week notes) commit after typing pauses. */
@@ -229,10 +241,19 @@ const clamp01 = (n: number): number => Math.min(1, Math.max(0, n))
 const withDefined = <T extends object>(o: T): Partial<T> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
 
-function isAggregate(a: unknown): a is Aggregate {
-  if (!isRec(a) || a.v !== AGGREGATE_VERSION || typeof a.events !== 'number') return false
-  for (const key of ['lessons', 'sims', 'labs', 'facts', 'days', 'achievements', 'acks', 'completions']) {
+/** The aggregate of the Wave 0b snapshot, which `upgradeAggregate` carries forward (spec §3.1). */
+const V1_AGGREGATE = 1
+
+function isAggregate(a: unknown): a is Aggregate | AggregateV1 {
+  if (!isRec(a) || (a.v !== AGGREGATE_VERSION && a.v !== V1_AGGREGATE) || typeof a.events !== 'number') return false
+  const maps = ['lessons', 'sims', 'labs', 'facts', 'days', 'achievements', 'acks', 'completions']
+  if (a.v === AGGREGATE_VERSION) maps.push('plays', 'proves', 'itemSec')
+  for (const key of maps) {
     if (!isRec(a[key])) return false
+  }
+  if (a.v === AGGREGATE_VERSION) {
+    if (!Object.values(a.sims as object).every((x) => isRec(x) && isRec(x.outcomes))) return false
+    if (!Object.values(a.labs as object).every((x) => isRec(x) && isRec(x.unseen))) return false
   }
   const fw = a.fleetWeek
   const cap = a.capstone
@@ -242,8 +263,17 @@ function isAggregate(a: unknown): a is Aggregate {
 const isWorkingShape = (w: unknown): w is WorkingRecord =>
   isRec(w) && typeof w.key === 'string' && 'value' in w && typeof w.at === 'string' && typeof w.dev === 'string'
 
-/** §8.2 steps 1 and 3: the snapshot, or an empty ledger. A corrupt or foreign-format snapshot is ignored (§9.8). */
-function hydrate(storage: FacadeEnv['storage']): { aggregate: Aggregate; working: WorkingRecord[]; readOnly?: ReadOnlyReason } {
+/**
+ * §8.2 steps 1 and 3: the snapshot, or an empty ledger. A corrupt or foreign-format snapshot is ignored (§9.8).
+ * A version-1 aggregate (Wave 0b) is upgraded in place rather than discarded, so the first paint after the
+ * Wave 1 deploy shows the old numbers; `upgraded` tells the store to boot the engine now (wave-1.md §3.1).
+ */
+function hydrate(storage: FacadeEnv['storage']): {
+  aggregate: Aggregate
+  working: WorkingRecord[]
+  readOnly?: ReadOnlyReason
+  upgraded?: boolean
+} {
   const empty = { aggregate: emptyAggregate(), working: [] as WorkingRecord[] }
   let raw: string | null = null
   try {
@@ -255,12 +285,15 @@ function hydrate(storage: FacadeEnv['storage']): { aggregate: Aggregate; working
   try {
     const snap = JSON.parse(raw) as Partial<SnapshotV2>
     const readOnly = checkSnapshot(SCHEMA_VERSION, snap) ?? undefined
-    if (snap.aggregateVersion !== AGGREGATE_VERSION || !isAggregate(snap.aggregate) || !Array.isArray(snap.working)) {
+    const stored: unknown = snap.aggregate
+    if (!isAggregate(stored) || !Array.isArray(snap.working) || (snap.aggregateVersion as unknown) !== stored.v) {
       return readOnly ? { ...empty, readOnly } : empty
     }
     const working = snap.working.filter(isWorkingShape)
-    toProgressData(snap.aggregate, workingMap(working)) // throws on a malformed aggregate: fall through to empty
-    return { aggregate: snap.aggregate, working, readOnly }
+    const upgraded = stored.v === V1_AGGREGATE
+    const aggregate = stored.v === V1_AGGREGATE ? upgradeAggregate(stored) : stored
+    toProgressData(aggregate, workingMap(working)) // throws on a malformed aggregate: fall through to empty
+    return { aggregate, working, readOnly, upgraded }
   } catch {
     return empty
   }
@@ -341,6 +374,7 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       if (v !== cur[key]) patch[key] = v
     }
     for (const key of DATA_KEYS) consider(key, data[key])
+    consider('aggregate', agg)
     consider('acks', agg.acks)
     consider('completions', agg.completions)
     consider('working', working)
@@ -542,12 +576,24 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
 
   const currentWorking = (key: WorkingKey): Json | undefined => workingRecs.get(key)?.value
 
+  /** One `lab-check` event: `ok` is cumulative, so a lab stays done once every check has passed in some run. */
+  function writeLabRun(labId: string, passed: string[], total: number, provenance: Provenance, extra: object, data: object): void {
+    const prev = getOwn(agg.labs, labId)
+    const checks = new Set([...Object.keys(prev?.checks ?? {}), ...passed])
+    const done = (total > 0 && checks.size >= total) || !!prev?.done
+    const score = total > 0 ? clamp01(passed.length / total) : 0
+    record([ev(stamp(), 'lab-check', `lab:${labId}`, { ...graded(score, done, provenance, extra), data })], [])
+  }
+
   /* ---- actions ---- */
   const actions: Actions = {
     markLessonStatus: (lessonId, status) => {
       if (status === 'done') {
-        if (getOwn(agg.lessons, lessonId)?.done) return
-        record([ev(stamp(), 'complete', `lesson:${lessonId}`)], [])
+        const L = getOwn(agg.lessons, lessonId)
+        if (L?.done || L?.passedAt !== undefined) return
+        record([ev(stamp(), 'complete', `lesson:${lessonId}`)], []) // no `via`: reads as `read` until a pass (spec §8.7)
+      } else if (status === 'read') {
+        actions.completeLesson(lessonId, 'read')
       } else if (status === 'reading') {
         visitLesson(lessonId)
       } // 'unstarted': status never goes backwards
@@ -583,20 +629,8 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
     },
 
     recordLabResult: (labId, passedCheckIds, totalChecks, meta) => {
-      const prev = getOwn(agg.labs, labId)
-      const checks = new Set([...Object.keys(prev?.checks ?? {}), ...passedCheckIds])
-      const done = (totalChecks > 0 && checks.size >= totalChecks) || !!prev?.done
-      const score = totalChecks > 0 ? clamp01(passedCheckIds.length / totalChecks) : 0
       const extra = withDefined({ wasmSha256: meta?.wasmSha256, seed: meta?.seed })
-      record(
-        [
-          ev(stamp(), 'lab-check', `lab:${labId}`, {
-            ...graded(score, done, meta?.provenance ?? 'lab-green', extra),
-            data: { passed: [...passedCheckIds], total: totalChecks },
-          }),
-        ],
-        [],
-      )
+      writeLabRun(labId, passedCheckIds, totalChecks, meta?.provenance ?? 'lab-green', extra, { passed: [...passedCheckIds], total: totalChecks })
     },
 
     completeFleetWeekAct: (actId, score) => {
@@ -686,7 +720,7 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
         ev(s, 'item', `quiz:${attempt.lessonId}#${r.qi}`, {
           ...graded(r.ok ? 1 : 0, r.ok, 'practice', withDefined({ conf: r.conf, seed: attempt.seed })),
           rev: r.rev,
-          data: { src: 'quiz', pick: r.pick, grp, lessonId: attempt.lessonId },
+          data: { src: 'quiz', pick: r.pick, grp, lessonId: attempt.lessonId, ...(r.kcs ? { kcs: r.kcs.slice(0, MAX_KCS) } : {}) },
         }),
       )
       evs.push(
@@ -725,6 +759,73 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
     },
 
     setWorking: (key: WorkingKey, value: Json) => writeWorking([[key, value]]),
+
+    /* Wave 1 actions (wave-1.md §3.3) */
+
+    recordTicket: (a: TicketAttempt) => {
+      const n = a.responses.length
+      if (n === 0) return
+      const s = stamp()
+      const grp = newId()
+      const src = a.form === 'testout' ? 'testout' : 'ticket'
+      const evs = a.responses.map((r, i) => {
+        const kcs = r.data.kcs?.slice(0, MAX_KCS)
+        return ev(s, 'item', r.ref, {
+          ...graded(clamp01(r.score), r.ok, r.provenance ?? 'practice', withDefined({ conf: r.conf, seed: r.seed, ms: r.ms })),
+          rev: r.rev,
+          data: { slot: i, of: n, lessonId: a.lessonId, ...r.data, ...(kcs ? { kcs } : {}), src, form: a.form, grp },
+        })
+      })
+      const kcs = [...new Set(a.responses.flatMap((r) => r.data.kcs ?? []))].sort()
+      const correct = a.responses.filter((r) => r.ok).length
+      evs.push(
+        ev(s, 'quiz', `lesson:${a.lessonId}`, {
+          ...graded(correct / n, a.ok, 'practice', withDefined({ seed: a.seed, ms: a.ms })),
+          data: { grp, n, form: a.form, nonMcqOk: a.nonMcqOk, kcs },
+        }),
+      )
+      // A pass completes the lesson (done); a miss writes only evidence, and "continue anyway" is completeLesson.
+      if (a.ok) evs.push(ev(s, 'complete', `lesson:${a.lessonId}`, { data: { via: a.form === 'testout' ? 'testout' : 'ticket', grp } }))
+      record(evs, [])
+    },
+
+    completeLesson: (lessonId, via) => {
+      const L = getOwn(agg.lessons, lessonId)
+      if (L?.read || L?.passedAt !== undefined) return
+      record([ev(stamp(), 'complete', `lesson:${lessonId}`, { data: { via } })], [])
+    },
+
+    recordSimOutcome: (simId: string, o: SimOutcome) => {
+      const sim = getOwn(agg.sims, simId)
+      if (sim && getOwn(sim.outcomes, o.taskId)) return // an ok outcome already counts; later runs are not evidence of more
+      record(
+        [ev(stamp(), 'sim-task', `sim:${simId}/${o.taskId}`, { ...graded(clamp01(o.score), o.ok, 'practice', withDefined({ conf: o.conf, ms: o.ms })), data: o.data })],
+        [],
+      )
+    },
+
+    recordLabRun: (r: LabRunV2) => {
+      const extra = withDefined({ wasmSha256: r.wasmSha256, ms: r.ms })
+      const data = withDefined({ passed: [...r.passed], total: r.total, abi: r.abi, checks: r.checks, seeds: r.seeds, stage: r.stage })
+      writeLabRun(r.labId, r.passed, r.total, r.provenance, extra, data)
+    },
+
+    recordPlay: (r: PlayResult) => {
+      record(
+        [ev(stamp(), 'play', `play:${r.playId}`, { ...graded(clamp01(r.score), r.ok, r.provenance, withDefined({ seed: r.seed, ms: r.ms })), data: r.data })],
+        [],
+      )
+    },
+
+    recordProve: (r: ProveResult) => {
+      record([ev(stamp(), 'prove', `prove:${r.labId}`, { ...graded(clamp01(r.score), r.ok, 'practice', withDefined({ ms: r.ms })), data: r.data })], [])
+    },
+
+    completePlacement: (result: JsonObject) => {
+      const s = stamp()
+      const value = toJson(result)
+      record([ev(s, 'complete', 'placement')], value === undefined ? [] : [{ key: 'placement:result', value, at: s.at, dev: device }])
+    },
   }
 
   /* ---- create the store ---- */
@@ -735,6 +836,7 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
     return {
       ...initialData,
       ledger: ledgerStatus,
+      aggregate: agg,
       acks: agg.acks,
       completions: agg.completions,
       working: workingValues(),
@@ -756,7 +858,11 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
   }
 
   // §8.2 step 4: the engine starts when the browser is idle, or on the first write. A read-only snapshot needs no engine.
-  if (!readOnlyReason) (options.scheduleBoot ?? idleBoot)(() => void bootEngine())
+  // A snapshot upgraded from aggregate v1 is approximate (passed instants, new maps empty): the full derive fixes it, so do not wait for idle.
+  if (!readOnlyReason) {
+    if (hydrated.upgraded) void bootEngine()
+    else (options.scheduleBoot ?? idleBoot)(() => void bootEngine())
+  }
 
   const controls: ProgressControls = {
     async flush() {
@@ -817,10 +923,10 @@ export function selectTrackDone(trackId: string) {
       .length
 }
 
-/** First non-done lesson in track order → next recommended lesson id. */
+/** First lesson in track order that is neither done nor read (resume skips read, wave-1.md §8.3) → next recommended lesson id. */
 export function selectNextLesson(orderedLessonIds: string[]) {
   return (s: ProgressState) =>
-    orderedLessonIds.find((id) => s.lessons[id]?.status !== 'done') ?? null
+    orderedLessonIds.find((id) => s.lessons[id]?.status !== 'done' && s.lessons[id]?.status !== 'read') ?? null
 }
 
 /** Current streak length in consecutive days ending today/yesterday. */

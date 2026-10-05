@@ -5,7 +5,8 @@
  * - splitmix32 drives every choice, so a seed replays exactly (`LEDGER_SEED=<n>`).
  * - Pools are fixed, so tests stay independent of content edits.
  * - Devices have their own tz and a deterministic id stream; the clock starts 2026-09-01T08:00Z.
- * - Ops mirror the façade actions (spec §8.3-8.4), including their skip rules.
+ * - Ops mirror the façade actions (spec §8.3-8.4, and the Wave 1 actions of wave-1.md §3.3), including
+ *   their skip rules. Every shape is one the codec must accept, so the import properties exercise it.
  */
 import { derive } from '../../src/lib/ledger/fold'
 import { compareEvents, compareWorking, type Ledger } from '../../src/lib/ledger/merge'
@@ -39,6 +40,11 @@ export const LABS: Record<string, { checks: string[]; total: number }> = {
 }
 export const ACTS = ['engine', 'fleet', 'business', 'incident']
 export const STEPS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7']
+export const PLAY = 'block-placement'
+export const FORMS = ['ticket', 'spiral', 'testout'] as const
+/** Wave 1 item refs, one of each grammar (wave-1.md §3.2). */
+export const WAVE1_ITEM_REFS = ['gen:frag/first-fit', 'gen:kv/bytes-per-token', 'pre:t1.l4#0', 'dia:t1.l3#5', 'cr:t0.l4#0', 'item:r.anchor.e0502-1']
+const KCS = ['kc.frag.external', 'kc.kv.size', 'kc.roofline.bound']
 export const TZS = [-420, 0, 330, 540]
 export const START_MS = Date.parse('2026-09-01T08:00:00.000Z')
 const MINUTE = 60_000
@@ -61,7 +67,7 @@ let handBuilt = 0
 
 /** A hand-made event for unit tests: graded kinds get `score: 1, ok: true, provenance: 'practice'` unless `extra` says otherwise. */
 export function evt(kind: LedgerEvent['kind'], ref: string, at: string, extra: Record<string, unknown> = {}, tz = 0): LedgerEvent {
-  const graded = ['item', 'probe', 'quiz', 'predict', 'sim-task', 'lab-check', 'fleet-act', 'capstone-step'].includes(kind)
+  const graded = ['item', 'probe', 'quiz', 'predict', 'sim-task', 'lab-check', 'fleet-act', 'capstone-step', 'play', 'prove'].includes(kind)
   return {
     id: `h${handBuilt++}`,
     v: 1,
@@ -314,12 +320,193 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
       return null
     },
   },
+  /* ---- Wave 1 (wave-1.md §3.3): every new action, with its skip rule ---- */
+  {
+    weight: 4,
+    name: 'ticket',
+    run: (d) => {
+      const id = pick(d.rand, LESSONS)
+      const form = pick(d.rand, FORMS)
+      const n = int(d.rand, 3, 5)
+      const grp = `${d.id}:t${d.ms}`
+      const src = form === 'testout' ? 'testout' : 'ticket'
+      const kcs = shuffle(d.rand, KCS).slice(0, int(d.rand, 1, 3))
+      let correct = 0
+      let nonMcqOk = false
+      for (let i = 0; i < n; i++) {
+        const ok = chance(d.rand, 0.7)
+        if (ok) correct += 1
+        if (ok && i === n - 1) nonMcqOk = true // the last slot is the non-MCQ
+        d.graded('item', pick(d.rand, WAVE1_ITEM_REFS), ok ? 1 : 0, ok, {
+          rev: `t${i}`,
+          provenance: chance(d.rand, 0.4) ? 'unseen' : 'practice',
+          seed: int(d.rand, 0, 0xffffffff),
+          ...maybeConf(d.rand),
+          data: { src, form, grp, slot: i, of: n, kcs, lessonId: id, level: int(d.rand, 0, 3), nsec: int(d.rand, 10, 120), picks: ['b'] },
+        })
+      }
+      const score = correct / n
+      const ok = score >= 0.66 && nonMcqOk
+      d.graded('quiz', `lesson:${id}`, score, ok, { data: { grp, n, form, nonMcqOk, kcs } })
+      if (ok) d.emit('complete', `lesson:${id}`, { data: { via: form === 'testout' ? 'testout' : 'ticket', grp } })
+      return `${id} ${form} ${correct}/${n}${ok ? ' pass' : ''}`
+    },
+  },
+  {
+    weight: 3,
+    name: 'complete-read',
+    run: (d) => {
+      const id = pick(d.rand, LESSONS)
+      if (d.skips) {
+        const L = d.agg.lessons[id]
+        if (L?.read || L?.passedAt !== undefined) return null
+      }
+      d.emit('complete', `lesson:${id}`, { data: { via: 'read' } })
+      return id
+    },
+  },
+  {
+    weight: 3,
+    name: 'sim-outcome',
+    run: (d) => {
+      const t = pick(d.rand, SIM_TASKS)
+      if (d.skips && d.agg.sims[SIM]?.outcomes[t]) return null
+      const ok = chance(d.rand, 0.6)
+      d.graded('sim-task', `sim:${SIM}/${t}`, ok ? 1 : 0, ok, {
+        ...maybeConf(d.rand),
+        data: {
+          v: 2,
+          outcome: true,
+          predict: { value: int(d.rand, 1, 9), unit: 'ms' },
+          actual: int(d.rand, 1, 9),
+          logErr: Math.round(d.rand() * 100) / 100,
+          explain: 'because the batch is memory bound',
+          ideas: [0, 2],
+          ...(chance(d.rand, 0.3) ? { phone: true } : {}),
+        },
+      })
+      return `${t} ${ok ? 'ok' : 'miss'}`
+    },
+  },
+  {
+    weight: 4,
+    name: 'lab-run-v2',
+    run: (d) => {
+      const lab = pick(d.rand, Object.keys(LABS))
+      const { checks, total } = LABS[lab]
+      const passed = shuffle(d.rand, checks).slice(0, int(d.rand, 0, checks.length))
+      const seeds = pick(d.rand, ['fresh', 'default'] as const)
+      const detail = checks.map((id) => ({
+        id,
+        status: passed.includes(id) ? 'pass' : pick(d.rand, ['fail', 'trap', 'timeout'] as const),
+        seed: int(d.rand, 0, 0xffffffff),
+        ...(seeds === 'fresh' && chance(d.rand, 0.8) ? { fresh: true } : {}),
+      }))
+      const known = d.skips ? Object.keys(d.agg.labs[lab]?.checks ?? {}) : []
+      const done = new Set([...known, ...passed]).size >= total || (!d.skips && passed.length === total)
+      d.graded('lab-check', `lab:${lab}`, passed.length / total, done, {
+        provenance: seeds === 'fresh' ? pick(d.rand, ['unseen', 'assisted', 'lab-green'] as const) : 'lab-green',
+        data: { passed, total, abi: 2, checks: detail, seeds, stage: int(d.rand, 0, 3) },
+        ...(chance(d.rand, 0.3) ? { wasmSha256: 'cd'.repeat(32) } : {}),
+      })
+      return `${lab} ${seeds} ${passed.join(',')}`
+    },
+  },
+  {
+    weight: 3,
+    name: 'play',
+    run: (d) => {
+      const phase = pick(d.rand, ['play', 'compose'] as const)
+      const ok = chance(d.rand, 0.6)
+      d.graded('play', `play:${PLAY}`, Math.round(d.rand() * 100) / 100, ok, {
+        provenance: pick(d.rand, ['practice', 'unseen'] as const),
+        seed: int(d.rand, 0, 0xffffffff),
+        data: {
+          phase,
+          turns: int(d.rand, 1, 20),
+          survived: int(d.rand, 0, 20),
+          ghostSurvived: int(d.rand, 0, 20),
+          ...(phase === 'compose' ? { spec: { fit: 'best', coalesce: 'eager', minSplit: 16, classes: 'pow2' }, equivalent: ok } : {}),
+        },
+      })
+      return `${phase} ${ok ? 'ok' : 'miss'}`
+    },
+  },
+  {
+    weight: 2,
+    name: 'prove',
+    run: (d) => {
+      const lab = pick(d.rand, Object.keys(LABS))
+      const self = [0, 1, 2].map(() => int(d.rand, 0, 1))
+      const score = self.reduce((a, b) => a + b, 0) / self.length
+      d.graded('prove', `prove:${lab}`, score, chance(d.rand, 0.8), { data: { v: 1, qids: ['q1', 'q2', 'q3'], self } })
+      return lab
+    },
+  },
+  {
+    weight: 1,
+    name: 'placement',
+    run: (d) => {
+      d.emit('complete', 'placement')
+      d.setWorking('placement:result', { at: d.iso, tracks: { t0: int(d.rand, 0, 3), t1: int(d.rand, 0, 3) } })
+      return 'placement'
+    },
+  },
+  {
+    weight: 3,
+    name: 'hint',
+    run: (d) => {
+      const lab = pick(d.rand, Object.keys(LABS))
+      const ref = `hint:${lab}/${pick(d.rand, LABS[lab].checks)}#${pick(d.rand, ['R1', 'R2', 'bottom'])}`
+      if (d.skips && d.agg.acks[ref] !== undefined) return null
+      d.emit('ack', ref)
+      return ref
+    },
+  },
+  {
+    weight: 4,
+    name: 'today-item',
+    run: (d) => {
+      const ref = pick(d.rand, WAVE1_ITEM_REFS)
+      const ok = chance(d.rand, 0.6)
+      const kind = pick(d.rand, ['item', 'probe'] as const)
+      d.graded(kind, ref, ok ? 1 : 0, ok, {
+        rev: 'g0',
+        seed: int(d.rand, 0, 0xffffffff),
+        provenance: chance(d.rand, 0.5) ? 'unseen' : 'practice',
+        ...maybeConf(d.rand),
+        data: {
+          src: pick(d.rand, ['today', 'placement', 'practice', 'pre', 'diagram'] as const),
+          kcs: shuffle(d.rand, KCS).slice(0, 2),
+          nsec: int(d.rand, 0, 600),
+          slot: int(d.rand, 0, 7),
+          of: 8,
+          reason: pick(d.rand, ['priority', 'threshold', 'due', 'confirm', 'probe', 'extra'] as const),
+          ...(ref.startsWith('gen:') ? { level: 2, variant: 'first-fit', unit: 'B', truth: 64, miss: 'kv.priced-fp16' } : {}),
+        },
+      })
+      return ref
+    },
+  },
+  {
+    weight: 2,
+    name: 'predict-w1',
+    run: (d) => {
+      const ok = chance(d.rand, 0.5)
+      const lo = int(d.rand, 1, 20)
+      d.graded('predict', pick(d.rand, ['pre:t1.l4#0', 'dia:t1.l3#5', 'item:r.anchor.e0502-1']), ok ? 1 : 0, ok, {
+        rev: 'p0',
+        data: { value: 10, unit: 'KiB', truth: ok ? 10 : 80, src: pick(d.rand, ['pre', 'diagram', 'placement', 'lesson'] as const), lo, hi: lo + int(d.rand, 0, 40), kcs: [KCS[0]], nsec: int(d.rand, 5, 90) },
+      })
+      return null
+    },
+  },
   {
     weight: 4,
     name: 'working',
     run: (d) => {
       const r = d.rand
-      switch (int(r, 0, 5)) {
+      switch (int(r, 0, 9)) {
         case 0: {
           const id = pick(r, LESSONS)
           if (d.skips && !d.agg.lessons[id]) return null
@@ -338,9 +525,21 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
         case 4:
           d.setWorking('capstone:metrics', { ttft: int(r, 1, 9), itl: int(r, 1, 9), throughput: int(r, 1, 999) })
           return 'capstone:metrics'
-        default:
+        case 5:
           d.setWorking('settings:codeLang', pick(r, ['python', 'java', 'rust', 'c']))
           return 'settings'
+        case 6:
+          d.setWorking('queue:laptop', [{ simId: SIM, taskId: pick(r, SIM_TASKS), at: d.iso }])
+          return 'queue:laptop'
+        case 7:
+          d.setWorking('handoff:last', { at: d.iso, events: int(r, 0, 50) })
+          return 'handoff:last'
+        case 8:
+          d.setWorking('today:prefs', { phoneMode: chance(r, 0.5), sessionMinutes: int(r, 5, 12) })
+          return 'today:prefs'
+        default:
+          d.setWorking('boot:week', { minutesPerWeek: 180, sessionMinutes: 12, phoneDays: [1, 3], laptopDays: [6], slo: 0.9 })
+          return 'boot:week'
       }
     },
   },

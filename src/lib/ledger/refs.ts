@@ -38,15 +38,43 @@ export function parseSimTaskRef(ref: string): { simId: string; taskId: string } 
 
 const nonEmpty = (ref: string, prefix: string) => refTail(ref, prefix) !== null
 
-const isCardItemRef = (ref: string) => {
-  const tail = refTail(ref, 'card:')
+/** `<prefix><id>#<n>`: a card item, a prequestion, a diagram prediction or a constructed response. */
+const isIndexedRef = (ref: string, prefix: string) => {
+  const tail = refTail(ref, prefix)
   if (tail === null) return false
   const hash = tail.lastIndexOf('#')
   return hash > 0 && /^\d+$/.test(tail.slice(hash + 1))
 }
 
-/** Item, probe and predict refs: a quiz item, a Boot step or a change-card item. */
-const isItemRef = (ref: string) => parseQuizItemRef(ref) !== null || nonEmpty(ref, 'boot:') || isCardItemRef(ref)
+/** `gen:<family>/<variant>` */
+const isGenRef = (ref: string) => {
+  const tail = refTail(ref, 'gen:')
+  const slash = tail === null ? -1 : tail.indexOf('/')
+  return tail !== null && slash > 0 && slash < tail.length - 1
+}
+
+/**
+ * `hint:<labId>/<checkId>#<rung>` (H3) -> its parts. The rung is `R1`, `R2`, ... or `bottom`.
+ */
+export function parseHintRef(ref: string): { labId: string; checkId: string; rung: string } | null {
+  const tail = refTail(ref, 'hint:')
+  if (tail === null) return null
+  const slash = tail.indexOf('/')
+  const hash = tail.lastIndexOf('#')
+  if (slash <= 0 || hash <= slash + 1 || hash === tail.length - 1) return null
+  return { labId: tail.slice(0, slash), checkId: tail.slice(slash + 1, hash), rung: tail.slice(hash + 1) }
+}
+
+/**
+ * Item, probe and predict refs: a quiz item, a Boot step, a change-card item, and the Wave 1 shapes
+ * (spec §3.2): generated, prequestion, diagram, constructed response and authored `item:<id>`.
+ */
+const isItemRef = (ref: string) =>
+  parseQuizItemRef(ref) !== null ||
+  nonEmpty(ref, 'boot:') ||
+  nonEmpty(ref, 'item:') ||
+  isGenRef(ref) ||
+  ['card:', 'pre:', 'dia:', 'cr:'].some((p) => isIndexedRef(ref, p))
 
 const REF_RULES: Record<EventKind, (ref: string) => boolean> = {
   item: isItemRef,
@@ -57,15 +85,15 @@ const REF_RULES: Record<EventKind, (ref: string) => boolean> = {
   'lab-check': (ref) => nonEmpty(ref, 'lab:') && !ref.includes('/'),
   'fleet-act': (ref) => nonEmpty(ref, 'fw:'),
   'capstone-step': (ref) => nonEmpty(ref, 'cap:'),
-  play: (ref) => ref.length > 0,
+  play: (ref) => nonEmpty(ref, 'play:'),
   incident: (ref) => ref.length > 0,
   'fleet-run': (ref) => ref.length > 0,
-  prove: (ref) => ref.length > 0,
+  prove: (ref) => nonEmpty(ref, 'prove:'),
   visit: (ref) => nonEmpty(ref, 'lesson:') || (nonEmpty(ref, 'sim:') && !ref.includes('/')) || ref === 'boot',
-  complete: (ref) => nonEmpty(ref, 'lesson:') || ref === 'boot',
+  complete: (ref) => nonEmpty(ref, 'lesson:') || ref === 'boot' || ref === 'placement',
   exercise: (ref) => nonEmpty(ref, 'lesson:'),
   achievement: (ref) => nonEmpty(ref, 'ach:'),
-  ack: (ref) => nonEmpty(ref, 'erratum:') || nonEmpty(ref, 'screen:'),
+  ack: (ref) => nonEmpty(ref, 'erratum:') || nonEmpty(ref, 'screen:') || parseHintRef(ref) !== null,
 }
 
 /** The ref grammar of each kind (spec §4.2), used by import validation. */
