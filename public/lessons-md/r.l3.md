@@ -45,23 +45,23 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
 
 **Q1. After let b = a for a String, what happened?**
 
-- (o1) b owns the buffer, and a is no longer usable after the move
-- (o2) The heap buffer was deep-copied, so a and b are now independent owners
-- (o3) The buffer was freed at once and a now holds an empty String that is still usable
+- (o1) b becomes the sole owner of the buffer and a is no longer usable
+- (o2) The buffer was deep-copied and a and b are independent owners
+- (o3) The buffer was freed at once and a holds an empty String that is still usable
 - (o4) a and b both point at the buffer and the last one to leave scope frees it
 
 **Q2. Why is clone() intentionally explicit?**
 
-- (o1) Implicit duplication would run Drop twice on one buffer, so the call must be spelled out
-- (o2) The compiler cannot tell whether a type is safe to duplicate, so the programmer must vouch for it each time
-- (o3) clone() is built on unsafe pointer copies, so Rust makes each use deliberate and auditable
-- (o4) Duplicating a heap value can allocate and copy a lot of data, so the cost is visible at the call site
+- (o1) Implicit duplication would call drop() twice on the same buffer and corrupt it
+- (o2) The compiler cannot tell if a type is safe to clone() and the programmer vouches
+- (o3) clone() is built on unsafe pointer copies and each use must be audited
+- (o4) Duplicating a heap value can copy a lot of data and clone() shows the cost
 
 **Q3. What does Drop provide?**
 
-- (o1) Cleanup of heap memory only, since files, sockets and locks still need a manual close call
-- (o2) Cleanup run by a background collector, some time after the owner leaves scope, as Java does, via finalizers
-- (o3) Deterministic cleanup of whatever the value owns, such as memory, a file or a lock, when its owner ends
-- (o4) Cleanup that happens only when code calls drop() explicitly, like close() in C
+- (o1) Cleanup of heap memory while files and locks are left to a manual close call
+- (o2) Cleanup run by a background collector some time after the owner leaves scope
+- (o3) Deterministic cleanup of what the value owns such as memory or a file
+- (o4) Cleanup that runs when the code calls drop by hand as it would call close in C
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

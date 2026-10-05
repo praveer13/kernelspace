@@ -49,23 +49,23 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 
 **Q1. Which combination may exist at the same time for one value?**
 
-- (o1) At most one reference of either kind, since even two &T could see a half-written update
-- (o2) One &mut T alongside any number of &T, because readers cannot see an in-progress write, so nothing races
-- (o3) Any number of &mut T, provided no two of them write the same element, since the compiler tracks each index
-- (o4) Many &T, or exactly one &mut T, but never a &mut T together with any other live reference
+- (o1) At most one reference of either kind even when both just read
+- (o2) One &mut T alongside any number of shared &T references
+- (o3) Any number of &mut T when no two of them write the same element
+- (o4) Many &T references or one &mut T but not both at once
 
 **Q2. Why prefer &[T] to &Vec<T> in a read-only function parameter?**
 
-- (o1) A slice accepts arrays, Vecs and subranges, and exposes only the access the callee needs
-- (o2) A &Vec<T> parameter forces the callee to allocate a new Vec, copy every element, then drop it, but a slice reuses the caller's buffer
-- (o3) Indexing and iteration need a slice type, so a &Vec<T> parameter cannot use either one
-- (o4) A &Vec<T> moves the Vec into the callee for good, so the caller loses it, whereas a slice only borrows part of it
+- (o1) Passing &[T] lets the caller supply arrays and Vecs and subranges
+- (o2) Passing &[T] copies the elements into a temporary buffer first
+- (o3) Passing &Vec<T> blocks indexing and iteration unless a slice type is used
+- (o4) Passing &Vec<T> moves the Vec into the callee and the caller loses it
 
 **Q3. Why can Vec::push conflict with a live element reference?**
 
-- (o1) push takes the Vec by value, so every earlier reference points at moved-from memory afterwards
-- (o2) Vec counts live element borrows at runtime, and push panics whenever that count is nonzero
-- (o3) push shifts existing elements along by one slot, so the held reference would see a different value
-- (o4) push can reallocate the buffer, leaving any held element reference pointing at freed heap memory
+- (o1) push consumes the Vec and leaves earlier references pointing at moved memory
+- (o2) Vec counts live element borrows at runtime and push panics when that count is nonzero
+- (o3) push shifts the existing elements by one slot and changes what a held reference sees
+- (o4) push can reallocate the buffer and leave a held reference pointing at freed memory
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

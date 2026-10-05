@@ -51,23 +51,23 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
 
 **Q1. What does Option<T> communicate that a nullable reference does not?**
 
-- (o1) The value is boxed on the heap, and a null pointer stands for None at runtime
-- (o2) Absence is a variant of the type, so the compiler forces each caller to handle it
-- (o3) Each access is checked for null at runtime and throws on failure, as in a Java NPE
-- (o4) Why the value is missing, since None carries an error describing the absence
+- (o1) The value is boxed on the heap and a null pointer marks the empty case at runtime
+- (o2) Absence is a type variant and the compiler forces callers to handle it
+- (o3) Each access is checked for null at runtime and throws on failure as in Java
+- (o4) None carries an error that says why the value is missing
 
 **Q2. Inside a Result-returning function, what does expr? do when expr is Err?**
 
-- (o1) It evaluates to the error value and execution continues, leaving later code to check it, as in Go
-- (o2) It panics with the error value, like unwrap(), instead of handing the Err to the caller
-- (o3) It unwinds like an exception to whichever caller has a handler, so signatures need no Result
-- (o4) It returns that Err from the current function, converting the error with From when the types differ
+- (o1) It evaluates to the error value and execution goes on as in Go
+- (o2) It panics with the error value as unwrap does instead of returning it
+- (o3) It unwinds like an exception to a caller and signatures need no Result
+- (o4) It returns the Err from the current function and converts it with From
 
 **Q3. When should ordinary input validation return Result instead of panic?**
 
-- (o1) Only when failures are frequent enough that unwinding would show up in profiles
-- (o2) Only in library crates, while an application may panic on any input it cannot use
-- (o3) When the caller can reasonably react, such as rejecting a bad config value
-- (o4) Only for I/O errors, since a malformed value is an invariant violation and should panic
+- (o1) When failures are frequent and rare ones should panic to save unwinding cost
+- (o2) When the code is a library crate and a binary crate should panic instead
+- (o3) When the caller can reasonably react such as rejecting a bad config value
+- (o4) When the error is an I/O failure while a malformed value should panic
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
