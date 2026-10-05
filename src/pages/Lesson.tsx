@@ -6,7 +6,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -492,6 +492,7 @@ export default function LessonPage() {
 function LessonView({ lesson }: { lesson: Lesson }) {
   const track = getTrack(lesson.trackId)!
   const navigate = useNavigate()
+  const { hash } = useLocation()
   const trackLessons = lessonsForTrack(lesson.trackId)
   const next = nextLesson(lesson)
   const prev = prevLesson(lesson)
@@ -540,8 +541,15 @@ function LessonView({ lesson }: { lesson: Lesson }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson.id])
 
-  /* resume position (runs after Layout's scroll-to-top) */
+  /* resume position (runs after Layout's scroll-to-top); a #heading link (⌘K opens KCs at their H2) wins over it */
   useEffect(() => {
+    const anchor = decodeURIComponent(hash.slice(1))
+    if (anchor && headings.some((h) => h.id === anchor)) {
+      const id = requestAnimationFrame(() =>
+        requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior })),
+      )
+      return () => cancelAnimationFrame(id)
+    }
     const saved = useProgress.getState().lessons[lesson.id]?.scrollPct
     if (saved && saved > 5 && saved < 95) {
       const id = requestAnimationFrame(() =>
@@ -552,7 +560,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
       )
       return () => cancelAnimationFrame(id)
     }
-  }, [lesson.id])
+  }, [lesson.id, hash, headings])
 
   /* scroll driver: progress bar + pct readout (refs), throttled store save */
   useEffect(() => {
