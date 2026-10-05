@@ -16,6 +16,10 @@ export interface ForgeLabCheck {
   expectation?: string
   /** Advanced extension that is reported but does not gate lab completion. */
   optional?: boolean
+  /** V4 (Wave 1): KC ids the check exercises (lab 01 first; docs/specs/wave-1.md §4.5). */
+  kcs?: string[]
+  /** F2 (Wave 1): the stage the check belongs to; must match the module's `list` reply. */
+  stage?: number
 }
 
 export interface ForgeLab {
