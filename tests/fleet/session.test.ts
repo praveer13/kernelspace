@@ -480,14 +480,16 @@ describe('the watchdog', () => {
 describe('reference modules earn no credit', () => {
   test('validateModule rejects a <lab>@reference build, and a learner build still passes', async () => {
     const reference = await validateModule(labModule('batching-scheduler@reference'), 'batching-scheduler')
-    expect(reference).toMatchObject({ ok: false, title: 'reference module: no credit' })
+    /* The lab worker (C1) now refuses a reference build at validateLabInWorker, before validateModule's own check. */
+    expect(reference).toMatchObject({ ok: false, title: 'not a lab module' })
+    expect(reference).toMatchObject({ detail: expect.stringContaining('reference modules earn no credit') })
     expect(await validateModule(labModule('batching-scheduler'), 'batching-scheduler')).toEqual({ ok: true })
     expect(await validateModule(labModule('mpmc-queue'), 'batching-scheduler')).toMatchObject({ ok: false, title: 'wrong lab module' })
   })
 
   test('the leaderboard rejects a @reference build before running anything', async () => {
     const stub = {} as never
-    await expect(verifyAndScoreScheduler(labModule('batching-scheduler@reference'), stub, stub)).rejects.toThrow('earns no leaderboard credit')
+    await expect(verifyAndScoreScheduler(labModule('batching-scheduler@reference'), stub, stub)).rejects.toThrow('reference modules earn no credit')
   })
 })
 
