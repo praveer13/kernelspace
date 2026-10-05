@@ -12,6 +12,49 @@ const lesson: Lesson = {
   simId: 'sim-memory',
   blocks: [
     {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A hot loop reads only the deadline field of each of a million request records. Which layout feeds that loop best?',
+          options: [
+            'One array of whole records, with each request\'s fields stored together in one struct',
+            'One array per field, with the deadlines stored next to each other',
+            'A linked list of records, with each node allocated as its request arrives',
+            'A hash map keyed by request id, with each record looked up through its id',
+          ],
+          correct: [1],
+          why: [
+            'This is AoS. Each fetched line carries other fields the loop never reads, so only part of every line is useful.',
+            'Right: this is SoA. Deadlines sit contiguously, so every byte of every fetched line is a deadline the loop wants, and the prefetcher streams it.',
+            'Worse still: nodes can be scattered across the heap, so each step is a pointer chase and most of every line is unused.',
+            'A hash map finds one record fast, but a sweep over all deadlines then visits entries in scattered order and wastes most of each line.',
+          ],
+          revealAt: 'AoS: the shape your language gives you',
+          kcs: ['t0.data-layout'],
+        },
+        {
+          kind: 'choice',
+          q: 'Eight threads each increment their own counter. The eight counters sit side by side in one array, and no thread touches another\'s. How does total throughput compare with one thread?',
+          options: [
+            'About eight times higher, with every core working on its own counter in parallel',
+            'A little under eight times higher, with some time lost starting up the threads',
+            'About the same, with the cores taking turns because the OS runs one thread at a time',
+            'Lower than one thread, with the cores fighting over the one line the counters share',
+          ],
+          correct: [3],
+          why: [
+            'That would hold if the counters were on separate lines. Here they share one 64-byte line, and coherence works per line, not per variable.',
+            'Thread startup is a one-off cost. The loss here is on every increment, so it cannot be a small fixed overhead.',
+            'The OS schedules these threads on separate cores that run in parallel. The slowdown comes from the cores, not the scheduler.',
+            'Right: each write takes the line away from every other core, so ownership ping-pongs on every increment. The result can be 10x to 50x slower than one thread.',
+          ],
+          revealAt: 'False sharing: the line you did not know you were sharing',
+          kcs: ['t0.false-sharing'],
+        },
+      ],
+    },
+    {
       type: 'prose',
       md: `Lesson 2 gave you the hierarchy; lesson 3 gave you the stride. This lesson gives you the **atom**: the 64-byte cache line. The memory system never moves one byte at a time — it moves lines. Every performance mystery involving data layout reduces, eventually, to the question: *"when I fetch 64 bytes, how many of them did I actually want, and who else wanted the rest?"*
 
@@ -137,6 +180,24 @@ Picture a classic pattern: 8 worker threads, each incrementing its own counter i
         { caption: 'Core 1 writes B: now IT must own the line. Core 0\'s copy is invalidated. The line ping-pongs between cores on every single write — hundreds of cycles per "independent" increment.', active: ['core1', 'l1b'], edges: ['core1->line', 'line->l1b'] },
         { caption: 'The fix is layout, not locks: pad each counter to its own 64-byte line (Rust #[repr(align(64))], Java @Contended). True sharing is a protocol problem; false sharing is a packing problem.', active: ['line'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'Core 0 has just written counter A, so it owns the cache line. Core 1 now writes counter B, a different variable in the same line. What does the hardware do?',
+        options: [
+          'Lets both cores write, with A and B being different bytes that cannot conflict',
+          'Takes the line from core 0, with ownership moving to core 1 and back on every write',
+          'Copies only B\'s 8 bytes to core 0, with the rest of the line staying put in both caches',
+          'Stalls core 1 until core 0 finishes its loop, with the two writers running one after the other',
+        ],
+        correct: [1],
+        why: [
+          'Coherence tracks whole lines, not bytes. Different variables in one line still conflict, because a core must own the line to write any part of it.',
+          'Right: core 1 must own the line to write, so core 0\'s copy is invalidated, and the line ping-pongs between cores on every write.',
+          'Lines move whole. The protocol invalidates the other copy rather than patching 8 bytes, so there is no partial update to rely on.',
+          'Nothing waits for a loop to end. The cores interleave their writes, each paying a line transfer every time, so they are slow but not strictly sequential.',
+        ],
+        kcs: ['t0.false-sharing', 't0.cache-lines'],
+      },
     },
     {
       type: 'code',
@@ -202,6 +263,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'Assumes one struct per line. Structs are 32 bytes, so two share a line and both deadlines are read: 16 of 64, i.e. 1/4. One-eighth would need 64-byte structs.',
             'Only SoA gets this. The memory system moves whole 64-byte lines regardless of the 8 bytes requested, and AoS interleaves other fields into every line, so they are fetched but unused.',
           ],
+          kcs: ['t0.data-layout', 't0.cache-lines'],
         },
         {
           q: 'Eight threads increment eight independent counters stored contiguously in one cache line. Throughput collapses because…',
@@ -220,6 +282,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'Right: coherence works per line, not per variable. Independent counters in one line still force an ownership transfer on every write, costing hundreds of cycles per increment. Padding gives each its own line.',
             'Sharing a line does not corrupt data: each counter owns distinct bytes and the hardware keeps writes to different addresses independent. The cost is purely performance, from coherence traffic.',
           ],
+          kcs: ['t0.false-sharing'],
         },
         {
           q: 'The standard fix for false sharing is…',
@@ -238,6 +301,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'volatile controls compiler optimization and ordering, not cache-line ownership. Writes still invalidate the line on every other core, so the ping-pong remains.',
             'Separately allocated nodes can still land in one 64-byte line, since allocators promise no such spacing, and traversal adds pointer chasing. Only explicit alignment makes the separation deterministic.',
           ],
+          kcs: ['t0.false-sharing'],
         },
         {
           q: 'When does AoS beat SoA?',
@@ -256,10 +320,39 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'The same fields take the same total bytes in either layout; only the grouping differs. Record size alone does not decide, access pattern does.',
             'SoA\'s gain is useful bytes per fetched line, which helps a single thread too: the deadline sweep runs at full bandwidth on one core. Threads matter for false sharing, a different problem.',
           ],
+          kcs: ['t0.data-layout'],
         },
       ],
     },
   ],
+  kcs: ['t0.data-layout', 't0.false-sharing', 't0.cache-lines'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain false sharing: what is shared, why does it slow code down, and what is the fix?',
+        model:
+          'Two threads write different variables that sit in the same 64-byte cache line. Coherence works per line, so each write invalidates the other core\'s copy and the line ping-pongs between cores, costing hundreds of cycles per write. The fix is layout: pad each hot variable onto its own line.',
+        ideas: [
+          'Different variables share one 64-byte cache line',
+          'Coherence is per line, so each write invalidates other cores and the line ping-pongs',
+          'Pad each hot variable onto its own line',
+        ],
+        kcs: ['t0.false-sharing', 't0.cache-lines'],
+      },
+      {
+        prompt: 'Choose AoS or SoA for two loops: (a) a sweep that reads only the deadline of every request, (b) a handler that reads every field of one request. Justify each.',
+        model:
+          '(a) SoA: deadlines are contiguous, so every byte of each fetched 64-byte line is useful, against one quarter in AoS. (b) AoS: one or two lines carry the whole record, where SoA touches a line per field. The rule: pack what is read together.',
+        ideas: [
+          '(a) SoA, because contiguous deadlines make every byte of each fetched line useful',
+          '(b) AoS, because one or two lines deliver the whole record',
+          'The rule: match the layout to which fields are read together',
+        ],
+        kcs: ['t0.data-layout', 't0.cache-lines'],
+      },
+    ],
+  },
 }
 
 export default lesson

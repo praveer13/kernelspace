@@ -23,6 +23,11 @@ export interface QuizQuestion {
    */
   why?: string[]
   /**
+   * Misconception id of each lure, parallel to `options` (authored order); '' for the key and for a lure
+   * with no named slip. The item player reads it into the grade's diagnosis (`t2.cfs-current`).
+   */
+  miss?: string[]
+  /**
    * V4 (Wave 1, docs/specs/wave-1.md §4.5): the KC ids this item assesses, 1-3, primary first.
    * verify-kc requires them in T0-T2 and R. Writers copy them into `data.kcs` on the item event.
    */

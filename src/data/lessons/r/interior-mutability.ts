@@ -76,6 +76,7 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
             'That is try_borrow_mut, not borrow_mut. The plain method has no error return, so a conflict panics and the caller never gets a value to handle.',
             'RefCell is not Sync and the conflict is caught first, so no aliasing write happens. A panic stops the program before any race could occur.',
           ],
+          kcs: ['r.interior-mutability', 'r.borrow-rules'],
         },
         {
           q: 'What releases a std::sync::Mutex lock?',
@@ -94,6 +95,7 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
             'A guard bound with let lives until its scope ends. Only an unbound temporary, as in lock().unwrap().push(1), drops at the end of its statement.',
             'A sleeping or blocked thread keeps holding the lock, which is how deadlocks happen. Nothing releases it until the guard is dropped.',
           ],
+          kcs: ['r.interior-mutability'],
         },
         {
           q: 'Which type lets a single-threaded counter of Copy values change through a shared reference, with no guard and no lock?',
@@ -108,14 +110,16 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
             'Cell provides simple get/set interior mutability for Copy values without borrow guards.',
           why: [
             'Right: Cell copies values in and out with get and set, so no reference into it exists. It needs no guard, borrow flag or lock.',
-            'Rc shares ownership but only hands out shared access, so nobody can update the counter through it. Rc alone gives no mutation.',
+            'Rc shares ownership but hands out only shared access while it is shared: get_mut returns None once a second Rc exists, and make_mut would clone the counter instead of updating it. A shared counter needs Cell or RefCell inside the Rc.',
             'RefCell works but hands out Ref and RefMut guards and keeps a runtime borrow flag that can panic. The question rules out guards.',
             'It works but pays for atomic counting and a lock a single thread never needs, and it hands out a guard. It is overkill here.',
           ],
+          kcs: ['r.interior-mutability'],
         },
       ],
     },
   ],
+  kcs: ['r.interior-mutability', 'r.borrow-rules'],
 }
 
 export default lesson

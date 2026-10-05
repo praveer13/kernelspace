@@ -218,6 +218,8 @@ describe('coverage, for lessons that set Lesson.kcs', () => {
   test('a KC in Lesson.kcs needs 2 tagged items or a generator', () => {
     const lessons = withLesson('t2.l1', (l) => {
       l.kcs = ['t2.process-thread', 't2.context-switch']
+      // the real t2.l1 has a ticket whose constructed responses add tagged items; this test counts quiz tags alone
+      delete l.ticket
       tagQuiz(l, [['t2.process-thread'], ['t2.process-thread', 't2.context-switch'], ['t2.process-thread'], ['t2.process-thread']])
     })
     expect(errorsOf(input({ lessons }))).toEqual(['t2.context-switch: 1 tagged item(s) and no generator (want at least 2 items or a generator)'])

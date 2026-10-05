@@ -121,6 +121,8 @@ You should now be able to trace a request through a modern async server: NIC int
             'Misconception: one kernel thread per socket. epoll is a single wait on one kernel-side interest list; per-connection threads are the model C10k showed does not scale.',
             'Misconception: epoll avoids syscalls. epoll_wait is a syscall per wake; shared-memory rings that cut syscalls are io_uring, a later mechanism.',
           ],
+          kcs: ['t2.async-io'],
+          miss: ['t2.epoll-zero-copy', '', 't2.epoll-thread-per-socket', 't2.epoll-no-syscall'],
         },
         {
           q: 'io_uring\'s key advance over epoll is…',
@@ -139,6 +141,8 @@ You should now be able to trace a request through a modern async server: NIC int
             'Misconception: no async needed. Operations complete later, so code still needs a loop or runtime to reap completions and continue; io_uring is a mechanism under async, not a replacement.',
             'Misconception: hardware-bound. The advantage is in the submission and completion interface between userspace and kernel, and it works on sockets and ordinary disks too.',
           ],
+          kcs: ['t2.async-io'],
+          miss: ['', 't2.epoll-for-files', 't2.uring-needs-no-async', 't2.uring-hardware-bound'],
         },
         {
           q: 'A suspended tokio task costs ~hundreds of bytes instead of ~1 MB because…',
@@ -157,6 +161,8 @@ You should now be able to trace a request through a modern async server: NIC int
             'Misconception: compression. Nothing compresses idle tasks; the small size is structural, because the future never held a stack or dead locals in the first place.',
             'Misconception: shared stack. Live locals must survive the park, and a shared stack would be overwritten by the next task; they are saved in the future struct, not registers.',
           ],
+          kcs: ['t2.async-tasks'],
+          miss: ['t2.growable-task-stacks', '', 't2.tasks-compressed', 't2.tasks-share-stack'],
         },
         {
           q: 'Why is one blocking call inside async code so damaging?',
@@ -175,10 +181,42 @@ You should now be able to trace a request through a modern async server: NIC int
             'Misconception: a TLB flush per block. A syscall does not flush the TLB, and the stall is on one thread that cannot run anything else, not a switch penalty per connection.',
             'Misconception: thread per blocking task. A runtime does not do this on its own; spawn_blocking would, which is the fix, while an unmarked blocking call just freezes its thread.',
           ],
+          kcs: ['t2.async-tasks', 't2.async-io'],
+          miss: ['t2.blocking-loses-wakeups', '', 't2.blocking-flushes-tlb', 't2.blocking-spawns-thread'],
         },
       ],
     },
   ],
+  kcs: ['t2.async-io', 't2.async-tasks'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Contrast epoll and io_uring: what does each tell you, and what does each cost per operation?',
+        model:
+          'epoll reports readiness: you register file descriptors once and epoll_wait returns only the ready ones, but you still make a read or write syscall per operation, and regular files are always ready. io_uring shares submission and completion rings with the kernel, so you queue operations and reap results in batches with few syscalls, for files and sockets alike.',
+        ideas: [
+          'epoll: register once, and the wait returns only ready fds, so work tracks ready events',
+          'epoll still needs a syscall per read or write, and regular files are always ready',
+          'io_uring: shared SQ and CQ rings, batched submissions and completions, few syscalls, files included',
+        ],
+        kcs: ['t2.async-io'],
+      },
+      {
+        prompt:
+          'Why can one thread serve 10,000 connections as tokio tasks, and what single mistake stalls all of them?',
+        model:
+          'An async fn compiles to a state machine that keeps only the values live across each await, so a suspended task costs hundreds of bytes, not a megabyte of stack. The runtime polls ready tasks on a few OS threads. A blocking call holds the thread itself, so every task scheduled on that thread waits behind it.',
+        ideas: [
+          'A task is a small state machine of hundreds of bytes, not a roughly 1 MB thread stack',
+          'The runtime polls ready tasks across a few OS threads, switching in userspace at awaits',
+          'A blocking call occupies the thread, so every task on it stalls; use spawn_blocking instead',
+        ],
+        kcs: ['t2.async-tasks'],
+      },
+    ],
+  },
 }
 
 export default lesson

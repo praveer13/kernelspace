@@ -68,4 +68,11 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
 - (o3) Another thread can change the value after your load, so Err returns what it saw
 - (o4) A failure can tear the value, so the caller must restore the old value
 
+**Q4. In try_lock above, why can the failure ordering be Relaxed while the success ordering is Acquire?**
+
+- (o1) A failed probe took no lock, so there is no protected data to acquire
+- (o2) Relaxed is the cheapest ordering, so a retry loop is best served by using it everywhere
+- (o3) A failed exchange stores the old value back, and a store cannot carry Acquire
+- (o4) The success ordering covers both outcomes, so the failure argument is ignored
+
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

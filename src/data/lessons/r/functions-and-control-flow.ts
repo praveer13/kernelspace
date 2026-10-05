@@ -78,6 +78,7 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
             'No wildcard is required when all variants are named. A wildcard is allowed but hides new variants, which is why named arms give better compiler help.',
             'An uncovered case is rejected before the program runs, with E0004. There is no runtime match failure to find by testing.',
           ],
+          kcs: ['r.control-flow-match'],
         },
         {
           q: 'What values does 0..4 produce?',
@@ -96,6 +97,7 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
             'Rust ranges start at whatever the left bound says, here 0. Nothing in the language is one-based, and the upper bound is the excluded end.',
             'Slice ranges follow the same half-open rule, so v[0..4] selects four elements, indexes 0 to 3. No context makes the end inclusive.',
           ],
+          kcs: ['r.loops-ranges'],
         },
         {
           q: 'How can an infinite loop compute a value?',
@@ -114,10 +116,12 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
             'A loop repeats its body, so no single tail value exists. The value comes only from a break expression that exits the loop.',
             'No such syntax exists. The type is inferred from the break value, and every break in the loop must supply the same type.',
           ],
+          kcs: ['r.loops-ranges', 'r.bindings-expressions'],
         },
       ],
     },
   ],
+  kcs: ['r.control-flow-match', 'r.loops-ranges'],
 }
 
 export default lesson

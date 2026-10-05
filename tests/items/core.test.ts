@@ -201,7 +201,8 @@ describe('the registry', () => {
 
 describe('verify-generators: a sound family', () => {
   test('passes at 100 seeds with no problems and no dead rules', () => {
-    const r = checkFamily(demo, { seeds: 100 })
+    // the demo's one choice variant has a fixed key text, which the blind-strategy gate rightly rejects (tests/items/mc-cues.test.ts)
+    const r = checkFamily(demo, { seeds: 100, cues: false })
     expect(r.problems).toEqual([])
     expect(r.warnings).toEqual([])
     expect(r.instances).toBe(100 * (4 + 3 + 4))
@@ -229,8 +230,8 @@ describe('verify-generators: a sound family', () => {
 
 /** The suite must fail when a family is broken, one defect at a time. */
 describe('verify-generators: it catches each defect', () => {
-  const run = (patch: Partial<Gen>, opts: { speed?: boolean } = { speed: false }) => checkFamily({ ...demo, ...patch }, { seeds: 60, ...opts })
-  const says = (patch: Partial<Gen>, needle: RegExp, opts?: { speed?: boolean }) => {
+  const run = (patch: Partial<Gen>, opts: { speed?: boolean; cues?: boolean } = { speed: false, cues: false }) => checkFamily({ ...demo, ...patch }, { seeds: 60, ...opts })
+  const says = (patch: Partial<Gen>, needle: RegExp, opts?: { speed?: boolean; cues?: boolean }) => {
     const r = run(patch, opts)
     expect(r.problems.some((p) => needle.test(p))).toBe(true)
     return r

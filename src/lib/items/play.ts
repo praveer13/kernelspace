@@ -163,7 +163,12 @@ type ChoiceView = Extract<PlayView, { kind: 'choice' }>
 /** An authored question as a choice: ids are the authored indices, so grading never depends on order. */
 function authoredView(q: QuizQuestion, seed: number): Pick<ChoiceView, 'kind' | 'prompt' | 'options' | 'correct' | 'multi'> {
   const hasWhy = q.why?.length === q.options.length
-  const options: ChoiceOption[] = q.options.map((text, i) => ({ id: String(i), text, why: hasWhy ? (q.why?.[i] ?? '') : '' }))
+  const options: ChoiceOption[] = q.options.map((text, i) => ({
+    id: String(i),
+    text,
+    why: hasWhy ? (q.why?.[i] ?? '') : '',
+    ...(q.miss?.[i] ? { miss: q.miss[i] } : {}),
+  }))
   return {
     kind: 'choice',
     prompt: { stem: [{ t: 'text', text: q.q }] },
@@ -291,15 +296,21 @@ function gradeCr(cr: ConstructedPrompt, r: CrResponse): Grade {
 }
 
 /**
- * Choice grading for authored questions: picked ids equal the correct ids. Authored options carry no
- * misconception id, so there is no diagnosis; a wrong pick's why reaches the learner through Feedback's Whys.
+ * Choice grading for authored questions: picked ids equal the keyed ones. A wrong pick whose option carries a
+ * misconception id (`QuizQuestion.miss`) is diagnosed with it, as a generated lure is; an option with none gives
+ * no diagnosis, and its why still reaches the learner through Feedback's Whys.
  */
-function gradeAuthoredChoice(view: Pick<ChoiceView, 'correct'>, r: Extract<Response, { kind: 'choice' }>): Grade {
+function gradeAuthoredChoice(view: Pick<ChoiceView, 'correct' | 'options'>, r: Extract<Response, { kind: 'choice' }>): Grade {
   const picks = [...new Set(Array.isArray(r.picks) ? r.picks : [])]
   if (picks.length === 0) return { ok: false, score: 0, feedback: 'Pick an answer first.' }
   const right = new Set(view.correct)
   const ok = picks.length === right.size && picks.every((p) => right.has(p))
-  return { ok, score: ok ? 1 : 0, feedback: ok ? 'Correct.' : 'Not quite.' }
+  if (ok) return { ok, score: 1, feedback: 'Correct.' }
+  // the first wrong pick (by authored index) that names a misconception
+  const lure = view.options
+    .filter((o) => picks.includes(o.id) && !right.has(o.id) && o.miss)
+    .sort((a, b) => Number(a.id) - Number(b.id))[0]
+  return { ok, score: 0, feedback: 'Not quite.', ...(lure?.miss ? { diagnosis: { id: lure.miss, message: lure.why } } : {}) }
 }
 
 /**

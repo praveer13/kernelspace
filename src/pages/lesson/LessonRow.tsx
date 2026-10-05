@@ -1,8 +1,8 @@
 /**
  * LessonRow (design.md §9.6) — shared by /curriculum accordions and /tracks/:id.
  * 56px grid row: [32px status | 1fr title+desc | auto meta | 24px chevron].
- * Status: done = mint check · current = pulsing ring (track color) · todo = line
- * outline · exam = amber graduation-cap.
+ * Status: done = mint check · read = hollow check (finished, not passed: wave-1.md §8.3) ·
+ * current = pulsing ring (track color) · todo = line outline · exam = amber graduation-cap.
  */
 
 import { Link } from 'react-router'
@@ -33,6 +33,11 @@ export default function LessonRow({
 }: LessonRowProps) {
   const status = useProgress((s) => s.lessons[lesson.id]?.status ?? 'unstarted')
   const done = status === 'done'
+  // finished without passing: a hollow check, named in words so colour and shape are not the only cue (§8.3)
+  const read = status === 'read'
+  const readLabel = lesson.ticket ? 'read, ticket not passed' : 'read, checkpoint not passed'
+  // t2.l7 is no longer an exam with a gate: it is the spiral checkpoint (§8.6)
+  const examLabel = lesson.ticket?.form === 'spiral' ? 'spiral checkpoint' : 'exam'
   const meta = EXERCISE_META[lesson.exercise]
   const ExIcon = meta.icon
 
@@ -40,6 +45,7 @@ export default function LessonRow({
     <motion.div whileHover="hover" className={className}>
       <Link
         to={lessonPath(lesson)}
+        data-status={status}
         className={cn(
           'group grid min-h-14 grid-cols-[32px_1fr_auto_24px] items-center gap-3 rounded-md border border-transparent px-3 py-2.5 transition-colors duration-150 hover:bg-surface-2',
           current && 'border-l-2 bg-surface-2',
@@ -54,14 +60,31 @@ export default function LessonRow({
             <span
               className={cn(
                 'flex h-5 w-5 items-center justify-center rounded-full border',
-                done ? 'border-accent bg-accent text-accent-foreground' : 'border-amber/60 text-amber',
+                done
+                  ? 'border-accent bg-accent text-accent-foreground'
+                  : read
+                    ? 'border-text-3 text-text-2'
+                    : 'border-amber/60 text-amber',
               )}
             >
-              {done ? <Check size={11} strokeWidth={3} /> : <GraduationCap size={12} strokeWidth={1.75} />}
+              {done ? (
+                <Check size={11} strokeWidth={3} />
+              ) : read ? (
+                <Check size={11} strokeWidth={2} aria-hidden />
+              ) : (
+                <GraduationCap size={12} strokeWidth={1.75} />
+              )}
+              {(done || read) && <span className="sr-only">{done ? 'done' : readLabel}</span>}
             </span>
           ) : done ? (
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <Check size={11} strokeWidth={3} />
+              <span className="sr-only">done</span>
+            </span>
+          ) : read ? (
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-text-3 text-text-2">
+              <Check size={11} strokeWidth={2} aria-hidden />
+              <span className="sr-only">{readLabel}</span>
             </span>
           ) : current ? (
             <span className="relative flex h-5 w-5 items-center justify-center">
@@ -96,7 +119,7 @@ export default function LessonRow({
             {lesson.title}
             {lesson.exam && (
               <span className="ml-2 rounded-sm border border-amber/40 bg-amber/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-amber">
-                ★ exam
+                ★ {examLabel}
               </span>
             )}
           </motion.span>

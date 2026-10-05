@@ -136,6 +136,8 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
             'Misconception: victim lookup is slow. With a list the oldest page is at the tail, so finding a victim is O(1); the expense is reordering the list on every single access.',
             'Misconception: no usage signal. The MMU sets an accessed bit in each page-table entry on use; the kernel reads and clears it, and that is exactly what Clock builds on.',
           ],
+          kcs: ['t2.eviction-policies'],
+          miss: ['t2.recency-useless', '', 't2.lru-victim-lookup-slow', 't2.no-usage-signal'],
         },
         {
           q: 'A nightly batch job reads a 10 GB file once on a host with 4 GB of page cache. Under strict LRU this is harmful because…',
@@ -154,6 +156,8 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
             'Misconception: LRU pins pages. LRU evicts the least recently used page whenever it needs space; nothing becomes unevictable, so reads never fail, the useful set is simply flushed.',
             'Misconception: TLB doubling. Page-cache eviction is about physical frames and has no effect on how many TLB entries a process uses; the damage is lost cache hits.',
           ],
+          kcs: ['t2.eviction-policies'],
+          miss: ['t2.readonly-uncacheable', '', 't2.lru-pins-pages', 't2.scan-doubles-tlb'],
         },
         {
           q: 'Thrashing is best defined as…',
@@ -172,6 +176,8 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
             'Misconception: thrashing is a leak. A leak steadily exhausts memory and ends in an OOM kill; thrashing occurs with healthy processes whose combined hot data is just too big.',
             'Misconception: swap fragmentation. Swap is accessed by slot and latency comes from device speed and fault volume; the cause of thrashing is demand exceeding RAM, not disk layout.',
           ],
+          kcs: ['t2.thrashing'],
+          miss: ['t2.any-swap-is-thrashing', '', 't2.thrashing-is-leak', 't2.thrashing-is-swap-fragmentation'],
         },
         {
           q: 'The PagedAttention paper\'s two preemption options (swap KV to CPU RAM vs discard-and-recompute; vLLM V1 keeps only recompute) most closely mirror the OS decision between…',
@@ -190,10 +196,42 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
             'Misconception: it is a page-size choice. Huge versus base pages trade TLB reach against internal waste; vLLM already fixes the block size and is choosing what to do with evicted state.',
             'Misconception: it is a scheduling-class choice. Fair-share versus real-time decides who runs; swap versus recompute decides how an already-preempted sequence\'s memory is restored.',
           ],
+          kcs: ['t2.swap-vs-recompute'],
+          miss: ['t2.swap-recompute-is-lock-wait', '', 't2.swap-recompute-is-page-size', 't2.swap-recompute-is-sched-class'],
         },
       ],
     },
   ],
+  kcs: ['t2.eviction-policies', 't2.thrashing', 't2.swap-vs-recompute'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Why do kernels use Clock rather than exact LRU, and what does one sweep of the hand do?',
+        model:
+          'Exact LRU would reorder a list on every memory access, far too costly in a kernel. Clock reads the accessed bit the MMU sets for free. The hand sweeps the ring: a page with the bit set gets it cleared and a second chance; the first page found with the bit clear is evicted. That approximates LRU in O(1) work.',
+        ideas: [
+          'Exact LRU needs a list update on every memory access, which is too expensive in the kernel',
+          'Clock reads the accessed bit that the MMU sets for free',
+          'The hand clears set bits (a second chance) and evicts the first page whose bit is already clear',
+        ],
+        kcs: ['t2.eviction-policies'],
+      },
+      {
+        prompt:
+          'A server crawls when a fifth process starts, and the disk is busy all the time. Diagnose the problem and give the fix.',
+        model:
+          'This is thrashing: the combined working sets exceed RAM, so every eviction is followed by a near-term fault and the machine pages more than it computes. Throughput cliffs rather than degrading, and no eviction policy cures it. The fix is admission control: run fewer processes so each hot set fits, or add memory.',
+        ideas: [
+          'Combined working sets exceed RAM, so each eviction is soon followed by a fault',
+          'More time goes to paging than computing, so throughput cliffs instead of degrading',
+          'Fix it by admitting less work (or adding RAM); a cleverer eviction policy will not help',
+        ],
+        kcs: ['t2.thrashing'],
+      },
+    ],
+  },
 }
 
 export default lesson

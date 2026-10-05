@@ -79,6 +79,7 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
             'Option<T> is stored inline, with no heap allocation. Pointer-like payloads such as Box may use a null niche, but that is an optimization.',
             'No runtime null check exists, because there are no null references. The compiler enforces handling statically, so there is no NPE to throw.',
           ],
+          kcs: ['r.enums-option-result', 'r.control-flow-match'],
         },
         {
           q: 'Inside a Result-returning function, what does expr? do when expr is Err?',
@@ -97,6 +98,7 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
             'Right: ? is an early return of the Err, passed through From::from so error types can differ. The caller sees the failure in the function\'s signature.',
             'Execution does not continue past a failed ?. The function returns immediately, so later statements never see the error value.',
           ],
+          kcs: ['r.error-propagation', 'r.enums-option-result'],
         },
         {
           q: 'When should ordinary input validation return Result instead of panic?',
@@ -115,10 +117,12 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
             'The rule is about who can recover, not speed. Result suits rare failures too, and panicking on bad input makes callers unable to respond.',
             'Malformed input is expected, recoverable failure, so it returns Err just like an I/O error does. Invariants are things only a bug can violate.',
           ],
+          kcs: ['r.error-propagation'],
         },
       ],
     },
   ],
+  kcs: ['r.enums-option-result', 'r.error-propagation'],
 }
 
 export default lesson

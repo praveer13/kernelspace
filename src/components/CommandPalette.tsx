@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import Fuse from 'fuse.js'
-import { Search, FileText, ArrowRight } from 'lucide-react'
+import { Search, FileText, ArrowRight, BookOpen, Hash, Languages, Lightbulb } from 'lucide-react'
 import { TRACKS, CAPSTONE, SIMS } from '@/lib/tracks'
+import { indexItems, makeSearcher, type SearchIndex, type SearchItem } from '@/lib/search'
 import { cn } from '@/lib/utils'
 
-interface Item {
-  id: string
-  group: 'Pages' | 'Tracks' | 'Simulators'
-  title: string
-  crumb: string
-  to: string
-  keywords: string[]
+const GROUP_ICON: Partial<Record<SearchItem['group'], typeof FileText>> = {
+  Lessons: BookOpen,
+  Concepts: Lightbulb,
+  Numbers: Hash,
+  Glossary: Languages,
 }
 
-const INDEX: Item[] = [
+/** Pages, tracks and simulators: always searchable, with or without the generated index. */
+const STATIC_ITEMS: SearchItem[] = [
   { id: 'home', group: 'Pages', title: 'Home', crumb: '~/', to: '/', keywords: ['landing', 'start'] },
   { id: 'curriculum', group: 'Pages', title: 'Curriculum', crumb: '~/curriculum', to: '/curriculum', keywords: ['tracks', 'lessons', 'map'] },
   { id: 'lab', group: 'Pages', title: 'Lab', crumb: '~/lab', to: '/lab', keywords: ['simulators', 'playground'] },
@@ -27,7 +26,7 @@ const INDEX: Item[] = [
   { id: 'capstone', group: 'Pages', title: 'Capstone', crumb: '~/capstone', to: '/capstone', keywords: ['project', 'engine', 'build'] },
   { id: 'glossary', group: 'Pages', title: 'Glossary', crumb: '~/glossary', to: '/glossary', keywords: ['terms', 'isomorphism', 'concepts'] },
   { id: 'progress', group: 'Pages', title: 'Progress', crumb: '~/progress', to: '/progress', keywords: ['dashboard', 'xp', 'rank', 'streak'] },
-  ...TRACKS.map<Item>((t) => ({
+  ...TRACKS.map<SearchItem>((t) => ({
     id: `track-${t.id}`,
     group: 'Tracks',
     title: `${t.code} — ${t.name}`,
@@ -36,7 +35,7 @@ const INDEX: Item[] = [
     keywords: [t.name.toLowerCase(), t.code.toLowerCase()],
   })),
   { id: 'track-capstone', group: 'Tracks', title: `${CAPSTONE.code} — ${CAPSTONE.name}`, crumb: 'capstone · 7 steps', to: '/capstone', keywords: ['capstone', 'inference engine'] },
-  ...SIMS.map<Item>((s) => ({
+  ...SIMS.map<SearchItem>((s) => ({
     id: `sim-${s.id}`,
     group: 'Simulators',
     title: s.name,
@@ -46,13 +45,13 @@ const INDEX: Item[] = [
   })),
 ]
 
-const GROUP_ORDER: Item['group'][] = ['Pages', 'Tracks', 'Simulators']
-
 /**
  * CommandPalette (design.md §9.3) — a lazy chunk opened by CommandPaletteHost on ⌘K / Ctrl+K / `/`.
- * Fuzzy search over a build-time index; ↑↓ navigate, Enter jumps, esc closes. The host mounts it as
- * soon as the chunk arrives, so opening is a class change: it fades in and out with CSS transitions
- * and is `invisible` (out of the tab order and the accessibility tree) while closed.
+ * Fuzzy search over a build-time index (src/data/search-index.json: lessons, concepts, claims and glossary
+ * terms, its own chunk fetched on the first open) plus the pages, tracks and simulators; ↑↓ navigate,
+ * Enter jumps, esc closes. The host mounts it as soon as the chunk arrives, so opening is a class change:
+ * it fades in and out with CSS transitions and is `invisible` (out of the tab order and the accessibility
+ * tree) while closed.
  */
 export default function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = useState('')
@@ -74,25 +73,36 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
     if (open) inputRef.current?.focus()
   }, [open])
 
-  const fuse = useMemo(
-    () => new Fuse(INDEX, { keys: ['title', 'keywords', 'crumb'], threshold: 0.35 }),
-    [],
+  // The generated index loads once, on the first open. Until it lands (or if it fails, offline and uncached)
+  // the static rows still answer; a failed load is retried on the next open.
+  const [index, setIndex] = useState<SearchIndex | null>(null)
+  const loading = useRef(false)
+  useEffect(() => {
+    if (!open || index || loading.current) return
+    loading.current = true
+    import('@/data/search-index.json')
+      .then((m) => setIndex(m.default as unknown as SearchIndex))
+      .catch(() => {})
+      .finally(() => {
+        loading.current = false
+      })
+  }, [open, index])
+
+  const search = useMemo(
+    () => makeSearcher(index ? [...indexItems(index), ...STATIC_ITEMS] : STATIC_ITEMS),
+    [index],
   )
 
   const results = useMemo(() => {
-    const items = query.trim() ? fuse.search(query).map((r) => r.item) : INDEX
-    const grouped = new Map<Item['group'], Item[]>()
-    for (const g of GROUP_ORDER) grouped.set(g, [])
-    for (const item of items.slice(0, 12)) grouped.get(item.group)?.push(item)
-    const groups = GROUP_ORDER.map((g) => ({ group: g, items: grouped.get(g) ?? [] })).filter(
-      (g) => g.items.length > 0,
-    )
-    // flat row offset of each group's first item (cursor indexes into `flat`)
-    return groups.map((g, i) => ({
-      ...g,
-      start: groups.slice(0, i).reduce((n, x) => n + x.items.length, 0),
-    }))
-  }, [query, fuse])
+    const items = search(query)
+    const groups: { group: SearchItem['group']; items: SearchItem[]; start: number }[] = []
+    for (const item of items) {
+      const last = groups[groups.length - 1]
+      if (last?.group === item.group) last.items.push(item)
+      else groups.push({ group: item.group, items: [item], start: items.indexOf(item) })
+    }
+    return groups
+  }, [query, search])
 
   const flat = useMemo(() => results.flatMap((g) => g.items), [results])
 
@@ -152,7 +162,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
               setQuery(e.target.value)
               setCursor(0)
             }}
-            placeholder="Search lessons, tracks, simulators…"
+            placeholder="Search lessons, concepts, numbers, terms…"
             className="h-12 w-full bg-transparent font-mono text-sm text-text-1 outline-none placeholder:text-text-3"
           />
           <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-text-3">
@@ -162,7 +172,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
         <div className="max-h-[46vh] overflow-y-auto p-2">
           {flat.length === 0 && (
             <p className="px-3 py-8 text-center font-mono text-xs text-text-3">
-              no matches — try “paging”, “rust”, “batch”…
+              no matches — try “PagedAttention”, “KV cache”, “ridge”…
             </p>
           )}
           {results.map(({ group, items, start }) => (
@@ -173,6 +183,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
               {items.map((item, i) => {
                 const idx = start + i
                 const active = idx === cursor
+                const Icon = GROUP_ICON[item.group] ?? FileText
                 return (
                   <button
                     key={item.id}
@@ -184,7 +195,7 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
                       active ? 'bg-surface-3' : 'bg-transparent',
                     )}
                   >
-                    <FileText size={15} strokeWidth={1.75} className="shrink-0 text-text-3" />
+                    <Icon size={15} strokeWidth={1.75} className="shrink-0 text-text-3" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-body-sm text-text-1">
                         {item.title}

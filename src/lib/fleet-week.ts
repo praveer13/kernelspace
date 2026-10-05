@@ -40,7 +40,7 @@ export interface ActResult {
   seed?: number | null
   /** An uncredited practice call: informational, not a verdict on the act. */
   practice?: boolean
-  /** Act IV only: a first call was missed, so the act cannot be credited until incidents on unseen seeds exist. */
+  /** Act IV only: a first call was missed, so the act cannot be completed (no XP) until incidents on unseen seeds exist. */
   closed?: boolean
 }
 
@@ -877,7 +877,9 @@ export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null
  * graded and explained, but never counted toward the act or its XP.
  *
  * The act needs every incident right on its first call, so one missed first call closes it: no
- * call can undo that, and the act stays closed until incidents on unseen seeds exist.
+ * call can undo that, and the act stays closed until incidents on unseen seeds exist. A closed act
+ * still grades and records the first call on an incident that has not been called yet (it is not
+ * practice), but `pass` can no longer be true, so no Act IV XP is awarded.
  */
 export interface IncidentLedger {
   /** Incident ids with at least one call (the first call is the only one that counts). */
@@ -918,7 +920,7 @@ export const incidentMisses = (ledger: IncidentLedger): number => ledger.attempt
  * the current incident set: the act reopens only with incidents on seeds the learner has not seen.
  */
 export const INCIDENT_CLOSED_NOTE =
-  'A first call was missed, and Act IV credits only first calls, so the act is closed for now. Calls from here on are practice: graded and explained, never credited. Fresh incidents on unseen seeds arrive in a later update, and those will count.'
+  'A first call was missed, and Act IV needs every incident right on its first call, so the act is closed for now and earns no XP. Repeat calls on an incident are practice: graded and explained, but not marked. First calls on incidents you have not called yet are still graded and marked, but they cannot complete the act. Fresh incidents on unseen seeds arrive in a later update, and those will count.'
 
 export function gradeIncidentCall(
   ledger: IncidentLedger,
@@ -941,7 +943,7 @@ export function gradeIncidentCall(
   const name = incident.title.split('—')[0].trim()
   const missed = incidentMisses(next)
   const metrics: [string, string][] = [
-    ['credited', `${next.credited.length}/${total}`],
+    ['first calls right', `${next.credited.length}/${total}`],
     ['cause', causeOk ? 'correct' : 'wrong'],
     ['mitigation', mitigationOk ? 'correct' : 'wrong'],
   ]
@@ -968,8 +970,8 @@ export function gradeIncidentCall(
   const left = total - next.attempted.length
   let detail: string
   if (allDone) detail = 'all three incidents diagnosed with the right fix on the first call. The Planner would hire you.'
-  else if (!ok) detail = `${verdict}. That was the first call on this incident, so it is now practice only: the right answer is shown below and a later call here will not count. Act IV needs every incident right on its first call, so it is closed for now. Fresh incidents on unseen seeds arrive in a later update.`
-  else if (closed) detail = `${verdict}. Credited, but ${missed} incident(s) were missed on the first call, so Act IV cannot be credited from this progress. Fresh incidents on unseen seeds arrive in a later update.`
+  else if (!ok) detail = `${verdict}. That was the first call on this incident, so it is now practice only: the right answer is shown below and a later call here will not count. Act IV needs every incident right on its first call, so it is closed for now and earns no XP. Fresh incidents on unseen seeds arrive in a later update.`
+  else if (closed) detail = `${verdict}. Correct and marked, but ${missed} incident(s) were missed on the first call, so Act IV stays closed and earns no XP. Fresh incidents on unseen seeds arrive in a later update.`
   else detail = `${left} incident(s) left to call for the first time. Each needs the right cause and mitigation on its first call; a miss closes the act for now.`
   return {
     ledger: next,
