@@ -49,10 +49,10 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
       pairs: [
         {
           os: 'page / frame',
-          osLine: 'Fixed 4 KB units of virtual/physical memory; any frame backs any page.',
+          osLine: 'Fixed 4 KiB units of virtual/physical memory; any frame backs any page.',
           llm: 'KV block',
           llmLine: 'Fixed 16-token units of logical/physical KV; any physical block serves any sequence.',
-          breaks: 'A page is sized by hardware (4 KB) and backs bytes; a KV block is a software choice (16 tokens) whose byte size depends on the model\'s layers, heads and dtype.',
+          breaks: 'A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (16 tokens) whose byte size depends on the model\'s layers, heads and dtype.',
         },
         {
           os: 'page table + MMU',
@@ -101,7 +101,7 @@ Also note §5's distributed bits: for models spanning GPUs, the block manager is
     {
       type: 'deepdive',
       title: 'Why one level of block table, not four?',
-      md: `T2.L2's 4-level radix tree exists because a 48-bit address space is astronomically sparse. A sequence is small (≤ ~1M tokens → ≤ 65k blocks), so a **flat array** block table is tiny (65k × 8 B = 512 KB worst case) and translation is a single indexed load. Design rule from both worlds: match the table depth to the sparsity of the space. Later systems (e.g. some TGI/TRT-LLM modes) use the same flat scheme; the radix tree returns when the "address space" is a whole cluster's KV pool — see T5.L9 on Mooncake's distributed KV.`,
+      md: `T2.L2's 4-level radix tree exists because a 48-bit address space is astronomically sparse. A sequence is small (≤ ~1M tokens → ≤ 65k blocks), so a **flat array** block table is tiny (65k × 8 B = 512 KiB worst case) and translation is a single indexed load. Design rule from both worlds: match the table depth to the sparsity of the space. Later systems (e.g. some TGI/TRT-LLM modes) use the same flat scheme; the radix tree returns when the "address space" is a whole cluster's KV pool — see T5.L9 on Mooncake's distributed KV.`,
     },
     {
       type: 'prose',

@@ -269,7 +269,7 @@ export const TRACK_EXTRAS: Record<TrackId, TrackExtras> = {
       'The 2026 canon: MoE and wide expert parallelism, EPD disaggregation, FP4/Blackwell, MTP speculation, RL rollouts, agentic traffic. The physics is unchanged — the payload grew teeth.',
     outcomes: [
       'Explain the all-to-all: why MoE serving is a networking discipline, not a kernel one.',
-      'Recompute KV arithmetic for MLA (~70 KB/token) and argue what it enables (giant batches).',
+      'Recompute KV arithmetic for MLA (~68.6 KiB/token) and argue what it enables (giant batches).',
       'Place DeepEP, EPLB, and dual-batch overlap in a wide-EP decode fleet.',
       'Compose TP×PP×DP×EP×CP per phase, priced by the interconnect ladder.',
       'Read the 2026 traffic picture: agents, structured output, RL rollouts, multi-LoRA.',

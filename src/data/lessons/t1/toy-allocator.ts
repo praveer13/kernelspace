@@ -21,7 +21,7 @@ This is the highest-ROI lesson in the course, so be present for it. The allocato
       type: 'prose',
       md: `## The contract and the slab
 
-\`malloc(n)\` promises: return a pointer to at least \`n\` bytes of usable, suitably aligned memory; \`free(p)\` takes it back. Where does the memory come from? The allocator asks the OS for big slabs up front (historically \`sbrk\`, today \`mmap\`), then **sub-allocates** from them. The kernel deals in pages (4 KB); the allocator deals in bytes. Everything between those two granularities is the allocator's problem.
+\`malloc(n)\` promises: return a pointer to at least \`n\` bytes of usable, suitably aligned memory; \`free(p)\` takes it back. Where does the memory come from? The allocator asks the OS for big slabs up front (historically \`sbrk\`, today \`mmap\`), then **sub-allocates** from them. The kernel deals in pages (4 KiB); the allocator deals in bytes. Everything between those two granularities is the allocator's problem.
 
 The core data structure of our design — and of K&R's classic — is the **explicit free list**: every block, used or free, carries a small header recording its size and status; free blocks additionally thread a pointer to the next free block. Allocation walks the list for a fit; freeing puts the block back.`,
     },
@@ -99,7 +99,7 @@ Look past the pointer plumbing; the algorithm is two ideas.
 
 **Splitting.** A free block bigger than the request is divided: the head becomes your allocation, the tail becomes a smaller free block. Without splitting, the first \`malloc(8)\` would consume the entire megabyte. With splitting, big free ranges are gradually whittled down — which creates the next problem.
 
-**Coalescing.** Freeing a block can leave it adjacent to other free blocks: three 16-byte crumbs in a row are useless for a 1 KB request, but *merged* they are fine. Coalescing walks the neighbors and fuses them back into one big block. The classic implementation is the **boundary tag** (Knuth): store the size at both ends of each block so the previous neighbor can be found in O(1). Our toy skipped the prev-pointer for clarity — the simulator shows full coalescing.`,
+**Coalescing.** Freeing a block can leave it adjacent to other free blocks: three 16-byte crumbs in a row are useless for a 1 KiB request, but *merged* they are fine. Coalescing walks the neighbors and fuses them back into one big block. The classic implementation is the **boundary tag** (Knuth): store the size at both ends of each block so the previous neighbor can be found in O(1). Our toy skipped the prev-pointer for clarity — the simulator shows full coalescing.`,
     },
     {
       type: 'diagram',
@@ -107,10 +107,10 @@ Look past the pointer plumbing; the algorithm is two ideas.
       height: 56,
       nodes: [
         { id: 'a', x: 4, y: 8, w: 60, h: 8, label: 'FREE 1 MiB', sub: 'the initial slab' },
-        { id: 'b1', x: 4, y: 24, w: 12, h: 8, label: 'used 4 KB', color: '#FB7185' },
+        { id: 'b1', x: 4, y: 24, w: 12, h: 8, label: 'used 4 KiB', color: '#FB7185' },
         { id: 'b2', x: 18, y: 24, w: 46, h: 8, label: 'FREE ~1 MiB', sub: 'tail after split' },
-        { id: 'c1', x: 4, y: 40, w: 12, h: 8, label: 'used 4 KB', color: '#FB7185' },
-        { id: 'c2', x: 18, y: 40, w: 8, h: 8, label: 'used 1 KB', color: '#FB7185' },
+        { id: 'c1', x: 4, y: 40, w: 12, h: 8, label: 'used 4 KiB', color: '#FB7185' },
+        { id: 'c2', x: 18, y: 40, w: 8, h: 8, label: 'used 1 KiB', color: '#FB7185' },
         { id: 'c3', x: 28, y: 40, w: 6, h: 8, label: 'free', color: '#34D399' },
         { id: 'c4', x: 36, y: 40, w: 5, h: 8, label: 'free', color: '#34D399' },
         { id: 'c5', x: 43, y: 40, w: 21, h: 8, label: 'free (rest)', color: '#34D399' },
@@ -121,8 +121,8 @@ Look past the pointer plumbing; the algorithm is two ideas.
       ],
       steps: [
         { caption: 'Startup: the whole slab is ONE free block. free_list = [1 MiB]. Any request fits; the only question is how much to give away.', active: ['a'] },
-        { caption: 'malloc(4 KB): first-fit finds the big block and SPLITS it — 4 KB handed out, ~1 MiB tail stays free. Note the 16-byte header charged to every block (internal bookkeeping overhead).', active: ['b1', 'b2'], edges: ['a->b2'] },
-        { caption: 'After many alloc/free cycles: the slab is a mosaic of used and free pieces. Two adjacent free crumbs (c3, c4) individually can\'t serve a 4 KB request even though their bytes are contiguous.', active: ['c1', 'c2', 'c3', 'c4', 'c5'] },
+        { caption: 'malloc(4 KiB): first-fit finds the big block and SPLITS it — 4 KiB handed out, ~1 MiB tail stays free. Note the 16-byte header charged to every block (internal bookkeeping overhead).', active: ['b1', 'b2'], edges: ['a->b2'] },
+        { caption: 'After many alloc/free cycles: the slab is a mosaic of used and free pieces. Two adjacent free crumbs (c3, c4) individually can\'t serve a 4 KiB request even though their bytes are contiguous.', active: ['c1', 'c2', 'c3', 'c4', 'c5'] },
         { caption: 'COALESCE: on free, merge with free neighbors into one bigger block. Crumbs become usable ranges again. Skip coalescing and the heap degenerates into gravel — external fragmentation wins.', active: ['c3', 'c4'], edges: ['c3->c4'] },
       ],
     },
@@ -142,7 +142,7 @@ Add the real world's finishing touches and you have glibc malloc: per-thread are
     {
       type: 'callout',
       variant: 'analogy',
-      md: `You have met these policies before, disguised. A **JVM's** copying GC sidesteps the free list entirely by compacting (lesson T0.L5) — allocation stays a pointer bump because reclamation re-creates one huge free range. A **database buffer pool** is segregated fit taken to the extreme: every "block" is exactly one page (8 KB), so fit-search is O(1) and external fragmentation is *impossible*. Hold that thought — it is the entire PagedAttention trick.`,
+      md: `You have met these policies before, disguised. A **JVM's** copying GC sidesteps the free list entirely by compacting (lesson T0.L5) — allocation stays a pointer bump because reclamation re-creates one huge free range. A **database buffer pool** is segregated fit taken to the extreme: every "block" is exactly one page (8 KiB), so fit-search is O(1) and external fragmentation is *impossible*. Hold that thought — it is the entire PagedAttention trick.`,
     },
     {
       type: 'isomorphism',

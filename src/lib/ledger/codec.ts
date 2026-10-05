@@ -37,7 +37,7 @@ export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   'unknown-format': "this file isn't a kernelspace progress export",
   'older-export': OLDER_EXPORT_MESSAGE,
   'newer-schema': 'this export was made by a newer version of kernelspace; reload to update, then try again',
-  'too-large': `this file is over ${IMPORT_MAX_BYTES / (1024 * 1024)} MB`,
+  'too-large': `this file is over ${IMPORT_MAX_BYTES / (1024 * 1024)} MiB`,
   invalid: 'this export is damaged or edited and failed validation',
   'read-only': 'a newer version of kernelspace is open in another tab; reload to keep saving',
 }

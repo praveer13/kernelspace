@@ -100,7 +100,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'BPE builds its vocabulary by…',
           options: [
-            'Splitting text on whitespace, keeping the most common words as entries, and spelling every other word out one letter at a time',
+            'Splitting text on whitespace, building its vocabulary from the most common words, and spelling every other word out one letter at a time',
             'Starting from 256 byte symbols and iteratively merging the most frequent adjacent pair, once per new vocabulary entry',
             'Clustering embeddings of substrings and giving each cluster one id, so substrings with similar meaning share a token',
             'Applying a hand-written list of English prefixes and suffixes, which is why other languages split into many small pieces',
@@ -136,10 +136,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'A single leading space changing a prompt can break prefix caching because…',
           options: [
-            'The extra space adds one token and the cache only matches prompts of equal length, so different-length prompts never share blocks',
+            'The extra leading space adds one token and the prefix cache only matches prompts of equal length, so different-length prompts never share blocks',
             'Caching is keyed by token ids, and the space re-tokenizes the start of the prompt, so the shared prefix no longer matches at the token level',
-            'The server hashes the raw prompt string while the model strips leading spaces, so the stored entry and the lookup key come from different text',
-            'Whitespace changes the embedding of only the first token, and the cache stores embeddings, so only that one entry is lost',
+            'The server hashes the raw prompt string while the model strips a single leading space, so the stored entry and the lookup key come from different text',
+            'Whitespace changes the embedding of only the first token, and the prefix cache stores embeddings, so only that one entry is lost',
           ],
           correct: [1],
           explanation:
@@ -154,7 +154,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'The "strawberry problem" (models struggling to count letters) follows from…',
           options: [
-            'Too little text about spelling in training, so more data alone would let the model read the letters inside a token',
+            'Too little text about spelling in training, so more data alone would let the models count the letters inside a token',
             'The model receiving ids for multi-letter chunks, so the letters inside a chunk are never visible to it',
             'Attention being order-blind over characters, so the model sees which letters appear but not how many times each occurs',
             'Counting needing a sequential loop that one forward pass cannot express, so a model reading single characters would fail too',

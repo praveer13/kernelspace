@@ -48,7 +48,7 @@ const WS_MAX_IDX = WS_SIZES_KB.length - 1
 const STRIDES_B = [8, 64, 256, 1024, 4096]
 
 const fmtKb = (kb: number): string =>
-  kb >= 1024 ? `${kb / 1024} MB` : `${kb} KB`
+  kb >= 1024 ? `${kb / 1024} MiB` : `${kb} KiB`
 const fmtNs = (ns: number): string =>
   ns >= 100 ? `${ns.toFixed(0)} ns` : ns >= 10 ? `${ns.toFixed(1)} ns` : `${ns.toFixed(2)} ns`
 
@@ -133,7 +133,7 @@ export default function LatencyWalk() {
       level.name === 'DRAM' ? 'warn' : 'ok',
     )
     if (strideB >= 4096)
-      log(t, 'TLB', 'stride ≥ 4 KB — every load a new page; prefetcher cannot help', 'warn')
+      log(t, 'TLB', 'stride ≥ 4 KiB — every load a new page; prefetcher cannot help', 'warn')
 
     /* guided-task detection (t0.l2) */
     if (wsKb <= 32) completeSimTask(SIM_ID, 't-lat-l1', 60)

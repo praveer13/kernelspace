@@ -749,9 +749,9 @@ function daysSince(since: string): number {
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
-  return `${(n / 1024 ** 3).toFixed(1)} GB`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MiB`
+  return `${(n / 1024 ** 3).toFixed(1)} GiB`
 }
 
 const UNDO_LABELS: Record<NonNullable<LedgerStatus['undo']>['reason'], string> = {
@@ -842,7 +842,7 @@ function DataOwnership() {
     if (readOnly) return
     setImportError(null)
     if (file.size > IMPORT_MAX_BYTES) {
-      setImportError(`this file is over ${IMPORT_MAX_BYTES / (1024 * 1024)} MB`)
+      setImportError(`this file is over ${IMPORT_MAX_BYTES / (1024 * 1024)} MiB`)
       return
     }
     setWorking('import')

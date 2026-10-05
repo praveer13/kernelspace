@@ -9,13 +9,13 @@ const lesson: Lesson = {
   minutes: 20,
   hook: 'Every previous track optimized something. This track defines the thing. One number the business understands, one curve the engineers argue with, and the reason "10,000 tok/s" on a benchmark page means nothing.',
   exercise: 'read+quiz',
-  verifiedAt: '2026-08',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
       md: `T5.L3 defined the metrics; this track operationalizes them. The serving business has exactly one objective function: **goodput — requests per second (or tokens per second) delivered within SLO**. Not throughput. Not utilization. Requests that meet their latency contract, per unit of cost. Everything in T7 is this function's derivatives.
 
-Why the distinction is not pedantry: throughput curves are monotonic — more batch, more tokens, always. Latency curves are not — more batch, more queueing, and past the knee the p99 goes vertical. Raw "tok/s" benchmarks are taken *at* the vertical part, where every user has already left. Goodput forces the honest question: at what concurrency does the system stop meeting TTFT/TPOT — and what does that point cost?`,
+Why the distinction is not pedantry: as batch grows, throughput rises and then flattens against the compute and bandwidth roofs, while latency keeps rising — bigger batches stretch every step and deepen the queue, and past the knee the p99 goes vertical. Completions crawl even as the batch gets enormous. Raw "tok/s" benchmarks are taken *at* the vertical part, where every user has already left. Goodput forces the honest question: at what concurrency does the system stop meeting TTFT/TPOT — and what does that point cost?`,
     },
     {
       type: 'prose',
@@ -27,7 +27,7 @@ Why the distinction is not pedantry: throughput curves are monotonic — more ba
 - **Goodput**: throughput *subject to* the above — e.g. req/s with TTFT < 2 s AND TPOT < 100 ms. Capacity planning's only honest input.
 - **Interactivity** (tok/s/user) vs **throughput** (tok/s/GPU): the two ends of the dial T7.L3 turns. Benchmarks that don't name which end they're showing are marketing.
 
-The engine's control loop, one line: **batching couples TTFT and TPOT into a seesaw, and the SLO picks the operating point.** Your lab-06 scheduler is that sentence made executable — you implemented admission policy against this exact objective function.`,
+The engine's control loop, one line: **batching puts throughput and latency on a seesaw (bigger batches buy tokens per second and cost TTFT and TPOT), and the SLO picks the operating point.** Your lab-06 scheduler is that sentence made executable — you implemented admission policy against this exact objective function.`,
     },
     {
       type: 'statline',
@@ -83,21 +83,21 @@ The engine's control loop, one line: **batching couples TTFT and TPOT into a see
           ],
         },
         {
-          q: 'TTFT and TPOT are coupled into a seesaw by…',
+          q: 'Throughput and latency sit on a seesaw: tokens per second per GPU rise with load while TTFT and TPOT rise too. The coupling comes from…',
           options: [
             'The tokenizer, whose per-request CPU time delays both the first token and every later token',
             'NCCL collectives, whose fixed all-reduce latency is added to both prefill and every decode step of a request',
             'Batching: bigger batches amortize weight reads but deepen queues and lengthen every decode step',
-            'Quantization, which trades accuracy for speed, so a faster TTFT is bought with a slower TPOT and vice versa',
+            'Quantization, which trades accuracy for speed, so extra tokens per second are paid for in answer quality rather than in latency',
           ],
           correct: [2],
           explanation:
-            'The batch size is the dial between the two; the SLO picks the operating point. This is why "goodput" is a curve, not a number — and why your lab-06 policy exists.',
+            'Batch size is the dial between throughput and latency; the SLO picks the operating point. This is why "goodput" is a curve, not a number — and why your lab-06 policy exists.',
           why: [
-            'Tokenization is small CPU work that delays only TTFT, once per request, not every later token. It cannot create a seesaw, which needs one metric to improve while the other worsens.',
-            'A fixed per-step collective cost raises both latencies together, so it is overhead, not a tradeoff. The seesaw comes from a knob that helps one at the other\'s expense.',
-            'Right: batch size is the dial. Larger batches amortize weight reads and raise throughput, but they queue requests longer and stretch each step, so TTFT and TPOT rise as cost falls.',
-            'Quantization trades accuracy, not one latency for the other. Fewer weight bytes speed decode and low-precision math (FP8, FP4) speeds prefill, so it moves the frontier outward instead of along it.',
+            'Tokenization is small CPU work that delays only TTFT, once per request, not every later token. It cannot create a seesaw, which needs throughput to improve while latency worsens.',
+            'A fixed per-step collective cost raises both latencies together, so it is overhead, not a tradeoff. The seesaw comes from a knob that buys throughput at latency\'s expense.',
+            'Right: batch size is the dial. Larger batches amortize weight reads and raise throughput, but they queue requests longer and stretch each step, so TTFT and TPOT rise as cost per token falls.',
+            'Quantization trades accuracy, not throughput against latency. Fewer weight bytes speed decode and low-precision math (FP8, FP4) speeds prefill, so it moves the frontier outward instead of along it.',
           ],
         },
         {

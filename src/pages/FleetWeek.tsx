@@ -286,7 +286,7 @@ function MeasurementSubmission({
       <label className="mt-3 flex cursor-pointer items-center gap-2 rounded border border-dashed border-line px-3 py-2 font-mono text-[11px] text-text-2 transition-colors hover:border-accent/60 hover:text-text-1">
         <ImagePlus className="h-4 w-4 text-accent" />
         {evidence.screenshotName
-          ? `${evidence.screenshotName} · ${Math.ceil((evidence.screenshotBytes ?? 0) / 1024)} KB`
+          ? `${evidence.screenshotName} · ${Math.ceil((evidence.screenshotBytes ?? 0) / 1024)} KiB`
           : 'attach dashboard screenshot · PNG / JPEG / WebP'}
         <input
           type="file"

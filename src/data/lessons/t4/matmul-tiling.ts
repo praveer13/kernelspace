@@ -10,6 +10,7 @@ const lesson: Lesson = {
   hook: 'The interactive tiling visualization: how blocking turns a memory-bound matmul into a compute monster — and why FlashAttention is the same trick.',
   exercise: 'sim',
   simId: 'sim-roofline',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',

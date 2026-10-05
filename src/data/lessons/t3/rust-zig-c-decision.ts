@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 20,
   hook: 'T3 taught you Rust. The senior skill is knowing when NOT to reach for it — four questions that decide the language, the case studies that prove them, and the honest 2026 map of who writes what in this field.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
@@ -16,7 +17,7 @@ const lesson: Lesson = {
 
 **The four questions:**
 1. **What does failure cost on this path?** Memory corruption with untrusted input (network-facing, multi-tenant, long-lived) → memory safety is not optional. That's Rust's table stakes, and the reason ~70% of serious CVEs being memory-safety issues is an argument, not a statistic.
-2. **Where's the ecosystem gravity?** You do not get to choose in a vacuum. CUDA, NCCL, NIXL, UCX are C-ABI libraries — the language must interop for free. GPU kernels follow the vendor ecosystem: CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang). Rust GPU projects (CubeCL, rust-cuda, cudarc) exist but are marginal in production, and Zig and Go have no vote. The ML libraries you'll actually call (tokenizers, safetensors, cuBLAS) pick the language more often than you do.
+2. **Where's the ecosystem gravity?** You do not get to choose in a vacuum. CUDA, NCCL, NIXL, UCX are C-ABI libraries — the language must interop for free. GPU kernels follow the vendor ecosystem: CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang). Rust GPU projects (CubeCL, rust-cuda) exist but are marginal in production, and Zig and Go have no vote. (cudarc is not one of them: it wraps the host-side CUDA API so Rust can launch kernels, not write them.) The ML libraries you'll actually call (tokenizers, safetensors, cuBLAS) pick the language more often than you do.
 3. **Who maintains it for five years?** Team velocity, hiring, compile-time guardrails vs review-time guardrails. A compiler that catches your invariants (Rust) is worth real money on a fast-moving codebase; a codebase your six-person team can hold in their heads entirely (Zig's pitch) is worth a different kind of money.
 4. **What's the allocation and determinism budget?** Tail latency in microseconds and zero tolerance for hidden allocation (databases, embedded, schedulers) → you want allocation as a visible act: Zig's explicit-allocator discipline or C. GC-shaped languages already lost this round in T0.L5.`,
     },
@@ -65,10 +66,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: '"Ecosystem gravity" means…',
           options: [
-            'Language popularity: pick whichever language tops developer surveys, since hiring and tutorials follow it',
-            'The libraries you cannot avoid (CUDA, NCCL, NIXL, UCX) constrain the choice, so free C-ABI interop is mandatory',
-            'Build speed: compile times decide the language, since slow builds cost the team more than runtime performance does',
-            'Inertia: the language of the existing codebase always wins, because migration is never worth the cost',
+            'Language popularity: pick whichever language tops the indexes (Stack Overflow, TIOBE, RedMonk), since hiring follows it',
+            'The libraries you cannot avoid (CUDA and NCCL, for example) constrain the choice, so free C-ABI interop is mandatory',
+            'Build speed: compile times (rustc, nvcc, LLVM) decide the language, since slow builds cost more than runtime performance does',
+            'Inertia: the existing codebase (and its CI, IDE and SDK tooling) always wins the language choice, because migration is never worth the cost',
           ],
           correct: [1],
           explanation:
@@ -83,10 +84,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: 'Zig\'s honest 2026 position is…',
           options: [
-            'Abandoned: the language has no production users, and release-to-release churn makes it unsuitable for real systems',
-            'Dominant in serving: ZML and similar stacks have displaced Rust for most new inference engines and data planes',
-            'A real but deliberate niche (TigerBeetle, Bun, Ghostty, ZML), chosen for explicit allocation and comptime',
-            'A strict upgrade over Rust, giving the same safety guarantees with less compile-time friction',
+            'Abandoned: no production users (only hobby projects, demos and benchmarks), and release-to-release churn makes it unsuitable for real systems',
+            'Dominant in serving: ZML and similar stacks (Zig end to end) have displaced Rust for most new inference engines, data planes and routers',
+            'A real but deliberate niche (TigerBeetle, Bun, Ghostty and ZML), chosen for explicit allocation, comptime and C interop',
+            'A strict upgrade over Rust, giving the same safety guarantees (ownership, lifetimes, borrow checking) with less compile-time friction',
           ],
           correct: [2],
           explanation:
@@ -101,10 +102,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: 'C\'s role in your career here is best described as…',
           options: [
-            'Obsolete: new infrastructure is written in Rust or Zig, so C only matters for maintaining legacy code',
-            'The water you swim in: CUDA host APIs, kernel headers, io_uring, eBPF and NCCL internals, read weekly even if you rarely write it',
-            'Kernel-only: C matters for kernel modules and drivers, but userspace serving code never needs it',
-            'A skill you can outsource: generated bindings and wrappers hide the C layer, so reading it is rarely needed',
+            'Obsolete: new infrastructure is written in Rust or Zig (Dynamo, Infire, ZML), so C only matters for maintaining legacy code',
+            'The water you swim in: CUDA host APIs, kernel headers, io_uring and NCCL internals, read weekly even if you rarely write it',
+            'Kernel-only: C matters for kernel modules and device drivers, but userspace serving code never needs it or touches it',
+            'A skill you can outsource: generated bindings and wrappers (bindgen, cgo, ctypes) hide the C layer, so reading it is rarely needed',
           ],
           correct: [1],
           explanation:
@@ -119,17 +120,17 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: 'Per the component-by-component application, GPU kernels are written in…',
           options: [
-            'Rust, because memory safety matters most where kernels process untrusted tensors and model weights in production',
-            'Zig, because comptime can specialise kernels for each GPU architecture at build time with no runtime cost',
-            'CUDA C++ plus Python DSLs such as CuTe DSL, Triton/Gluon and TileLang, because the vendor ecosystem decides',
-            'Triton alone, because it has replaced hand-written CUDA C++ in every production attention kernel and MoE path',
+            'Rust (CubeCL, rust-cuda), because memory safety matters most where kernels process untrusted tensors and weights',
+            'Zig on NVIDIA, AMD and Intel GPUs, because comptime can specialise kernels per architecture with no runtime cost',
+            'CUDA C++ plus Python DSLs such as CuTe DSL, Triton/Gluon and TileLang, because the vendor ecosystem and its libraries decide',
+            'Triton alone, because it has replaced hand-written CUDA C++ in every production attention kernel (FlashAttention) and MoE path',
           ],
           correct: [2],
           explanation:
             'The four questions are per-component, not per-project. Router: Rust. Scheduler: Rust. Kernels: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang). io_uring glue: C. CLI tools: whatever ships. Ideology appears nowhere — that\'s the point of the framework.',
           why: [
-            'Safety is why Rust owns host code like the router and scheduler. Rust GPU projects (CubeCL, rust-cuda, cudarc) exist but are marginal in production kernels.',
-            'Comptime specialises Zig code at build time, but GPU kernels reach the device through toolchains from the GPU vendor ecosystem, and there the libraries and profilers live.',
+            'Safety is why Rust owns host code like the router and scheduler. Rust GPU projects such as CubeCL and rust-cuda exist but are marginal in production kernels, and cudarc only wraps the host-side CUDA API.',
+            'Comptime specialises Zig code at build time, but GPU kernels reach the device through toolchains from the GPU vendor ecosystem, and there the vendor libraries and tooling live.',
             'Right: kernels follow the vendor ecosystem, which means CUDA C++ plus Python DSLs such as CuTe DSL (FlashAttention-4), Triton/Gluon and TileLang. Rust and Zig serve the host side.',
             'FlashAttention-4 is written in CuTe DSL, and vLLM v0.30 defaults to a FlashInfer CuTe DSL NVFP4 path on SM100. Triton is one DSL among several, and CUDA C++ remains.',
           ],

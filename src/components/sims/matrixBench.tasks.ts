@@ -18,7 +18,7 @@ export const MATRIX_BENCH_TASKS: SimTask[] = [
   },
   {
     id: 't-matrix-prefetch',
-    text: 'Toggle the prefetcher and see it rescue row-major but not the 64 KB column stride',
+    text: 'Toggle the prefetcher and see it rescue row-major but not the 64 KiB column stride',
     xp: 60,
   },
 ]

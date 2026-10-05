@@ -76,7 +76,7 @@ The metric that matters is: \`largest_free_block / total_free\`. When that ratio
 
 So: variable sizes give you external fragmentation you cannot fully control; fixed sizes give you bounded internal waste you *can*. Systems that must run for months without a heap restart almost always move toward fixed or few-size designs:
 
-- **OS page frames** — RAM is managed as 4 KB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
+- **OS page frames** — RAM is managed as 4 KiB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
 - **Slab/slab-like allocators** — one object size per cache; freeing is O(1); the slab *is* a fixed-block design.
 - **Database buffer pools** — everything is an 8 KB page, full stop.
 - **vLLM KV blocks** — every block holds the same number of tokens (default 16). A 300-token sequence needs ⌈300/16⌉ = 19 blocks; waste is at most 15 tokens of KV in the tail, under 4% in practice. Before this, engines reserved *contiguous* KV per sequence sized to max length: 60%+ of HBM stranded. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
@@ -89,7 +89,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
     {
       type: 'callout',
       variant: 'warning',
-      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is the measured sweet spot). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KB frames fragments huge (2 MB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
+      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is a balance, not a proven optimum: the PagedAttention paper's sweep found 16 to 128 tokens best on ShareGPT). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KiB frames fragments huge (2 MiB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
     },
     {
       type: 'prose',
@@ -160,10 +160,10 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'Why do fixed-size-block designs eliminate external fragmentation?',
           options: [
-            'They coalesce more aggressively on every free, so adjacent holes never persist',
-            'They compact live blocks periodically, as ZGC does, to squeeze the holes out',
+            'They eliminate external holes by coalescing more aggressively on every free, so adjacent holes never persist',
+            'They compact live block contents periodically, as ZGC does, to squeeze the holes out',
             'Every free block is identical, so any free block satisfies any request',
-            'They place blocks in sorted order, so free blocks always end up adjacent',
+            'They place each block in sorted order, so free blocks always end up adjacent',
           ],
           correct: [2],
           explanation:
@@ -178,10 +178,10 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'Why can\'t a C allocator fix external fragmentation by compacting like a JVM GC?',
           options: [
-            'Compaction requires a JIT-compiled runtime with profiling data, and C is compiled ahead of time',
+            'Compaction by a JVM-style collector requires a JIT-compiled runtime with profiling data, and the C allocator is compiled ahead of time',
             'Moving a block means updating every pointer to it, which the allocator cannot find in C code',
-            'C heaps are typically too large to copy without stalling the whole process for seconds',
-            'The OS forbids moving heap memory once malloc has handed it out to the running program',
+            'A C heap is typically too large to copy without stalling the whole process for seconds',
+            'The OS forbids moving heap memory once the allocator has handed it out to a running program',
           ],
           correct: [1],
           explanation:

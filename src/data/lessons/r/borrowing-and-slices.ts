@@ -63,9 +63,9 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
         {
           q: 'Which combination may exist at the same time for one value?',
           options: [
-            'One &mut T alongside any number of &T, because readers cannot see an in-progress write',
+            'One &mut T alongside any number of &T, because readers cannot see an in-progress write, so nothing races',
             'Many &T, or exactly one &mut T, but never a &mut T together with any other live reference',
-            'Any number of &mut T, provided no two of them write the same element',
+            'Any number of &mut T, provided no two of them write the same element, since the compiler tracks each index',
             'At most one reference of either kind, since even two &T could see a half-written update',
           ],
           correct: [1],
@@ -81,9 +81,9 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
         {
           q: 'Why prefer &[T] to &Vec<T> in a read-only function parameter?',
           options: [
-            'A &Vec<T> parameter forces the callee to allocate a new Vec, but a slice reuses the caller\'s existing buffer',
+            'A &Vec<T> parameter forces the callee to allocate a new Vec, copy every element, then drop it, but a slice reuses the caller\'s buffer',
             'A slice accepts arrays, Vecs and subranges, and exposes only the access the callee needs',
-            'A &Vec<T> moves the Vec into the callee for good, whereas a slice only borrows part of it',
+            'A &Vec<T> moves the Vec into the callee for good, so the caller loses it, whereas a slice only borrows part of it',
             'Indexing and iteration need a slice type, so a &Vec<T> parameter cannot use either one',
           ],
           correct: [1],

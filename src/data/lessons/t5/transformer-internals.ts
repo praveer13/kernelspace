@@ -49,10 +49,10 @@ The bill arrives in memory: per token, per layer, we store one K vector and one 
 
 \`\`\`text
 KV bytes per token = 2 (K and V) × L (layers) × d (hidden) × bytes/elem
-                   = 2 × 32 × 4096 × 2 B  =  512 KB per token   (32 KV heads, no GQA)
+                   = 2 × 32 × 4096 × 2 B  =  512 KiB per token   (32 KV heads, no GQA)
 \`\`\`
 
-This worked example is an 8B-class model with full multi-head attention (32 KV heads). A 128k-token context on it: \`512 KB × 131,072 = 64 GB\` — *4× the 16 GB of weights*. Real Llama-3-8B uses GQA with 8 KV heads and needs 128 KB per token (T5.L4); GQA is exactly the lever that closes that gap. That single formula is the reason T5 exists. T5.L4 is entirely about it; vLLM exists because of it.`,
+This worked example is an 8B-class model with full multi-head attention (32 KV heads). A 128k-token context on it: \`512 KiB × 131,072 = 64 GiB\` — *about 4× the 16 GB (≈15 GiB) of weights*. Real Llama-3-8B uses GQA with 8 KV heads and needs 128 KiB per token (T5.L4); GQA is exactly the lever that closes that gap. That single formula is the reason T5 exists. T5.L4 is entirely about it; vLLM exists because of it.`,
     },
     {
       type: 'diagram',
@@ -91,7 +91,7 @@ This worked example is an 8B-class model with full multi-head attention (32 KV h
 
 - **Prefill**: the parallel pass over the prompt that fills the cache initially — compute-bound (T4.L3). Metric: **TTFT** (time to first token).
 - **Decode**: the autoregressive loop above — bandwidth-bound. Metric: **ITL/TPOT** (inter-token latency) and throughput in tok/s.
-- **Context window**: max \`t\`; every "128k context" claim is a KV-cache capacity claim — 64 GB for our 8B, before batching.
+- **Context window**: max \`t\`; every "128k context" claim is a KV-cache capacity claim — 64 GiB for our 8B, before batching.
 - **GQA/MQA**: grouped/multi-query attention shares K/V across query heads (8 KV heads instead of 32), cutting the cache 4× — a *capacity* optimization dressed as an architecture tweak. When a model card says GQA, read: "KV cache ÷ 4."
 
 The remaining lessons put these to work: tokenization next (the input side), then the economics (prefill vs decode), then the memory math in full.`,
@@ -104,7 +104,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
       tasks: [
         'Step one token through the 8B model: watch QKV → attention → MLP per layer; note the MLP\'s FLOP share.',
         'Toggle the KV cache OFF: watch decode cost go quadratic in context length.',
-        'Sweep context 1k → 128k: plot KV-cache GB vs the 16 GB weight line; find the crossover.',
+        'Sweep context 1k → 128k: plot KV-cache GiB vs the 16 GB weight line; find the crossover.',
         'Switch 32 heads → 8 KV heads (GQA): confirm the cache shrinks 4×.',
       ],
       note: `Three numbers to keep forever: 2·params FLOPs/token, 2·params bytes/token, and 2·L·d·bytes KV/token. Every T5 lesson is arithmetic on these three.`,
@@ -116,7 +116,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
           q: 'The KV cache exists because…',
           options: [
             'Attention scores for earlier tokens are expensive, so the engine stores the softmax weights and reuses them unchanged for every later token',
-            'Under causal masking a past token\'s K and V never change, so storing them lets each step process only the new token instead of re-running the prefix',
+            'Under causal masking a past token\'s keys and values never change, so storing them lets each step process only the new token instead of re-running the prefix',
             'Model weights are re-read for every token, so the engine keeps the hottest weight matrices in on-chip memory next to the tensor cores',
             'The prompt is tokenized and embedded once, so the cache stores those embeddings and later steps skip the embedding lookup',
           ],
@@ -133,14 +133,14 @@ The remaining lessons put these to work: tokenization next (the input side), the
         {
           q: 'A decoder-only model has 32 layers, hidden size 4096 and 32 KV heads (full multi-head attention, no GQA), with an FP16 cache. KV cache per token is about…',
           options: [
-            'About 256 KB, because only K is stored per layer and V can be recomputed from it on demand',
-            'About 512 KB: 2 (K and V) x 32 layers x 4096 hidden x 2 bytes per FP16 element',
-            'About 1 MB, the same product with 4 bytes per element because the softmax runs in FP32',
-            'About 128 KB, because Llama-3-8B shares 8 KV heads across query heads and so the same saving applies here',
+            'About 256 KiB, because only K is stored per layer and V can be recomputed from it on demand',
+            'About 512 KiB: 2 (keys and values) x 32 layers x 4096 hidden x 2 bytes per FP16 element',
+            'About 1 MiB, the same product with 4 bytes per element because the softmax runs in FP32',
+            'About 128 KiB, because Llama-3-8B shares 8 KV heads across query heads and so the same saving applies here',
           ],
           correct: [1],
           explanation:
-            '2 x L x d x bytes = 2 x 32 x 4096 x 2 = 524,288 B, about 512 KB per token, with every query head keeping its own K and V. At 128k context that is 64 GB, 4x the weights. Real Llama-3-8B uses 8 KV heads and needs 128 KB (T5.L4).',
+            '2 x L x d x bytes = 2 x 32 x 4096 x 2 = 524,288 B, about 512 KiB per token, with every query head keeping its own K and V. At 128k context that is 64 GiB, about 4x the weights. Real Llama-3-8B uses 8 KV heads and needs 128 KiB (T5.L4).',
           why: [
             'V cannot be derived from K: they come from different projection matrices, so both must be stored. Dropping V halves the true figure.',
             'Right: K and V per layer, 32 layers, 4096 elements each, 2 bytes per FP16 element gives 524,288 B. This is the no-GQA case, with 32 KV heads.',
@@ -170,7 +170,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
           q: 'GQA (grouped-query attention) matters to a serving engineer because it…',
           options: [
             'Drops attention heads whose scores are small at inference time, so the model does less work per token and the cache holds fewer positions',
-            'Lets several query heads share one K/V head, so cache size and per-step K/V reads fall by the group factor (32 to 8 KV heads is 4x)',
+            'Lets several query heads share one key and value head, so cache size and per-step reads fall by the group factor (32 to 8 KV heads is 4x)',
             'Stores K and V in FP8 inside the attention kernel, halving cache bytes and bandwidth with the model unchanged',
             'Limits each query head to a window of recent tokens, so the cache stops growing once the window is full',
           ],

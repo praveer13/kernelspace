@@ -106,7 +106,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         'Compare stride-1 vs stride-4096 traversal of the same buffer; explain the difference using 64-byte cache lines.',
         'Locate HBM on the ladder and note its bandwidth vs DRAM — the number decode lives and dies by.',
       ],
-      note: `The step pattern you just saw is the memory hierarchy measured directly. Each plateau is a level: while the working set fits in L1 you pay ~0.5 ns; once it spills, latency jumps to the next level. **Stride-4096 defeats the prefetcher and the TLB at once** — every access lands in a new 4 KB page and a new cache line. This exact experiment, run on a GPU against HBM, is why LLM inference engineers obsess over memory access patterns.`,
+      note: `The step pattern you just saw is the memory hierarchy measured directly. Each plateau is a level: while the working set fits in L1 you pay ~0.5 ns; once it spills, latency jumps to the next level. **Stride-4096 defeats the prefetcher and the TLB at once** — every access lands in a new 4 KiB page and a new cache line. This exact experiment, run on a GPU against HBM, is why LLM inference engineers obsess over memory access patterns.`,
     },
     {
       type: 'quiz',
@@ -123,7 +123,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
           explanation:
             '~0.5 ns vs ~100 ns — about two orders of magnitude. On the "L1 = 1 second" scale, DRAM is a 3–4 minute wait. This is the ratio behind nearly every cache optimization you will ever make.',
           why: [
-            'Treats DRAM as part of the cache family. DRAM is off-chip, behind a memory controller: ~100 ns against ~0.5 ns for L1. Even the hop from L1 to L2 is about 10x, so 2x is smaller than a single cache-level step.',
+            'Treats DRAM as part of the cache family. DRAM is off-chip: ~100 ns against ~0.5 ns for L1. Even L1 to L2 is about 10x, so 2x is below a single cache-level step.',
             'Matches the L2-to-L3 step, which is 3x to 10x. Each cache level is only a few times slower than the one above; the jump to DRAM is a much larger cliff.',
             'Right: about 100 ns against about 0.5 ns. On the "L1 = 1 second" scale DRAM is a 3 to 4 minute wait, the ratio behind nearly every cache optimization you will make.',
             'Overshoots by two orders of magnitude. Tens of microseconds is closer to flash than DRAM; an NVMe read at ~100 µs is the roughly 200,000x case. DRAM stays near 100 ns.',
@@ -132,9 +132,9 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         {
           q: 'When the CPU needs 8 bytes from DRAM, how many bytes does the memory controller actually fetch?',
           options: [
-            'Exactly 8 bytes: the memory system is byte-addressed, so the controller fetches only what the load asked for',
+            'Exactly 8 bytes: the memory system is byte-addressed (no wider unit), so the controller fetches only what the load asked for',
             '64 bytes: one full cache line, betting that neighboring bytes will be used soon (spatial locality)',
-            '4,096 bytes: DRAM is accessed a page at a time, so every miss pulls in a full 4 KB page',
+            '4,096 bytes: DRAM is accessed a page at a time (an OS page), so every miss pulls in a full 4 KiB page',
             'However many bytes the compiler requested with prefetch hints, since hardware fetches only what software asks for',
           ],
           correct: [1],
@@ -143,16 +143,16 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
           why: [
             'Addresses are byte-granular but transfers are not. Caches and the memory controller move whole lines, so an 8-byte load costs a 64-byte transfer. Assuming byte precision hides the wasted bandwidth.',
             'Right: the 64-byte cache line is the atom of the memory system. Use the neighbors soon and the fetch was free; otherwise you wasted 8x the bandwidth. AoS-vs-SoA layout is built on this number.',
-            '4 KB is the virtual-memory page size, a unit of translation and OS paging, not of cache fills. CPU caches fill 64-byte lines, so a miss does not drag in a whole page.',
+            '4 KiB is the virtual-memory page size, a unit of translation and OS paging, not of cache fills. CPU caches fill 64-byte lines, so a miss does not drag in a whole page.',
             'Prefetch hints only request extra lines; every demand miss still fetches a full line. Hardware prefetchers also run without any hints, so software requests do not set the fetch size.',
           ],
         },
         {
           q: 'A Python loop over a list of 1M integers is far slower than the same loop over a numpy array mostly because…',
           options: [
-            'Every list element is a pointer to a scattered heap object, so each iteration is a guaranteed DRAM cache miss',
+            'Every list element is a pointer to a scattered heap object (not inline data), so each iteration is a guaranteed DRAM cache miss',
             'Per-element interpreter work: bytecode dispatch, refcounting and a boxed int for every add, with no SIMD loop',
-            'numpy releases the GIL and spreads the loop across all cores while the list loop is stuck on one core',
+            'numpy releases the GIL and spreads the loop across all cores (every add calls a parallel BLAS routine) while the list loop is stuck on one core',
             'Python integers are arbitrary-precision, so even a small add has to walk a multi-word bignum representation',
           ],
           correct: [1],
@@ -168,10 +168,10 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         {
           q: 'Why can\'t we simply build 128 GB of L1-speed SRAM and skip the hierarchy?',
           options: [
-            'Large SRAM arrays cannot be fabricated at all: past a few MB the cells stop holding their state reliably',
+            'Large SRAM arrays cannot be fabricated at all: past a few MB, the cells stop holding their state reliably',
             'SRAM needs ~6 transistors per bit vs 1 transistor plus a capacitor for DRAM: area, power and cost make it infeasible',
-            'DRAM cells are intrinsically faster than SRAM but harder to program, so designers put SRAM caches in front for convenience',
-            'A 128 GB array would be too hot to cool: the memory controller would overheat and throttle the whole chip',
+            'DRAM cells are intrinsically faster than SRAM but harder to program, so designers put SRAM caches in front (a hardware-software split chosen for ease of compilation, not for cost)',
+            'A 128 GB array would be too hot to cool: the memory controller would overheat, and throttle the whole chip',
           ],
           correct: [1],
           explanation:

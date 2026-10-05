@@ -143,9 +143,9 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'A request has 2,048 cached system-prompt tokens and a 128-token uncached user tail. What work does APC remove?',
           options: [
-            'The tail prefill and every decode step, because a hit lets the engine replay the response it produced last time',
+            'The tail prefill and every decode step; a hit lets the engine replay the response it produced last time',
             'Prefill for the 2,048 cached tokens; the tail is still prefilled and decoding proceeds as usual',
-            'Tokenization and embedding lookup for the whole prompt, since the cache stores token ids rather than K/V tensors',
+            'Tokenization and embedding lookup for the whole prompt; the cache stores token ids rather than K/V tensors',
             'Nothing, because K/V can be reused only when the entire prompt, tail included, matches a cached entry exactly',
           ],
           correct: [1],
@@ -160,7 +160,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'Why does radix-cache eviction choose leaves?',
           options: [
-            'Leaves hold the longest token runs, so freeing one returns the most blocks to the pool for each eviction step',
+            'Leaves hold the longest token runs; freeing one returns the most blocks to the pool for each eviction step',
             'An internal node is a shared ancestor, so removing it strands every descendant; a leaf can be released and empty ancestors pruned',
             'Internal nodes carry no KV blocks of their own, only child pointers, so there is nothing to evict until a leaf goes',
             'Only leaves carry an LRU timestamp, because interior nodes are never touched again once an edge has been split',
@@ -177,7 +177,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'Why is pure longest-prefix routing insufficient?',
           options: [
-            'A cache hit only skips the attention work, so the MLP still recomputes every cached token and the saving is too small to route for',
+            'A cache hit only skips the attention work; the MLP still recomputes every cached token and the saving is too small to route for',
             'It herds traffic onto one warm worker until queueing outweighs the saved prefill; a load guard bounds that skew',
             'Cached K/V is bound to the request that created it, so no router can reuse it for a later request',
             'A longer match means more K/V to move to the chosen worker, so the router should prefer short matches over long ones',
@@ -200,10 +200,10 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
             'The token ids plus the client session id, so that one user\'s cached prefix can never be reused by any other user\'s requests',
           ],
           correct: [1],
-          explanation: 'The key must name deterministic K/V, not merely similar text. Model/adapter/multimodal configuration and isolation namespace matter alongside exact token ids.',
+          explanation: 'A cache identity must name deterministic K/V, not merely similar text. Model/adapter/multimodal configuration and isolation namespace matter alongside exact token ids.',
           why: [
             'Equal text does not guarantee equal token ids across tokenizer versions or special-token handling, and text ignores model and adapter. K/V is a function of token ids and weights.',
-            'Right: the key must name deterministic K/V. Token ids, model, adapter and multimodal inputs fix the tensors; a salt partitions tenants against timing side channels.',
+            'Right: the cache identity must name deterministic K/V. Token ids, model, adapter and multimodal inputs fix the tensors; a salt partitions tenants against timing side channels.',
             'Sampling happens after the forward pass over the prompt. Prefill K/V is identical for any temperature or top-p, so including them would only fragment the cache.',
             'A per-session key never lets two users share a system prompt, which removes most of the cache\'s value. Isolation needs a trust-domain salt, not one entry per session.',
           ],

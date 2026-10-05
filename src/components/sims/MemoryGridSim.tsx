@@ -661,7 +661,7 @@ export default function MemoryGridSim() {
               Grow the <span className="font-mono text-text-1">working set</span> and the answering
               level steps down the ladder: L1 (32 KB, ~0.5 ns) → L2 (1 MB, ~5 ns) → L3 (32 MB,
               ~15 ns) → DRAM (~100 ns). A <span className="font-mono text-text-1">stride</span>{' '}
-              under 64 B shares each cache line across loads; a 4 KB stride puts every load on a
+              under 64 B shares each cache line across loads; a 4 KiB stride puts every load on a
               new page — no line sharing, no prefetch rescue, plus a TLB miss. The faint staircase
               is the expected curve at your current stride; your runs plot as dots on top.
             </p>

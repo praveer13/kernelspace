@@ -19,7 +19,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## The data structures, concretely
 
-The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KB of KV per token, so one block holds 16 × 128 KB = 2 MB), a pool of N blocks is the entire serving capacity. Two structures run the show:
+The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KiB of KV per token, so one block holds 16 × 128 KiB = 2 MiB), a pool of N blocks is the entire serving capacity. Two structures run the show:
 
 - **The free-block queue** — your T1.L3 free list, minus the fit search (all blocks identical), kept in eviction order: \`alloc()\` pops the head, \`free()\` pushes the tail, O(1), no fragmentation between blocks ever.
 - **Per-sequence block tables** — a growable array of physical block ids: logical block \`i\` (tokens \`16i..16i+15\`) lives in physical block \`table[i]\`. The attention kernel translates per block as it reads — the MMU walk, one level deep.
@@ -143,10 +143,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'Prefix caching in vLLM is implemented as…',
           options: [
-            'Copying the cached prompt\'s KV tensors into freshly allocated blocks on a hit, so each request owns its own private copy that it can then modify freely',
+            'Copying the cached prompt\'s KV tensors into freshly allocated blocks on a hit (copy-on-hit), so each request owns a private copy it can modify',
             'Hashing token blocks (each chained to the blocks before it) and mapping matching cached physical blocks into the new sequence\'s table, refcount+1',
-            'Keeping finished blocks in a CPU-side key-value store and fetching them back over PCIe into GPU blocks when a matching request arrives',
-            'Merging requests that share a system prompt into one long sequence, so the shared prompt is processed once and the outputs are split afterwards',
+            'Keeping finished blocks in a CPU-side key-value store (host DRAM) and fetching them back over PCIe into GPU blocks when a matching request arrives',
+            'Merging requests that share a system prompt into one long sequence (a shared batch), so the prompt is processed once and the outputs are split',
           ],
           correct: [1],
           explanation:
@@ -161,10 +161,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'The block size (default 16 tokens) trades off…',
           options: [
-            'Model quality against speed: larger blocks coarsen attention over the cached tokens and slightly degrade the output in return for faster kernels',
+            'Model quality against speed: larger blocks coarsen attention (a coarser softmax) and slightly degrade output for faster kernels (fewer lookups)',
             'Internal waste in the half-empty tail block (bigger means more) against table length and per-block lookup overhead in the kernel (smaller means more)',
             'External fragmentation between blocks (larger blocks leave more holes) against allocation time (smaller blocks take longer to find a free slot in the pool)',
-            'Transfer cost between GPUs (larger blocks move more bytes over NVLink in tensor-parallel serving) against how many blocks the pool can hold, which limits concurrency',
+            'Transfer cost between GPUs (larger blocks move more bytes over NVLink) against how many blocks the pool can hold, which limits concurrency',
           ],
           correct: [1],
           explanation:
@@ -179,10 +179,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'When the free-block queue empties during decode, vLLM…',
           options: [
-            'Swaps the lowest-priority sequence\'s blocks to CPU RAM over PCIe and restores them once memory frees up, which is how V1 handles every preemption by default',
+            'Swaps the lowest-priority sequence\'s blocks to CPU RAM over PCIe (and back), restoring them when memory frees up, as V1 does for every preemption',
             'Has reallocated every cached free block, so it preempts a running sequence: frees its blocks and recomputes it on resume (V1 has no CPU swap)',
-            'Spills new tokens\' KV into pinned CPU memory transparently, so decode continues at lower bandwidth with no scheduler action and no change to the batch',
-            'Raises an out-of-memory error for the whole engine, because blocks are reserved at startup for each request and cannot be reclaimed from running requests',
+            'Spills new tokens\' KV into pinned (page-locked) CPU memory transparently, so decode continues at lower bandwidth (no scheduler action, no batch change)',
+            'Raises an out-of-memory error for the whole engine (an OOM abort), because blocks are reserved at startup and cannot be reclaimed from running requests',
           ],
           correct: [1],
           explanation:
@@ -197,10 +197,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'The PagedAttention kernel\'s block-table indirection is affordable because…',
           options: [
-            'Modern GPUs resolve the block-table lookup in hardware like a TLB, so the indirection adds no measurable cost and the saved memory is a pure gain',
+            'Modern GPUs resolve the block-table lookup in hardware (the way a hardware TLB caches translations), so the indirection adds no measurable cost and memory savings are a pure gain',
             'The kernel is slower (20-26% higher attention latency than FasterTransformer in the paper), but reclaimed memory grows batches and gives 2-4x the throughput',
-            'The kernel first gathers the blocks into one contiguous buffer, so the attention math runs on contiguous memory and pays only for one extra copy',
-            'The table is small enough to live in registers, so lookups never touch HBM and the kernel runs as fast as a contiguous-cache kernel',
+            'The kernel first gathers the blocks into one contiguous buffer (a 16-token copy per block), so attention runs on contiguous memory and pays one extra copy',
+            'The table is small enough to live in registers (only a few entries per sequence), so lookups never touch HBM and the kernel runs as fast as a contiguous-cache kernel',
           ],
           correct: [1],
           explanation:

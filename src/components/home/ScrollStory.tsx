@@ -286,7 +286,7 @@ const BEATS: Beat[] = [
     rightLabel: 'LLM serving · 2020s',
     left: Beat1Left,
     right: Beat1Right,
-    lines: ['page table ≡ block table', '4 KB pages ≡ 16-token blocks', 'near-zero fragmentation'],
+    lines: ['page table ≡ block table', '4 KiB pages ≡ 16-token blocks', 'near-zero fragmentation'],
   },
   {
     caption: 'Swap ≡ KV offload',

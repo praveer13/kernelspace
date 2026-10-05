@@ -73,7 +73,7 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       type: 'prose',
       md: `## Why capacity is the serving bottleneck
 
-One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of weights** — already 2 GPUs before a single request. Per request, the KV cache grows \`2 × layers × kv_width × bytes\` per token. Take a 70B-class model with full multi-head attention (80 layers, 8192 wide, no GQA): that's **~2.6 MB per token in FP16** — a 4k-token conversation eats ~10 GB. Ten such conversations and an 80 GB H100 is *full of cache*, weights elsewhere. Real Llama-3-70B uses GQA with 8 KV heads (1024 wide), which cuts this 8× to **320 KB per token** (T5.L4); the bottleneck is the same, only the headcount of conversations moves. Capacity, not compute, caps concurrent requests; bandwidth, not FLOPs, caps tokens/s. The GPU memory hierarchy isn't background knowledge for serving — it **is** serving.`,
+One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of weights** — already 2 GPUs before a single request. Per request, the KV cache grows \`2 × layers × kv_width × bytes\` per token. Take a 70B-class model with full multi-head attention (80 layers, 8192 wide, no GQA): that's **~2.5 MiB per token in FP16** — a 4k-token conversation eats ~10 GiB. Ten such conversations and an 80 GB H100 is *full of cache*, weights elsewhere. Real Llama-3-70B uses GQA with 8 KV heads (1024 wide), which cuts this 8× to **320 KiB per token** (T5.L4); the bottleneck is the same, only the headcount of conversations moves. Capacity, not compute, caps concurrent requests; bandwidth, not FLOPs, caps tokens/s. The GPU memory hierarchy isn't background knowledge for serving — it **is** serving.`,
     },
     {
       type: 'exercise',
@@ -130,14 +130,14 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
         {
           q: 'For a 70B FP16 model with full multi-head attention (no GQA), the first-order capacity problem on 80 GB GPUs is…',
           options: [
-            'The roughly 50 MB L2 cannot hold the weights, so each step thrashes it and compute caps how many requests run',
+            'The roughly 50 MB L2 cannot hold the weights (it is far too small), so each step thrashes it and compute caps how many requests run',
             'Weights need two GPUs, and each 4k-token KV cache adds ~10 GB, so capacity caps concurrency',
-            'Tokenization and sampling run on the CPU, so the host becomes the limit long before GPU memory fills up',
+            'Tokenization and sampling run on the CPU (not the GPU), so the host becomes the limit long before GPU memory fills up',
             'Tensor cores compute in FP32, so the FP16 weights are upcast and double their footprint before any request',
           ],
           correct: [1],
           explanation:
-            'Weights alone exceed one HBM; KV caches (~2.6 MB/token for MHA; Llama-3-70B\'s GQA is 8× smaller at 320 KB/token) consume the rest. This arithmetic is why quantization, multi-GPU parallelism, and KV paging are survival features, not optimizations.',
+            'Weights alone exceed one HBM; KV caches (~2.5 MiB/token for MHA; Llama-3-70B\'s GQA is 8× smaller at 320 KiB/token) consume the rest. This arithmetic is why quantization, multi-GPU parallelism, and KV paging are survival features, not optimizations.',
           why: [
             'Weights are never required to fit in L2; they stream from HBM each step. The binding limit is HBM capacity for weights plus KV caches.',
             'Right: 140 GB of FP16 weights already exceed one 80 GB GPU, and every active 4k-token sequence adds about 10 GB of KV. Capacity, not compute, caps concurrency.',
