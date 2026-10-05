@@ -12,8 +12,17 @@
  * expected lessons passed exceeds MAX_RANK_EXPECTED or that passes any single lesson with probability
  * >= MAX_RANK_LESSON, (9) across all `whyRequired` tracks together, a length-rank strategy whose expected
  * lessons passed, summed over those tracks, exceeds MAX_RANK_AGGREGATE (the PLAN-100X exit criterion is at
- * most 1 of the 19 T0-T2 lessons; the per-track bars alone would allow one per track).
- * REPORTS (never fails): longest-key rates, `why` coverage, the length-rank aggregate and a blind-strategy simulation.
+ * most 1 of the 19 T0-T2 lessons; the per-track bars alone would allow one per track), (10) in a
+ * `whyRequired` track, the key being strictly the longest option in more than MAX_KEY_LONGEST_SHARE of the
+ * track's items (PLAN-100X 5.1 V1), (11) a lexical-cue strategy (the option containing parentheses, a colon,
+ * ", so", or NOT containing because/since) that passes any single lesson with probability >= MAX_RANK_LESSON,
+ * or whose expected passes over all gated lesson tracks exceed MAX_LEXICAL_AGGREGATE, (12) Fleet Week Act IV
+ * (when gated): any length-rank or lexical-cue strategy that gets BOTH the cause and the mitigation of one
+ * incident right with probability >= MAX_RANK_LESSON, or that passes the six items as one pseudo-lesson with
+ * probability >= MAX_RANK_LESSON.
+ * REPORTS (never fails): longest-key rates, items whose key / mean-distractor length ratio exceeds
+ * MAX_LENGTH_RATIO, `why` coverage, the length-rank aggregate, the lexical-cue expectations per track and a
+ * blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
  *   bun scripts/verify-items.ts --update-baseline [--force]
@@ -36,6 +45,12 @@ const MAX_RANK_EXPECTED = 1.0
 const MAX_RANK_LESSON = 0.5
 /** Summed over every whyRequired track together, no length-rank strategy may pass more than this many lessons in expectation. */
 const MAX_RANK_AGGREGATE = 1.0
+/** PLAN-100X 5.1 V1: in a whyRequired track the key may be strictly the longest option in at most this share of items. */
+const MAX_KEY_LONGEST_SHARE = 0.3
+/** PLAN-100X 5.1 V1: items whose key / mean-distractor length ratio exceeds this are reported (not failed). */
+const MAX_LENGTH_RATIO = 1.3
+/** Summed over every gated lesson track, no lexical-cue strategy may pass more than this many lessons in expectation. */
+const MAX_LEXICAL_AGGREGATE = 2.0
 
 interface Item {
   track: string
@@ -231,6 +246,26 @@ for (const item of validItems) {
   }
 }
 
+/* ------------------------- (2c) V1 item rules ------------------------- */
+
+/** Key (mean of the keys for a multi-select) over mean distractor length; NaN when there is no distractor. */
+function lengthRatio(q: QuizQuestion): number {
+  const key = mean(q.correct.map((c) => len(q.options[c])))
+  const wrong = q.options.filter((_, oi) => !q.correct.includes(oi)).map(len)
+  return wrong.length ? key / mean(wrong) : NaN
+}
+
+const longRatioItems = validItems.filter((i) => whyRequired.includes(i.track) && lengthRatio(i.q) > MAX_LENGTH_RATIO)
+for (const t of whyRequired) {
+  const rows = validItems.filter((i) => i.track === t)
+  const longest = rows.filter((i) => keyIsLongest(i.q)).length
+  if (rows.length && longest / rows.length > MAX_KEY_LONGEST_SHARE) {
+    failures.push(
+      `longest: track ${t} has the key strictly longest in ${longest}/${rows.length} items (${pct(longest / rows.length)}; limit ${MAX_KEY_LONGEST_SHARE * 100}%); shorten the key or lengthen distractors`,
+    )
+  }
+}
+
 /* ------------------------- (3) shuffle sanity ------------------------- */
 
 const SEEDS = 10_000
@@ -311,11 +346,7 @@ let totalItems = 0
 let totalLongest = 0
 for (const t of trackKeys) {
   const rows = validItems.filter((i) => i.track === t)
-  const ratios = rows.map((i) => {
-    const key = mean(i.q.correct.map((c) => len(i.q.options[c])))
-    const wrong = i.q.options.filter((_, oi) => !i.q.correct.includes(oi)).map(len)
-    return wrong.length ? key / mean(wrong) : NaN
-  }).filter((r) => Number.isFinite(r))
+  const ratios = rows.map((i) => lengthRatio(i.q)).filter((r) => Number.isFinite(r))
   totalItems += rows.length
   totalLongest += longestByTrack[t]
   const share = rows.length ? longestByTrack[t] / rows.length : 0
@@ -324,6 +355,10 @@ for (const t of trackKeys) {
   )
 }
 console.log(`  ${'all'.padEnd(11)}${String(totalItems).padStart(6)}${String(totalLongest).padStart(13)}${pct(totalItems ? totalLongest / totalItems : 0).padStart(8)}`)
+
+console.log('')
+console.log(`items in gated tracks whose key / mean-distractor length ratio exceeds ${MAX_LENGTH_RATIO} (reported, not failed): ${longRatioItems.length}`)
+for (const i of longRatioItems) console.log(`  ${i.ref.padEnd(40)} ratio ${lengthRatio(i.q).toFixed(2)}`)
 
 console.log('')
 console.log('why coverage per track (items with per-option why / items)')
@@ -385,6 +420,25 @@ const RANK_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] = [
   { name: '2nd-longest', pick: (q) => pickRank(q, 1, true) },
   { name: '2nd-shortest', pick: (q) => pickRank(q, 1, false) },
   { name: 'shortest', pick: (q) => pickRank(q, 0, false) },
+]
+
+/**
+ * Lexical cues the length gate cannot see. A strategy picks uniformly among the options its predicate
+ * matches; when it matches none (or every option) the cue says nothing and the pick is uniform over all
+ * options. A multi-select needs the full set, so one pick never passes it.
+ */
+function pickMatching(q: QuizQuestion, matches: (option: string) => boolean): number {
+  if (q.correct.length !== 1) return 0
+  const hit = q.options.flatMap((o, i) => (matches(o) ? [i] : []))
+  if (hit.length === 0) return 1 / q.options.length
+  return hit.includes(q.correct[0]) ? 1 / hit.length : 0
+}
+
+const LEXICAL_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] = [
+  { name: 'has-parentheses', pick: (q) => pickMatching(q, (o) => /[()]/.test(o)) },
+  { name: 'has-colon', pick: (q) => pickMatching(q, (o) => o.includes(':')) },
+  { name: 'has-", so"', pick: (q) => pickMatching(q, (o) => o.includes(', so')) },
+  { name: 'no-because/since', pick: (q) => pickMatching(q, (o) => !/\b(because|since)\b/i.test(o)) },
 ]
 
 const byLesson = new Map<string, QuizQuestion[]>()
@@ -481,9 +535,55 @@ console.log(
     .join('  ')}`,
 )
 
+// (11) Lexical-cue strategies, per whyRequired lesson track: expected lessons passed and the worst single lesson.
+{
+  const lessonTracks = trackKeys.filter((k) => k !== FLEET_TRACK)
+  console.log('')
+  console.log('lexical-cue strategies per track: expected lessons passed (worst single lesson p)')
+  const totals: { name: string; expected: number }[] = []
+  for (const strat of LEXICAL_STRATEGIES) {
+    const pass = lessonPass(strat.pick)
+    const cells: string[] = []
+    let aggregate = 0
+    for (const t of lessonTracks) {
+      let expected = 0
+      let worstP = 0
+      let worstId = ''
+      lessonIds.forEach((id, i) => {
+        if (trackOfLesson.get(id) !== t) return
+        expected += pass[i]
+        if (pass[i] > worstP) {
+          worstP = pass[i]
+          worstId = id
+        }
+      })
+      const gated = whyRequired.includes(t)
+      cells.push(`${t} ${expected.toFixed(2)}${gated ? '*' : ''}${worstP > 0 ? ` (${worstP.toFixed(2)} ${worstId})` : ''}`)
+      if (!gated) continue
+      aggregate += expected
+      if (worstP >= MAX_RANK_LESSON) {
+        failures.push(
+          `lexical: ${worstId} is passed with p=${worstP.toFixed(2)} by the strategy '${strat.name}' (limit < ${MAX_RANK_LESSON}); rewrite the options so the cue does not separate the key`,
+        )
+      }
+    }
+    totals.push({ name: strat.name, expected: aggregate })
+    if (aggregate > MAX_LEXICAL_AGGREGATE) {
+      failures.push(
+        `lexical: the gated tracks together expect ${aggregate.toFixed(2)} lessons passed by the strategy '${strat.name}' (limit ${MAX_LEXICAL_AGGREGATE} in total); rewrite the options so the cue does not separate the key`,
+      )
+    }
+    console.log(`  ${strat.name.padEnd(17)}${cells.join('  ')}`)
+  }
+  console.log(`  (* gated: every lesson p < ${MAX_RANK_LESSON})`)
+  console.log(
+    `  overall over the gated tracks (limit <= ${MAX_LEXICAL_AGGREGATE} per strategy): ${totals.map((a) => `${a.name} ${a.expected.toFixed(2)}`).join('  ')}`,
+  )
+}
+
 // Fleet Week Act IV is not a lesson quiz, so the loops above skip it. Its six incident items
 // (cause + mitigation per incident) are checked here the same way, as one pseudo-lesson graded at
-// PASS_BAR, and per incident, where the game needs the cause AND the mitigation right. Gated when
+// PASS_BAR, and per incident (the real unit), where the game needs the cause AND the mitigation right. Gated when
 // the baseline lists 'fleet-week' in whyRequired.
 {
   const fleetItems = validItems.filter((i) => i.track === FLEET_TRACK)
@@ -499,19 +599,23 @@ console.log(
   console.log('')
   console.log(`fleet-week Act IV (${fleetQs.length} items as one pseudo-lesson; per incident the cause and the mitigation must both be right)`)
   fleetItems.forEach((i) => console.log(`  ${i.ref.padEnd(40)} key ${rankOf(i.q)}  lengths ${i.q.options.map(len).join('/')}`))
-  for (const strat of RANK_STRATEGIES) {
+  for (const strat of [...RANK_STRATEGIES, ...LEXICAL_STRATEGIES]) {
     const ps = fleetQs.map(strat.pick)
     const lessonP = passProbability(ps)
+    // The unit the game grades: both the cause and the mitigation of one incident right.
     const incidentPs = INCIDENTS.map((inc, k) => ps[2 * k] * ps[2 * k + 1])
     const worstIncident = Math.max(...incidentPs)
+    const worstId = INCIDENTS[incidentPs.indexOf(worstIncident)].id
     console.log(
-      `  ${strat.name.padEnd(13)}expected key hits ${ps.reduce((a, b) => a + b, 0).toFixed(2)}/${ps.length}  pseudo-lesson p ${lessonP.toFixed(2)}  worst incident p ${worstIncident.toFixed(2)}${fleetGated ? '*' : ''}`,
+      `  ${strat.name.padEnd(17)}expected key hits ${ps.reduce((a, b) => a + b, 0).toFixed(2)}/${ps.length}  pseudo-lesson p ${lessonP.toFixed(2)}  worst incident p ${worstIncident.toFixed(2)}${fleetGated ? '*' : ''}`,
     )
-    if (fleetGated && lessonP >= MAX_RANK_LESSON) {
-      failures.push(`rank: fleet-week is passed with p=${lessonP.toFixed(2)} by always picking the ${strat.name} option (limit < ${MAX_RANK_LESSON}); rebalance option lengths`)
+    if (fleetGated && worstIncident >= MAX_RANK_LESSON) {
+      failures.push(
+        `rank: fleet-week incident ${worstId} gets cause and mitigation both right with p=${worstIncident.toFixed(2)} by the strategy '${strat.name}' (limit < ${MAX_RANK_LESSON}); rewrite the options`,
+      )
     }
-    if (fleetGated && lessonP > MAX_RANK_EXPECTED) {
-      failures.push(`rank: fleet-week expects ${lessonP.toFixed(2)} passes by always picking the ${strat.name} option (limit ${MAX_RANK_EXPECTED})`)
+    if (fleetGated && lessonP >= MAX_RANK_LESSON) {
+      failures.push(`rank: fleet-week is passed with p=${lessonP.toFixed(2)} by the strategy '${strat.name}' (limit < ${MAX_RANK_LESSON}); rewrite the options`)
     }
   }
   const fleetShortest = passProbability(fleetQs.map(pickShortest))

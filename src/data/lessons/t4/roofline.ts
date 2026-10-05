@@ -160,7 +160,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
           q: 'On an H100 (~990 FP16 TFLOPS, 3.35 TB/s), a kernel with AI = 1 FLOP/byte is…',
           options: [
             'Compute-bound, because any kernel that uses tensor cores runs at the 990 TFLOP/s peak however many bytes it moves',
-            'Bandwidth-bound: attainable is about 1 × 3.35 TFLOP/s, roughly 0.3% of the 990 TFLOP/s peak, so compute sits idle',
+            'Bandwidth-bound, because attainable is about 1 × 3.35 TFLOP/s, roughly 0.3% of peak, and compute sits idle',
             'Latency-bound, because at this low a ratio each load is followed by too little math to cover its delay',
             'Near the ridge, because the ridge is where AI reaches one FLOP per byte on any modern GPU',
           ],
@@ -177,8 +177,8 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'Why does batching multiply decode throughput (up to a point)?',
           options: [
-            'Batching shrinks each sequence\'s KV cache because attention keys are shared across the batch, so fewer bytes move per token',
-            'Each weight read from HBM serves N sequences, so AI rises N-fold and decode climbs the slope toward the roof',
+            'Batching shrinks each sequence\'s KV cache because attention keys are shared across the batch, which cuts the bytes moved per token',
+            'Each weight read from HBM serves N sequences, which raises AI N-fold and moves decode up the slope toward the roof',
             'Batching removes per-token kernel launches, and launch overhead is what keeps decode far below the compute roof',
             'Larger batches raise the usable HBM bandwidth, since more concurrent requests keep more memory channels busy',
           ],
@@ -196,7 +196,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
           q: 'A B200 has 2.25 PFLOP/s dense FP16 compute and 8 TB/s HBM bandwidth. A kernel with AI = 256 FLOP/byte is…',
           options: [
             'Compute-bound, because 256 FLOP/byte is a large intensity, well above what decode or router kernels reach',
-            'Bandwidth-bound: the ridge is about 281 FLOP/byte, so 256 still sits on the slope, just below the ridge',
+            'Bandwidth-bound, because the ridge is about 281 FLOP/byte and 256 still sits on the slope, just under it',
             'At the ridge, since 256 is within about 10% of 281 and the model cannot separate points that close',
             'Unclassifiable without timing a run, because only a measurement shows which limit the kernel hit first',
           ],
@@ -214,7 +214,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
           q: 'Prefill is compute-bound while decode is bandwidth-bound because…',
           options: [
             'Prefill multiplies larger weight matrices than decode, and larger matrices carry more FLOPs per byte whatever the token count',
-            'Prefill reuses each weight across every prompt position, so AI scales with sequence length; decode re-reads all weights per token, AI near 1',
+            'Prefill reuses each weight across all prompt positions, which grows AI with length, while decode re-reads them for one token at AI near 1',
             'Decode runs on a separate GPU pool whose HBM is slower, pushing it left of the ridge while prefill GPUs stay compute-bound',
             'Prefill skips the KV cache write, which removes the memory traffic that keeps decode below the compute roof',
           ],
