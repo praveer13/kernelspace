@@ -1,41 +1,126 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
-import { Menu, X, Search } from 'lucide-react'
+import { ChevronDown, Menu, X, Search } from 'lucide-react'
 import ProgressRing from '@/components/ProgressRing'
-import { useProgress, selectOverallPct, rankForXp } from '@/lib/progress'
+import { BUILD_LINKS, DESTINATIONS, SECONDARY_LINKS, destinationOf } from '@/components/nav-links'
+import { selectRings } from '@/lib/economy'
+import { useProgress, selectOverallPct } from '@/lib/progress'
 import { openCommandPalette } from '@/lib/command-palette'
 import { cn } from '@/lib/utils'
 
-const NAV_LINKS = [
-  { to: '/curriculum', label: 'Curriculum' },
-  { to: '/lab', label: 'Lab' },
-  { to: '/forge', label: 'Forge' },
-  { to: '/fleet', label: 'Fleet' },
-  { to: '/week', label: 'Fleet Week' },
-  { to: '/freshness', label: 'Notes' },
-  { to: '/capstone', label: 'Capstone' },
-  { to: '/glossary', label: 'Glossary' },
-]
+const LINK = 'relative whitespace-nowrap py-1 text-body-sm font-medium transition-colors duration-150'
 
-const MOBILE_LINKS = [
-  { to: '/', label: 'Home' },
-  ...NAV_LINKS,
-  { to: '/progress', label: 'Progress' },
-]
+/** The 2px accent bar that scales in under the active destination. */
+function Underline({ active }: { active: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'absolute -bottom-[2px] left-0 h-[2px] w-full origin-left bg-accent transition-transform duration-200 ease-out-expo',
+        active ? 'scale-x-100' : 'scale-x-0',
+      )}
+    />
+  )
+}
 
 /**
- * TopNavbar (design.md §9.1, home.md §0).
+ * Build is a menu (wave-1.md §6.9): a disclosure button over six links. Enter or Space opens it, Tab walks the
+ * links, Escape closes it and returns focus to the button, and so do a click elsewhere and focus leaving it.
+ */
+function BuildMenu({ active }: { active: boolean }) {
+  const { pathname } = useLocation()
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
+
+  // Close on navigation (adjust state during render, not in an effect)
+  const [prevPathname, setPrevPathname] = useState(pathname)
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname)
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      button.current?.focus()
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div
+      ref={root}
+      className="relative"
+      onBlur={(e) => {
+        if (open && !root.current?.contains(e.relatedTarget as Node | null)) setOpen(false)
+      }}
+    >
+      <button
+        ref={button}
+        type="button"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(LINK, 'flex items-center gap-1', active ? 'text-text-1' : 'text-text-2 hover:text-text-1')}
+      >
+        Build
+        <ChevronDown size={14} strokeWidth={1.75} aria-hidden className={cn('transition-transform duration-150', open && 'rotate-180')} />
+        <Underline active={active} />
+      </button>
+      <ul
+        id={menuId}
+        hidden={!open}
+        className="absolute left-1/2 top-full z-50 mt-3 w-48 -translate-x-1/2 rounded-md border border-line bg-surface-1 p-1 shadow-[0_16px_48px_rgba(0,0,0,.5)]"
+      >
+        {BUILD_LINKS.map((link) => (
+          <li key={link.to}>
+            <NavLink
+              to={link.to}
+              className={({ isActive }) =>
+                cn(
+                  'flex min-h-10 items-center rounded-sm px-3 text-body-sm transition-colors duration-150 hover:bg-surface-2 hover:text-text-1',
+                  isActive ? 'text-accent' : 'text-text-2',
+                )
+              }
+            >
+              {link.label}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * TopNavbar (design.md §9.1, wave-1.md §6.9).
  * sticky top-0 z-50 — stays in normal document flow; pages never compensate
  * for nav height. On `/` it starts transparent over the hero and gains the
  * surface-1/80 blur background after 24px of scroll (250ms ease-out-expo).
+ *
+ * Four destinations (Today, Path, Build, Me) plus ⌘K from lg up. Below lg the bottom tab bar carries the
+ * four and the hamburger keeps only secondary links. It reads the snapshot-backed store and the pure ring
+ * selector, never the ledger engine, so it stays in the entry chunk without pulling the engine in.
  */
 export default function Navbar() {
   const { pathname } = useLocation()
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const xp = useProgress((s) => s.xp)
   const overallPct = useProgress(selectOverallPct)
-  const rank = rankForXp(xp)
+  const ring = useProgress((s) => selectRings(s.aggregate).rank)
+  const here = destinationOf(pathname)
 
   const isHome = pathname === '/'
   const solid = !isHome || scrolled
@@ -85,36 +170,26 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Center: primary links (lg+) */}
-          <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary">
-            {NAV_LINKS.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) =>
-                  cn(
-                    'relative whitespace-nowrap py-1 text-body-sm font-medium transition-colors duration-150',
-                    isActive ? 'text-text-1' : 'text-text-2 hover:text-text-1',
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {link.label}
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'absolute -bottom-[2px] left-0 h-[2px] w-full origin-left bg-accent transition-transform duration-200 ease-out-expo',
-                        isActive ? 'scale-x-100' : 'scale-x-0',
-                      )}
-                    />
-                  </>
-                )}
-              </NavLink>
-            ))}
+          {/* Center: the four destinations (lg+) */}
+          <nav className="hidden items-center gap-8 lg:flex" aria-label="Primary">
+            {DESTINATIONS.map((d) =>
+              d.id === 'build' ? (
+                <BuildMenu key={d.id} active={here === 'build'} />
+              ) : (
+                <Link
+                  key={d.id}
+                  to={d.to}
+                  aria-current={pathname === d.to ? 'page' : here === d.id ? 'true' : undefined}
+                  className={cn(LINK, here === d.id ? 'text-text-1' : 'text-text-2 hover:text-text-1')}
+                >
+                  {d.label}
+                  <Underline active={here === d.id} />
+                </Link>
+              ),
+            )}
           </nav>
 
-          {/* Right: search, progress donut, rank chip, hamburger */}
+          {/* Right: search, ring chip, hamburger */}
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -132,17 +207,17 @@ export default function Navbar() {
             <Link
               to="/progress"
               className="flex items-center gap-2.5"
-              aria-label={`Progress ${overallPct}% — rank ${rank.name}`}
+              aria-label={`Progress ${overallPct}% — highest ring earned ${ring}`}
             >
               <ProgressRing value={overallPct} size={28} showLabel={false} strokeWidth={3} />
               <span className="hidden whitespace-nowrap rounded-full border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-accent md:inline-block">
-                {rank.name}
+                {ring}
               </span>
             </Link>
 
             <button
               type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-text-2 transition-colors hover:border-line-bright hover:text-text-1 xl:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-text-2 transition-colors hover:border-line-bright hover:text-text-1 lg:hidden"
               onClick={() => setMenuOpen((v) => !v)}
               aria-label={menuOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={menuOpen}
@@ -153,15 +228,15 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* Mobile full-screen menu: always mounted, faded and hidden from focus with CSS while closed */}
+      {/* Mobile full-screen menu (secondary links only): always mounted, faded and hidden from focus with CSS while closed */}
       <div
         className={cn(
-          'fixed inset-0 z-40 flex flex-col bg-ink/95 pt-16 backdrop-blur-md transition-[opacity,visibility] duration-180 xl:hidden',
+          'fixed inset-0 z-40 flex flex-col bg-ink/95 pt-16 backdrop-blur-md transition-[opacity,visibility] duration-180 lg:hidden',
           menuOpen ? 'visible opacity-100' : 'invisible opacity-0',
         )}
       >
-        <nav className="flex flex-col gap-1 px-6 pt-8" aria-label="Mobile">
-          {MOBILE_LINKS.map((link, i) => (
+        <nav className="flex flex-col gap-1 overflow-y-auto px-6 pt-8" aria-label="More">
+          {SECONDARY_LINKS.map((link, i) => (
             <div
               key={link.to}
               className={cn(
@@ -172,6 +247,7 @@ export default function Navbar() {
             >
               <NavLink
                 to={link.to}
+                end={link.to === '/'}
                 className={({ isActive }) =>
                   cn(
                     'flex min-h-12 items-center justify-between border-b border-line py-3 font-display text-h3',
@@ -186,7 +262,7 @@ export default function Navbar() {
           ))}
         </nav>
         <div className="mt-auto px-6 pb-10 font-mono text-label text-text-3">
-          {overallPct}% ALLOCATED · {rank.name}
+          {overallPct}% ALLOCATED · {ring}
         </div>
       </div>
     </>
