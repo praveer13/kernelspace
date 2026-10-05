@@ -236,11 +236,14 @@ function boundAnswer(p: Params): AnswerSpec {
   const left = num(p, 'ai') < ridge
   const R = formatNumber(ridge, 1)
   const side = (rightOne: boolean): string => `${ai} FLOP/B is ${rightOne ? 'left' : 'right'} of the ${R} FLOP/B ridge (peak ÷ bandwidth), so the ${rightOne ? 'bandwidth' : 'compute'} roof binds.`
-  const flipped = 'You compared against bandwidth ÷ peak, the inverse of the ridge. The ridge is peak ÷ bandwidth: hundreds of FLOP/B on a modern GPU.'
+  // Every pool intensity is far right of the inverted ridge (bandwidth ÷ peak, about 0.003), so a learner
+  // who inverted it answers compute-bound. That is the slip only where compute-bound is wrong: left of the ridge.
+  const flipped = 'You compared against bandwidth ÷ peak, the inverse of the ridge, which any kernel clears. The ridge is peak ÷ bandwidth: hundreds of FLOP/B on a modern GPU.'
+  const above = `${ai} FLOP/B is above the ${R} FLOP/B ridge, so the tensor cores saturate before memory does: more bandwidth would not speed this kernel up.`
   return {
     kind: 'choice',
     options: [
-      { id: 'bw', text: 'Bandwidth-bound: memory traffic is the limit, not the tensor cores', why: left ? side(true) : flipped, ...(left ? {} : { miss: 'roofline.inverted-ridge' }) },
+      { id: 'bw', text: 'Bandwidth-bound: memory traffic is the limit, not the tensor cores', why: left ? side(true) : above, ...(left ? {} : { miss: 'roofline.bandwidth-above-ridge' }) },
       { id: 'cb', text: 'Compute-bound: the tensor cores are the limit, not memory traffic', why: left ? flipped : side(false), ...(left ? { miss: 'roofline.inverted-ridge' } : {}) },
       { id: 'nm', text: 'It cannot be told until the kernel is measured on the chip, whatever its intensity', why: 'The intensity and the ridge already say which roof binds. Measuring only shows how close the kernel gets to it.', miss: 'roofline.needs-measuring' },
     ],
@@ -368,7 +371,12 @@ const RATIO_RULES: RatioRule[] = [
   },
   {
     id: 'roofline.sparse-flops',
-    ratio: (i) => ((ridgeLike(i) || (computeBound(i) && i.params.ask !== 'busy')) && chip(i.params).sparse ? 2 : null),
+    ratio: (i) => {
+      if (!(ridgeLike(i) || i.variant === 'attainable') || !chip(i.params).sparse) return null
+      // a busy item is a share of the peak: the sparse peak halves it on the bandwidth roof, and moves no simple multiple on the compute roof
+      if (i.params.ask === 'busy') return computeBound(i) ? null : 1 / 2
+      return ridgeLike(i) || computeBound(i) ? 2 : null
+    },
     message: 'You used the datasheet figure marked "with sparsity". It is twice the dense peak, and dense work gets the dense one.',
   },
   {

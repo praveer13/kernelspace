@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { checkFamily, checkHashes, genSeeds, lintLiterals, type HashRows } from '../../scripts/verify-generators'
 import { atlasRow } from '../../src/data/atlas'
+import { BOOT } from '../../src/lib/boot/model'
 import { partsText } from '../../src/lib/items/core'
 import { correctResponse } from '../../src/lib/items/grade'
 import roofline from '../../src/lib/items/families/roofline'
@@ -62,6 +63,12 @@ describe('pins', () => {
     expect(truthOf(pin('0.34 %'))).toBeCloseTo(0.34, 2)
     expect(truthOf(pin('128 x 128'))).toBe(64)
     expect(roofline.pins).toHaveLength(5)
+  })
+
+  test('the Boot pins follow BOOT, the model the spec names as their source', () => {
+    expect(truthOf(pin('H100 ridge'))).toBeCloseTo(BOOT.ridge, 1)
+    expect(truthOf(pin('decode at batch 1'))).toBeCloseTo(BOOT.decodeTps, 1)
+    expect(truthOf(pin('0.34 %'))).toBeCloseTo(BOOT.mathBusyBatch1 * 100, 2)
   })
 
   test('the busy pin says 0.34 % in its own prompt and the decode pin uses the Llama-3-8B claim', () => {
@@ -213,14 +220,40 @@ describe('diagnoses', () => {
     expect(diag(fp32, truthOf(fp32) * 4)).toBe('roofline.elements-not-bytes')
   })
 
-  test('picking the wrong class on a bound item names the inverted ridge; "cannot be told" names its own slip', () => {
-    const i = roofline.make(seeds[7], 2, 'bound')
-    if (i.answer.kind !== 'choice') throw new Error('bound is a choice')
-    const wrong = i.answer.options.find((o) => o.miss === 'roofline.inverted-ridge')!
-    expect(roofline.grade(i, { kind: 'choice', picks: [wrong.id] }).diagnosis?.id).toBe('roofline.inverted-ridge')
-    expect(roofline.grade(i, { kind: 'choice', picks: ['nm'] }).diagnosis?.id).toBe('roofline.needs-measuring')
-    expect(roofline.grade(i, correctResponse(i)).ok).toBe(true)
-    for (const o of i.answer.options) expect(o.why.length).toBeGreaterThan(20)
+  test('the wrong class on a bound item is diagnosed by the side of the ridge, and each why says what is true', () => {
+    // an inverted ridge is about 0.003, so a learner who inverted it calls every kernel compute-bound:
+    // that is the slip only left of the ridge. Right of it, picking bandwidth is a different misconception.
+    const sides = { left: 0, right: 0 }
+    for (const l of LEVELS) {
+      for (const i of all('bound', [l])) {
+        if (i.answer.kind !== 'choice') throw new Error('bound is a choice')
+        const left = i.answer.correct[0] === 'bw'
+        sides[left ? 'left' : 'right']++
+        const wrong = i.answer.options.find((o) => o.id === (left ? 'cb' : 'bw'))!
+        const expected = left ? 'roofline.inverted-ridge' : 'roofline.bandwidth-above-ridge'
+        expect(wrong.miss).toBe(expected)
+        expect(roofline.grade(i, { kind: 'choice', picks: [wrong.id] }).diagnosis?.id).toBe(expected)
+        // only left-of-ridge items talk about the inverse of the ridge
+        expect(wrong.why.includes('bandwidth ÷ peak')).toBe(left)
+        expect(wrong.why.includes(left ? 'inverse' : 'tensor cores saturate')).toBe(true)
+        expect(i.answer.options.filter((o) => o.miss === 'roofline.inverted-ridge')).toHaveLength(left ? 1 : 0)
+        expect(roofline.grade(i, { kind: 'choice', picks: ['nm'] }).diagnosis?.id).toBe('roofline.needs-measuring')
+        expect(roofline.grade(i, correctResponse(i)).ok).toBe(true)
+        for (const o of i.answer.options) expect(o.why.length).toBeGreaterThan(20)
+      }
+    }
+    expect(sides.left).toBeGreaterThan(0)
+    expect(sides.right).toBeGreaterThan(0)
+  })
+
+  test('the sparse peak halves a bandwidth-bound share of the peak, and is not diagnosed on the compute roof', () => {
+    const sparse = ['h100', 'b200', 'a100-80', 'rtx4090']
+    const busy = all('attainable', [3])
+    const bw = busy.filter((i) => sparse.includes(String(i.params.hw)) && truthOf(i) < 100)
+    expect(bw.length).toBeGreaterThan(5)
+    for (const i of bw) expect(diag(i, truthOf(i) / 2)).toBe('roofline.sparse-flops')
+    const t4 = busy.find((i) => i.params.hw === 't4' && truthOf(i) < 100)
+    if (t4) expect(diag(t4, truthOf(t4) / 2)).toBeUndefined()
   })
 
   test('a right answer is never diagnosed', () => {
