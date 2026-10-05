@@ -11,62 +11,81 @@
 //! └────────────────────────────────────────────────────────────────┘
 //!
 //! The checks below are the single source of truth:
-//!   * `cargo test` runs them on your machine.
+//!   * `cargo test` runs them on your machine, on their default seeds and on
+//!     32 extra seeds.
 //!   * `cargo build --release --target wasm32-unknown-unknown` bakes them
-//!     into the .wasm you drop into kernelspace → the site calls `ks_run`
-//!     and renders exactly these results.
+//!     into the .wasm you drop into kernelspace → the site runs each check on
+//!     its own (template v2), with fresh seeds for the seeded ones, and
+//!     renders exactly these results.
 //!
-//! A `todo!()` in your code traps the wasm module; the site shows that as
-//! "not implemented yet". Finish all six checks to complete the lab.
+//! A `todo!()` in your code traps that check; the site shows it as "not
+//! implemented yet" with the panic text, and the other checks still run.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   boot            `new` or a first `alloc` that does not work at all
+//!   align           offsets that ignore the requested alignment
+//!   no_overlap      two live spans sharing a byte (an off-by-one split)
+//!   reuse           a bump allocator that never hands a freed block back
+//!   coalesce        `free` that does not merge with its free neighbours,
+//!                   on either side (the tail is used up first, so only a
+//!                   merged run can serve the big request)
+//!   fragmentation   the same, under seeded churn at ~75 % occupancy: a
+//!                   request may fail only when no free span that large
+//!                   exists among your live blocks
+//! ```
 
 mod allocator;
 
 use allocator::Allocator;
-use kslab::{Check, Report};
+use kslab::{Check, CheckDef, Ctx, Lab, Rng};
 
 const CAP: usize = 1 << 20; // 1 MiB simulated heap
 
-/* --------------------------- determinism ---------------------------- */
+#[cfg(not(feature = "reference"))]
+const LAB_ID: &str = "rust-allocator";
+/// A `--features reference` build names itself, and earns no credit anywhere.
+#[cfg(feature = "reference")]
+const LAB_ID: &str = "rust-allocator@reference";
 
-/// xorshift64* — a seeded PRNG so the browser and `cargo test` see the
-/// exact same trace every time. No `rand` dependency.
-struct Rng(u64);
+/// The checks, in grading order. Ids and stages match `src/data/labs.ts`.
+pub static CHECKS: [CheckDef; 6] = [
+    CheckDef { id: "boot", label: BOOT, stage: 1, seeded: false, default_seed: 0, run: check_boot },
+    CheckDef { id: "align", label: ALIGN, stage: 2, seeded: true, default_seed: 0xA11C, run: check_align },
+    CheckDef { id: "no_overlap", label: NO_OVERLAP, stage: 2, seeded: true, default_seed: 0xB0B, run: check_no_overlap },
+    CheckDef { id: "coalesce", label: COALESCE, stage: 4, seeded: false, default_seed: 0, run: check_coalesce },
+    CheckDef { id: "reuse", label: REUSE, stage: 3, seeded: false, default_seed: 0, run: check_reuse },
+    CheckDef { id: "fragmentation", label: FRAGMENTATION, stage: 4, seeded: true, default_seed: 0xF7A6, run: check_fragmentation },
+];
 
-impl Rng {
-    fn next(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x >> 12;
-        x ^= x << 25;
-        x ^= x >> 27;
-        self.0 = x;
-        x.wrapping_mul(0x2545_F491_4F6C_DD1D)
-    }
-    /// 0..n
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-}
+pub static LAB: Lab = Lab { id: LAB_ID, version: 2, checks: &CHECKS };
+
+const BOOT: &str = "constructs and serves a first allocation";
+const ALIGN: &str = "returned offsets respect alignment (1–256)";
+const NO_OVERLAP: &str = "live allocations never overlap";
+const COALESCE: &str = "adjacent free blocks coalesce";
+const REUSE: &str = "freed blocks are reused";
+const FRAGMENTATION: &str = "3000-op churn at ~75% occupancy: never refuses a span that fits";
 
 /* ------------------------------ checks ------------------------------ */
 
 /// 1. boot: the allocator constructs and hands out its first byte.
-pub fn check_boot() -> Check {
+pub fn check_boot(_: &Ctx) -> Check {
     const ID: &str = "boot";
-    const LABEL: &str = "constructs and serves a first allocation";
     let mut a = Allocator::new(CAP);
     match a.alloc(1, 1) {
-        Some(_) => Check::pass(ID, LABEL, "allocator is alive"),
-        None => Check::fail(ID, LABEL, "alloc(1, 1) on an empty 1 MiB heap returned None"),
+        Some(_) => Check::pass(ID, BOOT, "allocator is alive"),
+        None => Check::fail(ID, BOOT, "alloc(1, 1) on an empty 1 MiB heap returned None"),
     }
 }
 
 /// 2. align: every returned offset satisfies the requested alignment.
-pub fn check_align() -> Check {
+pub fn check_align(ctx: &Ctx) -> Check {
     const ID: &str = "align";
-    const LABEL: &str = "returned offsets respect alignment (1–256)";
     let aligns = [1usize, 2, 4, 8, 16, 32, 64, 128, 256];
     let mut a = Allocator::new(CAP);
-    let mut rng = Rng(0xA11C);
+    let mut rng = Rng::seeded(ctx.seed);
     let mut live: Vec<(usize, usize)> = Vec::new();
     for i in 0..200 {
         let al = aligns[rng.below(aligns.len())];
@@ -76,7 +95,7 @@ pub fn check_align() -> Check {
                 if p % al != 0 {
                     return Check::fail(
                         ID,
-                        LABEL,
+                        ALIGN,
                         format!("op {i}: alloc({sz}, align {al}) returned {p} — not {al}-aligned"),
                     );
                 }
@@ -90,21 +109,20 @@ pub fn check_align() -> Check {
             None => {
                 return Check::fail(
                     ID,
-                    LABEL,
+                    ALIGN,
                     format!("op {i}: alloc({sz}, {al}) failed with <64 KiB live — heap is 1 MiB"),
                 )
             }
         }
     }
-    Check::pass(ID, LABEL, "200/200 allocations correctly aligned")
+    Check::pass(ID, ALIGN, "200/200 allocations correctly aligned")
 }
 
 /// 3. no-overlap: no two live allocations ever share a byte.
-pub fn check_no_overlap() -> Check {
+pub fn check_no_overlap(ctx: &Ctx) -> Check {
     const ID: &str = "no_overlap";
-    const LABEL: &str = "live allocations never overlap";
     let mut a = Allocator::new(CAP);
-    let mut rng = Rng(0xB0B);
+    let mut rng = Rng::seeded(ctx.seed);
     let mut live: Vec<(usize, usize)> = Vec::new();
     for i in 0..400 {
         let do_alloc = live.is_empty() || rng.below(100) < 60;
@@ -113,16 +131,15 @@ pub fn check_no_overlap() -> Check {
             let al = 1usize << rng.below(7); // 1..64
             match a.alloc(sz, al) {
                 Some(p) => {
+                    if p + sz > CAP {
+                        return Check::fail(ID, NO_OVERLAP, format!("op {i}: [{p}, {}) runs past the 1 MiB heap", p + sz));
+                    }
                     for &(lp, ls) in &live {
                         if p < lp + ls && lp < p + sz {
                             return Check::fail(
                                 ID,
-                                LABEL,
-                                format!(
-                                    "op {i}: [{p}, {}) overlaps live [{lp}, {})",
-                                    p + sz,
-                                    lp + ls
-                                ),
+                                NO_OVERLAP,
+                                format!("op {i}: [{p}, {}) overlaps live [{lp}, {})", p + sz, lp + ls),
                             );
                         }
                     }
@@ -131,97 +148,10 @@ pub fn check_no_overlap() -> Check {
                 None => {
                     return Check::fail(
                         ID,
-                        LABEL,
-                        format!("op {i}: alloc({sz}, {al}) failed with {} bytes live", live.iter().map(|&(_, s)| s).sum::<usize>()),
-                    )
-                }
-            }
-        } else {
-            let idx = rng.below(live.len());
-            let (p, s) = live.remove(idx);
-            a.free(p, s);
-        }
-    }
-    Check::pass(ID, LABEL, "400 mixed ops, zero overlaps")
-}
-
-/// 4. coalesce: 16 freed 4 KiB blocks must merge back into one 64 KiB run.
-pub fn check_coalesce() -> Check {
-    const ID: &str = "coalesce";
-    const LABEL: &str = "adjacent free blocks coalesce";
-    let mut a = Allocator::new(CAP);
-    let mut ptrs = Vec::new();
-    for _ in 0..16 {
-        match a.alloc(4096, 16) {
-            Some(p) => ptrs.push(p),
-            None => {
-                return Check::fail(ID, LABEL, "could not place 16 × 4 KiB on a 1 MiB heap")
-            }
-        }
-    }
-    for p in ptrs {
-        a.free(p, 4096);
-    }
-    match a.alloc(1 << 16, 16) {
-        Some(_) => Check::pass(ID, LABEL, "64 KiB allocation succeeded after freeing 16 × 4 KiB"),
-        None => Check::fail(
-            ID,
-            LABEL,
-            "64 KiB allocation failed after freeing 16 adjacent 4 KiB blocks — free() must coalesce neighbors",
-        ),
-    }
-}
-
-/// 5. reuse: a freed block is handed out again (bump allocators fail here).
-pub fn check_reuse() -> Check {
-    const ID: &str = "reuse";
-    const LABEL: &str = "freed blocks are reused";
-    let mut a = Allocator::new(CAP);
-    let p1 = match a.alloc(1024, 8) {
-        Some(p) => p,
-        None => return Check::fail(ID, LABEL, "first alloc failed"),
-    };
-    a.free(p1, 1024);
-    match a.alloc(1024, 8) {
-        Some(p2) if p2 == p1 => Check::pass(ID, LABEL, "freed block served the next same-size alloc"),
-        Some(p2) => Check::fail(
-            ID,
-            LABEL,
-            format!("freed block at {p1} ignored; next 1 KiB alloc landed at {p2} — bump-only growth?"),
-        ),
-        None => Check::fail(ID, LABEL, "alloc after free returned None"),
-    }
-}
-
-/// 6. fragmentation: ~45 % occupancy churn for 3000 ops must never fail.
-///    Bump and non-coalescing allocators die here; first-fit + coalesce
-///    (and pow2 size-class designs) pass comfortably.
-pub fn check_fragmentation() -> Check {
-    const ID: &str = "fragmentation";
-    const LABEL: &str = "3000-op churn at ~45% occupancy: zero failures";
-    let mut a = Allocator::new(CAP);
-    let mut rng = Rng(0xF7A6);
-    let mut live: Vec<(usize, usize)> = Vec::new();
-    let mut live_bytes = 0usize;
-    let mut peak = 0usize;
-    let target = CAP * 45 / 100;
-    for i in 0..3000 {
-        if live_bytes < target {
-            let sz = 64 + rng.below(1985); // 64..2048
-            match a.alloc(sz, 8) {
-                Some(p) => {
-                    live.push((p, sz));
-                    live_bytes += sz;
-                    peak = peak.max(live_bytes);
-                }
-                None => {
-                    return Check::fail(
-                        ID,
-                        LABEL,
+                        NO_OVERLAP,
                         format!(
-                            "op {i}: alloc({sz}) failed with {} KiB live / 1024 KiB — fragmentation (peak {} KiB)",
-                            live_bytes / 1024,
-                            peak / 1024
+                            "op {i}: alloc({sz}, {al}) failed with {} bytes live",
+                            live.iter().map(|&(_, s)| s).sum::<usize>()
                         ),
                     )
                 }
@@ -230,32 +160,383 @@ pub fn check_fragmentation() -> Check {
             let idx = rng.below(live.len());
             let (p, s) = live.remove(idx);
             a.free(p, s);
-            live_bytes -= s;
+        }
+    }
+    Check::pass(ID, NO_OVERLAP, "400 mixed ops, zero overlaps")
+}
+
+/// Fill whatever the heap has left (largest requests first), so the only way
+/// to serve a later big request is to merge blocks the check frees.
+fn exhaust(a: &mut Allocator) {
+    let mut sz = CAP;
+    let mut placed = 0;
+    while sz >= 16 {
+        while placed < 4096 && a.alloc(sz, 1).is_some() {
+            placed += 1;
+        }
+        sz /= 2;
+    }
+}
+
+/// Offsets sorted, and whether they form one back-to-back run of `size`-byte blocks.
+fn side_by_side(ptrs: &[usize], size: usize) -> (Vec<usize>, bool) {
+    let mut sorted = ptrs.to_vec();
+    sorted.sort_unstable();
+    let ok = sorted.windows(2).all(|w| w[1] == w[0] + size);
+    (sorted, ok)
+}
+
+/// 4. coalesce: freed neighbours must merge, on both sides, even when the
+///    heap's untouched tail cannot rescue the request.
+pub fn check_coalesce(_: &Ctx) -> Check {
+    const ID: &str = "coalesce";
+    const KIB4: usize = 4096;
+
+    // Part 1: sixteen 4 KiB neighbours, freed evens first, then odds — so each
+    // odd free has a free block on both sides. Then one 64 KiB request.
+    let mut a = Allocator::new(CAP);
+    let mut ptrs = Vec::new();
+    for _ in 0..16 {
+        match a.alloc(KIB4, 16) {
+            Some(p) => ptrs.push(p),
+            None => return Check::fail(ID, COALESCE, "could not place 16 × 4 KiB on an empty 1 MiB heap"),
+        }
+    }
+    exhaust(&mut a);
+    let (blocks, adjacent) = side_by_side(&ptrs, KIB4);
+    if !adjacent {
+        return Check::fail(
+            ID,
+            COALESCE,
+            format!(
+                "16 back-to-back 4 KiB allocations on an empty heap should sit side by side; yours start at {:?}",
+                &blocks[..4.min(blocks.len())]
+            ),
+        );
+    }
+    for p in blocks.iter().step_by(2).chain(blocks.iter().skip(1).step_by(2)) {
+        a.free(*p, KIB4);
+    }
+    if a.alloc(16 * KIB4, 16).is_none() {
+        return Check::fail(
+            ID,
+            COALESCE,
+            "freed 16 neighbouring 4 KiB blocks (evens, then odds) with the rest of the heap full; \
+             a 64 KiB request then failed — free() must merge each block with its free neighbours on both sides",
+        );
+    }
+
+    // Part 2: the three-way merge. Free the left block, then the right, then
+    // the middle one, which must join both at once.
+    const KIB16: usize = 16 * 1024;
+    let mut a = Allocator::new(CAP);
+    let mut three = Vec::new();
+    for _ in 0..3 {
+        match a.alloc(KIB16, 16) {
+            Some(p) => three.push(p),
+            None => return Check::fail(ID, COALESCE, "could not place 3 × 16 KiB on an empty 1 MiB heap"),
+        }
+    }
+    exhaust(&mut a);
+    let (lmr, adjacent) = side_by_side(&three, KIB16);
+    if !adjacent {
+        return Check::fail(
+            ID,
+            COALESCE,
+            format!("3 back-to-back 16 KiB allocations on an empty heap should sit side by side; yours start at {lmr:?}"),
+        );
+    }
+    a.free(lmr[0], KIB16);
+    a.free(lmr[2], KIB16);
+    a.free(lmr[1], KIB16);
+    match a.alloc(3 * KIB16, 16) {
+        Some(_) => Check::pass(
+            ID,
+            COALESCE,
+            "16 freed 4 KiB neighbours served 64 KiB, and left + right + middle served 48 KiB",
+        ),
+        None => Check::fail(
+            ID,
+            COALESCE,
+            "freed the left, then the right, then the middle 16 KiB block; a 48 KiB request then failed — \
+             freeing a block between two free neighbours must merge all three",
+        ),
+    }
+}
+
+/// 5. reuse: a freed block is handed out again (bump allocators fail here).
+pub fn check_reuse(_: &Ctx) -> Check {
+    const ID: &str = "reuse";
+    let mut a = Allocator::new(CAP);
+    let p1 = match a.alloc(1024, 8) {
+        Some(p) => p,
+        None => return Check::fail(ID, REUSE, "first alloc failed"),
+    };
+    a.free(p1, 1024);
+    match a.alloc(1024, 8) {
+        Some(p2) if p2 == p1 => Check::pass(ID, REUSE, "freed block served the next same-size alloc"),
+        Some(p2) => Check::fail(
+            ID,
+            REUSE,
+            format!("freed block at {p1} ignored; next 1 KiB alloc landed at {p2} — bump-only growth?"),
+        ),
+        None => Check::fail(ID, REUSE, "alloc after free returned None"),
+    }
+}
+
+/* ------------------------- fragmentation ---------------------------- */
+
+/// Sizes and alignments are multiples of 16, so every span boundary a correct
+/// allocator produces is 16-aligned and the harness's view of free space is
+/// exact. SLACK forgives allocators that round sizes up internally (to 32 or
+/// 64 bytes): a refusal is a bug only when a free span is SLACK bytes bigger
+/// than the request.
+const GRAIN: usize = 16;
+const SLACK: usize = 64;
+
+fn small(rng: &mut Rng) -> usize {
+    GRAIN * rng.range(1, 128) // 16 B ..= 2 KiB
+}
+
+fn large(rng: &mut Rng) -> usize {
+    GRAIN * rng.range(512, 2048) // 8 KiB ..= 32 KiB
+}
+
+/// The largest free span left between live blocks, as (start, usable bytes at
+/// GRAIN alignment). Free space is everything in the heap no live span covers:
+/// exactly what a coalescing free list holds, whatever its placement policy.
+fn largest_gap(live: &[(usize, usize)]) -> (usize, usize) {
+    let mut spans = live.to_vec();
+    spans.sort_unstable();
+    let mut best = (0, 0);
+    let mut cursor = 0;
+    for &(p, s) in spans.iter().chain(std::iter::once(&(CAP, 0))) {
+        if p > cursor {
+            let start = cursor.div_ceil(GRAIN) * GRAIN;
+            let usable = p.saturating_sub(start);
+            if usable > best.1 {
+                best = (start, usable);
+            }
+        }
+        cursor = cursor.max(p + s);
+    }
+    best
+}
+
+struct Churn {
+    a: Allocator,
+    live: Vec<(usize, usize)>,
+    live_bytes: usize,
+    refused: usize,
+}
+
+impl Churn {
+    /// alloc(size, 16). Err(message) when the reply is a bug: out of the heap,
+    /// or None while a free span of size + SLACK bytes exists.
+    fn alloc(&mut self, op: usize, size: usize) -> Result<Option<usize>, String> {
+        match self.a.alloc(size, GRAIN) {
+            Some(p) => {
+                if p % GRAIN != 0 || p + size > CAP {
+                    return Err(format!("op {op}: alloc({size}, {GRAIN}) returned {p}, outside the heap or misaligned"));
+                }
+                self.live.push((p, size));
+                self.live_bytes += size;
+                Ok(Some(p))
+            }
+            None => {
+                let (at, gap) = largest_gap(&self.live);
+                if gap >= size + SLACK {
+                    return Err(format!(
+                        "op {op}: alloc({size}) returned None with {} KiB live, yet the {gap} bytes from offset {at} \
+                         hold no live block. A free list that merges freed neighbours and keeps split remainders \
+                         would have served it",
+                        self.live_bytes / 1024
+                    ));
+                }
+                self.refused += 1;
+                Ok(None)
+            }
+        }
+    }
+
+    fn free_at(&mut self, idx: usize) {
+        let (p, s) = self.live.swap_remove(idx);
+        self.a.free(p, s);
+        self.live_bytes -= s;
+    }
+
+    /// Request the largest free span (less SLACK); it must succeed. Then give it back.
+    fn probe(&mut self, op: usize) -> Result<(), String> {
+        let (_, gap) = largest_gap(&self.live);
+        if gap < 4096 + SLACK {
+            return Ok(());
+        }
+        let size = (gap - SLACK) / GRAIN * GRAIN;
+        match self.alloc(op, size)? {
+            Some(_) => {
+                let last = self.live.len() - 1;
+                self.free_at(last);
+                Ok(())
+            }
+            None => Err(format!("op {op}: a {size}-byte request failed although a free span fits it")),
+        }
+    }
+}
+
+/// 6. fragmentation: fill the heap, open a seeded window of neighbours, then
+///    churn 3000 ops at ~75 % occupancy with mixed 16 B–2 KiB and 8–32 KiB
+///    requests. A request may fail only when no free span that large exists
+///    between your live blocks, so placement policy is yours to choose
+///    (first-, best- or next-fit all pass); merging freed neighbours is not.
+pub fn check_fragmentation(ctx: &Ctx) -> Check {
+    const ID: &str = "fragmentation";
+    let mut rng = Rng::seeded(ctx.seed);
+    let mut c = Churn { a: Allocator::new(CAP), live: Vec::new(), live_bytes: 0, refused: 0 };
+    let fail = |msg: String| Check::fail(ID, FRAGMENTATION, msg);
+
+    // 1. Fill until a small request is refused (justifiably: the heap is full).
+    let mut op = 0;
+    loop {
+        let size = small(&mut rng);
+        match c.alloc(op, size) {
+            Err(m) => return fail(m),
+            Ok(None) => break,
+            Ok(Some(_)) => {}
+        }
+        op += 1;
+        if op > 100_000 {
+            return fail("the heap never filled: 100,000 allocations of ≤ 2 KiB each fit in 1 MiB".into());
+        }
+    }
+
+    let filled = c.live_bytes;
+
+    // 2. A window of at least 8 KiB of neighbours, freed in seeded order, then
+    //    asked for whole. Only a merged run can serve it: every block is ≤ 2 KiB.
+    let mut order = c.live.clone();
+    order.sort_unstable();
+    let n = order.len();
+    let begin = rng.below(n);
+    let mut found = None;
+    for k in 0..n {
+        let (first, start) = ((begin + k) % n, order[(begin + k) % n].0);
+        let (mut last, mut end) = (first, start);
+        while last < n && order[last].0 <= end + SLACK && end - start < 8192 {
+            end = order[last].0 + order[last].1;
+            last += 1;
+        }
+        if end - start >= 8192 {
+            found = Some((first, last, start, end));
+            break;
+        }
+    }
+    if let Some((first, last, start, end)) = found {
+        let mut window: Vec<usize> = order[first..last].iter().map(|&(p, _)| p).collect();
+        while !window.is_empty() {
+            let p = window.swap_remove(rng.below(window.len()));
+            if let Some(idx) = c.live.iter().position(|&(q, _)| q == p) {
+                c.free_at(idx);
+            }
+        }
+        let size = (end - start - SLACK) / GRAIN * GRAIN;
+        match c.alloc(op, size) {
+            Err(m) => return fail(m),
+            Ok(None) => return fail(format!("op {op}: a {size}-byte request failed after freeing that many bytes of neighbours")),
+            Ok(Some(_)) => {
+                let last = c.live.len() - 1;
+                c.free_at(last);
+            }
+        }
+    }
+
+    // 3. Down to ~70 %, then 3000 ops of churn around 75 %, probing the largest
+    //    free span every 250 ops.
+    while c.live_bytes > CAP * 70 / 100 && !c.live.is_empty() {
+        let idx = rng.below(c.live.len());
+        c.free_at(idx);
+    }
+    let target = CAP * 75 / 100;
+    for i in 0..3000 {
+        let step = if c.live_bytes < target || c.live.is_empty() {
+            let size = if rng.below(8) == 0 { large(&mut rng) } else { small(&mut rng) };
+            c.alloc(op + i, size).map(|_| ())
+        } else {
+            let idx = rng.below(c.live.len());
+            c.free_at(idx);
+            Ok(())
+        };
+        let step = step.and_then(|_| if i % 250 == 249 { c.probe(op + i) } else { Ok(()) });
+        if let Err(m) = step {
+            return fail(m);
         }
     }
     Check::pass(
         ID,
-        LABEL,
-        format!("3000 ops survived; peak live {} KiB of 1024 KiB", peak / 1024),
+        FRAGMENTATION,
+        format!(
+            "filled to {} KiB of 1024 KiB, then 3000 ops near 75 %: {} refusals, each with no free span that large",
+            filled / 1024,
+            c.refused
+        ),
     )
 }
 
-/// The full suite, in grading order.
+/// The full suite on default seeds, in grading order (v1 report order).
 pub fn self_checks() -> Vec<Check> {
-    vec![
-        check_boot(),
-        check_align(),
-        check_no_overlap(),
-        check_coalesce(),
-        check_reuse(),
-        check_fragmentation(),
-    ]
+    CHECKS.iter().map(|c| (c.run)(&Ctx { seed: c.default_seed, fresh: false })).collect()
+}
+
+/* ------------------------------ probe ------------------------------- */
+
+/// `probe <seed>`: 200 seeded ops on your allocator, summarised in one line:
+/// live bytes, the largest free span between live blocks and the share of
+/// free bytes outside it. Deterministic for a given seed and allocator.
+pub fn probe(seed: u32) -> String {
+    let mut rng = Rng::seeded(seed);
+    let mut a = Allocator::new(CAP);
+    let mut live: Vec<(usize, usize)> = Vec::new();
+    let mut live_bytes = 0;
+    let mut failed = 0;
+    for _ in 0..200 {
+        if live.is_empty() || rng.below(100) < 65 {
+            let size = if rng.below(8) == 0 { large(&mut rng) } else { small(&mut rng) };
+            match a.alloc(size, GRAIN) {
+                Some(p) => {
+                    live.push((p, size));
+                    live_bytes += size;
+                }
+                None => failed += 1,
+            }
+        } else {
+            let (p, s) = live.swap_remove(rng.below(live.len()));
+            a.free(p, s);
+            live_bytes -= s;
+        }
+    }
+    let (_, largest) = largest_gap(&live);
+    let free = CAP - live_bytes;
+    let frag = if free == 0 { 0.0 } else { 1.0 - largest as f64 / free as f64 };
+    format!("ops=200 live={live_bytes} largest_free={largest} frag={frag:.3} failed={failed}")
 }
 
 /* ------------------------------ wasm ABI ---------------------------- */
 
+kslab::export_abi_v2!();
+
 #[no_mangle]
-pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report { lab: "rust-allocator", version: 1, checks: self_checks() };
-    kslab::emit(&report)
+pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
+}
+
+/// The runtime bridge: `probe <seed>` (see `probe`).
+#[no_mangle]
+pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::install_panic_hook();
+    let cmd = std::str::from_utf8(unsafe { kslab::input(in_ptr, in_len) }).unwrap_or("");
+    let mut it = cmd.split_whitespace();
+    let reply = match (it.next(), it.next().map(str::parse::<u32>)) {
+        (Some("probe"), Some(Ok(seed))) => probe(seed),
+        _ => format!("err unknown command {:?} (try: probe <seed>)", kslab::clip(cmd.trim(), 40)),
+    };
+    kslab::emit_str(&reply)
 }

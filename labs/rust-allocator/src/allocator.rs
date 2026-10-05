@@ -9,8 +9,8 @@
 //!                              or None if nothing fits. [offset, offset+size)
 //!                              must not overlap any live allocation.
 //!   * `free(offset, size)`   — give the exact span back. Neighboring free
-//!                              spans must coalesce, or check 4 and 6 will
-//!                              eat you.
+//!                              spans must coalesce, or `coalesce` and
+//!                              `fragmentation` will eat you.
 //!
 //! Offset 0 is a valid allocation (the harness never dereferences anything;
 //! it only tracks spans).
@@ -26,9 +26,11 @@
 //! Hints:
 //!   * align_up(off, align) = (off + align - 1) / align * align   (align ≥ 1)
 //!   * Keep size ≥ 1 (alloc(0, _) is legal and must still be unique).
-//!   * The fragmentation check churns ~450 KiB live of 1024 KiB. A bump
-//!     allocator fails it. A first-fit + coalescing allocator passes with
-//!     room to spare. That gap is the entire lesson.
+//!   * The fragmentation check churns ~768 KiB live of 1024 KiB on fresh
+//!     seeds, and a request may fail only when no free span that large
+//!     exists. A bump allocator, or a free list that never merges, fails
+//!     it. A first-fit + coalescing allocator passes. That gap is the
+//!     entire lesson.
 //!
 //! When all six checks pass in `cargo test`, build the wasm:
 //!   cargo build --release --target wasm32-unknown-unknown

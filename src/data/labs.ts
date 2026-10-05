@@ -508,12 +508,12 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
       { id: 'no_overlap', label: 'live allocations never overlap' },
       { id: 'coalesce', label: 'adjacent free blocks coalesce' },
       { id: 'reuse', label: 'freed blocks are reused' },
-      { id: 'fragmentation', label: '3000-op churn at ~45% occupancy: zero failures' },
+      { id: 'fragmentation', label: '3000-op churn at ~75% occupancy: never refuses a span that fits' },
     ],
     brief: [
       'In T1.L3 you split and coalesced blocks in a browser sim. Now do it in Rust, for real: one 1 MiB heap, an address-ordered free list, first-fit with alignment, coalescing on free. Sixty lines that malloc would recognize.',
       'This is not busywork in a costume. vLLM\u2019s KV-cache block manager — the thing T5.L5 is about — is this exact design problem: a fixed backing store, adversarial allocation sizes, fragmentation as the failure mode. The allocator you write here is the block manager\u2019s ancestor; the paged block manager (lab 02) is its descendant.',
-      'The harness is the teacher: six checks, deterministic, identical in `cargo test` and on this page. The last one is the lesson — 3000 mixed ops at ~45% occupancy. A bump allocator dies. A coalescing free-list walks through. That gap is why real allocators coalesce.',
+      'The harness is the teacher: six checks, identical in `cargo test` and on this page, each graded on its own. Each catches one mistake: `align` an offset that ignores alignment, `no_overlap` an off-by-one split, `reuse` a bump allocator, and `coalesce` and `fragmentation` a `free` that never merges its neighbours. The last one is the lesson: 3000 mixed ops at ~75% occupancy, on seeds drawn when you grade, where a request may fail only if no free span that large exists. A free list that never merges dies. A coalescing one walks through. That gap is why real allocators coalesce.',
     ],
   },
   {
