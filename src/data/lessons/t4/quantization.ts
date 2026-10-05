@@ -121,10 +121,10 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'Quantization speeds up LLM decode primarily because…',
           options: [
-            'Smaller numbers go through the ALUs faster, so each matmul instruction finishes in fewer cycles',
-            'Decode is bandwidth-bound, so fewer bytes per weight means more tokens per second through the same HBM',
-            'It prunes the least important layers, so each token passes through fewer layers and reads fewer weights',
-            'It removes the softmax and normalization steps, which are the slowest operations in each transformer layer',
+            'Smaller numbers go through the arithmetic units faster and each matmul instruction finishes in fewer cycles',
+            'Decode is bandwidth-bound and fewer bytes per weight means more tokens per second through the same memory',
+            'It prunes the least important layers and each token passes through fewer layers and reads fewer weights',
+            'It removes the softmax and normalization steps that are the slowest operations in each transformer layer',
           ],
           correct: [1],
           explanation:
@@ -139,10 +139,10 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'BF16 exists because deep learning values…',
           options: [
-            'Extra mantissa bits beyond FP16, because gradients need more significant digits than activations to train stably',
-            'The exponent range of FP32 over mantissa precision, because overflow hurts more than rounding',
-            'Exact integer arithmetic, because quantized training accumulates in integers and needs a format with no rounding',
-            'Direct compatibility with FP64 hardware, so BF16 tensors can be promoted to double precision without conversion',
+            'More mantissa bits than FP16 with gradients needing more significant digits than activations to train stably',
+            'The exponent range of FP32 over mantissa precision with overflow hurting more than rounding',
+            'Exact integer arithmetic for INT8 training with a format that has no rounding at all',
+            'Direct compatibility with FP64 hardware with tensors promoted to double precision without conversion',
           ],
           correct: [1],
           explanation:
@@ -157,10 +157,10 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'Per-group scales (group size 128) improve weight quantization because…',
           options: [
-            'They cut metadata, since one scale per 128 weights stores less than the per-tensor scheme needs',
-            'Each group\'s scale follows its local absmax, shrinking the error bound (scale/2) at well under one bit per weight of scale metadata',
-            'They let negative weights be represented, which a single symmetric scale per tensor cannot do for every value',
-            'They remove the need for calibration data, since each group fits its own range and no samples are required',
+            'They cut metadata overhead with one scale per 128 weights and store less than the per-tensor scheme needs',
+            'Each group scale tracks a local absmax and shrinks the error bound at under 1 bit per weight of metadata',
+            'They make negative weights representable in the grid where a single symmetric scale per tensor cannot do so',
+            'They remove the need for calibration data with each group fitting its own range in a single pass',
           ],
           correct: [1],
           explanation:
@@ -175,10 +175,10 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'The standard quality ordering for what to quantize hardest is…',
           options: [
-            'Activations first, then weights, then the KV cache, because activations are recomputed each step and hold nothing learned in training',
-            'Weights tolerate 4 bits with care, the KV cache sits at 8 bits, and activations are the most fragile, so prefer FP8',
-            'All three equally, down to INT4 each, because the accuracy loss per bit is the same for every tensor in the model',
-            'None of them: any quantization is lossy enough to harm output quality, so production systems keep every tensor in FP16',
+            'Activations at 4 bits and weights at 8 bits with the KV cache as the most fragile tensor',
+            'Weights at 4 bits and the KV cache at 8 bits with activations as the most fragile tensor',
+            'The three tensors equally down to INT4 with the accuracy loss per bit the same for each',
+            'No tensor at low precision with any quantization harming quality and production systems keeping FP16',
           ],
           correct: [1],
           explanation:

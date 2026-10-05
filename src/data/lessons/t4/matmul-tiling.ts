@@ -120,10 +120,10 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         {
           q: 'Tiling raises matmul performance primarily by…',
           options: [
-            'Reducing the FLOP count, since blocking lets the kernel skip tile products that contribute little to the final output',
-            'Raising arithmetic intensity: each tile element staged in SRAM is reused about T times, so HBM traffic falls as 1/T',
-            'Spreading the multiply over more SMs, because small tiles create more thread blocks and so more hardware in use',
-            'Running the tensor cores at a higher clock, since data staged in SRAM lets the cores run faster than when fed from HBM',
+            'Reducing the arithmetic count with blocking that lets the kernel skip tile products of little value',
+            'Raising arithmetic intensity with each staged tile element reused many times and memory traffic falling in proportion',
+            'Spreading the multiply over more multiprocessors with small tiles creating more thread blocks and more hardware in use',
+            'Running the tensor cores at a higher clock with data staged on-chip letting the cores run faster than when fed from memory',
           ],
           correct: [1],
           explanation:
@@ -138,10 +138,10 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         {
           q: 'FlashAttention\'s core insight is that…',
           options: [
-            'Most attention scores are near zero, so keys can be dropped from the N×N matrix and attention computed approximately, at a small accuracy cost',
-            'The N×N score matrix never needs to live in HBM: tile Q, K and V in SRAM and fold in the softmax incrementally (online softmax)',
-            'Recent GPUs have dedicated attention units that compute softmax(QKᵀ)V in one instruction, so a kernel only has to launch it',
-            'Quantizing the score matrix to INT4 is lossless for softmax, so the N×N scores fit in a quarter of the space',
+            'Most attention scores are near zero and keys can be dropped from the score matrix for an approximate result',
+            'The score matrix does not need to live in global memory and an online softmax folds in each tile',
+            'Recent chips have dedicated attention units that compute the whole operation in one instruction',
+            'Quantizing the score matrix to four bits is lossless for softmax and the scores fit in a quarter of the space',
           ],
           correct: [1],
           explanation:
@@ -156,10 +156,10 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         {
           q: 'Why can\'t tiles simply be as large as possible?',
           options: [
-            'The compiler rejects shared-memory arrays above a few kilobytes, so a larger tile fails to compile at all',
-            'Big tiles use up per-SM SRAM and registers, leaving too few resident warps to hide latency',
-            'Bigger tiles need more HBM transactions per output, since each tile crosses more memory segments and loses coalescing',
-            'Larger tiles make bank conflicts unavoidable, since a bigger tile always maps more lanes onto the same banks',
+            'The compiler rejects shared memory arrays above a few kilobytes and any larger tile fails to compile at build time',
+            'Big tiles use up the per-multiprocessor memory and registers and leave too few resident warps to hide latency',
+            'Bigger tiles need more global memory transactions per output and lose coalescing across memory segments',
+            'Larger tiles make bank conflicts unavoidable and map more lanes onto the same banks as they grow',
           ],
           correct: [1],
           explanation:
@@ -174,10 +174,10 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         {
           q: 'The closest database analog to matmul tiling is…',
           options: [
-            'A covering index, which answers a query from the index alone so base table pages are never fetched',
-            'The block nested-loop join: chunk both inputs to fit the buffer pool and reuse each chunk',
-            'Query memoization, which caches the output of an expensive subquery so identical requests skip recomputation',
-            'An index nested-loop join, which replaces each inner scan with a logarithmic B-tree probe per outer row',
+            'A covering index that answers a query from index entries and skips the base table pages',
+            'The block nested-loop join that chunks both inputs to fit the buffer pool and reuses each chunk',
+            'Query memoization that caches the output of an expensive subquery and lets identical requests skip recomputation',
+            'An index nested-loop join that replaces each inner scan with a logarithmic B-tree probe per outer row',
           ],
           correct: [1],
           explanation:

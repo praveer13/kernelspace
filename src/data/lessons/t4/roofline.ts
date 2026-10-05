@@ -141,10 +141,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'Arithmetic intensity is defined as…',
           options: [
-            'Peak FLOPs per second divided by peak bytes per second for the chip, a fixed number per GPU',
-            'FLOPs executed per byte moved from DRAM, set by the kernel and its data layout',
-            'FLOPs executed per byte the kernel loads, counting every load whether it hits cache or goes to DRAM',
-            'Floating-point instructions issued per clock cycle on one SM, a measure of how busy the ALUs are',
+            'Peak FLOPs per second divided by peak bytes per second for the chip and a fixed number per part',
+            'FLOPs executed per byte moved from main memory and set by the kernel and its data layout',
+            'FLOPs executed per byte the kernel loads and counting each load whether it hits cache or goes to memory',
+            'Floating-point instructions issued per clock cycle on one multiprocessor as a measure of how busy the arithmetic units are',
           ],
           correct: [1],
           explanation:
@@ -159,10 +159,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'On an H100 (~990 FP16 TFLOPS, 3.35 TB/s), a kernel with AI = 1 FLOP/byte is…',
           options: [
-            'Compute-bound, because any kernel that uses tensor cores (Hopper included) runs at the 990 TFLOP/s peak, however many bytes it moves',
-            'Bandwidth-bound, because attainable is about 1 × 3.35 TFLOP/s, roughly 0.3% of peak, and compute sits idle',
-            'Latency-bound, because at this low a ratio (AI = 1), each load is followed by too little math to cover its delay',
-            'Near the ridge, because the ridge is where AI reaches one FLOP per byte (on any modern GPU), so 1 is the ridge',
+            'Compute-bound with tensor cores running at the 990 TFLOP/s peak however many bytes the kernel moves',
+            'Bandwidth-bound with attainable performance near 3.35 TFLOP/s and the compute units sitting idle',
+            'Latency-bound with 1 FLOP per byte leaving too little math to cover the delay of each load',
+            'Near the ridge with the ridge sitting at 1 FLOP per byte on any modern GPU',
           ],
           correct: [1],
           explanation:
@@ -177,10 +177,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'Why does batching multiply decode throughput (up to a point)?',
           options: [
-            'Batching shrinks each sequence\'s KV cache because attention keys are shared across the batch, which cuts the bytes moved per token',
-            'Each weight read from HBM serves N sequences, which raises AI N-fold and moves decode up the slope toward the roof',
-            'Batching removes per-token kernel launches, and launch overhead is what keeps decode far below the compute roof',
-            'Larger batches raise the usable HBM bandwidth, since more concurrent requests keep more memory channels busy',
+            'Attention keys are shared across the batch and that shrinks the bytes of key-value cache moved per token',
+            'Each weight read from memory serves N sequences and that raises intensity N-fold along the slope',
+            'Batching removes per-token kernel launches and launch overhead is what keeps decode below the compute roof',
+            'Larger batches raise the usable memory bandwidth and more concurrent requests keep more channels busy',
           ],
           correct: [1],
           explanation:
@@ -195,10 +195,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'A B200 has 2.25 PFLOP/s dense FP16 compute and 8 TB/s HBM bandwidth. A kernel with AI = 256 FLOP/byte is…',
           options: [
-            'Compute-bound, because 256 FLOP/byte is a large intensity, well above what decode or router kernels reach',
-            'Bandwidth-bound, because the ridge is about 281 FLOP/byte and 256 still sits on the slope, just under it',
-            'At the ridge, since 256 is within about 10% of 281 and the model cannot separate points that close',
-            'Unclassifiable without timing a run, because only a measurement shows which limit the kernel hit first',
+            'Compute-bound with 256 FLOP/byte well above what decode or router kernels reach',
+            'Bandwidth-bound with a ridge near 281 FLOP/byte and 256 still on the slope below it',
+            'At the ridge with 256 within about 10% of 281 FLOP/byte and too close for the model to separate',
+            'Unclassifiable at 256 FLOP/byte without a timed run showing which limit the kernel hit',
           ],
           correct: [1],
           explanation:
@@ -213,10 +213,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'Prefill is compute-bound while decode is bandwidth-bound because…',
           options: [
-            'Prefill multiplies larger weight matrices than decode (more rows), and larger matrices carry more FLOPs per byte whatever the token count',
-            'Prefill reuses each weight across all prompt positions, which grows AI with length, while decode re-reads them for one token at AI near 1',
-            'Decode runs on a separate GPU pool (disaggregated) whose HBM is slower, pushing it left of the ridge while prefill GPUs stay compute-bound',
-            'Prefill skips the KV cache write, which removes the memory traffic that keeps decode below the compute roof',
+            'Prefill multiplies larger weight matrices than decode and larger matrices carry more FLOPs per byte at any token count',
+            'Prefill reuses each weight across the prompt and grows intensity with length while decode rereads it per token',
+            'Decode runs on a separate disaggregated pool of slower devices and that hardware gap pushes it left of the ridge',
+            'Prefill skips the key-value cache write and that removes the memory traffic that keeps decode below the roof',
           ],
           correct: [1],
           explanation:
