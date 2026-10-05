@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play, X } from 'lucide-react'
 import { ClaimValue } from '@/components/ClaimValue'
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
@@ -16,6 +16,7 @@ import {
   type ActResult,
   type Act3Eval,
   type Incident,
+  type IncidentOption,
   type MeasurementActId,
   type MeasurementEvidence,
 } from '@/lib/fleet-week'
@@ -428,6 +429,44 @@ function ActBusiness() {
 
 /* ------------------------------ ACT 4 ------------------------------ */
 
+/** The call just graded: the options as authored, with the picks as authored indices (the display order is reshuffled for the retry). */
+interface IncidentCall {
+  causes: IncidentOption[]
+  mitigations: IncidentOption[]
+  cause: number
+  mitigation: number
+}
+
+/** Why the chosen option and the right one are what they are, in the same shape as QuizBlock's why list. */
+function WhyList({ heading, options, picked }: { heading: string; options: IncidentOption[]; picked: number }) {
+  // the pick first when it is wrong (its misconception), then the key
+  const shown = [...(options[picked]?.correct ? [] : [picked]), ...options.flatMap((o, i) => (o.correct ? [i] : []))]
+  return (
+    <div>
+      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">{heading}</p>
+      <ul className="mt-2 space-y-1.5" aria-label={`Why each ${heading} is right or wrong`}>
+        {shown.map((oi) => {
+          const o = options[oi]
+          const right = o.correct
+          const isPick = oi === picked
+          return (
+            <li key={o.id} className={cn('flex items-start gap-2 rounded-md border-l-2 bg-surface-2 px-3.5 py-2.5 text-body-sm text-text-2', right ? 'border-accent' : 'border-danger')}>
+              {right ? <Check size={14} className="mt-0.5 shrink-0 text-accent" aria-hidden /> : <X size={14} className="mt-0.5 shrink-0 text-danger" aria-hidden />}
+              <span>
+                <span className={cn('mr-1.5 font-mono text-[10px] uppercase', right ? 'text-accent' : 'text-danger')}>
+                  {right ? (isPick ? 'your pick, correct' : 'correct answer') : 'your pick, wrong'}
+                </span>
+                <span className="mb-1 block font-mono text-[11px] text-text-3">{o.label}</span>
+                {o.why}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 function ActIncident() {
   const { running, result, error, finish, setRunning, setError } = useActRunner('incident')
   const [idx, setIdx] = useState(0)
@@ -436,6 +475,7 @@ function ActIncident() {
   const [cause, setCause] = useState<number | null>(null)
   const [mitigation, setMitigation] = useState<number | null>(null)
   const [solved, setSolved] = useState<string[]>([])
+  const [call, setCall] = useState<IncidentCall | null>(null)
   const [seed, setSeed] = useState(freshSeed)
   const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
   const mitigationOrder = useMemo(() => (incident ? shuffledOrder(incident.mitigations.length, seed ^ 0x9e3779b1) : []), [incident, seed])
@@ -449,6 +489,7 @@ function ActIncident() {
     setIncident(null)
     setCause(null)
     setMitigation(null)
+    setCall(null)
     setIdx(i)
     setSeed(freshSeed())
     try {
@@ -468,6 +509,7 @@ function ActIncident() {
     const ok = causeOk && mitOk
     const newSolved = ok && !solved.includes(incident.id) ? [...solved, incident.id] : solved
     setSolved(newSolved)
+    setCall({ causes: incident.causes, mitigations: incident.mitigations, cause, mitigation })
     // every retry gets a fresh order and a clean selection, so positions can't be memorised
     setSeed(freshSeed())
     setCause(null)
@@ -533,6 +575,12 @@ function ActIncident() {
         </div>
       )}
       {result && <ResultPanel result={result} />}
+      {call && (
+        <section aria-label="Why your call was right or wrong" className="mt-4 grid gap-4 sm:grid-cols-2">
+          <WhyList heading="root cause" options={call.causes} picked={call.cause} />
+          <WhyList heading="mitigation" options={call.mitigations} picked={call.mitigation} />
+        </section>
+      )}
     </div>
   )
 }

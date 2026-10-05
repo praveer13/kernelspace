@@ -116,7 +116,7 @@ You are ready for the checkpoint when you can answer, without notes: What three 
           q: 'The three KV-memory wastes the paper diagnoses in prior systems map to which allocator phenomena?',
           options: [
             'Memory leaks from unfreed sequences, data races on shared KV tensors, and deadlocks between the scheduler and the allocator',
-            'Internal fragmentation (worst-case reservation), external fragmentation (variable segments), and duplication (unshared prefixes)',
+            'Internal fragmentation from worst-case reservation, external fragmentation from variable segments, and duplicated prefixes',
             'Thrashing from preemption storms, false sharing between attention heads, and TLB misses on every block-table lookup in the kernel',
             'Stack overflow from long prompts, heap overflow from long outputs, and double frees when a sequence is preempted',
           ],
@@ -152,7 +152,7 @@ You are ready for the checkpoint when you can answer, without notes: What three 
           q: 'Beam search / parallel sampling in vLLM shares memory exactly like…',
           options: [
             'A RAID mirror: each branch writes its own copy of every block in parallel so that one failed branch cannot corrupt another',
-            'fork() with copy-on-write: branches share the prompt\'s physical blocks via refcounts, and a diverging write copies only that block',
+            'Unix fork with copy-on-write: branches share the prompt\'s physical blocks via refcounts, and a diverging write copies one block',
             'An mmap\'d read-only file: branches map the same prompt blocks and may never write to them, so nothing is ever copied or duplicated',
             'A lock-protected shared queue: branches take turns appending their tokens to one common buffer so that only one writes at a time',
           ],

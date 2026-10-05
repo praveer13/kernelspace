@@ -85,7 +85,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
           q: 'Goodput is defined as…',
           options: [
             'Tokens per second per GPU at the largest batch memory allows, the ceiling that SLOs can approach but never exceed',
-            'Throughput subject to SLO constraints (for example TTFT under 2 s and ITL under 100 ms), the honest capacity metric',
+            'Throughput subject to SLO constraints, such as TTFT under 2 s and ITL under 100 ms, the honest capacity metric',
             'The fraction of GPU time spent in tensor-core math instead of waiting on memory, usually reported as MFU',
             'The share of requests that finish with a 200 status and a complete response, whatever their latency',
           ],
@@ -103,7 +103,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
           q: 'The batching seesaw between TTFT/ITL and throughput exists because…',
           options: [
             'Larger batches must be padded to the longest sequence, so padding work grows with batch size, wastes compute on pad tokens, and slows every step',
-            'Larger batches amortize each weight read over more sequences (throughput up) but read more KV per step and deepen queues (per-token latency up)',
+            'Larger batches amortize each weight read over more sequences, raising throughput, but read more KV per step and deepen queues, raising per-token latency',
             'Batching runs the sequences in a batch one after another, so later sequences wait for earlier ones to finish generating and latency grows with batch size',
             'GPUs lower their clocks at sustained high utilization, so bigger batches run on throttled silicon, every step slows, and the extra work stops paying for itself',
           ],
@@ -121,7 +121,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
           q: 'Decode cannot simply be "parallelized away" like training because…',
           options: [
             'Training spreads one step over thousands of GPUs, but a serving fleet is far smaller and simply has too few devices to spread a single token across the whole model',
-            'Autoregression is serial: token t+1 depends on token t, so you can only make steps cheaper (quantization), amortized (batching) or fewer (speculative decoding)',
+            'Autoregression is serial and token t+1 needs token t, which leaves only cheaper steps by quantization, amortized steps by batching, or fewer steps by speculation',
             'Softmax over the context needs a global max and sum, forcing a serial pass over positions, which training sidesteps with a parallel approximation',
             'The KV cache must be appended in order, and thread blocks cannot write to HBM concurrently, so each step must finish writing before the next',
           ],

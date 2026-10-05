@@ -601,7 +601,7 @@ export function gradeAct3Doc(choiceId: string, claimCost: number, doc: string, e
 /**
  * One selectable cause or mitigation. `why` follows the quiz convention: the key's starts with
  * "Right: ", a distractor's names the misconception and why the telemetry rules it out. The Act IV
- * page does not render it yet; scripts/verify-items.ts lints it.
+ * page shows the chosen option's and the right one's after each call; scripts/verify-items.ts lints it.
  */
 export interface IncidentOption {
   id: string
