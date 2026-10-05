@@ -39,7 +39,7 @@ function Sparkline({ data }: { data: number[] }) {
 
 /**
  * StatusBar — the "system monitor" (design.md §9.2).
- * Fixed bottom, lg+ only. XP as CPU%, lessons as MEM blocks, streak as uptime,
+ * Fixed bottom, lg+ only (below lg the BottomTabs bar takes the strip). XP as CPU%, lessons as MEM blocks, streak as uptime,
  * current route + a playful latency readout on the right.
  */
 export default function StatusBar() {
@@ -112,7 +112,7 @@ export default function StatusBar() {
     >
       <div className="mx-auto flex h-full max-w-app items-center gap-6 px-6 font-mono text-[11px] tracking-wide text-text-3 xl:px-12">
         {/* Zone 1 — CPU = XP utilization */}
-        <div className="flex items-center gap-2" title={`${xp} XP`}>
+        <div className="flex items-center gap-2" title={`${xp} XP (nominal minutes of graded work)`}>
           <span className="text-accent">▣</span>
           <span>
             CPU <span className="text-text-1">{cpuPct}%</span>
