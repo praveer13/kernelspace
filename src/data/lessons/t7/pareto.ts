@@ -95,7 +95,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
             'Batch size and the SLO pick a point on the curve (same efficiency, different tradeoff), and replicas only scale the total. The frontier shifts only when the physics change: fewer bytes, more bandwidth, or better overlap of compute and communication.',
           why: [
             'Batch size is the master dial along the frontier. It trades per-user speed for per-GPU throughput at unchanged efficiency, so the curve itself stays put.',
-            'Right: the frontier shifts only when physics changes, with fewer bytes, more bandwidth or better overlap. Batch size and traffic only choose a point on the existing curve.',
+            'Right: the frontier shifts only when physics changes, with fewer bytes, more bandwidth or better overlap. Batch size and the SLO only choose a point on the existing curve.',
             'A looser SLO changes which region is sellable, not what is achievable. The operable zone widens while the curve is exactly where it was.',
             'Replicas scale the fleet total but each GPU stays on the same per-GPU curve. Tokens per second per GPU and per-user speed are unchanged, so the frontier does not move.',
           ],

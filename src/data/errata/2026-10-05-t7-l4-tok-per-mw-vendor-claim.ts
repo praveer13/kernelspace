@@ -11,5 +11,5 @@ export default {
   after:
     'The answer now rests on the mechanism: a site\'s power envelope is fixed, so tokens per megawatt converts each hardware generation into what the site can sell. The 10× figure stays in the prose, labelled as NVIDIA\'s pitch.',
   why: 'Vendor multipliers blend precision, software vintage and interactivity point. Teach them as claims to decompose, not as results, and keep the quiz key on what holds whatever the multiplier is.',
-  source: { url: 'https://developer.nvidia.com/blog/inside-nvidia-groq-3-lpx-the-low-latency-inference-accelerator-for-the-nvidia-vera-rubin-platform/', title: 'NVIDIA: Inside NVIDIA Groq 3 LPX (vendor tokens-per-megawatt claims at a stated interactivity point)' },
+  source: { url: 'https://developer.nvidia.com/blog/inside-nvidia-groq-3-lpx-the-low-latency-inference-accelerator-for-the-nvidia-vera-rubin-platform/', title: 'NVIDIA: Inside NVIDIA Groq 3 LPX (vendor tokens-per-megawatt claims at a stated interactivity point; does not itself state the Blackwell 10x figure)' },
 } satisfies Erratum

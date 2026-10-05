@@ -31,7 +31,7 @@ A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 
 
 ## Rule 4: Compare stacks on identical everything
 
-Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quantization), same traffic seed, same engine version, and both warmed. InferenceX's value is procedural: nightly runs, pinned versions, published configs — the difference between "SGLang beats vLLM by 12%" and "your harness differed by 12%."`,
+Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quantization), same traffic seed, same engine version, and both warmed. InferenceX's value is procedural: nightly runs, pinned versions, public runs — the difference between "SGLang beats vLLM by 12%" and "your harness differed by 12%."`,
     },
     {
       type: 'statline',
@@ -89,7 +89,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
           explanation:
             'Warm until TTFT stabilizes, then measure a labeled steady-state window. Cold-start is a separate legitimate metric (serverless lives on it) — the sin is mixing them unlabeled.',
           why: [
-            'Thermal soak and power caps do move clocks, which is why runs report the power cap and hold a steady-state window. Warmup itself waits out engine state: caches, graph capture, compilation.',
+            'Heating tends to lower sustained clocks rather than raise them, and thermal and power-cap effects are small next to engine state. Warmup waits out caches, graph capture and compilation; runs report the power cap.',
             'Right: until caches fill, graphs are captured and kernels compile, early samples measure the cold start. Warm until TTFT stabilizes, then report a labeled steady-state window.',
             'Discarding samples with no identified cause is arbitrary. Warmup is justified by named engine state, and its length is set by when TTFT and hit rates plateau.',
             'Connection setup is cheap and takes milliseconds. It cannot explain a transient lasting minutes, and a well-built harness opens connections before timing starts.',
