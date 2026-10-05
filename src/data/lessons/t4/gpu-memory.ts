@@ -131,7 +131,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
           q: 'For a 70B FP16 model with full multi-head attention (no GQA), the first-order capacity problem on 80 GB GPUs is…',
           options: [
             'The roughly 50 MB L2 cannot hold the weights (it is far too small), so each step thrashes it and compute caps how many requests run',
-            'Weights need two GPUs, and each 4k-token KV cache adds ~10 GB, so capacity caps concurrency',
+            'Weights need two GPUs, and each 4k-token KV cache adds ~10 GiB, so capacity caps concurrency',
             'Tokenization and sampling run on the CPU (not the GPU), so the host becomes the limit long before GPU memory fills up',
             'Tensor cores compute in FP32, so the FP16 weights are upcast and double their footprint before any request',
           ],
@@ -140,7 +140,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
             'Weights alone exceed one HBM; KV caches (~2.5 MiB/token for MHA; Llama-3-70B\'s GQA is 8× smaller at 320 KiB/token) consume the rest. This arithmetic is why quantization, multi-GPU parallelism, and KV paging are survival features, not optimizations.',
           why: [
             'Weights are never required to fit in L2; they stream from HBM each step. The binding limit is HBM capacity for weights plus KV caches.',
-            'Right: 140 GB of FP16 weights already exceed one 80 GB GPU, and every active 4k-token sequence adds about 10 GB of KV. Capacity, not compute, caps concurrency.',
+            'Right: 140 GB of FP16 weights already exceed one 80 GB GPU, and every active 4k-token sequence adds about 10 GiB of KV. Capacity, not compute, caps concurrency.',
             'Host-side work per token is small. The 140 GB weight footprint exceeds one GPU before the first request arrives, so GPU memory binds first.',
             'H100 tensor cores take FP16 and BF16 inputs directly and accumulate at higher precision. Weights stay two bytes each; the 140 GB is the problem.',
           ],
