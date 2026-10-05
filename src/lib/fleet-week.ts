@@ -598,14 +598,26 @@ export function gradeAct3Doc(choiceId: string, claimCost: number, doc: string, e
 
 /* ------------------------------ ACT 4 ------------------------------ */
 
+/**
+ * One selectable cause or mitigation. `why` follows the quiz convention: the key's starts with
+ * "Right: ", a distractor's names the misconception and why the telemetry rules it out. The Act IV
+ * page does not render it yet; scripts/verify-items.ts lints it.
+ */
+export interface IncidentOption {
+  id: string
+  label: string
+  correct: boolean
+  why?: string
+}
+
 export interface Incident {
   seed: number | null
   id: string
   title: string
   briefing: string
   telemetry: TickSample[]
-  causes: { id: string; label: string; correct: boolean }[]
-  mitigations: { id: string; label: string; correct: boolean }[]
+  causes: IncidentOption[]
+  mitigations: IncidentOption[]
 }
 
 function runIncidentEngine(seeds: FleetWeekSeeds, cfg = CFG, sched = makeRefScheduler()): TickSample[] {
@@ -632,16 +644,56 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     briefing:
       'gen_ai.server.time_to_first_token p95 has been climbing for hours while TPOT stays comparatively flat. Auto-preempts are nonzero and rising; free blocks hover near zero. Nothing was deployed today — but the traffic got longer-context this week.',
     causes: [
-      { id: 'sched-bug', label: 'scheduler bug — it admits nothing', correct: false },
-      { id: 'pool-small', label: 'capacity wall: the KV pool is too small for the new context lengths — allocation failures force recompute preemption', correct: true },
-      { id: 'net-stall', label: 'network stall between workers', correct: false },
-      { id: 'queue-lie', label: 'intake queue dropping requests silently', correct: false },
+      {
+        id: 'sched-bug',
+        label: 'scheduler regression: its admission order starves long prompts, so their time to first token climbs while the pool sits mostly idle',
+        correct: false,
+        why: 'The pool is not idle: free blocks sit near zero. Preemption only hits requests that were already admitted, so rising auto-preempts show the scheduler is admitting and memory is the constraint.',
+      },
+      {
+        id: 'pool-small',
+        label: 'capacity wall: the KV pool is too small for the new context lengths — allocation failures force recompute preemption',
+        correct: true,
+        why: 'Right: near-zero free blocks plus rising auto-preempts mean allocations fail and preempted requests restart by recompute. Longer contexts take more blocks each, so the same pool holds fewer sequences and TTFT climbs.',
+      },
+      {
+        id: 'net-stall',
+        label: 'network stall between workers: transfers delay the first token while decode on each worker stays normal',
+        correct: false,
+        why: 'A transfer stall would delay first tokens without touching memory counters. Near-zero free blocks and climbing auto-preempts are a KV-allocation signature, and no network fault produces them.',
+      },
+      {
+        id: 'queue-lie',
+        label: 'intake queue silently dropping requests, so clients retry in bursts and each burst waits behind the last',
+        correct: false,
+        why: 'Drops would appear as shed or lost completions, and retries add load without creating preemptions. Nonzero auto-preempts with exhausted free blocks point at the KV pool, not at intake.',
+      },
     ],
     mitigations: [
-      { id: 'restart', label: 'restart the workers nightly', correct: false },
-      { id: 'bigger-pool', label: 'grow the pool (more HBM / FP8 KV / offload tier) and cap admitted context', correct: true },
-      { id: 'smaller-batch', label: 'reduce max_running', correct: false },
-      { id: 'ignore', label: 'ignore it — p95 will recover', correct: false },
+      {
+        id: 'restart',
+        label: 'restart workers on a schedule so leaked KV blocks are reclaimed before p95 climbs',
+        correct: false,
+        why: 'Nothing is leaking: blocks return to the pool when requests finish. The pressure is live demand from long contexts, so a restart drops in-flight work and the preempt storm returns as traffic refills the pool.',
+      },
+      {
+        id: 'bigger-pool',
+        label: 'grow the pool (more HBM / FP8 KV / offload tier) and cap admitted context',
+        correct: true,
+        why: 'Right: more usable blocks (HBM, FP8 KV at half the bytes of 16-bit, or an offload tier) remove the capacity wall, and a cap on admitted context stops one long request from evicting many others.',
+      },
+      {
+        id: 'smaller-batch',
+        label: 'lower max_running, leave the pool and context caps alone, and accept lower throughput',
+        correct: false,
+        why: 'Fewer concurrent sequences does reduce preemptions, but only by throttling throughput while the pool stays too small for the traffic. Queueing grows instead; this treats the symptom, and capacity is the fix.',
+      },
+      {
+        id: 'chunked-prefill',
+        label: 'enable chunked prefill so long prompts stop blocking decode steps of running requests',
+        correct: false,
+        why: 'Chunked prefill smooths prefill-decode interference, which shows up as TPOT spikes. TPOT is flat here; the pain is preemption from block exhaustion, which chunking does not relieve.',
+      },
     ],
   },
   {
@@ -650,16 +702,56 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     briefing:
       'The queue-delay p95 and shed count climb steadily, yet workers sit half-empty: running is low, the scheduler waiting list is near zero, and completions trickle. TPOT is normal once a request starts. The intake queue is not full on average.',
     causes: [
-      { id: 'drain', label: 'intake drain rate misconfigured — the queue is being emptied far slower than arrivals, so it fills and sheds despite idle capacity', correct: true },
-      { id: 'pool-small', label: 'KV pool too small', correct: false },
-      { id: 'hot-expert', label: 'hot expert straggler', correct: false },
-      { id: 'sched-bug', label: 'scheduler stuck', correct: false },
+      {
+        id: 'drain',
+        label: 'intake drain is misconfigured: the queue empties far slower than arrivals, so it fills and sheds despite idle capacity',
+        correct: true,
+        why: 'Right: the scheduler has nothing waiting and running is low, so requests are held upstream. A drain slower than arrivals fills intake and sheds, while TPOT stays normal and GPUs idle.',
+      },
+      {
+        id: 'pool-small',
+        label: 'KV pool too small: blocks run out and preempted requests re-queue until the backlog sheds new arrivals',
+        correct: false,
+        why: 'A full pool shows near-zero free blocks, preemptions and a long scheduler waiting list. Workers here are half-empty with nothing waiting, so memory is not the constraint.',
+      },
+      {
+        id: 'hot-expert',
+        label: 'hot expert straggler: one overloaded expert gates every MoE step, so the whole worker finishes slowly while it looks underfilled',
+        correct: false,
+        why: 'A straggler stretches step time, so TPOT would rise for requests already running. TPOT is normal once a request starts, which places the stall before the engine, not inside a step.',
+      },
+      {
+        id: 'sched-bug',
+        label: 'scheduler stuck: its admit step returns nothing, so requests pile up in the queue while the workers sit with free capacity',
+        correct: false,
+        why: 'A stuck scheduler would show a long waiting list, because requests reach it and are not admitted. The waiting list is near zero, so the bottleneck sits upstream, at the intake drain.',
+      },
     ],
     mitigations: [
-      { id: 'bigger-pool', label: 'grow the KV pool', correct: false },
-      { id: 'fix-drain', label: 'fix the drain configuration (match drain to admission capacity) and re-run the flash-crowd test', correct: true },
-      { id: 'restart', label: 'restart the router', correct: false },
-      { id: 'bigger-queue', label: 'just make the queue bigger', correct: false },
+      {
+        id: 'bigger-pool',
+        label: 'grow the KV pool so every worker holds more sequences once the backlog arrives',
+        correct: false,
+        why: 'Memory is not short: nothing is waiting at the scheduler and workers are half-empty. More blocks add capacity that already sits idle and leave the drain bottleneck, and the shedding, untouched.',
+      },
+      {
+        id: 'fix-drain',
+        label: 'fix the drain configuration (match drain to admission capacity) and re-run the flash-crowd test',
+        correct: true,
+        why: 'Right: the bottleneck is the drain rate, so match it to what admission can absorb. Re-running the flash-crowd test confirms shed and queue delay recover rather than assuming they do.',
+      },
+      {
+        id: 'restart',
+        label: 'restart the router to flush the queue, then watch whether the shed count returns',
+        correct: false,
+        why: 'A restart may clear the backlog briefly, but the drain is still slower than arrivals, so the queue refills and sheds again. It treats a configuration fault as a transient hang.',
+      },
+      {
+        id: 'bigger-queue',
+        label: 'enlarge the intake queue so a flash crowd is buffered rather than shed, and revisit the drain rate later',
+        correct: false,
+        why: 'A larger buffer postpones shedding but adds queue delay, because arrivals still outpace the drain. Under sustained load it still fills, and buffered requests miss the SLO instead of being shed.',
+      },
     ],
   },
   {
@@ -668,16 +760,56 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     briefing:
       'Launch day: concurrency is 4× normal. Goodput falls first, then queue-delay and TTFT p95 explode; TPOT for requests that already started is comparatively stable. The batch is enormous while completions crawl.',
     causes: [
-      { id: 'no-admission', label: 'no admission control — everything is admitted at once, the batch overcommits, KV pressure and queueing collapse the SLO', correct: true },
-      { id: 'pool-small', label: 'pool too small', correct: false },
-      { id: 'net-stall', label: 'network partition', correct: false },
-      { id: 'quant', label: 'quantization regression', correct: false },
+      {
+        id: 'no-admission',
+        label: 'no admission control — everything is admitted at once, the batch overcommits, KV pressure and queueing collapse the SLO',
+        correct: true,
+        why: 'Right: with no gate, 4× concurrency lands in one huge batch that overcommits KV. Completions crawl, queue delay and TTFT p95 explode and goodput falls, while TPOT for started requests holds.',
+      },
+      {
+        id: 'pool-small',
+        label: 'KV pool sized too small for launch-day contexts, so blocks run out and requests are preempted',
+        correct: false,
+        why: 'Pool size adds pressure but is not the root cause: an admit-everything policy overruns any finite pool at some load. The enormous batch with crawling completions points at missing admission control.',
+      },
+      {
+        id: 'net-stall',
+        label: 'network partition between router and workers that delays first tokens for every launch-day request',
+        correct: false,
+        why: 'A partition would stall or fail requests already in flight, so TPOT would not be stable. The batch is huge and workers are busy, so the engine is overloaded rather than disconnected.',
+      },
+      {
+        id: 'quant',
+        label: 'quantization regression: a recent FP8 build slows every decode step, so goodput drops under load',
+        correct: false,
+        why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable and the collapse tracks launch-day concurrency, not a deploy, so the model build is not the cause.',
+      },
     ],
     mitigations: [
-      { id: 'bigger-pool', label: 'grow the pool', correct: false },
-      { id: 'admission', label: 'add admission control (size-aware, headroom-aware) and an honest shed path — the lab-06 shape', correct: true },
-      { id: 'smaller-model', label: 'switch to a smaller model', correct: false },
-      { id: 'more-nodes', label: 'double the fleet tonight', correct: false },
+      {
+        id: 'bigger-pool',
+        label: 'grow the KV pool so the oversized launch-day batch fits without any preemption',
+        correct: false,
+        why: 'More blocks raise the ceiling but not the policy. Admit-everything still overcommits a bigger pool at some load, and queue delay stays unbounded. A larger pool cannot replace a gate and a shed path.',
+      },
+      {
+        id: 'admission',
+        label: 'add admission control (size-aware, headroom-aware) and an honest shed path — the lab-06 shape',
+        correct: true,
+        why: 'Right: a size- and headroom-aware gate admits only what fits and sheds the rest honestly, so KV never overcommits and admitted requests keep meeting the SLO. Lab 06 builds this shape.',
+      },
+      {
+        id: 'smaller-model',
+        label: 'switch to a smaller model for launch week so each decode step is cheaper and the batch drains faster',
+        correct: false,
+        why: 'A smaller model lowers per-step cost but changes quality and means a deploy mid-incident. Every request is still admitted at once, so the batch still overcommits and the missing gate remains.',
+      },
+      {
+        id: 'more-nodes',
+        label: 'double the fleet tonight and spread the 4× concurrency across twice as many workers behind the router',
+        correct: false,
+        why: 'Extra nodes spread load only as well as the router balances it, and each still admits everything. Provisioning takes time and money, and any burst past the new capacity collapses the same way.',
+      },
     ],
   },
 ]
