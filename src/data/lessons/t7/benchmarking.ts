@@ -9,7 +9,7 @@ const lesson: Lesson = {
   minutes: 25,
   hook: 'Most published inference numbers are unusable — wrong traffic, no warmup, percentiles from five samples. The four rules that make a benchmark honest, and the public harnesses that follow them.',
   exercise: 'read+quiz',
-  verifiedAt: '2026-08',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
@@ -31,7 +31,7 @@ A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 
 
 ## Rule 4: Compare stacks on identical everything
 
-Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quantization), same traffic seed, same engine version, and both warmed. InferenceX's value is procedural: nightly runs, pinned versions, public runs — the difference between "SGLang beats vLLM by 12%" and "your harness differed by 12%."`,
+Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quantization), same traffic seed, same engine version, and both warmed. InferenceX's value is procedural: the suite re-runs every night and the runs are public — the difference between "SGLang beats vLLM by 12%" and "your harness differed by 12%."`,
     },
     {
       type: 'statline',

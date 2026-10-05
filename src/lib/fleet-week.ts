@@ -686,7 +686,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
         id: 'smaller-batch',
         label: 'lower max_running to cut preemptions, leave the pool and context caps as they are, and accept a throughput ceiling',
         correct: false,
-        why: 'Fewer concurrent sequences does cut preemptions, but it only caps throughput: the pool stays too small for the new contexts and the cause is untouched. The key adds blocks and a context cap instead.',
+        why: 'Fewer concurrent sequences does cut preemptions, but it only caps throughput: the pool stays too small for the new contexts and the cause is untouched. Adding blocks and capping context is what removes it.',
       },
       {
         id: 'chunked-prefill',

@@ -9,6 +9,7 @@ const lesson: Lesson = {
   minutes: 20,
   hook: 'T3 taught you Rust. The senior skill is knowing when NOT to reach for it — four questions that decide the language, the case studies that prove them, and the honest 2026 map of who writes what in this field.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
@@ -16,7 +17,7 @@ const lesson: Lesson = {
 
 **The four questions:**
 1. **What does failure cost on this path?** Memory corruption with untrusted input (network-facing, multi-tenant, long-lived) → memory safety is not optional. That's Rust's table stakes, and the reason ~70% of serious CVEs being memory-safety issues is an argument, not a statistic.
-2. **Where's the ecosystem gravity?** You do not get to choose in a vacuum. CUDA, NCCL, NIXL, UCX are C-ABI libraries — the language must interop for free. GPU kernels follow the vendor ecosystem: CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang). Rust GPU projects (CubeCL, rust-cuda, cudarc) exist but are marginal in production, and Zig and Go have no vote. The ML libraries you'll actually call (tokenizers, safetensors, cuBLAS) pick the language more often than you do.
+2. **Where's the ecosystem gravity?** You do not get to choose in a vacuum. CUDA, NCCL, NIXL, UCX are C-ABI libraries — the language must interop for free. GPU kernels follow the vendor ecosystem: CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang). Rust GPU projects (CubeCL, rust-cuda) exist but are marginal in production, and Zig and Go have no vote. (cudarc is not one of them: it wraps the host-side CUDA API so Rust can launch kernels, not write them.) The ML libraries you'll actually call (tokenizers, safetensors, cuBLAS) pick the language more often than you do.
 3. **Who maintains it for five years?** Team velocity, hiring, compile-time guardrails vs review-time guardrails. A compiler that catches your invariants (Rust) is worth real money on a fast-moving codebase; a codebase your six-person team can hold in their heads entirely (Zig's pitch) is worth a different kind of money.
 4. **What's the allocation and determinism budget?** Tail latency in microseconds and zero tolerance for hidden allocation (databases, embedded, schedulers) → you want allocation as a visible act: Zig's explicit-allocator discipline or C. GC-shaped languages already lost this round in T0.L5.`,
     },
@@ -128,7 +129,7 @@ Run the four questions down the stack you've built in this course: **Router / AP
           explanation:
             'The four questions are per-component, not per-project. Router: Rust. Scheduler: Rust. Kernels: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang). io_uring glue: C. CLI tools: whatever ships. Ideology appears nowhere — that\'s the point of the framework.',
           why: [
-            'Safety is why Rust owns host code like the router and scheduler. Rust GPU projects (CubeCL, rust-cuda, cudarc) exist but are marginal in production kernels.',
+            'Safety is why Rust owns host code like the router and scheduler. Rust GPU projects such as CubeCL and rust-cuda exist but are marginal in production kernels, and cudarc only wraps the host-side CUDA API.',
             'Comptime specialises Zig code at build time, but GPU kernels reach the device through toolchains from the GPU vendor ecosystem, and there the libraries and profilers live.',
             'Right: kernels follow the vendor ecosystem, which means CUDA C++ plus Python DSLs such as CuTe DSL (FlashAttention-4), Triton/Gluon and TileLang. Rust and Zig serve the host side.',
             'FlashAttention-4 is written in CuTe DSL, and vLLM v0.30 defaults to a FlashInfer CuTe DSL NVFP4 path on SM100. Triton is one DSL among several, and CUDA C++ remains.',
