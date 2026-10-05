@@ -7,6 +7,7 @@
  *   2) ABA inspector: step-through replay of the classic lock-free stack ABA
  *      hazard, with a tagged-pointer toggle that makes the stale CAS fail.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Play, RotateCcw, StepForward } from 'lucide-react'

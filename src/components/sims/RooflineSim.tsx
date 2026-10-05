@@ -23,6 +23,7 @@
  *   - shared memory bandwidth: ~20 TB/s
  *   - PCIe x16 Gen4: ~32 GB/s
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Eraser, TrendingUp } from 'lucide-react'

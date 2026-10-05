@@ -8,6 +8,8 @@
  *     sidebar on the right wired to the progress store (+XP toast on completion)
  *   - URL-state note (configs live in ?cfg=) + visit tracking
  *   - ?embed=1 hides all chrome (header/tasks) — used by ExerciseShell in lessons
+ *   - inside a SimHost (P2), config and machine come from the host: only mode "lab" reads and writes the
+ *     URL (?cfg=, ?machine=); "embed" and "phone" never touch it. No SimHost = lab behaviour, as before.
  *
  * Sims provide their own canvas/controls/transport/log inside `children`.
  * Named exports below are shared sim infrastructure (log console, transport bar,
@@ -38,6 +40,9 @@ import { getProgress, useProgress } from '@/lib/progress'
 import { lessonById } from '@/data/lessons'
 import { cn } from '@/lib/utils'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
+import { encodeCfg, pickInitialCfg, pickMachineSource, routeConfigWrite, useSimHost } from '@/lib/sims/host'
+import { resolveTasks } from '@/lib/sims/registry'
+import { TaskList } from '@/components/sims/TaskPanel'
 import {
   Dialog,
   DialogContent,
@@ -127,38 +132,15 @@ export function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-/* ------------------------------------------------------------------ */
-/* Config ↔ URL codec (playground.md §2: base64 JSON, versioned)       */
-/* ------------------------------------------------------------------ */
-
-export function encodeCfg(cfg: unknown): string {
-  try {
-    return btoa(JSON.stringify({ v: 1, cfg }))
-      .replaceAll('+', '-')
-      .replaceAll('/', '_')
-      .replace(/=+$/, '')
-  } catch {
-    return ''
-  }
-}
-
-export function decodeCfg<T>(raw: string | null): T | null {
-  if (!raw) return null
-  try {
-    const b64 = raw.replaceAll('-', '+').replaceAll('_', '/')
-    const parsed = JSON.parse(atob(b64)) as { v: number; cfg: T }
-    return parsed?.v === 1 ? parsed.cfg : null
-  } catch {
-    return null
-  }
-}
-
-/** Serialize a sim's config object into ?cfg= (debounced, replace — keeps ?embed/?from). */
+/**
+ * Serialize a sim's config object into ?cfg= (debounced, replace — keeps ?embed/?from). Only in lab mode
+ * (or with no SimHost): inside an embed or phone host the config stays in memory and the URL is untouched.
+ */
 export function useWriteCfg(cfg: unknown): void {
   const [, setSearchParams] = useSearchParams()
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      const encoded = encodeCfg(cfg)
+  const writeUrl = useCallback(
+    (c: unknown) => {
+      const encoded = encodeCfg(c)
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev)
@@ -167,16 +149,58 @@ export function useWriteCfg(cfg: unknown): void {
         },
         { replace: true },
       )
-    }, 250)
-    return () => window.clearTimeout(id)
-  }, [cfg, setSearchParams])
+    },
+    [setSearchParams],
+  )
+  const schedule = useCfgScheduler(writeUrl)
+  useEffect(() => schedule(cfg), [cfg, schedule])
 }
 
-/** Read the cfg param once (lazy useState initializer — safe on remount). */
+/**
+ * `useWriteCfg` without the effect: the function that routes one config change by the enclosing SimHost
+ * (`writeUrl` in lab mode or with no host, the host's memory otherwise) and returns its cancel. The
+ * result changes only when the host's mode or `writeUrl` do. Exported for tests.
+ */
+export function useCfgScheduler(writeUrl: (cfg: unknown) => void): (cfg: unknown) => () => void {
+  const host = useSimHost()
+  const mode = host?.mode
+  const writeMemory = host?.writeConfig
+  return useCallback((cfg) => routeConfigWrite(mode, writeMemory, cfg, writeUrl), [mode, writeMemory, writeUrl])
+}
+
+/** Read the config once: the host's prop config in embed and phone mode, else the ?cfg= param (lazy useState initializer — safe on remount). */
 export function useInitialCfg<T>(): T | null {
   const [searchParams] = useSearchParams()
-  const [value] = useState<T | null>(() => decodeCfg<T>(searchParams.get('cfg')))
+  const host = useSimHost()
+  const [value] = useState<T | null>(() => pickInitialCfg<T>(host, searchParams.get('cfg')))
   return value
+}
+
+/**
+ * The sub-machine and the lesson the sim was opened from. Lab mode (or no SimHost): `?machine=` and
+ * `?from=`, and `selectMachine` replaces `?machine=` the way the sims do themselves. Embed and phone:
+ * the host's machine (switched in memory) and its lesson id.
+ */
+export function useSimMachine(): {
+  machine: string | null
+  from: string | null
+  selectMachine: (machine: string) => void
+} {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const host = useSimHost()
+  const selectUrl = useCallback(
+    (machine: string) =>
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current)
+          next.set('machine', machine)
+          return next
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  )
+  return pickMachineSource(host, { machine: searchParams.get('machine'), from: searchParams.get('from'), select: selectUrl })
 }
 
 /* ------------------------------------------------------------------ */
@@ -192,8 +216,11 @@ export default function PlaygroundShell({
   children,
 }: PlaygroundShellProps) {
   const [searchParams] = useSearchParams()
-  const embed = searchParams.get('embed') === '1'
+  const host = useSimHost()
+  const embed = searchParams.get('embed') === '1' || (host !== null && host.mode !== 'lab')
   const from = searchParams.get('from')
+  const { machine: activeMachine } = useSimMachine()
+  const hasOutcomeTasks = host !== null && resolveTasks(simId, activeMachine).some((t) => t.kind === 'outcome')
   /* ?from carries the originating lesson id (e.g. t0.l2); legacy links sent the
      literal string "lesson", which produced a dead /lesson/lesson href. Only
      render the chip when the id resolves to a real lesson. */
@@ -355,74 +382,83 @@ export default function PlaygroundShell({
         <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
           <div className="min-w-0 flex-1">{children}</div>
 
-          {tasks.length > 0 && (
+          {(tasks.length > 0 || hasOutcomeTasks) && (
             <aside className="flex w-full shrink-0 flex-col border-t border-line bg-surface-1 xl:w-[264px] xl:border-l xl:border-t-0">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <span className="flex items-center gap-2 font-mono text-label uppercase tracking-[0.10em] text-text-3">
-                  <ListChecks size={13} strokeWidth={1.75} />
-                  exercise tasks
-                </span>
-                <span className="font-mono text-[10px] text-text-3">
-                  {doneCount}/{tasks.length}
-                </span>
-              </div>
-              <ul className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
-                {tasks.map((task) => {
-                  const done = tasksDone.includes(task.id)
-                  return (
-                    <li
-                      key={task.id}
-                      className={cn(
-                        'relative flex items-start gap-2.5 overflow-hidden rounded-sm border px-3 py-2.5 transition-colors duration-250',
-                        done ? 'border-accent/40 bg-accent-dim/30' : 'border-line bg-surface-2',
-                      )}
-                    >
-                      {done && (
-                        <motion.span
-                          aria-hidden
-                          className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-accent/20 to-transparent"
-                          initial={{ x: '-120%' }}
-                          animate={{ x: '340%' }}
-                          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                        />
-                      )}
-                      <span
-                        className={cn(
-                          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-250',
-                          done ? 'border-accent bg-accent text-accent-foreground' : 'border-line-bright',
-                        )}
-                      >
-                        {done && <Check size={10} strokeWidth={3} />}
-                      </span>
-                      <span
-                        className={cn(
-                          'text-body-sm leading-snug',
-                          done ? 'text-text-3' : 'text-text-2',
-                        )}
-                      >
-                        {task.text}
-                      </span>
-                      <span
-                        className={cn(
-                          'ml-auto shrink-0 font-mono text-[10px]',
-                          done ? 'text-text-3' : 'text-accent',
-                        )}
-                      >
-                        +{task.xp}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-              <div className="border-t border-line px-4 py-3 font-mono text-[10px] leading-relaxed text-text-3">
-                <p>
-                  state is scratch · config lives in the url{' '}
-                  <span className="text-text-2">?cfg=…</span> — share a broken heap with a friend.
-                </p>
-                <p className="mt-1.5">
-                  {visits} runs · tasks persist to <span className="text-text-2">/progress</span>
-                </p>
-              </div>
+              {hasOutcomeTasks && (
+                <div className="max-h-[70vh] overflow-y-auto border-b border-line px-3 py-3 xl:max-h-[60%]">
+                  <TaskList simId={simId} machine={activeMachine} kinds="outcome" />
+                </div>
+              )}
+              {tasks.length > 0 && (
+                <>
+                  <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                    <span className="flex items-center gap-2 font-mono text-label uppercase tracking-[0.10em] text-text-3">
+                      <ListChecks size={13} strokeWidth={1.75} />
+                      exercise tasks
+                    </span>
+                    <span className="font-mono text-[10px] text-text-3">
+                      {doneCount}/{tasks.length}
+                    </span>
+                  </div>
+                  <ul className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+                    {tasks.map((task) => {
+                      const done = tasksDone.includes(task.id)
+                      return (
+                        <li
+                          key={task.id}
+                          className={cn(
+                            'relative flex items-start gap-2.5 overflow-hidden rounded-sm border px-3 py-2.5 transition-colors duration-250',
+                            done ? 'border-accent/40 bg-accent-dim/30' : 'border-line bg-surface-2',
+                          )}
+                        >
+                          {done && (
+                            <motion.span
+                              aria-hidden
+                              className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-accent/20 to-transparent"
+                              initial={{ x: '-120%' }}
+                              animate={{ x: '340%' }}
+                              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                            />
+                          )}
+                          <span
+                            className={cn(
+                              'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-250',
+                              done ? 'border-accent bg-accent text-accent-foreground' : 'border-line-bright',
+                            )}
+                          >
+                            {done && <Check size={10} strokeWidth={3} />}
+                          </span>
+                          <span
+                            className={cn(
+                              'text-body-sm leading-snug',
+                              done ? 'text-text-3' : 'text-text-2',
+                            )}
+                          >
+                            {task.text}
+                          </span>
+                          <span
+                            className={cn(
+                              'ml-auto shrink-0 font-mono text-[10px]',
+                              done ? 'text-text-3' : 'text-accent',
+                            )}
+                          >
+                            +{task.xp}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <div className="border-t border-line px-4 py-3 font-mono text-[10px] leading-relaxed text-text-3">
+                    <p>
+                      state is scratch · config lives in the url{' '}
+                      <span className="text-text-2">?cfg=…</span> — share a broken heap with a friend.
+                    </p>
+                    <p className="mt-1.5">
+                      {visits} runs · tasks persist to <span className="text-text-2">/progress</span>
+                    </p>
+                  </div>
+                </>
+              )}
             </aside>
           )}
         </div>

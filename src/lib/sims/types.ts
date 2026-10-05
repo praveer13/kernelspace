@@ -37,9 +37,9 @@ export interface SimHostContextValue {
   machine: string | undefined
   /** Embed and phone: the prop config. Lab: the decoded `?cfg=` (or null). Read once at mount. */
   initialConfig: unknown
-  /** Lab mode writes `?cfg=` (debounced, replace); other modes keep it in memory only. */
+  /** Embed and phone keep the config in memory only. Lab mode: sims write `?cfg=` through the shell's `useWriteCfg`, so the host's own is a no-op. */
   writeConfig(cfg: unknown): void
-  /** Lab mode sets `?machine=`; other modes switch in memory. */
+  /** Embed and phone switch in memory. Lab mode: sims set `?machine=` through the shell's `useSimMachine`, so the host's own is a no-op. */
   selectMachine(machine: string): void
   /** Sims report what they measured; the task panel grades predictions against these. */
   observe(obs: Observation): void
@@ -51,7 +51,11 @@ export interface Observation {
   key: string
   value: number | string
   unit?: string
-  /** Optional: the config the value was measured under, so a stale observation is never graded. */
+  /**
+   * Optional: the config the value was measured under (spec §10.3). Not used yet: the panel grades the
+   * first observation of its key after the commit and does not compare hashes, so a sim must not re-emit
+   * for a config it has already left.
+   */
   configHash?: string
 }
 
