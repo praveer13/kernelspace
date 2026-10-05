@@ -39,6 +39,9 @@ const outcome = (over: Partial<SimTaskDef> = {}): SimTaskDef => ({
   ...over,
 })
 
+/** Whether a sim's source talks to the router itself instead of going through the shell's SimHost-aware hooks. */
+const readsUrlItself = (src: string): boolean => /\b(useSearchParams|setSearchParams)\b/.test(src)
+
 const problemsOf = (...tasks: SimTaskDef[]) => buildRegistry({ '/src/components/sims/x.tasks.ts': { T: tasks } }).problems
 
 describe('discovery', () => {
@@ -189,6 +192,29 @@ describe('lessons list registry tasks', () => {
       if (t.phone === undefined) continue
       expect(t.phone.canonical).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+$/i)
     }
+  })
+
+  // Tripwire for C7 to C10: an unmigrated sim still calls setSearchParams and reads ?machine= itself, so mounted
+  // inline it would rewrite its lesson's URL and ignore the `machine` prop. Migrate it (shell hooks) before a block names it.
+  test('an inline exercise block (one with taskIds) never names a sim that still reads the URL itself', () => {
+    const host = readFileSync(join(SIMS_DIR, 'SimHost.tsx'), 'utf8')
+    const fileOf: Record<string, string> = {}
+    for (const m of host.matchAll(/'(sim-[a-z]+)': \(\) => import\('@\/components\/sims\/(\w+)'\)/g)) fileOf[m[1]] = m[2]
+    expect(Object.keys(fileOf)).toHaveLength(9)
+    const offenders: string[] = []
+    for (const lesson of ALL_LESSONS) {
+      for (const b of lesson.blocks) {
+        if (b.type !== 'exercise' || b.taskIds === undefined || b.taskIds.length === 0) continue
+        if (readsUrlItself(readFileSync(join(SIMS_DIR, `${fileOf[b.simId]}.tsx`), 'utf8'))) offenders.push(`${lesson.id}: ${b.simId}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  test('the tripwire detector sees a direct router read and ignores the shell hooks', () => {
+    expect(readsUrlItself("const [searchParams, setSearchParams] = useSearchParams()")).toBe(true)
+    expect(readsUrlItself("import { useSearchParams } from 'react-router'")).toBe(true)
+    expect(readsUrlItself("const cfg = useInitialCfg<Cfg>()\nconst { machine } = useSimMachine()\nuseWriteCfg(cfg)")).toBe(false)
   })
 
   test('resolveTasks keeps the order given, skips unknown ids and another sim’s ids', () => {

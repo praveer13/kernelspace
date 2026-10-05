@@ -40,7 +40,7 @@ import { getProgress, useProgress } from '@/lib/progress'
 import { lessonById } from '@/data/lessons'
 import { cn } from '@/lib/utils'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
-import { scheduleConfigWrite, useSimHost } from '@/lib/sims/host'
+import { encodeCfg, pickInitialCfg, pickMachineSource, routeConfigWrite, useSimHost } from '@/lib/sims/host'
 import { resolveTasks } from '@/lib/sims/registry'
 import { TaskList } from '@/components/sims/TaskPanel'
 import {
@@ -132,70 +132,47 @@ export function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-/* ------------------------------------------------------------------ */
-/* Config ↔ URL codec (playground.md §2: base64 JSON, versioned)       */
-/* ------------------------------------------------------------------ */
-
-export function encodeCfg(cfg: unknown): string {
-  try {
-    return btoa(JSON.stringify({ v: 1, cfg }))
-      .replaceAll('+', '-')
-      .replaceAll('/', '_')
-      .replace(/=+$/, '')
-  } catch {
-    return ''
-  }
-}
-
-export function decodeCfg<T>(raw: string | null): T | null {
-  if (!raw) return null
-  try {
-    const b64 = raw.replaceAll('-', '+').replaceAll('_', '/')
-    const parsed = JSON.parse(atob(b64)) as { v: number; cfg: T }
-    return parsed?.v === 1 ? parsed.cfg : null
-  } catch {
-    return null
-  }
-}
-
 /**
  * Serialize a sim's config object into ?cfg= (debounced, replace — keeps ?embed/?from). Only in lab mode
  * (or with no SimHost): inside an embed or phone host the config stays in memory and the URL is untouched.
  */
 export function useWriteCfg(cfg: unknown): void {
   const [, setSearchParams] = useSearchParams()
-  const host = useSimHost()
-  const mode = host?.mode ?? 'lab'
-  const writeMemory = host?.writeConfig
-  useEffect(
-    () =>
-      scheduleConfigWrite(mode, cfg, {
-        url: (c) => {
-          const encoded = encodeCfg(c)
-          setSearchParams(
-            (prev) => {
-              const next = new URLSearchParams(prev)
-              if (encoded) next.set('cfg', encoded)
-              return next
-            },
-            { replace: true },
-          )
+  const writeUrl = useCallback(
+    (c: unknown) => {
+      const encoded = encodeCfg(c)
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (encoded) next.set('cfg', encoded)
+          return next
         },
-        memory: (c) => writeMemory?.(c),
-      }),
-    [cfg, mode, writeMemory, setSearchParams],
+        { replace: true },
+      )
+    },
+    [setSearchParams],
   )
+  const schedule = useCfgScheduler(writeUrl)
+  useEffect(() => schedule(cfg), [cfg, schedule])
+}
+
+/**
+ * `useWriteCfg` without the effect: the function that routes one config change by the enclosing SimHost
+ * (`writeUrl` in lab mode or with no host, the host's memory otherwise) and returns its cancel. The
+ * result changes only when the host's mode or `writeUrl` do. Exported for tests.
+ */
+export function useCfgScheduler(writeUrl: (cfg: unknown) => void): (cfg: unknown) => () => void {
+  const host = useSimHost()
+  const mode = host?.mode
+  const writeMemory = host?.writeConfig
+  return useCallback((cfg) => routeConfigWrite(mode, writeMemory, cfg, writeUrl), [mode, writeMemory, writeUrl])
 }
 
 /** Read the config once: the host's prop config in embed and phone mode, else the ?cfg= param (lazy useState initializer — safe on remount). */
 export function useInitialCfg<T>(): T | null {
   const [searchParams] = useSearchParams()
   const host = useSimHost()
-  const [value] = useState<T | null>(() =>
-    host !== null && host.mode !== 'lab'
-      ? ((host.initialConfig ?? null) as T | null)
-      : decodeCfg<T>(searchParams.get('cfg')),
-  )
+  const [value] = useState<T | null>(() => pickInitialCfg<T>(host, searchParams.get('cfg')))
   return value
 }
 
@@ -223,10 +200,7 @@ export function useSimMachine(): {
       ),
     [setSearchParams],
   )
-  if (host !== null && host.mode !== 'lab') {
-    return { machine: host.machine ?? null, from: host.lessonId ?? null, selectMachine: host.selectMachine }
-  }
-  return { machine: searchParams.get('machine'), from: searchParams.get('from'), selectMachine: selectUrl }
+  return pickMachineSource(host, { machine: searchParams.get('machine'), from: searchParams.get('from'), select: selectUrl })
 }
 
 /* ------------------------------------------------------------------ */

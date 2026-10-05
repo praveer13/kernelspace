@@ -123,7 +123,7 @@ function InlineExercise({ block, trackColor, lessonId }: { block: ExerciseBlock;
           <button
             type="button"
             onClick={() => setForceEmbed(true)}
-            className="font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-accent"
+            className="inline-flex min-h-11 items-center font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-accent"
           >
             run the full simulator here instead
           </button>

@@ -10,18 +10,19 @@
  * A sim that renders without a SimHost behaves as in lab mode.
  */
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import type { ComponentType, LazyExoticComponent, ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import type { SimId } from '@/data/lessons/types'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import RouteFallback from '@/components/RouteFallback'
 import { TaskList } from '@/components/sims/TaskPanel'
-import { decodeCfg, encodeCfg } from '@/components/sims/PlaygroundShell'
-import { SimHostContext, createFinishedStore, createObservationBus, scheduleConfigWrite, useTasksDone } from '@/lib/sims/host'
+import { SimHostContext, createFinishedStore, createObservationBus, decodeCfg, useTasksDone } from '@/lib/sims/host'
 import type { SimHostInternal } from '@/lib/sims/host'
 import { resolveTasks } from '@/lib/sims/registry'
 import type { SimHostProps } from '@/lib/sims/types'
+
+const NOOP = (): void => {}
 
 // Each simulator is its own chunk; only the one being opened is fetched.
 const LOADERS: Record<SimId, () => Promise<{ default: ComponentType }>> = {
@@ -78,47 +79,10 @@ function SimView({ simId, lab, children }: { simId: SimId; lab?: boolean; childr
 /* ------------------------------------------------------------------ */
 
 function LabHost({ simId, machine, taskIds, lessonId, children }: SimHostComponentProps) {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const [initialConfig] = useState<unknown>(() => decodeCfg<unknown>(searchParams.get('cfg')))
   const [bus] = useState(createObservationBus)
   const [finished] = useState(createFinishedStore)
-  const cancelWrite = useRef<() => void>(() => {})
-
-  const writeConfig = useCallback(
-    (cfg: unknown) => {
-      cancelWrite.current()
-      cancelWrite.current = scheduleConfigWrite('lab', cfg, {
-        url: (c) => {
-          const encoded = encodeCfg(c)
-          setSearchParams(
-            (prev) => {
-              const next = new URLSearchParams(prev)
-              if (encoded) next.set('cfg', encoded)
-              return next
-            },
-            { replace: true },
-          )
-        },
-        memory: () => {},
-      })
-    },
-    [setSearchParams],
-  )
-  useEffect(() => () => cancelWrite.current(), [])
-
-  const selectMachine = useCallback(
-    (m: string) =>
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev)
-          next.set('machine', m)
-          return next
-        },
-        { replace: true },
-      ),
-    [setSearchParams],
-  )
-
   const urlMachine = searchParams.get('machine') ?? undefined
   const urlFrom = searchParams.get('from') ?? undefined
   const value = useMemo<SimHostInternal>(
@@ -127,15 +91,15 @@ function LabHost({ simId, machine, taskIds, lessonId, children }: SimHostCompone
       mode: 'lab',
       machine: machine ?? urlMachine,
       initialConfig,
-      writeConfig,
-      selectMachine,
+      writeConfig: NOOP, // lab sims write ?cfg= and ?machine= through the shell's hooks, which never ask the host
+      selectMachine: NOOP,
       observe: bus.emit,
       lessonId: lessonId ?? urlFrom,
       taskIds,
       bus,
       finished,
     }),
-    [simId, machine, urlMachine, initialConfig, writeConfig, selectMachine, bus, lessonId, urlFrom, taskIds, finished],
+    [simId, machine, urlMachine, initialConfig, bus, lessonId, urlFrom, taskIds, finished],
   )
 
   return (
@@ -157,16 +121,13 @@ function InlineHost({ simId, mode, machine: machine0, config, taskIds, lessonId,
   const [initialConfig] = useState<unknown>(config ?? null)
   const [bus] = useState(createObservationBus)
   const [finished] = useState(createFinishedStore)
-  // The sim keeps its own state; an inline host has nowhere to put a config but memory, so it just takes it.
-  const writeConfig = useCallback(() => {}, [])
-
   const value = useMemo<SimHostInternal>(
     () => ({
       simId,
       mode,
       machine,
       initialConfig,
-      writeConfig,
+      writeConfig: NOOP, // the sim keeps its own state; an inline host has nowhere to put a config but memory
       selectMachine: setMachine,
       observe: bus.emit,
       lessonId,
@@ -174,7 +135,7 @@ function InlineHost({ simId, mode, machine: machine0, config, taskIds, lessonId,
       bus,
       finished,
     }),
-    [simId, mode, machine, initialConfig, writeConfig, bus, lessonId, taskIds, finished],
+    [simId, mode, machine, initialConfig, bus, lessonId, taskIds, finished],
   )
 
   return (

@@ -7,6 +7,8 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
+import PhoneOutcome, { OutcomeChart } from '../../src/components/sims/PhoneOutcome'
+import SimMirror from '../../src/components/sims/SimMirror'
 import { TaskPanel } from '../../src/components/sims/TaskPanel'
 import {
   MAX_EXPLAIN_CHARS,
@@ -22,6 +24,7 @@ import {
   wordCount,
 } from '../../src/lib/sims/host'
 import type { RunAction, SimHostInternal, TaskRun } from '../../src/lib/sims/host'
+import type { CanonicalOutcome } from '../../src/lib/sims/host'
 import type { SimTaskDef } from '../../src/lib/sims/types'
 import { makeProfile, startTab } from '../ledger/env'
 
@@ -268,5 +271,81 @@ describe('the panel', () => {
   test('an outcome task with no predict or explain renders nothing', () => {
     expect(render({ ...TASK, predict: undefined })).toBe('')
     expect(render({ ...TASK, explain: undefined })).toBe('')
+  })
+
+  test('an always-mounted live region exists before any result, and the touch-size classes are on the controls', () => {
+    const html = render(TASK)
+    expect(html).toMatch(/role="status" aria-live="polite"[^>]*class="sr-only"><\/div>/)
+    expect(html).toContain('min-h-6')
+    expect(html).toContain('[@media(pointer:coarse)]:min-h-11')
+  })
+})
+
+describe('phone mode (§10.4, §16.2)', () => {
+  test('a fresh phone panel: every control carries the 44 px hit area, and nothing is graded yet', () => {
+    const html = renderToString(createElement(PhoneOutcome, { task: TASK }))
+    expect(html).toContain('data-phone')
+    expect(html).toContain('Lock in and show the outcome')
+    expect(html).not.toContain('Queue the hands-on run')
+    // the lock button, the three "how sure" chips and the numeric field
+    expect(html.match(/min-h-11/g)!.length).toBeGreaterThanOrEqual(4)
+    expect(html).not.toContain('min-h-6')
+    expect(html).not.toContain('h-9')
+    expect(html).not.toContain('role="status"')
+  })
+
+  test('a choice task in phone mode makes each radio row 44 px', () => {
+    const html = renderToString(createElement(PhoneOutcome, { task: CHOICE_TASK }))
+    expect(html.match(/type="radio"/g)).toHaveLength(2)
+    expect(html.match(/<label[^>]*min-h-11/g)).toHaveLength(2)
+  })
+
+  const outcome = (over: Partial<CanonicalOutcome['chart']> = {}): CanonicalOutcome => ({
+    actual: 295,
+    unit: 'FLOP/B',
+    summary: 'The ridge is 295 FLOP/B.',
+    chart: { kind: 'bars', xLabel: 'batch', yLabel: 'FLOP/B', points: [{ x: 1, y: 2 }, { x: 8, y: 16 }, { x: 32, y: 64 }], mark: 2, ...over },
+    table: { caption: 'Intensity by batch', columns: ['batch', 'FLOP/B'], rows: [['1', '2'], ['8', '16'], ['32', '64']] },
+  })
+  const barHeights = (svg: string) => [...svg.matchAll(/<rect [^>]*height="([\d.]+)"/g)].map((m) => Number(m[1]))
+  const chart = (o: CanonicalOutcome) => renderToString(createElement(OutcomeChart, { outcome: o }))
+
+  test('the chart is a labelled image with a mark, and an empty series draws nothing', () => {
+    const svg = chart(outcome())
+    expect(svg).toContain('role="img"')
+    expect(svg).toContain('aria-label="FLOP/B by batch. The ridge is 295 FLOP/B."')
+    expect(svg.match(/fill-accent/g)).toHaveLength(1)
+    expect(chart(outcome({ points: [] }))).toBe('')
+  })
+
+  test('a log-Y series on one power of ten still has bars with a height, and so does a line', () => {
+    const flat = [{ x: 'a', y: 100 }, { x: 'b', y: 100 }]
+    for (const heights of [barHeights(chart(outcome({ logY: true, points: flat, mark: 0 })))]) {
+      expect(heights).toHaveLength(2)
+      for (const h of heights) expect(h).toBeGreaterThan(20)
+    }
+    const line = chart(outcome({ kind: 'line', logY: true, points: [{ x: 1, y: 1000 }, { x: 2, y: 1000 }], mark: 1 }))
+    expect(line).not.toContain('NaN')
+    expect(line).not.toContain('Infinity')
+  })
+})
+
+describe('SimMirror (§10.5)', () => {
+  const table = { caption: 'Roofline points', columns: ['batch', 'FLOP/B'], rows: [['1', '2'], ['32', '64']], announce: 'bandwidth-bound' }
+  const html = renderToString(createElement(SimMirror, { id: 'mirror-roof', table }))
+
+  test('the table is in the document, visually hidden, and the toggle points at it', () => {
+    expect(html).toMatch(/<div id="mirror-roof" class="sr-only"><table/)
+    expect(html).toContain('<caption')
+    expect(html).toContain('scope="col"')
+    expect(html).toContain('scope="row"')
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*aria-controls="mirror-roof"|<button[^>]*aria-controls="mirror-roof"[^>]*aria-expanded="false"/)
+    expect(html).toContain('Show data table')
+    expect(html).toContain('min-h-6')
+  })
+
+  test('a polite, atomic live region is mounted, empty until the first throttled announcement', () => {
+    expect(html).toMatch(/<div role="status" aria-live="polite" aria-atomic="true" class="sr-only"><\/div>/)
+    expect(html).not.toContain('bandwidth-bound</div>')
   })
 })

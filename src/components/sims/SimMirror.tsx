@@ -12,7 +12,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { announceDelay } from '@/lib/sims/host'
+import { clsx as cn } from 'clsx'
+import { announceDelay, hitArea } from '@/lib/sims/host'
 import type { MirrorTable } from '@/lib/sims/types'
 
 /** The table alone (phone mode shows it open beside its chart). */
@@ -84,7 +85,10 @@ export default function SimMirror({ id, table, className }: SimMirrorProps) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={id}
-        className="rounded-sm border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-text-2 transition-colors duration-150 hover:border-line-bright hover:text-text-1"
+        className={cn(
+          'inline-flex items-center rounded-sm border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-text-2 transition-colors duration-150 hover:border-line-bright hover:text-text-1',
+          hitArea(false),
+        )}
       >
         {open ? 'Hide data table' : 'Show data table'}
       </button>

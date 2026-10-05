@@ -8,7 +8,7 @@
  * record is written `ok: false`: full completion still needs the laptop run (see buildPhoneOutcome).
  */
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { CalendarClock, Check, Lock } from 'lucide-react'
 import { useProgress } from '@/lib/progress'
 import { clsx as cn } from 'clsx' // not twMerge: it drops `text-body-sm` next to a `text-text-*` colour
@@ -17,6 +17,7 @@ import {
   checkPrediction,
   describePrediction,
   formatNumber,
+  hitArea,
   parseLaptopQueue,
   queueForLaptop,
   splitCanonical,
@@ -27,7 +28,18 @@ import { MirrorTableView } from '@/components/sims/SimMirror'
 import { PredictFields } from '@/components/sims/TaskPanel'
 import type { PredictDraft } from '@/components/sims/TaskPanel'
 
-const MODELS = import.meta.glob<{ PHONE_MODELS: Record<string, () => CanonicalOutcome> }>('/src/lib/sims/models/*.ts')
+type ModelModule = { PHONE_MODELS: Record<string, () => CanonicalOutcome> }
+
+/** Vite rewrites `import.meta.glob`; under `bun test` it is not there, and no model loads (phone mode then reads as "missing"). */
+function discoverModels(): Record<string, () => Promise<ModelModule>> {
+  try {
+    return import.meta.glob<ModelModule>('/src/lib/sims/models/*.ts')
+  } catch {
+    return {}
+  }
+}
+
+const MODELS = discoverModels()
 
 type Loaded = { state: 'loading' } | { state: 'missing' } | { state: 'ready'; outcome: CanonicalOutcome }
 
@@ -70,6 +82,17 @@ export default function PhoneOutcome({ task }: { task: SimTaskDef }) {
   const [invalid, setInvalid] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; prediction: Prediction } | null>(null)
   const queued = parseLaptopQueue(queue).some((q) => q.simId === task.simId && q.taskId === task.id)
+  // The pressed button unmounts, so focus moves to what replaces it (§16.2).
+  const resultRef = useRef<HTMLParagraphElement>(null)
+  const queuedRef = useRef<HTMLParagraphElement>(null)
+  const queuePressed = useRef(false)
+  const hasResult = result !== null
+  useEffect(() => {
+    if (hasResult) resultRef.current?.focus({ preventScroll: true })
+  }, [hasResult])
+  useEffect(() => {
+    if (queued && queuePressed.current) queuedRef.current?.focus({ preventScroll: true })
+  }, [queued])
 
   if (spec === undefined) return null
 
@@ -87,6 +110,7 @@ export default function PhoneOutcome({ task }: { task: SimTaskDef }) {
   }
 
   const queueIt = () => {
+    queuePressed.current = true
     setWorking(
       'queue:laptop',
       queueForLaptop(queue, { simId: task.simId, taskId: task.id, at: new Date().toISOString() }),
@@ -117,13 +141,17 @@ export default function PhoneOutcome({ task }: { task: SimTaskDef }) {
             lockedPrediction={result?.prediction}
             lockedConf={draft.conf}
             onSubmit={submit}
+            touch
           />
           {result === null && (
             <button
               type="button"
               onClick={submit}
               disabled={canonical.state !== 'ready'}
-              className="mt-3 flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-2 font-display text-[14px] font-semibold text-accent-foreground transition-all duration-150 active:scale-[.97] disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-text-3"
+              className={cn(
+                'mt-3 flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-2 font-display text-[14px] font-semibold text-accent-foreground transition-all duration-150 active:scale-[.97] disabled:cursor-not-allowed disabled:bg-surface-3 disabled:text-text-3',
+                hitArea(true),
+              )}
             >
               <Lock size={13} strokeWidth={2} aria-hidden />
               Lock in and show the outcome
@@ -135,9 +163,10 @@ export default function PhoneOutcome({ task }: { task: SimTaskDef }) {
       {result !== null && canonical.state === 'ready' && (
         <div className="mt-3 space-y-3">
           <p
-            role="status"
+            ref={resultRef}
+            tabIndex={-1}
             className={cn(
-              'rounded-sm border-l-2 px-2.5 py-2 text-body-sm text-text-1',
+              'rounded-sm border-l-2 px-2.5 py-2 text-body-sm text-text-1 outline-none',
               result.ok ? 'border-accent bg-accent-dim/30' : 'border-amber bg-surface-3',
             )}
           >
@@ -162,7 +191,7 @@ export default function PhoneOutcome({ task }: { task: SimTaskDef }) {
       {(result !== null || canonical.state === 'missing') && (
         <div className="mt-3">
           {queued ? (
-            <p role="status" className="flex items-center gap-1.5 text-body-sm text-text-2">
+            <p ref={queuedRef} tabIndex={-1} className="flex items-center gap-1.5 text-body-sm text-text-2 outline-none">
               <Check size={14} className="text-accent" aria-hidden />
               Queued for your laptop. Up Next will bring it back.
             </p>
@@ -170,7 +199,10 @@ export default function PhoneOutcome({ task }: { task: SimTaskDef }) {
             <button
               type="button"
               onClick={queueIt}
-              className="flex items-center gap-1.5 rounded-md border border-line bg-surface-3 px-3 py-2 text-body-sm text-text-1 transition-colors duration-150 hover:border-line-bright active:scale-[.97]"
+              className={cn(
+                'flex items-center gap-1.5 rounded-md border border-line bg-surface-3 px-3 py-2 text-body-sm text-text-1 transition-colors duration-150 hover:border-line-bright active:scale-[.97]',
+                hitArea(true),
+              )}
             >
               <CalendarClock size={14} strokeWidth={1.75} aria-hidden />
               Queue the hands-on run for my laptop
@@ -192,15 +224,18 @@ const H = 190
 const PAD = { l: 44, r: 12, t: 12, b: 34 }
 
 /** Bars (a category per point) or a line (x numeric), with the marked point in the accent colour. */
-function OutcomeChart({ outcome }: { outcome: CanonicalOutcome }) {
+export function OutcomeChart({ outcome }: { outcome: CanonicalOutcome }) {
   const { chart } = outcome
   const pts = chart.points
   if (pts.length === 0) return null
   const ys = pts.map((p) => p.y)
   const logY = chart.logY === true && ys.every((y) => y > 0)
   const ty = (y: number) => (logY ? Math.log10(y) : y)
-  const yMin = logY ? Math.floor(Math.log10(Math.min(...ys))) : 0
-  const yMax = logY ? Math.ceil(Math.log10(Math.max(...ys))) : Math.max(...ys) * 1.1 || 1
+  // A log axis starts at a power of ten: bars start one decade below their smallest value (else it has no
+  // height) and the range is at least a decade wide (else a series on one power of ten has no span).
+  const lo = logY ? Math.log10(Math.min(...ys)) : 0
+  const yMin = logY ? (chart.kind === 'bars' ? Math.ceil(lo) - 1 : Math.floor(lo)) : 0
+  const yMax = logY ? Math.max(Math.ceil(Math.log10(Math.max(...ys))), yMin + 1) : Math.max(...ys) * 1.1 || 1
   const iw = W - PAD.l - PAD.r
   const ih = H - PAD.t - PAD.b
   const py = (y: number) => PAD.t + ih - ((ty(y) - yMin) / (yMax - yMin || 1)) * ih

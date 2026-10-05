@@ -15,6 +15,32 @@ import { useProgress } from '@/lib/progress'
 import type { MirrorTable, Observation, PredictSpec, SimHostContextValue, SimHostMode, SimTaskDef } from './types'
 
 /* ------------------------------------------------------------------ */
+/* Config ↔ URL codec (playground.md §2: base64 JSON, versioned)       */
+/* ------------------------------------------------------------------ */
+
+export function encodeCfg(cfg: unknown): string {
+  try {
+    return btoa(JSON.stringify({ v: 1, cfg }))
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, '')
+  } catch {
+    return ''
+  }
+}
+
+export function decodeCfg<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    const b64 = raw.replaceAll('-', '+').replaceAll('_', '/')
+    const parsed = JSON.parse(atob(b64)) as { v: number; cfg: T }
+    return parsed?.v === 1 ? parsed.cfg : null
+  } catch {
+    return null
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* /lab/:simId ids                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -190,6 +216,48 @@ export function scheduleConfigWrite(
   return () => clearTimeout(id)
 }
 
+/**
+ * The host-to-sink decision the shell hooks share (`useWriteCfg`, `useInitialCfg`, `useSimMachine`): the URL
+ * is the store only in lab mode, or when no SimHost wraps the sim. Kept pure so tests can pin it.
+ */
+export const hostUsesUrl = (host: Pick<SimHostContextValue, 'mode'> | null): boolean => (host?.mode ?? 'lab') === 'lab'
+
+/** `scheduleConfigWrite` for a sim's hook: `mode` and `writeMemory` come from the SimHost (undefined: none). */
+export function routeConfigWrite(
+  mode: SimHostMode | undefined,
+  writeMemory: ((cfg: unknown) => void) | undefined,
+  cfg: unknown,
+  writeUrl: (cfg: unknown) => void,
+): () => void {
+  return scheduleConfigWrite(mode ?? 'lab', cfg, { url: writeUrl, memory: (c) => writeMemory?.(c) })
+}
+
+/** The config a sim starts from: the host's props outside lab mode, else the decoded `?cfg=`. */
+export function pickInitialCfg<T>(host: Pick<SimHostContextValue, 'mode' | 'initialConfig'> | null, rawUrlCfg: string | null): T | null {
+  if (host === null || hostUsesUrl(host)) return decodeCfg<T>(rawUrlCfg)
+  return (host.initialConfig ?? null) as T | null
+}
+
+/** The machine and lesson a sim sees, and where a machine switch goes: the host in embed and phone, else the URL. */
+export function pickMachineSource(
+  host: Pick<SimHostContextValue, 'mode' | 'machine' | 'selectMachine'> & { lessonId?: string } | null,
+  url: { machine: string | null; from: string | null; select: (machine: string) => void },
+): { machine: string | null; from: string | null; selectMachine: (machine: string) => void } {
+  if (host === null || hostUsesUrl(host)) return { machine: url.machine, from: url.from, selectMachine: url.select }
+  return { machine: host.machine ?? null, from: host.lessonId ?? null, selectMachine: host.selectMachine }
+}
+
+/* ------------------------------------------------------------------ */
+/* Touch targets                                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Hit area of a control (spec §16.2, WCAG 2.5.8): 44 px in phone mode and on a coarse pointer, at least
+ * 24 px on a desktop one.
+ */
+export const hitArea = (touch: boolean): string =>
+  touch ? 'min-h-11 min-w-11' : 'min-h-6 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11'
+
 /* ------------------------------------------------------------------ */
 /* Predictions and grading (§10.3)                                     */
 /* ------------------------------------------------------------------ */
@@ -286,7 +354,7 @@ export interface TaskRun {
   conf?: Confidence
   committedAt?: number
   /** The first observation of the task's `observe` key after the commit. */
-  observed?: { actual: number | string; unit?: string; configHash?: string; grade: PredictionGrade }
+  observed?: { actual: number | string; unit?: string; grade: PredictionGrade }
   explain: string
   /** Indices of the ticked ideas, ascending. */
   ideas: number[]
@@ -325,7 +393,7 @@ export function reduceRun(task: SimTaskDef, state: TaskRun, action: RunAction): 
       if (action.obs.key !== task.observe) return state
       const grade = gradePrediction(task.predict, state.prediction, action.obs.value)
       if (grade === null) return state
-      const observed = { actual: action.obs.value, unit: action.obs.unit, configHash: action.obs.configHash, grade }
+      const observed = { actual: action.obs.value, unit: action.obs.unit, grade }
       return { ...state, phase: 'explain', observed }
     }
     case 'explain':

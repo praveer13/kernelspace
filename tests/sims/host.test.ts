@@ -8,25 +8,33 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import SimHost from '../../src/components/sims/SimHost'
-import { decodeCfg, encodeCfg, useInitialCfg, useSimMachine } from '../../src/components/sims/PlaygroundShell'
+import { useCfgScheduler, useInitialCfg, useSimMachine } from '../../src/components/sims/PlaygroundShell'
 import {
   ANNOUNCE_MIN_GAP_MS,
   CFG_WRITE_DELAY_MS,
   LAPTOP_QUEUE_MAX,
   SIM_ALIASES,
+  SimHostContext,
   announceDelay,
   checkPrediction,
   createFinishedStore,
   createObservationBus,
+  decodeCfg,
+  encodeCfg,
   gradePrediction,
+  hitArea,
+  hostUsesUrl,
+  pickInitialCfg,
+  pickMachineSource,
   parseLaptopQueue,
   parseNumeric,
   queueForLaptop,
   resolveInlineMode,
+  routeConfigWrite,
   scheduleConfigWrite,
   splitCanonical,
 } from '../../src/lib/sims/host'
-import type { ConfigSinks } from '../../src/lib/sims/host'
+import type { ConfigSinks, SimHostInternal } from '../../src/lib/sims/host'
 import type { Observation, PredictSpec, SimHostMode } from '../../src/lib/sims/types'
 import { WAIVER, checkCanvasMirrors } from '../../scripts/verify-plays'
 
@@ -65,6 +73,117 @@ describe('where a config change goes (§10.1)', () => {
     expect(calls).toEqual(['memory:{"n":1}', 'memory:{"n":2}'])
     await sleep(30)
     expect(calls.some((c) => c.startsWith('url:'))).toBe(false)
+  })
+})
+
+const sleepLong = () => sleep(CFG_WRITE_DELAY_MS + 60)
+
+const fakeHost = (mode: SimHostMode, over: Partial<SimHostInternal> = {}): SimHostInternal => ({
+  simId: 'sim-allocator',
+  mode,
+  machine: 'allocator',
+  initialConfig: { s: 'from-props' },
+  writeConfig: () => {},
+  selectMachine: () => {},
+  observe: () => {},
+  lessonId: 't1.l4',
+  bus: createObservationBus(),
+  finished: createFinishedStore(),
+  ...over,
+})
+
+describe('the host-to-sink decision (§10.1), pure', () => {
+  test('only lab, or no host at all, uses the URL', () => {
+    expect(hostUsesUrl(null)).toBe(true)
+    expect(hostUsesUrl({ mode: 'lab' })).toBe(true)
+    expect(hostUsesUrl({ mode: 'embed' })).toBe(false)
+    expect(hostUsesUrl({ mode: 'phone' })).toBe(false)
+  })
+
+  test('routeConfigWrite: no host and lab write the URL after the delay; embed and phone write memory only', async () => {
+    const calls: string[] = []
+    const mem = (c: unknown) => calls.push(`memory:${JSON.stringify(c)}`)
+    const url = (c: unknown) => calls.push(`url:${JSON.stringify(c)}`)
+    routeConfigWrite(undefined, undefined, { n: 0 }, url)
+    routeConfigWrite('lab', mem, { n: 1 }, url)
+    routeConfigWrite('embed', mem, { n: 2 }, url)
+    routeConfigWrite('phone', mem, { n: 3 }, url)
+    routeConfigWrite('embed', undefined, { n: 4 }, url) // no memory sink: dropped, still no URL
+    expect(calls).toEqual(['memory:{"n":2}', 'memory:{"n":3}'])
+    await sleepLong()
+    expect(calls.filter((c) => c.startsWith('url:'))).toEqual(['url:{"n":0}', 'url:{"n":1}'])
+  })
+
+  test('pickInitialCfg: props outside lab, the decoded ?cfg= in lab and with no host', () => {
+    const raw = encodeCfg({ s: 'from-url' })
+    expect(pickInitialCfg(null, raw)).toEqual({ s: 'from-url' })
+    expect(pickInitialCfg(fakeHost('lab'), raw)).toEqual({ s: 'from-url' })
+    expect(pickInitialCfg(fakeHost('embed'), raw)).toEqual({ s: 'from-props' })
+    expect(pickInitialCfg(fakeHost('phone', { initialConfig: undefined }), raw)).toBeNull()
+  })
+
+  test('pickMachineSource: the host in embed and phone, the URL in lab and with no host', () => {
+    const url = { machine: 'rust', from: 't3.l3', select: () => {} }
+    expect(pickMachineSource(null, url)).toEqual({ machine: 'rust', from: 't3.l3', selectMachine: url.select })
+    expect(pickMachineSource(fakeHost('lab'), url).selectMachine).toBe(url.select)
+    const h = fakeHost('embed')
+    expect(pickMachineSource(h, url)).toEqual({ machine: 'allocator', from: 't1.l4', selectMachine: h.selectMachine })
+  })
+})
+
+/**
+ * The hooks sims call, run through their real wiring. renderToString runs no effects, so the probes call
+ * what the hook returns while rendering; the router is a MemoryRouter and the URL sink is a spy.
+ */
+describe('the hooks route by the enclosing host (§10.1: embed and phone never write the URL)', () => {
+  const withHost = (host: SimHostInternal | null, el: ReturnType<typeof createElement>) =>
+    html(host === null ? el : createElement(SimHostContext.Provider, { value: host }, el), '/lesson/t1.l4?machine=rust&from=t3.l3')
+
+  async function schedulerCalls(host: SimHostInternal | null) {
+    const calls: string[] = []
+    const mem = (c: unknown) => calls.push(`memory:${JSON.stringify(c)}`)
+    function Writer() {
+      const schedule = useCfgScheduler((c) => calls.push(`url:${JSON.stringify(c)}`))
+      schedule({ n: 1 })
+      return null
+    }
+    withHost(host === null ? null : { ...host, writeConfig: mem }, createElement(Writer))
+    await sleepLong()
+    return calls
+  }
+
+  test('useCfgScheduler: lab and no host reach the URL; embed and phone reach memory and never the URL', async () => {
+    expect(await schedulerCalls(null)).toEqual(['url:{"n":1}'])
+    expect(await schedulerCalls(fakeHost('lab'))).toEqual(['url:{"n":1}'])
+    expect(await schedulerCalls(fakeHost('embed'))).toEqual(['memory:{"n":1}'])
+    expect(await schedulerCalls(fakeHost('phone'))).toEqual(['memory:{"n":1}'])
+  })
+
+  test('useSimMachine: embed and phone get the host’s selectMachine, lab and no host get the URL’s', () => {
+    const picked = (host: SimHostInternal | null) => {
+      const got: unknown[] = []
+      function P() {
+        got.push(useSimMachine().selectMachine)
+        return null
+      }
+      withHost(host, createElement(P))
+      return got[0]
+    }
+    for (const mode of ['embed', 'phone'] as const) {
+      const h = fakeHost(mode)
+      expect(picked(h)).toBe(h.selectMachine)
+    }
+    const lab = fakeHost('lab')
+    expect(picked(lab)).not.toBe(lab.selectMachine)
+    expect(picked(null)).toBeInstanceOf(Function)
+  })
+})
+
+describe('touch targets (§16.2)', () => {
+  test('phone mode asks for 44 px; elsewhere 24 px, 44 px on a coarse pointer', () => {
+    expect(hitArea(true)).toContain('min-h-11')
+    expect(hitArea(false)).toContain('min-h-6')
+    expect(hitArea(false)).toContain('[@media(pointer:coarse)]:min-h-11')
   })
 })
 
@@ -143,7 +262,7 @@ describe('observation bus', () => {
     const offA = bus.subscribe((o) => a.push(`${o.key}=${o.value}`))
     bus.subscribe((o) => b.push(o.key))
     bus.emit({ key: 'k', value: 1 })
-    bus.emit({ key: 'k', value: 'two', unit: 'x', configHash: 'h' })
+    bus.emit({ key: 'k', value: 'two', unit: 'x' })
     offA()
     bus.emit({ key: 'j', value: 3 })
     expect(a).toEqual(['k=1', 'k=two'])
