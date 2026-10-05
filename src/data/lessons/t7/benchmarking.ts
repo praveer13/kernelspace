@@ -63,7 +63,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
           q: 'Two engine comparisons report opposite winners. The most common cause is…',
           options: [
             'Run-to-run noise, so the rankings flip at random and the test should be repeated until one winner appears',
-            'Engine builds: the reports ran different vLLM or SGLang versions or kernels, which alone explains the flip',
+            'Unpinned builds: once both reports use the same vLLM or SGLang version and kernels, any two harnesses must agree',
             'A different traffic shape, warmup or stack configuration: results belong to the workload and harness',
             'Hardware generation, since an engine\'s ranking is fixed per GPU and the two reports must have used different chips',
           ],
@@ -72,7 +72,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
             'Rules 1 and 4: different length distributions, prefix ratios, warmup states, power caps, or engine versions. Before believing any comparison, check that everything except the engine was identical.',
           why: [
             'Noise exists but is small beside the effects of workload shape, and repetition under different settings will keep flipping the winner. Controlled runs, not repeats, resolve the disagreement.',
-            'Versions and kernels do shift results, but they are one factor among many. Reports pinned to identical builds still flip on length distribution, prefix ratio or warmup, so version alone does not explain it.',
+            'Pinning versions and kernels helps but does not make harnesses agree. On identical builds the winner still flips with length distribution, prefix ratio, warmup or power cap, which pinning leaves free.',
             'Right: rules 1 and 4. Length distributions, arrival process, prefix ratio, warmup, power caps and engine versions all move the result. Check that everything except the engine was identical.',
             'Hardware is one axis, but rankings flip on identical chips too when traffic shape, prefix sharing or warmup differ. Pinning the GPU alone does not make two comparisons agree.',
           ],

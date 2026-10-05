@@ -77,7 +77,7 @@ The engine's control loop, one line: **batching couples TTFT and TPOT into a see
             'Throughput flattens as batch size grows; latency blows up past the knee. Unaccompanied throughput numbers are taken at the knee you would never operate at. Ask: at what concurrency, at what TTFT/TPOT?',
           why: [
             'Peak tok/s is the number capacity plans must not use. Throughput flattens as batch grows while latency climbs steeply past the knee, so the peak sits where users already see unusable delays.',
-            'Right: throughput is monotonic in batch size, latency blows up past the knee. A figure with no TTFT or TPOT is likely from the vertical part of the curve, so ask at what concurrency.',
+            'Right: throughput rises and flattens with batch size while latency blows up past the knee. A figure with no TTFT or TPOT is likely from the vertical part of the curve, so ask at what concurrency.',
             'Dividing by GPU count changes the unit, not the missing context. Per-GPU throughput is still undefined without the latency it was reached at, so vendors remain incomparable.',
             'Naming the model fixes one variable only. The same model gives very different tok/s at batch 1 and batch 256, so the operating point still decides the number.',
           ],
@@ -88,7 +88,7 @@ The engine's control loop, one line: **batching couples TTFT and TPOT into a see
             'The tokenizer, whose per-request CPU time delays both the first token and every later token',
             'NCCL collectives, whose fixed all-reduce latency is added to both prefill and every decode step of a request',
             'Batching: bigger batches amortize weight reads but deepen queues and lengthen every decode step',
-            'Quantization, which speeds prefill by shrinking weights but slows each decode step through dequantization',
+            'Quantization, which trades accuracy for speed, so a faster TTFT is bought with a slower TPOT and vice versa',
           ],
           correct: [2],
           explanation:
@@ -97,7 +97,7 @@ The engine's control loop, one line: **batching couples TTFT and TPOT into a see
             'Tokenization is small CPU work that delays only TTFT, once per request, not every later token. It cannot create a seesaw, which needs one metric to improve while the other worsens.',
             'A fixed per-step collective cost raises both latencies together, so it is overhead, not a tradeoff. The seesaw comes from a knob that helps one at the other\'s expense.',
             'Right: batch size is the dial. Larger batches amortize weight reads and raise throughput, but they queue requests longer and stretch each step, so TTFT and TPOT rise as cost falls.',
-            'Quantization is not a tradeoff knob. Fewer weight bytes speed decode, while only low-precision math (FP8, FP4) speeds compute-bound prefill, so the frontier moves outward instead of trading one metric for the other.',
+            'Quantization trades accuracy, not one latency for the other. Fewer weight bytes speed decode and low-precision math (FP8, FP4) speeds prefill, so it moves the frontier outward instead of along it.',
           ],
         },
         {
