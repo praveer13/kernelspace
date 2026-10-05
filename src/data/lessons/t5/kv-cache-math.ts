@@ -80,7 +80,7 @@ And the formula's blind spot: it prices *residency*. The per-step **bandwidth** 
     {
       type: 'callout',
       variant: 'warning',
-      md: `Don't confuse the two memory walls. **Capacity wall:** concurrent × context × per-token bytes > HBM → can't admit more requests (solve with paging, quant, offload). **Bandwidth wall:** per-step reads of weights+KV > what latency allows → ITL blows the SLO (solve with batching, quant, shorter cache). Teams routinely fix the wrong one: more GPUs don't speed ITL; faster kernels don't add capacity. Name the wall before you buy the fix.`,
+      md: `Don't confuse the two memory walls. **Capacity wall:** concurrent × context × per-token bytes > HBM → can't admit more requests (solve with paging, quant, offload). **Bandwidth wall:** per-step reads of weights+KV > what latency allows → ITL blows the SLO (solve with batching, quant, shorter cache). Teams routinely fix the wrong one: more replicas do not speed ITL; sharding one model across GPUs can, until communication dominates; faster kernels don't add capacity. Name the wall before you buy the fix.`,
     },
     {
       type: 'prose',

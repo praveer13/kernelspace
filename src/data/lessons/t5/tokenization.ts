@@ -54,7 +54,7 @@ def bpe_train(corpus: list[bytes], vocab_size: int):
 
 **Tokenization is on the hot path — but it's not the bottleneck you think.** Encoding is fast (µs–ms); what matters is *counting*: billing, truncation, and context management all need exact token counts per request, which means running the tokenizer (or a cached count) per message. Under-specify this and you get the classic production bug: truncated context, silent quality loss, confused users.
 
-**Edge cases with teeth:** trailing whitespace and capitalization are *different tokens* (" hello" vs "hello" — models learn sentence-initial forms separately); token boundaries blind the model to intra-token characters (the strawberry problem: "strawberry" is one token; the model never sees its letters); and tokenizer **version skew** — same model name, different tokenizer revision — changes token counts and breaks caches. Pin the tokenizer like you pin the model.`,
+**Edge cases with teeth:** trailing whitespace and capitalization are *different tokens* (" hello" vs "hello" — models learn sentence-initial forms separately); token boundaries blind the model to intra-token characters (the strawberry problem: the model receives ids for multi-letter chunks, never the letters inside them, so counting the r's is a memorization problem, not a lookup); and tokenizer **version skew** — same model name, different tokenizer revision — changes token counts and breaks caches. Pin the tokenizer like you pin the model.`,
     },
     {
       type: 'statline',

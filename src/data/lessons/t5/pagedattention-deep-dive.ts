@@ -122,7 +122,7 @@ class BlockManager:
       type: 'prose',
       md: `## What the indirection costs — and buys
 
-The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: a few percent on attention time — and attention is a minority of decode time (the MLP dominates, T5.L1). What it buys, from the paper and every deployment since: waste from 60–80% → **<4%**, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
+The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% → **<4%**, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
     },
     {
       type: 'exercise',
