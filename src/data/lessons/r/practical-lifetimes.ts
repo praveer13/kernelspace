@@ -79,6 +79,7 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
             'Right: lifetimes are erased after borrow checking and generate no code. They only let the compiler prove references never outlive their referents.',
             'No scope tag or runtime check exists; a reference is a plain pointer. Dangling use is rejected at compile time, for example with E0597.',
           ],
+          kcs: ['r.lifetimes'],
         },
         {
           q: 'Why must struct Block<\'a> declare a lifetime for its &[u32] field?',
@@ -97,6 +98,7 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
             'A &[u32] is a fixed-size pointer and length pair, so Block\'s size is known. The lifetime says nothing about size; it relates validity.',
             'Elision does not apply to struct fields. A reference field always needs a named lifetime, shared or mutable, or E0106 is reported.',
           ],
+          kcs: ['r.lifetimes', 'r.slices'],
         },
         {
           q: 'What is the right fix when data truly must outlive the input it came from?',
@@ -115,10 +117,12 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
             'Box<&T> still holds the original borrow, so it lives no longer than the input. Boxing moves the pointer to the heap, not the referent.',
             'A shared reference is Copy, so `let r2 = r` only duplicates the pointer. The copy keeps the input\'s lifetime. Only an owning conversion such as to_string or to_vec detaches it.',
           ],
+          kcs: ['r.lifetimes'],
         },
       ],
     },
   ],
+  kcs: ['r.lifetimes', 'r.slices'],
 }
 
 export default lesson

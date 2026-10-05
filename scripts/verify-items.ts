@@ -33,8 +33,8 @@
  *
  * The cross-validated gates below target the options-only cue-ablation bar of PLAN-100X directly, so that no single
  * feature can be gamed. They run over the gated items: every item of a `whyRequired` lesson track, Fleet Week Act IV
- * (when gated) and the errata retrieval items (src/data/errata/*.ts `items`, always gated; they have no lessons, so the
- * lesson-pass metrics do not apply to them and their rates are reported separately). Multi-select items cannot be hit by one
+ * (when gated) and the errata retrieval items (src/data/errata/*.ts `items`, plus the placement anchors of src/data/placement/*.ts, always gated; they have no
+ * lessons, so the lesson-pass metrics do not apply to them and their rates are reported separately). Multi-select items cannot be hit by one
  * pick and count as misses. Chance is the mean of 1 / options over the evaluated single-key items.
  * (15) ODD-ONE-OUT, per item: for each binary feature (a reason connective: because, since, so, which means, as a result;
  * a parenthetical; a colon; a semicolon; a digit; an acronym; an absolute or hedge word; an enumeration of 2+ commas) the key may be
@@ -847,6 +847,30 @@ const errataFile = new Map<Item, string>()
         errataFile.set(item, `src/data/errata/${file}`)
       }
     })
+  }
+}
+
+// Placement anchors (src/data/placement/*.ts, any exported array of { id, q }): authored single-answer items with
+// no lesson, gated with the errata items (they share the 'errata' pool).
+{
+  const dir = new URL('src/data/placement/', REPO_ROOT)
+  const files = (await readdir(dir).catch(() => [] as string[])).filter((name) => name.endsWith('.ts')).sort()
+  for (const file of files) {
+    const mod = (await import(new URL(file, dir).href)) as Record<string, unknown>
+    for (const list of Object.values(mod)) {
+      if (!Array.isArray(list)) continue
+      for (const entry of list as { id?: string; q?: QuizQuestion }[]) {
+        if (typeof entry?.id !== 'string' || !entry.q) continue
+        const item: Item = { track: ERRATA_TRACK, lessonId: null, qi: -1, ref: `item:${entry.id}`, q: entry.q, needsExplanation: true }
+        const errs = structureErrors(item)
+        if (errs.length) {
+          failures.push(`structure: src/data/placement/${file} ${entry.id}: ${errs.join('; ')}`)
+        } else {
+          errataItems.push(item)
+          errataFile.set(item, `src/data/placement/${file}`)
+        }
+      }
+    }
   }
 }
 

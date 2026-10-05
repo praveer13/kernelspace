@@ -77,6 +77,7 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
             'The unlocking store must be Release so the critical section\'s writes are visible to the next Acquire locker. Relaxed would let them be missed.',
             'Atomicity does not give ordering. A CAS that publishes or consumes other data needs Acquire or Release, so Relaxed fits only independent values.',
           ],
+          kcs: ['r.atomics-ordering'],
         },
         {
           q: 'What relationship does Release/Acquire establish when the Acquire observes the Release?',
@@ -95,6 +96,7 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
             'Acquire never blocks or waits. It is a load that either reads the released value or does not, and then the thread must retry or proceed.',
             'Orderings are chosen per operation. Release and Acquire do not upgrade other operations, and only SeqCst operations join the single global order.',
           ],
+          kcs: ['r.atomics-ordering'],
         },
         {
           q: 'Why must compare_exchange code handle failure?',
@@ -113,10 +115,31 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
             'Atomics have no poisoning; that is a Mutex feature. After a failed CAS the atomic is intact and can be used again at once.',
             'Atomic operations never tear. A failed CAS leaves the value untouched, with only the observed value returned, so nothing needs restoring.',
           ],
+          kcs: ['r.compare-exchange'],
+        },
+        {
+          q: 'In try_lock above, why can the failure ordering be Relaxed while the success ordering is Acquire?',
+          options: [
+            'The success ordering covers both outcomes, so the failure argument is ignored',
+            'A failed probe took no lock, so there is no protected data to acquire',
+            'A failed exchange stores the old value back, and a store cannot carry Acquire',
+            'Relaxed is the cheapest ordering, so a retry loop is best served by using it everywhere',
+          ],
+          correct: [1],
+          explanation:
+            'Success must see the previous holder\'s writes, so it acquires. A failed probe only loads and took no lock, so it has nothing to acquire.',
+          why: [
+            'The two orderings describe different events and both are used. A failed exchange runs only the failure ordering, which the success ordering does not cover.',
+            'Right: success takes the lock and must see the last holder\'s writes, so it needs Acquire. A failure only loads and guards nothing, so Relaxed is enough.',
+            'A failed exchange stores nothing; it only loads the current value. Acquire is a legal failure ordering for that load, but a probe that took no lock does not need it.',
+            'Relaxed is not a safe default. Weakening the success ordering would let a new holder miss the previous holder\'s writes, because Acquire pairs with the unlocking Release.',
+          ],
+          kcs: ['r.compare-exchange', 'r.atomics-ordering'],
         },
       ],
     },
   ],
+  kcs: ['r.atomics-ordering', 'r.compare-exchange'],
 }
 
 export default lesson
