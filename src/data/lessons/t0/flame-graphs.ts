@@ -89,17 +89,17 @@ The later Forge labs now put an exact **profile this** command on the all-green 
         {
           q: 'A bar in a flame graph is twice as wide as its neighbor. That means…',
           options: [
-            'It ran twice as many times in a row: width counts how many consecutive calls the function made',
-            'Its stack showed up in twice as many samples, so it accounts for twice the share of time',
-            'It called twice as many distinct functions: width measures the fan-out of that frame',
-            'It has twice the latency per call: width is the duration of one invocation, so it marks the slowest function',
+            'It ran twice as many times in a row, with width counting consecutive calls of the function',
+            'Its stack appeared in twice as many samples, with width showing its share of total time',
+            'It called twice as many distinct functions, with width measuring the fan-out of that frame',
+            'It has twice the latency per call, with width showing the duration of one invocation',
           ],
           correct: [1],
           explanation:
             'Width is sample frequency = share of total time. The x-axis is not chronological (that\'s a flame chart) and says nothing about per-call latency — a bar can be wide because it\'s called often, or because each call is slow. Width alone doesn\'t distinguish; the tree shape around it usually does.',
           why: [
             'Flame graphs merge identical stacks, so width does not count calls or consecutive runs. Many fast calls and a few slow ones can draw the same width; only sample count matters.',
-            'Right: width is the fraction of samples containing that stack, i.e. its share of total time. It cannot say whether time came from many cheap calls or a few slow ones; the surrounding tree shape can.',
+            'Right: width is the fraction of samples containing that stack, i.e. its share of total time. It cannot say whether time came from many cheap calls or a few slow ones; tree shape can.',
             'Width does not count callees. Fan-out shows up as many narrow children side by side above a frame, and is unrelated to how wide the frame itself is.',
             'Width aggregates all samples, not one call. A bar is wide because it is called often or because each call is slow; per-call latency needs separate timing data.',
           ],
@@ -107,10 +107,10 @@ The later Forge labs now put an exact **profile this** command on the all-green 
         {
           q: 'You see a wide futex/mutex-wait bar across all your worker threads. The most likely story is…',
           options: [
-            'The CPU is too slow: threads queue for cores, so the profile shows time spent in kernel wait code',
-            'Lock contention: threads are parked on a shared lock instead of working (the T2 convoy, measured)',
-            'Sampling bias: the profiler interrupts threads most often while they are blocked, so wait frames look exaggerated',
-            'The profiler is the bottleneck: its own sampling signal handler takes a lock that all threads queue on',
+            'The cores are too slow, with threads queuing for them and spending time in kernel wait code',
+            'Lock contention, with threads parked on one shared lock and forming a convoy instead of working',
+            'Sampling bias, with the profiler interrupting threads most often while they are blocked',
+            'The profiler is the bottleneck, with its sampling signal handler taking a lock the threads queue on',
           ],
           correct: [1],
           explanation:
@@ -125,10 +125,10 @@ The later Forge labs now put an exact **profile this** command on the all-green 
         {
           q: 'Why sample instead of instrumenting the code with timers?',
           options: [
-            'Timers cannot resolve short functions: any timer below one millisecond is too inaccurate to trust',
-            'Instrumentation is impractical in compiled languages like Rust, which have no hooks around function calls',
-            'No code changes, ~1% overhead and safe on production; timers distort the thing measured and miss frames you did not wrap',
-            'A sampler records memory allocations as well as CPU time, which timers cannot observe at all',
+            'Timers cannot resolve short functions, with any timer below one millisecond too inaccurate to trust',
+            'Instrumentation is impractical in compiled languages like Rust, with no hooks around function calls',
+            'Sampling attaches without code changes at low overhead, with timers distorting what they measure',
+            'A sampler records memory allocations as well as time, with timers blind to allocations',
           ],
           correct: [2],
           explanation:
@@ -143,16 +143,16 @@ The later Forge labs now put an exact **profile this** command on the all-green 
         {
           q: 'Three of four ranks show a wide ncclAllReduce sync bar; the fourth doesn\'t. The correct conclusion is…',
           options: [
-            'Rank 4 is the straggler: it arrives last so it never waits, while the others sit in the barrier; their bars show cost, not cause',
-            'Rank 4 is broken: its missing sync bar means it skipped the collective, so its gradients are being dropped',
-            'NCCL is slow here: three ranks spend most of their time inside the collective, so the library is the bottleneck',
-            'Ranks 1 to 3 are overheating and throttling, which stretches every kernel they run including the collective',
+            'Rank 4 is the straggler that reached the NCCL barrier last, with the bars on ranks 1 to 3 showing cost',
+            'Rank 4 is broken, with its missing bar showing it skipped the NCCL collective and dropped its gradients from the sum',
+            'NCCL is slow here, with 3 of 4 ranks spending most of their time inside the collective call',
+            'Ranks 1 to 3 are overheating and throttling, stretching each GPU kernel including the collective',
           ],
           correct: [0],
           explanation:
             'A collective is a barrier: everyone waits for the last arrival. Three wide wait bars + one absent = rank 4 is the straggler; the others\' profiles show the *cost*, not the *cause*. Reading absence is a real flame-graph skill.',
           why: [
-            'Right: a collective is a barrier: everyone waits for the last arrival. Three wide wait bars and one missing means rank 4 is the straggler; the others\' profiles show the cost of waiting, not its cause.',
+            'Right: a collective is a barrier, so everyone waits for the last arrival. Three wide wait bars and one missing means rank 4 is the straggler; the other bars show the cost, not the cause.',
             'A rank that skipped the collective would hang the job, since NCCL needs every rank to participate. The absent bar means rank 4 spent no time waiting, because it arrived last.',
             'The time in NCCL is mostly waiting for rank 4, not data movement. Blaming the library treats the symptom; ask why one rank reaches the collective late.',
             'Early arrivals wait longest, so wide bars mark ranks that were fast enough. A throttling GPU would be late, making it the straggler with the thin bar, not one of the waiting ranks.',

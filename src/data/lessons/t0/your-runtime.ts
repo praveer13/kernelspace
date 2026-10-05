@@ -111,10 +111,10 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
         {
           q: 'Java can allocate objects as cheaply as a pointer bump mainly because…',
           options: [
-            'The JIT removes all allocations through escape analysis, so objects never reach the heap',
-            'TLABs give each thread a private bump region, and compacting GC keeps free space contiguous',
-            'The JVM pre-allocates an object pool at startup, so new simply hands out a slot that already exists',
-            'malloc is slow because it takes a global lock, and the JVM avoids that by simply never freeing memory',
+            'The JIT removes allocations through escape analysis, keeping objects off the heap',
+            'TLABs give each thread a private bump region, with compacting GC keeping free space contiguous',
+            'The JVM pre-allocates an object pool at startup, leaving new to hand out an existing slot',
+            'malloc is slow from its global lock, with the JVM dodging that by simply skipping frees altogether',
           ],
           correct: [1],
           explanation:
@@ -129,10 +129,10 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
         {
           q: 'CPython needs the GIL primarily to protect…',
           options: [
-            'The interpreter\'s evaluation stack, which would be corrupted if two threads pushed values at once',
-            'Object reference counts, which every assignment and scope exit must update consistently',
-            'The cyclic garbage collector, whose traversal of object graphs is unsafe to interleave with running threads',
-            'The import system\'s module cache, which every thread consults and mutates whenever it imports a name',
+            'The interpreter\'s evaluation stack, shared by threads pushing values at once',
+            'Object reference counts, updated on each assignment and scope exit',
+            'The cyclic garbage collector, traversing object graphs while threads run',
+            'The import system\'s module cache, consulted and mutated whenever a name is imported',
           ],
           correct: [1],
           explanation:
@@ -147,10 +147,10 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
         {
           q: 'JIT deoptimization most closely resembles which LLM-serving technique?',
           options: [
-            'Quantization: the JIT drops to a cheaper representation and falls back to full precision on bad values',
-            'Speculative decoding: an optimistic fast path, verified and rolled back when its assumption is wrong',
-            'Continuous batching: the runtime swaps requests in and out mid-flight, as the JIT swaps compiled code',
-            'Prefix caching: the JIT reuses previously compiled code for a matching prefix, as the server reuses KV blocks',
+            'Quantization, with the JIT dropping to a cheaper form and reverting to full precision on bad values',
+            'Speculative decoding, with an optimistic draft verified by the LLM and rolled back when wrong',
+            'Continuous batching, with the runtime swapping requests mid-flight as the JIT swaps compiled code',
+            'Prefix caching, with the JIT reusing compiled code for a matching prefix as the server reuses KV blocks',
           ],
           correct: [1],
           explanation:
@@ -165,10 +165,10 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
         {
           q: 'Why do LLM serving stacks keep Python out of the hot data plane?',
           options: [
-            'Python has no CUDA bindings, so every GPU call has to be written in C++ or Rust from the start',
-            'GC pauses, per-object overhead and the GIL cost too much when moving GBs per token under tight tail-latency budgets',
-            'Python bytecode is about 100x slower than C++, so any Python anywhere in the request path makes decode 100x slower',
-            'Python has no async support, so a data plane cannot overlap network transfers with GPU compute',
+            'Python has no CUDA bindings and forces each GPU call to be written in C++ or Rust',
+            'GC pauses and GIL contention cost too much when moving GBs per token under tight latency budgets',
+            'Python bytecode runs far slower than C++ and slows GPU decode to match anywhere in the request path',
+            'Python has no async support and cannot overlap network transfers with GPU compute in a data plane',
           ],
           correct: [1],
           explanation:

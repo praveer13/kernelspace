@@ -133,10 +133,10 @@ Notice that all three answers address the *same* question. Manual memory managem
         {
           q: 'Dereferencing NULL crashes your process because…',
           options: [
-            'The C runtime tracks live pointers and aborts when a NULL one is used',
-            'Address 0 is left unmapped by the OS; the MMU faults and the kernel delivers SIGSEGV',
-            'The CPU reserves address 0 in hardware and traps on any access to it',
-            'The compiler inserts a null check before every load and aborts the process when it fails',
+            'The C runtime tracks live pointers, aborting when a NULL pointer is used at address 0',
+            'Address 0 is left unmapped by the OS, with the MMU faulting and the kernel delivering SIGSEGV',
+            'The CPU reserves address 0 in hardware, trapping on any access to it',
+            'The compiler inserts a NULL check before each load, aborting the process when address 0 is hit',
           ],
           correct: [1],
           explanation:
@@ -151,10 +151,10 @@ Notice that all three answers address the *same* question. Manual memory managem
         {
           q: 'Why is reading one element past an array more dangerous than crashing?',
           options: [
-            'It is not more dangerous; C checks every array bound, so reading past the end always crashes at once',
-            'Neighboring memory is usually mapped, so the program keeps running on silently wrong data',
-            'The read always damages the allocator metadata, so the whole heap is corrupted at that moment',
-            'The TLB caches the failed lookup, so later accesses to that address keep faulting',
+            'It is not more dangerous, with C checking each array bound and the OS ending the program at once',
+            'Neighboring memory is usually mapped by the OS, leaving the program running on silently wrong data',
+            'The read damages the allocator\'s metadata, corrupting the heap that the OS handed out to the program',
+            'The TLB caches the failed lookup, leaving later accesses to that address faulting',
           ],
           correct: [1],
           explanation:
@@ -169,10 +169,10 @@ Notice that all three answers address the *same* question. Manual memory managem
         {
           q: 'Which statement is true of both a Java reference and a C pointer?',
           options: [
-            'It supports arithmetic, so adding an offset reaches the neighboring object',
-            'It is dereferenced implicitly, with no explicit dereference operator needed',
-            'It can be null, and using it that way fails at run time (NPE or SIGSEGV)',
-            'It holds a fixed address, because the target never moves while the program runs',
+            'It supports arithmetic, with an added offset reaching the neighboring object in RAM',
+            'It is dereferenced implicitly, with no dereference operator needed on field access in the JVM',
+            'It can be null, with use of a null value failing at run time as an NPE or SIGSEGV',
+            'It holds a fixed address, with the target staying put under the OS for the program\'s lifetime',
           ],
           correct: [2],
           explanation:

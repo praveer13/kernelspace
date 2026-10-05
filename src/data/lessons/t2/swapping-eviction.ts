@@ -122,10 +122,10 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
         {
           q: 'Why don\'t production operating systems implement true LRU for page eviction?',
           options: [
-            'LRU performs no better than random eviction on real workloads, so kernels evict random pages and skip the bookkeeping',
-            'True LRU needs an ordered-list update on every access; Clock approximates it in O(1) using the hardware accessed bit',
-            'LRU is correct but too slow to find a victim, because scanning all pages for the oldest timestamp is O(n) per eviction',
-            'Hardware gives no reference information, so the kernel cannot tell which pages were used recently and must guess',
+            'LRU performs no better than random eviction on real workloads, with kernels evicting random pages to skip bookkeeping',
+            'True LRU needs an ordered-list update on each access, with Clock approximating it using the hardware accessed bit',
+            'LRU is correct but too slow to find a victim, with a scan for the oldest timestamp costing linear time per eviction',
+            'Hardware gives no reference information to the LRU policy, with the kernel unable to tell which pages were used recently',
           ],
           correct: [1],
           explanation:
@@ -140,10 +140,10 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
         {
           q: 'A nightly batch job reads a 10 GB file once on a host with 4 GB of page cache. Under strict LRU this is harmful because…',
           options: [
-            'A read-only file cannot be kept in the cache by LRU, so every pass of the scan goes back to disk and slows the job',
-            'The scan evicts hot pages to cache data that will never be reread, because LRU treats a first touch as a sign of future use',
-            'LRU pins every page it has touched, so after 10 GB the cache is full of unevictable pages and new reads fail',
-            'The scan doubles the number of TLB entries in use, so address translation slows for every process on the host',
+            'A file that is just read cannot be kept in the cache by LRU, with each pass of the scan going back to disk',
+            'The scan evicts hot pages to cache data that nobody rereads, with LRU treating a first touch as a sign of future use',
+            'LRU pins any page it has touched, with the cache full of unevictable pages after the scan and new reads failing',
+            'The scan doubles the number of TLB entries in use, with address translation slowing for each process on the host',
           ],
           correct: [1],
           explanation:
@@ -158,10 +158,10 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
         {
           q: 'Thrashing is best defined as…',
           options: [
-            'Any steady use of swap space at all, since every swapped-out page implies a slow disk round trip the next time any process touches it',
-            'Combined working sets exceeding physical memory, so the system faults pages in more than it executes and throughput collapses',
-            'A kernel memory leak that shrinks free memory until the page cache is squeezed to nothing and the OOM killer runs',
-            'Heavy fragmentation of the swap device, so reading a swapped page needs many seeks and latency grows with swap size',
+            'Any steady use of swap space, with each swapped-out page implying a slow disk round trip for the CPU on the next touch',
+            'Combined working sets exceeding RAM, with the whole system faulting more than it runs and the throughput collapsing',
+            'A kernel memory leak, with free memory shrinking until the page cache is squeezed out and the OOM killer runs',
+            'Heavy fragmentation of the swap device, with reads of a swapped page costing many HDD seeks as latency grows',
           ],
           correct: [1],
           explanation:
@@ -176,17 +176,17 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
         {
           q: 'The PagedAttention paper\'s two preemption options (swap KV to CPU RAM vs discard-and-recompute; vLLM V1 keeps only recompute) most closely mirror the OS decision between…',
           options: [
-            'Spinning versus sleeping on a lock: keep holding the core while waiting, or yield it and pay a wake-up later',
-            'Swapping anonymous pages to disk versus dropping clean file-backed pages that can be re-read from their source',
-            'Huge pages versus base pages: fewer, larger blocks to move at once versus finer-grained blocks that waste less',
-            'Fair-share versus real-time scheduling: preempt by weighted time used, or by a fixed priority class',
+            'Spinning versus sleeping on a lock, holding the core while waiting or yielding it and paying a wake-up cost later',
+            'Swapping anonymous pages to disk versus dropping clean file-backed pages that are re-read later',
+            'Huge pages versus base pages, with fewer larger blocks to move at once against finer blocks that waste less',
+            'Fair-share versus real-time scheduling, preempting by weighted time used against a fixed priority class',
           ],
           correct: [1],
           explanation:
             'Same trade: pay I/O to preserve state vs recompute from source. File-backed clean pages get dropped (re-readable); anonymous pages must be swapped. The paper weighs PCIe bandwidth against prefill FLOPs — the identical equation at GPU speeds — and V1 settled on recompute.',
           why: [
             'Misconception: it is a waiting-policy choice. Spin versus sleep concerns how to wait for a lock; vLLM is deciding how to give up memory, which is a storage choice.',
-            'Right: dropping a clean file-backed page and re-reading it is recompute; swapping an anonymous page preserves unrecoverable state at the cost of I/O. The paper faces the same swap versus recompute choice, and V1 chose recompute.',
+            'Right: dropping a clean file-backed page and re-reading it is recompute; swapping an anonymous page preserves state it cannot rebuild, at I/O cost. The paper faces the same choice, and V1 chose recompute.',
             'Misconception: it is a page-size choice. Huge versus base pages trade TLB reach against internal waste; vLLM already fixes the block size and is choosing what to do with evicted state.',
             'Misconception: it is a scheduling-class choice. Fair-share versus real-time decides who runs; swap versus recompute decides how an already-preempted sequence\'s memory is restored.',
           ],
