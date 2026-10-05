@@ -8,6 +8,7 @@
  */
 
 import type { TrackId } from '@/data/lessons/types'
+import { KC } from '@/data/kc/ids'
 
 export interface ForgeLabCheck {
   id: string
@@ -502,16 +503,24 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
       command: 'cargo flamegraph --test allocator_tests',
       question: 'Is the widest self-time in free-list search, insertion, or coalescing — and should it be?',
     },
+    // Stages (F2): 1 boot, about 2 minutes; 2 align and no_overlap; 3 reuse; 4 coalesce and fragmentation.
+    // Order, labels and stages match the module's `list` reply (verify:labs).
     checks: [
-      { id: 'boot', label: 'constructs and serves a first allocation' },
-      { id: 'align', label: 'returned offsets respect alignment (1–256)' },
-      { id: 'no_overlap', label: 'live allocations never overlap' },
-      { id: 'coalesce', label: 'adjacent free blocks coalesce' },
-      { id: 'reuse', label: 'freed blocks are reused' },
-      { id: 'fragmentation', label: '3000-op churn at ~75% occupancy: never refuses a span that fits' },
+      { id: 'boot', label: 'constructs and serves a first allocation', stage: 1, kcs: [KC.allocatorContract, KC.enumsOptionResult] },
+      { id: 'align', label: 'returned offsets respect alignment (1–256)', stage: 2, kcs: [KC.alignment] },
+      { id: 'no_overlap', label: 'live allocations never overlap', stage: 2, kcs: [KC.allocatorContract] },
+      { id: 'coalesce', label: 'adjacent free blocks coalesce', stage: 4, kcs: [KC.splitCoalesce] },
+      { id: 'reuse', label: 'freed blocks are reused', stage: 3, kcs: [KC.allocatorContract] },
+      {
+        id: 'fragmentation',
+        label: '3000-op churn at ~75% occupancy: never refuses a span that fits',
+        stage: 4,
+        kcs: [KC.externalFrag, KC.placementPolicy],
+      },
     ],
     brief: [
       'In T1.L3 you split and coalesced blocks in a browser sim. Now do it in Rust, for real: one 1 MiB heap, an address-ordered free list, first-fit with alignment, coalescing on free. Sixty lines that malloc would recognize.',
+      'The lab runs in stages, so the first green comes in about two minutes. Before you download anything, predict how a bump allocator fares on check 6\u2019s kind of churn, then watch a reference allocator run in your browser. Investigate the harness, change one thing about the run, and predict again. Then build: stage 1 `boot` (a bump `alloc`), stage 2 `align` and `no_overlap`, stage 3 `reuse` (a free list with first-fit and split), stage 4 `coalesce` and `fragmentation` (merge on `free`). Each stage is green on this page before you start the next, and none takes more than 25 minutes.',
       'This is not busywork in a costume. vLLM\u2019s KV-cache block manager — the thing T5.L5 is about — is this exact design problem: a fixed backing store, adversarial allocation sizes, fragmentation as the failure mode. The allocator you write here is the block manager\u2019s ancestor; the paged block manager (lab 02) is its descendant.',
       'The harness is the teacher: six checks, identical in `cargo test` and on this page, each graded on its own. Each catches one mistake: `align` an offset that ignores alignment, `no_overlap` an off-by-one split, `reuse` a bump allocator, and `coalesce` and `fragmentation` a `free` that never merges its neighbours. The last one is the lesson: 3000 mixed ops at ~75% occupancy, on seeds drawn when you grade, where a request may fail only if no free span that large exists. A free list that never merges dies. A coalescing one walks through. That gap is why real allocators coalesce.',
     ],

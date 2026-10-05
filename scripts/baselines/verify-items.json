@@ -9,7 +9,8 @@
     "t5": 7,
     "t6": 5,
     "t7": 6,
-    "fleet-week": 0
+    "fleet-week": 0,
+    "forge": 0
   },
   "whyRequired": [
     "r",
@@ -21,6 +22,7 @@
     "t5",
     "t6",
     "t7",
-    "fleet-week"
+    "fleet-week",
+    "forge"
   ]
 }
