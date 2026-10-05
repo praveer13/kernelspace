@@ -94,10 +94,10 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
         {
           q: 'Shared memory on a GPU differs from a CPU L1 cache in that…',
           options: [
-            'It behaves like a slower, larger L1, filled and evicted by the hardware as threads touch addresses',
-            'It is programmer-managed: the kernel stages tiles in and out explicitly, scoped to one block',
-            'It is one pool visible to every SM on the GPU, so any two blocks can exchange data through it in a kernel',
-            'It holds read-only data such as constants and instructions, which the hardware prefetches before launch',
+            'It behaves like a slower and larger cache that the hardware fills and evicts as threads touch addresses',
+            'It is a programmer-managed scratchpad that the kernel fills and empties explicitly for one block',
+            'It is a single pool shared across the whole GPU and any two blocks can exchange data through it',
+            'It holds read-only data such as constants and instructions that the hardware prefetches before launch',
           ],
           correct: [1],
           explanation:
@@ -112,10 +112,10 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
         {
           q: 'Register spilling is dangerous to kernel performance because…',
           options: [
-            'The compiler aborts with a register-allocation error, so the kernel never launches and the problem is caught early',
-            'Spilled values go to local memory, which is backed by device memory, so a fall off the fastest tier silently costs bandwidth',
-            'Spilled values move into shared memory, which is slower than registers but still on-chip, so the cost stays small',
-            'Each spilled register halves the number of warps that fit on an SM, so latency hiding collapses first',
+            'The compiler aborts with a register allocation error and the kernel fails to launch at build time',
+            'Spilled values land in local memory backed by device memory and the lost fast tier costs bandwidth',
+            'Spilled values move into shared memory that is slower than registers but still on-chip and cheap',
+            'Each spilled register halves the number of warps that fit on a multiprocessor and latency hiding collapses',
           ],
           correct: [1],
           explanation:
@@ -130,10 +130,10 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
         {
           q: 'For a 70B FP16 model with full multi-head attention (no GQA), the first-order capacity problem on 80 GB GPUs is…',
           options: [
-            'The roughly 50 MB L2 cannot hold the weights (it is far too small), so each step thrashes it and compute caps how many requests run',
-            'Weights need two GPUs, and each 4k-token KV cache adds ~10 GiB, so capacity caps concurrency',
-            'Tokenization and sampling run on the CPU (not the GPU), so the host becomes the limit long before GPU memory fills up',
-            'Tensor cores compute in FP32, so the FP16 weights are upcast and double their footprint before any request',
+            'The second-level cache is far too small to hold the weights and each step thrashes it while compute caps requests',
+            'The weights alone exceed one device and long sequences add gigabytes of key-value cache that caps concurrency',
+            'Tokenization and sampling run on the host processor and the host becomes the limit before device memory fills',
+            'Tensor cores compute in single precision and upcast the half precision weights to double their footprint',
           ],
           correct: [1],
           explanation:
@@ -148,10 +148,10 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
         {
           q: 'CPU RAM plays which role in the GPU serving stack?',
           options: [
-            'A warm tier just under HBM that the GPU reads at near-HBM speed, so offloading KV blocks is nearly free',
-            'The offload tier: about 50× lower bandwidth over PCIe, so offloaded KV blocks and streamed weights cost time',
-            'A staging area for loading the checkpoint at startup; once weights sit in HBM, serving never touches it again',
-            'The backing store for register spills, so spilled values land in host RAM and return at PCIe speed',
+            'A warm tier just under HBM that the GPU reads at near HBM speed and offloading is nearly free',
+            'The offload tier that the GPU reaches over PCIe at far lower bandwidth than HBM',
+            'A staging area for loading the checkpoint at startup that the GPU leaves untouched once weights reach HBM',
+            'The backing store for register spills that land in host RAM and return to the GPU at PCIe speed',
           ],
           correct: [1],
           explanation:
