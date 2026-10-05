@@ -9,7 +9,78 @@ const lesson: Lesson = {
   minutes: 20,
   hook: 'Every pain from this track — use-after-free, double-free, leaks, races — solved by the compiler, before your code ever runs.',
   exercise: 'read',
+  kcs: ['t1.ownership-answer', 't1.memory-errors'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Pick two memory bugs from this track and say which Rust rule rules each one out.',
+        model:
+          'Double-free: every value has one owner and is dropped once, when the owner leaves scope, so a second free has nothing to act on. Dangling pointer or use-after-free: any other pointer must be a borrow, and the compiler rejects a borrow that would outlive its owner.',
+        ideas: [
+          'Double-free is ruled out by one owner and one drop',
+          'Dangling pointers are ruled out, since a borrow cannot outlive its owner',
+          'Both rules are checked at compile time, at no run-time cost',
+        ],
+        kcs: ['t1.ownership-answer', 't1.memory-errors'],
+      },
+      {
+        prompt: 'Ownership is described as prepaid, not free. List what it costs.',
+        model:
+          'The price is paid at compile time. The borrow checker rejects some programs that are actually safe, so you restructure them. Ownership shapes APIs, so shared or cyclic data needs Rc, Arc or an arena with indices. And unsafe blocks remain where the compiler cannot see an invariant, kept small and auditable.',
+        ideas: [
+          'Compile-time friction: the checker rejects some safe programs',
+          'Design pressure: shared or cyclic data needs Rc, Arc or arenas',
+          'unsafe remains for invariants the compiler cannot see, kept small',
+        ],
+        kcs: ['t1.ownership-answer'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A Rust program runs `let a = vec![1, 2, 3]`, then `let b = a`, then prints `a`. What happens?',
+          options: [
+            'It fails to compile, and the compiler reports a use of the moved value a',
+            'It prints the same three numbers, and both names share one copy of data',
+            'It prints an empty list, and a is left holding a vector with no items',
+            'It compiles but panics at run time, and a was freed when the move happened',
+          ],
+          correct: [0],
+          why: [
+            'Right: assignment moves ownership to b, and the compiler rejects any later use of a. Nothing reaches run time.',
+            'There is no sharing here. A move transfers the single owner, and a plain assignment does not copy the buffer or alias it.',
+            'A moved-from variable is not left empty. It is dead, and the compiler stops you from reading it at all.',
+            'The error is caught at compile time, so the program never runs. Nothing is freed by the move either, since b now owns the data.',
+          ],
+          revealAt: 'One owner, exactly one free',
+          kcs: ['t1.ownership-answer'],
+        },
+        {
+          kind: 'choice',
+          q: 'Rust prevents use-after-free without a garbage collector. Where is the price of that guarantee paid?',
+          options: [
+            'At run time, as a counter that is updated each time a value is assigned to a name',
+            'In a background thread that scans memory and pauses the program to free it',
+            'At compile time, as programs that the checker cannot prove safe are rejected',
+            'In the operating system, which verifies every pointer each time that it is used',
+          ],
+          correct: [2],
+          why: [
+            'That is reference counting, which Rust makes opt-in through Rc and Arc. Plain ownership keeps no counter at run time.',
+            'Rust has no collector thread and no pauses. Values are dropped at a known point, when their owner leaves scope.',
+            'Right: the borrow checker proves safety before the program runs, and the price is friction when it rejects code that is safe but unproven.',
+            'The OS does not verify pointers on use. Its page protection works the same for Rust as for C, and it catches only unmapped addresses.',
+          ],
+          revealAt: 'What it costs, honestly',
+          kcs: ['t1.ownership-answer'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `Take stock of what this track has taught you to fear. Dangling pointers to dead stack frames. Reads past the array that silently corrupt. Double-frees that hand two owners the same memory. Leaks that only the OOM killer notices. Data races that need exactly the wrong interleaving to lose your data. Each is a distinct bug with a distinct flavor of pain — and Microsoft and Google have both published the same statistic about their C/C++ codebases: **~70% of serious security vulnerabilities are memory-safety bugs.**
@@ -123,6 +194,7 @@ Next track: the operating system. You have built memory management by hand; now 
             'Heap values like Box and Vec are owned too. Ownership governs lifetimes, not placement, and an owner on the stack frees its heap data on drop.',
             'Rust has no collector. The compiler checks ownership and inserts drops; it does not trace reachability, and nothing runs to find garbage at build or run time.',
           ],
+          kcs: ['t1.ownership-answer'],
         },
         {
           q: 'The borrow rules ("many &T XOR one &mut T, never outliving the owner") primarily eliminate…',
@@ -141,6 +213,7 @@ Next track: the operating system. You have built memory management by hand; now 
             'Right: use-after-free and data races both need a writer overlapping other access. One writer or many readers, never outliving the owner, rules both out at compile time.',
             'Cycles are made with Rc or Arc, which are owned values and not borrows, so the rules do not stop them. Rc cycles can still leak.',
           ],
+          kcs: ['t1.ownership-answer', 't1.memory-errors'],
         },
         {
           q: 'When Rust code needs shared ownership or cycles, the idiomatic escape is…',
@@ -159,6 +232,7 @@ Next track: the operating system. You have built memory management by hand; now 
             'Right: Rc/Arc add runtime counting only where sharing is needed, and an arena has one owner while nodes refer to each other by index.',
             'Graphs, trees with parent links, and cyclic structures are routine in Rust through Rc, Arc, arenas, and crates built on them. No collector is required.',
           ],
+          kcs: ['t1.ownership-answer'],
         },
         {
           q: 'Dynamo\'s Rust code orchestrates KV transfers that NIXL (C++) performs. Why Rust for that layer over C++?',
@@ -177,6 +251,7 @@ Next track: the operating system. You have built memory management by hand; now 
             'Binary size and startup are not the deciding trade-off for a data plane moving gigabytes under tail-latency budgets; safety and control are.',
             'C++ binds to Python well through pybind11 and nanobind, so interop does not separate the two languages.',
           ],
+          kcs: ['t1.ownership-answer'],
         },
       ],
     },
