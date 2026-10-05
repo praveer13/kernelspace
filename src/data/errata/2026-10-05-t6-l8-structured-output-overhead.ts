@@ -15,4 +15,22 @@ export default {
     url: 'https://arxiv.org/abs/2411.15100',
     title: 'XGrammar: Flexible and Efficient Structured Generation Engine for Large Language Models',
   },
+  items: [
+    {
+      q: 'How does XGrammar keep grammar-constrained decoding from slowing generation, according to its paper?',
+      options: [
+        'It builds a GPU-resident table of masks for every grammar state, so no CPU work is needed and the overhead is a few percent',
+        'It overlaps grammar computation with GPU execution and keeps a persistent stack for token checks, reporting near-zero overhead',
+        'It syncs the CPU and GPU at every token to build the mask, accepting a few percent overhead because each mask is cheap to compute',
+        'It samples freely first and then rejects invalid tokens, retrying until the output parses, so the cost is amortized across retries',
+      ],
+      correct: [1],
+      why: [
+        'Context-dependent token checks cannot all be tabulated ahead of time. XGrammar does grammar work on the CPU and hides it behind GPU execution.',
+        'Right: XGrammar overlaps grammar computation with GPU execution and keeps a persistent stack for context-dependent checks. Its paper reports near-zero end-to-end overhead.',
+        'A per-token CPU to GPU sync is exactly the stall that overlap avoids. XGrammar hides the mask work behind the GPU step instead of waiting on it.',
+        'Constrained decoding masks invalid tokens before sampling, so the output stays valid at every step. It does not sample freely and retry afterwards.',
+      ],
+    },
+  ],
 } satisfies Erratum

@@ -9,12 +9,13 @@ const lesson: Lesson = {
   minutes: 35,
   hook: 'The guided architecture read: four production engines, their design centers, and when to choose which — the T5 capstone before the capstone.',
   exercise: 'read+quiz',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
       md: `You've assembled every piece: the memory hierarchy (T0), allocators and paging (T1–T2), Rust's role (T3), the GPU's physics (T4), and the serving algorithms (T5). This final lesson reads the four production stacks as *engineering arguments* — each one's design center, the trade-offs it chose, and when it wins. No marketing, no benchmarks-by-vendor; just architecture, using the vocabulary you now own.
 
-The four: **vLLM** (the open-source reference), **SGLang** (the structured-generation specialist), **TensorRT-LLM** (NVIDIA's compiled-performance stack), and **Dynamo** (NVIDIA's distributed data plane — which is a different *kind* of thing, as you'll see).`,
+The four: **vLLM** (the open-source reference), **SGLang** (the structured-generation specialist), **TensorRT-LLM** (NVIDIA's kernel-tuned performance stack), and **Dynamo** (NVIDIA's distributed data plane — which is a different *kind* of thing, as you'll see).`,
     },
     {
       type: 'prose',
@@ -34,11 +35,11 @@ The four: **vLLM** (the open-source reference), **SGLang** (the structured-gener
     },
     {
       type: 'prose',
-      md: `## TensorRT-LLM: the compiler's answer
+      md: `## TensorRT-LLM: NVIDIA's own kernels
 
-**Design center:** squeeze the GPU with a *build-time* approach — models are **compiled** into optimized engine artifacts: kernel fusion, per-layer precision selection, FlashAttention variants, in-flight (continuous) batching, paged KV, FP8 end-to-end, all tuned per-GPU-generation by NVIDIA's kernel teams. Where vLLM interprets a scheduler loop in Python, TRT-LLM's runtime is C++ with the graph pre-planned. Peak single-node throughput and latency numbers typically belong here, especially on flagship NVIDIA hardware with FP8.
+**Design center:** squeeze the GPU with NVIDIA's own kernels and runtime. TRT-LLM began as a *build-time* compiler (models became pre-built TensorRT engines), but in the 1.x line the PyTorch backend is the default: the stack is architected on PyTorch, with a Python \`LLM\` API over a \`PyExecutor\` that owns the scheduler, the KV-cache manager and the sampler. The speed comes from custom kernels for attention, GEMMs and MoE, CUDA graphs, an overlap scheduler, FP8/FP4 paths, speculative decoding, wide expert parallelism and P/D disaggregation, all tuned per GPU generation by NVIDIA's kernel teams. Peak single-node throughput and latency numbers typically belong here, especially on flagship NVIDIA hardware with FP8 or FP4.
 
-**Trade-offs chosen:** performance and NVIDIA-hardware depth over flexibility. The compile step adds friction (model support lags open-weight releases; custom architectures need plugin work), the stack is deepest exactly on NVIDIA (obviously), and debugging a compiled engine is a different sport than debugging Python. **Choose it when:** tokens/s/GPU is your margin and your model set is stable — inference as a *fixed* production workload, compiled like the binary it is.`,
+**Trade-offs chosen:** performance and NVIDIA-hardware depth over breadth. The stack is deepest exactly on NVIDIA (obviously), the best-tuned paths follow NVIDIA's newest hardware and recipes, and engine versions move fast: Dynamo v1.5.0 pins TRT-LLM 1.3.0rc25, a release candidate, so name versions when you compare. **Choose it when:** tokens/s/GPU is your margin and your model set is stable — inference as a *fixed* production workload tuned like the binary it is.`,
     },
     {
       type: 'prose',
@@ -54,17 +55,17 @@ The four: **vLLM** (the open-source reference), **SGLang** (the structured-gener
 
 | | vLLM | SGLang | TRT-LLM | Dynamo |
 |---|---|---|---|---|
-| **Kind** | engine (library+server) | engine + frontend lang | compiled engine | distributed data plane |
-| **Design center** | PagedAttention for all | RadixAttention cache reuse | build-time optimization | fleet orchestration |
-| **Language core** | Python + CUDA | Python + CUDA | C++ + CUDA graphs | Rust + Python planner |
+| **Kind** | engine (library+server) | engine + frontend lang | engine (PyTorch-native, NVIDIA kernels) | distributed data plane |
+| **Design center** | PagedAttention for all | RadixAttention cache reuse | NVIDIA-tuned kernels and runtime | fleet orchestration |
+| **Language core** | Python + CUDA | Python + CUDA | Python runtime + C++/CUDA kernels | Rust + Python planner |
 | **Signature win** | ecosystem default | agentic/structured traffic | peak per-GPU perf | long-context fleet goodput |
-| **Price** | scheduler overhead | smaller ecosystem | compile friction, NVIDIA-shaped | operational complexity |
+| **Price** | scheduler overhead | smaller ecosystem | NVIDIA-only depth | operational complexity |
 | **Runs on** | any CUDA (+AMD/TPU ports) | any CUDA | NVIDIA | wraps the other three |`,
     },
     {
       type: 'callout',
       variant: 'analogy',
-      md: `Map them to the world you know: **vLLM ≈ Postgres** (the default, everything works, extensible), **SGLang ≈ Redis with a query language** (a specialist whose cache semantics *are* the product), **TRT-LLM ≈ a hand-tuned C++ storage engine** (compiled, fused, fastest on its hardware, slower to change), **Dynamo ≈ Vitess/ProxySQL** (the fleet layer that makes the engines a cluster). And notice the meta-pattern one last time: every one of these is T0–T4 ideas — paging, scheduling, allocators, zero-copy, roofline, quantization — assembled with different priorities. You didn't learn four products. You learned the one design space they all live in.`,
+      md: `Map them to the world you know: **vLLM ≈ Postgres** (the default, everything works, extensible), **SGLang ≈ Redis with a query language** (a specialist whose cache semantics *are* the product), **TRT-LLM ≈ a hand-tuned C++ storage engine** (vendor-tuned kernels, fastest on its hardware, NVIDIA-shaped), **Dynamo ≈ Vitess/ProxySQL** (the fleet layer that makes the engines a cluster). And notice the meta-pattern one last time: every one of these is T0–T4 ideas — paging, scheduling, allocators, zero-copy, roofline, quantization — assembled with different priorities. You didn't learn four products. You learned the one design space they all live in.`,
     },
     {
       type: 'prose',
@@ -97,16 +98,16 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           q: 'TensorRT-LLM\'s defining trade is…',
           options: [
             'Python-level development velocity and the broadest model coverage, at the cost of scheduler overhead',
-            'Build-time compilation (fusion, per-layer precision, CUDA graphs) for peak per-GPU speed, accepting compile friction',
+            'NVIDIA-tuned kernels, CUDA graphs and an overlap scheduler for peak per-GPU speed, accepting NVIDIA-only depth and tuning',
             'A distributed routing and autoscaling layer for fleet fault tolerance, paid for with a second distributed system to operate and monitor',
             'Constrained decoding and a frontend language for JSON and regex output, giving up some general-purpose engine throughput',
           ],
           correct: [1],
           explanation:
-            'The compiler\'s answer: pre-plan the graph, fuse the kernels, tune per GPU generation. Peak steady-state performance; the cost is flexibility and debuggability of a compiled artifact.',
+            'TRT-LLM 1.x runs on a PyTorch-based runtime by default, not a pre-built engine. NVIDIA\'s custom kernels, CUDA graphs and overlap scheduling buy peak steady-state speed; the cost is NVIDIA-only depth.',
           why: [
-            'That is vLLM\'s trade: Python-first velocity and breadth over peak micro-efficiency. TRT-LLM gives up flexibility for compiled, NVIDIA-tuned performance, so its onboarding is slower, not faster.',
-            'Right: pre-plan the graph, fuse kernels and tune per GPU generation for peak steady-state throughput; the price is flexibility and the debuggability of a compiled artifact.',
+            'That is vLLM\'s trade: Python-first velocity and breadth over peak micro-efficiency. TRT-LLM trades breadth for NVIDIA-tuned kernels and runtime, so its edge is peak per-GPU speed, not the widest model coverage.',
+            'Right: TRT-LLM 1.x defaults to a PyTorch-based runtime with NVIDIA\'s custom kernels, CUDA graphs and overlap scheduling for peak steady-state throughput; the price is NVIDIA-only depth.',
             'That is Dynamo\'s role. TRT-LLM is an engine that serves a model on its GPUs; fleet routing and autoscaling sit in a layer around engines.',
             'That is SGLang\'s design center. TRT-LLM targets per-GPU speed on a stable model set, not a structured-output frontend language.',
           ],
@@ -123,7 +124,7 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           explanation:
             'Dynamo deliberately runs other engines as workers. Its product is fleet-level goodput: routing for cache reuse, phase disaggregation, and a Rust data plane that orchestrates KV transfers, with NIXL (C++) moving the bytes (T3.L6).',
           why: [
-            'Dynamo is not an engine. It runs vLLM, SGLang or TRT-LLM as workers; Rust covers its data plane (routing, transfer), not the model execution loop.',
+            'Dynamo is not an engine. It runs vLLM, SGLang or TRT-LLM as workers; Rust covers its data plane (routing, transfer orchestration; NIXL moves the bytes), not the model execution loop.',
             'Right: Dynamo\'s product is fleet-level goodput. Routing for cache reuse, phase disaggregation and orchestrated KV transfers make it the proxy and sharding tier that turns engines into a cluster.',
             'Quantization belongs to engine tooling and model-optimization libraries. Dynamo\'s concern is how requests and KV move across engines, not the numeric format of the weights.',
             'Registries manage artifacts, not live traffic. Dynamo works at serving time: routing requests, moving KV between workers and scaling prefill and decode pools.',
@@ -134,7 +135,7 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           options: [
             'Dynamo with disaggregation, because its routing and cache reuse improve goodput even when there is only one GPU serving traffic',
             'One vLLM (or SGLang) instance with chunked prefill; fleet layers pay off at scale and long context, not on one GPU',
-            'TRT-LLM compiled per model, because compile-time fusion beats a runtime scheduler at every deployment size',
+            'TRT-LLM tuned per model, because NVIDIA\'s fused kernels beat a general scheduler at every deployment size',
             'A custom CUDA stack, because short-context chat needs none of an engine\'s generality and a lean loop will beat it',
           ],
           correct: [1],
@@ -143,7 +144,7 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           why: [
             'Dynamo adds NATS, etcd and a transfer fabric. One GPU has no second worker to route to or disaggregate onto, so the platform cost buys nothing.',
             'Right: operational simplicity wins when fleet-level gains cannot amortize. Colocate with chunked prefill at small scale and short context; disaggregate at scale and long context.',
-            'Compilation pays off for a stable, fixed workload where tokens/s/GPU is the margin. As a default it adds build friction and slower model onboarding for no fleet-level benefit.',
+            'Vendor-tuned kernels pay off for a stable, fixed workload where tokens/s/GPU is the margin. As a default on one GPU they add NVIDIA-only lock-in and tuning effort for no fleet-level benefit.',
             'A custom stack rebuilds paging, continuous batching and kernel coverage that engines already ship. Short context removes the need for fleet layers, not for a proper KV manager and scheduler.',
           ],
         },

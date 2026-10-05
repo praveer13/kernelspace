@@ -89,7 +89,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
     {
       type: 'callout',
       variant: 'warning',
-      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is the measured sweet spot). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KB frames fragments huge (2 MB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
+      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is a balance, not a proven optimum: the PagedAttention paper's sweep found 16 to 128 tokens best on ShareGPT). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KB frames fragments huge (2 MB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
     },
     {
       type: 'prose',
