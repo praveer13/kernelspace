@@ -67,7 +67,7 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
           options: [
             'Engines reload from shared storage on a nightly schedule, with RL tolerating a rollout policy that lags the trainer by hours',
             'A half-updated engine must not serve, with mixed weights yielding off-policy rollouts that silently corrupt the gradient',
-            'Weights are broadcast with each engine paused, with layer streaming during decode counted as unsafe',
+            'Weights are always broadcast with every engine paused, with layer streaming during decode never counted as safe',
             'Mixed versions are tolerable, with gradient clipping absorbing any mismatch between rollout and trainer weights',
           ],
           correct: [1],

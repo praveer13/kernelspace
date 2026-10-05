@@ -67,7 +67,7 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
           q: 'GB200 NVL72 changes architecture (not just speed) because…',
           options: [
             'It cuts the power drawn per chip, letting the facility pack more accelerators into each rack for more total compute',
-            'Seventy-two GPUs share one fast NVLink domain, letting parallel groups that stopped at eight GPUs span a whole rack',
+            'A whole rack of GPUs shares one fast NVLink domain, letting parallel groups that stopped at one server span the rack',
             'Direct liquid cooling lets chips sustain boost clocks, raising per-chip throughput enough to change batch sizes',
             'A Grace host processor beside each pair of accelerators gives the rack unified host memory, keeping cache inside the rack',
           ],
@@ -103,9 +103,9 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
           q: 'Re-deriving T4\'s roofline for B200: the decode rate roughly…',
           options: [
             'Stays near 1x of H100, with decode limited by FLOP count and the extra FP4 and FP8 FLOPs going to prefill',
-            'Rises about 2.4 times on Blackwell over H100 at equal precision, with FP4 compounding that gain over the weight bytes',
+            'Rises about 2.4 times over H100 at equal precision, with FP4 weights adding a further roughly 1.8 times over FP8',
             'Falls below 1x of H100 per chip, with FP4 block scales adding reads that cancel the bandwidth gain over FP8',
-            'Follows peak FLOPs rather than bandwidth, with FP4 at 2x the FP8 rate of H100 even if bandwidth stayed fixed',
+            'Follows peak FP4 FLOPs rather than bandwidth, with FP4 at twice the FP8 rate even if bandwidth stayed fixed',
           ],
           correct: [1],
           explanation:

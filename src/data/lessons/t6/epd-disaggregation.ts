@@ -94,7 +94,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           q: 'NIXL is best described as…',
           options: [
             'A C++ inference engine with its own scheduler, planning prefill and decode batches across the whole cluster',
-            'A point to point transfer library using one-sided reads, moving cache blocks between workers over several backends',
+            'A point-to-point transfer library using one-sided reads, moving cache blocks between workers over several backends',
             'A block-scaled low-bit number format with per-block scales, letting cache blocks travel between workers in fewer bytes',
             'A Kubernetes operator driven by custom resources, autoscaling prefill and decode pools and placing them close together',
           ],

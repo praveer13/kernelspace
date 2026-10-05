@@ -183,7 +183,7 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
           q: 'Remote attestation for confidential GPU inference proves primarily that…',
           options: [
             'The model cannot leak data in its output, with the trusted environment encrypting each token it produces',
-            'Expected measured software and confidential-capable hardware are running, before a tenant releases secrets to them',
+            'Expected measured software and confidential-capable hardware are running, with the tenant releasing secrets once that is shown',
             'Each tool call the agent makes is authorized, with attested code executing just the actions that policy approves',
             'Confidential mode adds no measurable overhead, with attestation checking that hardware encryption runs at line rate',
           ],
@@ -220,7 +220,7 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
           options: [
             'The output grammar, with constrained decoding guaranteeing that the request matches the transfer schema',
             'The model\'s confidence score, with a high-probability tool call reflecting intent the user already approved',
-            'A deterministic broker that checks identity and policy, then mints a narrow short-lived capability',
+            'A deterministic broker that checks identity and policy, with the worker then holding one narrow short-lived capability',
             'The microVM booting successfully, with an isolated sandbox making any action inside it safe to approve',
           ],
           correct: [2],
