@@ -2,10 +2,11 @@ import type { Claim } from './schema'
 import { HARDWARE_CLAIMS } from './hardware'
 import { MODEL_CLAIMS } from './models'
 import { PRICE_CLAIMS } from './prices'
+import { PRODUCTION_CLAIMS } from './production'
 
 export type { Claim, ClaimKind } from './schema'
 
-export const CLAIMS: Claim[] = [...HARDWARE_CLAIMS, ...MODEL_CLAIMS, ...PRICE_CLAIMS]
+export const CLAIMS: Claim[] = [...HARDWARE_CLAIMS, ...MODEL_CLAIMS, ...PRICE_CLAIMS, ...PRODUCTION_CLAIMS]
 
 export const byId: Record<string, Claim> = Object.fromEntries(CLAIMS.map((c) => [c.id, c]))
 

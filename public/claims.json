@@ -608,6 +608,208 @@
       "boundary": "One sequence, 16-bit (BF16/FP16) K and V: 2 (K and V) x layers x KV heads x head dim x 2 bytes."
     },
     {
+      "id": "model.llama3-70b.layers",
+      "kind": "spec",
+      "value": 80,
+      "label": "Llama-3-70B layers",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_hidden_layers\": 80",
+        "row": "num_hidden_layers"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "label": "Llama-3-70B KV heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_key_value_heads\": 8",
+        "row": "num_key_value_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.attn-heads",
+      "kind": "spec",
+      "value": 64,
+      "label": "Llama-3-70B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_attention_heads\": 64",
+        "row": "num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.hidden-size",
+      "kind": "spec",
+      "value": 8192,
+      "label": "Llama-3-70B hidden size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"hidden_size\": 8192",
+        "row": "hidden_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.head-dim",
+      "kind": "derived",
+      "value": 128,
+      "label": "Llama-3-70B head dimension",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.attn-heads"
+        ],
+        "formula": "hiddenSize / attnHeads"
+      },
+      "boundary": "No head_dim in config.json: hidden_size / num_attention_heads."
+    },
+    {
+      "id": "model.qwen3-0-6b.layers",
+      "kind": "spec",
+      "value": 28,
+      "label": "Qwen3-0.6B layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 28",
+        "row": "num_hidden_layers"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.qwen3-0-6b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "label": "Qwen3-0.6B KV heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 8",
+        "row": "num_key_value_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.qwen3-0-6b.attn-heads",
+      "kind": "spec",
+      "value": 16,
+      "label": "Qwen3-0.6B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"num_attention_heads\": 16",
+        "row": "num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.qwen3-0-6b.head-dim",
+      "kind": "spec",
+      "value": 128,
+      "label": "Qwen3-0.6B head dimension",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"head_dim\": 128",
+        "row": "head_dim"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Explicit in config.json, not hidden_size / num_attention_heads (1024 / 16 = 64)."
+    },
+    {
+      "id": "model.mixtral-8x7b.layers",
+      "kind": "spec",
+      "value": 32,
+      "label": "Mixtral-8x7B layers",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 32",
+        "row": "num_hidden_layers"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "label": "Mixtral-8x7B KV heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 8",
+        "row": "num_key_value_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Base model v0.1. Only the feed-forward layers are experts; attention is dense GQA."
+    },
+    {
+      "id": "model.mixtral-8x7b.attn-heads",
+      "kind": "spec",
+      "value": 32,
+      "label": "Mixtral-8x7B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_attention_heads\": 32",
+        "row": "num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.hidden-size",
+      "kind": "spec",
+      "value": 4096,
+      "label": "Mixtral-8x7B hidden size",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"hidden_size\": 4096",
+        "row": "hidden_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.head-dim",
+      "kind": "derived",
+      "value": 128,
+      "label": "Mixtral-8x7B head dimension",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.mixtral-8x7b.hidden-size",
+          "model.mixtral-8x7b.attn-heads"
+        ],
+        "formula": "hiddenSize / attnHeads"
+      },
+      "boundary": "No head_dim in config.json: hidden_size / num_attention_heads."
+    },
+    {
       "id": "price.h100.median",
       "kind": "price",
       "value": 3.49,
@@ -741,6 +943,116 @@
       "verifiedAt": "2026-10-04",
       "ttlDays": 365,
       "boundary": "No source: it only makes the Fleet cost card produce a plausible $/Mtok."
+    },
+    {
+      "id": "production.vllm.block-size",
+      "kind": "status",
+      "value": 16,
+      "unit": "tokens/block",
+      "label": "vLLM default KV cache block size",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/main/vllm/config/cache.py",
+        "title": "vLLM source: vllm/config/cache.py (CacheConfig)",
+        "quote": "DEFAULT_BLOCK_SIZE: ClassVar[int] = 16",
+        "row": "CacheConfig.DEFAULT_BLOCK_SIZE"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "When --block-size is not given. Hybrid and Mamba models track their own block sizes (mamba_block_size)."
+    },
+    {
+      "id": "production.vllm.v1-preemption",
+      "kind": "status",
+      "value": "recompute",
+      "label": "vLLM V1 default preemption mode",
+      "source": {
+        "url": "https://docs.vllm.ai/en/latest/configuration/optimization/",
+        "title": "vLLM docs: Optimization and Tuning (Preemption)",
+        "quote": "In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture.",
+        "row": "Preemption"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "V1 engine: a preempted request is recomputed, not swapped to CPU."
+    },
+    {
+      "id": "production.glibc.mmap-threshold",
+      "kind": "spec",
+      "value": 131072,
+      "unit": "bytes",
+      "label": "glibc malloc initial mmap threshold (128 KiB)",
+      "source": {
+        "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html",
+        "title": "mallopt(3), Linux man-pages",
+        "quote": "Balancing these factors leads to a default setting of 128*1024 for the M_MMAP_THRESHOLD parameter.",
+        "row": "M_MMAP_THRESHOLD"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The starting value. glibc raises it dynamically as larger mmapped blocks are freed, unless M_MMAP_THRESHOLD is set."
+    },
+    {
+      "id": "production.glibc.bins",
+      "kind": "spec",
+      "value": "fast, unsorted, small, large",
+      "label": "glibc malloc free-chunk bin kinds",
+      "source": {
+        "url": "https://sourceware.org/glibc/wiki/MallocInternals",
+        "title": "glibc wiki: MallocInternals",
+        "quote": "The normal bins are divided into \"small\" bins, where each chunk is the same size, and \"large\" bins, where chunks are a range of sizes.",
+        "row": "Arenas > bins"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Per arena, with a per-thread cache (tcache) in front. Fastbins do not coalesce; small and large bins do."
+    },
+    {
+      "id": "production.jemalloc.classes-per-doubling",
+      "kind": "spec",
+      "value": 4,
+      "unit": "classes per doubling",
+      "label": "jemalloc size classes per doubling in size",
+      "source": {
+        "url": "https://jemalloc.net/jemalloc.3.html",
+        "title": "jemalloc(3) manual page",
+        "quote": "there are four size classes for each doubling in size",
+        "row": "Size classes"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Classes that are multiples of the quantum; tiny requests round up to a power of two."
+    },
+    {
+      "id": "production.jemalloc.max-internal-frag",
+      "kind": "spec",
+      "value": 20,
+      "unit": "%",
+      "label": "jemalloc internal fragmentation bound from size-class spacing",
+      "source": {
+        "url": "https://jemalloc.net/jemalloc.3.html",
+        "title": "jemalloc(3) manual page",
+        "quote": "limits internal fragmentation to approximately 20% for all but the smallest size classes",
+        "row": "Size classes"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Rounding waste only, not slab or extent overhead."
+    },
+    {
+      "id": "production.jemalloc.small-classes",
+      "kind": "spec",
+      "value": "8, 16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256",
+      "unit": "bytes",
+      "label": "jemalloc smallest size classes on 64-bit",
+      "source": {
+        "url": "https://jemalloc.net/jemalloc.3.html",
+        "title": "jemalloc(3) manual page",
+        "quote": "lg [8] 16 [16, 32, 48, 64, 80, 96, 112, 128] 32 [160, 192, 224, 256]",
+        "row": "Table 1. Size classes > Small"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "64-bit, 16-byte quantum, 4 KiB pages; the table continues to 14 KiB."
     }
   ]
 }
