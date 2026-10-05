@@ -65,10 +65,10 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
         {
           q: 'What does a lifetime annotation do at runtime?',
           options: [
-            'It keeps the referent alive until \'a ends, moving it to the heap if needed',
-            'It adds a reference count at runtime, as Rc does, so \'a lasts while any holder remains',
-            'Nothing at runtime, because it is compile-time metadata relating how long references stay valid',
-            'It stores a scope tag with the reference and checks it on dereference, panicking if the scope ended',
+            "It keeps the referent alive until 'a ends and moves it to the heap if needed",
+            "It adds a reference count at runtime as Rc does and 'a lasts while a holder remains",
+            'Nothing at runtime and it is compile-time metadata on reference validity',
+            'It stores a scope tag with the reference and checks it on dereference',
           ],
           correct: [2],
           explanation:
@@ -83,10 +83,10 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
         {
           q: 'Why must struct Block<\'a> declare a lifetime for its &[u32] field?',
           options: [
-            'A slice owns its elements, and \'a tells Rust how long Block keeps that storage allocated',
-            'The type must say that a Block cannot outlive its borrowed slice, so rustc can check it',
-            'Rust must declare a lifetime to compute the size of Block, because a slice length is unknown at compile time',
-            'It is optional for shared slice fields, since elision applies; &mut fields demand it',
+            "A slice owns its elements and 'a tells Rust how long Block keeps that storage",
+            'The type must say that a Block cannot outlive the slice it borrows',
+            'Rust must know the size of Block and a slice length is unknown at compile time',
+            'It is optional for shared slice fields when elision applies and required for &mut fields',
           ],
           correct: [1],
           explanation:
@@ -101,10 +101,10 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
         {
           q: 'What is the right fix when data truly must outlive the input it came from?',
           options: [
-            'Declare the return as \'static, so the data stays valid from the input\'s scope until the whole program ends',
-            'Return or store owned data, such as a Vec or String, so nothing borrows from the input',
-            'Wrap the reference in a Box, because heap placement gives the data it came from an independent lifetime',
-            'Copy the reference with `let r2 = r`, so the copy no longer depends on the input it was taken from',
+            "Declare the return as 'static to keep the data valid until the program ends",
+            'Return owned data such as a String or Vec with no borrow of the input',
+            'Wrap the reference in a Box to give the data its own lifetime',
+            'Copy the reference with a plain let binding to detach it from the input',
           ],
           correct: [1],
           explanation:

@@ -86,10 +86,10 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
         {
           q: 'What does let x = x + 1 do when x already exists?',
           options: [
-            'It mutates the existing binding in place, which compiles only if x was already declared with mut',
-            'It creates a new binding named x that shadows the old one, and the new type may differ',
-            'It allocates a fresh x on the heap so the old and new values can coexist',
-            'It is a compile error, because a name can be bound only once per scope',
+            'It mutates the existing binding in place and needs x to be declared with mut',
+            'It creates a new binding named x that shadows the old one and may change the type',
+            'It allocates a fresh x on the heap and keeps the old value alive beside it',
+            'It is a compile error that rejects a second binding of the same name in one scope',
           ],
           correct: [1],
           explanation:
@@ -104,10 +104,10 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
         {
           q: 'Why does removing the final semicolon from a Rust block matter?',
           options: [
-            'The block turns lazy, so its statements run only when the result is first read',
-            'The final expression becomes the value of the block',
-            'The block returns early and also ends the enclosing function with that value',
-            'The line is no longer evaluated, since only semicolon-terminated lines execute',
+            'The block turns lazy and runs its statements when the result is first read',
+            'The final expression becomes the value that the block produces',
+            'The block returns early and ends the enclosing function with that value',
+            'The last line is skipped at runtime and the block produces no value',
           ],
           correct: [1],
           explanation:
@@ -122,10 +122,10 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
         {
           q: 'Which integer type is normally used for collection indexes?',
           options: [
-            'i32, the default inferred integer type, as with int indexes in Java',
-            'u32, because an index is never negative and 32 bits cover any collection',
-            'usize, whose width matches the pointer size of the target platform',
-            'isize, so that arithmetic such as index - 1 cannot underflow',
+            'The i32 type that Rust infers for integer literals',
+            'The u32 type that is wide enough for a collection index',
+            'The usize type that matches the pointer width of the target',
+            'The isize type that keeps index minus one from underflowing',
           ],
           correct: [2],
           explanation:

@@ -65,10 +65,10 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
         {
           q: 'What does Option<T> communicate that a nullable reference does not?',
           options: [
-            'Why the value is missing, since None carries an error describing the absence',
-            'Absence is a variant of the type, so the compiler forces each caller to handle it',
-            'The value is boxed on the heap, and a null pointer stands for None at runtime',
-            'Each access is checked for null at runtime and throws on failure, as in a Java NPE',
+            'None carries an error that says why the value is missing',
+            'Absence is a type variant and the compiler forces callers to handle it',
+            'The value is boxed on the heap and a null pointer marks the empty case at runtime',
+            'Each access is checked for null at runtime and throws on failure as in Java',
           ],
           correct: [1],
           explanation:
@@ -83,10 +83,10 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
         {
           q: 'Inside a Result-returning function, what does expr? do when expr is Err?',
           options: [
-            'It panics with the error value, like unwrap(), instead of handing the Err to the caller',
-            'It unwinds like an exception to whichever caller has a handler, so signatures need no Result',
-            'It returns that Err from the current function, converting the error with From when the types differ',
-            'It evaluates to the error value and execution continues, leaving later code to check it, as in Go',
+            'It panics with the error value as unwrap does instead of returning it',
+            'It unwinds like an exception to a caller and signatures need no Result',
+            'It returns the Err from the current function and converts it with From',
+            'It evaluates to the error value and execution goes on as in Go',
           ],
           correct: [2],
           explanation:
@@ -101,10 +101,10 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
         {
           q: 'When should ordinary input validation return Result instead of panic?',
           options: [
-            'When the caller can reasonably react, such as rejecting a bad config value',
-            'Only in library crates, while an application may panic on any input it cannot use',
-            'Only when failures are frequent enough that unwinding would show up in profiles',
-            'Only for I/O errors, since a malformed value is an invariant violation and should panic',
+            'When the caller can reasonably react such as rejecting a bad config value',
+            'When the code is a library crate and a binary crate should panic instead',
+            'When failures are frequent and rare ones should panic to save unwinding cost',
+            'When the error is an I/O failure while a malformed value should panic',
           ],
           correct: [0],
           explanation:

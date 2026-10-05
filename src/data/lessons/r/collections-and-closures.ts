@@ -65,10 +65,10 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
         {
           q: 'Which iterator consumes a Vec and yields owned elements?',
           options: [
-            'iter(), which yields each element by value, copied out of the Vec',
-            'iter_mut(), which moves elements out so the loop body can modify them freely',
-            'into_iter(), which takes the Vec by value and yields each element in turn',
-            'drain(..), which yields owned elements while keeping the Vec usable afterwards',
+            'iter() yields each element by value and copies it out of the Vec',
+            'iter_mut() moves each element out and lets the loop body modify it',
+            'into_iter() takes the Vec by value and yields each element in turn',
+            'drain(..) yields owned elements and leaves the Vec usable afterwards',
           ],
           correct: [2],
           explanation:
@@ -83,9 +83,9 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
         {
           q: 'When do lazy iterator adapters actually perform work?',
           options: [
-            'As soon as map is called, which runs the closure over every element straight away',
-            'When collect, sum or another consumer pulls items through the chain',
-            'When the adapter is dropped at the end of its scope, as with other RAII cleanup',
+            'As soon as map is called and the closure runs over the whole input',
+            'When a consumer such as collect or sum pulls items through the chain',
+            'When the adapter is dropped at the end of the scope it was built in',
             'On a background thread pool that starts as soon as the adapter is built',
           ],
           correct: [1],
@@ -101,10 +101,10 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
         {
           q: 'Why use HashMap::entry for a counter?',
           options: [
-            'It locks the bucket so several threads can increment the same counter safely',
-            'It finds or inserts the slot with a single hash lookup, then returns mutable access to the stored value',
-            'It returns a copy of the stored value, so updating it never conflicts with borrowing the map',
-            'It keeps a running count inside the map, so no separate counter variable is needed',
+            'It locks the bucket and lets several threads increment one counter without a data race',
+            'It finds or inserts the slot with one hash lookup and gives mutable access',
+            'It returns a copy of the stored value and avoids borrowing the map',
+            'It keeps a running count inside the map and needs no separate local variable at all',
           ],
           correct: [1],
           explanation:
