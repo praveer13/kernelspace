@@ -184,7 +184,7 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
           options: [
             'The model cannot leak data in its output, with the trusted environment encrypting each token it produces',
             'Expected measured software and confidential-capable hardware are running, with the tenant releasing secrets once that is shown',
-            'Each tool call the agent makes is authorized, with attested code executing just the actions that policy approves',
+            'Each tool call the agent makes is authorized, with attested code executing only the actions that policy approves',
             'Confidential mode adds no measurable overhead, with attestation checking that hardware encryption runs at line rate',
           ],
           correct: [1],

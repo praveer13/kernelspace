@@ -21,7 +21,7 @@ Both are, at heart, T0 ideas reincarnated on the GPU: occupancy is your I/O-boun
       type: 'prose',
       md: `## Occupancy: warps in residence
 
-An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KB ÷ per-thread usage), shared memory per SM (228 KB ÷ per-block usage), and block/warp slots. A kernel using 128 registers/thread and 100 KB shared/block might fit only 4 warps per SM: 6% occupancy. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
+An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KiB ÷ per-thread usage), shared memory per SM (228 KiB ÷ per-block usage), and block/warp slots. A kernel using 128 registers/thread and 100 KiB shared/block might fit only 4 warps per SM: 6% occupancy. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
 
 The tuning loop is mechanical: check occupancy (nsight-compute or compiler stats), find the binding budget, relax it — fewer live registers (smaller tiles), less shared per block, smaller blocks. **But** high occupancy is a means, not a goal: some of the fastest kernels run at 25% occupancy with heavy instruction-level parallelism. The rule that survives: *enough* warps (or enough ILP) to keep the memory pipeline full — measure, don't worship.`,
     },
@@ -41,7 +41,7 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
         { id: 'warp', x: 2, y: 8, w: 18, h: 10, label: 'warp (32 lanes)', sub: 'one load instr' },
         { id: 'coal', x: 30, y: 4, w: 30, h: 9, label: 'coalesced', sub: 'lanes → consecutive 4 B' },
         { id: 't1', x: 72, y: 4, w: 24, h: 9, label: '1 transaction', sub: '128 B, full BW', color: '#3EF2A4' },
-        { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KB' },
+        { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KiB' },
         { id: 't32', x: 72, y: 30, w: 24, h: 9, label: '32 transactions', sub: '~1/32 peak BW', color: '#FF5C6C' },
       ],
       edges: [
@@ -127,10 +127,10 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'Staging a strided access through shared memory helps because…',
           options: [
-            'Shared memory reorders the strided global accesses on its own and the hardware makes them wide with no kernel change',
-            'Global reads become wide and coalesced and the strided reads hit on-chip memory that has no coalescing rule',
-            'Shared memory is backed by the second-level cache and repeated strided reads of a tile come from it',
-            'Shared memory has more banks than global memory has channels and strided reads spread over more parallel units',
+            'Shared memory reorders the strided global accesses on its own, with the hardware making them wide and needing no kernel change',
+            'Global reads become wide and coalesced, while the strided reads hit on-chip memory that has no coalescing rule',
+            'Shared memory is backed by the second-level cache, with repeated strided reads of a tile coming from it',
+            'Shared memory has more banks than global memory has channels, with strided reads spreading over more parallel units',
           ],
           correct: [1],
           explanation:

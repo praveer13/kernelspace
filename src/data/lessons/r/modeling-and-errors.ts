@@ -84,7 +84,7 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
           q: 'Inside a Result-returning function, what does expr? do when expr is Err?',
           options: [
             'It panics with the error value as unwrap does instead of returning it',
-            'It unwinds like an exception to a caller and signatures need no Result',
+            'It unwinds like an exception to a catching caller, so signatures need no Result',
             'It returns the Err from the current function and converts it with From',
             'It evaluates to the error value and execution goes on as in Go',
           ],

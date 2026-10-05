@@ -159,7 +159,7 @@ Everything is unlocked. The order is the point. Each lesson is 15–35 minutes, 
           options: [
             'Each request brings its own GPU compute units, with throughput scaling until the chip runs out of cores',
             'The batch shares one KV cache, with memory staying flat and a long prompt the sole OOM trigger',
-            'The weights stream once per step for the whole batch, with each sequence adding just its own KV cache',
+            'The weights stream once per step for the whole batch, with each sequence adding its own KV cache',
             'Idle compute units absorb extra requests for free, with the OOM arriving past peak GPU FLOPs',
           ],
           correct: [2],

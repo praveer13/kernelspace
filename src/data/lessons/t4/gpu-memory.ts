@@ -20,9 +20,9 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
     {
       type: 'statline',
       stats: [
-        { value: '256 KB', label: 'registers / SM', hint: '64K × 32-bit registers per SM on H100 — the fastest memory on the chip.' },
-        { value: '228 KB', label: 'shared mem / SM', hint: 'Programmer-managed SRAM per SM (H100); ~20–30× faster than HBM; block-scoped.' },
-        { value: '~50 MB', label: 'L2 (H100)', hint: 'Shared across SMs; the KV cache\'s second home.' },
+        { value: '256 KiB', label: 'registers / SM', hint: '64K × 32-bit registers per SM on H100 — the fastest memory on the chip.' },
+        { value: '228 KiB', label: 'shared mem / SM', hint: 'Programmer-managed SRAM per SM (H100); ~20–30× faster than HBM; block-scoped.' },
+        { value: '~50 MiB', label: 'L2 (H100)', hint: 'Shared across SMs; the KV cache\'s second home.' },
         { value: '80 GB · 3.35 TB/s', label: 'HBM3 (H100)', hint: 'Where weights and KV cache live; the wall decode runs into.' },
       ],
     },
@@ -30,11 +30,11 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       type: 'prose',
       md: `## The ladder, tier by tier
 
-**Registers** (~256 KB per SM, 64K 32-bit registers): per-thread, zero-latency-ish, allocated at compile time. Run out and the compiler *spills* to local memory — which is secretly HBM, so spills are silent bandwidth leaks. (T1's stack, but the spill goes to the slow tier.)
+**Registers** (~256 KiB per SM, 64K 32-bit registers): per-thread, zero-latency-ish, allocated at compile time. Run out and the compiler *spills* to local memory — which is secretly HBM, so spills are silent bandwidth leaks. (T1's stack, but the spill goes to the slow tier.)
 
-**Shared memory / SRAM** (~228 KB per SM on H100, configurable split with L1): the signature GPU feature. A block of threads (up to 1024) shares this scratchpad *explicitly*: the kernel loads a tile from HBM into shared memory, synchronizes the block, then computes from SRAM at ~20–30× HBM's per-SM bandwidth. Every fast kernel you've heard of — tiled matmul, FlashAttention — is a choreography of this staging.
+**Shared memory / SRAM** (~228 KiB per SM on H100, configurable split with L1): the signature GPU feature. A block of threads (up to 1024) shares this scratchpad *explicitly*: the kernel loads a tile from HBM into shared memory, synchronizes the block, then computes from SRAM at ~20–30× HBM's per-SM bandwidth. Every fast kernel you've heard of — tiled matmul, FlashAttention — is a choreography of this staging.
 
-**L2** (~50 MB, shared across the whole GPU): the mediator between SMs and HBM, and deeply relevant to serving: hot KV blocks and hot weights can live here between steps.
+**L2** (~50 MiB, shared across the whole GPU): the mediator between SMs and HBM, and deeply relevant to serving: hot KV blocks and hot weights can live here between steps.
 
 **HBM** (80 GB at 3.35 TB/s on H100): stacked DRAM sitting on the same package as the die — 5× the bandwidth of server DDR, at datacenter prices. This is where a 70B model's weights (140 GB in FP16 → 2 GPUs) and every sequence's KV cache live. When T5 says "the KV cache dominates HBM," this is the number being dominated.`,
     },
@@ -43,10 +43,10 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
       caption: 'fig 1 — the steep ladder: per-SM tiers vs shared tiers',
       height: 52,
       nodes: [
-        { id: 'sm0', x: 2, y: 6, w: 20, h: 12, label: 'SM 0', sub: 'reg 256KB · smem 228KB' },
-        { id: 'sm1', x: 2, y: 24, w: 20, h: 12, label: 'SM 1', sub: 'reg 256KB · smem 228KB' },
+        { id: 'sm0', x: 2, y: 6, w: 20, h: 12, label: 'SM 0', sub: 'reg 256KiB · smem 228KiB' },
+        { id: 'sm1', x: 2, y: 24, w: 20, h: 12, label: 'SM 1', sub: 'reg 256KiB · smem 228KiB' },
         { id: 'sm2', x: 2, y: 42, w: 20, h: 12, label: 'SM …131', sub: '×132 total' },
-        { id: 'l2', x: 34, y: 20, w: 24, h: 14, label: 'L2 · ~50 MB', sub: 'shared, all SMs', color: '#A78BFA' },
+        { id: 'l2', x: 34, y: 20, w: 24, h: 14, label: 'L2 · ~50 MiB', sub: 'shared, all SMs', color: '#A78BFA' },
         { id: 'hbm', x: 70, y: 20, w: 26, h: 14, label: 'HBM · 80 GB', sub: '3.35 TB/s', color: '#3EF2A4' },
         { id: 'cpu', x: 70, y: 42, w: 26, h: 10, label: 'CPU RAM (PCIe)', sub: '~64 GB/s · the offload tier', color: '#FFB224' },
       ],
@@ -81,9 +81,9 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
       machine: 'roofline',
       title: 'Tier probe: where does your data live?',
       tasks: [
-        'Run a kernel reading 4 KB per block from shared memory vs direct from HBM: measure about 6× on H100 (the ratio varies with the selected GPU\'s HBM bandwidth).',
+        'Run a kernel reading 4 KiB per block from shared memory vs direct from HBM: measure about 6× on H100 (the ratio varies with the selected GPU\'s HBM bandwidth).',
         'Force register spilling (raise per-thread arrays); watch effective bandwidth collapse to HBM speeds.',
-        'Sweep working-set size across 228 KB / 50 MB / 80 GB: find the L2 and HBM cliffs.',
+        'Sweep working-set size across 228 KiB / 50 MiB / 80 GB: find the L2 and HBM cliffs.',
         'Measure a PCIe transfer (CPU→GPU) and compare with HBM streaming: the 50× offload cliff.',
       ],
       note: `The cliffs you measured are the design constraints of every kernel and every serving system: fast tiers are small and local; the big tier is shared and far; below it, the PCIe abyss. Tiling (T4.L6) exists to keep working sets in the top of this ladder.`,
@@ -131,7 +131,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
           q: 'For a 70B FP16 model with full multi-head attention (no GQA), the first-order capacity problem on 80 GB GPUs is…',
           options: [
             'The second-level cache is far too small to hold the weights and each step thrashes it while compute caps requests',
-            'The weights alone exceed one device and long sequences add gigabytes of key-value cache that caps concurrency',
+            'The weights already exceed one device and long sequences add gigabytes of key-value cache that caps concurrency',
             'Tokenization and sampling run on the host processor and the host becomes the limit before device memory fills',
             'Tensor cores compute in single precision and upcast the half precision weights to double their footprint',
           ],
@@ -148,7 +148,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
         {
           q: 'CPU RAM plays which role in the GPU serving stack?',
           options: [
-            'A warm tier just under HBM that the GPU reads at near HBM speed and offloading is nearly free',
+            'A warm tier directly below HBM that the GPU reads at near HBM speed, so offloading is nearly free',
             'The offload tier that the GPU reaches over PCIe at far lower bandwidth than HBM',
             'A staging area for loading the checkpoint at startup that the GPU leaves untouched once weights reach HBM',
             'The backing store for register spills that land in host RAM and return to the GPU at PCIe speed',

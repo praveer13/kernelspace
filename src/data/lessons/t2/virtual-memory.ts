@@ -143,8 +143,8 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           options: [
             'Each level mirrors one cache tier from L1 through DRAM, with a four-level walk matching the hardware memory hierarchy',
             'A flat table for a 48-bit space would need about 512 GiB per process, with the MMU walking a sparse radix tree',
-            'Each level is a 512-entry table sized to one 4 KiB page, with the MMU walker fetching a whole level in one cache line',
-            'Smaller tables make context switches cheaper, with just the top level saved and the lower 3 levels staying in the TLB',
+            'Each level is a 512-entry table sized to one 4096-byte page, with the MMU walker fetching a whole level in one cache line',
+            'Smaller tables make context switches cheaper, with only the top level saved and the lower 3 levels staying in the TLB',
           ],
           correct: [1],
           explanation:
@@ -195,10 +195,10 @@ You will perform translations by hand: pick a virtual address, walk the four lev
         {
           q: 'Copy-on-write after fork() means…',
           options: [
-            'The child receives a full private copy of the parent\'s memory at fork time, making forking a large process slow',
-            'Parent and child share frames write-protected, with a frame copied just when one of them writes to it at fault time',
-            'Parent and child share frames writable, with the kernel serialising their writes through a per-page lock',
-            'Each write is first logged to the swap device, with a failed child rolled back leaving the parent untouched',
+            'The child receives a full private copy of the parent\'s memory at fork time, making forking a big process slow',
+            'Parent and child share frames write-protected, with a frame copied at fault time when one of them writes to it',
+            'Parent and child share frames writable, with the kernel serialising their writes through a per-page lock so both see updates',
+            'Each write is first logged to the swap device, with a failed child rolled back and leaving the parent untouched',
           ],
           correct: [1],
           explanation:

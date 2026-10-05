@@ -22,7 +22,7 @@ Naive matmul \`C = A × B\` (N×N): for each of N² outputs, dot a row of A with
       type: 'prose',
       md: `## Tiling: block the problem to fit the fast tier
 
-The insight: a \`T × T\` output tile \`C_tile\` only needs a \`T × K\` slab of A and a \`K × T\` slab of B. Choose \`T\` and \`K\` so those slabs fit in **shared memory** (T4.L2's 228 KB scratchpad), and the algorithm becomes: cooperatively load both slabs (coalesced, T4.L4), barrier, then compute from SRAM at ~20–30× HBM's bandwidth, accumulating into registers. March the slabs along the K dimension and repeat.
+The insight: a \`T × T\` output tile \`C_tile\` only needs a \`T × K\` slab of A and a \`K × T\` slab of B. Choose \`T\` and \`K\` so those slabs fit in **shared memory** (T4.L2's 228 KiB scratchpad), and the algorithm becomes: cooperatively load both slabs (coalesced, T4.L4), barrier, then compute from SRAM at ~20–30× HBM's bandwidth, accumulating into registers. March the slabs along the K dimension and repeat.
 
 Now count bytes. Marching K steps, the tile does \`2·T²·K\` FLOPs and loads \`2·T·K\` elements — \`2·T·K·b\` bytes at \`b\` bytes each — so intensity is \`T / b\`: **\`T/2\` FLOP/byte at FP16**. With \`T = 128\` each element of A and B loaded from HBM is reused **T times** from SRAM, and intensity jumps from 0.5 (the naive case is just \`T = 1\`) to 64 FLOP/byte — a 128× lift — and keeps growing linearly with \`T\` toward the H100's ridge (~295 F/B at FP16, reached near \`T ≈ 590\` on HBM traffic alone; real kernels close the gap with L2 reuse across blocks). **Same 2N³ FLOPs, same math, far more delivered throughput.** Tiling didn't change the algorithm; it changed which tier of the hierarchy the algorithm *lives* in.`,
     },
@@ -93,7 +93,7 @@ The result: the extra memory drops from \`O(N²)\` to \`O(N)\`, HBM accesses fal
     {
       type: 'callout',
       variant: 'info',
-      md: `Why not just bigger tiles forever? SRAM is 228 KB/SM and registers 256 KB/SM — tile size trades against **occupancy** (T4.L4): a giant tile leaves room for few warps, and latency-hiding suffers. Real GEMM libraries (cuBLAS, CUTLASS) auto-tune tile shapes per GPU generation. The craft is balancing reuse (AI) against residency (occupancy) — two of this track's lessons pulling in opposite directions, as physics intended.`,
+      md: `Why not just bigger tiles forever? SRAM is 228 KiB/SM and registers 256 KiB/SM — tile size trades against **occupancy** (T4.L4): a giant tile leaves room for few warps, and latency-hiding suffers. Real GEMM libraries (cuBLAS, CUTLASS) auto-tune tile shapes per GPU generation. The craft is balancing reuse (AI) against residency (occupancy) — two of this track's lessons pulling in opposite directions, as physics intended.`,
     },
     {
       type: 'prose',
@@ -156,16 +156,16 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         {
           q: 'Why can\'t tiles simply be as large as possible?',
           options: [
-            'The compiler rejects shared memory arrays above a few kilobytes and any larger tile fails to compile at build time',
-            'Big tiles use up the per-multiprocessor memory and registers and leave too few resident warps to hide latency',
-            'Bigger tiles need more global memory transactions per output and lose coalescing across memory segments',
-            'Larger tiles make bank conflicts unavoidable and map more lanes onto the same banks as they grow',
+            'The compiler rejects shared memory arrays above a few kilobytes, making any larger tile fail to compile at build time',
+            'Big tiles use up the per-multiprocessor memory and registers, leaving too few resident warps to hide latency',
+            'Bigger tiles need more global memory transactions per output, losing coalescing across memory segments',
+            'Larger tiles make bank conflicts unavoidable, mapping more lanes onto the same banks as they grow',
           ],
           correct: [1],
           explanation:
             'Reuse (favors big T) fights residency (favors small footprint). cuBLAS/CUTLASS tune per-GPU shapes precisely because the optimum sits in the middle of the U.',
           why: [
-            'Blocks can opt in to well over 48 KB (about 227 KB on H100), so a few-KB cap is false. The real constraint is per-SM residency: big tiles leave room for fewer blocks.',
+            'Blocks can opt in to well over 48 KiB (about 227 KiB on H100), so a few-kilobyte cap is false. The real constraint is per-SM residency: big tiles leave room for fewer blocks.',
             'Right: reuse favors big tiles, but each tile claims SRAM and registers, so fewer warps stay resident and latency hiding suffers.',
             'Bigger tiles do less HBM traffic per FLOP (it falls as 1/T), and slab loads stay coalesced. The cost is on-chip residency, not HBM efficiency.',
             'Bank conflicts depend on access stride, and padding fixes them at any tile size. They are not what limits tile growth.',

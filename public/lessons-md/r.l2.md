@@ -50,10 +50,10 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
 
 **Q1. What property makes match especially useful with enums?**
 
-- (o1) It requires a trailing wildcard arm in every match over any enum
+- (o1) It requires a trailing wildcard arm in every match, however many variants the enum has
 - (o2) It raises a runtime error when no arm matches the value
-- (o3) It must cover each variant and a new variant breaks incomplete matches
-- (o4) Arms fall through to the next arm unless each ends with a break
+- (o3) It must cover each variant, so a new variant breaks every incomplete match
+- (o4) Arms fall through to the next arm, so each one must end with an explicit break
 
 **Q2. What values does 0..4 produce?**
 

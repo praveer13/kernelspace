@@ -22,7 +22,7 @@ export default {
         'About 37×, with MLA measured against full multi-head attention at 2621440 B per token',
         'About 4.7×, with MLA at 61 layers × 576 × 2 B or 70272 B against 327680 B per token',
         'About 284×, with MLA storing one 1152 B latent per token across the whole model',
-        'About 4.9×, with MLA caching a latent in just the 58 MoE layers at 66816 B per token',
+        'About 4.9×, with MLA caching a latent in only the 58 MoE layers at 66816 B per token',
       ],
       correct: [1],
       why: [

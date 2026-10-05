@@ -19,7 +19,7 @@ export default {
     {
       q: 'Which description of how production GPU kernels are written fits the corrected T3.L7 lesson?',
       options: [
-        'CUDA C and Triton alone, following ecosystem gravity toward two languages',
+        'Only CUDA C and Triton, following ecosystem gravity toward two languages',
         'Mostly Rust, driven by memory safety over untrusted GPU tensors in the major engines',
         'CUDA C++ plus Python DSLs such as CuTe DSL and Triton, following the vendors',
         'Mostly Zig, driven by comptime specialization per GPU architecture in serving stacks',
@@ -35,7 +35,7 @@ export default {
     {
       q: 'A teammate lists cudarc as a Rust GPU kernel project. What does cudarc actually do?',
       options: [
-        'It is a Rust kernel language that writes GPU kernels in Rust instead of CUDA C++',
+        'It is a Rust kernel language that writes GPU kernels in Rust, not in CUDA C++',
         'It is a safe-Rust attention library with kernels matching hand-written CUDA C++ speed',
         'It reimplements the CUDA runtime in pure Rust and runs on any GPU vendor',
         'It wraps the host-side CUDA API for Rust and launches kernels written elsewhere',

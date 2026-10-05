@@ -20,9 +20,9 @@ This is the single most consequential performance fact in computing, and it is i
     {
       type: 'statline',
       stats: [
-        { value: '~0.5 ns', label: 'L1 cache', hint: 'Roughly one CPU cycle at ~3–5 GHz. 32–64 KB per core.' },
-        { value: '~5 ns', label: 'L2 cache', hint: '~10 cycles. 256 KB–2 MB per core.' },
-        { value: '~15 ns', label: 'L3 cache', hint: '~40 cycles. Tens of MB shared across cores.' },
+        { value: '~0.5 ns', label: 'L1 cache', hint: 'Roughly one CPU cycle at ~3–5 GHz. 32–64 KiB per core.' },
+        { value: '~5 ns', label: 'L2 cache', hint: '~10 cycles. 256 KiB–2 MiB per core.' },
+        { value: '~15 ns', label: 'L3 cache', hint: '~40 cycles. Tens of MiB shared across cores.' },
         { value: '~100 ns', label: 'DRAM', hint: '~300 cycles. This is the "×200 vs L1" number that runs the course.' },
         { value: '~100 µs', label: 'NVMe SSD', hint: 'Random read. About 200,000 L1 accesses (100 µs ÷ 0.5 ns) could have happened instead.' },
       ],
@@ -37,10 +37,10 @@ Every performance instinct you want is already in that paragraph. When a profile
 
 | Level | Size (typical) | Latency | Analogy (L1 = 1 s) |
 |---|---|---|---|
-| Registers | ~1 KB per core | <0.3 ns | instant |
-| L1 cache | 32–64 KB per core | ~0.5 ns | 1 second |
-| L2 cache | 0.5–2 MB per core | ~5 ns | 10 seconds |
-| L3 cache | 16–64 MB shared | ~15 ns | 30 seconds |
+| Registers | ~1 KiB per core | <0.3 ns | instant |
+| L1 cache | 32–64 KiB per core | ~0.5 ns | 1 second |
+| L2 cache | 256 KiB–2 MiB per core | ~5 ns | 10 seconds |
+| L3 cache | 16–64 MiB shared | ~15 ns | 30 seconds |
 | DRAM | 32–512 GB | ~100 ns | ~3.5 minutes |
 | NVMe SSD | 1–8 TB | ~100 µs | ~2.5 days |
 
@@ -52,9 +52,9 @@ These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200�
       height: 52,
       nodes: [
         { id: 'cpu', x: 2, y: 20, w: 14, h: 10, label: 'CPU core', sub: 'load r1, [addr]' },
-        { id: 'l1', x: 24, y: 4, w: 16, h: 9, label: 'L1', sub: '~0.5 ns · 48 KB' },
-        { id: 'l2', x: 24, y: 20, w: 16, h: 9, label: 'L2', sub: '~5 ns · 1 MB' },
-        { id: 'l3', x: 24, y: 36, w: 16, h: 9, label: 'L3', sub: '~15 ns · 32 MB' },
+        { id: 'l1', x: 24, y: 4, w: 16, h: 9, label: 'L1', sub: '~0.5 ns · 48 KiB' },
+        { id: 'l2', x: 24, y: 20, w: 16, h: 9, label: 'L2', sub: '~5 ns · 1 MiB' },
+        { id: 'l3', x: 24, y: 36, w: 16, h: 9, label: 'L3', sub: '~15 ns · 32 MiB' },
         { id: 'dram', x: 56, y: 12, w: 18, h: 10, label: 'DRAM', sub: '~100 ns · 128 GB' },
         { id: 'ssd', x: 56, y: 32, w: 18, h: 10, label: 'NVMe', sub: '~100 µs · 4 TB' },
         { id: 'hbm', x: 82, y: 20, w: 16, h: 12, label: 'HBM (GPU)', sub: '~3.35 TB/s', color: '#A78BFA' },
@@ -91,7 +91,7 @@ Two kinds of locality make the whole scheme work. **Temporal locality:** data yo
       type: 'prose',
       md: `## The same ladder, on the GPU
 
-LLM serving runs on the same physics with different numbers. An H100 pairs huge compute with **HBM3** — high-bandwidth memory delivering ~3.35 TB/s and ~80 GB of capacity. Above HBM sits a ~50 MB L2, and above that, per-SM SRAM ("shared memory") of up to 228 KB with ~20+ TB/s of aggregate bandwidth. The hierarchy is *steeper*: compute is so abundant that feeding it is the entire problem. That is why this course keeps returning to one question — **how many bytes must move per unit of work?** — whether the work is a Java loop, a CUDA kernel, or a transformer forward pass.
+LLM serving runs on the same physics with different numbers. An H100 pairs huge compute with **HBM3** — high-bandwidth memory delivering ~3.35 TB/s and ~80 GB of capacity. Above HBM sits a ~50 MiB L2, and above that, per-SM SRAM ("shared memory") of up to 228 KiB with ~20+ TB/s of aggregate bandwidth. The hierarchy is *steeper*: compute is so abundant that feeding it is the entire problem. That is why this course keeps returning to one question — **how many bytes must move per unit of work?** — whether the work is a Java loop, a CUDA kernel, or a transformer forward pass.
 
 In the simulator below you will walk this ladder yourself: fire accesses at different working-set sizes and stride patterns, watch which level answers, and feel the 0.5 ns → 100 µs cliff in your hands instead of on a slide.`,
     },
@@ -101,8 +101,8 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
       machine: 'latency',
       title: 'Latency-walk visualizer',
       tasks: [
-        'Run the pointer-chase with a 32 KB working set — find which cache level answers (flat, fast).',
-        'Grow the working set to 64 MB and watch the latency step up L1 → L2 → L3 → DRAM.',
+        'Run the pointer-chase with a 32 KiB working set — find which cache level answers (flat, fast).',
+        'Grow the working set to 64 MiB and watch the latency step up L1 → L2 → L3 → DRAM.',
         'Compare stride-1 vs stride-4096 traversal of the same buffer; explain the difference using 64-byte cache lines.',
         'Locate HBM on the ladder and note its bandwidth vs DRAM — the number decode lives and dies by.',
       ],
@@ -117,7 +117,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             'About 2×, with DRAM sitting on the chip beside the caches',
             'About 10×, with DRAM one order of magnitude behind L1 like each cache step',
             'About 200×, with DRAM costing two orders of magnitude more than L1',
-            'About 20,000× with each DRAM access paying a round trip of tens of microseconds',
+            'About 20,000×, with each DRAM access paying a round trip of tens of microseconds',
           ],
           correct: [2],
           explanation:
@@ -168,7 +168,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         {
           q: 'Why can\'t we simply build 128 GB of L1-speed SRAM and skip the hierarchy?',
           options: [
-            'Large SRAM arrays cannot be fabricated, with cells past 8 MB failing to hold their state reliably',
+            'Large SRAM arrays cannot be fabricated, with cells past a few megabytes failing to hold their state reliably',
             'SRAM needs about 6 transistors per bit against one transistor and a capacitor for DRAM, making it too big and costly',
             'DRAM cells run about 2× faster than SRAM but are harder to program, with SRAM caches placed in front to ease compilation',
             'A 128 GB array would run too hot to cool, with the memory controller overheating and throttling the chip',

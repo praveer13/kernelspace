@@ -120,7 +120,7 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
             'Per request, where a request is admitted whole and keeps its batch slot until its final token is produced',
             'Per iteration, where finished sequences leave and waiting ones join after each decode step if free blocks remain',
             'Per block of generated tokens, where the batch is re-formed after each block and switching cost stays amortized',
-            'Per time slice, where a fixed wall-clock quantum ends and the batch is re-evaluated whatever the sequences are doing',
+            'Per time slice, where a fixed wall-clock quantum ends and the batch is re-evaluated regardless of what the sequences are doing',
           ],
           correct: [1],
           explanation:
@@ -154,8 +154,8 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
           q: 'Under sustained overload (arrivals > capacity), the correct system response is…',
           options: [
             'A smarter preemption policy such as oldest-first, which keeps requests progressing and prevents thrashing under load',
-            'Admission control that rejects load early or adds capacity, which no scheduling policy can replace past the cliff',
-            'Longer client timeouts, which give queued requests enough time to drain once preempted sequences are recomputed',
+            'Either admission control that rejects load early or more capacity, which no scheduling policy can replace',
+            'Longer client timeouts, which give queued requests time to drain once preempted sequences are recomputed',
             'A larger running set, which shares each weight read among more sequences and lets the batch absorb the extra arrivals',
           ],
           correct: [1],

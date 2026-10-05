@@ -87,8 +87,8 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
         {
           q: 'WebAssembly\'s security model is best described as…',
           options: [
-            'Process isolation where the host runs each module in its own operating system process',
-            'Capability-based where a module touches just its own linear memory and the host functions it was explicitly handed',
+            'Process isolation where the host runs each module in its own operating system process with a separate address space',
+            'Capability-based where a module touches its own linear memory and the host functions it was handed',
             'A policy file like the Java security manager where the host lists permitted syscalls and paths',
             'Trust-based where the host verifies a publisher signature and runs signed modules with full user permissions',
           ],
@@ -106,9 +106,9 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
           q: 'Rust is an unusually good Wasm source language because…',
           options: [
             'It compiles through its own backend that emits Wasm directly and beats C and C++ output',
-            'It has no collector or runtime to port and needs just thin allocator and panic shims',
+            'It has no collector or runtime to port and gets by with a few thin allocator and panic shims',
             'Its borrow checker runs inside the Wasm module and adds the memory safety Wasm lacks',
-            'Wasm engines ship the Rust standard library and its file and thread APIs work unchanged in a tab',
+            'Wasm engines ship the Rust standard library, so its file and thread APIs work unchanged in a tab',
           ],
           correct: [1],
           explanation:
@@ -124,9 +124,9 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
           q: 'The main performance trap in JS↔Wasm apps is…',
           options: [
             'Wasm compute running far slower than native code which leaves heavy numeric loops better in JavaScript',
-            'Crossing the boundary too often and paying to marshal strings and objects on each of the calls',
+            'Crossing the boundary too often and paying to marshal strings and objects on each call',
             'Linear memory being slower than the JavaScript heap which makes shared buffers a hot path hazard',
-            'Modules being recompiled from the wasm file on each call and paying the compile cost again',
+            'Modules being recompiled from the wasm file on each call, paying the cost again',
           ],
           correct: [1],
           explanation:

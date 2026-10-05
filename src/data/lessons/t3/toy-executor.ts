@@ -205,9 +205,9 @@ An inference engine's control plane is an async-runtime workload: thousands of S
         {
           q: 'tokio adds to the toy executor primarily…',
           options: [
-            'A tracing garbage collector that reclaims finished tasks along with the buffers and sockets they held',
+            'A tracing garbage collector that reclaims finished tasks with the buffers and sockets they held',
             'Work-stealing worker threads and a reactor that turns operating system events into wakes plus timers',
-            'Stackful green threads with one per task which lets an ordinary blocking call suspend just that task',
+            'Stackful green threads, one per task, so an ordinary blocking call suspends only the task that made it',
             'Preemptive time slicing like an operating system scheduler that interrupts a long-running task and gives others a turn',
           ],
           correct: [1],

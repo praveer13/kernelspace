@@ -129,7 +129,7 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
           options: [
             'The engine merges each adapter into the weights as its request arrives, giving the batch one ordinary weight matrix',
             'The base matmul is identical across tenants, with one shared pass serving the batch and each request adding its own delta',
-            'LoRA modifies just the embedding table, leaving the later layers identical across tenants',
+            'LoRA modifies only the embedding table, leaving the later layers identical across tenants',
             'Batching ignores adapter identity, with the engine approximating each tenant\'s delta by one shared averaged low-rank update',
           ],
           correct: [1],

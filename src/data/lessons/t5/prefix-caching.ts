@@ -161,8 +161,8 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           q: 'Why does radix-cache eviction choose leaves?',
           options: [
             'Leaves hold the longest token runs, and freeing one returns the most blocks to the pool at each eviction step',
-            'An internal node is a shared ancestor, and removing it strands its descendants while a leaf can be released cleanly',
-            'Internal nodes carry just child pointers and no blocks of their own, and there is nothing to evict until a leaf goes',
+            'An internal node is a shared ancestor, and removing it strands its descendants while a leaf can be released',
+            'Internal nodes carry child pointers and no blocks of their own, so there is nothing to evict until a leaf goes',
             'Leaves are the nodes with a recency timestamp, and interior nodes go untouched once an edge has been split',
           ],
           correct: [1],
@@ -177,7 +177,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'Why is pure longest-prefix routing insufficient?',
           options: [
-            'A cache hit skips the attention work alone, and the feed-forward layers still recompute each cached token',
+            'A cache hit skips the attention work, and the feed-forward layers still recompute each cached token',
             'It herds traffic onto one warm worker until queueing outweighs the saved prefill, and a guard caps the skew',
             'Cached key and value tensors are bound to the request that created them, and no router can reuse them later',
             'A longer match means more tensors to move to the chosen worker, and the router should prefer short matches',
@@ -195,7 +195,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           q: 'Which value must be part of a safe prefix-cache identity?',
           options: [
             'The normalized prompt text after whitespace and Unicode cleanup, as identical text tokenizes identically',
-            'The exact token ids plus the model and adapter settings and a tenant salt, as K/V and isolation depend on them',
+            'The exact token ids plus the model and adapter settings plus a tenant salt, as K/V and isolation depend on them',
             'The token ids plus the sampling parameters, as temperature and top-p change which tokens the cache should hold',
             'The token ids plus the client session id, as one user\'s cached prefix must be hidden from other users\' requests',
           ],

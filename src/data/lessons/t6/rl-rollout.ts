@@ -101,8 +101,8 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
         {
           q: 'Colocating trainer and rollout workers on the same GPUs wins…',
           options: [
-            'Accuracy, with the rollout policy sharing the exact optimizer state and parameter copy of the update and leaving no sync gap',
-            'Utilization, with rollout filling training bubbles and vice versa at some cost in isolation and a harder packing problem',
+            'Accuracy, with the rollout policy sharing the optimizer state and parameter copy that the update uses, leaving no sync gap',
+            'Utilization, with rollout filling training bubbles and vice versa, at some cost in isolation and a harder packing problem',
             'Isolation, with a stalled rollout no longer able to delay a training step or push it out of memory',
             'Nothing measurable, with time-slicing between two workloads costing as much in switching as it saves',
           ],

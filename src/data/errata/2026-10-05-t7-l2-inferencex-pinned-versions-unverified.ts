@@ -19,7 +19,7 @@ export default {
     {
       q: 'T7.L2 calls InferenceX\'s value procedural. Which procedural strength can the lesson state, given what the project documents?',
       options: [
-        'It re-runs its suite nightly with framework versions pinned and results differing by the engine under test',
+        'It re-runs its suite nightly with framework versions pinned, so results differ only by the engine under test',
         'It re-runs its suite nightly and publishes the runs openly for fresh public checks',
         'It runs once per release and shares results with vendors on one frozen set of numbers',
         'It publishes the numbers vendors submit after tuning with no independent re-run',

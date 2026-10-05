@@ -94,7 +94,7 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
             'GPUs give each lane a much larger cache and avoid memory stalls without needing any other latency tricks',
             'CPUs spend transistors on single-thread latency while GPUs spend them on many simple in-order lanes',
             'GPUs run at higher clock speeds and finish a single instruction stream sooner than a CPU core',
-            'CPUs lack wide floating-point hardware and reach useful dense linear algebra speed on a GPU alone',
+            'CPUs lack wide floating-point hardware, so dense linear algebra needs a GPU to reach useful speed',
           ],
           correct: [1],
           explanation:

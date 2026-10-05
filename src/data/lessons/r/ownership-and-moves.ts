@@ -77,10 +77,10 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
         {
           q: 'Why is clone() intentionally explicit?',
           options: [
-            'Implicit duplication would call drop() twice on the same buffer and corrupt it',
-            'Duplicating a heap value can copy a lot of data and clone() shows the cost',
-            'clone() is built on unsafe pointer copies and each use must be audited',
-            'The compiler cannot tell if a type is safe to clone() and the programmer vouches',
+            'Implicit duplication would call drop() twice on the same buffer, so the call must be spelled out',
+            'Duplicating a heap value can copy a lot of data, so clone() makes the cost visible',
+            'clone() is built on unsafe pointer copies, so each use must be deliberate and auditable',
+            'The compiler cannot tell if a type is safe to clone(), so the programmer must vouch for it',
           ],
           correct: [1],
           explanation:

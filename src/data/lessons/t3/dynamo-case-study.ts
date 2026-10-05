@@ -120,10 +120,10 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
         {
           q: 'The strongest argument against C++ for Dynamo\'s data plane was…',
           options: [
-            'C++ cannot match Rust speed on transfer paths and cache transfer throughput would drop and stall decode workers',
-            'Memory-safety bugs dominate the failures and exploits seen on network-facing paths in large codebases',
-            'C++ lacks a mature async I/O ecosystem and the team would write its own event loop for connection fan-out',
-            'C++ cannot link against the accelerator and transfer libraries directly and needs a wrapper layer around each',
+            'C++ cannot match Rust\'s speed on transfer paths, so KV transfer throughput would drop and stall decode workers',
+            'Memory-safety bugs dominate the failures and exploits on network-facing paths, so safety wins over speed',
+            'C++ lacks a mature async I/O ecosystem, so the team would write its own event loop for connection fan-out',
+            'C++ cannot link against the accelerator and transfer libraries directly, so it needs a wrapper layer around each',
           ],
           correct: [1],
           explanation:
@@ -156,10 +156,10 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
         {
           q: 'Which Rust features map most directly onto Dynamo\'s data-plane requirements?',
           options: [
-            'Procedural macros and reflection and codegen that let the data plane serialize descriptors without hand-written code',
-            'Tokio for async fan-out and Bytes for zero-copy buffers and Send and Sync for auditable races and cheap C interop',
-            'The borrow checker alone with the remaining requirements equally met by C++ and the same libraries',
-            'Cargo and its package registry that supply pure-Rust replacements for the accelerator and transfer libraries',
+            'Procedural macros, reflection and codegen, which let the data plane serialize KV descriptors without hand-written code',
+            'Tokio for async fan-out, Bytes for zero-copy buffers, Send and Sync for auditable races, and the C ABI for interop',
+            'The borrow checker alone, with every other requirement equally met by C++ and the same libraries',
+            'Cargo and its package registry, which supply pure-Rust replacements for the CUDA and RDMA transfer libraries',
           ],
           correct: [1],
           explanation:

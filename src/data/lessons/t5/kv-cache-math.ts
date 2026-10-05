@@ -125,7 +125,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'For a 70B FP16 model (80 layers, d_kv = 1024), a single 128k-token context costs about…',
           options: [
-            'About 20 GiB, from 80 layers x 1024 x 2 bytes x 128k tokens with the key tensor stored alone',
+            'About 20 GiB, from 80 layers x 1024 x 2 bytes x 128k tokens, counting only the key tensor',
             'About 320 GiB, from 2.5 MiB per token as if the 64 query heads each stored their own keys and values',
             'About 40 GiB, from 320 KiB per token for keys and values across 80 layers at 2 bytes and 1024 width',
             'About 130 GiB, equal to the weights at 2 bytes per parameter on the premise that cache and model match',

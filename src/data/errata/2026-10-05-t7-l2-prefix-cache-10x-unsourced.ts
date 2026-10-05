@@ -19,7 +19,7 @@ export default {
         'It is a fixed multiple cheaper for any model and engine once cache hits dominate',
         'It is cheaper for the first few requests and then cached blocks are evicted under load',
         'It costs about the same as each request still pays for a full prefill',
-        'It is cheaper by an amount that depends on hit rate and prompt length and engine',
+        'It is cheaper by an amount that depends on hit rate, prompt length and engine',
       ],
       correct: [3],
       why: [

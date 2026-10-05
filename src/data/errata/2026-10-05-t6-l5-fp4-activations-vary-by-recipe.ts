@@ -19,7 +19,7 @@ export default {
     {
       q: 'NVIDIA\'s DeepSeek-R1-FP4 checkpoint is the FP4 lesson\'s flagship example. According to its model card, what is quantized to FP4?',
       options: [
-        'The weights alone with activations kept in BF16 or FP8 in the shipped recipes',
+        'Only the weights, with activations kept in BF16 or FP8 in the shipped recipes',
         'The weights and activations of the linear operators in the transformer at FP4',
         'Each tensor in the model from embeddings to the KV cache and output layer at FP4',
         'The expert weights of the MoE layers with dense layers and activations left in BF16',

@@ -80,9 +80,9 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
         {
           q: 'What releases a std::sync::Mutex lock?',
           options: [
-            'Calling unlock() on the Mutex when the critical section ends as in Java',
-            'Dropping the MutexGuard that lock() returned at the end of its scope',
-            'The end of the statement that called lock() whether or not the guard was bound',
+            'Calling unlock() on the Mutex when the critical section ends, as with a Java ReentrantLock',
+            'Dropping the MutexGuard that lock() returned, at scope end or by an explicit drop(guard)',
+            'The end of the statement that called lock(), whether or not the guard was bound to a name',
             'The scheduler when the holding thread calls sleep() in the critical section',
           ],
           correct: [1],

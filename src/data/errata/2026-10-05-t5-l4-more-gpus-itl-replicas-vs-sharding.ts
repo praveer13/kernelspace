@@ -19,7 +19,7 @@ export default {
     {
       q: 'A 70B FP16 model moves from 2 GPUs to tensor parallelism across 8 GPUs. What happens to the weight bytes each GPU reads per decode step?',
       options: [
-        'They stay the same as each GPU still needs the full weights for its part of each layer',
+        'They stay the same, as each GPU still needs the full weights for its part of each layer',
         'They fall to about a quarter as each GPU holds a smaller shard of the weights',
         'They rise as each GPU also reads the weights its neighbours hold to combine partial results',
         'They stay the same per GPU and any speedup comes from extra tensor-core FLOPs at this size',

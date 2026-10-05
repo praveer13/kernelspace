@@ -84,7 +84,7 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
         {
           q: 'Production quantization recipes on Blackwell are…',
           options: [
-            'Full FP4 for weights and activations and cache alike, with the tensor cores running FP4 natively',
+            'Full FP4 for weights, activations and cache alike, with the tensor cores running FP4 natively',
             'Block-scaled FP4 weights, with activations at FP4 or higher precision by recipe and outliers kept wider',
             'INT4 with one per-tensor scale on a symmetric grid, with uniform resolution that avoids the coarse FP4 spacing',
             'Weight-only FP4 with BF16 activations throughout, with no shipped recipe quantizing activations below 16 bits',

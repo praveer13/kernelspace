@@ -124,10 +124,10 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
         {
           q: 'The defining difference between a process and a thread is…',
           options: [
-            'A process has its own execution context scheduled by the kernel, while threads are scheduled by the language runtime inside that process',
+            'A process has its own execution context scheduled by the kernel, while threads are scheduled by the language runtime within it',
             'A process owns a private address space and a bundle of resources, while its threads share that one address space and those resources',
-            'A thread gets a private stack and heap and shares just code and globals with its siblings, while a process shares nothing with others',
-            'A process is the unit the scheduler places on a core, while a thread is just a queue of work items that the process consumes',
+            'A thread gets a private stack and heap, sharing only code and globals with its siblings, while a process shares nothing with other processes',
+            'A process is the unit the scheduler places on a core, while a thread is only a queue of work items that the process consumes',
           ],
           correct: [1],
           explanation:

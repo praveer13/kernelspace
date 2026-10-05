@@ -64,10 +64,10 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
         {
           q: 'What does Arc::clone(&x) copy?',
           options: [
-            'The inner value in full and each thread gets a private copy of the data',
-            'A new handle to the same allocation and an atomic count goes up',
-            'The inner value when T implements Clone and a handle otherwise',
-            'A mutable handle to the shared value that lets the new owner write through it',
+            'The inner value in full, so each thread gets a private copy of the data',
+            'A new handle to the same allocation, bumping an atomic count',
+            'The inner value when T is Clone, and a handle otherwise',
+            'A mutable handle to the shared value, so the new owner may write through it',
           ],
           correct: [1],
           explanation:

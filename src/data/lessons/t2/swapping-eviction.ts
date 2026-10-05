@@ -140,7 +140,7 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
         {
           q: 'A nightly batch job reads a 10 GB file once on a host with 4 GB of page cache. Under strict LRU this is harmful because…',
           options: [
-            'A file that is just read cannot be kept in the cache by LRU, with each pass of the scan going back to disk',
+            'A read-only file cannot be kept in the cache by LRU, with each pass of the scan going back to disk',
             'The scan evicts hot pages to cache data that nobody rereads, with LRU treating a first touch as a sign of future use',
             'LRU pins any page it has touched, with the cache full of unevictable pages after the scan and new reads failing',
             'The scan doubles the number of TLB entries in use, with address translation slowing for each process on the host',
@@ -177,8 +177,8 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
           q: 'The PagedAttention paper\'s two preemption options (swap KV to CPU RAM vs discard-and-recompute; vLLM V1 keeps only recompute) most closely mirror the OS decision between…',
           options: [
             'Spinning versus sleeping on a lock, holding the core while waiting or yielding it and paying a wake-up cost later',
-            'Swapping anonymous pages to disk versus dropping clean file-backed pages that are re-read later',
-            'Huge pages versus base pages, with fewer larger blocks to move at once against finer blocks that waste less',
+            'Swapping anonymous pages to disk versus dropping clean file-backed pages, which can be re-read from their source',
+            'Huge pages versus base pages, with fewer larger blocks to move at once against finer blocks that waste less memory',
             'Fair-share versus real-time scheduling, preempting by weighted time used against a fixed priority class',
           ],
           correct: [1],

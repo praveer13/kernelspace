@@ -16,10 +16,10 @@ export default {
     {
       q: 'A vendor page reports peak tok/s with no latency figures. As batch size grows, what do throughput and latency do, and why does that peak figure mislead?',
       options: [
-        'Throughput climbs without limit while latency stays flat with the peak a best case at any load',
-        'Throughput climbs then collapses while latency stays flat with the peak a brief spike that load erases',
-        'Throughput flattens while latency keeps rising past the knee with the peak where users had left',
-        'Both stay flat until the cache fills with the peak trustworthy until requests start failing',
+        'Throughput climbs without limit while latency stays flat, so the peak is the best case at any load',
+        'Throughput climbs then collapses while latency stays flat, so the peak is a brief spike that load erases',
+        'Throughput flattens while latency keeps rising past the knee, so the peak sits where users had left',
+        'Both stay flat until the cache fills, so the peak is trustworthy until requests start failing',
       ],
       correct: [2],
       why: [

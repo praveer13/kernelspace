@@ -15,9 +15,9 @@
  *      vs FlashAttention toggle.
  *
  * Documented constants (synthetic but dimensionally faithful):
- *   - register file: 256 KB/SM  = 65,536 32-bit registers
+ *   - register file: 256 KiB/SM  = 65,536 32-bit registers
  *   - max warp slots: 64/SM
- *   - shared memory: 228 KB/SM
+ *   - shared memory: 228 KiB/SM
  *   - H100-class HBM: 3.35 TB/s
  *   - L2 bandwidth: ~12 TB/s
  *   - shared memory bandwidth: ~20 TB/s

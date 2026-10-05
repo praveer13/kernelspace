@@ -159,10 +159,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'On an H100 (~990 FP16 TFLOPS, 3.35 TB/s), a kernel with AI = 1 FLOP/byte is…',
           options: [
-            'Compute-bound with tensor cores running at the 990 TFLOP/s peak however many bytes the kernel moves',
-            'Bandwidth-bound with attainable performance near 3.35 TFLOP/s and the compute units sitting idle',
-            'Latency-bound with 1 FLOP per byte leaving too little math to cover the delay of each load',
-            'Near the ridge with the ridge sitting at 1 FLOP per byte on any modern GPU',
+            'Compute-bound, with tensor cores running at the 990 TFLOP/s peak however many bytes the kernel moves',
+            'Bandwidth-bound, with attainable performance near 3.35 TFLOP/s and the compute units sitting idle',
+            'Latency-bound, with 1 FLOP per byte leaving too little math to cover the delay of each load',
+            'Near the ridge, which sits at about 1 FLOP per byte on any modern GPU and balances compute against bandwidth',
           ],
           correct: [1],
           explanation:

@@ -22,7 +22,7 @@ export default {
         'Tasks on the whole runtime, with a held lock pausing the thread pool',
         'Tasks that call lock on that mutex, each blocking its worker thread',
         'No task, with the await releasing the guard at the suspension point',
-        'The holder alone, with other tasks woken once its future is dropped',
+        'Only the holder, with other tasks woken once its future is dropped',
       ],
       correct: [1],
       why: [

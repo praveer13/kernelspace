@@ -148,10 +148,10 @@ The exercise wires the three architectures against the same workload and shows y
         {
           q: 'Rust\'s "fearless concurrency" guarantee covers…',
           options: [
-            'Data races and deadlocks through type tracking of which locks each thread holds',
-            'Data races on shared memory while logic races and deadlocks remain your own problem',
-            'Data races solely in programs that avoid unsafe code in dependencies and the standard library',
-            'Memory safety across threads when you use channels while state behind a Mutex falls outside it',
+            'Data races and deadlocks, through type tracking of which locks each thread holds',
+            'Data races on shared memory, while logic races and deadlocks remain your own problem',
+            'Data races, but only when no dependency and not even the standard library contains unsafe code',
+            'Memory safety across threads for channel-based designs, with state behind a Mutex falling outside it',
           ],
           correct: [1],
           explanation:

@@ -21,7 +21,7 @@ export default {
       options: [
         'About 43 GiB, with a GiB at 10^9 bytes and a GB at 2^30 bytes',
         'About 40 GiB or 43 GB, with a GiB at 2^30 bytes and a GB at 10^9 bytes',
-        'About 40 GB, with a GB and a GiB naming the same unit and rounded down',
+        'About 40 GB, with a GB and a GiB naming the same unit, rounded down',
         'About 400 GiB, with a GiB at 2^30 bytes and a GB total of 4.3 x 10^11 bytes',
       ],
       correct: [1],

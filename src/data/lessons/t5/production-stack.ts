@@ -116,9 +116,9 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           q: 'Dynamo is best characterized as…',
           options: [
             'A faster inference engine that rewrites the scheduler and kernels of vLLM, and keeps the same serving loop and interface',
-            'A data plane around existing engines, handling cache-aware routing and disaggregation and autoscaling for the fleet',
-            'A quantization toolkit of low-precision recipes, and a converted checkpoint serves from fewer devices and less memory',
-            'A model registry and artifact store for images and checkpoints, and weights are pushed to replicas on each deploy',
+            'A data plane around existing engines that handles cache-aware routing, disaggregation and autoscaling for the fleet',
+            'A quantization toolkit of low-precision recipes, so a converted checkpoint serves from fewer devices and less memory',
+            'A model registry and artifact store for images and checkpoints, so weights are pushed to replicas on each deploy',
           ],
           correct: [1],
           explanation:

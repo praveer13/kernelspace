@@ -165,10 +165,10 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
         {
           q: 'Why do LLM serving stacks keep Python out of the hot data plane?',
           options: [
-            'Python has no CUDA bindings and forces each GPU call to be written in C++ or Rust',
-            'GC pauses and GIL contention cost too much when moving GBs per token under tight latency budgets',
-            'Python bytecode runs far slower than C++ and slows GPU decode to match anywhere in the request path',
-            'Python has no async support and cannot overlap network transfers with GPU compute in a data plane',
+            'Python has no CUDA bindings, forcing every GPU call to be written in C++ or Rust from the very start',
+            'GC pauses and GIL contention cost too much when moving GB per token under tight latency budgets',
+            'Python bytecode runs far slower than C++, so any Python in the request path slows GPU decode to match',
+            'Python has no async support, so a data plane cannot overlap network transfers with compute',
           ],
           correct: [1],
           explanation:

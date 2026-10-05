@@ -19,7 +19,7 @@ export default {
       options: [
         'HBM traffic becomes linear in N and doubling the context doubles the bytes moved',
         'HBM traffic stays quadratic in N but shrinks by about M over d squared',
-        'HBM traffic is unchanged and the extra memory alone shrinks to linear in N',
+        'HBM traffic is unchanged and only the extra memory shrinks, to linear in N',
         'It is an approximation that drops low-scoring entries and keeps a sparse matrix in HBM',
       ],
       correct: [1],

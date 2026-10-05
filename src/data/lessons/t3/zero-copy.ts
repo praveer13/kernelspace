@@ -138,7 +138,7 @@ Serving systems live or die on copy discipline: every tensor moved between devic
           q: 'bytes::Bytes achieves zero-copy sharing by…',
           options: [
             'Copying on first write where slices share the original bytes until one is mutated and gets a private copy',
-            'Reference-counting one immutable buffer and handing out views that merely bump the count',
+            'Reference-counting one immutable buffer and handing out views that bump the count instead of copying',
             'Borrowing the original Vec with a lifetime parameter and tying each slice to the creating stack frame',
             'Allocating each slice from a pool that is freed in one step and avoids per-slice tracking',
           ],
@@ -176,7 +176,7 @@ Serving systems live or die on copy discipline: every tensor moved between devic
             'Declare hot-path modules unsafe throughout and skip per-block annotations that add noise',
             'Keep unsafe internals tiny behind a safe borrow-checked interface and document the invariants',
             'Ban unsafe outright on the view that a single block voids the safety guarantee of the whole program',
-            'Expose unsafe functions directly and document them in the crate docs and let callers decide on the risk',
+            'Expose unsafe functions directly, document them in the crate docs and let callers decide on the risk',
           ],
           correct: [1],
           explanation:

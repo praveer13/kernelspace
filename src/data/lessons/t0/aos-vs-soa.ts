@@ -245,7 +245,7 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
             'In no case, with SoA strictly superior and fetching fewer bytes per record than AoS',
             'When the hot path reads most fields of a few records at a time, with one line fetch serving the whole record',
             'When the records are small, with one array of small structs taking less memory than parallel arrays',
-            'When the workload is single-threaded, with SoA paying off just once several cores read the data',
+            'When the workload is single-threaded, with SoA paying off only once several cores read the data',
           ],
           correct: [1],
           explanation:

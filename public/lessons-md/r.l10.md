@@ -63,9 +63,9 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
 
 **Q3. Why must compare_exchange code handle failure?**
 
-- (o1) A failure poisons the atomic and the caller must reset it before reusing it again
-- (o2) A failure means the ordering was too weak and a stronger ordering removes failures
-- (o3) Another thread can change the value after your load and Err returns what it saw
-- (o4) A failure can tear the value and the caller must restore the old one
+- (o1) A failure poisons the atomic, so the caller must reset it before it can be used again
+- (o2) A failure means the ordering was too weak, so a stronger ordering removes failures
+- (o3) Another thread can change the value after your load, so Err returns what it saw
+- (o4) A failure can tear the value, so the caller must restore the old value
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

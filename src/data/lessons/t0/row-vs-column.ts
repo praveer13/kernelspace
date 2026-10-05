@@ -169,18 +169,18 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
         {
           q: 'Why does the row/column performance gap nearly vanish when the matrix shrinks to fit in L2 cache?',
           options: [
-            'Small matrices use a faster memory bus, bypassing the DRAM controller entirely',
-            'The CPU reorders loops automatically for small arrays, leaving both traversal orders row-major',
-            'Once data sits in cache, access order matters little and the penalty is purely DRAM latency',
-            'The CPU prefetcher works just on small working sets, hiding latency for both orders after shrinking',
+            'Small matrices use a faster memory bus, so they bypass the DRAM controller entirely',
+            'The CPU reorders loops automatically for small arrays, so both traversal orders end up row-major',
+            'Once data is cached, access order matters little because the DRAM traffic and TLB thrash vanish',
+            'The CPU prefetcher works only on small working sets, so it hides latency for both orders after shrinking',
           ],
           correct: [2],
           explanation:
-            'The 20× is the cost of missing to DRAM on every access. If everything is already in L2, both orders hit cache and run at similar speed — the cleanest proof that layout penalties are hierarchy effects.',
+            'The ~20× gap is the cost of missing to DRAM on every access: about 8× the traffic, with no prefetch rescue, plus TLB thrash. If everything is already in L2, both orders hit cache and run at similar speed — the cleanest proof that layout penalties are hierarchy effects.',
           why: [
             'There is one path to DRAM. Small arrays are fast because they never go there: they are served by L2 on-chip, not through a special bus.',
             'Hardware does not reorder loops; the instruction stream keeps its order. Compilers can interchange loops at -O3, but that is a compile-time change and would help the large matrix too.',
-            'Right: the ~20x gap is the cost of missing to DRAM on every access. With everything in L2, both orders hit cache and run at similar speed: proof that layout penalties are hierarchy effects.',
+            'Right: the ~20x gap comes from DRAM misses on every access, about 8x the traffic plus TLB thrash. With everything in L2, both orders hit cache and run at similar speed: a hierarchy effect.',
             'Prefetchers work at any size, including on large arrays. Row order benefits from them on big matrices, which is part of why the gap exists there but disappears in L2.',
           ],
         },

@@ -21,7 +21,7 @@ export default {
       options: [
         'The eligible thread with the earliest virtual deadline',
         'The runnable thread with the smallest vruntime as in the old scheduler',
-        'The thread with the largest positive lag whether eligible or not',
+        'The thread with the largest positive lag, whether it is eligible or not',
         'The thread with the shortest requested slice whatever its lag is',
       ],
       correct: [0],
@@ -36,9 +36,9 @@ export default {
       q: 'Under EEVDF, what can still starve ordinary fair-class threads?',
       options: [
         'A fair-class thread that requests a very long time slice',
-        'No thread given the fair class guarantee against starvation',
+        'Nothing, because the fair class guarantees that no thread starves',
         'A real-time thread that spins without blocking or yielding',
-        'A fair-class thread whose lag stays negative for a long time',
+        'A fair-class thread whose lag has stayed negative for a long time',
       ],
       correct: [2],
       why: [

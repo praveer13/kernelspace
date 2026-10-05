@@ -19,7 +19,7 @@ export default {
     {
       q: 'How does XGrammar keep grammar-constrained decoding from slowing generation, according to its paper?',
       options: [
-        'It builds a GPU table of masks for each grammar state and reports a few percent overhead',
+        'It builds a GPU table of masks for each grammar state, and reports a few percent overhead',
         'It overlaps grammar computation with GPU execution and reports near-zero overhead',
         'It syncs the CPU and GPU at each token to build the mask and reports a few percent overhead',
         'It samples freely and retries rejected tokens until the output parses on the GPU',

@@ -201,8 +201,8 @@ Step back and name what you built: a system that multiplexes a fixed resource am
         {
           q: 'In a free-list allocator, what does "splitting" do?',
           options: [
-            'Divides the heap between two threads, giving each thread its own private free list',
-            'Cuts a too-large free block into an allocation plus a small remainder',
+            'Divides the heap between two threads, giving each thread its own private free list of blocks',
+            'Cuts a too-large free block in two, handing one part out and keeping the rest free',
             'Spreads one large request across two non-adjacent free blocks, stitching them together',
             'Separates each block header from its payload, letting them be freed apart',
           ],

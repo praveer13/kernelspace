@@ -7,7 +7,7 @@ const lesson: Lesson = {
   index: 6,
   title: 'Speculative Decoding in Production: MTP, EAGLE, and the Acceptance Economy',
   minutes: 25,
-  hook: 'T5.L8 taught the draft-verify trick. Production made it stranger: the draft is now the model\'s own head (MTP), acceptance rate is a designed quantity, and on MoE the win is 2–3× interactivity, not 1.5×.',
+  hook: 'T5.L8 taught the draft-verify trick. Production made it stranger: the draft is now the model\'s own head (MTP), acceptance rate is a designed quantity, and on DeepSeek-R1 the published win reaches 2–3× interactivity.',
   exercise: 'read+quiz',
   verifiedAt: '2026-08',
   blocks: [
@@ -28,12 +28,12 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
 - **Acceptance rate is a metric you design for, not observe.** Domain drafters (a code-tuned head for a code product), temperature coupling (low temperature → higher acceptance), k tuning per workload (k=2–4 typical; each extra draft token costs draft time and verify FLOPs).
 - **Why k here is smaller than T5.L8's k ≈ 4–8.** Same E, different setting. A separate draft model is a cheap, independent predictor, so on predictable text you can run it further out. MTP ships one trained module (DeepSeek-V3/R1: num_nextn_predict_layers = 1), and MTP-3 runs that same module for 3 draft steps. Each extra step is another pass of the module on the critical path, and later steps predict tokens further ahead than the module was trained for, so α falls with each step and the α^(k+1) term you gain per step shrinks faster than your cost. The ranges overlap near k ≈ 4; they are not a contradiction.
 - **Verify is prefill-shaped, and that's the point.** T4.L3: decode wastes the compute roof; verification backfills it — k tokens per weight-read instead of 1. The win disappears when the batch is already compute-saturated: speculative decoding is an *interactivity* technology (small batches, single-user streams), not a throughput one. SemiAnalysis on InferenceX (formerly InferenceMAX): MTP gives **2–3× interactivity**, and high-interactivity configs are where B200 single-node can beat GB200 NVL72 (which wins at low interactivity / max throughput).
-- **MoE makes it bigger.** On a 37B-active-param MoE, a target step reads little weight, so the verify pass's marginal cost is low and acceptance on structured text (code, JSON, tool calls) runs high. 2–3× on MoE vs ~1.5–2× on dense, per NVIDIA's and SemiAnalysis' published numbers.`,
+- **MoE changes the arithmetic, not the rule.** A sparse MoE feeds each expert only a small share of the batch, so decode stays bandwidth-bound out to much larger batches than a dense model, and verification keeps using idle compute where dense decode has none ([MoESD](https://arxiv.org/abs/2505.19645) finds MoE can gain more than dense at medium batch sizes). The catch: k drafted tokens can route to more experts than one decode step touches, so a verify pass reads more weight bytes than a single step and the gain depends on batch size. The published numbers are for DeepSeek-R1 only: SemiAnalysis measured up to 2–3× throughput at some iso-interactivity points (GB200 NVL72, 8K in and 1K out), and NVIDIA [reports 2.16× at batch 1](https://nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog2_DeepSeek_R1_MTP_Implementation_and_Optimization.html) on 8 B200. Neither gives a dense-model figure, so there is no sourced MoE-versus-dense ratio.`,
     },
     {
       type: 'statline',
       stats: [
-        { value: '2–3×', label: 'MTP interactivity gain on MoE', hint: 'NVIDIA + SemiAnalysis InferenceX numbers, DeepSeek-class models.' },
+        { value: '2–3×', label: 'MTP gain on DeepSeek-R1', hint: 'Up to, at some iso-interactivity points on GB200 NVL72 (SemiAnalysis InferenceX); NVIDIA reports 2.16× at batch 1 on 8 B200.' },
         { value: 'k = 2–4', label: 'typical draft length', hint: 'MTP depth. Each extra token costs draft time + verify FLOPs, and E = (1 − α^(k+1)) / (1 − α) flattens; a separate draft model (T5.L8) runs k ≈ 4–8.' },
         { value: '0%', label: 'quality loss', hint: 'Rejection sampling keeps output distributionally identical to the target model — speed, not approximation.' },
         { value: 'MTP-3', label: 'DeepSeek-R1 production drafter', hint: 'One MTP module (num_nextn_predict_layers = 1) run for 3 draft steps, fed by the target hidden states — drafter as the model itself.' },
@@ -75,11 +75,11 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
           ],
           correct: [1],
           explanation:
-            'The mechanism converts idle decode FLOPs into skipped steps. At high occupancy there are no idle FLOPs — it is an interactivity (tok/s/user) technology: 2–3× on MoE, which is why min-latency configs love MTP and throughput configs care less.',
+            'The mechanism converts idle decode FLOPs into skipped steps. At high occupancy there are no idle FLOPs — it is an interactivity (tok/s/user) technology: up to 2–3× on DeepSeek-R1, which is why min-latency configs love MTP and throughput configs care less.',
           why: [
             'Backwards. A saturated batch has no idle compute to fill, so verifying extra tokens adds FLOPs that slow every sequence. Speculation is an interactivity technique, not a throughput one.',
             'Right: at small batch, decode is bound by reading weights and leaves arithmetic idle. Verifying k tokens per weight read uses that spare compute to skip steps.',
-            'The published gains are larger on MoE (2–3×) than on dense models (about 1.5–2×). Acceptance depends on how predictable the text is, not on the target being dense.',
+            'MoE routing does not collapse acceptance: the published MTP gains, up to 2–3×, are on DeepSeek-R1, a MoE. Acceptance depends on how predictable the text is, not on the target being dense.',
             'Acceptance depends on how predictable the continuation is (code, JSON, low temperature), not on prompt length. Short prompts also say nothing about whether the batch has idle compute.',
           ],
         },
@@ -102,21 +102,21 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
           ],
         },
         {
-          q: 'Why is the win bigger on MoE than dense?',
+          q: 'Why can speculative decoding stay profitable at larger batches on a MoE than on a dense model?',
           options: [
-            'The router acts as the drafter, with each expert predicting a different future token from one routing decision',
-            'A MoE decode step moves few weight bytes, making verification cheap and letting structured text accept often',
-            'MoE layers run fewer FLOPs per token than dense layers, making extra verified tokens free at any batch size',
-            'MoE models hold more total parameters, giving a draft head more capacity and near-perfect acceptance on any text',
+            'The router acts as the drafter, so each expert predicts a different future token per routing decision',
+            'Each expert sees few tokens, so decode stays bandwidth-bound where a dense model is already compute-bound',
+            'MoE layers run fewer FLOPs per token than dense layers, so extra verified tokens are free at any batch size',
+            'MoE models hold more total parameters, so a draft head gets more capacity and near-perfect acceptance on any text',
           ],
           correct: [1],
           explanation:
-            'Speculative economics = win × acceptance ÷ verify cost. MoE shrinks the denominator (per-step bytes) and, on code/JSON-shaped text, raises acceptance. Published: ~2–3× on MoE vs ~1.5–2× dense.',
+            'Speculative gain = accepted tokens per step ÷ verify cost. A sparse MoE stays bandwidth-bound out to larger batches, so verification keeps using idle compute where a dense model has none; but k drafted tokens can touch more experts than one step, so the gain depends on batch size. Reported: up to 2–3× on DeepSeek-R1 (SemiAnalysis), 2.16× at batch 1 on 8 B200 (NVIDIA); no source here gives a dense figure.',
           why: [
             'Routers choose experts for the current token\'s feed-forward layer; they do not predict future tokens. Drafts come from a draft model, Medusa heads or an MTP module.',
-            'Right: a MoE step reads only the active experts, so the verify pass adds little marginal cost, and code or JSON-shaped text accepts at a high rate. Published: about 2–3× on MoE versus 1.5–2× dense.',
-            'Sparse activation lowers the cost per token but does not make verification free. Once the batch saturates compute, extra verified tokens cost FLOPs again, as on dense models.',
-            'Acceptance depends on how predictable the text is and how well the head matches the target, not on total parameter count. The MoE gain comes mainly from cheaper verification.',
+            'Right: each expert gets a small share of the batch, so intensity stays low and compute idle at batch sizes where dense decode is compute-bound. One study finds MoE can gain more at medium batches.',
+            'Sparse activation lowers the cost per token but not to zero. Verifying k tokens can route to more experts than one decode step touches, and once the batch saturates compute, extra tokens cost FLOPs again.',
+            'Acceptance depends on how predictable the text is and how well the head matches the target, not on total parameter count. The MoE advantage comes from idle compute over a wider batch range.',
           ],
         },
       ],

@@ -112,7 +112,7 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
             'The number of chips in the fleet, with each added chip raising the hourly bill and the cost of each token',
             'Goodput per billed chip hour, meaning tokens delivered within the latency target per hour',
             'The peak utilization reached in the busiest minute, which shows how efficiently the silicon can be used',
-            'The chip\'s hourly rate, with a rented or amortized card costing the same per hour whatever it runs',
+            'The chip\'s hourly rate, with a rented or amortized card costing the same per hour regardless of what it runs',
           ],
           correct: [1],
           explanation:

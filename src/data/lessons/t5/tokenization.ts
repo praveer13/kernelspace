@@ -118,10 +118,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'Why should cost and latency estimates never be done in words?',
           options: [
-            'Tokenizers are nondeterministic, and the same text can cost a different number of tokens on each request even with a pinned version',
-            'Words per token shifts with content type and falls sharply for code and non-Latin scripts, and a traffic sample gives the number',
-            'Providers bill per character, and the character count is the right estimate for cost while tokens matter for context limits',
-            'The context window is measured in bytes, and byte length is the right estimate while word counts under-report non-Latin scripts',
+            'Tokenizers are nondeterministic, so the same text can cost a different number of tokens on each request even with a pinned version',
+            'Words per token shifts with content type and falls sharply for code and non-Latin scripts, so a traffic sample gives the number',
+            'Providers bill per character, so the character count is the right estimate for cost while tokens matter for context limits',
+            'The context window is measured in bytes, so byte length is the right estimate while word counts under-report non-Latin scripts',
           ],
           correct: [1],
           explanation:
@@ -154,10 +154,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'The "strawberry problem" (models struggling to count letters) follows from…',
           options: [
-            'Too little text about spelling in the training data, and more data would teach the model the letters inside each token',
-            'The model receiving ids for multi-letter chunks, and the letters inside a chunk stay out of its input',
-            'Attention being blind to character order, and the model sees which letters appear but not their counts',
-            'Counting needing a sequential loop, and one forward pass cannot express it even for single characters',
+            'Too little text about spelling in the training data, so more data would teach the model the letters inside each token',
+            'The model receiving ids for multi-letter chunks, so the letters inside a chunk stay out of its input',
+            'Attention being blind to character order, so the model sees which letters appear but not their counts',
+            'Counting needing a sequential loop, so one forward pass cannot express it even for single characters',
           ],
           correct: [1],
           explanation:

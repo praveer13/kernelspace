@@ -201,7 +201,7 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'CAS is not truly atomic on some CPUs, with another thread able to change the word between the compare and the swap',
             'A freed node\'s address can be recycled, with a pointer compare succeeding though the node changed before the CAS',
             'Two threads using different memory orderings can see the pointer update out of order, with the CAS compare reading a stale value',
-            'Misaligned allocations make the CAS span two cache lines, with the compare checking just half of the pointer',
+            'Misaligned allocations make the CAS span two cache lines, with the compare checking half of the pointer',
           ],
           correct: [1],
           explanation:

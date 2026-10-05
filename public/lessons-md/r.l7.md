@@ -50,10 +50,10 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
 
 **Q1. What does Arc::clone(&x) copy?**
 
-- (o1) The inner value when T implements Clone and a handle otherwise
-- (o2) The inner value in full and each thread gets a private copy of the data
-- (o3) A mutable handle to the shared value that lets the new owner write through it
-- (o4) A new handle to the same allocation and an atomic count goes up
+- (o1) The inner value when T is Clone, and a handle otherwise
+- (o2) The inner value in full, so each thread gets a private copy of the data
+- (o3) A mutable handle to the shared value, so the new owner may write through it
+- (o4) A new handle to the same allocation, bumping an atomic count
 
 **Q2. Why can Rc<T> not normally be sent to another thread?**
 

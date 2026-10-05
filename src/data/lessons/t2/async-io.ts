@@ -108,7 +108,7 @@ You should now be able to trace a request through a modern async server: NIC int
           q: 'epoll beat select/poll for C10k because…',
           options: [
             'It hands socket buffers to userspace without copying, with each readable connection costing no kernel-to-user data copy',
-            'Interest is registered once and each wake returns just the ready fds, with work scaling with ready events rather than total connections',
+            'Interest is registered once and each wake returns the ready fds, with work scaling with ready events rather than total connections',
             'It spawns a kernel thread per connection, with waiting on thousands of sockets proceeding in parallel instead of in a single-threaded scan loop',
             'It signals readiness through shared memory without any system call, with the loop avoiding a trap into the kernel to wait',
           ],
@@ -128,7 +128,7 @@ You should now be able to trace a request through a modern async server: NIC int
             'It covers files as well as sockets, moving submissions and completions through shared SQ/CQ rings to remove most per-I/O syscalls',
             'It adds a readiness mode for regular files, with epoll-style loops working on SSD reads that previously blocked the thread',
             'It makes each read and write non-blocking, with single-threaded code no longer needing an event loop or async API',
-            'It lets the storage or network device write straight into user buffers, helping just on NVMe or DMA-capable hardware',
+            'It lets the storage or network device write straight into user buffers, helping only on NVMe or DMA-capable hardware',
           ],
           correct: [0],
           explanation:
@@ -144,9 +144,9 @@ You should now be able to trace a request through a modern async server: NIC int
           q: 'A suspended tokio task costs ~hundreds of bytes instead of ~1 MB because…',
           options: [
             'Rust stacks start tiny and grow on demand, with an idle task keeping a few hundred bytes of OS stack committed',
-            'An async fn compiles to a state machine holding the locals live across each await, with no stack or OS thread',
+            'An async fn compiles to a state machine holding only the locals live across each await, with no stack or OS thread',
             'The runtime compresses suspended tasks and decompresses them on wake, trading CPU cycles for a smaller resident memory footprint',
-            'Suspended tasks share the worker thread\'s single OS stack, with just each task\'s registers saved when it parks',
+            'Suspended tasks share the worker thread\'s single OS stack, with only each task\'s registers saved when it parks at an await',
           ],
           correct: [1],
           explanation:

@@ -75,8 +75,8 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
         {
           q: 'The core inference-economic win of MoE is…',
           options: [
-            'Shrinking the total parameter count a lot, letting the whole model fit on fewer GPUs and cost less to store',
-            'Running just a few top-k experts for each token, leaving active parameters far below the total capacity',
+            'Shrinking the total parameter count a lot, letting the whole model fit on fewer GPUs and cost less to store and serve',
+            'Running a small top-k subset of experts for each token, leaving active parameters far below the total capacity',
             'Replacing most attention layers with a cheap router lookup, cutting the quadratic attention cost on long prompts',
             'Quantizing expert FFNs harder than dense ones, reaching the same quality with far fewer bits per weight',
           ],

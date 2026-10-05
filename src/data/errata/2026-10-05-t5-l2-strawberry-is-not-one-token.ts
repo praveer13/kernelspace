@@ -19,7 +19,7 @@ export default {
     {
       q: 'A model counts the r letters in "strawberry" wrongly. Which statement about its input is correct?',
       options: [
-        'It receives the word as individual letters with attention spreading too evenly to count them',
+        'It receives the word as individual letters, with attention spreading too evenly to count them',
         'It receives ids for multi-letter chunks with no letter-level view of the word',
         'It receives the whole word as one token id with no view of the letters inside',
         'It receives the letters as bytes with rounding blurring which letter is which',

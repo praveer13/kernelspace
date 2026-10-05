@@ -49,14 +49,14 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 
 **Q1. Which combination may exist at the same time for one value?**
 
-- (o1) At most one reference of either kind even when both just read
+- (o1) At most one reference of either kind, even when both are plain reads
 - (o2) One &mut T alongside any number of shared &T references
 - (o3) Any number of &mut T when no two of them write the same element
 - (o4) Many &T references or one &mut T but not both at once
 
 **Q2. Why prefer &[T] to &Vec<T> in a read-only function parameter?**
 
-- (o1) Passing &[T] lets the caller supply arrays and Vecs and subranges
+- (o1) Passing &[T] lets the caller supply arrays, Vecs and subranges
 - (o2) Passing &[T] copies the elements into a temporary buffer first
 - (o3) Passing &Vec<T> blocks indexing and iteration unless a slice type is used
 - (o4) Passing &Vec<T> moves the Vec into the callee and the caller loses it

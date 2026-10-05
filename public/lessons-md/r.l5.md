@@ -60,7 +60,7 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
 
 - (o1) It evaluates to the error value and execution goes on as in Go
 - (o2) It panics with the error value as unwrap does instead of returning it
-- (o3) It unwinds like an exception to a caller and signatures need no Result
+- (o3) It unwinds like an exception to a catching caller, so signatures need no Result
 - (o4) It returns the Err from the current function and converts it with From
 
 **Q3. When should ordinary input validation return Result instead of panic?**

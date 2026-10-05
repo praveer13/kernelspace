@@ -104,7 +104,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           why: [
             'An engine runs the model and its scheduler. NIXL runs inside engines and moves KV between them; it schedules no batches and replaces no engine.',
             'Right: NIXL is the transfer layer. Workers hand it descriptor lists and it moves KV blocks point to point, with GPU-direct paths where the fabric allows.',
-            'NVFP4-style formats are quantization schemes, and even they do not halve bytes: 4-bit values plus one FP8 scale per 16 give 4.5 bits, about 1.8× fewer than FP8. NIXL moves whatever bytes the engine gives it and has no say in precision.',
+            'NVFP4-style formats are quantization schemes, and even they save less than half: 4.5 bits per value, about 1.8× fewer bytes than FP8. NIXL moves the bytes the engine gives it and does not choose precision.',
             'Autoscaling and placement are done by orchestration such as Dynamo\'s planner or llm-d. NIXL is a library the workers call and it never schedules pods.',
           ],
         },
@@ -129,10 +129,10 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
         {
           q: 'llm-d vs Dynamo is closest to…',
           options: [
-            'Postgres vs MySQL, with llm-d packaging disaggregated serving for Kubernetes and Dynamo shipping the chip vendor\'s planner and transfer stack',
-            'Kubernetes vs Docker, with llm-d orchestrating the replicas and Dynamo being the container runtime that each worker runs in',
-            'vLLM vs SGLang, with both competing as single-node engines that differ in scheduler design but not in how they split prefill and decode',
-            'A compiler vs an interpreter, with llm-d fixing the serving topology ahead of time and Dynamo deciding placement per request',
+            'Postgres vs MySQL, with llm-d packaging disaggregated serving for Kubernetes while Dynamo ships NVIDIA\'s planner and transfer stack',
+            'Kubernetes vs Docker, with llm-d orchestrating the replicas across nodes while Dynamo is the container runtime that each GPU worker runs in',
+            'vLLM vs SGLang, with both competing as single-node GPU engines that differ in scheduler design but not in how they split prefill and decode',
+            'A compiler vs an interpreter, with llm-d fixing the serving topology ahead of time while Dynamo decides placement per request',
           ],
           correct: [0],
           explanation:

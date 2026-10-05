@@ -74,7 +74,7 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
         {
           q: 'TP belongs inside an NVLink domain because…',
           options: [
-            'NVLink is the sole fabric supporting collective reductions, with network cards implementing just point-to-point sends',
+            'NVLink is the only fabric that supports collective reductions, with network cards implementing only point-to-point sends',
             'Its reduction sits on the per-layer critical path, leaving slower inter-node links to starve the compute',
             'It shards the cache by sequence, forcing each attention step to fetch key and value chunks from its peers',
             'It replicates the weights on each device, needing the fastest links available to keep the replicas in sync',

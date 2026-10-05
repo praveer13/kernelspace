@@ -56,9 +56,9 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
 **Q2. What releases a std::sync::Mutex lock?**
 
 - (o1) The scheduler when the holding thread calls sleep() in the critical section
-- (o2) Dropping the MutexGuard that lock() returned at the end of its scope
-- (o3) The end of the statement that called lock() whether or not the guard was bound
-- (o4) Calling unlock() on the Mutex when the critical section ends as in Java
+- (o2) Dropping the MutexGuard that lock() returned, at scope end or by an explicit drop(guard)
+- (o3) The end of the statement that called lock(), whether or not the guard was bound to a name
+- (o4) Calling unlock() on the Mutex when the critical section ends, as with a Java ReentrantLock
 
 **Q3. Which type lets a single-threaded counter of Copy values change through a shared reference, with no guard and no lock?**
 

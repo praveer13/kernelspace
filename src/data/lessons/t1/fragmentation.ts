@@ -196,8 +196,8 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'vLLM\'s reported <4% KV-cache waste comes primarily from…',
           options: [
-            'Compressing the KV tensors to a lower precision, halving the bytes each token needs',
-            'Fixed-size KV token blocks, leaving the partly filled tail block of each sequence',
+            'Compressing KV to lower precision, halving the bytes each token needs',
+            'Fixed-size KV token blocks, confining waste to the partly filled tail block',
             'Evicting idle sequences to CPU RAM, freeing the GPU blocks stranded by waiting requests',
             'Sharing one copy of the model weights, with concurrent requests reusing it on the GPU',
           ],

@@ -73,8 +73,8 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
           options: [
             'Is harmless, with the model reading it as ordinary text and the cached state for the rest of the prompt staying valid',
             'Changes bytes near the start of the prompt, with the shared prefix diverging and the radix tree missing from turn two',
-            'Costs just the tokens of the timestamp itself, with the radix tree re-matching the unchanged text that follows it later',
-            'Matters on the first turn alone, with later turns keyed on the previous reply instead of the system prompt',
+            'Costs only the tokens of the timestamp itself, with the radix tree re-matching the unchanged text that follows it later',
+            'Matters only on the first turn, with later turns keyed on the previous reply instead of the system prompt',
           ],
           correct: [1],
           explanation:
@@ -110,7 +110,7 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
             'It is too slow, with a character-level check needing a separate processor round trip for each token in the vocabulary',
             'A token can span several grammar states or start legally and end illegally, requiring the byte string to be simulated',
             'Text is carried in a wide encoding, with a token\'s first character failing to identify the byte the parser reads first',
-            'Token ids carry no text, with a mask buildable just after sampling once the chosen token is decoded to a string',
+            'Token ids carry no text, with a mask buildable only after sampling, once the chosen token is decoded to a string',
           ],
           correct: [1],
           explanation:

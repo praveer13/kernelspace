@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T5.L3 defined the metrics; this track operationalizes them. The serving business has exactly one objective function: **goodput — requests per second (or tokens per second) delivered within SLO**. Not throughput. Not utilization. Requests that meet their latency contract, per unit of cost. Everything in T7 is this function's derivatives.
+      md: `T5.L3 defined the metrics; this track operationalizes them. The serving business has exactly one objective function: **goodput — requests per second (or tokens per second) delivered within SLO**, which you divide by cost (per GPU-hour) to compare fleets. Not throughput. Not utilization. Requests that meet their latency contract. Everything in T7 is this function's derivatives.
 
 Why the distinction is not pedantry: as batch grows, throughput rises and then flattens against the compute and bandwidth roofs, while latency keeps rising — bigger batches stretch every step and deepen the queue, and past the knee the p99 goes vertical. Completions crawl even as the batch gets enormous. Raw "tok/s" benchmarks are taken *at* the vertical part, where every user has already left. Goodput forces the honest question: at what concurrency does the system stop meeting TTFT/TPOT — and what does that point cost?`,
     },
@@ -35,7 +35,7 @@ The engine's control loop, one line: **batching puts throughput and latency on a
         { value: '<350 ms', label: 'Meta TTFT SLO', hint: 'Production app target (Oct 2025 writeup).' },
         { value: '<25 ms', label: 'Meta TTIT SLO', hint: 'Per-token interactivity target — decode loop latency budget.' },
         { value: 'p95', label: 'the honest percentile', hint: 'Design at p50, contract at p95. Never one number.' },
-        { value: 'goodput', label: 'the objective', hint: 'Requests within SLO per unit cost. Everything else is a proxy.' },
+        { value: 'goodput', label: 'the objective', hint: 'Requests within SLO per second; divide by cost to compare fleets. Everything else is a proxy.' },
       ],
     },
     {
@@ -50,16 +50,16 @@ The engine's control loop, one line: **batching puts throughput and latency on a
           q: 'Goodput is defined as…',
           options: [
             'Total tokens per second the engine emits across its whole request stream, measured at saturation',
-            'Throughput restricted to requests that meet their latency contract, per unit of cost',
-            'The fraction of device time spent in useful kernels, reported as a utilization percentage',
-            'Requests per second that finish with a success status, whatever latency they took',
+            'Throughput within the first-token and inter-token latency targets, the honest capacity metric',
+            'The fraction of device time spent in useful kernels instead of idle, reported as a utilization percentage',
+            'Requests per second that finish with a success status, regardless of the latency they took',
           ],
           correct: [1],
           explanation:
             'Raw throughput hides the latency collapse that produced it. Goodput counts only what meets TTFT/TPOT bounds — the only honest capacity metric, and the only one the business should see.',
           why: [
             'Describes plain throughput. It also counts tokens from requests that blew their latency target, so it keeps climbing past the point where users give up. Goodput removes those.',
-            'Right: a request only counts if it meets its latency contract. That makes goodput the one honest capacity metric, and it is stated per unit of cost.',
+            'Right: a request only counts if it meets its latency targets. That makes goodput the one honest capacity metric; divide it by cost to compare fleets.',
             'Utilization measures busy hardware, not outcomes. A GPU kept saturated by a deep queue is fully utilized while delivering almost no requests inside the SLO.',
             'Success status says nothing about timing. A 200 that arrives after the TTFT or TPOT budget has been blown is a failure from the user\'s side and is not goodput.',
           ],
@@ -67,10 +67,10 @@ The engine's control loop, one line: **batching puts throughput and latency on a
         {
           q: 'A vendor page shows "10,000 tok/s" with no latency numbers. The right reaction is…',
           options: [
-            'Credible for current hardware, and peak tokens per second is what capacity plans are built on',
-            'Uninformative without latency figures, likely taken past the knee where goodput collapses',
+            'Credible for current hardware, since peak tokens per second is the figure capacity plans are built on',
+            'Uninformative without any latency figures, likely taken well past the knee where goodput collapses',
             'Usable after dividing by the chip count, turning it into a figure comparable across vendors',
-            'Trustworthy once the page names the model, and decode speed follows from the parameter count',
+            'Trustworthy once the page names the model, since decode speed follows from the parameter count',
           ],
           correct: [1],
           explanation:

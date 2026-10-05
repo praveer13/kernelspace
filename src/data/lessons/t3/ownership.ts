@@ -129,7 +129,7 @@ The exercise replays ownership scenarios on a live memory diagram: moves, borrow
           options: [
             'Copies the heap buffer into a second allocation that b owns independently of the original a',
             'Reference-counts the buffer and lets a and b both stay usable until the last one is dropped',
-            'Moves ownership to b and leaves a statically unusable once b takes over the single drop',
+            'Moves ownership to b, with b taking over the drop and a statically unusable afterward',
             'Creates an immutable borrow of a that leaves a readable but forbids mutating it',
           ],
           correct: [2],

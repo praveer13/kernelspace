@@ -180,7 +180,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
           q: 'In the current V1 engine, when the free-block queue empties during decode, vLLM…',
           options: [
             'Swaps the lowest-priority sequence\'s blocks to host memory over the bus, and restores them when memory frees up',
-            'Evicts the cached free blocks and then preempts a running sequence, freeing its blocks and recomputing it on resume',
+            'Preempts a running sequence once no cached free block is left to reallocate, freeing its blocks and recomputing it on resume',
             'Spills new tokens\' key and value tensors into pinned host memory, and decode continues at lower bandwidth with no scheduler action',
             'Raises an out-of-memory error for the whole engine, and aborts the in-flight requests with no scheduler recovery',
           ],

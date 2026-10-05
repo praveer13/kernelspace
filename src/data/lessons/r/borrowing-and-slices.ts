@@ -66,7 +66,7 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
             'One &mut T alongside any number of shared &T references',
             'Many &T references or one &mut T but not both at once',
             'Any number of &mut T when no two of them write the same element',
-            'At most one reference of either kind even when both just read',
+            'At most one reference of either kind, even when both are plain reads',
           ],
           correct: [1],
           explanation:
@@ -82,7 +82,7 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
           q: 'Why prefer &[T] to &Vec<T> in a read-only function parameter?',
           options: [
             'Passing &[T] copies the elements into a temporary buffer first',
-            'Passing &[T] lets the caller supply arrays and Vecs and subranges',
+            'Passing &[T] lets the caller supply arrays, Vecs and subranges',
             'Passing &Vec<T> moves the Vec into the callee and the caller loses it',
             'Passing &Vec<T> blocks indexing and iteration unless a slice type is used',
           ],

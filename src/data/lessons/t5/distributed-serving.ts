@@ -93,7 +93,7 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
             'It keeps a full copy of the key-value cache on each device, and the copies need hardware coherence that fast links provide',
             'It shards each matmul and needs two collective reductions per layer per step, and the intra-node bandwidth hides that traffic',
             'It hands whole activations to the next device after each layer, and Ethernet latency is too high for such hand-offs between nodes',
-            'It must synchronize gradients at each step, and the strict synchronous reduction that needs is supported by fast links alone',
+            'It must synchronize gradients at each step, and the strict synchronous reduction that needs is available only on fast links',
           ],
           correct: [1],
           explanation:
@@ -127,8 +127,8 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
           q: 'Prefill/decode disaggregation pays off primarily because…',
           options: [
             'Splitting the work across two fleets halves the weights each device stores, and that frees memory for a larger cache',
-            'Opposite roofline regimes let separate fleets tune and scale independently and isolate latency, at the cost of a transfer',
-            'Prefill workers send just the final token and its logits to decode workers, and no cache transfer is needed',
+            'Opposite roofline regimes let separate fleets tune and scale independently and isolate latency, at the price of a transfer',
+            'Prefill workers send only the final token and its logits to decode workers, and no cache transfer is needed',
             'Cross-node links are faster than device memory, and moving the cache to a dedicated decode device beats reading it locally',
           ],
           correct: [1],
@@ -144,10 +144,10 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
         {
           q: 'Mooncake\'s architecture is best described as…',
           options: [
-            'A parallelism library that shards each layer\'s attention heads across nodes, and a request\'s cache stays where it is',
+            'A parallelism library that shards each layer\'s attention heads across nodes, so a request\'s cache never has to move',
             'A distributed cache store for attention keys and values across the memory tiers, with cache-aware request routing between workers',
-            'A quantization framework that compresses stored blocks to a low bit width, and more prefixes fit in each device\'s memory',
-            'A load balancer that spreads requests by utilization, and each worker keeps its cache strictly local with per-engine prefix caching',
+            'A quantization framework that compresses stored blocks to a low bit width, so more prefixes fit in each device\'s memory',
+            'A load balancer that spreads requests by utilization, keeping each worker\'s cache strictly local and relying on per-engine prefix caching',
           ],
           correct: [1],
           explanation:

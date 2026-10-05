@@ -48,10 +48,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: 'The first question in the framework (failure cost) points to Rust primarily when…',
           options: [
-            'The path is slow today and Rust is the language to reach for when raw performance matters',
-            'The path takes untrusted input at scale and a memory bug becomes an outage and an exploit',
-            'The team already knows Rust well and that familiarity lowers review and maintenance cost',
-            'Rust crates already exist for the libraries involved and ecosystem coverage decides which language is safe',
+            'The path is slow today, so Rust is the language to reach for when raw performance matters',
+            'The path takes untrusted input at scale, so a memory bug becomes an outage and an exploit',
+            'The team already knows Rust well, so that familiarity lowers review and maintenance cost',
+            'Rust crates already exist for the libraries involved, so ecosystem coverage decides which language is safe',
           ],
           correct: [1],
           explanation:
@@ -69,7 +69,7 @@ Run the four questions down the stack you've built in this course: **Router / AP
             'Language popularity where you pick whichever language tops the indexes and hiring follows it',
             'The libraries you cannot avoid constrain the choice and cheap C interop becomes a hard requirement',
             'Build speed where compile times decide the language and slow builds cost the team more than runtime speed',
-            'Inertia where the existing codebase and its tooling wins the language choice and migration costs too much',
+            'Inertia where the existing codebase and its tooling win the language choice because migration costs too much',
           ],
           correct: [1],
           explanation:
@@ -102,10 +102,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: 'C\'s role in your career here is best described as…',
           options: [
-            'Obsolete as new infrastructure moves to Rust or Zig and C matters just for legacy code',
-            'The water you swim in that you read weekly in driver headers and kernel interfaces even if you rarely write it',
-            'Kernel space with a role in modules and device drivers and no part in userspace serving code',
-            'A skill you can outsource as generated bindings hide the C layer and reading it is rarely needed in practice',
+            'Obsolete, as new infrastructure moves to Rust or Zig and C matters only for legacy code',
+            'The water you swim in, read weekly in driver headers and kernel interfaces even if rarely written',
+            'Kernel-only, mattering for modules and device drivers but playing no part in userspace serving code',
+            'A skill you can outsource, as generated bindings hide the C layer and reading it is rarely needed in practice',
           ],
           correct: [1],
           explanation:
@@ -120,10 +120,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: 'Per the component-by-component application, GPU kernels are written in…',
           options: [
-            'Rust with CubeCL or rust-cuda to keep kernels that handle untrusted tensors memory safe',
-            'Zig across vendors with comptime specialising each kernel per architecture at no runtime cost',
-            'The vendor C++ dialect plus Python kernel languages such as CuTe and Triton and TileLang',
-            'Triton alone as it has replaced hand-written vendor C++ in production attention kernels and MoE paths',
+            'Rust with CubeCL or rust-cuda, to keep kernels that handle untrusted GPU tensors memory safe',
+            'Zig across GPU vendors, with comptime specialising each kernel per architecture at no runtime cost',
+            'CUDA C++ plus Python DSLs such as CuTe DSL, Triton and TileLang that follow the vendor ecosystem',
+            'Triton alone, as it has replaced hand-written CUDA C++ in production attention and MoE kernels',
           ],
           correct: [2],
           explanation:

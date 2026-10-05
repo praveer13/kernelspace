@@ -68,8 +68,8 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
           options: [
             'Prefill is limited by memory bandwidth over the whole prompt, while decode is limited by arithmetic over the full model per token',
             'Prefill runs the prompt in parallel and is limited by arithmetic, while each decode step streams weights and cache and is bandwidth-limited',
-            'Time to first token is mostly network and queue delay and a deployment problem, while GPU physics governs inter-token latency alone',
-            'Both phases are bandwidth-bound, and differ in that prefill reads the prompt tokens while decode reads generated ones one at a time',
+            'Time to first token is mostly network and queue delay, which makes it a deployment problem, while GPU physics governs the inter-token latency',
+            'Both phases are bandwidth-bound, and differ in that prefill reads the prompt tokens while decode reads the generated ones one at a time',
           ],
           correct: [1],
           explanation:
@@ -85,9 +85,9 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
           q: 'Goodput is defined as…',
           options: [
             'Tokens per second per GPU at the largest batch memory allows, a ceiling that latency targets can approach but not exceed',
-            'Throughput measured within the latency targets for first-token time and inter-token time, the honest capacity metric',
+            'Throughput within the first-token and inter-token latency targets, the honest capacity metric',
             'The fraction of GPU time spent in tensor-core math instead of waiting on memory, usually reported as utilization',
-            'The share of requests that finish with a success status and a complete response, whatever their latency',
+            'The share of requests that finish with a success status and a complete response, regardless of latency',
           ],
           correct: [1],
           explanation:

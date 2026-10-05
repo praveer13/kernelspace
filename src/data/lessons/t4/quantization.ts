@@ -121,9 +121,9 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'Quantization speeds up LLM decode primarily because…',
           options: [
-            'Smaller numbers go through the arithmetic units faster and each matmul instruction finishes in fewer cycles',
-            'Decode is bandwidth-bound and fewer bytes per weight means more tokens per second through the same memory',
-            'It prunes the least important layers and each token passes through fewer layers and reads fewer weights',
+            'Smaller numbers go through the arithmetic units faster, so each matmul instruction finishes in fewer cycles',
+            'Decode is bandwidth-bound, so fewer bytes per weight means more tokens per second through the same memory',
+            'It prunes the least important layers, so each token passes through fewer layers and reads fewer weights',
             'It removes the softmax and normalization steps that are the slowest operations in each transformer layer',
           ],
           correct: [1],
@@ -139,10 +139,10 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'BF16 exists because deep learning values…',
           options: [
-            'More mantissa bits than FP16 with gradients needing more significant digits than activations to train stably',
-            'The exponent range of FP32 over mantissa precision with overflow hurting more than rounding',
-            'Exact integer arithmetic for INT8 training with a format that has no rounding at all',
-            'Direct compatibility with FP64 hardware with tensors promoted to double precision without conversion',
+            'More mantissa bits than FP16, since gradients need more significant digits than activations to train stably',
+            'The exponent range of FP32 over mantissa precision, since overflow hurts more than rounding',
+            'Exact integer arithmetic, since quantized training accumulates in integers and needs a format with no rounding',
+            'Direct compatibility with FP64 hardware, since BF16 tensors can be promoted to double precision without conversion',
           ],
           correct: [1],
           explanation:

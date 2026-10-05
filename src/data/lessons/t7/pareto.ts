@@ -28,7 +28,7 @@ This is why contradictory benchmark claims can both be true: they are *different
 
 **Moving the frontier itself** (genuine progress — more of both):
 - **Quantization** (T6.L5): FP8→NVFP4 moves ~1.8× fewer bytes (4.5 bits per weight with block scales), not 2× — the whole curve shifts out.
-- **Speculative decoding** (T6.L6): shifts the *interactivity end* 2–3×, barely touches the throughput end.
+- **Speculative decoding** (T6.L6): shifts the *interactivity end* (up to 2–3× on DeepSeek-R1 in SemiAnalysis's InferenceX runs), barely touches the throughput end.
 - **Disaggregation** (T6.L3): shifts the middle — better ITL at given throughput via phase isolation.
 - **Better kernels and hardware** (T4, T6.L5): the boring, reliable shifter.
 
@@ -67,10 +67,10 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'In SemiAnalysis\'s InferenceMAX launch (Oct 2025, now InferenceX), DeepSeek-R1 FP4 has a GB200 NVL72 leading at 30 tok/s/user while a B200 on TRT-LLM beats it above 90 tok/s/user. These results are…',
           options: [
-            'In conflict, with one model on one hardware family unable to have two winners and one harness flawed',
-            'Both true, sitting in different regions of one frontier at its throughput end and interactivity end',
-            'About different models, with a large model favoring the rack and a small model favoring the node',
-            'Both marketing, with vendor-chosen configurations and workloads making neither claim informative',
+            'In conflict, since one model on one hardware family cannot have two winners and one harness must be flawed',
+            'Both true, since they sit at the throughput end and the interactivity end of one frontier',
+            'About different models, since a large model favors the rack and a small model favors the node',
+            'Both marketing, since vendor-chosen configurations and workloads make neither claim informative',
           ],
           correct: [1],
           explanation:
@@ -104,7 +104,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
           q: 'MTP speculative decoding shifts…',
           options: [
             'The whole frontier uniformly, with fewer forward passes per token helping at each batch size',
-            'The first-token latency alone, with extra draft tokens produced during prefill to shorten the wait',
+            'Only the first-token latency, with extra draft tokens produced during prefill to shorten the wait',
             'The interactivity end most, spending idle decode compute while barely moving the throughput end',
             'The throughput end most, with several tokens verified per step lifting tokens per second at large batch',
           ],
