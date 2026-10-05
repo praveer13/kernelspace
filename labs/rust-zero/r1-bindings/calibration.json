@@ -1,0 +1,164 @@
+{
+  "lab": "rust-zero-r1",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "5c12adad566b9cb3038648f6cb500a2e43cbb3b577951e39dc74c8bb5257fd5f",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "mut_accumulate": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "add-not-mul": 0,
+        "int-average": 0,
+        "le-boundary": 0,
+        "literal": 1,
+        "no-swap": 0,
+        "skip-negatives": 1,
+        "u32-overflow": 0
+      }
+    },
+    "shadow_convert": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "add-not-mul": 0,
+        "int-average": 0,
+        "le-boundary": 0,
+        "literal": 1,
+        "no-swap": 0,
+        "skip-negatives": 0,
+        "u32-overflow": 1
+      }
+    },
+    "typed_average": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "add-not-mul": 0,
+        "int-average": 1,
+        "le-boundary": 0,
+        "literal": 1,
+        "no-swap": 0,
+        "skip-negatives": 0,
+        "u32-overflow": 0
+      }
+    },
+    "block_value": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "add-not-mul": 1,
+        "int-average": 0,
+        "le-boundary": 0,
+        "literal": 1,
+        "no-swap": 0,
+        "skip-negatives": 0,
+        "u32-overflow": 0
+      }
+    },
+    "branch_value": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "add-not-mul": 0,
+        "int-average": 0,
+        "le-boundary": 1,
+        "literal": 1,
+        "no-swap": 0,
+        "skip-negatives": 0,
+        "u32-overflow": 0
+      }
+    },
+    "destructure": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "add-not-mul": 0,
+        "int-average": 0,
+        "le-boundary": 0,
+        "literal": 1,
+        "no-swap": 1,
+        "skip-negatives": 0,
+        "u32-overflow": 0
+      }
+    }
+  },
+  "mutants": {
+    "add-not-mul": {
+      "defaultSeedFails": [
+        "block_value"
+      ],
+      "caughtBy": [
+        "block_value"
+      ]
+    },
+    "int-average": {
+      "defaultSeedFails": [
+        "typed_average"
+      ],
+      "caughtBy": [
+        "typed_average"
+      ]
+    },
+    "le-boundary": {
+      "defaultSeedFails": [
+        "branch_value"
+      ],
+      "caughtBy": [
+        "branch_value"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "mut_accumulate",
+        "shadow_convert",
+        "typed_average",
+        "block_value",
+        "branch_value",
+        "destructure"
+      ],
+      "caughtBy": [
+        "mut_accumulate",
+        "shadow_convert",
+        "typed_average",
+        "block_value",
+        "branch_value",
+        "destructure"
+      ]
+    },
+    "no-swap": {
+      "defaultSeedFails": [
+        "destructure"
+      ],
+      "caughtBy": [
+        "destructure"
+      ]
+    },
+    "skip-negatives": {
+      "defaultSeedFails": [
+        "mut_accumulate"
+      ],
+      "caughtBy": [
+        "mut_accumulate"
+      ]
+    },
+    "u32-overflow": {
+      "defaultSeedFails": [
+        "shadow_convert"
+      ],
+      "caughtBy": [
+        "shadow_convert"
+      ]
+    }
+  }
+}

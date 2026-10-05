@@ -1,0 +1,164 @@
+{
+  "lab": "rust-zero-r3",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "f39112dfa7983e4fd136d396c8c4b320075d28014b867fc630ecb12a02354191",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "copy_scalar": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "clone-not-take": 0,
+        "keeps-old-field": 0,
+        "literal": 1,
+        "plus-one-twice": 1,
+        "product": 0,
+        "shared-buffers": 0,
+        "upper": 0
+      }
+    },
+    "return_ownership": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "clone-not-take": 0,
+        "keeps-old-field": 0,
+        "literal": 1,
+        "plus-one-twice": 0,
+        "product": 0,
+        "shared-buffers": 0,
+        "upper": 1
+      }
+    },
+    "clone_independent": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "clone-not-take": 0,
+        "keeps-old-field": 0,
+        "literal": 1,
+        "plus-one-twice": 0,
+        "product": 0,
+        "shared-buffers": 1,
+        "upper": 0
+      }
+    },
+    "consume_vec": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "clone-not-take": 0,
+        "keeps-old-field": 0,
+        "literal": 1,
+        "plus-one-twice": 0,
+        "product": 1,
+        "shared-buffers": 0,
+        "upper": 0
+      }
+    },
+    "option_take": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "clone-not-take": 1,
+        "keeps-old-field": 0,
+        "literal": 1,
+        "plus-one-twice": 0,
+        "product": 0,
+        "shared-buffers": 0,
+        "upper": 0
+      }
+    },
+    "replace_field": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "clone-not-take": 0,
+        "keeps-old-field": 1,
+        "literal": 1,
+        "plus-one-twice": 0,
+        "product": 0,
+        "shared-buffers": 0,
+        "upper": 0
+      }
+    }
+  },
+  "mutants": {
+    "clone-not-take": {
+      "defaultSeedFails": [
+        "option_take"
+      ],
+      "caughtBy": [
+        "option_take"
+      ]
+    },
+    "keeps-old-field": {
+      "defaultSeedFails": [
+        "replace_field"
+      ],
+      "caughtBy": [
+        "replace_field"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "copy_scalar",
+        "return_ownership",
+        "clone_independent",
+        "consume_vec",
+        "option_take",
+        "replace_field"
+      ],
+      "caughtBy": [
+        "copy_scalar",
+        "return_ownership",
+        "clone_independent",
+        "consume_vec",
+        "option_take",
+        "replace_field"
+      ]
+    },
+    "plus-one-twice": {
+      "defaultSeedFails": [
+        "copy_scalar"
+      ],
+      "caughtBy": [
+        "copy_scalar"
+      ]
+    },
+    "product": {
+      "defaultSeedFails": [
+        "consume_vec"
+      ],
+      "caughtBy": [
+        "consume_vec"
+      ]
+    },
+    "shared-buffers": {
+      "defaultSeedFails": [
+        "clone_independent"
+      ],
+      "caughtBy": [
+        "clone_independent"
+      ]
+    },
+    "upper": {
+      "defaultSeedFails": [
+        "return_ownership"
+      ],
+      "caughtBy": [
+        "return_ownership"
+      ]
+    }
+  }
+}

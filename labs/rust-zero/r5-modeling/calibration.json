@@ -1,0 +1,164 @@
+{
+  "lab": "rust-zero-r5",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "85cccf5b0faad055d41a38bec529b3db5b5edea7893b25517e94b05947b2f371",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "block_method": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "decode-as-prefill": 0,
+        "done-as-running": 0,
+        "last-even": 0,
+        "literal": 1,
+        "right-first": 0,
+        "underflow-wrap": 1,
+        "zero-ok": 0
+      }
+    },
+    "state_match": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "decode-as-prefill": 1,
+        "done-as-running": 0,
+        "last-even": 0,
+        "literal": 1,
+        "right-first": 0,
+        "underflow-wrap": 0,
+        "zero-ok": 0
+      }
+    },
+    "option_lookup": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "decode-as-prefill": 0,
+        "done-as-running": 0,
+        "last-even": 1,
+        "literal": 1,
+        "right-first": 0,
+        "underflow-wrap": 0,
+        "zero-ok": 0
+      }
+    },
+    "result_validate": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "decode-as-prefill": 0,
+        "done-as-running": 0,
+        "last-even": 0,
+        "literal": 1,
+        "right-first": 0,
+        "underflow-wrap": 0,
+        "zero-ok": 1
+      }
+    },
+    "question_mark": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "decode-as-prefill": 0,
+        "done-as-running": 0,
+        "last-even": 0,
+        "literal": 1,
+        "right-first": 1,
+        "underflow-wrap": 0,
+        "zero-ok": 0
+      }
+    },
+    "nested_match": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "decode-as-prefill": 0,
+        "done-as-running": 1,
+        "last-even": 0,
+        "literal": 1,
+        "right-first": 0,
+        "underflow-wrap": 0,
+        "zero-ok": 0
+      }
+    }
+  },
+  "mutants": {
+    "decode-as-prefill": {
+      "defaultSeedFails": [
+        "state_match"
+      ],
+      "caughtBy": [
+        "state_match"
+      ]
+    },
+    "done-as-running": {
+      "defaultSeedFails": [
+        "nested_match"
+      ],
+      "caughtBy": [
+        "nested_match"
+      ]
+    },
+    "last-even": {
+      "defaultSeedFails": [
+        "option_lookup"
+      ],
+      "caughtBy": [
+        "option_lookup"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "block_method",
+        "state_match",
+        "option_lookup",
+        "result_validate",
+        "question_mark",
+        "nested_match"
+      ],
+      "caughtBy": [
+        "block_method",
+        "state_match",
+        "option_lookup",
+        "result_validate",
+        "question_mark",
+        "nested_match"
+      ]
+    },
+    "right-first": {
+      "defaultSeedFails": [
+        "question_mark"
+      ],
+      "caughtBy": [
+        "question_mark"
+      ]
+    },
+    "underflow-wrap": {
+      "defaultSeedFails": [
+        "block_method"
+      ],
+      "caughtBy": [
+        "block_method"
+      ]
+    },
+    "zero-ok": {
+      "defaultSeedFails": [
+        "result_validate"
+      ],
+      "caughtBy": [
+        "result_validate"
+      ]
+    }
+  }
+}
