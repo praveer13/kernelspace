@@ -117,9 +117,9 @@
       "id": "vllm-rust-frontend",
       "title": "vLLM's Rust frontend moves request handling off the Python hot path",
       "summary": "The RFC (issue 40846) benchmarked 4 GB200 GPUs with Qwen3-0.6B at concurrency 1024: 837 against 162 requests per second in a preprocess-heavy case, and P50 TTFT of 50.51 against 165.95 ms in a decode-heavy one. The in-tree integration (pull request 40848) merged on 2026-05-21. At small-model scale the frontend, not the GPU, was the bottleneck.",
-      "source": "vLLM Rust frontend integration pull request 40848",
-      "href": "https://github.com/vllm-project/vllm/pull/40848",
-      "published": "2026-05",
+      "source": "vLLM Rust front-end RFC, issue 40846",
+      "href": "https://github.com/vllm-project/vllm/issues/40846",
+      "published": "2026-04",
       "verified": "2026-10",
       "lessons": ["t3.l7", "t5.l10"],
       "tags": ["Rust", "frontend", "vLLM"]
