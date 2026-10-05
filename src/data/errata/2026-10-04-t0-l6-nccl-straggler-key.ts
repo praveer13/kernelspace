@@ -24,7 +24,7 @@ export default {
       why: [
         'The rank with no wait bar did not finish early. It arrived last, so there was nobody left to wait for.',
         'A wide wait bar is time spent waiting, which means that rank arrived early.',
-        'Right. A barrier makes the slowest participant the one with no wait time; the wide bars show the cost of waiting, not the cause.',
+        'Right: a barrier makes the slowest participant the one with no wait time; the wide bars show the cost of waiting, not the cause.',
         'Ranks that arrive early wait longer than ranks that arrive late, so the waits differ.',
       ],
     },

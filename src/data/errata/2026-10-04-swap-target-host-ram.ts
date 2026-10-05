@@ -29,7 +29,7 @@ export default {
         'PCIe is an interconnect, not storage. The swap target in the paper is host memory.',
         'The swap target is host memory, and PCIe holds no data: it only carries it.',
         'The location is right but PCIe is not memory. It is the link between GPU and host.',
-        'Right. The blocks live in host DRAM and cross PCIe in both directions, so swap costs bandwidth where recomputation costs compute.',
+        'Right: the blocks live in host DRAM and cross PCIe in both directions, so swap costs bandwidth where recomputation costs compute.',
       ],
     },
   ],

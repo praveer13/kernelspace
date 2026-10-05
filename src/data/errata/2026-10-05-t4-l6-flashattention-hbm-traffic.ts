@@ -25,7 +25,7 @@ export default {
       correct: [1],
       why: [
         'Theorem 2 gives Θ(N²d²/M), still quadratic in N. The factor M/d² is the saving, not a change of order in N.',
-        'Right. The score matrix is never stored, so extra memory is O(N). Traffic is Θ(N²d²/M) against Θ(Nd + N²), smaller by about M/d².',
+        'Right: the score matrix is never stored, so extra memory is O(N). Traffic is Θ(N²d²/M) against Θ(Nd + N²), smaller by about M/d².',
         'Traffic does fall: the N×N matrix no longer round-trips through HBM. Both traffic and extra memory improve, by different amounts.',
         'FlashAttention is exact. It does not sparsify or drop scores; it only changes where they are computed.',
       ],

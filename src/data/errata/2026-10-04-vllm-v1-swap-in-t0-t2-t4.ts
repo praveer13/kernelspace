@@ -27,7 +27,7 @@ export default {
       correct: [1],
       why: [
         'That was the V0 and PagedAttention-paper swap option. V1 does not copy blocks to host memory.',
-        'Right. The scheduler frees the victim blocks and sets num_computed_tokens to 0, so a preemption storm burns prefill FLOPs, not PCIe bandwidth.',
+        'Right: the scheduler frees the victim blocks and sets num_computed_tokens to 0, so a preemption storm burns prefill FLOPs, not PCIe bandwidth.',
         'Pinning the blocks would keep the memory the scheduler needs. Preemption exists to give blocks back.',
         'Preemption is not failure. The request stays queued and is recomputed when memory frees up.',
       ],

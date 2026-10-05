@@ -157,7 +157,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
             'Too little text about spelling in training, so more data alone would let the model read the letters inside a token',
             'The model receiving ids for multi-letter chunks, so the letters inside a chunk are never visible to it',
             'Attention being order-blind over characters, so the model sees which letters appear but not how many times each occurs',
-            'BF16 rounding in the embedding lookup blurring letter identity, so counts drift by one or two in the logits',
+            'Counting needing a sequential loop that one forward pass cannot express, so a model reading single characters would fail too',
           ],
           correct: [1],
           explanation:
@@ -166,7 +166,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
             'Spelling data helps a model memorize token spellings, but the input still carries no letters. The structural cause is the tokenizer, so data alone does not remove it.',
             'Right: the model sees only token ids, each standing for a chunk of several letters. Letter counts must be memorized per token or worked out step by step.',
             'Attention never sees characters. It operates on token embeddings with position information, so there is no letter-level view to be order-blind about.',
-            'BF16 precision affects numerics slightly across the whole model. It does not hide letters, because letters are not in the input to begin with.',
+            'A forward pass attends over every position at once, and spelling the word out step by step helps token models count. The obstacle is letters hidden inside tokens, not a missing loop.',
           ],
         },
       ],

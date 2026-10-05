@@ -23,7 +23,7 @@ export default {
       correct: [1],
       why: [
         'Letters are not the input unit. A byte-pair tokenizer merges them into chunks before the model sees anything.',
-        'Right. The input is a sequence of ids for multi-letter pieces, and counting letters inside a piece must be memorized or reasoned out.',
+        'Right: the input is a sequence of ids for multi-letter pieces, and counting letters inside a piece must be memorized or reasoned out.',
         'Common tokenizers split this word into several pieces. A single id is not needed for the failure: any multi-letter chunk hides its letters.',
         'Bytes are merged into tokens before embedding, and BF16 precision does not decide letter identity. The model never gets per-letter inputs here.',
       ],

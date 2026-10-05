@@ -25,7 +25,7 @@ export default {
       correct: [1],
       why: [
         'That counts two FLOPs per element. The kernel does one add, so the numerator is 1.',
-        'Right. One add per element over 12 bytes (two reads and one write of 4 bytes) is 1 / 12, about 0.08.',
+        'Right: one add per element over 12 bytes (two reads and one write of 4 bytes) is 1 / 12, about 0.08.',
         'That leaves out the output write: one add over just the two 4-byte reads is 1 / 8. The store adds 4 more bytes.',
         'That counts only one 4-byte operand. Both inputs and the output cross the memory bus.',
       ],

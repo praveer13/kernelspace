@@ -24,7 +24,7 @@ export default {
         '335 GB is the 4-bit figure and ignores the block scales. NVL72 is a rack, not a pair of nodes, and one node is already enough.',
         'One 8xB200 node ships about 1,440 GB (about 180 GB per GPU), far more than the 377 GB of weights.',
         '671 GB is the FP8 figure, and even that fits in one 1,440 GB node.',
-        'Right. 671e9 x 4.5 / 8 is about 377 GB, which fits one node with room left for KV cache.',
+        'Right: 671e9 x 4.5 / 8 is about 377 GB, which fits one node with room left for KV cache.',
       ],
     },
   ],

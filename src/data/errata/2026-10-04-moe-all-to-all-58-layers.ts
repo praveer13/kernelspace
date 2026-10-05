@@ -22,7 +22,7 @@ export default {
       correct: [1],
       why: [
         'The 3 dense layers have no router and no experts, so they have nothing to dispatch or combine.',
-        'Right. 61 - 3 = 58 MoE layers, each with a dispatch and a combine: 2 x 58 = 116.',
+        'Right: 61 - 3 = 58 MoE layers, each with a dispatch and a combine: 2 x 58 = 116.',
         'Each MoE layer needs two all-to-alls, one to send tokens to experts and one to bring results back.',
         'The first 3 layers are dense, not 2, so the MoE layer count is 58.',
       ],

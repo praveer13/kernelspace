@@ -118,26 +118,26 @@ Plug in any model shape and watch the numbers move: independently choose weight 
           why: [
             'Weights are fixed per model. The cache grows with every token generated, so it cannot be params x bytes; it depends on layers, KV heads, head size and dtype.',
             'Right: one K and one V vector of d_kv elements per layer per token, times bytes per element. Multiplying by tokens in flight gives total cache size.',
-            'Context length is what you multiply the per-token figure by to get a sequence\'s cache. Putting it inside the per-token formula counts length twice.',
+            'That is a per-sequence total, not a per-token figure: context length multiplies the per-token bytes afterwards. It also uses hidden size, which overcounts when GQA makes d_kv smaller.',
             'The embedding table is read once per token at the input and is not stored per cached token. The cache holds per-layer K and V, not embedding rows.',
           ],
         },
         {
           q: 'For a 70B FP16 model (80 layers, d_kv = 1024), a single 128k-token context costs about…',
           options: [
-            'About 20 GB: 80 layers x 1024 x 2 bytes x 131,072 tokens, counting only the K tensor',
-            'About 340 GB: 2.6 MB per token, as if all 64 heads stored their own K and V with no GQA',
-            'About 40 GB: 2 x 80 layers x 1024 x 2 bytes = 320 KB per token, x 131,072 tokens',
-            'About 140 GB, the same as the FP16 weights, since a full-context cache and the model are the same size',
+            'About 20 GiB: 80 layers x 1024 x 2 bytes x 131,072 tokens, counting only the K tensor',
+            'About 320 GiB: 2.5 MiB per token, as if all 64 heads stored their own K and V with no GQA',
+            'About 40 GiB: 2 x 80 layers x 1024 x 2 bytes = 320 KiB per token, x 131,072 tokens',
+            'About 130 GiB, the same as the FP16 weights, since a full-context cache and the model are the same size',
           ],
           correct: [2],
           explanation:
-            '2 x 80 x 1024 x 2 B = 320 KB per token; x 131,072 is about 40 GB. One long document is half an H100 of cache. Long context is a capacity product, not a quality feature.',
+            '2 x 80 x 1024 x 2 B = 320 KiB per token; x 131,072 is 40 GiB (about 43 GB). One long document is half an H100 of cache. Long context is a capacity product, not a quality feature.',
           why: [
             'That drops V. Both K and V are stored, so the per-token figure has a factor of 2 and the total is about double this.',
-            'That is full multi-head attention. Llama-3-70B has 8 KV heads (d_kv = 1024), so GQA already cuts the 2.6 MB figure 8x to 320 KB per token.',
-            'Right: 2 (K and V) x 80 layers x 1024 x 2 bytes is 327,680 B per token, and 131,072 tokens of that is about 40 GB.',
-            'Cache equals weights only for the 8B model at 128k (16 GB each). For the 70B the weights are 140 GB and the cache is about 40 GB; the match was a coincidence.',
+            'That is full multi-head attention. Llama-3-70B has 8 KV heads (d_kv = 1024), so GQA already cuts the 2.5 MiB figure 8x to 320 KiB per token.',
+            'Right: 2 (K and V) x 80 layers x 1024 x 2 bytes is 327,680 B (320 KiB) per token, and 131,072 tokens of that is 40 GiB.',
+            'Cache equals weights only for the 8B model at 128k (16 GiB each). For the 70B the weights are about 130 GiB and the cache is 40 GiB; the match was a coincidence.',
           ],
         },
         {
@@ -168,7 +168,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
           ],
           correct: [1],
           explanation:
-            'Replicas add capacity and aggregate throughput, but one request still runs on one GPU at that GPU\'s bandwidth, so at the same per-replica batch size its ITL is unchanged. Sharding one model across GPUs (tensor parallelism) is different: it cuts bytes read per GPU per step, at the cost of communication.',
+            'Replicas add capacity and aggregate throughput, but one request still runs on one replica at that replica\'s bandwidth, so at the same per-replica batch size its ITL is unchanged. Sharding one model across GPUs (tensor parallelism) is different: it cuts bytes read per GPU per step, at the cost of communication.',
           why: [
             'Each replica brings its own HBM and therefore its own KV blocks, so the fleet admits proportionally more concurrent requests.',
             'Right: at the same per-replica batch, a step does the same work as before, so ITL is unchanged. Only sharding the model (tensor parallelism) shortens a step.',

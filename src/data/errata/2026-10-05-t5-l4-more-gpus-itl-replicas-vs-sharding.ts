@@ -27,7 +27,7 @@ export default {
       correct: [1],
       why: [
         'Tensor parallelism splits each weight matrix across GPUs, so a GPU reads only its shard. Replication is what keeps the full weights on every GPU.',
-        'Right. 140 GB over 8 GPUs is about 17.5 GB each, against 70 GB each on 2 GPUs. Per-GPU read time falls, minus all-reduce cost.',
+        'Right: 140 GB over 8 GPUs is about 17.5 GB each, against 70 GB each on 2 GPUs. Per-GPU read time falls, minus all-reduce cost.',
         'Each GPU computes on its own shard and exchanges activations, not weights, over the interconnect.',
         'Decode at small batch is bandwidth-bound, so the gain comes from reading fewer bytes per GPU, not from spare FLOPs.',
       ],
