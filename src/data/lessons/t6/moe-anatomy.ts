@@ -75,10 +75,10 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
         {
           q: 'The core inference-economic win of MoE is…',
           options: [
-            'A much smaller total parameter count (671B shrinking to about 37B), so the whole model fits on fewer GPUs and costs less to store',
-            'Only the top-k experts run per token, so active parameters (~37B of 671B) shrink while capacity stays large',
-            'The router replaces most attention layers with a cheap lookup (top-k gating), so the quadratic attention cost drops on long prompts',
-            'Expert FFNs tolerate FP4 better than dense FFNs (per-expert scales), so the same quality is reached with far fewer bits per weight',
+            'Shrinking the total parameter count a lot, letting the whole model fit on fewer GPUs and cost less to store',
+            'Running just a few top-k experts for each token, leaving active parameters far below the total capacity',
+            'Replacing most attention layers with a cheap router lookup, cutting the quadratic attention cost on long prompts',
+            'Quantizing expert FFNs harder than dense ones, reaching the same quality with far fewer bits per weight',
           ],
           correct: [1],
           explanation:
@@ -93,10 +93,10 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
         {
           q: 'The all-to-all problem refers to…',
           options: [
-            'Copying expert weights between GPUs whenever the router\'s statistics change (a rebalance), which stalls decode each time',
-            'Moving tokens to their experts\' GPUs and the results back, twice per MoE layer, so cost grows with layers',
-            'Broadcasting the full matrix of router scores to every device (an all-gather), so each GPU can pick top-k experts for all tokens itself',
-            'Exchanging gradients across every data-parallel replica after each step, which is why MoE needs a faster fabric than dense models',
+            'Copying expert weights between GPUs after each router rebalance, stalling decode every time one happens',
+            'Sending tokens to their experts\' GPUs and the results back twice per layer, adding network cost as depth grows',
+            'Broadcasting the full router score matrix to each device, letting each GPU pick top-k experts for any token',
+            'Exchanging gradients across data-parallel replicas after each step, demanding a faster fabric than dense models',
           ],
           correct: [1],
           explanation:
@@ -111,10 +111,10 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
         {
           q: 'MLA\'s contribution to serving economics is…',
           options: [
-            'Fused attention kernels (up to 2× faster reads) that read the KV cache faster, so each decode step finishes sooner for the same cache size',
-            'One shared low-rank latent per layer (4.7× below Llama-3-70B\'s GQA cache), so far bigger batches fit in HBM',
-            'A learned gate that skips low-scoring attention heads (about 8 of 64 per token), cutting both the attention FLOPs and the K/V bytes cached',
-            'Storing the KV cache in FP8 instead of BF16 (with a per-tensor scale), which halves the bytes per token but leaves the layout unchanged',
+            'Fusing attention kernels to read the KV cache faster, finishing each decode step sooner at equal cache size',
+            'Caching one shared low-rank latent per layer, shrinking the KV cache and letting far bigger batches fit',
+            'Skipping low-scoring attention heads with a learned gate, cutting both the attention math and the KV bytes',
+            'Storing the KV cache at lower precision, halving bytes per token while the cache layout stays unchanged',
           ],
           correct: [1],
           explanation:
@@ -129,10 +129,10 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
         {
           q: 'A "hot expert" hurts because…',
           options: [
-            'Its GPU runs out of HBM for KV cache (the hot expert\'s tokens pile up), so requests are preempted and every expert\'s batch shrinks',
-            'Routing collapse sets in (255 of 256 experts go cold), so the router starts sending every token to it regardless of its content',
-            'Its GPU becomes the straggler at the combine barrier, so every other device waits, like one hot shard setting a fan-out p99',
-            'Replicating a hot expert onto second GPUs duplicates its weights and eats the HBM the batch\'s KV cache needed',
+            'Its GPU runs out of memory for the cache, leaving requests preempted and each expert\'s batch smaller',
+            'Routing collapses toward it as other experts go cold, leaving the router to send tokens there regardless of content',
+            'Its GPU becomes the straggler at the combine barrier, leaving the other devices waiting on the slowest expert',
+            'Replicating it onto a second GPU duplicates its weights, eating the memory the batch needed for cache',
           ],
           correct: [2],
           explanation:

@@ -74,10 +74,10 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
         {
           q: 'TP belongs inside an NVLink domain because…',
           options: [
-            'NVLink is the only fabric that supports all-reduce, because RDMA NICs implement only point-to-point sends',
-            'Its all-reduce sits on the per-layer critical path, so over RDMA the communication starves the compute',
-            'TP shards the KV cache by sequence, so every attention step needs K/V chunks from all of its peers',
-            'TP replicates the weights on each GPU, and keeping those replicas in sync needs the fastest links available',
+            'NVLink is the sole fabric supporting collective reductions, with network cards implementing just point-to-point sends',
+            'Its reduction sits on the per-layer critical path, leaving slower inter-node links to starve the compute',
+            'It shards the cache by sequence, forcing each attention step to fetch key and value chunks from its peers',
+            'It replicates the weights on each device, needing the fastest links available to keep the replicas in sync',
           ],
           correct: [1],
           explanation:
@@ -92,10 +92,10 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
         {
           q: 'Context parallelism exists because…',
           options: [
-            'Models outgrew one GPU\'s weight memory, so splitting the layers into a chain of stages is the only way to hold them',
-            'One 1M-token request\'s KV and prefill FLOPs exceed one GPU, so its sequence is sharded and K/V chunks ring between the GPUs',
-            'It replaces EP for MoE models by sharding tokens across experts, avoiding the all-to-all dispatch and combine',
-            'Ring attention approximates full attention with a sparse pattern, which is cheaper than dense attention on long prompts',
+            'Models outgrew one device\'s weight memory, making a chain of layer stages the sole way to hold them',
+            'A single million-token request exceeds one device in cache and prefill compute, forcing its sequence to be sharded',
+            'It replaces expert parallelism for sparse models by sharding tokens across experts, avoiding the dispatch and combine',
+            'Ring attention approximates full attention with a sparse pattern, costing less than dense attention on long prompts',
           ],
           correct: [1],
           explanation:
@@ -110,10 +110,10 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
         {
           q: 'EP144 × DP144 (DeepSeek decode) means…',
           options: [
-            'Experts spread across 144 GPUs, with the giant batch data-parallel over those same devices',
-            'Two separate fleets of 144 GPUs: one holding the expert shards and a second holding full-model replicas that process the batches',
-            'A 144-stage pipeline in which each GPU owns one layer group, with a data-parallel copy of the whole pipeline behind it',
-            'Each of 144 GPUs holds a complete copy of all 256 experts, so any token is served locally with no all-to-all',
+            'Experts are spread out across 144 devices, with a giant batch data-parallel over those same devices',
+            'Two separate fleets of 144 devices exist, with one holding expert shards and a second holding model replicas',
+            'A 144-stage pipeline is formed, with each device owning one layer group and a data-parallel copy behind it',
+            'Each of 144 devices holds a complete copy of the experts, serving any token locally with no dispatch step',
           ],
           correct: [0],
           explanation:
@@ -128,10 +128,10 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
         {
           q: 'In the composition discipline, DP is filled in last because…',
           options: [
-            'DP is the slowest axis, so it is applied last to avoid delaying the faster axes that were chosen first',
-            'It costs nothing per token because replicas are independent, so capacity left after the TP, EP and CP choices is spent on copies',
-            'DP needs a global batch size fixed in advance, which is only known after the other axes set per-GPU memory limits',
-            'DP replicas must stay in sync on every token, so it is added last, once the faster NVLink axes have claimed the whole domain for themselves',
+            'DP is the slowest axis, getting applied last to avoid delaying the faster axes chosen first',
+            'Replicas are independent and cost nothing per token, leaving spare capacity for copies after other axes are set',
+            'It needs a global batch size fixed in advance, which is known after the other axes set per-device memory limits',
+            'Replicas must stay in sync on each token, getting added after the faster axes claim the whole NVLink domain',
           ],
           correct: [1],
           explanation:

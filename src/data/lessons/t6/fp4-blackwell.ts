@@ -48,10 +48,10 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
         {
           q: 'FP4\'s biggest production win is…',
           options: [
-            'Faster training, since 4-bit gradients (about 2x less traffic) cut the weight-update cost and let pretraining finish in fewer GPU-hours',
-            'Decode of bandwidth-bound giants: weight bytes per token fall ~1.8× vs FP8 (about 4.5 bits with scales) for MoEs',
-            'Higher accuracy than FP8, because per-16-element scales (one per block) give finer dynamic range than FP8\'s per-tensor scale',
-            'Simpler kernels, since one 4-bit format (no E5M2 and E4M3 split) removes the dequantize and scale-handling steps FP8 needs',
+            'Faster training, with FP4 gradients cutting traffic against FP8 and finishing pretraining in fewer GPU-hours',
+            'Decode of bandwidth-bound giants like MoE models, with FP4 weights moving fewer bytes per token than FP8',
+            'Higher accuracy than FP8, with per-block FP4 scales giving finer dynamic range than one per-tensor scale',
+            'Simpler kernels, with one FP4 format removing the dequantize and scale steps that FP8 needs',
           ],
           correct: [1],
           explanation:
@@ -66,10 +66,10 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
         {
           q: 'GB200 NVL72 changes architecture (not just speed) because…',
           options: [
-            'It cuts per-GPU power draw (TDP) enough to pack more accelerators per rack, so the same footprint delivers more total FLOPs',
-            '72 GPUs share one ~1.8 TB/s per-GPU NVLink domain, so TP, EP and CP groups that stopped at 8 GPUs can span a whole rack',
-            'Direct liquid cooling (DLC) lets the GPUs sustain boost clocks, so per-GPU throughput rises enough to change batch sizes',
-            'A Grace CPU beside each pair of GPUs (a shared LPDDR pool) gives the rack unified host memory, so KV cache never leaves the rack',
+            'It cuts the power drawn per chip, letting the facility pack more accelerators into each rack for more total compute',
+            'A whole rack of GPUs shares one fast NVLink domain, letting parallel groups that stopped at one server span the rack',
+            'Direct liquid cooling lets chips sustain boost clocks, raising per-chip throughput enough to change batch sizes',
+            'A Grace host processor beside each pair of accelerators gives the rack unified host memory, keeping cache inside the rack',
           ],
           correct: [1],
           explanation:
@@ -84,10 +84,10 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
         {
           q: 'Production quantization recipes on Blackwell are…',
           options: [
-            'Everything in FP4 (E2M1), including weights, activations and KV cache, because the tensor cores run FP4 natively',
-            'Block-scaled FP4 weights, with activations at FP4, FP8 or BF16 depending on the recipe, and the outlier-sensitive tensors kept wider',
-            'INT4 everywhere with one per-tensor scale (a symmetric grid), since an integer grid gives uniform resolution and avoids FP4\'s coarse spacing',
-            'Weight-only FP4 with BF16 activations everywhere, because no shipped recipe quantizes activations and they are always too fragile for 4 bits',
+            'Full FP4 for weights and activations and cache alike, with the tensor cores running FP4 natively',
+            'Block-scaled FP4 weights, with activations at FP4 or higher precision by recipe and outliers kept wider',
+            'INT4 with one per-tensor scale on a symmetric grid, with uniform resolution that avoids the coarse FP4 spacing',
+            'Weight-only FP4 with BF16 activations throughout, with no shipped recipe quantizing activations below 16 bits',
           ],
           correct: [1],
           explanation:
@@ -102,10 +102,10 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
         {
           q: 'Re-deriving T4\'s roofline for B200: the decode rate roughly…',
           options: [
-            'Stays unchanged (about 1x), since decode is limited by the model\'s FLOP count and Blackwell\'s extra FLOPs go to prefill',
-            'Rises ~2.4× over H100 at equal precision, then ~1.8× more from FP4 over FP8 weights, so the two gains multiply',
-            'Falls below H100 per GPU (under 1x), because FP4\'s block scale factors add extra reads that cancel the bandwidth gain',
-            'Follows peak tensor FLOPs instead (2x the FP8 rate), so FP4\'s higher TFLOPS multiplies decode rate even if bandwidth stayed fixed',
+            'Stays near 1x of H100, with decode limited by FLOP count and the extra FP4 and FP8 FLOPs going to prefill',
+            'Rises about 2.4 times over H100 at equal precision, with FP4 weights adding a further roughly 1.8 times over FP8',
+            'Falls below 1x of H100 per chip, with FP4 block scales adding reads that cancel the bandwidth gain over FP8',
+            'Follows peak FP4 FLOPs rather than bandwidth, with FP4 at twice the FP8 rate even if bandwidth stayed fixed',
           ],
           correct: [1],
           explanation:

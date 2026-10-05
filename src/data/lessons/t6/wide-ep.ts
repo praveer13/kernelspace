@@ -73,10 +73,10 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
         {
           q: 'Decode runs at EP144 while prefill runs at EP32 primarily because…',
           options: [
-            'Decode does more FLOPs per token than prefill, so it needs many more GPUs to finish each step inside the latency budget and stay under its SLO',
-            'Decode is bandwidth-bound and wants giant uniform batches with little weight per GPU; prefill is compute-bound and wants big dense chunks',
-            'Prefill cannot use the all-to-all path efficiently, so it is confined to a narrower group of GPUs on one NVLink domain',
-            'EP144 matches the number of experts per layer, so the width is fixed by the model and prefill simply uses fewer of them',
+            'Decode needs more FLOPs per token than prefill, demanding many more GPUs to finish each step within its latency budget',
+            'Decode is bandwidth-bound and wants huge uniform batches, while prefill is compute-bound and wants big dense chunks',
+            'Prefill cannot use the dispatch path efficiently, confining it to a narrow group of GPUs in one NVLink domain',
+            'The width matches the number of experts per layer in the model, with prefill simply using fewer of them',
           ],
           correct: [1],
           explanation:
@@ -91,10 +91,10 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
         {
           q: 'EPLB keeps the combine barrier cheap by…',
           options: [
-            'Capping each expert\'s capacity and dropping tokens beyond the cap, so no GPU ever sees more than the average load',
-            'Replicating hot experts onto second GPUs and reassigning placement so every GPU carries about the mean load',
-            'Shrinking the batch each step so fewer tokens reach any single expert, which flattens load at some cost in utilization',
-            'Detecting slow GPUs at runtime and rerouting their tokens to the next-best experts so the barrier waits only for healthy devices',
+            'Capping each expert\'s capacity and dropping tokens past the cap, leaving no GPU above the average load',
+            'Replicating hot experts onto second GPUs and reassigning placement, leaving each GPU near the mean load',
+            'Shrinking the batch at each step to send fewer tokens to any expert, flattening load at some cost in utilization',
+            'Detecting slow GPUs at runtime and rerouting their tokens to next-best experts, leaving the barrier waiting on healthy devices',
           ],
           correct: [1],
           explanation:
@@ -109,10 +109,10 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
         {
           q: 'Dual-batch overlap exists to…',
           options: [
-            'Run two copies of the model on one GPU so a new version can be tested against the old without a restart',
-            'Pipeline two micro-batches so one computes while the other runs its all-to-all, hiding network behind compute',
-            'Double the batch per step so expert load flattens statistically, at the cost of extra latency for each token generated',
-            'Replicate every expert on two GPUs so a token can use whichever copy is idle and skip the all-to-all wait entirely',
+            'Run two model copies on one GPU, letting a new version be tested against the old without a restart',
+            'Pipeline two micro-batches, letting one compute while the other communicates and hiding network time behind compute',
+            'Double the batch per step, flattening expert load statistically at the cost of extra latency per generated token',
+            'Replicate each expert on two GPUs, letting a token use whichever copy is idle and skipping the dispatch wait entirely',
           ],
           correct: [1],
           explanation:
@@ -127,10 +127,10 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
         {
           q: 'DeepEP ships two dispatch protocols because…',
           options: [
-            'One fabric, two workloads: prefill wants bandwidth through large transfers; decode wants low latency through pre-registered buffers and no per-layer handshake',
-            'One mode moves tokens inside a node over NVLink and the other moves them between nodes over RDMA, since the two fabrics need different protocols',
-            'The low-latency mode replaced a buggy original, and the older mode stays only for compatibility with earlier deployments',
-            'Training and inference use different expert layouts, so each needs a dispatch routine matched to its model\'s weight format',
+            'Prefill wants bandwidth from large transfers, while decode wants low latency from pre-registered buffers and no handshake',
+            'One mode moves tokens within a node over the fast local links, while the other moves them across nodes over the slower network fabric',
+            'The low-latency mode replaced a buggy original, while the older mode stays for compatibility with earlier deployments',
+            'Training and inference use different expert layouts, while each needs a routine matched to its weight format',
           ],
           correct: [0],
           explanation:

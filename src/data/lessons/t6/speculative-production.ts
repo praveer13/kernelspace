@@ -50,10 +50,10 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
         {
           q: 'MTP beats a separate draft model because…',
           options: [
-            'Its draft tokens are sampled from the target\'s own weights, so the verification pass can be skipped whenever the head is confident in them',
-            'The head reads the target\'s hidden states and shares its embedding and output head, so its drafts track the target\'s distribution closely',
-            'It predicts tokens t+1 through t+k in parallel from shallow output heads, and parallel prediction is more accurate than drafting in sequence',
-            'It removes the second model\'s memory footprint, and that saving alone produces the speedup whether or not the drafts are accepted',
+            'Its draft tokens are sampled from the target\'s own weights, letting the verification pass be skipped when the head is confident',
+            'The head reads the target\'s hidden states and shares its embeddings, keeping drafts close to the target\'s distribution',
+            'It predicts several future tokens in parallel from shallow output heads, beating the accuracy of drafting in sequence',
+            'It removes the second model\'s memory footprint, producing the speedup whether or not the drafts are accepted',
           ],
           correct: [1],
           explanation:
@@ -68,10 +68,10 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
         {
           q: 'Speculative decoding pays off most when…',
           options: [
-            'The batch is large and compute-saturated, because verifying k tokens per sequence puts more arithmetic on the GPU for each weight read',
-            'Batches are small and per-user speed matters, because verification spends compute that single-token decode would leave idle',
-            'The model is dense, because MoE routing makes the draft and target disagree on expert choice and acceptance collapses',
-            'Prompts are short, because the drafter then has little context to mispredict and acceptance approaches 100%',
+            'The batch is large and compute-saturated, putting more arithmetic on the chip for each weight read',
+            'Batches are small and per-user speed matters most, spending the compute that single-token decode would leave idle',
+            'The model is dense, avoiding the routing mismatch between draft and target that collapses acceptance on MoE models',
+            'Prompts are short, giving the drafter little context to mispredict and pushing acceptance near its ceiling',
           ],
           correct: [1],
           explanation:
@@ -86,10 +86,10 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
         {
           q: 'The output quality cost of speculative decoding is…',
           options: [
-            'Small but real, because accepted draft tokens come from a weaker distribution, and the loss grows with the draft length k',
-            'Bounded, because the target re-scores each draft token and rejects any whose probability falls below a fixed cutoff threshold',
-            'None in distribution: accept/reject sampling against the target\'s probabilities reproduces exactly its output distribution',
-            'Zero only at temperature 0; at higher temperatures sampled draft tokens let lower-quality continuations through',
+            'Small but real, with accepted draft tokens coming from a weaker distribution and the loss growing with draft length',
+            'Bounded by a cutoff, with the target re-scoring each draft token and rejecting those below a fixed probability threshold',
+            'Nothing in distribution, with accept and reject sampling against the target reproducing its output distribution exactly',
+            'Zero at temperature zero, with sampled draft tokens letting lower-quality continuations through at higher temperatures',
           ],
           correct: [2],
           explanation:
@@ -104,10 +104,10 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
         {
           q: 'Why is the win bigger on MoE than dense?',
           options: [
-            'The router acts as the drafter: each expert predicts a different future token, so k drafts come from one routing decision',
-            'A MoE decode step moves few weight bytes (37B of 671B active), so verifying costs little and structured text accepts often',
-            'MoE layers run fewer FLOPs per token than dense layers, so verifying k extra tokens in each decode step is free at any batch size',
-            'MoE models have more total parameters, so a draft head trained on them has more capacity and reaches near-perfect acceptance on all text',
+            'The router acts as the drafter, with each expert predicting a different future token from one routing decision',
+            'A MoE decode step moves few weight bytes, making verification cheap and letting structured text accept often',
+            'MoE layers run fewer FLOPs per token than dense layers, making extra verified tokens free at any batch size',
+            'MoE models hold more total parameters, giving a draft head more capacity and near-perfect acceptance on any text',
           ],
           correct: [1],
           explanation:
