@@ -19,34 +19,64 @@
 //!      blocks return immediately; cached suffix blocks remain at ref=1.
 //!
 //! That protocol is the lab 02 manager API, imported as infrastructure.
+//!
+//! Template v2: every check runs on its own, in a fresh copy of your module,
+//! and a `todo!()` traps only the checks that reach it. The two gauntlets are
+//! seeded: `block_conservation` (the 2,000-op churn) and `chat_hit_rate` (the
+//! replay's family order) draw from the seed. `cargo test` runs them on their
+//! default seeds and on 32 extra seeds, so a crate that is green here is green
+//! on the site's fresh seeds too.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   exact_match         a lookup that misses its own entry, or an exact
+//!                       duplicate stored as a second entry
+//!   longest_prefix      the first branch instead of the deepest ancestor
+//!   eviction_order      a lookup that does not touch, an internal prefix
+//!                       evicted before its descendant, a pinned leaf evicted
+//!   block_conservation  a retain without its release (a leak), a release
+//!                       twice, an entry limit that is not enforced
+//!   cow_divergence      a partial tail shared with a writer that diverges, or
+//!                       a whole prefix block copied instead of shared
+//!   chat_hit_rate       lookups that hit only on a whole cached entry: the
+//!                       savings are in the partial prefix every request shares
+//! ```
 
 mod block_pool;
 mod cache;
 
 use block_pool::BlockAllocator;
 use cache::{PrefixMatch, RadixCache};
-use kslab::{Check, Report};
+use kslab::{Check, CheckDef, Ctx, Lab, Rng};
 
 const BS: usize = 16;
 
-/* --------------------------- determinism ---------------------------- */
+/// The checks, in grading order. Ids and labels match `src/data/labs.ts`;
+/// stages are the F2 order of play (1 = the two-minute win).
+pub static CHECKS: [CheckDef; 6] = [
+    CheckDef { id: "exact_match", label: EXACT_MATCH, stage: 1, seeded: false, default_seed: 0, run: check_exact_match },
+    CheckDef { id: "longest_prefix", label: LONGEST_PREFIX, stage: 2, seeded: false, default_seed: 0, run: check_longest_prefix },
+    CheckDef { id: "eviction_order", label: EVICTION_ORDER, stage: 3, seeded: false, default_seed: 0, run: check_eviction_order },
+    CheckDef { id: "block_conservation", label: BLOCK_CONSERVATION, stage: 4, seeded: true, default_seed: 0xCAC4E5, run: check_block_conservation },
+    CheckDef { id: "cow_divergence", label: COW_DIVERGENCE, stage: 3, seeded: false, default_seed: 0, run: check_cow_divergence },
+    CheckDef { id: "chat_hit_rate", label: CHAT_HIT_RATE, stage: 4, seeded: true, default_seed: 0xC4A7, run: check_chat_hit_rate },
+];
 
-struct Rng(u64);
+#[cfg(not(feature = "reference"))]
+const LAB_ID: &str = "radix-cache";
+/// A `--features reference` build names itself, and earns no credit anywhere.
+#[cfg(feature = "reference")]
+const LAB_ID: &str = "radix-cache@reference";
 
-impl Rng {
-    fn next(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x >> 12;
-        x ^= x << 25;
-        x ^= x >> 27;
-        self.0 = x;
-        x.wrapping_mul(0x2545_F491_4F6C_DD1D)
-    }
+pub static LAB: Lab = Lab { id: LAB_ID, version: 2, checks: &CHECKS };
 
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-}
+const EXACT_MATCH: &str = "exact-match hit returns the full cached block table";
+const LONGEST_PREFIX: &str = "longest cached ancestor wins";
+const EVICTION_ORDER: &str = "leaf LRU respects recency and live pins";
+const BLOCK_CONSERVATION: &str = "2000-op churn conserves every physical block";
+const COW_DIVERGENCE: &str = "divergent writer copy-on-writes a shared partial tail";
+const CHAT_HIT_RATE: &str = "shared-system chat replay clears the KV-hit floor";
 
 fn tokens(start: u32, len: usize) -> Vec<u32> {
     (0..len).map(|i| start + i as u32).collect()
@@ -77,9 +107,9 @@ fn miss() -> PrefixMatch {
 /* ------------------------------ checks ------------------------------ */
 
 /// 1. Exact request returns the complete token length and stable block ids.
-pub fn check_exact_match() -> Check {
+pub fn check_exact_match(_: &Ctx) -> Check {
     const ID: &str = "exact_match";
-    const LABEL: &str = "exact-match hit returns the full cached block table";
+    const LABEL: &str = EXACT_MATCH;
     let pool = BlockAllocator::new(24, BS);
     let mut cache = RadixCache::new(pool.clone(), 8);
     let prompt = tokens(100, 40);
@@ -108,17 +138,41 @@ pub fn check_exact_match() -> Check {
     if first.blocks.iter().any(|&b| pool.refcount(b) != 1) {
         return Check::fail(ID, LABEL, "after prefill release, an unshared cache entry must own exactly one reference per block");
     }
+    // The same prompt again is a touch, not a second entry.
+    if !store(&mut cache, &pool, &prompt) {
+        return Check::fail(ID, LABEL, "re-inserting an exact duplicate failed");
+    }
+    if cache.entry_count() != 1 || cache.match_prefix(&prompt) != first {
+        return Check::fail(
+            ID,
+            LABEL,
+            format!(
+                "an exact duplicate must be a touch: {} entries after two identical inserts, want 1",
+                cache.entry_count()
+            ),
+        );
+    }
+    if pool.allocated_blocks() != 3 || first.blocks.iter().any(|&b| pool.refcount(b) != 1) {
+        return Check::fail(
+            ID,
+            LABEL,
+            format!(
+                "after a duplicate insert and release, 3 blocks at one reference each; got {} blocks allocated",
+                pool.allocated_blocks()
+            ),
+        );
+    }
     Check::pass(
         ID,
         LABEL,
-        "40/40 tokens hit; the same three physical blocks returned",
+        "40/40 tokens hit; the same three physical blocks returned; a duplicate insert was a touch",
     )
 }
 
 /// 2. A query follows the deepest cached ancestor, not the first branch.
-pub fn check_longest_prefix() -> Check {
+pub fn check_longest_prefix(_: &Ctx) -> Check {
     const ID: &str = "longest_prefix";
-    const LABEL: &str = "longest cached ancestor wins";
+    const LABEL: &str = LONGEST_PREFIX;
     let pool = BlockAllocator::new(48, BS);
     let mut cache = RadixCache::new(pool.clone(), 12);
     let system = tokens(1_000, 32);
@@ -162,9 +216,9 @@ pub fn check_longest_prefix() -> Check {
 
 /// 3. LRU is updated by hits; internal prefixes and externally pinned
 /// leaves are not eviction candidates.
-pub fn check_eviction_order() -> Check {
+pub fn check_eviction_order(_: &Ctx) -> Check {
     const ID: &str = "eviction_order";
-    const LABEL: &str = "leaf LRU respects recency and live pins";
+    const LABEL: &str = EVICTION_ORDER;
 
     // Ordinary LRU: touch A, so inserting D evicts B.
     let pool = BlockAllocator::new(32, BS);
@@ -237,9 +291,21 @@ pub fn check_eviction_order() -> Check {
     if !store(&mut tree, &pool2, &newcomer) {
         return Check::fail(ID, LABEL, "newcomer insert failed");
     }
-    // Drop child; if an incorrect eviction removed base earlier, no exact
-    // base entry remains after the child disappears.
-    if !tree.evict_lru() || tree.match_prefix(&base).len != base.len() {
+    // `base` is the oldest entry, but `child` extends it: the coldest LEAF is
+    // `side`, and it must be the one that went.
+    if tree.match_prefix(&side).len != 0
+        || tree.match_prefix(&child).len != child.len()
+        || tree.match_prefix(&newcomer).len != newcomer.len()
+    {
+        return Check::fail(
+            ID,
+            LABEL,
+            "at the entry limit the coldest leaf (side) must go; an internal terminal prefix with a descendant is not a leaf",
+        );
+    }
+    // Drop the child (now the oldest leaf): `base` is a leaf again and must
+    // still be an entry of its own.
+    if !tree.evict_lru() || tree.match_prefix(&base).len != base.len() || tree.entry_count() != 2 {
         return Check::fail(
             ID,
             LABEL,
@@ -255,14 +321,14 @@ pub fn check_eviction_order() -> Check {
 }
 
 /// 4. Two thousand mixed inserts/lookups/evictions, then a complete drain.
-pub fn check_block_conservation() -> Check {
+pub fn check_block_conservation(ctx: &Ctx) -> Check {
     const ID: &str = "block_conservation";
-    const LABEL: &str = "2000-op churn conserves every physical block";
+    const LABEL: &str = BLOCK_CONSERVATION;
     const TOTAL: usize = 128;
     const MAX_ENTRIES: usize = 24;
     let pool = BlockAllocator::new(TOTAL, BS);
     let mut cache = RadixCache::new(pool.clone(), MAX_ENTRIES);
-    let mut rng = Rng(0xCA_C4_E5);
+    let mut rng = Rng::seeded(ctx.seed);
 
     for op in 0..2_000usize {
         let family = rng.below(12) as u32;
@@ -344,9 +410,9 @@ pub fn check_block_conservation() -> Check {
 }
 
 /// 5. A branch can share whole prefix blocks but must copy a partial tail.
-pub fn check_cow_divergence() -> Check {
+pub fn check_cow_divergence(_: &Ctx) -> Check {
     const ID: &str = "cow_divergence";
-    const LABEL: &str = "divergent writer copy-on-writes a shared partial tail";
+    const LABEL: &str = COW_DIVERGENCE;
     let pool = BlockAllocator::new(24, BS);
     let mut cache = RadixCache::new(pool.clone(), 8);
     let base = tokens(30_000, 20); // one full block + a 4-token partial tail
@@ -404,20 +470,22 @@ fn chat_prompt(family: usize, turn: usize) -> Vec<u32> {
 }
 
 /// 6. Replay a system-prompt-heavy chat trace. APC should skip most input
-/// after the first request in each family.
-pub fn check_chat_hit_rate() -> Check {
+/// after the first request in each family. Seeded: which family each of the
+/// 240 requests belongs to.
+pub fn check_chat_hit_rate(ctx: &Ctx) -> Check {
     const ID: &str = "chat_hit_rate";
-    const LABEL: &str = "shared-system chat replay clears the KV-hit floor";
+    const LABEL: &str = CHAT_HIT_RATE;
     const REQUESTS: usize = 240;
     let pool = BlockAllocator::new(128, BS);
     let mut cache = RadixCache::new(pool.clone(), 32);
+    let mut rng = Rng::seeded(ctx.seed);
     let mut hit_tokens = 0usize;
     let mut prompt_tokens = 0usize;
 
     for i in 0..REQUESTS {
         // Eight interleaved products/agents sharing their own 64-token
         // system+tool prefix — a realistic multi-tenant chat shape.
-        let family = (i * 7 + i / 5) % 8;
+        let family = rng.below(8);
         let prompt = chat_prompt(family, i);
         let hit = cache.match_prefix(&prompt);
         hit_tokens += hit.len;
@@ -449,23 +517,58 @@ pub fn check_chat_hit_rate() -> Check {
     )
 }
 
+/// The full suite on default seeds, in grading order (v1 report order).
 pub fn self_checks() -> Vec<Check> {
-    vec![
-        check_exact_match(),
-        check_longest_prefix(),
-        check_eviction_order(),
-        check_block_conservation(),
-        check_cow_divergence(),
-        check_chat_hit_rate(),
-    ]
+    CHECKS.iter().map(|c| (c.run)(&Ctx { seed: c.default_seed, fresh: false })).collect()
 }
 
+/* ------------------------------ probe ------------------------------- */
+
+/// `probe <seed>`: 48 seeded chat requests (four 32-token system prompts, a
+/// 16-token user turn each) through YOUR cache, which holds 12 entries over a
+/// 48-block pool, summarised in one line. Deterministic for a given seed and
+/// cache.
+pub fn probe(seed: u32) -> String {
+    let mut rng = Rng::seeded(seed);
+    let pool = BlockAllocator::new(48, BS);
+    let mut cache = RadixCache::new(pool.clone(), 12);
+    let (mut hit_tokens, mut prompt_tokens) = (0usize, 0usize);
+    for turn in 0..48usize {
+        let mut prompt = tokens(500_000 + rng.below(4) as u32 * 1_000, 32);
+        prompt.extend((0..16).map(|i| 800_000 + turn as u32 * 32 + i as u32));
+        hit_tokens += cache.match_prefix(&prompt).len;
+        prompt_tokens += prompt.len();
+        if !store(&mut cache, &pool, &prompt) {
+            return format!("err request {turn}: the cache could not admit a 48-token prompt");
+        }
+    }
+    format!(
+        "requests=48 hit_tokens={hit_tokens} prompt_tokens={prompt_tokens} hit_rate={:.3} entries={} free_blocks={} conserved={}",
+        hit_tokens as f64 / prompt_tokens as f64,
+        cache.entry_count(),
+        pool.free_blocks(),
+        pool.conserved()
+    )
+}
+
+/* ------------------------------ wasm ABI ---------------------------- */
+
+kslab::export_abi_v2!();
+
 #[no_mangle]
-pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report {
-        lab: "radix-cache",
-        version: 1,
-        checks: self_checks(),
+pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
+}
+
+/// The runtime bridge: `probe <seed>` (see `probe`).
+#[no_mangle]
+pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::install_panic_hook();
+    let cmd = std::str::from_utf8(unsafe { kslab::input(in_ptr, in_len) }).unwrap_or("");
+    let mut it = cmd.split_whitespace();
+    let reply = match (it.next(), it.next().map(str::parse::<u32>)) {
+        (Some("probe"), Some(Ok(seed))) => probe(seed),
+        _ => format!("err unknown command {:?} (try: probe <seed>)", kslab::clip(cmd.trim(), 40)),
     };
-    kslab::emit(&report)
+    kslab::emit_str(&reply)
 }
