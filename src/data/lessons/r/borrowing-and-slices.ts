@@ -77,6 +77,7 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
             'Two live &mut T to the same value fail with E0499. The rule covers the whole value, not individual elements, which is why split_at_mut exists.',
             'Many &T are fine. Readers alone cannot change anything, so the compiler allows any number of them at once and limits only writers.',
           ],
+          kcs: ['r.borrow-rules'],
         },
         {
           q: 'Why prefer &[T] to &Vec<T> in a read-only function parameter?',
@@ -95,6 +96,7 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
             'Both are borrows and neither moves anything. Moving would need a by-value Vec<T> parameter, which is a different signature altogether.',
             'A &Vec<T> indexes and iterates fine, because Vec implements Index and derefs to a slice. The reason to prefer slices is flexibility, not capability.',
           ],
+          kcs: ['r.slices'],
         },
         {
           q: 'Why can Vec::push conflict with a live element reference?',
@@ -113,10 +115,12 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
             'That is RefCell\'s runtime check. Vec tracks no borrows; the conflict is found at compile time, before the program runs.',
             'push writes after the last element and moves nothing in place. Elements move only when the buffer reallocates, which is the real hazard.',
           ],
+          kcs: ['r.borrow-rules'],
         },
       ],
     },
   ],
+  kcs: ['r.borrow-rules', 'r.slices'],
 }
 
 export default lesson

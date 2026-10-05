@@ -78,6 +78,7 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
             'Arc::clone does not depend on T: Clone, and it works for types that are not Clone. It always duplicates the handle only.',
             'Arc gives shared access only. Writing through it needs interior mutability such as Mutex, because a plain Arc<T> never hands out &mut T.',
           ],
+          kcs: ['r.smart-pointers', 'r.ownership-moves'],
         },
         {
           q: 'Why can Rc<T> not normally be sent to another thread?',
@@ -96,6 +97,7 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
             'Rc::new puts the value on the heap, not on a stack frame. Moving the handle to another thread would not dangle it; the count is the problem.',
             'Arc has no lock either; it differs from Rc only in using atomic counts. Mutation across threads needs a Mutex in both cases.',
           ],
+          kcs: ['r.smart-pointers'],
         },
         {
           q: 'Which type expresses a non-owning edge that does not keep an Rc/Arc allocation alive?',
@@ -114,10 +116,12 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
             'Box is an owning pointer and cannot borrow data owned by an Rc. It would need its own allocation or a move, not an observation.',
             'Every Rc clone increments the strong count when created, whether or not it is dereferenced. Only Weak avoids that.',
           ],
+          kcs: ['r.smart-pointers', 'r.ownership-moves'],
         },
       ],
     },
   ],
+  kcs: ['r.smart-pointers', 'r.ownership-moves'],
 }
 
 export default lesson
