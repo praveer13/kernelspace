@@ -64,7 +64,7 @@ _The operating system ideas LLM serving re-invented — page tables, eviction, s
 - [T2.L4 Scheduling & Admission Control](https://kernelspace.naigap.com/lessons-md/t2.l4.md): Preemptive multitasking, priority inversion, and why continuous batching is a 1960s scheduler wearing a GPU.
 - [T2.L5 Mutexes, Atomics & Lock-Free Queues](https://kernelspace.naigap.com/lessons-md/t2.l5.md): The synchronization toolbox: when a mutex beats an atomic, memory ordering made survivable, and the ABA problem visualized.
 - [T2.L6 Async I/O: epoll, io_uring, Event Loops](https://kernelspace.naigap.com/lessons-md/t2.l6.md): Why one thread can serve 100k connections, why Rust's tokio exists, and the ring buffers that made I/O syscall-free.
-- [T2.L7 EXAM: Read the PagedAttention Paper](https://kernelspace.naigap.com/lessons-md/t2.l7.md): A guided walkthrough mapping every idea in the vLLM paper to an OS concept you now own. Completion requires 80%+ on the exam quiz.
+- [T2.L7 EXAM: Read the PagedAttention Paper](https://kernelspace.naigap.com/lessons-md/t2.l7.md): A guided walkthrough mapping every idea in the vLLM paper to an OS concept you now own, then a spiral checkpoint across the whole track: 6 of 8 right, with one written or computed answer.
 
 ### T3 — Rust for Systems
 

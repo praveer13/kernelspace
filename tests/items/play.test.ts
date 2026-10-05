@@ -238,6 +238,23 @@ describe('every source grades', () => {
     expect(wrong.diagnosis?.id).toBe('demo.forgot-k-and-v')
   })
 
+  test('an authored lure that names a misconception diagnoses it, and an unnamed one does not', () => {
+    const named: QuizQuestion = { ...Q, miss: ['', '', 'demo.bitmap-finds-tightest', ''] }
+    const pick = (picks: string[], q: QuizQuestion = named) => gradeItem(quiz(q), { kind: 'choice', picks })
+    expect(pick(['2']).diagnosis).toEqual({ id: 'demo.bitmap-finds-tightest', message: Q.why?.[2] })
+    expect(pick(['0']).diagnosis).toBeUndefined()
+    expect(pick(['1']).diagnosis).toBeUndefined()
+    expect(pick(['1']).ok).toBe(true)
+    // the id rides on the option the player shows, wherever the shuffle puts it
+    const shown = playView(quiz(named), 5)
+    expect(shown.kind === 'choice' && shown.options.find((o) => o.id === '2')?.miss).toBe('demo.bitmap-finds-tightest')
+    expect(shown.kind === 'choice' && shown.options.find((o) => o.id === '1')?.miss).toBeUndefined()
+    // an unnamed question grades as before
+    expect(pick(['2'], Q).diagnosis).toBeUndefined()
+    // an item event carries the id through the result's grade
+    expect(resultFor(quiz(named), { kind: 'choice', picks: ['2'] }, pick(['2']), { seed: 1, ms: 10 }).grade.diagnosis?.id).toBe('demo.bitmap-finds-tightest')
+  })
+
   test('a numeric slip is named by the family rule, and the shared rules apply without the family', () => {
     const g = gen('bytes-per-token')
     if (g.source !== 'gen' || g.inst.answer.kind !== 'numeric') throw new Error('expected numeric')
