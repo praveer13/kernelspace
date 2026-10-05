@@ -101,7 +101,7 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
         {
           q: 'Why use HashMap::entry for a counter?',
           options: [
-            'It locks the bucket and lets several threads increment one counter',
+            'It locks the bucket and lets several threads increment one counter without a data race',
             'It finds or inserts the slot with one hash lookup and gives mutable access',
             'It returns a copy of the stored value and avoids borrowing the map',
             'It keeps a running count inside the map and needs no separate variable',

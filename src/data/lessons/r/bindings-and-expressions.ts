@@ -89,7 +89,7 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
             'It mutates the existing binding in place and needs x to be declared with mut',
             'It creates a new binding named x that shadows the old one and may change the type',
             'It allocates a fresh x on the heap and keeps the old value alive beside it',
-            'It is a compile error that rejects a second binding of the same name',
+            'It is a compile error that rejects a second binding of the same name in one scope',
           ],
           correct: [1],
           explanation:

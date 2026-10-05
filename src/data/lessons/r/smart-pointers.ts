@@ -101,7 +101,7 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
           q: 'Which type expresses a non-owning edge that does not keep an Rc/Arc allocation alive?',
           options: [
             'A second Rc stored in a RefCell that hides it from the strong count',
-            'Weak whose upgrade method gives no handle once the last strong handle is dropped',
+            'Weak whose upgrade gives no handle once the last strong handle is dropped',
             'A Box holding a pointer to the data that observes it without owning it',
             'A cloned Rc kept in a struct field that the count ignores until it is used',
           ],

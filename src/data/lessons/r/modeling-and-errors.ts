@@ -65,7 +65,7 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
         {
           q: 'What does Option<T> communicate that a nullable reference does not?',
           options: [
-            'The reason the value is missing is carried inside the empty variant as an error',
+            'None carries an error that says why the value is missing',
             'Absence is a type variant and the compiler forces callers to handle it',
             'The value is boxed on the heap and a null pointer marks the empty case at runtime',
             'Each access is checked for null at runtime and throws on failure as in Java',
@@ -102,8 +102,8 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
           q: 'When should ordinary input validation return Result instead of panic?',
           options: [
             'When the caller can reasonably react such as rejecting a bad config value',
-            'When the code is a library crate and an application may panic on bad input',
-            'When failures are frequent enough that unwinding would show up in profiles',
+            'When the code is a library crate and a binary crate should panic instead',
+            'When failures are frequent and rare ones should panic to save unwinding cost',
             'When the error is an I/O failure while a malformed value should panic',
           ],
           correct: [0],

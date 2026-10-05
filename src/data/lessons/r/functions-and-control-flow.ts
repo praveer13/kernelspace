@@ -85,7 +85,7 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
             '0, 1, 2, 3 and the upper bound 4 is excluded',
             '0, 1, 2, 3, 4 and both ends are included',
             '1, 2, 3, 4 and counting starts at one',
-            '0, 1, 2, 3 in a for loop and up to 4 in a slice index',
+            '0, 1, 2, 3 in a for loop and 0 through 4 in a slice index',
           ],
           correct: [0],
           explanation:
