@@ -531,9 +531,11 @@ function ActIncident() {
         Diagnose from the same surface you instrumented: TTFT, TPOT, queue delay, KV state,
         goodput, and cost. The incident sparklines use those timing events plus pressure counters;
         identify the first metric that moves, not the loudest symptom at the end. Only your first call
-        on each incident counts toward the act and its XP; the answer is revealed after every call, so
-        any later call on the same incident is practice. The act needs all three incidents right on the
-        first call, so a missed first call closes it until fresh incidents arrive in a later update.
+        on each incident counts toward the act; it is marked ✓ if right and ○ if missed. The answer is
+        revealed after every call, so any repeat call on the same incident is practice. The act needs
+        all three incidents right on the first call, and only then earns its XP. A missed first call
+        closes it until fresh incidents arrive in a later update: first calls on the other incidents
+        are still graded and marked, but they cannot complete the act.
       </p>
       <div className="flex flex-wrap gap-2 font-mono text-[12px]">
         {INCIDENTS.map((d, i) => (
@@ -572,7 +574,7 @@ function ActIncident() {
               </div>
             </div>
           </div>
-          <RunButton running={false} label={ledger.attempted.includes(incident.id) ? 'practice call (not credited)' : 'call it'} onClick={submit} disabled={cause === null || mitigation === null} />
+          <RunButton running={false} label={ledger.attempted.includes(incident.id) ? 'practice call (not credited)' : missed > 0 ? 'call it (marked, act stays closed)' : 'call it'} onClick={submit} disabled={cause === null || mitigation === null} />
         </div>
       )}
       {result && <ResultPanel result={result} />}

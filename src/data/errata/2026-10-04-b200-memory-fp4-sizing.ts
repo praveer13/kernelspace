@@ -15,7 +15,7 @@ export default {
       q: 'NVFP4 stores about 4.5 bits per weight. How much memory do the weights of a 671B model need, and where do they fit?',
       options: [
         'About 335 GB, held across a 2-node NVL72 pair with spare capacity',
-        'About 377 GB, held across a full 72-GPU NVL72 rack of nodes',
+        'About 377 GB, needing a full 72-GPU NVL72 rack of nodes to hold them',
         'About 671 GB, held across two 8xB200 nodes with a split model',
         'About 377 GB, held on a single 8xB200 node with room to spare',
       ],
