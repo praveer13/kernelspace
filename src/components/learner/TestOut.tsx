@@ -9,12 +9,15 @@
  * attempt is written by `recordTicket` with `form: 'testout'`.
  *
  * A miss offers the lesson and locks nothing. The one limit is one test-out per lesson per local day, read
- * from the ledger: it keeps the measurement honest, and the lesson itself stays open (W8).
+ * from the ledger and from this browser's outbox (a write reaches the outbox synchronously and the engine a
+ * moment later, so a reload right after a test-out still sees it): it keeps the measurement honest, and the
+ * lesson itself stays open (W8).
  */
 import { useEffect, useState } from 'react'
 import type { Lesson } from '@/data/lessons/types'
 import { localDateKey } from '@/lib/economy'
-import { getLedgerClient } from '@/lib/ledger/client'
+import { browserEnv, getLedgerClient } from '@/lib/ledger/client'
+import { collectOutboxes, pendingFrom } from '@/lib/ledger/outbox'
 import type { LocalDay } from '@/lib/ledger/types'
 import { testOutUsedToday } from '@/lib/learner/ticket'
 import { useProgress } from '@/lib/progress'
@@ -27,18 +30,29 @@ export interface TestOutProps {
   className?: string
 }
 
+/** Whether a test-out for this lesson sits in a localStorage outbox on `day`: the write the engine may not have committed yet. */
+function usedInOutbox(lessonId: string, day: LocalDay): boolean {
+  try {
+    return testOutUsedToday(pendingFrom(collectOutboxes(browserEnv().storage, browserEnv().tabId)).events, lessonId, day)
+  } catch {
+    return false
+  }
+}
+
 export default function TestOut({ lesson, trackColor, className }: TestOutProps) {
   const status = useProgress((s) => s.lessons[lesson.id]?.status)
   const [open, setOpen] = useState(false)
-  // null until the ledger has been read; a read that fails leaves the offer open
-  const [usedToday, setUsedToday] = useState<boolean | null>(null)
+  // null until the ledger has been read (a read that fails leaves the offer open); a write still in the outbox counts at once
+  const [usedToday, setUsedToday] = useState<boolean | null>(() => (usedInOutbox(lesson.id, localDateKey() as LocalDay) ? true : null))
 
   useEffect(() => {
     let live = true
+    const day = localDateKey() as LocalDay
+    const pending = usedInOutbox(lesson.id, day)
     getLedgerClient()
       .then((client) => client.events({ kinds: ['quiz'], refPrefix: `lesson:${lesson.id}` }))
-      .then((events) => live && setUsedToday(testOutUsedToday(events, lesson.id, localDateKey() as LocalDay)))
-      .catch(() => live && setUsedToday(false))
+      .then((events) => live && setUsedToday(pending || testOutUsedToday(events, lesson.id, day)))
+      .catch(() => live && setUsedToday(pending))
     return () => {
       live = false
     }
@@ -68,17 +82,26 @@ export default function TestOut({ lesson, trackColor, className }: TestOutProps)
     )
   }
 
+  const checking = usedToday === null
   return (
     <div className={cn('rounded-md border border-line bg-surface-1 px-4 py-3', className)}>
       <p className="text-body-sm text-text-1">Already know this? Test out: 3 items, about 3 minutes.</p>
       <button
         type="button"
-        disabled={usedToday === null}
-        onClick={() => setOpen(true)}
-        className="mt-2 min-h-11 rounded-md border border-line-bright bg-surface-2 px-5 font-display text-[15px] font-semibold text-text-1 hover:border-accent disabled:opacity-60"
+        aria-disabled={checking}
+        onClick={() => !checking && setOpen(true)}
+        className={cn(
+          'mt-2 min-h-11 rounded-md border border-line-bright bg-surface-2 px-5 font-display text-[15px] font-semibold text-text-1',
+          checking ? 'opacity-60' : 'hover:border-accent',
+        )}
       >
         Test out
       </button>
+      {checking && (
+        <p role="status" className="mt-2 text-body-sm text-text-2">
+          Checking whether today&apos;s test-out is free.
+        </p>
+      )}
     </div>
   )
 }

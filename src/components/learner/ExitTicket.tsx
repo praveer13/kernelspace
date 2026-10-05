@@ -9,7 +9,11 @@
  * Nothing locks (W8). A miss always offers **New numbers** (a fresh seed and other questions) and
  * **Continue anyway** (`completeLesson(id, 'read')`: read, not passed) as two equal buttons. A test-out
  * is the exception that proves the rule: it is limited to one per lesson per local day, so its miss
- * offers the lesson instead, which was never closed.
+ * offers the lesson instead, which was never closed. On a lesson that is already done (review mode) a miss
+ * offers only New numbers: the lesson stays done, so there is nothing to continue past.
+ *
+ * Focus (§15.3, §16.2): the section stays mounted while New numbers plans, and the first control of the
+ * fresh item 1 takes focus when it lands; Continue anyway hands focus to New numbers before it leaves.
  *
  * The root carries `id="exit-ticket"` and `data-ks-ticket` (a test-out: `test-out`, `data-ks-testout`), so the lesson page's "Exit ticket" button and
  * the `m` key can scroll to it and focus its first control. Keys inside a card are the item player's, the
@@ -145,6 +149,12 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
   const [index, setIndex] = useState(0)
   const [verdict, setVerdict] = useState<TicketVerdict | null>(null)
   const [continued, setContinued] = useState(false)
+  // New numbers is planning (the old items and verdict stay on screen), or could not plan
+  const [refreshing, setRefreshing] = useState(false)
+  const [retryFailed, setRetryFailed] = useState(false)
+  // a retry has landed: item 1 takes focus, because the button that asked for it is gone
+  const [retried, setRetried] = useState(false)
+  const alreadyDone = useProgress((s) => s.lessons[lesson.id]?.status === 'done')
   const results = useRef<ItemResult[]>([])
   const startedAt = useRef(0) // set when a plan lands (`reset`)
   const recorded = useRef(false)
@@ -171,6 +181,8 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
     setIndex(0)
     setVerdict(null)
     setContinued(false)
+    setRefreshing(false)
+    setRetryFailed(false)
     setLoad(p ? { status: 'ready', plan: p } : { status: 'none' })
   }, [])
 
@@ -185,11 +197,22 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
   }, [plan, reset])
 
   const newNumbers = () => {
+    if (refreshing) return
     if (load.status === 'ready') for (const it of load.plan.items) shown.current.add(refFor(it))
-    setLoad({ status: 'loading' })
-    plan()
-      .then((p) => live.current && reset(p))
-      .catch(() => live.current && reset(null))
+    setRefreshing(true)
+    setRetryFailed(false)
+    const landed = (p: TicketPlan | null) => {
+      if (!live.current) return
+      if (p) {
+        setRetried(true)
+        reset(p)
+      } else {
+        // keep the verdict and its buttons: swapping them for the fallback would drop focus and the way to try again
+        setRefreshing(false)
+        setRetryFailed(true)
+      }
+    }
+    plan().then(landed).catch(() => landed(null))
   }
 
   const finish = (p: TicketPlan) => {
@@ -248,7 +271,7 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
         item={p.items[index]}
         {...(itemSeeds[index] === undefined ? {} : { seed: itemSeeds[index] })}
         eyebrow={`Item ${index + 1} of ${p.items.length}`}
-        autoFocus={index > 0}
+        autoFocus={index > 0 || retried}
         onResult={(r) => {
           results.current[index] = r
           if (index === last) finish(p)
@@ -262,6 +285,10 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
             plan={p}
             verdict={verdict}
             continued={continued}
+            alreadyDone={alreadyDone}
+            hasTicket={!!lesson.ticket}
+            refreshing={refreshing}
+            retryFailed={retryFailed}
             onNewNumbers={newNumbers}
             onContinue={continueAnyway}
             {...(onClose ? { onClose } : {})}
@@ -272,10 +299,14 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
   )
 }
 
-function Verdict({
+export function Verdict({
   plan,
   verdict,
   continued,
+  alreadyDone = false,
+  hasTicket = true,
+  refreshing = false,
+  retryFailed = false,
   onNewNumbers,
   onContinue,
   onClose,
@@ -283,6 +314,13 @@ function Verdict({
   plan: TicketPlan
   verdict: TicketVerdict
   continued: boolean
+  /** The lesson is already done (review mode): Continue anyway would change nothing, so it is not offered. */
+  alreadyDone?: boolean
+  /** The lesson has an exit ticket at its end; a test-out miss points there only when it does. */
+  hasTicket?: boolean
+  /** New numbers is planning: the buttons stay, so focus stays. */
+  refreshing?: boolean
+  retryFailed?: boolean
   onNewNumbers: () => void
   onContinue: () => void
   onClose?: () => void
@@ -290,6 +328,8 @@ function Verdict({
   const testout = plan.form === 'testout'
   const tally = `${verdict.correct} of ${verdict.of} right`
   const word = NON_MCQ_WORD(plan)
+  // Continue anyway leaves the page's focus on a button that is about to unmount: New numbers takes it first
+  const newRef = useRef<HTMLButtonElement>(null)
   if (verdict.ok) {
     return (
       <div className="space-y-3">
@@ -326,7 +366,7 @@ function Verdict({
       </p>
       {testout ? (
         <>
-          <p className="text-body-sm text-text-2">Nothing is locked: the lesson is open. A new test-out opens tomorrow, and the exit ticket at the end of the lesson is open any time.</p>
+          <p className="text-body-sm text-text-2">Nothing is locked: the lesson is open. A new test-out opens tomorrow, and {hasTicket ? 'the exit ticket at the end of the lesson' : "the lesson's checkpoint"} is open any time.</p>
           {onClose && (
             <button type="button" onClick={onClose} className={BUTTON}>
               Read the lesson
@@ -337,19 +377,30 @@ function Verdict({
         <>
           {continued ? (
             <p className="text-body-sm text-text-2">Marked as read, ticket not passed. The ticket stays here, so you can pass it later.</p>
+          ) : alreadyDone ? (
+            <p className="text-body-sm text-text-2">Nothing is locked, and the lesson stays done. Try fresh items whenever you like.</p>
           ) : (
             <p className="text-body-sm text-text-2">Nothing is locked. Try fresh items, or carry on and come back to this ticket later.</p>
           )}
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={onNewNumbers} className={BUTTON}>
+            <button ref={newRef} type="button" aria-disabled={refreshing} onClick={onNewNumbers} className={cn(BUTTON, refreshing && 'opacity-60')}>
               New numbers
             </button>
-            {!continued && (
-              <button type="button" onClick={onContinue} className={BUTTON}>
+            {!continued && !alreadyDone && (
+              <button
+                type="button"
+                onClick={() => {
+                  newRef.current?.focus()
+                  onContinue()
+                }}
+                className={BUTTON}
+              >
                 Continue anyway
               </button>
             )}
           </div>
+          {refreshing && <p className="text-body-sm text-text-2">Preparing new items.</p>}
+          {retryFailed && <p className="text-body-sm text-danger">New items could not be prepared. Try again.</p>}
         </>
       )}
     </div>

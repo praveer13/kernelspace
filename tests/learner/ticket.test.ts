@@ -5,6 +5,10 @@
  * and to the cards.
  */
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { Verdict } from '../../src/components/learner/ExitTicket'
+import TestOut from '../../src/components/learner/TestOut'
 import { KCS, kcById } from '../../src/data/kc'
 import type { Lesson, QuizBlockData } from '../../src/data/lessons/types'
 import { loadFamily } from '../../src/lib/items/registry'
@@ -255,12 +259,11 @@ describe('planTicket: retries', () => {
   })
 
   test('a miss never closes the way: a retry always plans, however often it is asked', () => {
-    let events = attempted({ 0: false, 1: false })
+    const events = attempted({ 0: false, 1: false })
     const avoid = new Set<string>()
     for (let seed = 1; seed <= 6; seed++) {
       const plan = mustPlan(planTicket(lesson, content(NO_POOL), events, seed, { avoid }))
       for (const r of refs(plan)) avoid.add(r)
-      events = [...events]
     }
   })
 })
@@ -439,5 +442,75 @@ describe('through the façade', () => {
       expect(c.origin).toBe('testout')
       expect(c.confirmDay).toBeDefined()
     }
+  })
+})
+
+/* ------------------------------ what a miss offers ------------------------------ */
+
+describe('the verdict on a miss', () => {
+  const missed = (form: 'ticket' | 'spiral' | 'testout', extra: Partial<Parameters<typeof Verdict>[0]> = {}) => {
+    const lesson = lessonOf('t0.l1', T0_L1, 5, 2)
+    const base = mustPlan(planTicket(lesson, content(NO_POOL), [], 3, { form: form === 'testout' ? 'testout' : 'ticket' }))
+    // the Verdict reads only the form, the items and the rule: a spiral plan's planning is covered above
+    const plan: TicketPlan = form === 'spiral' ? { ...base, form, passRule: SPIRAL_RULE } : base
+    return renderToStaticMarkup(createElement(Verdict, { plan, verdict: judgeTicket(plan, plan.items.map(() => false)), continued: false, onNewNumbers: () => {}, onContinue: () => {}, onClose: () => {}, ...extra }))
+  }
+
+  test('a ticket miss offers New numbers and Continue anyway', () => {
+    const html = missed('ticket')
+    expect(html).toContain('New numbers')
+    expect(html).toContain('Continue anyway')
+    expect(html).toContain('Nothing is locked')
+  })
+
+  test('a spiral miss offers both too', () => {
+    const html = missed('spiral')
+    expect(html).toContain('New numbers')
+    expect(html).toContain('Continue anyway')
+  })
+
+  test('a test-out miss offers the lesson, not a retry', () => {
+    const html = missed('testout')
+    expect(html).toContain('Read the lesson')
+    expect(html).not.toContain('New numbers')
+    expect(html).not.toContain('Continue anyway')
+    expect(html).toContain('exit ticket at the end of the lesson')
+    expect(missed('testout', { hasTicket: false })).toContain('lesson&#x27;s checkpoint')
+    expect(missed('testout', { hasTicket: false })).not.toContain('exit ticket')
+  })
+
+  test('review of a done lesson keeps New numbers and drops Continue anyway', () => {
+    const html = missed('ticket', { alreadyDone: true })
+    expect(html).toContain('New numbers')
+    expect(html).not.toContain('Continue anyway')
+    expect(html).toContain('the lesson stays done')
+  })
+
+  test('after Continue anyway the message says read and the button is gone', () => {
+    const html = missed('ticket', { continued: true })
+    expect(html).toContain('Marked as read, ticket not passed')
+    expect(html).toContain('New numbers')
+    expect(html).not.toContain('Continue anyway')
+  })
+
+  test('while New numbers plans, the button stays and says why', () => {
+    const html = missed('ticket', { refreshing: true })
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('Preparing new items.')
+  })
+
+  test('a retry that cannot plan says so and keeps both buttons', () => {
+    const html = missed('ticket', { retryFailed: true })
+    expect(html).toContain('could not be prepared')
+    expect(html).toContain('Continue anyway')
+  })
+})
+
+describe('TestOut before the ledger has been read', () => {
+  test('the button is aria-disabled and a status line says why', () => {
+    const html = renderToStaticMarkup(createElement(TestOut, { lesson: lessonOf('t0.l1', T0_L1, 5, 2) }))
+    expect(html).toContain('Test out')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('role="status"')
   })
 })
