@@ -11,7 +11,9 @@ import {
   gradeAct3Doc,
   gradeIncidentCall,
   incidentLedgerFrom,
+  incidentMisses,
   HW_MENU,
+  INCIDENT_CLOSED_NOTE,
   INCIDENTS,
   seedLabel,
   type Act2Choice,
@@ -92,7 +94,7 @@ function ResultPanel({ result }: { result: ActResult }) {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-4 rounded-md border p-4', result.pass ? 'border-accent/50 bg-accent/10' : result.practice ? 'border-line bg-surface-2' : 'border-amber/50 bg-amber/5')}>
       <p className={cn('font-mono text-sm', result.pass ? 'text-accent' : result.practice ? 'text-text-2' : 'text-amber')}>
-        {result.pass ? 'PASS' : result.practice ? 'PRACTICE' : 'NOT YET'} — {result.headline}
+        {result.pass ? 'PASS' : result.practice ? 'PRACTICE' : result.closed ? 'CLOSED' : 'NOT YET'} — {result.headline}
       </p>
       <p className="mt-1 text-body-sm text-text-2">{result.detail}</p>
       <div className="mt-3 grid gap-x-6 gap-y-1 font-mono text-[11px] text-text-2 sm:grid-cols-2">
@@ -481,6 +483,7 @@ function ActIncident() {
   const stored = useProgress((s) => s.fleetWeek.measurementEvidence?.incident)
   const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
   const ledger = useMemo(() => incidentLedgerFrom(stored), [stored])
+  const missed = incidentMisses(ledger)
   const [call, setCall] = useState<IncidentCall | null>(null)
   const [seed, setSeed] = useState(freshSeed)
   const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
@@ -529,7 +532,8 @@ function ActIncident() {
         goodput, and cost. The incident sparklines use those timing events plus pressure counters;
         identify the first metric that moves, not the loudest symptom at the end. Only your first call
         on each incident counts toward the act and its XP; the answer is revealed after every call, so
-        any later call on the same incident is practice.
+        any later call on the same incident is practice. The act needs all three incidents right on the
+        first call, so a missed first call closes it until fresh incidents arrive in a later update.
       </p>
       <div className="flex flex-wrap gap-2 font-mono text-[12px]">
         {INCIDENTS.map((d, i) => (
@@ -538,6 +542,11 @@ function ActIncident() {
           </button>
         ))}
       </div>
+      {missed > 0 && (
+        <p role="status" className="mt-3 max-w-3xl rounded-md border border-amber/50 bg-amber/5 px-3.5 py-2.5 text-body-sm text-text-2">
+          {INCIDENT_CLOSED_NOTE}
+        </p>
+      )}
       {running && <p className="mt-3 font-mono text-[12px] text-text-3"><Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />loading telemetry…</p>}
       <ActError message={error} />
       {incident && (
