@@ -22,6 +22,11 @@ export interface QuizQuestion {
    * right, or which misconception it encodes and why it is wrong. Shown after submit.
    */
   why?: string[]
+  /**
+   * V4 (Wave 1, docs/specs/wave-1.md §4.5): the KC ids this item assesses, 1-3, primary first.
+   * verify-kc requires them in T0-T2 and R. Writers copy them into `data.kcs` on the item event.
+   */
+  kcs?: string[]
 }
 
 interface QuizBlockProps {

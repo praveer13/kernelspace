@@ -47,9 +47,41 @@ export type FleetActRef = `fw:${string}`
 export type CapstoneRef = `cap:${string}`
 /** `ach:<achievementId>` */
 export type AchievementRef = `ach:${string}`
-/** `erratum:<erratumId>` (a change card was acknowledged) or `screen:<screenId>` (a one-time screen was seen). */
-export type AckRef = `erratum:${string}` | `screen:${string}`
-export type ItemRef = QuizItemRef | CardItemRef | BootRef
+/*
+ * Wave 1 refs (docs/specs/wave-1.md §3.2). Types only: the runtime grammar (refs.ts) and the codec's
+ * allow-lists accept them from task B0 on. No writer may use one before B0 merges, or the outbox
+ * flush would drop its events as invalid.
+ */
+/** A generated item, `gen:<family>/<variant>`; the seed is on the event. */
+export type GenItemRef = `gen:${string}/${string}`
+/** A prequestion (P1), `pre:<lessonId>#<i>`. */
+export type PrequestionRef = `pre:${string}#${number}`
+/** A diagram prediction (DiagramBlock.predictAt), `dia:<lessonId>#<blockIndex>`. */
+export type DiagramPredictRef = `dia:${string}#${number}`
+/** A self-checked constructed response, `cr:<lessonId>#<i>`. */
+export type ConstructedRef = `cr:${string}#${number}`
+/** An authored item outside a lesson checkpoint (placement anchors, spiral items), `item:<id>`. */
+export type AuthoredItemRef = `item:${string}`
+/** `play:<playId>` (W1). */
+export type PlayRef = `play:${string}`
+/** `prove:<labId>` (H4). */
+export type ProveRef = `prove:${string}`
+/** A hint rung opened (H3), `hint:<labId>/<checkId>#<rung>`. A trace, never credit. */
+export type HintRef = `hint:${string}`
+/** The placement walk finished (`complete placement`). */
+export type PlacementRef = 'placement'
+
+/** `erratum:<erratumId>` (a change card was acknowledged), `screen:<screenId>` (a one-time screen was seen) or a hint rung. */
+export type AckRef = `erratum:${string}` | `screen:${string}` | HintRef
+export type ItemRef =
+  | QuizItemRef
+  | CardItemRef
+  | BootRef
+  | GenItemRef
+  | PrequestionRef
+  | DiagramPredictRef
+  | ConstructedRef
+  | AuthoredItemRef
 
 export type Ref =
   | LessonRef
@@ -62,6 +94,14 @@ export type Ref =
   | CapstoneRef
   | AchievementRef
   | AckRef
+  | GenItemRef
+  | PrequestionRef
+  | DiagramPredictRef
+  | ConstructedRef
+  | AuthoredItemRef
+  | PlayRef
+  | ProveRef
+  | PlacementRef
 
 /* ------------------------------------------------------------------ */
 /* Provenance (V6) and confidence (V2)                                 */
@@ -114,9 +154,30 @@ interface Graded {
   wasmSha256?: string
 }
 
+/**
+ * Surface that served an item. Wave 0b: quiz, boot, card, cold. Wave 1 (spec §3.2): today (a Today
+ * session), ticket (exit ticket or spiral checkpoint), testout, placement, pre (prequestion),
+ * diagram (predictAt), practice ("new numbers" outside Today).
+ */
+export type ItemSrc =
+  | 'quiz'
+  | 'boot'
+  | 'card'
+  | 'cold'
+  | 'today'
+  | 'ticket'
+  | 'testout'
+  | 'placement'
+  | 'pre'
+  | 'diagram'
+  | 'practice'
+
+/** Exit-ticket shapes (V5). A `quiz` event with `data.form` set is a ticket, spiral or test-out summary. */
+export type TicketForm = 'ticket' | 'spiral' | 'testout'
+
 export interface ItemData {
   /** Surface that served the item. */
-  src: 'quiz' | 'boot' | 'card' | 'cold'
+  src: ItemSrc
   /** Chosen option(s) by AUTHORED index (MCQ). */
   pick?: number[]
   /** Numeric answer (numeric items). */
@@ -127,6 +188,36 @@ export interface ItemData {
   lessonId?: string
   /** Probes only: whole days since the learner last met this lesson; absent when unknown. */
   sinceDays?: number
+
+  /* ---- Wave 1 (spec §3.2); every field optional, all JSON-safe ---- */
+  /** KCs the item was tagged with at write time (read-time precedence: spec §4.6). */
+  kcs?: string[]
+  /** Generated choice items: the picked option ids. */
+  picks?: string[]
+  /** Generator level (0-3) and variant. */
+  level?: 0 | 1 | 2 | 3
+  variant?: string
+  /** The unit the learner answered in. */
+  unit?: string
+  /** The learner's 90 % interval (estimates) and whether it caught the truth. */
+  lo?: number
+  hi?: number
+  hit?: boolean
+  /** The truth the response was graded against (numeric, estimate). */
+  truth?: number
+  /** Misconception id from a lure or a ratio diagnosis, e.g. `kv.priced-fp16`. */
+  miss?: string
+  /** Constructed responses: indices of the three ideas the learner ticked (self-checked). */
+  ideas?: number[]
+  /** Nominal seconds (XP and session sizing, spec §8.4). */
+  nsec?: number
+  /** Position in a Today session or ticket, and its length. */
+  slot?: number
+  of?: number
+  /** Tickets: which form served the item. */
+  form?: TicketForm
+  /** Today: why the composer chose the item (spec §6.3). */
+  reason?: 'priority' | 'threshold' | 'due' | 'confirm' | 'probe' | 'extra'
 }
 
 /** One response to one item (quiz question, Boot step, change-card item). */
@@ -141,25 +232,75 @@ export interface ProbeEvent extends Envelope<'probe', ItemRef>, Graded {
   data: ItemData
 }
 
-/** One checkpoint submission: `score` = fraction correct, `ok` = score >= 0.8. */
+/**
+ * One checkpoint submission: `score` = fraction correct, `ok` = score >= 0.8. Wave 1 (V5): with
+ * `data.form` set it is an exit ticket, spiral checkpoint or test-out summary, and `ok` is that
+ * form's pass rule (spec §8.1). Any `ok` quiz event passes the lesson (fact `quiz-pass:<id>`).
+ */
 export interface QuizEvent extends Envelope<'quiz', LessonRef>, Graded {
-  data?: { grp?: string; n?: number }
+  data?: { grp?: string; n?: number; form?: TicketForm; nonMcqOk?: boolean; kcs?: string[] }
 }
 
-/** A committed numeric prediction (Boot's guess; P1 later). */
+/** A committed numeric prediction (Boot's guess; P1 prequestions, diagram and sim predictions in Wave 1). */
 export interface PredictEvent extends Envelope<'predict', ItemRef>, Graded {
   rev: string
-  data: { value: number; unit: string; truth: number; src: 'boot' | 'lesson' }
+  data: {
+    value: number
+    unit: string
+    truth: number
+    src: 'boot' | 'lesson' | 'pre' | 'diagram' | 'placement'
+    kcs?: string[]
+    /** The learner's 90 % interval, when asked. */
+    lo?: number
+    hi?: number
+  }
 }
 
-export interface SimTaskEvent extends Envelope<'sim-task', SimRef>, Graded {}
+/** P2 (Wave 1): an outcome-graded sim task, predict → run → explain (spec §10.3). */
+export interface SimOutcomeData {
+  v: 2
+  outcome: true
+  predict: { value?: number; choice?: string; unit?: string }
+  /** What the sim measured (the Observation the task names). */
+  actual: number | string
+  logErr?: number
+  /** The learner's one-line explanation (≤ 280 characters). It stays in the learner's own ledger. */
+  explain?: string
+  /** Indices of the three explanation ideas the learner ticked. */
+  ideas?: number[]
+  /** Completed the prediction in phone mode against the canonical outcome (the hands-on run is queued). */
+  phone?: boolean
+  kcs?: string[]
+}
+
+export interface SimTaskEvent extends Envelope<'sim-task', SimRef>, Graded {
+  /** Absent on legacy (state-detected) tasks; SimOutcomeData on outcome-graded ones. */
+  data?: SimOutcomeData
+}
+
+/** F1 (Wave 1): one check of a v2 run. */
+export interface LabCheckDetail {
+  id: string
+  status: 'pass' | 'fail' | 'trap' | 'timeout'
+  seed?: number
+  fresh?: boolean
+}
 
 /**
  * One lab run (`lab:<labId>`): `passed` = required check ids that passed in this run, `total` = required
  * checks, `ok` = the lab is done after this run (cumulative, as recordLabResult computes it today).
+ * Wave 1 adds the v2 fields: the ABI, per-check detail and whether the seeds were drawn at grade time.
  */
 export interface LabCheckEvent extends Envelope<'lab-check', LabRef>, Graded {
-  data: { passed: string[]; total?: number }
+  data: {
+    passed: string[]
+    total?: number
+    abi?: 1 | 2
+    checks?: LabCheckDetail[]
+    seeds?: 'fresh' | 'default'
+    /** F2: the highest stage whose checks are all green after this run. */
+    stage?: number
+  }
 }
 
 export interface FleetActEvent extends Envelope<'fleet-act', FleetActRef>, Graded {}
@@ -168,15 +309,57 @@ export interface CapstoneStepEvent extends Envelope<'capstone-step', CapstoneRef
   data?: { index?: number }
 }
 
-/** Kinds reserved for later waves (W1 play, W3 incident, W4 fleet-run, H4 prove). No writers in Wave 0b. */
-export interface ReservedGradedEvent extends Envelope<'play' | 'incident' | 'fleet-run' | 'prove', Ref>, Graded {
+/** W1 (Wave 1): one play, or one Compose result (spec §11.5). */
+export interface PlayData {
+  phase: 'play' | 'compose'
+  /** Turns the learner took (play) or specs tried (compose). */
+  turns: number
+  survived: number
+  ghostSurvived: number
+  /** The op the debrief stopped at, if the runs diverged. */
+  divergenceOp?: number
+  skipped?: boolean
+  /** Compose: the dials, and whether they reproduce the reference exactly. */
+  spec?: { fit: string; coalesce: string; minSplit: number; classes: string }
+  equivalent?: boolean
+  kcs?: string[]
+}
+
+export interface PlayEvent extends Envelope<'play', PlayRef>, Graded {
+  data: PlayData
+}
+
+/** H4 v1 (Wave 1): a self-graded Prove-it attempt, practice weight only. */
+export interface ProveData {
+  v: 1
+  /** Question ids served (3 of the lab's pool). */
+  qids: string[]
+  /** Self-grade per question, 1 = "I got it", parallel to `qids`. */
+  self: number[]
+  kcs?: string[]
+}
+
+export interface ProveEvent extends Envelope<'prove', ProveRef>, Graded {
+  data: ProveData
+}
+
+/** Kinds reserved for later waves (W3 incident, W4 fleet-run). No writers yet. */
+export interface ReservedGradedEvent extends Envelope<'incident' | 'fleet-run', Ref>, Graded {
   data?: JsonObject
 }
 
 export type VisitEvent = Envelope<'visit', LessonRef | SimRef | BootRef>
 
-/** A lesson marked complete (the click), or a non-lesson flow finished (`boot`). Never credit. */
-export interface CompleteEvent extends Envelope<'complete', LessonRef | BootRef> {
+/**
+ * How a lesson was finished (V5): `ticket`/`testout` accompany a passing quiz event; `read` is
+ * "continue anyway" (read, not passed). A checkpoint pass needs no complete event: the passing
+ * quiz event is the evidence (spec §8.3).
+ */
+export type LessonCompleteVia = 'ticket' | 'testout' | 'read'
+
+/** A lesson marked complete (the click), or a non-lesson flow finished (`boot`, `placement`). Never credit. */
+export interface CompleteEvent extends Envelope<'complete', LessonRef | BootRef | PlacementRef> {
+  /** Lessons in Wave 1: `{via, grp?}`. A Wave 0b event without `via` reads as `read` (spec §8.7). */
   data?: JsonObject
 }
 
@@ -197,6 +380,8 @@ export type LedgerEvent =
   | LabCheckEvent
   | FleetActEvent
   | CapstoneStepEvent
+  | PlayEvent
+  | ProveEvent
   | ReservedGradedEvent
   | VisitEvent
   | CompleteEvent
@@ -235,6 +420,15 @@ export type WorkingKey =
   | 'boot:week'
   | 'boot:value'
   | 'boot:install-dismissed'
+  /* Wave 1 (spec §3.5); the codec accepts them from task B0 on */
+  /** PlacementResult (src/lib/learner/types.ts). */
+  | 'placement:result'
+  /** Hands-on sim tasks queued from phone mode: `{simId, taskId, at}[]`. */
+  | 'queue:laptop'
+  /** The last delta handoff export: `{at, events}`. */
+  | 'handoff:last'
+  /** Today preferences: `{phoneMode?: boolean, sessionMinutes?: number}`. */
+  | 'today:prefs'
 
 export interface WorkingRecord {
   key: WorkingKey
@@ -595,6 +789,88 @@ export interface LedgerFacadeActions {
   completeRef(ref: BootRef, data?: JsonObject): void
   recordVisit(ref: LessonRef | SimRef | BootRef): void
   setWorking(key: WorkingKey, value: Json): void
+}
+
+/* ---- Wave 1 façade additions (spec §3.3). Task B0 adds these to ProgressState. ---- */
+
+/** One exit ticket, spiral checkpoint or test-out: its item responses plus the verdict of its pass rule. */
+export interface TicketAttempt {
+  lessonId: string
+  form: TicketForm
+  /** The ticket's seed (item choice and generated-item seeds derive from it). */
+  seed: number
+  ms?: number
+  /** In display order. Each response's `data.src` is `ticket` or `testout`. */
+  responses: Omit<ItemResponse, 'kind'>[]
+  /** The pass rule's verdict (src/lib/learner/ticket.ts): the quiz event's `ok`. */
+  ok: boolean
+  nonMcqOk: boolean
+}
+
+export interface SimOutcome {
+  taskId: string
+  score: number
+  ok: boolean
+  conf?: Confidence
+  ms?: number
+  data: SimOutcomeData
+}
+
+/** A Forge run reported through ABI v1 or v2 (F1). */
+export interface LabRunV2 {
+  labId: string
+  /** Required check ids that passed in this run. */
+  passed: string[]
+  /** Required checks. */
+  total: number
+  abi: 1 | 2
+  checks: LabCheckDetail[]
+  seeds: 'fresh' | 'default'
+  /** `unseen` only when `seeds` is fresh and every required check passed or had passed on fresh seeds (spec §12.4). */
+  provenance: Extract<Provenance, 'lab-green' | 'unseen' | 'assisted'>
+  wasmSha256?: string
+  stage?: number
+  ms?: number
+}
+
+export interface PlayResult {
+  playId: string
+  score: number
+  /** The debrief was reached (play) or the spec reproduced the reference (compose). */
+  ok: boolean
+  seed: number
+  provenance: Extract<Provenance, 'practice' | 'unseen'>
+  ms?: number
+  data: PlayData
+}
+
+export interface ProveResult {
+  labId: string
+  /** Fraction self-graded "got it". */
+  score: number
+  /** All questions answered. */
+  ok: boolean
+  ms?: number
+  data: ProveData
+}
+
+/**
+ * New actions. Kept apart from LedgerFacadeActions until B0 implements them, so this commit
+ * changes no runtime contract; B0 merges them into ProgressState.
+ */
+export interface LedgerFacadeActionsV31 {
+  /** n `item` events + one `quiz` summary (`data.form`); on `ok`, also `complete lesson:<id>` with `via`. */
+  recordTicket(attempt: TicketAttempt): void
+  /** "Continue anyway" and the T3-T7/R Mark complete: `complete lesson:<id>` with `{via: 'read'}`. */
+  completeLesson(lessonId: string, via: Extract<LessonCompleteVia, 'read'>): void
+  /** One outcome-graded `sim-task` event. Idempotent per (simId, taskId) once `ok`. */
+  recordSimOutcome(simId: string, outcome: SimOutcome): void
+  /** One `lab-check` event with v2 detail. recordLabResult stays for v1 callers. */
+  recordLabRun(run: LabRunV2): void
+  recordPlay(result: PlayResult): void
+  recordProve(result: ProveResult): void
+  /** `complete placement` plus the working record `placement:result` (a JSON-safe PlacementResult). */
+  completePlacement(result: JsonObject): void
 }
 
 export interface EventFilter {
