@@ -268,7 +268,7 @@ const accessResult = (
 
 type MemoryPath = 'auto' | 'shared' | 'hbm'
 
-/** Effective bandwidth tier for the working-set probe. Explicit paths support the 4 KB comparison. */
+/** Effective bandwidth tier for the working-set probe. Explicit paths support the 4 KiB comparison. */
 const tierBandwidth = (
   wsKb: number,
   pcie: boolean,
@@ -1578,7 +1578,7 @@ export default function RooflineSim() {
                 onChange={(v) => setWorkingSetKb(2 ** v)}
               />
               <div>
-                <p className="mb-1.5 font-mono text-[11px] text-text-2">4 KB data path</p>
+                <p className="mb-1.5 font-mono text-[11px] text-text-2">4 KiB data path</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(['auto', 'shared', 'hbm'] as const).map((path) => (
                     <ChipButton

@@ -865,3 +865,74 @@ export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null
   }
   return { ...def, seed: seeds.seed, telemetry }
 }
+
+/**
+ * Act IV credits only a learner's first call on each incident. The WhyList reveals the right
+ * cause and mitigation after any call and the same incident can be re-opened, so a later call
+ * proves recall of that reveal, not diagnosis from the telemetry. Later calls are practice:
+ * graded and explained, but never counted toward the act or its XP.
+ */
+export interface IncidentLedger {
+  /** Incident ids with at least one call (the first call is the only one that counts). */
+  attempted: string[]
+  /** Incident ids whose first call named the right cause and the right mitigation. */
+  credited: string[]
+}
+
+export const EMPTY_INCIDENT_LEDGER: IncidentLedger = { attempted: [], credited: [] }
+
+export function gradeIncidentCall(
+  ledger: IncidentLedger,
+  incident: { id: string; title: string },
+  causeOk: boolean,
+  mitigationOk: boolean,
+  total: number = INCIDENTS.length,
+): { ledger: IncidentLedger; practice: boolean; result: ActResult } {
+  const ok = causeOk && mitigationOk
+  const practice = ledger.attempted.includes(incident.id)
+  const next: IncidentLedger = practice
+    ? ledger
+    : {
+        attempted: [...ledger.attempted, incident.id],
+        credited: ok ? [...ledger.credited, incident.id] : ledger.credited,
+      }
+  const name = incident.title.split('—')[0].trim()
+  const missed = next.attempted.length - next.credited.length
+  const metrics: [string, string][] = [
+    ['credited', `${next.credited.length}/${total}`],
+    ['cause', causeOk ? 'correct' : 'wrong'],
+    ['mitigation', mitigationOk ? 'correct' : 'wrong'],
+  ]
+  const verdict = `cause ${causeOk ? '✓' : '✗'} · mitigation ${mitigationOk ? '✓' : '✗'}`
+  if (practice) {
+    return {
+      ledger: next,
+      practice,
+      result: {
+        pass: false,
+        score: next.credited.length / total,
+        headline: ok ? `practice call — ${name} diagnosed, not credited` : 'practice call — wrong again',
+        detail: `${verdict}. Only the first call on an incident counts toward the act and XP; this one was practice.`,
+        metrics,
+      },
+    }
+  }
+  const allDone = next.credited.length >= total
+  const left = total - next.attempted.length
+  let detail: string
+  if (allDone) detail = 'all three incidents diagnosed with the right fix on the first call. The Planner would hire you.'
+  else if (!ok) detail = `${verdict}. This incident is now practice only: the right answer is shown below, and a later call here will not count toward the act or XP.`
+  else if (left > 0) detail = `${left} incident(s) left to call for the first time.`
+  else detail = `every incident has had its first call, but ${missed} missed it, so the act is not credited this session. Further calls are practice.`
+  return {
+    ledger: next,
+    practice,
+    result: {
+      pass: allDone,
+      score: next.credited.length / total,
+      headline: ok ? `correct — ${name} diagnosed` : 'wrong call — look at the telemetry again',
+      detail,
+      metrics,
+    },
+  }
+}

@@ -85,7 +85,7 @@ const SIM_CARDS: SimCardDef[] = [
   },
   {
     id: 'sim-kv', num: 'SIM-07', title: 'KV-Cache Calculator',
-    hook: 'Where did 40 GB of GPU memory go? Do the math.',
+    hook: 'Where did 43 GB of GPU memory go? Do the math.',
     track: 'T5', trackColor: '#FB7185', difficulty: 1,
     metaId: 'kv-calc', preview: 'kv',
     concepts: 'kv cache hbm memory context length batch gqa oom',

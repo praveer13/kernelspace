@@ -7,8 +7,10 @@ import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
   ACT3_COST_LABEL,
+  EMPTY_INCIDENT_LEDGER,
   gradeMeasurementSubmission,
   gradeAct3Doc,
+  gradeIncidentCall,
   HW_MENU,
   INCIDENTS,
   seedLabel,
@@ -474,7 +476,8 @@ function ActIncident() {
   // cause / mitigation are authored indices; the display order is reshuffled per attempt
   const [cause, setCause] = useState<number | null>(null)
   const [mitigation, setMitigation] = useState<number | null>(null)
-  const [solved, setSolved] = useState<string[]>([])
+  // only the first call on each incident counts; the act and its XP need all of them right on that call
+  const [ledger, setLedger] = useState(EMPTY_INCIDENT_LEDGER)
   const [call, setCall] = useState<IncidentCall | null>(null)
   const [seed, setSeed] = useState(freshSeed)
   const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
@@ -506,43 +509,29 @@ function ActIncident() {
     if (!incident || cause === null || mitigation === null) return
     const causeOk = incident.causes[cause].correct
     const mitOk = incident.mitigations[mitigation].correct
-    const ok = causeOk && mitOk
-    const newSolved = ok && !solved.includes(incident.id) ? [...solved, incident.id] : solved
-    setSolved(newSolved)
+    const graded = gradeIncidentCall(ledger, incident, causeOk, mitOk)
+    setLedger(graded.ledger)
     setCall({ causes: incident.causes, mitigations: incident.mitigations, cause, mitigation })
     // every retry gets a fresh order and a clean selection, so positions can't be memorised
     setSeed(freshSeed())
     setCause(null)
     setMitigation(null)
-    const allDone = newSolved.length >= INCIDENTS.length
-    finish({
-      pass: allDone,
-      score: newSolved.length / INCIDENTS.length,
-      headline: ok ? `correct — ${incident.title.split('—')[0].trim()} diagnosed` : 'wrong call — look at the telemetry again',
-      detail: ok
-        ? allDone
-          ? 'all three incidents diagnosed with the right fix. The Planner would hire you.'
-          : `${INCIDENTS.length - newSolved.length} incident(s) remain.`
-        : `cause ${causeOk ? '✓' : '✗'} · mitigation ${mitOk ? '✓' : '✗'} — re-read the briefing and the curves.`,
-      metrics: [
-        ['solved', `${newSolved.length}/${INCIDENTS.length}`],
-        ['cause', causeOk ? 'correct' : 'wrong'],
-        ['mitigation', mitOk ? 'correct' : 'wrong'],
-      ],
-    })
-  }, [incident, cause, mitigation, solved, finish])
+    finish(graded.result)
+  }, [incident, cause, mitigation, ledger, finish])
 
   return (
     <div>
       <p className="mb-3 max-w-3xl text-body-sm text-text-2">
         Diagnose from the same surface you instrumented: TTFT, TPOT, queue delay, KV state,
         goodput, and cost. The incident sparklines use those timing events plus pressure counters;
-        identify the first metric that moves, not the loudest symptom at the end.
+        identify the first metric that moves, not the loudest symptom at the end. Only your first call
+        on each incident counts toward the act and its XP; the answer is revealed after every call, so
+        any later call on the same incident is practice.
       </p>
       <div className="flex flex-wrap gap-2 font-mono text-[12px]">
         {INCIDENTS.map((d, i) => (
           <button key={d.id} onClick={() => void open(i)} className={cn('rounded border px-3 py-1.5', idx === i ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>
-            {solved.includes(d.id) ? '✓ ' : ''}{d.title.split('—')[0].trim()}
+            {ledger.credited.includes(d.id) ? '✓ ' : ledger.attempted.includes(d.id) ? '○ ' : ''}{d.title.split('—')[0].trim()}
           </button>
         ))}
       </div>
@@ -571,7 +560,7 @@ function ActIncident() {
               </div>
             </div>
           </div>
-          <RunButton running={false} label="call it" onClick={submit} disabled={cause === null || mitigation === null} />
+          <RunButton running={false} label={ledger.attempted.includes(incident.id) ? 'practice call (not credited)' : 'call it'} onClick={submit} disabled={cause === null || mitigation === null} />
         </div>
       )}
       {result && <ResultPanel result={result} />}
