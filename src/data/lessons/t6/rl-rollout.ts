@@ -47,10 +47,10 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
         {
           q: 'Rollout dominates RL wall-clock because…',
           options: [
-            'Reward scoring is the slow step, since a reward model must read every token of every completion and costs more than generating it',
-            'Each update needs thousands of long generations (k samples per prompt, 10k–100k-token chains), so decode volume dwarfs it',
-            'Weight sync takes most of each iteration, because hundreds of GB must be broadcast to every engine before generation can restart',
-            'Rollout engines run with tiny batches to keep policy versions consistent, so they cannot use continuous batching and sit mostly idle',
+            'Reward scoring is the slow step, with a reward model reading each token of each completion and costing more than generation',
+            'Each update needs thousands of long generations, with many samples per prompt and long chains making decode dwarf the rest',
+            'Weight sync takes most of each iteration, with hundreds of gigabytes broadcast to each engine before generation can restart',
+            'Rollout engines run with tiny batches to keep policy versions consistent, leaving them unable to use continuous batching',
           ],
           correct: [1],
           explanation:
@@ -65,10 +65,10 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
         {
           q: 'The hard rule of weight sync is…',
           options: [
-            'Engines should reload from shared storage on a nightly schedule, because RL tolerates a rollout policy that lags the trainer by hours',
-            'A half-updated engine must never serve, because mixed-version weights yield off-policy rollouts that silently corrupt the gradient',
-            'Weights must be broadcast over NCCL with every engine paused, because streaming layers during decode is never safe',
-            'Mixed versions are tolerable, because gradient clipping absorbs any mismatch between rollout and trainer weights',
+            'Engines reload from shared storage on a nightly schedule, with RL tolerating a rollout policy that lags the trainer by hours',
+            'A half-updated engine must not serve, with mixed weights yielding off-policy rollouts that silently corrupt the gradient',
+            'Weights are broadcast with each engine paused, with layer streaming during decode counted as unsafe',
+            'Mixed versions are tolerable, with gradient clipping absorbing any mismatch between rollout and trainer weights',
           ],
           correct: [1],
           explanation:
@@ -83,10 +83,10 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
         {
           q: 'Partial rollout exists because…',
           options: [
-            'GPUs fail during long generations, so rollouts are checkpointed to disk and replayed from the last saved token after a crash',
-            'Reasoning chains are long and uneven, so saving unfinished ones to resume next step beats restarting them or stalling the batch',
-            'It cuts KV memory by truncating every rollout at a fixed token budget, so the reward is computed on the shortened text for each prompt group',
-            'Reward functions need to score unfinished text, so the verifier runs on partially generated completions at every decoding step of a rollout',
+            'Accelerators fail during long generations, with rollouts checkpointed to disk and replayed from the last saved token after a crash',
+            'Reasoning chains are long and uneven, with unfinished ones saved and resumed next step instead of restarted or stalling the batch',
+            'It cuts cache memory by truncating rollouts at a fixed token budget, with the reward computed on the shortened text',
+            'Reward functions need to score unfinished text, with the verifier running on partial completions at each decoding step',
           ],
           correct: [1],
           explanation:
@@ -101,10 +101,10 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
         {
           q: 'Colocating trainer and rollout workers on the same GPUs wins…',
           options: [
-            'Accuracy, because the policy generating rollouts then shares the exact optimizer state and parameter copy used for the update, with no sync gap',
-            'Utilization: rollout fills training\'s bubbles and vice versa, at the cost of isolation and a harder bin-packing problem for the controller',
-            'Isolation, because a stalled rollout can no longer delay a training step or push it out of memory',
-            'Nothing measurable, because time-slicing GPUs between two workloads costs as much in switching as it saves',
+            'Accuracy, with the rollout policy sharing the exact optimizer state and parameter copy of the update and leaving no sync gap',
+            'Utilization, with rollout filling training bubbles and vice versa at some cost in isolation and a harder packing problem',
+            'Isolation, with a stalled rollout no longer able to delay a training step or push it out of memory',
+            'Nothing measurable, with time-slicing between two workloads costing as much in switching as it saves',
           ],
           correct: [1],
           explanation:

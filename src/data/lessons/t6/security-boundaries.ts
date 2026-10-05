@@ -164,10 +164,10 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
         {
           q: 'Why is a container alone a weak boundary for hostile model-generated code?',
           options: [
-            'Containers cannot enforce memory or CPU limits, so generated code can starve the host',
-            'Its processes still share the host kernel; a microVM adds a hardware-virtualized guest kernel boundary behind it',
-            'A container\'s root user is always root on the host, so any process in it can edit host files directly',
-            'Containers cannot restrict system calls or network access, so only a VM can apply a deny-by-default policy',
+            'Containers cannot enforce memory or processor limits, letting generated code starve the host',
+            'Its processes still share the host kernel, while a microVM adds a hardware-virtualized guest kernel boundary',
+            'A container\'s root user is the same root on the host, letting any process in it edit host files directly',
+            'Containers cannot restrict system calls or network access, leaving a full virtual machine as the sole place for deny-by-default policy',
           ],
           correct: [1],
           explanation:
@@ -182,10 +182,10 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
         {
           q: 'Remote attestation for confidential GPU inference proves primarily that…',
           options: [
-            'The model cannot leak data in its output, because the trusted environment encrypts every token it produces',
-            'Expected measured software and confidential-capable hardware are running before a tenant releases secrets to them',
-            'Every tool call the agent makes is authorized, because attested code only executes actions approved by policy',
-            'Confidential mode adds no measurable overhead, because attestation checks that hardware encryption runs at line rate',
+            'The model cannot leak data in its output, with the trusted environment encrypting each token it produces',
+            'Expected measured software and confidential-capable hardware are running, before a tenant releases secrets to them',
+            'Each tool call the agent makes is authorized, with attested code executing just the actions that policy approves',
+            'Confidential mode adds no measurable overhead, with attestation checking that hardware encryption runs at line rate',
           ],
           correct: [1],
           explanation:
@@ -200,10 +200,10 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
         {
           q: 'How can a prefix cache leak information without exposing KV tensors?',
           options: [
-            'Prompt text is stored in plaintext as the cache key, so anyone able to query the cache can enumerate the keys',
-            'A cache hit and a miss have measurably different latency, creating a membership oracle for guessed prefixes',
-            'Hashed block keys collide across tenants, so a guessed prefix returns another tenant\'s cached completion verbatim',
-            'Shared GPU memory is not zeroed between requests, so a new tenant can read residual KV bytes from the previous one',
+            'Prompt text is stored in plaintext as the cache key, letting anyone who can query the cache enumerate the keys',
+            'A hit and a miss have measurably different latency, creating a membership oracle for guessed prefixes',
+            'Hashed block keys collide across tenants, returning another tenant\'s cached completion verbatim for a guessed prefix',
+            'Shared device memory is not zeroed between requests, letting a new tenant read residual cache bytes from the previous one',
           ],
           correct: [1],
           explanation:
@@ -218,10 +218,10 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
         {
           q: 'A model emits a schema-valid request to transfer money. What authorizes execution?',
           options: [
-            'The JSON grammar, because constrained decoding guarantees the request matches the transfer schema',
-            'The model\'s confidence score, because a high-probability tool call reflects intent the user already approved',
-            'A deterministic broker that checks identity and policy, then mints one narrow, short-lived capability',
-            'The microVM booting successfully, because an isolated sandbox makes any action inside it safe to approve',
+            'The output grammar, with constrained decoding guaranteeing that the request matches the transfer schema',
+            'The model\'s confidence score, with a high-probability tool call reflecting intent the user already approved',
+            'A deterministic broker that checks identity and policy, then mints a narrow short-lived capability',
+            'The microVM booting successfully, with an isolated sandbox making any action inside it safe to approve',
           ],
           correct: [2],
           explanation:
