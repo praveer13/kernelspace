@@ -5,8 +5,9 @@
  * the count of items whose key is strictly the longest option (ratchet against
  * scripts/baselines/verify-items.json), (3) a broken per-attempt shuffle, (4) exported
  * keys piling onto one option id, (5) a shuffled surface that stopped calling shuffledOrder,
- * (6) a malformed per-option `why` (length must equal options, no empty entries) or a missing
- * `why` in a track listed in the baseline's `whyRequired`, (7) more than MAX_SHORTEST_PASSES lessons
+ * (6) a malformed per-option `why` (length must equal options, no empty entries), a missing `why` in a track listed
+ * in the baseline's `whyRequired`, or a `whyRequired` that lacks any of the hard-coded minimum gated set (r, t0 to t7,
+ * fleet-week; the file may add tracks, never drop one), (7) more than MAX_SHORTEST_PASSES lessons
  * in a `whyRequired` track that a blind "always pick the shortest option" strategy passes, (8) in a
  * `whyRequired` track, a length-rank strategy (1st-longest, 2nd-longest, 2nd-shortest, shortest) whose
  * expected lessons passed exceeds MAX_RANK_EXPECTED or that passes any single lesson with probability
@@ -22,8 +23,8 @@
  * probability >= MAX_RANK_LESSON, (13) in a `whyRequired` track, an item whose key / mean-distractor length ratio
  * exceeds MAX_LENGTH_RATIO (PLAN-100X 5.1 V1), (14) the surface-feature blind strategies (see SURFACE_STRATEGIES):
  * for each feature f of characters, words, commas, clause markers (the count of , ; : ( )), parentheses, semicolons,
- * capitalised words, acronyms (tokens of 2+ capitals), digit characters, numbers and absolute words (always, never,
- * only, all, none, every), "pick the option with the most f" and "pick the option with the fewest f" (ties broken
+ * capitalised words, acronyms (tokens of 2+ capitals), digit characters, numbers and absolute or hedge words (always, never,
+ * only, all, none, every, just, alone, solely, merely, whatever), "pick the option with the most f" and "pick the option with the fewest f" (ties broken
  * uniformly), plus "pick the option sharing the most words with the stem", the same restricted to words of 4+
  * letters, and "avoid options containing absolutes": any one passing any `whyRequired` lesson with probability >=
  * MAX_RANK_LESSON, or whose expected passes summed over all gated tracks exceed MAX_SURFACE_AGGREGATE. Act IV also
@@ -36,7 +37,7 @@
  * lesson-pass metrics do not apply to them and their rates are reported separately). Multi-select items cannot be hit by one
  * pick and count as misses. Chance is the mean of 1 / options over the evaluated single-key items.
  * (15) ODD-ONE-OUT, per item: for each binary feature (a reason connective: because, since, so, which means, as a result;
- * a parenthetical; a colon; a semicolon; a digit; an acronym; an absolute word; an enumeration of 2+ commas) the key may be
+ * a parenthetical; a colon; a semicolon; a digit; an acronym; an absolute or hedge word; an enumeration of 2+ commas) the key may be
  * neither the ONLY option with the feature nor the ONLY option without it. One failure per item, naming the file, the item and
  * every feature that isolates the key.
  * (16) OPTIONS-ONLY ADVERSARY: a conditional logit (softmax over the options of one item) on per-option surface features:
@@ -73,6 +74,8 @@ import { exportOrder, shuffledOrder } from '../src/lib/rng'
 const BASELINE_URL = new URL('./baselines/verify-items.json', import.meta.url)
 const PASS_BAR = 0.8 // QuizBlock.tsx: score = correct / total >= 0.8
 const FLEET_TRACK = 'fleet-week'
+/** The baseline file must not be able to switch a gate off: these tracks are gated whatever it says. It may add tracks, never drop one. */
+const MIN_GATED = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', FLEET_TRACK]
 /** In a whyRequired track, at most this many lessons may be passed by always picking the shortest option. */
 const MAX_SHORTEST_PASSES = 1
 /** In a whyRequired track, no length-rank strategy may pass more than this many lessons in expectation... */
@@ -277,7 +280,7 @@ if (updateBaseline) {
   if (baseline && increases.length && !force) {
     failures.push(`ratchet: refusing to update baseline, longest-key count increased (${increases.join(', ')}); pass --force to override`)
   } else {
-    const next: Baseline = { longestKeyByTrack: longestByTrack, whyRequired: baseline?.whyRequired ?? [] }
+    const next: Baseline = { longestKeyByTrack: longestByTrack, whyRequired: baseline?.whyRequired ?? MIN_GATED }
     await writeFile(BASELINE_URL, `${JSON.stringify(next, null, 2)}\n`)
     baselineWritten = true
   }
@@ -290,9 +293,15 @@ if (updateBaseline) {
 /* ------------------------- (2b) why coverage ------------------------- */
 
 const hasWhy = (q: QuizQuestion) => q.why !== undefined
-const whyRequired = baseline?.whyRequired ?? []
+// Creating a baseline from scratch (--update-baseline with no file) starts from the minimum gated set, never from an empty one.
+const whyRequired = baseline?.whyRequired ?? (updateBaseline ? MIN_GATED : [])
 for (const t of whyRequired) {
   if (!trackKeys.includes(t)) failures.push(`why: whyRequired lists unknown track '${t}'`)
+}
+for (const t of MIN_GATED) {
+  if (!whyRequired.includes(t)) {
+    failures.push(`why: scripts/baselines/verify-items.json whyRequired lacks '${t}' (minimum gated set: ${MIN_GATED.join(', ')}); restore it, the gated set only grows`)
+  }
 }
 for (const item of validItems) {
   if (whyRequired.includes(item.track) && !hasWhy(item.q)) {
@@ -502,7 +511,9 @@ const LEXICAL_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] 
 
 /* ---- surface-feature strategies: a family generalising the length and lexical cues above ---- */
 
-const ABSOLUTE = /\b(always|never|only|all|none|every)\b/i
+/** Absolute and hedge words: a distractor that claims too much ("always", "only") or a key that hedges ("just", "alone") both leak the key. */
+const ABSOLUTE_WORDS = ['always', 'never', 'only', 'all', 'none', 'every', 'just', 'alone', 'solely', 'merely', 'whatever']
+const ABSOLUTE = new RegExp(`\\b(${ABSOLUTE_WORDS.join('|')})\\b`, 'i')
 const matchCount = (o: string, re: RegExp) => (o.match(re) ?? []).length
 const tokensOf = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? []
 
@@ -868,7 +879,7 @@ const BINARY_FLAGS: { name: string; has: (option: string) => boolean }[] = [
   { name: 'a semicolon', has: (o) => o.includes(';') },
   { name: 'a digit', has: (o) => /\d/.test(o) },
   { name: 'an acronym', has: (o) => matchCount(o, /(?<![A-Za-z0-9])[A-Z]{2,}[0-9]*(?![A-Za-z])/g) > 0 },
-  { name: 'an absolute word (always, never, only, all, none, every)', has: (o) => ABSOLUTE.test(o) },
+  { name: `an absolute or hedge word (${ABSOLUTE_WORDS.join(', ')})`, has: (o) => ABSOLUTE.test(o) },
   { name: 'an enumeration (2+ commas)', has: (o) => matchCount(o, /,/g) >= 2 },
 ]
 
@@ -1115,7 +1126,7 @@ const cueRows = CUE_STRATEGIES.map((s) => {
   for (const flag of BINARY_FLAGS) {
     const hits = [...oddViolations].filter(([, v]) => v.some((m) => m.endsWith(flag.name)))
     const by = (pool: string) => hits.filter(([i]) => poolOf(i) === pool).length
-    console.log(`  ${flag.name.slice(0, 58).padEnd(60)}${String(hits.length).padStart(4)}  (lessons ${by('lessons')}, fleet-week ${by('fleet-week')}, errata ${by('errata')})`)
+    console.log(`  ${flag.name.slice(0, 98).padEnd(100)}${String(hits.length).padStart(4)}  (lessons ${by('lessons')}, fleet-week ${by('fleet-week')}, errata ${by('errata')})`)
   }
   console.log(`  items with at least one violation: ${oddViolations.size} of ${gatedItems.length}`)
 
