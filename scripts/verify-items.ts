@@ -105,6 +105,8 @@ for (const incident of INCIDENTS) {
         q: `${incident.id} ${kind}`,
         options: list.map((o) => o.label),
         correct: list.flatMap((o, i) => (o.correct ? [i] : [])),
+        // Only when every option carries one; a partial set is a structure error, not a silent skip.
+        ...(list.some((o) => o.why !== undefined) ? { why: list.map((o) => o.why ?? '') } : {}),
       },
       needsExplanation: false,
     })
@@ -478,6 +480,43 @@ console.log(
     .map((a) => `${a.name} ${a.expected.toFixed(2)}`)
     .join('  ')}`,
 )
+
+// Fleet Week Act IV is not a lesson quiz, so the loops above skip it. Its six incident items
+// (cause + mitigation per incident) are checked here the same way, as one pseudo-lesson graded at
+// PASS_BAR, and per incident, where the game needs the cause AND the mitigation right. Gated when
+// the baseline lists 'fleet-week' in whyRequired.
+{
+  const fleetItems = validItems.filter((i) => i.track === FLEET_TRACK)
+  const fleetQs = fleetItems.map((i) => i.q)
+  const fleetGated = whyRequired.includes(FLEET_TRACK)
+  const rankOf = (q: QuizQuestion): string => {
+    const lens = q.options.map(len)
+    const key = lens[q.correct[0]]
+    const longer = lens.filter((l) => l > key).length
+    const shorter = lens.filter((l) => l < key).length
+    return `${longer + 1}${['st', 'nd', 'rd', 'th'][Math.min(longer, 3)]}-longest/${shorter + 1}${['st', 'nd', 'rd', 'th'][Math.min(shorter, 3)]}-shortest`
+  }
+  console.log('')
+  console.log(`fleet-week Act IV (${fleetQs.length} items as one pseudo-lesson; per incident the cause and the mitigation must both be right)`)
+  fleetItems.forEach((i) => console.log(`  ${i.ref.padEnd(40)} key ${rankOf(i.q)}  lengths ${i.q.options.map(len).join('/')}`))
+  for (const strat of RANK_STRATEGIES) {
+    const ps = fleetQs.map(strat.pick)
+    const lessonP = passProbability(ps)
+    const incidentPs = INCIDENTS.map((inc, k) => ps[2 * k] * ps[2 * k + 1])
+    const worstIncident = Math.max(...incidentPs)
+    console.log(
+      `  ${strat.name.padEnd(13)}expected key hits ${ps.reduce((a, b) => a + b, 0).toFixed(2)}/${ps.length}  pseudo-lesson p ${lessonP.toFixed(2)}  worst incident p ${worstIncident.toFixed(2)}${fleetGated ? '*' : ''}`,
+    )
+    if (fleetGated && lessonP >= MAX_RANK_LESSON) {
+      failures.push(`rank: fleet-week is passed with p=${lessonP.toFixed(2)} by always picking the ${strat.name} option (limit < ${MAX_RANK_LESSON}); rebalance option lengths`)
+    }
+    if (fleetGated && lessonP > MAX_RANK_EXPECTED) {
+      failures.push(`rank: fleet-week expects ${lessonP.toFixed(2)} passes by always picking the ${strat.name} option (limit ${MAX_RANK_EXPECTED})`)
+    }
+  }
+  const fleetShortest = passProbability(fleetQs.map(pickShortest))
+  console.log(`  always-shortest pseudo-lesson p ${fleetShortest.toFixed(2)}`)
+}
 
 console.log('')
 console.log(`blind-strategy simulation: ${byLesson.size} lessons with a quiz, per-attempt shuffling, pass at >= ${PASS_BAR * 100}%`)
