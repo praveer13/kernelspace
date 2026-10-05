@@ -19,10 +19,10 @@ export default {
     {
       q: 'Chunked prefill is on and a long prompt arrives while other requests are decoding. What happens to the running decodes?',
       options: [
-        'They never stall, because the prompt is split so finely that decode tokens interleave with no measurable delay at any chunk size',
-        'They wait roughly one chunk of prefill per iteration rather than the whole prompt, and smaller chunk budgets give better ITL',
-        'They stall for the entire prefill, because the scheduler still finishes the whole prompt before any decode token is emitted again',
-        'They stall longer with smaller chunks, because every extra chunk adds a scheduling round that the decodes must wait through',
+        'They see no ITL delay as the prompt is split finely enough to interleave decode tokens',
+        'They wait around one chunk of prefill per iteration and smaller chunks give better ITL',
+        'They stall for the entire prefill and ITL spikes until the prompt completes',
+        'They stall longer with smaller chunks and ITL worsens with each extra scheduling round',
       ],
       correct: [1],
       why: [

@@ -21,7 +21,7 @@ Both are, at heart, T0 ideas reincarnated on the GPU: occupancy is your I/O-boun
       type: 'prose',
       md: `## Occupancy: warps in residence
 
-An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KB ÷ per-thread usage), shared memory per SM (228 KB ÷ per-block usage), and block/warp slots. A kernel using 128 registers/thread and 100 KB shared/block might fit only 4 warps per SM: 6% occupancy. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
+An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KiB ÷ per-thread usage), shared memory per SM (228 KiB ÷ per-block usage), and block/warp slots. A kernel using 128 registers/thread and 100 KiB shared/block might fit only 4 warps per SM: 6% occupancy. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
 
 The tuning loop is mechanical: check occupancy (nsight-compute or compiler stats), find the binding budget, relax it — fewer live registers (smaller tiles), less shared per block, smaller blocks. **But** high occupancy is a means, not a goal: some of the fastest kernels run at 25% occupancy with heavy instruction-level parallelism. The rule that survives: *enough* warps (or enough ILP) to keep the memory pipeline full — measure, don't worship.`,
     },
@@ -41,7 +41,7 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
         { id: 'warp', x: 2, y: 8, w: 18, h: 10, label: 'warp (32 lanes)', sub: 'one load instr' },
         { id: 'coal', x: 30, y: 4, w: 30, h: 9, label: 'coalesced', sub: 'lanes → consecutive 4 B' },
         { id: 't1', x: 72, y: 4, w: 24, h: 9, label: '1 transaction', sub: '128 B, full BW', color: '#3EF2A4' },
-        { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KB' },
+        { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KiB' },
         { id: 't32', x: 72, y: 30, w: 24, h: 9, label: '32 transactions', sub: '~1/32 peak BW', color: '#FF5C6C' },
       ],
       edges: [
@@ -93,10 +93,10 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'SM occupancy is limited by…',
           options: [
-            'The warp slot count on the SM alone; registers and shared memory change speed per warp, but not residency',
-            'The tightest of three budgets: registers per SM, shared memory per SM, and the block and warp slot limits on the SM',
-            'L2 cache capacity, since resident warps share the L2 and each needs a slice (a portion) for its working set',
-            'The memory clock, since faster HBM lets an SM keep more loads in flight (each load completes sooner and frees the registers it holds), and therefore more warps resident',
+            'The warp slot count on the multiprocessor, with registers and shared memory playing no part in residency',
+            'The tightest of three per-multiprocessor budgets among registers, shared memory and warp slots',
+            'The second-level cache capacity, which gives each resident warp a slice for its working set',
+            'The memory clock, which lets faster memory keep more loads in flight and more warps resident',
           ],
           correct: [1],
           explanation:
@@ -111,10 +111,10 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'A warp load where lane i reads address base + 4×i results in…',
           options: [
-            '32 separate transactions, one per lane, because each lane issues its own independent load',
-            'One 128-byte transaction: 32 consecutive words share a segment, so full bandwidth',
-            'A shared-memory bank conflict, because 32 consecutive words all map onto one bank',
-            'A divergent warp, since each lane computes a different address in that load',
+            '32 separate 4-byte transactions with one per lane as each lane issues its own independent load',
+            'One 128-byte transaction with 32 consecutive words sharing a segment at full bandwidth',
+            'A shared-memory bank conflict with 32 consecutive words mapping onto 1 bank',
+            'A divergent warp with 32 lanes computing 32 different addresses in that load',
           ],
           correct: [1],
           explanation:
@@ -129,10 +129,10 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'Staging a strided access through shared memory helps because…',
           options: [
-            'Shared memory reorders the strided HBM accesses automatically, so the hardware turns them into wide transactions for free, with no change to the kernel',
-            'Global reads become wide and coalesced while the strided reads hit SRAM, which has no coalescing rule, only bank conflicts',
-            'Shared memory is cached in L2, so repeated strided reads of the same tile come from L2 instead of HBM, at lower latency',
-            'Shared memory has more banks than HBM has channels, so strided reads spread over more parallel units and run at full speed',
+            'Shared memory reorders the strided global accesses on its own, with the hardware making them wide and needing no kernel change',
+            'Global reads become wide and coalesced, while the strided reads hit on-chip memory that has no coalescing rule',
+            'Shared memory is backed by the second-level cache, with repeated strided reads of a tile coming from it',
+            'Shared memory has more banks than global memory has channels, with strided reads spreading over more parallel units',
           ],
           correct: [1],
           explanation:
@@ -147,10 +147,10 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'A 32-way shared-memory bank conflict occurs when…',
           options: [
-            'More than 32 warps are resident on one SM (beyond what the four warp schedulers can track), so their shared-memory requests queue at the memory controller',
-            'All 32 lanes hit different addresses in the same SRAM bank, serializing the access 32-fold; padding rows usually fixes it',
-            'A block uses more than 1024 threads, so the hardware splits it into serialized waves (reusing the same banks)',
-            'Two kernels write the same array in global memory at once, so their writes serialize on one cache line',
+            'More than 32 warps are resident on one multiprocessor and shared memory requests queue at the memory controller',
+            'The 32 lanes of a warp hit different addresses in the same bank and the access serializes 32-fold',
+            'A block uses more than 1024 threads and the hardware splits it into serialized waves that reuse the banks',
+            'Two kernels write one global array at once and their writes serialize on a single 128-byte cache line',
           ],
           correct: [1],
           explanation:

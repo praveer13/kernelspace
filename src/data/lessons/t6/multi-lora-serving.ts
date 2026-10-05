@@ -127,10 +127,10 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
         {
           q: 'Why can requests using different LoRA adapters still share one base-model batch?',
           options: [
-            'The engine merges each adapter into W as its request arrives, so the batch sees one ordinary weight matrix for every request',
-            'The expensive Wx term is identical across tenants, so one base matmul serves the batch and each adds its own B(Ax) delta',
-            'LoRA modifies only the embedding table, so every later layer is identical across tenants and batches freely',
-            'Batching ignores adapter identity, and the engine approximates every tenant\'s delta with one shared averaged low-rank update',
+            'The engine merges each adapter into the weights as its request arrives, giving the batch one ordinary weight matrix',
+            'The base matmul is identical across tenants, with one shared pass serving the batch and each request adding its own delta',
+            'LoRA modifies only the embedding table, leaving the later layers identical across tenants',
+            'Batching ignores adapter identity, with the engine approximating each tenant\'s delta by one shared averaged low-rank update',
           ],
           correct: [1],
           explanation:
@@ -145,10 +145,10 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
         {
           q: 'S-LoRA Unified Paging puts adapter weights and KV in one pool because…',
           options: [
-            'They contain the same kind of values, so one kernel can read both without any translation between layouts or formats in memory, since both are just tensors',
-            'Both are variable-sized objects that come and go in scarce HBM, so paging limits fragmentation and reclaims each independently',
-            'Adapters are applied inside attention, so their tensors must sit beside the KV cache they update',
-            'GPUs cannot read adapter weights over PCIe, so adapters must be copied into the KV region first',
+            'They contain the same kind of values, letting one kernel read both without translating between layouts in memory',
+            'Both are variable-sized objects that come and go in scarce device memory, letting paging limit fragmentation',
+            'Adapters are applied inside attention, forcing their tensors to sit beside the cache they update',
+            'Accelerators cannot read adapter weights over the host bus, forcing adapters to be copied into the cache region first',
           ],
           correct: [1],
           explanation:
@@ -163,10 +163,10 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
         {
           q: 'What problem does Punica\'s SGMV kernel solve?',
           options: [
-            'Adapters not fitting in GPU memory, which it solves by streaming each adapter\'s pages in from host RAM during the kernel',
-            'Per-adapter work becoming many tiny, bandwidth-bound launches; it applies different low-rank matrices to request segments in one launch',
-            'Requests with the same adapter arriving too rarely, which it fixes by holding the batch until each adapter has enough requests to fill a tile',
-            'The base matmul differing between tenants, which it fixes by recomputing Wx separately for each adapter\'s segment',
+            'Adapters not fitting in device memory, solved by streaming each adapter\'s pages in from host memory during the kernel',
+            'Per-adapter work becoming many tiny launches, solved by applying different low-rank matrices to segments in one launch',
+            'Requests with one adapter arriving too rarely, solved by holding the batch until each adapter has enough requests to fill a tile',
+            'The base matmul differing between tenants, solved by recomputing the shared pass separately for each adapter\'s segment',
           ],
           correct: [1],
           explanation:
@@ -181,10 +181,10 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
         {
           q: 'A safe multi-LoRA control plane must treat runtime adapter loading as…',
           options: [
-            'A cache fill, because adapter files are small and loading an unvalidated path costs only a little extra latency',
-            'A trusted model-loading boundary: authenticated source, pinned content hash, base-model and rank checks, and per-tenant cache namespaces',
-            'A client-side preference that each tenant can set safely to whichever adapter path its own requests reference',
-            'Safe once the worker runs in a microVM, because adapter weights are only data and cannot change what the model outputs',
+            'A cache fill with small adapter files, where loading an unvalidated path costs little extra latency',
+            'A trusted model-loading boundary, where sources are authenticated and hashes pinned for each tenant',
+            'A client-side preference with a path per tenant, where tenants may reference any adapter they like',
+            'A step made safe by a microVM worker, where weights are plain data that cannot change outputs',
           ],
           correct: [1],
           explanation:

@@ -51,23 +51,23 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
 
 **Q1. Which iterator consumes a Vec and yields owned elements?**
 
-- (o1) iter_mut(), which moves elements out so the loop body can modify them freely
-- (o2) drain(..), which yields owned elements while keeping the Vec usable afterwards
-- (o3) iter(), which yields each element by value, copied out of the Vec
-- (o4) into_iter(), which takes the Vec by value and yields each element in turn
+- (o1) iter_mut() moves each element out and lets the loop body modify it
+- (o2) drain(..) yields owned elements and leaves the Vec usable afterwards
+- (o3) iter() yields each element by value and copies it out of the Vec
+- (o4) into_iter() takes the Vec by value and yields each element in turn
 
 **Q2. When do lazy iterator adapters actually perform work?**
 
-- (o1) As soon as map is called, which runs the closure over every element straight away
+- (o1) As soon as map is called and the closure runs over the whole input
 - (o2) On a background thread pool that starts as soon as the adapter is built
-- (o3) When collect, sum or another consumer pulls items through the chain
-- (o4) When the adapter is dropped at the end of its scope, as with other RAII cleanup
+- (o3) When a consumer such as collect or sum pulls items through the chain
+- (o4) When the adapter is dropped at the end of the scope it was built in
 
 **Q3. Why use HashMap::entry for a counter?**
 
-- (o1) It returns a copy of the stored value, so updating it never conflicts with borrowing the map
-- (o2) It keeps a running count inside the map, so no separate counter variable is needed
-- (o3) It locks the bucket so several threads can increment the same counter safely
-- (o4) It finds or inserts the slot with a single hash lookup, then returns mutable access to the stored value
+- (o1) It returns a copy of the stored value and avoids borrowing the map
+- (o2) It keeps a running count inside the map and needs no separate local variable at all
+- (o3) It locks the bucket and lets several threads increment one counter without a data race
+- (o4) It finds or inserts the slot with one hash lookup and gives mutable access
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

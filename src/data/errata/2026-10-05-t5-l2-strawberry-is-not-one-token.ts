@@ -19,10 +19,10 @@ export default {
     {
       q: 'A model counts the r letters in "strawberry" wrongly. Which statement about its input is correct?',
       options: [
-        'It receives the word as individual letters, but attention spreads weight over them too evenly to count each one',
-        'It receives ids for multi-letter chunks, so no letter-level view of the word is part of its input',
-        'It receives the whole word as one token id, which is why it cannot see any letters inside it at all',
-        'It receives the letters as bytes, but BF16 rounding blurs which letter is which',
+        'It receives the word as individual letters, with attention spreading too evenly to count them',
+        'It receives ids for multi-letter chunks with no letter-level view of the word',
+        'It receives the whole word as one token id with no view of the letters inside',
+        'It receives the letters as bytes with rounding blurring which letter is which',
       ],
       correct: [1],
       why: [

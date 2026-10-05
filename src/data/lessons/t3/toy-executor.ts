@@ -151,10 +151,10 @@ An inference engine's control plane is an async-runtime workload: thousands of S
         {
           q: 'An async fn in Rust compiles to…',
           options: [
-            'A task on a new OS thread that the runtime spawns, and joins when the result is needed',
-            'An inert state-machine struct implementing Future, built by the compiler; nothing runs until an executor polls it',
-            'A promise-like object that starts running immediately (eager execution) and calls back when it finishes, as in JavaScript',
-            'A green thread with its own stack (growable, like a goroutine) that the runtime switches to at each .await, as in Go',
+            'A task on a new operating system thread that the runtime spawns and joins when the result is needed',
+            'An inert state-machine struct implementing Future that does nothing until an executor polls it',
+            'A promise-like object that starts running immediately and calls back when it finishes as in JavaScript',
+            'A green thread with its own growable stack that the runtime switches to at each await as in Go',
           ],
           correct: [1],
           explanation:
@@ -169,10 +169,10 @@ An inference engine's control plane is an async-runtime workload: thousands of S
         {
           q: 'The Waker exists to…',
           options: [
-            'Interrupt the executor thread (via a signal) so it abandons its current task and immediately polls the newly ready one instead',
-            'Let a Pending future be re-polled only when progress is possible, with no busy loop or thread per task',
-            'Carry the result of a finished future (its Output value) back to the task that awaited it, then wake that task',
-            'Re-poll each Pending future on a fixed timer interval until it reports Ready, instead of waiting for readiness',
+            'Interrupt the executor thread with a signal and make it abandon its current task to poll the ready one',
+            'Let a Pending future be re-polled when progress is possible without a busy loop or a thread per task',
+            'Carry the Output value of a finished future back to the task that awaited it and then wake that task',
+            'Re-poll each Pending future on a fixed timer interval until it reports Ready instead of waiting for readiness',
           ],
           correct: [1],
           explanation:
@@ -187,10 +187,10 @@ An inference engine's control plane is an async-runtime workload: thousands of S
         {
           q: 'A task that returns Poll::Pending without arranging a wake will…',
           options: [
-            'Be polled again on the next loop turn (the executor spins on it in a busy loop), because the executor retries every Pending task',
-            'Never be polled again: the task hangs silently and permanently, with no error and no panic',
-            'Panic the executor (an assertion in debug builds that checks for a registered waker), since a missing waker registration is detected at run time',
-            'Be polled again once a default retry interval elapses, since runtimes fall back to timed polling',
+            'Be polled again on the next loop turn as the executor retries each Pending task in a busy loop',
+            'Stay parked without being polled again and hang silently with no error and no panic',
+            'Panic the executor through a debug assertion that detects the missing waker registration at run time',
+            'Be polled again after a default retry interval elapses as runtimes fall back to timed polling',
           ],
           correct: [1],
           explanation:
@@ -205,10 +205,10 @@ An inference engine's control plane is an async-runtime workload: thousands of S
         {
           q: 'tokio adds to the toy executor primarily…',
           options: [
-            'A tracing garbage collector (like Go\'s) that reclaims finished tasks, together with the buffers and sockets they were holding',
-            'Work-stealing worker threads, an OS reactor that drives wakes, timers, and spawn_blocking',
+            'A tracing garbage collector that reclaims finished tasks with the buffers and sockets they held',
+            'Work-stealing worker threads and a reactor that turns operating system events into wakes plus timers',
             'Stackful green threads, one per task, so an ordinary blocking call suspends only the task that made it',
-            'Preemptive time slicing (like an OS scheduler), so a task that runs for too long is interrupted and the others get a turn',
+            'Preemptive time slicing like an operating system scheduler that interrupts a long-running task and gives others a turn',
           ],
           correct: [1],
           explanation:

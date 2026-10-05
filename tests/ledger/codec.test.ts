@@ -267,8 +267,8 @@ describe('previewImport (spec §10.5)', () => {
     expect(p.fileEvents).toBe(3)
     expect(p.newEvents).toBe(2)
     expect(p.workingChanges).toBe(0) // the local doc is newer
-    expect(p.before).toEqual({ lessonsDone: 0, xp: 100, activeDays: 0, labsDone: 0, events: 2 })
-    expect(p.after).toEqual({ lessonsDone: 1, xp: 240, activeDays: 1, labsDone: 0, events: 4 })
+    expect(p.before).toEqual({ lessonsDone: 0, xp: 0, activeDays: 0, labsDone: 0, events: 2 })
+    expect(p.after).toEqual({ lessonsDone: 1, xp: 3, activeDays: 1, labsDone: 0, events: 4 })
     expect(p.warnings).toEqual(['file has no events newer than 2026-09-02'])
   })
 

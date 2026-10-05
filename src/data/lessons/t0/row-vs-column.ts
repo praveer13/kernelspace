@@ -151,17 +151,17 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
         {
           q: 'A row-major 8192×8192 matrix of doubles is summed column-by-column (outer loop over columns). The slowdown vs the row-major sum is primarily caused by…',
           options: [
-            'Branch misprediction at the inner loop exit: each column ends with a mispredicted branch that stalls the whole pipeline',
-            'Every access jumping 64 KiB, so each 64-byte line fetched yields 8 useful bytes and is evicted before reuse',
-            'Index arithmetic: computing row * 8192 + col for every access costs far more multiplies than the contiguous sum',
-            'The compiler failing to vectorize column loops, so each add runs as scalar code instead of SIMD',
+            'A mispredicted branch at each of the 8192 inner loop exits, stalling the CPU pipeline',
+            'Each access jumping 64 KiB, pulling in a 64-byte line from DRAM to use 8 bytes',
+            'Index arithmetic of row * 8192 + col, costing far more multiplies than the CPU needs for a contiguous sum',
+            'A compiler that fails to vectorize column loops, leaving each add scalar instead of 4-wide SIMD',
           ],
           correct: [1],
           explanation:
             'Stride = 8192 × 8 B = 64 KiB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8× the DRAM traffic, zero spatial locality, plus TLB thrash across 8192 pages.',
           why: [
             'Predictors handle loop-exit branches well, and one mispredict per 8192 iterations costs about 20 cycles. That cannot explain a ~20x gap that comes from a DRAM miss on every access.',
-            'Right: stride is 8192 × 8 B = 64 KiB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: ~8x the DRAM traffic, no spatial locality, and TLB thrash.',
+            'Right: stride is 8192 × 8 B = 64 KiB. Each access pulls a 64-byte line, uses 8 bytes, and the line is evicted before reuse: about 8x the DRAM traffic, with TLB thrash.',
             'Compilers reduce the index math to an add, and it costs about the same in both loop orders. A few cycles of arithmetic cannot compete with ~100 ns per DRAM miss.',
             'Missing SIMD costs at most 4–8x on arithmetic, but this loop is memory-bound, so vector units would still sit idle waiting for lines. Stride, not vectorization, is the root cause.',
           ],
@@ -169,28 +169,28 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
         {
           q: 'Why does the row/column performance gap nearly vanish when the matrix shrinks to fit in L2 cache?',
           options: [
-            'Small matrices use a different, faster memory bus that bypasses the DRAM controller entirely',
-            'The CPU reorders loops automatically for small arrays, so both traversal orders end up running row-major',
-            'Once data is cache-resident, access order barely matters: the penalty is a DRAM-latency effect',
-            'The prefetcher only works on small working sets, so it hides latency for both orders once the matrix shrinks',
+            'Small matrices use a faster memory bus, so they bypass the DRAM controller entirely',
+            'The CPU reorders loops automatically for small arrays, so both traversal orders end up row-major',
+            'Once data is cached, access order matters little because the DRAM traffic and TLB thrash vanish',
+            'The CPU prefetcher works only on small working sets, so it hides latency for both orders after shrinking',
           ],
           correct: [2],
           explanation:
-            'The 20× is the cost of missing to DRAM on every access. If everything is already in L2, both orders hit cache and run at similar speed — the cleanest proof that layout penalties are hierarchy effects.',
+            'The ~20× gap is the cost of missing to DRAM on every access: about 8× the traffic, with no prefetch rescue, plus TLB thrash. If everything is already in L2, both orders hit cache and run at similar speed — the cleanest proof that layout penalties are hierarchy effects.',
           why: [
             'There is one path to DRAM. Small arrays are fast because they never go there: they are served by L2 on-chip, not through a special bus.',
             'Hardware does not reorder loops; the instruction stream keeps its order. Compilers can interchange loops at -O3, but that is a compile-time change and would help the large matrix too.',
-            'Right: the ~20x gap is the cost of missing to DRAM on every access. With everything in L2, both orders hit cache and run at similar speed: proof that layout penalties are hierarchy effects.',
+            'Right: the ~20x gap comes from DRAM misses on every access, about 8x the traffic plus TLB thrash. With everything in L2, both orders hit cache and run at similar speed: a hierarchy effect.',
             'Prefetchers work at any size, including on large arrays. Row order benefits from them on big matrices, which is part of why the gap exists there but disappears in L2.',
           ],
         },
         {
           q: 'The hardware prefetcher helps most when your access pattern is…',
           options: [
-            'Random within a 4 KiB page, because the prefetcher fetches the whole page once it sees any access inside it',
-            'Sequential or small constant stride, so it can predict upcoming lines and fetch them before the load executes',
-            'Strided by exactly one page (4 KiB), because a perfectly regular stride gives the prefetcher a pattern to follow',
-            'Pointer-based, chasing linked nodes, because it reads each node and follows the next pointer ahead of time',
+            'Random within one page, with the prefetcher fetching the whole page after any touch',
+            'Sequential or small constant stride, with upcoming lines fetched before the load executes',
+            'Strided by exactly one page, with a perfectly regular stride giving a pattern to follow',
+            'Pointer-based and chasing linked nodes, with each next pointer read ahead of time',
           ],
           correct: [1],
           explanation:
@@ -205,10 +205,10 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
         {
           q: 'Java\'s double[][] makes the column walk especially slow compared with a flat C buffer because…',
           options: [
-            'The JIT refuses to optimize 2D loops, so every array access falls back to the interpreter',
-            'Rows are separately heap-allocated objects, so the walk pointer-chases across the heap with no contiguity guarantee',
-            'Each array stores a length header that misaligns the elements, so doubles straddle two cache lines',
-            'Bounds checks cost more than cache misses, so checking every column index dominates the walk',
+            'The runtime refuses to optimize nested loops, leaving each array access to the interpreter',
+            'Rows are separate heap objects, leaving the walk to chase pointers around the heap',
+            'Each array stores a length header that misaligns the elements, leaving doubles straddling two cache lines',
+            'Bounds checks cost more than cache misses, leaving the column index checks to dominate the walk',
           ],
           correct: [1],
           explanation:

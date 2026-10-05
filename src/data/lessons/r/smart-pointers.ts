@@ -64,9 +64,9 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
         {
           q: 'What does Arc::clone(&x) copy?',
           options: [
-            'The inner value in full, so each thread gets its own private copy of the data',
-            'Only a new handle to the same allocation, bumping an atomic count',
-            'The inner value when T implements Clone, and only a handle otherwise',
+            'The inner value in full, so each thread gets a private copy of the data',
+            'A new handle to the same allocation, bumping an atomic count',
+            'The inner value when T is Clone, and a handle otherwise',
             'A mutable handle to the shared value, so the new owner may write through it',
           ],
           correct: [1],
@@ -82,10 +82,10 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
         {
           q: 'Why can Rc<T> not normally be sent to another thread?',
           options: [
-            'Rc allocates in thread-local storage, so other threads cannot address the value',
-            'Its strong and weak counts use plain non-atomic updates, so concurrent clones may race',
-            'Rc keeps its value on the stack of the creating thread, where it would dangle elsewhere',
-            'Rc lacks the internal lock that Arc adds around T, so access from two threads would race on T',
+            'Rc allocates in thread-local storage and other threads cannot address it',
+            'Its strong and weak counts use non-atomic updates and clones may race',
+            'Rc keeps its value on the stack of the creating thread and it would dangle',
+            'Rc lacks the internal lock that Arc adds around T and access would race',
           ],
           correct: [1],
           explanation:
@@ -100,10 +100,10 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
         {
           q: 'Which type expresses a non-owning edge that does not keep an Rc/Arc allocation alive?',
           options: [
-            'A second Rc stored in a RefCell, since interior mutability hides it from the strong count',
-            'Weak, whose upgrade() method returns None once the last strong handle has been dropped',
-            'A Box holding a pointer to the data, which observes it without counting as an owner',
-            'A cloned Rc kept in a struct field, which the count ignores until it is dereferenced',
+            'A second Rc stored in a RefCell that hides it from the strong count',
+            'Weak whose upgrade gives no handle once the last strong handle is dropped',
+            'A Box holding a pointer to the data that observes it without owning it',
+            'A cloned Rc kept in a struct field that the count ignores until it is used',
           ],
           correct: [1],
           explanation:

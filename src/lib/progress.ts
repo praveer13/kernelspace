@@ -98,7 +98,7 @@ export interface FleetWeekProgress {
   docText?: string
   measurementEvidence?: Record<
     string,
-    { analysis?: string; screenshotName?: string; screenshotBytes?: number }
+    { analysis?: string; screenshotName?: string; screenshotBytes?: number; attempted?: string[]; credited?: string[] }
   >
 }
 
@@ -139,7 +139,7 @@ export interface ProgressState extends LedgerFacadeState, LedgerFacadeActions {
   setFleetWeekDoc: (text: string) => void
   setFleetWeekEvidence: (
     actId: string,
-    patch: { analysis?: string; screenshotName?: string; screenshotBytes?: number },
+    patch: { analysis?: string; screenshotName?: string; screenshotBytes?: number; attempted?: string[]; credited?: string[] },
   ) => void
   completeCapstoneStep: (stepId: string, stepIndex: number) => void
   setCapstoneMetrics: (metrics: CapstoneMetrics) => void

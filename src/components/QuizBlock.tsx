@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
 import { rev32 } from '@/lib/ledger/stable'
 import { getLedgerClient } from '@/lib/ledger/client'
-import type { Confidence } from '@/lib/ledger/types'
+import type { Confidence, LedgerEvent } from '@/lib/ledger/types'
 import { CONFIDENCE_CHOICES, selectCalibration, sureSummary } from '@/lib/learner/calibration'
 import ConfidencePicker from '@/components/learner/ConfidencePicker'
 
@@ -40,6 +40,54 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E']
 const isRight = (q: QuizQuestion, sel: Set<number>) =>
   sel.size === q.correct.length && q.correct.every((c) => sel.has(c))
 
+interface RestoredAttempt {
+  seed: number
+  selected: Record<number, Set<number>>
+  conf: Record<number, Confidence>
+}
+
+const newer = (a: LedgerEvent, b: LedgerEvent) => (a.at === b.at ? a.id > b.id : a.at > b.at)
+
+/**
+ * The lesson's latest checkpoint attempt, read back from its `quiz` event and the item events
+ * of the same `grp` (wave-1.md §15.2). `none`: nothing to restore. `changed`: some item's `rev`
+ * no longer matches the authored question (or the count differs), so the attempt is stale.
+ * Exit-ticket quiz events (`data.form`) are not checkpoint attempts and are ignored here.
+ */
+function restoreAttempt(
+  lessonId: string,
+  questions: QuizQuestion[],
+  quizzes: LedgerEvent[],
+  items: LedgerEvent[],
+): RestoredAttempt | 'none' | 'changed' {
+  let latest: LedgerEvent | undefined
+  for (const e of quizzes) {
+    if (e.kind !== 'quiz' || e.ref !== `lesson:${lessonId}` || e.data?.form || !e.data?.grp) continue
+    if (!latest || newer(e, latest)) latest = e
+  }
+  if (latest?.kind !== 'quiz' || !latest.data?.grp) return 'none'
+  const grp = latest.data.grp
+  const byQi = new Map<number, LedgerEvent>()
+  for (const e of items) {
+    if (e.kind !== 'item' || e.data.src !== 'quiz' || e.data.grp !== grp) continue
+    const m = /^quiz:(.+)#(\d+)$/.exec(e.ref)
+    if (m?.[1] === lessonId) byQi.set(Number(m[2]), e)
+  }
+  if (byQi.size !== questions.length) return 'changed'
+  const selected: Record<number, Set<number>> = {}
+  const conf: Record<number, Confidence> = {}
+  let seed = latest.seed
+  for (const [qi, q] of questions.entries()) {
+    const e = byQi.get(qi)
+    if (e?.kind !== 'item' || e.rev !== rev32({ q: q.q, options: q.options, correct: q.correct })) return 'changed'
+    selected[qi] = new Set((e.data.pick ?? []).filter((oi) => Number.isInteger(oi) && oi >= 0 && oi < q.options.length))
+    if (e.conf) conf[qi] = e.conf
+    seed ??= e.seed
+  }
+  // No seed means the option order cannot be reproduced; start fresh without a note.
+  return seed === undefined ? 'none' : { seed, selected, conf }
+}
+
 /**
  * QuizBlock — inline lesson checkpoint (design.md §9.10).
  * Submit → per-option feedback (mint wash + check / danger wash + shake, no shake under
@@ -53,7 +101,11 @@ const isRight = (q: QuizQuestion, sel: Set<number>) =>
  * keys 1-3 set it on the question that holds focus. It never gates Submit. Answers rated
  * sure and wrong are summarised first after submit. Each submit writes one ledger item event per
  * question plus one quiz event (`recordQuizAttempt`), with the item fingerprint, shuffle seed and
- * the authored pick.
+ * the authored pick, and the question's `kcs`.
+ * A reload after Submit restores that attempt (seed order, picks, confidence, verdicts) when every
+ * item's rev still matches; otherwise it starts fresh with a note (wave-1.md §15.2). Submit moves
+ * focus to the result header, whose verdict an aria-live region announces; Retry moves it to the
+ * first option (§15.3).
  */
 export default function QuizBlock({ lessonId, questions, className }: QuizBlockProps) {
   const recordQuizAttempt = useProgress((s) => s.recordQuizAttempt)
@@ -65,6 +117,13 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
   const uid = useId()
   const [submitted, setSubmitted] = useState(false)
   const [seed, setSeed] = useState(freshSeed)
+  const [staleNote, setStaleNote] = useState(false)
+  const [announce, setAnnounce] = useState('')
+  const headerRef = useRef<HTMLDivElement>(null)
+  // set by the user's own Submit or Retry; consumed after the render that follows, to place focus
+  const pendingFocus = useRef<'result' | 'first' | null>(null)
+  // true once the learner has touched this quiz, so a late ledger read never overwrites their picks
+  const interacted = useRef(false)
   const reducedMotion = useReducedMotion()
 
   // order[qi][displayPosition] = authored option index; new seed → new order
@@ -97,6 +156,7 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
 
   const toggle = (qi: number, oi: number, multi?: boolean) => {
     if (submitted) return
+    interacted.current = true
     startedAt.current ??= Date.now()
     setSelected((prev) => {
       const next = new Set(prev[qi] ?? [])
@@ -112,6 +172,11 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
   }
 
   const submit = () => {
+    interacted.current = true
+    pendingFocus.current = 'result'
+    const right = questions.filter((q, qi) => isRight(q, selected[qi] ?? new Set<number>())).length
+    setAnnounce(`${right} of ${questions.length} right, ${questions.length && right / questions.length >= 0.8 ? 'pass' : 'retry'}`)
+    setStaleNote(false)
     setSubmitted(true)
     recordQuizAttempt({
       lessonId,
@@ -125,12 +190,16 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
           pick: [...sel].sort((a, b) => a - b),
           ok: isRight(q, sel),
           ...(conf[qi] ? { conf: conf[qi] } : {}),
+          ...(q.kcs?.length ? { kcs: q.kcs } : {}),
         }
       }),
     })
   }
 
   const retry = () => {
+    interacted.current = true
+    pendingFocus.current = 'first'
+    setAnnounce('')
     setSubmitted(false)
     setSelected({})
     setConf({})
@@ -148,13 +217,15 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
     setConf((prev) => ({ ...prev, [qi]: choice.value }))
   }
 
-  const setQuestionConf = (qi: number, value: Confidence | undefined) =>
+  const setQuestionConf = (qi: number, value: Confidence | undefined) => {
+    interacted.current = true
     setConf((prev) => {
       const next = { ...prev }
       if (value) next[qi] = value
       else delete next[qi]
       return next
     })
+  }
 
   const jumpTo = (qi: number) => {
     const el = questionRefs.current[qi]
@@ -162,6 +233,43 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
     el.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
     el.focus({ preventScroll: true })
   }
+
+  // Restore the latest attempt on mount; the ledger read is async and best-effort.
+  useEffect(() => {
+    let live = true
+    getLedgerClient()
+      .then((client) =>
+        Promise.all([
+          client.events({ kinds: ['quiz'], refPrefix: `lesson:${lessonId}` }),
+          client.events({ kinds: ['item'], refPrefix: `quiz:${lessonId}#` }),
+        ]),
+      )
+      .then(([quizzes, items]) => {
+        if (!live || interacted.current) return
+        const r = restoreAttempt(lessonId, questions, quizzes, items)
+        if (r === 'none') return
+        if (r === 'changed') {
+          setStaleNote(true)
+          return
+        }
+        setSeed(r.seed)
+        setSelected(r.selected)
+        setConf(r.conf)
+        setSubmitted(true)
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [lessonId, questions])
+
+  // After the render that follows Submit or Retry, put focus where the unmounted button left it.
+  useEffect(() => {
+    const target = pendingFocus.current
+    pendingFocus.current = null
+    if (target === 'result') headerRef.current?.focus()
+    else if (target === 'first') questionRefs.current[0]?.querySelector('button')?.focus()
+  }, [submitted])
 
   // One quiet line once enough rated answers exist: the ledger read is async and best-effort.
   useEffect(() => {
@@ -185,7 +293,10 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
       className={cn('rounded-lg border border-line bg-surface-1 p-5 md:p-6', className)}
       aria-label="Checkpoint quiz"
     >
-      <div className="mb-5 flex items-center justify-between">
+      <p role="status" aria-live="polite" className="sr-only">
+        {announce}
+      </p>
+      <div ref={headerRef} tabIndex={-1} className="mb-5 flex items-center justify-between rounded-sm">
         <span className="font-mono text-label uppercase text-text-3">Checkpoint</span>
         {submitted && (
           <motion.span
@@ -202,6 +313,10 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
           </motion.span>
         )}
       </div>
+
+      {staleNote && !submitted && (
+        <p className="mb-5 font-mono text-[11px] text-text-3">this checkpoint changed since your last attempt</p>
+      )}
 
       {confidentMisses.length > 0 && (
         <div

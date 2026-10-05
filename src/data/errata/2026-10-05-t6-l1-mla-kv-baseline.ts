@@ -19,10 +19,10 @@ export default {
     {
       q: 'DeepSeek-V3 caches a 576-element BF16 latent per layer across 61 layers. Llama-3-70B with GQA needs 327,680 B per token. How much smaller is the MLA cache?',
       options: [
-        'About 37×, because MLA is measured against the same 70B model with full multi-head attention at 2,621,440 B',
-        'About 4.7×, because 61 layers × 576 × 2 B is 70,272 B per token, and 327,680 divided by 70,272 is 4.66',
-        'About 284×, because the 1,152 B latent is stored once per token in total, not repeated for each of the 61 layers',
-        'About 4.9×, because only the 58 MoE layers cache a latent, so 58 × 1,152 B is 66,816 B per token',
+        'About 37×, with MLA measured against full multi-head attention at 2621440 B per token',
+        'About 4.7×, with MLA at 61 layers × 576 × 2 B or 70272 B against 327680 B per token',
+        'About 284×, with MLA storing one 1152 B latent per token across the whole model',
+        'About 4.9×, with MLA caching a latent in only the 58 MoE layers at 66816 B per token',
       ],
       correct: [1],
       why: [

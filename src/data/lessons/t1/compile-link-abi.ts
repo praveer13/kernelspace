@@ -79,10 +79,10 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
         {
           q: 'An object file (.o) contains machine code plus…',
           options: [
-            'Copies of every library function it calls, so the linker only has to concatenate the files together',
-            'A symbol table of defined and undefined names, plus relocation entries for link-time patches',
-            'The final virtual address of every function, already resolved by the compiler',
-            'A page table telling the kernel which sections of the file are readable, writable or executable',
+            'Copies of each library function it calls, leaving the linker to concatenate the files',
+            'A symbol table of defined and undefined names, plus relocation entries to be patched',
+            'The final virtual address of each function, resolved by the compiler before linking',
+            'A page table for the kernel, marking sections as readable or executable',
           ],
           correct: [1],
           explanation:
@@ -110,16 +110,16 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
         {
           q: 'The System V AMD64 ABI specifies, among other things…',
           options: [
-            'What each instruction does: the opcode encodings and the exact effect of an AVX add on its vector registers',
-            'Argument registers (rdi, rsi, rdx…), return register rax, stack alignment, and register-saving rules',
-            'How the kernel schedules threads across cores when a call blocks on I/O or a lock',
-            'The in-memory layout of objects for managed languages such as Java and Python',
+            'The opcode encodings, with the exact effect of a vector add on the registers',
+            'Argument and return registers, with stack alignment and register-saving rules',
+            'How the kernel schedules threads across cores, with a call blocking on I/O or a lock',
+            'The in-memory layout of objects, for managed languages such as Java and Python',
           ],
           correct: [1],
           explanation:
             'The ABI is the binary calling contract: where arguments and returns live, who preserves which registers, alignment rules. It is what makes cross-language, cross-compiler calls possible at all.',
           why: [
-            'Describes the ISA. The psABI does name a baseline feature set and optional micro-architecture levels (x86-64-v2 and up), but opcode encodings and semantics live in the Intel and AMD processor manuals. The ABI covers how compiled code calls other compiled code.',
+            'Describes the ISA. The psABI names baseline feature levels (x86-64-v2 and up), but opcode encodings and semantics live in the Intel and AMD manuals. The ABI covers how compiled code calls other compiled code.',
             'Right: the ABI fixes where arguments and results live, stack alignment, and caller-saved versus callee-saved registers, so separately compiled code can call each other.',
             'Scheduling is an OS policy, not part of a calling convention. The ABI says how a call is made, not which thread or core runs it.',
             'Managed-language object layouts belong to each runtime. The C ABI covers only plain C types, which is why runtimes bridge through C-compatible structs.',
@@ -128,10 +128,10 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
         {
           q: 'Why is the C ABI the lingua franca of language interop?',
           options: [
-            'C is the fastest language, so every other runtime wraps it to get native speed',
-            'It is simple and stable, with named functions and plain structs',
-            'The C standard requires every language implementation to expose a C-compatible interface',
-            'Calls through it are checked by the compiler, which rules out memory bugs across the boundary',
+            'C is the fastest language, with each other runtime wrapping it to get native speed',
+            'It is simple and stable, with named functions and plain structs for any runtime',
+            'The C standard requires a C-compatible interface, with each language implementation exposing one',
+            'Calls through it are checked by the compiler, ruling out memory bugs across the boundary',
           ],
           correct: [1],
           explanation:

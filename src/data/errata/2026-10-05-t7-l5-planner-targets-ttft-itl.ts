@@ -19,10 +19,10 @@ export default {
     {
       q: 'Which statement about how Dynamo\'s Planner chooses its scaling signals is accurate?',
       options: [
-        'It ignores TTFT and ITL and scales only on queue depth, leaving latency targets to the load balancer to enforce',
-        'It scales only on measured TTFT, adding workers after the SLO is breached, because engines do not expose queue metrics',
-        'It targets TTFT and ITL SLAs, and its load mode scales on queue-depth and KV-utilization thresholds ahead of latency',
-        'It ships a queue, shed, then degrade policy in its docs, so overload handling is a built-in setting to switch on',
+        'It ignores TTFT and ITL and scales on queue depth, leaving the load balancer to enforce latency targets',
+        'It scales on measured TTFT and adds workers after the SLO is breached, since engines expose no queue metrics',
+        'It targets TTFT and ITL SLAs, and its load mode scales on queue depth and KV utilization ahead of latency',
+        'It ships a built-in overload policy of queueing, shedding and degrading, with no TTFT or ITL targets',
       ],
       correct: [2],
       why: [

@@ -53,10 +53,10 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
         {
           q: 'Agent-loop throughput is governed primarily by…',
           options: [
-            'Decode speed per token, because each turn is dominated by generating the model\'s reply rather than by handling the prior context',
-            'Prefix cache-hit rate: turns re-send 85–95% of prior context, so a 90% hit rate means about 10× less prefill',
-            'Tokenizer speed, because every turn re-tokenizes hundreds of thousands of tokens of history before the GPU can start',
-            'Replica count, because adding GPUs scales agent throughput linearly, however cache-aware the request routing is',
+            'Decode speed per token, with each turn dominated by generating the reply rather than handling the prior context',
+            'Prefix cache-hit rate, with each turn re-sending most of the prior context and a high hit rate cutting prefill',
+            'Tokenizer speed, with each turn re-tokenizing the whole history before the accelerator can start',
+            'Replica count, with extra devices scaling agent throughput linearly however cache-aware the routing is',
           ],
           correct: [1],
           explanation:
@@ -71,10 +71,10 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
         {
           q: 'A timestamp in the system prompt of an agent loop…',
           options: [
-            'Is harmless, because the model reads it as ordinary text and the cached KV for the rest of the prompt stays valid across turns',
-            'Changes bytes near the start of each request, so the shared prefix diverges there and the radix tree misses from turn 2 on',
-            'Costs only the tokens of the timestamp itself, because the radix tree re-matches the unchanged text that follows it',
-            'Matters only on the first turn, because later turns are keyed on the previous reply rather than on the system prompt',
+            'Is harmless, with the model reading it as ordinary text and the cached state for the rest of the prompt staying valid',
+            'Changes bytes near the start of the prompt, with the shared prefix diverging and the radix tree missing from turn two',
+            'Costs only the tokens of the timestamp itself, with the radix tree re-matching the unchanged text that follows it later',
+            'Matters only on the first turn, with later turns keyed on the previous reply instead of the system prompt',
           ],
           correct: [1],
           explanation:
@@ -89,10 +89,10 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
         {
           q: 'Structured output got cheap in 2025–26 because…',
           options: [
-            'Models became reliable enough at JSON that constraints are rarely needed, so retrying malformed output costs almost nothing',
-            'Engines compile the grammar once and apply token masks with little added latency, overlapping mask work with GPU execution',
-            'The engine validates the finished output and resamples only the invalid tokens, so no check runs during decoding',
-            'Production schemas shrank to flat objects, so the mask is a fixed table precomputed for each parser state and applied as-is',
+            'Models became reliable enough that constraints are rarely needed, with retrying malformed output costing almost nothing',
+            'Engines compile the grammar once and apply token masks cheaply, overlapping mask work with accelerator execution',
+            'The engine validates the finished output and resamples invalid tokens, with no check running during decoding',
+            'Production schemas shrank to flat objects, with the mask a fixed table precomputed per parser state and applied unchanged',
           ],
           correct: [1],
           explanation:
@@ -107,10 +107,10 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
         {
           q: 'Why is checking only the first character of each vocabulary token incorrect?',
           options: [
-            'It is too slow, because a character-level check needs a separate CPU round trip for every token in the vocabulary',
-            'A single BPE token can cross several grammar states or begin legally and end illegally; the whole token byte string must be simulated',
-            'JSON is carried as UTF-16, so a token\'s first character does not identify the byte the parser will read first',
-            'Token ids carry no text, so a mask can be built only after sampling, once the chosen token is decoded back into a string',
+            'It is too slow, with a character-level check needing a separate processor round trip for each token in the vocabulary',
+            'A token can span several grammar states or start legally and end illegally, requiring the byte string to be simulated',
+            'Text is carried in a wide encoding, with a token\'s first character failing to identify the byte the parser reads first',
+            'Token ids carry no text, with a mask buildable only after sampling, once the chosen token is decoded to a string',
           ],
           correct: [1],
           explanation:

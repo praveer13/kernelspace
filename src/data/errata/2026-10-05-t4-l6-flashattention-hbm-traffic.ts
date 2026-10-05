@@ -17,10 +17,10 @@ export default {
     {
       q: 'FlashAttention never writes the N×N score matrix to HBM. Which statement about its cost is correct?',
       options: [
-        'HBM traffic becomes linear in N, so doubling the context only doubles the bytes moved between HBM and the SMs',
-        'Extra memory is O(N), while HBM traffic stays quadratic in N but is smaller by about M/d²',
-        'HBM traffic is unchanged, and only the extra memory shrinks, to O(N)',
-        'It is an approximation: low-scoring entries are dropped, so the O(N²) matrix is replaced by a sparse O(N) one',
+        'HBM traffic becomes linear in N and doubling the context doubles the bytes moved',
+        'HBM traffic stays quadratic in N but shrinks by about M over d squared',
+        'HBM traffic is unchanged and only the extra memory shrinks, to linear in N',
+        'It is an approximation that drops low-scoring entries and keeps a sparse matrix in HBM',
       ],
       correct: [1],
       why: [

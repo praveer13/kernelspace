@@ -109,10 +109,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'KV bytes per token equals…',
           options: [
-            'Parameters x bytes per element (the weights), because the cache is a working copy of the weights each token touches',
-            '2 (K and V) x layers x KV dimension x bytes per element, stored once for every token in the context',
-            '2 x layers x hidden size x context length x bytes, since the cache is per sequence and context length belongs in the formula',
-            'Vocabulary size x hidden size x 4 (bytes per float), one embedding row stored per cached token and looked up at each step',
+            'Parameters times bytes per element, a working copy of the weights that each token touches',
+            'Two times layers times key-value dimension times bytes per element, stored per context token',
+            'Two times layers times hidden size times context length times bytes, the cache being per sequence',
+            'Vocabulary size times hidden size times bytes per float, one embedding row stored per cached token',
           ],
           correct: [1],
           explanation:
@@ -127,10 +127,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'For a 70B FP16 model (80 layers, d_kv = 1024), a single 128k-token context costs about…',
           options: [
-            'About 20 GiB: 80 layers x 1024 x 2 bytes x 131,072 tokens, counting only the K tensor',
-            'About 320 GiB: 2.5 MiB per token, as if all 64 heads stored their own K and V with no GQA',
-            'About 40 GiB: 2 x 80 layers x 1024 x 2 bytes = 320 KiB per token, x 131,072 tokens',
-            'About 130 GiB, the same as the FP16 weights, since a full-context cache and the model are the same size',
+            'About 20 GiB, from 80 layers x 1024 x 2 bytes x 128k tokens, counting only the key tensor',
+            'About 320 GiB, from 2.5 MiB per token as if the 64 query heads each stored their own keys and values',
+            'About 40 GiB, from 320 KiB per token for keys and values across 80 layers at 2 bytes and 1024 width',
+            'About 130 GiB, equal to the weights at 2 bytes per parameter on the premise that cache and model match',
           ],
           correct: [2],
           explanation:
@@ -145,10 +145,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'GQA reduces KV-cache size by…',
           options: [
-            'Compressing stored K and V with a lossless codec (such as zstd or zlib) after each write, and decompressing inside the attention kernel',
-            'Sharing K/V across groups of query heads, so the KV dimension shrinks by the group factor (32 to 8 heads is 4x) and the cache with it',
-            'Storing K and V in FP8 instead of FP16 (a per-tensor scale), which halves the bytes per element and is applied when the model is loaded',
-            'Skipping a fixed fraction of layers (for example alternate layers) when writing the cache, so only some layers contribute K and V for each token',
+            'Compressing stored keys and values with a lossless codec after each write, then decompressing inside the attention kernel',
+            'Sharing keys and values across groups of query heads, which shrinks the key-value dimension by the group factor',
+            'Storing keys and values in a narrower float format, which halves the bytes per element and is applied when the model loads',
+            'Skipping a fixed fraction of layers when writing the cache, which leaves some layers without keys or values for a token',
           ],
           correct: [1],
           explanation:
@@ -163,10 +163,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'You add GPUs as extra independent replicas of the same model. Which number stays the same for a request that is already being served, at the same per-replica batch size?',
           options: [
-            'Fleet capacity: the number of concurrent requests (sequences) the fleet can keep resident in KV cache at the same moment',
-            'Time between tokens (ITL): each step still reads the same weight and KV bytes at the same HBM bandwidth',
-            'Goodput: requests per second the fleet can serve within its TTFT and ITL targets (as load grows past one GPU)',
-            'Fleet throughput: tokens generated per second (across every replica) running in parallel',
+            'Fleet capacity, meaning the concurrent requests the fleet can keep resident in cache at the same moment',
+            'Time between tokens, meaning each step reads the same weight and cache bytes at the same memory bandwidth',
+            'Goodput, meaning the requests per second the fleet serves within its latency targets as load grows past one device',
+            'Fleet throughput, meaning the tokens generated per second across the replicas running in parallel',
           ],
           correct: [1],
           explanation:

@@ -15,10 +15,10 @@ export default {
     {
       q: 'In an allreduce profile, ranks 1 to 3 show wide wait bars and rank 4 shows none. Which rank is the straggler?',
       options: [
-        'Rank 4: it finishes first, and all the others are waiting on it',
+        'Rank 4: it finishes first and the other ranks wait on it',
         'Ranks 1 to 3: their wide bars show the slowest compute times',
-        'Rank 4: it arrives at the barrier last, so it has no wait time',
-        'No rank: a barrier makes every rank wait about equally long here',
+        'Rank 4: it reaches the barrier last and has no wait time',
+        'No rank: the 4 ranks wait about equally long at a barrier',
       ],
       correct: [2],
       why: [

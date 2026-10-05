@@ -71,23 +71,23 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
 
 **Q1. What does let x = x + 1 do when x already exists?**
 
-- (o1) It is a compile error, because a name can be bound only once per scope
-- (o2) It mutates the existing binding in place, which compiles only if x was already declared with mut
-- (o3) It allocates a fresh x on the heap so the old and new values can coexist
-- (o4) It creates a new binding named x that shadows the old one, and the new type may differ
+- (o1) It is a compile error that rejects a second binding of the same name in one scope
+- (o2) It mutates the existing binding in place and needs x to be declared with mut
+- (o3) It allocates a fresh x on the heap and keeps the old value alive beside it
+- (o4) It creates a new binding named x that shadows the old one and may change the type
 
 **Q2. Why does removing the final semicolon from a Rust block matter?**
 
-- (o1) The line is no longer evaluated, since only semicolon-terminated lines execute
-- (o2) The final expression becomes the value of the block
-- (o3) The block returns early and also ends the enclosing function with that value
-- (o4) The block turns lazy, so its statements run only when the result is first read
+- (o1) The last line is skipped at runtime and the block produces no value
+- (o2) The final expression becomes the value that the block produces
+- (o3) The block returns early and ends the enclosing function with that value
+- (o4) The block turns lazy and runs its statements when the result is first read
 
 **Q3. Which integer type is normally used for collection indexes?**
 
-- (o1) u32, because an index is never negative and 32 bits cover any collection
-- (o2) i32, the default inferred integer type, as with int indexes in Java
-- (o3) isize, so that arithmetic such as index - 1 cannot underflow
-- (o4) usize, whose width matches the pointer size of the target platform
+- (o1) The u32 type that is wide enough for a collection index
+- (o2) The i32 type that Rust infers for integer literals
+- (o3) The isize type that keeps index minus one from underflowing
+- (o4) The usize type that matches the pointer width of the target
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

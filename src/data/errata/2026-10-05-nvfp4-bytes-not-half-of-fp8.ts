@@ -19,10 +19,10 @@ export default {
     {
       q: 'NVFP4 stores a 4-bit value plus one FP8 scale per 16 values. Versus FP8 weights, how much does decode gain on the bandwidth-bound path from the byte reduction alone?',
       options: [
-        'About 2×, because 4 bits is exactly half of the 8 bits that FP8 uses per weight',
-        'About 1.8×, because 4.5 bits per weight is 4.5/8 of the weight bytes FP8 reads',
-        'About 1.1×, because the per-block scale factors cancel most of the saving',
-        'About 4×, because FP4 also halves the activation bytes on top of the weights',
+        'About 2×, from 4 bits being half of FP8\'s 8 bits per weight',
+        'About 1.8×, from 4.5 bits per weight against FP8\'s 8 bits',
+        'About 1.1×, from FP4 scale factors cancelling most of the saving',
+        'About 4×, from FP4 also halving the activation bytes',
       ],
       correct: [1],
       why: [

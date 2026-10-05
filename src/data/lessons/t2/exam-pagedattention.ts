@@ -115,10 +115,10 @@ You are ready for the checkpoint when you can answer, without notes: What three 
         {
           q: 'The three KV-memory wastes the paper diagnoses in prior systems map to which allocator phenomena?',
           options: [
-            'Memory leaks from unfreed sequences, data races on shared KV tensors, and deadlocks between the scheduler and the allocator',
-            'Internal fragmentation from worst-case reservation, external fragmentation from variable segments, and duplicated prefixes',
-            'Thrashing from preemption storms, false sharing between attention heads, and TLB misses on every block-table lookup in the kernel',
-            'Stack overflow from long prompts, heap overflow from long outputs, and double frees when a sequence is preempted',
+            'Memory leaks from unfreed sequences, data races on shared KV tensors, and deadlocks between the scheduler and the KV allocator under load',
+            'Internal fragmentation from worst-case reservation, external fragmentation from variable segments, and duplicated KV prefixes',
+            'Thrashing from preemption storms, false sharing between attention heads, and TLB misses on block-table lookups in the kernel',
+            'Stack overflow from long prompts, heap overflow from long outputs, and double frees of KV blocks when the scheduler preempts a sequence',
           ],
           correct: [1],
           explanation:
@@ -133,10 +133,10 @@ You are ready for the checkpoint when you can answer, without notes: What three 
         {
           q: 'PagedAttention bounds KV waste to <4% primarily because…',
           options: [
-            'Compressing KV tensors to FP8 shrinks every reservation, so the unused part of each reservation shrinks with it',
-            'Fixed-size token blocks rule out external fragmentation and cap internal waste at the partly filled tail block of each sequence',
-            'Evicting cold sequences to CPU RAM frees their blocks quickly, so reserved-but-idle memory never accumulates on the GPU at all',
-            'Sharing weights across GPUs with tensor parallelism leaves more HBM free for KV, which reduces the waste fraction directly',
+            'Compressing KV tensors to a lower precision shrinks each reservation, with the unused part shrinking along with it',
+            'Fixed-size KV token blocks remove external fragmentation, with internal waste capped at the tail block of each sequence',
+            'Evicting cold sequences to CPU RAM frees their blocks quickly, with reserved-but-idle memory not accumulating on the GPU',
+            'Sharing weights across GPUs with tensor parallelism leaves more HBM free for KV, reducing the waste fraction directly',
           ],
           correct: [1],
           explanation:
@@ -151,10 +151,10 @@ You are ready for the checkpoint when you can answer, without notes: What three 
         {
           q: 'Beam search / parallel sampling in vLLM shares memory exactly like…',
           options: [
-            'A RAID mirror: each branch writes its own copy of every block in parallel so that one failed branch cannot corrupt another',
-            'Unix fork with copy-on-write: branches share the prompt\'s physical blocks via refcounts, and a diverging write copies one block',
-            'An mmap\'d read-only file: branches map the same prompt blocks and may never write to them, so nothing is ever copied or duplicated',
-            'A lock-protected shared queue: branches take turns appending their tokens to one common buffer so that only one writes at a time',
+            'A RAID mirror, with each branch writing its own copy of each KV block in parallel to isolate branch failures',
+            'Unix fork with copy-on-write, with branches sharing the prompt\'s KV blocks via refcounts and copying on write',
+            'An mmap\'d write-protected file, with branches mapping the same prompt KV blocks and forbidden to write to them at any time',
+            'A lock-protected shared queue, with branches taking turns appending their tokens to one common KV buffer at a time',
           ],
           correct: [1],
           explanation:
@@ -169,10 +169,10 @@ You are ready for the checkpoint when you can answer, without notes: What three 
         {
           q: 'The swap-vs-recompute preemption debate in §4 mirrors the OS choice between…',
           options: [
-            'Eager versus lazy page allocation: reserve all frames at process start, or fault each page in on its first touch only',
-            'Swapping anonymous pages to disk versus dropping clean file-backed pages for later re-read: bandwidth versus recompute',
-            'Huge pages versus base pages: fewer, larger blocks to move at once versus finer blocks that waste less memory per allocation',
-            'Round-robin versus priority scheduling: rotate every sequence through the batch fairly, or always favour the most important one',
+            'Eager versus lazy page allocation, reserving the frames at process start against faulting each page in on its first touch',
+            'Swapping anonymous pages to disk versus dropping clean file-backed pages for a later re-read, trading bandwidth against recompute',
+            'Huge pages versus base pages, with fewer larger blocks to move at once against finer blocks that waste less memory',
+            'Round-robin versus priority scheduling, rotating each sequence through the batch fairly against favoring the single most important one',
           ],
           correct: [1],
           explanation:
@@ -187,10 +187,10 @@ You are ready for the checkpoint when you can answer, without notes: What three 
         {
           q: 'Why does the block-table indirection cost so little relative to its benefit?',
           options: [
-            'The block table is pinned in L1 cache for the whole kernel launch, so every lookup costs a single cycle and adds no stall',
-            'The extra index loads are small next to the 2–4× larger batch from reclaimed memory, since decode is memory-bound, not compute-bound',
-            'CUDA overlaps each block lookup with tensor-core math, so the extra loads are fully hidden and add no measurable time',
-            'The GPU\'s hardware MMU performs the block translation as part of normal addressing, so software pays nothing for it',
+            'The block table is pinned in the GPU cache for the whole kernel launch, with each lookup costing a single cycle and no stall',
+            'The extra index loads are small next to the much larger batch from reclaimed memory, with GPU decode memory-bound rather than compute-bound',
+            'CUDA overlaps each block lookup with tensor-core math, with the extra loads hidden and adding no measurable time',
+            'The GPU\'s hardware MMU performs the block translation as part of normal addressing, with software paying nothing for it',
           ],
           correct: [1],
           explanation:
