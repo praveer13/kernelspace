@@ -1050,6 +1050,16 @@
       "boundary": "No source: a round interactive-chat target chosen for the exercise."
     },
     {
+      "id": "synthetic.kv.custom-params",
+      "kind": "synthetic",
+      "value": 7,
+      "unit": "B params",
+      "label": "KV calculator: weight size assumed for the custom architecture (course stand-in)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "No source: a stand-in size for a shape the learner types in, so the custom preset has weights to fit beside its KV. It is not derived from the layers, KV heads or head dim entered."
+    },
+    {
       "id": "price.h100.median",
       "kind": "price",
       "value": 3.49,

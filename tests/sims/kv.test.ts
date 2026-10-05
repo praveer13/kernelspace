@@ -21,6 +21,7 @@ import type { ExerciseBlock } from '../../src/data/lessons/types'
 import { gradePrediction, splitCanonical } from '../../src/lib/sims/host'
 import {
   BLOCK_SIZE,
+  CUSTOM_PARAMS_B,
   DEFAULT_STATE,
   DTYPES,
   GPUS,
@@ -121,7 +122,8 @@ describe('every number comes from a claim (W4)', () => {
     expect(BLOCK_SIZE).toBe(claimNumber('production.vllm.block-size'))
     expect(PAGED_WASTE_PCT).toBe(claimNumber('synthetic.kv.paged-waste'))
     expect(ITL_SLO_MS).toBe(claimNumber('synthetic.kv.itl-slo'))
-    for (const id of ['synthetic.kv.paged-waste', 'synthetic.kv.runtime-base', 'synthetic.kv.runtime-overhead', 'synthetic.kv.itl-slo']) {
+    expect(CUSTOM_PARAMS_B).toBe(claimNumber('synthetic.kv.custom-params'))
+    for (const id of ['synthetic.kv.paged-waste', 'synthetic.kv.runtime-base', 'synthetic.kv.runtime-overhead', 'synthetic.kv.itl-slo', 'synthetic.kv.custom-params']) {
       expect(byId[id].kind).toBe('synthetic')
     }
     // the static-reservation share is the paper's measured range, not a made-up figure
@@ -283,11 +285,13 @@ describe('a task\'s answer: Run reads it off the setup, and phone mode draws the
     expect(setupMismatches({ ...custom, kvHeads: 8 }, SETUPS['kv.gqa'])).toEqual(['KV heads: 32'])
   })
 
-  test('only one setup answers each reading, so the readings of two tasks never both fire on one press', () => {
-    const states = KV_TASKS.map((t) => ({ id: t.id, s: stateFromSetup(SETUPS[t.observe as string]) }))
-    for (const a of states) {
-      const fired = KV_TASKS.filter((t) => setupMismatches(a.s, SETUPS[t.observe as string]).length === 0).map((t) => t.id)
-      expect(fired).toContain(a.id)
+  test('each setup fires its own reading on Run, and the one overlap is kv.oom-context also firing kv.bytes-per-token', () => {
+    // both pin only Llama-3-70B and FP16 KV between them, and each task grades its own key, so the extra reading is harmless
+    for (const a of KV_TASKS) {
+      const state = stateFromSetup(SETUPS[a.observe as string])
+      const fired = KV_TASKS.filter((t) => setupMismatches(state, SETUPS[t.observe as string]).length === 0).map((t) => t.id)
+      const expected = a.id === 'kv.oom-context' ? ['kv.bytes-per-token', 'kv.oom-context'] : [a.id]
+      expect([...fired].sort()).toEqual(expected)
     }
   })
 

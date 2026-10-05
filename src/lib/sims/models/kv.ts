@@ -6,7 +6,7 @@
  * KvCacheSim renders this, the five `kv.*` outcome tasks read it (the sim's Run button turns the current
  * setup into an `Observation`), and phone mode draws the canonical outcome from `PHONE_MODELS` without a sim.
  * Every real-world number comes from a claim (W4): model shapes from `model.*`, GPUs from the atlas, the
- * vLLM block size from `production.vllm.block-size`. The three scenario constants are `synthetic.kv.*`.
+ * vLLM block size from `production.vllm.block-size`. The scenario constants are `synthetic.kv.*`.
  * No React, no DOM, no clock: it runs under `bun test`.
  */
 
@@ -46,10 +46,11 @@ const preset = (id: ModelPreset['id'], name: string, claim: string, paramsClaim:
 })
 
 const mixtralActiveB = claimNumber('model.mixtral-8x7b.active-params')
+const gqaNote = (claim: string): string => `GQA, ${claimNumber(`model.${claim}.kv-heads`)} KV heads`
 
 export const PRESETS: readonly ModelPreset[] = [
-  preset('llama3-8b', 'Llama-3-8B', 'llama3-8b', 'model.llama3-8b.params', 'GQA, 8 KV heads'),
-  preset('llama3-70b', 'Llama-3-70B', 'llama3-70b', 'model.llama3-70b.params', 'GQA, 8 KV heads'),
+  preset('llama3-8b', 'Llama-3-8B', 'llama3-8b', 'model.llama3-8b.params', gqaNote('llama3-8b')),
+  preset('llama3-70b', 'Llama-3-70B', 'llama3-70b', 'model.llama3-70b.params', gqaNote('llama3-70b')),
   preset(
     'mixtral-8x7b',
     'Mixtral-8x7B',
@@ -148,8 +149,8 @@ export const DEFAULT_STATE: KvState = {
   paged: true,
 }
 
-/** Custom has no parameter count of its own; the sim treats it as a 7B-class model. */
-export const CUSTOM_PARAMS_B = 7
+/** Custom has no parameter count of its own; the sim gives it a stand-in size (`synthetic.kv.custom-params`). */
+export const CUSTOM_PARAMS_B = claimNumber('synthetic.kv.custom-params')
 
 export const paramsOf = (s: Pick<KvState, 'presetId'>): number =>
   s.presetId === 'custom' ? CUSTOM_PARAMS_B : (presetById(s.presetId)?.paramsB ?? CUSTOM_PARAMS_B)
