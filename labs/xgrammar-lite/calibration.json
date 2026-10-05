@@ -1,0 +1,260 @@
+{
+  "lab": "xgrammar-lite",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "eaa2130eff7798fe997f53849da10b78c755c9611f9f13c916491a3f3b9467ca",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "schema_compile": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "bool_prefix": 0,
+        "cache_by_source": 0,
+        "complete_early": 0,
+        "enum_is_string": 0,
+        "first_byte_mask": 0,
+        "int_no_bounds": 0,
+        "key_any": 0,
+        "leading_zero": 0,
+        "no_cache": 0,
+        "no_escapes": 0,
+        "no_whitespace": 0,
+        "non_sticky": 0,
+        "reject_at_token_end": 0,
+        "trailing_ok": 0
+      }
+    },
+    "valid_acceptance": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "bool_prefix": 0,
+        "cache_by_source": 0,
+        "complete_early": 1,
+        "enum_is_string": 0,
+        "first_byte_mask": 0,
+        "int_no_bounds": 0,
+        "key_any": 0,
+        "leading_zero": 0,
+        "no_cache": 0,
+        "no_escapes": 1,
+        "no_whitespace": 1,
+        "non_sticky": 0,
+        "reject_at_token_end": 0,
+        "trailing_ok": 0
+      }
+    },
+    "earliest_rejection": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "bool_prefix": 1,
+        "cache_by_source": 0,
+        "complete_early": 0,
+        "enum_is_string": 1,
+        "first_byte_mask": 0,
+        "int_no_bounds": 1,
+        "key_any": 1,
+        "leading_zero": 1,
+        "no_cache": 0,
+        "no_escapes": 0,
+        "no_whitespace": 0,
+        "non_sticky": 1,
+        "reject_at_token_end": 1,
+        "trailing_ok": 1
+      }
+    },
+    "token_mask": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "bool_prefix": 0,
+        "cache_by_source": 0,
+        "complete_early": 0,
+        "enum_is_string": 0.927,
+        "first_byte_mask": 1,
+        "int_no_bounds": 0.46,
+        "key_any": 0.995,
+        "leading_zero": 0.045,
+        "no_cache": 0,
+        "no_escapes": 0,
+        "no_whitespace": 0,
+        "non_sticky": 0,
+        "reject_at_token_end": 0,
+        "trailing_ok": 0.048
+      }
+    },
+    "mask_overhead": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "bool_prefix": 0,
+        "cache_by_source": 0,
+        "complete_early": 0,
+        "enum_is_string": 0,
+        "first_byte_mask": 0,
+        "int_no_bounds": 0,
+        "key_any": 0,
+        "leading_zero": 0,
+        "no_cache": 0,
+        "no_escapes": 0,
+        "no_whitespace": 0,
+        "non_sticky": 0,
+        "reject_at_token_end": 0,
+        "trailing_ok": 0
+      }
+    },
+    "compile_cache": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "bool_prefix": 0,
+        "cache_by_source": 1,
+        "complete_early": 0,
+        "enum_is_string": 0,
+        "first_byte_mask": 0,
+        "int_no_bounds": 0,
+        "key_any": 0,
+        "leading_zero": 0,
+        "no_cache": 1,
+        "no_escapes": 0,
+        "no_whitespace": 0,
+        "non_sticky": 0,
+        "reject_at_token_end": 0,
+        "trailing_ok": 0
+      }
+    }
+  },
+  "mutants": {
+    "bool_prefix": {
+      "defaultSeedFails": [
+        "earliest_rejection"
+      ],
+      "caughtBy": [
+        "earliest_rejection"
+      ]
+    },
+    "cache_by_source": {
+      "defaultSeedFails": [
+        "compile_cache"
+      ],
+      "caughtBy": [
+        "compile_cache"
+      ]
+    },
+    "complete_early": {
+      "defaultSeedFails": [
+        "valid_acceptance"
+      ],
+      "caughtBy": [
+        "valid_acceptance"
+      ]
+    },
+    "enum_is_string": {
+      "defaultSeedFails": [
+        "earliest_rejection",
+        "token_mask"
+      ],
+      "caughtBy": [
+        "earliest_rejection"
+      ]
+    },
+    "first_byte_mask": {
+      "defaultSeedFails": [
+        "token_mask"
+      ],
+      "caughtBy": [
+        "token_mask"
+      ]
+    },
+    "int_no_bounds": {
+      "defaultSeedFails": [
+        "earliest_rejection",
+        "token_mask"
+      ],
+      "caughtBy": [
+        "earliest_rejection"
+      ]
+    },
+    "key_any": {
+      "defaultSeedFails": [
+        "earliest_rejection",
+        "token_mask"
+      ],
+      "caughtBy": [
+        "earliest_rejection",
+        "token_mask"
+      ]
+    },
+    "leading_zero": {
+      "defaultSeedFails": [
+        "earliest_rejection"
+      ],
+      "caughtBy": [
+        "earliest_rejection"
+      ]
+    },
+    "no_cache": {
+      "defaultSeedFails": [
+        "compile_cache"
+      ],
+      "caughtBy": [
+        "compile_cache"
+      ]
+    },
+    "no_escapes": {
+      "defaultSeedFails": [
+        "valid_acceptance"
+      ],
+      "caughtBy": [
+        "valid_acceptance"
+      ]
+    },
+    "no_whitespace": {
+      "defaultSeedFails": [
+        "valid_acceptance"
+      ],
+      "caughtBy": [
+        "valid_acceptance"
+      ]
+    },
+    "non_sticky": {
+      "defaultSeedFails": [
+        "earliest_rejection"
+      ],
+      "caughtBy": [
+        "earliest_rejection"
+      ]
+    },
+    "reject_at_token_end": {
+      "defaultSeedFails": [
+        "earliest_rejection"
+      ],
+      "caughtBy": [
+        "earliest_rejection"
+      ]
+    },
+    "trailing_ok": {
+      "defaultSeedFails": [
+        "earliest_rejection"
+      ],
+      "caughtBy": [
+        "earliest_rejection"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "steps=11 complete=true legal_per_step=3,4,3,1,2,1,1,1,1,2,4 text=\"{\\\"kind\\\":\\\"answer\\\",\\\"count\\\":43}\""
+  }
+}
