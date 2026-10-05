@@ -10,8 +10,7 @@
  *   Stride < 64 B shares a cache line across accesses (latency × stride/64).
  *   Stride ≥ 4 KB adds a TLB-miss penalty and defeats the prefetcher.
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Play } from 'lucide-react'
 import {
@@ -24,6 +23,8 @@ import {
   usePrefersReducedMotion,
   useSimLog,
 } from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
+import type { MirrorTable } from '@/lib/sims/types'
 
 const SIM_ID = 'sim-memory'
 
@@ -107,8 +108,39 @@ export default function LatencyWalk() {
   const [width, setWidth] = useState(720)
   const tickRef = useRef(0)
 
+  const mirrorId = `${useId()}-mirror`
+
   const wsKb = WS_SIZES_KB[wsIdx]
   const lastRun = runs[runs.length - 1]
+
+  /* DOM mirror of the chart: the model's staircase at the current stride, then every recorded run.
+     The announcement follows the last run only, so slider and chip changes stay silent. */
+  const mirrorTable = useMemo<MirrorTable>(() => {
+    const model = WS_SIZES_KB.map((kb) => [
+      `model ${fmtKb(kb)}`,
+      fmtKb(kb),
+      `${strideB} B`,
+      prefetch ? 'on' : 'off',
+      levelFor(kb).name,
+      fmtNs(latencyModel(kb, strideB, prefetch)),
+    ])
+    const measured = runs.map((r) => [
+      `run ${r.id}`,
+      fmtKb(r.wsKb),
+      `${r.strideB} B`,
+      r.prefetch ? 'on' : 'off',
+      r.level,
+      fmtNs(r.ns),
+    ])
+    return {
+      caption: `Latency per dependent load against working set. The model rows are the expected staircase at stride ${strideB} B with the prefetcher ${prefetch ? 'on' : 'off'}; the run rows are your ${runs.length} recorded runs.`,
+      columns: ['Point', 'Working set', 'Stride', 'Prefetcher', 'Level', 'ns per load'],
+      rows: [...model, ...measured],
+      announce: lastRun
+        ? `Run ${lastRun.id}: ${lastRun.level} answers at working set ${fmtKb(lastRun.wsKb)}, stride ${lastRun.strideB} B, ${fmtNs(lastRun.ns)} per load.`
+        : undefined,
+    }
+  }, [strideB, prefetch, runs, lastRun])
 
   /* ---- run one pointer-chase ---- */
   const run = useCallback(() => {
@@ -320,8 +352,10 @@ export default function LatencyWalk() {
               style={{ width: '100%', height: CHART_H }}
               role="img"
               aria-label={`Latency versus working-set chart. ${runs.length} runs recorded.`}
+              aria-describedby={mirrorId}
             />
           </div>
+          <SimMirror id={mirrorId} table={mirrorTable} className="mt-3" />
 
           {/* access trace — a decorative strip of dependent hops */}
           {probe !== null && lastRun && (
