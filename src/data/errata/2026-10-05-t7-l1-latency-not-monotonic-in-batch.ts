@@ -24,7 +24,7 @@ export default {
       correct: [2],
       why: [
         'Throughput saturates against the compute and bandwidth roofs, and latency does not stay flat: bigger batches lengthen every step and deepen the queue. A peak taken at the limit hides that cost.',
-        'Throughput flattens rather than collapsing, and latency is the metric that blows up. Treating latency as flat is the exact contrast the old lesson text got wrong.',
+        'Throughput flattens rather than collapsing, and latency does not stay flat: it keeps rising with batch size and blows up past the knee. The old lesson text got this wrong from the other side, calling latency non-monotonic.',
         'Right: past the knee more batch adds almost no tokens, but queueing and longer steps push p99 vertical. A bare peak number is usually taken in that region, so ask for the latency.',
         'Latency climbs well before any memory limit is hit, because queueing and per-step time grow with batch. A figure with no TTFT or TPOT hides that long before requests fail.',
       ],
