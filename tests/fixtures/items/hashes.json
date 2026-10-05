@@ -11,5 +11,13 @@
     "capacity-chats": "82135e52",
     "capacity-tokens": "dd7e6c3a",
     "seq-bytes": "ba9ec9ee"
+  },
+  "roofline": {
+    "attainable": "e571840e",
+    "batch-to-ridge": "4fd5f0fb",
+    "bound": "85d2d00d",
+    "decode-b1": "6119396e",
+    "ridge": "14bb7e4d",
+    "tile-ai": "7b355c65"
   }
 }
