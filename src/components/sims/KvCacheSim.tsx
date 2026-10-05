@@ -746,7 +746,7 @@ export default function KvCacheSim() {
               <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">per-token cost</div>
               <div className="mt-1 font-display text-[28px] font-bold text-text-1">
                 {(calc.kvPerToken / 1024).toFixed(1)}
-                <span className="ml-1 text-[14px] text-text-3">KB/token</span>
+                <span className="ml-1 text-[14px] text-text-3">KiB/token</span>
               </div>
               <div className="mt-1 font-mono text-[11px] text-text-3">
                 2 × {layers} × {kvHeads} × {headDim} × {kvBytes}B — every token, every sequence, forever

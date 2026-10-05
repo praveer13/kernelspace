@@ -29,7 +29,7 @@ export default {
         'This is the retracted two-language list. FlashAttention-4 is written in CuTe DSL, which is neither CUDA C nor Triton, so the set of kernel languages was wider than two.',
         'Rust owns host code such as routers and schedulers. Rust GPU projects like CubeCL and rust-cuda exist but remain marginal in production kernels, so safety has not moved kernel authoring.',
         'Right: kernel language follows the GPU vendor ecosystem, now including CuTe DSL (FlashAttention-4), Triton/Gluon and TileLang next to CUDA C++. Rust and Zig serve the host side.',
-        'Zig has no vote on kernels. They reach the device through toolchains from the GPU vendor ecosystem, where the libraries and profilers live, so comptime does not change that.',
+        'Zig has no vote on kernels. They reach the device through toolchains from the GPU vendor ecosystem, where the vendor libraries and tooling live, so comptime does not change that.',
       ],
     },
     {

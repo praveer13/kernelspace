@@ -130,9 +130,9 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           q: 'llm-d vs Dynamo is closest to…',
           options: [
             'Postgres vs MySQL: llm-d packages disaggregated serving for Kubernetes, while Dynamo is NVIDIA\'s planner and transfer stack',
-            'Kubernetes vs Docker (Linux containers): llm-d orchestrates the replicas, while Dynamo is the container runtime that each worker runs in',
-            'vLLM vs SGLang (Python vs Python): two competing single-node engines that differ in scheduler design but not in how they split prefill and decode',
-            'A compiler vs an interpreter (LLVM vs CPython): llm-d fixes the serving topology ahead of time, while Dynamo decides placement per request',
+            'Kubernetes vs Docker (a cluster scheduler vs a single-host container runtime): llm-d orchestrates the replicas, while Dynamo is the container runtime that each worker runs in',
+            'vLLM vs SGLang (both open-source engines, each with its own scheduler and KV paging): they compete as single-node engines and differ in scheduler design but not in how they split prefill and decode',
+            'A compiler vs an interpreter (translation before running vs during running): llm-d fixes the serving topology ahead of time, while Dynamo decides placement per request',
           ],
           correct: [0],
           explanation:

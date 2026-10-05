@@ -48,7 +48,7 @@ const WS_MAX_IDX = WS_SIZES_KB.length - 1
 const STRIDES_B = [8, 64, 256, 1024, 4096]
 
 const fmtKb = (kb: number): string =>
-  kb >= 1024 ? `${kb / 1024} MB` : `${kb} KB`
+  kb >= 1024 ? `${kb / 1024} MiB` : `${kb} KiB`
 const fmtNs = (ns: number): string =>
   ns >= 100 ? `${ns.toFixed(0)} ns` : ns >= 10 ? `${ns.toFixed(1)} ns` : `${ns.toFixed(2)} ns`
 

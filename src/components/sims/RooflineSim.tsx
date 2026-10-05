@@ -183,9 +183,9 @@ const L2_BW_GBS = 12_000 // ~12 TB/s
 const PCIE_BW_GBS = 32 // ~32 GB/s
 
 const fmtBytes = (b: number): string => {
-  if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`
-  if (b >= 1024) return `${(b / 1024).toFixed(1)} KB`
+  if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GiB`
+  if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MiB`
+  if (b >= 1024) return `${(b / 1024).toFixed(1)} KiB`
   return `${b} B`
 }
 

@@ -177,7 +177,7 @@ export default function MatrixBench() {
       log(
         t,
         'STRIDE',
-        `stride ${(n * 8) / 1024} KB — one double per line, TLB miss per access`,
+        `stride ${(n * 8) / 1024} KiB — one double per line, TLB miss per access`,
         'warn',
       )
     }
@@ -381,7 +381,7 @@ export default function MatrixBench() {
               <span className="ml-2 font-mono text-[9px] text-text-3">
                 {lastRun.order === 'row'
                   ? 'one line reused 8×'
-                  : `stride ${(lastRun.n * 8) / 1024} KB`}
+                  : `stride ${(lastRun.n * 8) / 1024} KiB`}
               </span>
             </div>
           )}
@@ -479,8 +479,8 @@ export default function MatrixBench() {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`
   return `${bytes} B`
 }

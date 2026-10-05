@@ -4,7 +4,7 @@ export default {
   id: '2026-10-05-binary-units-page-size-and-kv-sweep',
   date: '2026-10-05',
   kind: 'error',
-  lessons: ['t0.l2', 't0.l3', 't1.l3', 't1.l4', 't2.l2', 't2.l7', 't4.l2', 't5.l4', 't5.l5'],
+  lessons: ['t0.l3', 't1.l3', 't1.l4', 't2.l2', 't2.l7', 't4.l2', 't5.l4', 't5.l5'],
   title: 'Page sizes and KV-cache sizes are binary: 4 KiB pages, 128 KiB and 320 KiB per token',
   before:
     'T0 to T2 wrote a page as "4 KB" and a 64 KB matrix stride. T4.L2, T5.L4 and T5.L5 wrote KV sizes as "2.6 MB", "320 KB" and "128 KB per token" (a block as 2 MB).',
