@@ -646,13 +646,13 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     causes: [
       {
         id: 'sched-bug',
-        label: 'scheduler regression: its admission order starves long prompts, so their time to first token climbs while the pool sits mostly idle',
+        label: 'scheduler regression: a recent change makes it admit too few requests per step, so batches stay small, TTFT climbs and the pool sits mostly idle',
         correct: false,
-        why: 'The pool is not idle: free blocks sit near zero. Preemption only hits requests that were already admitted, so rising auto-preempts show the scheduler is admitting and memory is the constraint.',
+        why: 'The pool is not idle: free blocks sit near zero. Preemption only hits requests that were already admitted, so rising auto-preempts show the scheduler is admitting plenty and memory is the constraint.',
       },
       {
         id: 'pool-small',
-        label: 'capacity wall: the KV pool is too small for the new context lengths — allocation failures force recompute preemption',
+        label: 'capacity wall: the KV pool is too small for the new context lengths, so allocation failures force recompute preemption',
         correct: true,
         why: 'Right: near-zero free blocks plus rising auto-preempts mean allocations fail and preempted requests restart by recompute. Longer contexts take more blocks each, so the same pool holds fewer sequences and TTFT climbs.',
       },
@@ -660,13 +660,13 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
         id: 'net-stall',
         label: 'network stall between workers: transfers delay the first token while decode on each worker stays normal',
         correct: false,
-        why: 'A transfer stall would delay first tokens without touching memory counters. Near-zero free blocks and climbing auto-preempts are a KV-allocation signature, and no network fault produces them.',
+        why: 'A transfer stall would delay first tokens, but by itself it would not explain near-zero free blocks together with rising auto-preempts. Those are KV-allocation signals, so the pool is the better-supported cause.',
       },
       {
         id: 'queue-lie',
         label: 'intake queue silently dropping requests, so clients retry in bursts and each burst waits behind the last',
         correct: false,
-        why: 'Drops would appear as shed or lost completions, and retries add load without creating preemptions. Nonzero auto-preempts with exhausted free blocks point at the KV pool, not at intake.',
+        why: 'Retry bursts would raise queue delay, but they do not explain free blocks near zero together with nonzero, rising auto-preempts. That signature points at the KV pool, not at intake.',
       },
     ],
     mitigations: [
@@ -678,15 +678,15 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
       },
       {
         id: 'bigger-pool',
-        label: 'grow the pool (more HBM / FP8 KV / offload tier) and cap admitted context',
+        label: 'grow the pool with more HBM, FP8 KV or an offload tier, and cap admitted context',
         correct: true,
         why: 'Right: more usable blocks (HBM, FP8 KV at half the bytes of 16-bit, or an offload tier) remove the capacity wall, and a cap on admitted context stops one long request from evicting many others.',
       },
       {
         id: 'smaller-batch',
-        label: 'lower max_running, leave the pool and context caps alone, and accept lower throughput',
+        label: 'lower max_running to cut preemptions, leave the pool and context caps as they are, and accept a throughput ceiling',
         correct: false,
-        why: 'Fewer concurrent sequences does reduce preemptions, but only by throttling throughput while the pool stays too small for the traffic. Queueing grows instead; this treats the symptom, and capacity is the fix.',
+        why: 'Fewer concurrent sequences does cut preemptions, but it only caps throughput: the pool stays too small for the new contexts and the cause is untouched. The key adds blocks and a context cap instead.',
       },
       {
         id: 'chunked-prefill',
@@ -736,7 +736,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
       },
       {
         id: 'fix-drain',
-        label: 'fix the drain configuration (match drain to admission capacity) and re-run the flash-crowd test',
+        label: 'fix the drain configuration so it matches what admission can absorb, then rerun the flash crowd test',
         correct: true,
         why: 'Right: the bottleneck is the drain rate, so match it to what admission can absorb. Re-running the flash-crowd test confirms shed and queue delay recover rather than assuming they do.',
       },
@@ -762,7 +762,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     causes: [
       {
         id: 'no-admission',
-        label: 'no admission control — everything is admitted at once, the batch overcommits, KV pressure and queueing collapse the SLO',
+        label: 'no admission control: everything is admitted at once, the batch overcommits, and KV pressure and queueing collapse the SLO',
         correct: true,
         why: 'Right: with no gate, 4× concurrency lands in one huge batch that overcommits KV. Completions crawl, queue delay and TTFT p95 explode and goodput falls, while TPOT for started requests holds.',
       },
@@ -780,9 +780,9 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
       },
       {
         id: 'quant',
-        label: 'quantization regression: a recent FP8 build slows every decode step, so goodput drops under load',
+        label: 'quantization regression: a recent quantized build or kernel change slows every decode step, so goodput drops under load',
         correct: false,
-        why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable and the collapse tracks launch-day concurrency, not a deploy, so the model build is not the cause.',
+        why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable, so no per-step slowdown explains the collapse; the damage is in queueing and batch size, not the model build.',
       },
     ],
     mitigations: [
@@ -794,7 +794,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
       },
       {
         id: 'admission',
-        label: 'add admission control (size-aware, headroom-aware) and an honest shed path — the lab-06 shape',
+        label: 'add admission control that sizes each admit to KV headroom plus an honest shed path as in lab 06',
         correct: true,
         why: 'Right: a size- and headroom-aware gate admits only what fits and sheds the rest honestly, so KV never overcommits and admitted requests keep meeting the SLO. Lab 06 builds this shape.',
       },
