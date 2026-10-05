@@ -13,6 +13,7 @@ import {
   topoOrder,
 } from '../../src/lib/kc/graph'
 import type { Kc } from '../../src/lib/kc/types'
+import { MAX_KCS } from '../../scripts/verify-kc'
 
 const kc = (id: string, requires: string[] = [], extra: Partial<Kc> = {}): Kc => ({
   id,
@@ -31,9 +32,9 @@ describe('the v1 graph', () => {
     for (const id of Object.values(KC)) expect(kcById(id)?.id).toBe(id)
   })
 
-  test('is about 70 KCs, under the cap, with unique well-formed ids', () => {
-    expect(KCS.length).toBeGreaterThanOrEqual(60)
-    expect(KCS.length).toBeLessThanOrEqual(80)
+  test('is under the 200 cap (§4.1), with unique well-formed ids', () => {
+    expect(KCS.length).toBeGreaterThanOrEqual(66)
+    expect(KCS.length).toBeLessThanOrEqual(MAX_KCS)
     expect(new Set(KCS.map((k) => k.id)).size).toBe(KCS.length)
     for (const k of KCS) expect(k.id).toMatch(/^(r|t[0-7])\.[a-z0-9]+(-[a-z0-9]+)*$/)
   })
@@ -136,6 +137,99 @@ describe('the v1 graph', () => {
     for (const step of GRADED_STEPS) expect(REF_KCS[`boot:${step}`]?.length).toBeGreaterThan(0)
     expect(new Set(Object.values(REF_KCS).flat())).toEqual(new Set(BOOT_KCS))
     expect(BOOT_KCS).toHaveLength(4)
+  })
+})
+
+describe('the Wave 2 contract ids (§4.2)', () => {
+  /** id → [introducing lesson, requires, labs] exactly as the §4.2 table lists them. */
+  const TABLE: Record<string, [string, string[], string[]]> = {
+    'r.permissions': ['r.l3', ['r.ownership-moves'], []],
+    'r.analyzer-limits': ['r.l4', ['r.borrow-rules'], []],
+    't3.unsafe-boundaries': ['t3.l2', ['r.analyzer-limits', 'r.slices'], []],
+    't4.quantized-bytes': ['t4.l7', ['t4.decode-bandwidth'], []],
+    't5.tokenizer-bytes': ['t5.l2', ['r.enums-option-result'], ['bpe-tokenizer']],
+    't5.bpe-merges': ['t5.l2', ['t5.tokenizer-bytes', 'r.closures-collections'], ['bpe-tokenizer']],
+    't5.block-tables': ['t5.l5', ['t2.address-translation', 'r.enums-option-result', 'r.iterators-ownership'], ['kv-block-manager']],
+    't5.block-refcounts': ['t5.l5', ['t5.block-tables', 'r.smart-pointers'], ['kv-block-manager']],
+    't5.kv-copy-on-write': ['t5.l5', ['t5.block-refcounts', 't2.copy-on-write'], ['kv-block-manager']],
+    't5.attention-variants': ['t5.l4', ['t5.kv-bytes-per-token'], []],
+    't5.kv-reads-vs-capacity': ['t5.l4', ['t5.attention-variants', 't4.decode-bandwidth'], []],
+    't5.prefix-routing': ['t5.l6', ['t5.block-refcounts'], []],
+    't5.continuous-batching': ['t5.l7', ['t5.batching-throughput', 't2.admission-scheduling'], []],
+    't5.admission-headroom': ['t5.l7', ['t5.continuous-batching', 't5.kv-capacity'], []],
+    't5.sched-order': ['t5.l7', ['t5.continuous-batching'], []],
+    't5.prefill-decode-interference': ['t5.l8', ['t5.continuous-batching'], []],
+    't5.speculative-decoding': ['t5.l8', ['t4.decode-bandwidth'], []],
+    't6.moe-active-params': ['t6.l1', ['t4.quantized-bytes'], []],
+    't6.ep-economics': ['t6.l2', ['t6.moe-active-params'], []],
+    't6.parallel-memory': ['t6.l4', ['t4.quantized-bytes'], []],
+    't6.fp4-capacity': ['t6.l5', ['t4.quantized-bytes'], []],
+    't6.spec-acceptance': ['t6.l6', ['t5.speculative-decoding'], []],
+    't6.agent-prefix-locality': ['t6.l8', ['t5.prefix-routing'], []],
+    't6.lora-adapter-bytes': ['t6.l9', ['t4.quantized-bytes'], []],
+    't7.slo-error-budget': ['t7.l1', [], []],
+    't7.goodput': ['t7.l1', ['t7.slo-error-budget'], []],
+    't7.goodput-curve': ['t7.l2', ['t7.goodput'], []],
+    't7.pareto-frontier': ['t7.l3', ['t7.goodput-curve'], []],
+    't7.cost-per-mtok': ['t7.l4', ['t7.goodput'], []],
+    't7.capacity-planning': ['t7.l5', ['t7.goodput'], []],
+    't7.incident-diagnosis': ['t7.l5', ['t7.slo-error-budget'], []],
+  }
+
+  test('all 31 are exported from ids.ts and defined', () => {
+    expect(Object.keys(TABLE)).toHaveLength(31)
+    const exported = new Set<string>(Object.values(KC))
+    for (const id of Object.keys(TABLE)) {
+      expect({ id, exported: exported.has(id) }).toEqual({ id, exported: true })
+      expect(kcById(id)?.id).toBe(id)
+    }
+  })
+
+  test('each has the introducing lesson, requires and labs the table lists', () => {
+    for (const [id, [lesson, requires, labs]] of Object.entries(TABLE)) {
+      const k = kcById(id)
+      expect({ id, lesson: k?.lessons[0] }).toEqual({ id, lesson })
+      expect({ id, requires: [...(k?.requires ?? [])].sort() }).toEqual({ id, requires: [...requires].sort() })
+      expect({ id, labs: k?.labs ?? [] }).toEqual({ id, labs })
+    }
+  })
+
+  test('every gen link of the family table is set, so a family lands without editing a KC file', () => {
+    const families: Record<string, string[]> = {
+      goodput: ['t7.goodput', 't7.goodput-curve', 't7.pareto-frontier', 't7.capacity-planning'],
+      cost: ['t7.cost-per-mtok', 't6.ep-economics', 't6.agent-prefix-locality'],
+      memory: ['t4.quantized-bytes', 't6.moe-active-params', 't6.parallel-memory', 't6.fp4-capacity', 't6.lora-adapter-bytes'],
+      spec: ['t6.spec-acceptance', 't5.speculative-decoding'],
+      sig: ['t7.incident-diagnosis', 't5.kv-capacity', 't2.admission-scheduling', 't7.capacity-planning', 't5.prefill-decode-interference'],
+      compile: [
+        'r.ownership-moves',
+        'r.clone-copy-drop',
+        'r.borrow-rules',
+        'r.slices',
+        'r.lifetimes',
+        'r.interior-mutability',
+        'r.permissions',
+        'r.analyzer-limits',
+      ],
+    }
+    for (const [family, ids] of Object.entries(families)) {
+      expect({ family, kcs: KCS.filter((k) => k.gen?.includes(family)).map((k) => k.id).sort() }).toEqual({ family, kcs: [...ids].sort() })
+    }
+  })
+
+  test('the R pairing edges: t1.ownership-answer requires r.permissions, t3.unsafe-boundaries requires r.analyzer-limits', () => {
+    expect(kcById('t1.ownership-answer')?.requires).toContain(KC.permissions)
+    expect(kcById(KC.unsafeBoundaries)?.requires).toContain(KC.analyzerLimits)
+    const index = indexKcs(KCS)
+    for (const lab of ['kv-block-manager', 'bpe-tokenizer']) {
+      expect(KCS.filter((k) => k.labs?.includes(lab)).length).toBeGreaterThan(0)
+    }
+    // the readiness lessons each introduce a prerequisite of the lab's check KCs (§4.2, last note)
+    const labReady: Record<string, string[]> = { 'kv-block-manager': ['r.l5', 'r.l6', 'r.l7'], 'bpe-tokenizer': ['r.l5', 'r.l6'] }
+    for (const [lab, lessons] of Object.entries(labReady)) {
+      const reach = new Set(KCS.filter((k) => k.labs?.includes(lab)).flatMap((k) => [k.id, ...prerequisitesOf(index, k.id)]))
+      for (const l of lessons) expect({ lab, l, ok: kcsIntroducedIn(KCS, l).some((k) => reach.has(k.id)) }).toEqual({ lab, l, ok: true })
+    }
   })
 })
 

@@ -188,7 +188,8 @@ describe('re-entry on a real ledger (cards + composer)', () => {
 
   test('spreads the overdue cards over 14 days, behind a welcome-back set of one session', () => {
     let spreadCards = 0
-    for (const seed of [5, 6, 7, 8]) {
+    // seeds 16 and 21 join: the 2a-06 contract KCs make the simulated learner earn cards faster, leaving seeds 5-8 with pending ones (skipped)
+    for (const seed of [5, 6, 7, 8, 16, 21]) {
       const { r, natural, now } = away(seed, 25)
       if (natural.pending.length > 0) continue
       const set = deriveCards(r.events, CONTENT, now)
