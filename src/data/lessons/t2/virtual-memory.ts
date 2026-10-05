@@ -152,7 +152,7 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           why: [
             'Misconception: levels match the cache tiers. Each level just consumes 9 address bits; the number of levels falls out of the 48-bit space and 4 KiB pages, not the cache hierarchy.',
             'Right: 2^36 pages at 8 B each is ~512 GiB if flat. A radix tree allocates lower levels only for mapped regions, so a sparse address space costs a few KiB of page tables.',
-            'Misconception: one cache line per level. A 4 KiB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from 48 address bits at 9 each.',
+            'Misconception: one cache line per level. A 4 KiB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from the 36 page-number bits (48 address bits minus the 12-bit page offset) at 9 bits per 512-entry level.',
             'Misconception: smaller tables make switches cheaper. A switch loads one root pointer (CR3) regardless of depth, and the TLB is flushed or PCID-tagged, not preserved level by level.',
           ],
         },
@@ -202,9 +202,9 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           ],
           correct: [1],
           explanation:
-            'COW makes fork() nearly free and keeps memory shared until it diverges. It is also exactly how vLLM forks a beam-search branch or shares a prompt prefix: same blocks, copy only the block being written.',
+            'COW makes fork() far cheaper than copying memory: only the page tables are copied, and the data stays shared until it diverges. It is also exactly how vLLM forks a beam-search branch or shares a prompt prefix: same blocks, copy only the block being written.',
           why: [
-            'Misconception: fork copies everything. Early Unix did; modern fork copies page tables and marks pages read-only, so cost scales with mapped regions, not with data size, and is far cheaper.',
+            'Misconception: fork copies everything. Early Unix did; modern fork copies page tables and marks pages read-only, so its cost scales with the page tables, about 1/512 of the mapped memory with 4 KiB pages, rather than with copying the data, and is far cheaper.',
             'Right: pages stay shared and read-only until a write faults. The kernel then copies just that page for the writer, so untouched memory is never duplicated.',
             'Misconception: shared read-write. That describes MAP_SHARED memory. After fork a write is private to the writer; the other process never sees it, which is the point of COW.',
             'Misconception: writes go to swap. Swap holds evicted pages under memory pressure; COW copies in RAM and has no rollback log, since the child simply gets its own copy.',

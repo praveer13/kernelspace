@@ -13,7 +13,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `T4.L3's roofline doesn't care about marketing; it cares about two numbers. Blackwell changes both, and adds a third lever. **B200**: ~180 GB HBM3e per GPU as shipped in HGX/DGX B200 (1,440 GB across 8 GPUs; many sources cite 192 GB per GPU, but the shipped spec lists 1,440 GB per 8) at **~8 TB/s** (2.4× H100's bandwidth, ~2.25× the capacity). **GB200 NVL72**: 72 Blackwell GPUs in one NVLink domain at ~1.8 TB/s per GPU bidirectional — the "one giant GPU" fiction made physical, and the reason EP144 and CP-over-32-nodes are routine (T6.L2, T6.L4). And **FP4**: a native 4-bit floating point format the tensor cores execute, doubling FP8 throughput per FLOP and cutting weight bytes ~1.8× versus FP8 (about 4.5 bits per weight once the block scales are counted).
+      md: `T4.L3's roofline doesn't care about marketing; it cares about two numbers. Blackwell changes both, and adds a third lever. **B200**: ~180 GB HBM3e per GPU as shipped in HGX/DGX B200 (1,440 GB across 8 GPUs; many sources cite 192 GB per GPU, but the shipped spec lists 1,440 GB per 8) at **~8 TB/s** (2.4× H100's bandwidth, ~2.25× the capacity). **GB200 NVL72**: 72 Blackwell GPUs in one NVLink domain at ~1.8 TB/s per GPU bidirectional — the "one giant GPU" fiction made physical. It makes wide groups cheaper rather than possible: EP144 decode already spans 18 H800 nodes and CP already runs across 16–32 H100 hosts, over the network between 8-GPU Hopper nodes (T6.L2, T6.L4). And **FP4**: a native 4-bit floating point format the tensor cores execute, doubling FP8 throughput per FLOP and cutting weight bytes ~1.8× versus FP8 (about 4.5 bits per weight once the block scales are counted).
 
 Run T4's decode arithmetic: tokens/s ≈ bandwidth ÷ bytes-per-token. B200 alone roughly doubles the H100 decode rate at FP8; NVFP4 moves ~1.8× fewer weight bytes than FP8 for models quantized to it (4.5 bits against 8, not a clean half). NVIDIA's B200 DeepSeek-R1 demo: **368 tok/s/user** on 8×B200 with NVFP4 weights + MTP-3 speculative + fused kernels — up from a 67 tok/s baseline, 5.5×, on the heaviest open model in production.`,
     },
@@ -33,14 +33,14 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
       stats: [
         { value: '~180 GB', label: 'B200 HBM3e (as shipped)', hint: '~2.25× H100 capacity (many sources cite 192 GB; shipped DGX/HGX B200 lists 1,440 GB per 8 GPUs) — a 70B FP16 model (140 GB) + ~120k tokens of KV at 320 KiB/token in one GPU.' },
         { value: '~8 TB/s', label: 'B200 HBM bandwidth', hint: '2.4× H100\'s 3.35 TB/s. Decode rates scale with it.' },
-        { value: '~1.8 TB/s', label: 'NVLink 5 per GPU', hint: 'GB200 NVL72: 72 GPUs, one domain. TP/EP/CP territory (T6.L4).' },
+        { value: '~1.8 TB/s', label: 'NVLink 5 per GPU', hint: 'GB200 NVL72: 72 GPUs, one domain. TP needs NVLink; EP and CP get cheaper (T6.L4).' },
         { value: '368 tok/s', label: 'DeepSeek-R1 per user on 8×B200', hint: 'NVFP4 + MTP3 + fused kernels, min-latency config (NVIDIA TRT-LLM blog).' },
       ],
     },
     {
       type: 'callout',
       variant: 'analogy',
-      md: `Blackwell is your **DDR4→DDR5 + L3-doubling upgrade**, but the business effect is bigger: when bytes-per-token fall ~1.8× and bandwidth rises ~2.4×, the *same SLO* is met with a fraction of the fleet — or the same fleet meets a SLO that was previously fantasy. This is the T7 theme arriving early: hardware generations are no longer 20% events; they change which architectures are viable (Blackwell's NVL72 is why wide-EP decode is a thing you do, not a thing you admire).`,
+      md: `Blackwell is your **DDR4→DDR5 + L3-doubling upgrade**, but the business effect is bigger: when bytes-per-token fall ~1.8× and bandwidth rises ~2.4×, the *same SLO* is met with a fraction of the fleet — or the same fleet meets a SLO that was previously fantasy. This is the T7 theme arriving early: hardware generations are no longer 20% events; they change which architectures are affordable (Blackwell's NVL72 does not invent wide-EP decode, which DeepSeek ran over RDMA on Hopper; it makes it cheaper to run).`,
     },
     {
       type: 'quiz',
@@ -73,10 +73,10 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
           ],
           correct: [1],
           explanation:
-            'T6.L4\'s rule — per-layer collectives need the NVLink tier — used to bound those axes to ~8 GPUs. NVL72 makes it 72. That is why wide-EP decode and CP-over-32-nodes are production patterns now.',
+            'T6.L4: only TP\'s per-layer all-reduces need the NVLink tier, and that tier used to end at ~8 GPUs. NVL72 makes it 72. EP\'s all-to-all and CP\'s ring attention also sit on the per-layer path, but they already run over RDMA when communication overlaps compute (DeepEP, ring attention). A 72-GPU NVLink domain makes wide EP and CP cheaper; it did not make them possible.',
           why: [
-            'Power and cooling are facility concerns, not what changes the design. The architectural change is NVLink domain size, which sets how wide TP, EP and CP can go.',
-            'Right: per-layer collectives need the NVLink tier, which used to end at about 8 GPUs. A 72-GPU domain lets TP, EP and CP span a rack without dropping to RDMA.',
+            'Power and cooling are facility concerns, not what changes the design. The architectural change is NVLink domain size, which sets how wide TP, EP and CP groups can stay on NVLink.',
+            'Right: TP\'s per-layer all-reduces need the NVLink tier, which used to end at about 8 GPUs. A 72-GPU domain lets TP, EP and CP span a rack without dropping to RDMA, which makes wide EP and CP cheaper. EP and CP already ran over RDMA with overlap, so NVL72 did not make them possible.',
             'Cooling affects sustained clocks, a modest per-GPU effect. The topology change comes from the NVLink domain, which turns cross-node RDMA hops into in-domain hops.',
             'Host memory extends capacity but at far lower bandwidth than HBM, so it is a tier, not a fix for per-layer collectives. The change that matters is the 72-GPU NVLink domain.',
           ],

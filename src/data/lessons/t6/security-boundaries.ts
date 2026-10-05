@@ -175,8 +175,8 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
           why: [
             'cgroups enforce memory and CPU limits for containers. The weakness is the shared kernel, which a kernel bug in a syscall can turn into host compromise.',
             'Right: namespaces and cgroups still run on the host kernel, so a kernel flaw can escape. A microVM puts a separate guest kernel behind a hardware-virtualization boundary.',
-            'User namespaces and rootless containers map container root to an unprivileged host user. The risk is the shared kernel attack surface, not an automatic root equivalence.',
-            'Seccomp filters syscalls and network namespaces limit networking in containers. These controls are valuable but still run on one shared host kernel, and so do not add depth.',
+            'Container root is host UID 0 by default, but Docker drops most capabilities and the mount namespace hides host files unless they are mounted in. User namespaces or rootless mode map it to an unprivileged host user. The deeper risk is the shared kernel attack surface.',
+            'Seccomp filters syscalls and network namespaces limit networking in containers. These controls add depth, but they all run on one shared host kernel, so they cannot add the second kernel boundary a microVM gives.',
           ],
         },
         {

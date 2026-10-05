@@ -26,7 +26,7 @@ Reproduce DeepSeek's day (open-infra index, Feb 2025): **226.75 nodes avg (8×H8
       md: `## The napkin model that prices anything
 
 One line per direction:
-- **Cost/token ≈ (GPU-hours × $/hr) ÷ tokens produced.** Tokens produced = goodput × time — which is why T7.L1's objective function is also the cost function. Utilization below SLO collapse is the whole game: an idle GPU bills the same as a full one.
+- **Cost per useful token ≈ (GPU-hours × $/hr) ÷ tokens delivered within SLO.** Those tokens = goodput × time — which is why T7.L1's objective function is also the cost function. Output from requests that miss their latency targets costs GPU-hours but does not count as a useful token. Utilization below SLO collapse is the whole game: an idle GPU bills the same as a full one.
 - **Revenue/token ≈ price × (1 + margin target).** Then solve for the goodput you must sustain: required tok/s/GPU = (price-adjusted cost) ÷ (tokens/GPU/s at your operating point on the T7.L3 frontier).
 
 Worked example, SGLang's DeepSeek reproduction (T6.L2): 96×H100, 22.3k output tok/s/node → per node-day: 22.3e3 × 86400 = 1.93G output tokens. At $2/GPU/hr × 8 GPUs × 24 = $384/node-day → **$0.20/M output tokens** (their published estimate matches). At R1's $2.19/M price, the margin is the whole story of 2025 inference economics — and why API prices then fell ~80% in a year: competition found the same arithmetic.
@@ -107,7 +107,7 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
           ],
         },
         {
-          q: 'An engine\'s cost per token is driven most directly by…',
+          q: 'At a fixed hourly rate, an engine\'s cost per token is driven most directly by…',
           options: [
             'The number of chips in the fleet, with each added chip raising the hourly bill and the cost of each token',
             'Goodput per billed chip hour, meaning tokens delivered within the latency target per hour',
@@ -116,12 +116,12 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
           ],
           correct: [1],
           explanation:
-            'Cost/token = (GPU-hours × rate) ÷ tokens produced, and tokens produced IS goodput. T7.L1\'s objective function is the cost function; the T7.L3 frontier is where you choose it.',
+            'Cost per useful token = (GPU-hours × rate) ÷ tokens delivered within SLO, which is goodput × time. Idle and SLO-collapsed GPUs bill the same as productive ones. T7.L1\'s objective function is the cost function; the T7.L3 frontier is where you choose it.',
           why: [
             'Fleet size raises cost and tokens together, so cost per token stays flat if each GPU is equally productive. What changes it is tokens per GPU-hour, not the count.',
-            'Right: cost per token is GPU-hours times rate, divided by tokens produced, and tokens produced is goodput. Idle or SLO-collapsed GPUs bill the same as productive ones.',
+            'Right: cost per useful token is GPU-hours times rate, divided by the tokens delivered within the SLO, which is goodput times time. Idle or SLO-collapsed GPUs bill the same as productive ones.',
             'You pay for every billed hour, not the best minute. A fleet that peaks briefly and idles the rest of the day still has a high cost per token.',
-            'The rate is the numerator and matters, but two fleets at the same rate can differ many-fold in cost per token through goodput. Goodput is the lever engineering controls.',
+            'The stem holds the rate fixed, so it cannot be what moves cost per token. Two fleets billed at the same rate can still differ many-fold through goodput, which is the lever engineering controls.',
           ],
         },
       ],
