@@ -2,10 +2,14 @@
    Today and Boot work offline after one visit. Four rules:
      1. Kill switch: set KILL_SWITCH to true and deploy, and install/activate unregister this worker and delete
         every cache. A copy that scripts/build-sw-manifest.ts never patched (BUILD is still null) does the same,
-        so a build that skipped the script cannot leave a half-configured worker behind.
+        so a build that skipped the script cannot leave a half-configured worker behind. Install only clears caches
+        and skips waiting: unregistering inside install deadlocks in Chromium (the unregister job queues behind the
+        update job that is waiting on this install), so the unregister happens in activate.
         App code (src/main.tsx) also unregisters on ?nosw=1 (it sends a `kill` message first, so the live worker
         stops caching), and a navigation carrying it bypasses this worker.
      2. index.html is network-first with a 3 s timeout, then the precached shell. Hashed assets are cache-first.
+        Cache lookups pass ignoreVary: the Cache API enforces Vary, and a host that sends `Vary: Origin` (vite preview
+        does) would otherwise miss every asset, because the precache request carried no Origin header.
      3. Schema handshake: pages post { t: 'hello', schemaVersion }. The highest value seen is kept, and a cached
         shell built for a lower schema is never served once a newer one has been seen.
      4. It never caches kernelspace:* storage or IndexedDB. It touches no storage API except its own caches, and
@@ -24,15 +28,19 @@ const kill = KILL_SWITCH || BUILD === null
 
 const allCaches = () => caches.keys()
 
-async function retire() {
+async function clearCaches() {
   const keys = await allCaches()
   await Promise.all(keys.map((key) => caches.delete(key)))
+}
+
+async function retire() {
+  await clearCaches()
   await self.registration.unregister()
 }
 
 if (kill) {
   self.addEventListener('install', (event) => {
-    event.waitUntil(retire().then(() => self.skipWaiting()))
+    event.waitUntil(clearCaches().then(() => self.skipWaiting()))
   })
   self.addEventListener('activate', (event) => {
     event.waitUntil(retire())
@@ -108,7 +116,7 @@ if (kill) {
   async function cachedShell() {
     if (BUILD.schema < (await readSeen())) return null
     const cache = await caches.open(PRECACHE)
-    return (await cache.match(SHELL_URL)) ?? null
+    return (await cache.match(SHELL_URL, { ignoreVary: true })) ?? null
   }
 
   const offlineShell = () =>
@@ -117,8 +125,8 @@ if (kill) {
       headers: { 'content-type': 'text/html; charset=utf-8' },
     })
 
-  /** Network first. After SHELL_TIMEOUT_MS or a failure, `fallback()`; with nothing to fall back to, keep waiting for the network. */
-  async function networkFirst(request, fallback) {
+  /** Network first. After SHELL_TIMEOUT_MS or a failure, `fallback()`; with nothing to fall back to, keep waiting for the network, then `last()`. */
+  async function networkFirst(request, fallback, last) {
     const network = fetch(request)
     network.catch(() => {}) // a late rejection after the timeout has already won must not go unhandled
     let timer
@@ -135,11 +143,11 @@ if (kill) {
     }
     const stored = await fallback()
     if (stored) return stored
-    return network.catch(() => offlineShell())
+    return network.catch(last)
   }
 
   async function assetFirst(event) {
-    const hit = await caches.match(event.request)
+    const hit = await caches.match(event.request, { ignoreVary: true })
     if (hit) return hit
     const response = await fetch(event.request)
     if (response.ok) event.waitUntil(caches.open(RUNTIME).then((cache) => cache.put(event.request, response.clone())))
@@ -154,7 +162,7 @@ if (kill) {
 
     if (request.mode === 'navigate') {
       if (url.searchParams.get('nosw') === '1') return // the recovery link goes straight to the network
-      event.respondWith(networkFirst(request, cachedShell))
+      event.respondWith(networkFirst(request, cachedShell, offlineShell))
       return
     }
     const bare = url.origin + url.pathname
@@ -163,9 +171,10 @@ if (kill) {
     } else if (bare !== SHELL_URL && precached.has(bare)) {
       // claims.json and the like: data the deploy may have changed, so the network wins and the cache is the offline copy.
       // The shell is excluded: it is only ever replaced by an install, so it always matches the precached chunks.
+      // Offline with nothing cached is a plain network error, never an HTML page for a JSON consumer.
       const key = new Request(bare)
       event.respondWith(
-        networkFirst(request, () => caches.match(key)).then((response) => {
+        networkFirst(request, () => caches.match(key, { ignoreVary: true }), () => Response.error()).then((response) => {
           if (response.ok && response.status === 200) event.waitUntil(caches.open(PRECACHE).then((cache) => cache.put(key, response.clone())))
           return response
         }),

@@ -5,9 +5,10 @@ import { PLACEHOLDER, buildSw, collectPrecache, patchSw, type ManifestChunk, typ
 import { SCHEMA_VERSION } from '../../src/lib/ledger/constants'
 
 /**
- * B23 (docs/specs/wave-1.md §6.10): the precache manifest builder and the four rules of public/sw.js. The browser
- * behaviour (offline Today, the 3 s timeout, ?nosw=1, a deployed kill switch) is checked in headless Chromium
- * against a real build; this file pins the logic that needs no browser.
+ * B23 (docs/specs/wave-1.md §6.10): the precache manifest builder and the four rules of public/sw.js. This file
+ * pins the logic against a fake worker scope. The fake cannot model the browser's job queue or Vary matching beyond
+ * what is written below, so the real behaviour (offline Today, the 3 s timeout, ?nosw=1, a deployed kill switch)
+ * is checked by scripts/sw-smoke.ts in headless Chromium.
  */
 const SW_SOURCE = readFileSync(resolve(import.meta.dir, '../../public/sw.js'), 'utf8')
 
@@ -124,8 +125,11 @@ function worldFor(source: string, store = new Map<string, Map<string, Response>>
     async put(r: Request | string, res: Response) {
       store.get(name)!.set(key(r), res)
     },
-    async match(r: Request | string) {
-      return store.get(name)!.get(key(r))?.clone()
+    async match(r: Request | string, opts: { ignoreVary?: boolean } = {}) {
+      const hit = store.get(name)!.get(key(r))
+      // the real Cache API enforces Vary: a Vary: Origin response misses a lookup unless ignoreVary is set
+      if (hit && !opts.ignoreVary && hit.headers.get('vary') === 'Origin') return undefined
+      return hit?.clone()
     },
     async addAll(rs: Request[]) {
       for (const r of rs) {
@@ -146,13 +150,14 @@ function worldFor(source: string, store = new Map<string, Map<string, Response>>
     skipped: 0,
     claimed: 0,
     online: true,
+    vary: false,
     timers: [] as (() => void)[],
     fetched: [] as string[],
     fetch: async (r: Request | string): Promise<Response> => {
       const url = key(r)
       world.fetched.push(url)
       if (!world.online) throw new TypeError('offline')
-      return new Response(`net:${url}`, { status: 200 })
+      return new Response(`net:${url}`, { status: 200, headers: world.vary ? { vary: 'Origin' } : {} })
     },
   }
   const caches = {
@@ -166,9 +171,9 @@ function worldFor(source: string, store = new Map<string, Map<string, Response>>
     async delete(name: string) {
       return store.delete(name)
     },
-    async match(r: Request) {
+    async match(r: Request, opts: { ignoreVary?: boolean } = {}) {
       for (const name of store.keys()) {
-        const hit = await cache(name).match(r)
+        const hit = await cache(name).match(r, opts)
         if (hit) return hit
       }
       return undefined
@@ -219,16 +224,18 @@ describe('rule 1: the kill switch', () => {
     ['KILL_SWITCH = true', sourceFor(BUILD, true)],
     ['an unpatched build', sourceFor(null)],
   ] as const) {
-    test(`${name}: install and activate unregister and delete every cache, and nothing is served`, async () => {
+    test(`${name}: install clears caches and skips waiting, activate unregisters, and nothing is served`, async () => {
       const { world, fire } = worldFor(src)
       world.store.set('ks-old', new Map())
       world.store.set('someone-elses', new Map())
       await fire('install')
-      expect(world.unregistered).toBe(1)
+      // unregistering during install deadlocks in Chromium (the unregister job queues behind the update waiting on install)
+      expect(world.unregistered).toBe(0)
+      expect(world.skipped).toBe(1)
       expect([...world.store.keys()]).toEqual([])
       world.store.set('ks-again', new Map())
       await fire('activate')
-      expect(world.unregistered).toBe(2)
+      expect(world.unregistered).toBe(1)
       expect([...world.store.keys()]).toEqual([])
       expect(world.listeners.has('fetch')).toBe(false)
     })
@@ -304,6 +311,24 @@ describe('rule 2: caching', () => {
     await t.fire('install')
     t.world.online = false
     expect(await (await t.request(`${SCOPE}claims.json`).response!).text()).toBe(`net:${SCOPE}claims.json`)
+  })
+
+  test('claims.json offline with nothing cached is a network error, not an HTML page', async () => {
+    const t = worldFor(sourceFor(BUILD))
+    t.world.online = false
+    const res = await t.request(`${SCOPE}claims.json`).response!
+    expect(res.type).toBe('error')
+  })
+
+  test('a host that sends Vary: Origin still serves precached assets and the shell offline', async () => {
+    const t = worldFor(sourceFor(BUILD))
+    t.world.vary = true
+    await t.fire('install')
+    t.world.online = false
+    expect(await (await t.request(`${SCOPE}assets/Today-1.js`).response!).text()).toBe(`net:${SCOPE}assets/Today-1.js`)
+    expect(await (await t.request(`${SCOPE}claims.json`).response!).text()).toBe(`net:${SCOPE}claims.json`)
+    const shell = await t.request(`${SCOPE}today`, { mode: 'navigate' }).response!
+    expect(shell.status).toBe(200)
   })
 
   test('the shell is only ever replaced by an install', async () => {
