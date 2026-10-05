@@ -7,7 +7,7 @@ export default {
   lessons: ['t5.l8'],
   title: 'Chunked prefill caps the ITL stall at one chunk; it does not remove it',
   before:
-    'The T5.L8 quiz key said chunked prefill works so that "no prompt stalls ITL", while its own explanation said the stall is bounded by the chunk size.',
+    'T5.L8 said chunked prefill works by "eliminating the ITL convoy" and that "ITL stays smooth for everyone".',
   after:
     'Each iteration carries at most one chunk of prefill, so a long prompt delays running decodes by about one chunk, not by the whole prefill. Smaller chunk budgets give better ITL; larger ones give better TTFT.',
   why: 'Chunking turns an unbounded stall into a bounded, tunable one. Claiming zero stall hides the chunk-size trade-off that engine operators actually tune.',
