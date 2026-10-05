@@ -79,6 +79,9 @@ function Hero() {
   const rank = rankForXp(xp)
   const nextId = ORDERED_LESSON_IDS.find((id) => lessons[id]?.status !== 'done') ?? null
   const returning = done > 0
+  // A first visit (no Boot, no lesson records) starts with Boot (spec §12.4, Addendum A3). There is no auto-redirect from `/`.
+  const bootDone = useProgress((s) => s.completions.boot !== undefined)
+  const firstVisit = !bootDone && Object.keys(lessons).length === 0
 
   const [nextTrack, nextLesson] = nextId ? nextId.split('.') : ['r', 'l1']
   const nextTrackMeta = TRACKS.find((t) => t.id === nextTrack)
@@ -182,6 +185,10 @@ function Hero() {
               {returning && nextId ? (
                 <LinkButton to={`/lesson/${nextId}`} icon={Play}>
                   {`Resume: ${nextTrackMeta?.code ?? 'R'} · Lesson ${nextLesson?.slice(1) ?? '1'}`}
+                </LinkButton>
+              ) : firstVisit ? (
+                <LinkButton to="/boot" icon={ArrowRight}>
+                  Start with Boot: 10 minutes, any device
                 </LinkButton>
               ) : (
                 <LinkButton to="/tracks/r" icon={ArrowRight}>
@@ -693,7 +700,7 @@ const FAQS = [
   },
   {
     q: 'Is my progress private?',
-    a: 'It never leaves your browser. Progress lives in localStorage only; export or import it as JSON anytime from the Progress page.',
+    a: 'Yes. Progress stays in this browser on this device (IndexedDB) and is never sent anywhere. Export or import it as JSON anytime from the Progress page.',
   },
   {
     q: 'Why Rust?',

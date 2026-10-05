@@ -13,4 +13,22 @@ export default {
     url: 'https://huggingface.co/meta-llama/Meta-Llama-3-70B/blob/main/config.json',
     title: 'Llama-3-70B config.json (80 layers, hidden 8192, 64 heads, num_key_value_heads: 8)',
   },
+  items: [
+    {
+      q: 'Llama-3-70B has 80 layers, 8 KV heads (GQA), head dimension 128 and FP16 KV. How much KV cache does one token take?',
+      options: [
+        'About 2.6 MB',
+        'About 160 KB',
+        'About 640 KB',
+        'About 320 KB',
+      ],
+      correct: [3],
+      why: [
+        'That is full multi-head attention: 80 x 8192 x 2 x 2 B, i.e. 64 KV heads where Llama-3-70B has 8.',
+        'That drops one of the two tensors. Both K and V are stored, so there is a factor of 2.',
+        'That uses 4 bytes per element. FP16 is 2 bytes.',
+        'Right. 80 layers x 8 KV heads x 128 x 2 (K and V) x 2 B = 327,680 B, about 320 KB.',
+      ],
+    },
+  ],
 } satisfies Erratum

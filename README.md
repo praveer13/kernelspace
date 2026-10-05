@@ -7,7 +7,7 @@ programming for LLM serving at scale.
 **Live: https://kernelspace.naigap.com**
 
 No signup, no servers. Every lesson, simulator, and lab check runs in your
-browser; progress lives in `localStorage` and is exportable.
+browser; progress stays in this browser on this device (IndexedDB) and is exportable.
 
 ## What it is
 

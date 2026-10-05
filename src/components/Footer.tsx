@@ -39,7 +39,8 @@ export default function Footer() {
               From cache lines to continuous batching.
             </p>
             <p className="mt-3 max-w-xs text-body-sm text-text-3">
-              Runs 100% in your browser. Your progress never leaves <code>localStorage</code>.
+              Runs 100% in your browser. Your progress stays in this browser on this device (<code>IndexedDB</code>), is never sent anywhere, and can be
+              exported from Progress.
             </p>
           </div>
 

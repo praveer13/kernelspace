@@ -43,6 +43,9 @@ jobs:
       - run: bun run verify:errata
       - run: bun run verify:claims
 
+      # Ledger core properties (spec docs/specs/ledger-v3.md §13): pure, no browser needed.
+      - run: bun run test
+
       - run: npm run build
 
       # Bundle budget (PLAN-100X §7.3): the entry chunk must stay <= 250 KB gzip.
