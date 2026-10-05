@@ -29,12 +29,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import ts from 'typescript'
-import { instanceRev, instanceText, seedFor } from '../src/lib/items/core'
+import { instanceRev, instanceText, partsText, seedFor } from '../src/lib/items/core'
 import { correctResponse, diagnose, inTolerance, ruleRatio, SHARED_RULES } from '../src/lib/items/grade'
 import { loadAllFamilies } from '../src/lib/items/registry'
 import type { Gen, Instance, Level, Response, SolutionStep } from '../src/lib/items/types'
 import { stableStringify } from '../src/lib/ledger/stable'
 import { hash32 } from '../src/lib/rng'
+import { CUE_STRATEGIES, MAX_HIT_OVER_CHANCE, oddOneOut, type CueQuestion } from './item-cues'
 
 /* ------------------------------ constants ------------------------------ */
 
@@ -45,6 +46,8 @@ const HASH_SEED_BASE = 0x68617368
 /** The V1 lint: at most this share of a choice variant's instances may have the key strictly longest. */
 export const MAX_LONGEST_KEY = 0.3
 export const MIN_DISTINCT_TRUTHS = 0.5
+/** The blind-strategy gate samples each choice variant at every level over at least this many seeds, whatever a caller asks for. */
+export const MIN_CUE_SEEDS = 200
 export const MAX_P95_MS = 1
 /** Samples before timing starts, so the JIT's first calls do not count. */
 const WARMUP = 50
@@ -181,12 +184,16 @@ export interface CheckOptions {
   seeds?: number
   /** Time make + grade (default true). */
   speed?: boolean
+  /** Run the blind-strategy gate on choice variants (default true); it samples at least MIN_CUE_SEEDS seeds. */
+  cues?: boolean
 }
 
 export interface CheckResult extends Report {
   instances: number
   /** p95 of make + grade in milliseconds (NaN when untimed). */
   p95Ms: number
+  /** Blind-strategy rows of the choice variants (empty when `cues` is off or the family has none). */
+  cues: CueRow[]
 }
 
 const percentile = (xs: number[], p: number): number => {
@@ -362,7 +369,93 @@ export function checkFamily(gen: Gen, opts: CheckOptions = {}): CheckResult {
     if (p95Ms >= MAX_P95_MS) fail('speed', `${gen.id}: p95 of make + grade is ${p95Ms.toFixed(3)} ms (max ${MAX_P95_MS} ms)`)
   }
 
-  return { problems: finish(), warnings, instances, p95Ms }
+  const problems = finish()
+  let cues: CueRow[] = []
+  if (opts.cues !== false) {
+    const c = checkChoiceCues(gen, { seeds: seeds.length })
+    problems.push(...c.problems)
+    cues = c.rows
+  }
+  return { problems, warnings, instances, p95Ms, cues }
+}
+
+/* ------------------------------ blind strategies (Wave 1a item rules) ------------------------------ */
+
+export interface CueRow {
+  /** `family/variant`, with `@L<n>` for one level and none for all levels together. */
+  where: string
+  instances: number
+  chance: number
+  /** The strategy with the highest hit rate in this row. */
+  worst: { name: string; hit: number }
+}
+
+export interface CueResult {
+  problems: string[]
+  rows: CueRow[]
+}
+
+/** What a blind strategy sees of an instance: the stem and givens, the option texts, the key's index. */
+export function cueQuestion(inst: Instance): CueQuestion | undefined {
+  const a = inst.answer
+  if (a.kind !== 'choice') return undefined
+  const givens = (inst.prompt.givens ?? []).map((g) => partsText([g.value])).join(' ')
+  return { q: `${partsText(inst.prompt.stem)} ${givens}`, options: a.options.map((o) => o.text), correct: a.correct.map((id) => a.options.findIndex((o) => o.id === id)) }
+}
+
+/**
+ * The Wave 1a item-level rules (scripts/item-cues.ts, the code scripts/verify-items.ts runs over lesson
+ * quizzes) applied to every choice variant of a family, over at least MIN_CUE_SEEDS seeds at every level:
+ *   - each strategy of length rank, lexical cue and surface feature (stem overlap included) hits the key
+ *     at most chance + 15 points, judged per (variant, level) and per variant over all its levels;
+ *   - no binary feature isolates the key: it is never the only option with, or without, the feature.
+ * Numeric and estimate variants have no options and are skipped. Never throws.
+ */
+export function checkChoiceCues(gen: Gen, opts: { seeds?: number } = {}): CueResult {
+  const seeds = genSeeds(Math.max(opts.seeds ?? DEFAULT_SEEDS, MIN_CUE_SEEDS))
+  const { fail, finish } = collector()
+  const rows: CueRow[] = []
+  const judge = (where: string, qs: CueQuestion[], oddSeen: Map<string, number>) => {
+    const single = qs.filter((q) => q.correct.length === 1)
+    if (single.length === 0) return
+    const chance = single.reduce((a, q) => a + 1 / q.options.length, 0) / single.length
+    let worst = { name: '', hit: -1 }
+    const over: string[] = []
+    for (const s of CUE_STRATEGIES) {
+      const hit = single.reduce((a, q) => a + s.pick(q), 0) / single.length
+      if (hit > worst.hit) worst = { name: s.name, hit }
+      if (hit > chance + MAX_HIT_OVER_CHANCE) over.push(`'${s.name}' ${(hit * 100).toFixed(1)} %`)
+    }
+    if (over.length > 0) {
+      const limit = ((chance + MAX_HIT_OVER_CHANCE) * 100).toFixed(1)
+      fail(`cue ${where}`, `${where}: ${over.length} blind strateg${over.length === 1 ? 'y hits' : 'ies hit'} the key above chance ${(chance * 100).toFixed(1)} % + ${MAX_HIT_OVER_CHANCE * 100} points = ${limit} % over ${single.length} instances: ${over.join(', ')}; rewrite the options so no surface feature separates the key`)
+    }
+    rows.push({ where, instances: single.length, chance, worst })
+    for (const [message, n] of oddSeen) fail(`odd ${where} ${message}`, `${where}: ${message} in ${n} of ${qs.length} instances; no binary feature may isolate the key`)
+  }
+  for (const spec of gen.variants) {
+    const pooled: CueQuestion[] = []
+    for (const level of spec.levels) {
+      const qs: CueQuestion[] = []
+      const odd = new Map<string, number>()
+      for (const seed of seeds) {
+        try {
+          const q = cueQuestion(gen.make(seed, level, spec.id))
+          if (!q) break
+          qs.push(q)
+          for (const m of oddOneOut(q)) odd.set(m, (odd.get(m) ?? 0) + 1)
+        } catch {
+          break // reported by checkFamily
+        }
+      }
+      if (qs.length === 0) break
+      pooled.push(...qs)
+      judge(`${gen.id}/${spec.id}@L${level}`, qs, odd)
+    }
+    // the per-level odd-one-out is already reported above, so the pooled row judges only the rates
+    if (pooled.length > 0 && spec.levels.length > 1) judge(`${gen.id}/${spec.id}`, pooled, new Map())
+  }
+  return { problems: finish(), rows }
 }
 
 /* ------------------------------ hash fixture (§16.3) ------------------------------ */
@@ -524,6 +617,12 @@ async function main(): Promise<void> {
     const file = path.join(ROOT, 'src/lib/items/families', `${g.id}.ts`)
     for (const f of lintLiterals(file, readFileSync(file, 'utf8'))) problems.push(`src/lib/items/families/${g.id}.ts:${f.line}:${f.col} ${f.message}`)
     console.log(`  ${g.id}: ${g.variants.length} variants, ${r.instances} instances, p95 ${Number.isNaN(r.p95Ms) ? 'n/a' : `${r.p95Ms.toFixed(3)} ms`}`)
+    // one line per choice variant: its all-levels row, or its only level's
+    const perVariant = new Map<string, CueRow>()
+    for (const row of r.cues) if (!perVariant.has(row.where.split('@')[0]) || !row.where.includes('@')) perVariant.set(row.where.split('@')[0], row)
+    for (const row of perVariant.values()) {
+      console.log(`    ${row.where}: ${row.instances} instances, worst blind strategy '${row.worst.name}' ${(row.worst.hit * 100).toFixed(1)} % against chance ${(row.chance * 100).toFixed(1)} %`)
+    }
   }
   if (!only) for (const id of Object.keys(hashes)) if (!families.some((g) => g.id === id)) problems.push(`tests/fixtures/items/hashes.json: rows for family "${id}" that does not exist`)
 

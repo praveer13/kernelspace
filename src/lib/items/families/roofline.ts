@@ -39,6 +39,15 @@ const SYNTHETIC = {
   mMax: 99,
   /** a kernel sits at least this many times away from the ridge, so its class is not a coin flip */
   clearance: 1.5,
+  /**
+   * What each option of a `bound` item may add after its verdict, drawn per option and never from the
+   * answer: the three options are written to the same length, shape and function words, so this is
+   * what makes their lengths and word counts trade places at random. Without it a blind reader could
+   * rank the options by length and find the key more often than chance.
+   */
+  pads: ['', ' here', ' on this chip', ' for this kernel on this chip'],
+  /** options of a `bound` item: bandwidth, compute, undecided */
+  boundOptions: 3,
   /** a model's weights take at most this share of memory */
   fit: 0.9,
   /** tile sides: every even number in a range, then the larger round ones */
@@ -230,6 +239,11 @@ function steps(variant: string, p: Params, truth: number): SolutionStep[] {
 
 /* ------------------------------ building an instance ------------------------------ */
 
+/**
+ * The three verdicts share one shape, "<verdict><pad>: <what binds>, not <what does not>", with one colon,
+ * one comma, no digits, no capitals past the first letter and no absolute words, so no surface feature
+ * of an option says which one is the key. `pads` (drawn per option, params `pads`) shuffles their lengths.
+ */
 function boundAnswer(p: Params): AnswerSpec {
   const ai = formatNumber(num(p, 'ai'))
   const ridge = ridgeOf('bound', p)
@@ -240,12 +254,13 @@ function boundAnswer(p: Params): AnswerSpec {
   // who inverted it answers compute-bound. That is the slip only where compute-bound is wrong: left of the ridge.
   const flipped = 'You compared against bandwidth ÷ peak, the inverse of the ridge, which any kernel clears. The ridge is peak ÷ bandwidth: hundreds of FLOP/B on a modern GPU.'
   const above = `${ai} FLOP/B is above the ${R} FLOP/B ridge, so the tensor cores saturate before memory does: more bandwidth would not speed this kernel up.`
+  const pad = (k: number): string => SYNTHETIC.pads[Number(String(p.pads)[k])]
   return {
     kind: 'choice',
     options: [
-      { id: 'bw', text: 'Bandwidth-bound: memory traffic is the limit, not the tensor cores', why: left ? side(true) : above, ...(left ? {} : { miss: 'roofline.bandwidth-above-ridge' }) },
-      { id: 'cb', text: 'Compute-bound: the tensor cores are the limit, not memory traffic', why: left ? flipped : side(false), ...(left ? { miss: 'roofline.inverted-ridge' } : {}) },
-      { id: 'nm', text: 'It cannot be told until the kernel is measured on the chip, whatever its intensity', why: 'The intensity and the ridge already say which roof binds. Measuring only shows how close the kernel gets to it.', miss: 'roofline.needs-measuring' },
+      { id: 'bw', text: `Bandwidth-bound${pad(0)}: memory traffic is the limit, not the tensor cores`, why: left ? side(true) : above, ...(left ? {} : { miss: 'roofline.bandwidth-above-ridge' }) },
+      { id: 'cb', text: `Compute-bound${pad(1)}: the tensor cores are the limit, not memory traffic`, why: left ? flipped : side(false), ...(left ? { miss: 'roofline.inverted-ridge' } : {}) },
+      { id: 'nm', text: `Undecided${pad(2)}: systematic profiling settles the limit, not the intensity`, why: 'The intensity and the ridge already say which roof binds. Measuring only shows how close the kernel gets to it.', miss: 'roofline.needs-measuring' },
     ],
     correct: [left ? 'bw' : 'cb'],
   }
@@ -269,7 +284,7 @@ function build(vs: VariantSpec, level: Level, seed: number, p: Params): Instance
       break
     case 'bound':
       g = givens(p, dtype, true)
-      stem = [t(`A kernel does ${ai} FLOP per byte of memory traffic on the ${c.name}, with ${nameOf(c, dtype)} math. Is it bandwidth-bound or compute-bound?`)]
+      stem = [t(`A kernel does ${ai} FLOP for every byte it moves on the ${c.name}, with ${nameOf(c, dtype)} math. Which limit does it reach first?`)]
       answer = boundAnswer(p)
       break
     case 'attainable':
@@ -329,7 +344,9 @@ function draw(variant: string, level: Level, r: Rng): Params {
       return { hw, dtype: level === TRANSFER ? 'fp8' : 'bf16', ...fractions(r) }
     case 'bound': {
       const dtype = level === TRANSFER ? 'fp8' : 'bf16'
-      return { hw, dtype, ai: intensity(r, ridgeAt({ hw }, dtype), r.int(0, 1) === 0) }
+      const ai = intensity(r, ridgeAt({ hw }, dtype), r.int(0, 1) === 0)
+      // one pad per option, independent of which option is the key (SYNTHETIC.pads)
+      return { hw, dtype, ai, pads: Array.from({ length: SYNTHETIC.boundOptions }, () => r.int(0, SYNTHETIC.pads.length - 1)).join('') }
     }
     case 'attainable':
       return { hw, ai: intensity(r, ridgeAt({ hw }, 'bf16'), r.int(0, SYNTHETIC.computeOneIn - 1) !== 0), ask: level === TRANSFER ? 'busy' : 'tflops' }
@@ -406,7 +423,7 @@ const pin = (name: string, source: string, variant: string, level: Level, p: Par
 
 const gen: Gen = {
   id: 'roofline',
-  version: 1,
+  version: 2,
   title: 'Roofline: ridge, bound class and decode speed',
   kcs: [KC.ridgePoint, KC.boundClassification, KC.decodeBandwidth, KC.tilingIntensity],
   variants: VARIANTS,
