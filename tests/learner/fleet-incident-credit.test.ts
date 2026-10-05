@@ -106,6 +106,7 @@ describe('a missed first call closes Act IV and the UI says so', () => {
     expect(missed.result.headline).not.toContain('look at the telemetry again')
     expect(missed.result.detail).toContain('practice only')
     expect(missed.result.detail).toContain('closed for now')
+    expect(missed.result.detail).toContain('earns no XP')
     expect(missed.result.detail).toContain('later update')
     expect(incidentMisses(missed.ledger)).toBe(1)
   })
@@ -120,16 +121,32 @@ describe('a missed first call closes Act IV and the UI says so', () => {
     expect(retry.ledger).toEqual(missed.ledger)
   })
 
-  test('a correct first call after an earlier miss is credited but cannot complete the act', () => {
+  test('a correct first call after an earlier miss is graded and marked but cannot complete the act', () => {
     let ledger = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], false, true).ledger
     let last = gradeIncidentCall(ledger, INCIDENTS[1], true, true)
     ledger = last.ledger
+    // the first call on an incident not yet called is not practice: it is recorded and marked ✓...
+    expect(last.practice).toBe(false)
+    expect(ledger.attempted).toEqual([INCIDENTS[0].id, INCIDENTS[1].id])
+    expect(ledger.credited).toEqual([INCIDENTS[1].id])
+    // ...but the act is closed, and the result says so without calling anything "credited"
+    expect(last.result.pass).toBe(false)
     expect(last.result.closed).toBe(true)
-    expect(last.result.detail).toContain('cannot be credited')
+    expect(last.result.detail).toContain('Correct and marked')
+    expect(last.result.detail).toContain('stays closed')
+    expect(last.result.detail).toContain('earns no XP')
+    expect(last.result.detail).not.toContain('Credited')
+    expect(last.result.detail).not.toContain('cannot be credited')
     last = gradeIncidentCall(ledger, INCIDENTS[2], true, true)
+    expect(last.practice).toBe(false)
     expect(last.result.pass).toBe(false)
     expect(last.result.detail).toContain('later update')
     expect(last.ledger.credited.length).toBe(total - 1)
+    // the missed incident stays practice, and no later call on any incident can pass
+    const repeat = gradeIncidentCall(last.ledger, INCIDENTS[0], true, true)
+    expect(repeat.practice).toBe(true)
+    expect(repeat.ledger).toEqual(last.ledger)
+    for (const inc of INCIDENTS) expect(gradeIncidentCall(last.ledger, inc, true, true).result.pass).toBe(false)
   })
 
   test('before any miss the act is open and the notice is not shown', () => {
@@ -139,8 +156,14 @@ describe('a missed first call closes Act IV and the UI says so', () => {
     expect(incidentMisses(first.ledger)).toBe(0)
   })
 
-  test('the standing notice names practice and the later update', () => {
-    expect(INCIDENT_CLOSED_NOTE).toContain('practice')
+  test('the standing notice says what the code does: repeat calls are practice, first calls on other incidents are graded and marked, no XP', () => {
+    expect(INCIDENT_CLOSED_NOTE).toContain('earns no XP')
+    expect(INCIDENT_CLOSED_NOTE).toContain('Repeat calls on an incident are practice')
+    expect(INCIDENT_CLOSED_NOTE).toContain('graded and marked')
+    expect(INCIDENT_CLOSED_NOTE).toContain('cannot complete the act')
     expect(INCIDENT_CLOSED_NOTE).toContain('later update')
+    // the old note said every later call is practice and never credited; first calls on other incidents are not
+    expect(INCIDENT_CLOSED_NOTE).not.toContain('never credited')
+    expect(INCIDENT_CLOSED_NOTE).not.toContain('Calls from here on are practice')
   })
 })
