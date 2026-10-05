@@ -35,9 +35,9 @@ export default {
     {
       q: 'A teammate lists cudarc as a Rust GPU kernel project. What does cudarc actually do?',
       options: [
-        'It is a Rust kernel language, so kernels are written in Rust instead of CUDA C++ and compiled for the GPU',
-        'It is a safe-Rust attention library whose kernels match hand-written CUDA C++ in production serving stacks',
-        'It reimplements the CUDA runtime in pure Rust, so programs run on any GPU vendor without the CUDA toolkit',
+        'It is a Rust kernel language, so kernels are written in Rust instead of CUDA C++ and compiled for the GPU device',
+        'It is a safe-Rust attention library whose kernels match hand-written CUDA C++ speed in production serving stacks',
+        'It reimplements the CUDA runtime in pure Rust, so programs run on any GPU vendor without the CUDA toolkit installed',
         'It wraps the host-side CUDA API for Rust, so Rust code manages devices and launches kernels made elsewhere',
       ],
       correct: [3],
