@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Check, Download, Flame, HardDrive, Package, Terminal } from 'lucide-react'
 import { RUST_ZERO_LABS, SYSTEMS_FORGE_LABS } from '@/data/labs'
 import { getTrack } from '@/lib/tracks'
-import { useProgress, XP } from '@/lib/progress'
+import { labXp } from '@/lib/economy'
+import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 
 const STEPS = [
@@ -15,7 +16,7 @@ const STEPS = [
   {
     icon: Terminal,
     title: 'make it green',
-    body: 'Run cargo test until every check passes on your machine. The terminal and this site run the identical suite — green here means green there.',
+    body: 'Run cargo test until every check passes on your machine. This site runs the same checks, but draws fresh seeds when you drop the file — so a pass here means your code, not one memorised input.',
   },
   {
     icon: Package,
@@ -43,6 +44,7 @@ const LAB_GROUPS = [
 
 export default function Forge() {
   const labs = useProgress((s) => s.labs)
+  const labAgg = useProgress((s) => s.aggregate.labs)
   return (
     <div className="mx-auto max-w-app px-6 pb-24 pt-24 lg:px-12">
       {/* hero */}
@@ -63,7 +65,7 @@ export default function Forge() {
         <p className="mt-5 text-body-lg text-text-2">
           The lessons explain systems. The forge makes you build them: actual Rust crates with
           one file marked <span className="font-mono text-[0.9em] text-text-1">TODO(you)</span>,
-          graded by checks that run identically in your terminal and in your browser. No account,
+          graded by the same checks in your terminal and in your browser, on fresh seeds. No account,
           no upload — your code never leaves your machine.
         </p>
         <div className="mt-5 flex flex-wrap justify-center gap-2 font-mono text-[11px] text-text-3">
@@ -113,6 +115,8 @@ export default function Forge() {
               const track = getTrack(lab.trackId)
               const requiredChecks = lab.checks.filter((check) => !check.optional).length
               const optionalChecks = lab.checks.length - requiredChecks
+              // Every required check passed on seeds drawn at grade time (unseen provenance, wave-1.md §12.3).
+              const allUnseen = requiredChecks > 0 && lab.checks.filter((check) => !check.optional).every((check) => labAgg[lab.id]?.unseen[check.id] === true)
               const delayIndex = groupIndex === 0 ? i : RUST_ZERO_LABS.length + i
               return (
                 <motion.div
@@ -141,6 +145,11 @@ export default function Forge() {
                         <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-3">
                           {track?.code ?? lab.trackId}
                         </span>
+                        {allUnseen && (
+                          <span className="rounded border border-accent/40 px-1.5 py-0.5 font-mono text-[10px] text-accent">
+                            unseen pass
+                          </span>
+                        )}
                         {lab.readiness && (
                           <span className="rounded border border-amber/35 bg-amber/5 px-1.5 py-0.5 font-mono text-[10px] text-amber">
                             {lab.readiness.label}
@@ -155,7 +164,7 @@ export default function Forge() {
                         {optionalChecks > 0 ? ` + ${optionalChecks} advanced` : ''}
                       </span>
                       <span>~{lab.minutes} min</span>
-                      <span className="text-accent">+{XP.lab} XP</span>
+                      <span className="text-accent">+{labXp(lab.id)} XP</span>
                       <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-1" />
                     </div>
                   </Link>

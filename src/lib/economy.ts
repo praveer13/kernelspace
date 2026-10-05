@@ -120,6 +120,20 @@ export function factMinutes(fact: string): number {
 }
 
 /**
+ * A whole lab's nominal XP: its `minutes`, paid across its required checks (§8.4). Pages label a lab with this
+ * instead of a local number. 0 for an unknown lab.
+ */
+export function labXp(labId: string): number {
+  return own(LABS, labId)?.minutes ?? 0
+}
+
+/** What one required check of a lab pays the first time any run passes it: `labXp ÷ required checks`. */
+export function labCheckXp(labId: string): number {
+  const lab = own(LABS, labId)
+  return lab === undefined || lab.checks.length === 0 ? 0 : lab.minutes / lab.checks.length
+}
+
+/**
  * XP by source for an aggregate. Each source is a whole number. Within a source the minutes are summed
  * as integer millionths first, so the sum cannot depend on the order the facts were folded in, and are
  * rounded once at the end.
