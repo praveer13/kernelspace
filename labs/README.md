@@ -127,7 +127,7 @@ one compiled program through the cache.
 
 ### Lab 06 trace calibration
 
-`batching-scheduler` keeps six checks, but its final goodput check now races
+`batching-scheduler` keeps six required checks, but its final goodput check now races
 the policy across three fixed distributions. These numbers were measured with
 `cargo run -p batching-scheduler --example calibrate` against the exact tables
 shipped in the crate; the reference column uses the private reference policy.
@@ -143,6 +143,16 @@ separate FCFS from size-aware admission, while the independent starvation
 check prevents pure SJF from passing the lab. Trace provenance and the LMSYS
 redistribution constraint are documented in `public/traces/README.md` in the
 full repository and encoded in the JSON artifacts used by Fleet.
+
+These three traces stay fixed tables (`goodput_score` is not seeded: its floors
+are the calibrated column above). The synthetic overload also has a seeded twin,
+the optional check `overload_seeded`: the same 400 requests at 2.4x offered load
+and the same SLO, redrawn from a fresh seed on every run, with a floor of 40%
+goodput. The reference clears it on each of 10,000 fresh seeds, and
+first-come-first-served misses it on each of 1,000. It is optional (it does not
+gate the lab), so the required-check count and the XP table do not change.
+`burst` stays a fixed table too: drawn from fresh seeds, the reference itself
+misses its 90% on about one draw in twenty.
 
 ## Seed calibration (maintainers)
 

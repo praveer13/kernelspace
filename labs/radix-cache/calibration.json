@@ -1,0 +1,268 @@
+{
+  "lab": "radix-cache",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "269a47958bda5dec98a28dce4015570f35b9c461b74476470286255bed7e8877",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "exact_match": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "double_release": 0,
+        "dup_entry": 1,
+        "evict_internal": 0,
+        "evict_mru": 0,
+        "exact_only": 0,
+        "first_branch": 0,
+        "ignore_pin": 0,
+        "leak_retain": 1,
+        "no_limit": 0,
+        "no_release": 0,
+        "no_share": 0,
+        "no_touch": 0,
+        "share_tail": 0
+      }
+    },
+    "longest_prefix": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "double_release": 0,
+        "dup_entry": 0,
+        "evict_internal": 0,
+        "evict_mru": 0,
+        "exact_only": 0,
+        "first_branch": 1,
+        "ignore_pin": 0,
+        "leak_retain": 0,
+        "no_limit": 0,
+        "no_release": 0,
+        "no_share": 0,
+        "no_touch": 0,
+        "share_tail": 0
+      }
+    },
+    "eviction_order": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "double_release": 1,
+        "dup_entry": 0,
+        "evict_internal": 1,
+        "evict_mru": 1,
+        "exact_only": 0,
+        "first_branch": 1,
+        "ignore_pin": 1,
+        "leak_retain": 1,
+        "no_limit": 1,
+        "no_release": 0,
+        "no_share": 0,
+        "no_touch": 1,
+        "share_tail": 0
+      }
+    },
+    "block_conservation": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "double_release": 1,
+        "dup_entry": 0,
+        "evict_internal": 0,
+        "evict_mru": 1,
+        "exact_only": 1,
+        "first_branch": 0,
+        "ignore_pin": 0,
+        "leak_retain": 1,
+        "no_limit": 1,
+        "no_release": 1,
+        "no_share": 0,
+        "no_touch": 1,
+        "share_tail": 0
+      }
+    },
+    "cow_divergence": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "double_release": 0,
+        "dup_entry": 0,
+        "evict_internal": 0,
+        "evict_mru": 0,
+        "exact_only": 0,
+        "first_branch": 1,
+        "ignore_pin": 0,
+        "leak_retain": 0,
+        "no_limit": 0,
+        "no_release": 0,
+        "no_share": 1,
+        "no_touch": 0,
+        "share_tail": 1
+      }
+    },
+    "chat_hit_rate": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "double_release": 1,
+        "dup_entry": 0,
+        "evict_internal": 0,
+        "evict_mru": 0.522,
+        "exact_only": 1,
+        "first_branch": 0,
+        "ignore_pin": 0,
+        "leak_retain": 1,
+        "no_limit": 0,
+        "no_release": 1,
+        "no_share": 0,
+        "no_touch": 0.339,
+        "share_tail": 0
+      }
+    }
+  },
+  "mutants": {
+    "double_release": {
+      "defaultSeedFails": [
+        "eviction_order",
+        "block_conservation",
+        "chat_hit_rate"
+      ],
+      "caughtBy": [
+        "eviction_order",
+        "block_conservation",
+        "chat_hit_rate"
+      ]
+    },
+    "dup_entry": {
+      "defaultSeedFails": [
+        "exact_match"
+      ],
+      "caughtBy": [
+        "exact_match"
+      ]
+    },
+    "evict_internal": {
+      "defaultSeedFails": [
+        "eviction_order"
+      ],
+      "caughtBy": [
+        "eviction_order"
+      ]
+    },
+    "evict_mru": {
+      "defaultSeedFails": [
+        "eviction_order",
+        "block_conservation",
+        "chat_hit_rate"
+      ],
+      "caughtBy": [
+        "eviction_order",
+        "block_conservation"
+      ]
+    },
+    "exact_only": {
+      "defaultSeedFails": [
+        "block_conservation",
+        "chat_hit_rate"
+      ],
+      "caughtBy": [
+        "block_conservation",
+        "chat_hit_rate"
+      ]
+    },
+    "first_branch": {
+      "defaultSeedFails": [
+        "longest_prefix",
+        "eviction_order",
+        "cow_divergence"
+      ],
+      "caughtBy": [
+        "longest_prefix",
+        "eviction_order",
+        "cow_divergence"
+      ]
+    },
+    "ignore_pin": {
+      "defaultSeedFails": [
+        "eviction_order"
+      ],
+      "caughtBy": [
+        "eviction_order"
+      ]
+    },
+    "leak_retain": {
+      "defaultSeedFails": [
+        "exact_match",
+        "eviction_order",
+        "block_conservation",
+        "chat_hit_rate"
+      ],
+      "caughtBy": [
+        "exact_match",
+        "eviction_order",
+        "block_conservation",
+        "chat_hit_rate"
+      ]
+    },
+    "no_limit": {
+      "defaultSeedFails": [
+        "eviction_order",
+        "block_conservation"
+      ],
+      "caughtBy": [
+        "eviction_order",
+        "block_conservation"
+      ]
+    },
+    "no_release": {
+      "defaultSeedFails": [
+        "block_conservation",
+        "chat_hit_rate"
+      ],
+      "caughtBy": [
+        "block_conservation",
+        "chat_hit_rate"
+      ]
+    },
+    "no_share": {
+      "defaultSeedFails": [
+        "cow_divergence"
+      ],
+      "caughtBy": [
+        "cow_divergence"
+      ]
+    },
+    "no_touch": {
+      "defaultSeedFails": [
+        "eviction_order",
+        "block_conservation",
+        "chat_hit_rate"
+      ],
+      "caughtBy": [
+        "eviction_order",
+        "block_conservation"
+      ]
+    },
+    "share_tail": {
+      "defaultSeedFails": [
+        "cow_divergence"
+      ],
+      "caughtBy": [
+        "cow_divergence"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "requests=48 hit_tokens=1312 prompt_tokens=2304 hit_rate=0.569 entries=12 free_blocks=30 conserved=true"
+  }
+}

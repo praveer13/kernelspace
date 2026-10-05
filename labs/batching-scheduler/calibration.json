@@ -1,0 +1,183 @@
+{
+  "lab": "batching-scheduler",
+  "abi": 2,
+  "version": 3,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "10124fbfeb845f80b7bc3b4de3d0568fa531ad3c4325e948e1e35f19059fd67f",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "runs_clean": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "fcfs": 0,
+        "huge_headroom": 0,
+        "largest_first": 0,
+        "never_admit": 1,
+        "one_at_a_time": 0.375,
+        "sjf": 0
+      }
+    },
+    "slo_light": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "fcfs": 0,
+        "huge_headroom": 0,
+        "largest_first": 0,
+        "never_admit": 1,
+        "one_at_a_time": 1,
+        "sjf": 0
+      }
+    },
+    "burst": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "fcfs": 0,
+        "huge_headroom": 1,
+        "largest_first": 0,
+        "never_admit": 1,
+        "one_at_a_time": 1,
+        "sjf": 0
+      }
+    },
+    "convoy": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "fcfs": 1,
+        "huge_headroom": 1,
+        "largest_first": 1,
+        "never_admit": 1,
+        "one_at_a_time": 1,
+        "sjf": 0
+      }
+    },
+    "starvation": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "fcfs": 0,
+        "huge_headroom": 0,
+        "largest_first": 0,
+        "never_admit": 1,
+        "one_at_a_time": 1,
+        "sjf": 1
+      }
+    },
+    "goodput_score": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "fcfs": 1,
+        "huge_headroom": 1,
+        "largest_first": 1,
+        "never_admit": 1,
+        "one_at_a_time": 1,
+        "sjf": 0
+      }
+    },
+    "overload_seeded": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "fcfs": 1,
+        "huge_headroom": 0,
+        "largest_first": 0,
+        "never_admit": 1,
+        "one_at_a_time": 1,
+        "sjf": 0
+      }
+    }
+  },
+  "mutants": {
+    "fcfs": {
+      "defaultSeedFails": [
+        "convoy",
+        "goodput_score"
+      ],
+      "caughtBy": [
+        "convoy",
+        "goodput_score"
+      ]
+    },
+    "huge_headroom": {
+      "defaultSeedFails": [
+        "burst",
+        "convoy",
+        "goodput_score"
+      ],
+      "caughtBy": [
+        "burst",
+        "convoy",
+        "goodput_score"
+      ]
+    },
+    "largest_first": {
+      "defaultSeedFails": [
+        "convoy",
+        "goodput_score"
+      ],
+      "caughtBy": [
+        "convoy",
+        "goodput_score"
+      ]
+    },
+    "never_admit": {
+      "defaultSeedFails": [
+        "runs_clean",
+        "slo_light",
+        "burst",
+        "convoy",
+        "starvation",
+        "goodput_score"
+      ],
+      "caughtBy": [
+        "runs_clean",
+        "slo_light",
+        "burst",
+        "convoy",
+        "starvation",
+        "goodput_score"
+      ]
+    },
+    "one_at_a_time": {
+      "defaultSeedFails": [
+        "slo_light",
+        "burst",
+        "convoy",
+        "starvation",
+        "goodput_score"
+      ],
+      "caughtBy": [
+        "slo_light",
+        "burst",
+        "convoy",
+        "starvation",
+        "goodput_score"
+      ]
+    },
+    "sjf": {
+      "defaultSeedFails": [
+        "starvation"
+      ],
+      "caughtBy": [
+        "starvation"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "reqs=60 completed=60 slo_met=38 goodput=0.633 ttft_p95=283 last_finish=539"
+  }
+}

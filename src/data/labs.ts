@@ -701,6 +701,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
       { id: 'convoy', label: 'convoy: shorts survive the whale (≥ 85 of 89 SLO-met)' },
       { id: 'starvation', label: 'aging: 3 longs complete under an endless short stream' },
       { id: 'goodput_score', label: 'three replay traces clear calibrated goodput floors' },
+      { id: 'overload_seeded', label: 'seeded 2.4× overload: goodput clears the calibrated floor', optional: true },
     ],
     brief: [
       'Every previous lab built a component. This one is the brain: once per iteration you decide who runs, who waits, who gets preempted — and you are graded the way the industry grades: goodput under SLO. A request only counts if it completes with TTFT inside the bound. Raw throughput is not the metric.',

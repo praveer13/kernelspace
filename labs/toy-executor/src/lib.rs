@@ -19,11 +19,32 @@
 //!   * A Ready task is dropped, never re-polled (a stale wake after
 //!     completion pops a task whose future is gone — skip it).
 //!   * spawn must work from INSIDE a poll (tasks spawning tasks).
+//!
+//! Template v2: every check runs on its own, in a fresh copy of your module,
+//! and a `todo!()` traps only the checks that reach it. Three checks are
+//! seeded: `fifo_poll`, `many_tasks` and `nested_spawn` draw their task
+//! counts, yield counts and spawn trees from the seed, and compare your
+//! executor with the harness's own simple model of the same run. `cargo
+//! test` runs them on their default seeds and on 32 extra seeds, so a
+//! crate that is green here is green on the site's fresh seeds too.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   block_on         a block_on that loses the value, or stops after a Pending
+//!   fifo_poll        a stack instead of a queue (seeded: 3-8 tasks, 0-3 yields each)
+//!   pending_repoll   re-polling without a wake (a busy loop, a re-queued Pending
+//!                    task), or a dropped wake
+//!   ping_pong        a wake lost between two tasks that hold each other's waker
+//!   many_tasks       lost tasks and double polls at scale (seeded: yields shuffled)
+//!   nested_spawn     a RefCell borrow held across poll, or a snapshotted queue
+//!                    (seeded: a tree of spawns, two levels deep)
+//! ```
 
 mod executor;
 
 pub use executor::{block_on, Executor};
-use kslab::{Check, Report};
+use kslab::{Check, CheckDef, Ctx, Lab, Rng};
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -124,6 +145,78 @@ impl Future for YieldN {
     }
 }
 
+/// Like `YieldN`, but writes its id to a shared log on EVERY poll, so the
+/// log is the exact poll order the executor produced.
+struct LogYield {
+    id: u32,
+    remaining: u32,
+    log: Rc<RefCell<Vec<u32>>>,
+}
+
+impl Future for LogYield {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        let this = self.get_mut();
+        this.log.borrow_mut().push(this.id);
+        if this.remaining == 0 {
+            Poll::Ready(())
+        } else {
+            this.remaining -= 1;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+}
+
+/// A gate one task parks on and another opens: the smallest reactor.
+struct Gate {
+    open: Cell<bool>,
+    waiter: RefCell<Option<Waker>>,
+}
+
+/// Pends WITHOUT waking itself until the gate opens: the only thing that may
+/// poll it again is the opener's wake. Counts its own polls.
+struct WaitGate {
+    gate: Rc<Gate>,
+    polls: Rc<Cell<u32>>,
+}
+
+impl Future for WaitGate {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        self.polls.set(self.polls.get() + 1);
+        if self.gate.open.get() {
+            return Poll::Ready(());
+        }
+        *self.gate.waiter.borrow_mut() = Some(cx.waker().clone());
+        Poll::Pending
+    }
+}
+
+/// Yields `remaining` times (waking itself), then opens the gate and wakes
+/// whoever parked on it.
+struct OpenAfter {
+    remaining: u32,
+    gate: Rc<Gate>,
+}
+
+impl Future for OpenAfter {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        let this = self.get_mut();
+        if this.remaining == 0 {
+            this.gate.open.set(true);
+            if let Some(w) = this.gate.waiter.borrow_mut().take() {
+                w.wake();
+            }
+            return Poll::Ready(());
+        }
+        this.remaining -= 1;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
 /// Two tasks alternate turns 100 times via shared state — the
 /// store-the-other-guy's-waker pattern every reactor uses.
 struct PingPong {
@@ -166,15 +259,64 @@ impl Future for PingPongTask {
     }
 }
 
+/* ----------------------- the harness's own model --------------------- */
+
+/// The poll order of tasks that each log on every poll and wake themselves
+/// until their yields run out: a plain FIFO queue, written the obvious way.
+/// Task ids are 1-based, in spawn order.
+fn model_poll_order(yields: &[u32]) -> Vec<u32> {
+    let mut queue: VecDeque<(u32, u32)> = yields.iter().enumerate().map(|(i, &y)| (i as u32 + 1, y)).collect();
+    let mut order = Vec::new();
+    while let Some((id, left)) = queue.pop_front() {
+        order.push(id);
+        if left > 0 {
+            queue.push_back((id, left - 1));
+        }
+    }
+    order
+}
+
+/// Spawn one `LogYield` task per entry of `yields` (ids 1.., in order).
+fn spawn_logged(ex: &Executor, yields: &[u32], log: &Rc<RefCell<Vec<u32>>>) {
+    for (i, &y) in yields.iter().enumerate() {
+        ex.spawn(LogYield { id: i as u32 + 1, remaining: y, log: Rc::clone(log) });
+    }
+}
+
 /* ------------------------------ checks ------------------------------ */
 
+/// The checks, in grading order. Ids and labels match `src/data/labs.ts`;
+/// stages are the F2 order of play (1 = the two-minute win).
+pub static CHECKS: [CheckDef; 6] = [
+    CheckDef { id: "block_on", label: BLOCK_ON, stage: 1, seeded: false, default_seed: 0, run: check_block_on },
+    CheckDef { id: "fifo_poll", label: FIFO_POLL, stage: 2, seeded: true, default_seed: 0xF1F0, run: check_fifo_poll },
+    CheckDef { id: "pending_repoll", label: PENDING_REPOLL, stage: 2, seeded: false, default_seed: 0, run: check_pending_repoll },
+    CheckDef { id: "ping_pong", label: PING_PONG, stage: 3, seeded: false, default_seed: 0, run: check_ping_pong },
+    CheckDef { id: "many_tasks", label: MANY_TASKS, stage: 4, seeded: true, default_seed: 0x7A5C, run: check_many_tasks },
+    CheckDef { id: "nested_spawn", label: NESTED_SPAWN, stage: 3, seeded: true, default_seed: 0x5E57, run: check_nested_spawn },
+];
+
+#[cfg(not(feature = "reference"))]
+const LAB_ID: &str = "toy-executor";
+/// A `--features reference` build names itself, and earns no credit anywhere.
+#[cfg(feature = "reference")]
+const LAB_ID: &str = "toy-executor@reference";
+
+pub static LAB: Lab = Lab { id: LAB_ID, version: 2, checks: &CHECKS };
+
+const BLOCK_ON: &str = "block_on returns values, through yields";
+const FIFO_POLL: &str = "spawn order, then FIFO wake order";
+const PENDING_REPOLL: &str = "Pending tasks re-polled only via wake (exactly 4 polls)";
+const PING_PONG: &str = "cross-task wakeup ×100 via stored wakers";
+const MANY_TASKS: &str = "1000 tasks: exactly 3000 polls, zero lost";
+const NESTED_SPAWN: &str = "tasks spawning tasks mid-run";
+
 /// 1. block_on: drives a future to completion, yields included.
-pub fn check_block_on() -> Check {
+pub fn check_block_on(_: &Ctx) -> Check {
     const ID: &str = "block_on";
-    const LABEL: &str = "block_on returns values, through yields";
     let plain = block_on(async { 42 });
     if plain != 42 {
-        return Check::fail(ID, LABEL, format!("block_on(async {{ 42 }}) = {plain}"));
+        return Check::fail(ID, BLOCK_ON, format!("block_on(async {{ 42 }}) = {plain}"));
     }
     let yielded = block_on(async {
         let polls = Rc::new(Cell::new(0u32));
@@ -182,64 +324,105 @@ pub fn check_block_on() -> Check {
         7
     });
     if yielded != 7 {
-        return Check::fail(ID, LABEL, "block_on lost the plot after a Pending — did you re-poll after wake?");
+        return Check::fail(ID, BLOCK_ON, "block_on lost the plot after a Pending — did you re-poll after wake?");
     }
-    Check::pass(ID, LABEL, "immediate and self-waking futures both complete")
+    Check::pass(ID, BLOCK_ON, "immediate and self-waking futures both complete")
 }
 
-/// 2. fifo_poll: three self-yielding tasks poll in spawn order, then in
-///    FIFO wake order. A stack (LIFO) fails this.
-pub fn check_fifo_poll() -> Check {
+/// 2. fifo_poll: 3–8 tasks, each yielding 0–3 times, must be polled in the
+///    exact order a FIFO queue gives: spawn order, then wake order. A stack
+///    (LIFO) fails this. Seeded: the task count and every task's yields.
+pub fn check_fifo_poll(ctx: &Ctx) -> Check {
     const ID: &str = "fifo_poll";
-    const LABEL: &str = "spawn order, then FIFO wake order";
+    let mut rng = Rng::seeded(ctx.seed);
+    let n = rng.range(3, 8);
+    let mut yields: Vec<u32> = (0..n).map(|_| rng.below(4) as u32).collect();
+    // at least two tasks must come back for a second turn, or LIFO could pass
+    for y in yields.iter_mut().take(2) {
+        if *y == 0 {
+            *y = 1 + rng.below(3) as u32;
+        }
+    }
     let log = Rc::new(RefCell::new(Vec::new()));
     let ex = Executor::new();
-    for id in 1..=3u32 {
-        let log = Rc::clone(&log);
-        ex.spawn(async move {
-            log.borrow_mut().push(id); // first poll
-            let polls = Rc::new(Cell::new(0u32));
-            YieldN { remaining: 1, polls, on_ready: None }.await;
-            log.borrow_mut().push(id); // second poll
-        });
-    }
-    ex.run();
+    spawn_logged(&ex, &yields, &log);
+    let polls = ex.run();
     let got = log.borrow().clone();
-    let want = vec![1, 2, 3, 1, 2, 3];
+    let want = model_poll_order(&yields);
     if got != want {
-        return Check::fail(ID, LABEL, format!("poll order {got:?}, want {want:?} — wakeups must be FIFO"));
+        return Check::fail(
+            ID,
+            FIFO_POLL,
+            format!("{n} tasks yielding {yields:?}: poll order {got:?}, want {want:?} — wakeups must be FIFO"),
+        );
     }
-    Check::pass(ID, LABEL, "spawn [1,2,3], wake [1,2,3]")
+    if polls != want.len() {
+        return Check::fail(ID, FIFO_POLL, format!("run() reported {polls} polls, the tasks were polled {} times", want.len()));
+    }
+    Check::pass(ID, FIFO_POLL, format!("{n} tasks, yields {yields:?}: {} polls in FIFO order", want.len()))
 }
 
-/// 3. pending_repoll: a 3-yield future is polled EXACTLY 4 times — no
-///    lost wakes, no busy-spinning.
-pub fn check_pending_repoll() -> Check {
+/// 3. pending_repoll, in two parts. (a) A 3-yield future is polled EXACTLY 4
+///    times: no lost wakes, no busy-spinning. (b) A task that returns Pending
+///    WITHOUT waking itself, parked on a gate another task opens after four
+///    polls of its own, is polled exactly twice: once to park, once after the
+///    wake. An executor that re-queues every Pending task polls it again at
+///    once, and then again on every round.
+pub fn check_pending_repoll(_: &Ctx) -> Check {
     const ID: &str = "pending_repoll";
-    const LABEL: &str = "Pending tasks re-polled only via wake (exactly 4 polls)";
     let ex = Executor::new();
     let polls = Rc::new(Cell::new(0u32));
     let done = Rc::new(Cell::new(0u32));
     ex.spawn(YieldN { remaining: 3, polls: Rc::clone(&polls), on_ready: Some(Rc::clone(&done)) });
     ex.run();
     if done.get() != 1 {
-        return Check::fail(ID, LABEL, "task never completed — a wake was dropped");
+        return Check::fail(ID, PENDING_REPOLL, "task never completed — a wake was dropped");
     }
     if polls.get() != 4 {
         return Check::fail(
             ID,
-            LABEL,
+            PENDING_REPOLL,
             format!("polled {} times, want exactly 4 — re-polling without a wake is a busy loop", polls.get()),
         );
     }
-    Check::pass(ID, LABEL, "3 Pending + 1 Ready, zero wasted polls")
+
+    let ex = Executor::new();
+    let gate = Rc::new(Gate { open: Cell::new(false), waiter: RefCell::new(None) });
+    let waits = Rc::new(Cell::new(0u32));
+    let woke = Rc::new(Cell::new(false));
+    {
+        let (gate, waits, woke) = (Rc::clone(&gate), Rc::clone(&waits), Rc::clone(&woke));
+        ex.spawn(async move {
+            WaitGate { gate, polls: waits }.await;
+            woke.set(true);
+        });
+    }
+    ex.spawn(OpenAfter { remaining: 3, gate: Rc::clone(&gate) });
+    let total = ex.run();
+    if !woke.get() {
+        return Check::fail(ID, PENDING_REPOLL, "a task parked on a gate never ran again — the opener's wake was dropped");
+    }
+    if waits.get() != 2 {
+        return Check::fail(
+            ID,
+            PENDING_REPOLL,
+            format!(
+                "a task that returned Pending without waking itself was polled {} times, want 2 (park, then the wake) — \
+                 only a wake may re-schedule a Pending task",
+                waits.get()
+            ),
+        );
+    }
+    if total != 6 {
+        return Check::fail(ID, PENDING_REPOLL, format!("run() reported {total} polls for 2 + 4 real polls, want 6"));
+    }
+    Check::pass(ID, PENDING_REPOLL, "3 Pending + 1 Ready, and a parked task polled only when woken")
 }
 
 /// 4. ping_pong: two tasks wake each other 100 times through stored
 ///    wakers. Both must observe completion.
-pub fn check_ping_pong() -> Check {
+pub fn check_ping_pong(_: &Ctx) -> Check {
     const ID: &str = "ping_pong";
-    const LABEL: &str = "cross-task wakeup ×100 via stored wakers";
     let ex = Executor::new();
     let shared = Rc::new(RefCell::new(PingPong {
         count: 0,
@@ -255,80 +438,147 @@ pub fn check_ping_pong() -> Check {
     if s.count != 100 || !s.done[0] || !s.done[1] {
         return Check::fail(
             ID,
-            LABEL,
+            PING_PONG,
             format!("count={}, done={:?} — a wakeup was lost between tasks", s.count, s.done),
         );
     }
-    Check::pass(ID, LABEL, "100 exchanges, both tasks observed completion")
+    Check::pass(ID, PING_PONG, "100 exchanges, both tasks observed completion")
 }
 
-/// 5. many_tasks: 1000 two-yield tasks → exactly 3000 polls, all complete.
-pub fn check_many_tasks() -> Check {
+/// 5. many_tasks: 1000 tasks whose yields are a seeded shuffle of 200 each of
+///    0, 1, 2, 3 and 4 — so exactly 3000 polls in every order — and all complete.
+pub fn check_many_tasks(ctx: &Ctx) -> Check {
     const ID: &str = "many_tasks";
-    const LABEL: &str = "1000 tasks: exactly 3000 polls, zero lost";
+    let mut rng = Rng::seeded(ctx.seed);
+    let mut yields: Vec<u32> = (0..1000).map(|i| (i / 200) as u32).collect();
+    for i in (1..yields.len()).rev() {
+        yields.swap(i, rng.below(i + 1));
+    }
+    let want_polls: usize = yields.iter().map(|&y| y as usize + 1).sum();
     let ex = Executor::new();
     let done = Rc::new(Cell::new(0u32));
-    for _ in 0..1000 {
-        ex.spawn(YieldN {
-            remaining: 2,
-            polls: Rc::new(Cell::new(0)),
-            on_ready: Some(Rc::clone(&done)),
-        });
+    for &y in &yields {
+        ex.spawn(YieldN { remaining: y, polls: Rc::new(Cell::new(0)), on_ready: Some(Rc::clone(&done)) });
     }
     let polls = ex.run();
     if done.get() != 1000 {
-        return Check::fail(ID, LABEL, format!("{} of 1000 tasks completed — tasks are being lost", done.get()));
+        return Check::fail(ID, MANY_TASKS, format!("{} of 1000 tasks completed — tasks are being lost", done.get()));
     }
-    if polls != 3000 {
-        return Check::fail(ID, LABEL, format!("run() executed {polls} polls, want 3000 — double-polling or spin-waste"));
-    }
-    Check::pass(ID, LABEL, "1000 tasks, 3000 polls, all home")
-}
-
-/// 6. nested_spawn: spawn from inside a poll. Executors that borrow the
-///    queue across poll, or snapshot it, fail (panic or lost children).
-pub fn check_nested_spawn() -> Check {
-    const ID: &str = "nested_spawn";
-    const LABEL: &str = "tasks spawning tasks mid-run";
-    let ex = Rc::new(Executor::new());
-    let spawned = Rc::new(Cell::new(0u32));
-    let ex2 = Rc::clone(&ex);
-    let spawned2 = Rc::clone(&spawned);
-    ex.spawn(async move {
-        for _ in 0..5 {
-            let s = Rc::clone(&spawned2);
-            ex2.spawn(async move {
-                s.set(s.get() + 1);
-            });
-        }
-    });
-    ex.run();
-    if spawned.get() != 5 {
+    if polls != want_polls {
         return Check::fail(
             ID,
-            LABEL,
-            format!("{} of 5 children ran — spawn inside poll must grow the live queue", spawned.get()),
+            MANY_TASKS,
+            format!("run() executed {polls} polls, want {want_polls} — double-polling or spin-waste"),
         );
     }
-    Check::pass(ID, LABEL, "parent spawned 5 children mid-poll; all 5 ran")
+    Check::pass(ID, MANY_TASKS, format!("1000 tasks, {polls} polls, all home"))
 }
 
-/// The full suite, in grading order.
+/// 6. nested_spawn: spawn from inside a poll, two levels deep. A parent
+///    spawns 3–8 children; each child that is told to yields once and then
+///    spawns 1–3 grandchildren. Executors that borrow the queue across poll,
+///    or snapshot it, panic or lose children. Seeded: the shape of the tree.
+pub fn check_nested_spawn(ctx: &Ctx) -> Check {
+    const ID: &str = "nested_spawn";
+    let mut rng = Rng::seeded(ctx.seed);
+    let kids = rng.range(3, 8);
+    let fanout: Vec<usize> = (0..kids).map(|_| if rng.below(3) == 0 { 0 } else { rng.range(1, 3) }).collect();
+    let grand: usize = fanout.iter().sum();
+    // parent: 1 poll; a child that spawns polls twice (it yields once), one that doesn't polls once
+    let want_polls = 1 + fanout.iter().map(|&g| if g > 0 { 2 } else { 1 }).sum::<usize>() + grand;
+
+    let ex = Rc::new(Executor::new());
+    let children = Rc::new(Cell::new(0usize));
+    let grandchildren = Rc::new(Cell::new(0usize));
+    {
+        let (ex2, children, grandchildren) = (Rc::clone(&ex), Rc::clone(&children), Rc::clone(&grandchildren));
+        let fanout = fanout.clone();
+        ex.spawn(async move {
+            for g in fanout {
+                let (ex3, children, grandchildren) = (Rc::clone(&ex2), Rc::clone(&children), Rc::clone(&grandchildren));
+                ex2.spawn(async move {
+                    if g > 0 {
+                        YieldN { remaining: 1, polls: Rc::new(Cell::new(0)), on_ready: None }.await;
+                    }
+                    children.set(children.get() + 1);
+                    for _ in 0..g {
+                        let grandchildren = Rc::clone(&grandchildren);
+                        ex3.spawn(async move {
+                            grandchildren.set(grandchildren.get() + 1);
+                        });
+                    }
+                });
+            }
+        });
+    }
+    let polls = ex.run();
+    if children.get() != kids || grandchildren.get() != grand {
+        return Check::fail(
+            ID,
+            NESTED_SPAWN,
+            format!(
+                "{} of {kids} children and {} of {grand} grandchildren ran — spawn inside poll must grow the live queue",
+                children.get(),
+                grandchildren.get()
+            ),
+        );
+    }
+    if polls != want_polls {
+        return Check::fail(ID, NESTED_SPAWN, format!("run() reported {polls} polls, want {want_polls} for this spawn tree"));
+    }
+    Check::pass(
+        ID,
+        NESTED_SPAWN,
+        format!("{kids} children and {grand} grandchildren spawned mid-poll; all ran in {polls} polls"),
+    )
+}
+
+/// The full suite on default seeds, in grading order (v1 report order).
 pub fn self_checks() -> Vec<Check> {
-    vec![
-        check_block_on(),
-        check_fifo_poll(),
-        check_pending_repoll(),
-        check_ping_pong(),
-        check_many_tasks(),
-        check_nested_spawn(),
-    ]
+    CHECKS.iter().map(|c| (c.run)(&Ctx { seed: c.default_seed, fresh: false })).collect()
+}
+
+/* ------------------------------ probe ------------------------------- */
+
+/// `probe <seed>`: 6–12 seeded tasks (0–4 yields each) on YOUR executor,
+/// summarised in one line: how many polls it executed against the FIFO
+/// model's count, how many tasks there were, and the order of the first
+/// twelve polls. Deterministic for a given seed and executor.
+pub fn probe(seed: u32) -> String {
+    let mut rng = Rng::seeded(seed);
+    let n = rng.range(6, 12);
+    let yields: Vec<u32> = (0..n).map(|_| rng.below(5) as u32).collect();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let ex = Executor::new();
+    spawn_logged(&ex, &yields, &log);
+    let polls = ex.run();
+    let first: Vec<String> = log.borrow().iter().take(12).map(u32::to_string).collect();
+    format!(
+        "tasks={n} yields={} polls={polls} model_polls={} first_polls={}",
+        yields.iter().sum::<u32>(),
+        model_poll_order(&yields).len(),
+        first.join(",")
+    )
 }
 
 /* ------------------------------ wasm ABI ---------------------------- */
 
+kslab::export_abi_v2!();
+
 #[no_mangle]
-pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report { lab: "toy-executor", version: 1, checks: self_checks() };
-    kslab::emit(&report)
+pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
+}
+
+/// The runtime bridge: `probe <seed>` (see `probe`).
+#[no_mangle]
+pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::install_panic_hook();
+    let cmd = std::str::from_utf8(unsafe { kslab::input(in_ptr, in_len) }).unwrap_or("");
+    let mut it = cmd.split_whitespace();
+    let reply = match (it.next(), it.next().map(str::parse::<u32>)) {
+        (Some("probe"), Some(Ok(seed))) => probe(seed),
+        _ => format!("err unknown command {:?} (try: probe <seed>)", kslab::clip(cmd.trim(), 40)),
+    };
+    kslab::emit_str(&reply)
 }

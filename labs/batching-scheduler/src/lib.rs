@@ -27,11 +27,33 @@
 //!   * SLO: TTFT = iterations from arrival to first token; a request
 //!     meets the SLO iff it completes with TTFT ≤ the scenario's bound.
 //!     Goodput = met / total. Raw throughput is not the metric.
+//!
+//! Template v2: every check runs on its own, in a fresh copy of your module,
+//! and a `todo!()` traps only the checks that reach it. Four checks draw
+//! their traffic from the seed (`runs_clean`, `slo_light`, `starvation`,
+//! `overload_seeded`); `cargo test` runs them on their default seeds and on
+//! 32 extra seeds. The scenarios with calibrated tables stay fixed: `burst`,
+//! `convoy`, and `goodput_score`, whose three replay traces have floors
+//! measured against the exact tables in the crate.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   runs_clean       an illegal action, or a policy that stalls on light load
+//!   slo_light        admitting so slowly that light traffic misses its TTFT
+//!   burst            a batch that never fills: one request admitted at a time
+//!   convoy           first-come-first-served: the whale goes first
+//!   starvation       pure smallest-first: the three longs never run
+//!   goodput_score    the replay traces (BurstGPT, LMSYS shape, one overload)
+//!   overload_seeded  first-come-first-served on a freshly drawn overload
+//!                    (optional): 400 requests at 2.4x, redrawn every run,
+//!                    where `goodput_score` replays one fixed trace
+//! ```
 
 mod scheduler;
 mod trace_scenarios;
 
-use kslab::{Check, Report};
+use kslab::{Check, CheckDef, Ctx, Lab, Rng as SeedRng};
 use scheduler::Scheduler;
 
 pub const CHUNK: u32 = 128; // prefill tokens per iteration
@@ -315,16 +337,26 @@ impl Rng {
     }
 }
 
-/// Light spread traffic — any sane policy passes.
-pub fn scn_light() -> Scenario {
-    let mut rng = Rng(0x1164);
+/// A source of values below a bound: the fixed scenarios read the lab's old
+/// xorshift stream, the seeded twins read `kslab::Rng::seeded(seed)`.
+type Draw<'a> = &'a mut dyn FnMut(u32) -> u32;
+
+fn fixed_draw(rng: &mut Rng) -> impl FnMut(u32) -> u32 + '_ {
+    move |n| rng.below(n)
+}
+
+fn seeded_draw(rng: &mut SeedRng) -> impl FnMut(u32) -> u32 + '_ {
+    move |n| rng.below(n as usize) as u32
+}
+
+fn light_from(below: Draw) -> Scenario {
     let mut reqs = Vec::new();
     for i in 0..20u32 {
         reqs.push(ReqSpec {
             id: i,
-            arrival: rng.below(200),
-            prompt: 32 + rng.below(224),
-            output: 16 + rng.below(48),
+            arrival: below(200),
+            prompt: 32 + below(224),
+            output: 16 + below(48),
         });
     }
     Scenario {
@@ -337,9 +369,69 @@ pub fn scn_light() -> Scenario {
     }
 }
 
+/// Light spread traffic — any sane policy passes.
+pub fn scn_light() -> Scenario {
+    light_from(&mut fixed_draw(&mut Rng(0x1164)))
+}
+
+/// Admit every waiting request that fits, in arrival order, as soon as it
+/// can run. The harness's yardstick for "light": not a policy to copy.
+fn eager(s: &State) -> Action {
+    let mut used: u32 = s.running.iter().map(|r| r.prompt_tokens + r.decoded).sum();
+    let mut slots = s.max_running.saturating_sub(s.running.len());
+    let mut admit = Vec::new();
+    for r in s.waiting {
+        if slots == 0 {
+            break;
+        }
+        if used + r.prompt_tokens > s.mem_cap {
+            continue;
+        }
+        used += r.prompt_tokens;
+        slots -= 1;
+        admit.push(r.id);
+    }
+    Action { admit, preempt: Vec::new() }
+}
+
+/// Light means nobody has to wait: an admit-as-soon-as-possible run meets
+/// every SLO and never has more than six of the eight slots busy.
+fn is_light(scn: &Scenario) -> bool {
+    let mut busiest = 0;
+    let run = simulate(scn, &mut |s: &State| {
+        let action = eager(s);
+        busiest = busiest.max(s.running.len() + action.admit.len());
+        action
+    });
+    matches!(run, Ok(s) if s.slo_met == s.total) && busiest <= 6
+}
+
+/// The same light traffic, drawn from a seed (the checks use this one).
+///
+/// A draw can pile nine requests into one stretch of iterations, and then
+/// some request must wait, and which one depends on the policy. Such a draw is
+/// not light: it is redrawn (deterministically, from the same stream) until
+/// every policy that admits promptly can serve all of it, so a policy that
+/// passes `slo_light` once passes it on every seed.
+pub fn scn_light_seeded(seed: u32) -> Scenario {
+    let mut rng = SeedRng::seeded(seed);
+    let mut scn = light_from(&mut seeded_draw(&mut rng));
+    for _ in 0..64 {
+        if is_light(&scn) {
+            break;
+        }
+        scn = light_from(&mut seeded_draw(&mut rng));
+    }
+    scn
+}
+
 /// A synchronized burst: 48 requests in the first 6 iterations, memory
 /// sized so only ~28 prompts fit resident — admission control and
 /// size-aware packing decide how many make the SLO.
+///
+/// Stays a fixed table on purpose: drawn from fresh seeds, the reference
+/// itself misses 90 % on about one burst in twenty (measured on 1,000 draws),
+/// and a check that cannot reach a reference pass rate of 1 is not seeded.
 pub fn scn_burst() -> Scenario {
     let mut rng = Rng(0xB57);
     let mut reqs = Vec::new();
@@ -390,11 +482,7 @@ pub fn scn_convoy() -> Scenario {
     }
 }
 
-/// Starvation watch: an effectively endless short stream (arrivals run
-/// past the horizon), three longs at t=0. Pure shortest-first NEVER
-/// admits the longs; only aging saves them.
-pub fn scn_starvation() -> Scenario {
-    let mut rng = Rng(0x57A1);
+fn starvation_from(below: Draw) -> Scenario {
     let mut reqs = Vec::new();
     for i in 0..3u32 {
         reqs.push(ReqSpec {
@@ -409,9 +497,9 @@ pub fn scn_starvation() -> Scenario {
             id: i,
             // a dense leading pack so no policy gets a free early window,
             // then a stream that outlasts the horizon
-            arrival: if i < 40 { i % 3 } else { rng.below(2000) },
-            prompt: 96 + rng.below(160),
-            output: 24 + rng.below(32),
+            arrival: if i < 40 { i % 3 } else { below(2000) },
+            prompt: 96 + below(160),
+            output: 24 + below(32),
         });
     }
     Scenario {
@@ -424,23 +512,31 @@ pub fn scn_starvation() -> Scenario {
     }
 }
 
-/// The big one: 400 requests over 800 iterations at 2.4× offered load —
-/// the SLO cannot be saved for everyone, so goodput IS the scheduling
-/// quality metric.
-pub fn scn_fleet() -> Scenario {
-    let mut rng = Rng(0xF1E7);
+/// Starvation watch: an effectively endless short stream (arrivals run
+/// past the horizon), three longs at t=0. Pure shortest-first NEVER
+/// admits the longs; only aging saves them.
+pub fn scn_starvation() -> Scenario {
+    starvation_from(&mut fixed_draw(&mut Rng(0x57A1)))
+}
+
+/// The same stream, drawn from a seed.
+pub fn scn_starvation_seeded(seed: u32) -> Scenario {
+    starvation_from(&mut seeded_draw(&mut SeedRng::seeded(seed)))
+}
+
+fn fleet_from(below: Draw) -> Scenario {
     let mut reqs = Vec::new();
     for i in 0..400u32 {
-        let heavy = rng.below(100) < 12;
+        let heavy = below(100) < 12;
         reqs.push(ReqSpec {
             id: i,
-            arrival: rng.below(1400),
+            arrival: below(1400),
             prompt: if heavy {
-                1024 + rng.below(2048)
+                1024 + below(2048)
             } else {
-                64 + rng.below(448)
+                64 + below(448)
             },
-            output: 16 + rng.below(80),
+            output: 16 + below(80),
         });
     }
     Scenario {
@@ -451,6 +547,21 @@ pub fn scn_fleet() -> Scenario {
         slo_ttft: 50,
         iters: 2500,
     }
+}
+
+/// The big one: 400 requests over 800 iterations at 2.4× offered load —
+/// the SLO cannot be saved for everyone, so goodput IS the scheduling
+/// quality metric.
+pub fn scn_fleet() -> Scenario {
+    fleet_from(&mut fixed_draw(&mut Rng(0xF1E7)))
+}
+
+/// The seeded twin of `scn_fleet`: the same 400 requests, the same 12 %
+/// heavies, the same load and the same SLO, drawn from a seed. The fixed
+/// `scn_fleet` stays in the replay score (and the leaderboard); this twin is
+/// graded by `overload_seeded`, on a fresh seed at grade time.
+pub fn scn_fleet_seeded(seed: u32) -> Scenario {
+    fleet_from(&mut seeded_draw(&mut SeedRng::seeded(seed)))
 }
 
 fn scenario_from_trace(
@@ -509,17 +620,48 @@ pub fn scn_lmsys_shape() -> Scenario {
 
 /* ------------------------------ checks ------------------------------ */
 
-fn run(scn: &Scenario) -> Result<Stats, String> {
+/// Run one scenario against YOUR scheduler (a fresh one), as the checks do.
+pub fn run(scn: &Scenario) -> Result<Stats, String> {
     let mut sch = Scheduler::new();
     simulate(scn, &mut |s| sch.schedule(s))
 }
 
+/// The checks, in grading order. Ids and labels match `src/data/labs.ts`;
+/// stages are the F2 order of play (1 = the two-minute win). The replay
+/// check stays unseeded: its floors are calibrated tables (labs/README,
+/// "Lab 06 trace calibration").
+pub static CHECKS: [CheckDef; 7] = [
+    CheckDef { id: "runs_clean", label: RUNS_CLEAN, stage: 1, seeded: true, default_seed: 0x1164, run: check_runs_clean },
+    CheckDef { id: "slo_light", label: SLO_LIGHT, stage: 2, seeded: true, default_seed: 0x1164, run: check_slo_light },
+    CheckDef { id: "burst", label: BURST, stage: 2, seeded: false, default_seed: 0, run: check_burst },
+    CheckDef { id: "convoy", label: CONVOY, stage: 3, seeded: false, default_seed: 0, run: check_convoy },
+    CheckDef { id: "starvation", label: STARVATION, stage: 3, seeded: true, default_seed: 0x57A1, run: check_starvation },
+    CheckDef { id: "goodput_score", label: GOODPUT_SCORE, stage: 4, seeded: false, default_seed: 0, run: check_goodput_score },
+    CheckDef { id: "overload_seeded", label: OVERLOAD_SEEDED, stage: 4, seeded: true, default_seed: 0xF1E7, run: check_overload_seeded },
+];
+
+#[cfg(not(feature = "reference"))]
+const LAB_ID: &str = "batching-scheduler";
+/// A `--features reference` build names itself, and earns no credit anywhere.
+#[cfg(feature = "reference")]
+const LAB_ID: &str = "batching-scheduler@reference";
+
+pub static LAB: Lab = Lab { id: LAB_ID, version: 3, checks: &CHECKS };
+
+const RUNS_CLEAN: &str = "legal moves only; light load completes";
+const SLO_LIGHT: &str = "goodput ≥ 95% on light load";
+const BURST: &str = "burst absorption: goodput ≥ 90%";
+const CONVOY: &str = "convoy: shorts survive the whale (≥ 85 of 89 SLO-met)";
+const STARVATION: &str = "aging: 3 longs complete under an endless short stream";
+const GOODPUT_SCORE: &str = "three replay traces clear calibrated goodput floors";
+const OVERLOAD_SEEDED: &str = "seeded 2.4× overload: goodput clears the calibrated floor";
+
 /// 1. runs_clean: invariants — never admit a non-waiting id, never blow
 ///    slots or memory — on the light scenario, everything completes.
-pub fn check_runs_clean() -> Check {
+pub fn check_runs_clean(ctx: &Ctx) -> Check {
     const ID: &str = "runs_clean";
-    const LABEL: &str = "legal moves only; light load completes";
-    let scn = scn_light();
+    const LABEL: &str = RUNS_CLEAN;
+    let scn = scn_light_seeded(ctx.seed);
     match run(&scn) {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
         Ok(s) if s.completed < s.total => Check::fail(
@@ -536,10 +678,10 @@ pub fn check_runs_clean() -> Check {
 
 /// 2. slo_light: goodput ≥ 95% on light load. (Plain FCFS passes this —
 ///    the point is that the SLO bar exists at all.)
-pub fn check_slo_light() -> Check {
+pub fn check_slo_light(ctx: &Ctx) -> Check {
     const ID: &str = "slo_light";
-    const LABEL: &str = "goodput ≥ 95% on light load";
-    let scn = scn_light();
+    const LABEL: &str = SLO_LIGHT;
+    let scn = scn_light_seeded(ctx.seed);
     match run(&scn) {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
         Ok(s) => {
@@ -562,9 +704,9 @@ pub fn check_slo_light() -> Check {
 }
 
 /// 3. burst: 48 requests in 6 iterations. Admission control or collapse.
-pub fn check_burst() -> Check {
+pub fn check_burst(_: &Ctx) -> Check {
     const ID: &str = "burst";
-    const LABEL: &str = "burst absorption: goodput ≥ 90%";
+    const LABEL: &str = BURST;
     let scn = scn_burst();
     match run(&scn) {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
@@ -593,9 +735,9 @@ pub fn check_burst() -> Check {
 /// 4. convoy: the whale must not go first, and decode growth must not
 ///    thrash the pool. Size-aware admission WITH headroom. (Calibrated:
 ///    plain FCFS meets 54 of 89.)
-pub fn check_convoy() -> Check {
+pub fn check_convoy(_: &Ctx) -> Check {
     const ID: &str = "convoy";
-    const LABEL: &str = "convoy: shorts survive the whale (≥ 85 of 89 SLO-met)";
+    const LABEL: &str = CONVOY;
     let scn = scn_convoy();
     match run(&scn) {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
@@ -631,10 +773,10 @@ pub fn check_convoy() -> Check {
 
 /// 5. starvation: the stream never stops; the three longs must still
 ///    finish inside the horizon. Pure shortest-first fails this.
-pub fn check_starvation() -> Check {
+pub fn check_starvation(ctx: &Ctx) -> Check {
     const ID: &str = "starvation";
-    const LABEL: &str = "aging: 3 longs complete under an endless short stream";
-    let scn = scn_starvation();
+    const LABEL: &str = STARVATION;
+    let scn = scn_starvation_seeded(ctx.seed);
     match run(&scn) {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
         Ok(s) => {
@@ -698,9 +840,9 @@ pub fn score_goodput_traces() -> Result<GoodputScores, String> {
 /// 6. goodput_score: one synthetic overload plus the recorded BurstGPT
 ///    slice and the licensed-safe LMSYS aggregate shape. Each distribution
 ///    has its own calibrated floor; the numeric mean is the leaderboard score.
-pub fn check_goodput_score() -> Check {
+pub fn check_goodput_score(_: &Ctx) -> Check {
     const ID: &str = "goodput_score";
-    const LABEL: &str = "three replay traces clear calibrated goodput floors";
+    const LABEL: &str = GOODPUT_SCORE;
     match score_goodput_traces() {
         Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
         Ok(scores) => {
@@ -754,34 +896,95 @@ pub fn check_goodput_score() -> Check {
     }
 }
 
-/// The full suite, in grading order.
+/// Goodput the seeded overload must clear. Calibrated offline on 10,000 fresh
+/// seeds (calibration.json): well under every reference-shaped policy's worst
+/// draw, well over first-come-first-served.
+pub const OVERLOAD_GOODPUT_FLOOR: f64 = 0.40;
+
+/// 7. overload_seeded: the synthetic fleet overload's seeded twin. The same
+///    400 requests at 2.4× load, drawn from the seed at grade time, so a
+///    policy tuned to the one fixed trace in `goodput_score` has to hold up
+///    on traffic it has not seen. The replay traces stay fixed tables.
+pub fn check_overload_seeded(ctx: &Ctx) -> Check {
+    const ID: &str = "overload_seeded";
+    const LABEL: &str = OVERLOAD_SEEDED;
+    let scn = scn_fleet_seeded(ctx.seed);
+    match run(&scn) {
+        Err(e) => Check::fail(ID, LABEL, format!("illegal action: {e}")),
+        Ok(s) => {
+            let g = s.goodput();
+            if g < OVERLOAD_GOODPUT_FLOOR {
+                Check::fail(
+                    ID,
+                    LABEL,
+                    format!(
+                        "goodput {:.1}% < {:.1}% floor on a freshly drawn 400-request overload — size-aware admission beats first-come-first-served here, and it has to hold on every draw",
+                        g * 100.0,
+                        OVERLOAD_GOODPUT_FLOOR * 100.0
+                    ),
+                )
+            } else {
+                Check::pass(
+                    ID,
+                    LABEL,
+                    format!("goodput {:.1}% on a seeded 400-request overload (ttft p95 {} iters)", g * 100.0, s.ttft_p95),
+                )
+            }
+        }
+    }
+}
+
+/// The full suite on default seeds, in grading order (v1 report order).
 pub fn self_checks() -> Vec<Check> {
-    vec![
-        check_runs_clean(),
-        check_slo_light(),
-        check_burst(),
-        check_convoy(),
-        check_starvation(),
-        check_goodput_score(),
-    ]
+    CHECKS.iter().map(|c| (c.run)(&Ctx { seed: c.default_seed, fresh: false })).collect()
+}
+
+/* ------------------------------ probe ------------------------------- */
+
+/// `probe <seed>`: a seeded mini-overload (60 requests in 300 iterations,
+/// 6 slots, 6,144 tokens of memory) on YOUR scheduler, summarised in one
+/// line. Deterministic for a given seed and scheduler.
+pub fn probe(seed: u32) -> String {
+    let mut rng = SeedRng::seeded(seed);
+    let mut reqs = Vec::new();
+    for i in 0..60u32 {
+        let heavy = rng.below(100) < 15;
+        reqs.push(ReqSpec {
+            id: i,
+            arrival: rng.below(300) as u32,
+            prompt: if heavy { 768 + rng.below(1024) as u32 } else { 64 + rng.below(320) as u32 },
+            output: 16 + rng.below(48) as u32,
+        });
+    }
+    let scn = Scenario { name: "probe", reqs, max_running: 6, mem_cap: 6144, slo_ttft: 40, iters: 700 };
+    match run(&scn) {
+        Ok(s) => format!(
+            "reqs={} completed={} slo_met={} goodput={:.3} ttft_p95={} last_finish={}",
+            s.total,
+            s.completed,
+            s.slo_met,
+            s.goodput(),
+            s.ttft_p95,
+            s.last_finish
+        ),
+        Err(e) => format!("err illegal action: {e}"),
+    }
 }
 
 /* ------------------------------ wasm ABI ---------------------------- */
 
+kslab::export_abi_v2!();
+
 #[no_mangle]
-pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report {
-        lab: "batching-scheduler",
-        version: 2,
-        checks: self_checks(),
-    };
-    kslab::emit(&report)
+pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
 }
 
 /* --------------------------- fleet bridge --------------------------- */
 /* The Fleet page (/fleet, engine mode) drives YOUR scheduler live:
 
      init                                   → ok   (fresh Scheduler)
+     probe <seed>                           → one summary line of a seeded mini-overload
      score                                  → four numeric score lines
      schedule <iter> <max_running> <mem_cap> <mem_used>
        W <id> <arrival> <prompt> ; …        waiting view (id arrival prompt)
@@ -797,6 +1000,7 @@ thread_local! {
 
 #[no_mangle]
 pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::install_panic_hook();
     let bytes = unsafe { std::slice::from_raw_parts(in_ptr as *const u8, in_len as usize) };
     let input = String::from_utf8_lossy(bytes).into_owned();
     let reply = FLEET_SCHED.with(|s| bridge(&mut s.borrow_mut(), &input));
@@ -814,6 +1018,10 @@ fn bridge(slot: &mut Option<Scheduler>, input: &str) -> String {
             *slot = Some(Scheduler::new());
             "ok".into()
         }
+        Some("probe") if parts.len() == 2 => match parts[1].parse::<u32>() {
+            Ok(seed) => probe(seed),
+            Err(_) => format!("err bad seed '{}'", parts[1]),
+        },
         Some("score") if parts.len() == 1 => match score_goodput_traces() {
             Ok(scores) => format!(
                 "synthetic {:.6}\nburstgpt {:.6}\nlmsys-shape {:.6}\nmean {:.6}",
