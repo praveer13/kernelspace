@@ -73,7 +73,7 @@ describe('legacy tasks keep their ids and pay as before', () => {
     for (const id of ['t-sched-fifo', 't-rust-move', 't-ctx-cliff', 't-lock-aba', 't-layout-aos', 't-eng-gqa', 't-blk-cow', 't-frame-trace']) {
       expect(ids).toContain(id)
     }
-    expect(legacy.length).toBe(reg.tasks.length) // no outcome tasks until C7–C9
+    expect(legacy.length + reg.tasks.filter((t) => t.kind === 'outcome').length).toBe(reg.tasks.length)
     for (const t of legacy) {
       expect(t.predict).toBeUndefined()
       expect(t.kcs).toEqual([])
