@@ -1,0 +1,276 @@
+{
+  "lab": "rust-zero-r6",
+  "abi": 2,
+  "version": 2,
+  "commit": "dd8e940",
+  "date": "2026-10-05",
+  "harness": "fc72f8863c35b5148421045beab051bfc8a86d965ad6c522c2a27bb61847730e",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "filter_vec": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "abs-values": 0,
+        "below-not-above": 0,
+        "count-off-by-one": 0,
+        "evens-unsquared": 0,
+        "first-one": 0,
+        "ge-not-gt": 0,
+        "gt-not-ge": 1,
+        "lane-then-id": 0,
+        "last-wins": 0,
+        "literal": 1,
+        "odd-squares": 0,
+        "reverse-lane": 0,
+        "sort-by-id": 0,
+        "sorted-output": 1,
+        "square-all": 0
+      }
+    },
+    "stable_sort": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "abs-values": 0,
+        "below-not-above": 0,
+        "count-off-by-one": 0,
+        "evens-unsquared": 0,
+        "first-one": 0,
+        "ge-not-gt": 0,
+        "gt-not-ge": 0,
+        "lane-then-id": 1,
+        "last-wins": 0,
+        "literal": 1,
+        "odd-squares": 0,
+        "reverse-lane": 1,
+        "sort-by-id": 1,
+        "sorted-output": 0,
+        "square-all": 0
+      }
+    },
+    "frequency_map": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "abs-values": 0,
+        "below-not-above": 0,
+        "count-off-by-one": 1,
+        "evens-unsquared": 0,
+        "first-one": 1,
+        "ge-not-gt": 0,
+        "gt-not-ge": 0,
+        "lane-then-id": 0,
+        "last-wins": 0,
+        "literal": 1,
+        "odd-squares": 0,
+        "reverse-lane": 0,
+        "sort-by-id": 0,
+        "sorted-output": 0,
+        "square-all": 0
+      }
+    },
+    "grouped_sum": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "abs-values": 1,
+        "below-not-above": 0,
+        "count-off-by-one": 0,
+        "evens-unsquared": 0,
+        "first-one": 0,
+        "ge-not-gt": 0,
+        "gt-not-ge": 0,
+        "lane-then-id": 0,
+        "last-wins": 1,
+        "literal": 1,
+        "odd-squares": 0,
+        "reverse-lane": 0,
+        "sort-by-id": 0,
+        "sorted-output": 0,
+        "square-all": 0
+      }
+    },
+    "closure_capture": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "abs-values": 0,
+        "below-not-above": 1,
+        "count-off-by-one": 0,
+        "evens-unsquared": 0,
+        "first-one": 0,
+        "ge-not-gt": 1,
+        "gt-not-ge": 0,
+        "lane-then-id": 0,
+        "last-wins": 0,
+        "literal": 1,
+        "odd-squares": 0,
+        "reverse-lane": 0,
+        "sort-by-id": 0,
+        "sorted-output": 0,
+        "square-all": 0
+      }
+    },
+    "iterator_pipeline": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "abs-values": 0,
+        "below-not-above": 0,
+        "count-off-by-one": 0,
+        "evens-unsquared": 1,
+        "first-one": 0,
+        "ge-not-gt": 0,
+        "gt-not-ge": 0,
+        "lane-then-id": 0,
+        "last-wins": 0,
+        "literal": 1,
+        "odd-squares": 1,
+        "reverse-lane": 0,
+        "sort-by-id": 0,
+        "sorted-output": 0,
+        "square-all": 1
+      }
+    }
+  },
+  "mutants": {
+    "abs-values": {
+      "defaultSeedFails": [
+        "grouped_sum"
+      ],
+      "caughtBy": [
+        "grouped_sum"
+      ]
+    },
+    "below-not-above": {
+      "defaultSeedFails": [
+        "closure_capture"
+      ],
+      "caughtBy": [
+        "closure_capture"
+      ]
+    },
+    "count-off-by-one": {
+      "defaultSeedFails": [
+        "frequency_map"
+      ],
+      "caughtBy": [
+        "frequency_map"
+      ]
+    },
+    "evens-unsquared": {
+      "defaultSeedFails": [
+        "iterator_pipeline"
+      ],
+      "caughtBy": [
+        "iterator_pipeline"
+      ]
+    },
+    "first-one": {
+      "defaultSeedFails": [
+        "frequency_map"
+      ],
+      "caughtBy": [
+        "frequency_map"
+      ]
+    },
+    "ge-not-gt": {
+      "defaultSeedFails": [
+        "closure_capture"
+      ],
+      "caughtBy": [
+        "closure_capture"
+      ]
+    },
+    "gt-not-ge": {
+      "defaultSeedFails": [
+        "filter_vec"
+      ],
+      "caughtBy": [
+        "filter_vec"
+      ]
+    },
+    "lane-then-id": {
+      "defaultSeedFails": [
+        "stable_sort"
+      ],
+      "caughtBy": [
+        "stable_sort"
+      ]
+    },
+    "last-wins": {
+      "defaultSeedFails": [
+        "grouped_sum"
+      ],
+      "caughtBy": [
+        "grouped_sum"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "filter_vec",
+        "stable_sort",
+        "frequency_map",
+        "grouped_sum",
+        "closure_capture",
+        "iterator_pipeline"
+      ],
+      "caughtBy": [
+        "filter_vec",
+        "stable_sort",
+        "frequency_map",
+        "grouped_sum",
+        "closure_capture",
+        "iterator_pipeline"
+      ]
+    },
+    "odd-squares": {
+      "defaultSeedFails": [
+        "iterator_pipeline"
+      ],
+      "caughtBy": [
+        "iterator_pipeline"
+      ]
+    },
+    "reverse-lane": {
+      "defaultSeedFails": [
+        "stable_sort"
+      ],
+      "caughtBy": [
+        "stable_sort"
+      ]
+    },
+    "sort-by-id": {
+      "defaultSeedFails": [
+        "stable_sort"
+      ],
+      "caughtBy": [
+        "stable_sort"
+      ]
+    },
+    "sorted-output": {
+      "defaultSeedFails": [
+        "filter_vec"
+      ],
+      "caughtBy": [
+        "filter_vec"
+      ]
+    },
+    "square-all": {
+      "defaultSeedFails": [
+        "iterator_pipeline"
+      ],
+      "caughtBy": [
+        "iterator_pipeline"
+      ]
+    }
+  }
+}

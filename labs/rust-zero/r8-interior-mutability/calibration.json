@@ -1,0 +1,276 @@
+{
+  "lab": "rust-zero-r8",
+  "abi": 2,
+  "version": 2,
+  "commit": "dd8e940",
+  "date": "2026-10-05",
+  "harness": "e1006d3f50b8b1e9e5b7a53d428f9714d205722594374fd41835e719019f94bc",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "cell_counter": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "appends-zero": 0,
+        "counter-not-stored": 1,
+        "inverted-availability": 0,
+        "leaked-guard": 0,
+        "length-after-first": 0,
+        "literal": 1,
+        "log-old-length": 0,
+        "log-prepend": 0,
+        "mutex-not-stored": 0,
+        "mutex-returns-old": 0,
+        "pushes-swapped": 0,
+        "readers-ignored": 0,
+        "returns-old-counter": 1,
+        "second-push-missing": 0,
+        "sum-skips-first": 0
+      }
+    },
+    "refcell_log": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "appends-zero": 0,
+        "counter-not-stored": 0,
+        "inverted-availability": 0,
+        "leaked-guard": 0,
+        "length-after-first": 0,
+        "literal": 1,
+        "log-old-length": 1,
+        "log-prepend": 1,
+        "mutex-not-stored": 0,
+        "mutex-returns-old": 0,
+        "pushes-swapped": 0,
+        "readers-ignored": 0,
+        "returns-old-counter": 0,
+        "second-push-missing": 0,
+        "sum-skips-first": 0
+      }
+    },
+    "conflict_detection": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "appends-zero": 0,
+        "counter-not-stored": 0,
+        "inverted-availability": 1,
+        "leaked-guard": 1,
+        "length-after-first": 0,
+        "literal": 1,
+        "log-old-length": 0,
+        "log-prepend": 0,
+        "mutex-not-stored": 0,
+        "mutex-returns-old": 0,
+        "pushes-swapped": 0,
+        "readers-ignored": 1,
+        "returns-old-counter": 0,
+        "second-push-missing": 0,
+        "sum-skips-first": 0
+      }
+    },
+    "scoped_borrow": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "appends-zero": 1,
+        "counter-not-stored": 0,
+        "inverted-availability": 0,
+        "leaked-guard": 0,
+        "length-after-first": 0,
+        "literal": 1,
+        "log-old-length": 0,
+        "log-prepend": 0,
+        "mutex-not-stored": 0,
+        "mutex-returns-old": 0,
+        "pushes-swapped": 0,
+        "readers-ignored": 0,
+        "returns-old-counter": 0,
+        "second-push-missing": 0,
+        "sum-skips-first": 1
+      }
+    },
+    "mutex_update": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "appends-zero": 0,
+        "counter-not-stored": 0,
+        "inverted-availability": 0,
+        "leaked-guard": 0,
+        "length-after-first": 0,
+        "literal": 1,
+        "log-old-length": 0,
+        "log-prepend": 0,
+        "mutex-not-stored": 1,
+        "mutex-returns-old": 1,
+        "pushes-swapped": 0,
+        "readers-ignored": 0,
+        "returns-old-counter": 0,
+        "second-push-missing": 0,
+        "sum-skips-first": 0
+      }
+    },
+    "lock_scope": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "appends-zero": 0,
+        "counter-not-stored": 0,
+        "inverted-availability": 0,
+        "leaked-guard": 0,
+        "length-after-first": 1,
+        "literal": 1,
+        "log-old-length": 0,
+        "log-prepend": 0,
+        "mutex-not-stored": 0,
+        "mutex-returns-old": 0,
+        "pushes-swapped": 1,
+        "readers-ignored": 0,
+        "returns-old-counter": 0,
+        "second-push-missing": 1,
+        "sum-skips-first": 0
+      }
+    }
+  },
+  "mutants": {
+    "appends-zero": {
+      "defaultSeedFails": [
+        "scoped_borrow"
+      ],
+      "caughtBy": [
+        "scoped_borrow"
+      ]
+    },
+    "counter-not-stored": {
+      "defaultSeedFails": [
+        "cell_counter"
+      ],
+      "caughtBy": [
+        "cell_counter"
+      ]
+    },
+    "inverted-availability": {
+      "defaultSeedFails": [
+        "conflict_detection"
+      ],
+      "caughtBy": [
+        "conflict_detection"
+      ]
+    },
+    "leaked-guard": {
+      "defaultSeedFails": [
+        "conflict_detection"
+      ],
+      "caughtBy": [
+        "conflict_detection"
+      ]
+    },
+    "length-after-first": {
+      "defaultSeedFails": [
+        "lock_scope"
+      ],
+      "caughtBy": [
+        "lock_scope"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "cell_counter",
+        "refcell_log",
+        "conflict_detection",
+        "scoped_borrow",
+        "mutex_update",
+        "lock_scope"
+      ],
+      "caughtBy": [
+        "cell_counter",
+        "refcell_log",
+        "conflict_detection",
+        "scoped_borrow",
+        "mutex_update",
+        "lock_scope"
+      ]
+    },
+    "log-old-length": {
+      "defaultSeedFails": [
+        "refcell_log"
+      ],
+      "caughtBy": [
+        "refcell_log"
+      ]
+    },
+    "log-prepend": {
+      "defaultSeedFails": [
+        "refcell_log"
+      ],
+      "caughtBy": [
+        "refcell_log"
+      ]
+    },
+    "mutex-not-stored": {
+      "defaultSeedFails": [
+        "mutex_update"
+      ],
+      "caughtBy": [
+        "mutex_update"
+      ]
+    },
+    "mutex-returns-old": {
+      "defaultSeedFails": [
+        "mutex_update"
+      ],
+      "caughtBy": [
+        "mutex_update"
+      ]
+    },
+    "pushes-swapped": {
+      "defaultSeedFails": [
+        "lock_scope"
+      ],
+      "caughtBy": [
+        "lock_scope"
+      ]
+    },
+    "readers-ignored": {
+      "defaultSeedFails": [
+        "conflict_detection"
+      ],
+      "caughtBy": [
+        "conflict_detection"
+      ]
+    },
+    "returns-old-counter": {
+      "defaultSeedFails": [
+        "cell_counter"
+      ],
+      "caughtBy": [
+        "cell_counter"
+      ]
+    },
+    "second-push-missing": {
+      "defaultSeedFails": [
+        "lock_scope"
+      ],
+      "caughtBy": [
+        "lock_scope"
+      ]
+    },
+    "sum-skips-first": {
+      "defaultSeedFails": [
+        "scoped_borrow"
+      ],
+      "caughtBy": [
+        "scoped_borrow"
+      ]
+    }
+  }
+}

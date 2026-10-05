@@ -1,0 +1,374 @@
+{
+  "lab": "rust-zero-r10",
+  "abi": 2,
+  "version": 2,
+  "commit": "dd8e940",
+  "date": "2026-10-05",
+  "harness": "ecf60d0f9180639f081742b077c095ad4916db820dfda0ff993d404621451b06",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "relaxed_ticket": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "claim-always-swaps": 0,
+        "claim-reports-new": 0,
+        "consumer-sees-nothing": 0,
+        "counter-seqcst": 0,
+        "err-holds-expected": 0,
+        "flag-never-set": 0,
+        "literal": 1,
+        "lock-ignores-holder": 0,
+        "lock-never-released": 0,
+        "lock-never-taken": 0,
+        "lock-released-early": 0,
+        "lowers-to-minimum": 0,
+        "observe-relaxed": 0,
+        "publish-acquire": 0,
+        "publish-seqcst": 0,
+        "raise-overwrites": 0,
+        "raise-returns-previous": 0,
+        "reads-before-publish": 0,
+        "ticket-not-incremented": 1,
+        "ticket-returns-new": 1,
+        "ticket-steps-by-two": 1,
+        "value-not-published": 0
+      }
+    },
+    "publish_consume": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "claim-always-swaps": 0,
+        "claim-reports-new": 0,
+        "consumer-sees-nothing": 1,
+        "counter-seqcst": 0,
+        "err-holds-expected": 0,
+        "flag-never-set": 1,
+        "literal": 1,
+        "lock-ignores-holder": 0,
+        "lock-never-released": 0,
+        "lock-never-taken": 0,
+        "lock-released-early": 0,
+        "lowers-to-minimum": 0,
+        "observe-relaxed": 0,
+        "publish-acquire": 0,
+        "publish-seqcst": 0,
+        "raise-overwrites": 0,
+        "raise-returns-previous": 0,
+        "reads-before-publish": 1,
+        "ticket-not-incremented": 0,
+        "ticket-returns-new": 0,
+        "ticket-steps-by-two": 0,
+        "value-not-published": 1
+      }
+    },
+    "compare_exchange": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "claim-always-swaps": 1,
+        "claim-reports-new": 1,
+        "consumer-sees-nothing": 0,
+        "counter-seqcst": 0,
+        "err-holds-expected": 1,
+        "flag-never-set": 0,
+        "literal": 1,
+        "lock-ignores-holder": 0,
+        "lock-never-released": 0,
+        "lock-never-taken": 0,
+        "lock-released-early": 0,
+        "lowers-to-minimum": 0,
+        "observe-relaxed": 0,
+        "publish-acquire": 0,
+        "publish-seqcst": 0,
+        "raise-overwrites": 0,
+        "raise-returns-previous": 0,
+        "reads-before-publish": 0,
+        "ticket-not-incremented": 0,
+        "ticket-returns-new": 0,
+        "ticket-steps-by-two": 0,
+        "value-not-published": 0
+      }
+    },
+    "fetch_update": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "claim-always-swaps": 0,
+        "claim-reports-new": 0,
+        "consumer-sees-nothing": 0,
+        "counter-seqcst": 0,
+        "err-holds-expected": 0,
+        "flag-never-set": 0,
+        "literal": 1,
+        "lock-ignores-holder": 0,
+        "lock-never-released": 0,
+        "lock-never-taken": 0,
+        "lock-released-early": 0,
+        "lowers-to-minimum": 1,
+        "observe-relaxed": 0,
+        "publish-acquire": 0,
+        "publish-seqcst": 0,
+        "raise-overwrites": 1,
+        "raise-returns-previous": 1,
+        "reads-before-publish": 0,
+        "ticket-not-incremented": 0,
+        "ticket-returns-new": 0,
+        "ticket-steps-by-two": 0,
+        "value-not-published": 0
+      }
+    },
+    "spin_lock": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "claim-always-swaps": 0,
+        "claim-reports-new": 0,
+        "consumer-sees-nothing": 0,
+        "counter-seqcst": 0,
+        "err-holds-expected": 0,
+        "flag-never-set": 0,
+        "literal": 1,
+        "lock-ignores-holder": 1,
+        "lock-never-released": 1,
+        "lock-never-taken": 1,
+        "lock-released-early": 1,
+        "lowers-to-minimum": 0,
+        "observe-relaxed": 0,
+        "publish-acquire": 0,
+        "publish-seqcst": 0,
+        "raise-overwrites": 0,
+        "raise-returns-previous": 0,
+        "reads-before-publish": 0,
+        "ticket-not-incremented": 0,
+        "ticket-returns-new": 0,
+        "ticket-steps-by-two": 0,
+        "value-not-published": 0
+      }
+    },
+    "ordering_choice": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "claim-always-swaps": 0,
+        "claim-reports-new": 0,
+        "consumer-sees-nothing": 0,
+        "counter-seqcst": 1,
+        "err-holds-expected": 0,
+        "flag-never-set": 0,
+        "literal": 1,
+        "lock-ignores-holder": 0,
+        "lock-never-released": 0,
+        "lock-never-taken": 0,
+        "lock-released-early": 0,
+        "lowers-to-minimum": 0,
+        "observe-relaxed": 1,
+        "publish-acquire": 1,
+        "publish-seqcst": 1,
+        "raise-overwrites": 0,
+        "raise-returns-previous": 0,
+        "reads-before-publish": 0,
+        "ticket-not-incremented": 0,
+        "ticket-returns-new": 0,
+        "ticket-steps-by-two": 0,
+        "value-not-published": 0
+      }
+    }
+  },
+  "mutants": {
+    "claim-always-swaps": {
+      "defaultSeedFails": [
+        "compare_exchange"
+      ],
+      "caughtBy": [
+        "compare_exchange"
+      ]
+    },
+    "claim-reports-new": {
+      "defaultSeedFails": [
+        "compare_exchange"
+      ],
+      "caughtBy": [
+        "compare_exchange"
+      ]
+    },
+    "consumer-sees-nothing": {
+      "defaultSeedFails": [
+        "publish_consume"
+      ],
+      "caughtBy": [
+        "publish_consume"
+      ]
+    },
+    "counter-seqcst": {
+      "defaultSeedFails": [
+        "ordering_choice"
+      ],
+      "caughtBy": [
+        "ordering_choice"
+      ]
+    },
+    "err-holds-expected": {
+      "defaultSeedFails": [
+        "compare_exchange"
+      ],
+      "caughtBy": [
+        "compare_exchange"
+      ]
+    },
+    "flag-never-set": {
+      "defaultSeedFails": [
+        "publish_consume"
+      ],
+      "caughtBy": [
+        "publish_consume"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "relaxed_ticket",
+        "publish_consume",
+        "compare_exchange",
+        "fetch_update",
+        "spin_lock",
+        "ordering_choice"
+      ],
+      "caughtBy": [
+        "relaxed_ticket",
+        "publish_consume",
+        "compare_exchange",
+        "fetch_update",
+        "spin_lock",
+        "ordering_choice"
+      ]
+    },
+    "lock-ignores-holder": {
+      "defaultSeedFails": [
+        "spin_lock"
+      ],
+      "caughtBy": [
+        "spin_lock"
+      ]
+    },
+    "lock-never-released": {
+      "defaultSeedFails": [
+        "spin_lock"
+      ],
+      "caughtBy": [
+        "spin_lock"
+      ]
+    },
+    "lock-never-taken": {
+      "defaultSeedFails": [
+        "spin_lock"
+      ],
+      "caughtBy": [
+        "spin_lock"
+      ]
+    },
+    "lock-released-early": {
+      "defaultSeedFails": [
+        "spin_lock"
+      ],
+      "caughtBy": [
+        "spin_lock"
+      ]
+    },
+    "lowers-to-minimum": {
+      "defaultSeedFails": [
+        "fetch_update"
+      ],
+      "caughtBy": [
+        "fetch_update"
+      ]
+    },
+    "observe-relaxed": {
+      "defaultSeedFails": [
+        "ordering_choice"
+      ],
+      "caughtBy": [
+        "ordering_choice"
+      ]
+    },
+    "publish-acquire": {
+      "defaultSeedFails": [
+        "ordering_choice"
+      ],
+      "caughtBy": [
+        "ordering_choice"
+      ]
+    },
+    "publish-seqcst": {
+      "defaultSeedFails": [
+        "ordering_choice"
+      ],
+      "caughtBy": [
+        "ordering_choice"
+      ]
+    },
+    "raise-overwrites": {
+      "defaultSeedFails": [
+        "fetch_update"
+      ],
+      "caughtBy": [
+        "fetch_update"
+      ]
+    },
+    "raise-returns-previous": {
+      "defaultSeedFails": [
+        "fetch_update"
+      ],
+      "caughtBy": [
+        "fetch_update"
+      ]
+    },
+    "reads-before-publish": {
+      "defaultSeedFails": [
+        "publish_consume"
+      ],
+      "caughtBy": [
+        "publish_consume"
+      ]
+    },
+    "ticket-not-incremented": {
+      "defaultSeedFails": [
+        "relaxed_ticket"
+      ],
+      "caughtBy": [
+        "relaxed_ticket"
+      ]
+    },
+    "ticket-returns-new": {
+      "defaultSeedFails": [
+        "relaxed_ticket"
+      ],
+      "caughtBy": [
+        "relaxed_ticket"
+      ]
+    },
+    "ticket-steps-by-two": {
+      "defaultSeedFails": [
+        "relaxed_ticket"
+      ],
+      "caughtBy": [
+        "relaxed_ticket"
+      ]
+    },
+    "value-not-published": {
+      "defaultSeedFails": [
+        "publish_consume"
+      ],
+      "caughtBy": [
+        "publish_consume"
+      ]
+    }
+  }
+}
