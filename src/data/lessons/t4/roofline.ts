@@ -198,7 +198,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
             'Compute-bound with 256 FLOP/byte well above what decode or router kernels reach',
             'Bandwidth-bound with a ridge near 281 FLOP/byte and 256 still on the slope below it',
             'At the ridge with 256 within about 10% of 281 FLOP/byte and too close for the model to separate',
-            'Unclassifiable at 256 FLOP/byte without a timed run showing which of the 2 limits the kernel hit',
+            'Unclassifiable at 256 FLOP/byte without a timed run showing which limit the kernel hit',
           ],
           correct: [1],
           explanation:
@@ -214,9 +214,9 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
           q: 'Prefill is compute-bound while decode is bandwidth-bound because…',
           options: [
             'Prefill multiplies larger weight matrices than decode and larger matrices carry more FLOPs per byte at any token count',
-            'Prefill reuses each weight across the prompt positions and grows intensity with length while decode rereads it for one token',
-            'Decode runs on a separate disaggregated pool of slower devices that pushes it left of the ridge',
-            'Prefill skips the cache write and that removes the memory traffic keeping decode below the compute roof',
+            'Prefill reuses each weight across the prompt and grows intensity with length while decode rereads it per token',
+            'Decode runs on a separate disaggregated pool of slower devices and that hardware gap pushes it left of the ridge',
+            'Prefill skips the key-value cache write and that removes the memory traffic that keeps decode below the roof',
           ],
           correct: [1],
           explanation:

@@ -159,7 +159,7 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
             'Make the workgroups in the grid wait for one another before a later pass reads earlier results',
             'Make the workgroup invocations arrive and make their workgroup memory writes visible before any proceeds',
             'Flush the workgroup writes out to global memory before other workgroups read the partial sums',
-            'Pause the invocations of the workgroup for a fixed delay that gives slower lanes time to finish loads',
+            'Pause the invocations of the workgroup for a fixed delay that gives the slower lanes time to finish their loads',
           ],
           correct: [1],
           explanation:
@@ -174,7 +174,7 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
         {
           q: 'The tree reduction\'s advantage over "everyone atomicAdds one output" is…',
           options: [
-            'Fewer registers with each invocation holding one partial while atomics need a private accumulator per lane',
+            'Fewer registers with each invocation holding a single partial while atomics need a private accumulator for each lane',
             'A logarithmic number of rounds of conflict-free pair sums in place of n updates queueing on one hot address',
             'Atomic adds on a shared address lose updates under contention and the final sum comes out wrong',
             'No need for barriers with each round reading values that earlier rounds already finished',
@@ -195,7 +195,7 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
             'Compute throughput with 16 million adds saturating the arithmetic units once workgroups fill the chip',
             'Memory bandwidth with 12 bytes moved per add and an intensity far left of any ridge point',
             'Workgroup size with 256 invocations per group leaving too few warps to hide the latency of each load',
-            'Barrier count with 1 synchronization per group before its outputs are written back to memory',
+            'Barrier count with each group stalling at a synchronization point before its outputs are written back',
           ],
           correct: [1],
           explanation:

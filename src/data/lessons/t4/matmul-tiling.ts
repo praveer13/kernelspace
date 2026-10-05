@@ -156,7 +156,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         {
           q: 'Why can\'t tiles simply be as large as possible?',
           options: [
-            'The compiler rejects shared memory arrays above a few kilobytes and a larger tile fails to compile',
+            'The compiler rejects shared memory arrays above a few kilobytes and any larger tile fails to compile at build time',
             'Big tiles use up the per-multiprocessor memory and registers and leave too few resident warps to hide latency',
             'Bigger tiles need more global memory transactions per output and lose coalescing across memory segments',
             'Larger tiles make bank conflicts unavoidable and map more lanes onto the same banks as they grow',

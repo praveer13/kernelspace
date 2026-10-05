@@ -146,7 +146,7 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
           q: 'Decode (single-token generation) underuses GPU compute because…',
           options: [
             'Transformer layers are too branchy and warp divergence leaves most lanes masked off in single-token steps',
-            'Each step is a small matrix-vector product that rereads the weights from memory and bandwidth sets the speed',
+            'Each step is a matrix-vector product that rereads the weights from memory and bandwidth sets the speed',
             'One token gives too few threads to fill the multiprocessors and kernel launch overhead dominates each step',
             'The key-value cache is too small at batch size one to keep the tensor cores busy during attention',
           ],

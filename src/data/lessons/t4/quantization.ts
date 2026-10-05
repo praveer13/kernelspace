@@ -157,10 +157,10 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'Per-group scales (group size 128) improve weight quantization because…',
           options: [
-            'They cut metadata with 1 scale per 128 weights storing less than the per-tensor scheme needs',
+            'They cut metadata overhead with one scale per 128 weights and store less than the per-tensor scheme needs',
             'Each group scale tracks a local absmax and shrinks the error bound at under 1 bit per weight of metadata',
-            'They make negative weights representable where one symmetric scale per tensor cannot at 4 bits',
-            'They remove the need for calibration data with each group fitting its own range in 1 pass',
+            'They make negative weights representable in the grid where a single symmetric scale per tensor cannot do so',
+            'They remove the need for calibration data with each group fitting its own range in a single pass',
           ],
           correct: [1],
           explanation:
@@ -175,7 +175,7 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'The standard quality ordering for what to quantize hardest is…',
           options: [
-            'Activations first at INT4 then weights at INT8 then the KV cache with activations holding nothing learned',
+            'Activations at 4 bits and weights at 8 bits with the KV cache as the most fragile tensor',
             'Weights at 4 bits and the KV cache at 8 bits with activations as the most fragile tensor',
             'The three tensors equally down to INT4 with the accuracy loss per bit the same for each',
             'No tensor at low precision with any quantization harming quality and production systems keeping FP16',

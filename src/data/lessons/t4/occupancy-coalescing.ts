@@ -91,10 +91,10 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'SM occupancy is limited by…',
           options: [
-            'The warp slot count alone and registers or shared memory change speed per warp but not residency',
-            'The tightest of three per-multiprocessor budgets in registers or shared memory or warp slots',
-            'The second-level cache capacity that gives each resident warp a slice for its working set',
-            'The memory clock that lets faster memory keep more loads in flight and more warps resident',
+            'The warp slot count on the multiprocessor, with registers and shared memory playing no part in residency',
+            'The tightest of three per-multiprocessor budgets among registers, shared memory and warp slots',
+            'The second-level cache capacity, which gives each resident warp a slice for its working set',
+            'The memory clock, which lets faster memory keep more loads in flight and more warps resident',
           ],
           correct: [1],
           explanation:
@@ -146,7 +146,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
           q: 'A 32-way shared-memory bank conflict occurs when…',
           options: [
             'More than 32 warps are resident on one multiprocessor and shared memory requests queue at the memory controller',
-            'The lanes of a warp hit different addresses in one bank and the access serializes 32-fold',
+            'The 32 lanes of a warp hit different addresses in the same bank and the access serializes 32-fold',
             'A block uses more than 1024 threads and the hardware splits it into serialized waves that reuse the banks',
             'Two kernels write one global array at once and their writes serialize on a single 128-byte cache line',
           ],
