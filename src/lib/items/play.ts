@@ -290,14 +290,16 @@ function gradeCr(cr: ConstructedPrompt, r: CrResponse): Grade {
   return { ok, score: ok ? 1 : 0, feedback }
 }
 
-/** Choice grading for authored questions: picked ids equal the correct ids. */
-function gradeAuthoredChoice(view: Pick<ChoiceView, 'options' | 'correct'>, r: Extract<Response, { kind: 'choice' }>): Grade {
+/**
+ * Choice grading for authored questions: picked ids equal the correct ids. Authored options carry no
+ * misconception id, so there is no diagnosis; a wrong pick's why reaches the learner through Feedback's Whys.
+ */
+function gradeAuthoredChoice(view: Pick<ChoiceView, 'correct'>, r: Extract<Response, { kind: 'choice' }>): Grade {
   const picks = [...new Set(Array.isArray(r.picks) ? r.picks : [])]
   if (picks.length === 0) return { ok: false, score: 0, feedback: 'Pick an answer first.' }
   const right = new Set(view.correct)
   const ok = picks.length === right.size && picks.every((p) => right.has(p))
-  const wrong = view.options.find((o) => picks.includes(o.id) && !right.has(o.id))
-  return { ok, score: ok ? 1 : 0, feedback: ok ? 'Correct.' : 'Not quite.', ...(wrong?.miss ? { diagnosis: { id: wrong.miss, message: wrong.why } } : {}) }
+  return { ok, score: ok ? 1 : 0, feedback: ok ? 'Correct.' : 'Not quite.' }
 }
 
 /**
@@ -362,4 +364,68 @@ export function confidenceForKey(key: string): Confidence | null {
 export function togglePick(picks: readonly string[], id: string, multi: boolean): string[] {
   if (!multi) return [id]
   return picks.includes(id) ? picks.filter((p) => p !== id) : [...picks, id]
+}
+
+/* ------------------------------ the keyboard, as a pure decision ------------------------------ */
+
+/** What the focused element is, as far as the card's keys care. `option` is an answer button. */
+export type KeyTarget = 'option' | 'button' | 'input' | 'textarea' | 'select' | 'other'
+
+export interface KeyState {
+  stepsOpen: boolean
+  /** The verdict is showing. */
+  done: boolean
+  kind: PlayView['kind']
+  optionCount: number
+  /** `hasAnswer(draft)`. */
+  answered: boolean
+  /** The optional confidence row is enabled for this card. */
+  confidence: boolean
+}
+
+export interface KeyInput {
+  key: string
+  repeat: boolean
+  shift: boolean
+  ctrl: boolean
+  meta: boolean
+  alt: boolean
+  target: KeyTarget
+}
+
+/**
+ * What the card does with a key. `act` is the primary action (reveal, submit, or next); `swallow` cancels
+ * the browser default and does nothing, so a held Enter cannot submit and then click the Next button that
+ * has just taken focus; `none` leaves the key to the browser.
+ */
+export type KeyAction =
+  | { type: 'none' }
+  | { type: 'swallow' }
+  | { type: 'close-steps' }
+  | { type: 'act' }
+  | { type: 'pick'; index: number }
+  | { type: 'confidence'; conf: Confidence }
+
+const NONE: KeyAction = { type: 'none' }
+
+export function keyAction(s: KeyState, e: KeyInput): KeyAction {
+  if (e.key === 'Escape') return s.stepsOpen ? { type: 'close-steps' } : NONE
+  if (e.alt) return NONE
+  const typing = e.target === 'input' || e.target === 'textarea' || e.target === 'select'
+  if (e.key === 'Enter') {
+    if (e.shift || e.target === 'select') return NONE
+    if (e.target === 'textarea' && !(e.ctrl || e.meta)) return NONE
+    if (e.repeat) return { type: 'swallow' }
+    // a button keeps its own Enter (click); an option submits once something is picked, else it selects
+    if (e.target === 'button' || (e.target === 'option' && !s.answered)) return NONE
+    return { type: 'act' }
+  }
+  if (typing || e.ctrl || e.meta || e.shift || e.repeat || s.done) return NONE
+  if (s.kind === 'choice') {
+    const index = optionIndexForKey(e.key, s.optionCount)
+    if (index !== null) return { type: 'pick', index }
+  }
+  const conf = confidenceForKey(e.key)
+  if (conf && s.confidence && s.kind !== 'cr' && s.answered) return { type: 'confidence', conf }
+  return NONE
 }

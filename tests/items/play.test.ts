@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import ConstructedAnswer from '../../src/components/items/ConstructedAnswer'
 import ItemCard from '../../src/components/items/ItemCard'
 import { getClaim } from '../../src/data/claims'
 import {
@@ -10,6 +11,7 @@ import {
   gradeItem,
   hasAnswer,
   kcsFor,
+  keyAction,
   optionIndexForKey,
   parseNumber,
   playView,
@@ -20,6 +22,9 @@ import {
   togglePick,
   type CrResponse,
   type Draft,
+  type KeyAction,
+  type KeyInput,
+  type KeyState,
 } from '../../src/lib/items/play'
 import type { AuthoredItem, ConstructedPrompt, Instance, PlayableItem } from '../../src/lib/items/types'
 import { rev32 } from '../../src/lib/ledger/stable'
@@ -284,6 +289,84 @@ describe('keys', () => {
 
   test('1, 2 and 3 are guess, think and sure', () => {
     expect([1, 2, 3, 4, 0].map((n) => confidenceForKey(String(n)))).toEqual(['guess', 'think', 'sure', null, null])
+  })
+})
+
+describe('keyAction: what the card does with a key', () => {
+  const state = (over: Partial<KeyState> = {}): KeyState => ({ stepsOpen: false, done: false, kind: 'choice', optionCount: 4, answered: false, confidence: true, ...over })
+  const key = (k: string, over: Partial<KeyInput> = {}): KeyInput => ({ key: k, repeat: false, shift: false, ctrl: false, meta: false, alt: false, target: 'other', ...over })
+  const none: KeyAction = { type: 'none' }
+
+  test('letters pick by position, only before the verdict and outside a field', () => {
+    expect(keyAction(state(), key('b'))).toEqual({ type: 'pick', index: 1 })
+    expect(keyAction(state(), key('E'))).toEqual(none)
+    expect(keyAction(state({ optionCount: 5 }), key('e'))).toEqual({ type: 'pick', index: 4 })
+    expect(keyAction(state({ done: true }), key('a'))).toEqual(none)
+    expect(keyAction(state({ kind: 'numeric' }), key('a'))).toEqual(none)
+    expect(keyAction(state(), key('a', { target: 'input' }))).toEqual(none)
+    expect(keyAction(state(), key('a', { ctrl: true }))).toEqual(none)
+    expect(keyAction(state(), key('a', { repeat: true }))).toEqual(none)
+  })
+
+  test('1, 2, 3 set confidence once something is answered, never for a constructed response or when off', () => {
+    expect(keyAction(state(), key('2'))).toEqual(none)
+    expect(keyAction(state({ answered: true }), key('1'))).toEqual({ type: 'confidence', conf: 'guess' })
+    expect(keyAction(state({ answered: true }), key('3'))).toEqual({ type: 'confidence', conf: 'sure' })
+    expect(keyAction(state({ answered: true, kind: 'numeric' }), key('2'))).toEqual({ type: 'confidence', conf: 'think' })
+    expect(keyAction(state({ answered: true, kind: 'cr' }), key('2'))).toEqual(none)
+    expect(keyAction(state({ answered: true, confidence: false }), key('2'))).toEqual(none)
+    expect(keyAction(state({ answered: true }), key('2', { target: 'input' }))).toEqual(none)
+  })
+
+  test('Enter: an option selects until something is picked, then submits; a button keeps its own click', () => {
+    expect(keyAction(state(), key('Enter', { target: 'option' }))).toEqual(none)
+    expect(keyAction(state({ answered: true }), key('Enter', { target: 'option' }))).toEqual({ type: 'act' })
+    expect(keyAction(state(), key('Enter', { target: 'button' }))).toEqual(none)
+    expect(keyAction(state(), key('Enter', { target: 'input' }))).toEqual({ type: 'act' })
+    expect(keyAction(state(), key('Enter'))).toEqual({ type: 'act' })
+    expect(keyAction(state(), key('Enter', { shift: true }))).toEqual(none)
+  })
+
+  test('Enter after the verdict goes on, and a held Enter does not run through submit into Next', () => {
+    expect(keyAction(state({ done: true }), key('Enter'))).toEqual({ type: 'act' })
+    for (const target of ['option', 'button', 'input', 'other'] as const) {
+      expect(keyAction(state({ answered: true }), key('Enter', { target, repeat: true }))).toEqual({ type: 'swallow' })
+    }
+    expect(keyAction(state({ done: true }), key('Enter', { target: 'button', repeat: true }))).toEqual({ type: 'swallow' })
+  })
+
+  test('in the constructed-response box Enter is a newline; Ctrl or Cmd plus Enter continues; a select keeps Enter', () => {
+    const cr = state({ kind: 'cr' })
+    expect(keyAction(cr, key('Enter', { target: 'textarea' }))).toEqual(none)
+    expect(keyAction(cr, key('Enter', { target: 'textarea', ctrl: true }))).toEqual({ type: 'act' })
+    expect(keyAction(cr, key('Enter', { target: 'textarea', meta: true }))).toEqual({ type: 'act' })
+    expect(keyAction(cr, key('Enter', { target: 'textarea', repeat: true }))).toEqual(none)
+    expect(keyAction(state(), key('Enter', { target: 'select' }))).toEqual(none)
+  })
+
+  test('Escape closes the steps when open, and is left alone otherwise', () => {
+    expect(keyAction(state({ stepsOpen: true }), key('Escape', { target: 'button' }))).toEqual({ type: 'close-steps' })
+    expect(keyAction(state({ stepsOpen: true, done: true }), key('Escape', { target: 'input' }))).toEqual({ type: 'close-steps' })
+    expect(keyAction(state(), key('Escape'))).toEqual(none)
+  })
+
+  test('Alt chords are left to the browser', () => {
+    expect(keyAction(state({ answered: true }), key('Enter', { alt: true }))).toEqual(none)
+    expect(keyAction(state(), key('a', { alt: true }))).toEqual(none)
+  })
+})
+
+describe('the constructed response after the reveal', () => {
+  const props = { cr: CR, text: '', ideas: [false, false, false] as [boolean, boolean, boolean], onText: () => {}, onReveal: () => {}, onIdea: () => {}, disabled: false }
+
+  test('the model answer is a focus target (the reveal button unmounts), and the ideas appear', () => {
+    const before = renderToStaticMarkup(createElement(ConstructedAnswer, { ...props, revealed: false }))
+    expect(before).toContain('data-ks-reveal')
+    expect(before).not.toContain('data-ks-model')
+    const after = renderToStaticMarkup(createElement(ConstructedAnswer, { ...props, revealed: true }))
+    expect(after).not.toContain('data-ks-reveal')
+    expect(after).toMatch(/data-ks-model="true" tabindex="-1"/)
+    expect(after.match(/data-ks-idea/g)).toHaveLength(3)
   })
 })
 

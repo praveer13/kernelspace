@@ -17,18 +17,18 @@ import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
 import ConfidencePicker from '@/components/learner/ConfidencePicker'
 import { loadFamily } from '@/lib/items/registry'
 import {
-  confidenceForKey,
   defaultSeed,
   emptyDraft,
   gradeItem,
   hasAnswer,
-  optionIndexForKey,
+  keyAction,
   playView,
   resultFor,
   responseFor,
   togglePick,
   type Draft,
   type ItemResult,
+  type KeyTarget,
   type PlayResponse,
 } from '@/lib/items/play'
 import type { Gen, Grade, PlayableItem, SolutionStep } from '@/lib/items/types'
@@ -130,6 +130,12 @@ export default function ItemCard({
     if (done) (nextRef.current ?? formRef.current)?.focus()
   }, [done])
 
+  // Revealing the model answer unmounts the reveal button, which held focus: move it to the model answer.
+  const revealed = draft.kind === 'cr' && draft.revealed
+  useEffect(() => {
+    if (revealed) formRef.current?.querySelector<HTMLElement>('[data-ks-model]')?.focus()
+  }, [revealed])
+
   const steps: readonly SolutionStep[] | undefined = useMemo(
     () => (phase.done && item.source === 'gen' && gen ? gen.solution(item.inst) : undefined),
     [phase.done, item, gen],
@@ -139,7 +145,8 @@ export default function ItemCard({
   const primaryLabel = view.kind === 'cr' && draft.kind === 'cr' && !draft.revealed ? 'Show the model answer' : 'Submit'
 
   const submit = useCallback(() => {
-    if (phase.done || awaitingGen) return
+    // when the family's checker cannot load, grade by the shared rules so the item is not stuck
+    if (phase.done || (awaitingGen && !loadError)) return
     const built = responseFor(draft)
     if (!built.ok) {
       setProblem(built.problem)
@@ -151,7 +158,7 @@ export default function ItemCard({
     const ms = startedAt.current === null ? 0 : Date.now() - startedAt.current
     setPhase({ done: true, response: built.response, grade })
     onResult?.(resultFor(item, built.response, grade, { seed, ms, ...(conf ? { conf } : {}) }))
-  }, [phase.done, awaitingGen, draft, item, gen, onResult, seed, conf])
+  }, [phase.done, awaitingGen, loadError, draft, item, gen, onResult, seed, conf])
 
   /** The card's primary action: reveal the model answer, submit, or (after the verdict) go on. */
   const act = useCallback(() => {
@@ -174,40 +181,36 @@ export default function ItemCard({
   const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
     if (e.defaultPrevented || e.nativeEvent.isComposing) return
     const t = e.target as HTMLElement
-    if (e.key === 'Escape') {
-      if (stepsOpen) {
-        e.preventDefault()
-        e.stopPropagation()
-        closeSteps()
-      }
-      return
-    }
-    if (e.altKey) return
-    const typing = t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement
-    if (e.key === 'Enter') {
-      // a button keeps its own Enter (click); an option submits once something is picked, else it selects
-      const optionWithPick = t.hasAttribute('data-ks-option') && hasAnswer(draft)
-      if (e.shiftKey || (t instanceof HTMLButtonElement && !optionWithPick)) return
-      if (t instanceof HTMLTextAreaElement && !(e.ctrlKey || e.metaKey)) return
-      if (t instanceof HTMLSelectElement) return
-      e.preventDefault()
-      act()
-      return
-    }
-    if (typing || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat || phase.done) return
-    if (view.kind === 'choice') {
-      const i = optionIndexForKey(e.key, view.options.length)
-      if (i !== null) {
-        e.preventDefault()
-        toggleOption(view.options[i].id)
-        return
-      }
-    }
-    const c = confidenceForKey(e.key)
-    if (c && confidence && view.kind !== 'cr' && hasAnswer(draft)) {
-      e.preventDefault()
-      setConf(c)
-    }
+    const target: KeyTarget = t.hasAttribute('data-ks-option')
+      ? 'option'
+      : t instanceof HTMLButtonElement
+        ? 'button'
+        : t instanceof HTMLInputElement
+          ? 'input'
+          : t instanceof HTMLTextAreaElement
+            ? 'textarea'
+            : t instanceof HTMLSelectElement
+              ? 'select'
+              : 'other'
+    const action = keyAction(
+      {
+        stepsOpen,
+        done: phase.done,
+        kind: view.kind,
+        optionCount: view.kind === 'choice' ? view.options.length : 0,
+        answered: hasAnswer(draft),
+        confidence,
+      },
+      { key: e.key, repeat: e.repeat, shift: e.shiftKey, ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey, target },
+    )
+    if (action.type === 'none') return
+    e.preventDefault()
+    if (action.type === 'close-steps') {
+      e.stopPropagation()
+      closeSteps()
+    } else if (action.type === 'act') act()
+    else if (action.type === 'pick' && view.kind === 'choice') toggleOption(view.options[action.index].id)
+    else if (action.type === 'confidence') setConf(action.conf)
   }
 
   const onSubmit = (e: FormEvent) => {
@@ -304,7 +307,7 @@ export default function ItemCard({
 
       {loadError && (
         <p role="alert" className="mt-3 text-body-sm text-amber">
-          Could not load this question&apos;s checker.{' '}
+          Could not load this question&apos;s checker, so Submit grades by the shared rules.{' '}
           <button type="button" className="min-h-11 underline underline-offset-2" onClick={() => setAttempt((n) => n + 1)}>
             Try again
           </button>

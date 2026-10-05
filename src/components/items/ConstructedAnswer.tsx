@@ -50,7 +50,7 @@ export default function ConstructedAnswer({ cr, text, ideas, revealed, onText, o
         </button>
       ) : (
         <div className="space-y-3">
-          <div className="rounded-md border-l-2 border-info bg-surface-2 px-3.5 py-2.5">
+          <div data-ks-model tabIndex={-1} role="group" aria-label="Model answer" className="rounded-md border-l-2 border-info bg-surface-2 px-3.5 py-2.5">
             <p className="mb-1 font-mono text-[11px] uppercase text-text-3">Model answer</p>
             <p className="break-words text-body-sm text-text-1">{cr.model}</p>
           </div>
