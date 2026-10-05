@@ -76,7 +76,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           q: 'The E in EPD exists because…',
           options: [
             'Prefill was split into an early encode half and a later attention half, so each half can be batched at its own size',
-            'Multimodal encoders turn pixels or audio into embeddings with zero KV, so they scale apart from prefill',
+            'Multimodal encoders turn pixels or audio into embeddings with zero KV, so they can scale apart from the prefill pool',
             'It stands for evict: a third pool holds the KV blocks that decode pushed out under memory pressure until they are reused',
             'Decode splits into a bandwidth-bound attention stage and a compute-bound expert stage, so it needs two separate fleets',
           ],
@@ -93,10 +93,10 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
         {
           q: 'NIXL is best described as…',
           options: [
-            'A C++ inference engine that schedules prefill and decode batches across the cluster, built to replace vLLM on RDMA clusters',
-            'A point-to-point library that moves KV blocks between workers with one-sided reads over RDMA, UCX, NVLink or SSD backends',
-            'A block-scaled 4-bit number format whose per-16-element scales let KV blocks be sent between workers at half the bytes',
-            'A Kubernetes operator that autoscales prefill and decode pools and places them close together to keep KV paths short',
+            'A C++ inference engine (with its own GPU scheduler) that schedules prefill and decode batches across the cluster, built to replace vLLM',
+            'A point-to-point transfer library that moves KV blocks between workers with one-sided reads over RDMA and other backends such as UCX',
+            'A block-scaled 4-bit number format (FP4) whose per-16-element scales let KV blocks be sent between workers at half the bytes',
+            'A Kubernetes operator (CRD-based) that autoscales prefill and decode pools and places them close together to keep KV paths short',
           ],
           correct: [1],
           explanation:
@@ -111,10 +111,10 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
         {
           q: 'Dynamo\'s KVBM (deprecated in v1.5.0 in favor of engine-native offload) added what to the lab-02 block manager design?',
           options: [
-            'Custom CUDA kernels that gather scattered KV blocks into one contiguous buffer before every attention call',
-            'A tiered hierarchy (GPU HBM, CPU DRAM, SSD, remote store) with placement, eviction and migration between tiers, written in Rust',
-            'Copy-on-write forking of blocks, so beam search and parallel sampling share a prompt\'s KV until the sequences diverge',
-            'Expert-aware placement, so blocks produced by hot experts stay in HBM while blocks from cold experts are demoted to SSD',
+            'Custom CUDA kernels that gather scattered KV blocks into one contiguous buffer before every attention call on Hopper',
+            'A tiered hierarchy across GPU, CPU and storage memory (written in Rust), with placement, eviction and migration between tiers',
+            'Copy-on-write (COW) forking of blocks, so beam search and parallel sampling share a prompt\'s KV until the sequences diverge',
+            'Expert-aware placement across MoE layers, so blocks produced by hot experts stay in HBM while blocks from cold experts are demoted to SSD',
           ],
           correct: [1],
           explanation:
@@ -130,9 +130,9 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           q: 'llm-d vs Dynamo is closest to…',
           options: [
             'Postgres vs MySQL: llm-d packages disaggregated serving for Kubernetes, while Dynamo is NVIDIA\'s planner and transfer stack',
-            'Kubernetes vs Docker: llm-d orchestrates the replicas, while Dynamo is the container runtime each prefill or decode worker runs in',
-            'vLLM vs SGLang: two competing single-node engines that differ in scheduler design but not in how they split prefill and decode',
-            'A compiler vs an interpreter: llm-d fixes the serving topology ahead of time, while Dynamo decides placement per request',
+            'Kubernetes vs Docker (Linux containers): llm-d orchestrates the replicas, while Dynamo is the container runtime that each worker runs in',
+            'vLLM vs SGLang (Python vs Python): two competing single-node engines that differ in scheduler design but not in how they split prefill and decode',
+            'A compiler vs an interpreter (LLVM vs CPython): llm-d fixes the serving topology ahead of time, while Dynamo decides placement per request',
           ],
           correct: [0],
           explanation:

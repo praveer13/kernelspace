@@ -672,13 +672,13 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     mitigations: [
       {
         id: 'restart',
-        label: 'restart workers on a schedule so leaked KV blocks are reclaimed before p95 climbs',
+        label: 'restart workers on a schedule (every hour) so leaked KV blocks are reclaimed before p95 climbs',
         correct: false,
         why: 'Nothing is leaking: blocks return to the pool when requests finish. The pressure is live demand from long contexts, so a restart drops in-flight work and the preempt storm returns as traffic refills the pool.',
       },
       {
         id: 'bigger-pool',
-        label: 'grow the pool with more HBM, FP8 KV or an offload tier, and cap admitted context',
+        label: 'grow the pool with more memory, quantized KV or an offload tier, and cap admitted context',
         correct: true,
         why: 'Right: more usable blocks (HBM, FP8 KV at half the bytes of 16-bit, or an offload tier) remove the capacity wall, and a cap on admitted context stops one long request from evicting many others.',
       },
@@ -768,19 +768,19 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
       },
       {
         id: 'pool-small',
-        label: 'KV pool sized too small for launch-day contexts, so blocks run out and requests are preempted',
+        label: 'KV pool sized too small for launch-day contexts, so blocks run out and requests are preempted and recomputed repeatedly on each GPU',
         correct: false,
         why: 'Pool size adds pressure but is not the root cause: an admit-everything policy overruns any finite pool at some load. The enormous batch with crawling completions points at missing admission control.',
       },
       {
         id: 'net-stall',
-        label: 'network partition between router and workers that delays first tokens for every launch-day request',
+        label: 'network partition between router and workers that delays first tokens for every launch-day request, even short prompts',
         correct: false,
         why: 'A partition would stall or fail requests already in flight, so TPOT would not be stable. The batch is huge and workers are busy, so the engine is overloaded rather than disconnected.',
       },
       {
         id: 'quant',
-        label: 'quantization regression: a recent quantized build or kernel change slows every decode step, so goodput drops under load',
+        label: 'quantization regression: a recent FP8 build or CUDA kernel change slows every decode step, so goodput drops under load',
         correct: false,
         why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable, so no per-step slowdown explains the collapse; the damage is in queueing and batch size, not the model build.',
       },

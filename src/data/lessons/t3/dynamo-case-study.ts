@@ -120,10 +120,10 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
         {
           q: 'The strongest argument against C++ for Dynamo\'s data plane was…',
           options: [
-            'C++ cannot match Rust\'s speed on RDMA transfer paths, so KV throughput would drop and stall the decode workers',
+            'C++ cannot match Rust\'s speed on RDMA transfer paths (zero-copy included), so KV throughput would drop and stall decode workers',
             'Memory-safety bugs (~70% of serious CVEs) dominate failures and exploits on network-facing paths',
-            'C++ lacks a mature async I/O ecosystem, so 100k-connection fan-out would force the team to write its own event loop',
-            'C++ cannot link against the CUDA and RDMA libraries directly and needs a C wrapper layer around each of them',
+            'C++ lacks a mature async I/O ecosystem, so 100k-connection fan-out (one thread each) would force the team to write its own event loop',
+            'C++ cannot link against the CUDA and RDMA libraries directly (no C ABI) and needs a C wrapper layer around each of them',
           ],
           correct: [1],
           explanation:
@@ -138,10 +138,10 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
         {
           q: 'KV-aware routing in Dynamo is best mapped to which course concept?',
           options: [
-            'Consistent hashing on the prompt prefix, which statically maps each prefix to a fixed worker',
+            'Consistent hashing on the prompt prefix (a hash ring), which statically maps each prefix to a fixed worker',
             'Locality scheduling: send work where its state already lives, like cache-affine OS scheduling, using live cache state',
-            'Least-connections load balancing, which sends each request to the worker with the fewest in-flight requests',
-            'Work stealing, where idle workers pull queued requests from the queues of busy peers',
+            'Least-connections load balancing, which sends each request (blindly) to the worker with the fewest in-flight requests',
+            'Work stealing: idle workers pull queued requests from the queues of busy peers, balancing load',
           ],
           correct: [1],
           explanation:
@@ -156,10 +156,10 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
         {
           q: 'Which Rust features map most directly onto Dynamo\'s data-plane requirements?',
           options: [
-            'Procedural macros and reflection, which let the data plane serialize KV descriptors without hand-written code',
+            'Procedural macros, reflection and codegen (serde-style), which let the data plane serialize KV descriptors without hand-written code',
             'tokio for async fan-out, Bytes for zero-copy buffers, Send/Sync for auditable races, and free C ABI interop',
-            'The borrow checker alone: every other requirement could equally have been met by C++ with the same libraries',
-            'Cargo\'s package registry, which supplies pure-Rust replacements for the CUDA and RDMA libraries',
+            'The borrow checker alone: every other requirement (async, zero-copy, ABI) could equally have been met by C++ with the same libraries',
+            'Cargo\'s package registry (crates.io), which supplies pure-Rust replacements for the CUDA and RDMA libraries',
           ],
           correct: [1],
           explanation:

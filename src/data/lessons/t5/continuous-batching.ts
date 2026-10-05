@@ -117,14 +117,14 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
         {
           q: 'Continuous batching schedules at what granularity?',
           options: [
-            'Per request: a request is admitted whole and keeps its batch slot until its final token is produced',
+            'Per request: a request is admitted whole, and keeps its batch slot until its final token is produced',
             'Per iteration: after every decode step finished sequences leave and waiting ones join, subject to free KV blocks',
-            'Per 100 tokens: the batch is re-formed after each block of generated tokens so that switching cost stays amortized',
-            'Per time slice: a fixed wall-clock quantum such as one second ends and the batch is re-evaluated whatever each sequence is doing',
+            'Per 100 tokens: the batch is re-formed after each block of generated tokens, so switching cost stays amortized',
+            'Per time slice: a fixed wall-clock quantum (such as one second) ends and the batch is re-evaluated whatever each sequence is doing',
           ],
           correct: [1],
           explanation:
-            'Iteration-level scheduling: the batch is edited every ~50 ms step. The quantum is small because switching is metadata (block tables), not a context switch — the key enabler.',
+            'Iteration-level scheduling: the batch is edited every ~50 ms step. The quantum is small because switching is metadata (block tables), not a context switch — the main enabler.',
           why: [
             'That is static batching. Per-request granularity keeps the batch fixed until it drains, so finished sequences wait for slow ones.',
             'Right: the batch is edited after every step, roughly 50 ms. The quantum can be this small because switching only updates block tables, not a context.',
@@ -135,10 +135,10 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
         {
           q: 'What makes preemption practical in an inference engine (vs a thread pool)?',
           options: [
-            'The GPU can pause a running sequence mid-iteration and save its registers and shared memory, the way a CPU saves a thread\'s context',
+            'The GPU can pause a running sequence mid-iteration, saving its registers and shared memory (like a CPU context switch), the way a CPU saves a thread\'s context',
             'State lives in pageable KV blocks: a victim\'s blocks are freed and its prefill recomputed on resume (V0 could swap them out)',
-            'Each sequence is a small stateless request, so dropping one and replaying it from the prompt costs far less than preempting an OS thread',
-            'Kernels checkpoint after each layer, so the scheduler can stop a sequence mid-forward-pass and resume it from that same layer later',
+            'Each sequence is a small stateless request, so dropping one and replaying it from the prompt (a cheap restart) costs far less than preempting an OS thread',
+            'Kernels checkpoint after each layer (a built-in hardware feature), so the scheduler can stop a sequence mid-forward-pass and resume it from that same layer later',
           ],
           correct: [1],
           explanation:

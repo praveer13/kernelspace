@@ -159,10 +159,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'On an H100 (~990 FP16 TFLOPS, 3.35 TB/s), a kernel with AI = 1 FLOP/byte is…',
           options: [
-            'Compute-bound, because any kernel that uses tensor cores runs at the 990 TFLOP/s peak however many bytes it moves',
+            'Compute-bound, because any kernel that uses tensor cores (Hopper included) runs at the 990 TFLOP/s peak, however many bytes it moves',
             'Bandwidth-bound, because attainable is about 1 × 3.35 TFLOP/s, roughly 0.3% of peak, and compute sits idle',
-            'Latency-bound, because at this low a ratio each load is followed by too little math to cover its delay',
-            'Near the ridge, because the ridge is where AI reaches one FLOP per byte on any modern GPU',
+            'Latency-bound, because at this low a ratio (AI = 1), each load is followed by too little math to cover its delay',
+            'Near the ridge, because the ridge is where AI reaches one FLOP per byte (on any modern GPU), so 1 is the ridge',
           ],
           correct: [1],
           explanation:
@@ -213,9 +213,9 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
         {
           q: 'Prefill is compute-bound while decode is bandwidth-bound because…',
           options: [
-            'Prefill multiplies larger weight matrices than decode, and larger matrices carry more FLOPs per byte whatever the token count',
+            'Prefill multiplies larger weight matrices than decode (more rows), and larger matrices carry more FLOPs per byte whatever the token count',
             'Prefill reuses each weight across all prompt positions, which grows AI with length, while decode re-reads them for one token at AI near 1',
-            'Decode runs on a separate GPU pool whose HBM is slower, pushing it left of the ridge while prefill GPUs stay compute-bound',
+            'Decode runs on a separate GPU pool (disaggregated) whose HBM is slower, pushing it left of the ridge while prefill GPUs stay compute-bound',
             'Prefill skips the KV cache write, which removes the memory traffic that keeps decode below the compute roof',
           ],
           correct: [1],

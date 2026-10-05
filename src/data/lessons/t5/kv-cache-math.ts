@@ -107,17 +107,17 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'KV bytes per token equals…',
           options: [
-            'Parameters x bytes per element, because the cache is a working copy of the weights each token touches',
-            '2 (K and V) x layers x KV dimension (kv heads x head dim) x bytes per element, stored once for every token in the context',
+            'Parameters x bytes per element (the weights), because the cache is a working copy of the weights each token touches',
+            '2 (K and V) x layers x KV dimension x bytes per element, stored once for every token in the context',
             '2 x layers x hidden size x context length x bytes, since the cache is per sequence and context length belongs in the formula',
-            'Vocabulary size x hidden size x 4, one embedding row stored per cached token and looked up at each step',
+            'Vocabulary size x hidden size x 4 (bytes per float), one embedding row stored per cached token and looked up at each step',
           ],
           correct: [1],
           explanation:
             'Per token, every layer stores one K and one V vector of d_kv = kv_heads x head_dim elements. 2 x L x d_kv x b is the most useful formula in serving; multiply by context length to size a sequence.',
           why: [
             'Weights are fixed per model. The cache grows with every token generated, so it cannot be params x bytes; it depends on layers, KV heads, head size and dtype.',
-            'Right: one K and one V vector of d_kv elements per layer per token, times bytes per element. Multiplying by tokens in flight gives total cache size.',
+            'Right: one K and one V vector of d_kv (kv heads x head dim) elements per layer per token, times bytes per element. Multiplying by tokens in flight gives total cache size.',
             'That is a per-sequence total, not a per-token figure: context length multiplies the per-token bytes afterwards. It also uses hidden size, which overcounts when GQA makes d_kv smaller.',
             'The embedding table is read once per token at the input and is not stored per cached token. The cache holds per-layer K and V, not embedding rows.',
           ],
@@ -143,10 +143,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'GQA reduces KV-cache size by…',
           options: [
-            'Compressing stored K and V with a lossless codec such as zlib after each write and decompressing inside the attention kernel',
+            'Compressing stored K and V with a lossless codec (such as zlib level 6) after each write, and decompressing inside the attention kernel',
             'Sharing K/V across groups of query heads, so the KV dimension shrinks by the group factor (32 to 8 heads is 4x) and the cache with it',
-            'Storing K and V in FP8 instead of FP16, which halves the bytes per element and is applied when the model is loaded',
-            'Skipping a fixed fraction of layers when writing the cache, so only some layers contribute K and V for each token',
+            'Storing K and V in FP8 instead of FP16 (a per-tensor scale), which halves the bytes per element and is applied when the model is loaded',
+            'Skipping a fixed fraction of layers (every 2nd layer) when writing the cache, so only some layers contribute K and V for each token',
           ],
           correct: [1],
           explanation:
@@ -161,10 +161,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'You add GPUs as extra independent replicas of the same model. Which number stays the same for a request that is already being served, at the same per-replica batch size?',
           options: [
-            'The number of concurrent requests the fleet can keep resident in KV cache across all of its GPUs at the same moment',
+            'Fleet capacity: the number of concurrent requests (sequences) the fleet can keep resident in KV cache at the same moment',
             'Time between tokens (ITL): each step still reads the same weight and KV bytes at the same HBM bandwidth',
-            'Requests per second the fleet can serve within its TTFT and ITL targets as offered load keeps growing past one GPU',
-            'Fleet-wide tokens generated per second across every replica running in parallel',
+            'Goodput: requests per second the fleet can serve within its TTFT and ITL targets (as load grows past one GPU)',
+            'Fleet throughput: tokens generated per second (across every replica) running in parallel',
           ],
           correct: [1],
           explanation:

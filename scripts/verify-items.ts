@@ -19,10 +19,18 @@
  * or whose expected passes over all gated lesson tracks exceed MAX_LEXICAL_AGGREGATE, (12) Fleet Week Act IV
  * (when gated): any length-rank or lexical-cue strategy that gets BOTH the cause and the mitigation of one
  * incident right with probability >= MAX_RANK_LESSON, or that passes the six items as one pseudo-lesson with
- * probability >= MAX_RANK_LESSON.
- * REPORTS (never fails): longest-key rates, items whose key / mean-distractor length ratio exceeds
- * MAX_LENGTH_RATIO, `why` coverage, the length-rank aggregate, the lexical-cue expectations per track and a
- * blind-strategy simulation.
+ * probability >= MAX_RANK_LESSON, (13) in a `whyRequired` track, an item whose key / mean-distractor length ratio
+ * exceeds MAX_LENGTH_RATIO (PLAN-100X 5.1 V1), (14) the surface-feature blind strategies (see SURFACE_STRATEGIES):
+ * for each feature f of characters, words, commas, clause markers (the count of , ; : ( )), parentheses, semicolons,
+ * capitalised words, acronyms (tokens of 2+ capitals), digit characters, numbers and absolute words (always, never,
+ * only, all, none, every), "pick the option with the most f" and "pick the option with the fewest f" (ties broken
+ * uniformly), plus "pick the option sharing the most words with the stem", the same restricted to words of 4+
+ * letters, and "avoid options containing absolutes": any one passing any `whyRequired` lesson with probability >=
+ * MAX_RANK_LESSON, or whose expected passes summed over all gated tracks exceed MAX_SURFACE_AGGREGATE. Act IV also
+ * runs every feature strategy except the stem-overlap pair (its stem is telemetry, not text) through the per-incident
+ * and pseudo-lesson gates of (12).
+ * REPORTS (never fails): longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
+ * surface-feature expectations per track and a blind-strategy simulation.
  *
  *   bun scripts/verify-items.ts
  *   bun scripts/verify-items.ts --update-baseline [--force]
@@ -47,10 +55,14 @@ const MAX_RANK_LESSON = 0.5
 const MAX_RANK_AGGREGATE = 1.0
 /** PLAN-100X 5.1 V1: in a whyRequired track the key may be strictly the longest option in at most this share of items. */
 const MAX_KEY_LONGEST_SHARE = 0.3
-/** PLAN-100X 5.1 V1: items whose key / mean-distractor length ratio exceeds this are reported (not failed). */
+/** PLAN-100X 5.1 V1: in a whyRequired track no item's key / mean-distractor length ratio may exceed this. */
 const MAX_LENGTH_RATIO = 1.3
 /** Summed over every gated lesson track, no lexical-cue strategy may pass more than this many lessons in expectation. */
 const MAX_LEXICAL_AGGREGATE = 2.0
+/** Lessons any surface-feature strategy passes with at least this probability are listed on a watch list (reported, not failed). */
+const WATCH_P = 0.1
+/** Summed over every gated lesson track, no surface-feature strategy may pass more than this many lessons in expectation. */
+const MAX_SURFACE_AGGREGATE = 2.0
 
 interface Item {
   track: string
@@ -256,6 +268,11 @@ function lengthRatio(q: QuizQuestion): number {
 }
 
 const longRatioItems = validItems.filter((i) => whyRequired.includes(i.track) && lengthRatio(i.q) > MAX_LENGTH_RATIO)
+for (const i of longRatioItems) {
+  failures.push(
+    `ratio: ${i.ref} key / mean-distractor length is ${lengthRatio(i.q).toFixed(2)} (limit ${MAX_LENGTH_RATIO}); lengthen the distractors or shorten the key`,
+  )
+}
 for (const t of whyRequired) {
   const rows = validItems.filter((i) => i.track === t)
   const longest = rows.filter((i) => keyIsLongest(i.q)).length
@@ -357,7 +374,7 @@ for (const t of trackKeys) {
 console.log(`  ${'all'.padEnd(11)}${String(totalItems).padStart(6)}${String(totalLongest).padStart(13)}${pct(totalItems ? totalLongest / totalItems : 0).padStart(8)}`)
 
 console.log('')
-console.log(`items in gated tracks whose key / mean-distractor length ratio exceeds ${MAX_LENGTH_RATIO} (reported, not failed): ${longRatioItems.length}`)
+console.log(`items in gated tracks whose key / mean-distractor length ratio exceeds ${MAX_LENGTH_RATIO} (failed): ${longRatioItems.length}`)
 for (const i of longRatioItems) console.log(`  ${i.ref.padEnd(40)} ratio ${lengthRatio(i.q).toFixed(2)}`)
 
 console.log('')
@@ -439,6 +456,56 @@ const LEXICAL_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] 
   { name: 'has-colon', pick: (q) => pickMatching(q, (o) => o.includes(':')) },
   { name: 'has-", so"', pick: (q) => pickMatching(q, (o) => o.includes(', so')) },
   { name: 'no-because/since', pick: (q) => pickMatching(q, (o) => !/\b(because|since)\b/i.test(o)) },
+]
+
+/* ---- surface-feature strategies: a family generalising the length and lexical cues above ---- */
+
+const ABSOLUTE = /\b(always|never|only|all|none|every)\b/i
+const matchCount = (o: string, re: RegExp) => (o.match(re) ?? []).length
+const tokensOf = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? []
+
+/** Countable surface features of one option's text. */
+const FEATURES: { name: string; count: (option: string) => number }[] = [
+  { name: 'characters', count: (o) => len(o) },
+  { name: 'words', count: (o) => o.trim().split(/\s+/).filter(Boolean).length },
+  { name: 'commas', count: (o) => matchCount(o, /,/g) },
+  { name: 'clause-markers', count: (o) => matchCount(o, /[,;:()]/g) },
+  { name: 'parentheses', count: (o) => matchCount(o, /[()]/g) },
+  { name: 'semicolons', count: (o) => matchCount(o, /;/g) },
+  { name: 'capitalised', count: (o) => matchCount(o, /(?<![A-Za-z0-9])[A-Z]/g) },
+  { name: 'acronyms', count: (o) => matchCount(o, /(?<![A-Za-z0-9])[A-Z]{2,}[0-9]*(?![A-Za-z])/g) },
+  { name: 'digits', count: (o) => matchCount(o, /\d/g) },
+  { name: 'numbers', count: (o) => matchCount(o, /\d+/g) },
+  { name: 'absolutes', count: (o) => matchCount(o, new RegExp(ABSOLUTE.source, 'gi')) },
+]
+
+/**
+ * Pick the option with the highest (or lowest) score; ties, including the case where every option ties, are
+ * broken uniformly. Scores do not move when options are shuffled. A multi-select needs the full set, so one
+ * pick never passes it.
+ */
+function pickByScore(q: QuizQuestion, score: (option: string) => number, extreme: 'most' | 'fewest'): number {
+  if (q.correct.length !== 1) return 0
+  const scores = q.options.map(score)
+  const best = extreme === 'most' ? Math.max(...scores) : Math.min(...scores)
+  const group = scores.flatMap((s, i) => (s === best ? [i] : []))
+  return group.includes(q.correct[0]) ? 1 / group.length : 0
+}
+
+/** Distinct words (4+ letters when `minLength` is set) an option shares with the question stem. */
+function stemOverlap(q: QuizQuestion, minLength: number): (option: string) => number {
+  const stem = new Set(tokensOf(q.q).filter((w) => w.length >= minLength))
+  return (option) => new Set(tokensOf(option).filter((w) => stem.has(w))).size
+}
+
+const SURFACE_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] = [
+  ...FEATURES.flatMap((f) => [
+    { name: `most-${f.name}`, pick: (q: QuizQuestion) => pickByScore(q, f.count, 'most') },
+    { name: `fewest-${f.name}`, pick: (q: QuizQuestion) => pickByScore(q, f.count, 'fewest') },
+  ]),
+  { name: 'stem-overlap', pick: (q) => pickByScore(q, stemOverlap(q, 1), 'most') },
+  { name: 'stem-overlap-4+', pick: (q) => pickByScore(q, stemOverlap(q, 4), 'most') },
+  { name: 'avoid-absolutes', pick: (q) => pickMatching(q, (o) => !ABSOLUTE.test(o)) },
 ]
 
 const byLesson = new Map<string, QuizQuestion[]>()
@@ -581,6 +648,69 @@ console.log(
   )
 }
 
+// (14) Surface-feature strategies, per lesson track: expected lessons passed and the worst single lesson, with the
+// overall expectation and worst lesson over every lesson. Gated tracks fail on any lesson at p >= MAX_RANK_LESSON and
+// on an aggregate over the gated tracks above MAX_SURFACE_AGGREGATE.
+{
+  const lessonTracks = trackKeys.filter((k) => k !== FLEET_TRACK)
+  console.log('')
+  console.log('surface-feature strategies per track: expected lessons passed (worst single lesson p)')
+  const totals: { name: string; expected: number; worstP: number; worstId: string }[] = []
+  const watch = new Map<string, string[]>() // lesson id -> strategies passing it with p >= WATCH_P
+  for (const strat of SURFACE_STRATEGIES) {
+    const pass = lessonPass(strat.pick)
+    lessonIds.forEach((id, i) => {
+      if (pass[i] >= WATCH_P) watch.set(id, [...(watch.get(id) ?? []), `${strat.name} ${pass[i].toFixed(2)}`])
+    })
+    const cells: string[] = []
+    let aggregate = 0
+    let overallWorstP = 0
+    let overallWorstId = ''
+    for (const t of lessonTracks) {
+      let expected = 0
+      let worstP = 0
+      let worstId = ''
+      lessonIds.forEach((id, i) => {
+        if (trackOfLesson.get(id) !== t) return
+        expected += pass[i]
+        if (pass[i] > worstP) {
+          worstP = pass[i]
+          worstId = id
+        }
+      })
+      const gated = whyRequired.includes(t)
+      cells.push(`${t} ${expected.toFixed(2)}${gated ? '*' : ''}${worstP >= 0.005 ? ` (${worstP.toFixed(2)} ${worstId})` : ''}`)
+      if (worstP > overallWorstP) {
+        overallWorstP = worstP
+        overallWorstId = worstId
+      }
+      if (!gated) continue
+      aggregate += expected
+      if (worstP >= MAX_RANK_LESSON) {
+        failures.push(
+          `surface: ${worstId} is passed with p=${worstP.toFixed(2)} by the strategy '${strat.name}' (limit < ${MAX_RANK_LESSON}); rewrite the options so the feature does not separate the key`,
+        )
+      }
+    }
+    totals.push({ name: strat.name, expected: aggregate, worstP: overallWorstP, worstId: overallWorstId })
+    if (aggregate > MAX_SURFACE_AGGREGATE) {
+      failures.push(
+        `surface: the gated tracks together expect ${aggregate.toFixed(2)} lessons passed by the strategy '${strat.name}' (limit ${MAX_SURFACE_AGGREGATE} in total); rewrite the options so the feature does not separate the key`,
+      )
+    }
+    console.log(`  ${strat.name.padEnd(24)}${cells.join('  ')}`)
+  }
+  console.log(`  (* gated: every lesson p < ${MAX_RANK_LESSON}; overall over the gated tracks <= ${MAX_SURFACE_AGGREGATE} per strategy)`)
+  console.log(`  overall expected passes of ${lessonIds.length} lessons, and the worst lesson, per strategy:`)
+  for (const t of totals) {
+    console.log(`    ${t.name.padEnd(24)}${t.expected.toFixed(2).padStart(6)}   worst ${t.worstP.toFixed(2)} ${t.worstId}`)
+  }
+  console.log(`  lessons passed with p >= ${WATCH_P} by some surface-feature strategy (watch list, ${watch.size}):`)
+  for (const [id, hits] of watch) console.log(`    ${id.padEnd(8)}${hits.join(', ')}`)
+  const top = totals.reduce((a, b) => (b.expected > a.expected ? b : a))
+  console.log(`  highest overall: ${top.name} ${top.expected.toFixed(2)} of ${lessonIds.length} (PLAN Wave 1 bar: <= 5)`)
+}
+
 // Fleet Week Act IV is not a lesson quiz, so the loops above skip it. Its six incident items
 // (cause + mitigation per incident) are checked here the same way, as one pseudo-lesson graded at
 // PASS_BAR, and per incident (the real unit), where the game needs the cause AND the mitigation right. Gated when
@@ -599,7 +729,7 @@ console.log(
   console.log('')
   console.log(`fleet-week Act IV (${fleetQs.length} items as one pseudo-lesson; per incident the cause and the mitigation must both be right)`)
   fleetItems.forEach((i) => console.log(`  ${i.ref.padEnd(40)} key ${rankOf(i.q)}  lengths ${i.q.options.map(len).join('/')}`))
-  for (const strat of [...RANK_STRATEGIES, ...LEXICAL_STRATEGIES]) {
+  for (const strat of [...RANK_STRATEGIES, ...LEXICAL_STRATEGIES, ...SURFACE_STRATEGIES.filter((x) => !x.name.startsWith('stem-overlap'))]) {
     const ps = fleetQs.map(strat.pick)
     const lessonP = passProbability(ps)
     // The unit the game grades: both the cause and the mitigation of one incident right.

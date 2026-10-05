@@ -130,9 +130,9 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
         {
           q: 'For a 70B FP16 model with full multi-head attention (no GQA), the first-order capacity problem on 80 GB GPUs is…',
           options: [
-            'The roughly 50 MB L2 cannot hold the weights, so each step thrashes it and compute caps how many requests run',
+            'The roughly 50 MB L2 cannot hold the weights (it is far too small), so each step thrashes it and compute caps how many requests run',
             'Weights need two GPUs, and each 4k-token KV cache adds ~10 GB, so capacity caps concurrency',
-            'Tokenization and sampling run on the CPU, so the host becomes the limit long before GPU memory fills up',
+            'Tokenization and sampling run on the CPU (not the GPU), so the host becomes the limit long before GPU memory fills up',
             'Tensor cores compute in FP32, so the FP16 weights are upcast and double their footprint before any request',
           ],
           correct: [1],

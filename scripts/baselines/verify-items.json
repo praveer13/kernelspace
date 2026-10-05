@@ -1,15 +1,15 @@
 {
   "longestKeyByTrack": {
-    "r": 7,
+    "r": 4,
     "t0": 5,
     "t1": 2,
     "t2": 5,
-    "t3": 7,
-    "t4": 8,
-    "t5": 9,
-    "t6": 7,
+    "t3": 4,
+    "t4": 6,
+    "t5": 7,
+    "t6": 5,
     "t7": 6,
-    "fleet-week": 1
+    "fleet-week": 0
   },
   "whyRequired": [
     "r",
