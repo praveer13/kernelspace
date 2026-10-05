@@ -2,9 +2,9 @@
   "lab": "rust-zero-r2",
   "abi": 2,
   "version": 2,
-  "commit": "1103dfe",
+  "commit": "20e87be",
   "date": "2026-10-05",
-  "harness": "49d740932034656b1c5394b46e091d72db32f2a96b3775d79b0476e3e0c841e7",
+  "harness": "bda82aa0878a558fcfea63474e9ea3fc9477903e4373f3c8608b079d80419342",
   "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
   "mutantN": 1000,
   "checks": {
@@ -13,6 +13,7 @@
       "n": 10001,
       "referencePassRate": 1,
       "mutants": {
+        "idle-before-disabled": 0,
         "inclusive-range": 0,
         "late-hot": 0,
         "literal": 1,
@@ -28,6 +29,7 @@
       "n": 10001,
       "referencePassRate": 1,
       "mutants": {
+        "idle-before-disabled": 0,
         "inclusive-range": 1,
         "late-hot": 0,
         "literal": 1,
@@ -43,6 +45,7 @@
       "n": 10001,
       "referencePassRate": 1,
       "mutants": {
+        "idle-before-disabled": 0,
         "inclusive-range": 0,
         "late-hot": 0,
         "literal": 1,
@@ -58,6 +61,7 @@
       "n": 10001,
       "referencePassRate": 1,
       "mutants": {
+        "idle-before-disabled": 0,
         "inclusive-range": 0,
         "late-hot": 0,
         "literal": 1,
@@ -73,6 +77,7 @@
       "n": 10001,
       "referencePassRate": 1,
       "mutants": {
+        "idle-before-disabled": 0,
         "inclusive-range": 0,
         "late-hot": 0,
         "literal": 1,
@@ -88,6 +93,7 @@
       "n": 10001,
       "referencePassRate": 1,
       "mutants": {
+        "idle-before-disabled": 1,
         "inclusive-range": 0,
         "late-hot": 1,
         "literal": 1,
@@ -100,6 +106,14 @@
     }
   },
   "mutants": {
+    "idle-before-disabled": {
+      "defaultSeedFails": [
+        "guarded_match"
+      ],
+      "caughtBy": [
+        "guarded_match"
+      ]
+    },
     "inclusive-range": {
       "defaultSeedFails": [
         "range_sum"

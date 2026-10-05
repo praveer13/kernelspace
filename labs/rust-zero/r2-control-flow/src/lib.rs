@@ -139,7 +139,8 @@ pub fn check_tuple_match(ctx: &Ctx) -> Check {
     )
 }
 
-/// Each band in turn, with both sides of the 75 % edge.
+/// Each band in turn, with both sides of the 75 % edge. Every seed runs `(0, 0)` and an active
+/// load on a disabled slot, so the "disabled" before "idle" order is always tested.
 pub fn check_guarded_match(ctx: &Ctx) -> Check {
     cases(
         "guarded_match",
@@ -148,11 +149,11 @@ pub fn check_guarded_match(ctx: &Ctx) -> Check {
         |rng, case| {
             let capacity = u32_in(rng, 2, 10) as usize * 4;
             match case % 8 {
-                0 => (rng.below(4), 0),
+                0 => (0, 0),
                 1 => (0, capacity),
                 2 => (capacity + 1 + rng.below(8), capacity),
                 3 => (capacity, capacity),
-                4 => (capacity * 3 / 4 + rng.below(capacity / 4), capacity),
+                4 => (rng.below(3) + 1, 0),
                 5 => (rng.range(1, capacity * 3 / 4 - 1), capacity),
                 6 => (capacity * 3 / 4, capacity),
                 _ => (capacity * 3 / 4 - 1, capacity),
