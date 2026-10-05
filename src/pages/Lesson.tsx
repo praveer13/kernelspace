@@ -2,10 +2,17 @@
  * Lesson engine (lesson.md): three-rail layout — track navigator (264px),
  * 720px reading column, right rail with ON THIS PAGE + controls.
  * Reading-progress bar via rAF (no re-renders), scrollPct resume, keyboard
- * shortcuts (←/→ j/k e m ? esc), quiz-gated exam completion, XP toast flow.
+ * shortcuts (←/→ j/k e m ? esc).
+ *
+ * Wave 1 (docs/specs/wave-1.md §8.2–8.3, §7.2–7.3, §14.3): nothing is clicked to completion. T0–T2 end in an
+ * exit ticket (t2.l7 the spiral checkpoint); T3–T7 and R say "pass the checkpoint" with a "continue anyway"
+ * that marks the lesson *read*; a pass shows one toast ("Passed · +3 min · RING 2: 11/19 tickets"). `m`
+ * navigates (never completes): to the ticket's first unanswered control, or to Up Next once the lesson is
+ * done. A not-yet-passed lesson offers a test-out, the footer shows one Up Next with its why, and the
+ * discussion mounts at the end. Nothing here locks anything (W8).
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -16,36 +23,57 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  ClipboardCheck,
   Flag,
   GraduationCap,
   Keyboard,
   List,
   ListTree,
-  Lock,
   OctagonX,
   RotateCcw,
   Terminal,
   X,
 } from 'lucide-react'
-import { XP, rankForXp, selectTrackPct, useProgress } from '@/lib/progress'
+import { selectTrackPct, useProgress } from '@/lib/progress'
+import type { LessonStatus } from '@/lib/progress'
+import { MINUTES, localDateKey, selectRings } from '@/lib/economy'
+import { RING2_LESSONS } from '@/lib/economy-table'
 import AgentActions from '@/components/AgentActions'
+import UpNextCard from '@/components/learner/UpNextCard'
 import { getTrack, CAPSTONE } from '@/lib/tracks'
 import {
+  ALL_LESSONS,
   lessonById,
   lessonsForTrack,
   nextLesson,
   prevLesson,
   lessonPath,
 } from '@/data/lessons'
-import type { ContentBlock, Lesson } from '@/data/lessons/types'
+import type { ContentBlock, Lesson, TrackId } from '@/data/lessons/types'
+import type { LocalDay } from '@/lib/ledger/types'
+import type { PlacementResult, Recommendation } from '@/lib/learner/types'
+import type { RecommendContent, RecommendState } from '@/lib/learner/recommend'
 import { RenderBlock } from '@/pages/lesson/blocks'
 import { countH2, extractHeadings } from '@/pages/lesson/markdown'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
 
+// the ticket, the test-out and the discussion load on demand: a lesson that is read first never pays for them
+const TestOut = lazy(() => import('@/components/learner/TestOut'))
+const Discussion = lazy(() => import('@/components/community/Discussion'))
+
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
 /* ------------------------------------------------------------------ */
+
+/** What the completion control says: T0–T2 end in a ticket (t2.l7 in the spiral checkpoint), the rest in the checkpoint. */
+function finishLabel(lesson: Lesson): string {
+  if (!lesson.ticket) return 'Finish: pass the checkpoint'
+  return lesson.ticket.form === 'spiral' ? 'Spiral checkpoint · 8 items' : 'Exit ticket · 3 items'
+}
+
+/** What a lesson that was finished without passing is waiting for. */
+const passWord = (lesson: Lesson): string => (lesson.ticket ? 'ticket' : 'checkpoint')
 
 const CONTENT_ERROR_FORM = 'https://github.com/praveer13/kernelspace/issues/new'
 
@@ -171,6 +199,11 @@ function TrackNav({ lesson, onNavigate }: { lesson: Lesson; onNavigate?: () => v
               <span className="flex w-4 shrink-0 justify-center">
                 {st === 'done' ? (
                   <Check size={13} strokeWidth={3} className="text-accent" />
+                ) : st === 'read' ? (
+                  <>
+                    <Check size={13} strokeWidth={1.5} className="text-text-3" aria-hidden />
+                    <span className="sr-only">{`read, ${passWord(l)} not passed`}</span>
+                  </>
                 ) : l.exam ? (
                   <GraduationCap size={13} className={current ? 'text-amber' : 'text-text-3'} />
                 ) : current ? (
@@ -214,10 +247,11 @@ interface RightRailProps {
   headings: { id: string; text: string; level: 2 | 3 }[]
   activeId: string | null
   pctRef: React.RefObject<HTMLSpanElement | null>
-  canComplete: boolean
-  examGate: boolean
-  done: boolean
-  onComplete: () => void
+  status: LessonStatus
+  /** Scroll to the exit ticket (T0–T2) or the checkpoint (the rest) and focus its first control. */
+  onFinish: () => void
+  /** "Continue anyway (read)": T3–T7 and R only; an exit ticket offers its own after a miss. */
+  onContinue: () => void
   onOpenShortcuts: () => void
 }
 
@@ -226,14 +260,15 @@ function RightRail({
   headings,
   activeId,
   pctRef,
-  canComplete,
-  examGate,
-  done,
-  onComplete,
+  status,
+  onFinish,
+  onContinue,
   onOpenShortcuts,
 }: RightRailProps) {
   const track = getTrack(lesson.trackId)!
   const hasExercise = lesson.blocks.some((b) => b.type === 'exercise')
+  const done = status === 'done'
+  const read = status === 'read'
 
   return (
     <div className="space-y-6">
@@ -265,36 +300,43 @@ function RightRail({
         <p className="mb-3 font-mono text-label uppercase text-text-3">Controls</p>
         <button
           type="button"
-          onClick={onComplete}
+          onClick={onFinish}
           data-complete-control
-          disabled={done || !canComplete}
-          title={examGate ? 'Requires ≥80% on the checkpoint quiz' : undefined}
+          disabled={done}
           className={cn(
-            'flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 font-display text-body-sm font-semibold transition-all duration-150 active:scale-[.97]',
-            done
-              ? 'cursor-default bg-accent-dim text-accent'
-              : canComplete
-                ? 'bg-accent text-accent-foreground hover:-translate-y-px'
-                : 'cursor-not-allowed border border-line bg-surface-2 text-text-3',
+            'flex min-h-11 w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 font-display text-body-sm font-semibold transition-all duration-150 active:scale-[.97]',
+            done ? 'cursor-default bg-accent-dim text-accent' : 'bg-accent text-accent-foreground hover:-translate-y-px',
           )}
         >
           {done ? (
             <>
-              <CheckCircle2 size={15} /> Completed
-            </>
-          ) : examGate ? (
-            <>
-              <Lock size={14} /> Mark complete
+              <CheckCircle2 size={15} /> Passed
             </>
           ) : (
             <>
-              <Check size={15} /> Mark complete
+              {lesson.ticket ? <ClipboardCheck size={15} /> : <Check size={15} />} {finishLabel(lesson)}
             </>
           )}
         </button>
-        {examGate && !done && (
+        {!done && !read && !lesson.ticket && (
+          <button
+            type="button"
+            onClick={onContinue}
+            data-continue-anyway
+            className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-line bg-surface-2 px-4 py-2 font-display text-body-sm font-medium text-text-1 transition-colors duration-150 hover:border-line-bright"
+          >
+            Continue anyway (read)
+          </button>
+        )}
+        {read && (
+          <p className="mt-2 flex items-start gap-1.5 font-mono text-[10px] leading-relaxed text-text-3">
+            <Check size={11} strokeWidth={1.5} className="mt-px shrink-0" aria-hidden />
+            Read, {passWord(lesson)} not passed. It stays open: pass it any time.
+          </p>
+        )}
+        {!done && lesson.exam && (
           <p className="mt-2 font-mono text-[10px] leading-relaxed text-amber">
-            EXAM — unlocks at ≥80% on the checkpoint quiz
+            {lesson.ticket?.form === 'spiral' ? 'SPIRAL CHECKPOINT: 6 of 8, a miss never locks anything' : 'EXAM'}
           </p>
         )}
 
@@ -338,7 +380,7 @@ interface ToastData {
 
 function Toast({ toast, onClose }: { toast: ToastData; onClose: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onClose, 3500)
+    const t = setTimeout(onClose, 6000)
     return () => clearTimeout(t)
   }, [onClose, toast])
   return (
@@ -347,7 +389,7 @@ function Toast({ toast, onClose }: { toast: ToastData; onClose: () => void }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-md border border-line bg-surface-2 px-4 py-3 shadow-[0_16px_48px_rgba(0,0,0,.5)] lg:bottom-14"
+      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-md border border-line bg-surface-2 px-4 py-3 shadow-[0_16px_48px_rgba(0,0,0,.5)] lg:bottom-14 lg:right-6"
       role="status"
     >
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-dim text-accent">
@@ -366,7 +408,7 @@ function ShortcutsModal({ onClose }: { onClose: () => void }) {
     ['← / →', 'previous / next lesson'],
     ['j / k', 'next / previous section'],
     ['e', 'jump to exercise'],
-    ['m', 'jump to quiz / complete'],
+    ['m', 'jump to the ticket, or Up Next'],
     ['?', 'this cheat sheet'],
     ['esc', 'close panels'],
   ]
@@ -479,6 +521,182 @@ function LessonNotFound({ id }: { id?: string }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* footer — previous, and one Up Next with a why (§7.3)                 */
+/* ------------------------------------------------------------------ */
+
+const TRACK_IDS: readonly string[] = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+/** `placement:result` as Up Next reads it; anything that is not a placement record is no placement. */
+function parsePlacement(raw: unknown): RecommendState['placement'] {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.entryTrack !== 'string' || !TRACK_IDS.includes(r.entryTrack)) return null
+  const anchor = r.rustAnchor === 'solid' || r.rustAnchor === 'missed' ? r.rustAnchor : 'skipped'
+  return { entryTrack: r.entryTrack as TrackId, missedKcs: strings(r.missedKcs), solidKcs: strings(r.solidKcs), rustAnchor: anchor } satisfies Pick<
+    PlacementResult,
+    'entryTrack' | 'missedKcs' | 'solidKcs' | 'rustAnchor'
+  >
+}
+
+type UpNextLoad =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ready'; recommend: typeof import('@/lib/learner/recommend').recommend; content: RecommendContent; now: string; day: 'phone' | 'laptop' | 'rest' }
+
+/**
+ * The lesson footer's Up Next: `recommend()` over the façade's lessons and labs, the learner's path and placement,
+ * and the week plan's kind of day. The KC graph, the labs and the recommender load on demand, so reading a lesson
+ * does not pay for them; until they land the slot holds its place, and if they cannot load the footer falls back
+ * to the plain next lesson, because a link must never depend on a chunk. Today's due cards are Today's and Home's
+ * to point at: this footer passes no summary, so rule 2 (due reviews first) does not fire here.
+ */
+function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: string }) {
+  const lessons = useProgress((s) => s.lessons)
+  const labs = useProgress((s) => s.labs)
+  const bootDone = useProgress((s) => s.completions.boot !== undefined)
+  const path = useProgress((s) => s.working['boot:path'])
+  const placementRaw = useProgress((s) => s.working['placement:result'])
+  const week = useProgress((s) => s.working['boot:week'])
+  const [load, setLoad] = useState<UpNextLoad>({ status: 'loading' })
+
+  useEffect(() => {
+    let live = true
+    Promise.all([import('@/data/kc'), import('@/data/labs'), import('@/lib/learner/recommend'), import('@/lib/learner/planner')])
+      .then(([kc, labsMod, rec, planner]) => {
+        if (!live) return
+        const day = planner.dayKindOf(planner.normalizeWeekPlan(week), localDateKey() as LocalDay, window.innerWidth)
+        setLoad({
+          status: 'ready',
+          recommend: rec.recommend,
+          content: { kcs: kc.KCS, lessons: ALL_LESSONS, labs: labsMod.FORGE_LABS },
+          now: new Date().toISOString(),
+          day,
+        })
+      })
+      .catch(() => live && setLoad({ status: 'error' }))
+    return () => {
+      live = false
+    }
+  }, [week])
+
+  const rec: Recommendation | null = useMemo(() => {
+    if (load.status !== 'ready') return null
+    // This footer is the end of this lesson, so for Up Next it has been read (a view of the state, never written):
+    // the recommendation looks past it instead of offering to resume the page the learner is on.
+    const here = lessons[lesson.id]
+    const seen = here?.status === 'done' ? lessons : { ...lessons, [lesson.id]: { ...here, status: 'read' as const, lastVisitedAt: here?.lastVisitedAt ?? load.now } }
+    const state: RecommendState = {
+      bootDone,
+      lessons: seen,
+      labs,
+      path: path === 'serving-first' || path === 'rust-systems' ? path : 'full-ramp',
+      placement: parsePlacement(placementRaw),
+      today: null,
+    }
+    try {
+      return load.recommend(state, load.content, load.now, load.day)
+    } catch {
+      return null
+    }
+  }, [load, lesson.id, bootDone, lessons, labs, path, placementRaw])
+
+  if (load.status === 'error' || (load.status === 'ready' && !rec)) return <NextLessonLink lesson={lesson} trackColor={trackColor} />
+  if (!rec) return <div data-up-next-slot aria-busy="true" className="min-h-[9.5rem] rounded-lg border border-line bg-surface-1" />
+  return <UpNextCard rec={rec} as="h2" />
+}
+
+/** The pre-Wave-1 footer link, kept as the fallback and for the last lesson's way on to the capstone. */
+function NextLessonLink({ lesson, trackColor }: { lesson: Lesson; trackColor: string }) {
+  const next = nextLesson(lesson)
+  const track = getTrack(lesson.trackId)!
+  const nextTrack = next && next.trackId !== lesson.trackId ? getTrack(next.trackId) : null
+  if (next) {
+    return (
+      <Link
+        to={lessonPath(next)}
+        className="group rounded-lg border p-4 text-right transition-all duration-180 hover:-translate-y-0.5"
+        style={{ borderColor: `${trackColor}55`, backgroundColor: `${trackColor}0d` }}
+      >
+        <span className="flex items-center justify-end gap-1.5 font-mono text-[11px]" style={{ color: trackColor }}>
+          {nextTrack ? `next track · ${nextTrack.code}` : 'next lesson'} <ArrowRight size={12} />
+        </span>
+        <span className="mt-1.5 block truncate font-display text-body-sm font-medium text-text-1">{next.title}</span>
+        <span className="mt-1 block font-mono text-[10px] text-text-3">
+          {next.minutes} min · {nextTrack?.name ?? track.name}
+        </span>
+      </Link>
+    )
+  }
+  return <CapstoneLink />
+}
+
+function CapstoneLink() {
+  return (
+    <Link to="/capstone" className="group rounded-lg border border-transparent bg-grad-brand p-[1px] transition-all duration-180 hover:-translate-y-0.5">
+      <span className="block rounded-[7px] bg-surface-1 p-4 text-right">
+        <span className="flex items-center justify-end gap-1.5 font-mono text-[11px] text-grad-brand">
+          <Terminal size={12} /> final destination
+        </span>
+        <span className="mt-1.5 block font-display text-body-sm font-medium text-text-1">
+          {CAPSTONE.code} · {CAPSTONE.name}
+        </span>
+        <span className="mt-1 block font-mono text-[10px] text-text-3">the whole address space</span>
+      </span>
+    </Link>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* focus helpers for `m` and the finish control                         */
+/* ------------------------------------------------------------------ */
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/** Bring `root` to the middle of the screen and focus `target` (or `root` itself, which then needs a tabindex). */
+function reveal(root: HTMLElement, target: HTMLElement | null) {
+  if (!target && !root.hasAttribute('tabindex')) root.setAttribute('tabindex', '-1')
+  root.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' })
+  ;(target ?? root).focus({ preventScroll: true })
+}
+
+/** The exit ticket (or spiral checkpoint): its first unanswered control, else its first live button, else the section. */
+function focusTicket(): boolean {
+  const ticket = document.querySelector<HTMLElement>('[data-ks-ticket]')
+  if (!ticket) return false
+  const first =
+    ticket.querySelector<HTMLElement>('[data-ks-option]:not(:disabled), [data-ks-field]:not(:disabled)') ??
+    ticket.querySelector<HTMLElement>('button:not(:disabled)')
+  reveal(ticket, first)
+  return true
+}
+
+/** The checkpoint quiz of a lesson without a ticket: its first unanswered question, else Submit, else the section. */
+function focusCheckpoint(): boolean {
+  const quiz = document.querySelector<HTMLElement>('section[aria-label="Checkpoint quiz"]')
+  if (!quiz) return false
+  const first =
+    quiz.querySelector<HTMLElement>('[data-answered="false"] button:not(:disabled)') ??
+    quiz.querySelector<HTMLElement>('[data-quiz-submit]:not(:disabled)')
+  reveal(quiz, first)
+  return true
+}
+
+/** Up Next: its link once the card has loaded, else its place holder. */
+function focusUpNext(): boolean {
+  const card = document.querySelector<HTMLElement>('[data-up-next]')
+  if (card) {
+    reveal(card, card.querySelector<HTMLElement>('a'))
+    return true
+  }
+  const slot = document.querySelector<HTMLElement>('[data-up-next-slot]')
+  if (!slot) return false
+  reveal(slot, null)
+  return true
+}
+
+/* ------------------------------------------------------------------ */
 /* the engine                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -495,17 +713,19 @@ function LessonView({ lesson }: { lesson: Lesson }) {
   const trackLessons = lessonsForTrack(lesson.trackId)
   const next = nextLesson(lesson)
   const prev = prevLesson(lesson)
-  const nextTrack = next && next.trackId !== lesson.trackId ? getTrack(next.trackId) : null
 
   const progress = useProgress((s) => s.lessons[lesson.id])
   const markLessonStatus = useProgress((s) => s.markLessonStatus)
+  const completeLesson = useProgress((s) => s.completeLesson)
   const setLessonScroll = useProgress((s) => s.setLessonScroll)
   const unlockAchievement = useProgress((s) => s.unlockAchievement)
 
-  const done = progress?.status === 'done'
-  const quizScore = progress?.quizScore
-  const examGate = !!lesson.exam && (quizScore ?? 0) < 0.8
-  const canComplete = !examGate
+  // done = passed (ticket, spiral, checkpoint or test-out); read = finished without passing (§8.3)
+  const status: LessonStatus = progress?.status ?? 'unstarted'
+  const done = status === 'done'
+  const read = status === 'read'
+  // a test-out is offered on a lesson that is not yet done, and stays mounted to show its verdict after a pass
+  const [offerTestOut] = useState(() => !!lesson.ticket && useProgress.getState().lessons[lesson.id]?.status !== 'done')
 
   const headings = useMemo(() => extractHeadings(lesson.blocks), [lesson])
   const blockOffsets = useMemo(() => {
@@ -532,11 +752,10 @@ function LessonView({ lesson }: { lesson: Lesson }) {
   const pctRef = useRef<HTMLSpanElement>(null)
   const lastSaved = useRef(0)
 
-  /* mark reading on mount (also creates the record for scroll saves) */
+  /* mark reading on mount (also creates the record for scroll saves); a lesson already read or passed keeps its state */
   useEffect(() => {
-    if (useProgress.getState().lessons[lesson.id]?.status !== 'done') {
-      markLessonStatus(lesson.id, 'reading')
-    }
+    const st = useProgress.getState().lessons[lesson.id]?.status
+    if (st !== 'done' && st !== 'read') markLessonStatus(lesson.id, 'reading')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson.id])
 
@@ -595,19 +814,39 @@ function LessonView({ lesson }: { lesson: Lesson }) {
     return () => obs.disconnect()
   }, [headings])
 
-  const complete = useCallback(() => {
-    if (done || !canComplete) return
-    markLessonStatus(lesson.id, 'done')
-    const pct = selectTrackPct(lesson.trackId, trackLessons.length)(useProgress.getState())
-    setToast({ msg: `+${XP.lesson} XP — lesson complete`, detail: `${track.code} progress ${pct}% · rank ${rankForXp(useProgress.getState().xp).name}` })
-    const allDone = trackLessons.every((l) =>
-      l.id === lesson.id ? true : useProgress.getState().lessons[l.id]?.status === 'done',
-    )
-    if (allDone) {
+  /* a pass made on this page (ticket, spiral, checkpoint or test-out): one toast, and the track's badge when it was the last */
+  const lastStatus = useRef(status)
+  useEffect(() => {
+    const before = lastStatus.current
+    lastStatus.current = status
+    if (status !== 'done' || before === 'done') return
+    // a pass that reached this tab from elsewhere (another tab, a sync) is not announced as made here
+    const at = useProgress.getState().lessons[lesson.id]?.completedAt
+    if (at !== undefined && Date.now() - Date.parse(at) > 15_000) return
+    const st = useProgress.getState()
+    const minutes = lesson.ticket?.form === 'spiral' ? MINUTES.spiral : MINUTES.quiz
+    const tickets = selectRings(st.aggregate).ring2.tickets
+    const detail = RING2_LESSONS.includes(lesson.id)
+      ? `RING 2: ${tickets.done}/${tickets.total} tickets`
+      : `${track.code} progress ${selectTrackPct(lesson.trackId, trackLessons.length)(st)}%`
+    setToast({ msg: `Passed · +${minutes} min`, detail })
+    if (trackLessons.every((l) => st.lessons[l.id]?.status === 'done')) {
       unlockAchievement(`track-${lesson.trackId}`)
       setTimeout(() => setTrackDoneOpen(true), 600)
     }
-  }, [done, canComplete, markLessonStatus, lesson, trackLessons, track.code, unlockAchievement])
+  }, [status, lesson, trackLessons, track.code, unlockAchievement])
+
+  /* the finish control: go to the ticket (T0–T2) or the checkpoint; it never completes anything by itself */
+  const finish = useCallback(() => {
+    if (lesson.ticket ? focusTicket() || focusCheckpoint() : focusCheckpoint()) return
+    document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [lesson.ticket])
+
+  /* "continue anyway": finished without passing, so the lesson reads as read and nothing else changes (W8) */
+  const continueAnyway = useCallback(() => {
+    if (useProgress.getState().lessons[lesson.id]?.status === 'done') return
+    completeLesson(lesson.id, 'read')
+  }, [completeLesson, lesson.id])
 
   /* section stepping for j/k */
   const stepSection = useCallback(
@@ -632,25 +871,15 @@ function LessonView({ lesson }: { lesson: Lesson }) {
     [headings],
   )
 
-  /* m: navigate to the completion area (the complete control once enabled, else the quiz); never completes */
+  /* m: navigate, never complete. The ticket's first unanswered control; Up Next once the lesson is done (§8.2) */
   const focusCompletion = useCallback(() => {
-    const quiz = document.querySelector<HTMLElement>('section[aria-label="Checkpoint quiz"]')
-    // the right rail is display:none below lg, and the sticky bar is fixed (no offsetParent), so test client rects
-    const controls = [...document.querySelectorAll<HTMLElement>('[data-complete-control]')].filter(
-      (c) => c.getClientRects().length > 0,
-    )
-    const el =
-      controls.find((c) => !(c as HTMLButtonElement).disabled) ??
-      quiz?.querySelector<HTMLElement>('[data-answered="false"] button:not(:disabled)') ??
-      quiz?.querySelector<HTMLElement>('[data-quiz-submit]:not(:disabled)') ??
-      quiz ??
-      controls[0]
-    if (!el) return
-    if (el === quiz && !quiz.hasAttribute('tabindex')) quiz.setAttribute('tabindex', '-1')
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ;(quiz?.contains(el) ? quiz : el).scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
-    el.focus({ preventScroll: true })
-  }, [])
+    if (useProgress.getState().lessons[lesson.id]?.status === 'done') {
+      if (!focusUpNext()) focusTicket()
+      return
+    }
+    if (lesson.ticket ? focusTicket() || focusCheckpoint() : focusCheckpoint()) return
+    focusUpNext()
+  }, [lesson.id, lesson.ticket])
 
   /* keyboard shortcuts (lesson.md §6) */
   useEffect(() => {
@@ -718,7 +947,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
 
       <div className="mx-auto grid max-w-app grid-cols-1 gap-8 px-6 lg:grid-cols-[264px_minmax(0,1fr)_232px] lg:px-12">
         {/* left rail */}
-        <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] lg:block">
+        <aside aria-label="Track lessons" className="sticky top-16 hidden h-[calc(100dvh-4rem)] lg:block">
           <TrackNav lesson={lesson} />
         </aside>
 
@@ -749,7 +978,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
               </span>
               {lesson.exam && (
                 <span className="flex items-center gap-1.5 rounded-sm border border-amber/40 bg-amber/10 px-2.5 py-0.5 font-mono text-[10px] uppercase text-amber">
-                  <GraduationCap size={11} /> ★ exam · quiz ≥80% to complete
+                  <GraduationCap size={11} /> ★ {lesson.ticket?.form === 'spiral' ? 'spiral checkpoint · 8 items' : 'exam'}
                 </span>
               )}
               {lesson.verifiedAt && (
@@ -766,12 +995,26 @@ function LessonView({ lesson }: { lesson: Lesson }) {
                   <CheckCircle2 size={12} /> done
                 </span>
               )}
-              {resumePct !== null && !done && (
+              {read && (
+                <span className="flex items-center gap-1.5 font-mono text-[11px] text-text-3">
+                  <Check size={12} strokeWidth={1.5} aria-hidden /> read, {passWord(lesson)} not passed
+                </span>
+              )}
+              {resumePct !== null && !done && !read && (
                 <span className="font-mono text-[11px] text-text-3">resumed at {resumePct}%</span>
               )}
               <AgentActions lessonId={lesson.id} title={lesson.title} />
             </div>
           </header>
+
+          {/* test-out (§7.2): offered while the lesson is not done, and kept to show its verdict */}
+          {offerTestOut && (
+            <div className="mb-8">
+              <Suspense fallback={<div aria-hidden className="min-h-[6.5rem]" />}>
+                <TestOut lesson={lesson} trackColor={track.color} />
+              </Suspense>
+            </div>
+          )}
 
           {/* blocks */}
           {lesson.blocks.map((b, i) => (
@@ -781,8 +1024,13 @@ function LessonView({ lesson }: { lesson: Lesson }) {
             </Fragment>
           ))}
 
-          {/* prev / next (lesson.md §7) */}
-          <nav className="mt-16 grid gap-4 border-t border-line pt-8 sm:grid-cols-2">
+          {/* discussion (§14.3): click to load, nothing is requested before the click */}
+          <Suspense fallback={null}>
+            <Discussion kind="lesson" id={lesson.id} />
+          </Suspense>
+
+          {/* previous, and Up Next with its why (lesson.md §7; wave-1.md §7.3) */}
+          <nav aria-label="Previous lesson and Up Next" className="mt-16 grid gap-4 border-t border-line pt-8 sm:grid-cols-2">
             {prev ? (
               <Link
                 to={lessonPath(prev)}
@@ -798,81 +1046,64 @@ function LessonView({ lesson }: { lesson: Lesson }) {
             ) : (
               <span />
             )}
-            {next ? (
-              <Link
-                to={lessonPath(next)}
-                className="group rounded-lg border p-4 text-right transition-all duration-180 hover:-translate-y-0.5"
-                style={{ borderColor: `${track.color}55`, backgroundColor: `${track.color}0d` }}
-              >
-                <span className="flex items-center justify-end gap-1.5 font-mono text-[11px]" style={{ color: track.color }}>
-                  {nextTrack ? `next track · ${nextTrack.code}` : 'next lesson'} <ArrowRight size={12} />
-                </span>
-                <span className="mt-1.5 block truncate font-display text-body-sm font-medium text-text-1">
-                  {next.title}
-                </span>
-                <span className="mt-1 block font-mono text-[10px] text-text-3">{next.minutes} min · {nextTrack?.name ?? track.name}</span>
-              </Link>
-            ) : (
-              <Link
-                to="/capstone"
-                className="group rounded-lg border border-transparent bg-grad-brand p-[1px] transition-all duration-180 hover:-translate-y-0.5"
-              >
-                <span className="block rounded-[7px] bg-surface-1 p-4 text-right">
-                  <span className="flex items-center justify-end gap-1.5 font-mono text-[11px] text-grad-brand">
-                    <Terminal size={12} /> final destination
-                  </span>
-                  <span className="mt-1.5 block font-display text-body-sm font-medium text-text-1">
-                    {CAPSTONE.code} · {CAPSTONE.name}
-                  </span>
-                  <span className="mt-1 block font-mono text-[10px] text-text-3">the whole address space</span>
-                </span>
-              </Link>
+            <LessonUpNext lesson={lesson} trackColor={track.color} />
+            {!next && (
+              <div className="sm:col-span-2 sm:w-1/2 sm:justify-self-end">
+                <CapstoneLink />
+              </div>
             )}
           </nav>
         </article>
 
         {/* right rail */}
-        <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] overflow-y-auto py-12 scrollbar-slim lg:block">
+        <aside aria-label="On this page and controls" className="sticky top-16 hidden h-[calc(100dvh-4rem)] overflow-y-auto py-12 scrollbar-slim lg:block">
           <RightRail
             lesson={lesson}
             headings={headings}
             activeId={activeId}
             pctRef={pctRef}
-            canComplete={canComplete}
-            examGate={examGate}
-            done={done}
-            onComplete={complete}
+            status={status}
+            onFinish={finish}
+            onContinue={continueAnyway}
             onOpenShortcuts={() => setShortcutsOpen(true)}
           />
         </aside>
       </div>
 
-      {/* sticky completion bar (lesson.md §5) */}
+      {/* sticky finish bar (lesson.md §5): at the end of a lesson that is neither passed nor read */}
       <AnimatePresence>
-        {showCompleteBar && !done && (
+        {showCompleteBar && !done && !read && (
           <motion.div
             initial={{ y: 64, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 64, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed bottom-6 left-1/2 z-40 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:bottom-14"
+            className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md lg:bottom-14"
           >
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-line-bright bg-surface-1/95 px-4 py-3 shadow-[0_16px_48px_rgba(0,0,0,.5)] backdrop-blur">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-line-bright bg-surface-1/95 px-4 py-3 shadow-[0_16px_48px_rgba(0,0,0,.5)] backdrop-blur">
               <p className="font-mono text-[11px] text-text-2">
-                end of lesson — {canComplete ? 'bank it?' : examGate ? 'quiz ≥80% required' : ''}
+                end of lesson · {lesson.ticket ? 'pass the ticket to finish' : 'pass the checkpoint to finish'}
               </p>
-              <button
-                type="button"
-                onClick={complete}
-                data-complete-control
-                disabled={!canComplete}
-                className={cn(
-                  'shrink-0 rounded-md px-4 py-2 font-display text-body-sm font-semibold transition-all duration-150 active:scale-[.97]',
-                  canComplete ? 'bg-accent text-accent-foreground hover:-translate-y-px' : 'cursor-not-allowed border border-line bg-surface-2 text-text-3',
+              <div className="flex shrink-0 items-center gap-2">
+                {!lesson.ticket && (
+                  <button
+                    type="button"
+                    onClick={continueAnyway}
+                    data-continue-anyway
+                    className="min-h-11 rounded-md border border-line bg-surface-2 px-3 py-2 font-display text-body-sm font-medium text-text-1 transition-colors duration-150 hover:border-line-bright"
+                  >
+                    Continue anyway (read)
+                  </button>
                 )}
-              >
-                Mark complete · +{XP.lesson} XP
-              </button>
+                <button
+                  type="button"
+                  onClick={finish}
+                  data-complete-control
+                  className="min-h-11 rounded-md bg-accent px-4 py-2 font-display text-body-sm font-semibold text-accent-foreground transition-all duration-150 hover:-translate-y-px active:scale-[.97]"
+                >
+                  {finishLabel(lesson)}
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -931,11 +1162,13 @@ function LessonView({ lesson }: { lesson: Lesson }) {
                 headings={headings}
                 activeId={activeId}
                 pctRef={pctRef}
-                canComplete={canComplete}
-                examGate={examGate}
-                done={done}
-                onComplete={() => {
-                  complete()
+                status={status}
+                onFinish={() => {
+                  setTocOpen(false)
+                  finish()
+                }}
+                onContinue={() => {
+                  continueAnyway()
                   setTocOpen(false)
                 }}
                 onOpenShortcuts={() => {
