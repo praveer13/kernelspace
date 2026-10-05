@@ -4,7 +4,7 @@ import { useLocation } from 'react-router'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import StatusBar from '@/components/StatusBar'
-import CommandPalette from '@/components/CommandPalette'
+import CommandPaletteHost from '@/components/CommandPaletteHost'
 import { useProgress } from '@/lib/progress'
 
 // Only fetched when the ledger has something to say (read-only tab, memory backend, cleared storage).
@@ -46,7 +46,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <main id="main">{children}</main>
       {isMarketing && <Footer />}
       <StatusBar />
-      <CommandPalette />
+      <CommandPaletteHost />
     </div>
   )
 }

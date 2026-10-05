@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X, Search } from 'lucide-react'
 import ProgressRing from '@/components/ProgressRing'
 import { useProgress, selectOverallPct, rankForXp } from '@/lib/progress'
@@ -102,13 +101,13 @@ export default function Navbar() {
                 {({ isActive }) => (
                   <>
                     {link.label}
-                    {isActive && (
-                      <motion.span
-                        layoutId="nav-underline"
-                        className="absolute -bottom-[2px] left-0 h-[2px] w-full bg-accent"
-                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                      />
-                    )}
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'absolute -bottom-[2px] left-0 h-[2px] w-full origin-left bg-accent transition-transform duration-200 ease-out-expo',
+                        isActive ? 'scale-x-100' : 'scale-x-0',
+                      )}
+                    />
                   </>
                 )}
               </NavLink>
@@ -154,45 +153,42 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* Mobile full-screen menu */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-40 flex flex-col bg-ink/95 pt-16 backdrop-blur-md xl:hidden"
-          >
-            <nav className="flex flex-col gap-1 px-6 pt-8" aria-label="Mobile">
-              {MOBILE_LINKS.map((link, i) => (
-                <motion.div
-                  key={link.to}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.06 * i, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <NavLink
-                    to={link.to}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex min-h-12 items-center justify-between border-b border-line py-3 font-display text-h3',
-                        isActive ? 'text-accent' : 'text-text-1',
-                      )
-                    }
-                  >
-                    {link.label}
-                    <span className="font-mono text-label text-text-3">0x0{i}</span>
-                  </NavLink>
-                </motion.div>
-              ))}
-            </nav>
-            <div className="mt-auto px-6 pb-10 font-mono text-label text-text-3">
-              {overallPct}% ALLOCATED · {rank.name}
-            </div>
-          </motion.div>
+      {/* Mobile full-screen menu: always mounted, faded and hidden from focus with CSS while closed */}
+      <div
+        className={cn(
+          'fixed inset-0 z-40 flex flex-col bg-ink/95 pt-16 backdrop-blur-md transition-[opacity,visibility] duration-180 xl:hidden',
+          menuOpen ? 'visible opacity-100' : 'invisible opacity-0',
         )}
-      </AnimatePresence>
+      >
+        <nav className="flex flex-col gap-1 px-6 pt-8" aria-label="Mobile">
+          {MOBILE_LINKS.map((link, i) => (
+            <div
+              key={link.to}
+              className={cn(
+                'transition-[opacity,transform] duration-300 ease-out-expo',
+                menuOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0',
+              )}
+              style={{ transitionDelay: menuOpen ? `${0.06 * i}s` : '0s' }}
+            >
+              <NavLink
+                to={link.to}
+                className={({ isActive }) =>
+                  cn(
+                    'flex min-h-12 items-center justify-between border-b border-line py-3 font-display text-h3',
+                    isActive ? 'text-accent' : 'text-text-1',
+                  )
+                }
+              >
+                {link.label}
+                <span className="font-mono text-label text-text-3">0x0{i}</span>
+              </NavLink>
+            </div>
+          ))}
+        </nav>
+        <div className="mt-auto px-6 pb-10 font-mono text-label text-text-3">
+          {overallPct}% ALLOCATED · {rank.name}
+        </div>
+      </div>
     </>
   )
 }
