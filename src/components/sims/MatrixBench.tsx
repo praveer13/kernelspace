@@ -22,6 +22,7 @@
  * row and column therefore nearly vanishes at 512², while at 8192² the total
  * matrix spills to DRAM and the 64 KB stride pays full TLB cost.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Play, RotateCcw } from 'lucide-react'

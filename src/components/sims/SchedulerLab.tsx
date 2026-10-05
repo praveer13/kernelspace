@@ -5,6 +5,7 @@
  * priority-inheritance, and admission control.  The timeline is drawn as a
  * Gantt-style canvas; metrics report short-job p99 latency and throughput.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Play, RotateCcw } from 'lucide-react'
 import {

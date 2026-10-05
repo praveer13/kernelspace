@@ -8,6 +8,7 @@
  *   2. False-sharing counter — shows 8 independent counters in one line
  *      ping-ponging ownership and killing throughput.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import {

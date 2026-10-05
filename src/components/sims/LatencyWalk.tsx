@@ -10,6 +10,7 @@
  *   Stride < 64 B shares a cache line across accesses (latency × stride/64).
  *   Stride ≥ 4 KB adds a TLB-miss penalty and defeats the prefetcher.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Play } from 'lucide-react'
