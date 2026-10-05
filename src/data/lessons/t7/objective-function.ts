@@ -49,10 +49,10 @@ The engine's control loop, one line: **batching puts throughput and latency on a
         {
           q: 'Goodput is defined as…',
           options: [
-            'Total tokens per second the engine emits across all requests, measured while it is saturated with load',
-            'Throughput counting only the requests (or tokens) that meet the TTFT and TPOT contract, per unit cost',
-            'The share of GPU time spent in useful kernels instead of idle, reported as a utilization percentage',
-            'Requests per second that finish without an error, so any 200 OK response counts as delivered',
+            'Total tokens per second the engine emits across its whole request stream, measured at saturation',
+            'Throughput restricted to requests that meet their latency contract, per unit of cost',
+            'The fraction of device time spent in useful kernels, reported as a utilization percentage',
+            'Requests per second that finish with a success status, whatever latency they took',
           ],
           correct: [1],
           explanation:
@@ -67,10 +67,10 @@ The engine's control loop, one line: **batching puts throughput and latency on a
         {
           q: 'A vendor page shows "10,000 tok/s" with no latency numbers. The right reaction is…',
           options: [
-            'Credible if the GPU is current, since peak tokens per second is the figure capacity plans are built on',
-            'Uninformative: it was probably taken past the latency knee, so ask for the goodput curve instead',
-            'Usable once divided by the GPU count, which turns it into a per-GPU figure comparable across vendors',
-            'Trustworthy if the page names the model, since decode speed is set by the model\'s parameter count',
+            'Credible for current hardware, and peak tokens per second is what capacity plans are built on',
+            'Uninformative without latency figures, likely taken past the knee where goodput collapses',
+            'Usable after dividing by the chip count, turning it into a figure comparable across vendors',
+            'Trustworthy once the page names the model, and decode speed follows from the parameter count',
           ],
           correct: [1],
           explanation:
@@ -85,10 +85,10 @@ The engine's control loop, one line: **batching puts throughput and latency on a
         {
           q: 'Throughput and latency sit on a seesaw: tokens per second per GPU rise with load while TTFT and TPOT rise too. The coupling comes from…',
           options: [
-            'The tokenizer, whose per-request CPU time delays both the first token and every later token',
-            'NCCL collectives, whose fixed all-reduce latency is added to both prefill and every decode step of a request',
-            'Batching: bigger batches amortize weight reads but deepen queues and lengthen every decode step',
-            'Quantization, which trades accuracy for speed, so extra tokens per second are paid for in answer quality rather than in latency',
+            'The tokenizer, whose per-request host time delays the first token and each later token',
+            'Collective communication, whose fixed per-step latency gets added to prefill and to each decode step',
+            'Batching, which grows throughput by amortizing weight reads while queues and decode steps lengthen',
+            'Quantization, which trades answer quality for speed rather than trading latency for throughput',
           ],
           correct: [2],
           explanation:
@@ -103,10 +103,10 @@ The engine's control loop, one line: **batching puts throughput and latency on a
         {
           q: 'Why design at p50 but contract at p95?',
           options: [
-            'The median is stable with few samples while p95 is too noisy to design with, so noise decides the split',
-            'The median guides sizing for the typical user, while the tail is what you promise; one number cannot do both',
-            'The slowest 5% of requests come from client networks and say nothing about the engine, so they are excluded',
-            'p50 and p95 move together, so a system that meets the median target will also meet the contract target',
+            'The median is stable with few samples while the tail is too noisy to design with, and noise decides',
+            'The median sizes for the typical user while the tail is promised, and one number cannot do both',
+            'The slowest requests come mostly from client networks and say nothing about the engine, and are excluded',
+            'The median and the tail move together, and a system that meets one target will also meet the other',
           ],
           correct: [1],
           explanation:

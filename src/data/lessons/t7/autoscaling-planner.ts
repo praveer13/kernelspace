@@ -67,10 +67,10 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
         {
           q: 'Dynamo\'s Planner can target TTFT and ITL SLAs, yet a planner should act on queue depth and KV utilization before measured TTFT breaks because…',
           options: [
-            'Queue metrics are cheaper to collect, whereas TTFT needs per-request tracing that slows down the serving path',
-            'TTFT is dominated by prefill compute, which is constant per prompt, so it carries no information about load',
-            'Scaling on latency oscillates, since added workers lower TTFT and then trigger an immediate scale-down',
-            'Queue depth and age lead the violation: TTFT includes queue time, so it only confirms a breach users felt',
+            'Queue metrics are cheaper to collect, whereas latency needs per-request tracing that slows the serving path',
+            'First-token latency is dominated by prefill compute, which is constant per prompt and carries no load information',
+            'Scaling on latency oscillates, with added workers lowering it and then triggering an immediate scale-down',
+            'Queue depth and age lead the violation, with first-token latency including queue time and confirming it late',
           ],
           correct: [3],
           explanation:
@@ -85,10 +85,10 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
         {
           q: 'Phase-aware scaling means…',
           options: [
-            'Scaling prefill and decode workers together at a fixed ratio so that the fleet\'s architecture stays balanced',
-            'Adding capacity to the binding phase, prefill or decode, and shifting the split as the traffic mix drifts',
-            'Adding replicas in stages: a fraction of the target, then a wait for metrics to settle, then the next batch',
-            'Swapping decode GPUs for newer hardware when TPOT creeps, since decode is bandwidth-bound and benefits from upgrades',
+            'Scaling prefill and decode workers together at a fixed ratio, keeping the fleet\'s architecture balanced',
+            'Adding capacity to the binding phase of prefill or decode, and shifting the split as the traffic mix drifts',
+            'Adding replicas in stages, with a fraction of the target first and a wait for metrics before each next batch',
+            'Swapping decode chips for newer hardware when per-token latency creeps, with decode bandwidth-bound',
           ],
           correct: [1],
           explanation:
@@ -103,10 +103,10 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
         {
           q: 'Cold start shapes Planner design via…',
           options: [
-            'Larger per-worker batches, so each slow-starting worker carries more requests and fewer workers are needed overall',
-            'Treating workers as stateless containers, since a new replica starts serving as soon as its process is up',
-            'Keep-warm pools for predictable peaks, fast weight loaders and weight sharing, since minutes of load time force early scaling',
-            'Over-provisioning every phase by a fixed multiple, so that a scale-up is never needed during the day',
+            'Larger per-worker batches, with each slow-starting worker carrying more requests and fewer workers needed',
+            'Treating workers as stateless containers, with a new replica serving as soon as its process is up',
+            'Keep-warm pools and fast weight loaders for predictable peaks, with minutes of load time forcing early scaling',
+            'Over-provisioning each phase by a fixed multiple, with scale-up not needed during the day',
           ],
           correct: [2],
           explanation:
@@ -121,10 +121,10 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
         {
           q: 'When capacity cannot arrive in time, the honest approach is…',
           options: [
-            'Let requests queue without bound, so every admitted request is eventually served and none are failed',
-            'Restart the saturated workers to clear their queues, since a fresh worker starts with no backlog',
-            'Walk a ladder fixed beforehand: a bounded queue, then a fast retryable 429 shed, then degraded output classes',
-            'Decide at the moment of overload which requests to drop, since the right choice depends on that incident\'s cause',
+            'Letting requests queue without bound, with each admitted request eventually served and no request failed',
+            'Restarting the saturated workers to clear their queues, with a fresh worker starting without backlog',
+            'Walking a ladder fixed beforehand, with a bounded queue then a fast retryable shed then degraded output',
+            'Deciding at the moment of overload which requests to drop, with the right choice depending on the incident\'s cause',
           ],
           correct: [2],
           explanation:

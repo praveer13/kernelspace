@@ -55,10 +55,10 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
         {
           q: 'DeepSeek\'s 545% margin day rested primarily on…',
           options: [
-            'A GPU cost basis far below the market rate, so almost any traffic volume would have produced a large margin',
-            'Wide-EP goodput, a 56.3% cache-hit input share and output pricing: the systems levers are the margin',
-            'Serving a small model, so each token needed few FLOPs and margin came from model size, not design',
-            'Free or subsidized electricity, since power is the dominant cost line in a serving business',
+            'An accelerator cost basis far below the market rate, with almost any traffic volume producing a large margin',
+            'Systems levers such as wide expert-parallel goodput, a high cache-hit share and output pricing',
+            'Serving a small model, with each token needing few operations and margin coming from model size',
+            'Free or subsidized electricity, with power being the dominant cost line in a serving business',
           ],
           correct: [1],
           explanation:
@@ -73,10 +73,10 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
         {
           q: 'Why are output tokens priced 3–5× input tokens?',
           options: [
-            'Users value generated text more than prompts, so providers price on perceived value rather than cost',
-            'Outputs are shorter than prompts, so per-request overhead is spread over fewer tokens and each one costs more',
-            'Decode is serial and bandwidth-bound while input is parallel and cached, so outputs carry the marginal cost',
-            'Providers recover prefill compute through output pricing, so the price includes processing the whole prompt',
+            'Users value generated text more than prompts, and providers price on perceived value rather than cost',
+            'Outputs are shorter than prompts, and per-request overhead spread over fewer tokens makes each one costlier',
+            'Decode is serial and bandwidth-bound while input is parallel and cached, and outputs carry the marginal cost',
+            'Providers recover prefill compute through output pricing, and the price includes processing the whole prompt',
           ],
           correct: [2],
           explanation:
@@ -91,10 +91,10 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
         {
           q: 'tok/MW matters because…',
           options: [
-            'Operators publish energy efficiency to meet sustainability goals, not because power limits capacity',
-            'A site\'s power envelope is fixed, so tokens per megawatt converts each hardware generation into what the site can sell',
-            'Electricity is the largest line in the cost stack, ahead of GPU-hours, so it dominates the bill',
-            'It tracks tok/s/$ exactly, since a lower-power GPU is also cheaper to buy and the two rank hardware the same',
+            'Operators publish energy efficiency to meet sustainability goals, and power does not limit capacity',
+            'A site\'s power envelope is fixed, and tokens per megawatt turns each generation into sellable output',
+            'Electricity is the largest line in the cost stack, and it dominates the bill ahead of accelerator rental',
+            'It tracks tokens per dollar exactly, and the two metrics rank each hardware generation the same way',
           ],
           correct: [1],
           explanation:
@@ -109,10 +109,10 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
         {
           q: 'An engine\'s cost per token is driven most directly by…',
           options: [
-            'The number of GPUs in the fleet, since every added GPU raises the hourly bill and so the cost of every token',
-            'Goodput per billed GPU-hour: tokens delivered within SLO per hour, since idle GPUs bill like busy ones',
-            'The peak utilization reached in the busiest minute, since it shows how efficiently the silicon can be used',
-            'The GPU\'s hourly rate, since a rented or amortized card costs the same per hour whatever workload it runs',
+            'The number of chips in the fleet, with each added chip raising the hourly bill and the cost of each token',
+            'Goodput per billed chip hour, meaning tokens delivered within the latency target per hour',
+            'The peak utilization reached in the busiest minute, which shows how efficiently the silicon can be used',
+            'The chip\'s hourly rate, with a rented or amortized card costing the same per hour whatever it runs',
           ],
           correct: [1],
           explanation:
