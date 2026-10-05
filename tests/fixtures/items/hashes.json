@@ -13,11 +13,11 @@
     "seq-bytes": "ba9ec9ee"
   },
   "roofline": {
-    "attainable": "e571840e",
-    "batch-to-ridge": "4fd5f0fb",
-    "bound": "85d2d00d",
-    "decode-b1": "6119396e",
-    "ridge": "14bb7e4d",
-    "tile-ai": "7b355c65"
+    "attainable": "b63d47d4",
+    "batch-to-ridge": "9088f531",
+    "bound": "d67f1d69",
+    "decode-b1": "fa0ac46f",
+    "ridge": "29aca0e4",
+    "tile-ai": "f6e31926"
   }
 }
