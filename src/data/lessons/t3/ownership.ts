@@ -127,10 +127,10 @@ The exercise replays ownership scenarios on a live memory diagram: moves, borrow
         {
           q: '`let b = a;` for an owning type (String, Vec) in Rust…',
           options: [
-            'Copies the heap buffer into a second allocation, so a and b each own an independent String',
-            'Reference-counts the buffer, so a and b both stay usable until the last of them goes out of scope',
-            'Moves ownership: b takes over the single drop, and a is statically unusable afterward',
-            'Creates an immutable borrow of a, so a stays readable but cannot be mutated',
+            'Copies the heap buffer into a second allocation that b owns independently of the original a',
+            'Reference-counts the buffer and lets a and b both stay usable until the last one is dropped',
+            'Moves ownership to b and leaves a statically unusable once b takes over the single drop',
+            'Creates an immutable borrow of a that leaves a readable but forbids mutating it',
           ],
           correct: [2],
           explanation:
@@ -145,10 +145,10 @@ The exercise replays ownership scenarios on a live memory diagram: moves, borrow
         {
           q: 'The borrow rule "many &T XOR one &mut T" directly prevents…',
           options: [
-            'Memory leaks, since every borrowed value is freed as soon as its last borrower finishes',
-            'Iterator invalidation and data races, since nobody can mutate while readers exist and writers never share',
-            'Deadlocks, since exclusive access to a value means two threads can never wait on each other',
-            'Panics from out-of-bounds indexing, since a borrowed slice always carries its own length',
+            'Memory leaks by freeing a borrowed value as soon as its last borrower finishes',
+            'Iterator invalidation and data races by letting no one mutate while any readers exist',
+            'Deadlocks by giving a value exclusive access that stops threads waiting on each other',
+            'Out-of-bounds indexing panics by making a borrowed slice carry its own length',
           ],
           correct: [1],
           explanation:
@@ -163,10 +163,10 @@ The exercise replays ownership scenarios on a live memory diagram: moves, borrow
         {
           q: 'An explicit lifetime annotation like <\'a> on fn longest(x: &\'a str, y: &\'a str) -> &\'a str tells the compiler…',
           options: [
-            'Extends the lifetime of both strings at run time, so they stay alive until the returned reference is dropped',
-            'That the result borrows from both inputs, so callers must keep both alive while using it',
-            'Which of x or y the function really returns at run time, so the caller may free the other one early',
-            'That the function body is exempt from borrow checking because the caller has accepted responsibility',
+            'That both strings stay alive at run time until the returned reference is dropped',
+            'That the result borrows from both of its inputs and callers must keep both of them alive',
+            'That the function returns one of x or y at run time and the caller may free the other early',
+            'That the function body is exempt from borrow checking once the caller accepts responsibility',
           ],
           correct: [1],
           explanation:
@@ -181,10 +181,10 @@ The exercise replays ownership scenarios on a live memory diagram: moves, borrow
         {
           q: 'The idiomatic systems-Rust answer to cyclic structures (graphs, linked lists) is…',
           options: [
-            'Raw pointers between nodes inside an unsafe module, since a graph cannot be built with borrow-checked code',
-            'An arena: one owning Vec plus usize indices as "pointers", which is borrow-free and cache-friendly',
-            'Box<Node> links in both directions, which the compiler accepts because each Box owns its target',
-            'Rc<RefCell<...>> for every link, since it is the standard drop-in replacement for a pointer',
+            'Raw pointers between nodes inside an unsafe module that works around the borrow checker',
+            'An arena with one owning Vec and usize indices standing in for pointers between graph nodes',
+            'Box<Node> links in both directions that each own their target node',
+            'Rc<RefCell<...>> around each link as the drop-in replacement for a pointer',
           ],
           correct: [1],
           explanation:
