@@ -1,6 +1,6 @@
 # Wave 2, play, frontier and a Forge without the wall: spec (PRs 2a, 2b, 2c, 2s)
 
-**Status:** draft for owner review. **Date:** 2026-10-05. **Base:** `wave-1c` @ b1963ce, once Wave 1's tail (B14–B17, B21, B24, B25, B27, C17, C19) has merged into it.
+**Status:** draft for owner review. **Date:** 2026-10-05. **Base:** `wave-1c` @ 4daa536, which holds Wave 1's whole tail (B14–B17, B21, B24, B25, B27, C17, C19). The spec was drafted at b1963ce; the critique pass checked its code claims against 4daa536.
 **Implements:** PLAN-100X §8 Wave 2: W1 scheduler play, Compose and In-production card; W3 Daily on own components and Act IV; W4; K3; V4 v2; K1 +4 families; T3–T7 tickets; P1 for T4–T5; W6; F4; F3a; F3d; labs 02–03; H2; 7 mirrors; the watcher backtest; partners. Stretch: F3b after re-measurement, Evidence Pack, Team kit. Also three Wave 1 carry-overs from the Wave 1a final review (§19).
 **Nothing but this file is committed with the spec.** Level 0 of PR 2a (§24) commits the contracts (ledger v3.2, contract KC ids, types, claims) before any other task starts.
 
@@ -14,7 +14,7 @@ Section numbers below are cited by the task DAG (§24) and by `wave2-dag.json`.
 |---|---|---|
 | D1 | **Three PRs on one foundation, plus a stretch PR.** 2a (engine, content, carry-over) merges first. Its level 0 lands in `wave-2a` before anything else; `wave-2b` (the World) and `wave-2c` (the Forge) branch from that commit and never edit the same file as each other or as 2a's later levels. Stretch (`wave-2s`) branches from `master` after all three and enters only while the review queue is under 10 h. | §24 |
 | D2 | **Ledger contract v3.2: `SCHEMA_VERSION` 4 → 5, `AGGREGATE_VERSION` 2 → 3, `IDB_VERSION` unchanged.** The reserved `incident` and `fleet-run` kinds get a ref grammar and data shapes; `packet:` acks, two item sources and four working keys are added; the existing `components` store gets its first writer. A Wave 1 tab would drop these events at outbox recovery and cross-tab sync, so it goes read-only instead. | §3 |
-| D3 | **Wave 1's tail is a hard prerequisite.** On this branch no lesson has `kcs` or a ticket, `recommend()` has no runtime caller (Today uses the `upNextFor` stand-in, `today.ts:385`), `completePlacement` has no caller, and PRIMM, the ladder and Prove-it are not mounted (`ForgeLab.tsx` still calls `runLabInWorker` and `recordLabResult`). B14–B17, B21, B25 and C17 own those. Wave 2 branches only after they merge; 2a-30 removes `upNextFor` if it is still there. | §1 |
+| D3 | **Wave 1's tail is a hard prerequisite, and it has merged** (`wave-1c` @ 4daa536). At b1963ce no lesson had `kcs` or a ticket, `completePlacement` had no caller and PRIMM, the ladder and Prove-it were not mounted; B14–B17, B21 and C17 fixed those. Still true at 4daa536: Today's Up Next is the `upNextFor` stand-in (`today.ts:385`, called at `Today.tsx:240`; only the lesson footer calls `recommend()`), and `tests/kc/scope.test.ts` asserts that no T3–T7 lesson has a ticket. 2a-30 removes `upNextFor`; 2a-17 removes that assertion before the content tasks add tickets. | §1 |
 | D4 | **The scheduler play runs on the Fleet `Engine`, and its ghost is `referenceScheduler` (`fleet-model.ts:322`).** The plan's `{sjf, 2000, 48, none}` is that function's policy: shortest prompt first, a FIFO starvation guard at 2,000 iterations (`GUARD_AGE`), 48 tokens of headroom (`HEADROOM_TOKENS`), no preemption. Neither the plan nor the evidence defines the four dials, so this spec does (order, guard, headroom, preemption), and a test proves that spec reproduces the reference at every iteration. | §8.4 |
 | D5 | **"BurstGPT's busiest minute" is a sampled minute.** The real busiest minute holds about 555 requests; the committed artifact is the busiest *hour* sampled to 480 rows (`public/traces/burstgpt-v2-busiest-hour.json`). The play uses 40 requests sampled evenly from the source's busiest 60 s, labelled "sampled", and draws fresh minutes by resampling the busiest hour. | §8.2 |
 | D6 | **W1's Code stage is not in Wave 2.** The bestiary histograms, the leaderboard's physics floors and the real-engine finale are not in Wave 2's line (§8: "W1 scheduler play, Compose and In-production card"). The leaderboard has 0 entries and the histograms have no outcome evidence. They move to Wave 3 with lab 06's PRIMM. | §8 |
@@ -58,7 +58,7 @@ The owner has asked us to proceed on these defaults and record them; nothing wai
 | Q14 | Ship a DeepSeek-V4 preset only if its `config.json` is public at a pinned revision? | Yes; otherwise CSA/HCA appears as a labelled synthetic example. |
 | Q15 | F7's move of Capstone Zero to after t5.l4 (PLAN §5.5, Wave 0a) never landed. Keep it out of Wave 2? | Out; listed as an open gap. |
 
-**Item-validity rule (carried from Wave 1).** Every learner-facing multiple-choice item added in Wave 2 carries a `why` per option and sits in a pool that `verify-items` (§6.5) or `verify-generators` (B27's cue gate) checks: prequestions, `predictAt` options, ticket and spiral items, PRIMM items, the Daily and Act IV menus, signature items, compile-bank items and every generator choice variant. (Prove-it answers are free text.) Prefer numeric, ordering or predict-then-run evidence where the KC allows; all four new families are numeric first.
+**Item-validity rule (carried from Wave 1).** Every learner-facing multiple-choice item added in Wave 2 carries a `why` per option and sits in a pool that `verify-items` (§6.5) or `verify-generators` (B27's cue gate) checks: prequestions, `predictAt` options, ticket and spiral items, PRIMM items, alignment items (§17.2), the Daily and Act IV menus, signature items, compile-bank items and every generator choice variant. (Prove-it answers are free text; sim outcome tasks predict what the run then shows, as in Wave 1, and carry their why in the explain step.) Prefer numeric, ordering or predict-then-run evidence where the KC allows; all four new families are numeric first.
 
 ---
 
@@ -150,7 +150,8 @@ Wave 1 closed the loop on one concept chain, block placement. Wave 2 does three 
 | `src/components/lesson/{PermissionDiagram,AlignItem}.tsx`, `src/data/aquascope/*`, `scripts/aquascope/extract.ts` | F4 | 2c-05 |
 | `src/lib/forge/watch.ts` | folder watch | 2c-08 |
 | `scripts/landscape/*`, `docs/backtest/*` | watcher backtest | 2a-20 |
-| `scripts/a11y.mjs`, `playwright.config.ts`, `e2e/*` | a11y harness | 2a-07 |
+| `scripts/a11y.mjs`, `playwright.config.ts`, `e2e/smoke.spec.ts` | a11y harness | 2a-07 |
+| `e2e/{item-block,ticket,scheduler,daily}.spec.ts` | keyboard walks (§22.2) | 2a-32, 2b-11, 2b-19 |
 
 ### 2.2 Routes
 
@@ -166,11 +167,11 @@ Each joins `App.tsx`, `staticRoutes` in `scripts/prepare-pages.mjs`, the nav (Bu
 
 So that 2b and 2c fill files instead of editing shared ones:
 - **Play registry.** `src/components/play/registry.ts` maps a play id to a lazy component. `PlayBlock.tsx:32` and `Play.tsx` stop hard-coding `block-placement`. `PENDING_PLAYS = ['scheduler']`: a pending id renders nothing (so 2a's T5 content can place the block before 2b ships the play); an unknown id renders an error card.
-- **Mount stubs**, each a lazy component that renders nothing until its owner fills it: `DailyCard` (Today's done card and empty state), `EngineCard` and `DonateExport` (Progress), `InstallButton` (ForgeLab, after a run).
-- **Exercise fallback.** `ExerciseView` (`src/pages/lesson/exercise.tsx:92–145`) drops task ids the registry does not know and falls back to the link card when none remain. 2a can then add the zoo exercise to t5.l4 before 2b registers its tasks.
-- **Types.** `ItemBlock` and `CodeBlockData.{permissions, alt}` in `src/data/lessons/types.ts`; `PromptPart` gains `{t: 'table'; caption; columns; rows}`; `Gen` gains `budgetMs?` (speed limit, default 1 ms), `bank?: {units: number}` (non-degeneracy for bank-backed families) and `hashFixture?: 'deferred'`.
+- **Mount stubs**, each a lazy component that renders nothing until its owner fills it and that exports its final props type (as Wave 1's B1 stubs did), so the owner never edits the mounting page: `DailyCard({variant: 'done' | 'empty'})` (Today's done card and empty state), `EngineCard()` and `DonateExport()` (Progress), `InstallButton({lab, report, credit, bytes})` (ForgeLab, after a run). ForgeLab keeps the last run's module bytes beside its report and credit for that mount; today they live only inside the run callback (`ForgeLab.tsx:136`).
+- **Exercise fallback.** `PENDING_TASK_IDS` in `src/lib/sims/registry.ts` holds the six zoo task ids (§11.4). `tests/sims/registry.test.ts` ("every exercise block taskId resolves") accepts a pending id and fails once a pending id is registered, so the list cannot go stale. `ExerciseView` (`src/pages/lesson/exercise.tsx`) renders nothing for a block whose ids are all pending, drops other unknown ids, and falls back to the link card when none remain. 2a can then add the zoo exercise to t5.l4 before 2b registers its tasks; 2b-13 empties the list.
+- **Types.** `ItemBlock` and `CodeBlockData.{permissions, alt, align}` in `src/data/lessons/types.ts`: `permissions?: {trace: string}` keys a trace in `src/data/aquascope/<lessonId>.json` (2c-05 defines the trace format), `alt?: {java?: string; python?: string}`, `align?: QuizQuestion[]` (alignment items, §17.2). `PromptPart` gains `{t: 'table'; caption; columns; rows}`, and the `code` part gains `lines?: true` and `mark?: number` (numbered lines, one marked; the compile family points at lines). `Gen` gains `budgetMs?` (speed limit, default 1 ms), `bank?: {units: number}` (non-degeneracy for bank-backed families) and `hashFixture?: 'deferred'`.
 - **Per-family hash fixtures.** `tests/fixtures/items/hashes.json` splits into `tests/fixtures/items/hashes/<family>.json`, so parallel family tasks never edit one file.
-- **The exporter** handles `item` blocks (title plus "practice with new numbers in the lesson") and code alternates, and stays byte-identical for every existing lesson.
+- **The exporter** handles `item` blocks (title plus "practice with new numbers in the lesson"), code alternates and alignment items (without keys, like quizzes), and stays byte-identical for every existing lesson.
 - **`verify:rust-items`** exists as a stub in the fast gate.
 
 ---
@@ -354,6 +355,18 @@ These are the ids other PRs tag. 2a-06 defines each with the fields shown and ad
 
 - `labs` fields name kv-block-manager and bpe-tokenizer on their check KCs; verify-kc's lab rules (`verify-kc.ts:282–306`) then require every such KC to be tagged by a check (2c-03) and each readiness lesson (R5–R7 for lab 02, R5–R6 for lab 03, `labs.ts`) to introduce a prerequisite reachable from the check KCs. The requires column above is chosen to satisfy that.
 - `PENDING_FAMILIES` (`verify-kc.ts:46`) gains `goodput`, `cost`, `memory`, `spec`, `sig` and `compile`, so a KC's `gen` may name a family before it exists (a warning, as for Wave 1's families).
+- **2a-06 sets every Wave 2 `gen` link now.** Once a family lands, verify-kc requires its `Gen.kcs` and the KCs whose `gen` lists it to be the same set (`verify-kc.ts:309–315`), and KC files are 2a's: a family task in 2a level 1, 2b or 2c cannot edit them. The links (each family's `Gen.kcs` must equal its row):
+
+  | Family | KCs whose `gen` lists it |
+  |---|---|
+  | `goodput` | `t7.goodput`, `t7.goodput-curve`, `t7.pareto-frontier`, `t7.capacity-planning` |
+  | `cost` | `t7.cost-per-mtok`, `t6.ep-economics`, `t6.agent-prefix-locality` |
+  | `memory` | `t4.quantized-bytes`, `t6.moe-active-params`, `t6.parallel-memory`, `t6.fp4-capacity`, `t6.lora-adapter-bytes` |
+  | `spec` | `t6.spec-acceptance`, `t5.speculative-decoding` |
+  | `sig` | `t7.incident-diagnosis`, `t5.kv-capacity`, `t2.admission-scheduling` (in `t2.ts`), `t7.capacity-planning`, `t5.prefill-decode-interference` |
+  | `compile` | `r.ownership-moves`, `r.clone-copy-drop`, `r.borrow-rules`, `r.slices`, `r.lifetimes`, `r.interior-mutability`, `r.permissions`, `r.analyzer-limits` |
+
+  `frag`, `kv` and `roofline` keep their sets: kv v2 (§11.5) assesses kv's existing KCs. Today filters `gen` by the families that loaded (`today.ts:303`), and the exit ticket and the placement walk load families with `Promise.allSettled`, so 2a can ship to `master` before `sig` and `compile` exist. `tests/kc/graph.test.ts` pins the graph at 60–80 KCs (`graph.test.ts:34–36`); 2a-06 takes it to about 97, so that pin becomes the 200 cap in 2a-06.
 
 ### 4.3 Notional machines (2a-11)
 
@@ -379,6 +392,7 @@ One card per track, 3–6 rules and 2–4 "what it ignores" lines each; `NOTIONA
 ### 5.1 Framework changes (2a-03)
 
 - **`PromptPart` `table`** for telemetry (signature items) and sweeps (`knee`, `frontier`): `{t: 'table'; caption: string; columns: string[]; rows: (string | number)[][]}`; `PromptView` renders a real `<table>` with a caption.
+- **Numbered code.** The existing `code` part gains `lines?: true` and `mark?: number`; `PromptView` numbers the lines and marks one. The compile family (§15.3) asks about lines, and `src/lib/items/types.ts` is a level-0 file.
 - **`Gen.budgetMs`**: `verify-generators` checks p95 of make + grade against `gen.budgetMs ?? 1` ms (today a fixed 1 ms). Only `sig` raises it (10 ms; it runs a small engine scenario).
 - **`Gen.bank`** (`{units}`) for bank-backed families: non-degeneracy becomes "distinct instances ≥ min(50 % of seeds, 80 % of units)" for that family.
 - **Per-family hash fixtures** (`tests/fixtures/items/hashes/<family>.json`); `hashFixture: 'deferred'` turns a missing fixture into a warning (the compile family until 2c-18 freezes the bank).
@@ -490,7 +504,8 @@ That is 12 of 15. t6.l3 (P:D ratio), t6.l7 and t6.l10 get W5's family and Fleet 
 
 - The last lesson of each track becomes a spiral checkpoint (`ticket.form: 'spiral'`, 8 items, pass ≥ 6 of 8 with a non-MCQ right, `ticket.ts:40–45`): **t3.l7, t4.l7, t5.l10, t6.l10, t7.l5**. Each carries ≥ 4 authored `ticket.spiral` items on earlier KCs of its own and prerequisite tracks.
 - `earlierKcsOf` (`ticket.ts:111`) draws only T0–T2 KCs today. It generalizes to "KCs introduced earlier in the lesson's track, or in any track before it in `TRACK_RANK`".
-- `SPIRAL_LESSONS` (`economy-table.ts:77`) gains the five lessons (2a-31), so each pays the spiral's 8 minutes.
+- `SPIRAL_LESSONS` (`economy-table.ts:77`) gains the five lessons (2a-31), so each pays the spiral's 8 minutes; 2a-31 also updates `tests/economy/table.test.ts`, which pins it to `['t2.l7']`.
+- **The tripwire.** B25's `tests/kc/scope.test.ts` asserts "T3–T7 keep the checkpoint until Wave 2: none has a ticket" (line 52). 2a-17 (level 1) removes that assertion, so the level-2 content tasks can add tickets without sharing the file; 2a-32 then extends the scope test. 2a-17 proves its spiral planning on fixture lessons; 2a-32 checks the five real spirals once content has landed.
 
 ### 6.3 P1 for T4–T5 (2a-23 … 2a-25)
 
@@ -524,8 +539,8 @@ That is 12 of 15. t6.l3 (P:D ratio), t6.l7 and t6.l10 get W5's family and Fleet 
 
 ### 6.5 verify-items v2 (2a-18)
 
-`verify-items` today gates 272 lesson items, 6 Act IV items and 55 errata items (333), and reads no prequestions, `predictAt` options, spiral items, anchors or PRIMM items beyond lab 01 (`verify-items.ts:150–194, 840–859`). v2:
-- **Pools:** lesson quizzes (68 lessons); prequestion choices and `predictAt` options (per lesson, item-level rules); spiral items (one pseudo-lesson per spiral); placement anchors and errata items (the existing no-lesson pool); every `src/data/forge/*/primm.ts` that exports `PRIMM_MC_ITEMS` (one pseudo-lesson per lab, found by `readdir`, so labs 02–03 join when 2c lands); the Act IV and Daily menus (`INCIDENTS`, one pseudo-lesson per fault).
+`verify-items` today gates 272 lesson items, 6 Act IV items and 55 errata items (333), plus the placement anchors in the errata pool (B17, `verify-items.ts:769–786` at 4daa536), and reads no prequestions, `predictAt` options, spiral items or PRIMM items beyond lab 01. v2:
+- **Pools:** lesson quizzes (68 lessons); prequestion choices and `predictAt` options (per lesson, item-level rules); alignment items on code blocks (`CodeBlockData.align`, §17.2; per lesson, item-level rules; none exist until 2c, so a fixture proves the gate); spiral items (one pseudo-lesson per spiral); placement anchors and errata items (the existing no-lesson pool); every `src/data/forge/*/primm.ts` that exports `PRIMM_MC_ITEMS` (one pseudo-lesson per lab, found by `readdir`, so labs 02–03 join when 2c lands); the Act IV and Daily menus (`INCIDENTS`, one pseudo-lesson per fault).
 - **The bar is enforced:** every strategy's expected lessons passed over the lesson pool must be ≤ 2.0, including the length strategies of §19.2; always-B stays inside its 2-SD band. The line printed at `verify-items.ts:779` becomes a gate and reads "Wave 2 bar: ≤ 2 of 68".
 - Item-level cue limits (≤ chance + 15 points per strategy) apply per pool.
 - Generator and compile-bank choice variants stay with `verify-generators` (B27).
@@ -560,7 +575,7 @@ Wave 1's slice built the placement walk (B21), test-out (B19), `recommend()` and
 
 ### 7.4 ⌘K v2 (2a-30)
 
-`scripts/build-search-index.ts` (B24) indexes the T3–T7 KCs (from the graph), the scheduler play, `/daily` and `/errors`. It indexes the Errors page, not individual bank entries, so 2c's bank never changes the index. `verify:search-index` passes; the index chunk stays ≤ 15 KB gzip (reported).
+`scripts/build-search-index.ts` (B24) indexes the T3–T7 KCs (from the graph) and every play in `PLAYS` (the scheduler play once 2b-11 registers it and the merged index is regenerated). `/daily` and `/errors` are pages, so they join the palette's static list (`STATIC_ITEMS`, `CommandPalette.tsx`, 2a-02), not the index; the bank's entries are never indexed, so 2c's bank never changes the index. `verify:search-index` passes; the index chunk stays ≤ 15 KB gzip (reported).
 
 **Generated index rule.** `src/data/search-index.json` is generated from lessons, KCs and claims. Every task that changes those regenerates it and lists it among its files. Two branches that both regenerate it are never merged by hand: the merger re-runs `bun scripts/build-search-index.ts` on the merged sources, and `verify:search-index` checks freshness. This is the one shared file the DAG checker exempts (§24.1).
 
@@ -581,7 +596,7 @@ The same play opens full screen at `/play/scheduler`. Its existing link card to 
 
 ### 8.2 Traces (2b-01)
 
-- **The practice minute.** `scripts/build-traces.py` gains `build_burstgpt_minute`: from the pinned BurstGPT v2 source (sha256-checked as `build_burstgpt` does, `build-traces.py:36–39, 108`), take the busiest aligned 60-second window and sample 40 requests evenly. Arrival seconds map to ticks (1 s per tick); prompt and output lengths are kept. The output is `public/traces/burstgpt-v2-busiest-minute.json` (schema 1, `requestSha256`), pinned by `verify-traces` and documented in `public/traces/README.md` (CC-BY-4.0, the sampling rate). The play shows "BurstGPT v2, busiest minute, 40 of ~555 requests sampled". This is the shared story, like Wave 1's `PLAY_PRACTICE_SEED`.
+- **The practice minute.** `scripts/build-traces.py` gains `build_burstgpt_minute`: from the pinned BurstGPT v2 source (sha256-checked as `build_burstgpt` does, `build-traces.py:36–39, 108`), take the busiest aligned 60-second window and sample 40 requests evenly. Arrival seconds map to ticks (1 s per tick); prompt and output lengths are kept. The output is `public/traces/burstgpt-v2-busiest-minute.json` (schema 1, `requestSha256`), pinned by `verify-traces` and documented in `public/traces/README.md` (CC-BY-4.0, the sampling rate). The artifact records the source minute's request count, and the play shows "BurstGPT v2, busiest minute, 40 of 555 requests sampled" with that number read from the artifact, never typed into the UI. This is the shared story, like Wave 1's `PLAY_PRACTICE_SEED`.
 - **Fresh minutes.** `drawSchedTrace(entropy)` (`src/lib/world/sched-traces.ts`) resamples 40 `(prompt, output)` pairs from the 480 rows of the busiest-hour artifact and arrival gaps from the minute's empirical gaps, by rejection sampling in the pattern of `drawPlacementTrace` (`world/traces.ts:137`). A minute is in band when:
   1. the ghost meets the TTFT SLO on ≥ 70 % of requests;
   2. an FCFS policy with the same headroom meets at least 3 fewer;
@@ -788,7 +803,7 @@ Thirty-second items (nominal `nsec` 30). The evidence describes a 5–10-second 
 
 **Placement in the app.**
 - `DailyCard` appears on Today's done card and empty state ("Fleet Daily #47 · about 8 min · your engine: 2 of 4 boxes"), lazy so `/today` stays within 200 KB.
-- `/daily` is in Build. It is precached, so the Daily runs offline, and its closure is ≤ 200 KB (gated).
+- `/daily` is in Build. It is precached, so the Daily runs offline, and its closure is ≤ 200 KB (gated). Its incidents run in the fleet worker (§9.5), whose bundle Vite's manifest does not list, so `build-sw-manifest` precaches that bundle explicitly (2a-02).
 
 **At 360 px and by keyboard** (a Wave 2 exit gate):
 - Every control is a ≥ 44 px button in reading order; the probe bar wraps; tables scroll inside their own region, never the page.
@@ -803,7 +818,7 @@ Thirty-second items (nominal `nsec` 30). The evidence describes a 5–10-second 
 **Today.** Act IV is three static incidents with four causes and four mitigations each (`fleet-week.ts:644–819`). Credit goes only to a first call, and one missed first call closes the act "until incidents on unseen seeds exist" (`INCIDENT_CLOSED_NOTE`, `fleet-week.ts:920`). The act is recorded with provenance `practice` and no seed (`progress.ts:636–645`).
 
 **Wave 2:**
-- **Drills.** A drill opens an incident session (§9.5) on reference components, with a seed drawn by `freshSeed()` when the drill starts: unseen, not secret, as lab seeds are (Wave 1 §12.4). The incident is `generateIncident('drill', hex(seed))`. The learner plays it with the Daily's hypothesis, probe and fix flow, and the session's `finish` scores it. The `sim.worker` `incident` job and `loadIncident` go; Acts I–III keep their jobs.
+- **Drills.** A drill opens an incident session (§9.5) on reference components, with a seed drawn by `freshSeed()` when the drill starts: unseen, not secret, as lab seeds are (Wave 1 §12.4). The incident is `generateIncident('drill', hex(seed))`. The learner plays it with the Daily's hypothesis, probe and fix flow, built by 2b-19 as components that take the session and the incident's source as props (so 2b-17 follows 2b-19), and the session's `finish` scores it. The `sim.worker` `incident` job and `loadIncident` go; Acts I–III keep their jobs.
 - **A drill passes** when `diagnosed && fixed && burn ≤ 2 × expertBurn + 5` (Q5). Each drill writes `recordIncident` (`src: 'drill'`, `act4: true`, provenance `unseen`).
 - **The act passes** after one passed drill on each of three distinct faults. `completeFleetWeekAct('incident', score, {seed, provenance: 'unseen', data: {faults, seeds}})`, with `score` the mean drill score.
 - **Retries are free:** a failed drill is followed by a new drill on a new seed; nothing closes. First-call-only credit, `IncidentLedger` and `INCIDENT_CLOSED_NOTE` go.
@@ -856,7 +871,7 @@ New `ks_invoke` verbs live in each crate's bridge code; the template ABI (Wave 1
 | bpe-tokenizer | `count <hex>`, UTF-8 text as hex | the token count from the bridge's tokenizer (the 48-merge table `probe` uses) |
 
 - **Unchanged:** `probe <seed>`; errors start with `err`.
-- **Templates.** On a template build the new verbs trap like any unfinished check, and the host reports "not implemented yet".
+- **Templates.** The verbs call the learner's code, as `probe` does (`radix-cache/src/lib.rs:565–574`). On a template build, and on a `--features reference` build (which only renames the template module, `verify-labs.ts:220–227`), they trap like any unfinished check, and the host reports "not implemented yet". Only a build with the private solution in place answers them; 2a-08 checks that with `cargo test` locally, and the bridge holds no reference logic.
 - **Calibration.** The change alters `lib.rs`, whose sha256 `calibration.json` pins, so calibration reruns from the private reference solutions (in the main checkout's gitignored `labs/_solutions/`, never committed; O1 of the Wave 1 owner answers).
 - **Admission.** `INVOKE_PROBES` (`wasm-lab.ts:252`) gains admission probes for both labs, so `validateModule` admits them.
 - **Docs and zips.** `labs/README.md` documents the verbs, and the two zips are repacked (`verify:labs` fails a stale zip).
@@ -864,7 +879,8 @@ New `ks_invoke` verbs live in each crate's bridge code; the template ABI (Wave 1
 **The prefix router (2b-20).**
 - `Cluster` gains a `RouterDriver` hook beside `RouterKind` (`fleet-model.ts:817`).
 - `makeWasmRouter` keeps one radix instance per worker. It routes a request to the worker with the longest `match` and skips workers over `PREFIX_LOAD_GUARD`, then `insert`s the routed prompt into that worker's instance.
-- A conformance test runs the reference module's router beside `WorkerPrefixCache` (`fleet-model.ts:825–902`) on `makePrefixSharedRequestStream` and requires the same routes.
+- A conformance test runs `makeWasmRouter` over a JS stand-in that answers `reset`, `insert` and `match` (the `fakeLab` pattern, `tests/forge/fixtures.ts`) beside `WorkerPrefixCache` (`fleet-model.ts:845`) on `makePrefixSharedRequestStream`, and requires the same routes. No wasm built from a private solution is committed; the integration step runs the real modules (§24.1).
+- Fleet sessions, incident opens included (§9.5), gain the `prefix-router` slot's bytes (`FleetSlotBytes`, `fleet-protocol.ts`).
 
 ### 10.4 The schematic (2b-12)
 
@@ -874,7 +890,7 @@ New `ks_invoke` verbs live in each crate's bridge code; the template ABI (Wave 1
 
 ### 10.5 The tokenizer comparison (2a-04 claims, 2b-20 UI)
 
-- **Corpus.** `src/data/engine/token-corpus.ts` holds eight short texts: prose, Python, JSON, numbers, a URL, Chinese, emoji, Rust. Their Qwen3 token counts are claims of kind `benchmark` with `pin` = the Qwen3 tokenizer's Hugging Face revision. `scripts/engine/qwen3-counts.py` reproduces them (it runs locally with `tokenizers`, never in CI).
+- **Corpus.** `src/data/engine/token-corpus.ts` holds eight short texts: prose, Python, JSON, numbers, a URL, Chinese, emoji, Rust. Their Qwen3 token counts are claims of kind `benchmark` with `pin` = the Qwen3 tokenizer's Hugging Face revision, and so is the tokenizer's vocabulary size that idea 2 below quotes. `scripts/engine/qwen3-counts.py` reproduces them (it runs locally with `tokenizers`, never in CI).
 - **`TokenizerCompare`** shows your counts (through `count`) beside Qwen3's and their ratio.
 - **The gap explanation** is a self-checked constructed response with three ideas. It is recorded as `item item:engine.bpe-gap` with `data.ideas`. The ideas:
   1. Qwen3 splits text with a pre-tokenizer regex (words, digits, punctuation) before merging, and yours does not;
@@ -948,22 +964,22 @@ The plan's mitigation for misread configs is "a second reader". 2b-06 is written
 | `zoo.dsa-reads` | bytes read per step at 128k against stored bytes (choice: same / reads ≪ stored / stored ≪ reads) | `t5.kv-reads-vs-capacity` |
 | `zoo.linear-state` | a linear layer's state at 1M ÷ at 1k | `t5.attention-variants` |
 | `zoo.hybrid-share` | the share of Kimi Linear's KV bytes at 128k held by its MLA layers | `t5.attention-variants` |
-| `zoo.gdn-prefix` | why a GDN layer cannot reuse a prefix from the middle of a cached sequence (choice with whys) | `t5.kv-reads-vs-capacity` |
+| `zoo.gdn-prefix` | whether a GDN layer can serve a request that shares only the first half of a cached sequence without recomputing that half (yes / no); the machine shows the state exists only at the end, and the explain step's ideas carry the why | `t5.kv-reads-vs-capacity` |
 
 - **Phone mode** shows each task's canonical outcome from `src/lib/sims/models/zoo.ts`.
-- **t5.l4** gets a second exercise block with these task ids (2a-24). The calc machine's five tasks and t5.l4's existing block stay as they are; `tests/sims/kv.test.ts` changes only where it counts every `sim-kv` task (line 74), and its checks on the calc block (lines 54–70, 351–355) stand.
+- **t5.l4** gets a second exercise block with these task ids (2a-24), listed in `PENDING_TASK_IDS` until 2b-13 registers them (§2.3). The calc machine's five tasks and t5.l4's existing block stay as they are; `tests/sims/kv.test.ts` changes only where it counts every `sim-kv` task (line 74), and its checks on the calc block (lines 54–70, 351–355) stand.
 
 ### 11.5 kv family v2 (2b-14)
 
-The kv family (version 1 → 2) gains three variants so the zoo's KCs come back in Today:
+The kv family (version 1 → 2) gains three variants so the zoo's arithmetic comes back in Today:
 
-| Variant | Asks | Diagnosis |
-|---|---|---|
-| `mla-bytes` | KV bytes per token for an MLA config | `kv.mla-as-gqa` (priced as GQA) |
-| `swa-capacity` | tokens of KV at context t with window W | `kv.window-ignored` |
-| `linear-state` | a linear layer's state bytes | `kv.state-grows` (scaled with t) |
+| Variant | Asks | Diagnosis | KC |
+|---|---|---|---|
+| `mla-bytes` | KV bytes per token for an MLA config | `kv.mla-as-gqa` (priced as GQA) | `t5.kv-bytes-per-token` |
+| `swa-capacity` | tokens of KV at context t with window W | `kv.window-ignored` | `t5.kv-capacity` |
+| `linear-state` | a linear layer's state bytes | `kv.state-grows` (scaled with t) | `t5.kv-bytes-per-token` |
 
-Pins come from kv-zoo's presets. Existing variants keep their instances (only the version field changes).
+The variants assess kv's existing KCs: a new KC in kv's `Gen.kcs` would need a `gen` edit in a 2a-owned KC file (§4.2). `t5.attention-variants` returns in Today through t5.l4's tagged checkpoint items. Pins come from kv-zoo's presets. Existing variants keep their instances (only the version field changes).
 
 ---
 
@@ -1023,7 +1039,7 @@ export interface ForgeBundle {
 - **Registry.** `src/data/forge/index.ts` discovers `src/data/forge/*/index.ts` with `import.meta.glob`, and with `readdir` plus `import()` under Bun (the pattern of `items/registry.ts:20–46`).
 - **Lab 01** exposes its existing data as a bundle with no behaviour change, and keeps exporting `PRIMM_MC_ITEMS` from `primm.ts` (the path `verify-items` reads, §6.5).
 - **Panels** take a bundle and import no lab's data. ForgeLab mounts them for any lab with a bundle and behaves as C17 left it for every other lab.
-- **`SetupLanes`, `FolderWatch` and `AskPacket`** are created as stubs that 2c-07, 2c-08 and 2c-06 fill. `SetupLanes` renders today's setup copy unchanged until then.
+- **`SetupLanes`, `FolderWatch` and `AskPacket`** are created as stubs that 2c-07, 2c-08 and 2c-06 fill. Each exports its final props type and 2c-02 mounts it with those props: `SetupLanes({lab})`, `FolderWatch({lab, onModule(file: File)})` (ForgeLab's `onFile`, the handler a drop calls), `AskPacket({lab, reports})` (like `HintLadder`, it reads the rung reached from the ledger's `hint:` acks). The three level-1 tasks run in parallel, so none of them may edit `ForgeLab.tsx`. `SetupLanes` renders today's setup copy unchanged until then.
 - **`lint-mentor`** checks every lab with a ladder: word limits, R1 anchors that are real H2s, R2 functions that exist in that lab's `lib.rs`, R3 shape, no `_solutions` mention, and no ladder for a non-required check. `askHumanUrl` takes the bundle's label instead of the hard-coded "[lab 01]" (`ladder.ts:453–456`).
 
 ### 13.2 Lab 02, kv-block-manager (2c-03 metadata, 2c-09 content)
@@ -1145,7 +1161,7 @@ export interface SnippetVariant {
   - the schema;
   - that each bank's source hashes match its snippets;
   - the phone limits;
-  - ≥ 3 snippets per error code in the final bank;
+  - ≥ 3 snippets per error code in the final bank (a warning until 2c-18 freezes the bank, so 2c-04's 10-snippet seed group passes);
   - the verdict quota: about 25 % of verdict items have "compiles" as the key, so a fixed option set gives no cue.
 
 ### 15.3 The `compile` family
@@ -1187,7 +1203,7 @@ Each task owns `snippets/<group>.ts` and `bank/<group>.json`; the family loads e
 
 ### 15.6 The Error Museum and the freeze (2c-18)
 
-- **`/errors`** (lazy page) lists one entry per error code in the bank: a minimal snippet, its permission diagram (§17.1), the real fix, the `.clone()` wrong fix with its why, the R lessons that teach it, and "practice this error" (compile items on that code).
+- **`/errors`** (lazy page) lists one entry per error code in the bank: a minimal snippet, its permission diagram (§17.1; traces in `src/data/aquascope/errors.json`, extracted by 2c-18), the real fix, the `.clone()` wrong fix with its why, the R lessons that teach it, and "practice this error" (compile items on that code).
 - **The entry list** is E0382, E0499, E0502, E0505, E0506, E0597, E0716 and `BorrowMutError` (computing-education.md:184–186), plus any other code the bank holds ≥ 3 times.
 - **Freeze.** 2c-18 then writes the compile family's hash fixture and removes `hashFixture: 'deferred'`.
 
@@ -1211,7 +1227,7 @@ Each task owns `snippets/<group>.ts` and `bank/<group>.json`; the family loads e
 ### 16.2 Codespaces (2c-07)
 
 - **Per-lab devcontainers.** `.devcontainer/labs/<id>/devcontainer.json` builds only that crate, unlike today's `postCreateCommand`, which builds the whole labs workspace.
-- **The link.** Each lab shows `https://codespaces.new/praveer13/kernelspace?devcontainer_path=.devcontainer/labs/<id>/devcontainer.json` with the note "Codespaces bills your GitHub account (120 core-hours a month free)" (Q11; forge-friction.md:161–166). The boot time is [unverified] and is not quoted.
+- **The link.** Each lab shows `https://codespaces.new/praveer13/kernelspace?devcontainer_path=.devcontainer/labs/<id>/devcontainer.json` with the note "Codespaces bills your GitHub account (120 core-hours a month free)" (Q11; forge-friction.md:161–166). The 120 is a claim added by 2a-04 (claims are level-0 files) and rendered from it. The boot time is [unverified] and is not quoted.
 
 ### 16.3 Folder watch (2c-08)
 
@@ -1235,13 +1251,13 @@ The plan: R3, R4, R8 and R9 rebuilt on Read/Write/Own permissions with build-tim
   - The output lives in `src/data/aquascope/<lessonId>.json` with the code's sha256.
   - CI never runs Aquascope (nightly drift); a test fails when a block's code no longer matches its trace's hash.
   - **Fallback (Q9):** if the pinned toolchain will not build, the traces are hand-authored in the same format, labelled "drawn after Aquascope's model", and owner-reviewed.
-- **`PermissionDiagram`** renders a trace as a table: paths × lines, each cell R/W/O with gained and lost marks. Text comes first, colour second; it works at 360 px. It is attached through `CodeBlockData.permissions` (2a-03), not a new block type: the plan caps new block types at four.
+- **`PermissionDiagram`** renders a trace as a table: paths × lines, each cell R/W/O with gained and lost marks. Text comes first, colour second; it works at 360 px. It is attached through `CodeBlockData.permissions: {trace}` (2a-03), a key into the lesson's trace file, not a new block type: the plan caps new block types at four.
 
 ### 17.2 Active alignment and `codeLang` (2c-05)
 
 - **Alternates.** `CodeBlockData.alt?: {java?: string; python?: string}` holds the familiar version of a snippet.
 - **A language switch** on such code blocks writes `settings:codeLang` through `updateSettings` (the first caller), and `CodeView` shows the chosen alternate beside the Rust.
-- **Active, not passive.** The evidence warns that passive side-by-side display is far weaker than active alignment (learning-science.md:141), so each lesson's side-by-side comes with an `AlignItem`: "Here is the Java version. Which Rust line does the compiler reject, and which permission is missing?" It is a choice item with whys, recorded as an authored item (`item:<lesson>.align.<n>`).
+- **Active, not passive.** The evidence warns that passive side-by-side display is far weaker than active alignment (learning-science.md:141), so each lesson's side-by-side comes with an `AlignItem`: "Here is the Java version. Which Rust line does the compiler reject, and which permission is missing?" It is a choice item with whys, authored as a `QuizQuestion` in the code block's `align` list (2a-03), gated by `verify-items` (§6.5) and recorded as an authored item (`item:<lesson>.align.<n>`, `src: 'lesson'`).
 
 ### 17.3 Analyzer limits versus undefined behaviour
 
@@ -1282,7 +1298,7 @@ The plan's metric, "R KCs pass cold checks before lab 01", is a field measure (�
 
 The plan holds the S4 watcher until "an independently rated ≥ 8-week backtest over all ~20 repos (Dynamo included) reporting precision and recall". The planning backtest read 3 repos, was proposer-rated and missed llm-d's `fs-connector` deprecation (PLAN §5.2). Wave 2 builds and runs the backtest (3 h); Wave 3 decides on the watcher.
 
-- **Watchlist** (`scripts/landscape/watchlist.ts`), the serving dossier's 20 repos (serving-landscape.md:275–283) plus Dynamo: vllm, sglang, dynamo, llm-d, TensorRT-LLM, flashinfer, flash-attention, DeepEP, DeepGEMM, Mooncake, LMCache, verl, slime, AReaL, mistral.rs, candle, burn, cudarc, InferenceX, gateway-api-inference-extension.
+- **Watchlist** (`scripts/landscape/watchlist.ts`), the serving dossier's 20 repos, Dynamo included (serving-landscape.md:275–283): vllm, sglang, dynamo, llm-d, TensorRT-LLM, flashinfer, flash-attention, DeepEP, DeepGEMM, Mooncake, LMCache, verl, slime, AReaL, mistral.rs, candle, burn, cudarc, InferenceX, gateway-api-inference-extension.
 - **Snapshot** (`fetch.ts`): every release in a fixed window of ≥ 8 weeks (default 2026-08-01 → 2026-09-30, which contains the KVBM deprecation of 2026-09-21), fetched once from GitHub's API on the implementer's machine (`GITHUB_TOKEN` optional, local only). It is committed as `docs/backtest/snapshot.json` so scoring is reproducible. Partial fetches are marked `[unverified]` (serving-landscape.md:314).
 - **Matcher** (`match.ts`, pure): the dossier's keyword rule (`deprecated|removed|default|renamed|GA`) plus term tags drawn from claim ids, KC titles and lesson H2s. It maps release-note lines to lesson and claim ids, writing `docs/backtest/candidates.json`. Its fixtures include the fs-connector line, which the dossier's tags did not map.
 - **Independent rating.** A rater who has not seen the matcher's output labels every release-note line in the snapshot that should change a lesson or a claim, producing the ground truth (`docs/backtest/ratings.json`). The rater is the owner, or a fresh agent given only the snapshot and the lesson list. `score.ts` refuses a ratings file that contains matcher fields.
@@ -1317,7 +1333,7 @@ Act IV's first-call-only credit (`fleet-week.ts:882–986`) then marks a learner
 
 kv-thrash and no-admission get the same kind of test for their own claims and pass it.
 
-The fix lands in 2a level 0 because today's Act IV, with its first-call-only credit, stays live until 2b-17 replaces it. W3 owns the result from there: its `drain-stall` fault (§9.2) inherits the corrected physics, and its `EXPECTED` row comes from this test's numbers.
+The fix lands in 2a level 0 because today's Act IV, with its first-call-only credit, stays live until 2b-17 replaces it. W3 owns the result from there: its `drain-stall` fault (§9.2) inherits the corrected physics, and its `EXPECTED` row comes from this test's numbers. The test drives `loadIncident`, so 2b-17 deletes it when `loadIncident` goes; the separability test (2b-10) carries the drain claims on.
 
 ### 19.2 The middle-length strategy is not gated (2a-10)
 
@@ -1434,7 +1450,8 @@ It is previewed before download and makes no network request (a test greps the o
   - Browsers come from `npx playwright install chromium`.
   - `nightly.yml` runs both and opens an issue on failure; nothing blocks (PLAN §7.4's heavy lane).
 - **Routes:** the PLAN §7.3 list (with `/progress` until K5 brings `/me`), plus `/daily`, `/play/scheduler`, `/errors`, `/week`, `/lab/kv-calc`, `/forge/kv-block-manager` and `/forge/bpe-tokenizer`. 0 serious or critical violations at 360 and 1280 px.
-- **Keyboard walks** (e2e): the Daily (exit gate), the scheduler play, an item block, a ticket.
+- **Keyboard walks** (e2e, at 360 px): the Daily (exit gate; `e2e/daily.spec.ts`, 2b-19), the scheduler play (`e2e/scheduler.spec.ts`, 2b-11), an item block and a ticket (`e2e/item-block.spec.ts`, `e2e/ticket.spec.ts`, 2a-32, the first task whose tree has lessons carrying item blocks and T3–T7 tickets).
+- **Level-0 UI.** 2a-07 lands first in 2a's level 0, so 2a-02 (nav, routes, mounts) and every later UI task can run `npm run a11y`.
 - **WCAG 2.2 specifics:** as Wave 1 §16.2 (target size, focus not obscured, no drag-only interaction, consistent help, no redundant entry).
 - **Screen readers:** a VoiceOver (iOS) and NVDA (Windows) pass at the wave exit over Boot → Today (with the Daily card) → `/daily` → t5.l7's play → `/forge/kv-block-manager`. This is an owner step.
 
@@ -1451,7 +1468,7 @@ It is previewed before download and makes no network request (a test greps the o
   - `tests/items/{goodput,cost,memory,spec,sig,compile,verify-items}.test.ts`;
   - `tests/learner/{item-block,placement-r1,outcomes,redact}.test.ts`;
   - `tests/world/{sched,sched-policy,sched-traces,faults,incident,separability,daily,daily-own,bpe,team}.test.ts`;
-  - `tests/fleet/{incident-consistency,incident-session,act4,act1,router}.test.ts`;
+  - `tests/fleet/{incident-session,act4,act1,router}.test.ts`, and `tests/fleet/incident-consistency.test.ts` from 2a-09 until 2b-17 retires it with `loadIncident`;
   - `tests/engine/{store,schematic,tokenizer-compare}.test.ts`;
   - `tests/sims/{kv-zoo,zoo}.test.ts`;
   - `tests/plays/{registry,scheduler}.test.ts`;
@@ -1496,7 +1513,7 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 | F5 | Exit-ticket keep-or-kill (Wave 2 exit) | median ≤ 4 min; ≥ 70 % pass within two tries; default if underpowered: 2 items |
 | F6 | Prove-it keep-or-kill (Wave 2 exit) | ≥ 60 % of greens attempted; default if underpowered: 1 question |
 | F7 | K3 (not an exit gate, reported) | `selectPlacementConfirm7`: ≥ 85 % of solid placement KCs confirmed at day 7 |
-| F8 | queue gating (PLAN §8) | Wave 2's review queue under 10 h before Wave 3 starts |
+| F8 | queue gating (PLAN §8) | Wave 2's review queue under 10 h before Wave 3 starts: the owner sums the open Wave 2 tasks at PLAN §8's rates (4, 8 or 20 h per S, M or L, plus content and a11y time) |
 | F9 | accessibility | the VoiceOver and NVDA passes of §22.2, recorded by the owner |
 
 ---
@@ -1531,15 +1548,15 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 ```
         tasks in a level run in parallel (∥); * = Opus first; → = sequential inside a level
-2a  L0: 2a-01 ∥ 2a-02 ∥ (2a-03 → 2a-07) ∥ (2a-04 → 2a-05) ∥ 2a-06 ∥ 2a-08 ∥ (2a-09 → 2a-10)   ← 2b and 2c branch here
+2a  L0: 2a-01 ∥ (2a-07 → (2a-02 ∥ 2a-03)) ∥ (2a-04 → 2a-05) ∥ 2a-06 ∥ 2a-08 ∥ (2a-09 → 2a-10)   ← 2b and 2c branch here
     L1: 2a-11* ∥ 2a-12 ∥ 2a-13 ∥ 2a-14 ∥ 2a-15 ∥ 2a-16 ∥ 2a-17 ∥ 2a-18 ∥ 2a-19 ∥ 2a-20 ∥ 2a-21
     L2: 2a-22 ∥ 2a-23 ∥ 2a-24 ∥ 2a-25 ∥ 2a-26 ∥ 2a-27 ∥ 2a-28            (after 2a-11's Opus review)
     L3: 2a-29 ∥ 2a-30 ∥ 2a-31 ∥ 2a-32
 2b  L0: (2b-01 → 2b-02*) ∥ 2b-03* ∥ 2b-04 ∥ 2b-05* ∥ 2b-06 ∥ 2b-07 ∥ 2b-08 ∥ 2b-09
     L1: 2b-10* ∥ 2b-11 ∥ 2b-12 ∥ 2b-13 ∥ 2b-14
     L2: 2b-15 ∥ 2b-16 ∥ 2b-18
-    L3: 2b-17 ∥ 2b-19 ∥ 2b-20
-    L4: 2b-21
+    L3: 2b-19 ∥ 2b-20
+    L4: 2b-17 → 2b-21                                          (Act IV's drills reuse the Daily's flow)
 2c  L0: (2c-01 → 2c-02) ∥ 2c-03 ∥ 2c-04* ∥ 2c-05*
     L1: 2c-06 ∥ 2c-07 ∥ 2c-08 ∥ 2c-09 ∥ 2c-10 ∥ 2c-11 ∥ 2c-12 ∥ 2c-13 ∥ 2c-14 ∥ 2c-15 ∥ 2c-16 ∥ 2c-17
     L2: 2c-18
@@ -1558,33 +1575,33 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 - **Files:** `src/lib/ledger/constants.ts`, `src/lib/ledger/types.ts`, `src/lib/ledger/refs.ts`, `src/lib/ledger/codec.ts`, `src/lib/ledger/fold.ts`, `src/lib/ledger/view.ts`, `src/lib/ledger/engine.ts`, `src/lib/ledger/client.ts`, `src/lib/progress.ts`, `src/lib/economy.ts`, `src/lib/economy-table.ts`, `tests/ledger/contract-v32.test.ts`, `tests/ledger/gen.ts`, `tests/ledger/codec.test.ts`, `tests/ledger/fold.test.ts`, `tests/ledger/facade.test.ts`, `tests/economy/table.test.ts`, `tests/economy/xp.test.ts`, `tests/learner/cards.test.ts`.
 - **Accept:** §3 as specified: SCHEMA_VERSION 5, AGGREGATE_VERSION 3 with upgradeAggregate v1→v2→v3 at hydrate (no empty first paint); REF_RULES, GRADED_KINDS, ITEM_SRCS and checkData accept every §3.2 shape and reject the listed malformed ones; LedgerFacadeActionsV32 merged (recordIncident, recordFleetRun, installComponent, removeComponent, recordHelp, completeFleetWeekAct meta); LedgerClient.components() and componentBytes(); the property suite (P6, P7, round-trip) passes at 100 seeds x 40 ops with every Wave 2 op in OPS_TABLE; a Wave 1 fixture ledger derives identically on every v2 field; schema guard 5 vs 4 goes read-only; economy prices inc:daily, inc:drill, fleet: and play:scheduler; entry growth ≤ 2 KB gzip, printed.
 
-**2a-02 · Routes, pages and mount points: /daily, /errors, /play/:playId by registry, nav, ⌘K pages, budgets, offline Daily, lazy mount stubs (spec §2.3)** M. Depends: w1:B24, w1:B25, w1:C17.
-- **Files:** `src/App.tsx`, `src/pages/Daily.tsx`, `src/pages/Errors.tsx`, `src/pages/Play.tsx`, `src/components/blocks/PlayBlock.tsx`, `src/components/play/registry.ts`, `scripts/prepare-pages.mjs`, `src/components/nav-links.ts`, `tests/shell/nav.test.ts`, `scripts/build-search-index.ts`, `scripts/verify-bundle.ts`, `scripts/build-sw-manifest.ts`, `tests/sw/manifest.test.ts`, `src/pages/today/DoneCard.tsx`, `src/pages/today/EmptyState.tsx`, `src/components/daily/DailyCard.tsx`, `src/pages/Progress.tsx`, `src/components/engine/EngineCard.tsx`, `src/components/ledger/DonateExport.tsx`, `src/pages/ForgeLab.tsx`, `src/components/engine/InstallButton.tsx`, `tests/plays/registry.test.ts`, `src/data/search-index.json`.
-- **Accept:** §2.3: /daily and /errors render placeholder pages and return HTTP 200 after prepare-pages; /play/:playId and the play block resolve ids through src/components/play/registry.ts, render nothing for an id in PENDING_PLAYS ('scheduler') and an error card for an unknown id (tested); Build gains Fleet Daily, Path gains Errors (nav test updated); the ⌘K page list has /today, /boot, /daily, /errors; verify:bundle gates /daily at 200 KB and reports /play/scheduler and /errors; build-sw-manifest precaches the /daily closure (test updated); DailyCard, EngineCard, DonateExport and InstallButton are lazy stubs that render nothing; existing routes render as before.
+**2a-02 · Routes, pages and mount points: /daily, /errors, /play/:playId by registry, nav, ⌘K pages, budgets, offline Daily, lazy mount stubs (spec §2.3)** M. Depends: 2a-07, w1:B24, w1:B25, w1:C17.
+- **Files:** `src/App.tsx`, `src/pages/Daily.tsx`, `src/pages/Errors.tsx`, `src/pages/Play.tsx`, `src/components/blocks/PlayBlock.tsx`, `src/components/play/registry.ts`, `scripts/prepare-pages.mjs`, `src/components/nav-links.ts`, `tests/shell/nav.test.ts`, `src/components/CommandPalette.tsx`, `scripts/verify-bundle.ts`, `scripts/build-sw-manifest.ts`, `tests/sw/manifest.test.ts`, `src/pages/today/DoneCard.tsx`, `src/pages/today/EmptyState.tsx`, `src/components/daily/DailyCard.tsx`, `src/pages/Progress.tsx`, `src/components/engine/EngineCard.tsx`, `src/components/ledger/DonateExport.tsx`, `src/pages/ForgeLab.tsx`, `src/components/engine/InstallButton.tsx`, `tests/plays/registry.test.ts`, `src/data/search-index.json`.
+- **Accept:** §2.3: /daily, /errors and /play/scheduler return HTTP 200 after prepare-pages (/daily and /errors as placeholder pages); /play/:playId and the play block resolve ids through src/components/play/registry.ts, render nothing for an id in PENDING_PLAYS ('scheduler') and an error card for an unknown id (tested); Build gains Fleet Daily, Path gains Errors (nav test updated); the ⌘K page list (STATIC_ITEMS in CommandPalette.tsx) has /today, /boot, /daily, /errors; verify:bundle gates /daily at 200 KB and reports /play/scheduler and /errors; build-sw-manifest precaches the /daily closure and the fleet worker bundle with the files it loads (the Daily's sessions run in it, §9.5; Vite's manifest does not list worker bundles, so the closure walk alone misses it), tests/sw/manifest.test.ts proving both; DailyCard, EngineCard, DonateExport and InstallButton are lazy stubs that render nothing and export their final props types (§2.3); ForgeLab keeps the last run's module bytes and mounts InstallButton with {lab, report, credit, bytes} after a run, so 2b-12 never edits ForgeLab.tsx; existing routes render as before. UI check (§24.1) on `/`, `/today`, `/daily`, `/errors`, `/progress`.
 
-**2a-03 · Content, item and verify scaffolding: item block type, CodeBlock permissions and alternates, table prompt parts, per-family hash fixtures, family speed budgets, verify:rust-items stub (spec §2.3, §5.1)** M. Depends: w1:B27.
-- **Files:** `src/data/lessons/types.ts`, `src/pages/lesson/blocks.tsx`, `src/pages/lesson/exercise.tsx`, `src/components/blocks/ItemBlock.tsx`, `src/lib/items/types.ts`, `src/components/items/PromptView.tsx`, `scripts/verify-generators.ts`, `tests/fixtures/items/hashes/frag.json`, `tests/fixtures/items/hashes/kv.json`, `tests/fixtures/items/hashes/roofline.json`, `tests/fixtures/items/hashes.json`, `tests/items/core.test.ts`, `tests/items/frag.test.ts`, `tests/items/kv.test.ts`, `tests/items/roofline.test.ts`, `scripts/export-lessons-md.ts`, `package.json`, `scripts/verify-rust-items.ts`, `scripts/verify-determinism.ts`, `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`.
-- **Accept:** §2.3 and §5.1: ItemBlock, CodeBlockData.permissions and CodeBlockData.alt types compile; RenderBlock routes 'item' to the lazy stub; ExerciseView drops task ids the registry does not know and falls back to the link card when none remain (tested); PromptPart 'table' renders as a real <table> with a caption; Gen.budgetMs and Gen.bank are honoured by verify-generators; hash fixtures live one file per family and the old hashes.json is gone, with identical rows; a family with hashFixture 'deferred' warns instead of failing; the exporter writes item blocks (title plus 'practice with new numbers in the lesson') and code alternates, and is byte-identical for every existing lesson; verify:rust-items exists and prints 'pending: 2c-04'; verify-determinism scans src/lib/kv-zoo.ts and src/lib/learner/item-block.ts.
+**2a-03 · Content, item and verify scaffolding: item block type, CodeBlock permissions and alternates, table prompt parts, per-family hash fixtures, family speed budgets, verify:rust-items stub (spec §2.3, §5.1)** M. Depends: 2a-07, w1:B27.
+- **Files:** `src/data/lessons/types.ts`, `src/pages/lesson/blocks.tsx`, `src/pages/lesson/exercise.tsx`, `src/components/blocks/ItemBlock.tsx`, `src/lib/items/types.ts`, `src/components/items/PromptView.tsx`, `scripts/verify-generators.ts`, `tests/fixtures/items/hashes/frag.json`, `tests/fixtures/items/hashes/kv.json`, `tests/fixtures/items/hashes/roofline.json`, `tests/fixtures/items/hashes.json`, `tests/items/core.test.ts`, `tests/items/frag.test.ts`, `tests/items/kv.test.ts`, `tests/items/roofline.test.ts`, `scripts/export-lessons-md.ts`, `package.json`, `scripts/verify-rust-items.ts`, `scripts/verify-determinism.ts`, `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `src/lib/sims/registry.ts`, `tests/sims/registry.test.ts`.
+- **Accept:** §2.3 and §5.1: ItemBlock, CodeBlockData.permissions ({trace}), CodeBlockData.alt and CodeBlockData.align (QuizQuestion[]) types compile; RenderBlock routes 'item' to the lazy stub; PENDING_TASK_IDS in src/lib/sims/registry.ts holds the six zoo task ids of §11.4, tests/sims/registry.test.ts accepts an exercise block that lists a pending id and fails once a pending id is registered, ExerciseView renders nothing for a block whose ids are all pending and otherwise drops unknown ids, falling back to the link card when none remain (tested); PromptPart 'table' renders as a real <table> with a caption, and the 'code' part gains numbered lines with one marked line; Gen.budgetMs and Gen.bank are honoured by verify-generators; hash fixtures live one file per family and the old hashes.json is gone, with identical rows; a family with hashFixture 'deferred' warns instead of failing; the exporter writes item blocks (title plus 'practice with new numbers in the lesson'), code alternates and align items (without keys, like quizzes), and is byte-identical for every existing lesson; verify:rust-items exists and prints 'pending: 2c-04'; verify-determinism scans src/lib/kv-zoo.ts and src/lib/learner/item-block.ts.
 
 **2a-04 · Wave 2 claims I: version-pinned claims (Claim.pin), engine scheduler settings, T6/T7 family constants, the token-count corpus and Qwen3 counts (spec §8.5, §5.3, §10.5)** M. Depends: this spec.
 - **Files:** `src/data/claims/schema.ts`, `src/data/claims/index.ts`, `src/data/claims/engines.ts`, `src/data/claims/serving.ts`, `src/data/claims/models.ts`, `src/data/claims/prices.ts`, `src/data/engine/token-corpus.ts`, `scripts/engine/qwen3-counts.py`, `public/claims.json`, `scripts/verify-claims.ts`, `tests/claims/pin.test.ts`, `src/data/search-index.json`.
-- **Accept:** §8.5, §5.3 and §10.5: Claim gains optional pin {repo, ref}; verify-claims fails a pinned claim whose source url does not contain pin.ref, and a status claim about engine settings without a pin; every claim listed in §5.3 and §8.5 exists with url, quote and verifiedAt, or is dropped from the card with a note in the PR (never invented); qwen3-counts.py records the tokenizer revision and reproduces every count; public/claims.json regenerated; the owner signs off the quotes in the PR.
+- **Accept:** §8.5, §5.3 and §10.5: Claim gains optional pin {repo, ref}; verify-claims fails a pinned claim whose source url does not contain pin.ref, and a status claim about engine settings without a pin; every claim listed in §5.3 and §8.5 exists with url, quote and verifiedAt, or is dropped from the card with a note in the PR (never invented); the Qwen3 vocabulary size (§10.5) and the Codespaces free core-hours of the §16.2 billing note are claims too; qwen3-counts.py records the tokenizer revision and reproduces every count; public/claims.json regenerated; the owner signs off the quotes in the PR.
 
 **2a-05 · Wave 2 claims II: attention-zoo model configs at pinned Hugging Face revisions (spec §11.2)** S-M. Depends: 2a-04.
 - **Files:** `src/data/claims/zoo.ts`, `src/data/claims/index.ts`, `public/claims.json`, `scripts/verify-claims.ts`, `src/data/search-index.json`.
 - **Accept:** §11.2: every config field the six presets need is a claim with pin {repo, ref = revision sha}, a source url into that revision's config.json and the quoted JSON line; DeepSeek-V4 ships only if its config is public at a pinned revision (otherwise the PR says so and the preset is dropped); verify:claims passes; the owner signs off the quotes.
 
 **2a-06 · Contract KCs (ids v2): the 31 KCs other PRs tag, R pairing edges, pending families (spec §4.2)** S-M. Depends: this spec.
-- **Files:** `src/data/kc/ids.ts`, `src/data/kc/index.ts`, `src/data/kc/r.ts`, `src/data/kc/t1.ts`, `src/data/kc/t4.ts`, `src/data/kc/t5.ts`, `src/data/kc/t3.ts`, `src/data/kc/t6.ts`, `src/data/kc/t7.ts`, `scripts/verify-kc.ts`, `tests/kc/verify.test.ts`, `src/data/search-index.json`.
-- **Accept:** §4.2: every id in the §4.2 table is defined with title, can, track, kind, lessons, requires and labs as listed, and exported from ids.ts; PENDING_FAMILIES gains goodput, cost, memory, spec, sig and compile; the R pairing rule holds for r.permissions and r.analyzer-limits; lab tag rules hold for kv-block-manager and bpe-tokenizer once 2c-03 tags them (readiness lessons introduce a prerequisite of their check KCs); verify:kc passes; KC count printed.
+- **Files:** `src/data/kc/ids.ts`, `src/data/kc/index.ts`, `src/data/kc/r.ts`, `src/data/kc/t1.ts`, `src/data/kc/t2.ts`, `src/data/kc/t4.ts`, `src/data/kc/t5.ts`, `src/data/kc/t3.ts`, `src/data/kc/t6.ts`, `src/data/kc/t7.ts`, `scripts/verify-kc.ts`, `tests/kc/verify.test.ts`, `tests/kc/graph.test.ts`, `src/data/search-index.json`.
+- **Accept:** §4.2: every id in the §4.2 table is defined with title, can, track, kind, lessons, requires and labs as listed, and exported from ids.ts; PENDING_FAMILIES gains goodput, cost, memory, spec, sig and compile, and every gen link of the §4.2 family table is set, so each family lands later without editing a KC file (verify-kc requires Gen.kcs and Kc.gen to agree both ways); tests/kc/graph.test.ts's 60-80 size pin becomes the 200 cap; the R pairing rule holds for r.permissions and r.analyzer-limits; lab tag rules hold for kv-block-manager and bpe-tokenizer once 2c-03 tags them (readiness lessons introduce a prerequisite of their check KCs); verify:kc passes; KC count printed.
 
-**2a-07 · Accessibility harness: Playwright and axe as devDependencies, npm run a11y, e2e keyboard specs, nightly lane (spec §22.2)** S-M. Depends: 2a-03.
+**2a-07 · Accessibility harness: Playwright and axe as devDependencies, npm run a11y, e2e keyboard specs, nightly lane (spec §22.2)** S-M. Depends: this spec.
 - **Files:** `package.json`, `package-lock.json`, `playwright.config.ts`, `scripts/a11y.mjs`, `e2e/smoke.spec.ts`, `e2e/fixtures/bad-contrast.html`, `.github/workflows/nightly.yml`.
 - **Accept:** §22.2: npm run a11y -- --routes /,/today --widths 360,1280 builds, serves with vite preview, runs axe and prints violations by route, width and impact; it exits 1 on the bad-contrast fixture and 0 on the current /today; npm run e2e runs e2e/*.spec.ts with Playwright and the smoke spec reaches every control on /today by Tab; bun run test does not pick up e2e/; nightly.yml runs both and opens an issue on failure without blocking anything; versions pinned.
 
 **2a-08 · Crate verbs for your engine: radix-cache reset/insert/match and bpe-tokenizer count over ks_invoke, lab version bumps, recalibration, repacked zips (spec §10.3)** S-M. Depends: this spec.
 - **Files:** `labs/radix-cache/src/lib.rs`, `labs/radix-cache/tests/cache_tests.rs`, `labs/radix-cache/calibration.json`, `labs/bpe-tokenizer/src/lib.rs`, `labs/bpe-tokenizer/tests/tokenizer_tests.rs`, `labs/bpe-tokenizer/calibration.json`, `public/labs/radix-cache.zip`, `public/labs/bpe-tokenizer.zip`, `src/lib/wasm-lab.ts`, `labs/README.md`.
-- **Accept:** §10.3: the reference builds answer reset, insert and match (radix-cache) and count (bpe-tokenizer) exactly as specified, on a template build the new verbs trap like any unfinished check (the host reports 'not implemented yet'), probe replies are unchanged, LAB version bumped; cargo test passes on default and 32 extra seeds; calibration rerun from the private solutions (main checkout labs/_solutions, never committed); INVOKE_PROBES admits both labs; verify:labs passes (fresh zips, zero imports, expect-trap and expect-reference).
+- **Accept:** §10.3: a build with the private solution in place answers reset, insert and match (radix-cache) and count (bpe-tokenizer) exactly as specified (cargo test, run locally with labs/_solutions copied in, never committed); the template and --features reference builds trap on the new verbs like any unfinished check (the host reports 'not implemented yet'), and the bridge holds no reference logic; probe replies are unchanged, LAB version bumped; cargo test passes on default and 32 extra seeds; calibration rerun from the private solutions (main checkout labs/_solutions, never committed); INVOKE_PROBES admits both labs; verify:labs passes (fresh zips, zero imports, expect-trap and expect-reference).
 
 **2a-09 · Carry-over: make the intake-stall incident consistent with its own simulation (W3 prerequisite; spec §19.1)** S. Depends: this spec.
 - **Files:** `src/lib/fleet-week.ts`, `tests/fleet/incident-consistency.test.ts`.
@@ -1602,7 +1619,7 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2a-12 · The item block: predict first, three fresh seeds, expert skip (spec §5.2)** M. Depends: 2a-01, 2a-03.
 - **Files:** `src/components/blocks/ItemBlock.tsx`, `src/lib/learner/item-block.ts`, `tests/learner/item-block.test.ts`.
-- **Accept:** §5.2: a predict event before the first item; items on fresh seeds at the staircase level with src 'lesson'; done after 3 correct on distinct fresh seeds; new numbers always offered, nothing locks; expert skip when every block KC has R ≥ 0.9; state restored from events after reload; keys as in Today; aria-live verdicts. UI check (§24.1) on `/lesson/t7.l1`.
+- **Accept:** §5.2: a predict event before the first item; items on fresh seeds at the staircase level with src 'lesson'; done after 3 correct on distinct fresh seeds; new numbers always offered, nothing locks; expert skip when every block KC has R ≥ 0.9; state restored from events after reload; keys as in Today; aria-live verdicts. No lesson carries the block until level 2, so its route check and keyboard walk run in 2a-32 (e2e/item-block.spec.ts).
 
 **2a-13 · Generator family: goodput (spec §5.3)** S-M. Depends: 2a-03, 2a-04, 2a-06.
 - **Files:** `src/lib/items/families/goodput.ts`, `tests/items/goodput.test.ts`, `tests/fixtures/items/hashes/goodput.json`.
@@ -1621,12 +1638,12 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 - **Accept:** §5.3 (spec): every variant at levels 0-3 with its ratio rules and pins; KCs t6.spec-acceptance, t5.speculative-decoding; real-world numbers only through claimNumber/atlasRow, scenario numbers in SYNTHETIC; choice variants pass the B27 cue gate; verify:generators passes at 1,000 seeds; chunk ≤ 8 KB gzip, printed; serves the item blocks of t6.l6, t5.l8.
 
 **2a-17 · Tickets v2: spiral pools for every track and the five track-end spirals (spec §6.2)** S. Depends: 2a-06.
-- **Files:** `src/lib/learner/ticket.ts`, `tests/learner/ticket.test.ts`.
-- **Accept:** §6.2: earlierKcsOf draws from the lesson's track and every track before it in TRACK_RANK (not T0-T2 only); planTicket builds 8-item spirals for t3.l7, t4.l7, t5.l10, t6.l10 and t7.l5 with ≥ 2 non-MCQ items; existing T0-T2 behaviour unchanged (fixtures).
+- **Files:** `src/lib/learner/ticket.ts`, `tests/learner/ticket.test.ts`, `tests/kc/scope.test.ts`.
+- **Accept:** §6.2: earlierKcsOf draws from the lesson's track and every track before it in TRACK_RANK (not T0-T2 only); planTicket builds 8-item spirals with ≥ 2 non-MCQ items for fixture lessons shaped like t3.l7, t4.l7, t5.l10, t6.l10 and t7.l5 (the real five are checked in 2a-32, after content lands); existing T0-T2 behaviour unchanged (fixtures); the 'T3-T7 keep the checkpoint until Wave 2: none has a ticket' tripwire leaves tests/kc/scope.test.ts, so the level-2 content tasks can add tickets.
 
 **2a-18 · verify-items v2: every learner-facing multiple-choice pool, and blind strategies ≤ 2/68 enforced (spec §6.5)** M. Depends: 2a-10, 2a-03.
 - **Files:** `scripts/verify-items.ts`, `scripts/baselines/verify-items.json`, `tests/items/verify-items.test.ts`.
-- **Accept:** §6.5: collects lesson quizzes, prequestions, predictAt options, spiral items, placement anchors, errata items, every src/data/forge/*/primm.ts PRIMM_MC_ITEMS and the Act IV menus; every strategy's expected lessons passed ≤ 2.0 over the lesson pool fails above (no longer printed only); always-B stays inside its 2-SD band; item-level cue limits per pool; prints the Wave 2 bar line; verify:items passes on this tree.
+- **Accept:** §6.5: collects lesson quizzes, prequestions, predictAt options, spiral items, placement anchors, errata items, every src/data/forge/*/primm.ts PRIMM_MC_ITEMS, alignment items on code blocks (CodeBlockData.align, item-level rules; a fixture proves an align item without a why per option fails) and the Act IV menus; every strategy's expected lessons passed ≤ 2.0 over the lesson pool fails above (no longer printed only); always-B stays inside its 2-SD band; item-level cue limits per pool; prints the Wave 2 bar line; verify:items passes on this tree.
 
 **2a-19 · Carry-over: finish the units sweep in T1-T3 prose (spec §19.3)** S-M. Depends: w1:B14, w1:B15, w1:B16.
 - **Files:** `src/data/lessons/t1/*.ts`, `src/data/lessons/t2/*.ts`, `src/data/lessons/t3/*.ts`, `public/lessons-md/t1.*.md`, `public/lessons-md/t2.*.md`, `public/lessons-md/t3.*.md`, `src/data/search-index.json`.
@@ -1634,11 +1651,11 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2a-20 · Watcher backtest harness: 20-repo watchlist, fixed 8-week snapshot, matcher, scoring (spec §18)** S. Depends: this spec.
 - **Files:** `scripts/landscape/watchlist.ts`, `scripts/landscape/fetch.ts`, `scripts/landscape/match.ts`, `scripts/landscape/score.ts`, `docs/backtest/snapshot.json`, `docs/backtest/candidates.json`, `docs/prereg/watcher.md`, `tests/landscape/match.test.ts`.
-- **Accept:** §18: fetch.ts writes a committed snapshot of every release in the fixed window for the 21 repos; match.ts is pure and flags candidates with lesson and claim ids (tested on fixtures, including llm-d's fs-connector deprecation); score.ts computes precision and recall from a ratings file and refuses ratings that list matcher output; docs/prereg/watcher.md states the keep bar for owner sign-off before scoring.
+- **Accept:** §18: fetch.ts writes a committed snapshot of every release in the fixed window for the 20 repos of the watchlist (Dynamo included); match.ts is pure and flags candidates with lesson and claim ids (tested on fixtures, including llm-d's fs-connector deprecation); score.ts computes precision and recall from a ratings file and refuses ratings that list matcher output; docs/prereg/watcher.md states the keep bar for owner sign-off before scoring.
 
 **2a-21 · Partner instrumentation v2: Wave 2 selectors, redacted donation with day offsets, partner report (spec §20)** M. Depends: 2a-01, 2a-02, w1:C19.
 - **Files:** `src/lib/learner/outcomes.ts`, `src/lib/learner/redact.ts`, `scripts/partner-report.ts`, `src/components/ledger/DonateExport.tsx`, `tests/learner/outcomes.test.ts`, `tests/learner/redact.test.ts`.
-- **Accept:** §20: selectRetention30, selectBootToFirstT, selectPlacementLanding, selectPlacementConfirm7, selectTicketStats, selectTodayStats, selectProveRate and selectDailyStats on fixture ledgers; redactForPartner keeps only the §20.2 whitelist with day offsets (a test proves no free text, hash, seed, device id or calendar date survives); the Donate button previews then downloads; partner-report prints the §23 field-gate table with n and Wilson intervals from full or redacted exports.
+- **Accept:** §20: selectRetention30, selectBootToFirstT, selectPlacementLanding, selectPlacementConfirm7, selectTicketStats, selectTodayStats, selectProveRate and selectDailyStats on fixture ledgers; redactForPartner keeps only the §20.2 whitelist with day offsets (a test proves no free text, hash, seed, device id or calendar date survives); the Donate button previews then downloads; partner-report prints the §23 field-gate table with n and Wilson intervals from full or redacted exports. UI check (§24.1) on `/progress`.
 
 **Level 2**
 
@@ -1646,7 +1663,7 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 - **Files:** `src/data/lessons/t3/*.ts`, `public/lessons-md/t3.*.md`, `src/data/search-index.json`.
 - **Accept:** §6.1 and §17.4: every T3 checkpoint item carries kcs; every lesson has 2-3 Lesson.kcs and a ticket with 2 constructed responses; t3.l7 is a spiral with ≥ 4 spiral items; t3.l1 opens with retrieval of r.ownership-moves, r.borrow-rules and r.lifetimes and drops the duplicated longest<'a>/Block<'a> material; t3.l4 gets a 'Build this' line for lab 05; titles and hooks unchanged; verify:kc and verify:items pass; exporter fresh; the owner reviews every new item.
 
-**2a-23 · Content T4 and P1 for T4: tags, tickets, the t4.l7 spiral, prequestions and predictAt (spec §6.1, §6.3)** M. Depends: 2a-11, 2a-17.
+**2a-23 · Content T4 and P1 for T4: tags, tickets, the t4.l7 spiral, prequestions and predictAt (spec §6.1, §6.3)** M. Depends: 2a-11, 2a-15, 2a-17.
 - **Files:** `src/data/lessons/t4/*.ts`, `public/lessons-md/t4.*.md`, `src/data/search-index.json`.
 - **Accept:** §6.1 and §6.3: as 2a-22 for T4, plus a predict block of 2 prequestions on all 7 lessons and predictAt on the 5 T4 diagrams of §6.3; roofline items as the ticket non-MCQ where the family covers a lesson KC; verify:kc and verify:items pass; exporter fresh.
 
@@ -1677,16 +1694,16 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 - **Accept:** §7.1: frontier probes on t6.fp4-capacity and t7.goodput after the six core KCs; misconception ids recorded from T3-T7 lures; ≤ 20 items; the property test (10,000 random placement results × 3 paths × random completion prefixes) proves recommend() and pathPlan never put r.l1 first for a placed learner unless the anchor was missed and the path includes R; an always-B learner places no further than T0. UI check (§24.1) on `/curriculum?placement=1`.
 
 **2a-30 · Up Next everywhere, paths v2, Boot to the first T lesson, ⌘K v2 (spec §7.2-7.4)** M. Depends: 2a-22, 2a-23, 2a-24, 2a-25, 2a-26, 2a-27, 2a-28, w1:B22, w1:B24, w1:B25.
-- **Files:** `src/lib/learner/recommend.ts`, `src/lib/learner/paths.ts`, `src/lib/learner/today.ts`, `src/lib/learner/summary.ts`, `src/components/learner/UpNextCard.tsx`, `src/pages/today/DoneCard.tsx`, `src/pages/today/EmptyState.tsx`, `src/pages/Home.tsx`, `src/pages/boot/You.tsx`, `src/data/search-index.json`, `scripts/build-search-index.ts`, `tests/learner/recommend.test.ts`, `tests/learner/paths.test.ts`.
-- **Accept:** §7.2-7.4: upNextFor is gone and recommend() drives Today, Home, the lesson footer and Curriculum; rule 4 offers lab 01-03 stages and rule 5 also proposes the scheduler play after t5.l7; Boot's last step and Today's empty state name the path's first T lesson (or its braided R partner); the printed full-ramp braid still never has 3 consecutive R lessons; ⌘K finds T3-T7 KCs, the scheduler play, the Daily and the Errors page; verify:search-index passes. UI check (§24.1) on `/today`, `/`, `/boot`.
+- **Files:** `src/lib/learner/recommend.ts`, `src/lib/learner/paths.ts`, `src/lib/learner/today.ts`, `src/lib/learner/summary.ts`, `src/components/learner/UpNextCard.tsx`, `src/pages/today/DoneCard.tsx`, `src/pages/today/EmptyState.tsx`, `src/pages/Home.tsx`, `src/pages/boot/You.tsx`, `src/data/search-index.json`, `scripts/build-search-index.ts`, `tests/learner/recommend.test.ts`, `tests/learner/paths.test.ts`, `src/pages/Today.tsx`, `src/components/CommandPalette.tsx`.
+- **Accept:** §7.2-7.4: upNextFor is gone (its caller is Today.tsx) and recommend() drives Today, Home, the lesson footer and Curriculum; rule 4 offers the next stage of any lab whose labs.ts checks carry stages (lab 01 in this tree; labs 02-03 join when 2c-03 lands, proven with a fixture lab) and rule 5 proposes a registered, undebriefed play after its host lesson (the scheduler play after t5.l7 once 2b-11 registers it, proven with a fixture registry); Boot's last step and Today's empty state name the path's first T lesson (or its braided R partner); the printed full-ramp braid still never has 3 consecutive R lessons; ⌘K finds T3-T7 KCs, every play in PLAYS (the scheduler play once 2b-11 lands and the merged index is regenerated), the Daily and the Errors page; verify:search-index passes. UI check (§24.1) on `/today`, `/`, `/boot`.
 
 **2a-31 · Rings v2: RING 1, RING 0 and ROOT from the ledger (spec §6.4)** S-M. Depends: 2a-01, 2a-22, 2a-23, 2a-24, 2a-25, 2a-26, 2a-27, 2a-28.
-- **Files:** `src/lib/economy.ts`, `src/lib/economy-table.ts`, `src/pages/Progress.tsx`, `tests/economy/rings.test.ts`.
+- **Files:** `src/lib/economy.ts`, `src/lib/economy-table.ts`, `src/pages/Progress.tsx`, `tests/economy/rings.test.ts`, `tests/economy/table.test.ts`.
 - **Accept:** §6.4: selectRings earns RING 1, RING 0 and ROOT exactly as specified on fixtures (never revoked, never gating, amber below 0.8 predicted recall); SPIRAL_LESSONS gains the five spirals; Progress shows each ring's checklist with links and Progress's UpNext becomes UpNextCard; the ring chip stays snapshot-only (imports test). UI check (§24.1) on `/progress`.
 
-**2a-32 · Scope and hands-on gates: every lesson tagged, T3-T7 tickets, T4-T5 prequestions, ≥ 10/15 T6/T7 hands-on (spec §5.4, §23)** S. Depends: 2a-22, 2a-23, 2a-24, 2a-25, 2a-26, 2a-27, 2a-28.
-- **Files:** `tests/kc/scope.test.ts`, `tests/kc/hands-on.test.ts`, `scripts/verify-kc.ts`.
-- **Accept:** §5.4 and §23: all 68 lessons set Lesson.kcs and every checkpoint item is tagged (verify-kc now requires it, not opt-in); T0-T7 lessons have a ticket; T0, T1, T4 and T5 lessons have a predict block; the hands-on test counts ≥ 10 of the 15 T6/T7 lessons by the §5.4 definition and prints the list.
+**2a-32 · Scope and hands-on gates: every lesson tagged, T3-T7 tickets, T4-T5 prequestions, ≥ 10/15 T6/T7 hands-on; keyboard walks for an item block and a ticket (spec §5.4, §22.2, §23)** S-M. Depends: 2a-22, 2a-23, 2a-24, 2a-25, 2a-26, 2a-27, 2a-28.
+- **Files:** `tests/kc/scope.test.ts`, `tests/kc/hands-on.test.ts`, `scripts/verify-kc.ts`, `e2e/item-block.spec.ts`, `e2e/ticket.spec.ts`.
+- **Accept:** §5.4 and §23: all 68 lessons set Lesson.kcs and every checkpoint item is tagged (verify-kc now requires it, not opt-in); T0-T7 lessons have a ticket; T0, T1, T4 and T5 lessons have a predict block; the hands-on test counts ≥ 10 of the 15 T6/T7 lessons by the §5.4 definition and prints the list; planTicket builds 8 items with ≥ 2 non-MCQ for each of the five real spirals (t3.l7, t4.l7, t5.l10, t6.l10, t7.l5); e2e/item-block.spec.ts (t7.l1) and e2e/ticket.spec.ts (a T3 ticket) pass by keyboard alone at 360 px. UI check (§24.1) on `/lesson/t7.l1`, `/lesson/t3.l2`.
 
 #### PR 2b: the World
 
@@ -1694,11 +1711,11 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2b-01 · The BurstGPT busiest-minute artifact and scheduler traces: practice minute, fresh BurstGPT-shaped minutes, band (spec §8.2)** S-M. Depends: this spec.
 - **Files:** `scripts/build-traces.py`, `public/traces/burstgpt-v2-busiest-minute.json`, `public/traces/README.md`, `scripts/verify-traces.ts`, `src/lib/world/sched-traces.ts`, `tests/world/sched-traces.test.ts`.
-- **Accept:** §8.2: build-traces.py emits the minute artifact from the pinned BurstGPT source (sha256 checked), 40 rows evenly sampled from the busiest aligned 60 s, schema 1 with requestSha256; verify-traces pins it; drawSchedTrace(entropy) resamples from the busiest-hour rows by rejection sampling into the §8.2 band (acceptance rate printed); deterministic per seed.
+- **Accept:** §8.2: build-traces.py emits the minute artifact from the pinned BurstGPT source (sha256 checked), 40 rows evenly sampled from the busiest aligned 60 s, schema 1 with requestSha256; verify-traces pins it; drawSchedTrace(entropy) resamples from the busiest-hour rows by rejection sampling into the §8.2 band (acceptance rate printed); deterministic per seed; the artifact records the source minute's request count, which the play's 'N of M sampled' line reads (never a literal).
 
 **2b-02 · Scheduler world: lockstep model over the Fleet Engine, hidden reference ghost, first-divergence debrief, Compose compiler and the equivalence proof [Opus first: approve the turn rule and the debrief sentences on 50 banded seeds]** L. Depends: 2b-01.
 - **Files:** `src/lib/world/sched.ts`, `src/lib/world/sched-policy.ts`, `src/lib/world/types.ts`, `tests/world/sched.test.ts`, `tests/world/sched-policy.test.ts`.
-- **Accept:** §8.3-8.4: a LockstepModel whose state is a decision log replayed through Engine (pure); turns only at admissible iterations, 60-turn cap, skip after 5 turns; the ghost is referenceScheduler and stays hidden; schedDivergence names the outcome and the decision with the §8.3 sentence templates; compileSchedPolicy({order: 'sjf', guard: 2000, headroom: 48, preempt: 'none'}) returns the same SchedAction as referenceScheduler at every iteration on the practice minute, 1,000 banded seeds and 100 Fleet Week CFG traces; deterministic.
+- **Accept:** §8.3-8.4: a LockstepModel whose state is a decision log replayed through Engine (pure); turns only at admissible iterations, 60-turn cap, skip after 5 turns; the ghost is referenceScheduler and stays hidden; schedDivergence names the outcome and the decision with the §8.3 sentence templates; compileSchedPolicy({order: 'sjf', guard: 2000, headroom: 48, preempt: 'none'}) returns the same SchedAction as referenceScheduler at every iteration on the practice minute, 1,000 banded seeds and 100 Fleet Week CFG traces (CFG is module-private: the test copies its values, and 2b-02 never edits fleet-week.ts, which 2b-03 owns at this level); the learner's decisions reach Engine through a replaying SchedulerDriver, with no edit to fleet-model.ts; deterministic.
 
 **2b-03 · Fault physics in the Fleet engine: FaultSpec v2 (pool-shrink, drain-stall, tenant-burst, straggler, admission-greedy) and the injector moved to world/faults [Opus first: confirm each fault moves the metrics its catalog entry claims]** M. Depends: this spec.
 - **Files:** `src/lib/fleet-model.ts`, `src/lib/world/faults.ts`, `src/lib/fleet-week.ts`, `tests/world/faults.test.ts`.
@@ -1714,7 +1731,7 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2b-06 · Attention Zoo second reader: an independent reading of the six configs (spec §11.3)** S. Depends: this spec.
 - **Files:** `scripts/zoo/second-reader.ts`, `tests/fixtures/zoo/second-reader.json`.
-- **Accept:** §11.3: written without reading src/lib/kv-zoo.ts or src/data/claims/zoo.ts; downloads each config.json at the pinned revision (sha256 recorded), derives bytes per token and per-step reads at the four contexts by hand-written per-model arithmetic, and commits the fixture with the revision shas.
+- **Accept:** §11.3: scripts/zoo/second-reader.ts imports nothing under src/ (a test greps it) and takes only the (repo, revision sha) list it is handed; the integrator gives the task to an agent that never opens src/lib/kv-zoo.ts or src/data/claims/zoo.ts; it downloads each config.json at the pinned revision (sha256 recorded), derives bytes per token and per-step reads at the four contexts by hand-written per-model arithmetic, and commits the fixture with the revision shas.
 
 **2b-07 · Mirrors A: BatchingSim, SchedulerLab, ContentionLab (spec §12)** S-M. Depends: this spec.
 - **Files:** `src/components/sims/BatchingSim.tsx`, `src/components/sims/SchedulerLab.tsx`, `src/components/sims/ContentionLab.tsx`.
@@ -1735,20 +1752,20 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 - **Accept:** §9.2-9.4: generateIncident(ns, key) seeded by hash32; four faults first (alternates per §9.2); classify() maps readings to categories; the expert identifies the injected fault on ≥ 90% of 1,000 seeds per fault and the confusion matrix is printed; burn, expertBurn and Streetlight follow §9.3 and are deterministic for a given action log; incident-spec.ts imports nothing from fleet-model.ts (test).
 
 **2b-11 · The scheduler play: turns, queue chips, debrief, Compose dials, In-production card, registration (spec §8)** M-L. Depends: 2b-02.
-- **Files:** `src/components/play/scheduler/Play.tsx`, `src/components/play/scheduler/Queue.tsx`, `src/components/play/scheduler/Debrief.tsx`, `src/components/play/scheduler/Compose.tsx`, `src/components/play/scheduler/ProductionCard.tsx`, `src/components/play/scheduler/Mirror.tsx`, `src/components/play/registry.ts`, `src/data/plays.ts`, `scripts/verify-plays.ts`, `tests/plays/scheduler.test.ts`.
-- **Accept:** §8: playable at 360 px by tap and by keyboard; the ghost is hidden until the debrief; recordPlay for play and compose with the scheduler spec shape; per-play production rows and practice-band checks in verify-plays; 'scheduler' leaves PENDING_PLAYS; the closure is printed (reported budget 220 KB). UI check (§24.1) on `/play/scheduler`, `/lesson/t5.l7`.
+- **Files:** `src/components/play/scheduler/Play.tsx`, `src/components/play/scheduler/Queue.tsx`, `src/components/play/scheduler/Debrief.tsx`, `src/components/play/scheduler/Compose.tsx`, `src/components/play/scheduler/ProductionCard.tsx`, `src/components/play/scheduler/Mirror.tsx`, `src/components/play/registry.ts`, `src/data/plays.ts`, `scripts/verify-plays.ts`, `tests/plays/scheduler.test.ts`, `tests/plays/play.test.ts`, `e2e/scheduler.spec.ts`.
+- **Accept:** §8: playable at 360 px by tap and by keyboard; the ghost is hidden until the debrief; recordPlay for play and compose with the scheduler spec shape; per-play production rows and practice-band checks in verify-plays; 'scheduler' leaves PENDING_PLAYS (tests/plays/play.test.ts's PLAY_IDS pin updated); e2e/scheduler.spec.ts plays the practice minute to the debrief by keyboard alone at 360 px; the closure is printed (reported budget 220 KB). t5.l7's play block arrives with 2a and is checked at integration. UI check (§24.1) on `/play/scheduler`.
 
 **2b-12 · Your engine UI: the 2D schematic, install from ForgeLab, persistent slots on /fleet, the Progress card (spec §10.4)** M. Depends: 2b-04.
 - **Files:** `src/components/engine/EngineSchematic.tsx`, `src/components/engine/EngineCard.tsx`, `src/components/engine/InstallButton.tsx`, `src/pages/Fleet.tsx`, `tests/engine/schematic.test.ts`.
 - **Accept:** §10.4: eight boxes in pipeline order, grey for reference and mint for yours, each with lab, short sha and install date, plus a DOM list mirror; InstallButton appears on ForgeLab only after an unseen-seed pass and installs through the store; /fleet slots come from the store and survive a reload. UI check (§24.1) on `/fleet`, `/progress`.
 
 **2b-13 · Attention Zoo UI: the zoo machine in KvCacheSim, two curves with a table mirror, outcome tasks, phone model, second-reader check (spec §11.4)** M. Depends: 2b-05, 2b-06.
-- **Files:** `src/components/sims/KvCacheSim.tsx`, `src/components/sims/kvZoo.tasks.ts`, `src/components/sims/ZooChart.tsx`, `src/lib/sims/models/zoo.ts`, `tests/sims/kv.test.ts`, `tests/sims/zoo.test.ts`.
-- **Accept:** §11.4: presets plus a paste-config box (parse errors named); capacity and per-step read curves from 1k to 1M tokens with a stepper; the six outcome tasks with log-scored predictions; phone canonical outcomes; kv-zoo's preset numbers equal the second reader's fixture exactly; the calc and blocks machines unchanged. UI check (§24.1) on `/lab/kv-calc`, `/lesson/t5.l4`.
+- **Files:** `src/components/sims/KvCacheSim.tsx`, `src/components/sims/kvZoo.tasks.ts`, `src/components/sims/ZooChart.tsx`, `src/lib/sims/models/zoo.ts`, `tests/sims/kv.test.ts`, `tests/sims/zoo.test.ts`, `src/lib/sims/registry.ts`, `tests/sims/registry.test.ts`.
+- **Accept:** §11.4: presets plus a paste-config box (parse errors named); capacity and per-step read curves from 1k to 1M tokens with a stepper; the six outcome tasks with log-scored predictions; phone canonical outcomes; kv-zoo's preset numbers equal the second reader's fixture exactly; the six zoo ids leave PENDING_TASK_IDS; the calc and blocks machines unchanged. t5.l4's zoo block arrives with 2a and is checked at integration. UI check (§24.1) on `/lab/kv-calc` (zoo machine selected).
 
 **2b-14 · kv family v2: mla-bytes, swa-capacity and linear-state variants (spec §11.5)** S. Depends: 2b-05.
 - **Files:** `src/lib/items/families/kv.ts`, `tests/items/kv.test.ts`, `tests/fixtures/items/hashes/kv.json`.
-- **Accept:** §11.5: three new variants at levels 0-3 with ratio rules (kv.mla-as-gqa, kv.window-ignored, kv.state-grows) and pins against kv-zoo's presets; existing variants' instances unchanged except the version field; verify:generators passes.
+- **Accept:** §11.5: three new variants at levels 0-3 with ratio rules (kv.mla-as-gqa, kv.window-ignored, kv.state-grows) and pins against kv-zoo's presets, assessing the kv family's existing KCs (t5.kv-bytes-per-token for mla-bytes and linear-state, t5.kv-capacity for swa-capacity), so no KC file changes; existing variants' instances unchanged except the version field; verify:generators passes.
 
 **Level 2**
 
@@ -1766,19 +1783,19 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **Level 3**
 
-**2b-17 · Act IV as probe drills on unseen seeds; first-call-only credit and the static MCQ incidents retired (spec §9.8)** M. Depends: 2b-09, 2b-10, 2b-15.
-- **Files:** `src/lib/fleet-week.ts`, `src/pages/FleetWeek.tsx`, `src/workers/sim-protocol.ts`, `src/workers/sim.worker.ts`, `tests/fleet/act4.test.ts`, `tests/learner/fleet-incident-credit.test.ts`.
-- **Accept:** §9.8: a drill opens an incident session on reference components with a freshSeed() drawn at drill start; the old incident job and loadIncident are removed; the act passes after one passed drill on each of three distinct faults; a practice-seed drill never counts (test); completeFleetWeekAct('incident', score, {seed, provenance: 'unseen'}); INCIDENTS keeps its export shape with the shared menus; verify:items passes on the new menus. UI check (§24.1) on `/week`.
-
 **2b-19 · The Fleet Daily: alert, hypothesis, probes on a budget, fix, debrief, share string, Today card (spec §9.7)** M-L. Depends: 2b-15, 2b-09, 2a-07.
 - **Files:** `src/pages/Daily.tsx`, `src/components/daily/Alert.tsx`, `src/components/daily/Hypothesis.tsx`, `src/components/daily/ProbeBar.tsx`, `src/components/daily/FixMenu.tsx`, `src/components/daily/Debrief.tsx`, `src/components/daily/ShareString.tsx`, `src/components/daily/DailyCard.tsx`, `src/lib/world/daily.ts`, `tests/world/daily.test.ts`, `e2e/daily.spec.ts`.
-- **Accept:** §9.7: one incident per local date from generateIncident('daily', date); hypothesis before the first probe; probes and fixes advance the clock; recordIncident once per date (replays are practice and write nothing); share string 'KS-Daily #N · P probes · burn B%' copied or shared; DailyCard on Today's done card and empty state; /daily closure ≤ 200 KB; e2e/daily.spec.ts completes a pinned date's Daily by keyboard alone at 360 px. UI check (§24.1) on `/daily`, `/today`.
+- **Accept:** §9.7: one incident per local date from generateIncident('daily', date); hypothesis before the first probe; probes and fixes advance the clock; recordIncident once per date (replays are practice and write nothing); the flow components (Alert, Hypothesis, ProbeBar, FixMenu, Debrief) take the session and the incident's source as props, so Act IV's drills (2b-17) reuse them; share string 'KS-Daily #N · P probes · burn B%' copied or shared; DailyCard on Today's done card and empty state; /daily closure ≤ 200 KB; e2e/daily.spec.ts completes a pinned date's Daily by keyboard alone at 360 px. UI check (§24.1) on `/daily`, `/today`.
 
 **2b-20 · Your components in the Fleet: the prefix router from radix-cache and the token-count check from bpe-tokenizer (spec §10.3, §10.5)** M. Depends: 2b-12, 2b-15, 2a-08.
-- **Files:** `src/lib/fleet-model.ts`, `src/pages/fleet/drivers.ts`, `src/lib/fleet-host.ts`, `src/components/engine/TokenizerCompare.tsx`, `tests/fleet/router.test.ts`, `tests/engine/tokenizer-compare.test.ts`.
-- **Accept:** §10.3 and §10.5: a RouterDriver hook in Cluster; makeWasmRouter keeps one radix instance per worker and routes by longest match with the load guard, and agrees with WorkerPrefixCache on a conformance trace with the reference module; makeWasmTokenCounter counts the corpus; TokenizerCompare shows your counts beside the Qwen3 claims and records the gap explanation; old module versions get the rebuild message.
+- **Files:** `src/lib/fleet-model.ts`, `src/pages/fleet/drivers.ts`, `src/lib/fleet-host.ts`, `src/components/engine/TokenizerCompare.tsx`, `tests/fleet/router.test.ts`, `tests/engine/tokenizer-compare.test.ts`, `src/workers/fleet-protocol.ts`, `src/lib/fleet-session.ts`.
+- **Accept:** §10.3 and §10.5: a RouterDriver hook in Cluster; makeWasmRouter keeps one radix instance per worker and routes by longest match with the load guard, and agrees with WorkerPrefixCache on a conformance trace with a JS stand-in that answers reset, insert and match (the fakeLab pattern of tests/forge/fixtures.ts; no wasm built from a private solution is ever committed); makeWasmTokenCounter counts the corpus, tested the same way; fleet sessions (incident opens included) carry the prefix-router slot; TokenizerCompare shows your counts beside the Qwen3 claims and records the gap explanation; old module versions get the rebuild message.
 
 **Level 4**
+
+**2b-17 · Act IV as probe drills on unseen seeds; first-call-only credit and the static MCQ incidents retired (spec §9.8)** M. Depends: 2b-09, 2b-10, 2b-15, 2b-19.
+- **Files:** `src/lib/fleet-week.ts`, `src/pages/FleetWeek.tsx`, `src/workers/sim-protocol.ts`, `src/workers/sim.worker.ts`, `tests/fleet/act4.test.ts`, `tests/learner/fleet-incident-credit.test.ts`, `tests/fleet/incident-consistency.test.ts`.
+- **Accept:** §9.8: a drill opens an incident session on reference components with a freshSeed() drawn at drill start and is played with the Daily's flow components (2b-19); the old incident job and loadIncident are removed, and tests/fleet/incident-consistency.test.ts goes with them (its drain claims live on in the drain-stall row of the separability test); the act passes after one passed drill on each of three distinct faults; a practice-seed drill never counts (test); completeFleetWeekAct('incident', score, {seed, provenance: 'unseen'}); INCIDENTS keeps its export shape with the shared menus; verify:items passes on the new menus. UI check (§24.1) on `/week`.
 
 **2b-21 · The Daily on your engine, and Act I requires one of your components (spec §9.7, §10.6)** M. Depends: 2b-17, 2b-19, 2b-20.
 - **Files:** `src/lib/world/daily.ts`, `src/components/daily/Debrief.tsx`, `src/pages/Daily.tsx`, `src/lib/fleet-week.ts`, `src/pages/FleetWeek.tsx`, `tests/fleet/act1.test.ts`, `tests/world/daily-own.test.ts`.
@@ -1794,7 +1811,7 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2c-02 · Generic forge panels and ForgeLab mounts: PRIMM, stages, reference run, ladder and Prove-it by bundle; slots for setup lanes, folder watch and the packet (spec §13.1)** M. Depends: 2c-01.
 - **Files:** `src/components/forge/PrimmPanel.tsx`, `src/components/forge/StagePanel.tsx`, `src/components/forge/ReferenceRun.tsx`, `src/components/forge/HintLadder.tsx`, `src/components/forge/ProveIt.tsx`, `src/components/forge/SetupLanes.tsx`, `src/components/forge/FolderWatch.tsx`, `src/components/forge/AskPacket.tsx`, `src/pages/ForgeLab.tsx`, `tests/forge/panels.test.ts`.
-- **Accept:** §13.1: every panel takes a bundle and contains no lab 01 import; ForgeLab mounts the panels for any lab whose bundle exists and keeps C17's behaviour for lab 01 and every other lab; SetupLanes renders today's setup copy unchanged, FolderWatch and AskPacket are stubs; the InstallButton mount from 2a-02 stays. UI check (§24.1) on `/forge/rust-allocator`.
+- **Accept:** §13.1: every panel takes a bundle and contains no lab 01 import; ForgeLab mounts the panels for any lab whose bundle exists and keeps C17's behaviour for lab 01 and every other lab; SetupLanes renders today's setup copy unchanged, FolderWatch and AskPacket are stubs; all three export their final props types and ForgeLab mounts them with those props (SetupLanes {lab}; FolderWatch {lab, onModule(file)}, which is ForgeLab's onFile, the handler a drop calls; AskPacket {lab, reports}, like HintLadder, reading the rung reached from the ledger's hint acks), so 2c-06, 2c-07 and 2c-08 never edit ForgeLab.tsx; the InstallButton mount from 2a-02 stays. UI check (§24.1) on `/forge/rust-allocator`.
 
 **2c-03 · Labs 02-03 metadata and stage markers: labs.ts stages, KCs and expectations; STAGE markers in the TODO files; repacked zips (spec §13.2-13.3)** S-M. Depends: 2a-06, 2a-08.
 - **Files:** `src/data/labs.ts`, `labs/kv-block-manager/src/manager.rs`, `labs/bpe-tokenizer/src/tokenizer.rs`, `public/labs/kv-block-manager.zip`, `public/labs/bpe-tokenizer.zip`.
@@ -1816,7 +1833,7 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2c-07 · F3d lanes: .tar.gz archives, a PowerShell one-liner, per-lab Codespaces links, lab-scoped devcontainers (spec §16.1-16.2)** M. Depends: 2c-02, 2c-03.
 - **Files:** `scripts/pack-labs.py`, `public/labs/*.tar.gz`, `public/labs/*.zip`, `.devcontainer/labs/*/devcontainer.json`, `scripts/verify-labs.ts`, `scripts/verify-guardrails.ts`, `src/components/forge/SetupLanes.tsx`, `src/pages/Forge.tsx`, `labs/README.md`.
-- **Accept:** §16.1-16.2: pack-labs writes a deterministic .tar.gz beside every zip with identical members; verify-labs and verify-guardrails check both; SetupLanes shows the POSIX, tar, PowerShell and WSL commands and a Codespaces link per lab with the billing note; each lab-scoped devcontainer builds only its crate; the artifact path shown is the workspace target/ path. UI check (§24.1) on `/forge/kv-block-manager`.
+- **Accept:** §16.1-16.2: pack-labs writes a deterministic .tar.gz beside every zip with identical members; verify-labs and verify-guardrails check both; SetupLanes shows the POSIX, tar, PowerShell and WSL commands and a Codespaces link per lab with the billing note, its free core-hours read from 2a-04's claim (never a literal); each lab-scoped devcontainer builds only its crate; the artifact path shown is the workspace target/ path. UI check (§24.1) on `/forge/kv-block-manager`.
 
 **2c-08 · Folder watch: pick the crate once, re-run on every rebuild, Chromium only, drag fallback (spec §16.3)** S. Depends: 2c-02.
 - **Files:** `src/lib/forge/watch.ts`, `src/components/forge/FolderWatch.tsx`, `tests/forge/watch.test.ts`.
@@ -1824,11 +1841,11 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2c-09 · Lab 02 (kv-block-manager): PRIMM stages, hint ladder, Prove-it v1 (spec §13.2)** M. Depends: 2c-02, 2c-03.
 - **Files:** `src/data/forge/kv-block-manager/index.ts`, `src/data/forge/kv-block-manager/primm.ts`, `src/data/forge/kv-block-manager/ladder.ts`, `src/data/forge/kv-block-manager/prove.ts`, `tests/forge/kv-block-manager.test.ts`.
-- **Accept:** §13.2: the bundle's PRIMM items, reference run on RefBlockManager, ladder (R0-R4 for the six required checks) and six Prove-it questions; verify:mentor and verify:items pass on them; stage 1 goes green in ≤ 2 min for the implementer, timed in the PR. UI check (§24.1) on `/forge/kv-block-manager`.
+- **Accept:** §13.2: the bundle's PRIMM items, reference run on RefBlockManager, ladder (R0-R4 for the six required checks) and six Prove-it questions; verify:mentor and verify:items pass on them; stage 1 is the single check paging, and the implementer's stopwatch time to green is recorded in the PR (a field measure of the 2-minute target, not a gate). UI check (§24.1) on `/forge/kv-block-manager`.
 
 **2c-10 · Lab 03 (bpe-tokenizer): PRIMM stages with an in-browser BPE reference, hint ladder, Prove-it v1 (spec §13.3)** M. Depends: 2c-02, 2c-03.
 - **Files:** `src/data/forge/bpe-tokenizer/index.ts`, `src/data/forge/bpe-tokenizer/primm.ts`, `src/data/forge/bpe-tokenizer/ladder.ts`, `src/data/forge/bpe-tokenizer/prove.ts`, `src/lib/world/bpe.ts`, `tests/forge/bpe-tokenizer.test.ts`, `tests/world/bpe.test.ts`.
-- **Accept:** §13.3: world/bpe.ts trains and encodes exactly like the harness (the 48-merge probe table and its token counts reproduced); the bundle's PRIMM, ladder (six required checks) and Prove-it; verify:mentor and verify:items pass; stage 1 ≤ 2 min, timed. UI check (§24.1) on `/forge/bpe-tokenizer`.
+- **Accept:** §13.3: world/bpe.ts trains and encodes exactly like the harness (the 48-merge probe table and its token counts reproduced); the bundle's PRIMM, ladder (six required checks) and Prove-it; verify:mentor and verify:items pass; stage 1 is the single check bytes_are_ids, and the implementer's stopwatch time to green is recorded in the PR (a field measure, not a gate). UI check (§24.1) on `/forge/bpe-tokenizer`.
 
 **2c-11 · Compile bank group moves: ~50 snippets on moves, clones and drops: E0382, E0505, E0507, the clone lure (spec §15.5)** M. Depends: 2c-04.
 - **Files:** `src/data/rust-items/snippets/moves.ts`, `src/data/rust-items/bank/moves.json`.
@@ -1861,8 +1878,8 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 **Level 2**
 
 **2c-18 · Bank freeze and the Error Museum page (spec §15.6)** S-M. Depends: 2c-05, 2c-11, 2c-12, 2c-13.
-- **Files:** `src/pages/Errors.tsx`, `src/components/rust/ErrorEntry.tsx`, `src/lib/items/families/compile.ts`, `tests/fixtures/items/hashes/compile.json`, `tests/rust/museum.test.ts`.
-- **Accept:** §15.6: the compile family's hash fixture is written and hashFixture 'deferred' removed; /errors lists one entry per error code in the bank with its snippet, permission diagram, real fix, the .clone() wrong fix and links to its R lessons, and serves compile items on that code; ≥ 3 snippets per code (test). UI check (§24.1) on `/errors`.
+- **Files:** `src/pages/Errors.tsx`, `src/components/rust/ErrorEntry.tsx`, `src/lib/items/families/compile.ts`, `tests/fixtures/items/hashes/compile.json`, `tests/rust/museum.test.ts`, `src/data/aquascope/errors.json`, `scripts/verify-rust-items.ts`.
+- **Accept:** §15.6: the compile family's hash fixture is written and hashFixture 'deferred' removed; /errors lists one entry per error code in the bank with its snippet, permission diagram, real fix, the .clone() wrong fix and links to its R lessons, and serves compile items on that code; each entry's permission diagram comes from src/data/aquascope/errors.json, extracted with 2c-05's tool (or its hand-authored fallback) and hash-checked like a lesson's; verify-rust-items' ≥ 3 snippets per error code turns from a warning into a failure here (test). UI check (§24.1) on `/errors`.
 
 #### PR 2s: stretch
 
@@ -1880,7 +1897,7 @@ PLAN §8's Wave 2 exit, each line classified. **Build gates** are provable in CI
 
 **2s-02 · F3b Miri lane for R drills, only after a go and owner approval of the CodeMirror dependency [stretch]** L. Depends: 2s-01.
 - **Files:** `src/lib/forge/miri.ts`, `src/components/forge/MiriEditor.tsx`, `scripts/miri/flatten.ts`, `package.json`, `package-lock.json`, `tests/forge/miri.test.ts`.
-- **Accept:** §21.1: a lazy chunk (CodeMirror 6 + lang-rust ≤ 170 KB gzip) only on R drill pages; the pinned download needs consent; drills report the same check ids as the zip; R1 green in ≤ 10 min for a timed first-time user recorded in the PR.
+- **Accept:** §21.1: a lazy chunk (CodeMirror 6 + lang-rust ≤ 170 KB gzip) only on R drill pages; the pinned download needs consent; drills report the same check ids as the zip. The plan's 'R1 green in ≤ 10 min' is a field gate: a first-time partner's timed run, recorded by the owner, not a build gate.
 
 **2s-04 · Team kit: facilitator notes, team Daily seeds, a paste-only team board [stretch]** S. Depends: 2b-21.
 - **Files:** `docs/team-kit/facilitator.md`, `docs/team-kit/wheel-of-misfortune.md`, `src/components/daily/TeamBoard.tsx`, `src/lib/world/daily.ts`, `tests/world/team.test.ts`.
