@@ -259,8 +259,11 @@ describe('coverage, for lessons that set Lesson.kcs', () => {
   test('a lab whose check KCs miss a readiness lesson', () => {
     const inp = input()
     kcOf(inp, KC.allocatorContract).requires = ['t1.pointers']
-    expect(has(errorsOf(inp), /lab rust-allocator: readiness lesson r\.l5 introduces no prerequisite/)).toBe(false) // r.enums-option-result names the lab itself
+    expect(has(errorsOf(inp), /lab rust-allocator: readiness lesson r\.l5 introduces no prerequisite/)).toBe(false) // r.enums-option-result is a check KC of the lab
     kcOf(inp, KC.enumsOptionResult).labs = []
+    inp.labs = inp.labs.map((lab) =>
+      lab.id === 'rust-allocator' ? { ...lab, checks: lab.checks.map((c) => ({ ...c, kcs: c.kcs?.filter((k) => k !== KC.enumsOptionResult) })) } : lab,
+    )
     expect(has(errorsOf(inp), /lab rust-allocator: readiness lesson r\.l5 introduces no prerequisite/)).toBe(true)
   })
 
