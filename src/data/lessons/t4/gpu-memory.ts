@@ -96,7 +96,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
           options: [
             'It behaves like a slower, larger L1, filled and evicted by the hardware as threads touch addresses',
             'It is programmer-managed: the kernel stages tiles in and out explicitly, scoped to one block',
-            'It is one pool visible to every SM, so blocks on different SMs can exchange data through it in a kernel',
+            'It is one pool visible to every SM on the GPU, so any two blocks can exchange data through it in a kernel',
             'It holds read-only data such as constants and instructions, which the hardware prefetches before launch',
           ],
           correct: [1],
@@ -105,7 +105,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
           why: [
             'Shared memory is on-chip SRAM with L1-class latency, not a slower cache, and nothing fills it automatically. Only the kernel\'s own stores put data there.',
             'Right: it is an addressable scratchpad. The kernel decides what to stage and when, it is visible to one block, and no hardware eviction surprises it mid-kernel.',
-            'Shared memory is per SM and scoped to a block. Other SMs cannot see it, so cross-block exchange goes through L2 and global memory.',
+            'Shared memory is physically per SM, and ordinary blocks cannot see each other\'s. Hopper clusters let only a few neighbouring SMs share, so it is no GPU-wide pool. Grid-wide exchange goes through L2 and global memory.',
             'Constants live in a separate constant space and instructions in their own cache. Shared memory is general read-write scratch for one block.',
           ],
         },

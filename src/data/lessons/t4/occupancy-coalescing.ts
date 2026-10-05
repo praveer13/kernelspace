@@ -110,7 +110,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
           q: 'A warp load where lane i reads address base + 4×i results in…',
           options: [
             '32 separate transactions, one per lane, because each lane issues its own independent load',
-            'One 128-byte transaction: perfect coalescing at full bandwidth',
+            'One 128-byte transaction: 32 consecutive words share a segment, so full bandwidth',
             'A shared-memory bank conflict, because 32 consecutive words all map onto one bank',
             'A divergent warp, since each lane computes a different address in that load',
           ],

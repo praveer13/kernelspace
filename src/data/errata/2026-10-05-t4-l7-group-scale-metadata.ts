@@ -9,6 +9,10 @@ export default {
   before: 'The quantize.py comment and a quiz key said per-group scales (group size 128) cost "+4 bits/weight of scale metadata at INT4".',
   after: 'One 16-bit scale shared by 128 weights is 16 / 128 = 0.125 bits per weight, well under one bit. That small overhead is why group 128 is the usual sweet spot.',
   why: 'Four bits per weight of metadata would double an INT4 model, which contradicts the lesson\'s own "negligible metadata overhead" and its 4× capacity claim. Scale bits are divided by the group size.',
+  source: {
+    url: 'https://arxiv.org/abs/2306.00978',
+    title: 'Lin et al., AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration (group size 128 used throughout)',
+  },
   items: [
     {
       q: 'INT4 weights share one 16-bit scale per group of 128 weights. How much scale metadata is that per weight?',
