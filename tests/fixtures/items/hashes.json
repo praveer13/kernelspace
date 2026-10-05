@@ -1,0 +1,10 @@
+{
+  "roofline": {
+    "attainable": "e571840e",
+    "batch-to-ridge": "4fd5f0fb",
+    "bound": "e1cf5c17",
+    "decode-b1": "6119396e",
+    "ridge": "14bb7e4d",
+    "tile-ai": "7b355c65"
+  }
+}
