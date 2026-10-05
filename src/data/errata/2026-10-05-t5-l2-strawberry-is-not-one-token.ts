@@ -11,6 +11,10 @@ export default {
   after:
     'Common GPT-style and Llama BPE vocabularies split "strawberry" into several multi-letter pieces. The cause is the same: the model receives ids for chunks, and the letters inside a chunk are never visible to it.',
   why: 'A wrong example invites a learner to check one tokenizer and doubt the whole lesson. The mechanism holds for any split: letters are not part of the model input.',
+  source: {
+    url: 'https://github.com/openai/tiktoken',
+    title: 'OpenAI tiktoken, run on "strawberry": cl100k_base gives str|aw|berry, o200k_base and gpt2 give st|raw|berry (checked 2026-10)',
+  },
   items: [
     {
       q: 'A model counts the r letters in "strawberry" wrongly. Which statement about its input is correct?',

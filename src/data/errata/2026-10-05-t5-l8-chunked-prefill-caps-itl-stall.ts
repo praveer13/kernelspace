@@ -15,4 +15,22 @@ export default {
     url: 'https://docs.vllm.ai/en/latest/configuration/optimization/',
     title: 'vLLM optimization guide: chunked prefill ("smaller values achieve better ITL because there are fewer prefills slowing down decodes")',
   },
+  items: [
+    {
+      q: 'Chunked prefill is on and a long prompt arrives while other requests are decoding. What happens to the running decodes?',
+      options: [
+        'They never stall, because the prompt is split so finely that decode tokens interleave with no measurable delay at any chunk size',
+        'They wait roughly one chunk of prefill per iteration rather than the whole prompt, and smaller chunk budgets give better ITL',
+        'They stall for the entire prefill, because the scheduler still finishes the whole prompt before any decode token is emitted again',
+        'They stall longer with smaller chunks, because every extra chunk adds a scheduling round that the decodes must wait through',
+      ],
+      correct: [1],
+      why: [
+        'Each iteration still carries up to one chunk of prefill work, so decodes are delayed by about that much. The stall is bounded, not removed.',
+        'Right: each iteration carries at most one prefill chunk, so decodes wait about one chunk. Smaller budgets give better ITL; larger budgets give better TTFT.',
+        'That is prefill without chunking. With chunking, decodes run in every iteration alongside one chunk, so the stall is capped at one chunk.',
+        'The direction is reversed. Smaller chunks mean fewer prefill tokens slowing each decode step, so ITL improves while TTFT gets worse.',
+      ],
+    },
+  ],
 } satisfies Erratum

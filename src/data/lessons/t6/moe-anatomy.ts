@@ -9,7 +9,7 @@ const lesson: Lesson = {
   minutes: 30,
   hook: 'DeepSeek-V3 has 256 experts and uses 8 per token. That one design decision changes every system you have learned so far — the memory math, the batching, the network, the scheduler. This is why T6 exists.',
   exercise: 'read+quiz',
-  verifiedAt: '2026-08',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
@@ -41,9 +41,9 @@ This is why MoE serving is a *scheduling and networking* discipline:
       type: 'prose',
       md: `## MLA: the other half of the DeepSeek trick
 
-T5.L4 taught you KV bytes/token = 2 × layers × kv_dim × bytes, and Llama-3-70B's 320 KB/token. DeepSeek's **Multi-head Latent Attention (MLA)** rewrites that line: instead of caching per-head K and V, the model stores one shared low-rank **latent vector** per token (~576 elements) and reconstructs per-head K/V on the fly with small up-projection matrices. KV cache per token: **~70 KB (BF16)** — 4.6× smaller than Llama-3-70B, ~7× smaller than full MHA.
+T5.L4 taught you KV bytes/token = 2 × layers × kv_dim × bytes, and Llama-3-70B's 327,680 B/token (320 KiB). DeepSeek's **Multi-head Latent Attention (MLA)** rewrites that line: instead of caching per-head K and V, the model stores one shared low-rank **latent vector** per token *per layer* (~576 elements: a 512-dim compressed latent plus a 64-dim RoPE key) and reconstructs per-head K/V on the fly with small up-projection matrices. KV cache per token: 576 × 2 B (BF16) = 1,152 B per layer × 61 layers = **70,272 B (≈70 KB)**, against 327,680 B for Llama-3-70B — about 4.7× smaller. The "×smaller than MHA" figure needs a baseline: the same 70B with full MHA (64 KV heads, 2 × 80 × 8192 × 2 B = 2,621,440 B per token) would be ≈37× bigger than MLA's 70,272 B.
 
-Run T5.L4's arithmetic again with 70 KB: the "cache is the payload" conclusion intensifies *less*, long context gets 4.6× cheaper, and the EP144 decode fleet can hold the giant batches that expert load-balancing requires. MLA is not an optimization bolted onto MoE — it is what *enables* the batch sizes MoE wants. When you design a serving stack, per-token KV bytes is the first number you ask for, and "what attention variant?" is why you had to ask.`,
+Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload" conclusion intensifies *less*, long context gets ~4.7× cheaper than Llama-3-70B, and the EP144 decode fleet can hold the giant batches that expert load-balancing requires. MLA is not an optimization bolted onto MoE — it is what *enables* the batch sizes MoE wants. When you design a serving stack, per-token KV bytes is the first number you ask for, and "what attention variant?" is why you had to ask.`,
     },
     {
       type: 'isomorphism',
@@ -112,16 +112,16 @@ Run T5.L4's arithmetic again with 70 KB: the "cache is the payload" conclusion i
           q: 'MLA\'s contribution to serving economics is…',
           options: [
             'Fused attention kernels that read the KV cache faster, so each decode step finishes sooner for the same cache size',
-            'One shared low-rank latent per token (~70 KB vs 320 KB for Llama-3-70B), so big batches and long contexts fit in far less cache',
+            'One shared low-rank latent per layer (70,272 B vs 327,680 B per token for Llama-3-70B), so far bigger batches fit in HBM',
             'A learned gate that skips low-scoring attention heads for each token, cutting both the attention FLOPs and the number of K/V bytes cached',
             'Storing the KV cache in FP8 instead of BF16, which halves the bytes per token but leaves the per-head layout unchanged',
           ],
           correct: [1],
           explanation:
-            'MLA caches one low-rank latent vector per token instead of per-head K/V. It shrinks the cache 4.6×, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
+            'MLA caches one low-rank latent vector per token instead of per-head K/V. It shrinks the cache ~4.7× against Llama-3-70B, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
           why: [
             'MLA changes what is cached, not how fast it is read. Faster kernels do not shrink KV bytes per token, so they do not raise how many sequences fit in HBM.',
-            'Right: the ~576-element latent is cached per layer (576 × 2 B ≈ 1.15 KB), so 61 layers give ≈ 70 KB per token, about 4.6× less than Llama-3-70B, and much bigger batches fit.',
+            'Right: the ~576-element latent is cached per layer (576 × 2 B = 1,152 B), so 61 layers give 70,272 B per token, about 4.7× less than Llama-3-70B\'s 327,680 B, and much bigger batches fit.',
             'MLA skips no heads. It keeps all of them and rebuilds each head\'s K and V from the shared latent with up-projections; the saving is stored bytes, not skipped compute.',
             'FP8 KV is a precision change that halves bytes. MLA changes the cached object itself to a low-rank latent, and the two choices are independent of each other.',
           ],

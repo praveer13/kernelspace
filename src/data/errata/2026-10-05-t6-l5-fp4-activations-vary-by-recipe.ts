@@ -9,7 +9,7 @@ export default {
   before:
     'T6.L5 taught that weight-only FP4 with BF16/FP8 activations is the production recipe, and that "activations stay wider in the shipped recipes".',
   after:
-    'Recipes differ. NVIDIA\'s DeepSeek-R1-FP4 quantizes the weights and activations of the linear operators in transformer blocks; Kimi K3 pairs MXFP4 weights with MXFP8 activations; vLLM\'s Blackwell default is NVFP4 W4A16.',
+    'Recipes differ: NVIDIA\'s DeepSeek-R1-FP4 quantizes weights and activations of the linear operators; Kimi K3 pairs MXFP4 weights with MXFP8 activations; vLLM v0.30 serves NVFP4 W4A16 checkpoints on SM100 via FlashInfer\'s CuTe DSL.',
   why: 'The lesson\'s own flagship example contradicts "weights only". Activations stay the riskier tensor, but whether they drop to 4 bits is a per-recipe choice, not a rule.',
   source: {
     url: 'https://huggingface.co/nvidia/DeepSeek-R1-FP4',

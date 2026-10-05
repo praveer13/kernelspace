@@ -28,9 +28,9 @@ where \`d_kv\` = num_kv_heads × head_dim (hidden size for MHA models; smaller f
 LLaMA-3-8B shape: 32 layers, 8 KV heads (GQA), head_dim 128 → \`d_kv = 8 × 128 = 1024\`. FP16:
 
 \`\`\`text
-per token  = 2 × 32 × 1024 × 2 B = 131,072 B = 128 KB
-128k ctx   = 128 KB × 131,072   ≈ 16 GB      (== the model's own weights)
-4k convo   = 128 KB × 4,096     ≈ 0.5 GB
+per token  = 2 × 32 × 1024 × 2 B = 131,072 B = 128 KiB
+128k ctx   = 128 KiB × 131,072  = 16 GiB     (≈ the model's own FP16 weights, ≈16 GB)
+4k convo   = 128 KiB × 4,096    = 0.5 GiB
 \`\`\`
 
 One 80 GB H100: 16 GB weights (FP16) + ~2 GB runtime leaves ~60 GB for KV — about **480k tokens** of cache. As 4k conversations, that's ~120 concurrent; as 128k documents, **3**. Context length is a concurrency tax, linear in both directions.`,
@@ -42,7 +42,7 @@ One 80 GB H100: 16 GB weights (FP16) + ~2 GB runtime leaves ~60 GB for KV — ab
 LLaMA-3-70B shape: 80 layers, 8 KV heads (GQA), head_dim 128 → \`d_kv = 1024\`. FP16:
 
 \`\`\`text
-per token  = 2 × 80 × 1024 × 2 B = 327,680 B = 320 KB
+per token  = 2 × 80 × 1024 × 2 B = 327,680 B = 320 KiB
 weights    = 70B × 2 B           = 140 GB    (2×80 GB GPUs, nothing left for KV)
 8 GPUs     = 640 GB − 140 GB     ≈ 500 GB KV ≈ 1.6 M tokens
 \`\`\`
@@ -53,8 +53,8 @@ Read those numbers again: to serve 70B with serious context, you need **8 GPUs �
       type: 'statline',
       stats: [
         { value: '2×L×d×b', label: 'the formula', hint: 'K and V × layers × KV dim × bytes/elem. All of T5.L4 in six symbols.' },
-        { value: '320 KB', label: '70B FP16 / token', hint: '80 layers, 8 KV heads × 128. GQA already included — MHA would be 8× worse.' },
-        { value: '40 GB', label: '70B 128k ctx', hint: 'One long document = half a GPU of cache. Capacity planning starts here.' },
+        { value: '320 KiB', label: '70B FP16 / token', hint: '80 layers, 8 KV heads × 128. GQA already included — MHA would be 8× worse.' },
+        { value: '40 GiB', label: '70B 128k ctx', hint: '≈43 GB. One long document = half a GPU of cache. Capacity planning starts here.' },
         { value: '×2 / ×4', label: 'FP8 / INT4 KV', hint: 'Cache quantization multiplies token capacity directly (T4.L7).' },
       ],
     },
@@ -137,7 +137,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
             'That drops V. Both K and V are stored, so the per-token figure has a factor of 2 and the total is about double this.',
             'That is full multi-head attention. Llama-3-70B has 8 KV heads (d_kv = 1024), so GQA already cuts the 2.5 MiB figure 8x to 320 KiB per token.',
             'Right: 2 (K and V) x 80 layers x 1024 x 2 bytes is 327,680 B (320 KiB) per token, and 131,072 tokens of that is 40 GiB.',
-            'Cache equals weights only for the 8B model at 128k (16 GiB each). For the 70B the weights are about 130 GiB and the cache is 40 GiB; the match was a coincidence.',
+            'Only the 8B model at 128k comes close: its FP16 weights are ≈16 GB (≈15 GiB), its cache 16 GiB. For the 70B, weights are about 130 GiB and the cache 40 GiB.',
           ],
         },
         {

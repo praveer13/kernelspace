@@ -4,7 +4,7 @@ export default {
   id: '2026-10-05-t5-l5-block-size-16-is-a-default',
   date: '2026-10-05',
   kind: 'error',
-  lessons: ['t5.l5'],
+  lessons: ['t1.l4', 't5.l5'],
   title: 'Block size 16 is vLLM\'s default balance, not a measured optimum the T1 simulator predicted',
   before:
     'The T5.L5 quiz explanation said "16 is the measured sweet spot — and the T1.L4 simulator predicted it".',

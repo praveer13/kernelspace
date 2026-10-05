@@ -11,6 +11,10 @@ export default {
   after:
     'The cache removes the recompute of past tokens: each step runs one new token through projections and MLP. Attention still reads all t cached K/V entries, so its FLOPs and bytes per token still grow with t.',
   why: 'Calling a step O(1) hides the cost that makes decode bandwidth-bound and long context expensive: the cache read grows with t on every token.',
+  source: {
+    url: 'https://arxiv.org/abs/2211.05102',
+    title: 'Pope et al., Efficiently Scaling Transformer Inference (the KV cache is loaded at every decode step, so memory time grows with context length)',
+  },
   items: [
     {
       q: 'With a KV cache, what does one decode step cost as the context grows from 1k to 100k tokens?',
