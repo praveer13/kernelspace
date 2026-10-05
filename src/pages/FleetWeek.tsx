@@ -7,10 +7,10 @@ import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
   ACT3_COST_LABEL,
-  EMPTY_INCIDENT_LEDGER,
   gradeMeasurementSubmission,
   gradeAct3Doc,
   gradeIncidentCall,
+  incidentLedgerFrom,
   HW_MENU,
   INCIDENTS,
   seedLabel,
@@ -90,9 +90,9 @@ function ActShell({ act, done, children }: { act: (typeof ACTS)[number]; done: b
 
 function ResultPanel({ result }: { result: ActResult }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-4 rounded-md border p-4', result.pass ? 'border-accent/50 bg-accent/10' : 'border-amber/50 bg-amber/5')}>
-      <p className={cn('font-mono text-sm', result.pass ? 'text-accent' : 'text-amber')}>
-        {result.pass ? 'PASS' : 'NOT YET'} — {result.headline}
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-4 rounded-md border p-4', result.pass ? 'border-accent/50 bg-accent/10' : result.practice ? 'border-line bg-surface-2' : 'border-amber/50 bg-amber/5')}>
+      <p className={cn('font-mono text-sm', result.pass ? 'text-accent' : result.practice ? 'text-text-2' : 'text-amber')}>
+        {result.pass ? 'PASS' : result.practice ? 'PRACTICE' : 'NOT YET'} — {result.headline}
       </p>
       <p className="mt-1 text-body-sm text-text-2">{result.detail}</p>
       <div className="mt-3 grid gap-x-6 gap-y-1 font-mono text-[11px] text-text-2 sm:grid-cols-2">
@@ -476,8 +476,11 @@ function ActIncident() {
   // cause / mitigation are authored indices; the display order is reshuffled per attempt
   const [cause, setCause] = useState<number | null>(null)
   const [mitigation, setMitigation] = useState<number | null>(null)
-  // only the first call on each incident counts; the act and its XP need all of them right on that call
-  const [ledger, setLedger] = useState(EMPTY_INCIDENT_LEDGER)
+  // only the first call on each incident counts; the act and its XP need all of them right on that call.
+  // Persisted in working state so a reload or a revisit cannot reset which incidents are already practice.
+  const stored = useProgress((s) => s.fleetWeek.measurementEvidence?.incident)
+  const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
+  const ledger = useMemo(() => incidentLedgerFrom(stored), [stored])
   const [call, setCall] = useState<IncidentCall | null>(null)
   const [seed, setSeed] = useState(freshSeed)
   const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
@@ -510,14 +513,14 @@ function ActIncident() {
     const causeOk = incident.causes[cause].correct
     const mitOk = incident.mitigations[mitigation].correct
     const graded = gradeIncidentCall(ledger, incident, causeOk, mitOk)
-    setLedger(graded.ledger)
+    if (!graded.practice) setEvidence('incident', graded.ledger)
     setCall({ causes: incident.causes, mitigations: incident.mitigations, cause, mitigation })
     // every retry gets a fresh order and a clean selection, so positions can't be memorised
     setSeed(freshSeed())
     setCause(null)
     setMitigation(null)
     finish(graded.result)
-  }, [incident, cause, mitigation, ledger, finish])
+  }, [incident, cause, mitigation, ledger, setEvidence, finish])
 
   return (
     <div>
