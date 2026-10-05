@@ -72,7 +72,7 @@ describe('fold rules (spec §6.1)', () => {
       evt('complete', 'lesson:t0.l1', T1),
       evt('visit', 'lesson:t0.l1', T3),
     ])
-    expect(agg.lessons['t0.l1']).toEqual({ done: true, completedAt: T1, lastAt: T3 })
+    expect(agg.lessons['t0.l1']).toEqual({ done: true, completedAt: T1, lastAt: T3, read: true }) // a click is read, not passed
     expect(xpOf(agg)).toBe(XP.lesson)
     expect(Object.keys(agg.days)).toEqual([]) // a click is not graded work
   })
@@ -124,13 +124,13 @@ describe('fold rules (spec §6.1)', () => {
       evt('sim-task', 'sim:sim-kv/a', T2),
       evt('sim-task', 'sim:sim-kv/b', T2),
     ])
-    expect(agg.sims['sim-kv']).toEqual({ visits: 2, tasks: { a: true, b: true } })
+    expect(agg.sims['sim-kv']).toEqual({ visits: 2, tasks: { a: true, b: true }, outcomes: {} })
     expect(xpOf(agg)).toBe(2 * XP.exercise)
   })
 
   test('labs: checks union, total max, done and completedAt from ok runs, streak only with a pass', () => {
     const none = derive([evt('lab-check', 'lab:lab-a', T1, { score: 0, ok: false, data: { passed: [], total: 4 } })])
-    expect(none.labs['lab-a']).toEqual({ checks: {}, total: 4 })
+    expect(none.labs['lab-a']).toEqual({ checks: {}, unseen: {}, total: 4 })
     expect(Object.keys(none.days)).toEqual([])
 
     const agg = derive([
@@ -138,7 +138,7 @@ describe('fold rules (spec §6.1)', () => {
       evt('lab-check', 'lab:lab-a', T3, { score: 1, ok: true, data: { passed: ['c3', 'c4'], total: 4 } }),
       evt('lab-check', 'lab:lab-a', T2, { score: 1, ok: true, data: { passed: ['c1'], total: 4 } }),
     ])
-    expect(agg.labs['lab-a']).toEqual({ checks: { c1: true, c2: true, c3: true, c4: true }, total: 4, done: true, completedAt: T2 })
+    expect(agg.labs['lab-a']).toEqual({ checks: { c1: true, c2: true, c3: true, c4: true }, unseen: {}, total: 4, done: true, completedAt: T2 })
     expect(xpOf(agg)).toBe(XP.lab)
     expect(Object.keys(agg.days).length).toBe(3)
   })
@@ -276,9 +276,12 @@ describe('view (spec §6.2)', () => {
   test('summary', () => {
     const agg = derive([
       evt('complete', 'lesson:t0.l1', T1),
+      evt('complete', 'lesson:t0.l2', T1),
+      evt('quiz', 'lesson:t0.l2', T1),
       evt('lab-check', 'lab:lab-b', T2, { data: { passed: ['c1', 'c2'], total: 2 } }),
     ])
-    expect(summary(agg)).toEqual({ lessonsDone: 1, xp: XP.lesson + XP.lab, activeDays: 1, labsDone: 1, events: 2 })
+    // lessonsDone counts passed lessons only: t0.l1 was clicked through (read)
+    expect(summary(agg)).toEqual({ lessonsDone: 1, xp: 2 * XP.lesson + XP.quiz + XP.lab, activeDays: 2, labsDone: 1, events: 4 })
   })
 
   test('economy re-exports behave as before', () => {

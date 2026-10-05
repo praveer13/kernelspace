@@ -50,13 +50,16 @@ const isPlainObject = (v: unknown): v is Record<string, Json> =>
 export function toProgressData(agg: Aggregate, working: Partial<Record<WorkingKey, Json>> = {}): ProgressData {
   const lessons: ProgressData['lessons'] = {}
   for (const [id, L] of Object.entries(agg.lessons)) {
+    // Four states (spec §8.3): reading, read (finished, not passed), done (passed). Unstarted has no record.
     const view: ProgressData['lessons'][string] = {
-      status: L.done ? 'done' : 'reading',
+      status: L.passedAt !== undefined ? 'done' : L.read ? 'read' : 'reading',
       lastVisitedAt: L.lastAt ?? '',
     }
     if (L.quizBest !== undefined) view.quizScore = L.quizBest
     if (L.exercise) view.exerciseDone = true
-    if (L.completedAt !== undefined) view.completedAt = L.completedAt
+    // A reader keeps their completion time, so change cards still reach a lesson that was only read (spec §3.4).
+    const completedAt = L.passedAt ?? (L.read ? L.completedAt : undefined)
+    if (completedAt !== undefined) view.completedAt = completedAt
     const scroll = working[`scroll:${id}`]
     if (typeof scroll === 'number') view.scrollPct = scroll
     setOwn(lessons, id, view)
@@ -127,7 +130,7 @@ export function toProgressData(agg: Aggregate, working: Partial<Record<WorkingKe
 /** Headline numbers for the import preview (spec §10.5). */
 export function summary(agg: Aggregate): ProgressSummary {
   return {
-    lessonsDone: Object.values(agg.lessons).filter((l) => l.done).length,
+    lessonsDone: Object.values(agg.lessons).filter((l) => l.passedAt !== undefined).length,
     xp: xpOf(agg),
     activeDays: Object.keys(agg.days).length,
     labsDone: Object.values(agg.labs).filter((l) => l.done).length,

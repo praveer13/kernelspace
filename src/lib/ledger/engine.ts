@@ -48,6 +48,7 @@ import type {
   EventFilter,
   EventId,
   ExportedComponent,
+  ExportOptions,
   ExportV3,
   ImportErrorCode,
   ImportMode,
@@ -558,10 +559,11 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     detail: IMPORT_ERROR_MESSAGES['read-only'],
   })
 
-  async function exportV3(opts?: { includeComponentBytes?: boolean }): Promise<ExportV3> {
+  async function exportV3(opts?: ExportOptions): Promise<ExportV3> {
+    const delta = opts?.sinceAt !== undefined
     const contents = await store.readAll()
     const components: ExportedComponent[] = []
-    for (const c of contents.components) {
+    for (const c of delta ? [] : contents.components) {
       const out: ExportedComponent = { ...c }
       if (opts?.includeComponentBytes) {
         const bytes = await store.readComponentBytes(c.sha256)
@@ -570,8 +572,8 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
       components.push(out)
     }
     const at = now()
-    const file = buildExportV3({ ...ledger(), device, exportedAt: at, components, extras: readExtras(storage) })
-    if (!guard.readOnly) {
+    const file = buildExportV3({ ...ledger(), device, exportedAt: at, components, extras: readExtras(storage), sinceAt: opts?.sinceAt })
+    if (!guard.readOnly && !delta) { // a handoff delta is not a backup, so it leaves the backup nudge alone
       const rec: MetaRecords['lastExport'] = { at, events: file.events.length }
       try {
         if (await commitMeta({ putMeta: { lastExport: rec } })) {

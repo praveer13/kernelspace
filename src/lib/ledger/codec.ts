@@ -50,7 +50,12 @@ export type Checked<T> = { ok: true; value: T } | { ok: false; reason: string }
 
 const PROVENANCES = new Set(['proved', 'unseen', 'lab-green', 'practice', 'assisted', 'field'])
 const CONFIDENCES = new Set(['guess', 'think', 'sure'])
-const ITEM_SRCS = new Set(['quiz', 'boot', 'card', 'cold'])
+const ITEM_SRCS = new Set(['quiz', 'boot', 'card', 'cold', 'today', 'ticket', 'testout', 'placement', 'pre', 'diagram', 'practice'])
+const PREDICT_SRCS = new Set(['boot', 'lesson', 'pre', 'diagram', 'placement'])
+const PLAY_PHASES = new Set(['play', 'compose'])
+const CHECK_STATUSES = new Set(['pass', 'fail', 'trap', 'timeout'])
+const MAX_KCS = 6
+const MAX_NSEC = 600
 const REV_REQUIRED = new Set<EventKind>(['item', 'probe', 'predict'])
 const MAX_ID_LENGTH = 200
 const MAX_TZ_MINUTES = 24 * 60
@@ -65,6 +70,18 @@ const hasProtoSegment = (s: string): boolean => s.split(/[:/#]/).includes('__pro
 
 const fail = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
 
+/**
+ * The Wave 1 item fields the codec checks (spec §3.2): `kcs`, `nsec` and the interval. Every other new
+ * field is optional and kept unvalidated, so a newer writer's extras survive (spec §4.9).
+ */
+function checkItemExtras(data: Record<string, unknown>): string | null {
+  const { kcs, nsec, lo, hi } = data
+  if (kcs !== undefined && !(Array.isArray(kcs) && kcs.length <= MAX_KCS && kcs.every((k) => typeof k === 'string'))) return `data.kcs must be at most ${MAX_KCS} strings`
+  if (nsec !== undefined && !(isFiniteNumber(nsec) && nsec >= 0 && nsec <= MAX_NSEC)) return `data.nsec must be within [0, ${MAX_NSEC}]`
+  if (isFiniteNumber(lo) && isFiniteNumber(hi) && lo > hi) return 'data.lo must not exceed data.hi'
+  return null
+}
+
 /** Kind-specific `data` shape: only what fold and the selectors read. */
 function checkData(kind: EventKind, data: unknown): string | null {
   switch (kind) {
@@ -72,15 +89,32 @@ function checkData(kind: EventKind, data: unknown): string | null {
     case 'probe':
       if (!isObject(data) || typeof data.src !== 'string' || !ITEM_SRCS.has(data.src)) return 'data.src is missing or unknown'
       if (data.pick !== undefined && !(Array.isArray(data.pick) && data.pick.every(isFiniteNumber))) return 'data.pick must be numbers'
-      return null
+      return checkItemExtras(data)
     case 'predict':
       if (!isObject(data) || !isFiniteNumber(data.value) || !isFiniteNumber(data.truth) || typeof data.unit !== 'string') {
         return 'data needs numeric value and truth and a unit'
       }
-      return null
-    case 'lab-check':
+      if (data.src !== undefined && !(typeof data.src === 'string' && PREDICT_SRCS.has(data.src))) return 'data.src is unknown'
+      return checkItemExtras(data)
+    case 'lab-check': {
       if (!isObject(data) || !Array.isArray(data.passed) || !data.passed.every((x) => typeof x === 'string')) return 'data.passed must be a list of check ids'
       if (data.total !== undefined && !isFiniteNumber(data.total)) return 'data.total must be a number'
+      if (data.abi !== undefined && data.abi !== 1 && data.abi !== 2) return 'data.abi must be 1 or 2'
+      if (data.seeds !== undefined && data.seeds !== 'fresh' && data.seeds !== 'default') return 'data.seeds must be fresh or default'
+      const checks = data.checks
+      if (checks !== undefined) {
+        const good = (c: unknown) => isObject(c) && isNonEmptyString(c.id) && typeof c.status === 'string' && CHECK_STATUSES.has(c.status)
+        if (!(Array.isArray(checks) && checks.every(good))) return 'data.checks must list {id, status}'
+      }
+      return null
+    }
+    case 'play':
+      if (!isObject(data) || typeof data.phase !== 'string' || !PLAY_PHASES.has(data.phase)) return 'data.phase must be play or compose'
+      if (!isFiniteNumber(data.turns) || !isFiniteNumber(data.survived) || !isFiniteNumber(data.ghostSurvived)) return 'data needs numeric turns, survived and ghostSurvived'
+      return null
+    case 'prove':
+      if (!isObject(data) || !Array.isArray(data.qids) || !data.qids.every((q) => typeof q === 'string')) return 'data.qids must be a list of question ids'
+      if (!Array.isArray(data.self) || !data.self.every(isFiniteNumber) || data.self.length !== data.qids.length) return 'data.self must be numbers, one per question'
       return null
     case 'capstone-step':
       if (data !== undefined && !(isObject(data) && (data.index === undefined || isFiniteNumber(data.index)))) return 'data.index must be a number'
@@ -125,7 +159,19 @@ export function validateEvent(x: unknown): Checked<LedgerEvent> {
   return { ok: true, value: x as unknown as LedgerEvent }
 }
 
-const WORKING_EXACT = new Set(['fw:doc', 'capstone:metrics', 'boot:path', 'boot:week', 'boot:value', 'boot:install-dismissed'])
+const WORKING_EXACT = new Set([
+  'fw:doc',
+  'capstone:metrics',
+  'boot:path',
+  'boot:week',
+  'boot:value',
+  'boot:install-dismissed',
+  // Wave 1 (spec §3.5)
+  'placement:result',
+  'queue:laptop',
+  'handoff:last',
+  'today:prefs',
+])
 const WORKING_PREFIXES = ['scroll:', 'sim-config:', 'fw:evidence:', 'settings:']
 
 export function isWorkingKey(key: unknown): key is WorkingRecord['key'] {
@@ -180,20 +226,29 @@ export interface ExportInput extends Ledger {
   exportedAt: string
   components?: ExportedComponent[]
   extras?: Extras
+  /** A delta (spec §6.6): only events and working records with `at` >= this. Components and extras are left out. */
+  sinceAt?: string
 }
 
-/** Build the export: events sorted by (`at`, `id`), working by key, components by hash. */
+/**
+ * Build the export: events sorted by (`at`, `id`), working by key, components by hash. With `sinceAt` it is a
+ * delta for a device handoff: still a complete export v3 file, so the other device imports it with merge.
+ * The bound is inclusive, because a duplicate is harmless to merge and a missed event is not.
+ */
 export function buildExportV3(input: ExportInput): ExportV3 {
+  const since = input.sinceAt
+  const events = since === undefined ? input.events : input.events.filter((e) => e.at >= since)
+  const working = since === undefined ? input.working : input.working.filter((r) => r.at >= since)
   return {
     format: EXPORT_FORMAT,
     version: 3,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: input.exportedAt,
     device: input.device,
-    events: mergeEvents(input.events),
-    working: mergeWorking(input.working),
-    components: mergeComponents(input.components ?? [], []),
-    extras: input.extras ?? { capstoneDrafts: {} },
+    events: mergeEvents(events),
+    working: mergeWorking(working),
+    components: since === undefined ? mergeComponents(input.components ?? [], []) : [],
+    extras: since === undefined ? (input.extras ?? { capstoneDrafts: {} }) : { capstoneDrafts: {} },
   }
 }
 
