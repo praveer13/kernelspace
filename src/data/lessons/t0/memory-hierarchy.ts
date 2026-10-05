@@ -114,10 +114,10 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         {
           q: 'Roughly how much slower is a DRAM access than an L1 cache hit?',
           options: [
-            'About 2×: both live on the chip, so a DRAM access costs roughly two cache hits',
-            'About 10×: one order of magnitude, like the step between adjacent cache levels',
-            'About 200×: ~100 ns against ~0.5 ns, so DRAM costs two orders of magnitude more',
-            'About 20,000×: off-chip DRAM pays a round trip closer to tens of microseconds per access',
+            'About 2×, with DRAM sitting on the chip beside the caches',
+            'About 10×, with DRAM one order of magnitude behind L1 like each cache step',
+            'About 200×, with DRAM costing two orders of magnitude more than L1',
+            'About 20,000× with each DRAM access paying a round trip of tens of microseconds',
           ],
           correct: [2],
           explanation:
@@ -132,10 +132,10 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         {
           q: 'When the CPU needs 8 bytes from DRAM, how many bytes does the memory controller actually fetch?',
           options: [
-            'Exactly 8 bytes: the memory system is byte-addressed (no wider unit), so the controller fetches only what the load asked for',
-            '64 bytes: one full cache line, betting that neighboring bytes will be used soon (spatial locality)',
-            '4,096 bytes: DRAM is accessed a page at a time (an OS page), so every miss pulls in a full 4 KiB page',
-            'However many bytes the compiler requested with prefetch hints, since hardware fetches only what software asks for',
+            'Exactly 8 bytes, with the byte-addressed memory system giving the CPU just what the load asked for',
+            '64 bytes, one full cache line fetched from DRAM on the bet that nearby bytes get used soon',
+            '4 KiB, one whole OS page pulled in on each miss',
+            'Whatever size the CPU was told to prefetch by compiler hints, say 8 or 32 bytes',
           ],
           correct: [1],
           explanation:
@@ -150,10 +150,10 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         {
           q: 'A Python loop over a list of 1M integers is far slower than the same loop over a numpy array mostly because…',
           options: [
-            'Every list element is a pointer to a scattered heap object (not inline data), so each iteration is a guaranteed DRAM cache miss',
-            'Per-element interpreter work: bytecode dispatch, refcounting and a boxed int for every add, with no SIMD loop',
-            'numpy releases the GIL and spreads the loop across all cores (every add calls a parallel BLAS routine) while the list loop is stuck on one core',
-            'Python integers are arbitrary-precision, so even a small add has to walk a multi-word bignum representation',
+            'Each list element is a pointer to a scattered heap object, making each iteration a DRAM miss',
+            'Per-element interpreter work, with bytecode dispatch and refcounting where numpy runs a SIMD loop',
+            'numpy releases the GIL, spreading the loop across many cores while the list loop stays on one',
+            'Python ints are arbitrary-precision, with even a small CPU add walking a multi-word bignum',
           ],
           correct: [1],
           explanation:
@@ -168,10 +168,10 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
         {
           q: 'Why can\'t we simply build 128 GB of L1-speed SRAM and skip the hierarchy?',
           options: [
-            'Large SRAM arrays cannot be fabricated at all: past a few MB, the cells stop holding their state reliably',
-            'SRAM needs ~6 transistors per bit vs 1 transistor plus a capacitor for DRAM: area, power and cost make it infeasible',
-            'DRAM cells are intrinsically faster than SRAM but harder to program, so designers put SRAM caches in front (a hardware-software split chosen for ease of compilation, not for cost)',
-            'A 128 GB array would be too hot to cool: the memory controller would overheat, and throttle the whole chip',
+            'Large SRAM arrays cannot be fabricated, with cells past 8 MB failing to hold their state reliably',
+            'SRAM needs about 6 transistors per bit against one transistor and a capacitor for DRAM, making it too big and costly',
+            'DRAM cells run about 2× faster than SRAM but are harder to program, with SRAM caches placed in front to ease compilation',
+            'A 128 GB array would run too hot to cool, with the memory controller overheating and throttling the chip',
           ],
           correct: [1],
           explanation:

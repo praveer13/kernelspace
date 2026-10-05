@@ -118,10 +118,10 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
         {
           q: 'The convoy effect in FIFO scheduling is…',
           options: [
-            'Excess context switches as many short jobs pile into the runqueue, so the CPU spends its time switching rather than running',
-            'Short jobs queued behind one long job, so waiting time is set by arrival order and tail latency collapses',
-            'Jobs sharing a core thrashing each other\'s cache lines, so every job in the queue runs slower than it would alone',
-            'A burst of arrivals overflowing the runqueue, so the scheduler drops or defers jobs and clients see timeouts',
+            'Excess context switches as many short jobs pile into the runqueue, leaving the CPU switching rather than running',
+            'Short jobs queued behind one long job on the CPU, with waiting time set by arrival order and tail latency collapsing',
+            'Jobs sharing a CPU core thrashing each other\'s cache lines, leaving each job in the queue slower than it would be alone',
+            'A burst of arrivals overflowing the runqueue, with the CPU scheduler dropping or deferring jobs and clients seeing timeouts',
           ],
           correct: [1],
           explanation:
@@ -136,10 +136,10 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
         {
           q: 'Priority inversion is best described as…',
           options: [
-            'A low-priority thread being dispatched ahead of a runnable high-priority thread because of a scheduler bug or stale priority value',
-            'A high-priority thread blocked on a lock held by a low-priority thread that medium-priority threads keep preempting, so high effectively runs below medium',
-            'Two threads each holding a lock the other needs, so both block forever, which raising either thread\'s priority would resolve',
-            'The kernel temporarily raising every waiting thread\'s priority under load, so that long-waiting low-priority work overtakes fresh high-priority work arriving later',
+            'A low-priority thread dispatched ahead of a runnable high-priority thread, caused by a scheduler bug or stale priority',
+            'A high-priority thread blocked on a lock held by a low-priority thread, with medium-priority threads preempting the holder',
+            'Two threads each holding a lock the other needs, with both blocked in a cycle that a priority boost resolves',
+            'The kernel raising the priority of waiting threads under load, with long-waiting low-priority work overtaking fresh high-priority work',
           ],
           correct: [1],
           explanation:
@@ -154,10 +154,10 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
         {
           q: 'Linux\'s default scheduler for ordinary threads (EEVDF, since 6.6) shares the CPU fairly by…',
           options: [
-            'Always running the thread with the smallest vruntime, taken as the leftmost node of a red-black tree, with no eligibility test',
-            'Tracking each thread\'s lag against its weighted fair share and running the eligible thread (lag ≥ 0) with the earliest virtual deadline',
-            'Cycling the runqueue in strict round-robin where every runnable thread gets the same fixed slice regardless of its nice value',
-            'Handing each thread its weighted share of an epoch up front and letting it run until that budget is spent',
+            'Running the thread with the smallest vruntime from the leftmost node of a red-black tree, with no eligibility test',
+            'Tracking each thread\'s lag against its fair share, with the eligible thread of earliest deadline running next',
+            'Cycling the runqueue in strict round-robin, with each runnable thread getting the same fixed slice regardless of nice value',
+            'Handing each thread its weighted share of an epoch up front, with the thread running until that budget is spent',
           ],
           correct: [1],
           explanation:
@@ -172,10 +172,10 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
         {
           q: 'Continuous batching maps to preemptive scheduling because…',
           options: [
-            'It spreads one batch across many GPU cores, the way a multicore scheduler spreads runnable threads across cores to hide memory latency',
-            'It re-decides the running set after every iteration (quantum), so sequences join and leave without draining the device',
-            'It lets a running sequence temporarily borrow the priority of a waiting one so the waiting one is never blocked behind it',
-            'It groups requests of similar prompt length into one batch, so they finish together and no batch slot sits idle waiting for a straggler',
+            'It spreads one batch across many GPU cores, with a multicore scheduler likewise spreading runnable threads to hide memory latency',
+            'It re-decides the running set after each iteration, with sequences joining and leaving without draining the GPU',
+            'It lets a running sequence borrow the priority of a waiting one, keeping the waiting one unblocked on the GPU',
+            'It groups requests of similar prompt length into one batch, with no GPU slot idling for a straggler',
           ],
           correct: [1],
           explanation:

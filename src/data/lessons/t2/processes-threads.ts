@@ -125,9 +125,9 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
           q: 'The defining difference between a process and a thread is…',
           options: [
             'A process has its own execution context scheduled by the kernel, while threads are scheduled by the language runtime inside that process',
-            'A process owns a private address space and resource bundle, while its threads share that one address space and those resources',
-            'A thread gets a private stack and heap and shares only code and globals with its siblings, while a process shares nothing at all',
-            'A process is the unit the scheduler places on a core, while a thread is only a queue of work items that the process itself consumes',
+            'A process owns a private address space and a bundle of resources, while its threads share that one address space and those resources',
+            'A thread gets a private stack and heap and shares just code and globals with its siblings, while a process shares nothing with others',
+            'A process is the unit the scheduler places on a core, while a thread is just a queue of work items that the process consumes',
           ],
           correct: [1],
           explanation:
@@ -142,10 +142,10 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
         {
           q: 'The largest hidden cost of a context switch is usually…',
           options: [
-            'Saving and restoring the register file, which takes thousands of cycles because every register is written out to main memory',
-            'The user-to-kernel trap itself, since entering supervisor mode flushes the pipeline and costs microseconds on every switch',
-            'Cache and TLB cold-start for the incoming thread: thousands of instructions run at DRAM latency while the caches refill',
-            'Updating the runqueue data structure, whose tree rebalancing gets slower as the number of runnable threads grows',
+            'Saving and restoring the CPU register file, taking thousands of cycles as each register goes out to main memory',
+            'The user-to-kernel trap itself, with entry to supervisor mode flushing the CPU pipeline at a cost of microseconds',
+            'Cache and TLB cold-start for the incoming thread, with thousands of instructions then running at the DRAM latency',
+            'Updating the runqueue data structure, with CPU time spent rebalancing a tree as the number of runnable threads grows',
           ],
           correct: [2],
           explanation:
@@ -160,10 +160,10 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
         {
           q: 'A CPU-bound service with 8 cores should run about how many busy threads?',
           options: [
-            'About 64, because more runnable threads keep every core busy during cache misses, so throughput keeps rising with thread count',
-            'About 8, because past the core count extra compute-bound threads only timeslice, adding switch and cache cost without throughput',
-            'About 1, because a single thread has no contention or switching, so latency is optimal and throughput is unaffected by core count',
-            'It depends only on RAM, because each thread needs a stack and heap and memory is the first resource a thread pool exhausts',
+            'About 64, with more runnable threads keeping each CPU core busy during cache misses and throughput rising with thread count',
+            'About 8, with extra compute-bound threads beyond the CPU core count time slicing and adding more switch cost',
+            'About 1, with a single thread seeing no contention or switching and leaving throughput unaffected by CPU core count',
+            'It depends on RAM alone, with each thread\'s 1 MB stack and heap making memory the first resource a pool exhausts',
           ],
           correct: [1],
           explanation:
@@ -178,10 +178,10 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
         {
           q: 'Java virtual threads (Loom) and goroutines reduce switch cost by…',
           options: [
-            'Pinning each logical thread to a hardware core so the kernel scheduler never has to switch it out for another',
-            'Multiplexing many logical threads onto few OS threads in userspace, so most parks and resumes never enter the kernel',
-            'Using SMT hardware thread contexts to keep each logical thread\'s registers resident on the core, so switches skip save and restore',
-            'Running each logical thread on its own kernel thread with a shrunken stack, so every kernel context switch moves less memory',
+            'Pinning each logical thread to a hardware CPU core, leaving the kernel scheduler no need to switch it out for another',
+            'Multiplexing many logical threads onto a few OS threads in user space, leaving most parks and resumes outside of the kernel',
+            'Using SMT hardware thread contexts to keep each logical thread\'s registers on the core, leaving switches to skip save and restore',
+            'Running each logical thread on its own kernel thread with a shrunken stack, leaving each CPU switch to move less memory',
           ],
           correct: [1],
           explanation:

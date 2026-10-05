@@ -201,10 +201,10 @@ Step back and name what you built: a system that multiplexes a fixed resource am
         {
           q: 'In a free-list allocator, what does "splitting" do?',
           options: [
-            'Divides the heap between two threads so each thread gets its own private free list',
-            'Cuts a too-large free block into an allocation plus a smaller free remainder',
-            'Spreads one large request across two non-adjacent free blocks',
-            'Separates each block header from its payload so they can be freed apart',
+            'Divides the heap between two threads, giving each thread its own private free list',
+            'Cuts a too-large free block into an allocation plus a small remainder',
+            'Spreads one large request across two non-adjacent free blocks, stitching them together',
+            'Separates each block header from its payload, letting them be freed apart',
           ],
           correct: [1],
           explanation:
@@ -219,10 +219,10 @@ Step back and name what you built: a system that multiplexes a fixed resource am
         {
           q: 'Without coalescing, a long-running heap tends to…',
           options: [
-            'Stay just as efficient, since free() skips the neighbor check and the bytes are still free',
-            'Degenerate into small non-adjacent free blocks that cannot serve larger requests',
-            'Leak memory, because freed blocks are never put back on the free list for reuse',
-            'Exhaust virtual address space almost at once, since freed blocks can never be reused',
+            'Stay just as efficient, with each free skipping the neighbor check and the bytes still free',
+            'Degenerate into lots of small free blocks, leaving large requests with nothing that fits',
+            'Leak memory, with freed blocks left off the free list and lost to reuse',
+            'Exhaust virtual address space almost at once, with freed blocks unusable for new requests',
           ],
           correct: [1],
           explanation:
@@ -237,10 +237,10 @@ Step back and name what you built: a system that multiplexes a fixed resource am
         {
           q: 'Why do jemalloc/tcmalloc/glibc use segregated size classes?',
           options: [
-            'So threads can allocate without locking, since each thread owns exactly one size class',
-            'O(1) fit search and bounded slack, with less fragmentation than a single free list',
-            'To eliminate internal fragmentation, because every request gets a block of exactly its size',
-            'To allow allocations larger than one page, which a single free list cannot represent',
+            'Lock-free allocation across threads, with each thread owning one size class',
+            'Constant-time fit search and bounded slack, with less fragmentation than one free list',
+            'Elimination of internal fragmentation, with each request getting a block of its exact size',
+            'Support for allocations larger than a page, with a single free list unable to represent them',
           ],
           correct: [1],
           explanation:
@@ -255,10 +255,10 @@ Step back and name what you built: a system that multiplexes a fixed resource am
         {
           q: 'A double-free in a free-list allocator is catastrophic because…',
           options: [
-            'It always segfaults at the second free, so the bug is loud and easy to find',
-            'The block enters the free list twice, so two future mallocs receive the same memory',
-            'It overwrites the free list head with a stale pointer, so every later malloc returns NULL',
-            'It returns the pages to the kernel twice, which makes the kernel kill the whole process',
+            'It segfaults at the second free, leaving the bug loud and easy to find during any test run',
+            'The block enters the free list twice, leaving two later mallocs with the same memory',
+            'It overwrites the free list head with a stale pointer, leaving each later malloc returning a null pointer',
+            'It returns the pages to the kernel twice, leaving the kernel to kill the whole process',
           ],
           correct: [1],
           explanation:

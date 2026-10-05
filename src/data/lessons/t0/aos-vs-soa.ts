@@ -188,10 +188,10 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
         {
           q: 'A deadline-sweep reads one u64 field per record from an AoS array of 32-byte structs. What fraction of each fetched cache line is useful?',
           options: [
-            '1/2: a 64-byte line holds two 32-byte structs, and the sweep touches one whole struct per fetch',
-            '1/4: the sweep uses 8 bytes of each 32-byte struct, so 16 useful bytes in every 64-byte line',
-            '1/8: the sweep needs 8 bytes out of every 64-byte line, because only one struct is fetched per line',
-            'All of it: the hardware fetches just the 8-byte field the loop reads, so no bytes are wasted',
+            '1/2, counting one whole 32-byte struct as useful in each 64-byte line',
+            '1/4, using 8 bytes of each 32-byte struct for 16 useful bytes per 64-byte line',
+            '1/8, needing 8 bytes of each 64-byte line with a single struct fetched per line',
+            '100%, with the hardware fetching just the 8-byte field the loop reads',
           ],
           correct: [1],
           explanation:
@@ -206,10 +206,10 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
         {
           q: 'Eight threads increment eight independent counters stored contiguously in one cache line. Throughput collapses because…',
           options: [
-            'The OS serializes the threads onto one runqueue, so only one counter can be incremented at a time',
-            'Atomic increments are always slow, so eight threads on eight counters scale no better than one would',
-            'Every write invalidates the line in all other cores\' caches, so ownership ping-pongs between cores (false sharing)',
-            'The counters overflow into each other: adjacent 8-byte values share one line, so an increment can corrupt its neighbors',
+            'The OS serializes the threads onto one runqueue, leaving a single counter incrementing at a time',
+            'Atomic CPU increments are slow, leaving eight threads on eight counters no faster than one',
+            'Each write invalidates the line in other CPU cores, leaving ownership to ping-pong among them',
+            'The counters overflow into their neighbors, leaving a CPU increment able to corrupt adjacent values',
           ],
           correct: [2],
           explanation:
@@ -224,10 +224,10 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
         {
           q: 'The standard fix for false sharing is…',
           options: [
-            'Wrap each counter in its own mutex so threads take turns touching the shared cache line',
-            'Pad and align each hot variable so it occupies its own 64-byte cache line, giving every writer a private line',
-            'Mark the counters volatile so each core re-reads from memory and stops holding stale copies of the line',
-            'Replace the array with a linked list of separately allocated counters so no two sit next to each other',
+            'Wrap each counter in its own mutex, making threads take turns on the shared line',
+            'Pad each hot variable onto its own cache line, giving each writer its own line',
+            'Mark the counters volatile, forcing each core to re-read from memory instead of holding stale copies',
+            'Replace the array with a linked list of separate allocations, keeping no two counters adjacent',
           ],
           correct: [1],
           explanation:
@@ -242,10 +242,10 @@ SoA is not an exotic game-engine trick; it is the default shape of serious data 
         {
           q: 'When does AoS beat SoA?',
           options: [
-            'Never: SoA is strictly superior because it always fetches fewer bytes per record than AoS',
-            'When the hot path reads most fields of a few records at a time, so one line fetch serves the whole record',
-            'When the records are small, because one array of small structs takes less memory than several parallel arrays',
-            'When the workload is single-threaded, because SoA only pays off once several cores read the data',
+            'In no case, with SoA strictly superior and fetching fewer bytes per record than AoS',
+            'When the hot path reads most fields of a few records at a time, with one line fetch serving the whole record',
+            'When the records are small, with one array of small structs taking less memory than parallel arrays',
+            'When the workload is single-threaded, with SoA paying off just once several cores read the data',
           ],
           correct: [1],
           explanation:

@@ -143,10 +143,10 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
         {
           q: 'Allocating 64 bytes of stack space for locals costs, on x86-64…',
           options: [
-            'A call into the kernel, which grows the process\'s stack mapping',
+            'A system call into the kernel, growing the process\'s stack mapping',
             'One subtract instruction on the stack pointer, about a cycle',
-            'A search of the free list for a block that is large enough',
-            'A page fault on every call, because stack pages are mapped lazily',
+            'A search of the free list, looking for a block that is large enough',
+            'A page fault on each call, with lazily mapped pages of the stack',
           ],
           correct: [1],
           explanation:
@@ -161,10 +161,10 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
         {
           q: 'The `call` instruction on x86-64 does exactly two things:',
           options: [
-            'Saves all general-purpose registers to the stack, then jumps to the target',
-            'Pushes the return address, then jumps to the target',
-            'Allocates the callee\'s stack frame, then jumps to the target',
-            'Switches to kernel mode to set up the call, then jumps to the target',
+            'Saves the general-purpose registers to the stack, then jumps to the target',
+            'Pushes the return address onto the stack, then jumps to the target',
+            'Allocates the callee\'s stack frame for locals, then jumps to the target',
+            'Switches to kernel mode for the setup, then jumps to the target',
           ],
           correct: [1],
           explanation:
@@ -179,10 +179,10 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
         {
           q: 'Returning the address of a local variable is catastrophic because…',
           options: [
-            'Locals live in read-only memory, so any write through the pointer faults',
-            'The stack frame is zeroed on return, so the pointer reads back as all zeros',
-            'The memory is reused by later calls, so the pointer aliases some unrelated frame',
-            'Restoring the stack pointer makes the CPU fault on any later access into the old frame',
+            'Locals live in write-protected memory, with any write through the pointer faulting',
+            'The stack frame is zeroed on return, with the pointer reading back as zeros',
+            'The memory gets reused by later calls, with the pointer aliasing another frame',
+            'Restoring the stack pointer unmaps the old frame, with any later access trapping',
           ],
           correct: [2],
           explanation:
@@ -197,10 +197,10 @@ Decode loops are frame-shy for a reason: the hot path of an inference engine pre
         {
           q: 'A JVM thread stack and the GC heap differ fundamentally in that…',
           options: [
-            'Frames hold primitives and references; the objects themselves live on the heap',
-            'The heap is private to each thread, while the stack is shared by every thread in the process',
-            'Stack memory is never cached by the CPU, so it is slower to access than the heap',
-            'The heap is managed in LIFO order, so objects are freed in reverse allocation order',
+            'Frames hold primitives and references, with the objects themselves living on the heap',
+            'The heap is private to each thread, with the stack shared by the threads of the process',
+            'Stack memory bypasses the caches, making it slower to access than the heap',
+            'The heap is managed last-in first-out, with objects freed in reverse allocation order',
           ],
           correct: [0],
           explanation:
