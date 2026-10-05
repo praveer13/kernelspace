@@ -168,7 +168,7 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
           why: [
             'Per-tensor stores one scale in total, so per-group stores more metadata, not less. The extra is small, 0.125 bits per weight for a 16-bit scale, and buys local accuracy.',
             'Right: a local absmax means a smaller scale and a tighter scale/2 bound. A 16-bit scale per 128 weights adds only 0.125 bits per weight.',
-            'Symmetric quantization already represents negatives: q runs from -127 to 127. Group scales change the step size, not the sign range.',
+            'Symmetric quantization already represents negatives: q is signed (-127 to 127 at INT8, -7 to 7 at INT4). Group scales change the step size, not the sign range.',
             'GPTQ and AWQ still use calibration samples to choose rounding and protect salient weights. Group scales reduce error but do not replace calibration.',
           ],
         },

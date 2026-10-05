@@ -105,7 +105,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
           why: [
             'Shared memory is on-chip SRAM with L1-class latency, not a slower cache, and nothing fills it automatically. Only the kernel\'s own stores put data there.',
             'Right: it is an addressable scratchpad. The kernel decides what to stage and when, it is visible to one block, and no hardware eviction surprises it mid-kernel.',
-            'Shared memory is physically per SM, and ordinary blocks cannot see each other\'s. Hopper clusters let only a few neighbouring SMs share, so it is no GPU-wide pool. Grid-wide exchange goes through L2 and global memory.',
+            'Shared memory is physically per SM, and ordinary blocks cannot see each other\'s. Hopper clusters let only a few neighbouring SMs share it. Grid-wide exchange goes through L2 and global memory.',
             'Constants live in a separate constant space and instructions in their own cache. Shared memory is general read-write scratch for one block.',
           ],
         },

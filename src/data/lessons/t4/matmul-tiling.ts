@@ -82,7 +82,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
 
 Standard attention materializes the \`N × N\` score matrix \`S = QKᵀ\` in HBM — for a 128k-context model that matrix is *terabytes*-scale traffic and tens of GB of capacity. The 2022 FlashAttention paper (Tri Dao et al.) noticed two things: (1) attention is three matmul-shaped ops around a softmax, and (2) the softmax denominator is just a **reduction** (T4.L5), which can be computed *incrementally*. So: tile Q, K, V into SRAM-sized blocks; for each KV block, compute the partial scores *in SRAM*, update the softmax statistics **online** (rescaling the running max and sum — the "online softmax"), and accumulate the output — never writing the N×N matrix to HBM at all.
 
-The result: the extra memory drops from \`O(N²)\` to \`O(N)\`, HBM accesses fall from \`Θ(Nd + N²)\` to \`Θ(N²d²/M)\` (head dimension \`d\`, SRAM size \`M\`, Theorem 2 of the paper), and the kernel gets *faster* despite doing extra rescaling math — because it was bandwidth-bound, and bytes dropped 10–20×. **FlashAttention is cache blocking applied to attention.** The transformer papers gave you the math; the systems move was recognizing the roofline regime and tiling the problem to fit SRAM. (This is also why "flash" kernels exist for everything now — it's a general recipe: fuse, tile, keep the working set in the fast tier.)`,
+The result: the extra memory drops from \`O(N²)\` to \`O(N)\`, HBM accesses fall from \`Θ(Nd + N²)\` to \`Θ(N²d²/M)\` (head dimension \`d\`, SRAM size \`M\`, Theorem 2 of the paper), and the kernel gets *faster* despite doing extra rescaling math — because it was bandwidth-bound: the extra memory is 10–20× smaller and HBM accesses are several times fewer (about 9× in Dao et al., Fig. 2). **FlashAttention is cache blocking applied to attention.** The transformer papers gave you the math; the systems move was recognizing the roofline regime and tiling the problem to fit SRAM. (This is also why "flash" kernels exist for everything now — it's a general recipe: fuse, tile, keep the working set in the fast tier.)`,
     },
     {
       type: 'callout',
@@ -111,7 +111,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
         'Oversize the tile until shared memory limits occupancy; observe the U-shaped performance curve.',
         'Toggle the attention view: naive (materialize S) vs flash (online softmax); compare HBM bytes at 32k context.',
       ],
-      note: `The U-curve is the whole craft: too small a tile → bandwidth starves; too big → occupancy starves. And the attention comparison is the industry's favorite before/after: same math, 10–20× fewer HBM bytes — the definition of a systems win.`,
+      note: `The U-curve is the whole craft: too small a tile → bandwidth starves; too big → occupancy starves. And the attention comparison is the industry's favorite before/after: same math, several times fewer HBM accesses (about 9× in Dao et al., Fig. 2) — the definition of a systems win.`,
     },
     {
       type: 'quiz',
@@ -164,7 +164,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
           explanation:
             'Reuse (favors big T) fights residency (favors small footprint). cuBLAS/CUTLASS tune per-GPU shapes precisely because the optimum sits in the middle of the U.',
           why: [
-            'A block can request up to nearly an SM\'s whole shared memory, so size alone does not stop compilation. The limit is what remains for other blocks and warps.',
+            'Blocks can opt in to well over 48 KB (about 227 KB on H100), so a few-KB cap is false. The real constraint is per-SM residency: big tiles leave room for fewer blocks.',
             'Right: reuse favors big tiles, but each tile claims SRAM and registers, so fewer warps stay resident and latency hiding suffers.',
             'Bigger tiles do less HBM traffic per FLOP (it falls as 1/T), and slab loads stay coalesced. The cost is on-chip residency, not HBM efficiency.',
             'Bank conflicts depend on access stride, and padding fixes them at any tile size. They are not what limits tile growth.',

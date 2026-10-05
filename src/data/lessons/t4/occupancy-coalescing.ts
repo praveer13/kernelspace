@@ -146,16 +146,16 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
           q: 'A 32-way shared-memory bank conflict occurs when…',
           options: [
             'More than 32 warps are resident on one SM, so their shared-memory requests queue at the memory controller',
-            'All 32 lanes hit the same SRAM bank, serializing the access 32-fold; padding rows usually fixes it',
+            'All 32 lanes hit different addresses in the same SRAM bank, serializing the access 32-fold; padding rows usually fixes it',
             'A block uses more than 1024 threads, so the hardware splits it into serialized waves that reuse the same banks',
             'Two kernels write the same array in global memory at once, so their writes serialize on one cache line',
           ],
           correct: [1],
           explanation:
-            'SRAM bandwidth is per-bank; same-bank collisions serialize. The +1 padding trick skews strides across banks — the false-sharing lesson (T0.L4) wearing a different hat.',
+            'SRAM bandwidth is per-bank; different-address collisions in one bank serialize. The +1 padding trick skews strides across banks — the false-sharing lesson (T0.L4) wearing a different hat.',
           why: [
             'Bank conflicts arise between the lanes of one warp\'s own access. The number of resident warps affects occupancy, not banks.',
-            'Right: SRAM bandwidth is per bank, so 32 lanes on one bank serialize 32-fold. Padding the tile rows skews the strides across banks.',
+            'Right: SRAM bandwidth is per bank, so 32 lanes on different addresses in one bank serialize 32-fold (one shared address is a broadcast). Padding the tile rows skews the strides across banks.',
             'A block is capped at 1024 threads and a launch above that fails; it is not serialized into waves. Conflicts depend on addresses within one warp.',
             'That is contention on global memory, a different problem. A bank conflict is among lanes of one warp in shared memory.',
           ],
