@@ -5,14 +5,37 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, ChevronDown, ChevronUp, Copy, Trash2 } from 'lucide-react'
-import { useSearchParams } from 'react-router'
+import { Check, ChevronDown, ChevronUp, Copy, Play, Trash2 } from 'lucide-react'
 import BlockTableExplorer from '@/components/sims/BlockTableExplorer'
-import PlaygroundShell from '@/components/sims/PlaygroundShell'
+import PlaygroundShell, { useInitialCfg, useSimMachine } from '@/components/sims/PlaygroundShell'
 import { BLOCK_TABLE_EXPLORER_TASKS as BLOCK_TABLE_TASKS } from '@/components/sims/blockTableExplorer.tasks'
 import { Slider } from '@/components/ui/slider'
-import { atlasRow } from '@/data/atlas'
-import { useProgress } from '@/lib/progress'
+import { useSimHost } from '@/lib/sims/host'
+import {
+  BATCH_STEPS,
+  BLOCK_SIZE,
+  CTX_STEPS,
+  DTYPES,
+  GPUS,
+  GPU_COUNT_PRESETS,
+  ITL_SLO_MS,
+  PAGED_WASTE_PCT,
+  PRESETS,
+  READINGS,
+  SETUPS,
+  STATIC_RESERVE_FACTOR,
+  STATIC_WASTE_PCT,
+  dtypeBytes,
+  fmtCtx,
+  fmtGb,
+  gpuById,
+  kvModel,
+  normalizeConfig,
+  presetById,
+  setupMismatches,
+} from '@/lib/sims/models/kv'
+import type { Dtype, KvState, PresetId } from '@/lib/sims/models/kv'
+import { resolveTasks } from '@/lib/sims/registry'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -115,18 +138,6 @@ function useReducedMotion(): boolean {
   return reduced
 }
 
-function useTaskAward(simId: string, log: (kind: LogKind, text: string) => void) {
-  return useCallback(
-    (taskId: string, xp: number, note: string) => {
-      const st = useProgress.getState()
-      if (st.sims[simId]?.tasksDone.includes(taskId)) return
-      st.recordSimTask(simId, taskId)
-      log('ok', `TASK ✓ ${note}  (+${xp} XP)`)
-    },
-    [simId, log],
-  )
-}
-
 /** 400ms cubic-out number tween (jumps instantly under reduced motion). */
 function useTweened(value: number, reduced: boolean, dur = 400): number {
   const [display, setDisplay] = useState(value)
@@ -154,175 +165,71 @@ function useTweened(value: number, reduced: boolean, dur = 400): number {
 }
 
 /* ------------------------------------------------------------------ */
-/* model + hardware data                                               */
-/* ------------------------------------------------------------------ */
-
-type PresetId = 'llama3-8b' | 'llama3-70b' | 'mixtral-8x7b' | 'custom'
-type Dtype = 'fp16' | 'fp8' | 'int4'
-
-interface ModelPreset {
-  id: PresetId
-  name: string
-  layers: number
-  kvHeads: number
-  headDim: number
-  paramsB: number
-  note?: string
-}
-const PRESETS: ModelPreset[] = [
-  { id: 'llama3-8b', name: 'Llama-3-8B', layers: 32, kvHeads: 8, headDim: 128, paramsB: 8.03, note: 'GQA 8 KV heads' },
-  { id: 'llama3-70b', name: 'Llama-3-70B', layers: 80, kvHeads: 8, headDim: 128, paramsB: 70.6, note: 'GQA 8 KV heads' },
-  { id: 'mixtral-8x7b', name: 'Mixtral-8x7B', layers: 32, kvHeads: 8, headDim: 128, paramsB: 46.7, note: 'MoE · 12.9B active, all 46.7B resident' },
-]
-
-const DTYPE: { id: Dtype; label: string; bytes: number }[] = [
-  { id: 'fp16', label: 'FP16', bytes: 2 },
-  { id: 'fp8', label: 'FP8', bytes: 1 },
-  { id: 'int4', label: 'INT4', bytes: 0.5 },
-]
-
-// Every card comes from the hardware atlas (sourced claims).
-function atlasGpu(id: string) {
-  const row = atlasRow(id)
-  return { id: row.id, name: row.name, gb: row.hbmGb ?? 0, bandwidthGbps: row.hbmBwGBs ?? 0 }
-}
-
-const GPUS = [
-  atlasGpu('h100'),
-  atlasGpu('b200'),
-  atlasGpu('a100-80'),
-  atlasGpu('a100-40'),
-  atlasGpu('rtx4090'),
-  atlasGpu('t4'),
-]
-
-const CTX_STEPS = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 200000, 262144, 524288, 1048576]
-const BATCH_STEPS = [1, 2, 4, 8, 16, 32, 64, 128, 256]
-const GPU_COUNT_PRESETS = [1, 2, 4, 8]
-const ITL_SLO_MS = 50
-
-const TASKS = [
-  { id: 'kv-oom', text: 'Make a 70B FP16 model OOM at 32k context on one H100', xp: 60 },
-  { id: 'kv-rescue', text: 'Rescue it: quantize (FP8) and use GQA math to fit the same 32k context', xp: 60 },
-  { id: 'kv-batch', text: 'Compute a batch size that fits 200k context (no OOM)', xp: 60 },
-]
-
-type Term = 'two' | 'L' | 'H' | 'd' | 'bytes' | 'ctx' | 'B' | null
-
-function fmtGb(gb: number): string {
-  return gb >= 100 ? gb.toFixed(1) : gb.toFixed(2)
-}
-function fmtCtx(c: number): string {
-  return c >= 1000 ? `${(c / 1000).toFixed(c % 1000 === 0 ? 0 : 1)}k` : String(c)
-}
-
-/* ------------------------------------------------------------------ */
 /* component                                                           */
 /* ------------------------------------------------------------------ */
 
+type Term = 'two' | 'L' | 'H' | 'd' | 'bytes' | 'ctx' | 'B' | null
+
 type MachineMode = 'calc' | 'blocks'
 
+/** What the Run button last did, in words that never give the number away. */
+interface RunStatus {
+  /** Bumps on every press, so a repeat announces again. */
+  n: number
+  text: string
+}
+
 export default function KvCacheSim() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const machineParam = searchParams.get('machine')
-  const fromParam = searchParams.get('from')
+  const { machine: machineParam, from: fromParam, selectMachine } = useSimMachine()
   const machineMode: MachineMode =
     machineParam === 'calc' || machineParam === 'blocks'
       ? machineParam
       : fromParam === 't5.l5'
         ? 'blocks'
         : 'calc'
-  const selectMachine = (mode: MachineMode) => {
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current)
-        next.set('machine', mode)
-        return next
-      },
-      { replace: true },
-    )
-  }
+  // The shell lists a machine's tasks by its explicit machine; a link or block with none gets the one shown.
+  useEffect(() => {
+    if (machineParam !== machineMode) selectMachine(machineMode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for the machine this mount resolved to
+  }, [])
 
+  const host = useSimHost()
+  const observe = host?.observe
   const reduced = useReducedMotion()
   const { lines, log, clear } = useLog('kv-calc ready — memory/token = 2 × L × H_kv × d × bytes')
-  const award = useTaskAward('sim-kv', log)
 
-  const [presetId, setPresetId] = useState<PresetId>('llama3-8b')
-  const [layers, setLayers] = useState(32)
-  const [kvHeads, setKvHeads] = useState(8)
-  const [headDim, setHeadDim] = useState(128)
-  const [kvDtype, setKvDtype] = useState<Dtype>('fp16')
-  const [weightDtype, setWeightDtype] = useState<Dtype>('fp16')
-  const [ctxIdx, setCtxIdx] = useState(3) // 8192
-  const [batchIdx, setBatchIdx] = useState(2) // 4
-  const [gpuId, setGpuId] = useState('h100')
-  const [gpuCount, setGpuCount] = useState(1)
-  const [prefixShare, setPrefixShare] = useState(0)
-  const [paged, setPaged] = useState<boolean>(true)
+  const initial = useInitialCfg<unknown>()
+  const start = useMemo(() => normalizeConfig(initial), [initial])
+  const [presetId, setPresetId] = useState<PresetId>(start.presetId)
+  const [layers, setLayers] = useState(start.layers)
+  const [kvHeads, setKvHeads] = useState(start.kvHeads)
+  const [headDim, setHeadDim] = useState(start.headDim)
+  const [kvDtype, setKvDtype] = useState<Dtype>(start.kvDtype)
+  const [weightDtype, setWeightDtype] = useState<Dtype>(start.weightDtype)
+  const [ctxIdx, setCtxIdx] = useState(CTX_STEPS.indexOf(start.ctx))
+  const [batchIdx, setBatchIdx] = useState(BATCH_STEPS.indexOf(start.batch))
+  const [gpuId, setGpuId] = useState(start.gpuId)
+  const [gpuCount, setGpuCount] = useState(start.gpuCount)
+  const [prefixShare, setPrefixShare] = useState(start.prefixShare)
+  const [paged, setPaged] = useState<boolean>(start.paged)
   const [hoverTerm, setHoverTerm] = useState<Term>(null)
+  const [runStatus, setRunStatus] = useState<RunStatus | null>(null)
+  const runCount = useRef(0)
 
   const isCustom = presetId === 'custom'
-  const paramsB = isCustom ? 7 : PRESETS.find((p) => p.id === presetId)?.paramsB ?? 7
-  const kvBytes = DTYPE.find((d) => d.id === kvDtype)?.bytes ?? 2
-  const weightBytes = DTYPE.find((d) => d.id === weightDtype)?.bytes ?? 2
+  const kvBytes = dtypeBytes(kvDtype)
   const ctx = CTX_STEPS[ctxIdx]
   const batch = BATCH_STEPS[batchIdx]
-  const gpu = GPUS.find((g) => g.id === gpuId) ?? GPUS[0]
-  const totalHbmGb = gpu.gb * gpuCount
-  const totalBandwidthGbps = gpu.bandwidthGbps * gpuCount
+  const gpu = gpuById(gpuId)
 
-  /* ---- the math: KV bytes = 2 × L × H_kv × d × bytes × ctx × B ---- */
-  const calc = useMemo(() => {
-    const kvPerToken = 2 * layers * kvHeads * headDim * kvBytes // bytes / token / sequence
-    const shareFactor = batch > 1 ? 1 - (prefixShare / 100) * ((batch - 1) / batch) : 1
-    const kvUsed = (kvPerToken * ctx * batch * shareFactor) / 1e9 // GB actually needed
-    const paFactor = paged ? 1.04 : 1 / 0.3 // static reservation wastes ~70%
-    const kvReserved = kvUsed * paFactor
-    const weights = paramsB * weightBytes
-    const overhead = 1 + 0.03 * weights
-    const total = weights + kvReserved + overhead
-    const oom = total > totalHbmGb
-    const perSeqGb = (kvPerToken * ctx * paFactor) / 1e9
-    const availableKvGb = Math.max(0, totalHbmGb - weights - overhead)
-    const sharedPrefixGb = perSeqGb * (prefixShare / 100)
-    const unsharedGb = perSeqGb - sharedPrefixGb
-    const maxBatch =
-      availableKvGb < sharedPrefixGb
-        ? 0
-        : Math.max(0, Math.floor((availableKvGb - sharedPrefixGb) / Math.max(unsharedGb, 1e-9)))
-    const itlMs = ((weights + kvUsed) / totalBandwidthGbps) * 1000
-    const bandwidthKvBudgetGb = Math.max(0, (totalBandwidthGbps * ITL_SLO_MS) / 1000 - weights)
-    const bandwidthPerSeqGb = (kvPerToken * ctx) / 1e9
-    const bandwidthSharedPrefixGb = bandwidthPerSeqGb * (prefixShare / 100)
-    const bandwidthUnsharedGb = bandwidthPerSeqGb - bandwidthSharedPrefixGb
-    const bandwidthBatch =
-      bandwidthKvBudgetGb < bandwidthSharedPrefixGb
-        ? 0
-        : Math.max(
-            0,
-            Math.floor(
-              (bandwidthKvBudgetGb - bandwidthSharedPrefixGb) /
-                Math.max(bandwidthUnsharedGb, 1e-9),
-            ),
-          )
-    const limitingWall = maxBatch <= bandwidthBatch ? 'capacity' : 'bandwidth'
-    return {
-      kvPerToken,
-      kvUsed,
-      kvReserved,
-      weights,
-      overhead,
-      total,
-      oom,
-      maxBatch,
-      bandwidthBatch,
-      limitingWall,
-      itlMs,
-      shareFactor,
-      paFactor,
-      wastePct: paged ? 4 : 70,
-    }
-  }, [layers, kvHeads, headDim, kvBytes, weightBytes, ctx, batch, prefixShare, paramsB, totalHbmGb, totalBandwidthGbps, paged])
+  const state: KvState = useMemo(
+    () => ({ presetId, layers, kvHeads, headDim, kvDtype, weightDtype, ctx, batch, gpuId, gpuCount, prefixShare, paged }),
+    [presetId, layers, kvHeads, headDim, kvDtype, weightDtype, ctx, batch, gpuId, gpuCount, prefixShare, paged],
+  )
+
+  /* ---- the math: KV bytes = 2 × L × H_kv × d × bytes × ctx × B (src/lib/sims/models/kv.ts) ---- */
+  const calc = useMemo(() => kvModel(state), [state])
+  const { totalHbmGb, totalBandwidthGbps } = calc
 
   const heroGb = useTweened(calc.kvReserved, reduced)
 
@@ -338,30 +245,44 @@ export default function KvCacheSim() {
     prevOom.current = calc.oom
   }, [calc.oom, calc.total, totalHbmGb, gpuCount, gpu.name, log])
 
-  /* ---- task detection ---- */
-  const oomSeen = useRef(false)
-  useEffect(() => {
-    if (presetId === 'llama3-70b' && weightDtype === 'fp16' && kvDtype === 'fp16' && ctx >= 32768 && calc.oom) {
-      oomSeen.current = true
-      award('kv-oom', 60, `70B FP16 @ ${fmtCtx(ctx)}: needs ${fmtGb(calc.total)}GB > ${totalHbmGb}GB`)
+  /* ---- Run: report what the sim measures, for the task panel to grade ---- */
+  const hostTaskIds = host?.taskIds
+  const scoped = useMemo(
+    () => resolveTasks('sim-kv', 'calc', hostTaskIds).filter((t) => t.kind === 'outcome' && t.observe !== undefined && SETUPS[t.observe] !== undefined),
+    [hostTaskIds],
+  )
+  const run = () => {
+    if (observe === undefined) return
+    const sent: string[] = []
+    for (const t of scoped) {
+      const setup = SETUPS[t.observe as string]
+      if (setupMismatches(state, setup).length > 0) continue
+      const reading = READINGS.find((r) => r.key === t.observe)
+      if (reading === undefined) continue
+      observe({ key: reading.key, value: reading.read(calc), unit: reading.unit, configHash: JSON.stringify(state) })
+      sent.push(t.title)
     }
-  }, [presetId, weightDtype, kvDtype, ctx, calc.oom, calc.total, totalHbmGb, award])
-
-  useEffect(() => {
-    if (oomSeen.current && presetId === 'llama3-70b' && kvDtype !== 'fp16' && ctx >= 32768 && !calc.oom) {
-      award('kv-rescue', 60, `rescued: 70B ${kvDtype.toUpperCase()} KV @ ${fmtCtx(ctx)} fits in ${fmtGb(calc.total)}GB ✓`)
+    runCount.current += 1
+    const n = runCount.current
+    if (sent.length > 0) {
+      log('ok', `RUN  reading sent for: ${sent.join('; ')}`)
+      setRunStatus({ n, text: `Run: reading sent for ${sent.join('; ')}.` })
+      return
     }
-  }, [presetId, kvDtype, ctx, calc.oom, calc.total, award])
-
-  useEffect(() => {
-    if (ctx >= 200000 && !calc.oom && batch >= 2) {
-      award('kv-batch', 60, `batch ${batch} fits @ ${fmtCtx(ctx)} (max ≈ ${calc.maxBatch})`)
+    const closest = scoped
+      .map((t) => ({ t, miss: setupMismatches(state, SETUPS[t.observe as string]) }))
+      .sort((a, b) => a.miss.length - b.miss.length)[0]
+    if (closest === undefined) {
+      setRunStatus({ n, text: 'Run: no task reads this calculator here.' })
+      return
     }
-  }, [ctx, calc.oom, calc.maxBatch, batch, award])
+    log('warn', `RUN  nothing sent; closest task "${closest.t.title}" needs ${closest.miss.join(', ')}`)
+    setRunStatus({ n, text: `Run: nothing sent. The closest task, "${closest.t.title}", needs ${closest.miss.join(', ')}.` })
+  }
 
   const applyPreset = (id: PresetId) => {
     setPresetId(id)
-    const p = PRESETS.find((pp) => pp.id === id)
+    const p = presetById(id)
     if (p) {
       setLayers(p.layers)
       setKvHeads(p.kvHeads)
@@ -407,10 +328,11 @@ export default function KvCacheSim() {
   const blocks = useMemo(() => {
     const n = 24
     const used = 7
+    const staticWasted = Math.round((n * STATIC_WASTE_PCT) / 100 + (used * (100 - STATIC_WASTE_PCT)) / 100)
     const arr: { used: boolean; wasted: boolean }[] = []
     for (let i = 0; i < n; i++) {
       if (paged) arr.push({ used: i < used, wasted: i === used })
-      else arr.push({ used: i < used, wasted: i >= used && i < Math.round(n * 0.7 + used * 0.3) })
+      else arr.push({ used: i < used, wasted: i >= used && i < staticWasted })
     }
     return arr
   }, [paged])
@@ -424,7 +346,7 @@ export default function KvCacheSim() {
           ? 'trace logical-to-physical KV blocks, prefix sharing, copy-on-write, and preemption'
           : 'memory/token = 2 × L × H_kv × d × bytes — a form with live consequences'
       }
-      tasks={machineMode === 'blocks' ? BLOCK_TABLE_TASKS : TASKS}
+      tasks={machineMode === 'blocks' ? BLOCK_TABLE_TASKS : []}
       help={
         machineMode === 'blocks' ? (
           <p>
@@ -457,6 +379,21 @@ export default function KvCacheSim() {
           </button>
         ))}
       </div>
+      {machineMode === 'calc' && observe !== undefined && scoped.length > 0 && (
+        <section aria-label="Run a task reading" className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface-1 px-4 py-3">
+          <button
+            type="button"
+            onClick={run}
+            className="flex min-h-6 items-center gap-1.5 rounded-sm border border-accent bg-accent-dim px-3 py-1.5 font-mono text-[12px] text-accent transition-all duration-180 active:scale-[.97] [@media(pointer:coarse)]:min-h-11"
+          >
+            <Play size={12} aria-hidden />
+            Run
+          </button>
+          <p role="status" aria-live="polite" className="min-w-0 flex-1 font-mono text-[11px] text-text-2" data-run-status>
+            {runStatus === null ? 'Set the calculator up as a task says, then press Run to send its reading to the task panel.' : runStatus.text}
+          </p>
+        </section>
+      )}
       {machineMode === 'calc' ? (
       <div className="grid gap-4 xl:grid-cols-[400px_1fr]">
         {/* ================= left: parameter form ================= */}
@@ -499,7 +436,7 @@ export default function KvCacheSim() {
             <Slider value={[layers]} onValueChange={(v) => setLayers(v[0])} min={8} max={128} step={4} aria-label="layers" />
             <div className="mt-3" />
             {ctrlLabel('H', 'KV heads (GQA)', String(kvHeads))}
-            <Slider value={[kvHeads]} onValueChange={(v) => setKvHeads(v[0])} min={1} max={16} step={1} aria-label="kv heads" />
+            <Slider value={[kvHeads]} onValueChange={(v) => setKvHeads(v[0])} min={1} max={32} step={1} aria-label="kv heads" />
             <div className="mt-3" />
             {ctrlLabel('d', 'head dim', String(headDim))}
             <Slider value={[headDim]} onValueChange={(v) => setHeadDim(v[0])} min={64} max={256} step={64} aria-label="head dim" />
@@ -517,7 +454,7 @@ export default function KvCacheSim() {
             <div key={label}>
               <div className="mb-1 font-mono text-[11px] text-text-3">{label}</div>
               <div className="flex gap-1">
-                {DTYPE.map((d) => (
+                {DTYPES.map((d) => (
                   <button
                     key={d.id}
                     type="button"
@@ -566,7 +503,7 @@ export default function KvCacheSim() {
           <button
             onClick={() => {
               setPaged(!paged)
-              log('op', !paged ? 'PAGEDATTENTION on — block=16, waste <4% ≡ OS paging' : 'STATIC reservation — reserve max ctx per seq (≈70% waste)')
+              log('op', !paged ? `PAGEDATTENTION on — block=${BLOCK_SIZE}, waste <${PAGED_WASTE_PCT}% ≡ OS paging` : `STATIC reservation — reserve max ctx per seq (≈${STATIC_WASTE_PCT}% waste)`)
             }}
             aria-pressed={paged}
             className={cn(
@@ -574,7 +511,7 @@ export default function KvCacheSim() {
               paged ? 'border-accent/60 bg-accent-dim/40 text-accent' : 'border-amber/50 bg-amber/5 text-amber',
             )}
           >
-            <span>PagedAttention (block=16)</span>
+            <span>PagedAttention (block={BLOCK_SIZE})</span>
             <span className="text-[10px]">{paged ? 'ON ≡ page table' : 'OFF ≡ static reserve'}</span>
           </button>
 
@@ -718,6 +655,9 @@ export default function KvCacheSim() {
                 <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">capacity wall</div>
                 <div className="mt-1 font-display text-[26px] font-bold text-text-1">{calc.maxBatch}</div>
                 <div className="font-mono text-[10px] text-text-3">max concurrent at {fmtCtx(ctx)}</div>
+                <div className="mt-1 font-mono text-[10px] text-text-3">
+                  longest context at batch {batch}: <span className="text-text-2">{fmtCtx(calc.maxCtx)}</span>
+                </div>
               </div>
               <div>
                 <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">bandwidth / ITL</div>
@@ -753,9 +693,9 @@ export default function KvCacheSim() {
               </div>
             </section>
             <section className="rounded-md border border-line bg-surface-1 p-4">
-              <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">one request @ 100k ctx</div>
+              <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">one request @ {fmtCtx(ctx)} ctx</div>
               <div className="mt-1 font-display text-[28px] font-bold text-t5">
-                {fmtGb((calc.kvPerToken * 100000) / 1e9)}
+                {fmtGb(calc.oneSequenceGb)}
                 <span className="ml-1 text-[14px] text-text-3">GB</span>
               </div>
               <div className="mt-1 font-mono text-[11px] text-text-3">
@@ -768,7 +708,7 @@ export default function KvCacheSim() {
           <section className="rounded-md border border-line bg-surface-1 p-4">
             <div className="mb-2 flex items-center justify-between">
               <span className="font-mono text-label uppercase tracking-[0.10em] text-text-3">
-                {paged ? 'pagedattention: on-demand blocks' : 'static reservation: the 70% tax'}
+                {paged ? 'pagedattention: on-demand blocks' : `static reservation: the ${STATIC_WASTE_PCT}% tax`}
               </span>
               <span className={cn('rounded-sm border px-1.5 py-0.5 font-mono text-[11px]', paged ? 'border-accent/50 text-accent' : 'border-amber/50 text-amber')}>
                 waste {calc.wastePct}%
@@ -790,15 +730,15 @@ export default function KvCacheSim() {
             <div className="font-mono text-[11px] leading-relaxed text-text-3">
               {paged ? (
                 <>
-                  allocate KV in 16-token blocks as tokens arrive ≡ <span className="text-t2">OS paging</span> ≡{' '}
+                  allocate KV in {BLOCK_SIZE}-token blocks as tokens arrive ≡ <span className="text-t2">OS paging</span> ≡{' '}
                   <span className="text-t5">KV block table</span>. internal fragmentation &lt; 1 block/seq ⇒{' '}
-                  <span className="text-accent">waste &lt;4%</span>. that's the entire PagedAttention trick.
+                  <span className="text-accent">waste &lt;{PAGED_WASTE_PCT}%</span>. that's the entire PagedAttention trick.
                 </>
               ) : (
                 <>
                   without paging you must reserve <span className="font-mono text-amber">max_ctx × batch</span> up
                   front — sequences that stop early leave HBM stranded (amber). need ≈
-                  <span className="text-amber"> 3.3×</span> the KV you actually use.
+                  <span className="text-amber"> {STATIC_RESERVE_FACTOR.toFixed(1)}×</span> the KV you actually use.
                 </>
               )}
             </div>

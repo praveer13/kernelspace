@@ -73,7 +73,8 @@ describe('legacy tasks keep their ids and pay as before', () => {
     for (const id of ['t-sched-fifo', 't-rust-move', 't-ctx-cliff', 't-lock-aba', 't-layout-aos', 't-eng-gqa', 't-blk-cow', 't-frame-trace']) {
       expect(ids).toContain(id)
     }
-    expect(legacy.length).toBe(reg.tasks.length) // no outcome tasks until C7–C9
+    // outcome tasks arrive per sim (C7–C9) under dotted ids: `roof.*`, `kv.*`, `alloc.*`; every other task is legacy
+    for (const t of reg.tasks) expect(t.kind === 'outcome').toBe(/^(roof|kv|alloc)\./.test(t.id))
     for (const t of legacy) {
       expect(t.predict).toBeUndefined()
       expect(t.kcs).toEqual([])
