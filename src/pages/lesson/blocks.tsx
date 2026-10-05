@@ -289,7 +289,7 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
     case 'callout':
       return <CalloutView block={block} />
     case 'diagram':
-      return <DiagramView block={block} trackColor={trackColor} />
+      return <DiagramView block={block} trackColor={trackColor} lessonId={lesson.id} blockIndex={lesson.blocks.indexOf(block)} />
     case 'statline':
       return <StatlineView block={block} trackColor={trackColor} />
     case 'quiz':
