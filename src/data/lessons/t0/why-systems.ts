@@ -11,6 +11,49 @@ const lesson: Lesson = {
   exercise: 'quiz',
   blocks: [
     {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'vLLM stores one sequence\'s KV cache in many fixed-size blocks that can sit anywhere in GPU memory, not in one contiguous buffer. What does that buy?',
+          options: [
+            'Faster attention reads, with scattered blocks spreading each sequence across more memory channels',
+            'Almost no wasted memory, with blocks handed out as the sequence grows and returned when it ends',
+            'Crash safety, with each block written to a log so a failed GPU can replay the sequence',
+            'Bigger batches through compression, with each block held in a smaller number format than the weights',
+          ],
+          correct: [1],
+          why: [
+            'Scattering does not speed anything up. A contiguous read is the fast case, and the block table exists to fix allocation, not bandwidth.',
+            'Right: this is paging. Fixed-size blocks go to a sequence on demand and come back when it ends, so no sequence reserves space for tokens it may never produce.',
+            'Journaling is a filesystem idea for durable state. KV cache is volatile and is recomputed if lost, so there is nothing to replay.',
+            'Precision is a separate lever, quantization, and block size does not touch it. Blocks change where bytes live, not how many bytes each value takes.',
+          ],
+          revealAt: 'The same fifty-year-old ideas',
+          kcs: ['t0.idea-reuse'],
+        },
+        {
+          kind: 'choice',
+          q: 'Decoding one token from an 8-billion-parameter FP16 model on an H100 takes about 5 ms. What is the GPU mostly doing in that time?',
+          options: [
+            'Multiplying matrices flat out, with the GPU math units saturated until the token is finished',
+            'Waiting on memory, with the weights streaming out of HBM while the GPU math units idle',
+            'Waiting on the host, with the weights copied across PCIe from CPU memory before each token',
+            'Waiting on the scheduler, with the CPU choosing which request runs next before the GPU starts',
+          ],
+          correct: [1],
+          why: [
+            'At batch size 1 the math is about 16 GFLOPs, trivial next to hundreds of TFLOPs. The units are mostly idle, not saturated.',
+            'Right: each token reads every weight from HBM once. About 16 GB at about 3.35 TB/s is roughly 5 ms, so the time is spent moving bytes, not doing math.',
+            'Weights stay resident in HBM after loading. PCIe carries prompts and sampled tokens, and at about 64 GB/s it would be far too slow to stream weights per token.',
+            'Scheduling happens between steps and overlaps with GPU work. It affects latency around the step, not the roughly 5 ms the step itself takes.',
+          ],
+          revealAt: 'Why decode is bandwidth-bound — a preview',
+          kcs: ['t4.decode-bandwidth'],
+        },
+      ],
+    },
+    {
       type: 'prose',
       md: `You already know how to serve traffic. You can shard a database, tune a connection pool, read a flame graph, and argue about p99 latency at a whiteboard. What you probably cannot do yet — and what this course will teach you — is explain *why* an LLM serving stack behaves the way it does. Why does adding one more request to a batch sometimes double throughput and sometimes OOM the GPU? Why does the vLLM paper spend three pages describing what is, unmistakably, a page table? Why did NVIDIA write Dynamo's data plane in Rust instead of Python?
 
@@ -117,6 +160,7 @@ Everything is unlocked. The order is the point. Each lesson is 15–35 minutes, 
             'Journaling protects on-disk metadata across crashes. KV cache is volatile GPU memory that is simply recomputed if lost, so there is no log to replay and no durability problem for PagedAttention to solve.',
             'DMA and interrupts are about moving bytes without the CPU. PagedAttention solves allocation and fragmentation of KV memory, not how bytes get transferred, so this describes a different layer of the system.',
           ],
+          kcs: ['t0.idea-reuse'],
         },
         {
           q: 'During single-token decode of an 8B FP16 model (~16 GB of weights), what fundamentally limits tokens/second?',
@@ -135,6 +179,7 @@ Everything is unlocked. The order is the point. Each lesson is 15–35 minutes, 
             'Weights stay resident in HBM after loading; PCIe carries prompts and sampled tokens. Streaming 16 GB per token over PCIe (roughly 64 GB/s) would be far slower than HBM at 3.35 TB/s.',
             'Tokenization is a microsecond-scale CPU step, overlapped with GPU work. It affects front-end latency, not the per-token decode floor, which is set by bytes read from HBM.',
           ],
+          kcs: ['t4.decode-bandwidth'],
         },
         {
           q: 'Why did NVIDIA implement Dynamo\'s data plane in Rust rather than Python?',
@@ -153,6 +198,7 @@ Everything is unlocked. The order is the point. Each lesson is 15–35 minutes, 
             'Python has asyncio and mature async libraries. The real cost is interpreter overhead and the GIL under heavy transfer concurrency, not missing async syntax.',
             'Production GPU kernels are written in CUDA C++ or similar, not compiled from Rust. Rust in Dynamo is host-side code orchestrating transfers, so a shared-toolchain argument does not apply.',
           ],
+          kcs: ['t0.runtime-costs', 't0.idea-reuse'],
         },
         {
           q: 'An 8B FP16 model streams ~16 GB of weights every decode step. Why can adding requests to the batch raise throughput almost for free, yet eventually cause an OOM?',
@@ -171,10 +217,39 @@ Everything is unlocked. The order is the point. Each lesson is 15–35 minutes, 
             'Right: the ~16 GB of weights are read once per step whatever the batch size, so extra sequences reuse them. Each adds only its own KV cache, which grows with context and eventually fills HBM.',
             'Idle compute is real at small batch, which is why batching is cheap, but an OOM is a memory error, not a FLOPs limit. Too few FLOPs slow steps; too little HBM fails allocation.',
           ],
+          kcs: ['t5.batching-throughput', 't4.decode-bandwidth'],
         },
       ],
     },
   ],
+  kcs: ['t0.idea-reuse', 't4.decode-bandwidth', 't5.batching-throughput'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain why the vLLM authors call KV-cache management a paging problem. Name the OS pieces it borrows and what each one does.',
+        model:
+          'Each sequence gets fixed-size KV blocks on demand, like pages. A per-sequence block table maps logical token positions to physical blocks, like a page table, so blocks can sit anywhere. Finished sequences return blocks to a shared pool, and shared prefixes use copy-on-write. Together these keep wasted memory near zero.',
+        ideas: [
+          'Fixed-size blocks are handed out on demand, like pages',
+          'A per-sequence block table maps logical tokens to physical blocks, like a page table',
+          'Blocks return to a shared pool and prefixes share copy-on-write, so waste stays near zero',
+        ],
+        kcs: ['t0.idea-reuse'],
+      },
+      {
+        prompt: 'A teammate says decode is slow because the GPU needs more TFLOPs. Using the 8B FP16 example, say what you would check first and why.',
+        model:
+          'Decode streams about 16 GB of weights per token. At about 3.35 TB/s that takes about 5 ms however fast the math units are, and they sit mostly idle. So check memory bandwidth and bytes moved per token. Fewer bytes (quantization) or more tokens per read (batching) help; extra FLOPs do not.',
+        ideas: [
+          'Each token reads all about 16 GB of weights, so time is bytes divided by bandwidth, about 5 ms',
+          'The math units mostly idle waiting on memory, so more TFLOPs does not help',
+          'The levers are fewer bytes per token or more tokens per read: quantization and batching',
+        ],
+        kcs: ['t4.decode-bandwidth', 't5.batching-throughput'],
+      },
+    ],
+  },
 }
 
 export default lesson

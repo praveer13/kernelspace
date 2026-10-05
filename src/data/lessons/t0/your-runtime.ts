@@ -11,6 +11,49 @@ const lesson: Lesson = {
   exercise: 'quiz',
   blocks: [
     {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A managed runtime promises memory safety: no dangling pointers, no use-after-free. What does it usually charge for that promise?',
+          options: [
+            'Extra CPU for garbage collection and write barriers, with spare heap headroom kept free',
+            'A slower start, with the program interpreted for a while before the JIT compiles code',
+            'A lock on each object access, with each read passing through the JVM\'s object monitor',
+            'A disk copy of each object, with each write logged to an SSD so freed memory can come back',
+          ],
+          correct: [0],
+          why: [
+            'Right: safety needs a collector or reference counts to know when memory is dead. That costs CPU, write barriers and spare heap, and the headroom is what lets pauses stay short.',
+            'Warm-up is a real cost, but it is the JIT\'s price for speed, not the price of memory safety. Safety is paid for in steady-state GC work.',
+            'Objects are not locked on every read. A lock per access would make single-threaded code crawl, and safety does not require it.',
+            'Heap objects live in RAM and are not mirrored to disk. A collector reclaims dead memory without logging writes.',
+          ],
+          revealAt: 'The contract your runtime signs for you',
+          kcs: ['t0.runtime-costs'],
+        },
+        {
+          kind: 'choice',
+          q: 'G1 and ZGC spend CPU and heap headroom to keep pauses short. Which serving decision is the same trade in a different place?',
+          options: [
+            'Choosing how much KV cache to keep resident, with GPU time spent moving the rest back',
+            'Choosing which tokenizer to load, with a larger BPE vocabulary using more CPU memory',
+            'Choosing which GPU to rent, with a faster HBM chip costing more per hour than a slower one',
+            'Choosing which LLM to serve, with a larger model giving better text at a higher GPU cost',
+          ],
+          correct: [0],
+          why: [
+            'Right: holding more state costs capacity, and reclaiming or moving it costs time. Tuning -Xmx against GC pauses and sizing KV residency are the same skill.',
+            'Vocabulary size is a fixed property of the model. It does not trade resident state against the cost of reclaiming it.',
+            'Price against speed is a real trade, but it has no reclamation step. The GC trade is about holding state versus the work to free it.',
+            'Quality against cost is a model choice. It does not involve reclaiming memory, so it is a different trade from heap headroom against pauses.',
+          ],
+          revealAt: 'The JVM: an operating system for one tenant',
+          kcs: ['t0.idea-reuse', 't0.runtime-costs'],
+        },
+      ],
+    },
+    {
       type: 'prose',
       md: `Every idea in this course lands twice as fast if it lands on familiar ground. So before T1 drops you into raw pointers, let's cash in your existing intuition. You have run the JVM or CPython in production for years. Both are **systems programs** — millions of lines of C and C++ that manage memory, schedule execution, and compile code behind your back. They are the perfect reference implementation of the concepts you are about to learn the manual way.
 
@@ -125,6 +168,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'Objects have different classes and sizes and are created on demand, so nothing can be pre-built per object. Allocation is fast because the region is contiguous and thread-private.',
             'The JVM does free memory, via GC in bulk. Modern malloc also uses per-thread arenas; its cost is searching free lists for a fitting block, which bump allocation skips entirely.',
           ],
+          kcs: ['t0.runtime-costs'],
         },
         {
           q: 'CPython needs the GIL primarily to protect…',
@@ -143,6 +187,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'The cycle collector also runs under the GIL, but it is a secondary client layered on refcounting. The lock chiefly guards the counts that every assignment updates.',
             'Imports use their own per-module locks and caches. A global interpreter lock exists because every object access touches a shared reference count, not because of module loading.',
           ],
+          kcs: ['t0.runtime-costs'],
         },
         {
           q: 'JIT deoptimization most closely resembles which LLM-serving technique?',
@@ -161,6 +206,7 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'Continuous batching schedules requests at token boundaries to keep the GPU full. It makes no speculative assumption, so it has nothing to verify or roll back.',
             'Caching reuses results known to be identical; it holds no unverified assumption. Deoptimization exists because compiled code may become wrong when an assumption breaks, which reuse never risks.',
           ],
+          kcs: ['t0.idea-reuse'],
         },
         {
           q: 'Why do LLM serving stacks keep Python out of the hot data plane?',
@@ -179,10 +225,39 @@ T0 is done when these five things feel like home: the latency ladder (0.5 ns →
             'The GPU does the heavy math in CUDA kernels, so Python adds per-launch overhead, not per-FLOP slowdown. Python is kept out for tail latency and data movement, not a blanket 100x penalty.',
             'asyncio and similar libraries overlap I/O fine in most services. The limit is interpreter and GIL cost under heavy concurrency, not missing async syntax.',
           ],
+          kcs: ['t0.runtime-costs', 't0.idea-reuse'],
         },
       ],
     },
   ],
+  kcs: ['t0.runtime-costs', 't0.idea-reuse'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain why CPython has a GIL, and name the T2 trade-off it matches.',
+        model:
+          'Every CPython object carries a reference count that every assignment updates. Making each update safe with atomics or per-object locks slowed single-threaded code, so CPython chose one global lock: one thread runs bytecode at a time. It is the big kernel lock trade-off: simple and cheap, but threads cannot run Python in parallel.',
+        ideas: [
+          'Reference counts are updated on every assignment, so they need protection',
+          'Fine-grained locks or atomics slowed single-threaded code, so one global lock was chosen',
+          'It matches a big kernel lock: simple and cheap, but it serializes threads',
+        ],
+        kcs: ['t0.runtime-costs'],
+      },
+      {
+        prompt: 'A JIT compiler speculates and sometimes deoptimizes. Describe that pattern, then name the serving technique that follows it.',
+        model:
+          'The JIT assumes a fast path, such as one receiver class at a call site, and compiles for it. A cheap guard checks the assumption, and on failure execution falls back to the interpreter. Speculative decoding does the same: a draft proposes tokens, the target verifies them in parallel, and rejected tokens are rolled back.',
+        ideas: [
+          'An optimistic fast path built on an assumption',
+          'A cheap check, with a safe fallback or rollback when it fails',
+          'Speculative decoding: draft, verify in parallel, roll back on mismatch',
+        ],
+        kcs: ['t0.idea-reuse', 't0.runtime-costs'],
+      },
+    ],
+  },
 }
 
 export default lesson
