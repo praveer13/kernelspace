@@ -48,9 +48,9 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
 
 **Q1. What happens when RefCell::borrow_mut conflicts with a live shared borrow?**
 
-- (o1) It blocks the thread until the shared borrow ends, as a Mutex lock would
-- (o2) It creates a data race, since two references now alias the same value
-- (o3) It panics at runtime, because RefCell enforces the borrow rule dynamically instead of statically
+- (o1) It blocks the thread until every shared borrow ends, as a Mutex lock would
+- (o2) It creates a data race, since two references now alias the same value in memory
+- (o3) It panics at runtime because RefCell enforces the borrow rule dynamically, not at compile time
 - (o4) It returns an Err value that the caller must handle, so the program carries on
 
 **Q2. What releases a std::sync::Mutex lock?**

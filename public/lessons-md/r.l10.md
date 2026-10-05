@@ -49,16 +49,16 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
 
 **Q1. When is Ordering::Relaxed sufficient?**
 
-- (o1) Every compare_exchange loop, because the compare and swap happen as one atomic step
+- (o1) Every compare_exchange loop because the compare and swap happen as one atomic step
 - (o2) A standalone ticket or metrics counter that guards no other data
-- (o3) The store that unlocks a spin lock, since only one atomic bool changes
+- (o3) The store that unlocks a spin lock since only one atomic bool changes
 - (o4) A ready flag set after filling a non-atomic buffer, because the flag store is itself atomic
 
 **Q2. What relationship does Release/Acquire establish when the Acquire observes the Release?**
 
 - (o1) Both operations become SeqCst, so every atomic in the program gets one global order
-- (o2) The Acquire blocks until the releasing thread leaves its critical section, as with a lock
-- (o3) Every thread sees the writes at once, not only the thread that performed the Acquire
+- (o2) The Acquire blocks until the releasing thread leaves its critical section as with a lock
+- (o3) Every thread sees the writes at once and not only the thread that performed the Acquire
 - (o4) Writes made before the Release are visible to the thread whose Acquire load observes it
 
 **Q3. Why must compare_exchange code handle failure?**

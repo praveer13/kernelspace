@@ -53,21 +53,21 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
 
 - (o1) It keeps the referent alive until 'a ends, moving it to the heap if needed
 - (o2) It stores a scope tag with the reference and checks it on dereference, panicking if the scope ended
-- (o3) It adds a reference count to the referent, as Rc does, so 'a lasts while any holder remains
+- (o3) It adds a reference count at runtime, as Rc does, so 'a lasts while any holder remains
 - (o4) Nothing at runtime, because it is compile-time metadata relating how long references stay valid
 
 **Q2. Why must struct Block<'a> declare a lifetime for its &[u32] field?**
 
 - (o1) The type must say that a Block cannot outlive its borrowed slice, so rustc can check it
-- (o2) Rust needs 'a to compute the size of Block, because a slice length is unknown at compile time
+- (o2) Rust must declare a lifetime to compute the size of Block, because a slice length is unknown at compile time
 - (o3) It is optional for shared slice fields, since elision applies; &mut fields demand it
 - (o4) A slice owns its elements, and 'a tells Rust how long Block keeps that storage allocated
 
 **Q3. What is the right fix when data truly must outlive the input it came from?**
 
-- (o1) Copy the reference with `let r2 = r`, so the copy no longer depends on the input
+- (o1) Copy the reference with `let r2 = r`, so the copy no longer depends on the input it was taken from
 - (o2) Return or store owned data, such as a Vec or String, so nothing borrows from the input
-- (o3) Declare the return as 'static, so the reference stays valid for the whole program
-- (o4) Wrap the reference in a Box, because heap placement gives it an independent lifetime
+- (o3) Declare the return as 'static, so the data stays valid from the input's scope until the whole program ends
+- (o4) Wrap the reference in a Box, because heap placement gives the data it came from an independent lifetime
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

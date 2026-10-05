@@ -59,8 +59,8 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
 
 **Q3. What does Drop provide?**
 
-- (o1) Cleanup of heap memory only, since files and locks still need a manual close call
-- (o2) Cleanup run by a background collector some time after the owner leaves scope, like a Java finalizer
+- (o1) Cleanup of heap memory only, since files, sockets and locks still need a manual close call
+- (o2) Cleanup run by a background collector, some time after the owner leaves scope, as Java does, via finalizers
 - (o3) Deterministic cleanup of whatever the value owns, such as memory, a file or a lock, when its owner ends
 - (o4) Cleanup that happens only when code calls drop() explicitly, like close() in C
 

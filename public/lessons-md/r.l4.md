@@ -50,16 +50,16 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 **Q1. Which combination may exist at the same time for one value?**
 
 - (o1) At most one reference of either kind, since even two &T could see a half-written update
-- (o2) One &mut T alongside any number of &T, because readers cannot see an in-progress write
-- (o3) Any number of &mut T, provided no two of them write the same element
+- (o2) One &mut T alongside any number of &T, because readers cannot see an in-progress write, so nothing races
+- (o3) Any number of &mut T, provided no two of them write the same element, since the compiler tracks each index
 - (o4) Many &T, or exactly one &mut T, but never a &mut T together with any other live reference
 
 **Q2. Why prefer &[T] to &Vec<T> in a read-only function parameter?**
 
 - (o1) A slice accepts arrays, Vecs and subranges, and exposes only the access the callee needs
-- (o2) A &Vec<T> parameter forces the callee to allocate a new Vec, but a slice reuses the caller's existing buffer
+- (o2) A &Vec<T> parameter forces the callee to allocate a new Vec, copy every element, then drop it, but a slice reuses the caller's buffer
 - (o3) Indexing and iteration need a slice type, so a &Vec<T> parameter cannot use either one
-- (o4) A &Vec<T> moves the Vec into the callee for good, whereas a slice only borrows part of it
+- (o4) A &Vec<T> moves the Vec into the callee for good, so the caller loses it, whereas a slice only borrows part of it
 
 **Q3. Why can Vec::push conflict with a live element reference?**
 
