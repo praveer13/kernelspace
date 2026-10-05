@@ -48,23 +48,23 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
 
 **Q1. What happens when RefCell::borrow_mut conflicts with a live shared borrow?**
 
-- (o1) It blocks until the borrow ends
-- (o2) It creates a data race
-- (o3) It panics at runtime
-- (o4) It silently clones the value
+- (o1) It blocks the thread until the shared borrow ends, as a Mutex lock would
+- (o2) It creates a data race, since two references now alias the same value
+- (o3) It panics at runtime, because RefCell enforces the borrow rule dynamically instead of statically
+- (o4) It returns an Err value that the caller must handle, so the program carries on
 
 **Q2. What releases a std::sync::Mutex lock?**
 
-- (o1) The next lock attempt
-- (o2) Dropping the MutexGuard
-- (o3) Cloning the mutex
-- (o4) A manual unlock call is always required
+- (o1) The scheduler, once the holding thread blocks or sleeps inside the critical section
+- (o2) Dropping the MutexGuard that lock() returned, usually at the end of scope or via drop
+- (o3) The end of the statement that called lock(), whether or not the guard was bound to a name
+- (o4) Calling unlock() on the Mutex once the critical section ends, as with a Java lock
 
-**Q3. Which type best fits a single-threaded shared counter whose value is Copy?**
+**Q3. Which type lets a single-threaded counter of Copy values change through a shared reference, with no guard and no lock?**
 
-- (o1) Arc<usize>
-- (o2) Cell<usize>
-- (o3) Weak<usize>
-- (o4) Box<Mutex<usize>>
+- (o1) Rc<usize>, which shares ownership of the counter and lets every owner update it
+- (o2) Cell<usize>, which sets and gets the value by copy, with no borrow tracking
+- (o3) Arc<Mutex<usize>>, the standard way to share a mutable counter
+- (o4) RefCell<usize>, since it also mutates through a shared reference and is the general choice
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

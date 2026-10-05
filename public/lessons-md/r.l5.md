@@ -51,23 +51,23 @@ The [R5 Forge drill](/forge/rust-zero-r5) covers struct methods, an enum state m
 
 **Q1. What does Option<T> communicate that a nullable reference does not?**
 
-- (o1) The value lives on the heap
-- (o2) Absence is an explicit variant that must be handled
-- (o3) The function cannot fail
-- (o4) The value is mutable
+- (o1) The value is boxed on the heap, and a null pointer stands for None at runtime
+- (o2) Absence is a variant of the type, so the compiler forces each caller to handle it
+- (o3) Each access is checked for null at runtime and throws on failure, as in a Java NPE
+- (o4) Why the value is missing, since None carries an error describing the absence
 
 **Q2. Inside a Result-returning function, what does expr? do when expr is Err?**
 
-- (o1) Retries the expression
-- (o2) Panics immediately
-- (o3) Ignores the error
-- (o4) Returns that error from the current function, converting it when supported
+- (o1) It evaluates to the error value and execution continues, leaving later code to check it, as in Go
+- (o2) It panics with the error value, like unwrap(), instead of handing the Err to the caller
+- (o3) It unwinds like an exception to whichever caller has a handler, so signatures need no Result
+- (o4) It returns that Err from the current function, converting the error with From when the types differ
 
 **Q3. When should ordinary input validation return Result instead of panic?**
 
-- (o1) Only in unsafe code
-- (o2) Never
-- (o3) When the caller can reasonably handle invalid input
-- (o4) Only when allocating
+- (o1) Only when failures are frequent enough that unwinding would show up in profiles
+- (o2) Only in library crates, while an application may panic on any input it cannot use
+- (o3) When the caller can reasonably react, such as rejecting a bad config value
+- (o4) Only for I/O errors, since a malformed value is an invariant violation and should panic
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

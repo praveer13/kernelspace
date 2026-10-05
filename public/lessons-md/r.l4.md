@@ -49,23 +49,23 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 
 **Q1. Which combination may exist at the same time for one value?**
 
-- (o1) References are never allowed together
-- (o2) One &mut T and any number of &T
-- (o3) Any number of &mut T
-- (o4) Many &T, or exactly one &mut T
+- (o1) At most one reference of either kind, since even two &T could see a half-written update
+- (o2) One &mut T alongside any number of &T, because readers cannot see an in-progress write
+- (o3) Any number of &mut T, provided no two of them write the same element
+- (o4) Many &T, or exactly one &mut T, but never a &mut T together with any other live reference
 
 **Q2. Why prefer &[T] to &Vec<T> in a read-only function parameter?**
 
-- (o1) A slice accepts more contiguous owners and exposes only the needed capability
-- (o2) Slices are always heap allocated
-- (o3) Slices copy all elements
-- (o4) Vec cannot be borrowed
+- (o1) A slice accepts arrays, Vecs and subranges, and exposes only the access the callee needs
+- (o2) A &Vec<T> parameter forces the callee to allocate a new Vec, but a slice reuses the caller's existing buffer
+- (o3) Indexing and iteration need a slice type, so a &Vec<T> parameter cannot use either one
+- (o4) A &Vec<T> moves the Vec into the callee for good, whereas a slice only borrows part of it
 
 **Q3. Why can Vec::push conflict with a live element reference?**
 
-- (o1) push is asynchronous
-- (o2) References cannot point to integers
-- (o3) push consumes the Vec
-- (o4) push may reallocate and invalidate the referenced address
+- (o1) push takes the Vec by value, so every earlier reference points at moved-from memory afterwards
+- (o2) Vec counts live element borrows at runtime, and push panics whenever that count is nonzero
+- (o3) push shifts existing elements along by one slot, so the held reference would see a different value
+- (o4) push can reallocate the buffer, leaving any held element reference pointing at freed heap memory
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

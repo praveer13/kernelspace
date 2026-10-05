@@ -51,23 +51,23 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
 
 **Q1. What does a lifetime annotation do at runtime?**
 
-- (o1) Extends heap allocation lifetime
-- (o2) Runs a destructor later
-- (o3) Adds reference counting
-- (o4) Nothing; it supplies a compile-time relationship
+- (o1) It keeps the referent alive until 'a ends, moving it to the heap if needed
+- (o2) It stores a scope tag with the reference and checks it on dereference, panicking if the scope ended
+- (o3) It adds a reference count to the referent, as Rc does, so 'a lasts while any holder remains
+- (o4) Nothing at runtime, because it is compile-time metadata relating how long references stay valid
 
 **Q2. Why must struct Block<'a> declare a lifetime for its &[u32] field?**
 
-- (o1) The type must state that Block cannot outlive the borrowed slice
-- (o2) The field is mutable
-- (o3) All structs require lifetimes
-- (o4) Slices always allocate
+- (o1) The type must say that a Block cannot outlive its borrowed slice, so rustc can check it
+- (o2) Rust needs 'a to compute the size of Block, because a slice length is unknown at compile time
+- (o3) It is optional for shared slice fields, since elision applies; &mut fields demand it
+- (o4) A slice owns its elements, and 'a tells Rust how long Block keeps that storage allocated
 
 **Q3. What is the right fix when data truly must outlive the input it came from?**
 
-- (o1) Disable Drop
-- (o2) Return or store owned data
-- (o3) Invent a longer lifetime annotation
-- (o4) Use a wildcard lifetime
+- (o1) Copy the reference with `let r2 = r`, so the copy no longer depends on the input
+- (o2) Return or store owned data, such as a Vec or String, so nothing borrows from the input
+- (o3) Declare the return as 'static, so the reference stays valid for the whole program
+- (o4) Wrap the reference in a Box, because heap placement gives it an independent lifetime
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

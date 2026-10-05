@@ -71,23 +71,23 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
 
 **Q1. What does let x = x + 1 do when x already exists?**
 
-- (o1) Fails in every case
-- (o2) Mutates the original binding
-- (o3) Allocates x on the heap
-- (o4) Creates a new binding that shadows the old one
+- (o1) It is a compile error, because a name can be bound only once per scope
+- (o2) It mutates the existing binding in place, which compiles only if x was already declared with mut
+- (o3) It allocates a fresh x on the heap so the old and new values can coexist
+- (o4) It creates a new binding named x that shadows the old one, and the new type may differ
 
 **Q2. Why does removing the final semicolon from a Rust block matter?**
 
-- (o1) It disables type checking
-- (o2) The final expression becomes the block value
-- (o3) It makes the value mutable
-- (o4) It makes the block asynchronous
+- (o1) The line is no longer evaluated, since only semicolon-terminated lines execute
+- (o2) The final expression becomes the value of the block
+- (o3) The block returns early and also ends the enclosing function with that value
+- (o4) The block turns lazy, so its statements run only when the result is first read
 
 **Q3. Which integer type is normally used for collection indexes?**
 
-- (o1) f64
-- (o2) i8
-- (o3) char
-- (o4) usize
+- (o1) u32, because an index is never negative and 32 bits cover any collection
+- (o2) i32, the default inferred integer type, as with int indexes in Java
+- (o3) isize, so that arithmetic such as index - 1 cannot underflow
+- (o4) usize, whose width matches the pointer size of the target platform
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

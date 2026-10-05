@@ -50,23 +50,23 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
 
 **Q1. What property makes match especially useful with enums?**
 
-- (o1) It allocates no stack
-- (o2) It accepts truthy values
-- (o3) It must cover every possible variant
-- (o4) It runs arms in parallel
+- (o1) It requires a trailing default arm, as a Java switch often does, to stay safe
+- (o2) It raises a runtime error when no arm matches, so tests must exercise every variant
+- (o3) It must cover every variant, so a newly added variant breaks incomplete matches
+- (o4) Arms fall through to the next one unless each ends with a break, as in a C switch
 
 **Q2. What values does 0..4 produce?**
 
-- (o1) 0, 1, 2, 3
-- (o2) 0, 1, 2, 3, 4
-- (o3) Only 0 and 4
-- (o4) 1, 2, 3, 4
+- (o1) 0, 1, 2, 3, because the upper bound is excluded unless you write the inclusive form 0..=4
+- (o2) 0, 1, 2, 3, 4, because Rust ranges include both ends, as in Ruby
+- (o3) 0, 1, 2, 3 in a for loop, but v[0..4] as a slice index includes element 4
+- (o4) 1, 2, 3, 4, because Rust ranges count from one, like Lua or Fortran arrays
 
 **Q3. How can an infinite loop compute a value?**
 
-- (o1) All loops evaluate to true
-- (o2) break can carry the loop result
-- (o3) return is mandatory
-- (o4) Only by mutating a global
+- (o1) Its last body expression becomes the value, as with the tail of a block
+- (o2) break can carry the loop's result, as in break n
+- (o3) Only through return, since every loop evaluates to the unit value
+- (o4) It needs a declared type, as in loop -> u32, before break may carry a value
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
