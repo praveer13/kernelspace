@@ -112,10 +112,10 @@ The exercise wires the three architectures against the same workload and shows y
         {
           q: 'Send and Sync mean, respectively…',
           options: [
-            'Serializable for sending over a wire / usable under a synchronized lock, as in Java',
+            'Serializable for sending over a wire / usable under a synchronized lock as in Java',
             'May be moved to another thread / may be shared across threads by reference',
-            'Safe to use with message channels / safe to use with locks, as two separate concurrency styles',
-            'Safe to call from async code / safe to call from blocking code, like async versus sync APIs',
+            'Safe to use with message channels / safe to use with locks',
+            'Safe to call from async code / safe to call from blocking code',
           ],
           correct: [1],
           explanation:
@@ -130,10 +130,10 @@ The exercise wires the three architectures against the same workload and shows y
         {
           q: 'Rc<T> is !Send because…',
           options: [
-            'Rc is slower than Arc, so the compiler steers threaded code away from it to protect performance',
-            'Its refcount updates are non-atomic, so concurrent clones could tear the count and cause use-after-free',
-            'Rc keeps its value on the heap, and heap memory that one thread allocated may not be touched by another thread',
-            'Rc contains a RefCell internally, and RefCell\'s borrow flags are not thread safe',
+            'Rc is slower than Arc and the compiler steers threaded code away from it',
+            'Its count is bumped non-atomically and two clones in two threads could tear it',
+            'Rc keeps its value on the heap and one thread may not touch memory another allocated',
+            'Rc contains a RefCell internally and the borrow flags of RefCell are not thread safe',
           ],
           correct: [1],
           explanation:
@@ -148,10 +148,10 @@ The exercise wires the three architectures against the same workload and shows y
         {
           q: 'Rust\'s "fearless concurrency" guarantee covers…',
           options: [
-            'Data races and deadlocks, because the type system tracks which locks each thread holds',
-            'Data races on shared memory, while logic races, deadlocks and starvation in your own protocol remain your problem',
-            'Data races only in programs with no unsafe code anywhere, including the standard library and dependencies',
-            'Memory safety across threads only when you use channels, while state behind a Mutex falls outside it',
+            'Data races and deadlocks through type tracking of which locks each thread holds',
+            'Data races on shared memory while logic races and deadlocks remain your own problem',
+            'Data races solely in programs that avoid unsafe code in dependencies and the standard library',
+            'Memory safety across threads when you use channels while state behind a Mutex falls outside it',
           ],
           correct: [1],
           explanation:
@@ -166,10 +166,10 @@ The exercise wires the three architectures against the same workload and shows y
         {
           q: 'Holding a std::sync::MutexGuard across an .await in async Rust is dangerous because…',
           options: [
-            'std mutexes are illegal in async code, so the compiler rejects any async fn that locks one',
-            'The task parks holding the lock, so tasks that call lock() block worker threads and the executor can deadlock',
-            'std::sync::Mutex poisons itself whenever a task is suspended at an await, so every later lock() returns an error',
-            'An await consumes the guard, so the lock is released at the suspension point and another task can slip in mid-update',
+            'std mutexes are illegal in async code and the compiler rejects any async fn that locks one',
+            'The task parks while it is holding the lock and other tasks that lock it block worker threads',
+            'The std mutex poisons itself when a task suspends at an await and later lock calls return an error',
+            'An await consumes the guard and releases the lock at the suspension point for another task to slip in',
           ],
           correct: [1],
           explanation:

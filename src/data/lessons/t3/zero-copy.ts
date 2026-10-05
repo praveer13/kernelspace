@@ -119,10 +119,10 @@ Serving systems live or die on copy discipline: every tensor moved between devic
         {
           q: 'A Rust slice &[T] is…',
           options: [
-            'An owned, heap-allocated array that carries its own length and frees itself, like a Java array or a Vec',
-            'A fat pointer (ptr, len) describing a borrowed, contiguous view that can never outlive its own source',
-            'A copy of the selected range, as with Python list slicing, so the original can be freed afterward',
-            'A reference-counted handle to the buffer, so it stays valid for as long as any slice exists',
+            'An owned heap-allocated array that carries its own length and frees itself like a Vec',
+            'A fat pointer of address and length that describes a borrowed contiguous view of its source',
+            'A copy of the selected range as with Python list slicing and the original can be freed afterward',
+            'A reference-counted handle to the buffer that stays valid for as long as any slice exists',
           ],
           correct: [1],
           explanation:
@@ -137,10 +137,10 @@ Serving systems live or die on copy discipline: every tensor moved between devic
         {
           q: 'bytes::Bytes achieves zero-copy sharing by…',
           options: [
-            'Copying on first write: all slices share the original bytes until someone mutates one, which triggers a private copy',
-            'Reference-counting one immutable buffer and handing out views that only bump the count',
-            'Borrowing the original Vec with a lifetime parameter, so each slice is a plain &[u8] tied to the creating stack frame',
-            'Allocating every slice from a pool that is freed in one step, so no per-slice tracking is needed at all',
+            'Copying on first write where slices share the original bytes until one is mutated and gets a private copy',
+            'Reference-counting one immutable buffer and handing out views that merely bump the count',
+            'Borrowing the original Vec with a lifetime parameter and tying each slice to the creating stack frame',
+            'Allocating each slice from a pool that is freed in one step and avoids per-slice tracking',
           ],
           correct: [1],
           explanation:
@@ -155,10 +155,10 @@ Serving systems live or die on copy discipline: every tensor moved between devic
         {
           q: 'Inside an unsafe block, Rust…',
           options: [
-            'Disables the borrow checker for the block, so references can alias freely and mutable access needs no proof there',
-            'Unlocks five extra operations, like raw-pointer dereference and unsafe calls; borrow rules still apply',
-            'Turns off bounds checks and overflow checks for everything inside the block, so indexing becomes unchecked',
-            'Taints the enclosing function, so every caller must also be marked unsafe',
+            'Disables the borrow checker for the block and lets references alias freely without proof',
+            'Unlocks a few extra operations such as raw-pointer dereference while borrow rules still apply',
+            'Turns off bounds checks and overflow checks inside the block and makes slice indexing unchecked',
+            'Taints the enclosing function and forces its callers to be marked unsafe as well',
           ],
           correct: [1],
           explanation:
@@ -173,10 +173,10 @@ Serving systems live or die on copy discipline: every tensor moved between devic
         {
           q: 'The professional pattern for unsafe Rust is…',
           options: [
-            'Declare hot-path modules unsafe throughout, since per-block annotations add noise and the checker cannot help there',
-            'Keep unsafe internals tiny behind a safe, borrow-checked API, with documented SAFETY invariants, Miri tests and review of that one module',
-            'Avoid unsafe in every circumstance, since a single block voids the safety guarantee of the whole program',
-            'Expose unsafe functions directly and document them in the README, so callers decide when the risk is acceptable',
+            'Declare hot-path modules unsafe throughout and skip per-block annotations that add noise',
+            'Keep unsafe internals tiny behind a safe borrow-checked interface and document the invariants',
+            'Ban unsafe outright on the view that a single block voids the safety guarantee of the whole program',
+            'Expose unsafe functions directly and document them in the crate docs and let callers decide on the risk',
           ],
           correct: [1],
           explanation:
