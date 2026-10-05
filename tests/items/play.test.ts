@@ -322,6 +322,9 @@ describe('keyAction: what the card does with a key', () => {
     expect(keyAction(state(), key('Enter', { target: 'option' }))).toEqual(none)
     expect(keyAction(state({ answered: true }), key('Enter', { target: 'option' }))).toEqual({ type: 'act' })
     expect(keyAction(state(), key('Enter', { target: 'button' }))).toEqual(none)
+    // a link (the claim popover's source) keeps its own Enter; ItemCard also ignores portalled events outright
+    expect(keyAction(state(), key('Enter', { target: 'link' }))).toEqual(none)
+    expect(keyAction(state({ answered: true }), key('Enter', { target: 'link' }))).toEqual(none)
     expect(keyAction(state(), key('Enter', { target: 'input' }))).toEqual({ type: 'act' })
     expect(keyAction(state(), key('Enter'))).toEqual({ type: 'act' })
     expect(keyAction(state(), key('Enter', { shift: true }))).toEqual(none)

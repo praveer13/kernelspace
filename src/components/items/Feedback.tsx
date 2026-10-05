@@ -53,7 +53,8 @@ export default function Feedback({ view, grade, picks, deferred, steps, stepsOpe
 
       {grade && !deferred && (
         <>
-          {!grade.ok && (view.kind === 'numeric' || view.kind === 'estimate') && (
+          {/* without a diagnosis the verdict line already ends with the answer */}
+          {!grade.ok && grade.diagnosis && (view.kind === 'numeric' || view.kind === 'estimate') && (
             <p className="text-body-sm text-text-2">
               The answer is <span className="font-mono text-text-1">{formatNumber(view.answer.truth)} {view.answer.unit}</span>.
             </p>

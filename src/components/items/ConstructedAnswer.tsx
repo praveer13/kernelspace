@@ -72,7 +72,7 @@ export default function ConstructedAnswer({ cr, text, ideas, revealed, onText, o
                     checked={ideas[i]}
                     disabled={disabled}
                     onChange={(e) => onIdea(i, e.target.checked)}
-                    className="mt-0.5 h-5 w-5 shrink-0 accent-[#3EF2A4]"
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-accent"
                   />
                   <span className="min-w-0 break-words">{idea}</span>
                 </label>

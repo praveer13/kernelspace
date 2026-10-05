@@ -368,8 +368,8 @@ export function togglePick(picks: readonly string[], id: string, multi: boolean)
 
 /* ------------------------------ the keyboard, as a pure decision ------------------------------ */
 
-/** What the focused element is, as far as the card's keys care. `option` is an answer button. */
-export type KeyTarget = 'option' | 'button' | 'input' | 'textarea' | 'select' | 'other'
+/** What the focused element is, as far as the card's keys care. `option` is an answer button; a `link` keeps its own Enter, like a button. */
+export type KeyTarget = 'option' | 'button' | 'link' | 'input' | 'textarea' | 'select' | 'other'
 
 export interface KeyState {
   stepsOpen: boolean
@@ -416,8 +416,8 @@ export function keyAction(s: KeyState, e: KeyInput): KeyAction {
     if (e.shift || e.target === 'select') return NONE
     if (e.target === 'textarea' && !(e.ctrl || e.meta)) return NONE
     if (e.repeat) return { type: 'swallow' }
-    // a button keeps its own Enter (click); an option submits once something is picked, else it selects
-    if (e.target === 'button' || (e.target === 'option' && !s.answered)) return NONE
+    // a button or link keeps its own Enter (click); an option submits once something is picked, else it selects
+    if (e.target === 'button' || e.target === 'link' || (e.target === 'option' && !s.answered)) return NONE
     return { type: 'act' }
   }
   if (typing || e.ctrl || e.meta || e.shift || e.repeat || s.done) return NONE

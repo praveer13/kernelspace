@@ -180,11 +180,16 @@ export default function ItemCard({
 
   const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
     if (e.defaultPrevented || e.nativeEvent.isComposing) return
+    // React bubbles synthetic events through portals: a claim chip's popover (Radix Portal) is outside
+    // the form's DOM but inside its React tree. Its keys belong to it, so only handle our own DOM.
+    if (!e.currentTarget.contains(e.target as Node)) return
     const t = e.target as HTMLElement
     const target: KeyTarget = t.hasAttribute('data-ks-option')
       ? 'option'
       : t instanceof HTMLButtonElement
         ? 'button'
+        : t instanceof HTMLAnchorElement
+          ? 'link'
         : t instanceof HTMLInputElement
           ? 'input'
           : t instanceof HTMLTextAreaElement

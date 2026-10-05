@@ -9,6 +9,7 @@ import { formatNumber } from '@/lib/items/units'
 import type { Prompt, PromptPart, SolutionStep } from '@/lib/items/types'
 import { cn } from '@/lib/utils'
 
+// Inline chips keep their text height: WCAG 2.5.8 exempts targets inside a sentence, and a 44 px hit area would overlap the neighbouring lines.
 const CHIP = 'rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[0.92em] text-text-1'
 
 function Part({ part }: { part: PromptPart }) {
