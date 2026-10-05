@@ -64,7 +64,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
       type: 'quiz',
       questions: [
         {
-          q: 'InferenceX (Oct 2025) shows "GB200 NVL72 leads DeepSeek-R1" and "a single B200 node wins at high interactivity". These claims are…',
+          q: 'InferenceX (Oct 2025) shows, on DeepSeek-R1, "GB200 NVL72 leads" and "a single B200 node wins at high interactivity". These claims are…',
           options: [
             'In conflict: one model on one hardware family cannot have two winners, so one of the results used a flawed harness',
             'Both true: they sit in different regions of one frontier, its throughput end and its interactivity end',
@@ -77,7 +77,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
           why: [
             'A frontier has one winner per region, not per model. Throughput and interactivity are separate axes, so different configs lead at each end without any flaw.',
             'Right: the ends of the frontier exclude each other. NVL72\'s fabric amortizes weights across giant batches, while a single node with MTP gives the highest per-user rate.',
-            'The stem names one model. The split is by operating point on the same curve, not by model, so changing the model does not explain it.',
+            'Both claims are about the same model, DeepSeek-R1. The split is by operating point on one frontier, not by model, so a different model cannot explain it.',
             'InferenceX publishes pinned configs and public runs, so the points are reproducible, not hand-picked. Each claim is true for its own region.',
           ],
         },

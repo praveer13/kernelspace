@@ -74,10 +74,10 @@ The engine's control loop, one line: **batching couples TTFT and TPOT into a see
           ],
           correct: [1],
           explanation:
-            'Throughput is monotonic in batch size; latency is not. Unaccompanied throughput numbers are taken at the knee you would never operate at. Ask: at what concurrency, at what TTFT/TPOT?',
+            'Throughput flattens as batch size grows; latency blows up past the knee. Unaccompanied throughput numbers are taken at the knee you would never operate at. Ask: at what concurrency, at what TTFT/TPOT?',
           why: [
-            'Peak throughput is the number capacity plans must not use. Throughput rises with batch size while latency does not, so the peak sits where users already see unusable delays.',
-            'Right: throughput is monotonic in batch size, latency is not. A figure with no TTFT or TPOT is likely from the vertical part of the curve, so ask at what concurrency.',
+            'Peak tok/s is the number capacity plans must not use. Throughput flattens as batch grows while latency climbs steeply past the knee, so the peak sits where users already see unusable delays.',
+            'Right: throughput is monotonic in batch size, latency blows up past the knee. A figure with no TTFT or TPOT is likely from the vertical part of the curve, so ask at what concurrency.',
             'Dividing by GPU count changes the unit, not the missing context. Per-GPU throughput is still undefined without the latency it was reached at, so vendors remain incomparable.',
             'Naming the model fixes one variable only. The same model gives very different tok/s at batch 1 and batch 256, so the operating point still decides the number.',
           ],
@@ -94,10 +94,10 @@ The engine's control loop, one line: **batching couples TTFT and TPOT into a see
           explanation:
             'The batch size is the dial between the two; the SLO picks the operating point. This is why "goodput" is a curve, not a number — and why your lab-06 policy exists.',
           why: [
-            'Tokenization is small CPU work, and it adds delay to both metrics in the same direction. A seesaw needs one metric to improve while the other worsens.',
+            'Tokenization is small CPU work that delays only TTFT, once per request, not every later token. It cannot create a seesaw, which needs one metric to improve while the other worsens.',
             'A fixed per-step collective cost raises both latencies together, so it is overhead, not a tradeoff. The seesaw comes from a knob that helps one at the other\'s expense.',
             'Right: batch size is the dial. Larger batches amortize weight reads and raise throughput, but they queue requests longer and stretch each step, so TTFT and TPOT rise as cost falls.',
-            'Fewer bytes speed up both phases, so quantization moves the frontier outward instead of trading one metric for the other. Dequantization overhead is small next to the saved memory traffic.',
+            'Quantization is not a tradeoff knob. Fewer weight bytes speed decode, while only low-precision math (FP8, FP4) speeds compute-bound prefill, so the frontier moves outward instead of trading one metric for the other.',
           ],
         },
         {

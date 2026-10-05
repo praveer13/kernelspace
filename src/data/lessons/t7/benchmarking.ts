@@ -63,7 +63,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
           q: 'Two engine comparisons report opposite winners. The most common cause is…',
           options: [
             'Run-to-run noise, so the rankings flip at random and the test should be repeated until one winner appears',
-            'Selective reporting: the losing side picked its worst run, because honest harnesses agree exactly',
+            'Engine builds: the reports ran different vLLM or SGLang versions or kernels, which alone explains the flip',
             'A different traffic shape, warmup or stack configuration: results belong to the workload and harness',
             'Hardware generation, since an engine\'s ranking is fixed per GPU and the two reports must have used different chips',
           ],
@@ -72,7 +72,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
             'Rules 1 and 4: different length distributions, prefix ratios, warmup states, power caps, or engine versions. Before believing any comparison, check that everything except the engine was identical.',
           why: [
             'Noise exists but is small beside the effects of workload shape, and repetition under different settings will keep flipping the winner. Controlled runs, not repeats, resolve the disagreement.',
-            'Cherry-picking happens, but it is not the usual cause. Two honest harnesses with different length distributions, prefix ratios or warmup states routinely disagree without anyone misreporting.',
+            'Versions and kernels do shift results, but they are one factor among many. Reports pinned to identical builds still flip on length distribution, prefix ratio or warmup, so version alone does not explain it.',
             'Right: rules 1 and 4. Length distributions, arrival process, prefix ratio, warmup, power caps and engine versions all move the result. Check that everything except the engine was identical.',
             'Hardware is one axis, but rankings flip on identical chips too when traffic shape, prefix sharing or warmup differ. Pinning the GPU alone does not make two comparisons agree.',
           ],
@@ -118,7 +118,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
           options: [
             'Shared prefixes are tokenized once and then reused by later requests, so the ratio sets the tokenizer\'s CPU cost',
             'A high ratio means prefix-cache hits that skip most prefill, so the same engine behaves as a different system',
-            'Engines with a prefix cache show the same numbers at any ratio, so it matters only for engines without one',
+            'The ratio only matters for sizing the cache memory, so it is a deployment detail rather than a benchmark variable',
             'It is a quality metric: shared prefixes reduce answer diversity, so it is disclosed beside accuracy',
           ],
           correct: [1],
@@ -127,7 +127,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
           why: [
             'Tokenization is small CPU work and is not what changes. The ratio matters because reused KV blocks let the engine skip prefill compute entirely.',
             'Right: with cache hits, prefill is mostly skipped, so TTFT, throughput and cost per request all shift. Agentic traffic with heavily shared prefixes exercises a different path than independent requests.',
-            'Backwards: a prefix cache makes results depend more on the ratio, since hit rate decides how much prefill is skipped. Without a cache the ratio changes nothing.',
+            'Cache sizing is a real use of the ratio, but the ratio also decides how much prefill is skipped, which changes TTFT, throughput and cost. Leaving it out makes two benchmarks incomparable.',
             'It is a workload property that changes performance, not an accuracy or diversity measure. The effect shows up in prefill work avoided, not in output quality.',
           ],
         },
