@@ -59,7 +59,7 @@ describe('hydration (§8.2)', () => {
     const second = startTab(p) // a reload: new tab id, same storage
     const s = second.progress.getState()
     expect(s.lessons['t0.l1']?.status).toBe('read')
-    expect(s.xp).toBe(100)
+    expect(s.xp).toBe(0) // a click pays nothing
     expect(s.sims['sim-kv']?.lastConfig).toEqual({ batch: 8 })
     expect(second.loads()).toBe(0) // no engine needed for first paint
   })
@@ -90,7 +90,7 @@ describe('hydration (§8.2)', () => {
     await tab.progress.controls.flush()
     const engine = await tab.engine()
     await engine.exportV3()
-    expect(tab.progress.getState().xp).toBe(140)
+    expect(tab.progress.getState().xp).toBe(3) // the quiz pass; clicking through t0.l1 and t0.l2 pays 0
     expect(p.storage.touched('kernelspace:v1')).toBe(false)
     expect(p.storage.data.get('kernelspace:v1')).toBe(V1_VALUE)
     expect((await engine.events()).every((e) => e.dev !== 'legacy')).toBe(true)
@@ -111,7 +111,7 @@ describe('hydration (§8.2)', () => {
 })
 
 describe('existing actions (§8.3)', () => {
-  test('markLessonStatus: done pays 100 XP synchronously, once; reading is one visit per day; unstarted never regresses', () => {
+  test('markLessonStatus: done pays no XP (a click is read), and is idempotent; reading is one visit per day; unstarted never regresses', () => {
     const tab = startTab(makeProfile())
     const { getState } = tab.progress
     getState().markLessonStatus('t0.l1', 'reading')
@@ -119,13 +119,13 @@ describe('existing actions (§8.3)', () => {
     expect(getState().xp).toBe(0)
 
     getState().markLessonStatus('t0.l1', 'done')
-    expect(getState().xp).toBe(100) // Lesson.tsx reads getState().xp right after (XP stays v1 until B7)
+    expect(getState().xp).toBe(0) // wave-1.md §8.4: reading, clicks and state toggles pay nothing
     expect(getState().lessons['t0.l1']?.status).toBe('read') // a click is read, not passed (wave-1.md §8.3)
     expect(getState().lessons['t0.l1']?.completedAt).toBeDefined()
     expect(selectDoneLessons(getState())).toBe(0)
 
     getState().markLessonStatus('t0.l1', 'done')
-    expect(getState().xp).toBe(100)
+    expect(getState().xp).toBe(0)
     getState().markLessonStatus('t0.l1', 'unstarted')
     getState().markLessonStatus('t0.l1', 'reading')
     expect(getState().lessons['t0.l1']?.status).toBe('read')
@@ -157,17 +157,17 @@ describe('existing actions (§8.3)', () => {
     expect(tab.progress.getState().streakDays).toEqual(['2026-10-05'])
   })
 
-  test('quiz: the pass pays 40 XP once however many passes; best score is kept', () => {
+  test('quiz: the pass pays 3 XP once however many passes; best score is kept', () => {
     const tab = startTab(makeProfile())
     const { getState } = tab.progress
     getState().recordQuizScore('t0.l1', 0.6)
     expect(getState().xp).toBe(0)
     expect(getState().lessons['t0.l1']?.quizScore).toBe(0.6)
     getState().recordQuizScore('t0.l1', 0.8)
-    expect(getState().xp).toBe(40)
+    expect(getState().xp).toBe(3)
     getState().recordQuizScore('t0.l1', 1)
     getState().recordQuizScore('t0.l1', 0.2)
-    expect(getState().xp).toBe(40)
+    expect(getState().xp).toBe(3)
     expect(getState().lessons['t0.l1']?.quizScore).toBe(1)
     expect(getState().streakDays).toHaveLength(1)
   })
@@ -178,7 +178,7 @@ describe('existing actions (§8.3)', () => {
     const { getState } = tab.progress
     getState().markExerciseDone('t0.l1')
     getState().markExerciseDone('t0.l1')
-    expect(getState().xp).toBe(60)
+    expect(getState().xp).toBe(0) // an exercise toggle pays nothing
     expect(getState().lessons['t0.l1']?.exerciseDone).toBe(true)
 
     getState().recordSimVisit('sim-kv')
@@ -187,28 +187,28 @@ describe('existing actions (§8.3)', () => {
     getState().recordSimTask('sim-kv', 'a')
     getState().recordSimTask('sim-kv', 'a')
     expect(getState().sims['sim-kv']?.tasksDone).toEqual(['a'])
-    expect(getState().xp).toBe(120)
+    expect(getState().xp).toBe(0) // a legacy sim-task is display only
     await tab.progress.controls.flush()
     expect((await (await tab.engine()).events({ kinds: ['sim-task'] })).length).toBe(1)
   })
 
-  test('labs: every run is evidence; done and 200 XP once; the streak needs a pass', async () => {
+  test('labs: every run is evidence; done; each required check pays lab minutes ÷ 6 once; the streak needs a pass', async () => {
     const p = makeProfile()
     const tab = startTab(p)
     const { getState } = tab.progress
-    getState().recordLabResult('lab-a', [], 4)
-    expect(getState().labs['lab-a']).toEqual({ done: false, checksDone: [] })
+    getState().recordLabResult('rust-allocator', [], 6)
+    expect(getState().labs['rust-allocator']).toEqual({ done: false, checksDone: [] })
     expect(getState().streakDays).toEqual([]) // nothing passed: no streak day
-    getState().recordLabResult('lab-a', ['c1', 'c2'], 4)
+    getState().recordLabResult('rust-allocator', ['boot', 'align'], 6)
     expect(getState().streakDays).toHaveLength(1)
-    getState().recordLabResult('lab-a', ['c3', 'c4'], 4, { wasmSha256: 'ab'.repeat(32), seed: 7 })
-    expect(getState().labs['lab-a']?.done).toBe(true)
-    expect(getState().labs['lab-a']?.checksDone).toEqual(['c1', 'c2', 'c3', 'c4'])
-    expect(getState().labs['lab-a']?.completedAt).toBeDefined()
-    expect(getState().xp).toBe(200)
-    getState().recordLabResult('lab-a', ['c1'], 4)
-    expect(getState().xp).toBe(200)
-    expect(getState().labs['lab-a']?.done).toBe(true)
+    getState().recordLabResult('rust-allocator', ['no_overlap', 'coalesce', 'reuse', 'fragmentation'], 6, { wasmSha256: 'ab'.repeat(32), seed: 7 })
+    expect(getState().labs['rust-allocator']?.done).toBe(true)
+    expect(getState().labs['rust-allocator']?.checksDone).toEqual(['align', 'boot', 'coalesce', 'fragmentation', 'no_overlap', 'reuse'])
+    expect(getState().labs['rust-allocator']?.completedAt).toBeDefined()
+    expect(getState().xp).toBe(90) // 6 checks × 15
+    getState().recordLabResult('rust-allocator', ['boot'], 6)
+    expect(getState().xp).toBe(90)
+    expect(getState().labs['rust-allocator']?.done).toBe(true)
 
     await tab.progress.controls.flush()
     const runs = await (await tab.engine()).events({ kinds: ['lab-check'] })
@@ -225,7 +225,7 @@ describe('existing actions (§8.3)', () => {
     getState().completeFleetWeekAct('engine', 0.9)
     getState().completeFleetWeekAct('engine', 0.2)
     expect(getState().fleetWeek.scores.engine).toBe(0.9)
-    expect(getState().xp).toBe(250)
+    expect(getState().xp).toBe(30)
     for (const act of ['fleet', 'business']) getState().completeFleetWeekAct(act, 1)
     expect(getState().achievements).toEqual([])
     getState().completeFleetWeekAct('incident', 1)
@@ -233,7 +233,7 @@ describe('existing actions (§8.3)', () => {
     expect(getState().fleetWeek.actsDone).toEqual(['business', 'engine', 'fleet', 'incident'])
     getState().completeFleetWeekAct('incident', 1)
     expect(getState().achievements).toEqual(['fleet-week'])
-    expect(getState().xp).toBe(1000)
+    expect(getState().xp).toBe(30 * 3 + 20) // the incident act is shorter
   })
 
   test('Fleet Week notes: doc text and shallow-merged evidence', () => {
@@ -251,12 +251,12 @@ describe('existing actions (§8.3)', () => {
   test('Capstone: steps pay once, step is the max index + 1, metrics are working state', () => {
     const tab = startTab(makeProfile())
     const { getState } = tab.progress
-    getState().completeCapstoneStep('s3', 2)
-    getState().completeCapstoneStep('s3', 2)
-    getState().completeCapstoneStep('s1', 0)
-    expect(getState().capstone.stepsDone).toEqual(['s1', 's3'])
+    getState().completeCapstoneStep('forward', 2)
+    getState().completeCapstoneStep('forward', 2)
+    getState().completeCapstoneStep('tokenize', 0)
+    expect(getState().capstone.stepsDone).toEqual(['forward', 'tokenize'])
     expect(getState().capstone.step).toBe(3)
-    expect(getState().xp).toBe(300)
+    expect(getState().xp).toBe(45 + 30) // each step pays its Capstone minutes
     getState().setCapstoneMetrics({ ttft: 1, itl: 2, throughput: 3 })
     expect(getState().capstone.metrics).toEqual({ ttft: 1, itl: 2, throughput: 3 })
   })
@@ -300,7 +300,7 @@ describe('existing actions (§8.3)', () => {
     expect(after.labs).toBe(before.labs)
     expect(after.settings).toBe(before.settings)
     expect(after.sims).not.toBe(before.sims)
-    expect(after.xp).toBe(160)
+    expect(after.xp).toBe(0) // a click and a legacy sim toggle pay nothing
   })
 })
 
@@ -322,7 +322,7 @@ describe('additive actions (§8.4)', () => {
       ],
     })
     expect(getState().lessons['t0.l3']?.quizScore).toBe(0.8)
-    expect(getState().xp).toBe(40)
+    expect(getState().xp).toBe(3 + 3) // the pass, plus 5 items at the default 30 s (2.5 min, rounded)
     await tab.progress.controls.flush()
     const events = await (await tab.engine()).events()
     const items = events.filter((e) => e.kind === 'item')
@@ -353,7 +353,7 @@ describe('additive actions (§8.4)', () => {
       { kind: 'predict', ref: 'boot:guess-1user', rev: 'b1', score: 0.7, ok: true, conf: 'think', data: { value: 200, unit: 'tok/s', truth: 208.6, src: 'boot' } },
       { kind: 'item', ref: 'boot:ridge', rev: 'b2', score: 0, ok: false, provenance: 'assisted', data: { src: 'boot', value: 100 } },
     ])
-    expect(getState().xp).toBe(0)
+    expect(getState().xp).toBe(1) // two graded items at the default 30 s each
     expect(getState().streakDays).toHaveLength(1) // graded work earns the day
 
     getState().acknowledge('erratum:e1')
@@ -480,7 +480,7 @@ describe('write path (§8.5, §8.6)', () => {
     const tab = startTab(p)
     p.storage.failWrites = true
     tab.progress.getState().markLessonStatus('t0.l1', 'done')
-    expect(tab.progress.getState().xp).toBe(100)
+    expect(tab.progress.getState().lessons['t0.l1']?.status).toBe('read')
     await tab.progress.controls.flush()
     expect((await p.store.readAll()).events).toHaveLength(1) // IndexedDB still committed
   })
@@ -491,7 +491,7 @@ describe('write path (§8.5, §8.6)', () => {
     const env = { ...tab.env, storage: null }
     const bare = createProgressStore(env, { scheduleBoot: () => {} })
     bare.getState().markLessonStatus('t0.l1', 'done')
-    expect(bare.getState().xp).toBe(100)
+    expect(bare.getState().lessons['t0.l1']?.status).toBe('read')
     await bare.controls.flush()
     expect((await p.store.readAll()).events).toHaveLength(1)
   })
@@ -502,6 +502,7 @@ describe('read-only mode (§8.7, P10)', () => {
     const p = makeProfile()
     const first = startTab(p)
     first.progress.getState().markLessonStatus('t0.l1', 'done')
+    first.progress.getState().recordQuizScore('t0.l3', 1)
     await first.progress.controls.flush()
     const snap = JSON.parse(p.storage.data.get(SNAPSHOT_KEY)!) as SnapshotV2
     snap.schemaVersion = SCHEMA_VERSION + 1
@@ -525,7 +526,7 @@ describe('read-only mode (§8.7, P10)', () => {
     await tick(20)
 
     expect(getState().lessons['t0.l2']).toBeUndefined()
-    expect(getState().xp).toBe(100)
+    expect(getState().xp).toBe(3) // still the snapshot's: the t0.l3 quiz pass
     expect(p.storage.writes()).toEqual([])
     expect([...p.storage.data.keys()].filter((k) => k.startsWith(OUTBOX_PREFIX))).toEqual(outboxesBefore)
     expect(tab.loads()).toBe(0) // it does not even boot the engine
@@ -622,7 +623,7 @@ describe('cross-tab sync (§9.4)', () => {
     expect(s.lessons['t0.l1']?.status).toBe('read')
     expect(s.sims['sim-kv']?.tasksDone).toEqual(['a'])
     expect(s.settings.codeLang).toBe('rust')
-    expect(s.xp).toBe(160)
+    expect(s.xp).toBe(0) // a click and a legacy sim toggle pay nothing
     expect(dataOf(s)).toEqual(dataOf(a.progress.getState()))
   })
 
@@ -639,7 +640,7 @@ describe('cross-tab sync (§9.4)', () => {
     await b.progress.controls.flush()
     await tick(10)
     expect(dataOf(a.progress.getState())).toEqual(dataOf(b.progress.getState()))
-    expect(a.progress.getState().xp).toBe(240)
+    expect(a.progress.getState().xp).toBe(3) // only the quiz pass pays
   })
 
   test('a reset in one tab empties the other, and undo brings it back', async () => {
@@ -649,9 +650,10 @@ describe('cross-tab sync (§9.4)', () => {
     await a.progress.controls.engine()
     await b.progress.controls.engine()
     a.progress.getState().markLessonStatus('t0.l1', 'done')
+    a.progress.getState().recordQuizScore('t0.l1', 1)
     await a.progress.controls.flush()
     await tick(10)
-    expect(b.progress.getState().xp).toBe(100)
+    expect(b.progress.getState().xp).toBe(3)
 
     a.progress.getState().resetProgress()
     await a.progress.controls.flush()
@@ -662,8 +664,8 @@ describe('cross-tab sync (§9.4)', () => {
 
     expect(await (await a.engine()).undo()).toBe(true)
     await tick(10)
-    expect(a.progress.getState().xp).toBe(100)
-    expect(b.progress.getState().xp).toBe(100)
+    expect(a.progress.getState().xp).toBe(3)
+    expect(b.progress.getState().xp).toBe(3)
     expect(b.progress.getState().ledger.undo).toBeUndefined()
   })
 
@@ -683,7 +685,7 @@ describe('cross-tab sync (§9.4)', () => {
     expect(await engine.importFile(file, 'merge')).toMatchObject({ ok: true, added: 2 })
     const s = tab.progress.getState()
     expect(Object.keys(s.lessons).sort()).toEqual(['t0.l1', 't0.l4'])
-    expect(s.xp).toBe(100 + 100 + 60)
+    expect(s.xp).toBe(0) // the merge carries both lessons and the sim task, none of which pays
     expect(s.ledger.undo).toMatchObject({ reason: 'import-merge' })
   })
 })
@@ -709,12 +711,12 @@ describe('importProgress and resetProgress (§8.3)', () => {
     expect(getState().importProgress(file)).toBe(true)
     await tab.progress.controls.flush()
     expect(Object.keys(getState().lessons)).toEqual(['t0.l4'])
-    expect(getState().xp).toBe(100)
+    expect(getState().xp).toBe(0)
     expect(getState().ledger.undo).toMatchObject({ reason: 'import-replace' })
 
     expect(await (await tab.engine()).undo()).toBe(true)
     expect(Object.keys(getState().lessons).sort()).toEqual(['t0.l1', 't0.l2'])
-    expect(getState().xp).toBe(200)
+    expect(getState().xp).toBe(0)
   })
 
   test('an invalid v3 file passes the shape check but the engine refuses it and nothing changes', async () => {
@@ -725,7 +727,7 @@ describe('importProgress and resetProgress (§8.3)', () => {
     const bad = JSON.stringify({ format: 'kernelspace-progress', version: 3, schemaVersion: 3, events: [{ id: 'x' }], working: [] })
     expect(tab.progress.getState().importProgress(bad)).toBe(true)
     await tab.progress.controls.flush()
-    expect(tab.progress.getState().xp).toBe(100)
+    expect(tab.progress.getState().lessons['t0.l1']?.status).toBe('read')
     expect((await (await tab.engine()).events()).length).toBe(1)
   })
 
@@ -769,7 +771,7 @@ describe('boot (§9.6) through the façade', () => {
     const evicted = makeProfile()
     evicted.storage.data.set(SNAPSHOT_KEY, raw)
     const tab = startTab(evicted)
-    expect(tab.progress.getState().xp).toBe(140) // first paint from the snapshot
+    expect(tab.progress.getState().xp).toBe(3) // first paint from the snapshot
     await tab.progress.controls.engine()
     const { ledger } = tab.progress.getState()
     expect(ledger.cleared?.orphanKey).toBe('kernelspace:v2:orphaned:2026-10-04')
@@ -785,7 +787,7 @@ describe('boot (§9.6) through the façade', () => {
     const reload = startTab(p) // reload before the engine ever committed? the outbox still holds it
     await reload.progress.controls.engine()
     expect(reload.progress.getState().ledger.cleared).toBeUndefined()
-    expect(reload.progress.getState().xp).toBe(100)
+    expect(reload.progress.getState().lessons['t0.l1']?.status).toBe('read')
   })
 
   test('IndexedDB unavailable: falls back to memory, keeps the outbox as the durable copy', async () => {
@@ -799,12 +801,12 @@ describe('boot (§9.6) through the façade', () => {
     tab.progress.getState().markLessonStatus('t0.l1', 'done')
     await tab.progress.controls.flush()
     expect(tab.progress.getState().ledger).toMatchObject({ ready: true, readOnly: false, backend: 'memory' })
-    expect(tab.progress.getState().xp).toBe(100)
+    expect(tab.progress.getState().lessons['t0.l1']?.status).toBe('read')
     expect(p.storage.data.has(outboxKey(tab.tabId))).toBe(true) // never settled: it is the store
     // A later load commits the outbox into its fresh memory store.
     const again = startTab(p, { store: new Broken(), engine: { fallbackStore: () => new MemoryStore() } })
     await again.progress.controls.engine()
-    expect(again.progress.getState().xp).toBe(100)
+    expect(again.progress.getState().lessons['t0.l1']?.status).toBe('read')
   })
 })
 
@@ -1087,14 +1089,14 @@ describe('P7 optimistic agreement (I7)', () => {
     }
     tab.progress.getState().markLessonStatus('t0.l1', 'done')
     tab.progress.getState().recordSimTask('sim-kv', 'a')
-    expect(tab.progress.getState().xp).toBe(160)
+    expect(tab.progress.getState().xp).toBe(0)
     release()
     await tab.progress.controls.flush()
     await tick(5)
     tab.progress.getState().markLessonStatus('t0.l2', 'done')
-    expect(tab.progress.getState().xp).toBe(260)
+    expect(tab.progress.getState().xp).toBe(0)
     await tab.progress.controls.flush()
     expect((await (await tab.engine()).events()).length).toBe(3)
-    expect(stableStringify(tab.progress.getState().xp)).toBe('260')
+    expect(stableStringify(tab.progress.getState().xp)).toBe('0')
   })
 })
