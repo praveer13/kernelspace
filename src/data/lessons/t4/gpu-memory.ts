@@ -80,6 +80,8 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
       simId: 'sim-roofline',
       machine: 'roofline',
       title: 'Tier probe: where does your data live?',
+      taskIds: ['t-roof-tiers', 't-roof-pcie'],
+      config: { m: 'H100', workingSetKb: 4, memoryPath: 'auto', pcieMode: false },
       tasks: [
         'Run a kernel reading 4 KB per block from shared memory vs direct from HBM: measure about 6× on H100 (the ratio varies with the selected GPU\'s HBM bandwidth).',
         'Force register spilling (raise per-thread arrays); watch effective bandwidth collapse to HBM speeds.',

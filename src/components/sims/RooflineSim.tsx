@@ -22,10 +22,11 @@
  *   - L2 bandwidth: ~12 TB/s
  *   - shared memory bandwidth: ~20 TB/s
  *   - PCIe x16 Gen4: ~32 GB/s
+ *
+ * Under a SimHost the six outcome tasks of roofline.tasks.ts are graded on what this sim reports through
+ * `useObserve` (the rules live in src/lib/sims/models/roofline.ts); the chart has a DOM mirror (SimMirror).
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Eraser, TrendingUp } from 'lucide-react'
 import PlaygroundShell, {
   ChipButton,
@@ -39,8 +40,10 @@ import PlaygroundShell, {
   usePlaygroundContext,
   usePrefersReducedMotion,
   useSimLog,
+  useSimMachine,
   useWriteCfg,
 } from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
 import { Switch } from '@/components/ui/switch'
 import {
   Select,
@@ -49,33 +52,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { atlasRow } from '@/data/atlas'
 import { cn } from '@/lib/utils'
-import { tiledIntensity } from '@/lib/roofline'
+import { useObserve } from '@/lib/sims/host'
+import {
+  BATCH_STEPS,
+  MACHINES,
+  PRESETS,
+  TILE_CHOICES,
+  announceAttention,
+  announceDecode,
+  announceKernel,
+  announceMachine,
+  announceTile,
+  attentionAI as attentionAIOf,
+  attentionBytes as attentionBytesOf,
+  attainable,
+  decodeAI as decodeAIOf,
+  dtypeLabel,
+  dtypeMultiplier,
+  fmtAI,
+  fmtRate,
+  matmulAI,
+  mirrorTable,
+  observationsFor,
+  ridgeAI as ridgeAIOf,
+} from '@/lib/sims/models/roofline'
+import type { AttentionMode, Dtype, RooflineEvent } from '@/lib/sims/models/roofline'
 
 const SIM_ID = 'sim-roofline'
-
-interface Machine {
-  name: string
-  bw: number // GB/s
-  peak: number // GFLOP/s
-}
-
-// Every preset comes from the hardware atlas (sourced claims). `name` is the saved-config key, so A100 keeps its short name.
-// T4 peak is dense FP16 (Turing has no BF16) and RTX 4090 peak is dense BF16 with FP32 accumulate.
-function atlasMachine(id: string, name?: string): Machine {
-  const row = atlasRow(id)
-  return { name: name ?? row.name, bw: row.hbmBwGBs ?? 0, peak: row.bf16DenseGflops ?? 0 }
-}
-
-const PRESETS: Machine[] = [
-  atlasMachine('t4'),
-  atlasMachine('rtx4090'),
-  atlasMachine('a100-40', 'A100'),
-  atlasMachine('h100'),
-  atlasMachine('b200'),
-  atlasMachine('tpu7x'),
-]
 
 interface KernelDef {
   id: string
@@ -143,21 +147,12 @@ const FLEET_KERNELS: FleetKernelDef[] = [
 ]
 
 const ALL_KERNELS: KernelDef[] = [...KERNELS, ...FLEET_KERNELS]
-const B200_RIDGE_AI = 2_250_000 / 8000
+const B200_RIDGE_AI = ridgeAIOf(MACHINES.b200)
 
 const X_MIN = -7 // log2 FLOPs/byte
 const X_MAX = 10
 const Y_MIN = 7 // log2 GFLOP/s
 const Y_MAX = 22
-
-const BATCH_STEPS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
-const TILE_CHOICES = Array.from({ length: 16 }, (_, index) => (index + 1) * 16)
-
-const fmtAI = (v: number): string =>
-  v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toPrecision(2)
-
-const fmtRate = (g: number): string =>
-  g >= 1000 ? `${(g / 1000).toFixed(g >= 100_000 ? 0 : 1)} TFLOP/s` : `${g.toFixed(0)} GFLOP/s`
 
 const fmtBandwidth = (gbs: number): string =>
   gbs >= 1000 ? `${(gbs / 1000).toFixed(1)} TB/s` : `${gbs.toFixed(gbs >= 100 ? 0 : 1)} GB/s`
@@ -188,18 +183,6 @@ const fmtBytes = (b: number): string => {
   if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MiB`
   if (b >= 1024) return `${(b / 1024).toFixed(1)} KiB`
   return `${b} B`
-}
-
-const dtypeMultiplier = (dtype: 'fp16' | 'fp8' | 'int4'): number => {
-  if (dtype === 'fp8') return 2
-  if (dtype === 'int4') return 4
-  return 1
-}
-
-const dtypeLabel = (dtype: 'fp16' | 'fp8' | 'int4'): string => {
-  if (dtype === 'fp8') return 'FP8 ×2'
-  if (dtype === 'int4') return 'INT4 ×4'
-  return 'FP16 ×1'
 }
 
 /** Synthetic occupancy: register file is the binding budget. */
@@ -300,9 +283,6 @@ const tierName = (
   return 'HBM'
 }
 
-/** Tiled reuse raises intensity in proportion to T: T/2 F/B for FP16 operands (see tiledIntensity). */
-const matmulAI = (T: number): number => tiledIntensity(T, 2)
-
 /** Synthetic shared-memory pressure curve: useful reuse wins through T=64, then residency falls. */
 const tileOccupancyFactor = (T: number): number => {
   const smemPerBlock = 2 * T * T * 4
@@ -318,7 +298,7 @@ interface RoofCfg {
   bw: number
   peak: number
   batch: number
-  dtype: 'fp16' | 'fp8' | 'int4'
+  dtype: Dtype
   guide: number // log2 AI
   warps: number
   registers: number
@@ -329,7 +309,7 @@ interface RoofCfg {
   memoryPath: MemoryPath
   pcieMode: boolean
   tileT: number
-  attentionMode: 'naive' | 'flash'
+  attentionMode: AttentionMode
   serialRan: boolean
   mapRan: boolean
 }
@@ -374,22 +354,13 @@ export default function RooflineSim() {
   const { embed } = usePlaygroundContext()
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const machine = searchParams.get('machine')
+  const { machine, from, selectMachine: selectMode } = useSimMachine()
   const mode: HostMode =
-    machine === 'cpu-gpu' || (machine !== 'roofline' && searchParams.get('from') === 't4.l1')
-      ? 'cpu-gpu'
-      : 'roofline'
-  const selectMode = (nextMode: HostMode) => {
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current)
-        next.set('machine', nextMode)
-        return next
-      },
-      { replace: true },
-    )
-  }
+    machine === 'cpu-gpu' || (machine !== 'roofline' && from === 't4.l1') ? 'cpu-gpu' : 'roofline'
+  const observe = useObserve()
+  const mirrorId = useId()
+  // Discrete results for the mirror's live region; SimMirror speaks them at most once a second.
+  const [announce, setAnnounce] = useState('')
 
   const initialCfg = useInitialCfg<StoredRoofCfg>()
   const initialPreset = PRESETS.find((p) => p.name === initialCfg?.m) ?? PRESETS[3]
@@ -405,7 +376,7 @@ export default function RooflineSim() {
     finiteOr(initialCfg?.peak, initialPreset.peak, 1, 10_000_000),
   )
   const [batch, setBatch] = useState(() => finiteOr(initialCfg?.batch, 1, 1, 512))
-  const [dtype, setDtype] = useState<'fp16' | 'fp8' | 'int4'>(initialDtype)
+  const [dtype, setDtype] = useState<Dtype>(initialDtype)
   const [guide, setGuide] = useState(() => finiteOr(initialCfg?.guide, 0, X_MIN, X_MAX))
   const [points, setPoints] = useState<PlottedPoint[]>([])
   const [playing, setPlaying] = useState(false)
@@ -442,7 +413,7 @@ export default function RooflineSim() {
   const [pcieMode, setPcieMode] = useState(initialCfg?.pcieMode === true)
 
   const [tileT, setTileT] = useState(() => numberOneOfOr(initialCfg?.tileT, TILE_CHOICES, 16))
-  const [attentionMode, setAttentionMode] = useState<'naive' | 'flash'>(
+  const [attentionMode, setAttentionMode] = useState<AttentionMode>(
     oneOfOr(initialCfg?.attentionMode, ['naive', 'flash'] as const, 'naive'),
   )
   const [ridgeAnswer, setRidgeAnswer] = useState('')
@@ -489,12 +460,12 @@ export default function RooflineSim() {
   useEffect(() => {
     targetRef.current = { bw, peak }
   }, [bw, peak])
-  const ridgeAI = (peak * dtypeMultiplier(dtype)) / bw
+  const ridgeAI = ridgeAIOf({ bw, peak }, dtype)
   const guideAI = 2 ** guide
   const guideBound: 'bandwidth' | 'compute' = guideAI < ridgeAI ? 'bandwidth' : 'compute'
 
   // Decode performs the same FLOPs while lower precision reads fewer weight bytes.
-  const decodeAI = batch * dtypeMultiplier(dtype)
+  const decodeAI = decodeAIOf(batch, dtype)
   const decodePlotted = points.some((p) => p.kernelId === 'decode')
 
   /* --------------------------- derived extension model ---------------------- */
@@ -520,9 +491,8 @@ export default function RooflineSim() {
   const tileAI = matmulAI(tileT)
   const tileOccFactor = tileOccupancyFactor(tileT)
 
-  const attentionAI = attentionMode === 'naive' ? 1 : 60
-  const attentionBytes =
-    attentionMode === 'naive' ? 2 * 32_768 ** 2 : 2 * 32_768 * 128 * 3
+  const attentionAI = attentionAIOf(attentionMode)
+  const attentionBytes = attentionBytesOf(attentionMode)
 
   /* ------------------------------ task detection ---------------------------- */
   const sawStridedRef = useRef(false)
@@ -532,8 +502,6 @@ export default function RooflineSim() {
   const sawSharedRef = useRef(false)
   const sawL2Ref = useRef(false)
   const sawHbmRef = useRef(false)
-  const sawSmallTileRef = useRef(true)
-  const comparedDtypesRef = useRef(new Set<RoofCfg['dtype']>())
 
   useEffect(() => {
     if (occupancyLow) completeSimTask(SIM_ID, 't-roof-occupancy', 60)
@@ -572,24 +540,14 @@ export default function RooflineSim() {
     if (pcieMode) completeSimTask(SIM_ID, 't-roof-pcie', 60)
   }, [pcieMode])
 
-  useEffect(() => {
-    if (tileT === 16) sawSmallTileRef.current = true
-    if (tileT >= 128 && sawSmallTileRef.current) completeSimTask(SIM_ID, 't-roof-tile', 60)
-  }, [tileT])
-
-  useEffect(() => {
-    if (attentionMode === 'flash') completeSimTask(SIM_ID, 't-roof-flash', 60)
-  }, [attentionMode])
-
-  useEffect(() => {
-    if (!decodePlotted) return
-    comparedDtypesRef.current.add(dtype)
-    if (comparedDtypesRef.current.size >= 2) {
-      completeSimTask(SIM_ID, 't-roof-dtype', 60)
-    }
-  }, [decodePlotted, dtype])
-
-  // Comparison credit requires observing decode at two precision settings.
+  /* The six outcome tasks (roofline.tasks.ts) are graded on what a learner's action reports, not on a state
+     the sim detects: each handler below calls `report` with what the learner just did. */
+  const report = useCallback(
+    (event: RooflineEvent) => {
+      for (const o of observationsFor(event)) observe(o)
+    },
+    [observe],
+  )
 
   /* ------------------------------ plotting ------------------------------ */
   const plotKernel = useCallback(
@@ -599,7 +557,6 @@ export default function RooflineSim() {
         if (prev.some((p) => p.kernelId === k.id)) return prev
         return [...prev, { kernelId: k.id, at: performance.now() }]
       })
-      if (k.id === 'decode') comparedDtypesRef.current.add(dtype)
       const ai = k.id === 'decode' ? decodeAI : k.ai
       const dtypePeak = peak * dtypeMultiplier(dtype)
       const roof = Math.min(dtypePeak, bw * ai)
@@ -610,14 +567,15 @@ export default function RooflineSim() {
         `${k.label} — AI ${fmtAI(ai)} → ${fmtRate(k.frac * roof)} (${bound})`,
         k.id === 'decode' || k.id === 'prefill' ? 'warn' : 'ok',
       )
-      if (k.id === 'decode') completeSimTask(SIM_ID, 't-decode', 60)
+      setAnnounce(
+        k.id === 'decode'
+          ? announceDecode({ bw, peak }, dtype, batch)
+          : announceKernel(k.label, ai, dtypePeak / bw),
+      )
+      if (k.id === 'decode') report({ type: 'plot-decode', preset, dtype, batch })
     },
-    [bump, bw, decodeAI, dtype, log, peak],
+    [batch, bump, bw, decodeAI, dtype, log, peak, preset, report],
   )
-  /* batch moves decode right until it crosses the ridge */
-  useEffect(() => {
-    if (decodePlotted && decodeAI >= ridgeAI) completeSimTask(SIM_ID, 't-batch', 60)
-  }, [decodePlotted, decodeAI, ridgeAI])
 
   const applyPreset = useCallback(
     (name: string) => {
@@ -631,8 +589,46 @@ export default function RooflineSim() {
         'PRESET',
         `${m.name} — ${m.bw} GB/s HBM · ${fmtRate(m.peak)} peak`,
       )
+      setAnnounce(announceMachine(m.name, m, dtype))
+      report({ type: 'machine', preset: name, dtype })
     },
-    [log],
+    [dtype, log, report],
+  )
+
+  const chooseDtype = useCallback(
+    (next: Dtype) => {
+      setDtype(next)
+      setAnnounce(announceMachine(preset, { bw, peak }, next))
+      report({ type: 'machine', preset, dtype: next })
+    },
+    [bw, peak, preset, report],
+  )
+
+  const chooseBatch = useCallback(
+    (next: number) => {
+      setBatch(next)
+      if (decodePlotted) setAnnounce(announceDecode({ bw, peak }, dtype, next))
+      report({ type: 'batch', preset, dtype, batch: next, decodePlotted })
+    },
+    [bw, decodePlotted, dtype, peak, preset, report],
+  )
+
+  const chooseTile = useCallback(
+    (next: number) => {
+      setTileT(next)
+      setAnnounce(announceTile(next))
+      report({ type: 'tile', tile: next })
+    },
+    [report],
+  )
+
+  const chooseAttention = useCallback(
+    (next: AttentionMode) => {
+      setAttentionMode(next)
+      setAnnounce(announceAttention(next))
+      report({ type: 'attention', mode: next })
+    },
+    [report],
   )
 
   const gradeFleetPractice = useCallback(() => {
@@ -640,7 +636,6 @@ export default function RooflineSim() {
     const feedback: Record<string, { ai: boolean; bound: boolean }> = {}
     const newlyPlotted: PlottedPoint[] = []
 
-    if (ridgeOk) completeSimTask(SIM_ID, 't-roof-b200-ridge', 60)
     for (const kernel of FLEET_KERNELS) {
       const answer = fleetAnswers[kernel.id]
       const expectedBound: Bound = kernel.ai < B200_RIDGE_AI ? 'bandwidth' : 'compute'
@@ -655,9 +650,9 @@ export default function RooflineSim() {
 
     setRidgeFeedback(ridgeOk)
     setFleetFeedback(feedback)
-    setPreset('B200')
-    setBw(8000)
-    setPeak(2_250_000)
+    setPreset(MACHINES.b200.name)
+    setBw(MACHINES.b200.bw)
+    setPeak(MACHINES.b200.peak)
     setDtype('fp16')
     setPoints((previous) => {
       const ids = new Set(previous.map((point) => point.kernelId))
@@ -704,8 +699,6 @@ export default function RooflineSim() {
     sawSharedRef.current = false
     sawL2Ref.current = false
     sawHbmRef.current = false
-    sawSmallTileRef.current = true
-    comparedDtypesRef.current.clear()
     log(0, 'RESET', 'chart cleared — kernels unplotted')
   }, [log])
 
@@ -727,6 +720,28 @@ export default function RooflineSim() {
     const id = window.setInterval(() => stepRef.current(), 500 / speed)
     return () => window.clearInterval(id)
   }, [playing, speed])
+
+  /* ------------------------------ DOM mirror ------------------------------ */
+  const mirror = mirrorTable({
+    preset,
+    bw,
+    peak,
+    dtype,
+    guideAI,
+    plotted: points.flatMap((p) => {
+      const k = ALL_KERNELS.find((kk) => kk.id === p.kernelId)
+      if (!k) return []
+      const ai = k.id === 'decode' ? decodeAI : k.ai
+      return [{ label: k.id === 'decode' && batch > 1 ? `${k.label} ×${batch}` : k.label, ai, attained: k.frac * attainable({ bw, peak }, dtype, ai) }]
+    }),
+    probes: [
+      { label: `coalescing probe (${accessPattern})`, ai: 0.25, attained: 0.25 * effectiveHbmBw },
+      { label: `tier probe (${tier})`, ai: 0.25, attained: 0.25 * tierBw },
+      { label: `matmul tile T=${tileT}`, ai: tileAI, attained: attainable({ bw, peak }, dtype, tileAI) * tileOccFactor },
+      { label: `${attentionMode} attention`, ai: attentionAI, attained: attainable({ bw, peak }, dtype, attentionAI) * 0.8 },
+    ],
+    announce,
+  })
 
   /* ------------------------------ canvas ------------------------------ */
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -1150,17 +1165,11 @@ export default function RooflineSim() {
         { id: 't-cpu-serial', text: 'Compare the serial dependency chain on CPU and GPU', xp: 60 },
         { id: 't-gpu-map', text: 'Compare a 64M elementwise map on CPU and GPU', xp: 60 },
         { id: 't-gpu-divergence', text: 'Compare the 64M map with divergent warp branches', xp: 60 },
-        { id: 't-decode', text: 'Plot decode and observe its bandwidth-bound throughput', xp: 60 },
-        { id: 't-batch', text: 'Batch decode until it crosses the ridge point', xp: 60 },
         { id: 't-roof-occupancy', text: 'Raise registers until occupancy drops below 25%', xp: 60 },
         { id: 't-roof-coalesce', text: 'Recover scattered global loads with coalesced shared-memory staging', xp: 60 },
         { id: 't-roof-bank', text: 'Fix a 32-way shared-memory bank conflict with padding', xp: 60 },
         { id: 't-roof-tiers', text: 'Sweep working set across shared / L2 / HBM cliffs', xp: 60 },
         { id: 't-roof-pcie', text: 'Measure the CPU→GPU PCIe transfer cliff', xp: 60 },
-        { id: 't-roof-tile', text: 'Sweep matmul tile T = 16 → 128 and watch AI move', xp: 60 },
-        { id: 't-roof-flash', text: 'Toggle FlashAttention and watch the AI jump', xp: 60 },
-        { id: 't-roof-dtype', text: 'Plot decode, then compare FP16 / FP8 / INT4', xp: 60 },
-        { id: 't-roof-b200-ridge', text: 'Compute the B200 FP16 ridge point', xp: 60 },
         { id: 't-roof-fleet-router', text: 'Classify and place Fleet router scoring', xp: 60 },
         { id: 't-roof-fleet-decode', text: 'Classify and place 70B batch-32 decode', xp: 60 },
         { id: 't-roof-fleet-paged-attn', text: 'Classify and place paged attention', xp: 60 },
@@ -1195,95 +1204,99 @@ export default function RooflineSim() {
           </ChipButton>
         </div>
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          {/* ------- stage ------- */}
-          <div className="relative min-h-[420px] flex-1 bg-ink bg-blueprint">
-            <div className="pointer-events-none absolute left-4 top-3 z-10 flex flex-wrap items-center gap-2 font-mono text-[10px] text-text-3">
-              <span className="flex items-center gap-1.5 rounded-sm border border-line bg-surface-1 px-2 py-0.5">
-                <TrendingUp size={11} strokeWidth={1.75} className="text-accent" />
-                {preset} · {bw} GB/s · {fmtRate(peak)}
-              </span>
-              <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
-                ridge @ {fmtAI(ridgeAI)} F/B
-              </span>
-              <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
-                dtype {dtypeLabel(dtype)}
-              </span>
-            </div>
-            {mode === 'cpu-gpu' && (
-              <div className="absolute inset-x-4 bottom-4 top-12 z-20 flex flex-col justify-center gap-3">
-                <div className="rounded-sm border border-line bg-surface-1/95 p-4">
-                  <p className="font-display text-base font-semibold text-text-1">Serial dependency chain</p>
-                  <p className="mt-1 font-mono text-[11px] text-text-2">
-                    Each operation depends on the previous result. GPU lanes cannot parallelize the chain,
-                    and launch/synchronization overhead dominates.
-                  </p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs">
-                    <div className="rounded-sm border border-[#5CA8FF44] p-2">CPU · {cpuSerialMs} ms</div>
-                    <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuSerialMs} ms</div>
-                  </div>
-                  <ChipButton
-                    className="mt-3"
-                    active={serialRan}
-                    color="#5CA8FF"
-                    onClick={() => {
-                      setSerialRan(true)
-                      completeSimTask(SIM_ID, 't-cpu-serial', 60)
-                      log(ticksRef.current, 'COMPARE', 'serial chain — CPU wins latency by 50×', 'ok')
-                    }}
-                  >
-                    run serial comparison
-                  </ChipButton>
-                  {serialRan && <p className="mt-2 font-mono text-[11px] text-[#5CA8FF]">CPU wins 50×</p>}
-                </div>
-                <div className="rounded-sm border border-line bg-surface-1/95 p-4">
-                  <p className="font-display text-base font-semibold text-text-1">64M elementwise map</p>
-                  <p className="mt-1 font-mono text-[11px] text-text-2">
-                    64 million independent elements expose enough uniform work to fill GPU warps.
-                  </p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs">
-                    <div className="rounded-sm border border-[#5CA8FF44] p-2">CPU · {cpuMapMs} ms</div>
-                    <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuMapMs.toFixed(2)} ms</div>
-                  </div>
-                  <ChipButton
-                    className="mt-3"
-                    active={mapRan}
-                    color="#A78BFA"
-                    onClick={() => {
-                      setMapRan(true)
-                      completeSimTask(SIM_ID, 't-gpu-map', 60)
-                      if (accessPattern === 'divergent') {
-                        completeSimTask(SIM_ID, 't-gpu-divergence', 60)
-                      }
-                      log(
-                        ticksRef.current,
-                        'COMPARE',
-                        `64M map — GPU ${accessPattern === 'coalesced' ? 'wins throughput by 50×' : accessPattern === 'staged' ? 'recovers coalesced global traffic through shared staging' : 'loses efficiency to warp divergence / scattered access'}`,
-                        accessPattern === 'coalesced' || accessPattern === 'staged' ? 'ok' : 'warn',
-                      )
-                    }}
-                  >
-                    run map comparison
-                  </ChipButton>
-                  {mapRan && (
-                    <p className="mt-2 font-mono text-[11px] text-[#A78BFA]">
-                      {accessPattern === 'coalesced'
-                        ? 'GPU wins 50×'
-                        : accessPattern === 'staged'
-                          ? `staging recovers ${Math.round(accessThroughputFactor * 100)}% end-to-end bandwidth`
-                          : `${accessPattern} warps cut effective throughput ${Math.round(1 / coalesceEff)}×`}
-                    </p>
-                  )}
-                </div>
+          {/* ------- stage + its data table ------- */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="relative min-h-[420px] flex-1 bg-ink bg-blueprint">
+              <div className="pointer-events-none absolute left-4 top-3 z-10 flex flex-wrap items-center gap-2 font-mono text-[10px] text-text-3">
+                <span className="flex items-center gap-1.5 rounded-sm border border-line bg-surface-1 px-2 py-0.5">
+                  <TrendingUp size={11} strokeWidth={1.75} className="text-accent" />
+                  {preset} · {bw} GB/s · {fmtRate(peak)}
+                </span>
+                <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
+                  ridge @ {fmtAI(ridgeAI)} F/B
+                </span>
+                <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
+                  dtype {dtypeLabel(dtype)}
+                </span>
               </div>
-            )}
-            <div ref={wrapRef} className="absolute inset-0">
-              <canvas
-                ref={canvasRef}
-                style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair' }}
-                role="img"
-                aria-label={`Roofline chart for ${preset}: ridge point at ${fmtAI(ridgeAI)} FLOPs per byte. Guide at intensity ${fmtAI(guideAI)}, ${guideBound}-bound.`}
-              />
+              {mode === 'cpu-gpu' && (
+                <div className="absolute inset-x-4 bottom-4 top-12 z-20 flex flex-col justify-center gap-3">
+                  <div className="rounded-sm border border-line bg-surface-1/95 p-4">
+                    <p className="font-display text-base font-semibold text-text-1">Serial dependency chain</p>
+                    <p className="mt-1 font-mono text-[11px] text-text-2">
+                      Each operation depends on the previous result. GPU lanes cannot parallelize the chain,
+                      and launch/synchronization overhead dominates.
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs">
+                      <div className="rounded-sm border border-[#5CA8FF44] p-2">CPU · {cpuSerialMs} ms</div>
+                      <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuSerialMs} ms</div>
+                    </div>
+                    <ChipButton
+                      className="mt-3"
+                      active={serialRan}
+                      color="#5CA8FF"
+                      onClick={() => {
+                        setSerialRan(true)
+                        completeSimTask(SIM_ID, 't-cpu-serial', 60)
+                        log(ticksRef.current, 'COMPARE', 'serial chain — CPU wins latency by 50×', 'ok')
+                      }}
+                    >
+                      run serial comparison
+                    </ChipButton>
+                    {serialRan && <p className="mt-2 font-mono text-[11px] text-[#5CA8FF]">CPU wins 50×</p>}
+                  </div>
+                  <div className="rounded-sm border border-line bg-surface-1/95 p-4">
+                    <p className="font-display text-base font-semibold text-text-1">64M elementwise map</p>
+                    <p className="mt-1 font-mono text-[11px] text-text-2">
+                      64 million independent elements expose enough uniform work to fill GPU warps.
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs">
+                      <div className="rounded-sm border border-[#5CA8FF44] p-2">CPU · {cpuMapMs} ms</div>
+                      <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuMapMs.toFixed(2)} ms</div>
+                    </div>
+                    <ChipButton
+                      className="mt-3"
+                      active={mapRan}
+                      color="#A78BFA"
+                      onClick={() => {
+                        setMapRan(true)
+                        completeSimTask(SIM_ID, 't-gpu-map', 60)
+                        if (accessPattern === 'divergent') {
+                          completeSimTask(SIM_ID, 't-gpu-divergence', 60)
+                        }
+                        log(
+                          ticksRef.current,
+                          'COMPARE',
+                          `64M map — GPU ${accessPattern === 'coalesced' ? 'wins throughput by 50×' : accessPattern === 'staged' ? 'recovers coalesced global traffic through shared staging' : 'loses efficiency to warp divergence / scattered access'}`,
+                          accessPattern === 'coalesced' || accessPattern === 'staged' ? 'ok' : 'warn',
+                        )
+                      }}
+                    >
+                      run map comparison
+                    </ChipButton>
+                    {mapRan && (
+                      <p className="mt-2 font-mono text-[11px] text-[#A78BFA]">
+                        {accessPattern === 'coalesced'
+                          ? 'GPU wins 50×'
+                          : accessPattern === 'staged'
+                            ? `staging recovers ${Math.round(accessThroughputFactor * 100)}% end-to-end bandwidth`
+                            : `${accessPattern} warps cut effective throughput ${Math.round(1 / coalesceEff)}×`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div ref={wrapRef} className="absolute inset-0">
+                <canvas
+                  ref={canvasRef}
+                  style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair' }}
+                  role="img"
+                  aria-label={`Roofline chart for ${preset}: ridge point at ${fmtAI(ridgeAI)} FLOPs per byte. Guide at intensity ${fmtAI(guideAI)}, ${guideBound}-bound.`}
+                  aria-describedby={mirrorId}
+                />
+              </div>
             </div>
+            <SimMirror id={mirrorId} table={mirror} className="border-t border-line bg-surface-1 px-3 py-2" />
           </div>
 
           {/* ------- control panel ------- */}
@@ -1333,7 +1346,7 @@ export default function RooflineSim() {
                       key={d}
                       active={dtype === d}
                       color="#A78BFA"
-                      onClick={() => setDtype(d)}
+                      onClick={() => chooseDtype(d)}
                     >
                       {dtypeLabel(d)}
                     </ChipButton>
@@ -1622,7 +1635,7 @@ export default function RooflineSim() {
                 min={16}
                 max={256}
                 step={16}
-                onChange={setTileT}
+                onChange={chooseTile}
               />
               <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] text-text-2">
                 <span>AI ≈ {fmtAI(tileAI)} F/B</span>
@@ -1639,7 +1652,7 @@ export default function RooflineSim() {
                       key={m}
                       active={attentionMode === m}
                       color="#A78BFA"
-                      onClick={() => setAttentionMode(m)}
+                      onClick={() => chooseAttention(m)}
                     >
                       {m} attention
                     </ChipButton>
@@ -1681,7 +1694,7 @@ export default function RooflineSim() {
                 min={0}
                 max={BATCH_STEPS.length - 1}
                 step={1}
-                onChange={(i) => setBatch(BATCH_STEPS[i])}
+                onChange={(i) => chooseBatch(BATCH_STEPS[i])}
               />
             </ControlGroup>
 
