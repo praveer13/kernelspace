@@ -95,7 +95,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           options: [
             'A C++ inference engine (with its own GPU scheduler) that schedules prefill and decode batches across the cluster, built to replace vLLM',
             'A point-to-point transfer library that moves KV blocks between workers with one-sided reads over RDMA and other backends such as UCX',
-            'A block-scaled 4-bit number format (FP4) whose per-16-element scales let KV blocks be sent between workers at half the bytes',
+            'A block-scaled 4-bit number format (FP4) whose per-16-element scales let KV blocks be sent between workers in about 1.8× fewer bytes',
             'A Kubernetes operator (CRD-based) that autoscales prefill and decode pools and places them close together to keep KV paths short',
           ],
           correct: [1],
@@ -104,7 +104,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           why: [
             'An engine runs the model and its scheduler. NIXL runs inside engines and moves KV between them; it schedules no batches and replaces no engine.',
             'Right: NIXL is the transfer layer. Workers hand it descriptor lists and it moves KV blocks point to point, with GPU-direct paths where the fabric allows.',
-            'NVFP4-style formats are quantization schemes. NIXL moves whatever bytes the engine gives it and has no say in precision or block scaling.',
+            'NVFP4-style formats are quantization schemes, and even they do not halve bytes: 4-bit values plus one FP8 scale per 16 give 4.5 bits, about 1.8× fewer than FP8. NIXL moves whatever bytes the engine gives it and has no say in precision.',
             'Autoscaling and placement are done by orchestration such as Dynamo\'s planner or llm-d. NIXL is a library the workers call and it never schedules pods.',
           ],
         },
