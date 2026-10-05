@@ -159,7 +159,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
           ],
         },
         {
-          q: 'You add GPUs as extra independent replicas of the same model. Which number stays the same for a request that is already being served?',
+          q: 'You add GPUs as extra independent replicas of the same model. Which number stays the same for a request that is already being served, at the same per-replica batch size?',
           options: [
             'The number of concurrent requests the fleet can keep resident in KV cache across all of its GPUs at the same moment',
             'Time between tokens (ITL): each step still reads the same weight and KV bytes at the same HBM bandwidth',
@@ -168,10 +168,10 @@ Plug in any model shape and watch the numbers move: independently choose weight 
           ],
           correct: [1],
           explanation:
-            'Replicas add capacity and aggregate throughput, but one request still runs on one GPU at that GPU\'s bandwidth, so its ITL is unchanged. Sharding one model across GPUs (tensor parallelism) is different: it cuts bytes read per GPU per step, at the cost of communication.',
+            'Replicas add capacity and aggregate throughput, but one request still runs on one GPU at that GPU\'s bandwidth, so at the same per-replica batch size its ITL is unchanged. Sharding one model across GPUs (tensor parallelism) is different: it cuts bytes read per GPU per step, at the cost of communication.',
           why: [
             'Each replica brings its own HBM and therefore its own KV blocks, so the fleet admits proportionally more concurrent requests.',
-            'Right: a replica does the same work per step as before, so a single request\'s ITL is unchanged. Only sharding the model (tensor parallelism) shortens the step.',
+            'Right: at the same per-replica batch, a step does the same work as before, so ITL is unchanged. Only sharding the model (tensor parallelism) shortens a step.',
             'More replicas absorb more load before queues build, so goodput at a given SLO rises with replica count.',
             'Independent replicas run in parallel, so aggregate tokens per second grows roughly with replica count.',
           ],

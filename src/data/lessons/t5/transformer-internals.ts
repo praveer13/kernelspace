@@ -25,8 +25,8 @@ One token flowing through one layer (hidden size \`d = 4096\`):
 
 - **QKV projection**: \`x · W_q, x · W_k, x · W_v\` — three matmuls \`d × d\` → \`3 × 2d²\` FLOPs ≈ 100 MFLOPs. Produces the query \`q\`, key \`k\`, value \`v\` for this token.
 - **Attention**: \`softmax(QKᵀ/√d_h) · V\`. Against all \`t\` previous positions: \`~4td\` FLOPs — *grows with context length*.
-- **Output projection**: another \`2d²\` ≈ 67 MFLOPs.
-- **MLP** (SwiGLU, intermediate ≈ 3.5d): three matmuls ≈ \`6d² × 3.5 / 2 …\` ≈ 470 MFLOPs — **the MLP is roughly 70-80% of the layer's parameters and FLOPs**. Attention gets the papers; the MLP eats the budget.
+- **Output projection**: another \`2d²\` ≈ 33.5 MFLOPs.
+- **MLP** (SwiGLU, intermediate ≈ 3.5d): three matmuls ≈ \`3 × 2 × d × 3.5d = 21d²\` ≈ 352 MFLOPs — **the MLP is about 70-80% of the layer's parameters and FLOPs (72% with full MHA, 81% for Llama-3-8B with GQA)**. Attention gets the papers; the MLP eats the budget.
 
 Sum across 32 layers and you land at the famous rule of thumb: **~2 FLOPs per parameter per token** (2 × 8e9 = 16 GFLOPs/token for our 8B model, plus the attention term that grows with t). And the bytes: every weight is read once per token (per sequence, at batch 1) — \`2 × params\` bytes in FP16, 16 GB. You already know from T4.L3 what that means: decode at batch 1 moves 16 GB for 16 GFLOPs — arithmetic intensity ≈ 1, hard against the bandwidth wall.`,
     },
@@ -35,7 +35,7 @@ Sum across 32 layers and you land at the famous rule of thumb: **~2 FLOPs per pa
       stats: [
         { value: '2 × params', label: 'FLOPs per token', hint: 'The Kaplan rule of thumb for decoder forward passes (attention term extra).' },
         { value: '2 × params B', label: 'weight bytes per token', hint: 'FP16: every weight read once per token at batch 1.' },
-        { value: '~3/4', label: 'MLP share', hint: 'Of parameters and FLOPs. Attention is the celebrity; MLP is the workforce.' },
+        { value: '70-80%', label: 'MLP share', hint: 'Of parameters and FLOPs (72% with MHA, 81% for Llama-3-8B). Attention is the celebrity; MLP is the workforce.' },
         { value: '∝ t', label: 'attention cost', hint: 'Per-token attention FLOPs grow linearly with context length t.' },
       ],
     },
@@ -63,7 +63,7 @@ This worked example is an 8B-class model with full multi-head attention (32 KV h
         { id: 'qkv', x: 28, y: 8, w: 20, h: 10, label: 'QKV proj', sub: '3 × d×d matmul' },
         { id: 'kvc', x: 28, y: 30, w: 26, h: 14, label: 'KV cache (HBM)', sub: 'K,V for tokens 1..t', color: '#FB7185' },
         { id: 'attn', x: 62, y: 18, w: 18, h: 10, label: 'attention', sub: 'q·Kᵀ → softmax → ·V', color: '#A78BFA' },
-        { id: 'mlp', x: 62, y: 40, w: 18, h: 8, label: 'MLP', sub: '~3/4 of FLOPs' },
+        { id: 'mlp', x: 62, y: 40, w: 18, h: 8, label: 'MLP', sub: '70-80% of FLOPs' },
         { id: 'out', x: 86, y: 18, w: 12, h: 10, label: 'logits', sub: 'sample' },
       ],
       edges: [
@@ -152,7 +152,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
           q: 'Where do most of a transformer layer\'s parameters and FLOPs live?',
           options: [
             'In attention: the Q, K, V and output projections plus the softmax over the context, since attention is the defining operation',
-            'In the MLP: its three SwiGLU matrices hold roughly 70-80% of the layer\'s parameters and FLOPs',
+            'In the MLP: its three SwiGLU matrices hold about 70-80% of the layer\'s parameters and FLOPs',
             'In the layer norms and residual adds, which run on every token twice per layer',
             'In the embedding and output tables: one 128k x 4096 matrix is about 0.5B parameters of an 8B model, touched on every step',
           ],
@@ -161,7 +161,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
             'SwiGLU MLPs with about 3.5d intermediate width dominate the parameter count. Attention gets the research attention; the MLP gets the transistor budget, a useful bias when reading optimization papers.',
           why: [
             'Attention is famous, not large: its four d x d projections are well under half the layer\'s weights, and the context-length term only overtakes the matmuls at long context.',
-            'Right: three matrices of roughly d x 3.5d beat the four d x d attention projections, about 10.5 d^2 against 4 d^2, so roughly 70-80% of the layer\'s parameters and per-token FLOPs.',
+            'Right: three matrices of roughly d x 3.5d beat the four d x d attention projections, about 10.5 d^2 against 4 d^2, so 72% with MHA and 81% for GQA Llama-3-8B.',
             'Norms and residuals hold a few thousand parameters and do elementwise work. Frequent but tiny; they are memory-bound filler, not the FLOP budget.',
             'The tables sit outside the layers, so they cannot be where the layer\'s parameters live. Even counting them, they are a small share of an 8B model.',
           ],
