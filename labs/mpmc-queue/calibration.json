@@ -1,0 +1,196 @@
+{
+  "lab": "mpmc-queue",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "63a353fff9c05b861c58d83102f4d76d40086bf289343cdfa4421dec411e0325",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "fifo": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "empty-garbage": 1,
+        "leak-slot": 0,
+        "no-recycle": 0,
+        "ok-when-full": 0,
+        "one-slot-short": 1,
+        "stale-slot": 1,
+        "swap-err": 0
+      }
+    },
+    "backpressure": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "empty-garbage": 0,
+        "leak-slot": 0,
+        "no-recycle": 1,
+        "ok-when-full": 1,
+        "one-slot-short": 1,
+        "stale-slot": 1,
+        "swap-err": 1
+      }
+    },
+    "wraparound": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "empty-garbage": 0,
+        "leak-slot": 1,
+        "no-recycle": 1,
+        "ok-when-full": 0,
+        "one-slot-short": 1,
+        "stale-slot": 1,
+        "swap-err": 0
+      }
+    },
+    "model_gauntlet": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "empty-garbage": 0.94,
+        "leak-slot": 1,
+        "no-recycle": 1,
+        "ok-when-full": 0.889,
+        "one-slot-short": 0.903,
+        "stale-slot": 1,
+        "swap-err": 0.879
+      }
+    },
+    "slot_conservation": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "empty-garbage": 0,
+        "leak-slot": 1,
+        "no-recycle": 1,
+        "ok-when-full": 0,
+        "one-slot-short": 1,
+        "stale-slot": 0,
+        "swap-err": 0
+      }
+    },
+    "burst_model": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "empty-garbage": 0.254,
+        "leak-slot": 1,
+        "no-recycle": 1,
+        "ok-when-full": 1,
+        "one-slot-short": 1,
+        "stale-slot": 1,
+        "swap-err": 1
+      }
+    }
+  },
+  "mutants": {
+    "empty-garbage": {
+      "defaultSeedFails": [
+        "fifo",
+        "model_gauntlet"
+      ],
+      "caughtBy": [
+        "fifo"
+      ]
+    },
+    "leak-slot": {
+      "defaultSeedFails": [
+        "wraparound",
+        "model_gauntlet",
+        "slot_conservation",
+        "burst_model"
+      ],
+      "caughtBy": [
+        "wraparound",
+        "model_gauntlet",
+        "slot_conservation",
+        "burst_model"
+      ]
+    },
+    "no-recycle": {
+      "defaultSeedFails": [
+        "backpressure",
+        "wraparound",
+        "model_gauntlet",
+        "slot_conservation",
+        "burst_model"
+      ],
+      "caughtBy": [
+        "backpressure",
+        "wraparound",
+        "model_gauntlet",
+        "slot_conservation",
+        "burst_model"
+      ]
+    },
+    "ok-when-full": {
+      "defaultSeedFails": [
+        "backpressure",
+        "model_gauntlet",
+        "burst_model"
+      ],
+      "caughtBy": [
+        "backpressure",
+        "burst_model"
+      ]
+    },
+    "one-slot-short": {
+      "defaultSeedFails": [
+        "fifo",
+        "backpressure",
+        "wraparound",
+        "model_gauntlet",
+        "slot_conservation",
+        "burst_model"
+      ],
+      "caughtBy": [
+        "fifo",
+        "backpressure",
+        "wraparound",
+        "slot_conservation",
+        "burst_model"
+      ]
+    },
+    "stale-slot": {
+      "defaultSeedFails": [
+        "fifo",
+        "backpressure",
+        "wraparound",
+        "model_gauntlet",
+        "burst_model"
+      ],
+      "caughtBy": [
+        "fifo",
+        "backpressure",
+        "wraparound",
+        "model_gauntlet",
+        "burst_model"
+      ]
+    },
+    "swap-err": {
+      "defaultSeedFails": [
+        "backpressure",
+        "model_gauntlet",
+        "burst_model"
+      ],
+      "caughtBy": [
+        "backpressure",
+        "burst_model"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "ops=300 pushed=122 popped=117 full=58 empty=3 len=5 wrong=0"
+  }
+}
