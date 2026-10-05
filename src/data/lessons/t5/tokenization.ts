@@ -50,7 +50,7 @@ def bpe_train(corpus: list[bytes], vocab_size: int):
 
 **Tokens ≠ words.** Rough English average: ~0.75 words/token (4 chars). "unbelievable" might be one token; a rare surname might be five. *Never* estimate cost in words — tokenize a representative sample and count.
 
-**The context window is a token budget, not a text budget.** A 128k-token window holds ~90k English words of prose, but far less of something token-inefficient: code with heavy indentation, non-Latin scripts (many tokenizers spend 2–5 tokens per CJK character — text can be *longer* in tokens than UTF-8 bytes), base64, URLs, or long numbers (which often split per-digit — one reason arithmetic is hard for models).
+**The context window is a token budget, not a text budget.** A 128k-token window holds ~90k English words of prose, but far less of something token-inefficient: code with heavy indentation, non-Latin scripts (byte-level tokenizers spend 1–3 tokens on a single everyday CJK character, never more than its 3 UTF-8 bytes, against roughly 4 English characters per token), base64, URLs, or long numbers (which often split per-digit — one reason arithmetic is hard for models).
 
 **Tokenization is on the hot path — but it's not the bottleneck you think.** Encoding is fast (µs–ms); what matters is *counting*: billing, truncation, and context management all need exact token counts per request, which means running the tokenizer (or a cached count) per message. Under-specify this and you get the classic production bug: truncated context, silent quality loss, confused users.
 
@@ -61,7 +61,7 @@ def bpe_train(corpus: list[bytes], vocab_size: int):
       stats: [
         { value: '~0.75', label: 'words/token (EN)', hint: 'Rule of thumb for English prose; varies wildly by content type.' },
         { value: '128k', label: 'vocab (LLaMA-3)', hint: 'Embedding rows = vocab size; a real memory line item (128k × 4096 × 2 B ≈ 1 GB).' },
-        { value: '2–5×', label: 'CJK token inflation', hint: 'Per-character tokenization vs byte-efficient English — pricing differs by language.' },
+        { value: '1–3', label: 'tokens for one CJK character', hint: 'A byte-level tokenizer never spends more tokens than the 3 UTF-8 bytes of an everyday CJK character, but that is still more per character than English, and billing follows tokens.' },
         { value: '1', label: 'token = 1 decode step', hint: 'Every generated token is a full forward pass. Tokens are literally time.' },
       ],
     },
@@ -110,9 +110,9 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
             'Bottom-up merging from the byte floor: frequent strings compress into single ids, rare ones decompose to bytes. Lossless, deterministic, and shaped by the training corpus.',
           why: [
             'That is a word-level vocabulary with a character fallback. BPE has no word list: it starts from bytes and learns multi-byte pieces from pair frequencies.',
-            'Right: each merge replaces the most frequent adjacent pair with a new symbol. About vocab-size minus 256 merges are learned, so any byte string remains encodable.',
+            'Right: each merge replaces the most frequent adjacent pair with a new symbol. About vocab-size minus 256 merges are learned, and the 256 byte symbols stay in the vocabulary, so any byte string remains encodable.',
             'BPE never looks at meaning. Merges depend only on how often adjacent symbols co-occur in the corpus; embeddings are trained afterwards, per token id.',
-            'Nothing is hand-written. Poor splits for other languages come from those languages being rare in the training corpus, not from linguistic rules.',
+            'The merges are learned, not hand-written. GPT-style tokenizers do split text with a hand-written regex first (contractions, letter runs, digit runs), but poor splits for other languages come mostly from those languages being rare in the training corpus.',
           ],
         },
         {
