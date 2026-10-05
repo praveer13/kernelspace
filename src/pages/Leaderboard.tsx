@@ -242,7 +242,9 @@ export default function Leaderboard() {
                   <h2 className="text-lg font-semibold text-text-1">Run the fixed benchmark</h2>
                   <p className="mt-1 text-body-sm text-text-2">
                     Choose the release WASM from Forge lab 06. The browser checks its ABI, reruns all
-                    six checks independently, then drives the standardized Fleet.
+                    six checks independently, then drives the standardized Fleet. The run happens in a
+                    worker with a 10 s budget, so a scheduler that stops responding is stopped and the
+                    error names the tick.
                   </p>
                 </div>
               </div>

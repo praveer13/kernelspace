@@ -11,9 +11,16 @@ import {
   type ManagerDriver,
   type QueueDriver,
 } from '@/lib/fleet-model'
+import type { FleetSlotBytes } from '@/workers/fleet-protocol'
+import type { SlotState } from './slots'
 export { makeWasmScheduler } from '@/lib/wasm-scheduler'
 
 export type Mod = LabModule & { hasInvoke: boolean }
+
+/** The slot bytes a fleet session instantiates inside its worker; null keeps the JS reference driver. */
+export function slotBytes(slots: SlotState): FleetSlotBytes {
+  return { sched: slots.sched?.bytes ?? null, mgr: slots.mgr?.bytes ?? null, queue: slots.queue?.bytes ?? null }
+}
 
 const DEFAULT_BLOCKS = 256
 const DEFAULT_BLOCK_SIZE = 16
@@ -45,14 +52,18 @@ export function makeWasmQueue(mod: Mod, cap = 32): QueueDriver {
 }
 
 /**
- * Validate an uploaded module: loadable, has the bridge, right lab, green checks.
- * Runs in the lab worker with a timeout — the panels only instantiate modules that passed.
+ * Validate an uploaded module: loadable, has the bridge, a learner build of the right lab, green checks.
+ * Runs in the lab worker with a timeout; the fleet worker only instantiates modules that passed
+ * (and the panels never instantiate them on the main thread).
  */
 export async function validateModule(bytes: ArrayBuffer, wantLab: string): Promise<{ ok: true } | { ok: false; title: string; detail: string }> {
   try {
     const { report, hasInvoke } = await validateLabInWorker(bytes)
     if (!hasInvoke || !report) {
       return { ok: false, title: 'module predates the fleet bridge', detail: 'rebuild with the latest lab template (adds ks_invoke).' }
+    }
+    if (report.lab.endsWith('@reference')) {
+      return { ok: false, title: 'reference module: no credit', detail: `"${report.lab}" is a reference build. It earns no credit here; upload the module you built from your own code.` }
     }
     if (report.lab !== wantLab) {
       return { ok: false, title: 'wrong lab module', detail: `this slot wants ${wantLab}, got "${report.lab}".` }
