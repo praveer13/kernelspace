@@ -143,10 +143,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'Prefix caching in vLLM is implemented as…',
           options: [
-            'Copying the cached prompt\'s KV tensors into freshly allocated blocks on a hit (copy-on-hit), so each request owns a private copy it can modify',
-            'Hashing token blocks (each chained to the blocks before it) and mapping matching cached physical blocks into the new sequence\'s table, refcount+1',
-            'Keeping finished blocks in a CPU-side key-value store (host DRAM) and fetching them back over PCIe into GPU blocks when a matching request arrives',
-            'Merging requests that share a system prompt into one long sequence (a shared batch), so the prompt is processed once and the outputs are split',
+            'Copying the cached prompt\'s key and value tensors into freshly allocated blocks on a hit, giving each request a private copy',
+            'Hashing token blocks chained to the blocks before them, and mapping matching cached physical blocks into the new sequence\'s table',
+            'Keeping finished blocks in a host-side key-value store in host memory, and fetching them back over the bus when a matching request arrives',
+            'Merging requests that share a system prompt into one long shared sequence, and splitting the outputs afterwards',
           ],
           correct: [1],
           explanation:
@@ -161,10 +161,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'The block size (default 16 tokens) trades off…',
           options: [
-            'Model quality against speed: larger blocks coarsen attention (a coarser softmax) and slightly degrade output for faster kernels (fewer lookups)',
-            'Internal waste in the half-empty tail block (bigger means more) against table length and per-block lookup overhead in the kernel (smaller means more)',
-            'External fragmentation between blocks (larger blocks leave more holes) against allocation time (smaller blocks take longer to find a free slot in the pool)',
-            'Transfer cost between GPUs (larger blocks move more bytes over NVLink) against how many blocks the pool can hold, which limits concurrency',
+            'Model quality, against kernel speed from fewer lookups as larger blocks coarsen attention',
+            'Internal waste in the half-empty tail block, against table length and lookup overhead in the kernel',
+            'External fragmentation between blocks, against allocation time spent finding a free slot in the pool',
+            'Transfer cost between devices, against how many blocks the pool can hold and thereby concurrency',
           ],
           correct: [1],
           explanation:
@@ -179,10 +179,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'When the free-block queue empties during decode, vLLM…',
           options: [
-            'Swaps the lowest-priority sequence\'s blocks to CPU RAM over PCIe (and back), restoring them when memory frees up, as V1 does for every preemption',
-            'Has reallocated every cached free block, so it preempts a running sequence: frees its blocks and recomputes it on resume (V1 has no CPU swap)',
-            'Spills new tokens\' KV into pinned (page-locked) CPU memory transparently, so decode continues at lower bandwidth (no scheduler action, no batch change)',
-            'Raises an out-of-memory error for the whole engine (an OOM abort), because blocks are reserved at startup and cannot be reclaimed from running requests',
+            'Swaps the lowest-priority sequence\'s blocks to host memory over the bus, and restores them when memory frees up',
+            'Evicts the cached free blocks and then preempts a running sequence, freeing its blocks and recomputing it on resume',
+            'Spills new tokens\' key and value tensors into pinned host memory, and decode continues at lower bandwidth with no scheduler action',
+            'Raises an out-of-memory error for the whole engine, and aborts as blocks are reserved at startup and cannot be reclaimed',
           ],
           correct: [1],
           explanation:
@@ -197,10 +197,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'The PagedAttention kernel\'s block-table indirection is affordable because…',
           options: [
-            'Modern GPUs resolve the block-table lookup in hardware (the way a hardware TLB caches translations), so the indirection adds no measurable cost and memory savings are a pure gain',
-            'The kernel is slower (20-26% higher attention latency than FasterTransformer in the paper), but reclaimed memory grows batches and gives 2-4x the throughput',
-            'The kernel first gathers the blocks into one contiguous buffer (a 16-token copy per block), so attention runs on contiguous memory and pays one extra copy',
-            'The table is small enough to live in registers (only a few entries per sequence), so lookups never touch HBM and the kernel runs as fast as a contiguous-cache kernel',
+            'Modern GPUs resolve the block-table lookup in hardware like a translation cache, and the indirection adds no measurable cost',
+            'The kernel runs measurably slower than a contiguous one, and the reclaimed memory grows batches enough to lift throughput',
+            'The kernel first gathers the blocks into one contiguous buffer, and attention then runs on contiguous memory at the price of one copy',
+            'The table is small enough to live in registers, and lookups stay out of memory while the kernel matches a contiguous-cache kernel',
           ],
           correct: [1],
           explanation:

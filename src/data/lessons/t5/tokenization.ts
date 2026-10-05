@@ -100,10 +100,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'BPE builds its vocabulary by…',
           options: [
-            'Splitting text on whitespace, building its vocabulary from the most common words, and spelling every other word out one letter at a time',
-            'Starting from 256 byte symbols and iteratively merging the most frequent adjacent pair, once per new vocabulary entry',
-            'Clustering embeddings of substrings and giving each cluster one id, so substrings with similar meaning share a token',
-            'Applying a hand-written list of English prefixes and suffixes, which is why other languages split into many small pieces',
+            'Splitting text on whitespace and keeping the most common words as entries with rare words spelled out letter by letter',
+            'Starting from single byte symbols and repeatedly merging the most frequent adjacent pair into a new vocabulary entry',
+            'Clustering embeddings of substrings and giving each cluster a single id for substrings with similar meaning',
+            'Applying a hand-written list of English prefixes and suffixes and splitting other languages into many small pieces',
           ],
           correct: [1],
           explanation:
@@ -118,10 +118,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'Why should cost and latency estimates never be done in words?',
           options: [
-            'Tokenizers are not deterministic, so the same text can cost a different number of tokens on each request even with a pinned version',
-            'Words per token varies by content (about 0.75 for English prose, far worse for code and CJK), so tokenize a representative sample and count',
-            'Providers bill per character, so character counts are what to estimate, and tokens matter only for latency and context limits',
-            'The context window is measured in bytes, so UTF-8 length is the right estimate and word counts under-report non-Latin scripts',
+            'Tokenizers are nondeterministic, and the same text can cost a different number of tokens on each request even with a pinned version',
+            'Words per token shifts with content type and falls sharply for code and non-Latin scripts, and a traffic sample gives the number',
+            'Providers bill per character, and the character count is the right estimate for cost while tokens matter for context limits',
+            'The context window is measured in bytes, and byte length is the right estimate while word counts under-report non-Latin scripts',
           ],
           correct: [1],
           explanation:
@@ -136,10 +136,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'A single leading space changing a prompt can break prefix caching because…',
           options: [
-            'The extra leading space adds one token and the prefix cache only matches prompts of equal length, so different-length prompts never share blocks',
-            'Caching is keyed by token ids, and the space re-tokenizes the start of the prompt, so the shared prefix no longer matches at the token level',
-            'The server hashes the raw prompt string while the model strips a single leading space, so the stored entry and the lookup key come from different text',
-            'Whitespace changes the embedding of only the first token, and the prefix cache stores embeddings, so only that one entry is lost',
+            'The extra space adds a token, and the prefix cache matches prompts of equal length rather than shared blocks',
+            'The cache is keyed by token ids, and the space re-tokenizes the start of the prompt and breaks the shared prefix',
+            'The server hashes the raw prompt string, and the model strips the leading space before the stored entry is built',
+            'Whitespace changes the embedding of the first token, and the cache stores embeddings that are lost for that one entry',
           ],
           correct: [1],
           explanation:
@@ -154,10 +154,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
         {
           q: 'The "strawberry problem" (models struggling to count letters) follows from…',
           options: [
-            'Too little text about spelling in training, so more data alone would let the models count the letters inside a token',
-            'The model receiving ids for multi-letter chunks, so the letters inside a chunk are never visible to it',
-            'Attention being order-blind over characters, so the model sees which letters appear but not how many times each occurs',
-            'Counting needing a sequential loop that one forward pass cannot express, so a model reading single characters would fail too',
+            'Too little text about spelling in the training data, and more data would teach the model the letters inside each token',
+            'The model receiving ids for multi-letter chunks, and the letters inside a chunk stay out of its input',
+            'Attention being blind to character order, and the model sees which letters appear but not their counts',
+            'Counting needing a sequential loop, and one forward pass cannot express it even for single characters',
           ],
           correct: [1],
           explanation:

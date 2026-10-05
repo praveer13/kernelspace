@@ -115,10 +115,10 @@ The remaining lessons put these to work: tokenization next (the input side), the
         {
           q: 'The KV cache exists because…',
           options: [
-            'Attention scores for earlier tokens are expensive, so the engine stores the softmax weights and reuses them unchanged for every later token',
-            'Under causal masking a past token\'s keys and values never change, so storing them lets each step process only the new token instead of re-running the prefix',
-            'Model weights are re-read for every token, so the engine keeps the hottest weight matrices in on-chip memory next to the tensor cores',
-            'The prompt is tokenized and embedded once, so the cache stores those embeddings and later steps skip the embedding lookup',
+            'Attention scores for earlier tokens are expensive to compute, and the engine stores the softmax weights for reuse at later steps in the sequence',
+            'Under causal masking a past token\'s keys and values stay fixed, and the engine stores them to avoid re-running the prefix at each step',
+            'Model weights are re-read at each step, and the engine keeps the hottest weight matrices in on-chip memory near the tensor cores',
+            'The prompt is tokenized and embedded once, and the engine stores those embeddings so later steps skip the embedding lookup',
           ],
           correct: [1],
           explanation:
@@ -133,10 +133,10 @@ The remaining lessons put these to work: tokenization next (the input side), the
         {
           q: 'A decoder-only model has 32 layers, hidden size 4096 and 32 KV heads (full multi-head attention, no GQA), with an FP16 cache. KV cache per token is about…',
           options: [
-            'About 256 KiB, because only K is stored per layer and V can be recomputed from it on demand',
-            'About 512 KiB: 2 (keys and values) x 32 layers x 4096 hidden x 2 bytes per FP16 element',
-            'About 1 MiB, the same product with 4 bytes per element because the softmax runs in FP32',
-            'About 128 KiB, because Llama-3-8B shares 8 KV heads across query heads and so the same saving applies here',
+            'About 256 KiB, storing keys alone at 2 bytes per element across 32 layers of 4096 hidden size',
+            'About 512 KiB, storing keys and values at 2 bytes per element across 32 layers of 4096 hidden size',
+            'About 1 MiB, storing keys and values at 4 bytes per element across 32 layers of 4096 hidden size',
+            'About 128 KiB, storing keys and values at 2 bytes per element with 8 shared head groups across 32 layers',
           ],
           correct: [1],
           explanation:
@@ -151,10 +151,10 @@ The remaining lessons put these to work: tokenization next (the input side), the
         {
           q: 'Where do most of a transformer layer\'s parameters and FLOPs live?',
           options: [
-            'In attention: the Q, K, V and output projections plus the softmax over the context, since attention is the defining operation',
-            'In the MLP: its three SwiGLU matrices hold about 70-80% of the layer\'s parameters and FLOPs',
-            'In the layer norms and residual adds, which run on every token twice per layer',
-            'In the embedding and output tables: one 128k x 4096 matrix is about 0.5B parameters of an 8B model, touched on every step',
+            'In the attention block with its four large projection matrices and the softmax over the whole context window',
+            'In the feed-forward block with its three gated matrices that dominate the layer\'s weights and arithmetic',
+            'In the layer norms and residual adds that run on each token twice in each layer',
+            'In the embedding and output tables that sit outside the layers and are read at each decoding step',
           ],
           correct: [1],
           explanation:
@@ -169,10 +169,10 @@ The remaining lessons put these to work: tokenization next (the input side), the
         {
           q: 'GQA (grouped-query attention) matters to a serving engineer because it…',
           options: [
-            'Drops attention heads whose scores are small at inference time, so the model does less work per token and the cache holds fewer positions',
-            'Lets several query heads share one key and value head, so cache size and per-step reads fall by the group factor (32 to 8 KV heads is 4x)',
-            'Stores K and V in FP8 inside the attention kernel, halving cache bytes and bandwidth with the model unchanged',
-            'Limits each query head to a window of recent tokens, so the cache stops growing once the window is full',
+            'Drops attention heads whose scores are small at inference time and cuts cache size in proportion',
+            'Lets several query heads share one key and value head and cuts cache size by the group factor',
+            'Stores keys and values in lower-precision floats inside the attention kernel and cuts cache size by the byte ratio',
+            'Limits each query head to a window of recent tokens and caps cache size once the window is full',
           ],
           correct: [1],
           explanation:

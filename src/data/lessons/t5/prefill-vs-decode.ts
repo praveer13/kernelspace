@@ -66,10 +66,10 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
         {
           q: 'TTFT and ITL are dominated by different physics because…',
           options: [
-            'Prefill is limited by HBM bandwidth because the whole prompt must be loaded, while decode is limited by FLOPs because it runs the full model every token',
-            'Prefill runs the prompt in parallel and is limited by tensor-core FLOPs, while each decode step reads weights and KV from HBM and is bandwidth-limited',
-            'TTFT is almost entirely network and queue delay, so it is a deployment problem, and only ITL is governed by GPU physics such as compute and bandwidth limits',
-            'Both phases are bandwidth-bound; they differ only in that prefill reads the prompt tokens and decode reads the generated ones one at a time',
+            'Prefill is limited by memory bandwidth as the whole prompt must be loaded, while decode is limited by arithmetic as it runs the full model per token',
+            'Prefill runs the prompt in parallel and is limited by arithmetic, while each decode step streams weights and cache and is bandwidth-limited',
+            'Time to first token is mostly network and queue delay and a deployment problem, while GPU physics governs inter-token latency alone',
+            'Both phases are bandwidth-bound, and differ in that prefill reads the prompt tokens while decode reads generated ones one at a time',
           ],
           correct: [1],
           explanation:
@@ -84,10 +84,10 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
         {
           q: 'Goodput is defined as…',
           options: [
-            'Tokens per second per GPU at the largest batch memory allows, the ceiling that SLOs can approach but never exceed',
-            'Throughput subject to SLO constraints, such as TTFT under 2 s and ITL under 100 ms, the honest capacity metric',
-            'The fraction of GPU time spent in tensor-core math instead of waiting on memory, usually reported as MFU',
-            'The share of requests that finish with a 200 status and a complete response, whatever their latency',
+            'Tokens per second per GPU at the largest batch memory allows, a ceiling that latency targets can approach but not exceed',
+            'Throughput measured within the latency targets for first-token time and inter-token time, the honest capacity metric',
+            'The fraction of GPU time spent in tensor-core math instead of waiting on memory, usually reported as utilization',
+            'The share of requests that finish with a success status and a complete response, whatever their latency',
           ],
           correct: [1],
           explanation:
@@ -102,10 +102,10 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
         {
           q: 'The batching seesaw between TTFT/ITL and throughput exists because…',
           options: [
-            'Larger batches must be padded to the longest sequence, so padding work grows with batch size, wastes compute on pad tokens, and slows every step',
-            'Larger batches amortize each weight read over more sequences, raising throughput, but read more KV per step and deepen queues, raising per-token latency',
-            'Batching runs the sequences in a batch one after another, so later sequences wait for earlier ones to finish generating and latency grows with batch size',
-            'GPUs lower their clocks at sustained high utilization, so bigger batches run on throttled silicon, every step slows, and the extra work stops paying for itself',
+            'Larger batches must be padded to the longest sequence in the batch, which wastes compute on pad tokens and slows each step',
+            'Larger batches amortize weight reads over more sequences and raise throughput, but read more cache per step and deepen queues',
+            'Batching runs the sequences in a batch one after another, which makes later ones wait for earlier ones to finish generating',
+            'GPUs lower their clocks at sustained high utilization, which throttles bigger batches until the extra work stops paying for itself',
           ],
           correct: [1],
           explanation:
@@ -120,10 +120,10 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
         {
           q: 'Decode cannot simply be "parallelized away" like training because…',
           options: [
-            'Training spreads one step over thousands of GPUs, but a serving fleet is far smaller and simply has too few devices to spread a single token across the whole model',
-            'Autoregression is serial and token t+1 needs token t, which leaves only cheaper steps by quantization, amortized steps by batching, or fewer steps by speculation',
-            'Softmax over the context needs a global max and sum, forcing a serial pass over positions, which training sidesteps with a parallel approximation',
-            'The KV cache must be appended in order, and thread blocks cannot write to HBM concurrently, so each step must finish writing before the next',
+            'Training spreads one step over thousands of GPUs, while a serving fleet is far smaller, with too few devices to spread a single token',
+            'Autoregression makes each token depend on the one before it, which leaves cheaper steps, shared steps or fewer steps as the levers',
+            'Softmax over the context needs a global max and sum, which forces a serial pass over positions, while training uses an approximation',
+            'The cache must be appended in order, and thread blocks cannot write to memory concurrently, which makes each step finish writing first',
           ],
           correct: [1],
           explanation:
