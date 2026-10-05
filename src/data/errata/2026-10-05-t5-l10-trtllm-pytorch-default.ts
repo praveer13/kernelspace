@@ -20,7 +20,7 @@ export default {
       q: 'TensorRT-LLM 1.0 made its PyTorch backend the default. Which description of its defining trade fits that default path?',
       options: [
         'Pre-built engines: each model is compiled ahead of time, so peak speed costs a build step and slower model onboarding',
-        'NVIDIA-tuned kernels, CUDA graphs and an overlap scheduler on PyTorch, trading breadth for NVIDIA-only depth',
+        'NVIDIA-tuned kernels, CUDA graphs and an overlap scheduler on PyTorch, trading breadth for deeper NVIDIA-only tuning',
         'A Python-only runtime with no custom kernels, so it matches vLLM on model coverage but cannot use CUDA graphs at all',
         'A fleet routing layer above the engines that orchestrates KV transfer, so it needs a second system to run and monitor',
       ],
