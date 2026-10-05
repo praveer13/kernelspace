@@ -32,7 +32,7 @@
 | # | Question (§19) | Decision |
 |---|---|---|
 | O1 | Reference solutions for F1 calibration and the mutant matrices | **Agents write them locally** under `labs/_solutions/`, which is gitignored and never committed or packed. Only calibration results (`calibration.json`) are committed. The zip audit in `pack-labs.py` must keep failing on any `_solutions` path. |
-| O2 | giscus | **The owner will set it up:** enable Discussions on praveer13/kernelspace, install the giscus app, and create the categories "Lessons" (Announcements) and "Labs" (Q&A). C16 ships with `src/data/community.ts` ids empty, and **the button stays hidden until the ids are filled in**. Until then, "Ask a human" in H3 falls back to the GitHub issue form. |
+| O2 | giscus | **Done 2026-10-05.** The giscus app is installed and Discussions are enabled. The API cannot create categories, so the defaults are used, and they are the right types. C16 writes these ids into `src/data/community.ts`: `repo: 'praveer13/kernelspace'`, `repoId: 'R_kgDOTc8vQw'`; lessons go to category **Announcements** (`DIC_kwDOTc8vQ84DHETD`, Announcement type, so only maintainers and giscus open threads), and labs go to **Q&A** (`DIC_kwDOTc8vQ84DHETF`, answerable). The owner may rename these in the GitHub UI; ids do not change. Keep the code path that hides the button when ids are empty. |
 | O3 | XP v2 table (§8.4) | **Approved as specified**, to be revisited at the Wave 2 exit with partner data. |
 | O4 | "Read, not passed" | **Navigation only.** Track percentages, badges, achievements and RING 2 count *done* lessons only. |
 | O5 | Does a checkpoint pass of ≥ 80% count as passed for R and T3–T7 before their tickets exist? | **Yes.** The Wave 1a rewrite makes those items valid evidence. |
