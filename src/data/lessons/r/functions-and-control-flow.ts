@@ -66,7 +66,7 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
           options: [
             'Arms fall through to the next arm unless each ends with a break',
             'It must cover each variant and a new variant breaks incomplete matches',
-            'It requires a trailing default arm in the way a Java switch does',
+            'It requires a trailing wildcard arm in every match over any enum',
             'It raises a runtime error when no arm matches the value',
           ],
           correct: [1],
@@ -75,7 +75,7 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
           why: [
             'Rust arms never fall through. The first matching arm runs and the match ends, so there is no break keyword to forget.',
             'Right: exhaustiveness is checked at compile time. Adding a variant makes every match that omits it fail with E0004, which lists the missing pattern.',
-            'No default is required when all variants are named. A wildcard is allowed but hides new variants, which is why named arms give better compiler help.',
+            'No wildcard is required when all variants are named. A wildcard is allowed but hides new variants, which is why named arms give better compiler help.',
             'An uncovered case is rejected before the program runs, with E0004. There is no runtime match failure to find by testing.',
           ],
         },

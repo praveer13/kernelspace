@@ -65,7 +65,7 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
           options: [
             'A ready flag that publishes a non-atomic buffer to a reader thread',
             'A standalone ticket or metrics counter that guards no other data',
-            'The store that unlocks a spin lock around a critical section',
+            'The store that unlocks a spin lock guarding a shared critical section',
             'A compare_exchange loop that hands data to other threads',
           ],
           correct: [1],
@@ -101,7 +101,7 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
           options: [
             'A failure means the ordering was too weak and a stronger ordering removes failures',
             'Another thread can change the value after your load and Err returns what it saw',
-            'A failure poisons the atomic and the caller must reset it before reuse',
+            'A failure poisons the atomic and the caller must reset it before reusing it again',
             'A failure can tear the value and the caller must restore the old one',
           ],
           correct: [1],

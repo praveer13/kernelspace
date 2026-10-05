@@ -104,7 +104,7 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
             'It locks the bucket and lets several threads increment one counter without a data race',
             'It finds or inserts the slot with one hash lookup and gives mutable access',
             'It returns a copy of the stored value and avoids borrowing the map',
-            'It keeps a running count inside the map and needs no separate variable',
+            'It keeps a running count inside the map and needs no separate local variable at all',
           ],
           correct: [1],
           explanation:
