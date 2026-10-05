@@ -527,9 +527,17 @@ For every family, variant and level, over **1,000 seeds**:
 - **Interval** for a target retention ρ: `S·(ρ^(−1/w20) − 1)/F`, rounded to whole days, at least 1.
 - **Rounding:** `roundTo(x, 8)` at the same points as ts-fsrs. The formulas transcribe ts-fsrs 5.4.2 `FSRSAlgorithm.next_state`.
 
+**API** (`src/lib/learner/fsrs.ts`, 100 lines, pure): `W`; `retrievability(t, S)`; `nextMemory(prev | null, t, G) → {stability, difficulty}` (first review when `prev` is null; `t = 0` is the same-day formula; a negative `t`, which clock skew can produce in a replayed ledger, acts as 0); `intervalDays(S, retention = 0.9)`, which throws `RangeError` outside (0, 1]. The interval is the raw `next_interval`: ts-fsrs's scheduler additionally forces again ≤ hard < good < easy by a day each, which is display logic for four buttons and is not part of the memory model, so it is not reproduced.
+
 **Tests.**
-- `tests/fixtures/fsrs/vectors.json`: 2,000 random `(t, G)` sequences of length 1–12, generated **once** by a script that runs ts-fsrs 5.4.2 in a scratch directory and is committed beside the fixture with the version and command.
-- `tests/learner/fsrs.test.ts` matches `{S, D, R, interval}` within 1e-8.
+- `tests/fixtures/fsrs/reference-vectors.json` (554 KB, committed): 2,000 random `(t, G)` sequences of length 1–12 (12,768 steps: 1,685 same-day, 2,215 lapses, 724 gaps over a year, every grade) at seven desired retentions from 0.70 to 0.99, each step recording `R` before, `S` and `D` after, and the interval; plus an `R(t, S)` grid and an interval grid over S ∈ [0.001, 36500] and retention ∈ [0.5, 1].
+- It is generated **once** by `scripts/gen-fsrs-vectors.ts`, which loads ts-fsrs 5.4.2 from a scratch directory by path and is committed with the version, seed and command in the fixture's `generator` block. It also replays every sequence through the library's public scheduler (`fsrs().next`) and aborts unless S and D equal the algorithm methods, so the vectors are what a real card gets. To regenerate:
+
+  ```
+  mkdir -p /tmp/fsrs-ref && cd /tmp/fsrs-ref && npm init -y && npm install ts-fsrs@5.4.2
+  cd <repo> && bun scripts/gen-fsrs-vectors.ts /tmp/fsrs-ref
+  ```
+- `tests/learner/fsrs.test.ts` matches `{R, S, D}` within 1e-8 and intervals exactly (measured max difference under Bun: 0), and checks the model's invariants (S0 and D0, lapse never raises S, Easy > Good > Hard, difficulty in [1, 10], interval bounds).
 - ts-fsrs is never added to `package.json` (W7).
 
 **Consequences.**
@@ -1688,7 +1696,7 @@ PLAN §8's Wave 1 exit, restated so each line has a measurement.
   - the staircase converges to 0.79 ± 0.03 on a simulated learner.
 
 **B6 · FSRS-6 core.** S. Depends: this spec.
-- **Files:** `src/lib/learner/fsrs.ts`; `tests/learner/fsrs.test.ts`; `tests/fixtures/fsrs/{vectors.json,generate.ts,README.md}`. The generator runs ts-fsrs 5.4.2 from a scratch directory.
+- **Files:** `src/lib/learner/fsrs.ts`; `tests/learner/fsrs.test.ts`; `tests/fixtures/fsrs/reference-vectors.json`; `scripts/gen-fsrs-vectors.ts` (documented in §6.1 and its header; there is no separate README). The generator runs ts-fsrs 5.4.2 from a scratch directory.
 - **Accept:** ADR-2; 2,000 vectors within 1e-8; `package.json` unchanged.
 
 **B7 · Economy v2 and rings.** M. Depends: B0.
