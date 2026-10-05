@@ -135,7 +135,7 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
         {
           q: 'What makes preemption practical in an inference engine (vs a thread pool)?',
           options: [
-            'The hardware can pause a running sequence mid-iteration and save its registers, as an operating system saves a thread\'s context',
+            'The hardware can pause a running sequence mid-iteration and save its registers, the way an operating system saves a thread\'s context',
             'State lives in pageable key-value blocks, and a victim\'s blocks are freed and its prefill is recomputed when it resumes',
             'Each sequence is a small stateless request, and dropping one to replay it from the prompt costs less than preempting a thread',
             'Kernels checkpoint after each layer in hardware, and the scheduler can stop a sequence mid-forward-pass and resume it later',
@@ -154,7 +154,7 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
           q: 'Under sustained overload (arrivals > capacity), the correct system response is…',
           options: [
             'A smarter preemption policy such as oldest-first, which keeps requests progressing and prevents thrashing under load',
-            'Admission control that rejects load early or adds capacity, as no scheduling policy prevents thrashing past the cliff',
+            'Admission control that rejects load early or adds capacity, which no scheduling policy can replace past the cliff',
             'Longer client timeouts, which give queued requests enough time to drain once preempted sequences are recomputed',
             'A larger running set, which shares each weight read among more sequences and lets the batch absorb the extra arrivals',
           ],

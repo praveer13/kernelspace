@@ -66,7 +66,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
         {
           q: 'TTFT and ITL are dominated by different physics because…',
           options: [
-            'Prefill is limited by memory bandwidth as the whole prompt must be loaded, while decode is limited by arithmetic as it runs the full model per token',
+            'Prefill is limited by memory bandwidth over the whole prompt, while decode is limited by arithmetic over the full model per token',
             'Prefill runs the prompt in parallel and is limited by arithmetic, while each decode step streams weights and cache and is bandwidth-limited',
             'Time to first token is mostly network and queue delay and a deployment problem, while GPU physics governs inter-token latency alone',
             'Both phases are bandwidth-bound, and differ in that prefill reads the prompt tokens while decode reads generated ones one at a time',

@@ -144,7 +144,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           q: 'A request has 2,048 cached system-prompt tokens and a 128-token uncached user tail. What work does APC remove?',
           options: [
             'The tail prefill and each decode step, and a hit lets the engine replay the response from last time',
-            'Prefill for the cached system prompt, while the tail is still prefilled and decoding proceeds as usual',
+            'Prefill for the cached system prompt, as the tail is still prefilled and decoding proceeds as usual',
             'Tokenization and embedding lookup for the whole prompt, as the cache stores token ids rather than tensors',
             'Nothing, as reuse needs the whole prompt to match a cached entry exactly and a new tail breaks the match',
           ],
@@ -195,7 +195,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           q: 'Which value must be part of a safe prefix-cache identity?',
           options: [
             'The normalized prompt text after whitespace and Unicode cleanup, as identical text tokenizes identically',
-            'The exact token ids plus the model and adapter settings that change cached tensors, with a trust-domain salt',
+            'The exact token ids plus the model and adapter settings and a tenant salt, as K/V and isolation depend on them',
             'The token ids plus the sampling parameters, as temperature and top-p change which tokens the cache should hold',
             'The token ids plus the client session id, as one user\'s cached prefix must be hidden from other users\' requests',
           ],

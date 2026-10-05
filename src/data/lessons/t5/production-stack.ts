@@ -98,7 +98,7 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
           q: 'TensorRT-LLM\'s defining trade is…',
           options: [
             'Python-level development velocity and the broadest model coverage, at the cost of scheduler overhead and peak efficiency',
-            'Vendor-tuned kernels with graph capture and an overlap scheduler for peak per-device speed, at the cost of vendor depth',
+            'Vendor-tuned kernels with graph capture and an overlap scheduler for peak per-device speed, at the cost of tying the stack to one vendor\'s hardware',
             'A distributed routing and autoscaling layer for fleet fault tolerance, at the cost of a second system to operate',
             'Constrained decoding and a frontend language for structured output, at the cost of some general-purpose engine throughput',
           ],
