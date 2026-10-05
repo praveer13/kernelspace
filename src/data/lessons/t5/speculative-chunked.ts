@@ -72,7 +72,7 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
 
 Continuous batching (T5.L7) schedules *sequences*, but prefill is still atomic: one 100k-token prompt's prefill is a multi-second compute-bound job that, run whole, stalls every decode in the batch (ITL spike for all users — a convoy inside the continuous schedule). **Chunked prefill** slices the prefill into fixed-size chunks (e.g. 2k tokens) and interleaves them with decode iterations: each step mixes one prefill chunk + the running decodes.
 
-The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: ITL stays smooth for everyone, long prompts get processed without convoying, and total goodput rises. This is why every modern engine (vLLM, SGLang, TRT-LLM) runs mixed prefill+decode batches by default, and why disaggregation (T5.L9) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
+The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: total goodput rises, and a long prompt no longer holds every decode for its whole prefill. It does not make ITL free. Each mixed step still carries up to one chunk of prefill, so a long prompt delays running decodes by about one chunk, not by the whole prefill, and the chunk budget trades ITL against TTFT: smaller chunks give better ITL, larger chunks give better TTFT. This is why every modern engine (vLLM, SGLang, TRT-LLM) runs mixed prefill+decode batches by default, and why disaggregation (T5.L9) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
     },
     {
       type: 'callout',
@@ -107,7 +107,7 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
           why: [
             'The drafter is deliberately much weaker (for example 100M against 70B). Its guesses are only proposals; the target checks every one, so quality does not depend on the drafter.',
             'Right: accepted sequences match the target\'s own distribution, and mismatches are resampled from an adjusted one. The gain is a roofline trade of idle ALUs for fewer serial steps.',
-            'Verification runs the full-precision target, and quantization is a separate decode remedy that is not lossless. Speculation is lossless because of its acceptance rule, not reduced precision.',
+            'Verification runs the deployed target model, at whatever precision it is served, with no extra quantization for the verify pass. Speculation reproduces that target\'s output distribution exactly because of its acceptance rule. Quantization is a separate, lossy decode remedy.',
             'A top-k rule would be approximate and change the output distribution. Lossless speculation accepts token x with probability min(1, p_target(x) / p_draft(x)) and resamples on rejection.',
           ],
         },
