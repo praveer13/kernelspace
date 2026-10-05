@@ -15,14 +15,20 @@
  *   - `calibration.json` matches the harness and shows the reference passing every seed and each
  *     mutant caught by a required check on ≥ 99 % of fresh seeds (§12.4).
  * Crates still on template v1 pass on the v1 rules until their C12 task migrates them.
- * The zip-freshness check joins with C18.
+ *
+ * Zip freshness (C18): `python3 scripts/pack-labs.py` is re-run into a temp dir, and every public/labs/<zip> must hold
+ * exactly the same members with the same bytes. A zip packed before a lab source, the guardrail kit or a check id
+ * changed is stale; the zip is the learner's workspace, so it must match the sources the checks ran on. No member of a
+ * zip may be under `_solutions` or `target`, or be a .wasm, .rlib or .rmeta.
  */
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { FORGE_LABS, type ForgeLab } from '../src/data/labs'
 import { abiOf, instantiator, listChecks } from '../src/lib/forge/run'
 import type { ListReply } from '../src/lib/forge/types'
+import { readZip } from './verify-guardrails'
 
 const ROOT = resolve(import.meta.dir, '..')
 const LABS = join(ROOT, 'labs')
@@ -122,7 +128,56 @@ function checkCalibration(l: ForgeLab, list: ListReply) {
   }
 }
 
+const isPrivate = (name: string) => {
+  const parts = name.split('/')
+  return parts.includes('_solutions') || parts.includes('target') || /\.(wasm|rlib|rmeta)$/.test(name)
+}
+
+/** The committed zip against a fresh `pack-labs.py` run: same members in the same order, same bytes, nothing private. */
+function checkZipFresh(l: ForgeLab, fresh: string) {
+  const name = basename(l.zip)
+  const committedPath = join(ROOT, 'public', 'labs', name)
+  if (!existsSync(committedPath)) {
+    fail(l.id, `public/labs/${name} is missing`)
+    return
+  }
+  let committed: Map<string, Buffer>
+  let packed: Map<string, Buffer>
+  try {
+    committed = readZip(committedPath)
+    packed = readZip(join(fresh, name))
+  } catch (e) {
+    fail(l.id, `${name}: ${e instanceof Error ? e.message : String(e)}`)
+    return
+  }
+  const leaked = [...committed.keys()].filter(isPrivate)
+  if (leaked.length > 0) fail(l.id, `${name} ships private or build files: ${leaked.join(', ')}`)
+  const drift = [
+    ...[...packed.keys()].filter((n) => !committed.has(n)).map((n) => `missing ${n}`),
+    ...[...committed.keys()].filter((n) => !packed.has(n)).map((n) => `unexpected ${n}`),
+    ...[...packed.keys()].filter((n) => committed.has(n) && !committed.get(n)!.equals(packed.get(n)!)).map((n) => `changed ${n}`),
+  ]
+  if (drift.length === 0 && [...committed.keys()].join('\n') !== [...packed.keys()].join('\n')) drift.push('members are in a different order')
+  if (drift.length > 0) fail(l.id, `public/labs/${name} is stale (${drift.join('; ')}): run python3 scripts/pack-labs.py and commit the zips`)
+}
+
+function checkZipsFresh() {
+  const dir = mkdtempSync(join(tmpdir(), 'ks-labs-zips-'))
+  try {
+    const r = sh(['python3', join(ROOT, 'scripts', 'pack-labs.py'), '--out', dir], ROOT)
+    if (!r.ok) {
+      failures.push(`pack-labs.py failed, so zip freshness is unchecked:\n${r.out.trim().replace(/^/gm, '    ')}`)
+      return
+    }
+    for (const l of labs) checkZipFresh(l, dir)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 const t0 = performance.now()
+checkZipsFresh()
+const zipFailures = failures.length
 if (build) {
   console.log('building every lab template (wasm32-unknown-unknown, release)…')
   const r = sh(['cargo', 'build', '--release', '--target', 'wasm32-unknown-unknown', '--workspace', '--quiet'], LABS)
@@ -178,7 +233,7 @@ for (const l of labs) {
 }
 
 console.log(rows.join('\n'))
-console.log(`${labs.length} lab(s), ${Math.round((performance.now() - t0) / 1000)} s. Zip freshness: C18.`)
+console.log(`${labs.length} lab(s), ${Math.round((performance.now() - t0) / 1000)} s. Zips: ${zipFailures === 0 ? 'all match a fresh pack-labs run' : `${zipFailures} problem(s)`}.`)
 if (failures.length > 0) {
   for (const f of failures) console.error(`FAIL: ${f}`)
   process.exit(1)

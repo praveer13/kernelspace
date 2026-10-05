@@ -9,9 +9,8 @@
  *   - the zip's own ks-guard.sh passes the fixture matrix under `sh`.
  *
  * Two sets of zips are checked. The generator's output (pack-labs.py into a temp dir) always has to be
- * 18/18. The committed public/labs/*.zip are repacked by C18; until then a zip with no kit at all is reported
- * as awaiting repack, and any zip that does carry the kit is held to the full check. C18 flips
- * REQUIRE_COMMITTED (or passes --require-committed) so a stale committed zip fails.
+ * 18/18. The committed public/labs/*.zip were repacked by C18, which flipped REQUIRE_COMMITTED: a committed zip
+ * with no kit fails like any other. (With the flag off, a kit-less zip is reported as awaiting repack.)
  *
  *   bun run verify:guardrails [--require-committed]
  */
@@ -23,7 +22,7 @@ import { inflateRawSync } from 'node:zlib'
 import { dumpLabs, type LabDump } from './dump-labs'
 
 const ROOT = resolve(import.meta.dirname, '..')
-const REQUIRE_COMMITTED = false
+const REQUIRE_COMMITTED = true
 
 export const KIT_FILES = [
   '.claude/settings.json',
