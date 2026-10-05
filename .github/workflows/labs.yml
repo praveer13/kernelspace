@@ -1,0 +1,73 @@
+name: Labs
+
+# Builds every lab crate for wasm and checks it through the same ABI client the site uses
+# (docs/specs/wave-1.md §12.7). Slower than the fast gate, so it is not part of ci.yml or deploy.yml:
+# it runs only on changes that can affect a lab, and it is expected to finish in under 6 minutes.
+# The scaffold (B1) reserves the job; C1 fills scripts/verify-labs.ts.
+on:
+  pull_request:
+    paths:
+      - 'labs/**'
+      - 'public/labs/**'
+      - 'src/lib/forge/**'
+      - 'src/lib/wasm-lab.ts'
+      - 'src/lib/lab-worker.ts'
+      - 'src/workers/lab*.ts'
+      - 'scripts/verify-labs.ts'
+      - 'scripts/verify-wasm-lab.ts'
+      - 'scripts/calibrate-lab-seeds.ts'
+      - 'scripts/pack-labs.py'
+      - '.github/workflows/labs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: labs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned so a new stable release never changes lab results under a PR (PLAN-100X risk: rustc drift).
+  RUST_TOOLCHAIN: 1.96.0
+
+jobs:
+  verify-labs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # The verify:* scripts run under Bun, pinned as in ci.yml and deploy.yml.
+      - name: Set up pinned Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - name: Set up pinned Rust with the wasm32 target
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
+          rustup default "$RUST_TOOLCHAIN"
+          rustc --version
+          rustup target list --installed
+
+      - name: Cache cargo registry and lab build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            labs/target
+          key: cargo-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('labs/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
+
+      - run: npm ci
+      - run: bun run verify:labs
