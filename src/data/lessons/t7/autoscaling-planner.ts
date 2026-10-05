@@ -9,22 +9,22 @@ const lesson: Lesson = {
   minutes: 25,
   hook: 'The last lesson of the course: the component that watches queue depth and TTFT, then adds or removes prefill and decode workers before the SLO breaks. Dynamo calls it the Planner. You have met it before — as the thing the whole course was secretly about.',
   exercise: 'read+quiz',
-  verifiedAt: '2026-08',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
       md: `You've built every piece the loop controls: the admission valve (lab 06), the block manager (lab 02), the intake queue (lab 04), the disaggregated fleets (T6.L3), the economics of the operating point (T7.L3–L4). The Planner closes the loop: **observe** (queue depth, TTFT/TPOT, KV utilization, GPU load) → **decide** (scale prefill? decode? rebalance the split? reroute?) → **act** (add/drain workers, adjust routing weights, shed load).
 
-Why this is hard and not just "HPA on a custom metric": inference capacity is *discrete and slow* (a new worker takes minutes to load 100s of GB of weights — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks — react to the queue, not the latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
+Why this is hard and not just "HPA on a custom metric": inference capacity is *discrete and slow* (a new worker takes minutes to load 100s of GB of weights — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks, so even a planner that targets TTFT and ITL SLAs, as Dynamo's does, has to act on queue and utilization signals or traffic forecasts rather than wait for the measured latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
     },
     {
       type: 'prose',
       md: `## The Planner's playbook (Dynamo's, and yours)
 
-1. **Signal selection.** Queue depth and *oldest-waiting-age* lead TTFT by the queue time; KV-block utilization leads preemption; TPOT drift leads decode saturation. TTFT itself is a lagging confirmation. Alert and scale on leading signals.
+1. **Signal selection.** Queue depth and *oldest-waiting-age* lead TTFT by the queue time; KV-block utilization leads preemption; TPOT drift leads decode saturation. Measured TTFT is a lagging confirmation. Dynamo's Planner can target TTFT and ITL SLAs directly, and its load and throughput modes act on queue-depth and KV-utilization thresholds and traffic forecasts. Alert and scale on leading signals.
 2. **Phase-aware scaling.** In disaggregated fleets (T6.L3), scale the phase that's binding: prefill queue → add prefill workers (compute); decode TPOT creeping → add decode workers (bandwidth+KV); and *rebalance the split* when the traffic mix drifts (summarization week vs chat week). The prefill:decode GPU ratio is a continuous variable, not an architecture.
 3. **Cold-start economics.** New workers cost minutes of load time. The mitigations are a lesson stack of their own: keep-warm pools for predictable peaks (diurnal traffic is cron-shaped), fast loaders (safetensors + direct-to-GPU streaming, Rust loaders like modelexpress — T3's language again), weight-sharing when the model is already resident elsewhere (NVLink copy over network pull).
-4. **Shed honestly.** When capacity can't arrive in time, the options are queue (TTFT dies), shed (some users fail fast — your lab-06/fleet intake, now production), or degrade (shorter max output, smaller batch classes). An honest shed with a retryable 429 beats a silent SLO violation every time — the user experience of a timeout is worse than a clean "busy."
+4. **Shed honestly.** When capacity can't arrive in time, this course's ladder, in order, is queue (bounded; TTFT dies as it deepens), then shed (some users fail fast — your lab-06/fleet intake, now production), then degrade (shorter max output, smaller batch classes). The ladder is a design recommendation, not a policy Dynamo's docs prescribe. An honest shed with a retryable 429 beats a silent SLO violation every time — the user experience of a timeout is worse than a clean "busy."
 
 5. **Failure drills.** Capacity failures are the norm (spot reclaim, node death, hot expert, KV thrash). The Planner's real test is behavior *during* them: reroute, rebalance, and how fast goodput recovers. Fleet Week's incident drills are this paragraph made executable.`,
     },
@@ -32,7 +32,7 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
       type: 'statline',
       stats: [
         { value: 'minutes', label: 'worker cold start', hint: 'Hundreds of GB of weights. Capacity is slow — signals must lead.' },
-        { value: 'queue age', label: 'the leading signal', hint: 'Oldest-waiting-age rises before TTFT breaks. Scale on the queue, not the latency.' },
+        { value: 'queue age', label: 'the leading signal', hint: 'Oldest-waiting-age rises before TTFT breaks. Scale on the queue, confirm with the latency.' },
         { value: '2 ratios', label: 'prefill:decode split, keep-warm pool', hint: 'The two continuous variables a Planner owns.' },
         { value: '3 options', label: 'queue, shed, degrade', hint: 'When capacity can\'t arrive: pick on purpose, in advance.' },
       ],
@@ -65,7 +65,7 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
       type: 'quiz',
       questions: [
         {
-          q: 'The Planner scales on queue depth and age rather than TTFT because…',
+          q: 'Dynamo\'s Planner can target TTFT and ITL SLAs, yet a planner should act on queue depth and KV utilization before measured TTFT breaks because…',
           options: [
             'Queue metrics are cheaper to collect, whereas TTFT needs per-request tracing that slows down the serving path',
             'TTFT is dominated by prefill compute, which is constant per prompt, so it carries no information about load',
@@ -74,12 +74,12 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
           ],
           correct: [3],
           explanation:
-            'TTFT = queue time + prefill time: the queue deepens before the SLO breaks. Scaling on leading signals is the only way to arrive before the violation — especially with minutes-slow capacity.',
+            'TTFT = queue time + prefill time: the queue deepens before the SLO breaks. Dynamo targets TTFT/ITL SLAs but acts on queue, KV-utilization and traffic signals, since only leading signals arrive before the violation with minutes-slow capacity.',
           why: [
             'Collection cost is not the reason: TTFT is already measured by every serving stack. The choice is about timing, since only the queue gives warning before the breach.',
             'TTFT is queue time plus prefill time, and queue time grows with load. It does carry load information, but only after users have waited.',
             'Oscillation is a real control issue, but cooldown windows handle it. The reason to scale on queues is that capacity arrives minutes late, so the signal must lead.',
-            'Right: TTFT is queue time plus prefill, so the queue deepens first. With minutes-slow capacity, scaling on the leading signal is the only way to arrive before the SLO breaks.',
+            'Right: TTFT is queue time plus prefill, so the queue deepens first. The SLA target is TTFT, but with minutes-slow capacity only a leading signal lets the Planner arrive before the SLO breaks.',
           ],
         },
         {
@@ -128,11 +128,11 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
           ],
           correct: [2],
           explanation:
-            'The ladder is queue, then shed, then degrade, fixed in advance. A bounded queue buys seconds but TTFT dies silently as it deepens; a fast retryable 429 preserves the experience of everyone admitted. The ladder is a design document, not an improvisation.',
+            'The course\'s ladder is queue, then shed, then degrade, fixed in advance (a design recommendation, not a Dynamo-documented policy). A bounded queue buys seconds but TTFT dies silently as it deepens; a fast retryable 429 preserves the experience of everyone admitted. The ladder is a design document, not an improvisation.',
           why: [
             'The ladder\'s queue rung must be bounded. An unbounded queue turns overload into a silent SLO breach for everyone: TTFT grows until requests time out, so users fail slowly instead of failing fast.',
             'Restarting discards in-flight work and KV state, and the replacement needs minutes to reload weights. It removes capacity at the moment capacity is short.',
-            'Right: queue briefly, shed with a fast retryable 429, then degrade output classes, in that order. A clean rejection preserves the experience of everyone admitted, and the ladder is written before the incident.',
+            'Right: queue briefly, then shed with a fast retryable 429, then degrade output classes. A clean rejection protects everyone admitted, and fixing the ladder before the incident avoids improvised, inconsistent calls.',
             'Improvising mid-incident is slow, error-prone and inconsistent across tenants. The ladder of queue, shed and degrade is a design decision made before overload, not an on-the-spot call.',
           ],
         },

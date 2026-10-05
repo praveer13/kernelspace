@@ -12,4 +12,22 @@ export default {
     'Cache-hit-dominated traffic skips most prefill, so TTFT and cost per request differ sharply from independent traffic. The size of the gap depends on hit rate and workload, so no single factor is taught.',
   why: 'A round multiplier with no source reads as a measured result. The gap depends on hit rate, prompt length and engine, so the lesson states the mechanism and leaves the number to your own measurement.',
   source: { url: 'https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/', title: 'vLLM docs: Automatic Prefix Caching' },
+  items: [
+    {
+      q: 'Traffic is dominated by prefix-cache hits. What can a lesson responsibly say about its cost per request compared with independent traffic?',
+      options: [
+        'It is a stable 10× cheaper, a factor that holds for any model and engine once cache hits dominate the traffic mix',
+        'It is cheaper only for the first few requests, since cached blocks are evicted almost immediately under real production load',
+        'It costs about the same, because every request still pays for a full prefill and caching only shortens the response',
+        'It is cheaper by an amount set by hit rate, prompt length and engine, so the gap has to be measured on your workload',
+      ],
+      correct: [3],
+      why: [
+        'No source supports a fixed 10×. The saving depends on hit share, prompt length and the engine, so a round multiplier reads as a measured result when it is not.',
+        'Cached blocks stay resident until memory pressure evicts them, and agentic traffic with shared prefixes keeps hitting them. The benefit persists across requests, not only the first few.',
+        'A hit reuses stored KV blocks, so prefill compute for the shared prefix is skipped rather than repeated. Cost per request therefore falls, though by an amount that varies.',
+        'Right: hits let the engine skip most of the prefill, so TTFT and cost shift sharply. How far depends on hit rate, prompt length and engine, which is why you measure it yourself.',
+      ],
+    },
+  ],
 } satisfies Erratum
