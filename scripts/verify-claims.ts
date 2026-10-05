@@ -36,6 +36,8 @@ const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'hw.b200.bf16-dense': (n) => (n('hw.hgx-b200.bf16-sparse-system') * 1000) / 8 / 2,
   'hw.b300.hbm-bw': (n) => n('hw.gb300-nvl72.hbm-bw') / 72,
   'model.llama3-8b.head-dim': (n) => n('model.llama3-8b.hidden-size') / n('model.llama3-8b.attn-heads'),
+  'model.llama3-70b.head-dim': (n) => n('model.llama3-70b.hidden-size') / n('model.llama3-70b.attn-heads'),
+  'model.mixtral-8x7b.head-dim': (n) => n('model.mixtral-8x7b.hidden-size') / n('model.mixtral-8x7b.attn-heads'),
   'model.llama3-8b.params': (n) => {
     const hidden = n('model.llama3-8b.hidden-size')
     const kvDim = n('model.llama3-8b.kv-heads') * n('model.llama3-8b.head-dim')

@@ -6,6 +6,22 @@ const LLAMA3_CONFIG = {
   title: 'Meta-Llama-3-8B config.json (NousResearch mirror of the gated meta-llama file)',
 }
 
+/** Meta's 70B file is gated too, so the quotes come from the same mirror as the 8B ones. */
+const LLAMA3_70B_CONFIG = {
+  url: 'https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json',
+  title: 'Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)',
+}
+
+const QWEN3_06B_CONFIG = {
+  url: 'https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json',
+  title: 'Qwen3-0.6B config.json (Qwen organisation, Hugging Face)',
+}
+
+const MIXTRAL_CONFIG = {
+  url: 'https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json',
+  title: 'Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)',
+}
+
 export const MODEL_CLAIMS: Claim[] = [
   {
     id: 'model.llama3-8b.layers',
@@ -109,5 +125,141 @@ export const MODEL_CLAIMS: Claim[] = [
       formula: '2 * layers * kvHeads * headDim * 2',
     },
     boundary: 'One sequence, 16-bit (BF16/FP16) K and V: 2 (K and V) x layers x KV heads x head dim x 2 bytes.',
+  },
+  {
+    id: 'model.llama3-70b.layers',
+    kind: 'spec',
+    value: 80,
+    label: 'Llama-3-70B layers',
+    source: { ...LLAMA3_70B_CONFIG, quote: '"num_hidden_layers": 80', row: 'num_hidden_layers' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.llama3-70b.kv-heads',
+    kind: 'spec',
+    value: 8,
+    label: 'Llama-3-70B KV heads (GQA)',
+    source: { ...LLAMA3_70B_CONFIG, quote: '"num_key_value_heads": 8', row: 'num_key_value_heads' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.llama3-70b.attn-heads',
+    kind: 'spec',
+    value: 64,
+    label: 'Llama-3-70B attention (query) heads',
+    source: { ...LLAMA3_70B_CONFIG, quote: '"num_attention_heads": 64', row: 'num_attention_heads' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.llama3-70b.hidden-size',
+    kind: 'spec',
+    value: 8192,
+    label: 'Llama-3-70B hidden size',
+    source: { ...LLAMA3_70B_CONFIG, quote: '"hidden_size": 8192', row: 'hidden_size' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.llama3-70b.head-dim',
+    kind: 'derived',
+    value: 128,
+    label: 'Llama-3-70B head dimension',
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    derived: {
+      from: ['model.llama3-70b.hidden-size', 'model.llama3-70b.attn-heads'],
+      formula: 'hiddenSize / attnHeads',
+    },
+    boundary: 'No head_dim in config.json: hidden_size / num_attention_heads.',
+  },
+  {
+    id: 'model.qwen3-0-6b.layers',
+    kind: 'spec',
+    value: 28,
+    label: 'Qwen3-0.6B layers',
+    source: { ...QWEN3_06B_CONFIG, quote: '"num_hidden_layers": 28', row: 'num_hidden_layers' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.qwen3-0-6b.kv-heads',
+    kind: 'spec',
+    value: 8,
+    label: 'Qwen3-0.6B KV heads (GQA)',
+    source: { ...QWEN3_06B_CONFIG, quote: '"num_key_value_heads": 8', row: 'num_key_value_heads' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.qwen3-0-6b.attn-heads',
+    kind: 'spec',
+    value: 16,
+    label: 'Qwen3-0.6B attention (query) heads',
+    source: { ...QWEN3_06B_CONFIG, quote: '"num_attention_heads": 16', row: 'num_attention_heads' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.qwen3-0-6b.head-dim',
+    kind: 'spec',
+    value: 128,
+    label: 'Qwen3-0.6B head dimension',
+    source: { ...QWEN3_06B_CONFIG, quote: '"head_dim": 128', row: 'head_dim' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    boundary: 'Explicit in config.json, not hidden_size / num_attention_heads (1024 / 16 = 64).',
+  },
+  {
+    id: 'model.mixtral-8x7b.layers',
+    kind: 'spec',
+    value: 32,
+    label: 'Mixtral-8x7B layers',
+    source: { ...MIXTRAL_CONFIG, quote: '"num_hidden_layers": 32', row: 'num_hidden_layers' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.mixtral-8x7b.kv-heads',
+    kind: 'spec',
+    value: 8,
+    label: 'Mixtral-8x7B KV heads (GQA)',
+    source: { ...MIXTRAL_CONFIG, quote: '"num_key_value_heads": 8', row: 'num_key_value_heads' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    boundary: 'Base model v0.1. Only the feed-forward layers are experts; attention is dense GQA.',
+  },
+  {
+    id: 'model.mixtral-8x7b.attn-heads',
+    kind: 'spec',
+    value: 32,
+    label: 'Mixtral-8x7B attention (query) heads',
+    source: { ...MIXTRAL_CONFIG, quote: '"num_attention_heads": 32', row: 'num_attention_heads' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.mixtral-8x7b.hidden-size',
+    kind: 'spec',
+    value: 4096,
+    label: 'Mixtral-8x7B hidden size',
+    source: { ...MIXTRAL_CONFIG, quote: '"hidden_size": 4096', row: 'hidden_size' },
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.mixtral-8x7b.head-dim',
+    kind: 'derived',
+    value: 128,
+    label: 'Mixtral-8x7B head dimension',
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    derived: {
+      from: ['model.mixtral-8x7b.hidden-size', 'model.mixtral-8x7b.attn-heads'],
+      formula: 'hiddenSize / attnHeads',
+    },
+    boundary: 'No head_dim in config.json: hidden_size / num_attention_heads.',
   },
 ]
