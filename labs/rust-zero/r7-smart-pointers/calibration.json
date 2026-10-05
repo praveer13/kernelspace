@@ -1,0 +1,304 @@
+{
+  "lab": "rust-zero-r7",
+  "abi": 2,
+  "version": 2,
+  "commit": "dd8e940",
+  "date": "2026-10-05",
+  "harness": "779e961c2e282ac9b8e718bf28bb3c1a88fce0982ea53d1a0b62a6ff5a77acfe",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "boxed_list": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-err": 0,
+        "always-gone": 0,
+        "copy-out-err": 0,
+        "count-before-clone": 0,
+        "count-without-clone": 0,
+        "deep-copy-arc": 0,
+        "deep-copy-rc": 0,
+        "leak-arc": 0,
+        "leak-rc": 0,
+        "literal": 1,
+        "owner-kept": 0,
+        "repeat-first": 1,
+        "reversed-list": 1,
+        "sum-doubled": 0,
+        "three-owners": 0,
+        "two-allocations": 0,
+        "unwrap-or-clone": 0
+      }
+    },
+    "rc_counts": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-err": 0,
+        "always-gone": 0,
+        "copy-out-err": 0,
+        "count-before-clone": 1,
+        "count-without-clone": 0,
+        "deep-copy-arc": 0,
+        "deep-copy-rc": 1,
+        "leak-arc": 0,
+        "leak-rc": 1,
+        "literal": 1,
+        "owner-kept": 0,
+        "repeat-first": 0,
+        "reversed-list": 0,
+        "sum-doubled": 0,
+        "three-owners": 0,
+        "two-allocations": 0,
+        "unwrap-or-clone": 0
+      }
+    },
+    "weak_edge": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-err": 0,
+        "always-gone": 1,
+        "copy-out-err": 0,
+        "count-before-clone": 0,
+        "count-without-clone": 0,
+        "deep-copy-arc": 0,
+        "deep-copy-rc": 0,
+        "leak-arc": 0,
+        "leak-rc": 0,
+        "literal": 1,
+        "owner-kept": 1,
+        "repeat-first": 0,
+        "reversed-list": 0,
+        "sum-doubled": 0,
+        "three-owners": 0,
+        "two-allocations": 0,
+        "unwrap-or-clone": 0
+      }
+    },
+    "arc_share": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-err": 0,
+        "always-gone": 0,
+        "copy-out-err": 0,
+        "count-before-clone": 0,
+        "count-without-clone": 1,
+        "deep-copy-arc": 1,
+        "deep-copy-rc": 0,
+        "leak-arc": 1,
+        "leak-rc": 0,
+        "literal": 1,
+        "owner-kept": 0,
+        "repeat-first": 0,
+        "reversed-list": 0,
+        "sum-doubled": 1,
+        "three-owners": 0,
+        "two-allocations": 0,
+        "unwrap-or-clone": 0
+      }
+    },
+    "handle_clone": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-err": 0,
+        "always-gone": 0,
+        "copy-out-err": 0,
+        "count-before-clone": 0,
+        "count-without-clone": 0,
+        "deep-copy-arc": 0,
+        "deep-copy-rc": 0,
+        "leak-arc": 0,
+        "leak-rc": 0,
+        "literal": 1,
+        "owner-kept": 0,
+        "repeat-first": 0,
+        "reversed-list": 0,
+        "sum-doubled": 0,
+        "three-owners": 1,
+        "two-allocations": 1,
+        "unwrap-or-clone": 0
+      }
+    },
+    "unwrap_unique": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-err": 1,
+        "always-gone": 0,
+        "copy-out-err": 1,
+        "count-before-clone": 0,
+        "count-without-clone": 0,
+        "deep-copy-arc": 0,
+        "deep-copy-rc": 0,
+        "leak-arc": 0,
+        "leak-rc": 0,
+        "literal": 1,
+        "owner-kept": 0,
+        "repeat-first": 0,
+        "reversed-list": 0,
+        "sum-doubled": 0,
+        "three-owners": 0,
+        "two-allocations": 0,
+        "unwrap-or-clone": 1
+      }
+    }
+  },
+  "mutants": {
+    "always-err": {
+      "defaultSeedFails": [
+        "unwrap_unique"
+      ],
+      "caughtBy": [
+        "unwrap_unique"
+      ]
+    },
+    "always-gone": {
+      "defaultSeedFails": [
+        "weak_edge"
+      ],
+      "caughtBy": [
+        "weak_edge"
+      ]
+    },
+    "copy-out-err": {
+      "defaultSeedFails": [
+        "unwrap_unique"
+      ],
+      "caughtBy": [
+        "unwrap_unique"
+      ]
+    },
+    "count-before-clone": {
+      "defaultSeedFails": [
+        "rc_counts"
+      ],
+      "caughtBy": [
+        "rc_counts"
+      ]
+    },
+    "count-without-clone": {
+      "defaultSeedFails": [
+        "arc_share"
+      ],
+      "caughtBy": [
+        "arc_share"
+      ]
+    },
+    "deep-copy-arc": {
+      "defaultSeedFails": [
+        "arc_share"
+      ],
+      "caughtBy": [
+        "arc_share"
+      ]
+    },
+    "deep-copy-rc": {
+      "defaultSeedFails": [
+        "rc_counts"
+      ],
+      "caughtBy": [
+        "rc_counts"
+      ]
+    },
+    "leak-arc": {
+      "defaultSeedFails": [
+        "arc_share"
+      ],
+      "caughtBy": [
+        "arc_share"
+      ]
+    },
+    "leak-rc": {
+      "defaultSeedFails": [
+        "rc_counts"
+      ],
+      "caughtBy": [
+        "rc_counts"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "boxed_list",
+        "rc_counts",
+        "weak_edge",
+        "arc_share",
+        "handle_clone",
+        "unwrap_unique"
+      ],
+      "caughtBy": [
+        "boxed_list",
+        "rc_counts",
+        "weak_edge",
+        "arc_share",
+        "handle_clone",
+        "unwrap_unique"
+      ]
+    },
+    "owner-kept": {
+      "defaultSeedFails": [
+        "weak_edge"
+      ],
+      "caughtBy": [
+        "weak_edge"
+      ]
+    },
+    "repeat-first": {
+      "defaultSeedFails": [
+        "boxed_list"
+      ],
+      "caughtBy": [
+        "boxed_list"
+      ]
+    },
+    "reversed-list": {
+      "defaultSeedFails": [
+        "boxed_list"
+      ],
+      "caughtBy": [
+        "boxed_list"
+      ]
+    },
+    "sum-doubled": {
+      "defaultSeedFails": [
+        "arc_share"
+      ],
+      "caughtBy": [
+        "arc_share"
+      ]
+    },
+    "three-owners": {
+      "defaultSeedFails": [
+        "handle_clone"
+      ],
+      "caughtBy": [
+        "handle_clone"
+      ]
+    },
+    "two-allocations": {
+      "defaultSeedFails": [
+        "handle_clone"
+      ],
+      "caughtBy": [
+        "handle_clone"
+      ]
+    },
+    "unwrap-or-clone": {
+      "defaultSeedFails": [
+        "unwrap_unique"
+      ],
+      "caughtBy": [
+        "unwrap_unique"
+      ]
+    }
+  }
+}
