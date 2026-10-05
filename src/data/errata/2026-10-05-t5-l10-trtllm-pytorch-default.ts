@@ -3,14 +3,14 @@ import type { Erratum } from './schema'
 export default {
   id: '2026-10-05-t5-l10-trtllm-pytorch-default',
   date: '2026-10-05',
-  kind: 'changed',
+  kind: 'error',
   lessons: ['t5.l10'],
   title: 'TensorRT-LLM 1.x runs a PyTorch-based runtime by default, not pre-built compiled engines',
   before:
     'T5.L10 taught TensorRT-LLM as a build-time compiler: models become compiled engine artifacts with a pre-planned C++ graph, and compile friction is its defining trade.',
   after:
     'Since 1.0 the PyTorch backend is the default: a Python LLM API over PyExecutor. Speed comes from NVIDIA\'s custom kernels, CUDA graphs and overlap scheduling; the price is NVIDIA-only depth, not compile friction.',
-  why: 'The 1.0 release made PyTorch the default backend, so "compiled engine" now describes the legacy path. Teaching the old trade would send readers to weigh TRT-LLM against friction it no longer has.',
+  why: 'The 1.0 release (2025-09-24) had already made PyTorch the default backend when T5.L10 was written, so "compiled engine" described the legacy path. Teaching the old trade sent readers to weigh TRT-LLM against friction it no longer had.',
   source: {
     url: 'https://github.com/NVIDIA/TensorRT-LLM/releases/tag/v1.0.0',
     title: 'TensorRT-LLM v1.0.0 release notes ("the PyTorch-based architecture is now stable and the default experience")',

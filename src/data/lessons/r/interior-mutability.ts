@@ -110,7 +110,7 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
             'Cell provides simple get/set interior mutability for Copy values without borrow guards.',
           why: [
             'Right: Cell copies values in and out with get and set, so no reference into it exists. It needs no guard, borrow flag or lock.',
-            'Rc shares ownership but only hands out shared access, so nobody can update the counter through it. Rc alone gives no mutation.',
+            'Rc shares ownership but hands out only shared access while it is shared: get_mut returns None once a second Rc exists, and make_mut would clone the counter instead of updating it. A shared counter needs Cell or RefCell inside the Rc.',
             'RefCell works but hands out Ref and RefMut guards and keeps a runtime borrow flag that can panic. The question rules out guards.',
             'It works but pays for atomic counting and a lock a single thread never needs, and it hands out a guard. It is overkill here.',
           ],

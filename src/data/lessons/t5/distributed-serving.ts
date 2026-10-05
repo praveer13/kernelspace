@@ -19,7 +19,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## The three axes of parallelism
 
-- **Tensor parallelism (TP):** split each layer's *matrices* across GPUs — every GPU computes a shard of every matmul, then **all-reduce/all-gather** to combine. Latency-friendly (all GPUs work every step) but brutally communication-hungry: two collective ops per layer, per step. TP belongs *inside* a node, on NVLink (900 GB/s GPU-to-GPU on NVL72-class fabric) — over Ethernet it starves.
+- **Tensor parallelism (TP):** split each layer's *matrices* across GPUs — every GPU computes a shard of every matmul, then **all-reduce/all-gather** to combine. Latency-friendly (all GPUs work every step) but brutally communication-hungry: two collective ops per layer, per step. TP belongs *inside* a node, on NVLink (900 GB/s per GPU on H100-class NVLink, 1.8 TB/s per GPU on NVL72) — over Ethernet it starves.
 - **Pipeline parallelism (PP):** split *layers* across GPUs — GPU 0 runs layers 1–20, GPU 1 runs 21–40, activations flow forward. Communication is tiny (one activation tensor per boundary), but the pipeline *bubbles*: to keep all stages busy you need many micro-batches in flight, which complicates latency for single requests. PP tolerates slower interconnects; TP does not.
 - **Data parallelism (DP):** whole model replicas on different GPUs, requests load-balanced across them. Zero communication within requests, linear capacity scaling — the obvious choice *until* one replica can't hold the model+KV. DP scales requests; TP/PP scale the model.
 
@@ -29,7 +29,7 @@ Production serving mixes all three: TP within the node, PP across a few nodes fo
       type: 'statline',
       stats: [
         { value: '3.35 TB/s', label: 'HBM (intra-GPU)', hint: 'The reference speed everything else is measured against.' },
-        { value: '900 GB/s', label: 'NVLink (GPU↔GPU)', hint: 'NVL72-class: makes tensor parallelism inside a node practical.' },
+        { value: '900 GB/s', label: 'NVLink 4 (GPU↔GPU)', hint: 'H100/H200 NVLink inside an 8-GPU node: makes tensor parallelism practical. NVL72\'s NVLink 5 doubles it to 1.8 TB/s per GPU across 72 GPUs.' },
         { value: '~64 GB/s', label: 'PCIe gen5 x16', hint: 'The CPU-attach tier — the old vLLM V0 swap path crossed it; V1 recomputes instead.' },
         { value: '25–100 GB/s', label: 'RDMA (node↔node)', hint: 'RoCE/InfiniBand: the disaggregation highway for KV transfer.' },
       ],
