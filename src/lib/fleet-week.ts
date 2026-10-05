@@ -38,6 +38,8 @@ export interface ActResult {
   metrics: [string, string][]
   /** The graded seed this run drew (null for the fixed practice scenario); the same seed replays it exactly. */
   seed?: number | null
+  /** An uncredited practice call: informational, not a verdict on the act. */
+  practice?: boolean
 }
 
 export interface MeasurementEvidence {
@@ -864,4 +866,89 @@ export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null
     telemetry = runIncidentEngine(seeds, CFG, greedy)
   }
   return { ...def, seed: seeds.seed, telemetry }
+}
+
+/**
+ * Act IV credits only a learner's first call on each incident. The WhyList reveals the right
+ * cause and mitigation after any call and the same incident can be re-opened, so a later call
+ * proves recall of that reveal, not diagnosis from the telemetry. Later calls are practice:
+ * graded and explained, but never counted toward the act or its XP.
+ */
+export interface IncidentLedger {
+  /** Incident ids with at least one call (the first call is the only one that counts). */
+  attempted: string[]
+  /** Incident ids whose first call named the right cause and the right mitigation. */
+  credited: string[]
+}
+
+export const EMPTY_INCIDENT_LEDGER: IncidentLedger = { attempted: [], credited: [] }
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+/**
+ * The ledger is kept in the progress store's working state (`fw:evidence:incident`), not in component
+ * state, so a reload or leaving the page cannot hand a learner a fresh first call on an incident whose
+ * answer they have already seen.
+ */
+export function incidentLedgerFrom(stored: { attempted?: unknown; credited?: unknown } | undefined): IncidentLedger {
+  if (!stored) return EMPTY_INCIDENT_LEDGER
+  const attempted = strings(stored.attempted)
+  return { attempted, credited: strings(stored.credited).filter((id) => attempted.includes(id)) }
+}
+
+export function gradeIncidentCall(
+  ledger: IncidentLedger,
+  incident: { id: string; title: string },
+  causeOk: boolean,
+  mitigationOk: boolean,
+  total: number = INCIDENTS.length,
+): { ledger: IncidentLedger; practice: boolean; result: ActResult } {
+  const ok = causeOk && mitigationOk
+  const practice = ledger.attempted.includes(incident.id)
+  const next: IncidentLedger = practice
+    ? ledger
+    : {
+        attempted: [...ledger.attempted, incident.id],
+        credited: ok ? [...ledger.credited, incident.id] : ledger.credited,
+      }
+  const name = incident.title.split('—')[0].trim()
+  const missed = next.attempted.length - next.credited.length
+  const metrics: [string, string][] = [
+    ['credited', `${next.credited.length}/${total}`],
+    ['cause', causeOk ? 'correct' : 'wrong'],
+    ['mitigation', mitigationOk ? 'correct' : 'wrong'],
+  ]
+  const verdict = `cause ${causeOk ? '✓' : '✗'} · mitigation ${mitigationOk ? '✓' : '✗'}`
+  if (practice) {
+    return {
+      ledger: next,
+      practice,
+      result: {
+        pass: false,
+        practice: true,
+        score: next.credited.length / total,
+        headline: ok ? `${name} diagnosed, not credited` : 'not diagnosed',
+        detail: `${verdict}. Only the first call on an incident counts toward the act and XP; this one was practice.`,
+        metrics,
+      },
+    }
+  }
+  const allDone = next.credited.length >= total
+  const left = total - next.attempted.length
+  let detail: string
+  if (allDone) detail = 'all three incidents diagnosed with the right fix on the first call. The Planner would hire you.'
+  else if (!ok) detail = `${verdict}. This incident is now practice only: the right answer is shown below, and a later call here will not count toward the act or XP.`
+  else if (left > 0) detail = `${left} incident(s) left to call for the first time.`
+  else detail = `every incident has had its first call, but ${missed} missed it, so the act cannot be credited from this progress. Further calls are practice.`
+  return {
+    ledger: next,
+    practice,
+    result: {
+      pass: allDone,
+      score: next.credited.length / total,
+      headline: ok ? `correct — ${name} diagnosed` : 'wrong call — look at the telemetry again',
+      detail,
+      metrics,
+    },
+  }
 }
