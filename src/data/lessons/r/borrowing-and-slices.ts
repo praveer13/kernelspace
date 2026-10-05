@@ -62,21 +62,57 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
       questions: [
         {
           q: 'Which combination may exist at the same time for one value?',
-          options: ['One &mut T and any number of &T', 'Many &T, or exactly one &mut T', 'Any number of &mut T', 'References are never allowed together'],
+          options: [
+            'One &mut T alongside any number of &T, because readers cannot see an in-progress write',
+            'Many &T, or exactly one &mut T, but never a &mut T together with any other live reference',
+            'Any number of &mut T, provided no two of them write the same element',
+            'At most one reference of either kind, since even two &T could see a half-written update',
+          ],
           correct: [1],
-          explanation: 'Readers may share; a writer must be exclusive. The compiler uses this invariant to prevent mutation races and invalidation.',
+          explanation:
+            'Readers may share; a writer must be exclusive. The compiler uses this invariant to prevent mutation races and invalidation.',
+          why: [
+            'A live &T plus a &mut T is rejected with E0502. The reader could see the value change under it, or point at memory the writer reallocated.',
+            'Right: shared references may coexist, but a &mut T must be the only live reference. Violations are E0499 for two &mut and E0502 for &mut with &T.',
+            'Two live &mut T to the same value fail with E0499. The rule covers the whole value, not individual elements, which is why split_at_mut exists.',
+            'Many &T are fine. Readers alone cannot change anything, so the compiler allows any number of them at once and limits only writers.',
+          ],
         },
         {
           q: 'Why prefer &[T] to &Vec<T> in a read-only function parameter?',
-          options: ['Slices are always heap allocated', 'A slice accepts more contiguous owners and exposes only the needed capability', 'Vec cannot be borrowed', 'Slices copy all elements'],
+          options: [
+            'A &Vec<T> parameter forces the callee to allocate a new Vec, but a slice reuses the caller\'s existing buffer',
+            'A slice accepts arrays, Vecs and subranges, and exposes only the access the callee needs',
+            'A &Vec<T> moves the Vec into the callee for good, whereas a slice only borrows part of it',
+            'Indexing and iteration need a slice type, so a &Vec<T> parameter cannot use either one',
+          ],
           correct: [1],
-          explanation: 'Arrays, Vecs, and subslices can all coerce to &[T]. It is a zero-copy view with a smaller API contract.',
+          explanation:
+            'Arrays, Vecs, and subslices can all coerce to &[T]. It is a zero-copy view with a smaller API contract.',
+          why: [
+            'Passing &Vec<T> allocates nothing either; it is just a pointer to the existing Vec. The difference is which callers the signature accepts.',
+            'Right: arrays, Vecs and subranges all coerce to &[T], so one signature serves them all. It also promises less, since it cannot grow or reallocate the buffer.',
+            'Both are borrows and neither moves anything. Moving would need a by-value Vec<T> parameter, which is a different signature altogether.',
+            'A &Vec<T> indexes and iterates fine, because Vec implements Index and derefs to a slice. The reason to prefer slices is flexibility, not capability.',
+          ],
         },
         {
           q: 'Why can Vec::push conflict with a live element reference?',
-          options: ['push is asynchronous', 'push may reallocate and invalidate the referenced address', 'References cannot point to integers', 'push consumes the Vec'],
+          options: [
+            'push takes the Vec by value, so every earlier reference points at moved-from memory afterwards',
+            'push can reallocate the buffer, leaving any held element reference pointing at freed heap memory',
+            'Vec counts live element borrows at runtime, and push panics whenever that count is nonzero',
+            'push shifts existing elements along by one slot, so the held reference would see a different value',
+          ],
           correct: [1],
-          explanation: 'Growing a Vec may move its buffer. The borrow checker prevents keeping an address into the old buffer across that mutation.',
+          explanation:
+            'Growing a Vec may move its buffer. The borrow checker prevents keeping an address into the old buffer across that mutation.',
+          why: [
+            'push takes &mut self, not self, so the Vec is not moved. The conflict is that the &mut borrow overlaps a live shared reference to an element.',
+            'Right: growth can allocate a new buffer and free the old one, so a held element reference would dangle. The borrow checker rejects it with E0502.',
+            'That is RefCell\'s runtime check. Vec tracks no borrows; the conflict is found at compile time, before the program runs.',
+            'push writes after the last element and moves nothing in place. Elements move only when the buffer reallocates, which is the real hazard.',
+          ],
         },
       ],
     },

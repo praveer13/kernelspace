@@ -85,21 +85,57 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
       questions: [
         {
           q: 'What does let x = x + 1 do when x already exists?',
-          options: ['Mutates the original binding', 'Creates a new binding that shadows the old one', 'Allocates x on the heap', 'Fails in every case'],
+          options: [
+            'It mutates the existing binding in place, which compiles only if x was already declared with mut',
+            'It creates a new binding named x that shadows the old one, and the new type may differ',
+            'It allocates a fresh x on the heap so the old and new values can coexist',
+            'It is a compile error, because a name can be bound only once per scope',
+          ],
           correct: [1],
-          explanation: 'Shadowing creates a fresh binding. It can change both the value and the type without making the original binding mutable.',
+          explanation:
+            'Shadowing creates a fresh binding. It can change both the value and the type without making the original binding mutable.',
+          why: [
+            'Mutating in place is spelled x = x + 1 and needs let mut. A new let starts a separate binding instead and leaves the old one untouched.',
+            'Right: let starts a new binding that hides the old one for the rest of the scope. It can change the type too, and the old binding never became mutable.',
+            'Shadowing is lexical name lookup, not allocation. Both values are ordinary locals, and the old one is simply unreachable by name after the new let.',
+            'Rust allows rebinding a name in the same scope; that is exactly shadowing. The error people remember, E0384, comes from assigning twice to a non-mut binding.',
+          ],
         },
         {
           q: 'Why does removing the final semicolon from a Rust block matter?',
-          options: ['It makes the block asynchronous', 'The final expression becomes the block value', 'It makes the value mutable', 'It disables type checking'],
+          options: [
+            'The block turns lazy, so its statements run only when the result is first read',
+            'The final expression becomes the value of the block',
+            'The block returns early and also ends the enclosing function with that value',
+            'The line is no longer evaluated, since only semicolon-terminated lines execute',
+          ],
           correct: [1],
-          explanation: 'A trailing expression is returned by the block. A semicolon turns it into a statement whose value is discarded.',
+          explanation:
+            'A trailing expression is returned by the block. A semicolon turns it into a statement whose value is discarded.',
+          why: [
+            'Blocks are evaluated eagerly where they appear. Laziness would need a closure; a missing semicolon only changes which value the block produces.',
+            'Right: a trailing expression without a semicolon is the block\'s value. Adding the semicolon turns it into a statement and the block evaluates to ().',
+            'That is return, which exits the function. A block\'s tail expression only gives the block a value, and the enclosing function keeps running after it.',
+            'Every expression is evaluated either way. The semicolon only discards the result, so the line still runs and the block then has the unit value.',
+          ],
         },
         {
           q: 'Which integer type is normally used for collection indexes?',
-          options: ['i8', 'f64', 'usize', 'char'],
+          options: [
+            'i32, the default inferred integer type, as with int indexes in Java',
+            'u32, because an index is never negative and 32 bits cover any collection',
+            'usize, whose width matches the pointer size of the target platform',
+            'isize, so that arithmetic such as index - 1 cannot underflow',
+          ],
           correct: [2],
-          explanation: 'usize matches the platform pointer width and is the index type used by slices and collections.',
+          explanation:
+            'usize matches the platform pointer width and is the index type used by slices and collections.',
+          why: [
+            'Indexing with an i32 is rejected with E0277. Vec and slice indexes must be usize, and Rust never widens or converts integer types implicitly.',
+            'u32 does not implement slice indexing either. Besides, a collection can exceed 2^32 elements on 64-bit targets, which is why the index type tracks pointer width.',
+            'Right: usize is as wide as a pointer on the target, so it can index any object in memory. Slices and Vecs index only with usize or ranges of it.',
+            'isize does not implement indexing, and a signed type does not prevent underflow bugs. It would only turn an underflow into a negative index that is still invalid.',
+          ],
         },
       ],
     },

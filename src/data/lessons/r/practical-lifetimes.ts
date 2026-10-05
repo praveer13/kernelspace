@@ -64,21 +64,57 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
       questions: [
         {
           q: 'What does a lifetime annotation do at runtime?',
-          options: ['Extends heap allocation lifetime', 'Adds reference counting', 'Nothing; it supplies a compile-time relationship', 'Runs a destructor later'],
+          options: [
+            'It keeps the referent alive until \'a ends, moving it to the heap if needed',
+            'It adds a reference count to the referent, as Rc does, so \'a lasts while any holder remains',
+            'Nothing at runtime, because it is compile-time metadata relating how long references stay valid',
+            'It stores a scope tag with the reference and checks it on dereference, panicking if the scope ended',
+          ],
           correct: [2],
-          explanation: 'Lifetimes are proof metadata erased after type checking. They never keep a referenced value alive.',
+          explanation:
+            'Lifetimes are proof metadata erased after type checking. They never keep a referenced value alive.',
+          why: [
+            'Annotations never extend or move a value. The referent dies when its owner does, and the compiler rejects code that would use the reference later.',
+            'Reference counting is Rc and Arc, with a real runtime count. Lifetime parameters are erased after checking and add no counter to the value.',
+            'Right: lifetimes are erased after borrow checking and generate no code. They only let the compiler prove references never outlive their referents.',
+            'No scope tag or runtime check exists; a reference is a plain pointer. Dangling use is rejected at compile time, for example with E0597.',
+          ],
         },
         {
           q: 'Why must struct Block<\'a> declare a lifetime for its &[u32] field?',
-          options: ['Slices always allocate', 'The type must state that Block cannot outlive the borrowed slice', 'The field is mutable', 'All structs require lifetimes'],
+          options: [
+            'A slice owns its elements, and \'a tells Rust how long Block keeps that storage allocated',
+            'The type must say that a Block cannot outlive its borrowed slice, so rustc can check it',
+            'Rust needs \'a to compute the size of Block, because a slice length is unknown at compile time',
+            'It is optional for shared slice fields, since elision applies; &mut fields demand it',
+          ],
           correct: [1],
-          explanation: 'A type that stores a reference must expose the validity relationship as part of its own type.',
+          explanation:
+            'A type that stores a reference must expose the validity relationship as part of its own type.',
+          why: [
+            'A &[u32] borrows its elements and owns nothing. Someone else owns the storage, and \'a ties the Block to that owner\'s lifetime, not to an allocation.',
+            'Right: the parameter is the contract that Block is only valid while its source slice is. rustc reports a missing one as E0106.',
+            'A &[u32] is a fixed-size pointer and length pair, so Block\'s size is known. The lifetime says nothing about size; it relates validity.',
+            'Elision does not apply to struct fields. A reference field always needs a named lifetime, shared or mutable, or E0106 is reported.',
+          ],
         },
         {
           q: 'What is the right fix when data truly must outlive the input it came from?',
-          options: ['Invent a longer lifetime annotation', 'Return or store owned data', 'Use a wildcard lifetime', 'Disable Drop'],
+          options: [
+            'Declare the return as \'static, so the reference stays valid for the whole program',
+            'Return or store owned data, such as a Vec or String, so nothing borrows from the input',
+            'Wrap the reference in a Box, because heap placement gives it an independent lifetime',
+            'Copy the reference with `let r2 = r`, so the copy no longer depends on the input',
+          ],
           correct: [1],
-          explanation: 'Annotations can describe valid relationships, not create them. Ownership is required when independent lifetime is required.',
+          explanation:
+            'Annotations can describe valid relationships, not create them. Ownership is required when independent lifetime is required.',
+          why: [
+            '\'static is a claim the compiler checks, and a borrow from a shorter-lived input cannot satisfy it. Rust rejects it with a lifetime may not live long enough error.',
+            'Right: copy or move the bytes into an owner such as String or Vec. Owned data has no tie to the input, so it can live as long as needed.',
+            'Box<&T> still holds the original borrow, so it lives no longer than the input. Boxing moves the pointer to the heap, not the referent.',
+            'A shared reference is Copy, so `let r2 = r` only duplicates the pointer. The copy keeps the input\'s lifetime. Only an owning conversion such as to_string or to_vec detaches it.',
+          ],
         },
       ],
     },

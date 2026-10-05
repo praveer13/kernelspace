@@ -58,21 +58,57 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
       questions: [
         {
           q: 'After let b = a for a String, what happened?',
-          options: ['The heap buffer was deep-copied', 'b owns the buffer and a is no longer usable', 'a and b are garbage-collected aliases', 'The string was dropped immediately'],
+          options: [
+            'The heap buffer was deep-copied, so a and b are now independent owners',
+            'b owns the buffer, and a is no longer usable after the move',
+            'a and b both point at the buffer and the last one to leave scope frees it',
+            'The buffer was freed at once and a now holds an empty String that is still usable',
+          ],
           correct: [1],
-          explanation: 'The pointer/length/capacity representation moves to b. Rust invalidates a so only one owner can eventually drop the buffer.',
+          explanation:
+            'The pointer/length/capacity representation moves to b. Rust invalidates a so only one owner can eventually drop the buffer.',
+          why: [
+            'Assignment never deep-copies a String. Copying the heap bytes takes an explicit clone(); a plain let b = a moves the existing buffer to b.',
+            'Right: the pointer, length and capacity move to b, and later use of a fails with E0382. Only one owner remains to free the buffer.',
+            'That describes shared ownership with reference counting, which needs Rc or Arc. Plain assignment keeps a single owner, and a becomes unusable.',
+            'Rust does not leave a valid empty String behind, as C++ std::move may. The source binding is dead, so there is nothing left to read from a.',
+          ],
         },
         {
           q: 'Why is clone() intentionally explicit?',
-          options: ['It always uses unsafe code', 'It can represent real allocation and copying cost', 'It changes a value to mutable', 'It disables Drop'],
+          options: [
+            'Implicit duplication would run Drop twice on one buffer, so the call must be spelled out',
+            'Duplicating a heap value can allocate and copy a lot of data, so the cost is visible at the call site',
+            'clone() is built on unsafe pointer copies, so Rust makes each use deliberate and auditable',
+            'The compiler cannot tell whether a type is safe to duplicate, so the programmer must vouch for it each time',
+          ],
           correct: [1],
-          explanation: 'Rust keeps potentially expensive duplication visible at the call site rather than hiding it behind assignment.',
+          explanation:
+            'Rust keeps potentially expensive duplication visible at the call site rather than hiding it behind assignment.',
+          why: [
+            'Bitwise implicit copies are why String is not Copy, but not why clone is explicit. A clone builds a separate buffer, so no double drop arises. Explicitness exposes cost.',
+            'Right: a clone may allocate and copy arbitrary amounts of data. Rust leaves cheap bit copies to Copy types and makes every costly duplicate visible.',
+            'Clone is an ordinary trait method, and implementations like String\'s are safe code. Unsafe is not what the explicit call signals.',
+            'The type itself decides, by implementing Clone or Copy. The compiler knows which types allow duplication, so no programmer vouching is involved.',
+          ],
         },
         {
           q: 'What does Drop provide?',
-          options: ['Nondeterministic garbage collection', 'Deterministic resource cleanup at the end of ownership', 'Automatic deep copying', 'A way to skip the type checker'],
+          options: [
+            'Cleanup run by a background collector some time after the owner leaves scope, like a Java finalizer',
+            'Deterministic cleanup of whatever the value owns, such as memory, a file or a lock, when its owner ends',
+            'Cleanup that happens only when code calls drop() explicitly, like close() in C',
+            'Cleanup of heap memory only, since files and locks still need a manual close call',
+          ],
           correct: [1],
-          explanation: 'When the owner leaves scope, Rust runs its destructor exactly once, covering memory and resources such as files or locks.',
+          explanation:
+            'When the owner leaves scope, Rust runs its destructor exactly once, covering memory and resources such as files or locks.',
+          why: [
+            'Rust has no collector. Drop runs at a fixed point, when the owner leaves scope, and does not wait for any background thread or timer.',
+            'Right: Drop runs at a predictable point, once, when ownership ends. It can release any resource the type owns, including files and mutex guards.',
+            'Drop runs automatically at the end of scope. Calling drop(x) merely moves x into a function that ends its life early; it is not required.',
+            'Drop is a general destructor. File handles and MutexGuard values release their resources in Drop, so no separate manual close is needed.',
+          ],
         },
       ],
     },

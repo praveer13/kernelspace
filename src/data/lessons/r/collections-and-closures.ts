@@ -64,21 +64,57 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
       questions: [
         {
           q: 'Which iterator consumes a Vec and yields owned elements?',
-          options: ['iter()', 'iter_mut()', 'into_iter()', 'windows()'],
+          options: [
+            'iter(), which yields each element by value, copied out of the Vec',
+            'iter_mut(), which moves elements out so the loop body can modify them freely',
+            'into_iter(), which takes the Vec by value and yields each element in turn',
+            'drain(..), which yields owned elements while keeping the Vec usable afterwards',
+          ],
           correct: [2],
-          explanation: 'into_iter takes ownership of the collection. iter and iter_mut only borrow it.',
+          explanation:
+            'into_iter takes ownership of the collection. iter and iter_mut only borrow it.',
+          why: [
+            'iter() yields shared references, &T, and leaves the Vec intact. Nothing is copied or moved out, so the elements stay owned by the Vec.',
+            'iter_mut() yields &mut T references. Elements are changed in place and remain owned by the Vec, so nothing is moved out of it.',
+            'Right: into_iter takes self, so the Vec is consumed and each element is moved out by value. The Vec binding cannot be used afterwards.',
+            'drain(..) yields owned elements but only borrows the Vec mutably, leaving it empty and usable. It removes elements rather than consuming the Vec.',
+          ],
         },
         {
           q: 'When do lazy iterator adapters actually perform work?',
-          options: ['As soon as map is called', 'When a consuming operation such as collect or sum drives them', 'Only on another thread', 'At compile time'],
+          options: [
+            'As soon as map is called, which runs the closure over every element straight away',
+            'When collect, sum or another consumer pulls items through the chain',
+            'When the adapter is dropped at the end of its scope, as with other RAII cleanup',
+            'On a background thread pool that starts as soon as the adapter is built',
+          ],
           correct: [1],
-          explanation: 'Adapters describe a pipeline. A consumer repeatedly requests the next item and drives the chain.',
+          explanation:
+            'Adapters describe a pipeline. A consumer repeatedly requests the next item and drives the chain.',
+          why: [
+            'Calling map only wraps the iterator and runs no closure. The eager behaviour of a Python list comprehension does not apply to Rust adapters.',
+            'Right: adapters only build a pipeline. A consumer such as collect, sum, count or fold calls next repeatedly, and each call pulls one item through.',
+            'Dropping an unconsumed adapter runs nothing; the compiler even warns that iterators are lazy. Work happens only when something consumes items.',
+            'Standard iterators are single-threaded. Parallel pipelines need a crate such as rayon, and even those start work only when consumed.',
+          ],
         },
         {
           q: 'Why use HashMap::entry for a counter?',
-          options: ['It sorts the map', 'It combines lookup/insertion and returns mutable access to the value', 'It clones every key', 'It makes the map lock-free'],
+          options: [
+            'It locks the bucket so several threads can increment the same counter safely',
+            'It finds or inserts the slot with a single hash lookup, then returns mutable access to the stored value',
+            'It returns a copy of the stored value, so updating it never conflicts with borrowing the map',
+            'It keeps a running count inside the map, so no separate counter variable is needed',
+          ],
           correct: [1],
-          explanation: 'The entry API expresses insert-if-absent followed by mutation with a single table lookup.',
+          explanation:
+            'The entry API expresses insert-if-absent followed by mutation with a single table lookup.',
+          why: [
+            'HashMap is not synchronized and entry takes &mut self. Sharing a counter across threads still needs a lock or atomics around the map.',
+            'Right: entry does one hash lookup, inserts when absent, and returns a &mut V. The idiom *map.entry(k).or_insert(0) += 1 needs no second lookup.',
+            'entry returns a mutable reference into the map, not a copy. Updating a copy would never change the stored count.',
+            'The map keeps no hidden counters. The count is simply the value stored under each key, which entry lets you update in place.',
+          ],
         },
       ],
     },
