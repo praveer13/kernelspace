@@ -407,7 +407,7 @@ describe('aggregate v2', () => {
     expect(Number.isInteger(forward)).toBe(true)
   })
 
-  test('facts: simo, labc, play, prove, boot and placement; XP v1 pays nothing for them', () => {
+  test('facts: simo, labc, play, prove, boot and placement; XP v2 prices the ones the table knows', () => {
     const agg = derive([
       evt('complete', 'boot', T1),
       evt('complete', 'placement', T1),
@@ -418,10 +418,14 @@ describe('aggregate v2', () => {
     ])
     expect(Object.keys(agg.facts).sort()).toEqual(['boot', 'labc:lab-a/c1', 'placement', 'play:block-placement', 'prove:lab-a', 'sim:sim-kv/a', 'simo:sim-kv/a'])
     expect(agg.completions).toEqual({ boot: T1, placement: T1 })
-    expect(factXp('boot')).toBe(0)
-    expect(factXp('placement')).toBe(0)
-    for (const f of ['simo:s/t', 'labc:l/c', 'play:p', 'prove:l']) expect(factXp(f)).toBe(0)
-    expect(xpOf(agg)).toBe(factXp('sim:sim-kv/a')) // only the v1 fact pays: XP stays v1 until B7
+    expect(factXp('boot')).toBe(10)
+    expect(factXp('placement')).toBe(10)
+    expect(factXp('simo:s/t')).toBe(3)
+    expect(factXp('play:block-placement')).toBe(15)
+    expect(factXp('prove:l')).toBe(5)
+    for (const f of ['labc:l/c', 'play:p', 'sim:sim-kv/a']) expect(factXp(f)).toBe(0) // unknown lab, unknown play, legacy toggle
+    expect(xpOf(agg)).toBe(10 + 10 + 3 + 15 + 5) // boot, placement, simo, play, prove; the six events carry no graded items
+
   })
 
   test('summary counts passed lessons only', () => {
@@ -472,7 +476,7 @@ describe('a Wave 0b fixture ledger', () => {
     expect(agg.sims['sim-kv'].outcomes).toEqual({})
     expect(agg.labs['lab-a'].unseen).toEqual({})
     expect(data.sims['sim-kv'].tasksDone).toEqual(['a']) // shown as seen
-    expect(data.xp).toBe(xpOf(agg)) // XP is still v1
+    expect(data.xp).toBe(xpOf(agg))
   })
 })
 
@@ -690,7 +694,7 @@ describe('hydrate from a Wave 0b snapshot', () => {
     expect(s.lessons['t0.l1']?.status).toBe('read')
     expect(s.lessons['t0.l2']?.status).toBe('done')
     expect(s.lessons['t0.l3']?.status).toBe('reading')
-    expect(s.xp).toBe(xpOf(derive(events)))
+    expect(s.xp).toBe(xpOf(upgradeAggregate(deriveV1(events)))) // facts re-priced by v2; item time (itemSec) is unknown until the derive
     expect(s.aggregate.v).toBe(2)
     expect(s.ledger).toMatchObject({ ready: false, readOnly: false })
     expect(tab.loads()).toBe(1) // booted without waiting for idle
@@ -701,6 +705,7 @@ describe('hydrate from a Wave 0b snapshot', () => {
     expect(tab.progress.getState().ledger.ready).toBe(true)
     expect(stableStringify(tab.progress.getState().aggregate)).toBe(stableStringify(derive(events))) // the exact derive replaced the upgrade
     expect(tab.progress.getState().lessons['t0.l2']?.completedAt).toBe(T2)
+    expect(tab.progress.getState().xp).toBe(xpOf(derive(events))) // and the derive adds the item minutes
   })
 
   test('a v2 snapshot does not boot the engine early; a snapshot of an unknown aggregate version is ignored', async () => {

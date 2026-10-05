@@ -1,10 +1,9 @@
-import { XP_UNITS, type XpUnitPrefix } from './constants'
+import { factMinutes, xpOf as economyXpOf } from '../economy'
 import { lwwWorking } from './merge'
 import { refTail } from './refs'
 import { getOwn, setOwn } from './stable'
 import type {
   Aggregate,
-  FactKey,
   Json,
   ProgressData,
   ProgressSummary,
@@ -24,18 +23,12 @@ export function workingMap(records: Iterable<WorkingRecord>): Partial<Record<Wor
   return out
 }
 
-/** The XP a fact pays (spec §6.3). Unknown prefixes pay nothing. */
-export function factXp(fact: string): number {
-  const colon = fact.indexOf(':')
-  const prefix = colon < 0 ? fact : fact.slice(0, colon)
-  return Object.hasOwn(XP_UNITS, prefix) ? XP_UNITS[prefix as XpUnitPrefix] : 0
-}
+/** The XP a fact pays (economy v2, wave-1.md §8.4). Unknown facts pay nothing. */
+export const factXp = factMinutes
 
-/** Each fact pays its unit once, however many events or devices assert it. */
+/** XP of the aggregate: each fact pays once, graded items by nominal time with a daily cap. Order-insensitive. */
 export function xpOf(agg: Aggregate): number {
-  let xp = 0
-  for (const fact of Object.keys(agg.facts) as FactKey[]) xp += factXp(fact)
-  return xp
+  return economyXpOf(agg)
 }
 
 const sortedKeys = (record: Record<string, unknown>): string[] => Object.keys(record).sort()

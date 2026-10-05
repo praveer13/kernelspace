@@ -817,8 +817,8 @@ describe('P5 two-device merge, through the engine', () => {
     await eb.importFile(fileA, 'merge')
     const sa = a.progress.getState()
     const sb = b.progress.getState()
-    expect(sa.lessons['t0.l1']?.status).toBe('done') // both completed it: one fact, one 100 XP
-    expect(sa.xp).toBe(100 + 40 + 60 + 60 + 200)
+    expect(sa.lessons['t0.l1']?.status).toBe('done') // both completed it: one fact
+    expect(sa.xp).toBe(3) // only the quiz pass pays (3 min); a click, sim toggles and the unknown lab-a pay 0
     expect(JSON.stringify({ ...sa, ledger: 0, acks: 0, aggregate: 0 }, replacer)).toBe(JSON.stringify({ ...sb, ledger: 0, acks: 0, aggregate: 0 }, replacer))
     expect(sa.settings.codeLang).toBe('rust') // last writer wins
     expect(ledgerKey(await ledgerOf(ea))).toBe(ledgerKey(await ledgerOf(eb)))
