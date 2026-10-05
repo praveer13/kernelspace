@@ -1,0 +1,178 @@
+{
+  "lab": "rust-allocator",
+  "abi": 2,
+  "version": 2,
+  "commit": "70c47dc",
+  "date": "2026-10-05",
+  "harness": "c50f6d76b477d6e27012277f91765c768f2b7629c731412c1e51045e50fd0f9a",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "boot": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "bump": 0,
+        "coal-left": 0,
+        "coal-right": 0,
+        "misalign": 0,
+        "nocoal": 0,
+        "nosplit": 0,
+        "overlap": 0
+      }
+    },
+    "align": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "bump": 0,
+        "coal-left": 0,
+        "coal-right": 0,
+        "misalign": 1,
+        "nocoal": 0,
+        "nosplit": 1,
+        "overlap": 0
+      }
+    },
+    "no_overlap": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "bump": 0,
+        "coal-left": 0,
+        "coal-right": 0,
+        "misalign": 0,
+        "nocoal": 0,
+        "nosplit": 1,
+        "overlap": 1
+      }
+    },
+    "coalesce": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "bump": 1,
+        "coal-left": 1,
+        "coal-right": 1,
+        "misalign": 0,
+        "nocoal": 1,
+        "nosplit": 1,
+        "overlap": 1
+      }
+    },
+    "reuse": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "bump": 1,
+        "coal-left": 0,
+        "coal-right": 0,
+        "misalign": 0,
+        "nocoal": 0,
+        "nosplit": 0,
+        "overlap": 0
+      }
+    },
+    "fragmentation": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "bump": 1,
+        "coal-left": 1,
+        "coal-right": 1,
+        "misalign": 0,
+        "nocoal": 1,
+        "nosplit": 1,
+        "overlap": 1
+      }
+    }
+  },
+  "mutants": {
+    "bump": {
+      "defaultSeedFails": [
+        "coalesce",
+        "reuse",
+        "fragmentation"
+      ],
+      "caughtBy": [
+        "coalesce",
+        "reuse",
+        "fragmentation"
+      ]
+    },
+    "coal-left": {
+      "defaultSeedFails": [
+        "coalesce",
+        "fragmentation"
+      ],
+      "caughtBy": [
+        "coalesce",
+        "fragmentation"
+      ]
+    },
+    "coal-right": {
+      "defaultSeedFails": [
+        "coalesce",
+        "fragmentation"
+      ],
+      "caughtBy": [
+        "coalesce",
+        "fragmentation"
+      ]
+    },
+    "misalign": {
+      "defaultSeedFails": [
+        "align"
+      ],
+      "caughtBy": [
+        "align"
+      ]
+    },
+    "nocoal": {
+      "defaultSeedFails": [
+        "coalesce",
+        "fragmentation"
+      ],
+      "caughtBy": [
+        "coalesce",
+        "fragmentation"
+      ]
+    },
+    "nosplit": {
+      "defaultSeedFails": [
+        "align",
+        "no_overlap",
+        "coalesce",
+        "fragmentation"
+      ],
+      "caughtBy": [
+        "align",
+        "no_overlap",
+        "coalesce",
+        "fragmentation"
+      ]
+    },
+    "overlap": {
+      "defaultSeedFails": [
+        "no_overlap",
+        "coalesce",
+        "fragmentation"
+      ],
+      "caughtBy": [
+        "no_overlap",
+        "coalesce",
+        "fragmentation"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "ops=200 live=229264 largest_free=795808 frag=0.029 failed=0"
+  }
+}

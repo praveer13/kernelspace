@@ -8,19 +8,38 @@
  * `(ptr << 32) | len` in a u64 → arrives in JS as a BigInt.
  *
  * No wasm-bindgen, no imports, no server: instantiation needs nothing.
+ *
+ * Template v2 (docs/specs/wave-1.md §12) runs each check in its own instance; that driver is
+ * src/lib/forge/run.ts. The types below stay the v1 report, with optional v2 fields added, so
+ * every v1 caller reads a v2 run unchanged.
  */
+
+import type { CheckStatus } from './forge/types'
 
 export interface LabCheckResult {
   id: string
   label: string
   pass: boolean
   msg: string
+  /* v2 only (template v2, run per check) */
+  status?: CheckStatus
+  stage?: number
+  seed?: number
+  fresh?: boolean
+  panic?: string
+  trace?: string
+  ms?: number
 }
 
 export interface LabReport {
+  /** The module's lab id; a `--features reference` build keeps its `@reference` suffix here, so no v1 caller credits it. */
   lab: string
   version: number
   checks: LabCheckResult[]
+  /* v2 only */
+  abi?: 1 | 2
+  reference?: boolean
+  seeds?: 'fresh' | 'default'
 }
 
 /** The module panicked (todo!(), unreachable!, assert) — expected while unfinished. */
@@ -51,14 +70,19 @@ export class LabAbiError extends Error {
 export class LabTimeoutError extends Error {
   /** short headline for result panels; the message is the detail beneath it */
   readonly title: string
-  constructor(ms: number, phase: 'checks' | 'invoke' = 'checks', checksPassed = true) {
+  /** Template v2: the check that was running. The run goes on with the next check. */
+  readonly check?: string
+  constructor(ms: number, phase: 'checks' | 'invoke' = 'checks', checksPassed = true, check?: string) {
     super(
       phase === 'invoke'
         ? `${checksPassed ? 'the self-checks passed, but the' : 'the'} module never returned from ks_invoke (the bridge /fleet drives), so the grader stopped it. Look for an infinite loop in your init or command handling.`
-        : 'the module was still running, so the grader stopped it. Look for an infinite loop in your code.',
+        : check
+          ? `check "${check}" was still running after ${ms / 1000} s, so the grader stopped it and went on with the next check. Look for an infinite loop in the code this check drives.`
+          : 'the module was still running, so the grader stopped it. Look for an infinite loop in your code.',
     )
     this.name = 'LabTimeoutError'
     this.title = `timed out after ${ms / 1000} s`
+    if (check !== undefined) this.check = check
   }
 }
 
@@ -95,7 +119,11 @@ export async function runLabWasm(bytes: ArrayBuffer): Promise<LabReport> {
       `not a loadable kernelspace lab module (${detail}). Drop the .wasm built from the lab template.`,
     )
   }
+  return runLabInstance(instance)
+}
 
+/** The v1 run on an existing instance: `ks_run(0, 0)`, every check, one report. Throws like runLabWasm. */
+export function runLabInstance(instance: WebAssembly.Instance): LabReport {
   const ex = instance.exports as Record<string, unknown>
   const memory = ex.memory as WebAssembly.Memory | undefined
   const ksRun = ex.ks_run as ((inPtr: number, inLen: number) => bigint) | undefined
@@ -150,11 +178,14 @@ const encoder = new TextEncoder()
 /**
  * Instantiate a lab module for runtime use. Requires the ks_invoke bridge
  * (labs built before the bridge have only ks_run — hasInvoke is false).
+ * Also takes an already compiled module (the lab worker compiles once per run).
  */
-export async function instantiateLab(bytes: ArrayBuffer): Promise<LabModule & { hasInvoke: boolean }> {
+export async function instantiateLab(bytes: ArrayBuffer | WebAssembly.Module): Promise<LabModule & { hasInvoke: boolean }> {
   let instance: WebAssembly.Instance
   try {
-    ;({ instance } = await WebAssembly.instantiate(bytes, {}))
+    instance = bytes instanceof WebAssembly.Module
+      ? await WebAssembly.instantiate(bytes, {})
+      : (await WebAssembly.instantiate(bytes, {})).instance
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     throw new LabAbiError(`not a loadable kernelspace lab module (${detail}).`)

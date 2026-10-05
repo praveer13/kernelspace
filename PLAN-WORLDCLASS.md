@@ -280,11 +280,19 @@ landscape-sensitive lessons (T5.L8/L9, T6, T7, and the new caching lesson).
 
 ## 10. Standing build & verification conventions (unchanged, apply to all waves)
 
-- Template crate compiles clean, traps as "not implemented" (`todo!()`);
-  solution `cargo test` N/N green; template N red. Check ids match
-  `src/data/labs.ts` verbatim. `bun scripts/verify-wasm-lab.ts <wasm>
-  expect-pass|expect-trap`. `python3 scripts/pack-labs.py` ships templates
-  only — audit every zip for `_solutions`/`target/` leakage.
+- Template crate compiles clean with zero wasm imports. Under ABI v2 each
+  required check reports `trap` ("not implemented yet" plus the panic text)
+  **individually**; the run is never one whole-module trap. The reference
+  solution is N/N green in `cargo test` on default seeds and on 32 extra
+  seeds, and calibrated (`labs/<lab>/calibration.json`) on fresh seeds. A
+  `--features reference` build reports `<id>@reference` and earns no credit.
+  Check ids and stages match `src/data/labs.ts` and the module's `list` reply
+  verbatim. `bun scripts/verify-wasm-lab.ts <wasm>
+  expect-pass|expect-trap|expect-timeout|expect-reference [--seeds
+  default|fresh|<n>] [--check <id>=pass|fail|trap|timeout]…`.
+  `python3 scripts/pack-labs.py` ships templates and the agent kit only;
+  audit every zip for `_solutions`/`target/` leakage. (Amended by Wave 1 C1,
+  docs/specs/wave-1.md §12.7.)
 - `bun run lint` bare (never piped — masks exit codes) before every commit.
 - Playwright rig at `/tmp/pw` (node at `/tmp/node/bin`) against `vite preview`
   for every shipped wave; kill preview servers by exact PID.
