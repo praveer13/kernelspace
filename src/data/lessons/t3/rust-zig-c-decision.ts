@@ -16,7 +16,7 @@ const lesson: Lesson = {
 
 **The four questions:**
 1. **What does failure cost on this path?** Memory corruption with untrusted input (network-facing, multi-tenant, long-lived) → memory safety is not optional. That's Rust's table stakes, and the reason ~70% of serious CVEs being memory-safety issues is an argument, not a statistic.
-2. **Where's the ecosystem gravity?** You do not get to choose in a vacuum. CUDA, NCCL, NIXL, UCX are C-ABI libraries — the language must interop for free. GPU kernels are CUDA C and Triton — no Rust, no Zig, no exceptions worth your quarter. The ML libraries you'll actually call (tokenizers, safetensors, cuBLAS) pick the language more often than you do.
+2. **Where's the ecosystem gravity?** You do not get to choose in a vacuum. CUDA, NCCL, NIXL, UCX are C-ABI libraries — the language must interop for free. GPU kernels follow the vendor ecosystem: CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang). Rust GPU projects (CubeCL, rust-cuda, cudarc) exist but are marginal in production, and Zig and Go have no vote. The ML libraries you'll actually call (tokenizers, safetensors, cuBLAS) pick the language more often than you do.
 3. **Who maintains it for five years?** Team velocity, hiring, compile-time guardrails vs review-time guardrails. A compiler that catches your invariants (Rust) is worth real money on a fast-moving codebase; a codebase your six-person team can hold in their heads entirely (Zig's pitch) is worth a different kind of money.
 4. **What's the allocation and determinism budget?** Tail latency in microseconds and zero tolerance for hidden allocation (databases, embedded, schedulers) → you want allocation as a visible act: Zig's explicit-allocator discipline or C. GC-shaped languages already lost this round in T0.L5.`,
     },
@@ -34,7 +34,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## Applied: the serving stack, component by component
 
-Run the four questions down the stack you've built in this course: **Router / API front** — untrusted input, 100k connections, tail latency: Rust (tokio, T3.L4). **Scheduler / KV block manager** — untrusted-adjacent, invariant-heavy, refactored weekly: Rust (your labs 02 and 06 are the proof shape). **Intake queue** — single-purpose, allocation-hostile hot loop: Rust still fine (lab 04), Zig equally defensible if the team prefers it. **GPU kernels** — ecosystem gravity wins: CUDA C or Triton, no vote. **io_uring / eBPF glue** — the kernel's ABI is C, so C. **CLI tooling, test harnesses, one-off migrations** — whatever the team ships fastest; this is where Zig earns honest keep. Notice what didn't appear anywhere in that list: ideology.`,
+Run the four questions down the stack you've built in this course: **Router / API front** — untrusted input, 100k connections, tail latency: Rust (tokio, T3.L4). **Scheduler / KV block manager** — untrusted-adjacent, invariant-heavy, refactored weekly: Rust (your labs 02 and 06 are the proof shape). **Intake queue** — single-purpose, allocation-hostile hot loop: Rust still fine (lab 04), Zig equally defensible if the team prefers it. **GPU kernels** — ecosystem gravity wins: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang), with Rust and Zig marginal at best. **io_uring / eBPF glue** — the kernel's ABI is C, so C. **CLI tooling, test harnesses, one-off migrations** — whatever the team ships fastest; this is where Zig earns honest keep. Notice what didn't appear anywhere in that list: ideology.`,
     },
     {
       type: 'callout',
@@ -72,10 +72,10 @@ Run the four questions down the stack you've built in this course: **Router / AP
           ],
           correct: [1],
           explanation:
-            'You do not choose in a vacuum. The accelerators, collectives, and transfer libraries are C-ABI; the kernels are CUDA C/Triton. Language decisions that ignore the gravity well get made again next quarter.',
+            'You do not choose in a vacuum. The accelerators, collectives, and transfer libraries are C-ABI; the kernels are CUDA C++ or Python DSLs such as CuTe DSL and Triton. Language decisions that ignore the gravity well get made again next quarter.',
           why: [
             'Popularity helps hiring but is not gravity. The point is that required libraries and interfaces limit your options regardless of what surveys say.',
-            'Right: CUDA, NCCL, NIXL and UCX expose C ABIs and kernels are CUDA C or Triton, so those constraints exist before preferences do, and cheap C interop is non-negotiable.',
+            'Right: CUDA, NCCL, NIXL and UCX expose C ABIs and kernel toolchains come from the GPU vendor ecosystem, so those constraints exist before preferences do, and cheap C interop is non-negotiable.',
             'Build time is a team-velocity input (question 3), not gravity. Gravity means unavoidable external libraries and interfaces that constrain the language choice.',
             'Gravity is about libraries you must call, not an inertia rule. Dynamo put Rust around existing C and C++ libraries, so a stack can mix languages across a C ABI without rewrites.',
           ],
@@ -119,19 +119,19 @@ Run the four questions down the stack you've built in this course: **Router / AP
         {
           q: 'Per the component-by-component application, GPU kernels are written in…',
           options: [
-            'Rust, because memory safety matters most where kernels process untrusted tensors and model weights',
-            'Zig, because comptime can specialise kernels for each GPU architecture at build time',
-            'CUDA C or Triton: ecosystem gravity is absolute, and this is the one component with no vote',
-            'Go, because goroutines map naturally onto the thousands of GPU threads a kernel launches',
+            'Rust, because memory safety matters most where kernels process untrusted tensors and model weights in production',
+            'Zig, because comptime can specialise kernels for each GPU architecture at build time with no runtime cost',
+            'CUDA C++, and increasingly Python DSLs (CuTe DSL, Triton/Gluon, TileLang), because the vendor ecosystem decides',
+            'Triton alone, because it has replaced hand-written CUDA C++ in every production attention kernel and MoE path',
           ],
           correct: [2],
           explanation:
-            'The four questions are per-component, not per-project. Router: Rust. Scheduler: Rust. Kernels: CUDA C/Triton. io_uring glue: C. CLI tools: whatever ships. Ideology appears nowhere — that\'s the point of the framework.',
+            'The four questions are per-component, not per-project. Router: Rust. Scheduler: Rust. Kernels: CUDA C++ or a Python DSL (CuTe DSL, Triton/Gluon, TileLang). io_uring glue: C. CLI tools: whatever ships. Ideology appears nowhere — that\'s the point of the framework.',
           why: [
-            'Safety is why Rust owns host code like the router and scheduler. Kernels depend on the CUDA and Triton toolchains and libraries, which mainstream serving stacks have no Rust equivalent for.',
-            'Zig\'s comptime is host-side metaprogramming. Kernels in this field are written in CUDA C or Triton because the vendor compilers and libraries live there; ecosystem decides, not language features.',
-            'Right: the toolchains, profilers and libraries for GPU kernels are CUDA C or Triton. Rust, Zig and the rest apply to the host-side components around them.',
-            'Goroutines are scheduled by Go\'s runtime on CPU threads. GPU threads run in lockstep groups on the accelerator, and mainstream kernels are written in CUDA C or Triton, not Go.',
+            'Safety is why Rust owns host code like the router and scheduler. Rust GPU projects (CubeCL, rust-cuda, cudarc) exist but are marginal in production kernels.',
+            'Comptime specialises Zig code at build time, but GPU kernels reach the device through toolchains from the GPU vendor ecosystem, and there the libraries and profilers live.',
+            'Right: kernels follow the vendor ecosystem, which means CUDA C++ plus Python DSLs such as CuTe DSL (FlashAttention-4), Triton/Gluon and TileLang. Rust and Zig serve the host side.',
+            'FlashAttention-4 is written in CuTe DSL, and vLLM v0.30 defaults to a FlashInfer CuTe DSL NVFP4 path on SM100. Triton is one DSL among several, and CUDA C++ remains.',
           ],
         },
       ],
