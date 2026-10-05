@@ -49,23 +49,23 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
 
 **Q1. When is Ordering::Relaxed sufficient?**
 
-- (o1) Every compare_exchange loop because the compare and swap happen as one atomic step
+- (o1) A compare_exchange loop that hands data to other threads
 - (o2) A standalone ticket or metrics counter that guards no other data
-- (o3) The store that unlocks a spin lock since only one atomic bool changes
-- (o4) A ready flag set after filling a non-atomic buffer, because the flag store is itself atomic
+- (o3) The store that unlocks a spin lock guarding a shared critical section
+- (o4) A ready flag that publishes a non-atomic buffer to a reader thread
 
 **Q2. What relationship does Release/Acquire establish when the Acquire observes the Release?**
 
-- (o1) Both operations become SeqCst, so every atomic in the program gets one global order
-- (o2) The Acquire blocks until the releasing thread leaves its critical section as with a lock
-- (o3) Every thread sees the writes at once and not only the thread that performed the Acquire
-- (o4) Writes made before the Release are visible to the thread whose Acquire load observes it
+- (o1) Both operations are upgraded to SeqCst and join the single global order
+- (o2) The Acquire waits until the releasing thread leaves its critical section
+- (o3) Other threads see the writes too and not only the thread that did the Acquire
+- (o4) Writes made before the Release become visible to the thread that observes it
 
 **Q3. Why must compare_exchange code handle failure?**
 
-- (o1) A failed CAS poisons the atomic, as with a Mutex, and it must be reset before reuse
-- (o2) A failed CAS means the Acquire ordering was too weak, and a stronger one removes failures
+- (o1) A failure poisons the atomic, so the caller must reset it before it can be used again
+- (o2) A failure means the ordering was too weak, so a stronger ordering removes failures
 - (o3) Another thread can change the value after your load, so Err returns what it saw
-- (o4) A failed CAS can tear the value, so the caller must restore the old one
+- (o4) A failure can tear the value, so the caller must restore the old value
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

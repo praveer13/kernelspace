@@ -75,10 +75,10 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
         {
           q: 'The E in EPD exists because…',
           options: [
-            'Prefill was split into an early encode half and a later attention half, so each half can be batched at its own size',
-            'Multimodal encoders turn pixels or audio into embeddings with zero KV, so they can scale apart from the prefill pool',
-            'It stands for evict: a third pool holds the KV blocks that decode pushed out under memory pressure until they are reused',
-            'Decode splits into a bandwidth-bound attention stage and a compute-bound expert stage, so it needs two separate fleets',
+            'Prefill was split into an early encode half and a later attention half, letting each half batch at its own size',
+            'Multimodal encoders turn pixels or audio into embeddings with no cache state, letting them scale apart from prefill',
+            'Evict gets its own pool, holding the cache blocks that decode pushed out under memory pressure until they are reused',
+            'Decode splits into a bandwidth-bound attention stage and a compute-bound expert stage, needing two separate fleets',
           ],
           correct: [1],
           explanation:
@@ -93,10 +93,10 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
         {
           q: 'NIXL is best described as…',
           options: [
-            'A C++ inference engine (with its own GPU scheduler) that schedules prefill and decode batches across the cluster, built to replace vLLM',
-            'A point-to-point transfer library that moves KV blocks between workers with one-sided reads over RDMA and other backends such as UCX',
-            'A block-scaled 4-bit number format (FP4) whose per-16-element scales let KV blocks be sent between workers at half the bytes',
-            'A Kubernetes operator (CRD-based) that autoscales prefill and decode pools and places them close together to keep KV paths short',
+            'A C++ inference engine with its own scheduler, planning prefill and decode batches across the whole cluster',
+            'A point-to-point transfer library using one-sided reads, moving cache blocks between workers over several backends',
+            'A block-scaled low-bit number format with per-block scales, letting cache blocks travel between workers in fewer bytes',
+            'A Kubernetes operator driven by custom resources, autoscaling prefill and decode pools and placing them close together',
           ],
           correct: [1],
           explanation:
@@ -104,17 +104,17 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           why: [
             'An engine runs the model and its scheduler. NIXL runs inside engines and moves KV between them; it schedules no batches and replaces no engine.',
             'Right: NIXL is the transfer layer. Workers hand it descriptor lists and it moves KV blocks point to point, with GPU-direct paths where the fabric allows.',
-            'NVFP4-style formats are quantization schemes. NIXL moves whatever bytes the engine gives it and has no say in precision or block scaling.',
+            'NVFP4-style formats are quantization schemes, and even they save less than half: 4.5 bits per value, about 1.8× fewer bytes than FP8. NIXL moves the bytes the engine gives it and does not choose precision.',
             'Autoscaling and placement are done by orchestration such as Dynamo\'s planner or llm-d. NIXL is a library the workers call and it never schedules pods.',
           ],
         },
         {
           q: 'Dynamo\'s KVBM (deprecated in v1.5.0 in favor of engine-native offload) added what to the lab-02 block manager design?',
           options: [
-            'Custom CUDA kernels that gather scattered KV blocks into one contiguous buffer before every attention call on Hopper',
-            'A tiered hierarchy across GPU, CPU and storage memory (written in Rust), with placement, eviction and migration between tiers',
-            'Copy-on-write (COW) forking of blocks, so beam search and parallel sampling share a prompt\'s KV until the sequences diverge',
-            'Expert-aware placement across MoE layers, so blocks produced by hot experts stay in HBM while blocks from cold experts are demoted to SSD',
+            'Custom kernels that gather scattered blocks into one contiguous buffer, running before each attention call on Hopper',
+            'A tiered hierarchy from device memory down to storage, handling placement and migration between the tiers',
+            'Copy-on-write forking of blocks, letting beam search and parallel sampling share a prompt cache until they diverge',
+            'Expert-aware placement across the layers, keeping blocks from hot experts on the device and demoting cold ones to storage',
           ],
           correct: [1],
           explanation:
@@ -129,10 +129,10 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
         {
           q: 'llm-d vs Dynamo is closest to…',
           options: [
-            'Postgres vs MySQL: llm-d packages disaggregated serving for Kubernetes, while Dynamo is NVIDIA\'s planner and transfer stack',
-            'Kubernetes vs Docker (a cluster scheduler vs a single-host container runtime): llm-d orchestrates the replicas, while Dynamo is the container runtime that each worker runs in',
-            'vLLM vs SGLang (both open-source engines, each with its own scheduler and KV paging): they compete as single-node engines and differ in scheduler design but not in how they split prefill and decode',
-            'A compiler vs an interpreter (translation before running vs during running): llm-d fixes the serving topology ahead of time, while Dynamo decides placement per request',
+            'Postgres vs MySQL, with llm-d packaging disaggregated serving for Kubernetes while Dynamo ships NVIDIA\'s planner and transfer stack',
+            'Kubernetes vs Docker, with llm-d orchestrating the replicas across nodes while Dynamo is the container runtime that each GPU worker runs in',
+            'vLLM vs SGLang, with both competing as single-node GPU engines that differ in scheduler design but not in how they split prefill and decode',
+            'A compiler vs an interpreter, with llm-d fixing the serving topology ahead of time while Dynamo decides placement per request',
           ],
           correct: [0],
           explanation:

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "quarter": "2026-Q3",
-  "generatedAt": "2026-08-11T00:00:00.000Z",
+  "quarter": "2026-Q4",
+  "generatedAt": "2026-10-05T00:00:00.000Z",
   "entries": [
     {
       "id": "xgrammar-2-agentic-constraints",
@@ -90,6 +90,61 @@
       "verified": "2026-08",
       "lessons": ["t5.l9", "t7.l1", "t7.l2", "t7.l5"],
       "tags": ["goodput", "SLO", "disaggregation"]
+    },
+    {
+      "id": "dynamo-kvbm-deprecation",
+      "title": "Dynamo deprecates KVBM in favor of engine-native offload",
+      "summary": "Dynamo v1.5.0 deprecates the KV Block Manager and targets its removal for v1.6.0, pointing users at the offload paths built into the engines. The block-table, refcount and tier-placement design the course teaches still holds; a production plan should name the engine-native feature, not the Dynamo component.",
+      "source": "Dynamo v1.5.0 release notes",
+      "href": "https://github.com/ai-dynamo/dynamo/releases/tag/v1.5.0",
+      "published": "2026-09",
+      "verified": "2026-10",
+      "lessons": ["t6.l3", "t5.l6", "t5.l9"],
+      "tags": ["KV cache", "offload", "Dynamo"]
+    },
+    {
+      "id": "deepseek-v4-compressed-attention",
+      "title": "DeepSeek-V4 compresses attention again, to about a tenth of V3.2's KV",
+      "summary": "The V4 report combines compressed sparse and heavily compressed attention, FP4 routed experts, and an FP8 KV cache with BF16 RoPE. At 1M context it reports 27% of V3.2's FLOPs and 10% of its KV. KV bytes per token are an architecture decision before they are a quantization decision. Whether its batch-invariant kernels run in production serving is not stated.",
+      "source": "DeepSeek-V4 technical report",
+      "href": "https://arxiv.org/abs/2606.19348",
+      "published": "2026-04",
+      "verified": "2026-10",
+      "lessons": ["t6.l1", "t5.l4", "t6.l5"],
+      "tags": ["MoE", "attention", "KV cache"]
+    },
+    {
+      "id": "vllm-rust-frontend",
+      "title": "vLLM's Rust frontend moves request handling off the Python hot path",
+      "summary": "The RFC (issue 40846) benchmarked 4 GB200 GPUs with Qwen3-0.6B at concurrency 1024: 837 against 162 requests per second in a preprocess-heavy case, and P50 TTFT of 50.51 against 165.95 ms in a decode-heavy one. The in-tree integration (pull request 40848) merged on 2026-05-21. At small-model scale the frontend, not the GPU, was the bottleneck.",
+      "source": "vLLM Rust frontend integration pull request 40848",
+      "href": "https://github.com/vllm-project/vllm/pull/40848",
+      "published": "2026-05",
+      "verified": "2026-10",
+      "lessons": ["t3.l7", "t5.l10"],
+      "tags": ["Rust", "frontend", "vLLM"]
+    },
+    {
+      "id": "sglang-rust-treecore",
+      "title": "SGLang makes a Rust radix TreeCore the default",
+      "summary": "The prefix-cache tree moved from Python to a Rust core, merged on 2026-09-29, with the SLRU and T-LRU eviction policies and sliding-window and Mamba state write-back ported. The RadixAttention design is unchanged; the control-plane data structure is now a systems-language component.",
+      "source": "SGLang pull request 39627",
+      "href": "https://github.com/sgl-project/sglang/pull/39627",
+      "published": "2026-09",
+      "verified": "2026-10",
+      "lessons": ["t5.l6", "t5.l10", "t3.l7"],
+      "tags": ["prefix cache", "Rust", "SGLang"]
+    },
+    {
+      "id": "nvidia-groq-3-lpx-afd",
+      "title": "NVIDIA Groq 3 LPX productizes attention-FFN disaggregation",
+      "summary": "Each of 256 LPUs carries 500 MB of SRAM at 150 TB/s. LPX runs FFN and MoE experts and drafts tokens while Rubin GPUs run attention and hold the KV cache, with Dynamo orchestrating the per-token activation exchange. Disaggregation now splits inside a layer as well as between prefill and decode.",
+      "source": "NVIDIA developer blog on Groq 3 LPX",
+      "href": "https://developer.nvidia.com/blog/inside-nvidia-groq-3-lpx-the-low-latency-inference-accelerator-for-the-nvidia-vera-rubin-platform/",
+      "published": "2026-03",
+      "verified": "2026-10",
+      "lessons": ["t6.l3", "t6.l4", "t5.l9"],
+      "tags": ["disaggregation", "decode", "hardware"]
     }
   ]
 }

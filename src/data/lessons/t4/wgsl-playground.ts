@@ -138,10 +138,10 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
         {
           q: 'In WGSL, @builtin(global_invocation_id) gid.x corresponds to which CUDA expression?',
           options: [
-            'threadIdx.x, because global_invocation_id numbers each invocation within its own workgroup from zero',
-            'blockIdx.x * blockDim.x + threadIdx.x, the index of the invocation across the whole dispatch',
-            'blockIdx.x * gridDim.x + threadIdx.x, the workgroup index scaled by the number of workgroups in the grid',
-            'The id of the warp running the invocation, which WGSL exposes so kernels can pick a lane within it',
+            'threadIdx.x with global_invocation_id numbering each invocation within its own workgroup from zero',
+            'blockIdx.x * blockDim.x + threadIdx.x as the index of the invocation across the whole dispatch',
+            'blockIdx.x * gridDim.x + threadIdx.x as the workgroup index scaled by the workgroups in the grid',
+            'The id of the warp running the invocation and exposed to let kernels pick a lane within it',
           ],
           correct: [1],
           explanation:
@@ -156,10 +156,10 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
         {
           q: 'workgroupBarrier() exists to…',
           options: [
-            'Make every workgroup in the grid wait for the others, so a later pass can safely read earlier results',
-            'Make every invocation in the workgroup arrive, and their workgroup-memory writes visible, before any one proceeds',
-            'Flush the workgroup\'s writes out to L2 and HBM so other workgroups can read the partial sums right away',
-            'Pause the invocations of the workgroup for a fixed delay, which gives slower lanes time to finish their loads',
+            'Make the workgroups in the grid wait for one another before a later pass reads earlier results',
+            'Make the workgroup invocations arrive and make their workgroup memory writes visible before any proceeds',
+            'Flush the workgroup writes out to global memory before other workgroups read the partial sums',
+            'Pause the invocations of the workgroup for a fixed delay that gives the slower lanes time to finish their loads',
           ],
           correct: [1],
           explanation:
@@ -174,10 +174,10 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
         {
           q: 'The tree reduction\'s advantage over "everyone atomicAdds one output" is…',
           options: [
-            'The tree needs fewer registers, since each invocation holds one partial while atomics need a private accumulator per lane',
-            'log2(n) rounds of conflict-free pair sums, instead of n updates queueing on one hot address',
-            'Atomic adds on a shared address can lose updates under contention, so the final sum would come out wrong',
-            'The tree removes the need for barriers, since each round reads only values earlier rounds have already finished',
+            'Fewer registers with each invocation holding a single partial while atomics need a private accumulator for each lane',
+            'A logarithmic number of rounds of conflict-free pair sums in place of n updates queueing on one hot address',
+            'Atomic adds on a shared address lose updates under contention and the final sum comes out wrong',
+            'No need for barriers with each round reading values that earlier rounds already finished',
           ],
           correct: [1],
           explanation:
@@ -192,10 +192,10 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
         {
           q: 'vec_add does one add per element and moves 12 bytes (two 4-byte reads, one 4-byte write). It will always be limited by…',
           options: [
-            'Compute throughput, because adding 16 million floats saturates the ALUs once the workgroups fill every SM of the GPU',
-            'Memory bandwidth: its arithmetic intensity of about 0.08 FLOP/byte sits far left of any GPU\'s ridge point',
-            'Workgroup size, because 256 invocations per group leaves too few warps to hide the latency of each load',
-            'Barrier count, because every group synchronizes before it writes its output elements back to memory',
+            'Compute throughput with 16 million adds saturating the arithmetic units once workgroups fill the chip',
+            'Memory bandwidth with 12 bytes moved per add and an intensity far left of any ridge point',
+            'Workgroup size with 256 invocations per group leaving too few warps to hide the latency of each load',
+            'Barrier count with each group stalling at a synchronization point before its outputs are written back',
           ],
           correct: [1],
           explanation:

@@ -91,10 +91,10 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
         {
           q: 'The fundamental CPU vs GPU design difference is…',
           options: [
-            'GPUs carry much larger caches per core, so their lanes almost never wait on memory and need no other latency tricks',
-            'CPUs spend transistors on single-thread latency (out-of-order, speculation); GPUs on many simple in-order lanes for throughput',
-            'GPUs run at higher clock speeds than CPUs, so each lane finishes a single instruction stream sooner than one CPU core can',
-            'CPUs have no wide floating-point hardware, so dense linear algebra only reaches useful speed on a GPU',
+            'GPUs give each lane a much larger cache and avoid memory stalls without needing any other latency tricks',
+            'CPUs spend transistors on single-thread latency while GPUs spend them on many simple in-order lanes',
+            'GPUs run at higher clock speeds and finish a single instruction stream sooner than a CPU core',
+            'CPUs lack wide floating-point hardware, so dense linear algebra needs a GPU to reach useful speed',
           ],
           correct: [1],
           explanation:
@@ -109,10 +109,10 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
         {
           q: 'Warp divergence means…',
           options: [
-            'A warp running past its scheduler time slice and being preempted, so another warp takes the SM until it resumes',
-            'Lanes of a warp reading scattered addresses, so one load splits into many memory transactions and bandwidth falls',
-            'Lanes of one warp taking different branches, so the paths run in turn with the idle lanes masked off',
-            'Warps of one block finishing at different times, so the block waits at a barrier for the slowest warp',
+            'A warp overrunning its scheduler time slice and being preempted by another warp on the multiprocessor',
+            'Lanes of a warp reading scattered addresses and splitting one load into many memory transactions',
+            'Lanes of one warp taking different branches and running the paths in turn with idle lanes masked off',
+            'Warps of one block finishing at different times and leaving the block waiting at a barrier',
           ],
           correct: [2],
           explanation:
@@ -127,10 +127,10 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
         {
           q: 'GPUs hide HBM latency primarily by…',
           options: [
-            'Speculating past the load with branch prediction, so the warp keeps issuing down the likely path',
-            'Large per-SM L1 caches that turn most loads into hits, so a warp rarely stalls for long',
-            'Keeping many warps resident per SM and switching to a ready one at no cost whenever a warp stalls on memory',
-            'Clocking HBM faster than the cores, so each load returns before the next instruction issues',
+            'Speculating past each load with branch prediction and issuing down the likely path',
+            'Large first-level caches that turn most loads into hits and keep warps from stalling for long',
+            'Keeping many warps resident and switching to a ready one for free whenever another stalls',
+            'Clocking the memory faster than the cores and returning each load before the next instruction issues',
           ],
           correct: [2],
           explanation:
@@ -145,10 +145,10 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
         {
           q: 'Decode (single-token generation) underuses GPU compute because…',
           options: [
-            'Transformer layers are too branchy, so warp divergence leaves most lanes masked off during single-token steps',
-            'Each step is a small matvec that re-reads every weight from HBM, so bandwidth, not the ALUs, sets the speed',
-            'One token gives too few threads to fill the SMs, and kernel launch overhead dominates every step',
-            'The KV cache is too small at batch 1 to keep the tensor cores busy, so they wait on attention',
+            'Transformer layers are too branchy and warp divergence leaves most lanes masked off in single-token steps',
+            'Each step is a matrix-vector product that rereads the weights from memory and bandwidth sets the speed',
+            'One token gives too few threads to fill the multiprocessors and kernel launch overhead dominates each step',
+            'The key-value cache is too small at batch size one to keep the tensor cores busy during attention',
           ],
           correct: [1],
           explanation:

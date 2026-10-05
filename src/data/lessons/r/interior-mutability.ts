@@ -62,10 +62,10 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
         {
           q: 'What happens when RefCell::borrow_mut conflicts with a live shared borrow?',
           options: [
-            'It blocks the thread until every shared borrow ends, as a Mutex lock would',
-            'It panics at runtime because RefCell enforces the borrow rule dynamically, not at compile time',
-            'It returns an Err value that the caller must handle, so the program carries on',
-            'It creates a data race, since two references now alias the same value in memory',
+            'It blocks the thread until the shared borrows end as a Mutex lock would',
+            'It panics at runtime with an already borrowed error message',
+            'It returns an Err value that the caller must handle and the program goes on',
+            'It creates a data race between the aliasing references',
           ],
           correct: [1],
           explanation:
@@ -80,10 +80,10 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
         {
           q: 'What releases a std::sync::Mutex lock?',
           options: [
-            'Calling unlock() on the Mutex once the critical section ends, as with a Java lock',
-            'Dropping the MutexGuard that lock() returned, usually at the end of scope or via drop',
+            'Calling unlock() on the Mutex when the critical section ends, as with a Java ReentrantLock',
+            'Dropping the MutexGuard that lock() returned, at scope end or by an explicit drop(guard)',
             'The end of the statement that called lock(), whether or not the guard was bound to a name',
-            'The scheduler, once the holding thread blocks or sleeps inside the critical section',
+            'The scheduler when the holding thread calls sleep() in the critical section',
           ],
           correct: [1],
           explanation:
@@ -98,10 +98,10 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
         {
           q: 'Which type lets a single-threaded counter of Copy values change through a shared reference, with no guard and no lock?',
           options: [
-            'Cell<usize>, which sets and gets the value by copy, with no borrow tracking',
-            'Rc<usize>, which shares ownership of the counter and lets every owner update it',
-            'RefCell<usize>, since it also mutates through a shared reference and is the general choice',
-            'Arc<Mutex<usize>>, the standard way to share a mutable counter',
+            'Cell<usize> that sets and gets the value by copy with no borrow tracking',
+            'Rc<usize> that shares ownership and lets each owner update the counter',
+            'RefCell<usize> that mutates through a shared reference and is the general choice',
+            'Arc<Mutex<usize>> that is the standard way to share a mutable counter',
           ],
           correct: [0],
           explanation:

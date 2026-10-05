@@ -19,9 +19,9 @@ export default {
     {
       q: 'vLLM V1 runs out of free KV blocks and preempts a running sequence. What does it do with it?',
       options: [
-        'Copies its blocks to CPU RAM over PCIe, and copies them back when it resumes',
-        'Frees its blocks and sets num_computed_tokens to 0, to recompute on resume',
-        'Parks it with its blocks pinned until another running sequence finishes',
+        'Copies its blocks to host memory and copies them back on resume',
+        'Frees its blocks and resets num_computed_tokens to recompute',
+        'Parks the sequence with its blocks pinned until another one finishes',
         'Aborts the request and returns an out-of-memory error to the client',
       ],
       correct: [1],

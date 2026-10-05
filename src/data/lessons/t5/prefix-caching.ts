@@ -143,10 +143,10 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'A request has 2,048 cached system-prompt tokens and a 128-token uncached user tail. What work does APC remove?',
           options: [
-            'The tail prefill and every decode step; a hit lets the engine replay the response it produced last time',
-            'Prefill for the 2,048 cached tokens; the tail is still prefilled and decoding proceeds as usual',
-            'Tokenization and embedding lookup for the whole prompt; the cache stores token ids rather than K/V tensors',
-            'Nothing, because K/V can be reused only when the entire prompt, tail included, matches a cached entry exactly',
+            'The tail prefill and each decode step, and a hit lets the engine replay the response from last time',
+            'Prefill for the cached system prompt, as the tail is still prefilled and decoding proceeds as usual',
+            'Tokenization and embedding lookup for the whole prompt, as the cache stores token ids rather than tensors',
+            'Nothing, as reuse needs the whole prompt to match a cached entry exactly and a new tail breaks the match',
           ],
           correct: [1],
           explanation: 'Prefix caching resumes at the first miss. It removes deterministic prefill already represented by K/V blocks; it does not remove new-tail prefill or autoregressive decode.',
@@ -160,10 +160,10 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'Why does radix-cache eviction choose leaves?',
           options: [
-            'Leaves hold the longest token runs; freeing one returns the most blocks to the pool for each eviction step',
-            'An internal node is a shared ancestor, so removing it strands every descendant; a leaf can be released and empty ancestors pruned',
-            'Internal nodes carry no KV blocks of their own, only child pointers, so there is nothing to evict until a leaf goes',
-            'Only leaves carry an LRU timestamp, because interior nodes are never touched again once an edge has been split',
+            'Leaves hold the longest token runs, and freeing one returns the most blocks to the pool at each eviction step',
+            'An internal node is a shared ancestor, and removing it strands its descendants while a leaf can be released',
+            'Internal nodes carry child pointers and no blocks of their own, so there is nothing to evict until a leaf goes',
+            'Leaves are the nodes with a recency timestamp, and interior nodes go untouched once an edge has been split',
           ],
           correct: [1],
           explanation: 'Tree topology is an ownership constraint. Evict an eligible leaf, drop its references, then prune ancestors only once nothing depends on them.',
@@ -177,10 +177,10 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'Why is pure longest-prefix routing insufficient?',
           options: [
-            'A cache hit only skips the attention work; the MLP still recomputes every cached token and the saving is too small to route for',
-            'It herds traffic onto one warm worker until queueing outweighs the saved prefill; a load guard bounds that skew',
-            'Cached K/V is bound to the request that created it, so no router can reuse it for a later request',
-            'A longer match means more K/V to move to the chosen worker, so the router should prefer short matches over long ones',
+            'A cache hit skips the attention work, and the feed-forward layers still recompute each cached token',
+            'It herds traffic onto one warm worker until queueing outweighs the saved prefill, and a guard caps the skew',
+            'Cached key and value tensors are bound to the request that created them, and no router can reuse them later',
+            'A longer match means more tensors to move to the chosen worker, and the router should prefer short matches',
           ],
           correct: [1],
           explanation: 'The objective is TTFT under load, not hit rate alone. Prefix affinity scores locality subject to a bounded imbalance, then falls back to least-loaded placement.',
@@ -194,10 +194,10 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
         {
           q: 'Which value must be part of a safe prefix-cache identity?',
           options: [
-            'The normalized prompt text after whitespace and Unicode cleanup, since identical text always tokenizes identically',
-            'Exact token ids plus every setting that changes K/V (model, adapter, multimodal), with a trust-domain salt for isolation',
-            'The token ids plus the sampling parameters, since temperature and top-p change which tokens the cached K/V should hold',
-            'The token ids plus the client session id, so that one user\'s cached prefix can never be reused by any other user\'s requests',
+            'The normalized prompt text after whitespace and Unicode cleanup, as identical text tokenizes identically',
+            'The exact token ids plus the model and adapter settings plus a tenant salt, as K/V and isolation depend on them',
+            'The token ids plus the sampling parameters, as temperature and top-p change which tokens the cache should hold',
+            'The token ids plus the client session id, as one user\'s cached prefix must be hidden from other users\' requests',
           ],
           correct: [1],
           explanation: 'A cache identity must name deterministic K/V, not merely similar text. Model/adapter/multimodal configuration and isolation namespace matter alongside exact token ids.',

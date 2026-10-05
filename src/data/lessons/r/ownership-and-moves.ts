@@ -59,10 +59,10 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
         {
           q: 'After let b = a for a String, what happened?',
           options: [
-            'The heap buffer was deep-copied, so a and b are now independent owners',
-            'b owns the buffer, and a is no longer usable after the move',
+            'The buffer was deep-copied and a and b are independent owners',
+            'b becomes the sole owner of the buffer and a is no longer usable',
             'a and b both point at the buffer and the last one to leave scope frees it',
-            'The buffer was freed at once and a now holds an empty String that is still usable',
+            'The buffer was freed at once and a holds an empty String that is still usable',
           ],
           correct: [1],
           explanation:
@@ -77,16 +77,16 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
         {
           q: 'Why is clone() intentionally explicit?',
           options: [
-            'Implicit duplication would run Drop twice on one buffer, so the call must be spelled out',
-            'Duplicating a heap value can allocate and copy a lot of data, so the cost is visible at the call site',
-            'clone() is built on unsafe pointer copies, so Rust makes each use deliberate and auditable',
-            'The compiler cannot tell whether a type is safe to duplicate, so the programmer must vouch for it each time',
+            'Implicit duplication would call drop() twice on the same buffer, so the call must be spelled out',
+            'Duplicating a heap value can copy a lot of data, so clone() makes the cost visible',
+            'clone() is built on unsafe pointer copies, so each use must be deliberate and auditable',
+            'The compiler cannot tell if a type is safe to clone(), so the programmer must vouch for it',
           ],
           correct: [1],
           explanation:
             'Rust keeps potentially expensive duplication visible at the call site rather than hiding it behind assignment.',
           why: [
-            'Bitwise implicit copies are why String is not Copy, but not why clone is explicit. A clone builds a separate buffer, so no double drop arises. Explicitness exposes cost.',
+            'A bitwise copy would double-drop the buffer, which is why String is not Copy. That is not why clone is explicit: a clone builds a separate buffer and exposes the cost.',
             'Right: a clone may allocate and copy arbitrary amounts of data. Rust leaves cheap bit copies to Copy types and makes every costly duplicate visible.',
             'Clone is an ordinary trait method, and implementations like String\'s are safe code. Unsafe is not what the explicit call signals.',
             'The type itself decides, by implementing Clone or Copy. The compiler knows which types allow duplication, so no programmer vouching is involved.',
@@ -95,10 +95,10 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
         {
           q: 'What does Drop provide?',
           options: [
-            'Cleanup run by a background collector, some time after the owner leaves scope, as Java does, via finalizers',
-            'Deterministic cleanup of whatever the value owns, such as memory, a file or a lock, when its owner ends',
-            'Cleanup that happens only when code calls drop() explicitly, like close() in C',
-            'Cleanup of heap memory only, since files, sockets and locks still need a manual close call',
+            'Cleanup run by a background collector some time after the owner leaves scope',
+            'Deterministic cleanup of what the value owns such as memory or a file',
+            'Cleanup that runs when the code calls drop by hand as it would call close in C',
+            'Cleanup of heap memory while files and locks are left to a manual close call',
           ],
           correct: [1],
           explanation:

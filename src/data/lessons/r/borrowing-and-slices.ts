@@ -63,10 +63,10 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
         {
           q: 'Which combination may exist at the same time for one value?',
           options: [
-            'One &mut T alongside any number of &T, because readers cannot see an in-progress write, so nothing races',
-            'Many &T, or exactly one &mut T, but never a &mut T together with any other live reference',
-            'Any number of &mut T, provided no two of them write the same element, since the compiler tracks each index',
-            'At most one reference of either kind, since even two &T could see a half-written update',
+            'One &mut T alongside any number of shared &T references',
+            'Many &T references or one &mut T but not both at once',
+            'Any number of &mut T when no two of them write the same element',
+            'At most one reference of either kind, even when both are plain reads',
           ],
           correct: [1],
           explanation:
@@ -81,16 +81,16 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
         {
           q: 'Why prefer &[T] to &Vec<T> in a read-only function parameter?',
           options: [
-            'A &Vec<T> parameter forces the callee to allocate a new Vec, copy every element, then drop it, but a slice reuses the caller\'s buffer',
-            'A slice accepts arrays, Vecs and subranges, and exposes only the access the callee needs',
-            'A &Vec<T> moves the Vec into the callee for good, so the caller loses it, whereas a slice only borrows part of it',
-            'Indexing and iteration need a slice type, so a &Vec<T> parameter cannot use either one',
+            'Passing &[T] copies the elements into a temporary buffer first',
+            'Passing &[T] lets the caller supply arrays, Vecs and subranges',
+            'Passing &Vec<T> moves the Vec into the callee and the caller loses it',
+            'Passing &Vec<T> blocks indexing and iteration unless a slice type is used',
           ],
           correct: [1],
           explanation:
             'Arrays, Vecs, and subslices can all coerce to &[T]. It is a zero-copy view with a smaller API contract.',
           why: [
-            'Passing &Vec<T> allocates nothing either; it is just a pointer to the existing Vec. The difference is which callers the signature accepts.',
+            'A slice is a pointer and a length into the existing buffer. Passing one allocates and copies nothing. The difference is which callers the signature accepts.',
             'Right: arrays, Vecs and subranges all coerce to &[T], so one signature serves them all. It also promises less, since it cannot grow or reallocate the buffer.',
             'Both are borrows and neither moves anything. Moving would need a by-value Vec<T> parameter, which is a different signature altogether.',
             'A &Vec<T> indexes and iterates fine, because Vec implements Index and derefs to a slice. The reason to prefer slices is flexibility, not capability.',
@@ -99,10 +99,10 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
         {
           q: 'Why can Vec::push conflict with a live element reference?',
           options: [
-            'push takes the Vec by value, so every earlier reference points at moved-from memory afterwards',
-            'push can reallocate the buffer, leaving any held element reference pointing at freed heap memory',
-            'Vec counts live element borrows at runtime, and push panics whenever that count is nonzero',
-            'push shifts existing elements along by one slot, so the held reference would see a different value',
+            'push consumes the Vec and leaves earlier references pointing at moved memory',
+            'push can reallocate the buffer and leave a held reference pointing at freed memory',
+            'Vec counts live element borrows at runtime and push panics when that count is nonzero',
+            'push shifts the existing elements by one slot and changes what a held reference sees',
           ],
           correct: [1],
           explanation:

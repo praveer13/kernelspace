@@ -19,10 +19,10 @@ export default {
     {
       q: 'Llama-3-8B has 32 layers, 8 KV heads (GQA), head dimension 128 and an FP16 cache. How much KV cache does one token take?',
       options: [
-        'About 512 KiB: 2 x 32 layers x 4096 x 2 B, as if all 32 heads kept their own K and V',
-        'About 128 KiB: 2 x 32 layers x 8 KV heads x 128 x 2 B, because GQA shares K and V heads',
-        'About 64 KiB: 2 x 32 layers x 8 KV heads x 128 x 1 B, because FP16 uses one byte per element',
-        'About 256 KiB: 32 layers x 32 KV heads x 128 x 2 B, because V is rebuilt from K, not stored',
+        'About 512 KiB: 2 x 32 layers x 4096 x 2 B with MHA keeping its own K and V per head',
+        'About 128 KiB: 2 x 32 layers x 8 KV heads x 128 x 2 B with GQA sharing K and V heads',
+        'About 64 KiB: 2 x 32 layers x 8 KV heads x 128 x 1 B with FP16 at one byte per element',
+        'About 256 KiB: 32 layers x 32 KV heads x 128 x 2 B with V rebuilt from K',
       ],
       correct: [1],
       why: [

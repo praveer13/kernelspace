@@ -87,10 +87,10 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
         {
           q: 'WebAssembly\'s security model is best described as…',
           options: [
-            'Process isolation: the host runs every module in its own OS process with a separate address space',
-            'Capability-based: a module touches only its own linear memory and the host functions it was handed',
-            'A policy file like the Java SecurityManager, where the host lists which syscalls and paths are permitted',
-            'Trust-based: the host verifies a publisher signature, and signed modules run with the full permissions of the user',
+            'Process isolation where the host runs each module in its own operating system process with a separate address space',
+            'Capability-based where a module touches its own linear memory and the host functions it was handed',
+            'A policy file like the Java security manager where the host lists permitted syscalls and paths',
+            'Trust-based where the host verifies a publisher signature and runs signed modules with full user permissions',
           ],
           correct: [1],
           explanation:
@@ -105,10 +105,10 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
         {
           q: 'Rust is an unusually good Wasm source language because…',
           options: [
-            'Rust compiles through its own backend that emits Wasm directly, so its output is faster than that of LLVM-based languages like C and C++',
-            'It has no GC or runtime to port, only thin allocator and panic shims, so the same code compiles to wasm32 with mature tooling',
-            'Its borrow checker runs inside the Wasm module, which adds the memory safety that Wasm lacks',
-            'Wasm engines ship Rust\'s std, so std::fs and std::thread work in a browser tab unchanged',
+            'It compiles through its own backend that emits Wasm directly and beats C and C++ output',
+            'It has no collector or runtime to port and gets by with a few thin allocator and panic shims',
+            'Its borrow checker runs inside the Wasm module and adds the memory safety Wasm lacks',
+            'Wasm engines ship the Rust standard library, so its file and thread APIs work unchanged in a tab',
           ],
           correct: [1],
           explanation:
@@ -123,10 +123,10 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
         {
           q: 'The main performance trap in JS↔Wasm apps is…',
           options: [
-            'Wasm compute is far slower than native code, so heavy numeric loops are better left in JavaScript than in the module',
-            'Crossing the boundary too often: marshalling strings and objects per call dominates, so batch the work',
-            'Linear memory is slower than JavaScript heap memory, so buffers shared with JavaScript should be avoided in hot paths',
-            'Modules are recompiled from the .wasm file on every call, so the cost of compilation is paid again on each call',
+            'Wasm compute running far slower than native code which leaves heavy numeric loops better in JavaScript',
+            'Crossing the boundary too often and paying to marshal strings and objects on each call',
+            'Linear memory being slower than the JavaScript heap which makes shared buffers a hot path hazard',
+            'Modules being recompiled from the wasm file on each call, paying the cost again',
           ],
           correct: [1],
           explanation:
@@ -141,10 +141,10 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
         {
           q: 'Server-side Wasm (wasmtime/WASI/Workers) sells which property over containers?',
           options: [
-            'Higher memory ceilings per instance, because a module can address all of the host\'s RAM and not just a quota',
-            'Microsecond cold starts and structural sandboxing for untrusted or plugin code, with isolation but no OS process per unit',
-            'Full POSIX compatibility, so existing Linux binaries run unmodified inside the sandbox without recompiling',
-            'Stronger isolation than a virtual machine, because a module never shares anything with the host kernel',
+            'Higher memory ceilings per instance that let a module address host memory instead of a fixed quota',
+            'Microsecond cold starts and structural sandboxing for plugin code without a process per unit',
+            'Full system call compatibility that runs existing Linux binaries unmodified inside the sandbox',
+            'Stronger isolation than a virtual machine as a module shares nothing with the host kernel',
           ],
           correct: [1],
           explanation:

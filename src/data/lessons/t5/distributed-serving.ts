@@ -90,10 +90,10 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
         {
           q: 'Tensor parallelism must stay on NVLink-class interconnects because…',
           options: [
-            'TP keeps a full copy of the KV cache on every GPU (replicated), and only NVLink offers the cache coherence needed to keep the copies consistent',
-            'TP shards every matmul, so it needs about two all-reduces per layer per step; only intra-node bandwidth hides that traffic',
-            'TP hands whole activations to the next GPU after each layer, and Ethernet latency (microseconds, not nanoseconds) is too high for such hand-offs between nodes',
-            'TP must synchronize gradients every step, and only NVLink supports the strict synchronous reduction that needs',
+            'It keeps a full copy of the key-value cache on each device, and the copies need hardware coherence that fast links provide',
+            'It shards each matmul and needs two collective reductions per layer per step, and the intra-node bandwidth hides that traffic',
+            'It hands whole activations to the next device after each layer, and Ethernet latency is too high for such hand-offs between nodes',
+            'It must synchronize gradients at each step, and the strict synchronous reduction that needs is available only on fast links',
           ],
           correct: [1],
           explanation:
@@ -108,10 +108,10 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
         {
           q: 'Pipeline parallelism\'s main weakness is…',
           options: [
-            'Each stage boundary ships the layer\'s full KV cache to the next GPU (a large transfer), so inter-stage traffic grows with context length',
-            'Pipeline bubbles: keeping every stage busy needs many micro-batches in flight, hurting single-request latency',
-            'Every layer needs two all-reduce collectives per step, so PP is as link-hungry as TP (and must also stay inside one NVLink domain)',
-            'Each stage must hold a full copy of the model weights for its micro-batch, which multiplies memory use by the number of stages',
+            'Each stage boundary ships the layer\'s full cache to the next device, and inter-stage traffic grows with context length',
+            'Pipeline bubbles, where keeping the stages busy needs many micro-batches in flight and hurts the latency of a request',
+            'Each layer needs two collective reductions per step, and the scheme is as link-hungry as tensor parallelism',
+            'Each stage must hold a full copy of the model weights for its micro-batch, and memory use multiplies by the stage count',
           ],
           correct: [1],
           explanation:
@@ -126,10 +126,10 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
         {
           q: 'Prefill/decode disaggregation pays off primarily because…',
           options: [
-            'Splitting the work across two fleets halves the weights each GPU stores, which frees memory for a larger KV cache',
-            'Opposite roofline regimes let separate fleets tune and scale independently and isolate ITL, at the price of a KV transfer',
-            'Prefill workers send only the final token and its logits to decode workers, so no KV transfer is needed and TTFT improves at no cost',
-            'Cross-node RDMA links are faster than HBM, so moving K/V to a dedicated decode GPU is quicker than reading it locally',
+            'Splitting the work across two fleets halves the weights each device stores, and that frees memory for a larger cache',
+            'Opposite roofline regimes let separate fleets tune and scale independently and isolate latency, at the price of a transfer',
+            'Prefill workers send only the final token and its logits to decode workers, and no cache transfer is needed',
+            'Cross-node links are faster than device memory, and moving the cache to a dedicated decode device beats reading it locally',
           ],
           correct: [1],
           explanation:
@@ -144,10 +144,10 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
         {
           q: 'Mooncake\'s architecture is best described as…',
           options: [
-            'A parallelism library that shards each layer\'s attention heads across nodes (tensor-parallel style), so one request\'s KV never has to move',
-            'A distributed KV-cache store spread across cluster memory tiers, with cache-aware request routing: a database cluster whose payload is KV blocks',
-            'A quantization framework (FP8 or INT4) that compresses stored KV blocks to a low bit width, so more prefixes fit in each GPU\'s HBM',
-            'A load balancer that spreads requests by GPU utilization and keeps each worker\'s KV strictly local, relying on per-engine prefix caching',
+            'A parallelism library that shards each layer\'s attention heads across nodes, so a request\'s cache never has to move',
+            'A distributed cache store for attention keys and values across the memory tiers, with cache-aware request routing between workers',
+            'A quantization framework that compresses stored blocks to a low bit width, so more prefixes fit in each device\'s memory',
+            'A load balancer that spreads requests by utilization, keeping each worker\'s cache strictly local and relying on per-engine prefix caching',
           ],
           correct: [1],
           explanation:

@@ -141,10 +141,10 @@ You will perform translations by hand: pick a virtual address, walk the four lev
         {
           q: 'A 4-level page walk on x86-64 exists because…',
           options: [
-            'Each level mirrors one cache tier (L1, L2, L3, DRAM), so a four-level walk matches the hardware memory hierarchy',
-            'A flat table for a 48-bit space would need ~512 GiB of entries per process; the radix tree allocates only mapped regions',
-            'Each level is a 512-entry table sized to one 4 KiB page, so the hardware walker fetches a whole level in one cache line',
-            'Smaller tables make context switches cheaper, since only the top level is saved and the lower levels stay in the TLB',
+            'Each level mirrors one cache tier from L1 through DRAM, with a four-level walk matching the hardware memory hierarchy',
+            'A flat table for a 48-bit space would need about 512 GiB per process, with the MMU walking a sparse radix tree',
+            'Each level is a 512-entry table sized to one 4096-byte page, with the MMU walker fetching a whole level in one cache line',
+            'Smaller tables make context switches cheaper, with only the top level saved and the lower 3 levels staying in the TLB',
           ],
           correct: [1],
           explanation:
@@ -159,10 +159,10 @@ You will perform translations by hand: pick a virtual address, walk the four lev
         {
           q: 'The TLB\'s job is to…',
           options: [
-            'Cache recently used data lines from DRAM near the core, so repeated reads of the same bytes avoid a slow memory trip',
-            'Cache recent virtual-page to physical-frame translations, so most accesses skip the four-level page walk',
-            'Hold the page-table entries of every resident page, so the kernel never walks the tables for memory a process already has',
-            'Cache the outcome of page-fault handling, so a page that was swapped in once is never faulted on again',
+            'Cache recently used data lines from DRAM near the core, with repeated reads of the same bytes avoiding a slow memory trip',
+            'Cache recent virtual-page to physical-frame translations in the MMU, with most of the accesses skipping the page walk',
+            'Hold the page-table entries of each resident page in the CPU, with the kernel skipping table walks for memory a process already has',
+            'Cache the outcome of page-fault handling in the TLB, with a page swapped in once not faulting again',
           ],
           correct: [1],
           explanation:
@@ -177,10 +177,10 @@ You will perform translations by hand: pick a virtual address, walk the four lev
         {
           q: 'Which access ends in SIGSEGV instead of being fixed up transparently by the page-fault handler?',
           options: [
-            'First touch of a malloc\'d region that the allocator reserved but the kernel has not yet backed with a physical frame',
-            'A dereference of address 0x0, which lies in a page the kernel deliberately leaves unmapped so that NULL bugs trap',
-            'A write to a page still shared copy-on-write with the other process after fork(), which needs a private copy first',
-            'First read of a page of a file that was mmap\'d but has not yet been read into the page cache from disk',
+            'First touch of a malloc\'d region, which the allocator reserved but the kernel has not yet backed with a physical RAM frame',
+            'A read or write at the null address, in a page the kernel deliberately leaves unmapped to catch NULL bugs',
+            'A write to a page still shared copy-on-write after a fork, needing a private copy of the RAM frame first',
+            'First read of a page of an mmap\'d file, which has not yet been read into the page cache from the SSD',
           ],
           correct: [1],
           explanation:
@@ -195,10 +195,10 @@ You will perform translations by hand: pick a virtual address, walk the four lev
         {
           q: 'Copy-on-write after fork() means…',
           options: [
-            'The child receives a full private copy of the parent\'s memory at fork time, which is why forking a large process is slow',
-            'Parent and child share frames read-only, and a frame is copied only when one of them writes to it, at fault time',
-            'Parent and child share frames read-write, and the kernel serialises their writes with a per-page lock so both see updates',
-            'Every write is first logged to the swap device, so a failed child can be rolled back without affecting the parent',
+            'The child receives a full private copy of the parent\'s memory at fork time, making forking a big process slow',
+            'Parent and child share frames write-protected, with a frame copied at fault time when one of them writes to it',
+            'Parent and child share frames writable, with the kernel serialising their writes through a per-page lock so both see updates',
+            'Each write is first logged to the swap device, with a failed child rolled back and leaving the parent untouched',
           ],
           correct: [1],
           explanation:

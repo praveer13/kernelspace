@@ -5,22 +5,22 @@
  * A synthetic-but-faithful bandwidth benchmark over an N×N f64 matrix.
  * Row-major walks memory sequentially, reusing every 64 B cache line for 8
  * doubles and letting the prefetcher run far ahead. Column-major strides by
- * N×8 B, using only one double per line; at N=8192 the stride is 64 KB,
+ * N×8 B, using only one double per line; at N=8192 the stride is 64 KiB,
  * defeating the prefetcher and thrashing the TLB.
  *
  * Model constants:
  *   f64 = 8 B · cache line = 64 B
- *   L1  32 KB / 0.5 ns  (~16 GB/s class)
- *   L2   4 MB / 5.0 ns   (~12.8 GB/s class)
- *   L3  32 MB / 15 ns    (~4.3 GB/s class)
+ *   L1  32 KiB / 0.5 ns  (~16 GB/s class)
+ *   L2   4 MiB / 5.0 ns   (~12.8 GB/s class)
+ *   L3  32 MiB / 15 ns    (~4.3 GB/s class)
  *   DRAM     / 85 ns     (~1.4 GB/s class)
  *   TLB miss penalty = +20 ns/access for page-crossing strides.
  *
- * Why L2=4 MB? 512²·8 B = 2 MB, so the whole matrix fits in L2. The active
- * column set is only N·64 B = 32 KB, which fits L1; once loaded, column-major
+ * Why L2=4 MiB? 512²·8 B = 2 MiB, so the whole matrix fits in L2. The active
+ * column set is only N·64 B = 32 KiB, which fits L1; once loaded, column-major
  * reuses those lines across the 8 columns that share each line. The gap between
  * row and column therefore nearly vanishes at 512², while at 8192² the total
- * matrix spills to DRAM and the 64 KB stride pays full TLB cost.
+ * matrix spills to DRAM and the 64 KiB stride pays full TLB cost.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -99,7 +99,7 @@ function matrixModel(
     // are reused across the 8 columns that share each line.
     const colLevel = kb <= L2_KB ? LEVELS[0] : level
     ns = doubles * colLevel.ns
-    // Prefetcher only helps small column strides; the 64 KB stride at 8192
+    // Prefetcher only helps small column strides; the 64 KiB stride at 8192
     // is far outside its window.
     if (prefetch && stride <= 256) ns *= 0.65
     // Page-crossing stride plus a working set larger than L2 = TLB thrash.

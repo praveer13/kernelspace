@@ -19,10 +19,10 @@ export default {
     {
       q: 'The page-table entry says a virtual-memory page is 4 KiB. How many bytes does one page hold?',
       options: [
-        'It holds 4,096 bytes, because a KiB is 2^10 = 1,024 bytes and the page is four of them',
-        'It holds 4,000 bytes, because a KiB is 10^3 bytes and the page is four of them exactly',
-        'It holds 4,096 bytes, because a KiB is 1,000 bytes and 96 more are reserved for the entry',
-        'It holds 64 bytes, because a page is one cache line and a KiB counts those lines as units',
+        'It holds 4096 bytes, taking a KiB to be 1024 bytes',
+        'It holds 4000 bytes, taking a KiB to be 1000 bytes',
+        'It holds 4096 bytes, taking a KiB to be 1000 bytes with 96 more reserved',
+        'It holds 64 bytes, taking a page to be one cache line',
       ],
       correct: [0],
       why: [

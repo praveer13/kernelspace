@@ -19,10 +19,10 @@ export default {
     {
       q: 'The KV cache for one 131,072-token context is 327,680 B per token x 131,072 tokens = 42,949,672,960 B. How should that total be written?',
       options: [
-        'About 43 GiB, since a GiB is 10^9 bytes and the division gives 42.9',
-        'About 40 GiB, or about 43 GB, because a GiB is 2^30 bytes and a GB is 10^9 bytes',
-        'About 40 GB, because gibibytes and gigabytes name the same unit and rounding down is conventional',
-        'About 400 GiB, because a GiB is 2^30 bytes and the byte total is 4.3 x 10^11',
+        'About 43 GiB, with a GiB at 10^9 bytes and a GB at 2^30 bytes',
+        'About 40 GiB or 43 GB, with a GiB at 2^30 bytes and a GB at 10^9 bytes',
+        'About 40 GB, with a GB and a GiB naming the same unit, rounded down',
+        'About 400 GiB, with a GiB at 2^30 bytes and a GB total of 4.3 x 10^11 bytes',
       ],
       correct: [1],
       why: [

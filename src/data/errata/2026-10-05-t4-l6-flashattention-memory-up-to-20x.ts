@@ -19,10 +19,10 @@ export default {
     {
       q: 'In Dao et al.\'s Fig. 2 (GPT-2 medium attention), standard attention runs slower than FlashAttention. What explains the speedup?',
       options: [
-        'FlashAttention does fewer FLOPs, because online softmax skips rescaling work that standard attention repeats',
-        'Far less HBM traffic, about 4.4 GB against 40.3 GB, even though it performs slightly more FLOPs overall',
-        'FlashAttention stores each score in a narrower format, so every score is cheaper to move through HBM',
-        'Its up-to-20× memory saving shrinks the N×N matrix by that factor, so traffic falls by the same factor',
+        'Fewer GPU FLOPs from online softmax skipping the rescaling work standard attention repeats',
+        'Far less HBM traffic from tiled kernels despite performing slightly more FLOPs overall',
+        'A narrower score format that makes each score cheaper to move through HBM',
+        'A memory saving that shrinks the score matrix and cuts HBM traffic by the same factor',
       ],
       correct: [1],
       why: [

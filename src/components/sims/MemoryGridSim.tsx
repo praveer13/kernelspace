@@ -58,17 +58,17 @@ const GRID_TASKS: SimTask[] = [
 const LATENCY_TASKS: SimTask[] = [
   {
     id: 't-lat-l1',
-    text: 'Pointer-chase a ≤32 KB working set — find which cache level answers',
+    text: 'Pointer-chase a ≤32 KiB working set — find which cache level answers',
     xp: 60,
   },
   {
     id: 't-lat-dram',
-    text: 'Grow the working set to 64 MB — watch latency step L1 → L2 → L3 → DRAM',
+    text: 'Grow the working set to 64 MiB — watch latency step L1 → L2 → L3 → DRAM',
     xp: 60,
   },
   {
     id: 't-lat-stride',
-    text: 'Same ≥1 MB buffer, stride ≤64 B vs stride 4096 B — explain the gap',
+    text: 'Same ≥1 MiB buffer, stride ≤64 B vs stride 4096 B — explain the gap',
     xp: 60,
   },
   {
@@ -659,7 +659,7 @@ export default function MemoryGridSim() {
             </p>
             <p>
               Grow the <span className="font-mono text-text-1">working set</span> and the answering
-              level steps down the ladder: L1 (32 KB, ~0.5 ns) → L2 (1 MB, ~5 ns) → L3 (32 MB,
+              level steps down the ladder: L1 (32 KiB, ~0.5 ns) → L2 (1 MiB, ~5 ns) → L3 (32 MiB,
               ~15 ns) → DRAM (~100 ns). A <span className="font-mono text-text-1">stride</span>{' '}
               under 64 B shares each cache line across loads; a 4 KiB stride puts every load on a
               new page — no line sharing, no prefetch rescue, plus a TLB miss. The faint staircase

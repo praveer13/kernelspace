@@ -63,10 +63,10 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
         {
           q: 'When is Ordering::Relaxed sufficient?',
           options: [
-            'A ready flag set after filling a non-atomic buffer, because the flag store is itself atomic',
+            'A ready flag that publishes a non-atomic buffer to a reader thread',
             'A standalone ticket or metrics counter that guards no other data',
-            'The store that unlocks a spin lock since only one atomic bool changes',
-            'Every compare_exchange loop because the compare and swap happen as one atomic step',
+            'The store that unlocks a spin lock guarding a shared critical section',
+            'A compare_exchange loop that hands data to other threads',
           ],
           correct: [1],
           explanation:
@@ -81,10 +81,10 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
         {
           q: 'What relationship does Release/Acquire establish when the Acquire observes the Release?',
           options: [
-            'Every thread sees the writes at once and not only the thread that performed the Acquire',
-            'Writes made before the Release are visible to the thread whose Acquire load observes it',
-            'The Acquire blocks until the releasing thread leaves its critical section as with a lock',
-            'Both operations become SeqCst, so every atomic in the program gets one global order',
+            'Other threads see the writes too and not only the thread that did the Acquire',
+            'Writes made before the Release become visible to the thread that observes it',
+            'The Acquire waits until the releasing thread leaves its critical section',
+            'Both operations are upgraded to SeqCst and join the single global order',
           ],
           correct: [1],
           explanation:
@@ -99,10 +99,10 @@ The [R10 Forge drill](/forge/rust-zero-r10) covers a Relaxed ticket counter, Rel
         {
           q: 'Why must compare_exchange code handle failure?',
           options: [
-            'A failed CAS means the Acquire ordering was too weak, and a stronger one removes failures',
+            'A failure means the ordering was too weak, so a stronger ordering removes failures',
             'Another thread can change the value after your load, so Err returns what it saw',
-            'A failed CAS poisons the atomic, as with a Mutex, and it must be reset before reuse',
-            'A failed CAS can tear the value, so the caller must restore the old one',
+            'A failure poisons the atomic, so the caller must reset it before it can be used again',
+            'A failure can tear the value, so the caller must restore the old value',
           ],
           correct: [1],
           explanation:

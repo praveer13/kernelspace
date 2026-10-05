@@ -9,7 +9,11 @@ import {
   ACT3_COST_LABEL,
   gradeMeasurementSubmission,
   gradeAct3Doc,
+  gradeIncidentCall,
+  incidentLedgerFrom,
+  incidentMisses,
   HW_MENU,
+  INCIDENT_CLOSED_NOTE,
   INCIDENTS,
   seedLabel,
   type Act2Choice,
@@ -88,9 +92,9 @@ function ActShell({ act, done, children }: { act: (typeof ACTS)[number]; done: b
 
 function ResultPanel({ result }: { result: ActResult }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-4 rounded-md border p-4', result.pass ? 'border-accent/50 bg-accent/10' : 'border-amber/50 bg-amber/5')}>
-      <p className={cn('font-mono text-sm', result.pass ? 'text-accent' : 'text-amber')}>
-        {result.pass ? 'PASS' : 'NOT YET'} — {result.headline}
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-4 rounded-md border p-4', result.pass ? 'border-accent/50 bg-accent/10' : result.practice ? 'border-line bg-surface-2' : 'border-amber/50 bg-amber/5')}>
+      <p className={cn('font-mono text-sm', result.pass ? 'text-accent' : result.practice ? 'text-text-2' : 'text-amber')}>
+        {result.pass ? 'PASS' : result.practice ? 'PRACTICE' : result.closed ? 'CLOSED' : 'NOT YET'} — {result.headline}
       </p>
       <p className="mt-1 text-body-sm text-text-2">{result.detail}</p>
       <div className="mt-3 grid gap-x-6 gap-y-1 font-mono text-[11px] text-text-2 sm:grid-cols-2">
@@ -474,7 +478,12 @@ function ActIncident() {
   // cause / mitigation are authored indices; the display order is reshuffled per attempt
   const [cause, setCause] = useState<number | null>(null)
   const [mitigation, setMitigation] = useState<number | null>(null)
-  const [solved, setSolved] = useState<string[]>([])
+  // only the first call on each incident counts; the act and its XP need all of them right on that call.
+  // Persisted in working state so a reload or a revisit cannot reset which incidents are already practice.
+  const stored = useProgress((s) => s.fleetWeek.measurementEvidence?.incident)
+  const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
+  const ledger = useMemo(() => incidentLedgerFrom(stored), [stored])
+  const missed = incidentMisses(ledger)
   const [call, setCall] = useState<IncidentCall | null>(null)
   const [seed, setSeed] = useState(freshSeed)
   const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
@@ -506,46 +515,38 @@ function ActIncident() {
     if (!incident || cause === null || mitigation === null) return
     const causeOk = incident.causes[cause].correct
     const mitOk = incident.mitigations[mitigation].correct
-    const ok = causeOk && mitOk
-    const newSolved = ok && !solved.includes(incident.id) ? [...solved, incident.id] : solved
-    setSolved(newSolved)
+    const graded = gradeIncidentCall(ledger, incident, causeOk, mitOk)
+    if (!graded.practice) setEvidence('incident', graded.ledger)
     setCall({ causes: incident.causes, mitigations: incident.mitigations, cause, mitigation })
     // every retry gets a fresh order and a clean selection, so positions can't be memorised
     setSeed(freshSeed())
     setCause(null)
     setMitigation(null)
-    const allDone = newSolved.length >= INCIDENTS.length
-    finish({
-      pass: allDone,
-      score: newSolved.length / INCIDENTS.length,
-      headline: ok ? `correct — ${incident.title.split('—')[0].trim()} diagnosed` : 'wrong call — look at the telemetry again',
-      detail: ok
-        ? allDone
-          ? 'all three incidents diagnosed with the right fix. The Planner would hire you.'
-          : `${INCIDENTS.length - newSolved.length} incident(s) remain.`
-        : `cause ${causeOk ? '✓' : '✗'} · mitigation ${mitOk ? '✓' : '✗'} — re-read the briefing and the curves.`,
-      metrics: [
-        ['solved', `${newSolved.length}/${INCIDENTS.length}`],
-        ['cause', causeOk ? 'correct' : 'wrong'],
-        ['mitigation', mitOk ? 'correct' : 'wrong'],
-      ],
-    })
-  }, [incident, cause, mitigation, solved, finish])
+    finish(graded.result)
+  }, [incident, cause, mitigation, ledger, setEvidence, finish])
 
   return (
     <div>
       <p className="mb-3 max-w-3xl text-body-sm text-text-2">
         Diagnose from the same surface you instrumented: TTFT, TPOT, queue delay, KV state,
         goodput, and cost. The incident sparklines use those timing events plus pressure counters;
-        identify the first metric that moves, not the loudest symptom at the end.
+        identify the first metric that moves, not the loudest symptom at the end. Only your first call
+        on each incident counts toward the act and its XP; the answer is revealed after every call, so
+        any later call on the same incident is practice. The act needs all three incidents right on the
+        first call, so a missed first call closes it until fresh incidents arrive in a later update.
       </p>
       <div className="flex flex-wrap gap-2 font-mono text-[12px]">
         {INCIDENTS.map((d, i) => (
           <button key={d.id} onClick={() => void open(i)} className={cn('rounded border px-3 py-1.5', idx === i ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>
-            {solved.includes(d.id) ? '✓ ' : ''}{d.title.split('—')[0].trim()}
+            {ledger.credited.includes(d.id) ? '✓ ' : ledger.attempted.includes(d.id) ? '○ ' : ''}{d.title.split('—')[0].trim()}
           </button>
         ))}
       </div>
+      {missed > 0 && (
+        <p role="status" className="mt-3 max-w-3xl rounded-md border border-amber/50 bg-amber/5 px-3.5 py-2.5 text-body-sm text-text-2">
+          {INCIDENT_CLOSED_NOTE}
+        </p>
+      )}
       {running && <p className="mt-3 font-mono text-[12px] text-text-3"><Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />loading telemetry…</p>}
       <ActError message={error} />
       {incident && (
@@ -571,7 +572,7 @@ function ActIncident() {
               </div>
             </div>
           </div>
-          <RunButton running={false} label="call it" onClick={submit} disabled={cause === null || mitigation === null} />
+          <RunButton running={false} label={ledger.attempted.includes(incident.id) ? 'practice call (not credited)' : 'call it'} onClick={submit} disabled={cause === null || mitigation === null} />
         </div>
       )}
       {result && <ResultPanel result={result} />}

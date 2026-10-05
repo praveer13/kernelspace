@@ -19,10 +19,10 @@ export default {
     {
       q: 'A model has 32 layers, 32 KV heads of head dimension 128 and an FP16 cache. One 131,072-token context holds 524,288 B per token. How should that total be written?',
       options: [
-        'About 64 GB, since a GB is 2^30 bytes and the byte total divides out to exactly 64',
-        'About 64 GiB, or about 69 GB, because a GiB is 2^30 bytes and a GB is 10^9 bytes',
-        'About 69 GiB, because the byte total is 6.9 x 10^10 and a GiB is 10^9 bytes each',
-        'About 2 TiB, because 524,288 B is the size per layer and the 32 layers multiply it again',
+        'About 64 GB, with a GB at 2^30 bytes and a GiB at 10^9 bytes',
+        'About 64 GiB or 69 GB, with a GiB at 2^30 bytes and a GB at 10^9 bytes',
+        'About 69 GiB, with a GiB at 10^9 bytes and a GB at 2^30 bytes each',
+        'About 2 TiB, with the 524288 bytes counted for each layer rather than each token',
       ],
       correct: [1],
       why: [

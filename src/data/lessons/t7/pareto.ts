@@ -28,7 +28,7 @@ This is why contradictory benchmark claims can both be true: they are *different
 
 **Moving the frontier itself** (genuine progress — more of both):
 - **Quantization** (T6.L5): FP8→NVFP4 moves ~1.8× fewer bytes (4.5 bits per weight with block scales), not 2× — the whole curve shifts out.
-- **Speculative decoding** (T6.L6): shifts the *interactivity end* 2–3×, barely touches the throughput end.
+- **Speculative decoding** (T6.L6): shifts the *interactivity end* (up to 2–3× on DeepSeek-R1 in SemiAnalysis's InferenceX runs), barely touches the throughput end.
 - **Disaggregation** (T6.L3): shifts the middle — better ITL at given throughput via phase isolation.
 - **Better kernels and hardware** (T4, T6.L5): the boring, reliable shifter.
 
@@ -67,10 +67,10 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'In SemiAnalysis\'s InferenceMAX launch (Oct 2025, now InferenceX), DeepSeek-R1 FP4 has a GB200 NVL72 leading at 30 tok/s/user while a B200 on TRT-LLM beats it above 90 tok/s/user. These results are…',
           options: [
-            'In conflict: one model on one hardware family cannot have two winners, so one of the results used a flawed harness',
-            'Both true: they sit in different regions of one frontier, its throughput end and its interactivity end',
-            'About different models: DeepSeek-R1 favors the rack and a smaller model favors the node, so nothing conflicts',
-            'Both marketing: vendor-chosen configurations and workloads make neither claim informative about the frontier',
+            'In conflict, since one model on one hardware family cannot have two winners and one harness must be flawed',
+            'Both true, since they sit at the throughput end and the interactivity end of one frontier',
+            'About different models, since a large model favors the rack and a small model favors the node',
+            'Both marketing, since vendor-chosen configurations and workloads make neither claim informative',
           ],
           correct: [1],
           explanation:
@@ -85,9 +85,9 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'Which of these moves the FRONTIER, rather than sliding along it?',
           options: [
-            'Raising batch size or concurrency, which lifts tokens per second per GPU at the cost of per-user speed',
-            'FP4 quantization, speculative decoding, disaggregation or better hardware: changes to bytes, bandwidth or overlap',
-            'Moving the SLO floor to a looser latency target, which makes more operating points along the curve sellable',
+            'Raising batch size or concurrency, which lifts tokens per second per chip at the cost of per-user speed',
+            'Quantized weights, speculative decoding or disaggregated phases that change the bytes moved or overlap',
+            'Loosening the latency target the product promises, which makes more operating points sellable',
             'Adding replicas behind the load balancer, which multiplies fleet tokens per second at the same per-user speed',
           ],
           correct: [1],
@@ -103,10 +103,10 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'MTP speculative decoding shifts…',
           options: [
-            'The whole frontier uniformly, since fewer forward passes per token help at every batch size',
-            'Only TTFT, since the extra draft tokens are produced during prefill and shorten the wait for the first token',
-            'The interactivity end by roughly 2–3× by spending idle decode FLOPs, while barely moving the throughput end',
-            'The throughput end most, since verifying several tokens per step raises tokens per second per GPU at large batch',
+            'The whole frontier uniformly, with fewer forward passes per token helping at each batch size',
+            'Only the first-token latency, with extra draft tokens produced during prefill to shorten the wait',
+            'The interactivity end most, spending idle decode compute while barely moving the throughput end',
+            'The throughput end most, with several tokens verified per step lifting tokens per second at large batch',
           ],
           correct: [2],
           explanation:
@@ -121,10 +121,10 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
         {
           q: 'Your product\'s SLO determines…',
           options: [
-            'Only the frontend\'s timeout and retry settings; the engine\'s operating point comes from a batch-size flag',
-            'Which region of the frontier is sellable: the latency contract fixes the operating point, hardware class and margin',
-            'The frontier itself, since a stricter SLO forces the vendor to find faster kernels and newer hardware',
-            'Nothing about hardware: GPU choice follows model size, and the SLO is met afterward by adding more replicas',
+            'The frontend\'s timeout and retry settings, while the engine\'s operating point comes from a batch-size flag',
+            'Which region of the frontier is sellable, with the latency contract setting the operating point',
+            'The frontier itself, with a stricter target forcing the vendor to find faster kernels and newer hardware',
+            'Nothing about hardware, with chip choice following model size and replicas added to meet the target',
           ],
           correct: [1],
           explanation:

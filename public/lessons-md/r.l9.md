@@ -51,23 +51,23 @@ The [R9 Forge drill](/forge/rust-zero-r9) returns subslices, chooses between bor
 
 **Q1. What does a lifetime annotation do at runtime?**
 
-- (o1) It keeps the referent alive until 'a ends, moving it to the heap if needed
-- (o2) It stores a scope tag with the reference and checks it on dereference, panicking if the scope ended
-- (o3) It adds a reference count at runtime, as Rc does, so 'a lasts while any holder remains
-- (o4) Nothing at runtime, because it is compile-time metadata relating how long references stay valid
+- (o1) It keeps the referent alive until 'a ends and moves it to the heap if needed
+- (o2) It stores a scope tag with the reference and checks it on dereference
+- (o3) It adds a reference count at runtime as Rc does and 'a lasts while a holder remains
+- (o4) Nothing at runtime and it is compile-time metadata on reference validity
 
 **Q2. Why must struct Block<'a> declare a lifetime for its &[u32] field?**
 
-- (o1) The type must say that a Block cannot outlive its borrowed slice, so rustc can check it
-- (o2) Rust must declare a lifetime to compute the size of Block, because a slice length is unknown at compile time
-- (o3) It is optional for shared slice fields, since elision applies; &mut fields demand it
-- (o4) A slice owns its elements, and 'a tells Rust how long Block keeps that storage allocated
+- (o1) The type must say that a Block cannot outlive the slice it borrows
+- (o2) Rust must know the size of Block and a slice length is unknown at compile time
+- (o3) It is optional for shared slice fields when elision applies and required for &mut fields
+- (o4) A slice owns its elements and 'a tells Rust how long Block keeps that storage
 
 **Q3. What is the right fix when data truly must outlive the input it came from?**
 
-- (o1) Copy the reference with `let r2 = r`, so the copy no longer depends on the input it was taken from
-- (o2) Return or store owned data, such as a Vec or String, so nothing borrows from the input
-- (o3) Declare the return as 'static, so the data stays valid from the input's scope until the whole program ends
-- (o4) Wrap the reference in a Box, because heap placement gives the data it came from an independent lifetime
+- (o1) Copy the reference with a plain let binding to detach it from the input
+- (o2) Return owned data such as a String or Vec with no borrow of the input
+- (o3) Declare the return as 'static to keep the data valid until the program ends
+- (o4) Wrap the reference in a Box to give the data its own lifetime
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

@@ -124,10 +124,10 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'A heap is 60% free, but a 1 MB allocation fails. This is…',
           options: [
-            'Internal fragmentation, wasted space hidden inside blocks that are already allocated to callers',
-            'External fragmentation: free memory is scattered in pieces too small for the request',
-            'A memory leak, where unreachable blocks were never returned to the allocator',
-            'Heap corruption, where overwritten block headers make the allocator ignore large free blocks',
+            'Internal fragmentation, with wasted space hidden inside blocks already allocated to callers',
+            'External fragmentation, with free memory scattered about in pieces too small for the request',
+            'A memory leak, with unreachable blocks left unreturned to the allocator',
+            'Heap corruption, with overwritten block headers making the allocator ignore large free blocks',
           ],
           correct: [1],
           explanation:
@@ -142,10 +142,10 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'Rounding a 33-byte request up to a 48-byte block is an example of…',
           options: [
-            'External fragmentation, since the 15 leftover bytes can never be reused by any other caller',
-            'Internal fragmentation: bytes allocated but unused inside the block',
-            'Coalescing, because the allocator merged the request with a neighboring free block',
-            'Splitting, because the allocator carved a 48-byte block out of a larger free one',
+            'External fragmentation, with the 15 leftover bytes unusable by any other caller',
+            'Internal fragmentation, with 15 spare bytes allocated but unused in the block',
+            'Coalescing, with the allocator merging the 33-byte request into a neighboring free block',
+            'Splitting, with the allocator carving a 48-byte block out of a larger free one',
           ],
           correct: [1],
           explanation:
@@ -160,10 +160,10 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'Why do fixed-size-block designs eliminate external fragmentation?',
           options: [
-            'They eliminate external holes by coalescing more aggressively on every free, so adjacent holes never persist',
-            'They compact live block contents periodically, as ZGC does, to squeeze the holes out',
-            'Every free block is identical, so any free block satisfies any request',
-            'They place each block in sorted order, so free blocks always end up adjacent',
+            'Coalescing on each free, with no adjacent holes persisting',
+            'Periodic compaction of live block contents, squeezing the holes out of the heap',
+            'Identical free blocks, letting any free block satisfy any request',
+            'Sorted placement of blocks, leaving free blocks adjacent',
           ],
           correct: [2],
           explanation:
@@ -178,10 +178,10 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'Why can\'t a C allocator fix external fragmentation by compacting like a JVM GC?',
           options: [
-            'Compaction by a JVM-style collector requires a JIT-compiled runtime with profiling data, and the C allocator is compiled ahead of time',
-            'Moving a block means updating every pointer to it, which the allocator cannot find in C code',
-            'A C heap is typically too large to copy without stalling the whole process for seconds',
-            'The OS forbids moving heap memory once the allocator has handed it out to a running program',
+            'Compaction needs a runtime with profiling data, while the C allocator is compiled ahead of time',
+            'Moving a block means updating each pointer to it, with the allocator unable to locate them in C',
+            'A C heap is typically too large to copy, stalling the whole process for seconds',
+            'The kernel forbids moving heap memory, with the allocator having handed it out to a running program',
           ],
           correct: [1],
           explanation:
@@ -196,10 +196,10 @@ In the exercise you will run adversarial traces against your toy allocator and w
         {
           q: 'vLLM\'s reported <4% KV-cache waste comes primarily from…',
           options: [
-            'Compressing the KV tensors to FP8, which halves the bytes each token needs for its keys and values',
-            'Fixed-size token blocks, so waste is only the partly filled tail block of each sequence',
-            'Evicting idle sequences to CPU RAM, which frees the GPU blocks stranded by waiting requests',
-            'Sharing one copy of the model weights across all concurrent requests',
+            'Compressing KV to lower precision, halving the bytes each token needs',
+            'Fixed-size KV token blocks, confining waste to the partly filled tail block',
+            'Evicting idle sequences to CPU RAM, freeing the GPU blocks stranded by waiting requests',
+            'Sharing one copy of the model weights, with concurrent requests reusing it on the GPU',
           ],
           correct: [1],
           explanation:

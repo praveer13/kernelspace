@@ -19,10 +19,10 @@ export default {
     {
       q: 'In shared memory, which warp access pattern causes a bank conflict that serializes the request?',
       options: [
-        'All 32 lanes reading the same 32-bit word, since every lane then lands in a single shared bank',
-        'Several lanes reading different 32-bit words that map to one bank, such as a column of a 2D tile',
-        'Each lane reading its own consecutive 32-bit word, since neighbouring lanes share a memory port',
-        'Two warps reading the same tile in the same cycle, since a bank can serve only one warp at a time',
+        'A warp of 32 lanes reading the same 32-bit word of a tile',
+        'Several lanes reading different 32-bit words from one bank',
+        'Each lane reading its own consecutive 32-bit word of a tile',
+        'Two warps reading words of one tile in the same clock cycle',
       ],
       correct: [1],
       why: [

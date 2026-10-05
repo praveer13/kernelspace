@@ -19,10 +19,10 @@ export default {
     {
       q: 'On DeepSeek-R1 FP4, InferenceMAX shows a GB200 NVL72 leading at 30 tok/s/user and a single B200 node beating it above 90. How do both hold?',
       options: [
-        'They sit in different regions of one frontier: the rack leads at the throughput end, the node at the interactivity end',
-        'They used different models, so the frontier for DeepSeek-R1 differs from the frontier of the smaller model tested',
-        'One result is a harness artifact, and a rerun at identical settings would put the rack ahead at every interactivity level',
-        'They differ in cost basis, because the node wins only when its GPUs are priced below the rack-scale provisioned rate',
+        'They sit in different regions of one frontier with the rack leading on throughput and the node on interactivity',
+        'They used different models and the frontier differs from that of the smaller model tested',
+        'One result is a harness artifact and a rerun at identical settings would put the rack ahead at each interactivity level',
+        'They differ in cost basis and the node wins when its GPUs are priced below the rack rate',
       ],
       correct: [0],
       why: [
