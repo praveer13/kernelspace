@@ -96,10 +96,10 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
         {
           q: 'Speculative decoding speeds up decode without quality loss because…',
           options: [
-            'The draft model is distilled from the target, so its guesses are accepted as-is and the target is rarely consulted',
-            'Rejection sampling keeps outputs identical to the target\'s distribution; k tokens are scored per weight read',
-            'The target is quantized for the verify pass, and the small numeric error is too small for sampling noise to reveal',
-            'Drafted tokens are accepted whenever they fall in the target\'s top-k, which stays close to the target while skipping most steps',
+            'The draft model is distilled from the target, and its guesses are accepted as-is while the target is rarely consulted',
+            'Rejection sampling keeps outputs identical to the target\'s distribution, and several tokens are scored per weight read',
+            'The target is quantized for the verify pass, and the small numeric error stays below the level that sampling noise reveals',
+            'Drafted tokens are accepted when they fall in the target\'s top few choices, and that stays close to the target while skipping steps',
           ],
           correct: [1],
           explanation:
@@ -114,10 +114,10 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
         {
           q: 'Verifying k drafted tokens costs about as much as ONE decode step because…',
           options: [
-            'The target reuses the drafts\' K/V from the drafting phase, so verification only compares tokens and does no model math',
-            'One parallel pass over k positions reads the weights once; decode was bandwidth-bound with idle ALUs, so the extra math is nearly free',
-            'Verification is offloaded to the CPU, which scores the k tokens while the GPU keeps decoding the next batch of requests',
-            'The k positions are checked in sequence but each reuses weights held in on-chip cache, so the combined cost stays near one step of the decode loop',
+            'The target reuses the drafts\' key and value tensors from the drafting phase, and verification compares tokens without any model math',
+            'One parallel pass over the drafted positions reads the weights once, and the extra arithmetic is nearly free on idle units',
+            'Verification is offloaded to the host processor, and it scores the drafted tokens while the accelerator decodes other requests',
+            'The drafted positions are checked in sequence and each reuses weights held in on-chip cache, keeping the cost near one decode step',
           ],
           correct: [1],
           explanation:
@@ -132,10 +132,10 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
         {
           q: 'Chunked prefill improves goodput by…',
           options: [
-            'Truncating or summarizing long prompts into fewer tokens before prefill, so each iteration finishes sooner for every running sequence',
-            'Slicing long prefills and interleaving chunks with decode steps, so compute-bound chunks use decode\'s idle ALUs and any ITL stall is capped at one chunk',
-            'Moving a long prompt\'s prefill to idle CPU cores while the GPU keeps decoding, then copying its K/V back before that prompt decodes',
-            'Skipping attention over the oldest chunks of a long prompt, which cuts the prefill FLOPs that were blocking other sequences',
+            'Truncating or summarizing long prompts into fewer tokens before prefill, which shortens each iteration for the running sequences',
+            'Slicing long prefills and interleaving the chunks with decode steps, which fills idle compute and caps any stall at one chunk',
+            'Moving a long prompt\'s prefill to idle host cores while the accelerator keeps decoding, and copying its cache back before decode starts',
+            'Skipping attention over the oldest chunks of a long prompt, which cuts the prefill work that was blocking other sequences',
           ],
           correct: [1],
           explanation:
@@ -150,10 +150,10 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
         {
           q: 'Speculative decoding can HURT throughput when…',
           options: [
-            'The text is highly predictable boilerplate or code, because verification then rejects most of the drafted tokens, wasting each pass',
-            'Batch sizes are already large enough that decode nears the compute roof, so verification FLOPs stop being free and become overhead',
-            'Decoding is greedy (temperature 0), because rejection sampling needs randomness to decide which of the drafted tokens to accept at each step',
-            'The prompt is long, because verification must re-read the whole prompt\'s K/V once for every drafted position',
+            'The text is highly predictable boilerplate or code, and verification then rejects most drafted tokens and wastes each pass',
+            'Batch sizes are already large enough that decode nears the compute roof, and verification arithmetic stops being free',
+            'Decoding is greedy at temperature zero, and rejection sampling needs randomness to decide which drafted tokens to accept',
+            'The prompt is long, and verification must re-read the whole prompt\'s cached tensors once for each drafted position',
           ],
           correct: [1],
           explanation:

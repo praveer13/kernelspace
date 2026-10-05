@@ -99,10 +99,10 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
         {
           q: 'Static batching wastes GPU capacity because…',
           options: [
-            'Every batch is capped at a small size, so each decode step re-reads all the weights to advance too few sequences at a time',
-            'The batch runs until its longest sequence finishes, holding short sequences\' slots and KV blocks while new requests wait',
-            'The GPU must flush its caches and context-switch whenever a sequence ends, so every early finish stalls the whole batch',
-            'Each request in a static batch is tokenized and prefilled one after another, which serializes the start of every batch',
+            'Batches are capped at a small size, and each decode step re-reads the weights to advance too few sequences at a time',
+            'The batch runs until its longest sequence finishes, and short sequences keep their slots while new requests wait',
+            'The hardware must flush its caches and context-switch when a sequence ends, and an early finish stalls the whole batch',
+            'Requests in a static batch are tokenized and prefilled one after another, and that serializes the start of the batch',
           ],
           correct: [1],
           explanation:
@@ -117,10 +117,10 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
         {
           q: 'Continuous batching schedules at what granularity?',
           options: [
-            'Per request: a request is admitted whole, and keeps its batch slot until its final token is produced',
-            'Per iteration: after every decode step finished sequences leave and waiting ones join, subject to free KV blocks',
-            'Per 100 tokens: the batch is re-formed after each block of generated tokens, so switching cost stays amortized',
-            'Per time slice: a fixed wall-clock quantum (such as one second) ends and the batch is re-evaluated whatever each sequence is doing',
+            'Per request, where a request is admitted whole and keeps its batch slot until its final token is produced',
+            'Per iteration, where finished sequences leave and waiting ones join after each decode step if free blocks remain',
+            'Per block of generated tokens, where the batch is re-formed after each block and switching cost stays amortized',
+            'Per time slice, where a fixed wall-clock quantum ends and the batch is re-evaluated whatever the sequences are doing',
           ],
           correct: [1],
           explanation:
@@ -135,10 +135,10 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
         {
           q: 'What makes preemption practical in an inference engine (vs a thread pool)?',
           options: [
-            'The GPU can pause a running sequence mid-iteration, saving its registers and shared memory (like a CPU context switch), the way a CPU saves a thread\'s context',
-            'State lives in pageable KV blocks: a victim\'s blocks are freed and its prefill recomputed on resume (V0 could swap them out)',
-            'Each sequence is a small stateless request, so dropping one and replaying it from the prompt (a cheap restart) costs far less than preempting an OS thread',
-            'Kernels checkpoint after each layer (a built-in hardware feature), so the scheduler can stop a sequence mid-forward-pass and resume it from that same layer later',
+            'The hardware can pause a running sequence mid-iteration and save its registers, the way an operating system saves a thread\'s context',
+            'State lives in pageable key-value blocks, and a victim\'s blocks are freed and its prefill is recomputed when it resumes',
+            'Each sequence is a small stateless request, and dropping one to replay it from the prompt costs less than preempting a thread',
+            'Kernels checkpoint after each layer in hardware, and the scheduler can stop a sequence mid-forward-pass and resume it later',
           ],
           correct: [1],
           explanation:
@@ -153,10 +153,10 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
         {
           q: 'Under sustained overload (arrivals > capacity), the correct system response is…',
           options: [
-            'A smarter preemption policy, such as oldest-first, which keeps every request progressing and so prevents thrashing under load',
-            'Admission control that queues or rejects early and cheaply, or more capacity; past the cliff no scheduling policy prevents thrashing',
-            'Longer client timeouts, so queued requests have enough time to drain once the preempted sequences have been recomputed',
-            'A larger running set, so more sequences share each weight read and the batch can absorb the extra arrivals',
+            'A smarter preemption policy such as oldest-first, which keeps requests progressing and prevents thrashing under load',
+            'Admission control that rejects load early or adds capacity, which no scheduling policy can replace past the cliff',
+            'Longer client timeouts, which give queued requests enough time to drain once preempted sequences are recomputed',
+            'A larger running set, which shares each weight read among more sequences and lets the batch absorb the extra arrivals',
           ],
           correct: [1],
           explanation:

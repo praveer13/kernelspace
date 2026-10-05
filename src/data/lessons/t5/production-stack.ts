@@ -79,10 +79,10 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
         {
           q: 'SGLang\'s RadixAttention differs from vLLM\'s prefix caching in that…',
           options: [
-            'It stores prefix KV at lower numeric precision than vLLM does (quantized pages), so many more cached tokens fit on each GPU',
-            'The KV cache is a radix tree over token prefixes with LRU eviction: automatic, fine-grained reuse for agentic and templated traffic',
-            'It keeps the cache in host DRAM instead of GPU memory (reached over PCIe), so the cache can grow far larger than HBM allows',
-            'It drops the block manager and gives each request one contiguous KV buffer, so a shared prefix needs no pointer indirection',
+            'It stores prefix tensors at lower numeric precision than vLLM does, and many more cached tokens fit on each device',
+            'The cache is a radix tree over token prefixes with least-recently-used eviction, and reuse is automatic and fine-grained',
+            'It keeps the cache in host memory instead of device memory, and the cache can grow far larger than device memory allows',
+            'It drops the block manager and gives each request one contiguous buffer, and a shared prefix needs no pointer indirection',
           ],
           correct: [1],
           explanation:
@@ -97,10 +97,10 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
         {
           q: 'TensorRT-LLM\'s defining trade is…',
           options: [
-            'Python-level development velocity (PyTorch-native, hackable) and the broadest model coverage, at the cost of scheduler overhead',
-            'NVIDIA-tuned kernels, CUDA graphs and an overlap scheduler for peak per-GPU speed, accepting NVIDIA-only depth and tuning',
-            'A distributed routing and autoscaling layer for fleet fault tolerance (Kubernetes-native), paid for with a second system to operate',
-            'Constrained decoding and a frontend language for JSON and regex output, giving up some general-purpose engine throughput',
+            'Python-level development velocity and the broadest model coverage, at the cost of scheduler overhead and peak efficiency',
+            'Vendor-tuned kernels with graph capture and an overlap scheduler for peak per-device speed, at the cost of tying the stack to one vendor\'s hardware',
+            'A distributed routing and autoscaling layer for fleet fault tolerance, at the cost of a second system to operate',
+            'Constrained decoding and a frontend language for structured output, at the cost of some general-purpose engine throughput',
           ],
           correct: [1],
           explanation:
@@ -115,10 +115,10 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
         {
           q: 'Dynamo is best characterized as…',
           options: [
-            'A faster inference engine (a Rust rewrite of vLLM\'s CPU scheduler and GPU kernels), keeping the same serving loop and API',
-            'A data plane around engines (vLLM, SGLang, TRT-LLM): KV-aware routing, disaggregation and autoscaling',
-            'A quantization toolkit (FP8 and FP4 recipes) that converts checkpoints so the same model serves from fewer GPUs and less memory',
-            'A model registry and artifact store (OCI images, checkpoints, rollbacks) that pushes weights to GPU and CPU replicas on every deploy',
+            'A faster inference engine that rewrites the scheduler and kernels of vLLM, and keeps the same serving loop and interface',
+            'A data plane around existing engines, handling cache-aware routing and disaggregation and autoscaling for the fleet',
+            'A quantization toolkit of low-precision recipes, and a converted checkpoint serves from fewer devices and less memory',
+            'A model registry and artifact store for images and checkpoints, and weights are pushed to replicas on each deploy',
           ],
           correct: [1],
           explanation:
@@ -133,10 +133,10 @@ T5 is complete — and so is the technical spine of the course: cache lines to c
         {
           q: 'For a single-GPU deployment serving short-context chat, the sound default is…',
           options: [
-            'Dynamo with disaggregation (separate prefill and decode pools), because its routing and cache reuse improve goodput on even one GPU',
-            'One vLLM (or SGLang) instance with chunked prefill; fleet layers pay off at scale and long context, not on one GPU',
-            'TRT-LLM tuned per model (engine builds, plugins), because NVIDIA\'s fused kernels beat a general scheduler at every deployment size',
-            'A custom CUDA stack (hand-written kernels and a lean loop), because short-context chat needs none of an engine\'s generality',
+            'Dynamo with disaggregation into prefill and decode pools, as its routing and cache reuse improve goodput even on one device',
+            'One vLLM or SGLang instance with chunked prefill, as fleet layers pay off at scale and long context and not on one device',
+            'A vendor-tuned engine built per model with plugins, as fused kernels beat a general scheduler at any deployment size',
+            'A custom kernel stack with hand-written kernels and a lean loop, as short-context chat has no use for an engine\'s generality',
           ],
           correct: [1],
           explanation:
