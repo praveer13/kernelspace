@@ -19,11 +19,12 @@ This is why contradictory benchmark claims are both true: NVIDIA's "60k tok/s/GP
     },
     {
       type: 'prose',
-      md: `## The three dials that move you along (and the two that move the curve)
+      md: `## The dial that moves you along the curve (and the ones that move the curve)
 
 **Along the frontier** (efficiency unchanged, tradeoff chosen):
 - **Batch size / concurrency** — the master dial (T7.L1's seesaw).
-- **Traffic mix** — long prompts drag you toward the throughput end; chat streams toward interactivity.
+
+**Changing the workload** is not a move along one curve: InferenceX publishes a separate frontier for each input/output length, so long prompts versus chat streams means reading a different curve, not sliding further along this one.
 
 **Moving the frontier itself** (genuine progress — more of both):
 - **Quantization** (T6.L5): FP8→FP4 halves bytes — the whole curve shifts out.
@@ -78,7 +79,7 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
             'A frontier has one winner per region, not per model. Throughput and interactivity are separate axes, so different configs lead at each end without any flaw.',
             'Right: the ends of the frontier exclude each other. NVL72\'s fabric amortizes weights across giant batches, while a single node with MTP gives the highest per-user rate.',
             'Both claims are about the same model, DeepSeek-R1. The split is by operating point on one frontier, not by model, so a different model cannot explain it.',
-            'InferenceX publishes pinned configs and public runs, so the points are reproducible, not hand-picked. Each claim is true for its own region.',
+            'InferenceX publishes public runs with Apache-2.0 code and data, so the points can be checked, not just asserted. Each claim is true for its own region.',
           ],
         },
         {
@@ -87,16 +88,16 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
             'Raising batch size or concurrency, which lifts tokens per second per GPU at the cost of per-user speed',
             'FP4 quantization, speculative decoding, disaggregation or better hardware: changes to bytes, bandwidth or overlap',
             'Moving the SLO floor to a looser latency target, which makes more operating points along the curve sellable',
-            'Shifting traffic toward longer prompts, which changes the load, request mix and arrival pattern the engine is measured on',
+            'Adding replicas behind the load balancer, which multiplies fleet tokens per second at the same per-user speed',
           ],
           correct: [1],
           explanation:
-            'Batch and traffic move you along the curve (same efficiency, different tradeoff). The frontier shifts only when the physics change: fewer bytes, more bandwidth, or better overlap of compute and communication.',
+            'Batch size and the SLO pick a point on the curve (same efficiency, different tradeoff), and replicas only scale the total. The frontier shifts only when the physics change: fewer bytes, more bandwidth, or better overlap of compute and communication.',
           why: [
             'Batch size is the master dial along the frontier. It trades per-user speed for per-GPU throughput at unchanged efficiency, so the curve itself stays put.',
             'Right: the frontier shifts only when physics changes, with fewer bytes, more bandwidth or better overlap. Batch size and traffic only choose a point on the existing curve.',
             'A looser SLO changes which region is sellable, not what is achievable. The operable zone widens while the curve is exactly where it was.',
-            'Traffic mix moves you along the curve, with long prompts dragging toward the throughput end. The engine\'s efficiency is unchanged.',
+            'Replicas scale the fleet total but each GPU stays on the same per-GPU curve. Tokens per second per GPU and per-user speed are unchanged, so the frontier does not move.',
           ],
         },
         {

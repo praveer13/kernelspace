@@ -89,7 +89,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
           explanation:
             'Warm until TTFT stabilizes, then measure a labeled steady-state window. Cold-start is a separate legitimate metric (serverless lives on it) — the sin is mixing them unlabeled.',
           why: [
-            'GPUs reach boost clocks within seconds. The minutes-long transient comes from software state: caches, graph capture and compilation, which is what warmup waits out.',
+            'Thermal soak and power caps do move clocks, which is why runs report the power cap and hold a steady-state window. Warmup itself waits out engine state: caches, graph capture, compilation.',
             'Right: until caches fill, graphs are captured and kernels compile, early samples measure the cold start. Warm until TTFT stabilizes, then report a labeled steady-state window.',
             'Discarding samples with no identified cause is arbitrary. Warmup is justified by named engine state, and its length is set by when TTFT and hit rates plateau.',
             'Connection setup is cheap and takes milliseconds. It cannot explain a transient lasting minutes, and a well-built harness opens connections before timing starts.',

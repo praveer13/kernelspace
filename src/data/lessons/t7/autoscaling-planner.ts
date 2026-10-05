@@ -123,17 +123,17 @@ Why this is hard and not just "HPA on a custom metric": inference capacity is *d
           options: [
             'Let requests queue without bound, so every admitted request is eventually served and none are failed',
             'Restart the saturated workers to clear their queues, since a fresh worker starts with no backlog',
-            'Decide the policy beforehand: shed excess with a fast retryable 429 or degrade output classes, not queue silently',
+            'Walk a ladder fixed beforehand: a bounded queue, then a fast retryable 429 shed, then degraded output classes',
             'Decide at the moment of overload which requests to drop, since the right choice depends on that incident\'s cause',
           ],
           correct: [2],
           explanation:
-            'A fast, retryable rejection preserves the experience of everyone admitted; silent queueing ruins everyone. The degradation ladder is a design document, not an improvisation.',
+            'The ladder is queue, then shed, then degrade, fixed in advance. A bounded queue buys seconds but TTFT dies silently as it deepens; a fast retryable 429 preserves the experience of everyone admitted. The ladder is a design document, not an improvisation.',
           why: [
-            'Unbounded queues turn overload into a silent SLO breach for everyone. TTFT grows until requests time out anyway, so users fail slowly instead of failing fast and retrying.',
+            'The ladder\'s queue rung must be bounded. An unbounded queue turns overload into a silent SLO breach for everyone: TTFT grows until requests time out, so users fail slowly instead of failing fast.',
             'Restarting discards in-flight work and KV state, and the replacement needs minutes to reload weights. It removes capacity at the moment capacity is short.',
-            'Right: a fast, retryable rejection preserves the experience of everyone admitted, while silent queueing ruins it for all. The degradation ladder is a design document written in advance.',
-            'Improvising mid-incident is slow, error-prone and inconsistent across tenants. The ladder of queue limits, shedding and degrade classes is a design decision made before overload.',
+            'Right: queue briefly, shed with a fast retryable 429, then degrade output classes, in that order. A clean rejection preserves the experience of everyone admitted, and the ladder is written before the incident.',
+            'Improvising mid-incident is slow, error-prone and inconsistent across tenants. The ladder of queue, shed and degrade is a design decision made before overload, not an on-the-spot call.',
           ],
         },
       ],

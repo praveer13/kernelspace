@@ -77,7 +77,7 @@ The engine's control loop, one line: **batching couples TTFT and TPOT into a see
             'Throughput flattens as batch size grows; latency blows up past the knee. Unaccompanied throughput numbers are taken at the knee you would never operate at. Ask: at what concurrency, at what TTFT/TPOT?',
           why: [
             'Peak tok/s is the number capacity plans must not use. Throughput flattens as batch grows while latency climbs steeply past the knee, so the peak sits where users already see unusable delays.',
-            'Right: throughput rises and flattens with batch size while latency blows up past the knee. A figure with no TTFT or TPOT is likely from the vertical part of the curve, so ask at what concurrency.',
+            'Right: throughput flattens as batch grows while latency blows up past the knee. A figure with no TTFT or TPOT likely comes from the vertical part of the curve, so ask at what concurrency.',
             'Dividing by GPU count changes the unit, not the missing context. Per-GPU throughput is still undefined without the latency it was reached at, so vendors remain incomparable.',
             'Naming the model fixes one variable only. The same model gives very different tok/s at batch 1 and batch 256, so the operating point still decides the number.',
           ],

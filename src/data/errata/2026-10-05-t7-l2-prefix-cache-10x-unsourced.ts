@@ -11,4 +11,5 @@ export default {
   after:
     'Cache-hit-dominated traffic skips most prefill, so TTFT and cost per request differ sharply from independent traffic. The size of the gap depends on hit rate and workload, so no single factor is taught.',
   why: 'A round multiplier with no source reads as a measured result. The gap depends on hit rate, prompt length and engine, so the lesson states the mechanism and leaves the number to your own measurement.',
+  source: { url: 'https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/', title: 'vLLM docs: Automatic Prefix Caching' },
 } satisfies Erratum

@@ -11,4 +11,5 @@ export default {
   after:
     'Throughput rises and flattens as batch size grows, while latency keeps rising and goes vertical past the knee. A bare tok/s figure is likely taken at that knee.',
   why: 'Latency is not non-monotonic in batch size. It rises with it, so the contrast was wrong. The real point is that throughput saturates while latency blows up, which is why peak tok/s misleads.',
+  source: { url: 'https://github.com/SemiAnalysisAI/InferenceX', title: 'SemiAnalysis InferenceX: public throughput versus interactivity benchmark runs' },
 } satisfies Erratum
