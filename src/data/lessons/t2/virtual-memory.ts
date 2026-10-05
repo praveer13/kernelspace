@@ -155,6 +155,8 @@ You will perform translations by hand: pick a virtual address, walk the four lev
             'Misconception: one cache line per level. A 4 KiB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from 48 address bits at 9 each.',
             'Misconception: smaller tables make switches cheaper. A switch loads one root pointer (CR3) regardless of depth, and the TLB is flushed or PCID-tagged, not preserved level by level.',
           ],
+          kcs: ['t2.address-translation'],
+          miss: ['t2.levels-match-caches', '', 't2.level-is-cache-line', 't2.small-tables-cheap-switch'],
         },
         {
           q: 'The TLB\'s job is to…',
@@ -173,6 +175,8 @@ You will perform translations by hand: pick a virtual address, walk the four lev
             'Misconception: the TLB holds all entries. It has roughly a thousand entries, covering a few MiB at 4 KiB pages; the full mapping lives in page tables, and walks happen on a miss.',
             'Misconception: the TLB records fault outcomes. It caches valid translations; a page that is evicted later faults again, and the TLB entry is invalidated when the mapping changes.',
           ],
+          kcs: ['t2.tlb', 't2.address-translation'],
+          miss: ['t2.tlb-caches-data', '', 't2.tlb-holds-all-entries', 't2.tlb-records-fault-outcomes'],
         },
         {
           q: 'Which access ends in SIGSEGV instead of being fixed up transparently by the page-fault handler?',
@@ -191,6 +195,8 @@ You will perform translations by hand: pick a virtual address, walk the four lev
             'Misconception: a COW write is an error. The write faults because the page is read-only; the handler copies the frame, remaps it writable, and retries, all transparently.',
             'Misconception: a file-backed first read is an error. A major fault reads the page from disk into the page cache, maps it, and resumes; only the latency betrays it.',
           ],
+          kcs: ['t2.page-faults'],
+          miss: ['t2.first-touch-is-error', '', 't2.cow-write-is-error', 't2.file-read-is-error'],
         },
         {
           q: 'Copy-on-write after fork() means…',
@@ -209,10 +215,42 @@ You will perform translations by hand: pick a virtual address, walk the four lev
             'Misconception: shared read-write. That describes MAP_SHARED memory. After fork a write is private to the writer; the other process never sees it, which is the point of COW.',
             'Misconception: writes go to swap. Swap holds evicted pages under memory pressure; COW copies in RAM and has no rollback log, since the child simply gets its own copy.',
           ],
+          kcs: ['t2.copy-on-write', 't2.page-faults'],
+          miss: ['t2.fork-copies-everything', '', 't2.cow-shared-writable', 't2.cow-writes-to-swap'],
         },
       ],
     },
   ],
+  kcs: ['t2.address-translation', 't2.tlb', 't2.page-faults'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Walk one load on x86-64 from a virtual address to a byte of RAM, and say what the TLB changes.',
+        model:
+          'The MMU splits the virtual address into a 36-bit page number and a 12-bit offset. Starting from the root pointer in CR3, it walks four table levels, nine address bits each, to reach the frame number. Frame plus the unchanged offset is the physical byte. The TLB caches recent translations, so a hit skips the walk\'s four extra memory reads.',
+        ideas: [
+          'Split the address into four 9-bit table indexes (walked from the CR3 root) and a 12-bit offset',
+          'The last entry gives a frame number; the frame plus the unchanged offset is the physical byte',
+          'The TLB caches recent translations, so a hit skips the walk\'s four extra memory reads',
+        ],
+        kcs: ['t2.address-translation', 't2.tlb'],
+      },
+      {
+        prompt:
+          'A program calls malloc for 1 GiB and then touches one byte of it. Say what the kernel does on that touch, and which other faults are normal rather than errors.',
+        model:
+          'malloc only reserved virtual range. The first touch finds the present bit clear, so the CPU traps into the kernel. The address is legal, so the kernel maps a zeroed frame and the instruction retries without the program noticing. Copy-on-write writes and first reads of mmap\'d files fault the same way. Only an illegal address ends in SIGSEGV.',
+        ideas: [
+          'The touch hits a non-present page, so the CPU traps into the kernel',
+          'The address is legal: the kernel maps a zeroed frame and the instruction retries invisibly',
+          'Copy-on-write and mmap\'d reads fault the same way; only an illegal address becomes SIGSEGV',
+        ],
+        kcs: ['t2.page-faults'],
+      },
+    ],
+  },
 }
 
 export default lesson

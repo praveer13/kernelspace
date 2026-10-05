@@ -138,6 +138,8 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
             'Misconception: threads have private heaps. Only stacks are private; sibling threads share one heap, which is exactly why they can pass pointers for free and why every data race in this track exists.',
             'Misconception: a thread is a work queue. A thread is a schedulable execution context (registers, stack, program counter); a thread pool is the work queue built on top of such threads.',
           ],
+          kcs: ['t2.process-thread'],
+          miss: ['t2.threads-user-level', '', 't2.threads-private-heap', 't2.thread-is-work-queue'],
         },
         {
           q: 'The largest hidden cost of a context switch is usually…',
@@ -156,6 +158,8 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
             'Right: the incoming thread finds cold L1/L2 and, across processes, a flushed TLB, so its next thousands of instructions run at DRAM latency. That aftermath dwarfs the mechanical switch.',
             'Misconception: runqueue bookkeeping dominates. Picking and requeueing a thread is O(log n) with tiny constants, a small fraction of a microsecond next to the cache refill penalty.',
           ],
+          kcs: ['t2.context-switch'],
+          miss: ['t2.register-save-dominates', 't2.trap-is-the-tax', '', 't2.runqueue-dominates'],
         },
         {
           q: 'A CPU-bound service with 8 cores should run about how many busy threads?',
@@ -174,6 +178,8 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
             'Misconception: avoid concurrency entirely. One thread uses one core, so seven of eight cores idle and throughput drops roughly eightfold; the goal is to match cores, not to eliminate switches.',
             'Misconception: memory is the limit. Stacks are cheap next to cores; at 8 cores the binding constraint on compute-bound work is CPU time, and RAM only matters at thousands of threads.',
           ],
+          kcs: ['t2.context-switch'],
+          miss: ['t2.more-threads-hide-stalls', '', 't2.avoid-concurrency', 't2.memory-limits-threads'],
         },
         {
           q: 'Java virtual threads (Loom) and goroutines reduce switch cost by…',
@@ -192,10 +198,42 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
             'Misconception: logical threads map to hardware thread contexts. SMT offers two per core, not thousands; virtual threads and goroutines park in userspace, so there is no kernel switch to speed up.',
             'Misconception: smaller stacks make kernel switches cheap. The kernel switch cost is dominated by trap and cache effects, not stack bytes, and one kernel thread per task still caps scale.',
           ],
+          kcs: ['t2.context-switch', 't2.process-thread'],
+          miss: ['t2.pinning-removes-switches', '', 't2.smt-per-logical-thread', 't2.small-stacks-cheap-switch'],
         },
       ],
     },
   ],
+  kcs: ['t2.process-thread', 't2.context-switch'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'A service runs 64 CPU-bound worker threads on an 8-core machine and gets less throughput than it did with 8. Explain why.',
+        model:
+          'Beyond eight runnable threads the extras only timeslice the same cores, so total CPU time stays fixed. Every switch adds a register save and restore plus scheduler work. The larger cost is the cache and TLB aftermath: each incoming thread starts cold, so its next instructions run at DRAM latency. For CPU-bound work, about one thread per core is right.',
+        ideas: [
+          'Extra compute-bound threads only timeslice the same eight cores, so total CPU does not grow',
+          'Each switch costs a register save and restore plus scheduler work',
+          'The bigger cost is cold caches and TLB for the incoming thread, so it runs at DRAM latency',
+        ],
+        kcs: ['t2.context-switch'],
+      },
+      {
+        prompt:
+          'What do two threads of one process share, and what does each keep for itself? Say why that makes threads cheaper to coordinate but riskier than processes.',
+        model:
+          'Threads of one process share the address space: heap, globals, code and open files. Each keeps its own registers, program counter and stack. Sharing lets threads pass pointers with no copying, which makes coordination cheap. It also means one thread\'s stray write or data race can corrupt every sibling, where separate processes stay isolated.',
+        ideas: [
+          'Shared: one address space (heap, globals, code, file descriptors)',
+          'Private to each thread: registers, program counter and a stack',
+          'Sharing makes communication free, but one thread\'s bug or race can corrupt every sibling',
+        ],
+        kcs: ['t2.process-thread'],
+      },
+    ],
+  },
 }
 
 export default lesson
