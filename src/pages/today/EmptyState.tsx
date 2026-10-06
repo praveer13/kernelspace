@@ -1,5 +1,9 @@
+import { Suspense, lazy } from 'react'
 import type { Recommendation } from '@/lib/learner/types'
 import { UpNext } from './DoneCard'
+
+// The Fleet Daily card (wave-2.md §9.7) is its own chunk, so /today stays within its closure budget.
+const DailyCard = lazy(() => import('@/components/daily/DailyCard'))
 
 export interface EmptyStateProps {
   upNext: Recommendation | null
@@ -27,6 +31,9 @@ export default function EmptyState({ upNext, onPractice }: EmptyStateProps) {
         )}
       </div>
       <UpNext rec={upNext} />
+      <Suspense fallback={null}>
+        <DailyCard variant="empty" />
+      </Suspense>
     </section>
   )
 }

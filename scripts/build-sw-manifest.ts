@@ -5,15 +5,17 @@
  * BUILD placeholder filled in: the build id, the schema version this bundle was built for, the shell and the
  * precache list. The list is the entry closure, the /today and /boot closures with their direct lazy chunks,
  * the ledger engine and notices the entry loads on every page, the lazy ⌘K palette, the generator family
- * chunks, the generated search index chunk and claims.json. Family and search index chunks are picked up when
- * they exist; the scaffold has neither until their tasks land. Re-running it is safe: it always starts from
+ * chunks, the generated search index chunk and claims.json. Wave 2 adds the /daily closure and the fleet worker
+ * bundle (wave-2.md §9.7, §9.5): Vite's manifest lists no worker bundle, so a closure walk alone would drop the
+ * code the Daily's sessions run in. The worker is found in dist/assets by name and the files it loads follow it.
+ * Family and search index chunks are picked up when they exist. Re-running it is safe: it always starts from
  * public/sw.js.
  *
  *   bun scripts/build-sw-manifest.ts
  */
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
 import { SCHEMA_VERSION } from '../src/lib/ledger/constants'
 
@@ -43,7 +45,43 @@ export interface SwBuild {
 export const ROUTES = [
   { route: '/today', src: 'src/pages/Today.tsx' },
   { route: '/boot', src: 'src/pages/Boot.tsx' },
+  { route: '/daily', src: 'src/pages/Daily.tsx' },
 ]
+
+/**
+ * Worker bundles the precache needs although Vite's manifest does not list them (`new Worker(new URL(...))`
+ * output goes to dist/assets without a manifest entry). The Fleet Daily's sessions run in the fleet worker.
+ */
+export const WORKER_BUNDLES = [/^assets\/fleet\.worker-[\w-]+\.js$/]
+
+/** What a worker bundle can load: quoted `assets/<file>` paths and `./<file>` imports of sibling chunks. */
+const LOADED_FILE = /["'`](?:\.\/|\/?(?:[\w.-]+\/)*?assets\/)([\w.-]+\.(?:js|mjs|wasm|json|css))["'`]/g
+
+/**
+ * The files for each worker bundle in WORKER_BUNDLES: the bundle itself plus every file it names that is in
+ * dist/assets, transitively (an ES-module worker splits into chunks; the current iife build has none).
+ * `assets` are dist-relative paths of dist/assets/*; `read` returns a text file's source. Fails when a bundle is
+ * missing, so a renamed worker does not silently lose offline support.
+ */
+export function workerFiles(assets: readonly string[], read: (file: string) => string): string[] {
+  const present = new Set(assets)
+  const files = new Set<string>()
+  const visit = (file: string) => {
+    if (files.has(file)) return
+    files.add(file)
+    if (!/\.(js|mjs)$/.test(file)) return
+    for (const m of read(file).matchAll(LOADED_FILE)) {
+      const next = `assets/${m[1]}`
+      if (present.has(next)) visit(next)
+    }
+  }
+  for (const bundle of WORKER_BUNDLES) {
+    const found = assets.filter((f) => bundle.test(f))
+    if (found.length === 0) throw new Error(`dist has no worker bundle matching ${bundle}; update WORKER_BUNDLES in scripts/build-sw-manifest.ts`)
+    for (const f of found) visit(f)
+  }
+  return [...files].sort()
+}
 
 /**
  * Chunks the entry loads lazily on every page: the ledger engine (Today and Boot read the ledger through it),
@@ -64,8 +102,11 @@ function routeKey(manifest: Record<string, ManifestChunk>, src: string): string 
   return Object.keys(manifest).find((k) => manifest[k].isDynamicEntry && manifest[k].name === name)
 }
 
-/** The precache list for a Vite manifest: dist-relative paths, sorted and unique. `publicFiles` are checked by the caller. */
-export function collectPrecache(manifest: Record<string, ManifestChunk>): string[] {
+/**
+ * The precache list for a Vite manifest: dist-relative paths, sorted and unique. `workers` are the worker bundle
+ * files (see `workerFiles`); PUBLIC_FILES are checked by the caller.
+ */
+export function collectPrecache(manifest: Record<string, ManifestChunk>, workers: readonly string[] = []): string[] {
   const files = new Set<string>()
   const seen = new Set<string>()
   const visit = (key: string) => {
@@ -95,13 +136,14 @@ export function collectPrecache(manifest: Record<string, ManifestChunk>): string
   for (const [key, chunk] of Object.entries(manifest)) {
     if (key.startsWith(FAMILY_PREFIX) || SEARCH_INDEX.test(key) || SEARCH_INDEX.test(chunk.file)) visit(key)
   }
+  for (const file of workers) files.add(file)
   for (const file of PUBLIC_FILES) files.add(file)
   files.add('index.html')
   return [...files].sort()
 }
 
-export function buildSw(manifest: Record<string, ManifestChunk>, indexHtml: string): SwBuild {
-  const precache = collectPrecache(manifest)
+export function buildSw(manifest: Record<string, ManifestChunk>, indexHtml: string, workers: readonly string[] = []): SwBuild {
+  const precache = collectPrecache(manifest, workers)
   const id = createHash('sha256').update(indexHtml).update('\0').update(precache.join('\n')).digest('hex').slice(0, 12)
   return { id, schema: SCHEMA_VERSION, shell: 'index.html', precache }
 }
@@ -121,7 +163,10 @@ if (import.meta.main) {
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8')) as Record<string, ManifestChunk>
   const indexHtml = await readFile(new URL('index.html', dist), 'utf8')
 
-  const build = buildSw(manifest, indexHtml)
+  const assets = (await readdir(new URL('assets/', dist))).map((f) => `assets/${f}`)
+  const sources = new Map<string, string>()
+  for (const f of assets) if (/\.(js|mjs)$/.test(f)) sources.set(f, await readFile(new URL(f, dist), 'utf8'))
+  const build = buildSw(manifest, indexHtml, workerFiles(assets, (f) => sources.get(f) ?? ''))
   for (const file of build.precache) {
     if (!existsSync(new URL(file, dist))) throw new Error(`precache lists ${file}, which is not in dist/`)
   }

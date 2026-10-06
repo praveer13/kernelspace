@@ -8,6 +8,8 @@ import HandoffButton from './HandoffButton'
 
 // The change cards and the errata behind them load only when something has changed for this learner.
 const ChangeCards = lazy(() => import('@/components/changes/ChangeCards'))
+// The Fleet Daily card (wave-2.md §9.7) is its own chunk, so /today stays within its closure budget.
+const DailyCard = lazy(() => import('@/components/daily/DailyCard'))
 
 /** One Up Next with its reason (spec §7.3). A link, never a gate (W8). */
 export function UpNext({ rec }: { rec: Recommendation | null }) {
@@ -98,6 +100,9 @@ export default function DoneCard({ tally, calibration, onKeepGoing, upNext, pend
         )}
       </div>
       <UpNext rec={upNext} />
+      <Suspense fallback={null}>
+        <DailyCard variant="done" />
+      </Suspense>
       <Changes />
       <HandoffButton pending={pendingHandoff} />
       <p>

@@ -54,6 +54,9 @@ import { cn } from '@/lib/utils'
 
 // The review model (calibration, week, hand-off) loads on demand, after the rings have painted.
 const ReviewPanel = lazy(() => import('@/pages/progress/ReviewPanel'))
+// Mount points that 2b-12 and 2a-21 fill (wave-2.md §2.3); each renders nothing until then.
+const EngineCard = lazy(() => import('@/components/engine/EngineCard'))
+const DonateExport = lazy(() => import('@/components/ledger/DonateExport'))
 
 /* ---------------- shared bits ---------------- */
 
@@ -1330,10 +1333,16 @@ export default function Progress() {
         </div>
 
         <KpiBand />
+        <Suspense fallback={null}>
+          <EngineCard />
+        </Suspense>
         <TrackBreakdown />
         <Heatmap />
         <Achievements />
         <DataOwnership />
+        <Suspense fallback={null}>
+          <DonateExport />
+        </Suspense>
         {!hasAny && (
           <div className="mt-14">
             <UpNext />
