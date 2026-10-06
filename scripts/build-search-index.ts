@@ -19,9 +19,13 @@ import type { SearchIndex } from '../src/lib/search'
 
 export const INDEX_PATH = 'src/data/search-index.json'
 
-/** Hooks and competence statements are crumbs in the palette; the full text is one click away. Cut to keep the chunk under budget. */
+/**
+ * Hooks and competence statements are crumbs in the palette; the full text is one click away. Cut to keep the chunk
+ * under budget. CAN_MAX is 0 since the KC graph grew to every track (wave-2 §4, task 2a-11: 97 → 153 KCs, +2.7 KB
+ * gzip): a concept row's crumb then names its lesson, which the index already carries, instead of a clipped "you can".
+ */
 const HOOK_MAX = 40
-const CAN_MAX = 50
+const CAN_MAX = 0
 
 /** `text` cut at a word boundary to at most `max` characters, with an ellipsis when something was cut. */
 export function clip(text: string, max: number): string {
@@ -30,8 +34,8 @@ export function clip(text: string, max: number): string {
   return `${head.slice(0, head.lastIndexOf(' '))}…`
 }
 
-/** A competence statement without its "You can " lead-in and final period: it opens the palette's crumb. */
-const canClause = (can: string) => clip(can.replace(/^You can /, '').replace(/\.$/, ''), CAN_MAX)
+/** A competence statement without its "You can " lead-in and final period: it opens the palette's crumb ('' when CAN_MAX is 0). */
+const canClause = (can: string) => (CAN_MAX > 0 ? clip(can.replace(/^You can /, '').replace(/\.$/, ''), CAN_MAX) : '')
 
 const h2Of = (lesson: Lesson) => extractHeadings(lesson.blocks).filter((h) => h.level === 2)
 
