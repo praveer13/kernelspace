@@ -413,7 +413,7 @@ export default function KvCacheSim() {
                   )}
                 >
                   <div className={cn('font-mono text-[12px]', presetId === p.id ? 'text-accent' : 'text-text-1')}>{p.name}</div>
-                  <div className="font-mono text-[10px] text-text-3">{p.note}</div>
+                  <div className={cn('font-mono text-[10px]', presetId === p.id ? 'text-text-2' : 'text-text-3')}>{p.note}</div>
                 </button>
               ))}
               <button
@@ -426,20 +426,20 @@ export default function KvCacheSim() {
                 )}
               >
                 <div className={cn('font-mono text-[12px]', isCustom ? 'text-accent' : 'text-text-1')}>custom</div>
-                <div className="font-mono text-[10px] text-text-3">your own arch</div>
+                <div className={cn('font-mono text-[10px]', isCustom ? 'text-text-2' : 'text-text-3')}>your own arch</div>
               </button>
             </div>
           </div>
 
-          <div className={cn(!isCustom && 'pointer-events-none opacity-45')}>
+          <div>
             {ctrlLabel('L', 'layers L', String(layers))}
-            <Slider value={[layers]} onValueChange={(v) => setLayers(v[0])} min={8} max={128} step={4} aria-label="layers" />
+            <Slider value={[layers]} onValueChange={(v) => setLayers(v[0])} min={8} max={128} step={4} disabled={!isCustom} aria-label="layers" />
             <div className="mt-3" />
             {ctrlLabel('H', 'KV heads (GQA)', String(kvHeads))}
-            <Slider value={[kvHeads]} onValueChange={(v) => setKvHeads(v[0])} min={1} max={32} step={1} aria-label="kv heads" />
+            <Slider value={[kvHeads]} onValueChange={(v) => setKvHeads(v[0])} min={1} max={32} step={1} disabled={!isCustom} aria-label="kv heads" />
             <div className="mt-3" />
             {ctrlLabel('d', 'head dim', String(headDim))}
-            <Slider value={[headDim]} onValueChange={(v) => setHeadDim(v[0])} min={64} max={256} step={64} aria-label="head dim" />
+            <Slider value={[headDim]} onValueChange={(v) => setHeadDim(v[0])} min={64} max={256} step={64} disabled={!isCustom} aria-label="head dim" />
           </div>
           {!isCustom && (
             <div className="-mt-1 font-mono text-[10px] text-text-3">
@@ -469,7 +469,7 @@ export default function KvCacheSim() {
                     )}
                   >
                     {d.label}
-                    <span className="ml-1 text-[10px] text-text-3">{d.bytes}B</span>
+                    <span className={cn('ml-1 text-[10px]', selected === d.id ? 'text-text-2' : 'text-text-3')}>{d.bytes}B</span>
                   </button>
                 ))}
               </div>

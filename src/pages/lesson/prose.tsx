@@ -84,7 +84,7 @@ export function ProseView({ md, trackColor, h2Start = 0, compact = false }: Pros
       const header = sepIdx > 0 ? rows.slice(0, sepIdx) : [rows[0]]
       const body = sepIdx > 0 ? rows.slice(sepIdx + 1) : rows.slice(1)
       nodes.push(
-        <div key={key++} className="my-6 overflow-x-auto rounded-md border border-line scrollbar-slim">
+        <div key={key++} tabIndex={0} role="region" aria-label="table, scrolls sideways" className="my-6 overflow-x-auto rounded-md border border-line scrollbar-slim">
           <table className="w-full border-collapse bg-surface-1 text-body-sm">
             <thead>
               {header.map((r, ri) => (

@@ -580,7 +580,7 @@ export default function AllocatorSim() {
         <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           {/* ------- stage ------- */}
-          <div className="relative min-h-[380px] flex-1 overflow-auto bg-ink bg-blueprint p-4">
+          <div tabIndex={0} role="region" aria-label="heap view" className="relative min-h-[380px] flex-1 overflow-auto bg-ink bg-blueprint p-4">
             {/* fragmentation meter (top-right, always visible) */}
             <div className="mb-4 flex items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-text-3">
@@ -843,7 +843,7 @@ export default function AllocatorSim() {
                   onValueChange={(v) => setStrategy(v as Strategy)}
                   disabled={fixedMode}
                 >
-                  <SelectTrigger className="h-8 border-line bg-surface-2 font-mono text-[12px]">
+                  <SelectTrigger aria-label="placement strategy" className="h-8 border-line bg-surface-2 font-mono text-[12px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="border-line bg-surface-1">

@@ -1303,7 +1303,7 @@ export default function RooflineSim() {
           <aside className="w-full shrink-0 overflow-y-auto border-t border-line bg-surface-1 lg:w-[296px] lg:border-l lg:border-t-0">
             <ControlGroup label="hardware">
               <Select value={preset} onValueChange={applyPreset}>
-                <SelectTrigger className="h-8 border-line bg-surface-2 font-mono text-[12px]">
+                <SelectTrigger aria-label="hardware" className="h-8 border-line bg-surface-2 font-mono text-[12px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border-line bg-surface-1">
