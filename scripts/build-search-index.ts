@@ -20,8 +20,8 @@ import type { SearchIndex } from '../src/lib/search'
 export const INDEX_PATH = 'src/data/search-index.json'
 
 /** Hooks and competence statements are crumbs in the palette; the full text is one click away. Cut to keep the chunk under budget. */
-const HOOK_MAX = 60
-const CAN_MAX = 70
+const HOOK_MAX = 40
+const CAN_MAX = 50
 
 /** `text` cut at a word boundary to at most `max` characters, with an ellipsis when something was cut. */
 export function clip(text: string, max: number): string {
