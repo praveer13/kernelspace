@@ -783,7 +783,8 @@ export default function MemoryGridSim() {
                 onPointerLeave={() => {
                   if (reticleRef.current) reticleRef.current.style.opacity = '0'
                 }}
-                role="img"
+                // the 256 cells are buttons, and an img role may not contain focusable children (axe: nested-interactive)
+                role="group"
                 aria-label={`256-byte memory grid. ${Object.keys(mem.pointers).length} live pointers, stack top ${hx(mem.stackTop & 0xff)}.`}
               >
                 {/* axis labels */}

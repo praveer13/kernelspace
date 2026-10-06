@@ -3,12 +3,13 @@
  * Type a float → see bit anatomy FP32→FP16/BF16/FP8-E4M3/INT8/INT4,
  * dynamic range, reconstruction error, and why LLM weights tolerate it.
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Copy, Info, Trash2, Zap } from 'lucide-react'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
 import { Slider } from '@/components/ui/slider'
 import { useProgress } from '@/lib/progress'
+import type { MirrorTable } from '@/lib/sims/types'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -106,6 +107,9 @@ function LogConsole({ lines, onClear }: { lines: LogLine[]; onClear: () => void 
           onMouseEnter={() => setStick(false)}
           onMouseLeave={() => setStick(true)}
           aria-live="polite"
+          role="log"
+          aria-label="activity log"
+          tabIndex={0}
           className="scrollbar-slim h-40 overflow-y-auto px-3 py-2 font-mono text-[12px] leading-[1.7]"
         >
           {lines.map((l) => (
@@ -368,6 +372,7 @@ export default function QuantizerSim() {
   const [outlier, setOutlier] = useState(false)
   const [groupSize, setGroupSize] = useState(128)
   const [hoverBit, setHoverBit] = useState<string>('hover a bit cell to see its weight')
+  const [histAnnounce, setHistAnnounce] = useState<string | undefined>(undefined)
 
   const x = useMemo(() => {
     const v = Number(input)
@@ -476,6 +481,57 @@ export default function QuantizerSim() {
     () => tensor.reduce((max, value, i) => Math.max(max, Math.abs(quantTensor[i] - value)), 0),
     [tensor, quantTensor],
   )
+
+  /* Announce the tensor result when a discrete setting changes (not on mount, not on scalar typing). The
+     state is adjusted during render, React's pattern for a value derived from a change in other state. */
+  const isIntFocus = focus === 'int8' || focus === 'int4'
+  const settingsKey = `${tensorKind}|${focus}|${isIntFocus ? groupSize : 0}|${outlier}`
+  const [seenSettings, setSeenSettings] = useState(settingsKey)
+  if (settingsKey !== seenSettings) {
+    setSeenSettings(settingsKey)
+    const scaleText = isIntFocus ? (groupSize === 256 ? ' per-tensor' : ` group-${groupSize}`) : ''
+    setHistAnnounce(
+      `${focus.toUpperCase()}${scaleText} on the ${tensorKind} tensor${outlier ? ' with the outlier' : ''}: max error ${fmtNum(tensorMaxError, 3)}, drift ${drift.toFixed(2)} nats.`,
+    )
+  }
+
+  /* DOM mirrors, one per canvas. The sparkline's 256 weights are summarised as 16 segments of 16 (a screen
+     reader gets the shape, not 256 rows); the histogram lists all of its bins. Both canvases are static, so
+     reduced motion has nothing to stop. Only the histogram's mirror announces: a tensor, format, group-size
+     or outlier change is one discrete result, and speaking it twice would repeat it. */
+  const sparkMirrorId = `${useId()}-spark-mirror`
+  const histMirrorId = `${useId()}-hist-mirror`
+  const sparkMirror = useMemo<MirrorTable>(() => {
+    const seg = 16
+    const rowsOut: (string | number)[][] = []
+    for (let g = 0; g < tensor.length; g += seg) {
+      const part = tensor.slice(g, g + seg)
+      const mean = part.reduce((a, v) => a + v, 0) / part.length
+      rowsOut.push([`${g}–${g + part.length - 1}`, fmtNum(Math.min(...part), 3), fmtNum(Math.max(...part), 3), fmtNum(mean, 3)])
+    }
+    return {
+      caption: `Tensor weights in index order, ${tensor.length} values summarised as ${rowsOut.length} segments. ${
+        outlier ? 'The injected outlier 47.3 sits at index 7.' : 'No outlier injected.'
+      }`,
+      columns: ['Indices', 'Min', 'Max', 'Mean'],
+      rows: rowsOut,
+    }
+  }, [tensor, outlier])
+  const histMirror = useMemo<MirrorTable>(() => {
+    const bw = (hist.hi - hist.lo) / hist.bins
+    const rowsOut = hist.orig.map((c, i) => [
+      `${fmtNum(hist.lo + i * bw, 3)} to ${fmtNum(hist.lo + (i + 1) * bw, 3)}`,
+      c,
+      hist.quant[i],
+    ])
+    const scaleLabel = isIntFocus ? (groupSize === 256 ? ', per-tensor scale' : `, group-${groupSize} scale`) : ''
+    return {
+      caption: `Weight histogram, ${hist.bins} bins: original against ${focusRow.label}-quantized${scaleLabel}. Max error ${fmtNum(tensorMaxError, 3)}, drift ${drift.toFixed(2)} nats.`,
+      columns: ['Bin', 'Original', `${focusRow.label} quantized`],
+      rows: rowsOut,
+      announce: histAnnounce,
+    }
+  }, [hist, isIntFocus, groupSize, focusRow.label, tensorMaxError, drift, histAnnounce])
 
   /* canvases */
   const sparkRef = useRef<HTMLCanvasElement>(null)
@@ -680,28 +736,35 @@ export default function QuantizerSim() {
               )}
             </div>
 
-            {/* format focus tabs */}
-            <div className="mt-3 flex flex-wrap items-center gap-1" role="tablist" aria-label="focus format">
-              {rows.map((r) => (
-                <button
-                  key={r.id}
-                  role="tab"
-                  aria-selected={focus === r.id}
-                  onClick={() => setFocus(r.id)}
-                  className={cn(
-                    'rounded-sm border px-2.5 py-1 font-mono text-[12px] uppercase transition-all duration-180 active:scale-[.97]',
-                    focus === r.id
-                      ? 'border-accent bg-accent-dim text-accent'
-                      : 'border-line bg-surface-2 text-text-2 hover:border-line-bright hover:text-text-1',
-                  )}
-                >
-                  {r.label}
-                </button>
-              ))}
-              <div className="ml-auto flex items-center gap-1 rounded-sm border border-line bg-surface-2 p-0.5">
+            {/* format focus tabs (the rounding switch sits beside the tablist, not inside it) */}
+            <div className="mt-3 flex flex-wrap items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="focus format">
+                {rows.map((r) => (
+                  <button
+                    key={r.id}
+                    role="tab"
+                    aria-selected={focus === r.id}
+                    onClick={() => setFocus(r.id)}
+                    className={cn(
+                      'rounded-sm border px-2.5 py-1 font-mono text-[12px] uppercase transition-all duration-180 active:scale-[.97]',
+                      focus === r.id
+                        ? 'border-accent bg-accent-dim text-accent'
+                        : 'border-line bg-surface-2 text-text-2 hover:border-line-bright hover:text-text-1',
+                    )}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="ml-auto flex items-center gap-1 rounded-sm border border-line bg-surface-2 p-0.5"
+                role="group"
+                aria-label="rounding mode"
+              >
                 {(['rtn', 'stoch'] as const).map((m) => (
                   <button
                     key={m}
+                    aria-pressed={mode === m}
                     onClick={() => {
                       setMode(m)
                       log('op', `ROUNDING → ${m === 'rtn' ? 'round-to-nearest-even' : 'stochastic'}`)
@@ -718,7 +781,7 @@ export default function QuantizerSim() {
             </div>
 
             {/* int controls */}
-            <div className={cn('mt-4 grid gap-4 sm:grid-cols-2', focus !== 'int8' && focus !== 'int4' && 'opacity-40')}>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <div className="mb-1 flex justify-between font-mono text-[11px] text-text-3">
                   <span>scale s</span>
@@ -731,9 +794,10 @@ export default function QuantizerSim() {
                   max={2}
                   step={0.05}
                   aria-label="quantization scale"
+                  className={cn(!isIntFocus && 'opacity-50')}
                 />
               </div>
-              <div className={cn(focus !== 'int8' && 'pointer-events-none opacity-40')}>
+              <div>
                 <div className="mb-1 flex justify-between font-mono text-[11px] text-text-3">
                   <span>zero-point z (INT8)</span>
                   <span className="text-text-1">{zp}</span>
@@ -745,6 +809,7 @@ export default function QuantizerSim() {
                   max={127}
                   step={1}
                   aria-label="zero point"
+                  disabled={focus !== 'int8'}
                 />
               </div>
             </div>
@@ -789,7 +854,14 @@ export default function QuantizerSim() {
                 </button>
               ))}
             </div>
-            <canvas ref={sparkRef} className="h-20 w-full rounded-sm border border-line bg-ink" />
+            <canvas
+              ref={sparkRef}
+              className="h-20 w-full rounded-sm border border-line bg-ink"
+              role="img"
+              aria-label={`Tensor weights in index order, ${tensor.length} values${outlier ? ', outlier 47.3 at index 7' : ''}.`}
+              aria-describedby={sparkMirrorId}
+            />
+            <SimMirror id={sparkMirrorId} table={sparkMirror} className="mt-2" />
             <div className="mt-2 flex items-center justify-between gap-2">
               <button
                 onClick={toggleOutlier}
@@ -961,7 +1033,14 @@ export default function QuantizerSim() {
                   </span>
                 </span>
               </div>
-              <canvas ref={histRef} className="h-28 w-full rounded-sm border border-line bg-ink" />
+              <canvas
+                ref={histRef}
+                className="h-28 w-full rounded-sm border border-line bg-ink"
+                role="img"
+                aria-label={`Weight histogram, original against ${focusRow.label}-quantized. Max error ${fmtNum(tensorMaxError, 3)}, drift ${drift.toFixed(2)} nats.`}
+                aria-describedby={histMirrorId}
+              />
+              <SimMirror id={histMirrorId} table={histMirror} className="mt-2" />
             </div>
           </section>
 
