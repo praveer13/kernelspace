@@ -1,0 +1,17 @@
+{
+  "name": "kernelspace lab: The Intake Ring",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown && cd labs && cargo test -p mpmc-queue --no-run",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "labs/mpmc-queue/src/queue.rs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}

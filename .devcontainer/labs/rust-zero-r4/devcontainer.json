@@ -1,0 +1,17 @@
+{
+  "name": "kernelspace lab: Borrowing & Slices",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown && cd labs && cargo test -p rust-zero-r4 --no-run",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "labs/rust-zero/r4-borrowing/src/exercises.rs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}

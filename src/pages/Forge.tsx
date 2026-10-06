@@ -11,7 +11,7 @@ const STEPS = [
   {
     icon: Download,
     title: 'get the lab',
-    body: 'Download the template crate — or open the repo in Codespaces / a dev container. One file has TODO(you) markers. Only that file is yours.',
+    body: 'Paste one command (POSIX, tar, PowerShell or WSL), download the ZIP or .tar.gz, or open that lab in its own Codespace. One file has TODO(you) markers. Only that file is yours.',
   },
   {
     icon: Terminal,

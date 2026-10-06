@@ -1,0 +1,17 @@
+{
+  "name": "kernelspace lab: Goodput or Nothing",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown && cd labs && cargo test -p batching-scheduler --no-run",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "labs/batching-scheduler/src/scheduler.rs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}

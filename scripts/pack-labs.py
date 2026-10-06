@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""pack-labs — zip forge lab templates into public/labs/ for download.
+"""pack-labs — zip and tar.gz forge lab templates into public/labs/ for download.
 
-The zip is the student-facing workspace: kit + lab crate(s) + devcontainer +
+The archive is the student-facing workspace: kit + lab crate(s) + devcontainer +
 README + the H1 guardrail kit. Reference solutions (_solutions/) and build
-artifacts (target/) are never shipped. Re-run after any change under labs/:
+artifacts (target/) are never shipped. Every <lab>.zip gets a <lab>.tar.gz
+beside it (docs/specs/wave-2.md §16.1): the same members, in the same order,
+with the same bytes and modes, for `curl … | tar xz` on macOS, Linux and
+Windows 10+. Both are deterministic. Re-run after any change under labs/:
 
     python3 scripts/pack-labs.py [--out DIR]
 
@@ -17,10 +20,14 @@ lab, with the lab's real check ids read from src/data/labs.ts through
     AGENTS.md                                     rendered from AGENTS.template.md
     CLAUDE.md                                     `@AGENTS.md`
 """
+import calendar
+import gzip
+import io
 import json
 import os
 import subprocess
 import sys
+import tarfile
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +37,8 @@ OUT_DIR = os.path.join(ROOT, "public", "labs")
 
 # fixed so repacking the same sources gives the same bytes
 ZIP_DATE = (2026, 1, 1, 0, 0, 0)
+# the same instant for the tar members (UTC seconds); the gzip header carries no mtime and no file name
+TAR_MTIME = calendar.timegm(ZIP_DATE)
 
 # (zip name, lab crate, extra members to include)
 PACKAGES = [
@@ -276,6 +285,36 @@ def add(z: zipfile.ZipFile, arcname: str, data: bytes, mode: int = 0o644) -> Non
     z.writestr(info, data)
 
 
+def tar_gz_bytes(entries) -> bytes:
+    """The members as a .tar.gz: GNU format, root-owned, the fixed mtime, no directory entries (as in the zip)."""
+    raw = io.BytesIO()
+    with tarfile.open(fileobj=raw, mode="w", format=tarfile.GNU_FORMAT) as t:
+        for arcname, data, mode in entries:
+            info = tarfile.TarInfo(arcname)
+            info.size = len(data)
+            info.mode = mode
+            info.mtime = TAR_MTIME
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            t.addfile(info, io.BytesIO(data))
+    out = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=out, mtime=0, compresslevel=9) as g:
+        g.write(raw.getvalue())
+    return out.getvalue()
+
+
+def banned_members(names) -> list:
+    return [
+        name
+        for name in names
+        if name.startswith("/")
+        or ".." in name.split("/")
+        or "_solutions" in name.split("/")
+        or "target" in name.split("/")
+        or name.endswith((".wasm", ".rlib", ".rmeta"))
+    ]
+
+
 def main() -> int:
     out_dir = OUT_DIR
     if "--out" in sys.argv:
@@ -300,32 +339,43 @@ def main() -> int:
             print(f"error: {zip_name}: TODO file {lab['todoFile']} is not in the package", file=sys.stderr)
             return 1
         kit = kit_files(lab)
+        entries = [
+            ("Cargo.toml", workspace_toml(package_members).encode(), 0o644),
+            *[(m, open(os.path.join(LABS, m), "rb").read(), 0o644) for m in members],
+            *kit,
+        ]
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-            add(z, "Cargo.toml", workspace_toml(package_members).encode())
-            for m in members:
-                add(z, m, open(os.path.join(LABS, m), "rb").read())
-            for arcname, data, mode in kit:
+            for arcname, data, mode in entries:
                 add(z, arcname, data, mode)
+        tar_name = zip_name[: -len(".zip")] + ".tar.gz"
+        tar_out = os.path.join(out_dir, tar_name)
+        with open(tar_out, "wb") as f:
+            f.write(tar_gz_bytes(entries))
+        expected = [arcname for arcname, _, _ in entries]
         with zipfile.ZipFile(out) as z:
             names = z.namelist()
-            expected = ["Cargo.toml", *members, *[arcname for arcname, _, _ in kit]]
             if names != expected:
                 print(f"error: archive manifest drift in {zip_name}", file=sys.stderr)
                 return 1
-            banned = [
-                name
-                for name in names
-                if name.startswith("/")
-                or ".." in name.split("/")
-                or "_solutions" in name.split("/")
-                or "target" in name.split("/")
-                or name.endswith((".wasm", ".rlib", ".rmeta"))
-            ]
+            banned = banned_members(names)
             if banned:
                 print(f"error: private/build artifacts in {zip_name}: {banned}", file=sys.stderr)
                 return 1
+        with tarfile.open(tar_out, "r:gz") as t:
+            members_in_tar = t.getmembers()
+            if [m.name for m in members_in_tar] != expected:
+                print(f"error: {tar_name} does not hold the same members as {zip_name}", file=sys.stderr)
+                return 1
+            for m, (arcname, data, mode) in zip(members_in_tar, entries):
+                if not m.isreg() or m.mode != mode or m.size != len(data) or t.extractfile(m).read() != data:
+                    print(f"error: {tar_name}: {arcname} differs from the zip's member", file=sys.stderr)
+                    return 1
         size = os.path.getsize(out)
-        print(f"packed {zip_name}: {len(members) + 1 + len(kit)} files, {size} bytes · audited")
+        tar_size = os.path.getsize(tar_out)
+        print(
+            f"packed {zip_name}: {len(entries)} files, {size} bytes · "
+            f"{tar_name}: {tar_size} bytes · audited"
+        )
     return 0
 
 
