@@ -1,5 +1,5 @@
 /**
- * The economy table (wave-1.md §8.4, task B7) equals its sources: labs.ts, Capstone's STEPS, the Fleet Week
+ * The economy table (wave-1.md §8.4, task B7) equals its sources: labs.ts, the capstone STEPS, the Fleet Week
  * acts, the T0–T2 lessons. When one changes, the failure shows the rebuilt value to copy into
  * src/lib/economy-table.ts. The table stays import-free, because it ships in the entry chunk.
  */
@@ -7,6 +7,8 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { FORGE_LABS } from '../../src/data/labs'
 import { LESSONS_BY_TRACK } from '../../src/data/lessons'
+import { PLAY_IDS } from '../../src/data/plays'
+import { STEPS } from '../../src/lib/capstone/steps'
 import {
   CAPSTONE_STEP_MINUTES,
   FLEET_ACT_MINUTES,
@@ -20,25 +22,6 @@ import {
 import { XP } from '../../src/lib/economy'
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')
-
-/** The `id`/`minutes` pairs of Capstone's STEPS literal (top-level fields only: 4-space indent). */
-function capstoneSteps(): Record<string, number> {
-  const lines = read('src/pages/Capstone.tsx').split('\n')
-  const start = lines.findIndex((l) => l.startsWith('const STEPS: StepDef[] = ['))
-  const end = lines.findIndex((l, i) => i > start && l === ']')
-  expect(start).toBeGreaterThan(0)
-  expect(end).toBeGreaterThan(start)
-  const ids: string[] = []
-  const minutes: number[] = []
-  for (const line of lines.slice(start, end)) {
-    const id = /^ {4}id: '([^']+)',$/.exec(line)
-    if (id) ids.push(id[1])
-    const min = /^ {4}minutes: (\d+),$/.exec(line)
-    if (min) minutes.push(Number(min[1]))
-  }
-  expect(ids.length).toBe(minutes.length)
-  return Object.fromEntries(ids.map((id, i) => [id, minutes[i]]))
-}
 
 describe('labs', () => {
   test('the table equals labs.ts: every lab, its minutes, its required check ids in order', () => {
@@ -63,8 +46,8 @@ describe('labs', () => {
 })
 
 describe('capstone, acts, plays', () => {
-  test('CAPSTONE_STEP_MINUTES equals Capstone.tsx STEPS', () => {
-    expect(CAPSTONE_STEP_MINUTES).toEqual(capstoneSteps())
+  test('CAPSTONE_STEP_MINUTES equals the capstone STEPS (src/lib/capstone/steps.ts)', () => {
+    expect(CAPSTONE_STEP_MINUTES).toEqual(Object.fromEntries(STEPS.map((s) => [s.id, s.minutes])))
   })
 
   test('FLEET_ACT_MINUTES covers exactly the Fleet Week acts; the incident is 20, the rest 30', () => {
@@ -75,9 +58,9 @@ describe('capstone, acts, plays', () => {
     expect(FLEET_ACT_MINUTES).toEqual({ engine: 30, fleet: 30, business: 30, incident: 20 })
   })
 
-  test('block placement is 15 minutes and is the route Play.tsx serves', () => {
+  test('block placement is 15 minutes, and PLAY_MINUTES covers exactly the plays /play/:playId serves', () => {
     expect(PLAY_MINUTES).toEqual({ 'block-placement': 15 })
-    expect(read('src/pages/Play.tsx')).toContain("const PLAY_IDS = ['block-placement']")
+    expect(Object.keys(PLAY_MINUTES).sort()).toEqual([...PLAY_IDS].sort())
   })
 })
 

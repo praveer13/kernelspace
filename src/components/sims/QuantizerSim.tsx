@@ -3,6 +3,7 @@
  * Type a float → see bit anatomy FP32→FP16/BF16/FP8-E4M3/INT8/INT4,
  * dynamic range, reconstruction error, and why LLM weights tolerate it.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Copy, Info, Trash2, Zap } from 'lucide-react'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'

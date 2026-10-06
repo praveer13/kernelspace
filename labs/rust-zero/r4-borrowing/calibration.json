@@ -1,0 +1,164 @@
+{
+  "lab": "rust-zero-r4",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "2e4836a155ad0e4d11ee605d08e38b16c1b49e79a9573eeafd7ddd547199d632",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "slice_sum": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "keep-ends": 0,
+        "literal": 1,
+        "push-last": 0,
+        "reverse-not-swap": 0,
+        "skip-last": 1,
+        "whole-input": 0,
+        "zero-everything": 0
+      }
+    },
+    "mutate_slice": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "keep-ends": 0,
+        "literal": 1,
+        "push-last": 0,
+        "reverse-not-swap": 0,
+        "skip-last": 0,
+        "whole-input": 0,
+        "zero-everything": 1
+      }
+    },
+    "split_mut": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "keep-ends": 0,
+        "literal": 1,
+        "push-last": 0,
+        "reverse-not-swap": 1,
+        "skip-last": 0,
+        "whole-input": 0,
+        "zero-everything": 0
+      }
+    },
+    "str_view": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "keep-ends": 0,
+        "literal": 1,
+        "push-last": 0,
+        "reverse-not-swap": 0,
+        "skip-last": 0,
+        "whole-input": 1,
+        "zero-everything": 0
+      }
+    },
+    "borrow_then_mutate": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "keep-ends": 0,
+        "literal": 1,
+        "push-last": 1,
+        "reverse-not-swap": 0,
+        "skip-last": 0,
+        "whole-input": 0,
+        "zero-everything": 0
+      }
+    },
+    "subslice": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "keep-ends": 1,
+        "literal": 1,
+        "push-last": 0,
+        "reverse-not-swap": 0,
+        "skip-last": 0,
+        "whole-input": 0,
+        "zero-everything": 0
+      }
+    }
+  },
+  "mutants": {
+    "keep-ends": {
+      "defaultSeedFails": [
+        "subslice"
+      ],
+      "caughtBy": [
+        "subslice"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "slice_sum",
+        "mutate_slice",
+        "split_mut",
+        "str_view",
+        "borrow_then_mutate",
+        "subslice"
+      ],
+      "caughtBy": [
+        "slice_sum",
+        "mutate_slice",
+        "split_mut",
+        "str_view",
+        "borrow_then_mutate",
+        "subslice"
+      ]
+    },
+    "push-last": {
+      "defaultSeedFails": [
+        "borrow_then_mutate"
+      ],
+      "caughtBy": [
+        "borrow_then_mutate"
+      ]
+    },
+    "reverse-not-swap": {
+      "defaultSeedFails": [
+        "split_mut"
+      ],
+      "caughtBy": [
+        "split_mut"
+      ]
+    },
+    "skip-last": {
+      "defaultSeedFails": [
+        "slice_sum"
+      ],
+      "caughtBy": [
+        "slice_sum"
+      ]
+    },
+    "whole-input": {
+      "defaultSeedFails": [
+        "str_view"
+      ],
+      "caughtBy": [
+        "str_view"
+      ]
+    },
+    "zero-everything": {
+      "defaultSeedFails": [
+        "mutate_slice"
+      ],
+      "caughtBy": [
+        "mutate_slice"
+      ]
+    }
+  }
+}

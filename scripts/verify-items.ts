@@ -75,6 +75,7 @@
 
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import type { QuizQuestion } from '../src/components/QuizBlock'
+import { PRIMM_MC_ITEMS } from '../src/data/forge/rust-allocator/primm'
 import { ALL_LESSONS, TRACK_IDS } from '../src/data/lessons'
 import { INCIDENTS } from '../src/lib/fleet-week'
 import { exportOrder, shuffledOrder } from '../src/lib/rng'
@@ -101,8 +102,10 @@ import {
 const BASELINE_URL = new URL('./baselines/verify-items.json', import.meta.url)
 const PASS_BAR = 0.8 // QuizBlock.tsx: score = correct / total >= 0.8
 const FLEET_TRACK = 'fleet-week'
+/** Lab 01's PRIMM multiple-choice items (src/data/forge/rust-allocator/primm.ts): one pseudo-lesson, gated like a lesson track. */
+const FORGE_TRACK = 'forge'
 /** The baseline file must not be able to switch a gate off: these tracks are gated whatever it says. It may add tracks, never drop one. */
-const MIN_GATED = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', FLEET_TRACK]
+const MIN_GATED = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', FLEET_TRACK, FORGE_TRACK]
 /** In a whyRequired track, at most this many lessons may be passed by always picking the shortest option. */
 const MAX_SHORTEST_PASSES = 1
 /** In a whyRequired track, no length-rank strategy may pass more than this many lessons in expectation... */
@@ -187,6 +190,11 @@ for (const lesson of ALL_LESSONS) {
   }
 }
 
+// Lab 01 PRIMM items: not a lesson quiz, so they are graded here as one pseudo-lesson at PASS_BAR.
+PRIMM_MC_ITEMS.forEach((item, i) => {
+  items.push({ track: FORGE_TRACK, lessonId: 'lab01.primm', qi: i, ref: `lab01 ${item.id}`, q: item.q, needsExplanation: false })
+})
+
 // Fleet Week Act IV: each incident asks a cause question and a mitigation question.
 for (const incident of INCIDENTS) {
   for (const [kind, list] of [
@@ -210,7 +218,7 @@ for (const incident of INCIDENTS) {
   }
 }
 
-const trackKeys = [...TRACK_IDS, FLEET_TRACK]
+const trackKeys = [...TRACK_IDS, FLEET_TRACK, FORGE_TRACK]
 const failures: string[] = []
 
 /* ------------------------- (1) structure ------------------------- */
@@ -378,7 +386,7 @@ for (let authored = 0; authored < N; authored++) {
 const MAX_EXPORT_SHARE = 0.4
 const exportedKeys: number[] = [] // exportedKeys[p] = keys exported at id o(p+1)
 for (const item of validItems) {
-  if (!item.lessonId) continue
+  if (!item.lessonId || item.track === FORGE_TRACK) continue // never exported to markdown
   const order = exportOrder(item.lessonId, item.qi, item.q.options.length)
   order.forEach((authored, pos) => {
     if (item.q.correct.includes(authored)) exportedKeys[pos] = (exportedKeys[pos] ?? 0) + 1

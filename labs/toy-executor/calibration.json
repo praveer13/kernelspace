@@ -1,0 +1,176 @@
+{
+  "lab": "toy-executor",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "ba242c2256a55cc81c46241508ec76683da7177d472f02ae26bc292ce1c2e6f2",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "block_on": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "block_on_once": 1,
+        "borrow_held": 1,
+        "lifo": 0,
+        "no_restore": 1,
+        "one_pass": 1,
+        "requeue": 0
+      }
+    },
+    "fifo_poll": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "block_on_once": 0,
+        "borrow_held": 1,
+        "lifo": 1,
+        "no_restore": 1,
+        "one_pass": 1,
+        "requeue": 0.952
+      }
+    },
+    "pending_repoll": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "block_on_once": 0,
+        "borrow_held": 1,
+        "lifo": 1,
+        "no_restore": 1,
+        "one_pass": 1,
+        "requeue": 1
+      }
+    },
+    "ping_pong": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "block_on_once": 0,
+        "borrow_held": 1,
+        "lifo": 0,
+        "no_restore": 1,
+        "one_pass": 1,
+        "requeue": 0
+      }
+    },
+    "many_tasks": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "block_on_once": 0,
+        "borrow_held": 1,
+        "lifo": 0,
+        "no_restore": 1,
+        "one_pass": 1,
+        "requeue": 0
+      }
+    },
+    "nested_spawn": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "block_on_once": 0,
+        "borrow_held": 1,
+        "lifo": 0,
+        "no_restore": 0.987,
+        "one_pass": 1,
+        "requeue": 0
+      }
+    }
+  },
+  "mutants": {
+    "block_on_once": {
+      "defaultSeedFails": [
+        "block_on"
+      ],
+      "caughtBy": [
+        "block_on"
+      ]
+    },
+    "borrow_held": {
+      "defaultSeedFails": [
+        "block_on",
+        "fifo_poll",
+        "pending_repoll",
+        "ping_pong",
+        "many_tasks",
+        "nested_spawn"
+      ],
+      "caughtBy": [
+        "block_on",
+        "fifo_poll",
+        "pending_repoll",
+        "ping_pong",
+        "many_tasks",
+        "nested_spawn"
+      ]
+    },
+    "lifo": {
+      "defaultSeedFails": [
+        "fifo_poll",
+        "pending_repoll"
+      ],
+      "caughtBy": [
+        "fifo_poll",
+        "pending_repoll"
+      ]
+    },
+    "no_restore": {
+      "defaultSeedFails": [
+        "block_on",
+        "fifo_poll",
+        "pending_repoll",
+        "ping_pong",
+        "many_tasks",
+        "nested_spawn"
+      ],
+      "caughtBy": [
+        "block_on",
+        "fifo_poll",
+        "pending_repoll",
+        "ping_pong",
+        "many_tasks"
+      ]
+    },
+    "one_pass": {
+      "defaultSeedFails": [
+        "block_on",
+        "fifo_poll",
+        "pending_repoll",
+        "ping_pong",
+        "many_tasks",
+        "nested_spawn"
+      ],
+      "caughtBy": [
+        "block_on",
+        "fifo_poll",
+        "pending_repoll",
+        "ping_pong",
+        "many_tasks",
+        "nested_spawn"
+      ]
+    },
+    "requeue": {
+      "defaultSeedFails": [
+        "fifo_poll",
+        "pending_repoll"
+      ],
+      "caughtBy": [
+        "pending_repoll"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "tasks=10 yields=25 polls=35 model_polls=35 first_polls=1,2,3,4,5,6,7,8,9,10,1,2"
+  }
+}

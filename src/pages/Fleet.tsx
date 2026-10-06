@@ -11,16 +11,16 @@ import {
   StepForward,
   Upload,
 } from 'lucide-react'
-import { instantiateLab, LabAbiError, LabTimeoutError, LabTrapError, type LabModule } from '@/lib/wasm-lab'
+import { LabAbiError, LabTimeoutError, LabTrapError } from '@/lib/wasm-lab'
 import { validateLabInWorker } from '@/lib/lab-worker'
+import { describeFleetError, openPoolSession, type PoolSession } from '@/lib/fleet-session'
 import {
-  dumpRefMultiset,
   makeScript,
-  parseDump,
   RefBlockManager,
   type FleetOp,
   type ManagerDump,
 } from '@/lib/fleet-model'
+import type { PoolOpResult } from '@/workers/fleet-protocol'
 import { cn } from '@/lib/utils'
 import { validateModule } from '@/pages/fleet/drivers'
 import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet/slots'
@@ -48,6 +48,10 @@ export default function Fleet() {
   const slots = useSlots((s) => s.slots)
   const setSlot = useSlots((s) => s.setSlot)
   const [slotError, setSlotError] = useState<string | null>(null)
+  /* a module that stops responding in a panel: "reset with reference drivers" clears all three slots */
+  const useReference = useCallback(() => {
+    for (const kind of ['sched', 'mgr', 'queue'] as const) setSlot(kind, null)
+  }, [setSlot])
   const inputsRef = useRef<Record<LabKind, HTMLInputElement | null>>({ sched: null, mgr: null, queue: null })
 
   const onSlotFile = useCallback(async (kind: LabKind, file: File) => {
@@ -132,7 +136,7 @@ export default function Fleet() {
       <div className="mt-6">
         <ErrorBoundary label="this panel" resetKey={mode}>
           <Suspense fallback={<RouteFallback label="loading panel" />}>
-            {mode === 'engine' ? <EnginePanel slots={slots} /> : mode === 'cluster' ? <ClusterPanel slots={slots} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+            {mode === 'engine' ? <EnginePanel slots={slots} onUseReference={useReference} /> : mode === 'cluster' ? <ClusterPanel slots={slots} onUseReference={useReference} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
           </Suspense>
         </ErrorBoundary>
       </div>
@@ -149,7 +153,7 @@ const TICKS = 160
 type Driver =
   | { kind: 'none' }
   | { kind: 'demo' } // JS reference drives the grid (no module uploaded)
-  | { kind: 'wasm'; mod: LabModule & { hasInvoke: boolean }; checksPassed: number; checksTotal: number }
+  | { kind: 'wasm'; bytes: ArrayBuffer; checksPassed: number; checksTotal: number }
 
 interface Divergence {
   tick: number
@@ -177,13 +181,29 @@ function PoolMode() {
   const [counters, setCounters] = useState<Counters>({ allocs: 0, forks: 0, appends: 0, frees: 0, failedAdmits: 0 })
   const [logLines, setLogLines] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  /* the module stopped responding: offer the reference engine instead */
+  const [timedOut, setTimedOut] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  /* demo mode drives this reference here; wasm mode keeps its own reference inside the fleet worker */
   const refRef = useRef<RefBlockManager | null>(null)
   const scriptRef = useRef<FleetOp[][]>([])
+  const poolRef = useRef<PoolSession | null>(null)
+  const busyRef = useRef(false)
+  const buildTokenRef = useRef(0)
 
   const log = useCallback((line: string) => {
     setLogLines((prev) => [...prev.slice(-13), line])
+  }, [])
+
+  const reportFailure = useCallback((e: unknown) => {
+    const described = describeFleetError(e)
+    setTimedOut(described.timedOut)
+    setError(
+      e instanceof LabTrapError
+        ? 'the module trapped — a todo!() is still open (the fleet needs dump() implemented too).'
+        : described.detail,
+    )
   }, [])
 
   const reset = useCallback(() => {
@@ -192,27 +212,48 @@ function PoolMode() {
     setDivergence(null)
     setCounters({ allocs: 0, forks: 0, appends: 0, frees: 0, failedAdmits: 0 })
     setLogLines([])
+    setTimedOut(false)
     scriptRef.current = makeScript(TICKS, intensity)
     refRef.current = new RefBlockManager(NUM_BLOCKS, BLOCK_SIZE)
+    poolRef.current?.close()
+    poolRef.current = null
+    const token = ++buildTokenRef.current
     if (driver.kind === 'wasm') {
-      try {
-        driver.mod.invoke(`init ${NUM_BLOCKS} ${BLOCK_SIZE}`)
-        setDump(parseDump(driver.mod.invoke('dump')))
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-      }
+      /* the worker instantiates the module; a spinning init is cut off at 5 s */
+      void openPoolSession({ mode: 'pool', slots: { mgr: driver.bytes }, cfg: { numBlocks: NUM_BLOCKS, blockSize: BLOCK_SIZE } })
+        .then((session) => {
+          if (buildTokenRef.current !== token) {
+            session.close()
+            return
+          }
+          poolRef.current = session
+          setDump(session.dump)
+        })
+        .catch((e: unknown) => {
+          if (buildTokenRef.current === token) reportFailure(e)
+        })
     } else if (driver.kind === 'demo') {
       const m = refRef.current
       setDump({ numBlocks: NUM_BLOCKS, blockSize: BLOCK_SIZE, free: m.freeBlocks, refs: new Map(), seqs: new Map() })
     }
-  }, [driver, intensity])
+  }, [driver, intensity, reportFailure])
 
   useEffect(() => {
     reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driver, intensity])
 
-  const step = useCallback(() => {
+  /* leaving the page, or switching panels, stops the worker */
+  useEffect(
+    () => () => {
+      buildTokenRef.current++
+      poolRef.current?.close()
+      poolRef.current = null
+    },
+    [],
+  )
+
+  const step = useCallback(async () => {
     const t = tick
     if (t >= TICKS) {
       setPlaying(false)
@@ -220,46 +261,56 @@ function PoolMode() {
     }
     const ops = scriptRef.current[t] ?? []
     const ref = refRef.current
-    if (!ref) return
+    const session = poolRef.current
+    const wasm = driver.kind === 'wasm'
+    if (wasm ? !session || busyRef.current : !ref) return
     let newDump: ManagerDump | null = null
     const c = { ...counters }
 
-    for (const op of ops) {
-      let refResult: boolean = true
-      if (op.kind === 'allocate') refResult = ref.allocate(op.a, op.n ?? 0)
-      else if (op.kind === 'append') refResult = ref.append(op.a, op.n ?? 0)
-      else if (op.kind === 'fork') refResult = ref.fork(op.a, op.b ?? 0)
-      else ref.free(op.a)
+    /* what the reference (and, in wasm mode, the module) answered for each op */
+    let results: PoolOpResult[]
+    let post: Awaited<ReturnType<PoolSession['pool']>> | null = null
+    if (wasm && session) {
+      busyRef.current = true
+      try {
+        post = await session.pool(ops, t)
+      } catch (e) {
+        if (poolRef.current !== session) return
+        setPlaying(false)
+        if (e instanceof LabTrapError) setDivergence({ tick: t, detail: 'module trapped mid-run — a todo!() or panic fired' })
+        else if (describeFleetError(e).timedOut) reportFailure(e)
+        else setDivergence({ tick: t, detail: e instanceof Error ? e.message : String(e) })
+        return
+      } finally {
+        busyRef.current = false
+      }
+      if (poolRef.current !== session) return
+      results = post.ops
+    } else {
+      results = ops.map((op) => {
+        let refResult = true
+        if (!ref) return { cmd: '', ref: refResult, got: '' }
+        if (op.kind === 'allocate') refResult = ref.allocate(op.a, op.n ?? 0)
+        else if (op.kind === 'append') refResult = ref.append(op.a, op.n ?? 0)
+        else if (op.kind === 'fork') refResult = ref.fork(op.a, op.b ?? 0)
+        else ref.free(op.a)
+        return { cmd: '', ref: refResult, got: '' }
+      })
+    }
 
-      if (driver.kind === 'wasm') {
-        try {
-          const cmd =
-            op.kind === 'allocate'
-              ? `allocate ${op.a} ${op.n}`
-              : op.kind === 'append'
-                ? `append ${op.a} ${op.n}`
-                : op.kind === 'fork'
-                  ? `fork ${op.a} ${op.b}`
-                  : `free ${op.a}`
-          const got = driver.mod.invoke(cmd).trim()
-          const gotBool = got === 'true' ? true : got === 'false' ? false : null
-          if (op.kind !== 'free' && gotBool !== null && gotBool !== refResult) {
-            setDivergence({
-              tick: t,
-              detail: `${cmd} → ${got} but reference says ${refResult} — capacity accounting differs`,
-            })
-            setPlaying(false)
-          } else if (op.kind !== 'free' && gotBool === null) {
-            setDivergence({ tick: t, detail: `${cmd} → "${got}" (unparseable reply)` })
-            setPlaying(false)
-          }
-        } catch (e) {
+    ops.forEach((op, i) => {
+      const { cmd, ref: refResult, got } = results[i]
+      if (wasm) {
+        const gotBool = got === 'true' ? true : got === 'false' ? false : null
+        if (op.kind !== 'free' && gotBool !== null && gotBool !== refResult) {
           setDivergence({
             tick: t,
-            detail: e instanceof LabTrapError ? 'module trapped mid-run — a todo!() or panic fired' : String(e),
+            detail: `${cmd} → ${got} but reference says ${refResult} — capacity accounting differs`,
           })
           setPlaying(false)
-          return
+        } else if (op.kind !== 'free' && gotBool === null) {
+          setDivergence({ tick: t, detail: `${cmd} → "${got}" (unparseable reply)` })
+          setPlaying(false)
         }
       }
 
@@ -280,29 +331,21 @@ function PoolMode() {
                 : `free seq ${op.a}`
         }${op.kind !== 'free' && !refResult ? ' — REJECTED (no blocks)' : ''}`,
       )
-    }
+    })
 
-    if (driver.kind === 'wasm') {
-      try {
-        const freeReply = Number(driver.mod.invoke('free_blocks').trim())
-        if (freeReply !== ref.freeBlocks) {
-          setDivergence({ tick: t, detail: `free_blocks = ${freeReply}, reference ${ref.freeBlocks} — a leak or a double-free` })
-          setPlaying(false)
-        }
-        const parsed = parseDump(driver.mod.invoke('dump'))
-        const a = dumpRefMultiset(parsed).join(',')
-        const b = ref.refcountMultiset().join(',')
-        if (a !== b) {
-          setDivergence({ tick: t, detail: `refcount multiset differs (yours [${a}] vs reference [${b}]) — sharing/CoW semantics diverge` })
-          setPlaying(false)
-        }
-        newDump = parsed
-      } catch (e) {
-        setDivergence({ tick: t, detail: e instanceof Error ? e.message : String(e) })
+    if (post) {
+      if (post.freeReply !== post.refFree) {
+        setDivergence({ tick: t, detail: `free_blocks = ${post.freeReply}, reference ${post.refFree} — a leak or a double-free` })
         setPlaying(false)
-        return
       }
-    } else {
+      const a = post.multiset.join(',')
+      const b = post.refMultiset.join(',')
+      if (a !== b) {
+        setDivergence({ tick: t, detail: `refcount multiset differs (yours [${a}] vs reference [${b}]) — sharing/CoW semantics diverge` })
+        setPlaying(false)
+      }
+      newDump = post.dump
+    } else if (ref) {
       const refsMap = new Map<number, number>()
       for (const [, s] of ref.seqs()) for (const b of s.blocks) refsMap.set(b, (refsMap.get(b) ?? 0) + 1)
       newDump = { numBlocks: NUM_BLOCKS, blockSize: BLOCK_SIZE, free: ref.freeBlocks, refs: refsMap, seqs: new Map(ref.seqs()) }
@@ -311,31 +354,35 @@ function PoolMode() {
     setCounters(c)
     setDump(newDump)
     setTick(t + 1)
-  }, [tick, counters, driver, log])
+  }, [tick, counters, driver, log, reportFailure])
 
   useEffect(() => {
     if (!playing) return
-    const id = window.setInterval(step, 120)
+    const id = window.setInterval(() => void step(), 120)
     return () => window.clearInterval(id)
   }, [playing, step])
 
   const onFile = useCallback(async (file: File) => {
     setError(null)
+    setTimedOut(false)
     try {
       const bytes = await file.arrayBuffer()
-      /* untrusted bytes are checked in the lab worker first; only a module that passed runs here */
+      /* untrusted bytes are checked in the lab worker first; only a module that passed reaches the fleet worker */
       const { report, hasInvoke } = await validateLabInWorker(bytes)
       if (!hasInvoke || !report) {
         setError('this module predates the fleet bridge (no ks_invoke) — pull the latest lab template and rebuild.')
+        return
+      }
+      if (report.lab.endsWith('@reference')) {
+        setError(`"${report.lab}" is a reference build. It earns no credit here; drop the module you built from your own code.`)
         return
       }
       if (report.lab !== 'kv-block-manager') {
         setError(`this module is for "${report.lab}" — pool mode drives kv-block-manager (lab 02).`)
         return
       }
-      const mod = await instantiateLab(bytes)
       const passed = report.checks.filter((x) => x.pass).length
-      setDriver({ kind: 'wasm', mod, checksPassed: passed, checksTotal: report.checks.length })
+      setDriver({ kind: 'wasm', bytes, checksPassed: passed, checksTotal: report.checks.length })
       setDivergence(null)
     } catch (e) {
       if (e instanceof LabTrapError) {
@@ -423,7 +470,7 @@ function PoolMode() {
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </button>
           <button
-            onClick={step}
+            onClick={() => void step()}
             disabled={driver.kind === 'none' || playing}
             className="rounded-md border border-line bg-surface-1 p-2 text-text-2 transition-colors hover:text-text-1 disabled:opacity-40"
             aria-label="step one tick"
@@ -446,7 +493,18 @@ function PoolMode() {
         {error && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-4 flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/5 p-4">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
-            <p className="text-body-sm text-text-2">{error}</p>
+            <div>
+              <p className="text-body-sm text-text-2">{error}</p>
+              {timedOut && (
+                <button
+                  type="button"
+                  onClick={() => setDriver({ kind: 'demo' })}
+                  className="mt-3 rounded border border-line bg-surface-1 px-3 py-1.5 font-mono text-[11px] text-text-1 hover:border-accent/50"
+                >
+                  reset with reference drivers
+                </button>
+              )}
+            </div>
           </motion.div>
         )}
         {divergence && (

@@ -1,28 +1,20 @@
-/** Capstone Zero step 5: the reference passes every check, the known mutants fail. */
-import {
-  STEP5_CHECKS,
-  STEP5_HINTS,
-  STEP5_REFERENCE_SOLUTION,
-  STEP5_TEMPLATE,
-  runStep5Harness,
-} from '../src/lib/capstone-checks'
+/**
+ * Capstone Zero: every step's solution passes its checks and its template does
+ * not; step 5's reference passes and its known mutants fail (PLAN-100X §5.5 F7).
+ * Runs through runStepJob, the same function the sandbox worker runs (§14.1).
+ */
+import { MIN_SPEEDUP, STEP5_HINTS, STEP5_REFERENCE_SOLUTION, STEP5_TEMPLATE } from '../src/lib/capstone-checks'
+import { STEPS, runStepJob } from '../src/lib/capstone/steps'
 
-function runChecks(code: string): Map<string, string | null> {
+const STEP5 = 'kv-cache'
+
+function runChecks(stepId: string, code: string): Map<string, string | null> {
+  const reply = runStepJob(stepId, code)
+  const step = STEPS.find((s) => s.id === stepId)!
   const results = new Map<string, string | null>()
-  let api: Record<string, unknown>
-  try {
-    api = runStep5Harness(code)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    for (const c of STEP5_CHECKS) results.set(c.id, `harness error: ${msg}`)
-    return results
-  }
-  for (const c of STEP5_CHECKS) {
-    try {
-      results.set(c.id, c.run(api, code))
-    } catch (e) {
-      results.set(c.id, e instanceof Error ? e.message : String(e))
-    }
+  for (const c of step.checks) {
+    const r = reply.results[c.id]
+    results.set(c.id, reply.error != null ? `harness error: ${reply.error}` : r == null ? 'no result' : r.pass ? null : r.msg)
   }
   return results
 }
@@ -96,18 +88,34 @@ const fail = (msg: string) => {
   console.error(`FAIL ${msg}`)
 }
 
-const ref = runChecks(STEP5_REFERENCE_SOLUTION)
+// steps 1-4, 6, 7: the shown solution passes, the unedited template does not
+for (const step of STEPS) {
+  if (!step.solution) continue
+  const sol = runChecks(step.id, step.solution)
+  const bad = [...sol].filter(([, msg]) => msg != null)
+  if (bad.length > 0) fail(`step ${step.id}: solution fails ${bad.map(([id, msg]) => `${id} (${msg})`).join(', ')}`)
+  else console.log(`ok   step ${step.id}: solution passes ${sol.size} checks`)
+  const tpl = runChecks(step.id, step.template)
+  if ([...tpl.values()].every((m) => m == null)) fail(`step ${step.id}: unedited template passes every check`)
+  else console.log(`ok   step ${step.id}: unedited template is rejected`)
+}
+
+const ref = runChecks(STEP5, STEP5_REFERENCE_SOLUTION)
 for (const [id, msg] of ref) {
   if (msg == null) console.log(`ok   reference passes ${id}`)
   else fail(`reference fails ${id}: ${msg}`)
 }
 
-const blank = runChecks(STEP5_TEMPLATE)
+const speedup = runStepJob(STEP5, STEP5_REFERENCE_SOLUTION).metrics.speedup
+if (speedup == null || speedup < MIN_SPEEDUP) fail(`reference speedup metric is ${speedup}, want >= ${MIN_SPEEDUP}`)
+else console.log(`ok   reference reports its own speedup (${speedup.toFixed(1)}x)`)
+
+const blank = runChecks(STEP5, STEP5_TEMPLATE)
 if ([...blank.values()].every((m) => m == null)) fail('unedited template passes every check')
 else console.log('ok   unedited template is rejected')
 
 for (const m of MUTANTS) {
-  const res = runChecks(m.code)
+  const res = runChecks(STEP5, m.code)
   const failures = [...res].filter(([, msg]) => msg != null)
   if (failures.length === 0) {
     fail(`mutant "${m.name}" passes every check`)
@@ -153,4 +161,4 @@ STEP5_HINTS.forEach((hint, i) => {
 })
 
 if (failed) process.exit(1)
-console.log('capstone step 5: reference passes, all mutants fail')
+console.log('capstone: every solution passes; step 5 reference passes, all mutants fail')

@@ -8,7 +8,7 @@
  *   2. False-sharing counter — shows 8 independent counters in one line
  *      ping-ponging ownership and killing throughput.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import {
   ChipButton,
@@ -20,6 +20,8 @@ import {
   usePrefersReducedMotion,
   useSimLog,
 } from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
+import type { MirrorTable } from '@/lib/sims/types'
 
 const SIM_ID = 'sim-memory'
 
@@ -122,6 +124,8 @@ export default function LayoutLab() {
   const [falseResult, setFalseResult] = useState<FalseResult | null>(null)
 
   const [running, setRunning] = useState(false)
+  const [announce, setAnnounce] = useState<string | undefined>(undefined)
+  const mirrorId = `${useId()}-mirror`
   const tickRef = useRef(0)
   const rafRef = useRef<number | null>(null)
 
@@ -339,6 +343,9 @@ export default function LayoutLab() {
     setRunning(true)
     const res = runSweepModel(layout, count, t)
     setSweepResult(res)
+    setAnnounce(
+      `Run ${t}: ${res.layout === 'aos' ? 'AoS' : 'SoA'} sweep of ${fmtCount(count)} used ${fmtBytes(res.bytesUsed)} of ${fmtBytes(res.bytesFetched)} fetched, ${fmtGbps(res.effectiveGbps)} effective.`,
+    )
     log(
       t,
       'SWEEP',
@@ -378,6 +385,11 @@ export default function LayoutLab() {
     setRunning(true)
     const res = runFalseModel(padded, t)
     setFalseResult(res)
+    setAnnounce(
+      padded
+        ? `Run ${t}: padded counters, no coherence transfers, ${res.ratio.toFixed(0)} times faster than unpadded.`
+        : `Run ${t}: unpadded counters, ${res.pingPongs.toLocaleString()} coherence transfers, ${(res.throughputMips / 1000).toFixed(1)}M increments per ms.`,
+    )
     log(
       t,
       'FALSE',
@@ -454,12 +466,53 @@ export default function LayoutLab() {
   const reset = useCallback(() => {
     setSweepResult(null)
     setFalseResult(null)
+    setAnnounce(undefined)
     clear()
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     setRunning(false)
   }, [clear])
 
   const modeLabel = mode === 'sweep' ? 'AoS / SoA sweep' : 'false-sharing counter'
+
+  /* DOM mirror of the chart: the current mode's last result (the canvas draws one run at a time). */
+  const mirrorTable = useMemo<MirrorTable>(() => {
+    if (mode === 'sweep') {
+      return {
+        caption: `AoS / SoA deadline sweep: bytes fetched against bytes used, with the DRAM roof at ${DRAM_ROOF_GBPS} GB/s.${sweepResult ? '' : ' Press run to record a result.'}`,
+        columns: ['Layout', 'Records', 'Fetched', 'Used', 'Utilization', 'Time', 'Effective bandwidth'],
+        rows: sweepResult
+          ? [
+              [
+                sweepResult.layout.toUpperCase(),
+                fmtCount(sweepResult.n),
+                fmtBytes(sweepResult.bytesFetched),
+                fmtBytes(sweepResult.bytesUsed),
+                `${((sweepResult.bytesUsed / sweepResult.bytesFetched) * 100).toFixed(1)}%`,
+                `${sweepResult.timeMs.toFixed(2)} ms`,
+                fmtGbps(sweepResult.effectiveGbps),
+              ],
+            ]
+          : [],
+        announce,
+      }
+    }
+    return {
+      caption: `False-sharing counter: eight threads, one u64 counter each.${falseResult ? '' : ' Press run to record a result.'}`,
+      columns: ['Padding', 'Increments', 'Throughput', 'Ping-pongs', 'Speedup vs unpadded'],
+      rows: falseResult
+        ? [
+            [
+              falseResult.padded ? '64-byte pad' : 'unpadded',
+              falseResult.totalIncrements.toLocaleString(),
+              `${(falseResult.throughputMips / 1000).toFixed(1)}M inc/ms`,
+              falseResult.pingPongs.toLocaleString(),
+              `${falseResult.ratio.toFixed(1)}×`,
+            ],
+          ]
+        : [],
+      announce,
+    }
+  }, [mode, sweepResult, falseResult, announce])
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -515,8 +568,10 @@ export default function LayoutLab() {
               style={{ width: '100%', height: CHART_H }}
               role="img"
               aria-label={`Layout lab visualization. Current mode: ${modeLabel}.`}
+              aria-describedby={mirrorId}
             />
           </div>
+          <SimMirror id={mirrorId} table={mirrorTable} className="mt-3" />
 
           {mode === 'sweep' && (
             <p className="mt-4 max-w-xl font-mono text-[10px] leading-relaxed text-text-3">

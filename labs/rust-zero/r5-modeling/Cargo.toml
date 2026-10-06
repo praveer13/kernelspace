@@ -10,3 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 rust-zero-harness = { path = "../harness" }
+
+[features]
+# Names the module `rust-zero-r5@reference`: the site shows its run and never credits it.
+reference = []

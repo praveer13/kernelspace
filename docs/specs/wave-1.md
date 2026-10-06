@@ -1415,7 +1415,7 @@ Injected into `index.html` **at build time only** (a small `transformIndexHtml` 
 ```
 default-src 'self';
 script-src 'self' 'wasm-unsafe-eval' https://giscus.app;
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://giscus.app;
 font-src 'self' https://fonts.gstatic.com;
 img-src 'self' data: blob: https:;
 connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co;
@@ -1426,6 +1426,7 @@ object-src 'none'; base-uri 'self'; form-action 'self'
 
 - **No `'unsafe-eval'`:** the Capstone's `new Function` moved to the sandbox. `'wasm-unsafe-eval'` covers Forge, Fleet and the real engine.
 - **`'unsafe-inline'` for styles** stays, for Radix and React style injection: low risk, and needed.
+- **`https://giscus.app` in `style-src`:** after the click, giscus's client adds `<link rel="stylesheet" href="https://giscus.app/default.css">`; without the entry the stylesheet is blocked and the discussion frame renders 300 px wide. Nothing else widens: `script-src`, `frame-src` and `connect-src` are as listed above.
 - **Meta CSP does not govern workers.** `gen-worker.js` imports transformers.js from jsdelivr inside its own worker. `frame-ancestors` cannot be set by a meta tag.
 - **Disclosed third parties** (PLAN §7.3): Google Fonts, the transformers.js CDN, giscus and GitHub.
 - **Acceptance:** a manual matrix (Chrome, Firefox, Safari) loads the routes listed in §16.2 plus the real-engine panel with **zero CSP violations** in the console, recorded in the PR.

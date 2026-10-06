@@ -167,7 +167,8 @@ export function sessionSpanMs(events: Iterable<LedgerEvent>, grp: string): numbe
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1))
   if (mine.length === 0) return null
   const last = mine[mine.length - 1]
-  return isoMs(last) - isoMs(mine[0]) + ((last as { ms?: number }).ms ?? 0)
+  const ms = (last as { ms?: unknown }).ms
+  return isoMs(last) - isoMs(mine[0]) + (typeof ms === 'number' && ms >= 0 ? ms : 0)
 }
 
 /* ------------------------------------------------------------------ */

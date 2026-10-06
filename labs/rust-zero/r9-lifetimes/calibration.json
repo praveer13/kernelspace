@@ -1,0 +1,332 @@
+{
+  "lab": "rust-zero-r9",
+  "abi": 2,
+  "version": 2,
+  "commit": "dd8e940",
+  "date": "2026-10-05",
+  "harness": "cc1cc19e24ee290812eb993bd545f6e212fcecdebe1bca4282aebf8c678b2d5c",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "first_word": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-left": 0,
+        "always-right": 0,
+        "block-copy": 0,
+        "block-drops-first": 0,
+        "first-char": 1,
+        "keep-left-copy": 0,
+        "keep-left-prefix": 0,
+        "last-word": 1,
+        "literal": 1,
+        "owned-lowercase": 0,
+        "owned-reversed": 0,
+        "owned-truncated": 0,
+        "prefix-copy": 0,
+        "prefix-panics-past-end": 0,
+        "prefix-short-by-one": 0,
+        "prefix-suffix": 0,
+        "prefix-whole-slice": 0,
+        "shorter": 0,
+        "whole-input": 1
+      }
+    },
+    "choose_longer": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-left": 1,
+        "always-right": 1,
+        "block-copy": 0,
+        "block-drops-first": 0,
+        "first-char": 0,
+        "keep-left-copy": 0,
+        "keep-left-prefix": 0,
+        "last-word": 0,
+        "literal": 1,
+        "owned-lowercase": 0,
+        "owned-reversed": 0,
+        "owned-truncated": 0,
+        "prefix-copy": 0,
+        "prefix-panics-past-end": 0,
+        "prefix-short-by-one": 0,
+        "prefix-suffix": 0,
+        "prefix-whole-slice": 0,
+        "shorter": 1,
+        "whole-input": 0
+      }
+    },
+    "borrowed_block": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-left": 0,
+        "always-right": 0,
+        "block-copy": 1,
+        "block-drops-first": 1,
+        "first-char": 0,
+        "keep-left-copy": 0,
+        "keep-left-prefix": 0,
+        "last-word": 0,
+        "literal": 1,
+        "owned-lowercase": 0,
+        "owned-reversed": 0,
+        "owned-truncated": 0,
+        "prefix-copy": 0,
+        "prefix-panics-past-end": 0,
+        "prefix-short-by-one": 0,
+        "prefix-suffix": 0,
+        "prefix-whole-slice": 0,
+        "shorter": 0,
+        "whole-input": 0
+      }
+    },
+    "separate_lifetimes": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-left": 0,
+        "always-right": 0,
+        "block-copy": 0,
+        "block-drops-first": 0,
+        "first-char": 0,
+        "keep-left-copy": 1,
+        "keep-left-prefix": 1,
+        "last-word": 0,
+        "literal": 1,
+        "owned-lowercase": 0,
+        "owned-reversed": 0,
+        "owned-truncated": 0,
+        "prefix-copy": 0,
+        "prefix-panics-past-end": 0,
+        "prefix-short-by-one": 0,
+        "prefix-suffix": 0,
+        "prefix-whole-slice": 0,
+        "shorter": 0,
+        "whole-input": 0
+      }
+    },
+    "owned_escape": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-left": 0,
+        "always-right": 0,
+        "block-copy": 0,
+        "block-drops-first": 0,
+        "first-char": 0,
+        "keep-left-copy": 0,
+        "keep-left-prefix": 0,
+        "last-word": 0,
+        "literal": 1,
+        "owned-lowercase": 1,
+        "owned-reversed": 1,
+        "owned-truncated": 0.998,
+        "prefix-copy": 0,
+        "prefix-panics-past-end": 0,
+        "prefix-short-by-one": 0,
+        "prefix-suffix": 0,
+        "prefix-whole-slice": 0,
+        "shorter": 0,
+        "whole-input": 0
+      }
+    },
+    "subslice_contract": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "always-left": 0,
+        "always-right": 0,
+        "block-copy": 0,
+        "block-drops-first": 0,
+        "first-char": 0,
+        "keep-left-copy": 0,
+        "keep-left-prefix": 0,
+        "last-word": 0,
+        "literal": 1,
+        "owned-lowercase": 0,
+        "owned-reversed": 0,
+        "owned-truncated": 0,
+        "prefix-copy": 1,
+        "prefix-panics-past-end": 1,
+        "prefix-short-by-one": 1,
+        "prefix-suffix": 1,
+        "prefix-whole-slice": 1,
+        "shorter": 0,
+        "whole-input": 0
+      }
+    }
+  },
+  "mutants": {
+    "always-left": {
+      "defaultSeedFails": [
+        "choose_longer"
+      ],
+      "caughtBy": [
+        "choose_longer"
+      ]
+    },
+    "always-right": {
+      "defaultSeedFails": [
+        "choose_longer"
+      ],
+      "caughtBy": [
+        "choose_longer"
+      ]
+    },
+    "block-copy": {
+      "defaultSeedFails": [
+        "borrowed_block"
+      ],
+      "caughtBy": [
+        "borrowed_block"
+      ]
+    },
+    "block-drops-first": {
+      "defaultSeedFails": [
+        "borrowed_block"
+      ],
+      "caughtBy": [
+        "borrowed_block"
+      ]
+    },
+    "first-char": {
+      "defaultSeedFails": [
+        "first_word"
+      ],
+      "caughtBy": [
+        "first_word"
+      ]
+    },
+    "keep-left-copy": {
+      "defaultSeedFails": [
+        "separate_lifetimes"
+      ],
+      "caughtBy": [
+        "separate_lifetimes"
+      ]
+    },
+    "keep-left-prefix": {
+      "defaultSeedFails": [
+        "separate_lifetimes"
+      ],
+      "caughtBy": [
+        "separate_lifetimes"
+      ]
+    },
+    "last-word": {
+      "defaultSeedFails": [
+        "first_word"
+      ],
+      "caughtBy": [
+        "first_word"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "first_word",
+        "choose_longer",
+        "borrowed_block",
+        "separate_lifetimes",
+        "owned_escape",
+        "subslice_contract"
+      ],
+      "caughtBy": [
+        "first_word",
+        "choose_longer",
+        "borrowed_block",
+        "separate_lifetimes",
+        "owned_escape",
+        "subslice_contract"
+      ]
+    },
+    "owned-lowercase": {
+      "defaultSeedFails": [
+        "owned_escape"
+      ],
+      "caughtBy": [
+        "owned_escape"
+      ]
+    },
+    "owned-reversed": {
+      "defaultSeedFails": [
+        "owned_escape"
+      ],
+      "caughtBy": [
+        "owned_escape"
+      ]
+    },
+    "owned-truncated": {
+      "defaultSeedFails": [
+        "owned_escape"
+      ],
+      "caughtBy": [
+        "owned_escape"
+      ]
+    },
+    "prefix-copy": {
+      "defaultSeedFails": [
+        "subslice_contract"
+      ],
+      "caughtBy": [
+        "subslice_contract"
+      ]
+    },
+    "prefix-panics-past-end": {
+      "defaultSeedFails": [
+        "subslice_contract"
+      ],
+      "caughtBy": [
+        "subslice_contract"
+      ]
+    },
+    "prefix-short-by-one": {
+      "defaultSeedFails": [
+        "subslice_contract"
+      ],
+      "caughtBy": [
+        "subslice_contract"
+      ]
+    },
+    "prefix-suffix": {
+      "defaultSeedFails": [
+        "subslice_contract"
+      ],
+      "caughtBy": [
+        "subslice_contract"
+      ]
+    },
+    "prefix-whole-slice": {
+      "defaultSeedFails": [
+        "subslice_contract"
+      ],
+      "caughtBy": [
+        "subslice_contract"
+      ]
+    },
+    "shorter": {
+      "defaultSeedFails": [
+        "choose_longer"
+      ],
+      "caughtBy": [
+        "choose_longer"
+      ]
+    },
+    "whole-input": {
+      "defaultSeedFails": [
+        "first_word"
+      ],
+      "caughtBy": [
+        "first_word"
+      ]
+    }
+  }
+}

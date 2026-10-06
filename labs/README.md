@@ -52,6 +52,40 @@ quota, not ours.
 A `todo!()` left in your code makes the module trap — the site shows
 "not implemented yet". That's a feature, not a bug.
 
+## Template v2: one check at a time, on fresh seeds
+
+Lab 01 (`rust-allocator`) is on template v2; the other crates move to it
+in later Wave 1 tasks and run as before until then. On a v2 lab:
+
+- **Each check runs on its own**, in a fresh copy of your module. A
+  `todo!()` in one function marks only the checks that reach it as "not
+  implemented yet", with the panic's text and line; the rest still run.
+- **Each check gets 2 seconds.** An infinite loop marks that one check
+  `timeout`, and grading carries on with the next.
+- **Seeded checks draw new inputs when you grade.** `cargo test` runs them
+  on their default seeds and on 32 extra seeds, so a crate that is green in
+  the terminal is green on the site's fresh seeds too. A pass on fresh
+  seeds is what the site records as *unseen*.
+- **`kslab::trace!("…")`** writes a line to a 16 KiB buffer the site shows
+  under that check (handy when a check fails and you want to see what your
+  code did).
+
+Under the hood, `ks_run` reads a few input lines (`v 2`, `list`,
+`only <id>`, `seed <u32>`; empty input still means "every check, v1
+report"), and the kit adds `ks_abi_version`, `ks_panic_msg` and
+`ks_trace_drain`. The module still has zero imports.
+
+### Which lab 01 check catches which mistake
+
+| check | catches |
+|---|---|
+| `boot` | `new` or a first `alloc` that does not work at all |
+| `align` | offsets that ignore the requested alignment |
+| `no_overlap` | two live spans sharing a byte (an off-by-one split) |
+| `reuse` | a bump allocator that never hands a freed block back |
+| `coalesce` | a `free` that does not merge with its free neighbours on both sides; the heap's tail is used up first, so only a merged run can serve the request |
+| `fragmentation` | the same under churn at ~75% occupancy on fresh seeds: a request may fail only when no free span that large exists among your live blocks, so first-, best- and next-fit all pass |
+
 ## Rust Zero drills
 
 | lesson | crate | focus |
@@ -93,7 +127,7 @@ one compiled program through the cache.
 
 ### Lab 06 trace calibration
 
-`batching-scheduler` keeps six checks, but its final goodput check now races
+`batching-scheduler` keeps six required checks, but its final goodput check now races
 the policy across three fixed distributions. These numbers were measured with
 `cargo run -p batching-scheduler --example calibrate` against the exact tables
 shipped in the crate; the reference column uses the private reference policy.
@@ -109,6 +143,41 @@ separate FCFS from size-aware admission, while the independent starvation
 check prevents pure SJF from passing the lab. Trace provenance and the LMSYS
 redistribution constraint are documented in `public/traces/README.md` in the
 full repository and encoded in the JSON artifacts used by Fleet.
+
+These three traces stay fixed tables (`goodput_score` is not seeded: its floors
+are the calibrated column above). The synthetic overload also has a seeded twin,
+the optional check `overload_seeded`: the same 400 requests at 2.4x offered load
+and the same SLO, redrawn from a fresh seed on every run, with a floor of 40%
+goodput. The reference clears it on each of 10,000 fresh seeds, and
+first-come-first-served misses it on each of 1,000. It is optional (it does not
+gate the lab), so the required-check count and the XP table do not change.
+`burst` stays a fixed table too: drawn from fresh seeds, the reference itself
+misses its 90% on about one draw in twenty.
+
+## Seed calibration (maintainers)
+
+Every seeded check must pass the reference solution on every seed, and
+every known wrong design (a *mutant*) must fail a required check. Both are
+measured offline, because reference solutions are private:
+
+- Reference solutions and mutants live only in `labs/_solutions/<lab>/`
+  (`allocator.rs`, `mutants/*.rs`). The directory is gitignored, never
+  committed and never packed; `pack-labs.py` fails on any `_solutions` path.
+- `bun scripts/calibrate-lab-seeds.ts <lab> <solution.rs|.wasm> --mutants
+  <dir> [--n 10000] [--mutant-n 1000]` builds each source into a scratch
+  copy of the crate, runs every seeded check on n fresh seeds, and writes
+  `labs/<lab>/calibration.json` (the only committed result).
+- `bun run verify:labs` (the labs workflow) requires that file for every v2
+  lab, measured on the current `src/lib.rs`, with the reference at 1.0 on
+  each check and each mutant failing a required check on ≥ 99% of seeds.
+- A seeded check that cannot reach 1.0 either rejects and redraws inside the
+  harness (deterministically from the seed) or becomes `seeded: false`.
+
+Lab 01's calibration: 10,000 fresh seeds per seeded check, reference 1.0;
+the `nocoal`, `coal-left`, `coal-right`, `bump`, `nosplit`, `misalign` and
+`overlap` mutants each fail at least one required check on every seed.
+Best-fit, next-fit, top-down and round-to-32-byte allocators that coalesce
+pass every check on 2,000 fresh seeds each.
 
 ## How grading works (honesty box)
 

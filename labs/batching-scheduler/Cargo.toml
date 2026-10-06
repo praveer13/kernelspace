@@ -11,6 +11,10 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 kslab = { path = "../kit" }
 
+[features]
+# Names the module `batching-scheduler@reference`: the site shows its run and never credits it.
+reference = []
+
 [profile.release]
 opt-level = 2
 debug = false

@@ -1,0 +1,213 @@
+{
+  "lab": "bpe-tokenizer",
+  "abi": 2,
+  "version": 2,
+  "commit": "1103dfe",
+  "date": "2026-10-05",
+  "harness": "8982ce6b8a253963062dc6247c62598ff79e0653cd628ca9708e118a599df83f",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "bytes_are_ids": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "drop-last-rule": 0,
+        "drop-unknown": 0,
+        "highest-rank": 0,
+        "latin1-decode": 0,
+        "leftmost-pair": 0,
+        "one-round": 0,
+        "overlapping": 0,
+        "panic-unknown": 0,
+        "right-to-left": 0,
+        "shallow-decode": 0
+      }
+    },
+    "merge_priority": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "drop-last-rule": 0,
+        "drop-unknown": 0,
+        "highest-rank": 1,
+        "latin1-decode": 0,
+        "leftmost-pair": 1,
+        "one-round": 0,
+        "overlapping": 0,
+        "panic-unknown": 0,
+        "right-to-left": 0,
+        "shallow-decode": 0
+      }
+    },
+    "leftmost_nonoverlap": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "drop-last-rule": 1,
+        "drop-unknown": 0,
+        "highest-rank": 0,
+        "latin1-decode": 0,
+        "leftmost-pair": 0,
+        "one-round": 0,
+        "overlapping": 1,
+        "panic-unknown": 0,
+        "right-to-left": 1,
+        "shallow-decode": 0
+      }
+    },
+    "roundtrip": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "drop-last-rule": 0,
+        "drop-unknown": 0,
+        "highest-rank": 0,
+        "latin1-decode": 1,
+        "leftmost-pair": 0,
+        "one-round": 0,
+        "overlapping": 0,
+        "panic-unknown": 0,
+        "right-to-left": 0,
+        "shallow-decode": 1
+      }
+    },
+    "robust_decode": {
+      "seeded": false,
+      "n": 1,
+      "referencePassRate": 1,
+      "mutants": {
+        "drop-last-rule": 1,
+        "drop-unknown": 1,
+        "highest-rank": 0,
+        "latin1-decode": 1,
+        "leftmost-pair": 0,
+        "one-round": 0,
+        "overlapping": 0,
+        "panic-unknown": 1,
+        "right-to-left": 0,
+        "shallow-decode": 0
+      }
+    },
+    "contract": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "drop-last-rule": 0.815,
+        "drop-unknown": 0,
+        "highest-rank": 1,
+        "latin1-decode": 1,
+        "leftmost-pair": 1,
+        "one-round": 1,
+        "overlapping": 0,
+        "panic-unknown": 0,
+        "right-to-left": 0,
+        "shallow-decode": 1
+      }
+    }
+  },
+  "mutants": {
+    "drop-last-rule": {
+      "defaultSeedFails": [
+        "leftmost_nonoverlap",
+        "robust_decode",
+        "contract"
+      ],
+      "caughtBy": [
+        "leftmost_nonoverlap",
+        "robust_decode"
+      ]
+    },
+    "drop-unknown": {
+      "defaultSeedFails": [
+        "robust_decode"
+      ],
+      "caughtBy": [
+        "robust_decode"
+      ]
+    },
+    "highest-rank": {
+      "defaultSeedFails": [
+        "merge_priority",
+        "contract"
+      ],
+      "caughtBy": [
+        "merge_priority",
+        "contract"
+      ]
+    },
+    "latin1-decode": {
+      "defaultSeedFails": [
+        "roundtrip",
+        "robust_decode",
+        "contract"
+      ],
+      "caughtBy": [
+        "roundtrip",
+        "robust_decode",
+        "contract"
+      ]
+    },
+    "leftmost-pair": {
+      "defaultSeedFails": [
+        "merge_priority",
+        "contract"
+      ],
+      "caughtBy": [
+        "merge_priority",
+        "contract"
+      ]
+    },
+    "one-round": {
+      "defaultSeedFails": [
+        "contract"
+      ],
+      "caughtBy": [
+        "contract"
+      ]
+    },
+    "overlapping": {
+      "defaultSeedFails": [
+        "leftmost_nonoverlap"
+      ],
+      "caughtBy": [
+        "leftmost_nonoverlap"
+      ]
+    },
+    "panic-unknown": {
+      "defaultSeedFails": [
+        "robust_decode"
+      ],
+      "caughtBy": [
+        "robust_decode"
+      ]
+    },
+    "right-to-left": {
+      "defaultSeedFails": [
+        "leftmost_nonoverlap"
+      ],
+      "caughtBy": [
+        "leftmost_nonoverlap"
+      ]
+    },
+    "shallow-decode": {
+      "defaultSeedFails": [
+        "roundtrip",
+        "contract"
+      ],
+      "caughtBy": [
+        "roundtrip",
+        "contract"
+      ]
+    }
+  },
+  "probe": {
+    "seed": 7,
+    "reply": "bytes=207 tokens=131 merged=35 distinct=53 ratio=1.58 roundtrip=true"
+  }
+}

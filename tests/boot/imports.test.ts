@@ -35,7 +35,8 @@ function staticGraph(entries: string[]): { files: Set<string>; packages: Set<str
     if (files.has(file)) return
     files.add(file)
     for (const m of readFileSync(file, 'utf8').matchAll(STATIC_IMPORT)) {
-      if (ASSET.test(m[1])) continue
+      // `?worker&url` and other Vite query imports yield a URL or string, not the module's graph
+      if (ASSET.test(m[1]) || m[1].includes('?')) continue
       const next = resolveSpecifier(m[1], file)
       if (next) visit(next)
       else if (!m[1].startsWith('.') && !m[1].startsWith('@/')) packages.add(m[1])

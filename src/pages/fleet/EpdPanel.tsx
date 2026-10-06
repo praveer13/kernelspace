@@ -1,28 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Loader2, Play, RotateCcw } from 'lucide-react'
-import { instantiateLab, LabAbiError, LabTrapError } from '@/lib/wasm-lab'
+import { describeFleetError, openFleetSession, type FleetSession } from '@/lib/fleet-session'
 import {
-  Cluster,
-  Engine,
-  EpdCluster,
-  makeRefManager,
-  makeRefQueue,
-  makeRefScheduler,
   makeRequestStream,
   makeRng,
   PRACTICE_SEED,
-  type EngineConfig,
   type ManagerDump,
   type RequestSpec,
 } from '@/lib/fleet-model'
-import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet/drivers'
+import type { EpdResult, EpdSide, EpdSnapshot } from '@/workers/fleet-protocol'
+import { slotBytes } from '@/pages/fleet/drivers'
 import type { SlotState } from '@/pages/fleet/slots'
 import { cn } from '@/lib/utils'
 
 const REQ_CHAT = 240
 const REQ_LONG = 160
 const SPAN = 900
+/** ticks per worker batch: well inside the 2 s step budget, and few enough round trips */
+const BATCH_TICKS = 100
 
 function longCtxStream(count: number, span: number): RequestSpec[] {
   const rng = makeRng(0x10c5)
@@ -33,28 +29,20 @@ function longCtxStream(count: number, span: number): RequestSpec[] {
   return out.sort((a, b) => a.arrival - b.arrival || a.id - b.id)
 }
 
-interface SideResult {
-  goodput: number
-  completed: number
-  shed: number
-  preempts: number
-  delay?: number
+interface PanelError {
+  message: string
+  /** a fleet command outran its budget: offer "reset with reference drivers" */
+  timedOut: boolean
 }
 
-interface EpdRun {
-  colocated: SideResult
-  epd: SideResult
-  winner: 'colocated' | 'epd' | 'tie'
-  dumps: { prefill: ManagerDump; decode: ManagerDump }
-}
-
-export default function EpdPanel({ slots }: { slots: SlotState }) {
+export default function EpdPanel({ slots, onUseReference }: { slots: SlotState; onUseReference?: () => void }) {
   const [traffic, setTraffic] = useState<'chat' | 'long'>('chat')
   const [itl, setItl] = useState(2)
   const [running, setRunning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<EpdRun | null>(null)
+  const [error, setError] = useState<PanelError | null>(null)
+  const [result, setResult] = useState<EpdResult | null>(null)
   const runIdRef = useRef(0)
+  const sessionRef = useRef<FleetSession<EpdSnapshot> | null>(null)
 
   const streamFor = useCallback(() => {
     return traffic === 'chat' ? makeRequestStream(REQ_CHAT, SPAN, PRACTICE_SEED) : longCtxStream(REQ_LONG, SPAN)
@@ -64,58 +52,57 @@ export default function EpdPanel({ slots }: { slots: SlotState }) {
     const runId = ++runIdRef.current
     setRunning(true)
     setError(null)
+    sessionRef.current?.close()
+    sessionRef.current = null
     try {
-      const req = traffic === 'chat' ? REQ_CHAT : REQ_LONG
-      const mkStudent = async (cfg: EngineConfig, prefillOnly = false) => {
-        const c = { ...cfg, prefillOnly }
-        const sched = slots.sched ? makeWasmScheduler(await instantiateLab(slots.sched.bytes)) : makeRefScheduler()
-        const mgr = slots.mgr
-          ? makeWasmManager(await instantiateLab(slots.mgr.bytes), cfg.numBlocks, cfg.blockSize)
-          : makeRefManager(cfg.numBlocks, cfg.blockSize)
-        const queue = slots.queue ? makeWasmQueue(await instantiateLab(slots.queue.bytes), 32) : makeRefQueue(32)
-        return new Engine(c, [], sched, mgr, { intake: queue, drainPerTick: 6 })
-      }
-
-      // colocated: 2 workers, each full engine
-      const colCfg = traffic === 'chat'
+      // colocated: 2 workers, each a full engine; EPD: 1 prefill + 1 decode with the same total blocks (cut in the worker)
+      const colocated = traffic === 'chat'
         ? { numBlocks: 192, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128, interference: true, sloItl: itl }
         : { numBlocks: 448, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128, interference: true, sloItl: itl }
-      const col = new Cluster(streamFor(), [await mkStudent(colCfg), await mkStudent(colCfg)], 'jsq')
-      let guard = 0
-      while (!col.done && guard++ < 40000) col.step()
-      const ca = col.aggregate()
-      if (runIdRef.current !== runId) return
-
-      // EPD: 1 prefill + 1 decode, same total blocks
-      const pCfg = { ...colCfg, numBlocks: Math.floor(colCfg.numBlocks / 2), prefillOnly: true }
-      const dCfg = { ...colCfg, numBlocks: colCfg.numBlocks * 2 - pCfg.numBlocks }
-      const pre = await mkStudent(pCfg, true)
-      const dec = await mkStudent(dCfg)
-      const epd = new EpdCluster(streamFor(), [pre], [dec], { prefillCfg: pCfg, decodeCfg: dCfg, transferRate: 256 })
-      guard = 0
-      while (!epd.done && guard++ < 40000) epd.step()
-      const ea = epd.aggregate()
-
-      const colR: SideResult = { goodput: Math.round((ca.sloMet / req) * 1000) / 10, completed: ca.completed, shed: ca.shed, preempts: ca.autoPreempts }
-      const epdR: SideResult = { goodput: Math.round((ea.sloMet / req) * 1000) / 10, completed: ea.completed, shed: ea.shed, preempts: ea.autoPreempts, delay: ea.avgDelay }
-      setResult({
-        colocated: colR,
-        epd: epdR,
-        winner: colR.goodput > epdR.goodput ? 'colocated' : epdR.goodput > colR.goodput ? 'epd' : 'tie',
-        dumps: { prefill: pre.mgrDump(), decode: dec.mgrDump() },
+      /* the worker instantiates the learner stack for every engine and runs both topologies, a batch of ticks at a time */
+      const session = await openFleetSession({
+        mode: 'epd',
+        slots: slotBytes(slots),
+        traffic: streamFor(),
+        cfg: { colocated, transferRate: 256, intakeCap: 32, drainPerTick: 6, maxTicks: 40000 },
       })
+      sessionRef.current = session
+      let snap = await session.step(BATCH_TICKS)
+      while (!snap.done) {
+        if (runIdRef.current !== runId) return
+        snap = await session.step(BATCH_TICKS)
+      }
+      if (runIdRef.current !== runId) return
+      session.close()
+      sessionRef.current = null
+      setResult(snap.result)
     } catch (e) {
-      if (e instanceof LabTrapError) setError('a module trapped — a todo!() or panic fired.')
-      else if (e instanceof LabAbiError) setError(e.message)
-      else setError(String(e))
+      if (runIdRef.current !== runId) return
+      const { detail, timedOut } = describeFleetError(e)
+      setError({ message: detail, timedOut })
     } finally {
-      setRunning(false)
+      if (runIdRef.current === runId) setRunning(false)
     }
   }, [traffic, itl, slots, streamFor])
 
   useEffect(() => {
+    runIdRef.current++
+    sessionRef.current?.close()
+    sessionRef.current = null
     setResult(null)
+    setRunning(false)
+    setError(null)
   }, [traffic, itl, slots])
+
+  /* leaving the page, or switching topology, stops the worker */
+  useEffect(
+    () => () => {
+      runIdRef.current++
+      sessionRef.current?.close()
+      sessionRef.current = null
+    },
+    [],
+  )
 
   const HUES = [162, 200, 265, 20, 330, 90, 45, 285, 150, 0]
 
@@ -149,7 +136,16 @@ export default function EpdPanel({ slots }: { slots: SlotState }) {
       <AnimatePresence>
         {error && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="rounded-lg border border-danger/40 bg-danger/5 p-4 font-mono text-[12px] text-danger">
-            {error}
+            {error.message}
+            {error.timedOut && onUseReference && (
+              <button
+                type="button"
+                onClick={onUseReference}
+                className="mt-3 block rounded border border-line bg-surface-1 px-3 py-1.5 text-[11px] text-text-1 hover:border-accent/50"
+              >
+                reset with reference drivers
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -199,7 +195,7 @@ export default function EpdPanel({ slots }: { slots: SlotState }) {
   )
 }
 
-function SideCard({ title, r, winner }: { title: string; r: SideResult; winner: boolean }) {
+function SideCard({ title, r, winner }: { title: string; r: EpdSide; winner: boolean }) {
   return (
     <div className={cn('rounded-lg border p-5', winner ? 'border-accent/60 bg-accent/5' : 'border-line bg-surface-1')}>
       <div className="flex items-baseline justify-between">

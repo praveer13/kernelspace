@@ -1,9 +1,12 @@
 /**
- * W1 play block (Wave 1, docs/specs/wave-1.md §11.1): the inline mount of a Play → Compose → Code
- * play inside a lesson. Scaffold stub (B1): the props are final, the body is a placeholder until C11.
+ * W1 play block (Wave 1, docs/specs/wave-1.md §11.1): the inline mount of a Play → Debrief → Compose →
+ * In-production → Code play inside a lesson. The play itself is lazy, so a lesson without one pays nothing;
+ * the full-screen route is `/play/<playId>`.
  */
 
-import { Link } from 'react-router'
+import { Suspense, lazy } from 'react'
+
+const BlockPlacementPlay = lazy(() => import('@/components/play/block-placement/Play'))
 
 export interface PlayBlockProps {
   lessonId: string
@@ -16,7 +19,7 @@ export interface PlayBlockProps {
 export default function PlayBlock({ lessonId, playId, title, trackColor }: PlayBlockProps) {
   return (
     <section
-      className="my-8 rounded-lg border border-line bg-surface-1 px-5 py-4"
+      className="my-8 rounded-lg border border-line bg-surface-1 px-4 py-4 sm:px-5"
       data-block="play"
       data-lesson={lessonId}
       data-play={playId}
@@ -24,14 +27,16 @@ export default function PlayBlock({ lessonId, playId, title, trackColor }: PlayB
       <p className="font-mono text-label uppercase" style={{ color: trackColor }}>
         Play
       </p>
-      <p className="mt-2 font-display text-body-sm font-medium text-text-1">{title}</p>
-      <p className="mt-1 font-mono text-body-sm text-text-3">The play is coming soon.</p>
-      <Link
-        to={`/play/${playId}`}
-        className="mt-3 inline-block font-mono text-[11px] text-text-3 transition-colors duration-150 hover:text-accent"
-      >
-        open full screen
-      </Link>
+      <h3 className="mt-2 font-display text-body font-medium text-text-1">{title}</h3>
+      <div className="mt-3">
+        {playId === 'block-placement' ? (
+          <Suspense fallback={<p className="font-mono text-body-sm text-text-3">Loading the play…</p>}>
+            <BlockPlacementPlay mode="embed" />
+          </Suspense>
+        ) : (
+          <p className="font-mono text-body-sm text-text-3">There is no play called {playId}.</p>
+        )}
+      </div>
     </section>
   )
 }

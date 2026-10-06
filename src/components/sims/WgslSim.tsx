@@ -4,6 +4,7 @@
  * real WebGPU execution with a graceful CPU fallback + honesty banner,
  * and a dispatch/workgroup visualizer linking code ↔ hardware.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import type { ReactNode } from 'react'
