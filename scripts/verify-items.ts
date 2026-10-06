@@ -13,7 +13,11 @@
  * expected lessons passed exceeds MAX_RANK_EXPECTED or that passes any single lesson with probability
  * >= MAX_RANK_LESSON, (9) across all `whyRequired` tracks together, a length-rank strategy whose expected
  * lessons passed, summed over those tracks, exceeds MAX_RANK_AGGREGATE (the PLAN-100X exit criterion is at
- * most 1 of the 19 T0-T2 lessons; the per-track bars alone would allow one per track), (10) in a
+ * most 1 of the 19 T0-T2 lessons; the per-track bars alone would allow one per track), (9b) every uniform choice
+ * over a proper subset of an item's length ranks (middle-length, avoid-longest, avoid-shortest, ranks-*; spec 19.2):
+ * expected lessons passed over the gated tracks together above MAX_RANK_SET_AGGREGATE (the Wave 2 bar of 2 of 68), any
+ * lesson at p >= MAX_RANK_LESSON, or an item-level hit rate above chance + 15 points in the lessons, Act IV or
+ * errata pool on its own, (10) in a
  * `whyRequired` track, the key being strictly the longest option in more than MAX_KEY_LONGEST_SHARE of the
  * track's items (PLAN-100X 5.1 V1), (11) a lexical-cue strategy (the option containing parentheses, a colon,
  * ", so", or NOT containing because/since) that passes any single lesson with probability >= MAX_RANK_LESSON,
@@ -83,15 +87,22 @@ import {
   longestIndices,
   matchCount,
   MAX_HIT_OVER_CHANCE,
+  MAX_RANK_AGGREGATE,
+  MAX_RANK_LESSON,
+  MAX_RANK_SET_AGGREGATE,
+  MAX_RANK_SUBSET_OPTIONS,
   oddOneOut,
+  PASS_BAR,
+  passProbability,
+  POOLS_OF_LENGTH_STRATEGIES,
   RANK_STRATEGIES,
   REASON,
   shortestIndices,
+  SINGLE_RANK_STRATEGIES,
   SURFACE_STRATEGIES,
 } from './item-cues'
 
 const BASELINE_URL = new URL('./baselines/verify-items.json', import.meta.url)
-const PASS_BAR = 0.8 // QuizBlock.tsx: score = correct / total >= 0.8
 const FLEET_TRACK = 'fleet-week'
 /** Lab 01's PRIMM multiple-choice items (src/data/forge/rust-allocator/primm.ts): one pseudo-lesson, gated like a lesson track. */
 const FORGE_TRACK = 'forge'
@@ -101,10 +112,6 @@ const MIN_GATED = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', FLEET_TR
 const MAX_SHORTEST_PASSES = 1
 /** In a whyRequired track, no length-rank strategy may pass more than this many lessons in expectation... */
 const MAX_RANK_EXPECTED = 1.0
-/** ...or pass any single lesson with at least this probability. */
-const MAX_RANK_LESSON = 0.5
-/** Summed over every whyRequired track together, no length-rank strategy may pass more than this many lessons in expectation. */
-const MAX_RANK_AGGREGATE = 1.0
 /** PLAN-100X 5.1 V1: in a whyRequired track the key may be strictly the longest option in at most this share of items. */
 const MAX_KEY_LONGEST_SHARE = 0.3
 /** PLAN-100X 5.1 V1: in a whyRequired track no item's key / mean-distractor length ratio may exceed this. */
@@ -218,6 +225,9 @@ function structureErrors(item: Item): string[] {
   const { options, correct, multi, explanation, why } = item.q
   const errs: string[] = []
   if (!Array.isArray(options) || options.length < 2) errs.push('fewer than 2 options')
+  if (Array.isArray(options) && options.length > MAX_RANK_SUBSET_OPTIONS) {
+    errs.push(`${options.length} options; the rank-subset strategies of item-cues.ts cover at most ${MAX_RANK_SUBSET_OPTIONS}, raise MAX_RANK_SUBSET_OPTIONS`)
+  }
   const texts = (options ?? []).map((o) => o.trim())
   if (new Set(texts).size !== texts.length) errs.push('duplicate option text')
   if (!Array.isArray(correct) || correct.length === 0) {
@@ -447,21 +457,8 @@ for (const t of trackKeys) {
   )
 }
 
-// Blind strategies on lesson quizzes under per-attempt shuffling. A lesson passes
-// when correct / total >= PASS_BAR. Probabilities are per question and independent,
-// so the pass probability is a Poisson-binomial tail computed exactly.
-function passProbability(ps: number[]): number {
-  let dist = [1]
-  for (const p of ps) {
-    const next = new Array<number>(dist.length + 1).fill(0)
-    dist.forEach((mass, k) => {
-      next[k] += mass * (1 - p)
-      next[k + 1] += mass * p
-    })
-    dist = next
-  }
-  return dist.reduce((a, mass, k) => (k / ps.length >= PASS_BAR ? a + mass : a), 0)
-}
+// Blind strategies on lesson quizzes under per-attempt shuffling. A lesson passes when correct / total >= PASS_BAR
+// (item-cues.ts: `passProbability`, a Poisson-binomial tail computed exactly from the per-question hit probabilities).
 
 // Shuffling makes every authored option equally likely at display position B, so a
 // single-key item is hit with 1 / options. A multi-select needs the full set, so
@@ -526,8 +523,10 @@ const gatedLessons = lessonIds.filter((id) => gatedTracks.includes(trackOfLesson
 const rankAggregates: { name: string; expected: number }[] = []
 console.log('')
 console.log('length-rank strategies per track: expected lessons passed (worst single lesson p)')
+const singleRank = new Set(SINGLE_RANK_STRATEGIES.map((x) => x.name))
 for (const strat of RANK_STRATEGIES) {
   const pass = lessonPass(strat.pick)
+  const set = !singleRank.has(strat.name)
   const cells: string[] = []
   let aggregate = 0
   for (const t of trackKeys.filter((k) => k !== FLEET_TRACK)) {
@@ -546,7 +545,7 @@ for (const strat of RANK_STRATEGIES) {
     cells.push(`${t} ${expected.toFixed(2)}${gated ? '*' : ''}${worstP > 0 ? ` (${worstP.toFixed(2)} ${worstId})` : ''}`)
     if (!gated) continue
     aggregate += expected
-    if (expected > MAX_RANK_EXPECTED) {
+    if (!set && expected > MAX_RANK_EXPECTED) {
       failures.push(
         `rank: track ${t} expects ${expected.toFixed(2)} lessons passed by always picking the ${strat.name} option (limit ${MAX_RANK_EXPECTED}); rebalance option lengths`,
       )
@@ -558,16 +557,17 @@ for (const strat of RANK_STRATEGIES) {
     }
   }
   rankAggregates.push({ name: strat.name, expected: aggregate })
-  if (aggregate > MAX_RANK_AGGREGATE) {
+  const aggregateLimit = set ? MAX_RANK_SET_AGGREGATE : MAX_RANK_AGGREGATE
+  if (aggregate > aggregateLimit) {
     failures.push(
-      `rank: the gated tracks together (${gatedTracks.join(' + ')}, ${gatedLessons} lessons) expect ${aggregate.toFixed(2)} lessons passed by always picking the ${strat.name} option (limit ${MAX_RANK_AGGREGATE} in total); rebalance option lengths`,
+      `rank: the gated tracks together (${gatedTracks.join(' + ')}, ${gatedLessons} lessons) expect ${aggregate.toFixed(2)} lessons passed by always picking the ${strat.name} option (limit ${aggregateLimit} in total); rebalance option lengths`,
     )
   }
-  console.log(`  ${strat.name.padEnd(13)}${cells.join('  ')}`)
+  console.log(`  ${strat.name.padEnd(15)}${cells.join('  ')}`)
 }
-console.log(`  (* gated: expected <= ${MAX_RANK_EXPECTED}, every lesson p < ${MAX_RANK_LESSON})`)
+console.log(`  (* gated: expected <= ${MAX_RANK_EXPECTED} per track for the one-rank strategies, every lesson p < ${MAX_RANK_LESSON}; the multi-rank strategies (middle-length, avoid-*, ranks-*) are held to <= ${MAX_RANK_SET_AGGREGATE} in total)`)
 console.log(
-  `  aggregate over the gated tracks (${gatedTracks.join(' + ') || 'none'}, ${gatedLessons} lessons; limit <= ${MAX_RANK_AGGREGATE} in total): ${rankAggregates
+  `  aggregate over the gated tracks (${gatedTracks.join(' + ') || 'none'}, ${gatedLessons} lessons; limit <= ${MAX_RANK_AGGREGATE} in total, ${MAX_RANK_SET_AGGREGATE} for the multi-rank strategies): ${rankAggregates
     .map((a) => `${a.name} ${a.expected.toFixed(2)}`)
     .join('  ')}`,
 )
@@ -996,6 +996,7 @@ const compositeResults = COMPOSITES.map((c) => {
 
 /* ---- (18) item-level cue limit: every single-feature strategy, over all gated items ---- */
 
+const rankNames = new Set(RANK_STRATEGIES.map((x) => x.name))
 const cueRows = CUE_STRATEGIES.map((s) => {
   // The stem-overlap pair reads the question, which Act IV does not have (its stem is telemetry).
   const rows = (s.name.startsWith('stem-overlap') ? gatedItems.filter((i) => i.track !== FLEET_TRACK) : gatedItems).filter(singleKey)
@@ -1012,7 +1013,9 @@ const cueRows = CUE_STRATEGIES.map((s) => {
     )
   }
   // The pooled rate can hide a leaking pool, so the two pools large enough to judge are held to the bar on their own too.
-  for (const pool of ['lessons', 'errata'] as const) {
+  // The length strategies (spec 19.2) are judged in Act IV's pool as well, where the middle-length leak was largest.
+  const pools = rankNames.has(s.name) ? POOLS_OF_LENGTH_STRATEGIES : (['lessons', 'errata'] as const)
+  for (const pool of pools) {
     const sub = rows.filter((i) => poolOf(i) === pool)
     if (!sub.length || (hit > chance + MAX_HIT_OVER_CHANCE && sub.length === rows.length)) continue
     const subHit = hitRateOf(sub, (i) => s.pick(i.q))
@@ -1073,7 +1076,7 @@ const cueRows = CUE_STRATEGIES.map((s) => {
   console.log(`  ${'strategy'.padEnd(26)}${'items'.padStart(6)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'lessons'.padStart(9)}${'fleet'.padStart(8)}${'errata'.padStart(8)}`)
   for (const r of cueRows) {
     console.log(
-      `  ${r.name.padEnd(26)}${String(r.rows).padStart(6)}${rate(r.hit).padStart(8)}${rate(r.chance).padStart(8)}${rate(r.lessons).padStart(9)}${rate(r.fleet).padStart(8)}${rate(r.errata).padStart(8)}${[r.hit - r.chance, r.lessons - chanceOf(lessonRows), r.errata - chanceOf(errataRows)].some((d) => d > MAX_HIT_OVER_CHANCE) ? '  FAIL' : ''}`,
+      `  ${r.name.padEnd(26)}${String(r.rows).padStart(6)}${rate(r.hit).padStart(8)}${rate(r.chance).padStart(8)}${rate(r.lessons).padStart(9)}${rate(r.fleet).padStart(8)}${rate(r.errata).padStart(8)}${[r.hit - r.chance, r.lessons - chanceOf(lessonRows), r.errata - chanceOf(errataRows), ...(rankNames.has(r.name) ? [r.fleet - chanceOf(fleetRows)] : [])].some((d) => d > MAX_HIT_OVER_CHANCE) ? '  FAIL' : ''}`,
     )
   }
 

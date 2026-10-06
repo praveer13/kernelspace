@@ -1,7 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { checkChoiceCues, checkFamily, cueQuestion, MIN_CUE_SEEDS } from '../../scripts/verify-generators'
-import { CUE_STRATEGIES, len, MAX_HIT_OVER_CHANCE, oddOneOut, pickRank } from '../../scripts/item-cues'
+import {
+  CUE_STRATEGIES,
+  len,
+  MAX_HIT_OVER_CHANCE,
+  MAX_RANK_AGGREGATE,
+  MAX_RANK_LESSON,
+  MAX_RANK_SET_AGGREGATE,
+  NAMED_RANK_SET_STRATEGIES,
+  oddOneOut,
+  passProbability,
+  pickRank,
+  pickRankSet,
+  POOLS_OF_LENGTH_STRATEGIES,
+  RANK_STRATEGIES,
+  SINGLE_RANK_STRATEGIES,
+  type CueQuestion,
+  type CueStrategy,
+} from '../../scripts/item-cues'
+import { INCIDENTS } from '../../src/lib/fleet-week'
 import { loadAllFamilies } from '../../src/lib/items/registry'
 import roofline from '../../src/lib/items/families/roofline'
 import type { ChoiceOption, Gen, Instance, Level, VariantSpec } from '../../src/lib/items/types'
@@ -219,5 +237,173 @@ describe('the strategies are the ones verify-items runs', () => {
       expect(names).toContain(n)
     }
     expect(new Set(names).size).toBe(names.length)
+  })
+})
+
+/* ---- 2a-10: every uniform choice over a proper subset of the length ranks (spec 19.2) ---- */
+
+/** An item whose option lengths are exactly `lens` in display order and whose key is the option at `key`; length is all the options carry. */
+const withLengths = (lens: number[], key: number): CueQuestion => ({ q: 'stem', options: lens.map((l) => 'x'.repeat(l)), correct: [key] })
+/** An item of `n` options with distinct lengths 40, 34, 28, 22 (the first n of them) whose key sits at length rank `rank` (0 = longest). */
+const ranked = (rank: number, n = 4): CueQuestion => withLengths([40, 34, 28, 22].slice(0, n), rank)
+
+/** The pick probability of a strategy for a key at each length rank of an n-option item. */
+const byRank = (s: CueStrategy, n: number): number[] => [...Array(n).keys()].map((r) => s.pick(ranked(r, n)))
+const named = (name: string): CueStrategy => RANK_STRATEGIES.find((s) => s.name === name)!
+
+describe('rank-subset strategies: every uniform choice over a non-empty proper subset of the length ranks', () => {
+  /** All non-empty proper subsets of ranks 0..n-1, as the pick-probability vector each implies (1/|S| at its ranks, 0 elsewhere). */
+  const subsets = (n: number): number[][] => {
+    const out: number[][] = []
+    for (let mask = 1; mask < (1 << n) - 1; mask++) {
+      const size = [...Array(n).keys()].filter((r) => mask & (1 << r)).length
+      out.push([...Array(n).keys()].map((r) => (mask & (1 << r) ? 1 / size : 0)))
+    }
+    return out
+  }
+  const close = (a: number[], b: number[]) => a.every((x, i) => Math.abs(x - b[i]) < 1e-12)
+
+  test('14 subsets for 4 options and 6 for 3: each is some strategy of RANK_STRATEGIES', () => {
+    expect(subsets(4)).toHaveLength(14)
+    expect(subsets(3)).toHaveLength(6)
+    for (const n of [3, 4]) {
+      for (const want of subsets(n)) expect(RANK_STRATEGIES.some((s) => close(byRank(s, n), want))).toBe(true)
+    }
+  })
+
+  test('the four one-rank strategies are unchanged and come first, then the three named ones', () => {
+    expect(RANK_STRATEGIES.slice(0, 4).map((s) => s.name)).toEqual(['1st-longest', '2nd-longest', '2nd-shortest', 'shortest'])
+    expect(SINGLE_RANK_STRATEGIES).toHaveLength(4)
+    expect(RANK_STRATEGIES.slice(4, 7).map((s) => s.name)).toEqual(['middle-length', 'avoid-longest', 'avoid-shortest'])
+    expect(NAMED_RANK_SET_STRATEGIES).toHaveLength(3)
+    // 4 one-rank + 3 named + the 10 multi-rank subsets of four ranks
+    expect(RANK_STRATEGIES).toHaveLength(17)
+    for (const n of ['middle-length', 'avoid-longest', 'avoid-shortest']) expect(CUE_STRATEGIES.map((s) => s.name)).toContain(n)
+  })
+
+  test('middle-length picks strictly between the longest and the shortest, at any option count', () => {
+    expect(byRank(named('middle-length'), 4)).toEqual([0, 0.5, 0.5, 0])
+    expect(byRank(named('middle-length'), 3)).toEqual([0, 1, 0])
+    // two options have no middle: the cue says nothing
+    expect(byRank(named('middle-length'), 2)).toEqual([0.5, 0.5])
+  })
+
+  test('avoid-longest and avoid-shortest pick uniformly over every other rank', () => {
+    expect(byRank(named('avoid-longest'), 4)).toEqual([0, 1 / 3, 1 / 3, 1 / 3])
+    expect(byRank(named('avoid-shortest'), 4)).toEqual([1 / 3, 1 / 3, 1 / 3, 0])
+    expect(byRank(named('avoid-longest'), 3)).toEqual([0, 0.5, 0.5])
+  })
+
+  test('ties share a rank, and the pick stays uniform over the tied options', () => {
+    // lengths 30, 20, 20, 10: the two middle options tie, so middle-length picks one of them and the key is one of the two
+    expect(named('middle-length').pick(withLengths([30, 20, 20, 10], 1))).toBeCloseTo(0.5)
+    expect(named('middle-length').pick(withLengths([30, 20, 20, 10], 0))).toBe(0)
+    // every option the same length: ranks carry no information, and every subset is chance
+    expect(pickRankSet(withLengths([5, 5, 5, 5], 2), [1, 2])).toBeCloseTo(0.25)
+  })
+
+  test('a set that names no rank of the item, or every rank, says nothing; a multi-select is never hit', () => {
+    expect(pickRankSet(ranked(1), [7, 8])).toBe(0.25)
+    expect(pickRankSet(ranked(1), [0, 1, 2, 3])).toBe(0.25)
+    expect(pickRankSet({ q: 's', options: ['a', 'bb', 'ccc', 'dddd'], correct: [1, 2] }, [1, 2])).toBe(0)
+  })
+})
+
+/** The three pools verify-items judges: lesson quizzes (grouped by lesson), Act IV's items and errata items. */
+interface Pools {
+  lessons: CueQuestion[][]
+  fleet: CueQuestion[]
+  errata: CueQuestion[]
+}
+const hitRate = (qs: CueQuestion[], s: CueStrategy) => qs.reduce((a, q) => a + s.pick(q), 0) / qs.length
+const chanceOf = (qs: CueQuestion[]) => qs.reduce((a, q) => a + 1 / q.options.length, 0) / qs.length
+
+/**
+ * The gates before 2a-10 (`now` false): the four one-rank strategies at the lesson level (at most MAX_RANK_AGGREGATE expected
+ * lessons, no lesson at MAX_RANK_LESSON) and every item-level strategy but the rank subsets, over the pooled items and the lessons
+ * and errata pools. The gates after (`now`): every RANK_STRATEGIES entry (the subsets held to MAX_RANK_SET_AGGREGATE) and Act IV's
+ * pool judged on its own. The same constants and strategies verify-items imports.
+ */
+function gateProblems(pools: Pools, now: boolean): string[] {
+  const problems: string[] = []
+  const single = new Set(SINGLE_RANK_STRATEGIES.map((s) => s.name))
+  for (const s of now ? RANK_STRATEGIES : SINGLE_RANK_STRATEGIES) {
+    const ps = pools.lessons.map((qs) => passProbability(qs.map(s.pick)))
+    const limit = single.has(s.name) ? MAX_RANK_AGGREGATE : MAX_RANK_SET_AGGREGATE
+    const expected = ps.reduce((a, b) => a + b, 0)
+    if (expected > limit) problems.push(`lessons: '${s.name}' passes ${expected.toFixed(2)} lessons (limit ${limit})`)
+    if (ps.some((p) => p >= MAX_RANK_LESSON)) problems.push(`lessons: '${s.name}' passes one lesson at p >= ${MAX_RANK_LESSON}`)
+  }
+  const all = { lessons: pools.lessons.flat(), 'fleet-week': pools.fleet, errata: pools.errata }
+  const pooled = Object.values(all).flat()
+  const isSubset = (s: CueStrategy) => RANK_STRATEGIES.includes(s) && !single.has(s.name)
+  for (const s of CUE_STRATEGIES.filter((c) => now || !isSubset(c))) {
+    if (hitRate(pooled, s) > chanceOf(pooled) + MAX_HIT_OVER_CHANCE) problems.push(`items: '${s.name}' over all pools`)
+    const judged: readonly string[] = now && RANK_STRATEGIES.includes(s) ? POOLS_OF_LENGTH_STRATEGIES : ['lessons', 'errata']
+    for (const [pool, qs] of Object.entries(all)) {
+      if (judged.includes(pool) && qs.length && hitRate(qs, s) > chanceOf(qs) + MAX_HIT_OVER_CHANCE) problems.push(`items: '${s.name}' in the ${pool} pool`)
+    }
+  }
+  return problems
+}
+
+describe('the old gates passed these fixtures; the new ones fail them', () => {
+  /** 20 lessons of five items: 15 whose keys all sit at the middle ranks (the top-heavy ones alternate), 5 whose keys sit at the ends. */
+  const middleLessons = (): CueQuestion[][] => {
+    const lessons: CueQuestion[][] = []
+    for (let i = 0; i < 15; i++) lessons.push((i % 2 === 0 ? [1, 2, 1, 2, 1] : [2, 1, 2, 1, 2]).map((r) => ranked(r)))
+    for (let i = 0; i < 5; i++) lessons.push([0, 3, 0, 3, i % 2 ? 0 : 3].map((r) => ranked(r)))
+    return lessons
+  }
+
+  test('a lesson pool whose keys sit at the middle ranks: no one rank passes a lesson, but middle-length does', () => {
+    const pools: Pools = { lessons: middleLessons(), fleet: [], errata: [] }
+    // the old gate: every single length rank stays under the item-level bar, and none passes a lesson
+    expect(gateProblems(pools, false)).toEqual([])
+    for (const s of SINGLE_RANK_STRATEGIES) {
+      expect(hitRate(pools.lessons.flat(), s)).toBeLessThanOrEqual(0.4)
+      expect(pools.lessons.every((qs) => passProbability(qs.map(s.pick)) === 0)).toBe(true)
+    }
+    // the new gate: picking at random between the two middle options passes about 0.19 of each of the 15 middle lessons
+    const problems = gateProblems(pools, true)
+    expect(problems.some((p) => /^lessons: 'middle-length' passes 2\.8\d lessons \(limit 2\)/.test(p))).toBe(true)
+    expect(problems.some((p) => p.startsWith("lessons: 'ranks-1+2' passes"))).toBe(true)
+    // the leak is the lesson-level one: at the item level the pool is not above chance + 15 points for any strategy
+    expect(problems.filter((p) => p.startsWith('items:'))).toEqual([])
+  })
+
+  /** The six Act IV items as they were before 2a-10: the option lengths of every cause and mitigation, and the key's place in each. */
+  const OLD_ACT_IV = [
+    withLengths([88, 87, 81, 90], 1),
+    withLengths([99, 98, 84, 90], 1),
+    withLengths([97, 89, 89, 99], 0),
+    withLengths([85, 83, 80, 97], 1),
+    withLengths([117, 116, 124, 105], 0),
+    withLengths([76, 92, 101, 105], 1),
+  ]
+
+  test("Act IV's old option lengths: every key at a middle rank, passed by the old gates, failed by the new item-level rule", () => {
+    expect(hitRate(OLD_ACT_IV, named('middle-length'))).toBe(0.5)
+    // the old gates saw Act IV only in the pooled rate, diluted by the lesson items
+    const lessons = [[0, 1, 2, 3, 1, 2, 1, 2, 3, 0].map((r) => ranked(r))]
+    const pools: Pools = { lessons, fleet: OLD_ACT_IV, errata: [] }
+    expect(gateProblems(pools, false)).toEqual([])
+    // the new gate judges the pool on its own
+    const problems = gateProblems(pools, true)
+    for (const name of ['middle-length', 'ranks-1+2', '2nd-longest', '2nd-shortest']) expect(problems).toContain(`items: '${name}' in the fleet-week pool`)
+  })
+
+  test('the Act IV options as shipped pass the item-level rule on their own, and no strategy gets an incident right at p >= 0.5', () => {
+    const asQuestions: CueQuestion[] = INCIDENTS.flatMap((inc) => [inc.causes, inc.mitigations]).map((list) => ({
+      q: 'stem',
+      options: list.map((o) => o.label),
+      correct: list.flatMap((o, i) => (o.correct ? [i] : [])),
+    }))
+    expect(asQuestions).toHaveLength(6)
+    for (const s of RANK_STRATEGIES) {
+      expect(hitRate(asQuestions, s)).toBeLessThanOrEqual(chanceOf(asQuestions) + MAX_HIT_OVER_CHANCE)
+      expect(passProbability(asQuestions.map(s.pick))).toBeLessThan(MAX_RANK_LESSON)
+      for (let k = 0; k < INCIDENTS.length; k++) expect(s.pick(asQuestions[2 * k]) * s.pick(asQuestions[2 * k + 1])).toBeLessThan(MAX_RANK_LESSON)
+    }
   })
 })

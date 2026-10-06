@@ -21,6 +21,39 @@ export const MAX_HIT_OVER_CHANCE = 0.15
 
 export const len = (s: string) => s.trim().length
 
+/** A lesson passes when correct / total reaches this (QuizBlock.tsx: score = correct / total >= 0.8). */
+export const PASS_BAR = 0.8
+
+/**
+ * The probability that blind picks pass a quiz: `ps` holds the chance each question is hit, independent under
+ * per-attempt shuffling, so the number of hits is Poisson-binomial and the tail at PASS_BAR is exact.
+ */
+export function passProbability(ps: number[]): number {
+  let dist = [1]
+  for (const p of ps) {
+    const next = new Array<number>(dist.length + 1).fill(0)
+    dist.forEach((mass, k) => {
+      next[k] += mass * (1 - p)
+      next[k + 1] += mass * p
+    })
+    dist = next
+  }
+  return dist.reduce((a, mass, k) => (k / ps.length >= PASS_BAR ? a + mass : a), 0)
+}
+
+/** No length strategy may pass any single lesson with at least this probability. */
+export const MAX_RANK_LESSON = 0.5
+/** Summed over the gated lesson tracks, a one-rank strategy (1st-longest, 2nd-longest, 2nd-shortest, shortest) may pass this many lessons in expectation. */
+export const MAX_RANK_AGGREGATE = 1.0
+/**
+ * Spec 19.2: a strategy that picks uniformly over several length ranks (middle-length, avoid-longest, avoid-shortest and every
+ * other proper subset) hits a 4-option key half the time or more by chance, so it is held to the Wave 2 bar instead: at most
+ * this many lessons in expectation over the gated lesson tracks together, and no single lesson at MAX_RANK_LESSON or above.
+ */
+export const MAX_RANK_SET_AGGREGATE = 2.0
+/** The pools of items whose item-level hit rate a length strategy may not push above chance + MAX_HIT_OVER_CHANCE on its own (Act IV's pool included since 2a-10). */
+export const POOLS_OF_LENGTH_STRATEGIES = ['lessons', 'fleet-week', 'errata'] as const
+
 /** Indices of the longest option(s); more than one on a tie. */
 export function longestIndices(q: CueQuestion): number[] {
   const lens = q.options.map(len)
@@ -48,12 +81,56 @@ export function pickRank(q: CueQuestion, rank: number, fromLongest: boolean): nu
   return group.includes(q.correct[0]) ? 1 / group.length : 0
 }
 
-export const RANK_STRATEGIES: CueStrategy[] = [
+/**
+ * Pick uniformly over a set of length ranks (0 = longest): the mean of `pickRank` over the set, so ties at a rank
+ * share its probability as there. A multi-select never passes on one pick. A set with no rank among the item's
+ * options, or with all of them, says nothing about the key, so the pick is uniform over all options.
+ */
+export function pickRankSet(q: CueQuestion, ranks: number[]): number {
+  if (q.correct.length !== 1) return 0
+  const here = ranks.filter((r) => r < q.options.length)
+  if (here.length === 0 || here.length === q.options.length) return 1 / q.options.length
+  return here.reduce((a, r) => a + pickRank(q, r, true), 0) / here.length
+}
+
+/** Items with more options than this are not covered by the generated rank-subset strategies; verify-items fails on one. */
+export const MAX_RANK_SUBSET_OPTIONS = 4
+
+/**
+ * Every uniform choice over a proper subset of the length ranks of an item with up to `maxOptions` options (14
+ * subsets for 4 options; their restrictions to the first 3 ranks give the 6 for 3 options), named by the ranks
+ * it picks from, 0 = longest: `ranks-1+2`. One-rank subsets are the four named strategies below, so they are
+ * not repeated here.
+ */
+export function rankSubsetStrategies(maxOptions: number): CueStrategy[] {
+  const out: CueStrategy[] = []
+  for (let mask = 1; mask < (1 << maxOptions) - 1; mask++) {
+    const ranks = [...Array(maxOptions).keys()].filter((r) => mask & (1 << r))
+    if (ranks.length > 1) out.push({ name: `ranks-${ranks.join('+')}`, pick: (q) => pickRankSet(q, ranks) })
+  }
+  return out
+}
+
+/** The four one-rank strategies. */
+export const SINGLE_RANK_STRATEGIES: CueStrategy[] = [
   { name: '1st-longest', pick: (q) => pickRank(q, 0, true) },
   { name: '2nd-longest', pick: (q) => pickRank(q, 1, true) },
   { name: '2nd-shortest', pick: (q) => pickRank(q, 1, false) },
   { name: 'shortest', pick: (q) => pickRank(q, 0, false) },
 ]
+
+/**
+ * The subsets test-wise learners use, whatever the option count: `middle-length` picks from the ranks strictly
+ * between the longest and the shortest, `avoid-longest` from every rank but the first, `avoid-shortest` from
+ * every rank but the last. With two options there is no middle, so `middle-length` says nothing.
+ */
+export const NAMED_RANK_SET_STRATEGIES: CueStrategy[] = [
+  { name: 'middle-length', pick: (q) => pickRankSet(q, q.options.slice(2).map((_, i) => i + 1)) },
+  { name: 'avoid-longest', pick: (q) => pickRankSet(q, q.options.slice(1).map((_, i) => i + 1)) },
+  { name: 'avoid-shortest', pick: (q) => pickRankSet(q, q.options.slice(1).map((_, i) => i)) },
+]
+
+export const RANK_STRATEGIES: CueStrategy[] = [...SINGLE_RANK_STRATEGIES, ...NAMED_RANK_SET_STRATEGIES, ...rankSubsetStrategies(MAX_RANK_SUBSET_OPTIONS)]
 
 /**
  * Lexical cues the length gate cannot see. A strategy picks uniformly among the options its predicate
