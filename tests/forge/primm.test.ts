@@ -419,7 +419,7 @@ describe('item wording', () => {
 /** Server renders only: there is no DOM in this suite, so interaction (focus after submit, the peek click) is checked in a browser. */
 describe('the panel as rendered (ARIA and focus structure)', () => {
   const panel = (initial: 'predict' | 'run' | 'investigate' | 'modify' | 'make') =>
-    renderToStaticMarkup(createElement(PrimmPanel, { checks, passed: new Set<string>(), initial }))
+    renderToStaticMarkup(createElement(PrimmPanel, { bundle: lab01, checks, passed: new Set<string>(), initial }))
 
   test('every graded item mounts an empty live region the verdict is written into, and no result yet', () => {
     for (const step of ['predict', 'investigate'] as const) {
@@ -442,7 +442,7 @@ describe('the panel as rendered (ARIA and focus structure)', () => {
   })
 
   test('the reference run has one persistent button and a status region that starts empty', () => {
-    const html = renderToStaticMarkup(createElement(ReferenceRun, { config: REFERENCE, title: 'Reference' }))
+    const html = renderToStaticMarkup(createElement(ReferenceRun, { bundle: lab01, config: { ...REFERENCE }, title: 'Reference' }))
     expect(html.match(/<button/g)?.length).toBe(1)
     expect(html).toContain('data-run-button="idle"')
     expect(html).toMatch(/<p role="status" aria-live="polite"[^>]*data-caption="true"><\/p>/)

@@ -8,8 +8,6 @@ import {
   Check,
   ChevronRight,
   Circle,
-  Copy,
-  Download,
   FileCode,
   Loader2,
   Terminal,
@@ -17,7 +15,10 @@ import {
   X,
 } from 'lucide-react'
 import Discussion from '@/components/community/Discussion'
+import { SetupLanes } from '@/components/forge/SetupLanes'
 import { FORGE_LABS, type ForgeLab as ForgeLabDef } from '@/data/labs'
+import { findForgeBundle } from '@/data/forge'
+import type { ForgeBundle } from '@/data/forge/types'
 import { lessonById } from '@/data/lessons'
 import { getTrack } from '@/lib/tracks'
 import { labXp } from '@/lib/economy'
@@ -46,18 +47,39 @@ import { cn } from '@/lib/utils'
  * Motion: App.tsx loads this page through `lazyMotion`, so every animation below runs inside MotionScope
  * (reduced motion honoured, wave-1.md §16.2); the page does not wrap itself a second time.
  *
- * Lab 01 (the allocator) has the PRIMM walk, the hint ladder and Prove it. They load on demand, so the other
- * 17 labs do not carry them, and the walk's fallback is the same get-the-lab and drop-zone content, so a slow or
- * failed chunk never takes the drop zone away.
+ * A lab with a Forge bundle (`src/data/forge/<labId>/`, wave-2.md §13.1) has the PRIMM walk, the hint ladder and
+ * Prove it, all drawn from that bundle by the generic panels. They load on demand, so a lab without a bundle does
+ * not carry them, and the walk's fallback is the same get-the-lab and drop-zone content, so a slow or failed chunk
+ * never takes the drop zone away. A lab without a bundle keeps the plain page.
+ *
+ * The three slots below take their final props now, so the tasks that fill them never edit this page:
+ * `SetupLanes {lab}` (2c-07), `FolderWatch {lab, onModule}` (2c-08) and `AskPacket {lab, reports}` (2c-06).
  */
 const PrimmPanel = lazy(() => import('@/components/forge/PrimmPanel').then((m) => ({ default: m.PrimmPanel })))
 const HintLadder = lazy(() => import('@/components/forge/HintLadder'))
 const ProveIt = lazy(() => import('@/components/forge/ProveIt'))
+const FolderWatch = lazy(() => import('@/components/forge/FolderWatch'))
+const AskPacket = lazy(() => import('@/components/forge/AskPacket'))
 // "Install in your engine" (wave-2.md §10.2): a stub until 2b-12, mounted here so that task never edits this page.
 const InstallButton = lazy(() => import('@/components/engine/InstallButton'))
 
-/** The one lab with the walk, the ladder and Prove it so far (§13). */
-const LAB01 = 'rust-allocator'
+/** The lab's bundle once loaded: `undefined` while loading, and for ever for a lab that has none. */
+function useForgeBundle(labId: string): ForgeBundle | undefined {
+  const [bundle, setBundle] = useState<ForgeBundle | undefined>()
+  useEffect(() => {
+    let live = true
+    findForgeBundle(labId)
+      .then((b) => {
+        if (live) setBundle(b)
+      })
+      // a chunk that failed to load leaves the plain page, which is complete without it
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [labId])
+  return bundle
+}
 
 type RunState =
   | { kind: 'idle' }
@@ -72,25 +94,6 @@ interface Live {
   running: string | null
 }
 const NO_LIVE: Live = { results: new Map(), running: null }
-
-const LANES = [
-  {
-    id: 'a',
-    title: 'lane A — your machine',
-    body: 'Two commands if you have Rust; one installer if you don’t.',
-    code: 'rustup target add wasm32-unknown-unknown',
-  },
-  {
-    id: 'b',
-    title: 'lane B — dev container',
-    body: 'Open the unzipped folder in VS Code → "Reopen in Container". Toolchain and wasm target preinstalled.',
-  },
-  {
-    id: 'c',
-    title: 'lane C — codespaces',
-    body: 'Open the kernelspace repo in a Codespace. Same environment, burns your free GitHub quota.',
-  },
-]
 
 const sectionLabel = 'font-mono text-[11px] uppercase tracking-[0.14em] text-text-3'
 
@@ -121,8 +124,8 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
   // Every graded run of this visit, oldest first: the hint ladder reads the reds, the stage panel the greens.
   const [reports, setReports] = useState<LabRunReport[]>([])
   const [dragOver, setDragOver] = useState(false)
-  const [setupCopied, setSetupCopied] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const bundle = useForgeBundle(lab.id)
   const inputRef = useRef<HTMLInputElement>(null)
   const resultsRef = useRef<HTMLHeadingElement>(null)
   const busy = useRef(false)
@@ -216,16 +219,6 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
   const report = run.kind === 'report' ? run.report : null
   const requiredChecks = lab.checks.filter((check) => !check.optional)
   const optionalChecks = lab.checks.filter((check) => check.optional)
-  const archiveName = lab.zip.split('/').pop() ?? `${lab.id}.zip`
-  const downloadUrl = new URL(lab.zip, window.location.origin).href
-  const workspaceDir = lab.id
-  const setupCommand =
-    `test ! -e ${workspaceDir} && ` +
-    `curl -fsSL ${downloadUrl} -o ${archiveName} && ` +
-    `mkdir ${workspaceDir} && ` +
-    `unzip -q ${archiveName} -d ${workspaceDir} && ` +
-    `cd ${workspaceDir}/${lab.crateDir ?? lab.id}`
-
   const rows = buildRows(lab.checks, report ? resultsOf(report) : live.results, run.kind === 'running' ? live.running : null)
   const counts = tally(rows)
   const allRequiredGreen = counts.requiredTotal > 0 && counts.required === counts.requiredTotal
@@ -237,72 +230,9 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
   const latest = graded[graded.length - 1]
   const passedNow = new Set(latest === undefined ? [] : latest.checks.filter((c) => c.status === 'pass').map((c) => c.id))
   const runsPassed = graded.map((r) => r.checks.filter((c) => c.status === 'pass').map((c) => c.id))
-  const isLab01 = lab.id === LAB01
 
-  const getTheLab = (
-    <section className="mt-12" aria-labelledby="get-lab">
-      <h2 id="get-lab" className={sectionLabel}>
-        1 · get the lab
-      </h2>
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
-        {LANES.map((lane) => (
-          <div key={lane.id} className="min-w-0 rounded-lg border border-line bg-surface-1 p-5">
-            <p className="font-mono text-sm text-text-1">{lane.title}</p>
-            <p className="mt-2 text-body-sm text-text-2">{lane.body}</p>
-            {lane.code && (
-              <pre tabIndex={0} className="mt-3 overflow-x-auto rounded border border-line bg-ink p-3 font-mono text-[12px] text-text-1">
-                {lane.code}
-              </pre>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 overflow-hidden rounded-lg border border-line bg-surface-1">
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-          <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-1">
-              one-command workspace
-            </p>
-            <p className="mt-0.5 text-body-sm text-text-3">
-              macOS, Linux, or WSL · requires curl and unzip
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard.writeText(setupCommand).catch(() => undefined)
-              setSetupCopied(true)
-              window.setTimeout(() => setSetupCopied(false), 1200)
-            }}
-            className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-text-3 transition-colors hover:text-text-1 [@media(pointer:coarse)]:min-h-11"
-            aria-label="Copy workspace setup command"
-          >
-            {setupCopied ? (
-              <Check className="h-3.5 w-3.5 text-accent" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" />
-            )}
-            {setupCopied ? 'copied' : 'copy'}
-          </button>
-        </div>
-        <pre tabIndex={0} className="overflow-x-auto bg-ink p-4 font-mono text-[12px] leading-relaxed text-text-1">
-          {setupCommand}
-        </pre>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
-          <p className="text-body-sm text-text-3">
-            Creates a fresh folder and enters the exercise crate. It stops if that folder already exists.
-          </p>
-          <a
-            href={lab.zip}
-            download
-            className="inline-flex shrink-0 items-center gap-2 font-mono text-[11px] text-accent underline [@media(pointer:coarse)]:min-h-11"
-          >
-            <Download className="h-3.5 w-3.5" /> download ZIP instead
-          </a>
-        </div>
-      </div>
-    </section>
-  )
+  // The setup copy lives in SetupLanes (2c-07 fills it); the page only places it.
+  const getTheLab = <SetupLanes lab={lab} />
 
   const makeGreen = (
     <section className="mt-12" aria-labelledby="make-green">
@@ -388,6 +318,10 @@ cargo build --release --target wasm32-unknown-unknown`}
           }}
         />
       </div>
+      {/* a rebuilt module goes through onFile, the handler a drop calls (wave-2.md §16.3) */}
+      <Suspense fallback={null}>
+        <FolderWatch lab={lab} onModule={onFile} />
+      </Suspense>
     </section>
   )
 
@@ -723,7 +657,7 @@ cargo build --release --target wasm32-unknown-unknown`}
         )}
       </section>
 
-      {isLab01 ? (
+      {bundle !== undefined ? (
         <>
           {/* the walk: predict, run, investigate, modify, make. Make holds the stage list and the drop zone */}
           <section className="mt-12" aria-labelledby="the-walk">
@@ -733,6 +667,7 @@ cargo build --release --target wasm32-unknown-unknown`}
             <div className="mt-4">
               <Suspense fallback={doing}>
                 <PrimmPanel
+                  bundle={bundle}
                   checks={lab.checks}
                   passed={passedNow}
                   runs={runsPassed}
@@ -746,8 +681,9 @@ cargo build --release --target wasm32-unknown-unknown`}
           {results}
           <div className="mt-10 max-w-3xl space-y-8">
             <Suspense fallback={null}>
-              <HintLadder reports={reports} />
-              <ProveIt unlocked={done || requiredReportPassed} />
+              <HintLadder bundle={bundle} reports={reports} />
+              <AskPacket lab={lab} reports={reports} />
+              <ProveIt bundle={bundle} unlocked={done || requiredReportPassed} />
             </Suspense>
           </div>
         </>

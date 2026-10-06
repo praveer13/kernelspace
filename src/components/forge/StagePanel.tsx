@@ -1,16 +1,21 @@
 /**
- * The Make step's stage list for lab 01 (docs/specs/wave-1.md §13.1): four stages, each with its checks, going
- * green in order. It sits above the drop zone and reads what the last graded run passed. It writes nothing; the
- * page records the `lab-check` event, with `greenStage(rows)` as its `stage`.
+ * The Make step's stage list (docs/specs/wave-1.md §13.1; docs/specs/wave-2.md §13.1): the stages of a lab's bundle,
+ * each with its checks, going green in order. It sits above the drop zone and reads what the last graded run
+ * passed. It writes nothing; the page records the `lab-check` event, with `greenStage(rows)` as its `stage`.
  */
 
 import { Check, Circle } from 'lucide-react'
 import { clsx as cn } from 'clsx'
 import { renderInline } from '@/pages/lesson/markdown'
 import type { ForgeLabCheck } from '@/data/labs'
-import { attemptsToGreen, currentStage, stageRows, STAGES } from '@/data/forge/rust-allocator/primm'
+import type { ForgeBundle } from '@/data/forge/types'
+import { attemptsToGreen, currentStage, stageRows } from '@/lib/forge/primm'
+
+const COUNT_WORD = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 
 export interface StagePanelProps {
+  /** The lab's bundle: its `stages` are the rows. */
+  bundle: ForgeBundle
   checks: readonly ForgeLabCheck[]
   /** Ids of the required checks that the latest run passed. */
   passed: ReadonlySet<string>
@@ -18,18 +23,21 @@ export interface StagePanelProps {
   runs?: readonly (readonly string[])[]
 }
 
-export function StagePanel({ checks, passed, runs }: StagePanelProps) {
-  const rows = stageRows(checks, passed)
+export function StagePanel({ bundle, checks, passed, runs }: StagePanelProps) {
+  const { stages } = bundle
+  const rows = stageRows(stages, checks, passed)
   const now = currentStage(rows)
-  const attempts = runs === undefined ? undefined : attemptsToGreen(runs, checks)
+  const attempts = runs === undefined ? undefined : attemptsToGreen(stages, runs, checks)
   const greenCount = rows.filter((r) => r.green).length
 
   return (
     <section aria-label="Build stages" data-stage-panel data-green-stages={greenCount}>
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="font-mono text-label uppercase tracking-[0.10em] text-text-3">Build in four stages</h3>
+        <h3 className="font-mono text-label uppercase tracking-[0.10em] text-text-3">
+          Build in {COUNT_WORD[stages.length] ?? stages.length} stages
+        </h3>
         <span className="font-mono text-[10px] text-text-3">
-          {greenCount}/{STAGES.length} green
+          {greenCount}/{stages.length} green
         </span>
       </div>
       <ol className="space-y-2">

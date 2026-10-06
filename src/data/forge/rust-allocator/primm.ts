@@ -17,7 +17,7 @@ import { KC } from '@/data/kc/ids'
 import type { ForgeLabCheck } from '@/data/labs'
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { ItemResponse } from '@/lib/ledger/types'
-import { rev32 } from '@/lib/ledger/stable'
+import { attemptsToGreen as attemptsToGreenOf, observationResponse, stageRows as stageRowsOf } from '@/lib/forge/primm'
 import { splitmix32u } from '@/lib/rng'
 import type { AuthoredItem } from '@/lib/items/types'
 import { alignedStart, allocWith, createHeap, freeId, runFits, viewOf, type HeapOptions } from '@/lib/world/heap'
@@ -25,12 +25,13 @@ import { firstFit, worstFit } from '@/lib/world/placement'
 import type { HeapOp, HeapTrace, HeapView, PlacementDriver } from '@/lib/world/types'
 import type { ChoicePrimm, NumberPrimm, PrimmItem, PrimmStep, PrimmStepId, ReferenceRunSpec, RunConfig, RunResult, StageInfo } from '../types'
 
-// The shapes live in ../types (the Forge bundle contract); they are re-exported so lab 01's imports keep working.
+// The shapes live in ../types (the Forge bundle contract), and what PRIMM does for every lab lives in
+// src/lib/forge/primm.ts; both are re-exported so lab 01's imports keep working.
 export type { ChoicePrimm, NumberPrimm, PrimmItem, StageInfo }
+export { currentStage, gradeChoice, gradeNumber, greenStage, itemRev, itemResponse, predictGraded, primmRef } from '@/lib/forge/primm'
+export type { PrimmAnswer, PrimmGrade, StageRow } from '@/lib/forge/primm'
 
 export const PRIMM_LAB = 'rust-allocator'
-/** Every PRIMM item's ledger ref is `item:` plus its id. */
-export const primmRef = (id: string) => `item:${id}` as const
 
 /* ------------------------------------------------------------------ */
 /* The Make step: four stages                                          */
@@ -44,64 +45,12 @@ export const STAGES: readonly StageInfo[] = [
   { n: 4, title: 'Coalesce', minutes: 25, goal: 'Merge on `free`, so churn near 75% never strands a span.' },
 ]
 
-export interface StageRow {
-  stage: StageInfo
-  checks: { id: string; label: string; passed: boolean }[]
-  /** Every check of the stage passed. */
-  green: boolean
-}
+/** The stages with their checks (labs.ts `stage`) and which of them passed: the shared `stageRows`, bound to lab 01's stages. */
+export const stageRows = (checks: readonly ForgeLabCheck[], passed: ReadonlySet<string>) => stageRowsOf(STAGES, checks, passed)
 
-const required = (checks: readonly ForgeLabCheck[]) => checks.filter((c) => c.optional !== true)
-
-/** The stages with their checks (labs.ts `stage`) and which of them passed. A stage with no checks is never green. */
-export function stageRows(checks: readonly ForgeLabCheck[], passed: ReadonlySet<string>): StageRow[] {
-  return STAGES.map((stage) => {
-    const mine = required(checks)
-      .filter((c) => c.stage === stage.n)
-      .map((c) => ({ id: c.id, label: c.label, passed: passed.has(c.id) }))
-    return { stage, checks: mine, green: mine.length > 0 && mine.every((c) => c.passed) }
-  })
-}
-
-/** The first stage that is not green yet (what to build next), or null when all four are. */
-export function currentStage(rows: readonly StageRow[]): StageInfo | null {
-  return rows.find((r) => !r.green)?.stage ?? null
-}
-
-/** The highest stage k with stages 1..k all green (0 when stage 1 is not): the `stage` of a `lab-check` event. */
-export function greenStage(rows: readonly StageRow[]): number {
-  let k = 0
-  for (const r of rows) {
-    if (!r.green) break
-    k = r.stage.n
-  }
-  return k
-}
-
-/**
- * Attempts-to-green per stage (spec §13.1, descriptive only): `runs` are the passed check ids of each lab run,
- * oldest first. A stage is green on the first run where all its checks pass. Its count is the number of runs from
- * the run after the previous stage went green, up to and including its own; 0 when it came green on the same run
- * as the stage before. Null while a stage has never been green.
- */
-export function attemptsToGreen(runs: readonly (readonly string[])[], checks: readonly ForgeLabCheck[]): (number | null)[] {
-  const out: (number | null)[] = []
-  let previous = 0
-  for (const stage of STAGES) {
-    const ids = required(checks)
-      .filter((c) => c.stage === stage.n)
-      .map((c) => c.id)
-    const at = ids.length === 0 ? -1 : runs.findIndex((r) => ids.every((id) => r.includes(id)))
-    if (at < 0) {
-      out.push(null)
-      continue
-    }
-    const run = at + 1
-    out.push(Math.max(0, run - previous))
-    previous = Math.max(previous, run)
-  }
-  return out
-}
+/** Attempts-to-green per stage (spec §13.1, descriptive only), over lab 01's stages. */
+export const attemptsToGreen = (runs: readonly (readonly string[])[], checks: readonly ForgeLabCheck[]): (number | null)[] =>
+  attemptsToGreenOf(STAGES, runs, checks)
 
 /* ------------------------------------------------------------------ */
 /* The reference run: a churn shaped like check 6                       */
@@ -505,114 +454,9 @@ export type { PrimmStepId }
  */
 export const RUN_ITEM = { id: 'lab01.primm.r1', nsec: 45 }
 
-/** Whether the Predict step still takes graded answers: not after the run was shown first (the "show me anyway" peek). */
-export const predictGraded = (peeked: boolean, alreadyAnswered: boolean) => alreadyAnswered || !peeked
-
-/* ------------------------------------------------------------------ */
-/* Grading and the ledger                                               */
-/* ------------------------------------------------------------------ */
-
-export interface PrimmGrade {
-  ok: boolean
-  /** In [0, 1]. */
-  score: number
-  /** One or two sentences: the verdict, then the key step. */
-  feedback: string
-  /** Misconception id of a recognised wrong answer. */
-  miss?: string
-}
-
-/** Grades a pick (authored index). The feedback is the option's own `why`, then the key's. */
-export function gradeChoice(item: ChoicePrimm, pick: number): PrimmGrade {
-  const { q } = item.item
-  const ok = q.correct.length === 1 && q.correct[0] === pick
-  const own = q.why?.[pick] ?? ''
-  const key = q.why?.[q.correct[0]] ?? ''
-  return { ok, score: ok ? 1 : 0, feedback: ok ? own : `${own} ${key}`.trim() }
-}
-
-const closeEnough = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b))
-
-/**
- * Grades a number. `numeric`: exact, with a named mistake when the answer is a known lure. `estimate`: right within
- * the item's factor of `truth`; the score falls off with the log error, as the generators' estimates do (spec §5.2).
- */
-export function gradeNumber(item: NumberPrimm, value: number, truth: number): PrimmGrade {
-  if (item.kind === 'numeric') {
-    const ok = closeEnough(value, truth)
-    const lure = item.lures?.find((l) => closeEnough(l.value, value))
-    return {
-      ok,
-      score: ok ? 1 : 0,
-      feedback: ok ? `Yes, ${truth} ${item.unit}. ${item.explain}` : `${lure?.message ?? `Not ${value}.`} ${item.explain}`.trim(),
-      ...(lure ? { miss: lure.miss } : {}),
-    }
-  }
-  const factor = item.factor ?? 2
-  const ratio = value <= 0 || truth <= 0 ? Infinity : Math.max(value / truth, truth / value)
-  const ok = ratio <= factor
-  const score = ratio === Infinity ? 0 : Math.max(0, 1 - Math.log10(ratio) / Math.log10(factor * 5))
-  const verdict = ok
-    ? `Close enough: ${truth} ops, and you said ${value}.`
-    : `The run says ${truth} ops; you said ${value}, ${ratio === Infinity ? 'which cannot be right' : `a factor of ${Math.round(ratio * 10) / 10} ${value > truth ? 'too high' : 'too low'}`}.`
-  return { ok, score, feedback: `${verdict} ${item.explain}` }
-}
-
-/** What a response to a PRIMM item is worth to the ledger: one `item` event, `src: practice`, tagged with its KCs. */
-export interface PrimmAnswer {
-  item: PrimmItem
-  grade: PrimmGrade
-  /** Choice items: the picked authored index. */
-  pick?: number
-  /** Number items: the learner's answer and the truth it was graded against. */
-  value?: number
-  truth?: number
-  ms?: number
-}
-
-/** Short content fingerprint: an edit to a prompt or an option changes it, so old events never claim the new text. */
-export function itemRev(item: PrimmItem): string {
-  return item.kind === 'choice'
-    ? rev32({ id: item.id, q: item.item.q.q, options: item.item.q.options, correct: item.item.q.correct })
-    : rev32({ id: item.id, prompt: item.prompt, unit: item.unit, truth: item.truth ?? null })
-}
-
-export function itemResponse(a: PrimmAnswer): ItemResponse {
-  const kcs = a.item.kind === 'choice' ? a.item.item.kcs : a.item.kcs
-  return {
-    kind: 'item',
-    ref: primmRef(a.item.id),
-    rev: itemRev(a.item),
-    score: a.grade.score,
-    ok: a.grade.ok,
-    provenance: 'practice',
-    ...(a.ms !== undefined ? { ms: a.ms } : {}),
-    data: {
-      src: 'practice',
-      kcs: [...kcs],
-      nsec: a.item.nsec,
-      ...(a.pick !== undefined ? { pick: [a.pick] } : {}),
-      ...(a.value !== undefined ? { value: a.value } : {}),
-      ...(a.truth !== undefined ? { truth: a.truth } : {}),
-      ...(a.grade.miss !== undefined ? { miss: a.grade.miss } : {}),
-    },
-  }
-}
-
 /** The Run step's evidence: what the reference run observed (ops served of the trace). An observation, not a graded answer: no KCs. */
-export function runResponse(run: ChurnRun, ms?: number): ItemResponse {
-  return {
-    kind: 'item',
-    ref: primmRef(RUN_ITEM.id),
-    rev: rev32({ id: RUN_ITEM.id, config: run.config }),
-    score: 1,
-    ok: true,
-    provenance: 'practice',
-    ...(ms !== undefined ? { ms } : {}),
-    data: { src: 'practice', kcs: [], nsec: RUN_ITEM.nsec, value: run.survived, truth: run.total },
-  }
-}
-
+export const runResponse = (run: ChurnRun, ms?: number): ItemResponse =>
+  observationResponse(RUN_ITEM, { config: run.config as unknown as RunConfig, value: run.survived, truth: run.total }, ms)
 
 /* ------------------------------------------------------------------ */
 /* The reference run as bundle data                                     */
@@ -654,4 +498,13 @@ export const RUN_SPEC: ReferenceRunSpec = {
   reference: { ...REFERENCE },
   baseline: { ...BUMP },
   run: runSpecResult,
+  modify: {
+    lead: `Change one thing about the reference run (${FIT_LABEL[REFERENCE.fit]} with coalescing, near ${REFERENCE.occupancyPct}%).`,
+    dials: [
+      { id: 'nocoal', label: 'turn coalescing off', config: { ...REFERENCE, coalesce: false } },
+      { id: 'worst', label: 'first-fit becomes worst-fit', config: { ...REFERENCE, fit: 'worst' } },
+      { id: 'occ45', label: 'occupancy 75% becomes 45%', config: { ...REFERENCE, occupancyPct: 45 } },
+      { id: 'occ90', label: 'occupancy 75% becomes 90%', config: { ...REFERENCE, occupancyPct: 90 } },
+    ],
+  },
 }

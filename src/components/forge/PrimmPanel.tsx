@@ -1,7 +1,8 @@
 /**
- * Lab 01's PRIMM walk (docs/specs/wave-1.md §13.1): Predict, Run, Investigate, Modify, Make.
+ * A lab's PRIMM walk (docs/specs/wave-1.md §13.1; wave-2.md §13.1): Predict, Run, Investigate, Modify, Make, all of
+ * it read from the lab's `ForgeBundle` (items, steps, reference run, stages); the panel holds no lab's data.
  *
- * It sits above the drop zone. Every answer writes one `item item:lab01.primm.*` event through `recordItems`
+ * It sits above the drop zone. Every answer writes one `item item:<the bundle's item id>` event through `recordItems`
  * (the Run step writes what the reference run observed, with no KCs). Nothing locks: the steps are buttons, and the
  * one soft gate (the Run strip would give away the first prediction) has a "show me anyway" after which the two
  * Predict questions stay open to read but take no answer and write nothing: a prediction made after seeing the run is
@@ -16,46 +17,22 @@ import { clsx as cn } from 'clsx'
 import type { ForgeLabCheck } from '@/data/labs'
 import { useProgress } from '@/lib/progress'
 import { freshSeed, hash32, shuffledOrder } from '@/lib/rng'
+import type { ChoicePrimm, ForgeBundle, NumberPrimm, PrimmItem, PrimmStepId, RunResult } from '@/data/forge/types'
 import {
-  BUMP,
-  FIT_LABEL,
-  PRIMM_ITEMS,
-  PRIMM_STEPS,
-  REFERENCE,
-  RUN_ITEM,
   gradeChoice,
   gradeNumber,
-  itemById,
   itemResponse,
+  observationResponse,
   predictGraded,
-  runChurn,
-  runResponse,
-  type ChoicePrimm,
-  type ChurnConfig,
-  type ChurnRun,
-  type NumberPrimm,
+  sameConfig,
   type PrimmAnswer,
   type PrimmGrade,
-  type PrimmItem,
-  type PrimmStepId,
-} from '@/data/forge/rust-allocator/primm'
+} from '@/lib/forge/primm'
 import { renderInline } from '@/pages/lesson/markdown'
 import { ReferenceRun } from '@/components/forge/ReferenceRun'
 import { StagePanel } from '@/components/forge/StagePanel'
 
-const item = (id: string): PrimmItem => {
-  const found = itemById(id)
-  if (found === undefined) throw new Error(`unknown PRIMM item ${id}`)
-  return found
-}
-
-/** The Modify step's dials: one change to the reference run each. */
-const DIALS: readonly { id: string; label: string; config: ChurnConfig }[] = [
-  { id: 'nocoal', label: 'turn coalescing off', config: { ...REFERENCE, coalesce: false } },
-  { id: 'worst', label: 'first-fit becomes worst-fit', config: { ...REFERENCE, fit: 'worst' } },
-  { id: 'occ45', label: 'occupancy 75% becomes 45%', config: { ...REFERENCE, occupancyPct: 45 } },
-  { id: 'occ90', label: 'occupancy 75% becomes 90%', config: { ...REFERENCE, occupancyPct: 90 } },
-]
+const COUNT_WORD = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 
 const parseNumber = (text: string): number | null => {
   const t = text.trim().replace(/,/g, '')
@@ -279,21 +256,25 @@ function NumberCard({ item, truth, answered, onAnswer, takeFocus }: NumberCardPr
 /* ------------------------------------------------------------------ */
 
 interface ModifyStepProps {
+  bundle: ForgeBundle
+  /** The bundle's modify item: a number the learner predicts, graded against the dial's run. */
+  item: NumberPrimm
   answered?: PrimmAnswer
   onAnswer(a: PrimmAnswer): void
   takeFocus: TakeFocus
 }
 
-/** Pick one dial, predict where the run first fails (or that it never does), then run it. The grade comes with the run. */
-function ModifyStep({ answered, onAnswer, takeFocus }: ModifyStepProps) {
+/** Pick one dial, predict what the changed run comes to, then run it. The grade comes with the run. */
+function ModifyStep({ bundle, item: m1, answered, onAnswer, takeFocus }: ModifyStepProps) {
   const uid = useId()
-  const m1 = item('lab01.primm.m1') as NumberPrimm
+  const spec = bundle.primm.run
+  const dials = spec.modify?.dials ?? []
   const [dial, setDial] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [invalid, setInvalid] = useState(false)
   const [committed, setCommitted] = useState<{ dial: string; value: number; at: number } | null>(null)
-  const chosen = DIALS.find((d) => d.id === (committed?.dial ?? dial))
-  const total = useMemo(() => (chosen === undefined ? 0 : runChurn(chosen.config).total), [chosen])
+  const chosen = dials.find((d) => d.id === (committed?.dial ?? dial))
+  const total = useMemo(() => (chosen === undefined ? 0 : spec.run(chosen.config).total), [chosen, spec])
 
   const commit = () => {
     const value = parseNumber(text)
@@ -305,23 +286,29 @@ function ModifyStep({ answered, onAnswer, takeFocus }: ModifyStepProps) {
     setCommitted({ dial, value, at: Date.now() })
   }
 
-  const finished = (run: ChurnRun) => {
+  const finished = (run: RunResult) => {
     if (committed === null || answered) return
-    const grade = gradeNumber(m1, committed.value, run.survived)
-    const note = run.clean
-      ? `Your change: ${chosen?.label}. The run served all ${run.total} ops.`
-      : `Your change: ${chosen?.label}. The run first failed at op ${run.survived + 1} of ${run.total}.`
-    onAnswer({ item: m1, grade: { ...grade, feedback: `${note} ${grade.feedback}` }, value: committed.value, truth: run.survived, ms: Date.now() - committed.at })
+    const grade = gradeNumber(m1, committed.value, run.value)
+    const note = `Your change: ${chosen?.label}. ${run.summary}`
+    onAnswer({ item: m1, grade: { ...grade, feedback: `${note} ${grade.feedback}` }, value: committed.value, truth: run.value, ms: Date.now() - committed.at })
+  }
+
+  if (dials.length === 0) {
+    return (
+      <div data-step-body="modify" className="rounded-sm border border-line bg-surface-2 p-3 text-body-sm text-text-2">
+        This lab has no dials to turn yet. Go on to Make.
+      </div>
+    )
   }
 
   return (
     <div data-step-body="modify">
       <fieldset disabled={committed !== null} className="min-w-0">
         <legend className="mb-1.5 text-body-sm font-medium leading-snug text-text-1">
-          Change one thing about the reference run ({FIT_LABEL[REFERENCE.fit]} with coalescing, near {REFERENCE.occupancyPct}%).
+          {spec.modify?.lead ?? 'Change one thing about the reference run.'}
         </legend>
         <div className="space-y-1.5">
-          {DIALS.map((d) => (
+          {dials.map((d) => (
             <label
               key={d.id}
               className={cn(
@@ -367,7 +354,7 @@ function ModifyStep({ answered, onAnswer, takeFocus }: ModifyStepProps) {
             Prediction locked: {committed.value} of {total} ops. Now run it.
           </p>
           {/* The lock button has just unmounted: focus goes to the next control, the run button. */}
-          <ReferenceRun key={chosen.id} config={chosen.config} title={`Your run: ${chosen.label}`} onFinished={finished} focusRun />
+          <ReferenceRun key={chosen.id} bundle={bundle} config={chosen.config} title={`Your run: ${chosen.label}`} onFinished={finished} focusRun />
           <Feedback id={m1.id} grade={answered?.grade} takeFocus={takeFocus} />
         </div>
       )}
@@ -380,6 +367,8 @@ function ModifyStep({ answered, onAnswer, takeFocus }: ModifyStepProps) {
 /* ------------------------------------------------------------------ */
 
 export interface PrimmPanelProps {
+  /** The lab's bundle: its items, steps, reference run and stages. */
+  bundle: ForgeBundle
   checks: readonly ForgeLabCheck[]
   /** Ids of the required checks the latest run passed. */
   passed: ReadonlySet<string>
@@ -391,16 +380,23 @@ export interface PrimmPanelProps {
   children?: ReactNode
 }
 
-const INVESTIGATE_IDS = PRIMM_ITEMS.filter((i) => i.step === 'investigate').map((i) => i.id)
+/** "[lab 02]" is "Lab 02". */
+const labName = (label: string) => label.replace(/^\[|\]$/g, '').replace(/^./, (c) => c.toUpperCase())
 
-export function PrimmPanel({ checks, passed, runs, initial = 'predict', children }: PrimmPanelProps) {
+export function PrimmPanel({ bundle, checks, passed, runs, initial = 'predict', children }: PrimmPanelProps) {
   const recordItems = useProgress((s) => s.recordItems)
+  const { items, steps, run: spec } = bundle.primm
   const [active, setActive] = useState<PrimmStepId>(initial)
   const [answers, setAnswers] = useState<Record<string, PrimmAnswer>>({})
   const [seed] = useState(freshSeed)
   const [peek, setPeek] = useState(false)
   const [ran, setRan] = useState(false)
-  const bumpTruth = useMemo(() => runChurn(BUMP).survived, [])
+  const stepItems = (step: PrimmStepId) => items.filter((i) => i.step === step)
+  const predictItems = stepItems('predict')
+  const investigateItems = stepItems('investigate')
+  const modifyItem = items.find((i): i is NumberPrimm => i.step === 'modify' && i.kind !== 'choice')
+  // An estimate is graded against the run the Predict step asks about: the baseline when the spec has one, else the reference.
+  const estimateTruth = useMemo(() => spec.run(spec.baseline ?? spec.reference).value, [spec])
   // Ids already written, checked synchronously so a double Enter or a double finish writes one event, not two.
   const sent = useRef(new Set<string>())
   // The item whose result should take focus once it renders; cleared when the learner changes step.
@@ -435,24 +431,24 @@ export function PrimmPanel({ checks, passed, runs, initial = 'predict', children
     recordItems([itemResponse(a)])
   }
 
-  const observed = (run: ChurnRun) => {
-    if (sent.current.has(RUN_ITEM.id) || run.config.fit !== REFERENCE.fit || run.config.coalesce !== REFERENCE.coalesce) return
-    sent.current.add(RUN_ITEM.id)
+  // Only the reference run is the Run step's evidence; the baseline beside it is for comparison.
+  const observed = (run: RunResult) => {
+    if (sent.current.has(spec.item.id) || !sameConfig(run.config, spec.reference)) return
+    sent.current.add(spec.item.id)
     setRan(true)
-    recordItems([runResponse(run)])
+    recordItems([observationResponse(spec.item, run)])
   }
 
-  const predicted = answers['lab01.primm.p1'] !== undefined && answers['lab01.primm.p2'] !== undefined
+  const predicted = predictItems.every((i) => answers[i.id] !== undefined)
   const done: Record<PrimmStepId, boolean> = {
     predict: predicted,
     run: ran,
-    investigate: INVESTIGATE_IDS.every((id) => answers[id] !== undefined),
-    modify: answers['lab01.primm.m1'] !== undefined,
+    investigate: investigateItems.every((i) => answers[i.id] !== undefined),
+    modify: modifyItem !== undefined && answers[modifyItem.id] !== undefined,
     make: false,
   }
-  const index = PRIMM_STEPS.findIndex((s) => s.id === active)
-  const next = PRIMM_STEPS[index + 1]
-  const stepItems = (step: PrimmStepId) => PRIMM_ITEMS.filter((i) => i.step === step)
+  const index = steps.findIndex((s) => s.id === active)
+  const next = steps[index + 1]
 
   const card = (i: PrimmItem) => {
     const a = answers[i.id]
@@ -469,16 +465,16 @@ export function PrimmPanel({ checks, passed, runs, initial = 'predict', children
         {i.kind === 'choice' ? (
           <ChoiceCard item={i} seed={seed} answered={a} onAnswer={answer} takeFocus={takeFocus} />
         ) : (
-          <NumberCard item={i} truth={i.kind === 'numeric' ? (i.truth ?? 0) : bumpTruth} answered={a} onAnswer={answer} takeFocus={takeFocus} />
+          <NumberCard item={i} truth={i.kind === 'numeric' ? (i.truth ?? 0) : estimateTruth} answered={a} onAnswer={answer} takeFocus={takeFocus} />
         )}
       </div>
     )
   }
 
   return (
-    <section aria-label="Lab 01 in five steps" data-primm-panel data-step={active} className="space-y-3">
+    <section aria-label={`${labName(bundle.discussionsLabel)} in five steps`} data-primm-panel data-step={active} className="space-y-3">
       <ol className="flex flex-wrap gap-1.5" aria-label="Steps">
-        {PRIMM_STEPS.map((s, i) => (
+        {steps.map((s, i) => (
           <li key={s.id}>
             <button
               type="button"
@@ -499,14 +495,14 @@ export function PrimmPanel({ checks, passed, runs, initial = 'predict', children
       </ol>
       <p ref={lead} tabIndex={-1} className="text-body-sm text-text-2" data-step-lead>
         <span className="sr-only">
-          Step {index + 1} of {PRIMM_STEPS.length}, {PRIMM_STEPS[index].title}.{' '}
+          Step {index + 1} of {steps.length}, {steps[index].title}.{' '}
         </span>
-        {PRIMM_STEPS[index].blurb}
+        {steps[index].blurb}
       </p>
 
       {active === 'predict' && (
         <div className="space-y-3" data-step-body="predict">
-          {stepItems('predict').map(card)}
+          {predictItems.map(card)}
         </div>
       )}
 
@@ -514,7 +510,10 @@ export function PrimmPanel({ checks, passed, runs, initial = 'predict', children
         <div className="space-y-3" data-step-body="run">
           {!predicted && !peek ? (
             <div className="rounded-sm border border-line bg-surface-2 p-3 text-body-sm text-text-2">
-              <p>The first run gives away what you were asked to predict. Answer the two questions in step 1 first; it takes a minute.</p>
+              <p>
+                The first run gives away what you were asked to predict. Answer the {COUNT_WORD[predictItems.length] ?? predictItems.length}{' '}
+                {predictItems.length === 1 ? 'question' : 'questions'} in step 1 first; it takes a minute.
+              </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -534,8 +533,8 @@ export function PrimmPanel({ checks, passed, runs, initial = 'predict', children
             </div>
           ) : (
             <>
-              <ReferenceRun config={REFERENCE} title="Reference: first-fit with coalescing" onFinished={observed} />
-              <ReferenceRun config={BUMP} title="Bump allocator: never takes a freed block back" />
+              <ReferenceRun bundle={bundle} config={spec.reference} onFinished={observed} />
+              {spec.baseline !== undefined && <ReferenceRun bundle={bundle} config={spec.baseline} />}
             </>
           )}
         </div>
@@ -543,15 +542,22 @@ export function PrimmPanel({ checks, passed, runs, initial = 'predict', children
 
       {active === 'investigate' && (
         <div className="space-y-3" data-step-body="investigate">
-          {stepItems('investigate').map(card)}
+          {investigateItems.map(card)}
         </div>
       )}
 
-      {active === 'modify' && <ModifyStep answered={answers['lab01.primm.m1']} onAnswer={answer} takeFocus={takeFocus} />}
+      {active === 'modify' &&
+        (modifyItem === undefined ? (
+          <div data-step-body="modify" className="rounded-sm border border-line bg-surface-2 p-3 text-body-sm text-text-2">
+            This lab has no Modify question yet. Go on to Make.
+          </div>
+        ) : (
+          <ModifyStep bundle={bundle} item={modifyItem} answered={answers[modifyItem.id]} onAnswer={answer} takeFocus={takeFocus} />
+        ))}
 
       {active === 'make' && (
         <div className="space-y-3" data-step-body="make">
-          <StagePanel checks={checks} passed={passed} runs={runs} />
+          <StagePanel bundle={bundle} checks={checks} passed={passed} runs={runs} />
           {children}
         </div>
       )}

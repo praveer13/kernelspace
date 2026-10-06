@@ -1,10 +1,11 @@
 /**
- * The hint ladder under a failing lab 01 check (H3, docs/specs/wave-1.md §13.2): R0 to R4, unlocked in
+ * The hint ladder under a failing check (H3, docs/specs/wave-1.md §13.2; wave-2.md §13.1): R0 to R4, unlocked in
  * order by the learner's own work and by red runs, then the bottom-out walkthrough and "ask a human".
  *
- * The rules and the authored text live in src/data/forge/rust-allocator/ladder.ts. This file owns the
- * clock and the ledger: a rung opened is one `ack hint:rust-allocator/<check>#R<n>`, the bottom-out is
- * `#bottom` (the ledger then credits the next 24 h of runs `assisted`), and nothing here ever grants credit.
+ * The authored rungs, the walkthrough and the discussion label come from the lab's `ForgeBundle`; the rules are
+ * src/lib/forge/ladder.ts. This file owns the clock and the ledger: a rung opened is one
+ * `ack hint:<lab>/<check>#R<n>`, the bottom-out is `#bottom` (the ledger then credits the next 24 h of runs
+ * `assisted`), and nothing here ever grants credit. A lab whose bundle has no walkthrough has no bottom-out.
  * A locked rung says what unlocks it; there are no hearts and no waits that cost anything.
  */
 
@@ -19,8 +20,6 @@ import type { CheckResult, LabRunReport } from '@/lib/forge/types'
 import {
   AFTER_BREAK,
   ASSISTED_HOURS,
-  LADDER,
-  LADDER_CHECK_IDS,
   MIN_TEACHBACK_WORDS,
   RUNGS,
   askHumanUrl,
@@ -32,10 +31,10 @@ import {
   restoreState,
   teachBackOk,
   unlockOf,
-  walkthroughFor,
   wordCount,
-} from '@/data/forge/rust-allocator/ladder'
-import type { Ctx, LadderAction, LadderState, RungId, Walkthrough } from '@/data/forge/rust-allocator/ladder'
+} from '@/lib/forge/ladder'
+import type { Ctx, LadderAction, LadderState, RungId } from '@/lib/forge/ladder'
+import type { CheckLadder, ForgeBundle, Walkthrough } from '@/data/forge/types'
 
 type States = Record<string, LadderState>
 type Act = { check: string; ctx: Ctx; action: LadderAction }
@@ -58,7 +57,11 @@ const RUNG_TITLE: Record<RungId, string> = {
   bottom: 'Bottom-out · where yours first leaves the rules',
 }
 
+const ladderOf = (bundle: ForgeBundle, checkId: string): CheckLadder | undefined => bundle.ladder.find((l) => l.checkId === checkId)
+
 export interface HintLadderViewProps {
+  /** The lab's bundle: its ladder, walkthrough, discussion label and id (the acks' namespace). */
+  bundle: ForgeBundle
   /** The runs so far this session, oldest first. The newest one that is not a reference build decides which checks are red. */
   reports: readonly LabRunReport[]
   /** The ledger's acks (`ref -> instant`): rungs already opened are open again after a reload. */
@@ -69,13 +72,15 @@ export interface HintLadderViewProps {
 }
 
 /** The ladder for every red check of the latest run. Presentational: `HintLadder` wires it to the ledger. */
-export function HintLadderView({ reports, acks, onAck, now = Date.now }: HintLadderViewProps) {
+export function HintLadderView({ bundle, reports, acks, onAck, now = Date.now }: HintLadderViewProps) {
   const latest = [...reports].reverse().find((r) => r.reference !== true)
-  const red = latest === undefined ? [] : latest.checks.filter((c) => c.status !== 'pass' && LADDER[c.id] !== undefined)
+  const red = latest === undefined ? [] : latest.checks.filter((c) => c.status !== 'pass' && ladderOf(bundle, c.id) !== undefined)
   const [t, setT] = useState(() => now())
   const [states, dispatch] = useReducer(reduceStates, undefined, (): States => {
     const at = now()
-    return Object.fromEntries(LADDER_CHECK_IDS.map((id) => [id, restoreState(acks, id, { red: redRuns(reports, id), now: at })]))
+    return Object.fromEntries(
+      bundle.ladder.map(({ checkId: id }) => [id, restoreState(acks, id, { red: redRuns(reports, id), now: at, labId: bundle.labId })]),
+    )
   })
 
   // Only R2's 2-minute clock needs a tick: nothing else changes with time.
@@ -110,6 +115,7 @@ export function HintLadderView({ reports, acks, onAck, now = Date.now }: HintLad
         red.map((c) => (
           <CheckCard
             key={c.id}
+            bundle={bundle}
             check={c}
             state={states[c.id] ?? freshState()}
             ctx={{ red: redRuns(reports, c.id), now: t }}
@@ -125,10 +131,10 @@ export function HintLadderView({ reports, acks, onAck, now = Date.now }: HintLad
 }
 
 /** The ladder wired to the ledger: rungs opened are acks, and the acks restore them after a reload. */
-export default function HintLadder({ reports }: { reports: readonly LabRunReport[] }) {
+export default function HintLadder({ bundle, reports }: { bundle: ForgeBundle; reports: readonly LabRunReport[] }) {
   const acks = useProgress((s) => s.acks)
   const acknowledge = useProgress((s) => s.acknowledge)
-  return <HintLadderView reports={reports} acks={acks} onAck={(ref) => acknowledge(ref)} />
+  return <HintLadderView bundle={bundle} reports={reports} acks={acks} onAck={(ref) => acknowledge(ref)} />
 }
 
 /* ------------------------------------------------------------------ */
@@ -136,6 +142,7 @@ export default function HintLadder({ reports }: { reports: readonly LabRunReport
 /* ------------------------------------------------------------------ */
 
 interface CardProps {
+  bundle: ForgeBundle
   check: CheckResult
   state: LadderState
   ctx: Ctx
@@ -145,8 +152,8 @@ interface CardProps {
   dispatch(action: LadderAction, ctx: Ctx): void
 }
 
-function CheckCard({ check, state, ctx, acks, clock, onAck, dispatch }: CardProps) {
-  const ladder = LADDER[check.id]
+function CheckCard({ bundle, check, state, ctx, acks, clock, onAck, dispatch }: CardProps) {
+  const ladder = ladderOf(bundle, check.id)
   const open = state.opened
   // A check whose rungs were opened before (acks restored after a reload) comes back expanded.
   const [expanded, setExpanded] = useState(open.R0 !== undefined)
@@ -167,7 +174,7 @@ function CheckCard({ check, state, ctx, acks, clock, onAck, dispatch }: CardProp
     if (open[rung] !== undefined || !unlockOf(state, rung, at).ok) return
     dispatch({ type: 'open', rung }, at)
     // `acknowledge` ignores a ref that is already in the ledger, so re-opening after a reload adds nothing.
-    onAck(hintRef(check.id, rung))
+    onAck(hintRef(check.id, rung, bundle.labId))
     focusAfter.current = heading(rung)
   }
   const toggle = () => {
@@ -176,8 +183,9 @@ function CheckCard({ check, state, ctx, acks, clock, onAck, dispatch }: CardProp
   }
 
   const message = check.status === 'trap' && check.panic ? `${check.msg}\n${check.panic}` : check.msg
-  const walk: Walkthrough | null = open.bottom === undefined ? null : walkthroughFor(check.id, check.trace)
-  const until = acks[hintRef(check.id, 'bottom')]
+  const walk: Walkthrough | null =
+    open.bottom === undefined || bundle.walkthrough === undefined ? null : bundle.walkthrough(check.id, check.trace === undefined ? [] : check.trace.split('\n'))
+  const until = acks[hintRef(check.id, 'bottom', bundle.labId)]
   const bodyId = `hint-body-${check.id}`
 
   return (
@@ -273,32 +281,34 @@ function CheckCard({ check, state, ctx, acks, clock, onAck, dispatch }: CardProp
             </Rung>
           ))}
 
-          <Rung id={heading('bottom')} title={RUNG_TITLE.bottom}>
-            {walk === null ? (
-              <>
-                <Gate checkId={check.id} rung="bottom" state={state} ctx={ctx} onOpen={() => openRung('bottom')} label="Show the walkthrough" />
-                <p className="mt-1.5 text-[12px] text-text-3">
-                  This shows where your last run first breaks the rules. Runs for the next {ASSISTED_HOURS} hours then count as assisted, until you pass on seeds you have not seen.
-                </p>
-              </>
-            ) : (
-              <>
-                <WalkthroughView walk={walk} />
-                <p className="mt-3 text-body-sm font-medium text-text-1">{AFTER_BREAK.title}</p>
-                <p className="text-body-sm text-text-2">{AFTER_BREAK.text}</p>
-                {until !== undefined && (
-                  <p className="mt-1 font-mono text-[11px] text-text-3" data-assisted-until>
-                    assisted until {new Date(assistedUntil(until)).toLocaleString()}
+          {bundle.walkthrough !== undefined && (
+            <Rung id={heading('bottom')} title={RUNG_TITLE.bottom}>
+              {walk === null ? (
+                <>
+                  <Gate checkId={check.id} rung="bottom" state={state} ctx={ctx} onOpen={() => openRung('bottom')} label="Show the walkthrough" />
+                  <p className="mt-1.5 text-[12px] text-text-3">
+                    This shows where your last run first breaks the rules. Runs for the next {ASSISTED_HOURS} hours then count as assisted, until you pass on seeds you have not seen.
                   </p>
-                )}
-              </>
-            )}
-          </Rung>
+                </>
+              ) : (
+                <>
+                  <WalkthroughView walk={walk} />
+                  <p className="mt-3 text-body-sm font-medium text-text-1">{AFTER_BREAK.title}</p>
+                  <p className="text-body-sm text-text-2">{AFTER_BREAK.text}</p>
+                  {until !== undefined && (
+                    <p className="mt-1 font-mono text-[11px] text-text-3" data-assisted-until>
+                      assisted until {new Date(assistedUntil(until)).toLocaleString()}
+                    </p>
+                  )}
+                </>
+              )}
+            </Rung>
+          )}
 
           <div className="border-t border-line pt-3">
             <a
               className={cn(BUTTON, 'no-underline')}
-              href={askHumanUrl({ checkId: check.id, message, r0: state.r0 })}
+              href={askHumanUrl({ label: bundle.discussionsLabel, checkId: check.id, message, r0: state.r0 })}
               target="_blank"
               rel="noopener noreferrer"
               data-ask-human
