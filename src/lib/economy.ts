@@ -221,39 +221,6 @@ export function selectRings(agg: Pick<Aggregate, 'labs' | 'lessons'>): Rings {
   return { rank: earned[earned.length - 1], earned, ring2 }
 }
 
-/* ------------------------------------------------------------------ */
-/* Legacy rank helpers                                                  */
-/* ------------------------------------------------------------------ */
-
-export interface Rank {
-  name: string
-  minXp: number
-}
-
-/**
- * @deprecated XP no longer decides rank (§8.5: use `selectRings(agg).rank`). Kept only so pages that still
- * call `rankForXp`/`nextRank` compile until Home, Progress, Navbar and Curriculum move to rings (B26); with
- * XP counting minutes these thresholds are not a ring. Delete with the last caller.
- */
-export const RANKS: Rank[] = [
-  { name: 'ROOT', minXp: 5000 },
-  { name: 'RING 0', minXp: 3000 },
-  { name: 'RING 1', minXp: 1500 },
-  { name: 'RING 2', minXp: 500 },
-  { name: 'RING 3', minXp: 0 },
-]
-
-/** @deprecated see `RANKS`. */
-export function rankForXp(xp: number): Rank {
-  return RANKS.find((r) => xp >= r.minXp) ?? RANKS[RANKS.length - 1]
-}
-
-/** @deprecated see `RANKS`. */
-export function nextRank(xp: number): Rank | null {
-  const sorted = [...RANKS].sort((a, b) => a.minXp - b.minXp)
-  return sorted.find((r) => r.minXp > xp) ?? null
-}
-
 /** YYYY-MM-DD from the learner's LOCAL calendar fields (not UTC), so a day rolls over at their midnight. */
 export function localDateKey(d: Date = new Date()): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0')

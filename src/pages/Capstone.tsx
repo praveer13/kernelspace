@@ -49,6 +49,7 @@ import {
 import capstoneWorkerUrl from '@/workers/capstone.worker?worker&url'
 import { useProgress, XP } from '@/lib/progress'
 import { cn } from '@/lib/utils'
+import { scrollBehavior } from '@/lib/lesson-scroll'
 
 /* ------------------------------------------------------------------ */
 /* Sandbox: learner code runs in an opaque-origin frame's worker       */
@@ -1152,7 +1153,7 @@ export default function Capstone() {
     const target = index ?? Math.min(stepsDone.length, 6)
     setActiveStep(target)
     window.setTimeout(
-      () => wizardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      () => wizardRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }),
       60,
     )
   }

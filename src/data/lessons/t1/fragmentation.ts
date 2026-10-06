@@ -48,7 +48,7 @@ const lesson: Lesson = {
           options: [
             'About one quarter of the block, as for a 1537-byte request placed in a 2048-byte slot',
             'About one eighth of the block, as for a 1793-byte request placed in a 2048-byte slot',
-            'Close to half the block, as for a 1025-byte request placed in a 2048-byte slot',
+            'Close to half of the whole block, as for a 1025-byte request placed in a 2048-byte slot',
             'Nearly nothing, as for a 2047-byte request placed in a 2048-byte slot',
           ],
           correct: [2],
@@ -66,7 +66,7 @@ const lesson: Lesson = {
           q: 'A sequence holds 200 tokens, and its KV cache is stored in blocks of 16 tokens each. How many blocks does it occupy?',
           unit: 'blocks',
           truth: 13,
-          okWithinFactor: 1.1,
+          okWithinFactor: 1.05,
           revealAt: 'The fixed-block maneuver',
           kcs: ['t1.fixed-blocks'],
           claims: ['production.vllm.block-size'],

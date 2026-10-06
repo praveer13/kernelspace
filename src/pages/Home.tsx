@@ -23,11 +23,11 @@ import CodeBlock from '@/components/CodeBlock'
 import { LinkButton } from '@/components/Button'
 import { lazyDecoration } from '@/lib/lazy-decoration'
 import { selectRings } from '@/lib/economy'
-import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
+import { TRACKS, CAPSTONE, SIMS } from '@/lib/tracks'
+import { isFirstVisit, useUpNext, type UpNextState } from '@/lib/learner/up-next'
 import {
   useProgress,
   selectDoneLessons,
-  selectNextLesson,
   TOTAL_LESSONS,
 } from '@/lib/progress'
 import {
@@ -117,26 +117,45 @@ function TodayCard() {
   )
 }
 
+/**
+ * Resume: where `recommend()` says to go next (spec §7.3), the same answer the lesson footer and /progress give.
+ * It loads with the recommender, so until then (or if that fails) it is a plain link to the path, never a guess
+ * at a lesson: a placed learner must not be sent to R.L1 by a stand-in.
+ */
+function ResumeLink({ up, variant }: { up: UpNextState; variant: 'primary' | 'secondary' }) {
+  if (up.status !== 'ready') {
+    return (
+      <LinkButton to="/curriculum" icon={Play} variant={variant}>
+        Open your path
+      </LinkButton>
+    )
+  }
+  const { rec } = up
+  // titles read "T1.L4 · Title" or "Lab 01 · stage 1": the part before the first " · " is short enough for a button
+  const name = rec.title.split(' · ')[0]
+  const label =
+    rec.kind === 'boot' ? 'Start with Boot' : rec.kind === 'lesson' ? `Resume: ${name}` : rec.kind === 'lab' ? `Continue: ${rec.title}` : rec.title
+  return (
+    <LinkButton to={rec.to} icon={Play} variant={variant}>
+      {label}
+    </LinkButton>
+  )
+}
+
 function Hero() {
   const reduced = useReducedMotion()
   const done = useProgress(selectDoneLessons)
   const ring = useProgress((s) => selectRings(s.aggregate).rank)
-  const nextId = useProgress(selectNextLesson(ORDERED_LESSON_IDS))
   const hasLessonRecords = useProgress((s) => Object.keys(s.lessons).length > 0)
   // A first visit (no Boot, no lesson records) starts with Boot (spec §12.4, Addendum A3). There is no auto-redirect from `/`.
   const bootDone = useProgress((s) => s.completions.boot !== undefined)
   const graded = useProgress((s) => Object.keys(s.aggregate.days).length > 0)
-  const firstVisit = !bootDone && !hasLessonRecords && !graded
-  // Boot completed or any graded event (a passed lesson is one): the hero leads with Today (owner answer O6) and Resume is the secondary.
-  const returning = bootDone || graded || done > 0
-
-  const [nextTrack, nextLesson] = nextId ? nextId.split('.') : ['r', 'l1']
-  const nextTrackMeta = TRACKS.find((t) => t.id === nextTrack)
-  const resume = nextId ? (
-    <LinkButton to={`/lesson/${nextId}`} icon={Play} variant="secondary">
-      {`Resume: ${nextTrackMeta?.code ?? 'R'} · Lesson ${nextLesson?.slice(1) ?? '1'}`}
-    </LinkButton>
-  ) : null
+  // A learner who placed (the walk writes no graded event) and skipped Boot has already chosen where to start.
+  const placed = useProgress((s) => Boolean(s.working['placement:result']))
+  const firstVisit = isFirstVisit({ bootDone, hasLessonRecords, graded, placed })
+  // Boot completed, a placement, or any graded event (a passed lesson is one): the hero leads with Today (owner answer O6) and Resume is the secondary.
+  const returning = bootDone || graded || placed || done > 0
+  const up = useUpNext()
 
   const showParticles =
     !reduced && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
@@ -244,14 +263,12 @@ function Hero() {
                   Start with Boot: 10 minutes, any device
                 </LinkButton>
               ) : (
-                <LinkButton to="/tracks/r" icon={ArrowRight}>
-                  Start at Rust Zero
-                </LinkButton>
+                <ResumeLink up={up} variant="primary" />
               )}
             </motion.div>
             <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }}>
-              {returning && resume ? (
-                resume
+              {returning ? (
+                <ResumeLink up={up} variant="secondary" />
               ) : (
                 <LinkButton to="/lab" variant="secondary">
                   Explore the lab

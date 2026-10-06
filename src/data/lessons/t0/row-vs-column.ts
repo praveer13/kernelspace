@@ -39,7 +39,7 @@ const lesson: Lesson = {
           options: [
             '8 bytes, one element, with column neighbors stored side by side',
             '64 bytes, one cache line, with each row start placed on a cache-line boundary',
-            '64 KiB, one whole row, with the column neighbor a full row length ahead',
+            '64 KiB, one whole row, with the element below sitting a full row length further along',
             '4 KiB, one page, with each row starting on a fresh page of physical memory',
           ],
           correct: [2],

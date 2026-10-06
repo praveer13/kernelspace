@@ -21,7 +21,7 @@ const OPTIONS = [
   'E0499: a second &mut borrow starts while the first is still live',
   'E0502: a &mut borrow starts while a shared borrow is still live',
   'E0382: a value is used after it was moved out of its binding',
-  'It compiles: with 2018 edition rules a borrow ends at its last use',
+  'It compiles: a borrow ends at its last use, giving 0 errors from rustc',
 ]
 
 export const R_ANCHORS: AuthoredItem[] = [

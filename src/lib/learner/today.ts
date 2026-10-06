@@ -24,7 +24,7 @@ import { CATCH_UP_COPY, WELCOME_BACK_COPY, dayNumber, weekdayOf } from '@/lib/le
 import type { ItemData, ItemRef, ItemResponse, Json, LedgerEvent, LocalDay } from '@/lib/ledger/types'
 import { seedFor } from '@/lib/items/core'
 import { budgetLine, itemSeconds, type ItemPool } from './composer'
-import type { FirstReviewCalibration, Recommendation, SessionMode, SessionPlan, SessionSlot, SlotReason, WeekStatus } from './types'
+import type { FirstReviewCalibration, SessionMode, SessionPlan, SessionSlot, SlotReason, WeekStatus } from './types'
 
 /* ------------------------------------------------------------------ */
 /* Preferences (`today:prefs`)                                         */
@@ -365,35 +365,6 @@ export function composePractice(kcs: readonly KcId[], pool: ItemPool, seed: numb
     if (item) out.push({ kc, item, level: item.source === 'gen' ? item.inst.level : undefined, reason })
   }
   return out
-}
-
-/* ------------------------------------------------------------------ */
-/* Up Next stand-in                                                    */
-/* ------------------------------------------------------------------ */
-
-export interface UpNextInput {
-  bootDone: boolean
-  /** Lessons in curriculum order, with their status in the learner's progress. */
-  lessons: readonly { id: string; title: string; minutes: number; status: string }[]
-  /** Items waiting for a "keep going" set. */
-  extraAvailable: boolean
-}
-
-/**
- * One Up Next until `recommend()` (K3, B22) replaces it: Boot first; else the first lesson that is neither
- * *done* nor *read*; else a warm-cache set. Never gates anything (W8): it is a link with a reason.
- */
-export function upNextFor(input: UpNextInput): Recommendation | null {
-  const touched = input.lessons.some((l) => l.status !== 'unstarted')
-  if (!input.bootDone && !touched) {
-    return { kind: 'boot', ref: '', to: '/boot', title: 'Boot', why: '10 minutes: how fast is one GPU for one user?', minutes: 10 }
-  }
-  const next = input.lessons.find((l) => l.status !== 'done' && l.status !== 'read')
-  if (next) {
-    const label = next.id.toUpperCase()
-    return { kind: 'lesson', ref: next.id, to: `/lesson/${next.id}`, title: label, why: `${next.title}: the next lesson on your path`, minutes: next.minutes }
-  }
-  return input.extraAvailable ? { kind: 'today', ref: '', to: '/today', title: 'Keep your cache warm', why: 'Everything is done: a short set of new numbers keeps it fresh', minutes: 5 } : null
 }
 
 /* ------------------------------------------------------------------ */

@@ -150,8 +150,7 @@ export interface ProgressState extends LedgerFacadeState, LedgerFacadeActions {
 }
 
 // The economy lives in economy.ts so the pure ledger core can use it without zustand.
-export { XP, RANKS, rankForXp, nextRank, localDateKey } from './economy'
-export type { Rank } from './economy'
+export { XP, localDateKey } from './economy'
 
 export const TOTAL_LESSONS = TOTAL_TRACK_LESSONS
 
@@ -921,12 +920,6 @@ export function selectTrackDone(trackId: string) {
   return (s: ProgressState) =>
     Object.entries(s.lessons).filter(([id, l]) => id.startsWith(`${trackId}.`) && l.status === 'done')
       .length
-}
-
-/** First lesson in track order that is neither done nor read (resume skips read, wave-1.md §8.3) → next recommended lesson id. */
-export function selectNextLesson(orderedLessonIds: string[]) {
-  return (s: ProgressState) =>
-    orderedLessonIds.find((id) => s.lessons[id]?.status !== 'done' && s.lessons[id]?.status !== 'read') ?? null
 }
 
 /** Current streak length in consecutive days ending today/yesterday. */

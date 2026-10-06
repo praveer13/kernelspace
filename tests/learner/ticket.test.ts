@@ -23,6 +23,7 @@ import {
   judgeTicket,
   makeGenPool,
   planTicket,
+  taughtBy,
   testOutUsedToday,
   ticketAttempt,
   type TicketContent,
@@ -38,9 +39,11 @@ import { CONTENT, Journal, START } from './ledger-gen'
 
 let frag: Gen
 let genPool: TicketPool
+let roofPool: TicketPool
 beforeAll(async () => {
   frag = await loadFamily('frag')
   genPool = makeGenPool(new Map([['frag', frag]]), (kc) => kcById(kc)?.gen ?? [])
+  roofPool = makeGenPool(new Map([['roofline', await loadFamily('roofline')]]), (kc) => kcById(kc)?.gen ?? [])
 })
 
 const NO_POOL: TicketPool = { families: () => [], make: () => null }
@@ -203,6 +206,67 @@ describe('planTicket: ticket', () => {
     for (const q of (lesson.blocks[0] as QuizBlockData).questions) delete q.kcs
     const plan = mustPlan(planTicket(lesson, content(NO_POOL), [], 1))
     for (const it of plan.items) if (it.source === 'quiz') expect(it.kcs).toEqual(T0_L1)
+  })
+})
+
+describe('planTicket: only a KC the lesson has taught is generated (1b blocking 1)', () => {
+  // t0.l1's Lesson.kcs names a T4 KC (first taught in t4.l3) that has a roofline family
+  const KC_T0 = 't0.idea-reuse'
+  const KC_T4 = 't4.decode-bandwidth'
+
+  test('taughtBy: the first lesson is this lesson or earlier in curriculum order', () => {
+    expect(taughtBy('t1.l4', 't1.l4')).toBe(true)
+    expect(taughtBy('t1.l4', 't0.l6')).toBe(true)
+    expect(taughtBy('t1.l4', 't1.l3')).toBe(true)
+    expect(taughtBy('t1.l4', 't1.l5')).toBe(false)
+    expect(taughtBy('t0.l1', 't4.l3')).toBe(false)
+    expect(taughtBy('t2.l7', 't0.l2')).toBe(true)
+    expect(taughtBy('t0.l1', undefined)).toBe(false) // a lab-only KC has no lesson
+    expect(taughtBy('t0.l1', 'r.l1')).toBe(false) // R is not in the T0-T7 order
+    expect(taughtBy('r.l1', 'r.l1')).toBe(true)
+    expect(taughtBy('r.l8', 'r.l7')).toBe(true) // R lessons are ordered among themselves
+    expect(taughtBy('r.l7', 'r.l8')).toBe(false)
+    expect(taughtBy('r.l10', 'r.l9')).toBe(true) // numeric, not string, order
+    expect(taughtBy('r.l3', 't0.l2')).toBe(false) // across the braid it stays conservative
+  })
+
+  test('a lesson naming a later-track KC never serves its family, and its authored constructed responses are served (400 seeds)', () => {
+    const lesson = lessonOf('t0.l1', [KC_T0, KC_T4], 5, 2)
+    const crs = new Set<number>()
+    for (let seed = 0; seed < 400; seed++) {
+      const plan = mustPlan(planTicket(lesson, content(roofPool), [], seed))
+      for (const it of plan.items) if (it.source === 'gen') throw new Error(`seed ${seed} served ${it.inst.family}/${it.inst.variant}`)
+      const last = plan.items[plan.nonMcqIndex]
+      expect(last.source).toBe('cr')
+      if (last.source === 'cr') crs.add(last.index)
+    }
+    // a fresh ledger always starts at the first constructed response; a retry rotates (see 'retries')
+    expect([...crs]).toEqual([0])
+    const retry = mustPlan(planTicket(lesson, content(roofPool), [], 1, { avoid: new Set(['cr:t0.l1#0']) }))
+    expect(retry.items[retry.nonMcqIndex]).toMatchObject({ source: 'cr', index: 1 })
+  })
+
+  test('without constructed responses such a lesson has nothing to produce: null, never the later KC\'s family', () => {
+    expect(planTicket(lessonOf('t0.l1', [KC_T0, KC_T4], 5, 0), content(roofPool), [], 1)).toBeNull()
+  })
+
+  test('a KC the lesson does teach still gets its family', () => {
+    const lesson = lessonOf('t4.l3', [KC_T4], 5, 2)
+    for (let seed = 0; seed < 50; seed++) {
+      const plan = mustPlan(planTicket(lesson, content(roofPool), [], seed))
+      const last = plan.items[plan.nonMcqIndex]
+      expect(last.source).toBe('gen')
+      if (last.source === 'gen') expect(last.inst.family).toBe('roofline')
+    }
+  })
+
+  test('the first taught KC with a family is used; the later one is passed over', () => {
+    const lesson = lessonOf('t4.l3', [KC_T0, KC_T4], 5, 2)
+    // t0.idea-reuse has no family; t4.decode-bandwidth does and t4.l3 teaches it
+    expect(mustPlan(planTicket(lesson, content(roofPool), [], 2)).items[2].source).toBe('gen')
+    // an injected graph says the T4 KC is first taught later: the CR is served
+    const later: TicketContent = { pool: roofPool, firstLesson: (kc) => (kc === KC_T4 ? 't4.l9' : 't0.l1') }
+    expect(mustPlan(planTicket(lesson, later, [], 2)).items[2].source).toBe('cr')
   })
 })
 

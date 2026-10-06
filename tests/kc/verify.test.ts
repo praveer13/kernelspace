@@ -4,6 +4,8 @@ import { KC, KC_GRAPH, REF_KCS, RUST_ANCHOR_KC, THRESHOLD_KCS } from '../../src/
 import { FORGE_LABS, type ForgeLab } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import type { Lesson } from '../../src/data/lessons/types'
+import { gradeItem } from '../../src/lib/items/play'
+import { prequestionItem } from '../../src/lib/learner/prequestions'
 import type { Kc, KcGraph } from '../../src/lib/kc/types'
 import { PENDING_FAMILIES, discoverAuthoredItems, discoverFamilies, verifyKc, type VerifyKcInput } from '../../scripts/verify-kc'
 
@@ -239,7 +241,7 @@ describe('coverage, for lessons that set Lesson.kcs', () => {
     expect(errorsOf(input({ lessons }))).toEqual([])
   })
 
-  test('Lesson.kcs must hold 2-3 KCs that teach the lesson', () => {
+  test('Lesson.kcs must hold 1-3 KCs that teach the lesson', () => {
     const lessons = withLesson('t2.l1', (l) => {
       l.kcs = ['t2.process-thread', KC.locality, 't2.context-switch', 't2.tlb']
       tagQuiz(l, [['t2.process-thread'], ['t2.process-thread'], ['t2.context-switch'], ['t2.context-switch']])
@@ -247,6 +249,23 @@ describe('coverage, for lessons that set Lesson.kcs', () => {
     const errors = errorsOf(input({ lessons }))
     expect(has(errors, /t2\.l1: Lesson\.kcs has 4 KCs/)).toBe(true)
     expect(has(errors, /t2\.l1: Lesson\.kcs names t0\.locality, whose lessons do not include t2\.l1/)).toBe(true)
+  })
+
+  test('Lesson.kcs may name only KCs first taught in this lesson or an earlier one', () => {
+    // the committed lessons are clean (the first test); t0.l1 once named two KCs that t4.l3 and t5.l7 introduce
+    const lessons = withLesson('t0.l1', (l) => {
+      l.kcs = ['t0.idea-reuse', KC.decodeBandwidth, KC.batchingThroughput]
+    })
+    const errors = errorsOf(input({ lessons }))
+    expect(errors).toEqual([
+      't0.l1: Lesson.kcs names t4.decode-bandwidth, first taught in t4.l3, later in curriculum order (name only KCs this lesson or an earlier one introduces)',
+      't0.l1: Lesson.kcs names t5.batching-throughput, first taught in t5.l7, later in curriculum order (name only KCs this lesson or an earlier one introduces)',
+    ])
+    // a KC first taught earlier is fine: t0.l5 may name t0.idea-reuse, whose first lesson is t0.l1
+    const earlier = withLesson('t0.l5', (l) => {
+      l.kcs = ['t0.idea-reuse', 't0.runtime-costs']
+    })
+    expect(errorsOf(input({ lessons: earlier }))).toEqual([])
   })
 
   test('lab check tags must agree with the KCs\' labs', () => {
@@ -290,5 +309,31 @@ describe('warnings', () => {
     const inp = input()
     kcOf(inp, 't0.wait-bars').requires = []
     expect(verifyKc(inp).warnings).toContain('t0.l6: none of its KCs requires anything')
+  })
+})
+
+describe('authored facts the final review caught (BF4)', () => {
+  test('the fragmentation block-count prequestion grades the forgotten partial block (12) as wrong', () => {
+    const l = ALL_LESSONS.find((x) => x.id === 't1.l4')
+    const block = l?.blocks.find((b) => b.type === 'predict')
+    if (block?.type !== 'predict') throw new Error('t1.l4 has no predict block')
+    const i = block.items.findIndex((p) => p.kind === 'numeric')
+    const p = block.items[i]
+    if (p.kind !== 'numeric') throw new Error('no numeric prequestion')
+    expect(p.truth).toBe(13)
+    // 200 tokens in 16-token blocks: 12.5 rounds up, so 13; the tolerance must stay below 13/12
+    expect(p.okWithinFactor).toBeLessThan(13 / 12)
+    const item = prequestionItem('t1.l4', i, p)
+    const ok = (value: number) => gradeItem(item, { kind: 'estimate', value }).ok
+    expect([ok(12), ok(13), ok(14)]).toEqual([false, true, false])
+  })
+
+  test('stack-vs-heap never says a frame is released by a subtract (the subtract allocates; an add or leave releases)', () => {
+    const l = ALL_LESSONS.find((x) => x.id === 't1.l1')
+    const block = l?.blocks.find((b) => b.type === 'predict')
+    if (block?.type !== 'predict') throw new Error('t1.l1 has no predict block')
+    const text = JSON.stringify(block.items)
+    expect(/releas\w*[^.]*subtract/i.test(text)).toBe(false)
+    expect(text).toContain('one add to rsp')
   })
 })

@@ -19,6 +19,7 @@
  */
 
 import type { QuizQuestion } from '@/components/QuizBlock'
+import { kcById } from '@/data/kc'
 import type { Lesson, QuizBlockData } from '@/data/lessons/types'
 import { seedFor } from '@/lib/items/core'
 import type { ItemResult } from '@/lib/items/play'
@@ -66,6 +67,8 @@ export interface TicketContent {
   earlier?: readonly KcId[]
   /** Spiral only: the predicted recall now of a carded KC, null for a KC with no card. */
   recall?(kc: KcId): number | null
+  /** The KC graph's first lesson of a KC (`Kc.lessons[0]`). Defaults to the real graph; a test may inject a fixture. */
+  firstLesson?(kc: KcId): string | undefined
 }
 
 /** The part of a lesson a ticket reads. */
@@ -117,6 +120,30 @@ export function earlierKcsOf(lessonId: string, kcs: readonly Kc[]): KcId[] {
       return first !== null && first < at && (k.track === 't0' || k.track === 't1' || k.track === 't2')
     })
     .map((k) => k.id)
+}
+
+/**
+ * True when the lesson has already taught the KC: the KC's first lesson is this lesson or an earlier one in
+ * curriculum order. A lesson's `kcs` may also name KCs it only previews or applies (T0.L1 names T4 and T5
+ * KCs), and a ticket must not ask a learner to produce what a later track teaches.
+ */
+export function taughtBy(lessonId: string, firstLesson: string | undefined): boolean {
+  if (firstLesson === undefined) return false
+  if (firstLesson === lessonId) return true
+  const first = sequencePos(firstLesson)
+  const at = sequencePos(lessonId)
+  // R and T lessons are ordered only within their own sequence; across the braid a ticket stays conservative.
+  return first !== null && at !== null && first.seq === at.seq && first.pos <= at.pos
+}
+
+const R_LESSON_ID = /^r\.l(\d+)$/
+
+/** Position of a lesson in its own sequence: T0-T7 in curriculum order, or R in R order. */
+function sequencePos(id: string): { seq: 't' | 'r'; pos: number } | null {
+  const t = lessonPos(id)
+  if (t !== null) return { seq: 't', pos: t }
+  const r = R_LESSON_ID.exec(id)
+  return r ? { seq: 'r', pos: Number(r[1]) } : null
 }
 
 /* ------------------------------------------------------------------ */
@@ -366,7 +393,10 @@ export function planTicket(
   const history = historyOf(events, lesson.id)
   const lessonKcs = lesson.kcs ?? []
 
-  const nonMcq = genNonMcq(lessonKcs, content.pool, seed, 100) ?? pickCr(lesson, history, avoid)
+  // only a KC the lesson has already taught may be asked as a generated item; else the authored constructed response
+  const firstLesson = content.firstLesson ?? ((kc: KcId) => kcById(kc)?.lessons[0])
+  const taught = lessonKcs.filter((kc) => taughtBy(lesson.id, firstLesson(kc)))
+  const nonMcq = genNonMcq(taught, content.pool, seed, 100) ?? pickCr(lesson, history, avoid)
   if (!nonMcq) return null
 
   const quiz = lesson.blocks.find((b): b is QuizBlockData => b.type === 'quiz')

@@ -195,10 +195,10 @@ You should now be able to trace a request through a modern async server: NIC int
         prompt:
           'Contrast epoll and io_uring: what does each tell you, and what does each cost per operation?',
         model:
-          'epoll reports readiness: you register file descriptors once and epoll_wait returns only the ready ones, but you still make a read or write syscall per operation, and regular files are always ready. io_uring shares submission and completion rings with the kernel, so you queue operations and reap results in batches with few syscalls, for files and sockets alike.',
+          'epoll reports readiness: you register file descriptors once and epoll_wait returns only the ready ones, but you still make a read or write syscall per operation, and epoll_ctl refuses regular files (EPERM). io_uring shares submission and completion rings with the kernel, so you queue operations and reap results in batches with few syscalls, for files and sockets alike.',
         ideas: [
           'epoll: register once, and the wait returns only ready fds, so work tracks ready events',
-          'epoll still needs a syscall per read or write, and regular files are always ready',
+          'epoll still needs a syscall per read or write, and epoll_ctl refuses regular files with EPERM',
           'io_uring: shared SQ and CQ rings, batched submissions and completions, few syscalls, files included',
         ],
         kcs: ['t2.async-io'],

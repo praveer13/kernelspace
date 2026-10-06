@@ -46,14 +46,14 @@ const lesson: Lesson = {
           q: 'A binary is dynamically linked against libc.so.6. When does the library\'s code get mapped into the process?',
           options: [
             'At link time, when the linker copies the library functions into the executable',
-            'At process start, when the loader maps the library and patches the jump table',
+            'At process start, when the loader maps the library and sets up its lazily filled jump table',
             'At the first call, when the kernel scheduler fetches the library it still needs',
             'At compile time, when the compiler reads the header and pulls the code in',
           ],
           correct: [1],
           why: [
             'That is static linking. A dynamically linked binary stays small because the library code is not copied into it.',
-            'Right: dynamic linking records a promise in the binary, and the loader fulfils it at startup by mapping the .so and patching the PLT and GOT.',
+            'Right: dynamic linking records a promise in the binary, and the loader fulfils it at startup by mapping the .so and setting up the PLT and GOT, whose slots fill in at the first call to each function (lazy binding).',
             'The scheduler decides which thread runs, and it does not load libraries. Lazy binding resolves addresses at the first call, but the library is already mapped.',
             'A header only declares functions. The compiler never reads library code, and the definition is found much later.',
           ],
@@ -93,7 +93,7 @@ This is a guided tour with a purpose. The destination is the **ABI** — the app
 
 **Preprocessing** is textual: \`#include\` pastes headers, \`#define\` expands macros. Output: one giant translation unit. **Compilation** parses that into an AST, optimizes, and emits assembly for your target ISA. **Assembly** turns mnemonics into machine code, producing an **object file** (\`.o\`): machine code plus metadata — sections (\`.text\` code, \`.data\` initialized, \`.bss\` zero-init), a **symbol table** (names this file defines vs names it needs), and **relocation entries** (addresses to patch later, because the file doesn't know where anything will finally live).
 
-**Linking** is the matchmaker. It takes many object files and libraries, resolves every undefined symbol to a definition, assigns final addresses, patches the relocation entries, and emits an executable. Two flavors: **static** linking copies library code into the binary (big, self-contained, no version skew); **dynamic** linking records a promise — "needs \`libc.so.6\`" — that the **loader** fulfills at process start, mapping the shared library and patching a jump table (the PLT/GOT machinery).`,
+**Linking** is the matchmaker. It takes many object files and libraries, resolves every undefined symbol to a definition, assigns final addresses, patches the relocation entries, and emits an executable. Two flavors: **static** linking copies library code into the binary (big, self-contained, no version skew); **dynamic** linking records a promise — "needs \`libc.so.6\`" — that the **loader** fulfills at process start, mapping the shared library and setting up a jump table (the PLT/GOT machinery) whose slots fill in on each function's first call.`,
     },
     {
       type: 'code',
