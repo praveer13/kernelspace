@@ -737,7 +737,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
       },
       {
         id: 'pool-small',
-        label: 'capacity wall, with allocations failing in a pool too small for the new context lengths',
+        label: 'capacity wall, with allocations failing in a pool too small for the new contexts',
         correct: true,
         why: 'Right: near-zero free blocks plus rising auto-preempts mean allocations fail and preempted requests restart by recompute. Longer contexts take more blocks each, so the same pool holds fewer sequences and TTFT climbs.',
       },
@@ -789,7 +789,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     causes: [
       {
         id: 'drain',
-        label: 'intake drain set slower than the arrival rate, so the queue fills and sheds despite idle capacity',
+        label: 'intake drain below the arrival rate, so the queue fills and sheds despite idle capacity',
         correct: true,
         why: 'Right: the scheduler has nothing waiting, running is low and free blocks are plentiful, so requests are held upstream. A drain slower than a traffic burst fills intake and sheds, while TPOT stays normal and GPUs idle.',
       },
