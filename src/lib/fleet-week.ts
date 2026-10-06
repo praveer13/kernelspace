@@ -17,6 +17,8 @@ import {
   makeRng,
   routerLabel,
   type ClusterStats,
+  type EngineConfig,
+  type EngineStats,
   type RouterKind,
   type SchedulerDriver,
   type SchedAction,
@@ -139,6 +141,8 @@ export function makeFaultInjector(faults: FaultSpec[], rng: () => number) {
 }
 
 const CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
+/** Intake-stall's node: the Act III rack's pool and batch, so the scheduler is never short of blocks or slots. */
+const INTAKE_STALL_CFG = { numBlocks: 2048, blockSize: 16, maxRunning: 96, sloTtft: 40, prefillChunk: 128 }
 const WORKER_CFG = { numBlocks: 128, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128 }
 const REQ_COUNT = 240
 const SPAN = 900
@@ -624,21 +628,98 @@ export interface Incident {
   mitigations: IncidentOption[]
 }
 
-function runIncidentEngine(seeds: FleetWeekSeeds, cfg = CFG, sched = makeRefScheduler()): TickSample[] {
-  const e = new Engine(cfg, traceFor(seeds), sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
-    intake: makeRefQueue(32),
-    drainPerTick: 8,
+/**
+ * What one incident runs: the node, the intake queue in front of it, the drain that feeds the scheduler and the
+ * scheduler itself. The fault is whichever of these is wrong. `runIncident` takes the same fields as a change,
+ * so a test can ask what each keyed mitigation (and each distractor) would do on the learner's own seed.
+ */
+export interface IncidentScenario {
+  cfg: EngineConfig
+  sched: SchedulerDriver
+  intakeCapacity: number
+  drainPerTick: number
+}
+
+/** What a run of an incident reports: the telemetry the learner sees, plus the end-of-run numbers it is graded against. */
+export interface IncidentRun {
+  /** one TickSample every 10 ticks, as the Act IV page draws them */
+  series: TickSample[]
+  stats: EngineStats
+  goodput: number
+  ttftP95: number
+  tpotP95: number
+  queueP95: number
+  ticks: number
+}
+
+/** Over-admission at small sizes: the scheduler fits prompts only, with no headroom for decode growth. */
+const NAIVE_SJF: SchedulerDriver = {
+  name: 'naive-sjf',
+  schedule: (v: SchedView) => {
+    const w = [...v.waiting].sort((a, b) => a.prompt - b.prompt || a.arrival - b.arrival)
+    const used = v.running.reduce((a, r) => a + r.prompt + r.decoded, 0)
+    const slots = v.maxRunning - v.running.length
+    const admit: number[] = []
+    let u = used
+    for (const r of w) {
+      if (admit.length >= slots) break
+      if (u + r.prompt > v.memCap) continue
+      admit.push(r.id)
+      u += r.prompt
+    }
+    return { admit, preempt: [] }
+  },
+}
+
+/** No admission control: everything waiting is admitted, whether or not the pool can back it. */
+const GREEDY_SCHEDULER: SchedulerDriver = {
+  name: 'greedy',
+  schedule: (v: SchedView) => ({ admit: v.waiting.map((r) => r.id), preempt: [] }),
+}
+
+/** The drain a healthy intake runs at (the engine default for every other act). */
+export const HEALTHY_DRAIN_PER_TICK = 8
+
+/**
+ * The faults, as parameters. kv-thrash is a pool of 96 blocks under a scheduler with no headroom (decode growth
+ * overflows, auto-preempt storm). intake-stall is a big, mostly idle node (the Act III rack's pool and batch) behind
+ * an intake that drains 1 request per tick: only a flash crowd outruns that, so shed arrives in steps while the
+ * scheduler has nothing waiting. no-admission is the Act I node behind a scheduler that admits everything.
+ * tests/fleet/incident-consistency.test.ts holds each briefing and key to these numbers on 32 graded seeds.
+ */
+export const INCIDENT_SCENARIOS: Record<string, IncidentScenario> = {
+  'kv-thrash': { cfg: { ...CFG, numBlocks: 96 }, sched: NAIVE_SJF, intakeCapacity: 32, drainPerTick: HEALTHY_DRAIN_PER_TICK },
+  'intake-stall': { cfg: INTAKE_STALL_CFG, sched: makeRefScheduler(), intakeCapacity: 32, drainPerTick: 1 },
+  'no-admission': { cfg: CFG, sched: GREEDY_SCHEDULER, intakeCapacity: 32, drainPerTick: HEALTHY_DRAIN_PER_TICK },
+}
+
+/** Run an incident's scenario on these seeds to completion, with `change` applied on top (the counterfactual). */
+export function runIncident(
+  id: string,
+  seeds: FleetWeekSeeds,
+  change: Partial<Omit<IncidentScenario, 'cfg'>> & { cfg?: Partial<EngineConfig> } = {},
+): IncidentRun {
+  const base = INCIDENT_SCENARIOS[id]
+  if (!base) throw new Error(`no incident scenario "${id}"`)
+  const cfg = { ...base.cfg, ...change.cfg }
+  const e = new Engine(cfg, traceFor(seeds), change.sched ?? base.sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
+    intake: makeRefQueue(change.intakeCapacity ?? base.intakeCapacity),
+    drainPerTick: change.drainPerTick ?? base.drainPerTick,
   })
   const series: TickSample[] = []
   e.recorder = (s) => {
     if (s.tick % 10 === 0) series.push(s)
   }
-  let guard = 0
-  while (!e.done && guard < 20000) {
-    e.step()
-    guard++
+  const ticks = drain(e, REQ_COUNT)
+  return {
+    series,
+    stats: e.stats(),
+    goodput: e.goodput(REQ_COUNT),
+    ttftP95: e.ttftP95(),
+    tpotP95: e.tpotP95(),
+    queueP95: e.queueP95(),
+    ticks,
   }
-  return series
 }
 
 export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
@@ -684,19 +765,19 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
         id: 'bigger-pool',
         label: 'grow the pool with more memory, quantized blocks or an offload tier while capping admitted context',
         correct: true,
-        why: 'Right: more usable blocks (HBM, FP8 KV at half the bytes of 16-bit, or an offload tier) remove the capacity wall, and a cap on admitted context stops one long request from evicting many others.',
+        why: 'Right: more usable blocks (HBM, FP8 KV at half the bytes of 16-bit, or an offload tier) lift the capacity wall: doubling the pool already cuts TTFT p95 and lifts goodput, and quadrupling it nearly ends the preempts. A cap on admitted context stops one long request from evicting many others.',
       },
       {
         id: 'smaller-batch',
         label: 'lower max_running to cut preemptions, accepting a throughput ceiling in the meantime',
         correct: false,
-        why: 'Fewer concurrent sequences does cut preemptions, but it only caps throughput: the pool stays too small for the new contexts and the cause is untouched. Adding blocks and capping context is what removes it.',
+        why: 'Fewer concurrent sequences leaves the pool just as small for the new contexts: preemptions are not reliably cut and goodput stays well below what adding blocks gives. It caps throughput and the cause is untouched.',
       },
       {
         id: 'chunked-prefill',
         label: 'enable chunked prefill, so long prompts stop blocking the decode steps of running requests',
         correct: false,
-        why: 'Chunked prefill smooths prefill-decode interference, which shows up as TPOT spikes. TPOT is flat here; the pain is preemption from block exhaustion, which chunking does not relieve.',
+        why: 'Chunked prefill smooths prefill-decode interference, which shows up as TPOT spikes. TPOT is flat here; the pain is preemption from block exhaustion, and chunking leaves goodput far below what adding blocks gives.',
       },
     ],
   },
@@ -704,19 +785,19 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     id: 'intake-stall',
     title: 'incident 02 — shed climbing, GPUs idle',
     briefing:
-      'The queue-delay p95 and shed count climb steadily, yet workers sit half-empty: running is low, the scheduler waiting list is near zero, and completions trickle. TPOT is normal once a request starts. The intake queue is not full on average.',
+      'The queue-delay p95 is high and the shed count jumps at every traffic burst, yet workers sit mostly empty: running is low, free blocks are plentiful and the scheduler waiting list is empty. Nothing is preempted, and TPOT is normal once a request starts.',
     causes: [
       {
         id: 'drain',
         label: 'intake drain set slower than the arrival rate, so the queue fills and sheds despite idle capacity',
         correct: true,
-        why: 'Right: the scheduler has nothing waiting and running is low, so requests are held upstream. A drain slower than arrivals fills intake and sheds, while TPOT stays normal and GPUs idle.',
+        why: 'Right: the scheduler has nothing waiting, running is low and free blocks are plentiful, so requests are held upstream. A drain slower than a traffic burst fills intake and sheds, while TPOT stays normal and GPUs idle.',
       },
       {
         id: 'pool-small',
         label: 'pool too small, so blocks run out and preempted requests re-queue until the backlog sheds',
         correct: false,
-        why: 'A full pool shows near-zero free blocks, preemptions and a long scheduler waiting list. Workers here are half-empty with nothing waiting, so memory is not the constraint.',
+        why: 'A full pool shows near-zero free blocks, preemptions and a long scheduler waiting list. Here free blocks are plentiful, nothing is preempted and nothing is waiting, so memory is not the constraint.',
       },
       {
         id: 'hot-expert',
@@ -736,25 +817,25 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
         id: 'bigger-pool',
         label: 'grow the pool to let each worker hold more sequences once the backlog finally arrives',
         correct: false,
-        why: 'Memory is not short: nothing is waiting at the scheduler and workers are half-empty. More blocks add capacity that already sits idle and leave the drain bottleneck, and the shedding, untouched.',
+        why: 'Memory is not short: nothing is waiting at the scheduler and workers are mostly empty. More blocks add capacity that already sits idle, so goodput does not move and the drain bottleneck, and the shedding, stay untouched.',
       },
       {
         id: 'fix-drain',
         label: 'fix the drain configuration to match what admission can absorb, then rerun the test',
         correct: true,
-        why: 'Right: the bottleneck is the drain rate, so match it to what admission can absorb. Re-running the flash-crowd test confirms shed and queue delay recover rather than assuming they do.',
+        why: 'Right: the bottleneck is the drain rate, so match it to what admission can absorb. Re-running the flash-crowd test confirms that shed more than halves and queue delay falls rather than assuming they do.',
       },
       {
         id: 'restart',
         label: 'restart the router to flush the queue, then watch whether the shed count returns',
         correct: false,
-        why: 'A restart may clear the backlog briefly, but the drain is still slower than arrivals, so the queue refills and sheds again. It treats a configuration fault as a transient hang.',
+        why: 'A restart may clear the backlog briefly, but the drain is still slower than a traffic burst, so the next burst fills the queue and sheds again. It treats a configuration fault as a transient hang.',
       },
       {
         id: 'bigger-queue',
         label: 'enlarge the intake queue to buffer a flash crowd instead of shedding, and revisit the drain later',
         correct: false,
-        why: 'A larger buffer postpones shedding but adds queue delay, because arrivals still outpace the drain. Under sustained load it still fills, and buffered requests miss the SLO instead of being shed.',
+        why: 'A larger buffer stops the shedding but not the wait: the queue still empties at the same slow rate, so queue delay ends up higher than before and buffered requests wait past the SLO. Goodput gains no more than the fix gives.',
       },
     ],
   },
@@ -762,31 +843,31 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
     id: 'no-admission',
     title: 'incident 03 — goodput fell off a cliff at launch',
     briefing:
-      'Launch day: concurrency is 4× normal. Goodput falls first, then queue-delay and TTFT p95 explode; TPOT for requests that already started is comparatively stable. The batch is enormous while completions crawl.',
+      'Launch day: far more requests are in flight than the pool can hold. Goodput collapses and TTFT p95 explodes; TPOT for requests that already started is comparatively stable. The batch stays full while completions crawl.',
     causes: [
       {
         id: 'no-admission',
         label: 'no admission control, so everything is admitted at once and the batch overcommits memory until queueing hurts latency',
         correct: true,
-        why: 'Right: with no gate, 4× concurrency lands in one huge batch that overcommits KV. Completions crawl, queue delay and TTFT p95 explode and goodput falls, while TPOT for started requests holds.',
+        why: 'Right: with no gate, launch-day concurrency lands in one full batch that overcommits KV. Completions crawl, TTFT p95 explodes and goodput collapses, while TPOT for started requests holds.',
       },
       {
         id: 'pool-small',
         label: 'pool sized too small for launch-day contexts, so blocks run out and requests are preempted and recomputed repeatedly',
         correct: false,
-        why: 'Pool size adds pressure but is not the root cause: an admit-everything policy overruns any finite pool at some load. The enormous batch with crawling completions points at missing admission control.',
+        why: 'Pool size adds pressure but is not the root cause: an admit-everything policy overruns any finite pool at some load, and even on a pool twice the size it earns no more goodput than a gated engine. The full batch with crawling completions points at missing admission control.',
       },
       {
         id: 'net-stall',
         label: 'network partition between router and workers, so every launch-day request including short prompts gets a delayed first token',
         correct: false,
-        why: 'A partition would stall or fail requests already in flight, so TPOT would not be stable. The batch is huge and workers are busy, so the engine is overloaded rather than disconnected.',
+        why: 'A partition would stall or fail requests already in flight, so TPOT would not be stable. The batch is full and workers are busy, so the engine is overloaded rather than disconnected.',
       },
       {
         id: 'quant',
         label: 'quantization regression from a recent build or kernel change, so each decode step slows and goodput drops',
         correct: false,
-        why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable, so no per-step slowdown explains the collapse; the damage is in queueing and batch size, not the model build.',
+        why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable, so no per-step slowdown explains the collapse; the damage is in batch size and memory overcommit, not the model build.',
       },
     ],
     mitigations: [
@@ -794,13 +875,13 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
         id: 'bigger-pool',
         label: 'grow the pool, so the oversized launch-day batch fits without any preemption',
         correct: false,
-        why: 'More blocks raise the ceiling but not the policy. Admit-everything still overcommits a bigger pool at some load, and queue delay stays unbounded. A larger pool cannot replace a gate and a shed path.',
+        why: 'More blocks raise the ceiling but not the policy: on a pool twice the size, admit-everything still earns no more goodput than a gated engine on the original pool. A larger pool cannot replace a gate and a shed path.',
       },
       {
         id: 'admission',
         label: 'add admission control that sizes each admit to memory headroom, so the rest is shed honestly',
         correct: true,
-        why: 'Right: a size- and headroom-aware gate admits only what fits and sheds the rest honestly, so KV never overcommits and admitted requests keep meeting the SLO. Lab 06 builds this shape.',
+        why: 'Right: a size- and headroom-aware gate admits only what fits and holds or sheds the rest honestly, so KV never overcommits, goodput recovers and admitted requests keep meeting the SLO. Lab 06 builds this shape.',
       },
       {
         id: 'smaller-model',
@@ -821,53 +902,7 @@ export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
 export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null {
   const def = INCIDENTS.find((i) => i.id === id)
   if (!def) return null
-  let telemetry: TickSample[]
-  if (id === 'kv-thrash') {
-    // pool too small + a scheduler with NO headroom: over-admission at
-    // small sizes, decode growth overflows, auto-preempt storm
-    const naiveSjf = {
-      name: 'naive-sjf',
-      schedule: (v: SchedView) => {
-        const w = [...v.waiting].sort((a, b) => a.prompt - b.prompt || a.arrival - b.arrival)
-        const used = v.running.reduce((a, r) => a + r.prompt + r.decoded, 0)
-        const slots = v.maxRunning - v.running.length
-        const admit: number[] = []
-        let u = used
-        for (const r of w) {
-          if (admit.length >= slots) break
-          if (u + r.prompt > v.memCap) continue
-          admit.push(r.id)
-          u += r.prompt
-        }
-        return { admit, preempt: [] }
-      },
-    }
-    telemetry = runIncidentEngine(seeds, { ...CFG, numBlocks: 96 }, naiveSjf)
-  } else if (id === 'intake-stall') {
-    // drain misconfigured: intake empties at a crawl
-    const e = new Engine(CFG, traceFor(seeds), makeRefScheduler(), makeRefManager(CFG.numBlocks, CFG.blockSize), {
-      intake: makeRefQueue(32),
-      drainPerTick: 1,
-    })
-    const series: TickSample[] = []
-    e.recorder = (s) => {
-      if (s.tick % 10 === 0) series.push(s)
-    }
-    let guard = 0
-    while (!e.done && guard < 20000) {
-      e.step()
-      guard++
-    }
-    telemetry = series
-  } else {
-    // no admission control: a greedy scheduler admits everything that fits
-    const greedy = {
-      name: 'greedy',
-      schedule: (v: SchedView) => ({ admit: v.waiting.map((r) => r.id), preempt: [] }),
-    }
-    telemetry = runIncidentEngine(seeds, CFG, greedy)
-  }
-  return { ...def, seed: seeds.seed, telemetry }
+  return { ...def, seed: seeds.seed, telemetry: runIncident(id, seeds).series }
 }
 
 /**
