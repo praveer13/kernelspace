@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { KCS } from '../../src/data/kc'
 import { gradeItem, resultFor, type ItemResult } from '../../src/lib/items/play'
 import { loadFamily } from '../../src/lib/items/registry'
@@ -28,7 +30,6 @@ import {
   sessionSpanMs,
   sloLine,
   tally,
-  upNextFor,
   weekBarPct,
   weekBarText,
   type SlotContext,
@@ -420,25 +421,13 @@ describe('authored items from lessons', () => {
   })
 })
 
-describe('Up Next stand-in', () => {
-  const lessons = [
-    { id: 'r.l1', title: 'Bindings', minutes: 20, status: 'done' },
-    { id: 'r.l2', title: 'Functions', minutes: 25, status: 'read' },
-    { id: 'r.l3', title: 'Ownership', minutes: 30, status: 'unstarted' },
-  ]
-  test('Boot first for a learner who has done nothing', () => {
-    const r = upNextFor({ bootDone: false, lessons: lessons.map((l) => ({ ...l, status: 'unstarted' })), extraAvailable: false })
-    expect(r).toMatchObject({ kind: 'boot', to: '/boot' })
-    expect(r?.why.length).toBeLessThanOrEqual(90)
-  })
-  test('then the first lesson that is neither done nor read', () => {
-    const r = upNextFor({ bootDone: true, lessons, extraAvailable: true })
-    expect(r).toMatchObject({ kind: 'lesson', ref: 'r.l3', to: '/lesson/r.l3', minutes: 30 })
-    expect(r?.why.length).toBeLessThanOrEqual(90)
-  })
-  test('with everything done, a warm-cache set, or nothing', () => {
-    const done = lessons.map((l) => ({ ...l, status: 'done' }))
-    expect(upNextFor({ bootDone: true, lessons: done, extraAvailable: true })?.kind).toBe('today')
-    expect(upNextFor({ bootDone: true, lessons: done, extraAvailable: false })).toBeNull()
+describe('Today moves focus to its first item', () => {
+  const page = readFileSync(join(import.meta.dir, '../../src/pages/Today.tsx'), 'utf8')
+  test('the review session takes focus on load, unless the learner already moved it on the page', () => {
+    // the first item card focuses its first control on mount, once (it never re-runs on a re-render)
+    expect(page).toContain("focusFirst={active.kind !== 'review' || ready.focusFirst}")
+    // decided once, at load, from whether focus had already gone to something on this page
+    expect(page).toContain('focusFirst: !touched.current')
+    expect(page).toContain('onFocusCapture')
   })
 })

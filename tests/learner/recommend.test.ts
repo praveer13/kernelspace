@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { KCS } from '../../src/data/kc'
 import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
@@ -19,7 +21,8 @@ import {
   type RecommendState,
 } from '../../src/lib/learner/recommend'
 import type { DayKind, PlacementResult } from '../../src/lib/learner/types'
-import type { LearningPath } from '../../src/lib/ledger/types'
+import { isFirstVisit, loadUpNext, recommendNow, type UpNextInput } from '../../src/lib/learner/up-next'
+import type { Json, LearningPath } from '../../src/lib/ledger/types'
 
 const CONTENT: RecommendContent = { kcs: KCS, lessons: ALL_LESSONS, labs: FORGE_LABS }
 const NOW = '2026-10-05T12:00:00.000Z'
@@ -318,4 +321,87 @@ test('R lessons tested out by placement are offered as test-outs, never resumed'
   const rec = recommend(fresh({ lessons, placement: placed('t0', 'solid') }), CONTENT, NOW, 'phone')
   expect(R_LESSONS).toContain('r.l3')
   expect(rec.ref).toBe('t0.l1')
+})
+
+/**
+ * The surfaces that are not the lesson footer (Today's empty state, done card and plan line, Home's Resume,
+ * Progress's Up Next) all call `recommendNow`, which turns the store's raw working records into one
+ * `recommend()`. These run it the way they do: raw `placement:result` JSON, no Boot, no lessons.
+ */
+describe('Up Next on Today, Home and Progress', () => {
+  const rawPlacement = (entryTrack: TrackId, rustAnchor: PlacementResult['rustAnchor'], missedKcs: string[] = []): Json => ({
+    v: 1,
+    at: daysAgo(1),
+    entryTrack,
+    solidKcs: [],
+    missedKcs,
+    misconceptions: [],
+    rustAnchor,
+    items: 12,
+  })
+  const input = (over: Partial<UpNextInput> = {}): UpNextInput => ({
+    bootDone: false,
+    lessons: {},
+    labs: {},
+    path: undefined,
+    placement: undefined,
+    week: undefined,
+    ...over,
+  })
+  const NOW_DATE = new Date(NOW)
+
+  test('a placed learner whose Rust anchor was solid never gets r.l1, and one who missed it does', async () => {
+    const loaded = await loadUpNext()
+    for (const track of ['t0', 't1', 't2', 't5'] as const) {
+      for (const anchor of ['solid', 'skipped'] as const) {
+        const { rec } = recommendNow(loaded, input({ placement: rawPlacement(track, anchor) }), NOW_DATE, 1280)
+        expect({ track, anchor, kind: rec.kind }).toEqual({ track, anchor, kind: 'lesson' })
+        expect(rec.ref).not.toStartWith('r.')
+        expect(rec.title).not.toStartWith('R.L1')
+      }
+    }
+    const missed = recommendNow(loaded, input({ placement: rawPlacement('t2', 'missed', ['r.borrow-rules']) }), NOW_DATE, 1280)
+    expect(missed.rec.ref).toBe('r.l1')
+  })
+
+  test('a placed learner who skipped Boot is sent to their entry track, not to Boot', async () => {
+    const loaded = await loadUpNext()
+    const { rec, offerPlacement: offer } = recommendNow(loaded, input({ placement: rawPlacement('t1', 'solid') }), NOW_DATE, 1280)
+    expect(rec).toMatchObject({ kind: 'lesson', ref: 't1.l1', to: '/lesson/t1.l1' })
+    expect(offer).toBe(false)
+  })
+
+  test('with no Boot, no lesson and no placement: Boot, and the placement walk is offered beside it', async () => {
+    const loaded = await loadUpNext()
+    const { rec, offerPlacement: offer } = recommendNow(loaded, input(), NOW_DATE, 1280)
+    expect(rec).toMatchObject({ kind: 'boot', to: '/boot', why: BOOT_WHY })
+    expect(offer).toBe(true)
+  })
+
+  test("a lesson only read is behind the learner, and the minutes are the next lesson's own", async () => {
+    const loaded = await loadUpNext()
+    const first = pathPlan('full-ramp', CONTENT, null).lessons
+    const lessons = { [first[0]]: { status: 'read' as const, lastVisitedAt: daysAgo(30) } }
+    const { rec } = recommendNow(loaded, input({ bootDone: true, lessons }), NOW_DATE, 1280)
+    const lesson = ALL_LESSONS.find((l) => l.id === rec.ref)
+    expect(rec.ref).not.toBe(first[0])
+    expect(rec.kind).toBe('lesson')
+    expect(rec.minutes).toBe(lesson?.minutes)
+  })
+
+  test('a first visit is a learner with no Boot, no lesson record, no graded event and no placement', () => {
+    const base = { bootDone: false, hasLessonRecords: false, graded: false, placed: false }
+    expect(isFirstVisit(base)).toBe(true)
+    for (const key of Object.keys(base) as (keyof typeof base)[]) expect(isFirstVisit({ ...base, [key]: true })).toBe(false)
+  })
+
+  test('no surface keeps a stand-in: all three take Up Next from recommend()', () => {
+    const src = (f: string) => readFileSync(join(import.meta.dir, '../../src', f), 'utf8')
+    for (const page of ['pages/Today.tsx', 'pages/Home.tsx', 'pages/Progress.tsx']) expect(src(page)).toContain('useUpNext')
+    expect(src('pages/Progress.tsx')).not.toContain('~12min')
+    for (const f of ['pages/Today.tsx', 'pages/Home.tsx', 'pages/Progress.tsx', 'lib/learner/today.ts', 'lib/progress.ts']) {
+      expect(src(f)).not.toMatch(/upNextFor|selectNextLesson/)
+    }
+    expect(src('pages/Progress.tsx')).not.toMatch(/ORDERED_LESSON_IDS\.find/)
+  })
 })

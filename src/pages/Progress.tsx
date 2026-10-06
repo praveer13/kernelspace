@@ -50,6 +50,8 @@ import { RINGS_PENDING, selectRings } from '@/lib/economy'
 import type { RingRecall } from '@/lib/learner/summary'
 import XpExplainer from '@/pages/progress/XpExplainer'
 import { useSummary } from '@/pages/progress/useSummary'
+import { useUpNext, type UpNextState } from '@/lib/learner/up-next'
+import { PLACEMENT_ROUTE } from '@/lib/learner/recommend'
 import { cn } from '@/lib/utils'
 
 // The review model (calibration, week, hand-off) loads on demand, after the rings have painted.
@@ -449,13 +451,11 @@ function KpiBand() {
 
 /* ---------------- section 3: track breakdown + address map ---------------- */
 
-function TrackBreakdown() {
+function TrackBreakdown({ nextId }: { nextId: string | null }) {
   const lessons = useProgress((s) => s.lessons)
   const stepsDone = useProgress((s) => s.capstone.stepsDone)
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
-
-  const nextId = ORDERED_LESSON_IDS.find((id) => lessons[id]?.status !== 'done') ?? null
 
   const rows = TRACKS.map((t) => {
     const doneN = Object.entries(lessons).filter(
@@ -1222,33 +1222,28 @@ function DataOwnership() {
 
 /* ---------------- section 7: up next ---------------- */
 
-function UpNext() {
-  const lessons = useProgress((s) => s.lessons)
+function UpNext({ up }: { up: UpNextState }) {
   const reduced = useReducedMotion()
-  const nextId = ORDERED_LESSON_IDS.find((id) => lessons[id]?.status !== 'done') ?? null
-
-  const reviewId = useMemo(() => {
-    if (nextId) return null
-    let worst: string | null = null
-    let worstScore = Infinity
-    for (const [id, l] of Object.entries(lessons)) {
-      if (l.quizScore != null && l.quizScore < worstScore) {
-        worstScore = l.quizScore
-        worst = id
-      }
-    }
-    return worst
-  }, [nextId, lessons])
-
-  const target = nextId ?? reviewId
-  if (!target) return null
-  const track = TRACKS.find((t) => t.id === target.split('.')[0])
+  if (up.status === 'loading') {
+    return <div data-up-next-slot aria-busy="true" className="min-h-[7rem] rounded-lg border border-line bg-surface-1" />
+  }
+  // the recommender could not load: a plain link to the path, never a guess at a lesson
+  if (up.status === 'error') {
+    return (
+      <Link to="/curriculum" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-surface-1 px-5 py-3 font-display text-[15px] text-text-1">
+        <Play size={14} /> open your path →
+      </Link>
+    )
+  }
+  const { rec, offerPlacement } = up
+  const track = rec.kind === 'lesson' ? TRACKS.find((t) => t.id === rec.ref.split('.')[0]) : undefined
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      data-up-next={rec.kind}
       className="relative overflow-hidden rounded-lg border border-line bg-surface-1 p-5"
     >
       <div className="absolute inset-x-0 top-0 h-px overflow-hidden" aria-hidden>
@@ -1264,23 +1259,26 @@ function UpNext() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
-            {nextId ? 'recommended next instruction' : 'review'}
+            {rec.kind === 'today' ? 'review' : 'recommended next instruction'}
           </p>
           <p className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span
-              className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px]"
-              style={{ color: track?.color }}
-            >
-              {track?.code}
-            </span>
-            <span className="font-mono text-body-sm text-text-1">{target}</span>
-            <span className="font-mono text-[11px] text-text-3">
-              · {track?.name} · ~12min
-            </span>
+            {track && (
+              <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px]" style={{ color: track.color }}>
+                {track.code}
+              </span>
+            )}
+            <span className="font-mono text-body-sm text-text-1 [overflow-wrap:anywhere]">{rec.title}</span>
+            <span className="font-mono text-[11px] text-text-3">· ~{rec.minutes}min</span>
           </p>
+          <p className="mt-1.5 text-body-sm text-text-2">{rec.why}</p>
+          {offerPlacement && (
+            <Link to={PLACEMENT_ROUTE} className="mt-2 inline-flex min-h-11 items-center text-body-sm text-text-2 underline decoration-line-bright underline-offset-4 hover:text-text-1">
+              Already know some of this? Place yourself, about 15 min
+            </Link>
+          )}
         </div>
         <Link
-          to={`/lesson/${target}`}
+          to={rec.to}
           className="flex items-center gap-2 rounded-md bg-accent px-5 py-3 font-display text-[15px] font-semibold text-accent-foreground transition-all duration-150 ease-snap hover:-translate-y-px active:scale-[.97]"
         >
           <Play size={14} /> execute →
@@ -1297,6 +1295,8 @@ export default function Progress() {
   const lessons = useProgress((s) => s.lessons)
   const hasAny = streakDays.length > 0 || Object.keys(lessons).length > 0
   const { load, retry } = useSummary()
+  const up = useUpNext()
+  const nextLessonId = up.status === 'ready' && up.rec.kind === 'lesson' ? up.rec.ref : null
 
   return (
     <div className="bg-grad-radial-glow">
@@ -1315,7 +1315,7 @@ export default function Progress() {
             </p>
             {hasAny && (
               <div className="mt-6">
-                <UpNext />
+                <UpNext up={up} />
               </div>
             )}
           </motion.div>
@@ -1330,13 +1330,13 @@ export default function Progress() {
         </div>
 
         <KpiBand />
-        <TrackBreakdown />
+        <TrackBreakdown nextId={nextLessonId} />
         <Heatmap />
         <Achievements />
         <DataOwnership />
         {!hasAny && (
           <div className="mt-14">
-            <UpNext />
+            <UpNext up={up} />
           </div>
         )}
         <div className="mt-16 font-mono text-[11px] text-text-3">

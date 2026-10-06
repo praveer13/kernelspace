@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { BUILD_LINKS, DESTINATIONS, SECONDARY_LINKS, destinationOf } from '../../src/components/nav-links'
 
@@ -115,6 +115,16 @@ describe('the shell reads only the snapshot', () => {
     const navbar = readFileSync(join(src, 'components/Navbar.tsx'), 'utf8')
     expect(navbar).toContain('selectRings')
     expect(navbar).not.toMatch(/rankForXp|nextRank|RANKS/)
+  })
+
+  test('Curriculum shows the ring from the ledger, and no page computes a rank from XP', () => {
+    const curriculum = readFileSync(join(src, 'pages/Curriculum.tsx'), 'utf8')
+    expect(curriculum).toContain('selectRings(')
+    const callers = (readdirSync(src, { recursive: true }) as string[])
+      .filter((f) => /\.(ts|tsx)$/.test(f))
+      .map((f) => join(src, f))
+      .filter((f) => /rankForXp|nextRank|\bRANKS\b/.test(readFileSync(f, 'utf8')))
+    expect(callers.map((f) => f.slice(src.length + 1))).toEqual([])
   })
 
   test('Layout renders the bottom tabs, and only below lg', () => {

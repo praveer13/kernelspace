@@ -6,7 +6,8 @@ import { rev32, sha256Hex, stableStringify } from '../../src/lib/ledger/stable'
 import { dayOf } from '../../src/lib/ledger/time'
 import { factXp, summary, toProgressData, workingMap, xpOf } from '../../src/lib/ledger/view'
 import type { LedgerEvent, WorkingRecord } from '../../src/lib/ledger/types'
-import { XP, nextRank, rankForXp } from '../../src/lib/economy'
+import * as economy from '../../src/lib/economy'
+import { XP } from '../../src/lib/economy'
 import { evt, forSeeds, runOps, shuffle, PROPERTY_TIMEOUT_MS } from './gen'
 
 setDefaultTimeout(PROPERTY_TIMEOUT_MS)
@@ -284,12 +285,10 @@ describe('view (spec §6.2)', () => {
     expect(summary(agg)).toEqual({ lessonsDone: 1, xp: XP.quiz, activeDays: 2, labsDone: 1, events: 4 })
   })
 
-  test('economy re-exports behave as before', () => {
-    expect(rankForXp(0).name).toBe('RING 3')
-    expect(rankForXp(500).name).toBe('RING 2')
-    expect(rankForXp(5000).name).toBe('ROOT')
-    expect(nextRank(0)?.name).toBe('RING 2')
-    expect(nextRank(5000)).toBeNull()
+  test('XP decides no rank: the ring comes from the ledger (spec 8.5)', () => {
+    // with no RING 2 evidence the rank is RING 3, and XP has no threshold table to say otherwise
+    expect(economy.selectRings(derive([])).rank).toBe('RING 3')
+    for (const gone of ['RANKS', 'rankForXp', 'nextRank']) expect(gone in economy).toBe(false)
   })
 })
 
