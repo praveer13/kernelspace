@@ -168,7 +168,7 @@ void toy_free(void *p) {
 
 Look past the pointer plumbing; the algorithm is two ideas.
 
-**Splitting.** A free block bigger than the request is divided: the head becomes your allocation, the tail becomes a smaller free block. Without splitting, the first \`malloc(8)\` would consume the entire megabyte. With splitting, big free ranges are gradually whittled down — which creates the next problem.
+**Splitting.** A free block bigger than the request is divided: the head becomes your allocation, the tail becomes a smaller free block. Without splitting, the first \`malloc(8)\` would consume the entire 1 MiB slab. With splitting, big free ranges are gradually whittled down — which creates the next problem.
 
 **Coalescing.** Freeing a block can leave it adjacent to other free blocks: three 16-byte crumbs in a row are useless for a 1 KiB request, but *merged* they are fine. Coalescing walks the neighbors and fuses them back into one big block. The classic implementation is the **boundary tag** (Knuth): store the size at both ends of each block so the previous neighbor can be found in O(1). Our toy skipped the prev-pointer for clarity — the simulator shows full coalescing.`,
     },
@@ -208,7 +208,7 @@ Look past the pointer plumbing; the algorithm is two ideas.
         correct: [0],
         why: [
           'Right: the head becomes the allocation and the tail stays on the free list, a block of about 1 MiB minus 4 KiB less a 16-byte header.',
-          'This is what happens without splitting, and the first malloc(8) would then consume the whole megabyte. Splitting keeps the tail free.',
+          'This is what happens without splitting, and the first malloc(8) would then consume the whole 1 MiB slab. Splitting keeps the tail free.',
           'A free block cannot stay at full size after part of it is handed out. The 4 KiB comes out of the slab, so the remaining block shrinks.',
           'The allocator carves exactly what was requested, not half. An even division would hand out 512 KiB for a 4 KiB request.',
         ],
