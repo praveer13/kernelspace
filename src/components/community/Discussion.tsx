@@ -53,7 +53,7 @@ function Thread({ kind, id }: DiscussionProps) {
             Load the discussion (GitHub via giscus, a third party)
           </Button>
         )}
-        <label htmlFor={checkId} className="flex items-center gap-2 text-sm text-text-2">
+        <label htmlFor={checkId} className="flex min-h-11 min-w-11 cursor-pointer items-center gap-2 text-sm text-text-2">
           <input
             id={checkId}
             type="checkbox"

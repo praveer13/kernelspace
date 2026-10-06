@@ -142,7 +142,7 @@ describe('the debrief (spec §11.2, as amended by C3’s review)', () => {
     expect(d.ghost.at).toBe(10 * C)
     expect(d.alternative).toEqual({ kind: 'place', start: 10 * C })
     expect(d.explanation).toBe(
-      'At op 5 you put 2 cells in the 12-cell run at cell 52; the reference would have used the 2-cell gap at cell 10. From there even the reference runs out: op 6 needed 12 cells, and your largest run was 10.',
+      'At op 5 you put 2 cells in the 12-cell run at cell 52; the reference would have used the 2-cell gap at cell 10. From your heap at that point, even the reference policy runs out: op 6 needed 12 cells, and your largest run was 10.',
     )
     const r = playResult(s, { provenance: 'unseen', kcs: ['k'], ms: 9 })
     expect(r).toEqual({
@@ -207,7 +207,7 @@ describe('the debrief (spec §11.2, as amended by C3’s review)', () => {
         // R holds just before the decision and never again after it.
         expect(recoverable(setup, ps.mine.before[d.op], d.op, t.ops.length)).toBe(true)
         for (let i = d.op + 1; i <= d.failedOp; i++) expect(recoverable(setup, ps.mine.before[i], i, t.ops.length)).toBe(false)
-        expect(d.explanation).toMatch(/^At op \d+ you put \d+ cells? in the \d+-cell (run|gap) at cell \d+; the reference would have used the \d+-cell (run|gap) at cell \d+\. From there even the reference runs out: op \d+ needed \d+ cells, and your largest run was \d+\.$/)
+        expect(d.explanation).toMatch(/^At op \d+ you put \d+ cells? in the \d+-cell (run|gap) at cell \d+; the reference would have used the \d+-cell (run|gap) at cell \d+\. From your heap at that point, even the reference policy runs out: op \d+ needed \d+ cells, and your largest run was \d+\.$/)
       }
       expect(debriefs).toBeGreaterThan(100)
     })

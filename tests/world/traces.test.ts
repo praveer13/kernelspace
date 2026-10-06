@@ -122,7 +122,7 @@ describe('PLAY_PRACTICE_SEED', () => {
     expect(s.survived).toBe(28)
     expect(s.divergence?.op).toBe(15)
     expect(s.divergence?.explanation).toBe(
-      'At op 16 you put 1 cell in the 15-cell run at cell 8; the reference would have used the 1-cell gap at cell 31. From there even the reference runs out: op 29 needed 10 cells, and your largest run was 9.',
+      'At op 16 you put 1 cell in the 15-cell run at cell 8; the reference would have used the 1-cell gap at cell 31. From your heap at that point, even the reference policy runs out: op 29 needed 10 cells, and your largest run was 9.',
     )
   })
 })
