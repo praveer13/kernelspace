@@ -486,7 +486,7 @@ describe('G7: Today duration', () => {
     expect(r.map((s) => [s.grp, s.items]).sort()).toEqual([['a', 3], ['b', 5]])
   })
 
-  test('is the median over completed sessions, pooled over ledgers: 9, 11 and 20 minutes give 11', () => {
+  test('is the median over every session, pooled over ledgers: 9, 11 and 20 minutes give 11', () => {
     const minutes = (m: number) => 2 * m + 1 // items 30 s apart: n items span (n - 1) * 30 s
     const a = session('a', 1, '09:00', minutes(9), { of: minutes(9) })
     const b = session('b', 2, '09:00', minutes(11), { of: minutes(11) })
@@ -494,25 +494,33 @@ describe('G7: Today duration', () => {
     const r = selectTodayDuration([a, b, c])
     expect(r.sessions).toBe(3)
     expect(r.completed).toBe(3)
+    expect(r.medianAllMinutes).toBeCloseTo(11, 9)
     expect(r.medianMinutes).toBeCloseTo(11, 9)
     expect(r.status).toBe('pass')
-    expect(selectTodayDuration([a, [...b, ...c]]).medianMinutes).toBeCloseTo(11, 9)
+    expect(selectTodayDuration([a, [...b, ...c]]).medianAllMinutes).toBeCloseTo(11, 9)
   })
 
   test('an even count takes the mean of the middle two', () => {
     const one = (grp: string, m: number) => session(grp, 1, '09:00', 2, { of: 2, gapSec: m * 60 })
-    expect(selectTodayDuration([one('a', 8), one('b', 12)]).medianMinutes).toBeCloseTo(10, 9)
+    const r = selectTodayDuration([one('a', 8), one('b', 12)])
+    expect(r.medianAllMinutes).toBeCloseTo(10, 9)
+    expect(r.medianMinutes).toBeCloseTo(10, 9)
   })
 
-  test('abandoned sessions do not pull the median down, and are still reported', () => {
+  test('the gate follows §17: the median over all sessions, with the completed-only median beside it', () => {
     const long = (grp: string, day: number) => session(grp, day, '09:00', 2, { of: 2, gapSec: 14 * 60 })
     const quit = (grp: string, day: number) => session(grp, day, '09:00', 2, { of: 9, gapSec: 20 })
+    // two finished 14 min sessions and three abandoned 20 s ones: the median session is short, so the gate passes
     const r = selectTodayDuration([[...long('a', 1), ...long('b', 2), ...quit('c', 3), ...quit('d', 4), ...quit('e', 5)]])
     expect(r.sessions).toBe(5)
     expect(r.completed).toBe(2)
-    expect(r.medianMinutes).toBeCloseTo(14, 9)
     expect(r.medianAllMinutes as number).toBeLessThan(1)
-    expect(r.status).toBe('fail')
+    expect(r.medianMinutes).toBeCloseTo(14, 9)
+    expect(r.status).toBe('pass')
+    // the other way round: mostly long sessions, one quick quit, so the gate fails even though completed ones are fine
+    const slow = selectTodayDuration([[...long('a', 1), ...long('b', 2), ...long('c', 3), ...quit('d', 4)]])
+    expect(slow.medianAllMinutes).toBeCloseTo(14, 9)
+    expect(slow.status).toBe('fail')
   })
 
   test('the bar is 12 minutes, inclusive', () => {
@@ -522,9 +530,15 @@ describe('G7: Today duration', () => {
     expect(at(12.5).status).toBe('fail')
   })
 
-  test('no completed session is insufficient, not a pass', () => {
+  test('no session is insufficient, not a pass', () => {
     expect(selectTodayDuration([])).toEqual({ sessions: 0, completed: 0, medianMinutes: null, medianAllMinutes: null, status: 'insufficient' })
-    expect(selectTodayDuration([session('a', 1, '09:00', 2, { of: 9 })]).status).toBe('insufficient')
+  })
+
+  test('only abandoned sessions still have a median, with no completed-only median beside it', () => {
+    const r = selectTodayDuration([session('a', 1, '09:00', 2, { of: 9 })])
+    expect(r.medianMinutes).toBeNull()
+    expect(r.medianAllMinutes as number).toBeLessThan(1)
+    expect(r.status).toBe('pass')
   })
 })
 
@@ -611,6 +625,30 @@ describe('the report', () => {
     expect(text).toContain('week of 2026-10-05')
     expect(text).not.toContain('2026-10-07')
     expect(text).not.toContain('T12:00')
+  })
+
+  test('the week is the learner\'s local day, not the UTC date of exportedAt', () => {
+    // 2026-10-05 is a Monday. 01:30 UTC on Monday is still Sunday 2026-10-04 evening at UTC-5, so week of 2026-09-28.
+    const west = fullLoop().map((e) => ({ ...e, tz: -300 }) as LedgerEvent)
+    const east = fullLoop().map((e) => ({ ...e, tz: 600 }) as LedgerEvent)
+    const report = buildOutcomeReport(
+      [
+        donated(west, '2026-10-05T01:30:00.000Z'),
+        // 22:00 UTC on Sunday is already Monday 08:00 at UTC+10, so week of 2026-10-05
+        donated(east, '2026-10-04T22:00:00.000Z'),
+        // no event, so no offset to read: the UTC date
+        donated([], '2026-10-05T01:30:00.000Z'),
+      ],
+      CONTENT,
+    )
+    expect(report.rows.map((r) => r.week)).toEqual(['2026-09-28', '2026-10-05', '2026-10-05'])
+    expect(formatOutcomeReport(report)).toContain('week of 2026-09-28')
+  })
+
+  test('G7 reports the all-session median as the gate and the completed-only median beside it', () => {
+    const text = formatOutcomeReport(buildOutcomeReport([], CONTENT))
+    expect(text).toContain('over all 0 sessions')
+    expect(text).toContain('completed only')
   })
 
   test('an empty set of ledgers still reports, with nothing to claim', () => {
