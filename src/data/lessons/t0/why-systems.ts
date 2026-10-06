@@ -222,7 +222,7 @@ Everything is unlocked. The order is the point. Each lesson is 15–35 minutes, 
       ],
     },
   ],
-  kcs: ['t0.idea-reuse', 't4.decode-bandwidth', 't5.batching-throughput'],
+  kcs: ['t0.idea-reuse'],
   ticket: {
     form: 'ticket',
     cr: [
