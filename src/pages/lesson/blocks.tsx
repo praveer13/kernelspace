@@ -84,14 +84,9 @@ function CalloutView({ block }: { block: CalloutBlock }) {
 /* ------------------------------------------------------------------ */
 
 function StatlineView({ block, trackColor }: { block: StatlineBlock; trackColor: string }) {
+  // No opacity fade-in: at 0.7 the 4.5:1 text-3 label measures 3.05:1 until the block scrolls into view.
   return (
-    <motion.div
-      initial={{ opacity: 0.7 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ once: true, margin: '-20% 0px' }}
-      transition={{ duration: 0.5 }}
-      className="my-6 flex flex-wrap gap-3"
-    >
+    <div className="my-6 flex flex-wrap gap-3">
       {block.stats.map((s) => (
         <div
           key={s.label}
@@ -104,7 +99,7 @@ function StatlineView({ block, trackColor }: { block: StatlineBlock; trackColor:
           <span className="font-mono text-label uppercase text-text-3">{s.label}</span>
         </div>
       ))}
-    </motion.div>
+    </div>
   )
 }
 

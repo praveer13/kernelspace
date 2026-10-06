@@ -1038,7 +1038,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
           </Suspense>
 
           {/* previous, and Up Next with its why (lesson.md §7; wave-1.md §7.3) */}
-          <nav aria-label="Previous lesson and Up Next" className="mt-16 grid gap-4 border-t border-line pt-8 sm:grid-cols-2">
+          <nav aria-label="Previous lesson and Up Next" className="mt-16 grid grid-cols-1 gap-4 border-t border-line pt-8 sm:grid-cols-2">
             {prev ? (
               <Link
                 to={lessonPath(prev)}
