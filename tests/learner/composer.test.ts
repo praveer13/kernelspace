@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { KCS } from '../../src/data/kc'
+import { ALL_LESSONS } from '../../src/data/lessons'
 import { seedFor } from '../../src/lib/items/core'
-import type { PlayableItem } from '../../src/lib/items/types'
+import { loadAllFamilies } from '../../src/lib/items/registry'
+import type { AuthoredItem, PlayableItem } from '../../src/lib/items/types'
 import { cardRetrievability, deriveCards, isConfirmPending, isDue } from '../../src/lib/learner/cards'
 import {
   AUTHORED_SEC,
@@ -13,11 +15,14 @@ import {
   budgetLine,
   confusableGroups,
   interleaveConfusable,
+  itemKcs,
   itemRef,
   itemSeconds,
   type ComposerContent,
 } from '../../src/lib/learner/composer'
 import { addDays } from '../../src/lib/learner/reentry'
+import { authoredFromLessons, buildPool } from '../../src/lib/learner/today'
+import { splitmix32u } from '../../src/lib/rng'
 import type { Card, CardSet, SessionSlot } from '../../src/lib/learner/types'
 import { CONTENT, composerContent, constructedItem, genItem, quizItem, simulate, START } from './ledger-gen'
 
@@ -94,7 +99,7 @@ describe('the time budget', () => {
 
   test('is 12 nominal minutes at most, whatever the session length', () => {
     const items = (n: number): ComposerContent =>
-      composerContent([], { authored: (kc) => [genItem(kc, 'f', 1, n, 200)], make: () => null, families: () => [] })
+      composerContent([], { authored: (kc) => [genItem(kc, `f-${kc}`, 1, n, 200)], make: () => null, families: () => [] })
     const plan = composeSession(many(), items(1), NOW, { sessionMinutes: 90 }, 1)
     expect(plan.slots).toHaveLength(3) // 3 × 200 s = 10 min; a fourth would pass 12
     expect(plan.estMinutes).toBe(10)
@@ -431,5 +436,81 @@ describe('properties over generated sessions', () => {
     const b = deriveCards([...r.events].reverse(), CONTENT, r.end)
     const plan = (c: typeof a) => composeSession(c, composerContent(r.events), r.end, {}, 77)
     expect(plan(b)).toEqual(plan(a))
+  })
+})
+
+/* ------------------------------ one item once per session (1b blocking 3) ------------------------------ */
+
+describe('no session serves an item twice', () => {
+  const multi = (id: string, kcs: string[]): PlayableItem => ({
+    source: 'item',
+    item: { id, q: { q: 'q', options: ['a', 'b'], correct: [0], why: ['a', 'b'] }, kcs } as AuthoredItem,
+  })
+  const SHARED = multi('shared', [U1, U2])
+  const only = (items: Record<string, PlayableItem[]>) =>
+    composerContent([], { families: () => [], authored: (kc) => items[kc] ?? [], recent: () => [] })
+  const dueCards = (kcs: string[], over: Partial<Card> = {}) => set(kcs.map((k) => card(k, { dueDay: D(25), lastReviewDay: D(20), ...over })))
+
+  test('a KC already covered by an earlier slot\'s multi-KC item is skipped, not asked again', () => {
+    const content = only({ [U1]: [SHARED], [U2]: [SHARED, quizItem(U2, 0)] })
+    for (let seed = 0; seed < 40; seed++) {
+      const plan = composeSession(dueCards([U1, U2]), content, NOW, {}, seed)
+      expect(plan.slots.map((s) => itemRef(s.item))).toEqual(['item:shared'])
+      expect(itemKcs(plan.slots[0].item)).toEqual([U1, U2])
+    }
+  })
+
+  test('one avoid set spans the session: a later KC takes another item, or none, never the one already served', () => {
+    const content = only({ [U1]: [quizItem(U1, 0)], [U2]: [quizItem(U1, 0)], [U3]: [quizItem(U1, 0), quizItem(U3, 0)] })
+    const refs = composeSession(dueCards([U1, U2, U3]), content, NOW, {}, 1).slots.map((s) => itemRef(s.item))
+    expect(new Set(refs).size).toBe(refs.length)
+  })
+
+  test('a KC whose every item was served is not reported as missing content', () => {
+    const missing: string[] = []
+    const content = { ...only({ [U1]: [quizItem(U1, 0)], [U2]: [quizItem(U1, 0)] }), needsContent: (kc: string) => missing.push(kc) }
+    composeSession(dueCards([U1, U2]), content, NOW, {}, 1)
+    expect(missing).toEqual([])
+    composeSession(dueCards([U3]), content, NOW, {}, 1)
+    expect(missing).toEqual([U3])
+  })
+
+  test('a priority card still gets its second, different item', () => {
+    const plan = composeSession(dueCards([U1], { priority: true }), only({ [U1]: [quizItem(U1, 0), quizItem(U1, 1)] }), NOW, {}, 4)
+    expect(new Set(plan.slots.map((s) => itemRef(s.item))).size).toBe(2)
+  })
+
+  test('over the real content pool and 500 seeds, no session repeats an item id', async () => {
+    const gens = new Map((await loadAllFamilies()).map((g) => [g.id, g] as const))
+    const { authored, constructed } = authoredFromLessons(ALL_LESSONS)
+    const pool = buildPool({ kcs: KCS, gens, authored, constructed, stair: [], recent: new Map() })
+    const content: ComposerContent = { ...CONTENT, pool }
+    const servable = KCS.filter((k) => pool.families(k.id).length > 0 || pool.authored(k.id).length > 0 || pool.constructed(k.id)).map((k) => k.id)
+    expect(servable.length).toBeGreaterThan(40)
+    // an instance of a generated item is its family, variant and seed; every other item is its ref
+    const idOf = (item: PlayableItem) => (item.source === 'gen' ? `${itemRef(item)}@${item.inst.seed}` : itemRef(item))
+    const tally = { sessions: 0, shared: 0, skipped: 0 }
+    for (let seed = 0; seed < 500; seed++) {
+      const next = splitmix32u(seed * 7919 + 13)
+      const n = 3 + (next() % 8) // 3 to 10 due cards
+      const kcs = new Set<string>()
+      while (kcs.size < n) kcs.add(servable[next() % servable.length])
+      const cards = set([...kcs].map((kc) => card(kc, { dueDay: D(25 + (next() % 4)), lastReviewDay: D(15 + (next() % 8)), priority: next() % 9 === 0 })))
+      const plan = composeSession(cards, content, NOW, { sessionMinutes: 12 }, seedFor(seed, 1))
+      const ids = plan.slots.map((s) => idOf(s.item))
+      expect(new Set(ids).size).toBe(ids.length)
+      const covered = new Set<string>()
+      for (const slot of plan.slots) {
+        const kcsOfItem = itemKcs(slot.item)
+        for (const k of kcsOfItem) covered.add(k)
+        if (kcsOfItem.length > 1) tally.shared += 1
+      }
+      tally.skipped += [...kcs].filter((kc) => !plan.slots.some((s) => s.kc === kc) && covered.has(kc)).length
+      tally.sessions += 1
+    }
+    // the draw must exercise the rule: multi-KC items served, and KCs skipped because one already covered them
+    expect(tally.sessions).toBe(500)
+    expect(tally.shared).toBeGreaterThan(0)
+    expect(tally.skipped).toBeGreaterThan(0)
   })
 })
