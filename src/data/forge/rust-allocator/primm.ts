@@ -23,6 +23,10 @@ import type { AuthoredItem } from '@/lib/items/types'
 import { alignedStart, allocWith, createHeap, freeId, runFits, viewOf, type HeapOptions } from '@/lib/world/heap'
 import { firstFit, worstFit } from '@/lib/world/placement'
 import type { HeapOp, HeapTrace, HeapView, PlacementDriver } from '@/lib/world/types'
+import type { ChoicePrimm, NumberPrimm, PrimmItem, PrimmStep, PrimmStepId, ReferenceRunSpec, RunConfig, RunResult, StageInfo } from '../types'
+
+// The shapes live in ../types (the Forge bundle contract); they are re-exported so lab 01's imports keep working.
+export type { ChoicePrimm, NumberPrimm, PrimmItem, StageInfo }
 
 export const PRIMM_LAB = 'rust-allocator'
 /** Every PRIMM item's ledger ref is `item:` plus its id. */
@@ -31,15 +35,6 @@ export const primmRef = (id: string) => `item:${id}` as const
 /* ------------------------------------------------------------------ */
 /* The Make step: four stages                                          */
 /* ------------------------------------------------------------------ */
-
-export interface StageInfo {
-  n: 1 | 2 | 3 | 4
-  title: string
-  /** Nominal minutes; every stage is at most 25 (PLAN §5.0). */
-  minutes: number
-  /** What the stage builds, one line. */
-  goal: string
-}
 
 /** The stage markers in `labs/rust-allocator/src/allocator.rs`. Which checks belong to which stage comes from labs.ts. */
 export const STAGES: readonly StageInfo[] = [
@@ -345,38 +340,6 @@ export function describeRun(run: ChurnRun): string {
 
 type KcList = AuthoredItem['kcs']
 
-interface ItemBase {
-  /** `lab01.primm.p1`; the ledger ref is `item:<id>`. */
-  id: string
-  step: 'predict' | 'investigate' | 'modify'
-  /** Nominal seconds (XP and session sizing, spec §8.4). */
-  nsec: number
-}
-
-/** A multiple-choice item. Options are shuffled per attempt by the panel; the answer is the authored index. */
-export interface ChoicePrimm extends ItemBase {
-  kind: 'choice'
-  item: AuthoredItem
-}
-
-/** A numeric answer: `numeric` is exact (the truth is fixed), `estimate` is a Fermi guess against a computed truth. */
-export interface NumberPrimm extends ItemBase {
-  kind: 'numeric' | 'estimate'
-  prompt: string
-  unit: string
-  kcs: KcList
-  /** `numeric`: the exact answer. */
-  truth?: number
-  /** `estimate`: right when within this factor of the truth, either way. */
-  factor?: number
-  /** Wrong answers that name a mistake, `numeric` only. */
-  lures?: { value: number; miss: string; message: string }[]
-  /** Said after the answer, whatever it was. */
-  explain: string
-}
-
-export type PrimmItem = ChoicePrimm | NumberPrimm
-
 const choice = (
   id: string,
   step: ChoicePrimm['step'],
@@ -531,9 +494,9 @@ export const PRIMM_STEPS = [
   { id: 'investigate', title: 'Investigate', blurb: 'Five questions about what the harness checks and why.' },
   { id: 'modify', title: 'Modify', blurb: 'Change one thing about the reference run, predict the result, then run it.' },
   { id: 'make', title: 'Make', blurb: 'Build the allocator in four stages. Each is green on this page before the next.' },
-] as const
+] as const satisfies readonly PrimmStep[]
 
-export type PrimmStepId = (typeof PRIMM_STEPS)[number]['id']
+export type { PrimmStepId }
 
 /**
  * The Run step's own item: the reference run's observed value. Watching a strip is not an answer, so it carries
@@ -650,3 +613,45 @@ export function runResponse(run: ChurnRun, ms?: number): ItemResponse {
   }
 }
 
+
+/* ------------------------------------------------------------------ */
+/* The reference run as bundle data                                     */
+/* ------------------------------------------------------------------ */
+
+const mib = CHURN.capacity / (1 << 20)
+const bucketKiB = CHURN.capacity / 1024 / CHURN.buckets
+
+/** What `ReferenceRun` shows for a config, in the bundle's lab-neutral shape (frames, stats, one-line summary). */
+function runSpecResult(config: RunConfig): RunResult {
+  const run = runChurn(config as unknown as ChurnConfig)
+  return {
+    config,
+    total: run.total,
+    value: run.survived,
+    truth: run.total,
+    clean: run.clean,
+    summary: describeRun(run),
+    frames: run.samples.map((s) => ({
+      op: s.op,
+      cells: s.map,
+      stats: [
+        { label: 'live bytes', value: kib(s.liveBytes) },
+        { label: 'largest free run', value: kib(s.largestFree) },
+      ],
+      alt: `The ${mib} MiB heap in address order, ${CHURN.buckets} buckets of ${bucketKiB} KiB. ${kib(s.liveBytes)} live, largest free run ${kib(s.largestFree)}.`,
+    })),
+  }
+}
+
+/** Lab 01's Run and Modify steps as data: the bundle's `primm.run`. */
+export const RUN_SPEC: ReferenceRunSpec = {
+  item: RUN_ITEM,
+  title: (config) =>
+    config.fit === 'bump'
+      ? 'Bump allocator: never takes a freed block back'
+      : `Reference: ${FIT_LABEL[config.fit as Fit] ?? config.fit}${config.coalesce ? ' with coalescing' : ' without coalescing'}`,
+  disclaimer: 'This is the page’s own churn, shaped like check 6 (same heap, same request sizes), not check 6 itself.',
+  reference: { ...REFERENCE },
+  baseline: { ...BUMP },
+  run: runSpecResult,
+}
