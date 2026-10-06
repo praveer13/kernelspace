@@ -59,6 +59,7 @@ import {
 } from '@/lib/capstone-checks'
 import { useProgress, XP } from '@/lib/progress'
 import { cn } from '@/lib/utils'
+import { scrollBehavior } from '@/lib/lesson-scroll'
 
 /* ------------------------------------------------------------------ */
 /* Harness: run learner code against the reference engine              */
@@ -1756,7 +1757,7 @@ export default function Capstone() {
     const target = index ?? Math.min(stepsDone.length, 6)
     setActiveStep(target)
     window.setTimeout(
-      () => wizardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      () => wizardRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }),
       60,
     )
   }

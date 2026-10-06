@@ -9,7 +9,7 @@
  * Which modules a route may not import is tests/boot/imports.test.ts's job; this gate measures bytes.
  * Wave 1 (docs/specs/wave-1.md §16.1): /boot and /today are gated at 200 KB with a tighter target, the
  * entry has a 125 KB target after the entry diet (B2), and the play closure, the generator family
- * chunks and the search index are reported. A route whose page file does not exist yet is skipped.
+ * chunks, the search index and the FSRS + cards + composer figure are reported. A route whose page file does not exist yet is skipped.
  *
  *   bun scripts/verify-bundle.ts
  */
@@ -20,9 +20,10 @@ import { gzipSync } from 'node:zlib'
 const BUDGET_KB = 250
 /** Entry target after the entry diet (spec §6.9, §16.1): reported, not gated. */
 const ENTRY_TARGET_KB = 125
-/** Each generator family chunk and the search index chunk (spec §16.1): reported, not gated. */
+/** Each generator family chunk, the search index chunk, and FSRS + cards + composer (spec §16.1): reported, not gated. */
 const FAMILY_REPORT_KB = 8
 const INDEX_REPORT_KB = 15
+const LEARNER_REPORT_KB = 6
 const KB = 1000
 
 interface RouteBudget {
@@ -194,6 +195,43 @@ if (indexes.length === 0) console.log('skip search index: no search-index chunk 
 for (const [, chunk] of indexes) {
   const kb = (await gzipSize(chunk.file)) / KB
   console.log(`${kb <= INDEX_REPORT_KB ? 'ok  ' : 'warn'} search index ${chunk.file.split('/').pop()} is ${kb.toFixed(1)} KB gzip (report ${INDEX_REPORT_KB} KB, not gated)`)
+}
+
+// Reported only: FSRS + cards + composer (spec §16.1, "inside /today"). Vite folds those modules into shared
+// chunks the manifest does not name, so the figure comes from bundling the three files on their own with
+// everything else they import left external (the ledger fold, the item core, rng, calibration, reentry), minified
+// and gzipped chunk by chunk. It is the code the three modules own, and it moves with them, not with their neighbours.
+const LEARNER_SRC = ['fsrs', 'cards', 'composer'].map((n) => `src/lib/learner/${n}.ts`)
+const learnerFiles = LEARNER_SRC.map((f) => new URL(`../${f}`, import.meta.url).pathname)
+if (learnerFiles.some((f) => !existsSync(f))) {
+  console.log('skip FSRS + cards + composer: a module does not exist yet')
+} else {
+  const built = await Bun.build({
+    entrypoints: learnerFiles,
+    target: 'browser',
+    format: 'esm',
+    minify: true,
+    splitting: true,
+    plugins: [
+      {
+        name: 'own-code-only',
+        setup(build) {
+          build.onResolve({ filter: /.*/ }, async (args) => {
+            if (!args.importer) return undefined
+            const alias = args.path.startsWith('@/') ? new URL(`../src/${args.path.slice(2)}`, import.meta.url).pathname : args.path
+            const resolved = alias.startsWith('.') ? new URL(alias, `file://${args.importer}`).pathname : alias
+            const hit = learnerFiles.some((f) => resolved === f || resolved === f.replace(/\.ts$/, ''))
+            return hit ? undefined : { path: args.path, external: true }
+          })
+        },
+      },
+    ],
+  })
+  if (!built.success) throw new Error(`bundling FSRS + cards + composer failed: ${built.logs.join('\n')}`)
+  let learnerBytes = 0
+  for (const out of built.outputs) learnerBytes += gzipSync(new Uint8Array(await out.arrayBuffer())).length
+  const kb = learnerBytes / KB
+  console.log(`${kb <= LEARNER_REPORT_KB ? 'ok  ' : 'warn'} FSRS + cards + composer is ${kb.toFixed(1)} KB gzip, own code (report ${LEARNER_REPORT_KB} KB, not gated)`)
 }
 
 if (failed) process.exit(1)

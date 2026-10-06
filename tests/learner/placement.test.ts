@@ -29,6 +29,7 @@ import {
   answerOf,
   authoredIndex,
   blindPattern,
+  canSkipAnchor,
   currentLesson,
   finishWalk,
   levelOfItem,
@@ -268,13 +269,38 @@ describe('the walk', () => {
     expect(first && playView(first.item, first.seed).ref).toBe(keep[0])
   })
 
-  test('a KC with one right answer and no item to confirm it is missed; a KC with no item at all is in neither list', () => {
+  test('a KC with one right answer and no item to confirm it is missed; so is a KC with no item at all', () => {
     const lone: WalkContent = { ...real, authored: (kc) => (kc === 't0.locality' ? real.authored(kc).slice(0, 1) : kc === 't2.address-translation' ? [] : real.authored(kc)) }
     const { outcome } = drive(lone, expert, 4)
-    expect(outcome.result.missedKcs).toEqual(['t0.locality'])
+    expect(outcome.result.missedKcs).toEqual(expect.arrayContaining(['t0.locality', 't2.address-translation']))
     expect(outcome.result.solidKcs).not.toContain('t2.address-translation')
-    expect(outcome.result.missedKcs).not.toContain('t2.address-translation')
     expect(outcome.result.entryTrack).toBe('t0')
+  })
+
+  test('a probe KC that gets no item has an explicit verdict, and entryTrack cannot skip past it', () => {
+    const bare = 't2.address-translation'
+    expect(real.pool.families(bare)).toEqual([])
+    const empty: WalkContent = { ...real, authored: (kc) => (kc === bare ? [] : real.authored(kc)) }
+    for (const seed of [1, 4, 9]) {
+      const w = drive(empty, expert, seed)
+      expect(w.state.verdicts[bare]).toBe('missed')
+      expect(w.state.answers[bare]).toBeUndefined()
+      // every other threshold KC is solid, so the unasked one is the only thing that can hold the entry back
+      for (const kc of THRESHOLD_KCS.filter((k) => k !== bare)) expect(w.state.verdicts[kc]).toBe('solid')
+      expect(w.outcome.result.missedKcs).toEqual([bare])
+      expect(w.outcome.result.entryTrack).toBe(trackOf(bare))
+      expect(w.outcome.result.entryTrack).not.toBe('t5')
+    }
+  })
+
+  test('canSkipAnchor holds only while skipAnchor can act: optional path, anchor still a probe, no answer yet', () => {
+    const fresh = startWalk('serving-first', 5)
+    expect(canSkipAnchor(fresh)).toBe(true)
+    expect(canSkipAnchor(startWalk('full-ramp', 5))).toBe(false)
+    expect(canSkipAnchor(skipAnchor(fresh))).toBe(false)
+    const asked = { ...fresh, answers: { [RUST_ANCHOR_KC]: [{ ref: 'item:x', from: 'x', ok: true, skipped: false }] } }
+    expect(canSkipAnchor(asked)).toBe(false)
+    expect(skipAnchor(asked)).toBe(asked)
   })
 
   test('the Rust anchor is optional on serving-first only: skipping it reads as skipped, and R lessons become test-outs', () => {
