@@ -38,6 +38,12 @@ This is why MoE serving is a *scheduling and networking* discipline:
       ],
     },
     {
+      type: 'item',
+      title: 'Bytes read per step, bytes resident',
+      family: 'memory',
+      variants: ['active-bytes'],
+    },
+    {
       type: 'prose',
       md: `## MLA: the other half of the DeepSeek trick
 
@@ -89,6 +95,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
             'The router is a tiny scoring layer in front of the expert FFNs. Attention is unchanged, so its cost still grows with context length and KV size.',
             'Quantization is orthogonal to routing. Experts and dense FFNs are quantized with the same methods; MoE saves by running fewer weights per token, not by using fewer bits.',
           ],
+          kcs: ['t6.moe-active-params'],
         },
         {
           q: 'The all-to-all problem refers to…',
@@ -107,6 +114,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
             'Router scores are tiny, and each token\'s top-k is computed on its home GPU. The heavy traffic is the token hidden states that follow the decision, not the scores.',
             'Gradient exchange is a training collective. The all-to-all in question runs in every inference forward pass too, moving activations, which is why serving MoE is a networking problem.',
           ],
+          kcs: ['t6.all-to-all'],
         },
         {
           q: 'MLA\'s contribution to serving economics is…',
@@ -125,6 +133,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
             'MLA skips no heads. It keeps all of them and rebuilds each head\'s K and V from the shared latent with up-projections; the saving is stored bytes, not skipped compute.',
             'FP8 KV is a precision change that halves bytes. MLA changes the cached object itself to a low-rank latent, and the two choices are independent of each other.',
           ],
+          kcs: ['t5.attention-variants', 't5.kv-bytes-per-token'],
         },
         {
           q: 'A "hot expert" hurts because…',
@@ -143,6 +152,7 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
             'Right: the combine is a barrier, so the slowest expert sets layer time. The overloaded GPU is the straggler and the other devices idle, like one hot shard in a fan-out.',
             'Replication is the remedy (EPLB), not the harm. It costs some HBM, but it is done because an unbalanced expert already stalls the whole layer at the barrier.',
           ],
+          kcs: ['t6.all-to-all'],
         },
       ],
     },
@@ -152,6 +162,36 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
       md: `Keep one concrete instance in your head for the rest of T6: **61 layers (3 dense + 58 MoE), hidden 7168, 256 routed experts (top-8) + 1 shared, MLA with 576-dim latent KV**. Production config (DeepSeek open-infra week, Feb 2025): prefill on EP32 with DP32, decode on EP144 with DP144, FP8 for matmul/dispatch, BF16 for MLA/combine. Published cost day: 226–278 H800 nodes serving 608B input / 168B output tokens, 56.3% KV-cache hit rate, $87k cost vs $562k theoretical revenue — the 545% margin T7.L4 dissects. Every lesson in this track generalizes from this one build.`,
     },
   ],
+  kcs: ['t6.moe-active-params', 't6.all-to-all'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'A 256-expert MoE reads far fewer weight bytes per decode step than its total size. Why, and why does that not shrink the memory you must provision?',
+        model:
+          'Each token runs only its top-k experts (DeepSeek-V3: 8 of 256, plus one shared), so about 37B of 671B parameters are active and only those bytes are read per step. But any token may route to any expert, so every expert stays resident: bandwidth follows active parameters, capacity follows total.',
+        ideas: [
+          'Only the top-k experts run per token, so active parameters (about 37B of 671B) set the bytes read per step',
+          'Any token can route to any expert, so all experts stay resident and capacity follows total parameters',
+          'Decode speed follows active bytes while the memory bill follows total bytes',
+        ],
+        kcs: ['t6.moe-active-params'],
+      },
+      {
+        prompt:
+          'Why does one popular expert slow a whole MoE layer spread across 144 GPUs, and what is one remedy?',
+        model:
+          'Each MoE layer ends in a combine all-to-all, which is a barrier: no GPU continues until every result is back. A popular expert\'s GPU receives the most tokens and finishes last, so the other 143 wait. Bigger batches even out the load statistically, and replicating hot experts (EPLB) balances it directly.',
+        ideas: [
+          'The combine all-to-all is a barrier, so the slowest GPU sets the layer time',
+          'A popular expert\'s GPU gets the most tokens and finishes last while the others idle',
+          'Remedy: bigger batches, or replicating hot experts (EPLB)',
+        ],
+        kcs: ['t6.all-to-all'],
+      },
+    ],
+  },
 }
 
 export default lesson
