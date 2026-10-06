@@ -11,7 +11,78 @@ const lesson: Lesson = {
   exercise: 'sim',
   simId: 'sim-roofline',
   verifiedAt: '2026-10',
+  kcs: ['t4.tiling-intensity', 't4.flashattention-blocking'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Show how a T by T tile changes a matmul\'s arithmetic intensity at FP16, and say what stops T from growing without limit.',
+        model:
+          'A naive matmul does about half a FLOP per byte. A T by T tile stages slabs of A and B in shared memory and reuses each element T times, so intensity is T/2 FLOP per byte, 64 at T = 128. Tiles are capped by shared memory and registers, because a bigger tile leaves room for fewer resident warps.',
+        ideas: [
+          'Naive intensity is about 0.5 FLOP per byte at FP16',
+          'A T by T tile reuses each staged element T times, so intensity is T/2',
+          'Shared memory and registers cap T, because a bigger tile leaves fewer resident warps',
+        ],
+        kcs: ['t4.tiling-intensity', 't4.occupancy'],
+      },
+      {
+        prompt: 'Say in your own words why FlashAttention is cache blocking, and what it never writes to HBM.',
+        model:
+          'It tiles Q, K and V into blocks that fit in SRAM and, for each block, computes the partial scores there, updating the softmax statistics online. The N by N score matrix is never written to HBM, so memory traffic falls and the bandwidth-bound kernel runs faster, with the same exact result.',
+        ideas: [
+          'Q, K and V are tiled into blocks that fit in SRAM',
+          'The softmax is updated online as each block arrives, as a streaming reduction',
+          'The N by N score matrix is never written to HBM, so traffic falls and the result stays exact',
+        ],
+        kcs: ['t4.flashattention-blocking'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A naive matmul re-reads a row of A and a column of B from DRAM for every output element. At FP16, about how many FLOP does it do for each byte it moves?',
+          options: [
+            'About 0.5, with the kernel deep on the bandwidth slope of an H100',
+            'About 64, with the kernel at the intensity a large tile reaches',
+            'About 295, with the kernel sitting right at the ridge of an H100 roofline',
+            'About 1000, with the kernel well into compute-bound territory on an H100 roofline',
+          ],
+          correct: [0],
+          why: [
+            'Right: each multiply-add touches two fresh 2-byte elements, so it does 2 FLOP per 4 bytes, about 0.5 FLOP per byte, roughly 600 times below the ridge.',
+            'That is what a 128 by 128 tile reaches once each staged element is reused 128 times. A kernel with no reuse is far below it.',
+            'The ridge is where a kernel stops being bandwidth-bound. A kernel that re-reads every operand from DRAM is nowhere near it.',
+            'Large matmuls can reach that range only through reuse. With no reuse, intensity is set by the 4 bytes read for each 2 FLOP.',
+          ],
+          revealAt: 'Tiling: block the problem to fit the fast tier',
+          kcs: ['t4.tiling-intensity'],
+        },
+        {
+          kind: 'choice',
+          q: 'FlashAttention computes exact attention faster than the standard kernel, although it does extra rescaling arithmetic. Where does the speedup come from?',
+          options: [
+            'Fewer bytes moved to and from main memory, with the score matrix kept on chip',
+            'Fewer floating-point operations, with the low-value scores skipped in the softmax',
+            'A higher clock on the tensor cores, with the data staged on chip keeping them fed',
+            'Fewer kernel launches, with fused layers removing the launch overhead of each step',
+          ],
+          correct: [0],
+          why: [
+            'Right: attention is bandwidth-bound, so the saving is in bytes. Tiles stay in SRAM, the softmax is updated online, and the N by N matrix never reaches main memory.',
+            'FlashAttention does slightly more arithmetic, not less, and skips no scores. It is exact, so every score is computed.',
+            'Clocks are fixed by the part and its power limit. Tiling feeds the tensor cores better; it does not speed them up.',
+            'Launch overhead is small next to the traffic of a long attention. The large effect is the HBM bytes the score matrix would have cost.',
+          ],
+          revealAt: 'FlashAttention: the same trick, one softmax harder',
+          kcs: ['t4.flashattention-blocking'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `Matrix multiplication is the most important kernel in the world right now — a transformer is, numerically, matmuls with garnish. It is also the perfect capstone for this track, because writing a *fast* one forces you to use every lesson so far: the hierarchy (T0), strides (T0.L3), SRAM staging and coalescing (T4.L4), roofline arithmetic (T4.L3). And the punchline is beautiful: **FlashAttention, the algorithm that made long-context LLMs practical, is not an attention trick — it is a cache-blocking trick.** This lesson earns you that sentence.
@@ -50,6 +121,24 @@ Now count bytes. Marching K steps, the tile does \`2·T²·K\` FLOPs and loads \
         { caption: 'The block cooperatively loads a T×K slab of A and a K×T slab of B into SRAM — wide, coalesced transactions, every byte fetched once.', active: ['aslab', 'bslab'], edges: ['a->aslab', 'b->bslab'] },
         { caption: 'Compute: each SRAM element is read T times from the fast tier (AI = T/2 at FP16). Barrier, march K, repeat. HBM traffic collapses by a factor of T; tensor cores stay fed.', active: ['ctile', 'tc'], edges: ['aslab->ctile', 'bslab->ctile'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'Both slabs now sit in shared memory and the block computes its tile from them. Next to streaming rows and columns from HBM for each output element, how does HBM traffic for the tile change?',
+        options: [
+          'It falls by a factor of the tile size, with each staged element reused that many times',
+          'It stays the same, with the same elements still needed and each one read once for each output',
+          'It falls by a factor of two, with the two slabs sharing one wide transaction in each step',
+          'It rises, with the slabs loaded on top of the reads that the kernel already made for each tile',
+        ],
+        correct: [0],
+        why: [
+          'Right: each element staged in SRAM is read from the fast tier T times and from HBM once, so HBM traffic falls by a factor of T and intensity rises to T/2 at FP16.',
+          'Without staging, each output re-reads its row and column, which is why intensity was low. Staging reads each element from HBM once and reuses it.',
+          'Two slabs loaded together do not halve anything. The saving scales with the tile size, which is far larger than two.',
+          'The slabs replace the per-output reads rather than adding to them. The kernel moves far fewer bytes after staging than before.',
+        ],
+        kcs: ['t4.tiling-intensity'],
+      },
     },
     {
       type: 'code',
@@ -136,6 +225,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
             'A naive kernel can already launch blocks on every SM. The limit was bytes per FLOP, not SM count, and smaller tiles lower reuse.',
             'Clock speed is fixed by the part and its power limit. Tiling feeds the existing compute better; it does not change the clock.',
           ],
+          kcs: ['t4.tiling-intensity'],
         },
         {
           q: 'FlashAttention\'s core insight is that…',
@@ -154,6 +244,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
             'GPUs have no single attention instruction. FlashAttention runs on ordinary tensor-core matmul and SIMT code, restructured to cut HBM traffic.',
             'FlashAttention does not quantize the scores; its output matches standard attention up to floating-point rounding. It never stores the matrix at all.',
           ],
+          kcs: ['t4.flashattention-blocking'],
         },
         {
           q: 'Why can\'t tiles simply be as large as possible?',
@@ -172,6 +263,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
             'Bigger tiles do less HBM traffic per FLOP (it falls as 1/T), and slab loads stay coalesced. The cost is on-chip residency, not HBM efficiency.',
             'Bank conflicts depend on access stride, and padding fixes them at any tile size. They are not what limits tile growth.',
           ],
+          kcs: ['t4.tiling-intensity', 't4.occupancy'],
         },
         {
           q: 'The closest database analog to matmul tiling is…',
@@ -190,6 +282,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
             'Memoization stores results to skip repeated work. Tiling still computes every product; it reorders them so each loaded element serves many.',
             'Each probe cuts the rows touched, but pages are still re-read per outer row. Tiling keeps a chunk resident and reuses it.',
           ],
+          kcs: ['t4.tiling-intensity'],
         },
       ],
     },

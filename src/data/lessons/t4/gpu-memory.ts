@@ -10,7 +10,69 @@ const lesson: Lesson = {
   hook: 'HBM, L2, shared memory/SRAM, registers — the steeper ladder that every serious kernel climbs, and where the KV cache lives.',
   exercise: 'sim',
   simId: 'sim-roofline',
+  kcs: ['t4.gpu-memory-ladder', 't4.shared-memory-scratchpad'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Order the GPU memory tiers from fastest to slowest, and say which of them each multiprocessor owns.',
+        model:
+          'Registers, shared memory, L2, HBM, then host RAM over PCIe. Each multiprocessor owns its registers and its shared memory, and no other one can see them. L2 and HBM are shared by the whole GPU. Host RAM sits across PCIe at about a fiftieth of HBM speed.',
+        ideas: [
+          'The order is registers, shared memory, L2, HBM, then host RAM over PCIe',
+          'Each multiprocessor owns its registers and shared memory; L2 and HBM are shared',
+          'Each step down is bigger and slower, with host RAM about fifty times slower than HBM',
+        ],
+        kcs: ['t4.gpu-memory-ladder'],
+      },
+      {
+        prompt: 'Explain why shared memory is called a scratchpad, and what the kernel has to do with it.',
+        model:
+          'It is addressable on-chip memory, not a cache, so nothing is placed or evicted for you. The kernel loads a tile from HBM into it, synchronises the block, then computes from it at far higher bandwidth. The hardware never moves data in or out behind the kernel\'s back, so access times are predictable.',
+        ideas: [
+          'An addressable on-chip scratchpad that the hardware does not fill or evict',
+          'The kernel stages a tile in from HBM, then synchronises the block',
+          'Reading it back is far faster than HBM and predictable, and it is visible to one block',
+        ],
+        kcs: ['t4.shared-memory-scratchpad'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'On a GPU, which on-chip memory does the kernel fill and empty by hand, where a CPU would use a cache that the hardware manages?',
+          options: [
+            'The L2 cache, which every multiprocessor reads through and the hardware fills on each miss',
+            'Shared memory, which sits in each multiprocessor and the kernel stages data into by hand',
+            'The register file, which the compiler hands out to threads and the hardware spills on its own',
+            'HBM, which holds the weights and the cache and which the driver pages in on demand',
+          ],
+          correct: [1],
+          why: [
+            'L2 is a true cache: the hardware fills it when a load misses and evicts lines on its own, and the kernel never addresses it directly.',
+            'Right: shared memory is an addressable scratchpad. The kernel decides what to stage and when, and nothing is evicted behind its back.',
+            'Registers are assigned by the compiler, not filled by the kernel at run time, and a spill is a compiler decision that lands in slow local memory, not a hardware cache fill.',
+            'HBM is the large main memory, and nothing pages it in on demand. It is not on-chip, and the kernel does not manage it like a scratchpad.',
+          ],
+          revealAt: 'The ladder, tier by tier',
+          kcs: ['t4.shared-memory-scratchpad'],
+        },
+        {
+          kind: 'numeric',
+          q: 'A 70-billion-parameter model is stored in FP16, two bytes per weight. How many gigabytes do its weights take?',
+          unit: 'GB',
+          truth: 140,
+          okWithinFactor: 1.1,
+          revealAt: 'Why capacity is the serving bottleneck',
+          kcs: ['t4.gpu-memory-ladder'],
+          claims: ['model.llama3-70b.params'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `T0 gave you the CPU ladder: registers → L1 → L2 → L3 → DRAM, with ~0.5 ns at the top and ~100 ns at the bottom. The GPU has the same ladder — **steeper at every step**. More compute to feed, more bandwidth needed, more explicit programmer control. The deep difference from CPUs: the fastest tier you actually *manage* — **shared memory** — is a programmer-addressable scratchpad, not a hardware-managed cache. GPU performance work is, in large part, the art of staging data through that scratchpad by hand.
@@ -63,6 +125,24 @@ This lesson is the map. T4.L3 (roofline) prices it; T4.L6 (tiling) weaponizes it
         { caption: 'HBM: the 80 GB main stage. Weights stream from here every forward pass; the KV cache grows here every decode step. 3.35 TB/s sounds like a lot until 16 GB of weights must move per token.', active: ['hbm'], edges: ['l2->hbm'] },
         { caption: 'Below HBM, the cliff: CPU RAM over PCIe at ~64 GB/s — 50× slower. This is where KV offload and model streaming go, and V0 could use it as a swap tier for preempted sequences (V1 recomputes instead; T2.L3). Offload decisions are expensive.', active: ['cpu'], edges: ['hbm->cpu'] },
       ],
+      predictAt: {
+        step: 3,
+        prompt: 'Below HBM, a GPU reaches host RAM over PCIe at about 64 GB/s. Against HBM at 3.35 TB/s, what does moving a byte from host RAM cost?',
+        options: [
+          'Roughly 1/2 of HBM speed, an offloaded byte costing about twice an HBM byte',
+          'Roughly 1/10 of HBM speed, an offloaded byte costing about ten HBM bytes',
+          'Roughly 1/50 of HBM speed, an offloaded byte costing about fifty HBM bytes',
+          'Roughly 1/1000 of HBM speed, an offloaded byte costing about a thousand HBM bytes',
+        ],
+        correct: [2],
+        why: [
+          'Too generous. 64 GB/s against 3.35 TB/s is a gap of about fifty times, not two, so an offloaded byte costs far more than twice an HBM byte.',
+          'Closer, but still short. 3,350 divided by 64 is about 52, so the gap is a factor of fifty, not ten.',
+          'Right: 3.35 TB/s over 64 GB/s is about 52. Host RAM is the offload tier, usable for KV and weight streaming, and priced about fifty times higher per byte.',
+          'Too pessimistic. A factor of a thousand would be near flash storage; PCIe to host RAM is about fifty times slower than HBM.',
+        ],
+        kcs: ['t4.gpu-memory-ladder'],
+      },
     },
     {
       type: 'callout',
@@ -110,6 +190,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
             'Shared memory is physically per SM, and ordinary blocks cannot see each other\'s. Hopper clusters let only a few neighbouring SMs share it. Grid-wide exchange goes through L2 and global memory.',
             'Constants live in a separate constant space and instructions in their own cache. Shared memory is general read-write scratch for one block.',
           ],
+          kcs: ['t4.shared-memory-scratchpad'],
         },
         {
           q: 'Register spilling is dangerous to kernel performance because…',
@@ -128,6 +209,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
             'Spills go to local memory in device memory, not to the shared-memory scratchpad. Hits in L1 or L2 can be cheap, but heavy spilling still adds traffic.',
             'Spilling trades registers for memory traffic; if anything it lets more warps fit. The cost is extra loads and stores, not lost residency.',
           ],
+          kcs: ['t4.shared-memory-scratchpad', 't4.gpu-memory-ladder'],
         },
         {
           q: 'For a 70B FP16 model with full multi-head attention (no GQA), the first-order capacity problem on 80 GB GPUs is…',
@@ -146,6 +228,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
             'Host-side work per token is small. The 140 GB weight footprint exceeds one GPU before the first request arrives, so GPU memory binds first.',
             'H100 tensor cores take FP16 and BF16 inputs directly and accumulate at higher precision. Weights stay two bytes each; the 140 GB is the problem.',
           ],
+          kcs: ['t4.gpu-memory-ladder'],
         },
         {
           q: 'CPU RAM plays which role in the GPU serving stack?',
@@ -164,6 +247,7 @@ One arithmetic preview of T5 (full math in T5.L4). A 70B FP16 model: **140 GB of
             'Engines can also use host RAM during serving, for KV offload and weight streaming, accepting the PCIe cost. It is more than a load-time buffer.',
             'Register spills go to local memory in device memory through L1 and L2. The GPU never pages registers across PCIe into host RAM.',
           ],
+          kcs: ['t4.gpu-memory-ladder'],
         },
       ],
     },
