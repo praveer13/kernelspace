@@ -69,7 +69,7 @@ const LAB_ID: &str = "radix-cache";
 #[cfg(feature = "reference")]
 const LAB_ID: &str = "radix-cache@reference";
 
-pub static LAB: Lab = Lab { id: LAB_ID, version: 2, checks: &CHECKS };
+pub static LAB: Lab = Lab { id: LAB_ID, version: 3, checks: &CHECKS };
 
 const EXACT_MATCH: &str = "exact-match hit returns the full cached block table";
 const LONGEST_PREFIX: &str = "longest cached ancestor wins";
@@ -560,15 +560,93 @@ pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
     kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
 }
 
-/// The runtime bridge: `probe <seed>` (see `probe`).
+/* ------------------------- the router bridge ------------------------- */
+/* The Fleet's prefix router drives YOUR cache through `ks_invoke`, one
+   command per call. The bridge owns a pool (1,024 blocks of 16 tokens) and a
+   cache over it (256 entries), and calls your `RadixCache` exactly as the
+   checks do: it holds no cache logic of its own, so a template build traps on
+   `reset` like any unfinished check.
+
+     reset              -> ok            (a fresh pool and cache)
+     insert <ids>       -> ok <entries>  (ids: comma-separated u32; evicts
+                                          leaves to make room, like `store`)
+     match <ids>        -> <n>           (length in tokens of the longest
+                                          cached prefix)
+     probe <seed>       -> one summary line of a seeded replay (see `probe`)
+
+   Errors start with `err`. */
+
+use std::cell::RefCell;
+
+const BRIDGE_BLOCKS: usize = 1_024;
+const BRIDGE_ENTRIES: usize = 256;
+
+thread_local! {
+    static BRIDGE: RefCell<Option<(BlockAllocator, RadixCache)>> = const { RefCell::new(None) };
+}
+
+/// `a,b,c` -> token ids. Empty text is an empty sequence.
+fn parse_ids(text: &str) -> Result<Vec<u32>, String> {
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+    text.split(',')
+        .map(|t| t.parse::<u32>().map_err(|_| format!("err bad token id {:?} (ids are comma-separated u32)", kslab::clip(t, 20))))
+        .collect()
+}
+
+/// One bridge command, as `ks_invoke` runs it. Public so `cargo test` can drive it natively.
+pub fn invoke(cmd: &str) -> String {
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    match parts[..] {
+        ["probe", seed, ..] => match seed.parse::<u32>() {
+            Ok(seed) => probe(seed),
+            Err(_) => format!("err bad seed {:?}", kslab::clip(seed, 20)),
+        },
+        ["reset"] => {
+            let pool = BlockAllocator::new(BRIDGE_BLOCKS, BS);
+            let cache = RadixCache::new(pool.clone(), BRIDGE_ENTRIES);
+            BRIDGE.with(|b| *b.borrow_mut() = Some((pool, cache)));
+            "ok".into()
+        }
+        ["insert", ids] => bridge_ids(true, ids),
+        ["match", ids] => bridge_ids(false, ids),
+        ["match"] => bridge_ids(false, ""),
+        _ => format!("err unknown command {:?} (try: reset, insert <ids>, match <ids>, probe <seed>)", kslab::clip(cmd.trim(), 40)),
+    }
+}
+
+fn bridge_ids(insert: bool, ids: &str) -> String {
+    let prompt = match parse_ids(ids) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    BRIDGE.with(|b| {
+        let mut b = b.borrow_mut();
+        let Some((pool, cache)) = b.as_mut() else {
+            return "err not initialized (send reset first)".to_string();
+        };
+        if !insert {
+            return cache.match_prefix(&prompt).len.to_string();
+        }
+        if prompt.is_empty() {
+            return "err insert needs at least one token id".to_string();
+        }
+        if prompt.len().div_ceil(BS) > pool.total_blocks() {
+            return format!("err a {}-token prompt does not fit the {}-block pool", prompt.len(), pool.total_blocks());
+        }
+        if store(cache, pool, &prompt) {
+            format!("ok {}", cache.entry_count())
+        } else {
+            "err the cache could not admit the prompt".to_string()
+        }
+    })
+}
+
+/// The runtime bridge (see above).
 #[no_mangle]
 pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
     kslab::install_panic_hook();
     let cmd = std::str::from_utf8(unsafe { kslab::input(in_ptr, in_len) }).unwrap_or("");
-    let mut it = cmd.split_whitespace();
-    let reply = match (it.next(), it.next().map(str::parse::<u32>)) {
-        (Some("probe"), Some(Ok(seed))) => probe(seed),
-        _ => format!("err unknown command {:?} (try: probe <seed>)", kslab::clip(cmd.trim(), 40)),
-    };
-    kslab::emit_str(&reply)
+    kslab::emit_str(&invoke(cmd))
 }

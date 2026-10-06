@@ -37,3 +37,51 @@ fn seeded_checks_pass_on_32_extra_seeds() {
         }
     }
 }
+
+/// The `ks_invoke` bridge the Fleet's token-count check drives. It calls your encode, so on the template
+/// `count` traps ("not implemented yet") like an unfinished check; with a working tokenizer it answers
+/// exactly as `labs/README.md` documents.
+fn hex(text: &str) -> String {
+    text.bytes().map(|b| format!("{b:02x}")).collect()
+}
+
+#[test]
+fn bridge_counts_the_48_merge_table() {
+    let tk = lab::Tokenizer::new(lab::train_bpe(lab::CORPUS, 48));
+    let texts = [
+        "the user waits for the first token while the scheduler batches the stream",
+        "hello world, hello world, hello",
+        "emoji: 🦀🚀 and cjk: 推し活 and accents: naïve café",
+        "— em-dash, “quotes”, and a newline\ninside",
+        "aaaa",
+        "x",
+        "",
+    ];
+    for text in texts {
+        let want = tk.encode(text).len().to_string();
+        assert_eq!(lab::invoke(&format!("count {}", hex(text))), want, "count of {text:?}");
+    }
+    assert_eq!(lab::invoke(&format!("count {}", hex(texts[0]))), "34", "the contract text is 34 ids");
+    assert_eq!(lab::invoke("count"), "0", "no hex is the empty text");
+    assert_eq!(lab::invoke(&format!("count {}", hex("🦀"))), "4", "four bytes the table never merges");
+    assert_eq!(
+        lab::invoke(&format!("count {}", hex("The scheduler").to_uppercase())),
+        lab::invoke(&format!("count {}", hex("The scheduler"))),
+        "hex digits in either case"
+    );
+}
+
+#[test]
+fn bridge_rejects_bad_commands() {
+    for cmd in ["count 4", "count zz", "count ff", "count c3", "count 41 42", "nope", ""] {
+        assert!(lab::invoke(cmd).starts_with("err"), "{cmd:?} should be an error, got {:?}", lab::invoke(cmd));
+    }
+    assert!(lab::invoke("probe x").starts_with("err"));
+}
+
+#[test]
+fn bridge_probe_matches_the_function() {
+    for seed in [0, 1, 7, 0xC0FFEE] {
+        assert_eq!(lab::invoke(&format!("probe {seed}")), lab::probe(seed));
+    }
+}
