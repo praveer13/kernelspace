@@ -86,6 +86,31 @@ report"), and the kit adds `ks_abi_version`, `ks_panic_msg` and
 | `coalesce` | a `free` that does not merge with its free neighbours on both sides; the heap's tail is used up first, so only a merged run can serve the request |
 | `fragmentation` | the same under churn at ~75% occupancy on fresh seeds: a request may fail only when no free span that large exists among your live blocks, so first-, best- and next-fit all pass |
 
+## Your engine: bridge verbs (lab version 3)
+
+The Fleet can drive your module live through `ks_invoke`: the host writes a one-line command into
+module memory, calls `ks_invoke` and reads the reply. `probe <seed>` is on every lab that has a bridge.
+Two labs gained verbs in lab version 3, so your radix cache can be the Fleet's prefix router and your
+tokenizer can count tokens. The template ABI does not change, the verbs call **your** code (the same
+code the checks call), and the bridge has no cache or tokenizer logic of its own: on the template, and
+on a `--features reference` build, each verb traps like an unfinished check and the site says
+"not implemented yet". Errors always start with `err`.
+
+| lab | verb | reply |
+|---|---|---|
+| `radix-cache` | `reset` | `ok`: a fresh pool (1,024 blocks of 16 tokens) and an empty cache (256 entries limit) |
+| `radix-cache` | `insert <ids>` | `ok <entries>`: `ids` is comma-separated u32; leaves are evicted to make room, as in the checks |
+| `radix-cache` | `match <ids>` | the length in tokens of the longest cached prefix (`0` for a miss) |
+| `bpe-tokenizer` | `count <hex>` | the number of ids your `encode` returns for the UTF-8 text given as hex, under the 48-merge table `probe` uses; no hex is the empty text |
+| both | `probe <seed>` | unchanged |
+
+`insert` and `match` before a `reset` answer `err not initialized`. A prompt that needs more blocks
+than the pool holds is refused rather than emptying the cache. Modules built from a version 2 zip do
+not know these verbs (they answer `err unknown command`): download the zip again and rebuild.
+
+Checking the verbs locally: `cargo test` runs `bridge_*` tests beside the checks. They are red on the
+template, like the checks, and green once your cache and tokenizer are right.
+
 ## Rust Zero drills
 
 | lesson | crate | focus |
