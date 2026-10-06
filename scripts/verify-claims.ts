@@ -1,10 +1,11 @@
 /**
  * Claims registry gate (PLAN-100X §5.2 S2): structure, sources, dates and derived formulas.
+ * A pinned claim's source url must contain pin.ref, and a status claim about engine settings must be pinned.
  * Expiry never fails: stale claims are only listed. `--write` regenerates public/claims.json,
  * and a plain run fails if that file has drifted from the registry.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { CLAIMS, staleSince, type Claim } from '../src/data/claims'
+import { CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims'
 
 const OUT = 'public/claims.json'
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -94,6 +95,8 @@ for (const c of CLAIMS) {
       if ((c.kind === 'spec' || c.kind === 'price') && !c.source.quote?.trim()) fail(c.id, `kind ${c.kind} needs source.quote (the source's own words)`)
     }
   }
+  // a fact tied to one release carries its ref, and its source url must point at it (W13)
+  for (const p of pinProblems(c)) fail(c.id, p)
   if (c.kind === 'synthetic' && c.source) fail(c.id, 'synthetic claims must not carry a source')
   if (c.kind === 'derived') {
     if (!c.derived) fail(c.id, 'derived claim needs derived.from and derived.formula')
