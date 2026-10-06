@@ -75,7 +75,7 @@ const lesson: Lesson = {
     },
     {
       type: 'prose',
-      md: `Your allocator from lesson 3 had a quiet enemy. It never crashes, never leaks a byte you can point at — it just slowly makes memory *unusable*. A heap can report 60% free and still fail a 1 MB allocation, the way a parking lot can have 60 free spaces and nowhere to park a bus. That enemy is **fragmentation**, and it comes in exactly two species. Every memory system you will ever operate — malloc heaps, JVMs, OS page frames, GPU KV caches — chooses its poison between them.
+      md: `Your allocator from lesson 3 had a quiet enemy. It never crashes, never leaks a byte you can point at — it just slowly makes memory *unusable*. A heap can report 60% free and still fail a 1 MiB allocation, the way a parking lot can have 60 free spaces and nowhere to park a bus. That enemy is **fragmentation**, and it comes in exactly two species. Every memory system you will ever operate — malloc heaps, JVMs, OS page frames, GPU KV caches — chooses its poison between them.
 
 This lesson gives you both species, their measurements, and the one design move that changes the game entirely: **make every block the same size.** That move trades external fragmentation for bounded internal waste, and it is the seed from which PagedAttention grows in T5.`,
     },
@@ -83,7 +83,7 @@ This lesson gives you both species, their measurements, and the one design move 
       type: 'prose',
       md: `## Internal fragmentation: waste inside the box
 
-**Internal fragmentation** is memory you *allocated* but the customer never uses. Sources: alignment padding (rounding 33 bytes to 48), size-class rounding (a 9 KB request landing in a 16 KB slab), block headers, and fixed-structure slack. The waste is *inside* the allocation — invisible to the free list, unrecoverable until free.
+**Internal fragmentation** is memory you *allocated* but the customer never uses. Sources: alignment padding (rounding 33 bytes to 48), size-class rounding (a 9 KiB request landing in a 16 KiB slab), block headers, and fixed-structure slack. The waste is *inside* the allocation — invisible to the free list, unrecoverable until free.
 
 The accounting is easy: \`internal_waste = Σ(given − requested)\`. Size-class allocators bound it by design — with power-of-two classes the worst case is just under 50% (a 5-byte request in an 8-byte slot is fine; a 1025-byte request in a 2048 slot is not), which is why real systems use *denser* classes for small sizes (8, 16, 24, 32, 48, 64…) and sparser ones for large.`,
     },
@@ -163,7 +163,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
 
 - **OS page frames** — RAM is managed as 4 KiB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
 - **Slab/slab-like allocators** — one object size per cache; freeing is O(1); the slab *is* a fixed-block design.
-- **Database buffer pools** — everything is an 8 KB page, full stop.
+- **Database buffer pools** — everything is an 8 KiB page, full stop.
 - **vLLM KV blocks** — every block holds the same number of tokens (default 16). A 300-token sequence needs ⌈300/16⌉ = 19 blocks; waste is at most 15 tokens of KV in the tail, under 4% in practice. Before this, engines reserved *contiguous* KV per sequence sized to max length: 60%+ of HBM stranded. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
     },
     {
@@ -208,7 +208,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
       type: 'quiz',
       questions: [
         {
-          q: 'A heap is 60% free, but a 1 MB allocation fails. This is…',
+          q: 'A heap is 60% free, but a 1 MiB allocation fails. This is…',
           options: [
             'Internal fragmentation, with wasted space hidden inside blocks already allocated to callers',
             'External fragmentation, with free memory scattered about in pieces too small for the request',
@@ -220,7 +220,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
             'The free bytes exist but not as one contiguous range. External fragmentation is a property of the alloc/free trace; the metric to watch is largest_free_block / total_free.',
           why: [
             'Mixes up the two kinds. Internal waste sits inside blocks that are in use, so it cannot show up as free memory; here the free bytes exist but are scattered.',
-            'Right: 60% free in total, but no single contiguous range reaches 1 MB. The metric to track is largest_free_block divided by total_free.',
+            'Right: 60% free in total, but no single contiguous range reaches 1 MiB. The metric to track is largest_free_block divided by total_free.',
             'A leak means memory is held but unreachable, which would show as less free memory, not more. Here the free space is real and reusable, just fragmented.',
             'Nothing here suggests damaged metadata. A healthy allocator with intact headers fails the same way when the free ranges are too small and scattered.',
           ],

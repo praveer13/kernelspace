@@ -92,7 +92,7 @@ This lesson draws that ceremony live. By the end you will be able to sketch any 
       type: 'prose',
       md: `## The stack: memory with a discipline
 
-The call stack is a contiguous region of memory (typically 1–8 MB per thread, set at thread creation) plus one register, the **stack pointer** (\`rsp\` on x86-64). "Allocating" on the stack means subtracting from that pointer. "Freeing" means adding back. That is the entire allocator: **one instruction, zero fragmentation, perfect cache warmth** — the last few KB of stack are almost always resident in L1.
+The call stack is a contiguous region of memory (typically 1–8 MiB per thread, set at thread creation) plus one register, the **stack pointer** (\`rsp\` on x86-64). "Allocating" on the stack means subtracting from that pointer. "Freeing" means adding back. That is the entire allocator: **one instruction, zero fragmentation, perfect cache warmth** — the last few KiB of stack are almost always resident in L1.
 
 The price for this perfection is a strict contract: **last in, first out.** Memory dies in exactly the reverse order it was born. That is perfect for function calls — a callee cannot outlive its caller — and useless for anything that must escape: return a pointer to a local and you have built a time bomb. The compiler will not stop you in C. (In Rust it physically cannot happen — T3's borrow checker is, at heart, a compile-time proof that nothing outlives its stack frame.)`,
     },
@@ -192,7 +192,7 @@ Anything that must outlive its creator — a request object passed between stage
 
 The stack/heap split also explains three errors every C programmer meets:
 
-- **Stack overflow** — recursion deeper than the 1–8 MB region; the stack pointer walks off the end into a guard page and the OS kills you (the namesake of the website).
+- **Stack overflow** — recursion deeper than the 1–8 MiB region; the stack pointer walks off the end into a guard page and the OS kills you (the namesake of the website).
 - **Use-after-return** — returning \`&local\`: the memory is silently reused by the next call. UB, heisenbugs, CVEs.
 - **Memory leak** — heap block never freed; RSS climbs until the OOM killer picks you.`,
     },

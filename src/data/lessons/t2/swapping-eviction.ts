@@ -23,7 +23,7 @@ You already know the application-level version of this decision — Redis \`maxm
 
 **OPT (Belady's algorithm)** evicts the page used *farthest in the future* — provably optimal, and provably impossible: it needs the future. Its value is as the measuring stick every real policy is graded against.
 
-**LRU (least recently used)** bets that recent past ≈ near future: evict what hasn't been touched longest. Beautiful for loops and working sets; catastrophically wrong for scans — read a 10 GB file once through a 4 GB cache and LRU evicts *everything useful* to hold data you'll never reread. (Databases know this: Postgres and InnoDB use scan-resistant variants — ARC, midpoint insertion — precisely so one \`SELECT *\` can't flush the buffer pool.)
+**LRU (least recently used)** bets that recent past ≈ near future: evict what hasn't been touched longest. Beautiful for loops and working sets; catastrophically wrong for scans — read a 10 GiB file once through a 4 GiB cache and LRU evicts *everything useful* to hold data you'll never reread. (Databases know this: Postgres and InnoDB use scan-resistant variants — ARC, midpoint insertion — precisely so one \`SELECT *\` can't flush the buffer pool.)
 
 **LFU (least frequently used)** counts references instead of recency: scans can't evict hot items, but LFU has memory — yesterday's hot page clings on after the workload moves on. Real systems add aging (Redis's approx-LFU does).
 
@@ -140,7 +140,7 @@ When the vLLM engine cannot allocate blocks for the next token of *some* sequenc
           miss: ['t2.recency-useless', '', 't2.lru-victim-lookup-slow', 't2.no-usage-signal'],
         },
         {
-          q: 'A nightly batch job reads a 10 GB file once on a host with 4 GB of page cache. Under strict LRU this is harmful because…',
+          q: 'A nightly batch job reads a 10 GiB file once on a host with 4 GiB of page cache. Under strict LRU this is harmful because…',
           options: [
             'A read-only file cannot be kept in the cache by LRU, with each pass of the scan going back to disk',
             'The scan evicts hot pages to cache data that nobody rereads, with LRU treating a first touch as a sign of future use',
