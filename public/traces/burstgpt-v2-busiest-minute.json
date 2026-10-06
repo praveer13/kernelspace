@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "id": "burstgpt-v2-busiest-minute",
+  "name": "BurstGPT v2.0 \u00b7 busiest aligned minute, sampled",
+  "kind": "recorded",
+  "source": "https://github.com/HPMLL/BurstGPT/releases/download/v2.0/BurstGPT_without_fails_1.csv",
+  "sourceRevision": "v2.0",
+  "sourceSha256": "a4d068a7113ec0290e74063a1b3447dc6001a30e4298eb313581b71006dda1f4",
+  "license": "CC-BY-4.0",
+  "attribution": "BurstGPT authors (KDD 2025), HPMLL/BurstGPT",
+  "note": "Token/timing metadata only. Busiest aligned 60-second bin; evenly spaced to 40 rows; 1 real second = 1 simulator tick; prompt tokens clamped to 8..4096 and response tokens to 1..256. This is a sample of the minute, not the whole minute: sampling.sourceRowsInWindow is the number of requests the minute holds. No prompt text, session id, model, or user data is included.",
+  "sampling": {
+    "method": "busiest-aligned-window-then-even-index",
+    "windowSeconds": 60,
+    "sourceWindowStart": 3063960,
+    "sourceRowsInWindow": 1095,
+    "selectedRows": 40,
+    "secondsPerTick": 1,
+    "promptClamp": [
+      8,
+      4096
+    ],
+    "outputClamp": [
+      1,
+      256
+    ]
+  },
+  "requestCount": 40,
+  "requestSha256": "945c778b35066571a3354a7912c49503201d6473e825e5d2080365afa03a9db9",
+  "requests": [
+    {
+      "t": 0,
+      "p": 263,
+      "o": 1
+    },
+    {
+      "t": 1,
+      "p": 274,
+      "o": 1
+    },
+    {
+      "t": 3,
+      "p": 238,
+      "o": 4
+    },
+    {
+      "t": 4,
+      "p": 226,
+      "o": 4
+    },
+    {
+      "t": 6,
+      "p": 274,
+      "o": 1
+    },
+    {
+      "t": 7,
+      "p": 197,
+      "o": 4
+    },
+    {
+      "t": 8,
+      "p": 263,
+      "o": 1
+    },
+    {
+      "t": 10,
+      "p": 212,
+      "o": 4
+    },
+    {
+      "t": 11,
+      "p": 169,
+      "o": 1
+    },
+    {
+      "t": 13,
+      "p": 185,
+      "o": 4
+    },
+    {
+      "t": 14,
+      "p": 346,
+      "o": 1
+    },
+    {
+      "t": 16,
+      "p": 263,
+      "o": 1
+    },
+    {
+      "t": 18,
+      "p": 171,
+      "o": 4
+    },
+    {
+      "t": 19,
+      "p": 255,
+      "o": 1
+    },
+    {
+      "t": 21,
+      "p": 263,
+      "o": 1
+    },
+    {
+      "t": 22,
+      "p": 692,
+      "o": 4
+    },
+    {
+      "t": 24,
+      "p": 270,
+      "o": 1
+    },
+    {
+      "t": 25,
+      "p": 262,
+      "o": 1
+    },
+    {
+      "t": 26,
+      "p": 211,
+      "o": 1
+    },
+    {
+      "t": 27,
+      "p": 211,
+      "o": 1
+    },
+    {
+      "t": 29,
+      "p": 171,
+      "o": 4
+    },
+    {
+      "t": 30,
+      "p": 263,
+      "o": 1
+    },
+    {
+      "t": 35,
+      "p": 211,
+      "o": 1
+    },
+    {
+      "t": 36,
+      "p": 185,
+      "o": 4
+    },
+    {
+      "t": 38,
+      "p": 169,
+      "o": 1
+    },
+    {
+      "t": 39,
+      "p": 197,
+      "o": 4
+    },
+    {
+      "t": 41,
+      "p": 433,
+      "o": 4
+    },
+    {
+      "t": 42,
+      "p": 263,
+      "o": 1
+    },
+    {
+      "t": 44,
+      "p": 211,
+      "o": 1
+    },
+    {
+      "t": 45,
+      "p": 346,
+      "o": 1
+    },
+    {
+      "t": 46,
+      "p": 274,
+      "o": 1
+    },
+    {
+      "t": 48,
+      "p": 692,
+      "o": 4
+    },
+    {
+      "t": 49,
+      "p": 193,
+      "o": 1
+    },
+    {
+      "t": 50,
+      "p": 262,
+      "o": 1
+    },
+    {
+      "t": 52,
+      "p": 198,
+      "o": 4
+    },
+    {
+      "t": 53,
+      "p": 270,
+      "o": 1
+    },
+    {
+      "t": 54,
+      "p": 433,
+      "o": 4
+    },
+    {
+      "t": 55,
+      "p": 198,
+      "o": 4
+    },
+    {
+      "t": 57,
+      "p": 211,
+      "o": 1
+    },
+    {
+      "t": 58,
+      "p": 185,
+      "o": 4
+    }
+  ]
+}

@@ -10,6 +10,7 @@ text, model output, account identifiers, or session identifiers.
 |---|---|---:|---|---|
 | `kimi-conversation.json` | Mooncake FAST'25 conversation trace | 1,200 | Apache-2.0 | first ten minutes; 667 ms → one tick; input ÷12 and output ÷4; clamps recorded in the artifact |
 | `burstgpt-v2-busiest-hour.json` | BurstGPT v2.0 `BurstGPT_without_fails_1.csv` | 480 | CC-BY-4.0 | busiest aligned one-hour bin (33,305 source rows); deterministic even-index sample; four seconds → one tick; prompt/output clamps recorded in the artifact |
+| `burstgpt-v2-busiest-minute.json` | BurstGPT v2.0 `BurstGPT_without_fails_1.csv` | 40 | CC-BY-4.0 | busiest aligned 60-second bin (1,095 source rows, 3.7 % sampled); deterministic even-index sample; one second → one tick; same clamps as the hour; the artifact records the minute's request count in `sampling.sourceRowsInWindow` |
 | `lmsys-chat-1m-published-shape.json` | LMSYS-Chat-1M dataset card aggregates | 360 | synthetic profile; no LMSYS records | fixed log-normal lengths with exact published means (69.5 prompt, 214.5 response tokens); deterministic synthetic arrivals |
 
 The BurstGPT slice is attributed to the BurstGPT authors and the
@@ -23,6 +24,14 @@ The Kimi source is the
 file in Mooncake at commit `b82b9f86ceb67bb809339b9088085f34329683bb`,
 licensed Apache-2.0. That source file's SHA-256 is
 `b8cbb061a85206d729d91cdc2981f43c9e0d99209dce588d3af5f7934408b9df`.
+
+The busiest minute is a sample of a minute, not the whole minute: it is the
+practice minute of the scheduler play, which shows "40 of 1,095 requests
+sampled" with the second number read from `sampling.sourceRowsInWindow`. It is
+not inside the busiest hour above: the busiest 60 seconds and the busiest 3,600
+seconds fall in different parts of the source (the hour averages 555 requests a
+minute). Fresh minutes for the play are drawn in `src/lib/world/sched-traces.ts`
+by resampling the hour's 480 rows, with arrival gaps taken from the minute.
 
 ## Why LMSYS is a profile, not a redistributed slice
 
@@ -87,8 +96,12 @@ python3 scripts/build-traces.py
 bun scripts/verify-traces.ts
 ```
 
+Pass `--burstgpt-csv PATH` to reuse a local copy of the source CSV; its SHA-256
+is checked either way.
+
 The build downloads the pinned BurstGPT v2.0 asset, verifies its source hash,
-regenerates both committed Wave 4 artifacts, and emits the matching Rust tables
-in `labs/batching-scheduler/src/trace_scenarios.rs`. Sampling is independent of
+regenerates the committed BurstGPT hour and minute artifacts, and emits the matching Rust tables
+in `labs/batching-scheduler/src/trace_scenarios.rs` (the hour and the LMSYS
+profile; the minute has no Rust table). Sampling is independent of
 CSV row order only where documented; identical source bytes produce identical
 artifacts.
