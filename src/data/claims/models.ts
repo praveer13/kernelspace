@@ -1,3 +1,4 @@
+import { TOKEN_CORPUS } from '../engine/token-corpus'
 import type { Claim } from './schema'
 
 /** Meta's file is gated (HTTP 401), so the quotes come from a verbatim mirror of config.json. */
@@ -21,6 +22,59 @@ const MIXTRAL_CONFIG = {
   url: 'https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json',
   title: 'Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)',
 }
+
+/** DeepSeek's cards are read at the revision current on 2026-10-05, so the quote can be re-read at the same bytes. */
+const DEEPSEEK_V3_PIN = { repo: 'deepseek-ai/DeepSeek-V3', ref: 'e815299b0bcbac849fa540c768ef21845365c9eb' } as const
+const DEEPSEEK_R1_PIN = { repo: 'deepseek-ai/DeepSeek-R1', ref: '56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad' } as const
+const DEEPSEEK_V3_CARD = {
+  url: `https://huggingface.co/${DEEPSEEK_V3_PIN.repo}/raw/${DEEPSEEK_V3_PIN.ref}/README.md`,
+  title: 'DeepSeek-V3 model card (README.md at a pinned revision, DeepSeek, Hugging Face)',
+}
+const DEEPSEEK_R1_CARD = {
+  url: `https://huggingface.co/${DEEPSEEK_R1_PIN.repo}/raw/${DEEPSEEK_R1_PIN.ref}/README.md`,
+  title: 'DeepSeek-R1 model card (README.md at a pinned revision, DeepSeek, Hugging Face)',
+}
+
+/**
+ * Qwen3's tokenizer at a pinned revision (docs/specs/wave-2.md §10.5). Every Qwen3 size shares it. The counts
+ * and the vocabulary size come from `scripts/engine/qwen3-counts.py`, which reproduces them (`--check` compares
+ * with public/claims.json); the texts are src/data/engine/token-corpus.ts, and each claim records its text's
+ * hash so tests/claims/pin.test.ts fails if a text is edited without recounting.
+ */
+const QWEN3_TOKENIZER_PIN = { repo: 'Qwen/Qwen3-0.6B', ref: 'c1899de289a04d12100db370d81485cdf75e47ca' } as const
+const QWEN3_TOKENIZER = {
+  url: `https://huggingface.co/${QWEN3_TOKENIZER_PIN.repo}/resolve/${QWEN3_TOKENIZER_PIN.ref}/tokenizer.json`,
+  title: 'Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)',
+}
+
+/** [corpus id, token count, first 12 hex of the text's sha256], as printed by qwen3-counts.py. */
+const QWEN3_COUNTS: ReadonlyArray<readonly [string, number, string]> = [
+  ['prose', 24, 'd7415fa906f6'],
+  ['python', 54, '2e75630451f7'],
+  ['json', 46, '73c06e2f16b3'],
+  ['numbers', 59, '2f574b1ac32f'],
+  ['url', 20, '11d0cf6fba6b'],
+  ['chinese', 17, '563910742446'],
+  ['emoji', 16, 'c3e143fcb530'],
+  ['rust', 37, '8696f604503d'],
+]
+
+const QWEN3_COUNT_CLAIMS: Claim[] = QWEN3_COUNTS.map(([id, tokens, sha]) => {
+  const text = TOKEN_CORPUS.find((t) => t.id === id)
+  if (!text) throw new Error(`QWEN3_COUNTS names a text that is not in the corpus: ${id}`)
+  return {
+    id: `model.qwen3-tokenizer.tokens-${id}`,
+    kind: 'benchmark',
+    value: tokens,
+    unit: 'tokens',
+    label: `Qwen3 tokenizer: tokens in the ${text.label} text`,
+    source: { ...QWEN3_TOKENIZER, row: 'scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)' },
+    pin: QWEN3_TOKENIZER_PIN,
+    verifiedAt: '2026-10-05',
+    ttlDays: 180,
+    boundary: `The ${text.text.length}-character corpus text "${id}" (sha256 ${sha}...), raw BPE ids with no chat template, BOS or end-of-text.`,
+  }
+})
 
 export const MODEL_CLAIMS: Claim[] = [
   {
@@ -485,4 +539,73 @@ export const MODEL_CLAIMS: Claim[] = [
     boundary:
       'No source: a stand-in size for a shape the learner types in, so the custom preset has weights to fit beside its KV. It is not derived from the layers, KV heads or head dim entered.',
   },
+  {
+    id: 'model.deepseek-v3.total-params',
+    kind: 'spec',
+    value: 671,
+    unit: 'B params',
+    label: 'DeepSeek-V3 total parameters',
+    source: {
+      ...DEEPSEEK_V3_CARD,
+      quote: 'a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token',
+      row: 'Abstract',
+    },
+    pin: DEEPSEEK_V3_PIN,
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    boundary: 'The main model, all experts resident. The Hugging Face total of 685B adds 14B of Multi-Token Prediction module weights.',
+  },
+  {
+    id: 'model.deepseek-v3.active-params',
+    kind: 'spec',
+    value: 37,
+    unit: 'B params',
+    label: 'DeepSeek-V3 activated parameters per token',
+    source: {
+      ...DEEPSEEK_V3_CARD,
+      quote: 'a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token',
+      row: 'Abstract',
+    },
+    pin: DEEPSEEK_V3_PIN,
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    boundary: 'Parameters a token passes through (shared and routed experts it selects); a decode step reads these bytes, while all 671B must be resident.',
+  },
+  {
+    id: 'model.deepseek-r1.total-params',
+    kind: 'spec',
+    value: 671,
+    unit: 'B params',
+    label: 'DeepSeek-R1 total parameters',
+    source: { ...DEEPSEEK_R1_CARD, quote: 'DeepSeek-R1 | 671B | 37B | 128K', row: 'Model Downloads: #Total Params' },
+    pin: DEEPSEEK_R1_PIN,
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    boundary: 'The card says R1 is trained based on DeepSeek-V3-Base and points to the V3 repository for the architecture.',
+  },
+  {
+    id: 'model.deepseek-r1.active-params',
+    kind: 'spec',
+    value: 37,
+    unit: 'B params',
+    label: 'DeepSeek-R1 activated parameters per token',
+    source: { ...DEEPSEEK_R1_CARD, quote: 'DeepSeek-R1 | 671B | 37B | 128K', row: 'Model Downloads: #Activated Params' },
+    pin: DEEPSEEK_R1_PIN,
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+  },
+  {
+    id: 'model.qwen3-tokenizer.vocab-size',
+    kind: 'benchmark',
+    value: 151669,
+    unit: 'tokens',
+    label: 'Qwen3 tokenizer vocabulary size, added tokens included',
+    source: { ...QWEN3_TOKENIZER, row: 'scripts/engine/qwen3-counts.py: Tokenizer.get_vocab_size(with_added_tokens=True)' },
+    pin: QWEN3_TOKENIZER_PIN,
+    verifiedAt: '2026-10-05',
+    ttlDays: 180,
+    boundary: 'The ids the tokenizer can emit: the byte-level BPE vocabulary plus the added special tokens. "About 151k entries" in the tokenizer comparison.',
+    discrepancy: 'config.json says "vocab_size": 151936 for Qwen3-0.6B: the embedding matrix is padded past the 151,669 ids the tokenizer defines.',
+  },
+  ...QWEN3_COUNT_CLAIMS,
 ]
