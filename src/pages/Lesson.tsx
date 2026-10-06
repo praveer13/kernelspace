@@ -281,7 +281,7 @@ function RightRail({
               href={`#${h.id}`}
               onClick={(e) => {
                 e.preventDefault()
-                document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                document.getElementById(h.id)?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
               }}
               className={cn(
                 'block py-1 pr-2 text-body-sm transition-colors duration-150',
@@ -343,7 +343,7 @@ function RightRail({
         {hasExercise && (
           <button
             type="button"
-            onClick={() => document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            onClick={() => document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-line bg-surface-2 px-4 py-2 font-mono text-[11px] text-text-2 transition-colors duration-150 hover:border-line-bright hover:text-text-1"
           >
             <RotateCcw size={12} /> Restart exercise
@@ -653,11 +653,24 @@ function CapstoneLink() {
 /* ------------------------------------------------------------------ */
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+/** Every scroll this page starts by itself: smooth, unless the learner asked for reduced motion. */
+const scrollBehavior = (): ScrollBehavior => (reducedMotion() ? 'auto' : 'smooth')
+
+/** The controls a finished-reading learner is about to use: the sticky finish bar must never sit over them. */
+const GRADED_SURFACES = '[data-ks-ticket], [data-ks-testout], section[aria-label="Checkpoint quiz"]'
+/** Whether any exit ticket, test-out or checkpoint quiz is (even partly) on screen. */
+function gradedSurfaceInView(): boolean {
+  for (const el of document.querySelectorAll<HTMLElement>(GRADED_SURFACES)) {
+    const r = el.getBoundingClientRect()
+    if (r.height > 0 && r.top < window.innerHeight && r.bottom > 0) return true
+  }
+  return false
+}
 
 /** Bring `root` to the middle of the screen and focus `target` (or `root` itself, which then needs a tabindex). */
 function reveal(root: HTMLElement, target: HTMLElement | null) {
   if (!target && !root.hasAttribute('tabindex')) root.setAttribute('tabindex', '-1')
-  root.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' })
+  root.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
   ;(target ?? root).focus({ preventScroll: true })
 }
 
@@ -792,7 +805,8 @@ function LessonView({ lesson }: { lesson: Lesson }) {
         const pct = scrollPctNow()
         if (barRef.current) barRef.current.style.transform = `scaleX(${pct / 100})`
         if (pctRef.current) pctRef.current.textContent = `${Math.round(pct)}%`
-        setShowCompleteBar(pct >= 90)
+        // the bar would cover Submit and Next (it is ~96 px tall at 360), so it steps aside while the ticket is on screen
+        setShowCompleteBar(pct >= 90 && !gradedSurfaceInView())
         const now = Date.now()
         if (now - lastSaved.current > 500) {
           lastSaved.current = now
@@ -802,7 +816,15 @@ function LessonView({ lesson }: { lesson: Lesson }) {
     }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    // a ticket grows when it is answered, which moves it without a scroll
+    window.addEventListener('resize', onScroll)
+    const ro = new ResizeObserver(onScroll)
+    ro.observe(document.body)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      ro.disconnect()
+    }
   }, [lesson.id, setLessonScroll])
 
   /* scroll-spy on headings */
@@ -847,7 +869,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
   /* the finish control: go to the ticket (T0–T2) or the checkpoint; it never completes anything by itself */
   const finish = useCallback(() => {
     if (lesson.ticket ? focusTicket() || focusCheckpoint() : focusCheckpoint()) return
-    document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
   }, [lesson.ticket])
 
   /* "continue anyway": finished without passing, so the lesson reads as read and nothing else changes (W8) */
@@ -868,12 +890,12 @@ function LessonView({ lesson }: { lesson: Lesson }) {
       if (dir === 1) {
         const idx = tops.findIndex((top) => top > y + 4)
         const target = els[idx === -1 ? els.length - 1 : idx]
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
       } else {
         let idx = -1
         for (let i = 0; i < tops.length; i++) if (tops[i] < y - 4) idx = i
         const target = els[idx === -1 ? 0 : idx]
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
       }
     },
     [headings],
@@ -909,7 +931,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
           stepSection(-1)
           break
         case 'e':
-          document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          document.querySelector('[data-exercise]')?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
           break
         case 'm':
           focusCompletion()

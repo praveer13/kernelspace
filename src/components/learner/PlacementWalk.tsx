@@ -32,7 +32,7 @@ import {
   PROBES,
   advance,
   answerOf,
-  anchorOptional,
+  canSkipAnchor,
   authoredIndex,
   currentLesson,
   finishWalk,
@@ -216,7 +216,8 @@ export default function PlacementWalk({ path, onClose, className }: PlacementWal
   const { step, walk } = session
   if (!step) return null
   const p = walkProgress(walk)
-  const rustOptional = anchorOptional(path) && step.kc === RUST_ANCHOR_KC
+  // only while skipAnchor can act: not on the anchor's second item, where it would do nothing
+  const rustOptional = step.kc === RUST_ANCHOR_KC && canSkipAnchor(walk)
   return (
     <section ref={rootRef} aria-labelledby={headingId} id="placement-walk" className={shell}>
       {header}
