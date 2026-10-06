@@ -1,0 +1,762 @@
+{
+  "spec": "docs/specs/wave-2.md section 11.3",
+  "generatedBy": "scripts/zoo/second-reader.ts",
+  "contexts": [
+    1024,
+    32768,
+    131072,
+    1048576
+  ],
+  "conventions": [
+    "b is the config dtype field in bytes (bfloat16 = 2); gpt-oss has no dtype field and its attention stays outside mxfp4, so it is read as bfloat16",
+    "contexts are 1024, 32768, 131072 and 1048576 tokens",
+    "stored is the KV cache one request holds at context t; readMain is what one decode step reads from it; readIndexer is what a sparse indexer reads to choose tokens",
+    "spec 11.1 reads DSA as readMain + readIndexer and CSA as readMain; readTotal is readMain + readIndexer for both",
+    "only num_hidden_layers layers are counted; multi-token-prediction modules are left out",
+    "conv states of linear layers and the DeepSeek-V4 compressor scratch buffers are left out, as the spec formulas leave them out",
+    "a linear layer keeps its state at the dtype the config names for it (Qwen3.5 mamba_ssm_dtype float32); stateBytesPerLinearLayerAtBf16 gives the same state at the KV dtype",
+    "gpt-oss attention sinks are one learned logit per head with no config field, so they store no tokens"
+  ],
+  "models": [
+    {
+      "repo": "NousResearch/Meta-Llama-3-70B",
+      "revision": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45",
+      "configUrl": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+      "configSha256": "c3e3c787cf77a9c68ef1d9c926fb366450fcbc99d723c7af96b534a02bd56652",
+      "modelType": "llama",
+      "bytesPerElement": 2,
+      "dtypeSource": "torch_dtype = bfloat16",
+      "fields": {
+        "num_hidden_layers": 80,
+        "num_key_value_heads": 8,
+        "head_dim": 128,
+        "entryBytesPerLayerToken": 4096
+      },
+      "kinds": [
+        {
+          "kind": "full",
+          "layers": 80,
+          "slopeBytesPerLayerToken": 4096,
+          "constantBytesPerLayer": 0,
+          "formula": "2 * kvHeads * headDim * b * t"
+        }
+      ],
+      "bytesPerToken": 327680,
+      "constantBytes": 0,
+      "contexts": {
+        "1024": {
+          "stored": 335544320,
+          "readMain": 335544320,
+          "readIndexer": 0,
+          "readTotal": 335544320,
+          "byKind": {
+            "full": {
+              "layers": 80,
+              "stored": 335544320,
+              "readMain": 335544320,
+              "readIndexer": 0
+            }
+          }
+        },
+        "32768": {
+          "stored": 10737418240,
+          "readMain": 10737418240,
+          "readIndexer": 0,
+          "readTotal": 10737418240,
+          "byKind": {
+            "full": {
+              "layers": 80,
+              "stored": 10737418240,
+              "readMain": 10737418240,
+              "readIndexer": 0
+            }
+          }
+        },
+        "131072": {
+          "stored": 42949672960,
+          "readMain": 42949672960,
+          "readIndexer": 0,
+          "readTotal": 42949672960,
+          "byKind": {
+            "full": {
+              "layers": 80,
+              "stored": 42949672960,
+              "readMain": 42949672960,
+              "readIndexer": 0
+            }
+          }
+        },
+        "1048576": {
+          "stored": 343597383680,
+          "readMain": 343597383680,
+          "readIndexer": 0,
+          "readTotal": 343597383680,
+          "byKind": {
+            "full": {
+              "layers": 80,
+              "stored": 343597383680,
+              "readMain": 343597383680,
+              "readIndexer": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "repo": "deepseek-ai/DeepSeek-V3",
+      "revision": "e815299b0bcbac849fa540c768ef21845365c9eb",
+      "configUrl": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+      "configSha256": "cbf0b95dc614de208a109bb5fd4e7eed11385e9c68411d2c17db5319443035d9",
+      "modelType": "deepseek_v3",
+      "bytesPerElement": 2,
+      "dtypeSource": "torch_dtype = bfloat16",
+      "fields": {
+        "num_hidden_layers": 61,
+        "kv_lora_rank": 512,
+        "qk_rope_head_dim": 64,
+        "entryBytesPerLayerToken": 1152
+      },
+      "kinds": [
+        {
+          "kind": "mla",
+          "layers": 61,
+          "slopeBytesPerLayerToken": 1152,
+          "constantBytesPerLayer": 0,
+          "formula": "(kv_lora_rank + qk_rope_head_dim) * b * t"
+        }
+      ],
+      "bytesPerToken": 70272,
+      "constantBytes": 0,
+      "contexts": {
+        "1024": {
+          "stored": 71958528,
+          "readMain": 71958528,
+          "readIndexer": 0,
+          "readTotal": 71958528,
+          "byKind": {
+            "mla": {
+              "layers": 61,
+              "stored": 71958528,
+              "readMain": 71958528,
+              "readIndexer": 0
+            }
+          }
+        },
+        "32768": {
+          "stored": 2302672896,
+          "readMain": 2302672896,
+          "readIndexer": 0,
+          "readTotal": 2302672896,
+          "byKind": {
+            "mla": {
+              "layers": 61,
+              "stored": 2302672896,
+              "readMain": 2302672896,
+              "readIndexer": 0
+            }
+          }
+        },
+        "131072": {
+          "stored": 9210691584,
+          "readMain": 9210691584,
+          "readIndexer": 0,
+          "readTotal": 9210691584,
+          "byKind": {
+            "mla": {
+              "layers": 61,
+              "stored": 9210691584,
+              "readMain": 9210691584,
+              "readIndexer": 0
+            }
+          }
+        },
+        "1048576": {
+          "stored": 73685532672,
+          "readMain": 73685532672,
+          "readIndexer": 0,
+          "readTotal": 73685532672,
+          "byKind": {
+            "mla": {
+              "layers": 61,
+              "stored": 73685532672,
+              "readMain": 73685532672,
+              "readIndexer": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "repo": "openai/gpt-oss-120b",
+      "revision": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a",
+      "configUrl": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+      "configSha256": "933aeb666a3fd851133ddd7686414f369bc564c4185fb5704416550879f10566",
+      "modelType": "gpt_oss",
+      "bytesPerElement": 2,
+      "dtypeSource": "no dtype field in the config; attention is outside mxfp4 (modules_to_not_convert), read as bfloat16",
+      "fields": {
+        "num_hidden_layers": 36,
+        "sliding_layers": 18,
+        "full_layers": 18,
+        "num_key_value_heads": 8,
+        "head_dim": 64,
+        "sliding_window": 128,
+        "sinkTokensStored": 0,
+        "entryBytesPerLayerToken": 2048
+      },
+      "kinds": [
+        {
+          "kind": "full",
+          "layers": 18,
+          "slopeBytesPerLayerToken": 2048,
+          "constantBytesPerLayer": 0,
+          "formula": "2 * kvHeads * headDim * b * t"
+        },
+        {
+          "kind": "swa",
+          "layers": 18,
+          "slopeBytesPerLayerToken": 0,
+          "constantBytesPerLayer": 262144,
+          "formula": "2 * kvHeads * headDim * b * min(t, sliding_window)"
+        }
+      ],
+      "bytesPerToken": 36864,
+      "constantBytes": 4718592,
+      "contexts": {
+        "1024": {
+          "stored": 42467328,
+          "readMain": 42467328,
+          "readIndexer": 0,
+          "readTotal": 42467328,
+          "byKind": {
+            "full": {
+              "layers": 18,
+              "stored": 37748736,
+              "readMain": 37748736,
+              "readIndexer": 0
+            },
+            "swa": {
+              "layers": 18,
+              "stored": 4718592,
+              "readMain": 4718592,
+              "readIndexer": 0
+            }
+          }
+        },
+        "32768": {
+          "stored": 1212678144,
+          "readMain": 1212678144,
+          "readIndexer": 0,
+          "readTotal": 1212678144,
+          "byKind": {
+            "full": {
+              "layers": 18,
+              "stored": 1207959552,
+              "readMain": 1207959552,
+              "readIndexer": 0
+            },
+            "swa": {
+              "layers": 18,
+              "stored": 4718592,
+              "readMain": 4718592,
+              "readIndexer": 0
+            }
+          }
+        },
+        "131072": {
+          "stored": 4836556800,
+          "readMain": 4836556800,
+          "readIndexer": 0,
+          "readTotal": 4836556800,
+          "byKind": {
+            "full": {
+              "layers": 18,
+              "stored": 4831838208,
+              "readMain": 4831838208,
+              "readIndexer": 0
+            },
+            "swa": {
+              "layers": 18,
+              "stored": 4718592,
+              "readMain": 4718592,
+              "readIndexer": 0
+            }
+          }
+        },
+        "1048576": {
+          "stored": 38659424256,
+          "readMain": 38659424256,
+          "readIndexer": 0,
+          "readTotal": 38659424256,
+          "byKind": {
+            "full": {
+              "layers": 18,
+              "stored": 38654705664,
+              "readMain": 38654705664,
+              "readIndexer": 0
+            },
+            "swa": {
+              "layers": 18,
+              "stored": 4718592,
+              "readMain": 4718592,
+              "readIndexer": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "repo": "Qwen/Qwen3.5-397B-A17B",
+      "revision": "8472618112abcbd45acbcdc58436aff4233c23f7",
+      "configUrl": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+      "configSha256": "3ae7fa89c2f7d1354096418ddaf1331e9e0898a8ca11e804fb6dbaa087efb7da",
+      "modelType": "qwen3_5_moe_text",
+      "bytesPerElement": 2,
+      "dtypeSource": "dtype = bfloat16; linear state: text_config.mamba_ssm_dtype = float32",
+      "fields": {
+        "num_hidden_layers": 60,
+        "full_layers": 15,
+        "linear_layers": 45,
+        "num_key_value_heads": 2,
+        "head_dim": 256,
+        "linear_num_value_heads": 64,
+        "linear_key_head_dim": 128,
+        "linear_value_head_dim": 128,
+        "stateBytesPerElement": 4,
+        "entryBytesPerLayerToken": 2048,
+        "stateBytesPerLinearLayer": 4194304,
+        "stateBytesPerLinearLayerAtBf16": 2097152
+      },
+      "kinds": [
+        {
+          "kind": "full",
+          "layers": 15,
+          "slopeBytesPerLayerToken": 2048,
+          "constantBytesPerLayer": 0,
+          "formula": "2 * kvHeads * headDim * b * t"
+        },
+        {
+          "kind": "linear",
+          "layers": 45,
+          "slopeBytesPerLayerToken": 0,
+          "constantBytesPerLayer": 4194304,
+          "formula": "linear_num_value_heads * linear_key_head_dim * linear_value_head_dim * stateBytes (constant in t)"
+        }
+      ],
+      "bytesPerToken": 30720,
+      "constantBytes": 188743680,
+      "contexts": {
+        "1024": {
+          "stored": 220200960,
+          "readMain": 220200960,
+          "readIndexer": 0,
+          "readTotal": 220200960,
+          "byKind": {
+            "full": {
+              "layers": 15,
+              "stored": 31457280,
+              "readMain": 31457280,
+              "readIndexer": 0
+            },
+            "linear": {
+              "layers": 45,
+              "stored": 188743680,
+              "readMain": 188743680,
+              "readIndexer": 0
+            }
+          }
+        },
+        "32768": {
+          "stored": 1195376640,
+          "readMain": 1195376640,
+          "readIndexer": 0,
+          "readTotal": 1195376640,
+          "byKind": {
+            "full": {
+              "layers": 15,
+              "stored": 1006632960,
+              "readMain": 1006632960,
+              "readIndexer": 0
+            },
+            "linear": {
+              "layers": 45,
+              "stored": 188743680,
+              "readMain": 188743680,
+              "readIndexer": 0
+            }
+          }
+        },
+        "131072": {
+          "stored": 4215275520,
+          "readMain": 4215275520,
+          "readIndexer": 0,
+          "readTotal": 4215275520,
+          "byKind": {
+            "full": {
+              "layers": 15,
+              "stored": 4026531840,
+              "readMain": 4026531840,
+              "readIndexer": 0
+            },
+            "linear": {
+              "layers": 45,
+              "stored": 188743680,
+              "readMain": 188743680,
+              "readIndexer": 0
+            }
+          }
+        },
+        "1048576": {
+          "stored": 32400998400,
+          "readMain": 32400998400,
+          "readIndexer": 0,
+          "readTotal": 32400998400,
+          "byKind": {
+            "full": {
+              "layers": 15,
+              "stored": 32212254720,
+              "readMain": 32212254720,
+              "readIndexer": 0
+            },
+            "linear": {
+              "layers": 45,
+              "stored": 188743680,
+              "readMain": 188743680,
+              "readIndexer": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+      "revision": "e1df551a447157d4658b573f9a695d57658590e9",
+      "configUrl": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+      "configSha256": "a6ac3c2c4b5aa72370f9727f49ffa4432715d20061889acdb37c688be853096e",
+      "modelType": "kimi_linear",
+      "bytesPerElement": 2,
+      "dtypeSource": "dtype = bfloat16",
+      "fields": {
+        "num_hidden_layers": 27,
+        "mla_layers": 7,
+        "kda_layers": 20,
+        "kv_lora_rank": 512,
+        "qk_rope_head_dim": 64,
+        "kda_num_heads": 32,
+        "kda_head_dim": 128,
+        "entryBytesPerLayerToken": 1152,
+        "stateBytesPerKdaLayer": 1048576
+      },
+      "kinds": [
+        {
+          "kind": "mla",
+          "layers": 7,
+          "slopeBytesPerLayerToken": 1152,
+          "constantBytesPerLayer": 0,
+          "formula": "(kv_lora_rank + qk_rope_head_dim) * b * t"
+        },
+        {
+          "kind": "kda",
+          "layers": 20,
+          "slopeBytesPerLayerToken": 0,
+          "constantBytesPerLayer": 1048576,
+          "formula": "num_heads * head_dim * head_dim * b (constant in t)"
+        }
+      ],
+      "bytesPerToken": 8064,
+      "constantBytes": 20971520,
+      "contexts": {
+        "1024": {
+          "stored": 29229056,
+          "readMain": 29229056,
+          "readIndexer": 0,
+          "readTotal": 29229056,
+          "byKind": {
+            "mla": {
+              "layers": 7,
+              "stored": 8257536,
+              "readMain": 8257536,
+              "readIndexer": 0
+            },
+            "kda": {
+              "layers": 20,
+              "stored": 20971520,
+              "readMain": 20971520,
+              "readIndexer": 0
+            }
+          }
+        },
+        "32768": {
+          "stored": 285212672,
+          "readMain": 285212672,
+          "readIndexer": 0,
+          "readTotal": 285212672,
+          "byKind": {
+            "mla": {
+              "layers": 7,
+              "stored": 264241152,
+              "readMain": 264241152,
+              "readIndexer": 0
+            },
+            "kda": {
+              "layers": 20,
+              "stored": 20971520,
+              "readMain": 20971520,
+              "readIndexer": 0
+            }
+          }
+        },
+        "131072": {
+          "stored": 1077936128,
+          "readMain": 1077936128,
+          "readIndexer": 0,
+          "readTotal": 1077936128,
+          "byKind": {
+            "mla": {
+              "layers": 7,
+              "stored": 1056964608,
+              "readMain": 1056964608,
+              "readIndexer": 0
+            },
+            "kda": {
+              "layers": 20,
+              "stored": 20971520,
+              "readMain": 20971520,
+              "readIndexer": 0
+            }
+          }
+        },
+        "1048576": {
+          "stored": 8476688384,
+          "readMain": 8476688384,
+          "readIndexer": 0,
+          "readTotal": 8476688384,
+          "byKind": {
+            "mla": {
+              "layers": 7,
+              "stored": 8455716864,
+              "readMain": 8455716864,
+              "readIndexer": 0
+            },
+            "kda": {
+              "layers": 20,
+              "stored": 20971520,
+              "readMain": 20971520,
+              "readIndexer": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "repo": "deepseek-ai/DeepSeek-V3.2",
+      "revision": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6",
+      "configUrl": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+      "configSha256": "c7fa8b191e9936d8e6a57d864baab82b792fae16a116416cdd3a75ba76bc5af1",
+      "modelType": "deepseek_v32",
+      "bytesPerElement": 2,
+      "dtypeSource": "torch_dtype = bfloat16",
+      "fields": {
+        "num_hidden_layers": 61,
+        "kv_lora_rank": 512,
+        "qk_rope_head_dim": 64,
+        "entryBytesPerLayerToken": 1152,
+        "index_topk": 2048,
+        "index_head_dim": 128,
+        "indexEntryBytesPerLayerToken": 256
+      },
+      "kinds": [
+        {
+          "kind": "dsa-mla",
+          "layers": 61,
+          "slopeBytesPerLayerToken": 1152,
+          "constantBytesPerLayer": 0,
+          "formula": "stored (kv_lora_rank + qk_rope_head_dim) * b * t; read entry * min(t, index_topk) plus the indexer, index_head_dim * b * t"
+        }
+      ],
+      "bytesPerToken": 70272,
+      "constantBytes": 0,
+      "contexts": {
+        "1024": {
+          "stored": 71958528,
+          "readMain": 71958528,
+          "readIndexer": 15990784,
+          "readTotal": 87949312,
+          "byKind": {
+            "dsa-mla": {
+              "layers": 61,
+              "stored": 71958528,
+              "readMain": 71958528,
+              "readIndexer": 15990784
+            }
+          }
+        },
+        "32768": {
+          "stored": 2302672896,
+          "readMain": 143917056,
+          "readIndexer": 511705088,
+          "readTotal": 655622144,
+          "byKind": {
+            "dsa-mla": {
+              "layers": 61,
+              "stored": 2302672896,
+              "readMain": 143917056,
+              "readIndexer": 511705088
+            }
+          }
+        },
+        "131072": {
+          "stored": 9210691584,
+          "readMain": 143917056,
+          "readIndexer": 2046820352,
+          "readTotal": 2190737408,
+          "byKind": {
+            "dsa-mla": {
+              "layers": 61,
+              "stored": 9210691584,
+              "readMain": 143917056,
+              "readIndexer": 2046820352
+            }
+          }
+        },
+        "1048576": {
+          "stored": 73685532672,
+          "readMain": 143917056,
+          "readIndexer": 16374562816,
+          "readTotal": 16518479872,
+          "byKind": {
+            "dsa-mla": {
+              "layers": 61,
+              "stored": 73685532672,
+              "readMain": 143917056,
+              "readIndexer": 16374562816
+            }
+          }
+        }
+      }
+    },
+    {
+      "repo": "deepseek-ai/DeepSeek-V4-Pro",
+      "revision": "b5968e9190ef611bbf34a7229255be88a0e937c1",
+      "configUrl": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+      "configSha256": "5fe4568daee51c208cb8a79538eaeda090ae011ade1dee2c386aa95f569c810e",
+      "modelType": "deepseek_v4",
+      "bytesPerElement": 2,
+      "dtypeSource": "torch_dtype = bfloat16",
+      "fields": {
+        "num_hidden_layers": 61,
+        "csa_layers": 30,
+        "hca_layers": 31,
+        "csa_ratio": 4,
+        "hca_ratio": 128,
+        "head_dim": 512,
+        "num_key_value_heads": 1,
+        "sliding_window": 128,
+        "index_topk": 1024,
+        "index_head_dim": 128,
+        "entryBytesPerLayerToken": 1024,
+        "indexEntryBytesPerLayerToken": 256
+      },
+      "kinds": [
+        {
+          "kind": "csa",
+          "layers": 30,
+          "slopeBytesPerLayerToken": 256,
+          "constantBytesPerLayer": 131072,
+          "formula": "entry * ceil(t / 4) + entry * sliding_window; read entry * min(ceil(t / 4), index_topk) + entry * sliding_window; indexer reads index_head_dim * b * ceil(t / 4)"
+        },
+        {
+          "kind": "hca",
+          "layers": 31,
+          "slopeBytesPerLayerToken": 8,
+          "constantBytesPerLayer": 131072,
+          "formula": "entry * ceil(t / 128) + entry * sliding_window; every stored entry is read"
+        }
+      ],
+      "bytesPerToken": 7928,
+      "constantBytes": 7995392,
+      "contexts": {
+        "1024": {
+          "stored": 16113664,
+          "readMain": 16113664,
+          "readIndexer": 1966080,
+          "readTotal": 18079744,
+          "byKind": {
+            "csa": {
+              "layers": 30,
+              "stored": 11796480,
+              "readMain": 11796480,
+              "readIndexer": 1966080
+            },
+            "hca": {
+              "layers": 31,
+              "stored": 4317184,
+              "readMain": 4317184,
+              "readIndexer": 0
+            }
+          }
+        },
+        "32768": {
+          "stored": 267780096,
+          "readMain": 47579136,
+          "readIndexer": 62914560,
+          "readTotal": 110493696,
+          "byKind": {
+            "csa": {
+              "layers": 30,
+              "stored": 255590400,
+              "readMain": 35389440,
+              "readIndexer": 62914560
+            },
+            "hca": {
+              "layers": 31,
+              "stored": 12189696,
+              "readMain": 12189696,
+              "readIndexer": 0
+            }
+          }
+        },
+        "131072": {
+          "stored": 1047134208,
+          "readMain": 71958528,
+          "readIndexer": 251658240,
+          "readTotal": 323616768,
+          "byKind": {
+            "csa": {
+              "layers": 30,
+              "stored": 1010565120,
+              "readMain": 35389440,
+              "readIndexer": 251658240
+            },
+            "hca": {
+              "layers": 31,
+              "stored": 36569088,
+              "readMain": 36569088,
+              "readIndexer": 0
+            }
+          }
+        },
+        "1048576": {
+          "stored": 8321105920,
+          "readMain": 299499520,
+          "readIndexer": 2013265920,
+          "readTotal": 2312765440,
+          "byKind": {
+            "csa": {
+              "layers": 30,
+              "stored": 8056995840,
+              "readMain": 35389440,
+              "readIndexer": 2013265920
+            },
+            "hca": {
+              "layers": 31,
+              "stored": 264110080,
+              "readMain": 264110080,
+              "readIndexer": 0
+            }
+          }
+        }
+      }
+    }
+  ]
+}
