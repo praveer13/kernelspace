@@ -126,6 +126,8 @@ The exercise wires the three architectures against the same workload and shows y
             'Both traits apply to every style. A value sent through a channel must be Send, and a value shared by reference must be Sync; neither trait names a style or a primitive.',
             'Here "sync" means shareable, not blocking versus async. Both traits are about threads and apply identically to blocking and async code.',
           ],
+          kcs: ['t3.send-sync'],
+          miss: ['t3.send-sync-are-serialization-and-synchronized', '', 't3.send-sync-are-channel-and-lock', 't3.send-sync-are-async-and-blocking'],
         },
         {
           q: 'Rc<T> is !Send because…',
@@ -144,6 +146,8 @@ The exercise wires the three architectures against the same workload and shows y
             'Heap data has no thread affinity; Box<T> and Vec<T> are Send when T is. Rc is blocked for its unsynchronized count, not for where its value lives.',
             'Rc holds no RefCell; they are separate types that are often paired. Rc<i32> is still !Send, so the restriction comes from its own non-atomic count.',
           ],
+          kcs: ['t3.send-sync', 'r.smart-pointers'],
+          miss: ['t3.rc-is-send-averse-for-speed', '', 't3.rc-is-heap-thread-bound', 't3.rc-contains-refcell'],
         },
         {
           q: 'Rust\'s "fearless concurrency" guarantee covers…',
@@ -162,6 +166,8 @@ The exercise wires the three architectures against the same workload and shows y
             'The standard library and crates like tokio use unsafe internally. The guarantee holds when that unsafe is sound, so it depends on correct unsafe code, not on there being none.',
             'Arc<Mutex<T>> is fully covered: Mutex<T> is Sync when T is Send, and the compiler forces mutation through the lock. Channels are one safe option, not the only one.',
           ],
+          kcs: ['t3.send-sync', 't3.concurrency-architecture'],
+          miss: ['t3.types-prevent-deadlock', '', 't3.guarantee-needs-no-unsafe-anywhere', 't3.guarantee-covers-channels-only'],
         },
         {
           q: 'Holding a std::sync::MutexGuard across an .await in async Rust is dangerous because…',
@@ -180,10 +186,42 @@ The exercise wires the three architectures against the same workload and shows y
             'Poisoning happens when a thread panics while holding the guard, not on suspension. A task parked at an .await simply keeps the lock held, which is the actual problem.',
             'An await never touches the guard: it stays alive in the future\'s saved state and the lock remains held. That is why other tasks block rather than slipping in mid-update.',
           ],
+          kcs: ['t3.concurrency-architecture'],
+          miss: ['t3.std-mutex-illegal-in-async', '', 't3.await-poisons-the-mutex', 't3.await-releases-the-guard'],
         },
       ],
     },
   ],
+  kcs: ['t3.send-sync', 't3.concurrency-architecture'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Say what Send and Sync mean, and use them to explain why Rc cannot cross threads but Arc<Mutex<T>> can.',
+        model:
+          'Send means a value may move to another thread; Sync means a shared reference to it may be used from several. Rc keeps a plain integer count, so two threads cloning it could tear the count and free early: it is neither. Arc counts atomically and Mutex supplies the exclusion, so Arc<Mutex<T>> is Send and Sync when T is Send.',
+        ideas: [
+          'Send: the value may move to another thread. Sync: a shared reference may be used from several',
+          'Rc has a plain, non-atomic count, so two threads could tear it, and it is neither',
+          'Arc counts atomically and Mutex supplies exclusion, so Arc<Mutex<T>> is Send and Sync for T: Send',
+        ],
+        kcs: ['t3.send-sync'],
+      },
+      {
+        prompt:
+          'For a pipeline stage, a shared map and a hit counter, name the concurrency tool you would use for each and why.',
+        model:
+          'A pipeline stage hands work off, so use a channel: ownership moves and nothing is shared afterward. A shared map is compound state with long critical sections, so use Arc<Mutex<T>>. A hit counter is a single word, so an atomic with Relaxed ordering is cheapest, sharded if one hot cache line becomes the limit.',
+        ideas: [
+          'Handoff between stages: a channel, because ownership moves and nothing is shared after the send',
+          'Compound state with a long critical section: Arc<Mutex<T>>',
+          'A single-word counter: an atomic, sharded if one hot cache line limits it',
+        ],
+        kcs: ['t3.concurrency-architecture'],
+      },
+    ],
+  },
 }
 
 export default lesson
