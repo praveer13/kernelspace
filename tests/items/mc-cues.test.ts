@@ -63,17 +63,20 @@ describe('the blind-strategy gate on the shipped families', () => {
 
   test('the gate really samples: every choice variant, frag fit-choice and roofline bound among them, is judged at every level, and pooled', async () => {
     const wheres = new Set<string>()
-    const families = await loadAllFamilies()
-    for (const gen of families) for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
-    // the choice variants are the ones whose instances carry options, whichever family ships them
-    const choice = families.flatMap((g) => g.variants.filter((v) => g.make(0, v.levels[0], v.id).answer.kind === 'choice').map((v) => `${g.id}/${v.id}`))
-    for (const v of ['frag/fit-choice', 'roofline/bound']) expect(choice).toContain(v)
-    for (const v of choice) {
+    // a variant is a choice variant when its instances are choices, so a new family's choice variants are judged without editing this list
+    const choice = new Set<string>()
+    for (const gen of await loadAllFamilies()) {
+      for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
+      for (const v of gen.variants) if (gen.make(1, v.levels[0], v.id).answer.kind === 'choice') choice.add(`${gen.id}/${v.id}`)
+    }
+    for (const v of ['frag/fit-choice', 'roofline/bound']) {
+      expect(choice.has(v)).toBe(true)
       expect(wheres.has(v)).toBe(true)
       for (const l of LEVELS) expect(wheres.has(`${v}@L${l}`)).toBe(true)
     }
     // numeric and estimate variants have no options, so nothing else is judged
-    expect([...wheres].every((w) => choice.includes(w.split('@')[0]))).toBe(true)
+    expect([...wheres].every((w) => choice.has(w.split('@')[0]))).toBe(true)
+    expect([...choice].every((v) => wheres.has(v))).toBe(true)
   }, SLOW)
 
   test('checkFamily runs it by default, from at least 200 seeds even when asked for fewer', () => {
