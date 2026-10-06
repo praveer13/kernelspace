@@ -10,21 +10,24 @@
  *     answer (truth × ρ) is not ok and carries that rule's diagnosis id; `grade` never throws on a
  *     response at ±1e9 × truth;
  *   - non-degeneracy: at least 50 % distinct truths per (variant, level); level-0 params are round;
+ *     a bank-backed family (`Gen.bank`) needs distinct instances >= min(50 % of seeds, 80 % of its units);
  *   - pins: every `Pin` reproduces within its tolerance;
- *   - speed: p95 of `make` + `grade` under 1 ms.
+ *   - speed: p95 of `make` + `grade` under `Gen.budgetMs` (default 1 ms).
  * It also lints each family's source (§5.4): a numeric literal outside `SYNTHETIC` and outside the
  * allow-list {0, 1, 2, 10, 100} fails, unless its line (or the line above) carries
- * `// gen-literal-ok: <reason>`; and compares 100-seed output hashes per family and variant with
- * tests/fixtures/items/hashes.json (§16.3). With no families in src/lib/items/families it passes.
+ * `// gen-literal-ok: <reason>`; and compares 100-seed output hashes per family and variant with the
+ * family's own fixture, tests/fixtures/items/hashes/<family>.json (wave-1.md §16.3, wave-2.md §5.1).
+ * A family with `hashFixture: 'deferred'` and no fixture file warns instead of failing. With no
+ * families in src/lib/items/families it passes.
  *
  * `bun test` runs the same checks at 100 seeds (tests/items/*.test.ts) through `checkFamily`.
  *
  *   bun scripts/verify-generators.ts [--seeds N] [--family a,b] [--update-hashes]
  *
- * `--update-hashes` rewrites the hash rows of the selected families (all, without --family) and
- * leaves every other family's rows alone, so each family task commits only its own.
+ * `--update-hashes` rewrites the fixture files of the selected families (all, without --family) and
+ * leaves every other family's file alone, so each family task commits only its own.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
@@ -57,7 +60,9 @@ const LITERAL_ALLOW = new Set([0, 1, 2, 10, 100])
 const BAD_TEXT = /\b(NaN|Infinity|undefined)\b|\[object /
 const CLAIM_REF = /^[^@\s]+@\d{4}-\d{2}-\d{2}$/
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const HASH_FILE = path.join(ROOT, 'tests/fixtures/items/hashes.json')
+export const HASH_DIR = path.join(ROOT, 'tests/fixtures/items/hashes')
+/** A bank-backed family's distinct instances must reach this share of its bank's units (or of the seeds, if fewer). */
+export const MIN_BANK_COVERAGE = 0.8
 
 /** The seeds a run uses: the two uint32 extremes first, then a fixed spread. */
 export function genSeeds(n: number, base = SEED_BASE): number[] {
@@ -311,7 +316,8 @@ export function checkFamily(gen: Gen, opts: CheckOptions = {}): CheckResult {
           // a choice has no truth: its fingerprint stands in, so the instances must still vary
           truths.add(inst.rev)
         } else {
-          truths.add(String(a.truth))
+          // a bank-backed family's instances are its units: the fingerprint tells them apart, a truth may repeat across units
+          truths.add(gen.bank ? inst.rev : String(a.truth))
         }
         if (level === 0) {
           for (const [k, v] of Object.entries(inst.params)) {
@@ -319,7 +325,13 @@ export function checkFamily(gen: Gen, opts: CheckOptions = {}): CheckResult {
           }
         }
       }
-      if (n > 0 && truths.size / n < MIN_DISTINCT_TRUTHS) {
+      if (gen.bank) {
+        // a bank has finitely many units, so it cannot give more distinct instances than it holds
+        const need = Math.min(MIN_DISTINCT_TRUTHS * n, MIN_BANK_COVERAGE * gen.bank.units)
+        if (n > 0 && truths.size < need) {
+          fail(`distinct ${spec.id}@L${level}`, `${head(spec.id, level)}: ${truths.size} distinct instances in ${n} seeds from a bank of ${gen.bank.units} units (need at least ${need}: min(${MIN_DISTINCT_TRUTHS * 100} % of seeds, ${MIN_BANK_COVERAGE * 100} % of units))`)
+        }
+      } else if (n > 0 && truths.size / n < MIN_DISTINCT_TRUTHS) {
         fail(`distinct ${spec.id}@L${level}`, `${head(spec.id, level)}: ${truths.size} distinct truths in ${n} seeds (< ${MIN_DISTINCT_TRUTHS * 100} %)`)
       }
     }
@@ -366,7 +378,8 @@ export function checkFamily(gen: Gen, opts: CheckOptions = {}): CheckResult {
       }
     }
     p95Ms = percentile(timings, 0.95)
-    if (p95Ms >= MAX_P95_MS) fail('speed', `${gen.id}: p95 of make + grade is ${p95Ms.toFixed(3)} ms (max ${MAX_P95_MS} ms)`)
+    const budget = gen.budgetMs ?? MAX_P95_MS
+    if (p95Ms >= budget) fail('speed', `${gen.id}: p95 of make + grade is ${p95Ms.toFixed(3)} ms (max ${budget} ms)`)
   }
 
   const problems = finish()
@@ -474,20 +487,64 @@ export function hashFamily(gen: Gen): Record<string, string> {
   return out
 }
 
-/** Differences between a family's current hashes and its fixture rows. */
-export function checkHashes(gen: Gen, fixture: HashRows): string[] {
+export interface HashCheck {
+  problems: string[]
+  warnings: string[]
+}
+
+/** The fixture file of one family: variant → hash. */
+export const hashFile = (familyId: string, dir = HASH_DIR): string => path.join(dir, `${familyId}.json`)
+
+/** One family's fixture as `HashRows` (`{}` when it has no file, or an unreadable one). */
+export function readHashRows(familyId: string, dir = HASH_DIR): HashRows {
+  try {
+    return { [familyId]: JSON.parse(readFileSync(hashFile(familyId, dir), 'utf8')) as Record<string, string> }
+  } catch {
+    return {}
+  }
+}
+
+/** Every fixture file in the directory, as `HashRows` (the file name is the family id). */
+export function readAllHashRows(dir = HASH_DIR): HashRows {
+  let names: string[]
+  try {
+    names = readdirSync(dir)
+  } catch {
+    return {}
+  }
+  const out: HashRows = {}
+  for (const name of names.sort()) {
+    const m = /^(.+)\.json$/.exec(name)
+    if (m) Object.assign(out, readHashRows(m[1], dir))
+  }
+  return out
+}
+
+/**
+ * Differences between a family's current hashes and its fixture rows. A family with
+ * `hashFixture: 'deferred'` that has no rows at all is a warning (its bank is not frozen yet); once it
+ * has rows they are checked like any other family's.
+ */
+export function checkHashRows(gen: Gen, fixture: HashRows): HashCheck {
   const rows = fixture[gen.id]
   const now = hashFamily(gen)
+  const file = `tests/fixtures/items/hashes/${gen.id}.json`
   const hint = `regenerate with: bun scripts/verify-generators.ts --update-hashes --family ${gen.id}`
-  if (!rows) return [`${gen.id}: no rows in tests/fixtures/items/hashes.json (${hint})`]
+  if (!rows) {
+    const message = `${gen.id}: no fixture ${file} (${hint})`
+    return gen.hashFixture === 'deferred' ? { problems: [], warnings: [`${message}; deferred until the family's bank is frozen`] } : { problems: [message], warnings: [] }
+  }
   const out: string[] = []
   for (const [variant, h] of Object.entries(now)) {
     if (rows[variant] === undefined) out.push(`${gen.id}/${variant}: no hash row (${hint})`)
     else if (rows[variant] !== h) out.push(`${gen.id}/${variant}: output drifted from the fixture (${rows[variant]} → ${h}); a deliberate change bumps the family's version (${hint})`)
   }
   for (const variant of Object.keys(rows)) if (!(variant in now)) out.push(`${gen.id}/${variant}: fixture row for a variant that no longer exists (${hint})`)
-  return out
+  return { problems: out, warnings: [] }
 }
+
+/** The problems of `checkHashRows`, for callers that gate on failures only. */
+export const checkHashes = (gen: Gen, fixture: HashRows): string[] => checkHashRows(gen, fixture).problems
 
 /* ------------------------------ literal lint (§5.4) ------------------------------ */
 
@@ -552,14 +609,6 @@ export function literalSelfTest(): string[] {
 
 /* ------------------------------ main ------------------------------ */
 
-function readHashes(): HashRows {
-  try {
-    return JSON.parse(readFileSync(HASH_FILE, 'utf8')) as HashRows
-  } catch {
-    return {}
-  }
-}
-
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   const flag = (name: string): string | undefined => {
@@ -597,23 +646,26 @@ async function main(): Promise<void> {
   const chosen = families.filter((g) => !only || only.includes(g.id))
 
   if (update) {
-    const rows = readHashes()
-    for (const g of chosen) rows[g.id] = hashFamily(g)
-    const sorted = Object.fromEntries(Object.keys(rows).sort().map((k) => [k, Object.fromEntries(Object.entries(rows[k]).sort(([a], [b]) => (a < b ? -1 : 1)))]))
-    mkdirSync(path.dirname(HASH_FILE), { recursive: true })
-    writeFileSync(HASH_FILE, `${JSON.stringify(sorted, null, 2)}\n`)
+    mkdirSync(HASH_DIR, { recursive: true })
+    for (const g of chosen) {
+      const rows = hashFamily(g)
+      const sorted = Object.fromEntries(Object.entries(rows).sort(([a], [b]) => (a < b ? -1 : 1)))
+      writeFileSync(hashFile(g.id), `${JSON.stringify(sorted, null, 2)}\n`)
+    }
     console.log(`verify-generators: wrote hash rows for ${chosen.map((g) => g.id).join(', ') || 'no families'}`)
     return
   }
 
   const problems: string[] = []
   const warnings: string[] = []
-  const hashes = readHashes()
+  const hashes = readAllHashRows()
   for (const g of chosen) {
     const r = checkFamily(g, { seeds })
     problems.push(...r.problems)
     warnings.push(...r.warnings)
-    problems.push(...checkHashes(g, hashes))
+    const h = checkHashRows(g, hashes)
+    problems.push(...h.problems)
+    warnings.push(...h.warnings)
     const file = path.join(ROOT, 'src/lib/items/families', `${g.id}.ts`)
     for (const f of lintLiterals(file, readFileSync(file, 'utf8'))) problems.push(`src/lib/items/families/${g.id}.ts:${f.line}:${f.col} ${f.message}`)
     console.log(`  ${g.id}: ${g.variants.length} variants, ${r.instances} instances, p95 ${Number.isNaN(r.p95Ms) ? 'n/a' : `${r.p95Ms.toFixed(3)} ms`}`)
@@ -624,7 +676,7 @@ async function main(): Promise<void> {
       console.log(`    ${row.where}: ${row.instances} instances, worst blind strategy '${row.worst.name}' ${(row.worst.hit * 100).toFixed(1)} % against chance ${(row.chance * 100).toFixed(1)} %`)
     }
   }
-  if (!only) for (const id of Object.keys(hashes)) if (!families.some((g) => g.id === id)) problems.push(`tests/fixtures/items/hashes.json: rows for family "${id}" that does not exist`)
+  if (!only) for (const id of Object.keys(hashes)) if (!families.some((g) => g.id === id)) problems.push(`tests/fixtures/items/hashes/${id}.json: a fixture for family "${id}" that does not exist`)
 
   for (const w of warnings) console.warn(`warning: ${w}`)
   const secs = ((performance.now() - t0) / 1000).toFixed(1)

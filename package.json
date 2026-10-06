@@ -28,6 +28,7 @@
     "verify:mentor": "bun scripts/lint-mentor.ts",
     "verify:labs": "bun scripts/verify-labs.ts",
     "verify:search-index": "bun scripts/verify-search-index.ts",
+    "verify:rust-items": "bun scripts/verify-rust-items.ts",
     "leaderboard:build": "bun scripts/build-leaderboard.ts"
   },
   "dependencies": {

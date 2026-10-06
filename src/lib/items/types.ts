@@ -29,7 +29,13 @@ export type PromptPart =
   | { t: 'value'; value: number; unit?: string; digits?: number }
   /** a sourced number: rendered as a tappable claim chip (ClaimValue) */
   | { t: 'claim'; claim: string; scale?: number; unit?: string }
-  | { t: 'code'; code: string; lang?: string }
+  /**
+   * Code. `lines` numbers the lines (from 1) and `mark` is the 1-based number of the one line to
+   * point at (the compile family asks about lines); a `mark` numbers the lines too.
+   */
+  | { t: 'code'; code: string; lang?: string; lines?: true; mark?: number }
+  /** A real table: telemetry for signature items, sweeps for `knee` and `frontier`. Numbers render with thousands separators. */
+  | { t: 'table'; caption: string; columns: string[]; rows: (string | number)[][] }
 
 export interface SolutionStep {
   text: PromptPart[]
@@ -169,6 +175,15 @@ export interface Gen {
   grade(inst: Instance, response: Response): Grade
   solution(inst: Instance): SolutionStep[]
   pins: readonly Pin[]
+  /** Speed limit for the p95 of make + grade, in ms (default 1). Only `sig` raises it: it runs a small engine scenario. */
+  budgetMs?: number
+  /**
+   * A bank-backed family (compile): instances come from a finite pool of `units`, so non-degeneracy
+   * becomes "distinct instances ≥ min(50 % of seeds, 80 % of units)".
+   */
+  bank?: { units: number }
+  /** `'deferred'`: a missing hash fixture is a warning, not a failure (the compile family until its bank is frozen). */
+  hashFixture?: 'deferred'
 }
 
 /** A self-checked constructed response (V5, P1): write, reveal the model answer, tick the ideas you covered. */

@@ -47,6 +47,19 @@ export interface CodeBlockData {
   highlightLines?: number[]
   /** Annotation chips under the header, e.g. `no GC` · `0 allocs`. */
   chips?: string[]
+  /**
+   * F4 (Wave 2, spec §17.1): a key into `src/data/aquascope/<lessonId>.json`, the permission trace
+   * (R/W/O per path and line) that a PermissionDiagram draws under this code. Not a new block type.
+   */
+  permissions?: { trace: string }
+  /** F4 (spec §17.2): the familiar version of a Rust snippet, shown beside it by the language switch. */
+  alt?: { java?: string; python?: string }
+  /**
+   * F4 (spec §17.2): active-alignment items on the side-by-side ("which Rust line does the compiler
+   * reject, and which permission is missing?"). Choice items with a why per option, gated by
+   * verify-items and exported without keys, like quizzes.
+   */
+  align?: QuizQuestion[]
 }
 
 export type CalloutVariant = 'analogy' | 'info' | 'warning' | 'segfault' | 'isomorphism'
@@ -192,6 +205,24 @@ export interface PlayBlock {
   title: string
 }
 
+/**
+ * K1 (Wave 2, spec §5.2): generated items inside a lesson. The learner predicts the first
+ * instance's answer, practises on fresh seeds and is done after `count` correct answers.
+ */
+export interface ItemBlock {
+  type: 'item'
+  /** "Price it with new numbers" */
+  title: string
+  /** The generator family, e.g. `cost`. */
+  family: string
+  /** Variant ids drawn round-robin on fresh seeds. */
+  variants: string[]
+  /** Correct answers on distinct fresh seeds that finish the block; default 3. */
+  count?: number
+  /** Commit a prediction before any worked step; default true. */
+  predict?: boolean
+}
+
 /** OS ≡ LLM isomorphism panel (lesson.md §2.8). */
 export interface IsomorphismPair {
   os: string
@@ -241,6 +272,7 @@ export type ContentBlock =
   | FieldNoteBlock
   | PredictBlock
   | PlayBlock
+  | ItemBlock
 
 /* ------------------------------ lesson ------------------------------ */
 
