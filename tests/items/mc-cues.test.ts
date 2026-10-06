@@ -488,7 +488,7 @@ describe('the own pools: prequestions, diagram predictions and spiral items are 
 
   test('refs are the ledger refs: pre:<lesson>#<i>, dia:<lesson>#<block index>, item:<id>', () => {
     for (const e of collectOwnPools(ALL_LESSONS)) {
-      expect(e.ref).toMatch(e.pool === 'prequestion' ? /^pre:t\d\.l\d+#\d+$/ : e.pool === 'predictAt' ? /^dia:t\d\.l\d+#\d+$/ : /^item:t2\.spiral\./)
+      expect(e.ref).toMatch(e.pool === 'prequestion' ? /^pre:t\d\.l\d+#\d+$/ : e.pool === 'predictAt' ? /^dia:t\d\.l\d+#\d+$/ : /^item:t\d\.spiral\./)
     }
     const dia = collectOwnPools(ALL_LESSONS).find((e) => e.pool === 'predictAt')
     const lesson = ALL_LESSONS.find((l) => l.id === dia?.lessonId)

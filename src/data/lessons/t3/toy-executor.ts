@@ -133,6 +133,11 @@ Everything tokio adds is scale and ergonomics on this exact skeleton: **multi-th
 An inference engine's control plane is an async-runtime workload: thousands of SSE streams, scheduler ticks, KV-transfer completions, cancellation when clients disconnect. The reason Dynamo's data plane and vLLM's Rust frontends behave predictably under that load is exactly this lesson: inert futures, explicit wakes, no hidden threads. Build the toy in the exercise, then read production architecture with working knowledge instead of faith.`,
     },
     {
+      type: 'callout',
+      variant: 'info',
+      md: `**Build this.** Lab 05, [Async, Demystified](/forge/toy-executor), is this executor in a file you edit: \`spawn\`, \`run\` and \`block_on\` in \`src/executor.rs\`, with the unsafe waker plumbing already given. Start with its first check, \`block_on\`, which needs only \`spawn\`, \`run\` and one wrapper task. The page grades each of the six checks on its own, so that first green arrives before you touch the other five. Readiness: R7 and R8.`,
+    },
+    {
       type: 'exercise',
       simId: 'sim-engine',
       machine: 'executor',
@@ -165,6 +170,8 @@ An inference engine's control plane is an async-runtime workload: thousands of S
             'That is JavaScript, where a Promise starts eagerly. Rust futures are lazy: calling an async fn only builds the state machine, and a future dropped unpolled never ran its body.',
             'Goroutines have stacks; Rust async is stackless. The compiler stores only the locals needed across awaits inside the future, which is why a task is small.',
           ],
+          kcs: ['t3.futures-state-machines'],
+          miss: ['t3.async-fn-is-a-thread', '', 't3.async-fn-is-an-eager-promise', 't3.async-fn-is-a-green-thread'],
         },
         {
           q: 'The Waker exists to…',
@@ -183,6 +190,8 @@ An inference engine's control plane is an async-runtime workload: thousands of S
             'Results travel through poll() returning Ready(value), not through the waker. The waker carries no data; it only signals that polling again could now make progress.',
             'Interval polling is the busy-loop the waker replaces. Fixed retries burn CPU while idle and add latency once ready; a wake fires exactly when readiness changes.',
           ],
+          kcs: ['t3.wakers-executor'],
+          miss: ['t3.waker-interrupts-the-executor', '', 't3.waker-carries-the-output', 't3.waker-polls-on-a-timer'],
         },
         {
           q: 'A task that returns Poll::Pending without arranging a wake will…',
@@ -201,6 +210,8 @@ An inference engine's control plane is an async-runtime workload: thousands of S
             'Nothing detects the missing wake. Pending is a valid return and the executor cannot know a wake is coming, so the failure shows up as a task that never finishes.',
             'Runtimes do not poll on a default interval; that would reintroduce busy-polling. A task with no wake path simply stays parked indefinitely.',
           ],
+          kcs: ['t3.wakers-executor', 't3.futures-state-machines'],
+          miss: ['t3.pending-is-retried-in-a-loop', '', 't3.missing-wake-panics', 't3.pending-is-retried-on-a-timer'],
         },
         {
           q: 'tokio adds to the toy executor primarily…',
@@ -219,10 +230,42 @@ An inference engine's control plane is an async-runtime workload: thousands of S
             'Tokio tasks are stackless futures. A blocking call inside one still blocks its worker thread, which is exactly why spawn_blocking exists.',
             'Tokio scheduling is cooperative: a task gives up its thread only at an .await. A long computation between awaits holds the worker and delays everything queued behind it.',
           ],
+          kcs: ['t3.wakers-executor'],
+          miss: ['t3.tokio-adds-a-collector', '', 't3.tokio-uses-stackful-green-threads', 't3.tokio-preempts-tasks'],
         },
       ],
     },
   ],
+  kcs: ['t3.futures-state-machines', 't3.wakers-executor'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Explain why a future that returns Pending without arranging a wake hangs, and how the executor and waker fit together.',
+        model:
+          'The executor polls only tasks in its ready queue. When poll returns Pending the task leaves the queue until its waker is called, which the reactor or a timer does when progress is possible, pushing the task back. A future that returns Pending with no wake path is never queued again, so it hangs silently.',
+        ideas: [
+          'The executor polls only tasks in its ready queue',
+          'A Pending task leaves the queue until its waker is called by a reactor or timer',
+          'With no wake path the task is never re-queued, so it hangs silently',
+        ],
+        kcs: ['t3.wakers-executor'],
+      },
+      {
+        prompt:
+          'Describe what an async fn compiles to, and why creating a future does nothing until it is polled.',
+        model:
+          'The compiler turns an async fn into a state machine: a struct holding the locals that live across await points, plus a record of where it is suspended. Creating it runs nothing. Only poll advances the machine, to its next await or to completion, and only the executor calls poll, so futures are inert without a runtime.',
+        ideas: [
+          'A struct of the locals kept across awaits, plus the current suspension point',
+          'Creating the future runs no code: calling the async fn only builds the struct',
+          'Only poll advances it, and the executor is what calls poll',
+        ],
+        kcs: ['t3.futures-state-machines'],
+      },
+    ],
+  },
 }
 
 export default lesson
