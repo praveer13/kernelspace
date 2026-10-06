@@ -10,7 +10,78 @@ const lesson: Lesson = {
   hook: 'SIMT, warps, and the factory floor: why the GPU wastes no silicon on making ONE thing fast — and why that\'s perfect for matmul.',
   exercise: 'sim',
   simId: 'sim-roofline',
+  kcs: ['t4.throughput-design', 't4.simt-warps'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain how a GPU keeps its lanes busy while a load from HBM is outstanding, with no large cache or branch prediction to help.',
+        model:
+          'Many warps stay resident on each multiprocessor. When one warp stalls on a load, the scheduler issues from a warp that is ready, and the switch costs nothing because every warp\'s state already sits in registers. Enough independent warps cover the whole wait, so the GPU hides latency by oversubscription, not by prediction.',
+        ideas: [
+          'Many warps stay resident on each multiprocessor',
+          'The scheduler issues from a ready warp when one stalls, and the switch is free because state sits in registers',
+          'Latency is hidden by oversubscription, with no large cache or prediction needed',
+        ],
+        kcs: ['t4.throughput-design', 't4.simt-warps'],
+      },
+      {
+        prompt: 'Say what happens when the lanes of one warp take different branches, and what that does to throughput.',
+        model:
+          'A warp issues one instruction at a time for all 32 lanes, so lanes that disagree cannot run together. The hardware runs each path in turn, with the lanes that are not on that path masked off. A two-way branch takes about twice as long, because both paths run at partial width.',
+        ideas: [
+          'A warp shares one instruction stream across its 32 lanes',
+          'Each branch path runs in turn, with the other lanes masked off',
+          'Throughput falls toward the total of the paths, about half for a two-way split',
+        ],
+        kcs: ['t4.simt-warps'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'Half the lanes of one warp take the if branch and the other half take the else branch. Next to a warp whose lanes all take one branch, how long does this warp take?',
+          options: [
+            'About the same time, with the two halves running side by side on separate lanes',
+            'About twice as long, with each path run in turn and the other lanes switched off',
+            'About half the time, with each branch having fewer lanes of work to finish',
+            'It fails to launch, with the hardware refusing a warp whose lanes disagree on a branch',
+          ],
+          correct: [1],
+          why: [
+            'Lanes of one warp share a single instruction stream, so they cannot run different instructions at the same moment. Two groups need two passes, not one wide pass.',
+            'Right: one instruction is issued per warp, so the hardware runs the if path with the else lanes masked off, then the else path with the if lanes masked off. Both paths cost full time.',
+            'Fewer active lanes do not shorten a pass. Each path takes as many cycles as it would with the whole warp working, and both paths must run.',
+            'Divergence is legal, only slow. The warp executes both paths one after the other and the lanes rejoin afterwards.',
+          ],
+          revealAt: 'SIMT and the warp: one instruction, 32 lanes',
+          kcs: ['t4.simt-warps'],
+        },
+        {
+          kind: 'choice',
+          q: 'Prefill is one big matrix multiply over the whole prompt, and decode makes one token per step. Which phase keeps the arithmetic units of a GPU busier?',
+          options: [
+            'Prefill, with each weight read from memory feeding many prompt tokens at once',
+            'Decode, with short steps letting the scheduler keep warps on the chip busy at a high rate',
+            'Both about equally, with the same layers and the same weights running on the same chip',
+            'Decode, with one token at a time meaning no waiting on other tokens and no stalls',
+          ],
+          correct: [0],
+          why: [
+            'Right: prefill reuses each weight across the prompt positions, so each byte read feeds many multiplies. Decode at batch 1 uses each weight once per token.',
+            'Short steps do not fill the chip. A batch-1 decode step is a matrix-vector product with little math per byte, so most arithmetic units wait on memory.',
+            'The layers and weights match, but the reuse does not. Prefill spreads one weight read over the whole prompt; decode spreads it over one token.',
+            'Having no other tokens to wait on does not remove stalls. Each decode step streams the weights from HBM, and the units idle while it does.',
+          ],
+          revealAt: 'Why LLMs live here',
+          kcs: ['t4.throughput-design'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `A modern CPU core is a masterpiece of latency engineering: multi-issue out-of-order execution, branch prediction, speculative execution, huge caches — billions of transistors spent so that **one** instruction stream finishes sooner. A GPU takes the same transistor budget and spends almost none of it on latency. Instead: thousands of simple in-order lanes, tiny caches, and a scheduling philosophy that hides memory latency by *switching to other work* rather than predicting around it.
@@ -58,6 +129,24 @@ NVIDIA's execution model is **SIMT** — single instruction, multiple threads. Y
         { caption: 'Warp 0 issues a load and stalls: HBM latency is ~400–800 cycles. On a CPU this would bubble the pipeline; here the scheduler simply switches to warp 2.', active: ['w1', 'hbm'], edges: ['w1->hbm', 'sm->w2'] },
         { caption: 'While warps rotate, HBM streams at full bandwidth. Utilization stays high WITHOUT speculation — the price is needing thousands of independent threads (parallel work) to keep the rotation full. That is why GPUs starve on serial workloads and feast on matmuls.', active: ['w2', 'w3', 'hbm'] },
       ],
+      predictAt: {
+        step: 1,
+        prompt: 'Warp 0 issues a load that takes hundreds of cycles to return from HBM. What does the scheduler do on the next cycle?',
+        options: [
+          'It issues from a resident warp that has its operands ready, with warp state already in registers',
+          'It leaves the multiprocessor idle until the load returns, with in-order lanes unable to start other work',
+          'It guesses the load will hit in cache and runs ahead of it, with branch prediction covering the delay',
+          'It copies the stalled warp\'s registers out to memory, with the move making room for another warp to run',
+        ],
+        correct: [0],
+        why: [
+          'Right: warp state lives in registers already, so the scheduler picks a ready warp on the next cycle at no cost. Enough resident warps keep the pipeline full.',
+          'Idling is what a stalled CPU pipeline does. The GPU keeps many warps resident precisely so that one stalled warp leaves others to run.',
+          'GPU cores are in-order and do not speculate. Latency is covered by running other warps, not by guessing past the load.',
+          'A switch copies nothing: each resident warp already holds its registers on chip. That is why the switch is free and thousands of warps can be resident.',
+        ],
+        kcs: ['t4.simt-warps', 't4.throughput-design'],
+      },
     },
     {
       type: 'callout',
@@ -107,6 +196,7 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
             'GPU clocks sit below typical CPU clocks, so one GPU lane is slower on a single stream. It wins by running thousands of lanes at once.',
             'CPUs have SIMD vector units and run floating point fine. They have far fewer lanes, so their throughput on dense matmul is much lower.',
           ],
+          kcs: ['t4.throughput-design'],
         },
         {
           q: 'Warp divergence means…',
@@ -125,6 +215,7 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
             'Right: one instruction is issued per warp, so each side of a branch runs in turn with the other lanes masked off. Throughput falls toward the serialized total.',
             'That is barrier skew between warps, a different cost. Divergence happens inside one warp, whose lanes share one instruction stream and cannot take separate paths at once.',
           ],
+          kcs: ['t4.simt-warps'],
         },
         {
           q: 'GPUs hide HBM latency primarily by…',
@@ -143,6 +234,7 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
             'Right: warp state sits in registers, so the scheduler swaps in a ready warp every cycle at no cost. With enough resident warps, someone always has work.',
             'HBM latency stays at hundreds of cycles whatever the memory clock. A faster clock raises bandwidth; it cannot make a load return before the next instruction.',
           ],
+          kcs: ['t4.throughput-design', 't4.simt-warps'],
         },
         {
           q: 'Decode (single-token generation) underuses GPU compute because…',
@@ -161,6 +253,7 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
             'Launch cost is microseconds, while streaming the weights takes milliseconds per token. Overhead is real but secondary to the bandwidth wall.',
             'At short contexts the KV read is the smaller one. The weight read dominates, and the tensor cores wait on weights, not on attention.',
           ],
+          kcs: ['t4.throughput-design'],
         },
       ],
     },
