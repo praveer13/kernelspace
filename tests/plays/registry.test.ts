@@ -9,8 +9,9 @@ import { PLAY_IDS } from '../../src/data/plays'
 
 /**
  * The play registry (docs/specs/wave-2.md §2.3, task 2a-02): /play/:playId and the lesson's play block resolve
- * ids through src/components/play/registry.ts. A registered id is a component, a pending id ('scheduler') renders
- * nothing so content can place the block before the play ships, and an unknown id is an error card.
+ * ids through src/components/play/registry.ts. A registered id is a component, a pending id renders nothing so
+ * content can place the block before the play ships, and an unknown id is an error card. 2b-11 registered
+ * 'scheduler', the one id that was pending, so the pending path is tested with a stand-in id.
  */
 const root = resolve(import.meta.dir, '../..')
 
@@ -23,9 +24,22 @@ describe('resolvePlay', () => {
     if (r.kind === 'play') expect(r.entry.intro.length).toBeGreaterThan(0)
   })
 
-  test('scheduler is pending, and pending is not registered', () => {
-    expect(PENDING_PLAYS).toEqual(['scheduler'])
-    expect(resolvePlay('scheduler').kind).toBe('pending')
+  test('scheduler is registered (2b-11), with an intro for its page, and nothing is pending', () => {
+    const r = resolvePlay('scheduler')
+    expect(r.kind).toBe('play')
+    if (r.kind === 'play') expect(r.entry.intro.length).toBeGreaterThan(0)
+    expect(PENDING_PLAYS).toEqual([])
+  })
+
+  test('a pending id resolves as pending until it is registered', () => {
+    const pending = PENDING_PLAYS as string[]
+    pending.push('a-later-play')
+    try {
+      expect(resolvePlay('a-later-play')).toEqual({ kind: 'pending', id: 'a-later-play' })
+    } finally {
+      pending.pop()
+    }
+    expect(resolvePlay('a-later-play').kind).toBe('unknown')
   })
 
   test('anything else is unknown, including prototype names and the empty id', () => {
@@ -45,7 +59,13 @@ describe('resolvePlay', () => {
 
 describe('the play block', () => {
   test('renders nothing for a pending id', () => {
-    expect(block('scheduler')).toBe('')
+    const pending = PENDING_PLAYS as string[]
+    pending.push('a-later-play')
+    try {
+      expect(block('a-later-play')).toBe('')
+    } finally {
+      pending.pop()
+    }
   })
 
   test('renders an error card for an unknown id, naming it', () => {
@@ -62,9 +82,11 @@ describe('the play block', () => {
   })
 
   test('a registered id gets its section, with the play loading inside', () => {
-    const html = block('block-placement')
-    expect(html).toContain('data-play="block-placement"')
-    expect(html).not.toContain('data-play-error')
+    for (const id of ['block-placement', 'scheduler']) {
+      const html = block(id)
+      expect(html).toContain(`data-play="${id}"`)
+      expect(html).not.toContain('data-play-error')
+    }
   })
 })
 
