@@ -27,11 +27,25 @@ RadixAttention (T5.L10's SGLang lesson) was built for exactly this traffic: the 
 
 - **Deterministic prompt construction is a feature.** If your framework inserts timestamps into the system prompt, the radix tree misses on turn 2 and the whole economy collapses. Agent frameworks now treat "prefix-stable prompts" as a hard requirement.
 - **Cache-aware routing pays double.** Route the session to the worker holding its tree (T5.L9's KV-aware routing, T6.L3's llm-d/Dynamo implementations) — locality at engine level AND cluster level.
-- **Long agent sessions = the capacity math of T5.L4 with a growing shared prefix.** One session's tree is compact; ten thousand concurrent agents' trees are a real HBM budget. Tree eviction policy is a product decision (evict = recompute cost next turn).
-
-## The token mask is not a string mask
+- **Long agent sessions = the capacity math of T5.L4 with a growing shared prefix.** One session's tree is compact; ten thousand concurrent agents' trees are a real HBM budget. Tree eviction policy is a product decision (evict = recompute cost next turn).`,
+    },
+    {
+      type: 'item',
+      title: 'Price an agent loop with new numbers',
+      family: 'cost',
+      variants: ['cache-discount'],
+    },
+    {
+      type: 'prose',
+      md: `## The token mask is not a string mask
 
 A BPE token can contain \`"tool","arguments":{\` — several grammar terminals and transitions in one model step. A mask that checks only the first character admits tokens whose suffix is impossible and rejects legal tokens that cross state boundaries. The constraint engine must speculatively consume the **whole token byte string** from the current parser stack. That is Forge lab 08: schema → pushdown state → whole-token mask → cached compilation.`,
+    },
+    {
+      type: 'callout',
+      variant: 'info',
+      title: 'Build this',
+      md: `[Forge lab 08, xgrammar-lite](/forge/xgrammar-lite) turns the mask into code. Its first check, \`schema_compile\`, lowers a JSON Schema to a pushdown program before you touch a single token; five more follow, ending at the cached compile.`,
     },
     {
       type: 'statline',
@@ -67,6 +81,8 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
             'Tokenizing text on the CPU is cheap beside prefilling the same tokens on the GPU. Hit rate decides how many of those tokens ever reach prefill.',
             'Scaling is not linear when routing ignores locality: spreading one session across replicas leaves each with a cold cache. Cache-aware routing is what makes added GPUs pay off.',
           ],
+          kcs: ['t6.agent-prefix-locality'],
+          miss: ['t6.decode-speed-sets-agent-throughput', '', 't6.tokenizer-bound-agents', 't6.replicas-scale-linearly'],
         },
         {
           q: 'A timestamp in the system prompt of an agent loop…',
@@ -85,6 +101,8 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
             'Later tokens\' KV was computed attending to the old timestamp, so it cannot be reused for new text. The prefix tree matches only an unbroken run from the first token.',
             'Prefix caching keys on the token sequence from the beginning, system prompt included. Every turn re-sends the system prompt, so a changing timestamp breaks every turn.',
           ],
+          kcs: ['t6.agent-prefix-locality'],
+          miss: ['t6.timestamp-harmless', '', 't6.timestamp-costs-own-tokens', 't6.timestamp-first-turn-only'],
         },
         {
           q: 'Structured output got cheap in 2025–26 because…',
@@ -103,6 +121,8 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
             'Validating afterwards is the retry approach, not constrained decoding. Resampling after the fact cannot keep the sequence valid as it grows, and the constraint must act at each step.',
             'Real schemas are nested and recursive, so legality depends on the parser stack and cannot be a static table. Engines precompute only the context-independent part and check the rest at runtime.',
           ],
+          kcs: ['t6.grammar-masks'],
+          miss: ['t6.models-need-no-constraints', '', 't6.validate-after-decoding', 't6.masks-are-static-tables'],
         },
         {
           q: 'Why is checking only the first character of each vocabulary token incorrect?',
@@ -121,6 +141,8 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
             'JSON text is UTF-8 by default (RFC 8259). The flaw is multi-byte tokens crossing grammar states, which would break the check under any encoding.',
             'Each id maps to a known byte string in the vocabulary, so legality can be computed before sampling. That is the whole point of a mask: it restricts the choices in advance.',
           ],
+          kcs: ['t6.grammar-masks'],
+          miss: ['t6.first-char-too-slow', '', 't6.mask-encoding-issue', 't6.mask-after-sampling'],
         },
       ],
     },
@@ -130,6 +152,36 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
       md: `Forge lab 08, **xgrammar-lite**, turns this lesson into a machine: compile a canonical JSON Schema subset, reject invalid output at the first impossible byte, and construct a mask over lab-03-style BPE tokens. Then continue to T6.L9: the next agent-era workload is not a new grammar but many tenant-specific LoRA adapters sharing one base-model batch.`,
     },
   ],
+  kcs: ['t6.agent-prefix-locality', 't6.grammar-masks'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'An agent loop re-sends a 40,000-token history and appends 2,000 new tokens each turn. What hit rate can the prefix cache reach, and what one habit in prompt construction destroys it?',
+        model:
+          'The cache can hit the whole prior history: 40,000 of 42,000 tokens, about 95 percent, so only the 2,000 new tokens need prefill. A byte changed early in the prompt, such as a timestamp in the system prompt, diverges the prefix there and every later token misses, so prompts must be built deterministically.',
+        ideas: [
+          'About 95 percent can hit: 40,000 of 42,000 tokens are an unchanged prefix',
+          'Only the 2,000 new tokens need prefill',
+          'A changing early byte such as a timestamp breaks the match from that point on',
+        ],
+        kcs: ['t6.agent-prefix-locality'],
+      },
+      {
+        prompt:
+          'A single BPE token can contain a run of JSON such as "tool","count":7}. Why does checking only its first character fail, and what does a correct mask do instead?',
+        model:
+          'The sampler picks model tokens, which are byte strings, but a grammar advances byte by byte. One token can cross several states, or start legally and end in garbage, so its first character proves nothing. A correct mask consumes every byte of each candidate from the current parser stack and allows the token only if all of them are legal.',
+        ideas: [
+          'Tokens are byte strings and a grammar advances byte by byte, so one token can span several states',
+          'A token can start legally and end in garbage, so the first character is not enough',
+          'A correct mask simulates every byte of each candidate token from the current parser stack',
+        ],
+        kcs: ['t6.grammar-masks'],
+      },
+    ],
+  },
 }
 
 export default lesson

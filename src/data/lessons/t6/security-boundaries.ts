@@ -1,4 +1,204 @@
+import type { AuthoredItem } from '@/lib/items/types'
 import type { Lesson } from '../types'
+
+/**
+ * Spiral items (wave-2.md §6.2): authored questions on earlier KCs of T2-T6, drawn by the t6.l10 checkpoint beside
+ * the generated items. Refs are `item:<id>`; each option's `miss` names the slip it encodes.
+ */
+const SPIRAL: AuthoredItem[] = [
+  {
+    id: 't6.spiral.hot-expert',
+    kcs: ['t6.all-to-all'],
+    q: {
+      q: 'In an expert-parallel MoE layer, one expert receives far more tokens than the others. What happens to that layer?',
+      options: [
+        'Only the GPU holding that expert slows down, while the others finish their share and start on the next layer',
+        'The dispatch all-to-all rebalances tokens across the GPUs before the experts run, leaving no GPU with extra work',
+        'The combine step waits for every GPU, leaving the whole layer paced by the one that holds the hot expert',
+        'The extra tokens spill onto neighbouring experts, adding a small constant that overlapped compute then hides',
+      ],
+      correct: [2],
+      explanation:
+        'Each MoE layer ends with a combine that needs every GPU\'s output, so the slowest GPU sets the pace of all of them. That is why EPLB replicates hot experts instead of letting one GPU stall the fleet.',
+      why: [
+        'The other GPUs cannot move on: the combine all-to-all needs every expert\'s output before the next layer starts, so they wait for the hot one.',
+        'The dispatch sends each token to the expert the router chose, and nothing rebalances it. Balance has to come from replicating or placing experts, as EPLB does.',
+        'Right: the combine is a barrier across GPUs, so one overloaded expert sets the pace of the whole layer. Replicating hot experts is the fix.',
+        'Tokens cannot move to another expert, because the router\'s choice is the computation. Overlap hides some communication, not an imbalance in how much each GPU computes.',
+      ],
+      kcs: ['t6.all-to-all'],
+      miss: ['t6.hot-expert-is-local', 't6.all-to-all-rebalances', '', 't6.hot-expert-spills'],
+    },
+  },
+  {
+    id: 't6.spiral.tp-placement',
+    kcs: ['t6.parallelism-composition'],
+    q: {
+      q: 'You lay out TP, PP and DP for a model across several 8-GPU nodes. Where should tensor parallelism go?',
+      options: [
+        'Inside one NVLink domain, where its all-reduce at each layer gets the fastest links on offer',
+        'Across nodes, putting each layer\'s shards on different machines and letting the network share the load evenly',
+        'Wherever memory is free, since its traffic is small beside the weights each GPU reads at every step',
+        'On the slowest links, leaving the fastest ones for pipeline stages that exchange activations constantly',
+      ],
+      correct: [0],
+      explanation:
+        'TP all-reduces activations twice per layer, so it needs the highest bandwidth and lowest latency: keep it inside an NVLink domain. PP and DP tolerate the network because they communicate far less often.',
+      why: [
+        'Right: TP all-reduces after attention and after the MLP of every layer, so it stays on NVLink. PP sends one activation per stage boundary, and DP syncs once per step.',
+        'Across nodes the all-reduce would run over InfiniBand or Ethernet, an order of magnitude slower, and it sits on the critical path of every layer.',
+        'TP traffic is large, not small: every layer moves activations between shards. Placement is set by link bandwidth, not by where memory happens to be free.',
+        'Backwards: pipeline stages pass one activation tensor per boundary, so PP tolerates slow links. TP is the axis that needs the fastest ones.',
+      ],
+      kcs: ['t6.parallelism-composition'],
+      miss: ['', 't6.tp-across-nodes', 't6.tp-traffic-is-small', 't6.pp-needs-fastest-links'],
+    },
+  },
+  {
+    id: 't6.spiral.cache-key',
+    kcs: ['t5.prefix-cache-keys'],
+    q: {
+      q: 'A prefix cache keys each block by the tokens before it. What else must the key cover for sharing to be safe across tenants and adapters?',
+      options: [
+        'Nothing more, because identical token ids always produce identical KV whichever model or tenant made them',
+        'The request id of the first request that filled the block, letting the owner be found when it is evicted',
+        'The model revision and adapter plus a server-held tenant salt, because KV depends on all three of them',
+        'The time of the fill, keeping blocks older than the model\'s last update from matching a new prompt',
+      ],
+      correct: [2],
+      explanation:
+        'KV depends on the weights that computed it, adapter included, so the key must name them. A server-held tenant salt keeps one tenant\'s prefixes from ever matching another\'s, which also closes the timing channel.',
+      why: [
+        'Identical token ids give different KV under a different model revision or adapter, and a shared key would also let tenants hit each other\'s blocks.',
+        'A request id says who filled the block, not whether another request may reuse it. Reuse is decided by the key, and ownership is tracked by refcounts.',
+        'Right: KV is a function of the tokens and of the weights, adapter included, and a server-held salt keeps tenants apart. A client-supplied hint would not.',
+        'Fill time does not make KV wrong. A model update changes the model revision, which belongs in the key, and a timestamp would also make identical prefixes miss.',
+      ],
+      kcs: ['t5.prefix-cache-keys'],
+      miss: ['t5.key-is-token-ids-only', 't5.key-is-request-id', '', 't5.key-is-timestamp'],
+    },
+  },
+  {
+    id: 't6.spiral.cow-tail',
+    kcs: ['t5.kv-copy-on-write'],
+    q: {
+      q: 'Two sequences share a prompt prefix whose last block is only partly full, and sequence A appends a token. What does the block manager do?',
+      options: [
+        'Writes in place, because the two sequences agree so far and the block can stay shared between them',
+        'Copies every shared block of the prefix for A, keeping later appends away from shared data',
+        'Frees the block and recomputes the prefix for A, since the two sequences no longer match',
+        'Copies that one shared block for A, leaving the original with B and every full block still shared',
+      ],
+      correct: [3],
+      explanation:
+        'Only the partly full tail can be written. Copy-on-write copies that one block for the writer, drops one reference on the original and leaves the full prefix blocks shared.',
+      why: [
+        'B would see A\'s token in its own sequence. A write to a block with more than one owner must copy first, or both sequences change.',
+        'Full prefix blocks are never written to, so copying them wastes memory. Only the tail block that A appends into needs a private copy.',
+        'Recomputing the prefix throws away valid KV. The prefix is identical, and one block copy is far cheaper than a prefill.',
+        'Right: copy only the shared tail block for the writer, decrement the original\'s refcount, and leave the full blocks shared by reference.',
+      ],
+      kcs: ['t5.kv-copy-on-write'],
+      miss: ['t5.cow-write-in-place', 't5.cow-copies-whole-prefix', 't5.cow-recomputes-prefix', ''],
+    },
+  },
+  {
+    id: 't6.spiral.decode-speed',
+    kcs: ['t4.decode-bandwidth'],
+    q: {
+      q: 'At batch size 1, the speed of decode in tokens per second is set mainly by what?',
+      options: [
+        'Memory bandwidth divided by weight bytes, since every token reads the whole model once while compute idles',
+        'Peak FLOP/s divided by the FLOPs per token, since the chip multiplies matrices flat out during the whole step',
+        'The size of the KV cache, since attention over the context is the only memory read each step performs',
+        'The clock speed of a single warp, since one sequence cannot spread across the many cores of a chip',
+      ],
+      correct: [0],
+      explanation:
+        'Decode at batch 1 has an arithmetic intensity near 1 FLOP per byte, far left of the ridge point. Every token streams all the weights from HBM, so bandwidth over weight bytes is the ceiling.',
+      why: [
+        'Right: one token needs each weight once, which is about 1 FLOP per byte, so the step is bandwidth-bound and compute sits idle.',
+        'That is the prefill ceiling. Decode at batch 1 does so little arithmetic per byte that the compute units wait on memory, far below peak FLOP/s.',
+        'KV reads grow with context, but at short contexts the weights dominate the bytes of each step. The weights are what set the ceiling.',
+        'A matrix-vector product spreads across all the SMs, so there is no single-warp limit. The limit is how fast the weights stream in from HBM.',
+      ],
+      kcs: ['t4.decode-bandwidth'],
+      miss: ['', 't4.decode-is-compute-bound', 't4.decode-reads-only-kv', 't4.decode-single-warp'],
+    },
+  },
+  {
+    id: 't6.spiral.wasm-reach',
+    kcs: ['t3.wasm-sandbox'],
+    q: {
+      q: 'Why is an untrusted Wasm module safer to host than a native shared library?',
+      options: [
+        'Wasm code runs slower than native, and that gap stops a module from reaching host memory in time',
+        'Its reach ends at its linear memory and the imports the host gives it, with no ambient OS access',
+        'The runtime scans each module for system calls before it runs, deleting any call it does not recognise',
+        'Wasm modules run on a separate OS kernel, putting a hypervisor-style boundary behind every call they make',
+      ],
+      correct: [1],
+      explanation:
+        'A module has no way to name anything outside its linear memory except what the host imports into it. The sandbox is capability-shaped: no import, no access.',
+      why: [
+        'Speed is not a security property. A slow module that could reach host memory would still be dangerous; it simply has no pointer to it.',
+        'Right: bounds-checked linear memory plus an explicit import list means the module reaches only what the host hands it.',
+        'There is no scan-and-delete step. The module has no system-call instruction at all, only calls to functions the host chose to import.',
+        'A Wasm module runs inside the host process, under the host\'s kernel. Its isolation comes from the memory and import model, not from a second kernel.',
+      ],
+      kcs: ['t3.wasm-sandbox'],
+      miss: ['t3.wasm-safe-because-slow', '', 't3.wasm-scans-syscalls', 't3.wasm-has-own-kernel'],
+    },
+  },
+  {
+    id: 't6.spiral.overload-door',
+    kcs: ['t2.admission-scheduling'],
+    q: {
+      q: 'A serving engine is overloaded and its queues keep growing. Why is queueing or refusing work at the door better than admitting everything?',
+      options: [
+        'Refused requests cost nothing, while admitted ones always cost GPU time, so rejection saves the most per request',
+        'A good policy can meet every deadline whatever the load, and the door only needs to stop a few extras',
+        'Admission is a courtesy to clients, since the engine\'s memory use does not depend on how many requests it holds',
+        'Past capacity each admitted request slows the rest and fills KV blocks, so refusing early protects others',
+      ],
+      correct: [3],
+      explanation:
+        'Past capacity no scheduling policy saves every request: queues grow, KV memory fills and all of them miss their deadlines. Admission control keeps the work that is admitted inside what the engine can finish.',
+      why: [
+        'Money is not the reason. A refused request is also a failed one; the point is protecting the requests already admitted from an overloaded engine.',
+        'No policy meets every deadline at any load. Little\'s law ties queue length to load, so extra work past capacity only lengthens everyone\'s wait.',
+        'Memory use depends directly on admitted requests, since each one holds KV blocks. Admission is a capacity check, not a courtesy.',
+        'Right: overload slows every admitted request and fills KV, so early refusal keeps the admitted ones inside their deadlines.',
+      ],
+      kcs: ['t2.admission-scheduling'],
+      miss: ['t2.reject-saves-money', 't2.policy-meets-any-load', 't2.admission-is-courtesy', ''],
+    },
+  },
+  {
+    id: 't6.spiral.iteration-level',
+    kcs: ['t5.continuous-batching'],
+    q: {
+      q: 'Why does continuous batching beat static batching on requests of mixed length?',
+      options: [
+        'It pads every request to one length, replacing the many small multiplies of a static batch with one big one',
+        'It admits and retires requests each iteration, freeing a finished request\'s KV slot instead of idling',
+        'It runs each request on its own GPU stream, so short requests never share a step with long ones',
+        'It grows the batch past KV capacity, swapping idle requests to disk between steps to make room',
+      ],
+      correct: [1],
+      explanation:
+        'A static batch runs until its longest request finishes, so finished slots idle. Iteration-level scheduling checks every step: a finished request leaves and a waiting one joins, keeping the batch full.',
+      why: [
+        'Padding wastes compute rather than saving it. Continuous batching has no common length; each sequence advances one token per iteration.',
+        'Right: scheduling per iteration lets a finished request release its slot and KV blocks at once, so the batch stays full and nothing idles on the longest request.',
+        'Requests share each step in one batch, which is the point: one weight read serves many sequences. Separate streams would lose that sharing.',
+        'KV capacity is a hard limit, and swapping to disk is far too slow for a step. Admission checks capacity rather than exceeding it.',
+      ],
+      kcs: ['t5.continuous-batching'],
+      miss: ['t5.cb-pads-requests', '', 't5.cb-separate-streams', 't5.cb-swaps-to-disk'],
+    },
+  },
+]
 
 const lesson: Lesson = {
   id: 't6.l10',
@@ -178,6 +378,8 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
             'Container root is host UID 0 by default, but Docker drops most capabilities and the mount namespace hides host files unless they are mounted in. User namespaces or rootless mode map it to an unprivileged host user. The deeper risk is the shared kernel attack surface.',
             'Seccomp filters syscalls and network namespaces limit networking in containers. These controls add depth, but they all run on one shared host kernel, so they cannot add the second kernel boundary a microVM gives.',
           ],
+          kcs: ['t6.isolation-boundaries'],
+          miss: ['t6.container-no-limits', '', 't6.container-root-is-host-root', 't6.container-no-syscall-policy'],
         },
         {
           q: 'Remote attestation for confidential GPU inference proves primarily that…',
@@ -196,6 +398,8 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
             'Attestation says what code runs, not what that code may do. Authorizing tool calls remains the job of application policy and a broker.',
             'Attestation reports identity and measurements, not speed. Overhead is configuration-specific; one H100 study measured roughly 4–8% and a later TDX study measured larger gaps.',
           ],
+          kcs: ['t6.tool-authorization', 't6.isolation-boundaries'],
+          miss: ['t6.attestation-stops-leaks', '', 't6.attestation-authorizes-tools', 't6.attestation-proves-no-overhead'],
         },
         {
           q: 'How can a prefix cache leak information without exposing KV tensors?',
@@ -214,6 +418,8 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
             'Collisions in a cryptographic hash are negligible, and a cache returns tensors rather than completions. The leak works through timing alone, with no wrong data returned.',
             'That is a memory-isolation bug, a different attack class. The prefix-cache channel works even when raw KV memory is never exposed, using only observed latency.',
           ],
+          kcs: ['t6.cache-timing-oracle'],
+          miss: ['t6.cache-keys-plaintext', '', 't6.hash-collision-returns-completion', 't6.unzeroed-memory'],
         },
         {
           q: 'A model emits a schema-valid request to transfer money. What authorizes execution?',
@@ -232,6 +438,8 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
             'Right: identity and policy are checked in ordinary deterministic code, and the worker gets one short-lived capability scoped to this operation, with no ambient authority.',
             'A sandbox contains damage after the decision; it does not make the decision. It is the last containment layer and must never be the first approval layer.',
           ],
+          kcs: ['t6.tool-authorization'],
+          miss: ['t6.grammar-authorizes', 't6.confidence-is-intent', '', 't6.sandbox-is-approval'],
         },
       ],
     },
@@ -241,6 +449,37 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
       md: `For one real agent tool, write four negative tests before a happy-path demo: a prompt that asks for an undeclared destination, a tool that forks or emits unbounded output, a guest that probes the metadata endpoint, and a second tenant that times a known sensitive prefix. Record which layer rejects each attempt and which audit event proves it. If two layers both “probably handle it,” the boundary has no owner.`,
     },
   ],
+  kcs: ['t6.isolation-boundaries', 't6.cache-timing-oracle', 't6.tool-authorization'],
+  ticket: {
+    form: 'spiral',
+    cr: [
+      {
+        prompt:
+          'A model emits a schema-valid tool call that wires money. What must happen before it runs, and where does the sandbox sit?',
+        model:
+          'The grammar only proves the call parses. Deterministic code must check who the user is, the tenant, the destination and policy, then mint one short-lived capability for that single operation. The tool then runs in a disposable microVM with filtered egress. The sandbox is the last containment layer, not the approval layer.',
+        ideas: [
+          'A schema-valid call proves syntax only; it is not authorization',
+          'A deterministic broker checks identity, destination and policy, then mints a single-use short-lived capability',
+          'The microVM is the last containment layer after approval, not the approval itself',
+        ],
+        kcs: ['t6.tool-authorization', 't6.isolation-boundaries'],
+      },
+      {
+        prompt:
+          'How can a shared prefix cache leak another tenant\'s prompt without ever exposing a KV tensor, and what closes the leak?',
+        model:
+          'A hit skips prefill and answers faster than a miss, so latency is an observable bit. An attacker submits guessed prefixes and times them; a fast reply says someone recently cached that prefix. Closing it means a server-derived tenant namespace in the cache key, so tenants never share prefixes, plus rate limits and probe detection.',
+        ideas: [
+          'A hit skips prefill and is measurably faster than a miss, so latency is an observable signal',
+          'The attacker times guessed prefixes: a fast reply means the prefix was recently cached',
+          'A server-derived tenant namespace in the cache key stops tenants sharing prefixes at all',
+        ],
+        kcs: ['t6.cache-timing-oracle'],
+      },
+    ],
+    spiral: SPIRAL,
+  },
 }
 
 export default lesson
