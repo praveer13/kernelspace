@@ -92,10 +92,10 @@ export default function SimMirror({ id, table, className }: SimMirrorProps) {
       >
         {open ? 'Hide data table' : 'Show data table'}
       </button>
-      {/* Open, the box scrolls, so it takes focus (a keyboard user can scroll it) and a name (axe: scrollable-region-focusable). */}
       <div
         id={id}
-        {...(open ? { tabIndex: 0, role: 'region', 'aria-label': 'Data table' } : {})}
+        // an open table scrolls, so it takes the keyboard (axe: scrollable-region-focusable); closed it is sr-only text
+        {...(open ? { tabIndex: 0, role: 'region', 'aria-label': 'Chart data table' } : {})}
         className={open ? 'mt-2 max-h-72 overflow-auto rounded-sm border border-line bg-surface-1 p-2' : 'sr-only'}
       >
         <MirrorTableView table={table} />
