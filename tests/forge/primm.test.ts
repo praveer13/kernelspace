@@ -13,6 +13,7 @@ import {
   PRIMM_ITEMS,
   PRIMM_MC_ITEMS,
   PRIMM_STEPS,
+  RUN_SPEC,
   REFERENCE,
   STAGES,
   attemptsToGreen,
@@ -32,6 +33,7 @@ import {
   stageRows,
   type NumberPrimm,
 } from '../../src/data/forge/rust-allocator/primm'
+import lab01 from '../../src/data/forge/rust-allocator'
 import { createHeap, viewOf } from '../../src/lib/world/heap'
 import { isKnownKind, refMatchesKind } from '../../src/lib/ledger/refs'
 
@@ -444,5 +446,48 @@ describe('the panel as rendered (ARIA and focus structure)', () => {
     expect(html.match(/<button/g)?.length).toBe(1)
     expect(html).toContain('data-run-button="idle"')
     expect(html).toMatch(/<p role="status" aria-live="polite"[^>]*data-caption="true"><\/p>/)
+  })
+})
+
+describe('lab 01’s reference run as bundle data (docs/specs/wave-2.md §13.1)', () => {
+  const spec = lab01.primm.run
+
+  test('the bundle carries primm.ts’s own items, steps and run, and PRIMM_MC_ITEMS is still exported from primm.ts', () => {
+    expect(spec).toBe(RUN_SPEC)
+    expect(lab01.primm.items).toEqual([...PRIMM_ITEMS])
+    expect(lab01.primm.steps).toEqual([...PRIMM_STEPS])
+    expect(PRIMM_MC_ITEMS.length).toBeGreaterThan(0)
+    expect(spec.item).toEqual({ id: 'lab01.primm.r1', nsec: 45 })
+  })
+
+  test('a run through the spec is runChurn’s run: same ops, same frames, same observed value', () => {
+    for (const config of [REFERENCE, BUMP, { ...REFERENCE, fit: 'worst' as const }, { ...REFERENCE, coalesce: false }]) {
+      const direct = runChurn(config)
+      const via = spec.run({ ...config })
+      expect(via.total).toBe(direct.total)
+      expect(via.value).toBe(direct.survived)
+      expect(via.truth).toBe(direct.total)
+      expect(via.clean).toBe(direct.clean)
+      expect(via.summary).toBe(describeRun(direct))
+      expect(via.frames.map((f) => f.op)).toEqual(direct.samples.map((s) => s.op))
+      expect(via.frames.map((f) => f.cells)).toEqual(direct.samples.map((s) => s.map))
+      expect(via.frames[0].cells).toHaveLength(CHURN.buckets)
+      expect(via.frames[0].stats.map((x) => x.label)).toEqual(['live bytes', 'largest free run'])
+    }
+  })
+
+  test('the reference config is the Run step’s reference and the baseline is the bump allocator', () => {
+    expect(spec.reference).toEqual({ ...REFERENCE })
+    expect(spec.baseline).toEqual({ ...BUMP })
+    expect(spec.title(spec.reference)).toBe('Reference: first-fit with coalescing')
+    expect(spec.title(spec.baseline!)).toBe('Bump allocator: never takes a freed block back')
+    expect(spec.run(spec.reference).clean).toBe(true)
+    expect(spec.run(spec.baseline!).clean).toBe(false)
+    expect(spec.disclaimer).toContain('not check 6 itself')
+  })
+
+  test('the stages are numbered 1 to 4 in order, as the checks in labs.ts expect', () => {
+    expect(lab01.stages.map((s) => s.n)).toEqual([1, 2, 3, 4])
+    expect(new Set(checks.map((c) => c.stage))).toEqual(new Set([1, 2, 3, 4]))
   })
 })

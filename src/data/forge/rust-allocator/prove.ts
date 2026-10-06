@@ -14,6 +14,10 @@
 
 import { KC } from '@/data/kc/ids'
 import type { ProveData, ProveResult } from '@/lib/ledger/types'
+import type { ProveQuestion } from '../types'
+
+// The shape lives in ../types (the Forge bundle contract); it is re-exported so lab 01's imports keep working.
+export type { ProveQuestion }
 
 export const PROVE_LAB_ID = 'rust-allocator'
 /** Questions served per attempt. */
@@ -23,18 +27,6 @@ export const MIN_ANSWER_WORDS = 12
 export const MAX_ANSWER_CHARS = 1200
 /** A retry opens this long after the last attempt, with questions the learner has not seen. */
 export const RETRY_AFTER_MS = 24 * 60 * 60 * 1000
-
-export interface ProveQuestion {
-  /** Short id: what `ProveData.qids` records. The Today follow-up ref is `followUpRef(id)`. */
-  id: string
-  /** Markdown-lite: backticks mark code. */
-  prompt: string
-  /** What a good answer says. Shown after the learner has written their own. */
-  model: string
-  /** Three points to check the learner's answer against. */
-  ideas: readonly [string, string, string]
-  kcs: readonly string[]
-}
 
 export const PROVE_QUESTIONS: readonly ProveQuestion[] = [
   {

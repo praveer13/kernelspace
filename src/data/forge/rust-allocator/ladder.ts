@@ -20,6 +20,10 @@ import type { HeapOptions } from '@/lib/world/heap'
 import { firstFit } from '@/lib/world/placement'
 import type { HeapOp, PlacementDriver } from '@/lib/world/types'
 import type { HintRef } from '@/lib/ledger/types'
+import type { CheckLadder, LessonLink, WalkStep, Walkthrough } from '../types'
+
+// The shapes live in ../types (the Forge bundle contract); they are re-exported so lab 01's imports keep working.
+export type { CheckLadder, LessonLink, WalkStep, Walkthrough }
 
 export const LAB_ID = 'rust-allocator'
 
@@ -43,25 +47,6 @@ export const ASSISTED_HOURS = 24
 export const LIMITS = { r1Words: 60, r2Words: 40, r3Lines: 3, r4Words: 80, promptWords: 30, ideaWords: 30 } as const
 
 export const R0_PROMPT = 'In two sentences: what does this check do to your allocator, and what did yours do?'
-
-export interface LessonLink {
-  lessonId: string
-  /** The H2's text, as written in the lesson. */
-  h2: string
-  /** The H2's id on the lesson page (the lesson's slugify of `h2`); `verify:mentor` checks it exists. */
-  anchor: string
-}
-
-export interface CheckLadder {
-  checkId: string
-  r0: { prompt: string; ideas: readonly string[] }
-  r1: { text: string; link: LessonLink }
-  /** `fn` is the check's function in the zip's `src/lib/lib.rs`; the text names it. */
-  r2: { text: string; fn: string }
-  /** Pseudo-code, one line per `\n`. */
-  r3: string
-  r4: string
-}
 
 const TWO_OPS: LessonLink = { lessonId: 't1.l3', h2: 'The two operations that matter', anchor: 'the-two-operations-that-matter' }
 const CONTRACT: LessonLink = { lessonId: 't1.l3', h2: 'The contract and the slab', anchor: 'the-contract-and-the-slab' }
@@ -243,7 +228,7 @@ export const AFTER_BREAK = {
 /* ------------------------------------------------------------------ */
 
 /** `ack hint:rust-allocator/<check>#R<n>`, or `#bottom`. A trace of what the learner opened, never credit. */
-export const hintRef = (checkId: string, rung: RungId): HintRef => `hint:${LAB_ID}/${checkId}#${rung}`
+export const hintRef = (checkId: string, rung: RungId, labId: string = LAB_ID): HintRef => `hint:${labId}/${checkId}#${rung}`
 
 /** The end of the assisted window an `#bottom` ack opens (the ledger fold computes the same instant). */
 export function assistedUntil(bottomAckAt: string): string {
@@ -289,6 +274,8 @@ export const freshState = (): LadderState => ({ r0: '', compared: false, ticks: 
 export interface Ctx {
   red: number
   now: number
+  /** The lab whose acks `restoreState` reads; lab 01 when absent. */
+  labId?: string
 }
 
 export interface Unlock {
@@ -363,7 +350,7 @@ export function ladderReduce(state: LadderState, action: LadderAction, ctx: Ctx)
  */
 export function restoreState(acks: Readonly<Record<string, string>>, checkId: string, ctx: Ctx): LadderState {
   const opened: LadderState['opened'] = {}
-  for (const rung of [...RUNGS, 'bottom'] as RungId[]) if (acks[hintRef(checkId, rung)] !== undefined) opened[rung] = { at: ctx.now, red: ctx.red }
+  for (const rung of [...RUNGS, 'bottom'] as RungId[]) if (acks[hintRef(checkId, rung, ctx.labId)] !== undefined) opened[rung] = { at: ctx.now, red: ctx.red }
   return { ...freshState(), compared: opened.R1 !== undefined, opened }
 }
 
@@ -433,7 +420,12 @@ export function stripCode(text: string): string {
 
 const quote = (text: string) => text.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')
 
+/** The title prefix of lab 01's posts; every other lab's comes from its bundle's `discussionsLabel`. */
+export const DEFAULT_LABEL = '[lab 01]'
+
 export interface AskInput {
+  /** The lab's `discussionsLabel` ("[lab 02]"); lab 01's when absent. */
+  label?: string
   checkId: string
   /** The failing check's message (`CheckResult.msg`). */
   message: string
@@ -442,18 +434,20 @@ export interface AskInput {
 }
 
 /**
- * A prefilled new-discussion URL: category Q&A, title "[lab 01] <check id>: <first line of the message>",
+ * A prefilled new-discussion URL: category Q&A, title "<label> <check id>: <first line of the message>" (the lab's label),
  * body = the message and the R0 text. There is no code input anywhere, and both texts pass `stripCode`.
  * Always shorter than `URL_BUDGET`: the texts shrink until it fits.
  */
-export function askHumanUrl({ checkId, message, r0 = '' }: AskInput): string {
+export function askHumanUrl({ label = DEFAULT_LABEL, checkId, message, r0 = '' }: AskInput): string {
   const msg = stripCode(message)
   const mine = stripCode(r0)
   const first = msg.split('\n').find((l) => l.trim() !== '' && l !== '[code removed]')?.trim() ?? 'failing'
-  const prefixLen = Array.from(`[lab 01] ${checkId}: `).length
+  const prefix = `${label} ${checkId}: `
+  const labName = label.replace(/^\[|\]$/g, '').replace(/^./, (c) => c.toUpperCase())
+  const prefixLen = Array.from(prefix).length
   const build = (titleCap: number, msgCap: number, r0Cap: number) => {
-    const title = clip(`[lab 01] ${checkId}: ${first}`, titleCap)
-    const parts = [`Lab 01 · check \`${checkId}\``, `**What the check said**\n${quote(clip(msg, msgCap) || '(no message)')}`]
+    const title = clip(`${prefix}${first}`, titleCap)
+    const parts = [`${labName} · check \`${checkId}\``, `**What the check said**\n${quote(clip(msg, msgCap) || '(no message)')}`]
     if (mine !== '') parts.push(`**What I understand so far**\n${quote(clip(mine, r0Cap))}`)
     parts.push('No code is attached.')
     const q = `category=${DISCUSSIONS.category}&title=${encodeURIComponent(title)}&body=${encodeURIComponent(parts.join('\n\n'))}`
@@ -477,30 +471,6 @@ export const LAB_HEAP: HeapOptions = { capacity: 1 << 20, coalesce: true, minSpl
 export const SLACK = 64
 
 const FIRST_FIT: PlacementDriver = { name: 'first-fit', place: firstFit }
-
-export interface WalkStep {
-  /** 1-based position in the trace (or script). */
-  n: number
-  op: string
-  /** What the learner's allocator did; `-` when there is no trace of it. */
-  yours: string
-  /** What the reference heap says about that op. */
-  reference: string
-  /** The first op at which the learner's trace breaks the harness's rules. */
-  diverges: boolean
-  note?: string
-}
-
-export interface Walkthrough {
-  /** `trace`: replayed from the learner's `ks_trace_drain` lines. `script`: the check's op sequence on the reference alone. */
-  source: 'trace' | 'script'
-  steps: WalkStep[]
-  /** The step number of the first divergence, or null. */
-  divergedAt: number | null
-  headline: string
-  /** Ops of the trace before the steps shown (they agree with the reference). */
-  skipped: number
-}
 
 /** What the learner's code logs with `kslab::trace!`: `alloc(<size>[, <align>]) -> <offset>|none` and `free(<offset>)`. */
 export type TraceOp =
