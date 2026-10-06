@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play, X } from 'lucide-react'
 import { ClaimValue } from '@/components/ClaimValue'
+import { TelemetryGrid } from '@/components/telemetry/TelemetryGrid'
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
@@ -24,7 +25,7 @@ import {
   type MeasurementActId,
   type MeasurementEvidence,
 } from '@/lib/fleet-week'
-import type { RouterKind, TickSample } from '@/lib/fleet-model'
+import type { RouterKind } from '@/lib/fleet-model'
 import { freshSeed, shuffledOrder } from '@/lib/rng'
 import { moduleBytes, runSim, SimTimeoutError } from '@/workers/sim-client'
 import { cn } from '@/lib/utils'
@@ -594,50 +595,6 @@ function Option({ active, onClick, label, tag }: { active: boolean; onClick: () 
       {tag && <span className="mr-2 text-text-3">{tag}.</span>}
       {label}
     </button>
-  )
-}
-
-const SERIES: { key: keyof TickSample; label: string; color: string }[] = [
-  { key: 'ttftP95', label: 'gen_ai · TTFT p95', color: '#FB7185' },
-  { key: 'tpotP95', label: 'gen_ai · TPOT p95', color: '#22D3EE' },
-  { key: 'queueP95', label: 'queue delay p95', color: '#FBBF24' },
-  { key: 'waiting', label: 'waiting requests', color: '#5CA8FF' },
-  { key: 'shed', label: 'shed', color: '#FF5C6C' },
-  { key: 'autoPreempts', label: 'auto-preempts', color: '#A78BFA' },
-]
-
-function TelemetryGrid({ series }: { series: TickSample[] }) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {SERIES.map((s) => (
-        <div key={s.key} className="rounded-md border border-line bg-ink p-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">{s.label}</p>
-          <Sparkline values={series.map((t) => t[s.key] as number)} color={s.color} />
-          <p className="mt-1 font-mono text-[10px] text-text-3">final: {fmt(series[series.length - 1]?.[s.key] as number)}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-const fmt = (n: number | undefined) => (n === undefined ? '—' : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n * 10) / 10}`)
-
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const { d, last } = useMemo(() => {
-    if (values.length < 2) return { d: '', last: 0 }
-    const max = Math.max(...values, 1e-9)
-    const min = Math.min(...values)
-    const pts = values
-      .map((v, i) => `${(i / (values.length - 1)) * 100},${34 - ((v - min) / Math.max(1e-9, max - min)) * 30}`)
-      .join(' ')
-    return { d: pts, last: values[values.length - 1] }
-  }, [values])
-  void last
-  if (!d) return <div className="h-9" />
-  return (
-    <svg viewBox="0 0 100 36" className="mt-1 h-9 w-full" preserveAspectRatio="none">
-      <polyline points={d} fill="none" stroke={color} strokeWidth="1.5" />
-    </svg>
   )
 }
 
