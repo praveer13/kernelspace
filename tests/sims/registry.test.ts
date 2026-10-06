@@ -78,8 +78,8 @@ describe('legacy tasks keep their ids and pay as before', () => {
     for (const id of ['t-sched-fifo', 't-rust-move', 't-ctx-cliff', 't-lock-aba', 't-layout-aos', 't-eng-gqa', 't-blk-cow', 't-frame-trace']) {
       expect(ids).toContain(id)
     }
-    // outcome tasks arrive per sim (C7–C9) under dotted ids: `roof.*`, `kv.*`, `alloc.*`; every other task is legacy
-    for (const t of reg.tasks) expect(t.kind === 'outcome').toBe(/^(roof|kv|alloc)\./.test(t.id))
+    // outcome tasks arrive per sim (C7–C9, 2b-13) under dotted ids: `roof.*`, `kv.*`, `alloc.*`, `zoo.*`; every other task is legacy
+    for (const t of reg.tasks) expect(t.kind === 'outcome').toBe(/^(roof|kv|alloc|zoo)\./.test(t.id))
     expect(legacy.length + reg.tasks.filter((t) => t.kind === 'outcome').length).toBe(reg.tasks.length)
     for (const t of legacy) {
       expect(t.predict).toBeUndefined()
@@ -169,6 +169,12 @@ describe('contract ids (§10.2 table), as C7–C9 add them', () => {
     'kv.fp8-rescue': { simId: 'sim-kv', kc: 't5.kv-bytes-per-token' },
     'kv.gqa': { simId: 'sim-kv', kc: 't5.gqa-kv-heads' },
     'kv.max-batch': { simId: 'sim-kv', kc: 't5.kv-capacity' },
+    'zoo.mla-ratio': { simId: 'sim-kv', kc: 't5.attention-variants' },
+    'zoo.swa-flat': { simId: 'sim-kv', kc: 't5.attention-variants' },
+    'zoo.dsa-reads': { simId: 'sim-kv', kc: 't5.kv-reads-vs-capacity' },
+    'zoo.linear-state': { simId: 'sim-kv', kc: 't5.attention-variants' },
+    'zoo.hybrid-share': { simId: 'sim-kv', kc: 't5.attention-variants' },
+    'zoo.gdn-prefix': { simId: 'sim-kv', kc: 't5.kv-reads-vs-capacity' },
     'alloc.frag-first-fit': { simId: 'sim-allocator', kc: KC.externalFrag },
     'alloc.coalesce-recover': { simId: 'sim-allocator', kc: 't1.split-coalesce' },
     'alloc.fixed-block-waste': { simId: 'sim-allocator', kc: 't1.fixed-blocks' },
@@ -191,7 +197,7 @@ describe('lessons list registry tasks', () => {
     for (const lesson of ALL_LESSONS) {
       for (const b of lesson.blocks) {
         if (b.type !== 'exercise' || b.taskIds === undefined) continue
-        // ids the zoo will register (PENDING_TASK_IDS) are listed ahead of their sim; everything else must exist
+        // ids a PR lists ahead of the one that registers them (PENDING_TASK_IDS, empty since the zoo registered its six) are excused; everything else must exist
         const expected = b.taskIds.filter((id) => !PENDING_TASK_IDS.includes(id))
         const found = resolveTasks(b.simId, b.machine, expected, reg)
         expect(found.map((t) => t.id)).toEqual(expected)
@@ -235,14 +241,19 @@ describe('lessons list registry tasks', () => {
   })
 })
 
-/** Pending ids are listed in `PENDING_TASK_IDS` until the zoo's tasks exist (wave-2.md §2.3, §11.4). */
+/**
+ * `PENDING_TASK_IDS` lets a lesson list task ids ahead of the PR that registers them (wave-2.md §2.3). 2b-13
+ * registered the zoo's six, so the list is empty; the mechanism is checked here with a stand-in list.
+ */
 describe('pending task ids', () => {
   const ZOO = ['zoo.mla-ratio', 'zoo.swa-flat', 'zoo.dsa-reads', 'zoo.linear-state', 'zoo.hybrid-share', 'zoo.gdn-prefix']
+  /** A stand-in for the real list, which is empty. */
+  const PENDING = ['zoo.mla-ratio', 'zoo.gdn-prefix']
   /** What the lesson test accepts for a block's ids. */
-  const unresolved = (b: ExerciseBlock, r = reg) =>
-    b.taskIds === undefined ? [] : b.taskIds.filter((id) => !PENDING_TASK_IDS.includes(id) && resolveTasks(b.simId, b.machine, [id], r).length === 0)
+  const unresolved = (b: ExerciseBlock, r = reg, pending: readonly string[] = PENDING_TASK_IDS) =>
+    b.taskIds === undefined ? [] : b.taskIds.filter((id) => !pending.includes(id) && resolveTasks(b.simId, b.machine, [id], r).length === 0)
   /** The staleness rule: a pending id that some registry has registered. */
-  const stale = (r = reg) => PENDING_TASK_IDS.filter((id) => r.byId(id) !== undefined)
+  const stale = (r = reg, pending: readonly string[] = PENDING_TASK_IDS) => pending.filter((id) => r.byId(id) !== undefined)
   const zoo = (over: Partial<ExerciseBlock> = {}): ExerciseBlock => ({
     type: 'exercise',
     simId: 'sim-kv',
@@ -255,34 +266,53 @@ describe('pending task ids', () => {
   /** A registry with one real sim-kv task, as the production one has. */
   const withKv = buildRegistry({ '/src/components/sims/x.tasks.ts': { T: [outcome({ id: 'kv.gqa', simId: 'sim-kv', title: 'GQA' })] } })
 
-  test('the list holds the six zoo task ids of §11.4', () => {
-    expect([...PENDING_TASK_IDS].sort()).toEqual([...ZOO].sort())
+  test("the list is empty: the zoo's six task ids of §11.4 are registered", () => {
+    expect(PENDING_TASK_IDS).toEqual([])
+    for (const id of ZOO) {
+      const t = reg.byId(id)
+      expect(t?.simId, id).toBe('sim-kv')
+      expect(t?.machine, id).toBe('zoo')
+    }
+    expect(resolveTasks('sim-kv', 'zoo', ZOO, reg).map((t) => t.id)).toEqual(ZOO)
+  })
+
+  test('a block that lists the zoo ids resolves them all, with no pending id to excuse any', () => {
+    expect(unresolved(zoo())).toEqual([])
   })
 
   test('an exercise block may list a pending id, and an unknown id that is not pending still fails', () => {
-    expect(unresolved(zoo())).toEqual([])
-    expect(unresolved(zoo({ taskIds: ['kv.gqa', 'zoo.mla-ratio'] }), withKv)).toEqual([])
-    expect(unresolved(zoo({ taskIds: ['kv.gqa', 'zoo.nope'] }), withKv)).toEqual(['zoo.nope'])
+    expect(unresolved(zoo({ taskIds: ['kv.gqa', 'zoo.mla-ratio'] }), withKv, PENDING)).toEqual([])
+    expect(unresolved(zoo({ taskIds: ['kv.gqa', 'zoo.nope'] }), withKv, PENDING)).toEqual(['zoo.nope'])
+    expect(unresolved(zoo({ taskIds: ['kv.gqa', 'zoo.mla-ratio'] }), withKv)).toEqual(['zoo.mla-ratio'])
   })
 
-  test('the list goes stale, and so fails, the moment a pending id is registered', () => {
-    expect(stale()).toEqual([])
+  test('a list goes stale, and so fails, the moment a pending id is registered', () => {
+    expect(stale(withKv, PENDING)).toEqual([])
     const registered = buildRegistry({
       '/src/components/sims/kvZoo.tasks.ts': { T: [outcome({ id: 'zoo.mla-ratio', simId: 'sim-kv', machine: 'zoo', title: 'MLA ratio' })] },
     })
-    expect(stale(registered)).toEqual(['zoo.mla-ratio'])
+    expect(stale(registered, PENDING)).toEqual(['zoo.mla-ratio'])
+    // and the real list is not stale, because it is empty
+    expect(stale()).toEqual([])
   })
 
   test('planExercise: all ids pending hides the block', () => {
-    expect(planExercise('sim-kv', 'zoo', ZOO, withKv)).toEqual({ show: 'hidden' })
-    expect(planExercise('sim-kv', 'zoo', ['zoo.gdn-prefix'], withKv)).toEqual({ show: 'hidden' })
+    expect(planExercise('sim-kv', 'zoo', PENDING, withKv, PENDING)).toEqual({ show: 'hidden' })
+    expect(planExercise('sim-kv', 'zoo', ['zoo.gdn-prefix'], withKv, PENDING)).toEqual({ show: 'hidden' })
+    // with the real (empty) list nothing is hidden: a block whose ids are not registered falls back to the card
+    expect(planExercise('sim-kv', 'zoo', PENDING, withKv)).toEqual({ show: 'card' })
   })
 
   test('planExercise: pending and unknown ids are dropped, what remains runs inline, in the given order', () => {
-    expect(planExercise('sim-kv', undefined, ['zoo.mla-ratio', 'kv.gqa', 'kv.nope'], withKv)).toEqual({ show: 'inline', taskIds: ['kv.gqa'] })
+    expect(planExercise('sim-kv', undefined, ['zoo.mla-ratio', 'kv.gqa', 'kv.nope'], withKv, PENDING)).toEqual({ show: 'inline', taskIds: ['kv.gqa'] })
+    expect(planExercise('sim-kv', undefined, ['kv.gqa', 'kv.nope'], withKv)).toEqual({ show: 'inline', taskIds: ['kv.gqa'] })
   })
 
-  test('planExercise: no id left, or another sim\'s id, falls back to the link card', () => {
+  test('planExercise: the zoo block runs inline now that its ids are registered', () => {
+    expect(planExercise('sim-kv', 'zoo', ZOO, reg)).toEqual({ show: 'inline', taskIds: ZOO })
+  })
+
+  test("planExercise: no id left, or another sim's id, falls back to the link card", () => {
     expect(planExercise('sim-kv', undefined, ['kv.nope'], withKv)).toEqual({ show: 'card' })
     expect(planExercise('sim-kv', undefined, ['zoo.mla-ratio', 'kv.nope'], withKv)).toEqual({ show: 'card' })
     expect(planExercise('sim-roofline', undefined, ['kv.gqa'], withKv)).toEqual({ show: 'card' })
@@ -293,12 +323,14 @@ describe('pending task ids', () => {
   const html = (block: ExerciseBlock, r = withKv) =>
     renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ExerciseView, { block, trackColor: '#fff', lessonId: 't5.l4', tasks: r })))
 
-  test('ExerciseView renders nothing for a block whose ids are all pending', () => {
-    expect(html(zoo())).toBe('')
+  test('ExerciseView mounts the zoo block inline now that its ids are registered', () => {
+    const out = html(zoo(), reg)
+    expect(out).toContain('data-inline=')
+    expect(out).toContain('data-exercise="sim-kv"')
   })
 
   test('ExerciseView drops unknown ids and mounts the sim inline with the rest', () => {
-    const out = html(zoo({ machine: undefined, taskIds: ['zoo.mla-ratio', 'kv.gqa', 'kv.nope'] }))
+    const out = html(zoo({ machine: undefined, taskIds: ['kv.nope', 'kv.gqa', 'kv.nope2'] }))
     expect(out).toContain('data-inline=')
     expect(out).toContain('data-exercise="sim-kv"')
   })

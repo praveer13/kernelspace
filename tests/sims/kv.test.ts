@@ -13,6 +13,7 @@ import KvCacheSim from '../../src/components/sims/KvCacheSim'
 import SimHost from '../../src/components/sims/SimHost'
 import * as blockTasks from '../../src/components/sims/blockTableExplorer.tasks'
 import { KV_TASKS } from '../../src/components/sims/kvCache.tasks'
+import { ZOO_TASKS } from '../../src/components/sims/kvZoo.tasks'
 import { atlasRow } from '../../src/data/atlas'
 import { byId, claimNumber } from '../../src/data/claims'
 import { KC } from '../../src/data/kc/ids'
@@ -83,6 +84,14 @@ describe('the five contract tasks (§10.2)', () => {
   test('they list on the calculator machine and not on the block-table machine', () => {
     expect(reg.forSim('sim-kv', 'calc').map((t) => t.id).sort()).toEqual(KV_TASKS.map((t) => t.id).sort())
     expect(reg.forSim('sim-kv', 'blocks')).toEqual([])
+  })
+
+  test("the zoo's six tasks (2b-13) list on the zoo machine only: the calculator's five and the block tables are as they were", () => {
+    const both = buildRegistry({ '/src/components/sims/kvCache.tasks.ts': { KV_TASKS }, '/src/components/sims/kvZoo.tasks.ts': { ZOO_TASKS } })
+    expect(both.problems).toEqual([])
+    expect(both.forSim('sim-kv', 'calc').map((t) => t.id).sort()).toEqual(KV_TASKS.map((t) => t.id).sort())
+    expect(both.forSim('sim-kv', 'blocks')).toEqual([])
+    expect(both.forSim('sim-kv', 'zoo').map((t) => t.id).sort()).toEqual(ZOO_TASKS.map((t) => t.id).sort())
   })
 
   test('the task text never gives the answer away', () => {
