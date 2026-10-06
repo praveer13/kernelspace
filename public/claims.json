@@ -1892,6 +1892,947 @@
       "verifiedAt": "2026-10-05",
       "ttlDays": 365,
       "boundary": "Per value, ignoring the one FP32 per-tensor scale. The same page gives about 3.5x less memory than FP16 and about 1.8x less than FP8."
+    },
+    {
+      "id": "zoo.llama3-70b.layers",
+      "kind": "spec",
+      "value": 80,
+      "unit": "layers",
+      "label": "Llama-3-70B transformer layers",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_hidden_layers\": 80,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "unit": "KV heads",
+      "label": "Llama-3-70B key/value heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_key_value_heads\": 8,",
+        "row": "num_key_value_heads"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.attn-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "Llama-3-70B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_attention_heads\": 64,",
+        "row": "num_attention_heads"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.hidden-size",
+      "kind": "spec",
+      "value": 8192,
+      "unit": "dims",
+      "label": "Llama-3-70B hidden size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"hidden_size\": 8192,",
+        "row": "hidden_size"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.head-dim",
+      "kind": "derived",
+      "value": 128,
+      "unit": "dims",
+      "label": "Llama-3-70B head dimension",
+      "derived": {
+        "from": [
+          "zoo.llama3-70b.hidden-size",
+          "zoo.llama3-70b.attn-heads"
+        ],
+        "formula": "hidden_size / num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The config has no head_dim field; Llama attention splits the hidden size evenly across its heads."
+    },
+    {
+      "id": "zoo.llama3-70b.kv-bytes-per-token",
+      "kind": "derived",
+      "value": 327680,
+      "unit": "bytes/token",
+      "label": "Llama-3-70B KV cache per token (BF16)",
+      "derived": {
+        "from": [
+          "zoo.llama3-70b.layers",
+          "zoo.llama3-70b.kv-heads",
+          "zoo.llama3-70b.head-dim"
+        ],
+        "formula": "2 (K and V) * layers * kv_heads * head_dim * 2 bytes (BF16)"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "BF16 KV, no paging overhead: 320 KiB/token, the baseline the zoo and t5.l4 compare every other kind against."
+    },
+    {
+      "id": "zoo.deepseek-v3.layers",
+      "kind": "spec",
+      "value": 61,
+      "unit": "layers",
+      "label": "DeepSeek-V3 transformer layers",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 61,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "MLA caches one latent per token per layer: kv_lora_rank + qk_rope_head_dim elements, shared by every attention head (the per-head num_key_value_heads in this file does not enter the cache size). The config counts the 61 transformer layers; the extra multi-token-prediction layer (num_nextn_predict_layers) is not one of them."
+    },
+    {
+      "id": "zoo.deepseek-v3.kv-lora-rank",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "DeepSeek-V3 MLA latent width (d_c)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"kv_lora_rank\": 512,",
+        "row": "kv_lora_rank"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "DeepSeek-V3 MLA decoupled RoPE key width (d_rope)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.layers",
+      "kind": "spec",
+      "value": 36,
+      "unit": "layers",
+      "label": "gpt-oss-120b transformer layers",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 36,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.swa-layers",
+      "kind": "spec",
+      "value": 18,
+      "unit": "layers",
+      "label": "gpt-oss-120b sliding-window layers",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"layer_types\": [ \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\" ],",
+        "row": "layer_types (count of \"sliding_attention\")"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The list alternates, sliding first, so layers 0, 2, 4 ... slide and 1, 3, 5 ... attend to everything."
+    },
+    {
+      "id": "zoo.gpt-oss-120b.full-layers",
+      "kind": "spec",
+      "value": 18,
+      "unit": "layers",
+      "label": "gpt-oss-120b full-attention layers",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"layer_types\": [ \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\" ],",
+        "row": "layer_types (count of \"full_attention\")"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.window",
+      "kind": "spec",
+      "value": 128,
+      "unit": "tokens",
+      "label": "gpt-oss-120b sliding window W",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"sliding_window\": 128,",
+        "row": "sliding_window"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "A sliding layer keeps the last 128 tokens, so its KV stops growing at context 128 (plus sinks, which store nothing here)."
+    },
+    {
+      "id": "zoo.gpt-oss-120b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "unit": "KV heads",
+      "label": "gpt-oss-120b key/value heads (GQA), both layer kinds",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 8,",
+        "row": "num_key_value_heads"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "gpt-oss-120b head dimension",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"head_dim\": 64,",
+        "row": "head_dim"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.sink-kv-tokens",
+      "kind": "spec",
+      "value": 0,
+      "unit": "tokens",
+      "label": "gpt-oss-120b KV tokens stored for attention sinks",
+      "source": {
+        "url": "https://arxiv.org/pdf/2508.10925",
+        "title": "gpt-oss-120b and gpt-oss-20b Model Card (OpenAI, arXiv 2508.10925)",
+        "quote": "Each attention head has a learned bias in the denominator of the softmax, similar to off-by-one attention and attention sinks",
+        "row": "section 2.2, Architecture"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "config.json has no sink field. gpt-oss's sinks are one learned logit per head, added to the softmax denominator, not cached tokens, so a sliding layer stores min(t, W) tokens and nothing more. A StreamingLLM-style model that does keep sink tokens would set this from its own config."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.layers",
+      "kind": "spec",
+      "value": 60,
+      "unit": "layers",
+      "label": "Qwen3.5-397B transformer layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 60,",
+        "row": "text_config.num_hidden_layers"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The text model is nested under text_config; the vision tower beside it is not part of the KV cache."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-layers",
+      "kind": "spec",
+      "value": 45,
+      "unit": "layers",
+      "label": "Qwen3.5-397B gated-DeltaNet (linear) layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"layer_types\": [ \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\" ],",
+        "row": "text_config.layer_types (count of \"linear_attention\")"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Three linear layers then one full-attention layer, repeating (full_attention_interval is 4 in the same file): 45 linear to 15 full, the 3:1 hybrid."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.full-layers",
+      "kind": "spec",
+      "value": 15,
+      "unit": "layers",
+      "label": "Qwen3.5-397B full-attention layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"layer_types\": [ \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\" ],",
+        "row": "text_config.layer_types (count of \"full_attention\")"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.kv-heads",
+      "kind": "spec",
+      "value": 2,
+      "unit": "KV heads",
+      "label": "Qwen3.5-397B key/value heads in a full-attention layer (GQA)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 2,",
+        "row": "text_config.num_key_value_heads"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.head-dim",
+      "kind": "spec",
+      "value": 256,
+      "unit": "dims",
+      "label": "Qwen3.5-397B full-attention head dimension",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"head_dim\": 256,",
+        "row": "text_config.head_dim"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-value-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "Qwen3.5-397B linear-attention value heads",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"linear_num_value_heads\": 64,",
+        "row": "text_config.linear_num_value_heads"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "A gated-DeltaNet layer keeps one d_k x d_v state per value head: heads * d_k * d_v elements per layer, constant in context. The short convolution state (linear_conv_kernel_dim) is a few elements per channel and not counted."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-key-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "Qwen3.5-397B linear-attention key head dimension (d_k)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"linear_key_head_dim\": 128,",
+        "row": "text_config.linear_key_head_dim"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-value-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "Qwen3.5-397B linear-attention value head dimension (d_v)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"linear_value_head_dim\": 128,",
+        "row": "text_config.linear_value_head_dim"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.layers",
+      "kind": "spec",
+      "value": 27,
+      "unit": "layers",
+      "label": "Kimi Linear transformer layers",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 27,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.mla-layers",
+      "kind": "spec",
+      "value": 7,
+      "unit": "layers",
+      "label": "Kimi Linear MLA (full-attention) layers",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"full_attn_layers\": [ 4, 8, 12, 16, 20, 24, 27 ],",
+        "row": "linear_attn_config.full_attn_layers (length)"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Layer numbers are 1-based (27 is the last layer). Seven MLA layers beside 20 KDA layers is 2.9:1, close to but not exactly the 3:1 the dossier rounds to."
+    },
+    {
+      "id": "zoo.kimi-linear.kda-layers",
+      "kind": "spec",
+      "value": 20,
+      "unit": "layers",
+      "label": "Kimi Linear KDA (linear) layers",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"kda_layers\": [ 1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26 ],",
+        "row": "linear_attn_config.kda_layers (length)"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.kv-lora-rank",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "Kimi Linear MLA latent width (d_c)",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"kv_lora_rank\": 512,",
+        "row": "kv_lora_rank"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The MLA layers cache kv_lora_rank + qk_rope_head_dim elements per token (modeling_kimi.py at this revision projects to exactly that width); in the reference code the rope-width slice is carried unrotated (mla_use_nope), not dropped from the cache."
+    },
+    {
+      "id": "zoo.kimi-linear.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "Kimi Linear MLA decoupled key width (d_rope)",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.kda-heads",
+      "kind": "spec",
+      "value": 32,
+      "unit": "heads",
+      "label": "Kimi Linear KDA heads",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"num_heads\": 32,",
+        "row": "linear_attn_config.num_heads"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "A KDA layer keeps one d_k x d_v state per head: heads * head_dim * head_dim elements, constant in context. The short convolution (short_conv_kernel_size) is not counted."
+    },
+    {
+      "id": "zoo.kimi-linear.kda-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "Kimi Linear KDA head dimension (d_k = d_v)",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"head_dim\": 128,",
+        "row": "linear_attn_config.head_dim"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The top-level head_dim (72) belongs to the MLA layers; the KDA layers use this one."
+    },
+    {
+      "id": "zoo.deepseek-v3-2.layers",
+      "kind": "spec",
+      "value": 61,
+      "unit": "layers",
+      "label": "DeepSeek-V3.2 transformer layers",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 61,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "MLA caches one latent per token per layer: kv_lora_rank + qk_rope_head_dim elements, shared by every attention head (the per-head num_key_value_heads in this file does not enter the cache size). The config counts the 61 transformer layers; the extra multi-token-prediction layer (num_nextn_predict_layers) is not one of them."
+    },
+    {
+      "id": "zoo.deepseek-v3-2.kv-lora-rank",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "DeepSeek-V3.2 MLA latent width (d_c)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"kv_lora_rank\": 512,",
+        "row": "kv_lora_rank"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3-2.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "DeepSeek-V3.2 MLA decoupled RoPE key width (d_rope)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3-2.index-topk",
+      "kind": "spec",
+      "value": 2048,
+      "unit": "tokens",
+      "label": "DeepSeek-V3.2 DSA top-k: tokens each query reads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_topk\": 2048,",
+        "row": "index_topk"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The lightning indexer scores every cached token, then the main attention reads only this many of them. All latents stay stored, so capacity is unchanged and reads per step stop growing past top-k."
+    },
+    {
+      "id": "zoo.deepseek-v3-2.index-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "DeepSeek-V3.2 DSA indexer key width",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_head_dim\": 128,",
+        "row": "index_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3-2.index-n-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "DeepSeek-V3.2 DSA indexer heads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_n_heads\": 64,",
+        "row": "index_n_heads"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.layers",
+      "kind": "spec",
+      "value": 61,
+      "unit": "layers",
+      "label": "DeepSeek-V4-Pro transformer layers",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 61,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.csa-layers",
+      "kind": "spec",
+      "value": 30,
+      "unit": "layers",
+      "label": "DeepSeek-V4-Pro CSA layers (compress ratio 4)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (count of 4)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "compress_ratios has 62 entries: one per layer (the first two are 128, then 4 and 128 alternate) and a final 0 for the multi-token-prediction layer. The config does not name the kinds; the technical report (arXiv 2606.19348, section 2.3) does: ratio 4 is Compressed Sparse Attention (every 4 tokens become one entry, then the indexer selects top-k of them) and ratio 128 is Heavily Compressed Attention (every 128 become one, no selection). Both add a sliding window of uncompressed recent entries."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.hca-layers",
+      "kind": "spec",
+      "value": 31,
+      "unit": "layers",
+      "label": "DeepSeek-V4-Pro HCA layers (compress ratio 128)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (count of 128)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.csa-ratio",
+      "kind": "spec",
+      "value": 4,
+      "unit": "tokens/entry",
+      "label": "DeepSeek-V4-Pro CSA compression ratio m",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (member)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.hca-ratio",
+      "kind": "spec",
+      "value": 128,
+      "unit": "tokens/entry",
+      "label": "DeepSeek-V4-Pro HCA compression ratio m'",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (member)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.window",
+      "kind": "spec",
+      "value": 128,
+      "unit": "tokens",
+      "label": "DeepSeek-V4-Pro sliding window of uncompressed entries",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"sliding_window\": 128,",
+        "row": "sliding_window"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Every CSA and HCA layer also keeps this many recent uncompressed entries, so a layer stores ceil(t / m) + window entries."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.kv-heads",
+      "kind": "spec",
+      "value": 1,
+      "unit": "KV heads",
+      "label": "DeepSeek-V4-Pro key/value heads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 1,",
+        "row": "num_key_value_heads"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "One shared key-value entry per token (multi-query), head_dim wide."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.head-dim",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "DeepSeek-V4-Pro KV entry width (head_dim)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"head_dim\": 512,",
+        "row": "head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "DeepSeek-V4-Pro rotary part of the KV entry",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Part of head_dim, not an addition to it, per the technical report (partial rotary)."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.index-topk",
+      "kind": "spec",
+      "value": 1024,
+      "unit": "entries",
+      "label": "DeepSeek-V4-Pro CSA top-k: compressed entries each query reads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_topk\": 1024,",
+        "row": "index_topk"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.index-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "DeepSeek-V4-Pro CSA indexer key width",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_head_dim\": 128,",
+        "row": "index_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.index-n-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "DeepSeek-V4-Pro CSA indexer heads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_n_heads\": 64,",
+        "row": "index_n_heads"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
     }
   ]
 }
