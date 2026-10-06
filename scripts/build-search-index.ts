@@ -24,7 +24,7 @@ export const INDEX_PATH = 'src/data/search-index.json'
  * under budget. CAN_MAX is 0 since the KC graph grew to every track (wave-2 §4, task 2a-11: 97 → 153 KCs, +2.7 KB
  * gzip): a concept row's crumb then names its lesson, which the index already carries, instead of a clipped "you can".
  */
-const HOOK_MAX = 40
+const HOOK_MAX = 32
 const CAN_MAX = 0
 
 /** `text` cut at a word boundary to at most `max` characters, with an ellipsis when something was cut. */
