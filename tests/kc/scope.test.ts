@@ -2,6 +2,7 @@
  * Wave 1 content scope (docs/specs/wave-1.md §4.7, §8.1, §9.1; task B25): the lessons that opted in as their content tasks
  * landed are now all of them. All 29 R and T0-T2 lessons set `kcs` (every id a real KC that lists the lesson), the 19 T0-T2
  * lessons carry a ticket (t2.l7 the spiral), and the 12 T0-T1 lessons open with a `predict` block of prequestions.
+ * T3-T7 are not pinned here: the Wave 2 content tasks add their tickets, and 2a-32 extends this scope (wave-2.md §6.2).
  */
 import { describe, expect, test } from 'bun:test'
 import { kcById } from '../../src/data/kc'
@@ -48,8 +49,4 @@ describe('Wave 1 content scope', () => {
       expect(blocks[0].items.length).toBeGreaterThanOrEqual(1)
     })
   }
-
-  test('T3-T7 keep the checkpoint until Wave 2: none has a ticket', () => {
-    for (const l of inTracks('t3', 't4', 't5', 't6', 't7')) expect(l.ticket).toBeUndefined()
-  })
 })
