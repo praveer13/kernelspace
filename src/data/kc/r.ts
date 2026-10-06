@@ -4,6 +4,10 @@
  * Two KCs are introduced per lesson; later lessons that revisit one list it after its introducer.
  * Every R lesson has at least one T0-T2 KC that `requires` a KC it introduces (§4.3, the braid's
  * pairing edges); those edges live on the T side, in t0.ts, t1.ts and t2.ts.
+ *
+ * Wave 2 (spec §4.2) adds `r.permissions` (r.l3) and `r.analyzer-limits` (r.l4) for F4, so those two lessons
+ * introduce three KCs each; their pairing edges are `t1.ownership-answer` (t1.ts) and `t3.unsafe-boundaries`
+ * (t3.ts). The KCs the compile bank draws from name `gen: ['compile']`, a family that lands in 2c-04.
  */
 
 import type { Kc } from '@/lib/kc/types'
@@ -66,6 +70,7 @@ export const R_KCS: readonly Kc[] = [
     lessons: ['r.l3', 'r.l6', 'r.l7'],
     requires: ['r.bindings-expressions'],
     confusable: [KC.borrowRules],
+    gen: ['compile'],
     since,
   },
   {
@@ -76,6 +81,19 @@ export const R_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['r.l3'],
     requires: [KC.ownershipMoves],
+    gen: ['compile'],
+    since,
+  },
+
+  {
+    id: KC.permissions,
+    title: 'Permissions: read, write, own',
+    can: 'You can say which of read, write and own a path holds at each line, and why a move or a borrow removes one.',
+    track: 'r',
+    kind: 'skill',
+    lessons: ['r.l3'],
+    requires: [KC.ownershipMoves],
+    gen: ['compile'],
     since,
   },
 
@@ -90,6 +108,7 @@ export const R_KCS: readonly Kc[] = [
     requires: [KC.ownershipMoves],
     confusable: [KC.ownershipMoves, 'r.lifetimes'],
     threshold: 'anchor',
+    gen: ['compile'],
     since,
   },
   {
@@ -100,6 +119,18 @@ export const R_KCS: readonly Kc[] = [
     kind: 'skill',
     lessons: ['r.l4', 'r.l9'],
     requires: [KC.borrowRules],
+    gen: ['compile'],
+    since,
+  },
+  {
+    id: KC.analyzerLimits,
+    title: 'What the borrow checker cannot see',
+    can: 'You can tell a real borrow error from a safe pattern the analyzer rejects, and fix it: scope, split or restructure.',
+    track: 'r',
+    kind: 'skill',
+    lessons: ['r.l4'],
+    requires: [KC.borrowRules],
+    gen: ['compile'],
     since,
   },
 
@@ -171,6 +202,7 @@ export const R_KCS: readonly Kc[] = [
     lessons: ['r.l8'],
     requires: [KC.borrowRules, 'r.smart-pointers'],
     confusable: ['r.smart-pointers'],
+    gen: ['compile'],
     since,
   },
 
@@ -184,6 +216,7 @@ export const R_KCS: readonly Kc[] = [
     lessons: ['r.l9'],
     requires: [KC.borrowRules, 'r.slices'],
     confusable: [KC.borrowRules],
+    gen: ['compile'],
     since,
   },
 

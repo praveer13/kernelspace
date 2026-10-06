@@ -40,10 +40,10 @@ const KINDS = new Set(['concept', 'procedure', 'fact', 'skill'])
 /** Tracks that need a notional-machine card in Wave 1 (§4.8). */
 const NOTIONAL_TRACKS = ['r', 't0', 't1', 't2']
 /**
- * Families the spec commits to (§5.5) that B9-B11 land in parallel with this graph. Naming one before
+ * Families the specs commit to (wave-1 §5.5; wave-2 §4.2 and §5) that land in parallel with this graph. Naming one before
  * its module exists is a warning; once the module exists, its Gen.kcs must agree with the graph.
  */
-export const PENDING_FAMILIES = ['frag', 'kv', 'roofline']
+export const PENDING_FAMILIES = ['frag', 'kv', 'roofline', 'goodput', 'cost', 'memory', 'spec', 'sig', 'compile']
 
 export interface KcFamily {
   id: string

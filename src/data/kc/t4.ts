@@ -1,6 +1,7 @@
 /**
  * T4 (GPU architecture) KCs that Wave 1 needs: the roofline family, RooflineSim tasks and Boot
- * (docs/specs/wave-1.md §4.9). The rest of T4 joins the graph with its tickets in Wave 2.
+ * (docs/specs/wave-1.md §4.9). `t4.quantized-bytes` is Wave 2's contract id for the memory family
+ * (§4.2); the rest of T4 joins the graph with its tickets in 2a-11.
  */
 
 import type { Kc } from '@/lib/kc/types'
@@ -57,6 +58,18 @@ export const T4_KCS: readonly Kc[] = [
     lessons: ['t4.l6'],
     requires: [KC.boundClassification, KC.locality],
     gen: ['roofline'],
+    since,
+  },
+
+  {
+    id: KC.quantizedBytes,
+    title: 'Bytes per weight when quantized',
+    can: 'You can compute weight bytes at FP16, FP8 and INT4 with scale overhead, and the decode speedup that bandwidth gives.',
+    track: 't4',
+    kind: 'procedure',
+    lessons: ['t4.l7'],
+    requires: [KC.decodeBandwidth],
+    gen: ['memory'],
     since,
   },
 ]
