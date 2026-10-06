@@ -12,7 +12,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { LabAbiError, LabTimeoutError, LabTrapError } from '@/lib/wasm-lab'
-import { validateLabInWorker } from '@/lib/lab-worker'
+import { runLab, validateLabInWorker } from '@/lib/lab-worker'
 import { describeFleetError, openPoolSession, type PoolSession } from '@/lib/fleet-session'
 import {
   makeScript,
@@ -23,7 +23,9 @@ import {
 import type { PoolOpResult } from '@/workers/fleet-protocol'
 import { cn } from '@/lib/utils'
 import { validateModule } from '@/pages/fleet/drivers'
+import { KIND_SLOT } from '@/lib/engine/slots'
 import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet/slots'
+import EngineSchematic from '@/components/engine/EngineSchematic'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import RouteFallback from '@/components/RouteFallback'
 
@@ -46,24 +48,40 @@ const RealEnginePanel = lazy(() => import('@/pages/fleet/RealEnginePanel'))
 export default function Fleet() {
   const [mode, setMode] = useState<'engine' | 'cluster' | 'real' | 'pool'>('engine')
   const slots = useSlots((s) => s.slots)
+  const installed = useSlots((s) => s.installed)
+  const ready = useSlots((s) => s.ready)
   const setSlot = useSlots((s) => s.setSlot)
+  const install = useSlots((s) => s.install)
   const [slotError, setSlotError] = useState<string | null>(null)
+  /* the kind being checked on fresh seeds, so a second drop waits and the page says what it is doing */
+  const [checking, setChecking] = useState<LabKind | null>(null)
   /* a module that stops responding in a panel: "reset with reference drivers" clears all three slots */
   const useReference = useCallback(() => {
     for (const kind of ['sched', 'mgr', 'queue'] as const) setSlot(kind, null)
   }, [setSlot])
   const inputsRef = useRef<Record<LabKind, HTMLInputElement | null>>({ sched: null, mgr: null, queue: null })
 
+  /* a drop is admitted (loadable, bridge, right lab), graded on fresh seeds in the lab worker, then installed
+     through the store: it survives a reload (docs/specs/wave-2.md §10.2) */
   const onSlotFile = useCallback(async (kind: LabKind, file: File) => {
     setSlotError(null)
-    const bytes = await file.arrayBuffer()
-    const res = await validateModule(bytes, SLOT_WANT_LAB[kind])
-    if (!res.ok) {
-      setSlotError(`${SLOT_LABEL[kind]}: ${res.title} — ${res.detail}`)
-      return
+    setChecking(kind)
+    try {
+      const bytes = await file.arrayBuffer()
+      const res = await validateModule(bytes, SLOT_WANT_LAB[kind])
+      if (!res.ok) {
+        setSlotError(`${SLOT_LABEL[kind]}: ${res.title} — ${res.detail}`)
+        return
+      }
+      const report = await runLab(bytes, { seeds: 'fresh' })
+      const out = await install({ slot: KIND_SLOT[kind], report, bytes, name: file.name })
+      if (!out.ok) setSlotError(`${SLOT_LABEL[kind]}: ${out.message}${out.detail ? ` — ${out.detail}` : ''}`)
+    } catch (e) {
+      setSlotError(`${SLOT_LABEL[kind]}: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setChecking(null)
     }
-    setSlot(kind, { bytes, fileName: file.name, lab: SLOT_WANT_LAB[kind] })
-  }, [setSlot])
+  }, [install])
 
   return (
     <div className="mx-auto max-w-app px-6 pb-24 pt-16 lg:px-12">
@@ -78,7 +96,7 @@ export default function Fleet() {
             Your stack, live traffic, N workers
           </h1>
           <p className="mt-3 max-w-2xl text-body-lg text-text-2">
-            Upload your Forge modules once — they run everywhere.{' '}
+            Install your Forge modules once — they stay on this device and run everywhere.{' '}
             <span className="text-text-1">Engine</span>: one engine, your scheduler + block manager +
             intake queue vs the reference stack. <span className="text-text-1">Cluster</span>: your stack
             replicated across workers behind a router. <span className="text-text-1">Pool</span>: your
@@ -101,20 +119,39 @@ export default function Fleet() {
         </div>
       </div>
 
-      {/* shared upload slots */}
+      <section aria-labelledby="fleet-engine-title" className="mt-8">
+        <h2 id="fleet-engine-title" className="font-display text-h3 text-text-1">
+          your engine
+        </h2>
+        <EngineSchematic installed={installed} className="mt-4" />
+      </section>
+
+      {/* shared slots: installed modules (persisted) fill the three the panels drive */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         {(['sched', 'mgr', 'queue'] as const).map((kind) => (
-          <span key={kind}>
+          <span key={kind} className="inline-flex items-center gap-1.5">
             <button
               onClick={() => inputsRef.current[kind]?.click()}
+              disabled={checking !== null}
               className={cn(
                 'inline-flex items-center gap-2 rounded-md border px-3.5 py-2 font-mono text-[12px] transition-colors',
                 slots[kind] ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line bg-surface-1 text-text-2 hover:border-accent/50 hover:text-text-1',
               )}
             >
               <Upload className="h-3.5 w-3.5" />
-              {SLOT_LABEL[kind]}: {slots[kind] ? 'yours ✓' : 'reference'}
+              {checking === kind ? `${SLOT_LABEL[kind]}: checking on fresh seeds…` : `${SLOT_LABEL[kind]}: ${slots[kind] ? 'yours ✓' : 'reference'}`}
             </button>
+            {slots[kind] && (
+              <button
+                type="button"
+                onClick={() => setSlot(kind, null)}
+                disabled={checking !== null}
+                aria-label={`Use the reference ${SLOT_LABEL[kind]} instead of yours`}
+                className="rounded border border-line px-2 py-1.5 font-mono text-[11px] text-text-3 transition-colors hover:text-text-1 disabled:opacity-40"
+              >
+                use reference
+              </button>
+            )}
             <input
               ref={(el) => {
                 inputsRef.current[kind] = el
@@ -130,13 +167,15 @@ export default function Fleet() {
             />
           </span>
         ))}
-        {slotError && <span className="font-mono text-[11px] text-danger">{slotError}</span>}
+      </div>
+      <div role="status" className="mt-2 font-mono text-[11px] text-danger empty:mt-0">
+        {slotError}
       </div>
 
       <div className="mt-6">
         <ErrorBoundary label="this panel" resetKey={mode}>
           <Suspense fallback={<RouteFallback label="loading panel" />}>
-            {mode === 'engine' ? <EnginePanel slots={slots} onUseReference={useReference} /> : mode === 'cluster' ? <ClusterPanel slots={slots} onUseReference={useReference} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+            {!ready ? <RouteFallback label="loading your engine" /> : mode === 'engine' ? <EnginePanel slots={slots} onUseReference={useReference} /> : mode === 'cluster' ? <ClusterPanel slots={slots} onUseReference={useReference} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
           </Suspense>
         </ErrorBoundary>
       </div>
