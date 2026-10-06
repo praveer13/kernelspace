@@ -19,8 +19,9 @@ export const STATIC_GROUPS: readonly SearchGroup[] = ['Pages', 'Tracks', 'Simula
 /** Rows are positional tuples: the JSON ships once, so it drops the key names. */
 export type LessonRow = [id: string, title: string, hook: string, h2s: string[]]
 /**
- * `can` is the competence statement without "You can ". `anchor` is the id of the H2 the KC is introduced
- * under, or '' to open the lesson at the top. `claimIds` are the claims its numbers rest on.
+ * `can` is the competence statement without "You can ", or '' when the build drops it to fit the budget (the crumb
+ * then names the lesson). `anchor` is the id of the H2 the KC is introduced under, or '' to open the lesson at the
+ * top. `claimIds` are the claims its numbers rest on.
  */
 export type KcRow = [id: string, title: string, can: string, lessonId: string, anchor: string, claimIds: string[]]
 export type ClaimRow = [id: string, label: string, value: number | string, unit: string]
@@ -60,6 +61,7 @@ export const claimPath = (id: string) => `/freshness?tab=claims#${id}`
  * the vLLM block size).
  */
 export function indexItems(index: SearchIndex): SearchItem[] {
+  const lessonTitles = new Map(index.lessons.map(([id, title]) => [id, title]))
   const kcTitlesByLesson = new Map<string, string[]>()
   const kcTitlesByClaim = new Map<string, string[]>()
   for (const [, title, , lessonId, , claimIds] of index.kcs) {
@@ -79,9 +81,9 @@ export function indexItems(index: SearchIndex): SearchItem[] {
       id: `kc-${id}`,
       group: 'Concepts',
       title,
-      crumb: `concept · ${label(lessonId)} · you can ${can}`,
+      crumb: `concept · ${label(lessonId)} · ${can ? `you can ${can}` : (lessonTitles.get(lessonId) ?? '')}`,
       to: `/lesson/${lessonId}${anchor ? `#${anchor}` : ''}`,
-      keywords: [can, id],
+      keywords: can ? [can, id] : [id],
     })),
     ...index.claims.map<SearchItem>(([id, name, value, unit]) => ({
       id: `claim-${id}`,

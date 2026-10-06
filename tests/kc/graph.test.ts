@@ -13,7 +13,7 @@ import {
   topoOrder,
 } from '../../src/lib/kc/graph'
 import type { Kc } from '../../src/lib/kc/types'
-import { MAX_KCS } from '../../scripts/verify-kc'
+import { MAX_KCS, NOTIONAL_TRACKS } from '../../scripts/verify-kc'
 
 const kc = (id: string, requires: string[] = [], extra: Partial<Kc> = {}): Kc => ({
   id,
@@ -27,13 +27,13 @@ const kc = (id: string, requires: string[] = [], extra: Partial<Kc> = {}): Kc =>
   ...extra,
 })
 
-describe('the v1 graph', () => {
+describe('the graph', () => {
   test('defines every contract id from ids.ts', () => {
     for (const id of Object.values(KC)) expect(kcById(id)?.id).toBe(id)
   })
 
-  test('is under the 200 cap (§4.1), with unique well-formed ids', () => {
-    expect(KCS.length).toBeGreaterThanOrEqual(66)
+  test('is about 155 KCs and under the 200 cap (wave-2 §4.1), with unique well-formed ids', () => {
+    expect(KCS.length).toBeGreaterThanOrEqual(145)
     expect(KCS.length).toBeLessThanOrEqual(MAX_KCS)
     expect(new Set(KCS.map((k) => k.id)).size).toBe(KCS.length)
     for (const k of KCS) expect(k.id).toMatch(/^(r|t[0-7])\.[a-z0-9]+(-[a-z0-9]+)*$/)
@@ -64,6 +64,20 @@ describe('the v1 graph', () => {
     for (const [a, b] of pairs) expect(kcById(a)?.confusable).toContain(b)
   })
 
+  test('the eight T3-T7 confusable pairs of 2a-11 are present', () => {
+    const pairs: [string, string][] = [
+      [KC.goodputCurve, KC.paretoFrontier],
+      ['t3.futures-state-machines', 't3.wakers-executor'],
+      ['t4.occupancy', 't4.coalescing'],
+      [KC.batchingThroughput, KC.goodput],
+      [KC.prefillDecodeInterference, 't5.pd-disaggregation'],
+      [KC.speculativeDecoding, KC.specAcceptance],
+      [KC.kvReadsVsCapacity, KC.moeActiveParams],
+      [KC.epEconomics, KC.costPerMtok],
+    ]
+    for (const [a, b] of pairs) expect(kcById(a)?.confusable).toContain(b)
+  })
+
   test('six core thresholds in THRESHOLD_KCS order of their lessons, plus the Rust anchor', () => {
     const core = KCS.filter((k) => k.threshold === 'core').map((k) => k.id)
     expect(new Set(core)).toEqual(new Set(THRESHOLD_KCS))
@@ -79,10 +93,45 @@ describe('the v1 graph', () => {
     expect(KCS.filter((k) => k.lessons.length === 0).map((k) => k.id)).toEqual([KC.alignment])
   })
 
-  test('every R and T0-T2 lesson is taught by at least two KCs, so Lesson.kcs can hold 2-3', () => {
-    for (const l of ALL_LESSONS.filter((x) => ['r', 't0', 't1', 't2'].includes(x.trackId))) {
+  test('every lesson is taught by at least two KCs, so Lesson.kcs can hold 2-3', () => {
+    for (const l of ALL_LESSONS) {
       expect({ lesson: l.id, n: KCS.filter((k) => k.lessons.includes(l.id)).length >= 2 }).toEqual({ lesson: l.id, n: true })
     }
+  })
+
+  test('every T3-T7 lesson has 2+ KCs its Lesson.kcs may name, i.e. introduced there or earlier (wave-2 §4.1, §4.4)', () => {
+    const order = new Map(ALL_LESSONS.map((l, i) => [l.id, i]))
+    const t37 = ALL_LESSONS.filter((x) => ['t3', 't4', 't5', 't6', 't7'].includes(x.trackId))
+    expect(t37).toHaveLength(39)
+    for (const l of t37) {
+      const at = order.get(l.id) as number
+      const nameable = KCS.filter((k) => k.lessons.includes(l.id) && (order.get(k.lessons[0]) as number) <= at)
+      expect({ lesson: l.id, ok: nameable.length >= 2 }).toEqual({ lesson: l.id, ok: true })
+    }
+  })
+
+  test('no T3-T7 lesson introduces more than 3 KCs beyond the contract ids (merge siblings, wave-2 §4.1)', () => {
+    const contract = new Set<string>(Object.values(KC))
+    const over = ALL_LESSONS.filter((l) => ['t3', 't4', 't5', 't6', 't7'].includes(l.trackId))
+      .map((l) => ({ lesson: l.id, n: KCS.filter((k) => k.lessons[0] === l.id && !contract.has(k.id)).length }))
+      .filter((x) => x.n > 3)
+    expect(over).toEqual([])
+  })
+
+  test('t6.l5 revisits t4.decode-bandwidth instead of a Blackwell-only copy of it (2a-11 review)', () => {
+    expect(kcById(KC.decodeBandwidth)?.lessons).toContain('t6.l5')
+    expect(KCS.filter((k) => k.lessons[0] === 't6.l5').map((k) => k.id).sort()).toEqual([KC.fp4Capacity, 't6.nvlink-domain'])
+  })
+
+  test('no requires edge points at a KC introduced later in curriculum order', () => {
+    const order = new Map(ALL_LESSONS.map((l, i) => [l.id, i]))
+    const index = indexKcs(KCS)
+    const late = KCS.flatMap((k) =>
+      k.lessons.length === 0
+        ? []
+        : k.requires.filter((r) => (order.get(index.get(r)?.lessons[0] ?? '') ?? -1) > (order.get(k.lessons[0]) as number)).map((r) => `${k.id} → ${r}`),
+    )
+    expect(late).toEqual([])
   })
 
   test('each R lesson has a T-side dependant (§4.3), and the pairing runs in R order', () => {
@@ -123,8 +172,9 @@ describe('the v1 graph', () => {
     }
   })
 
-  test('four notional machines, one per Wave 1 track, 3-6 rules and 2-4 ignores', () => {
-    expect(KC_GRAPH.notional.map((n) => n.track).sort()).toEqual(['r', 't0', 't1', 't2'])
+  test('nine notional machines, one per track (wave-2 §4.3), 3-6 rules and 2-4 ignores', () => {
+    expect(NOTIONAL_TRACKS).toHaveLength(9)
+    expect(KC_GRAPH.notional.map((n) => n.track).sort()).toEqual([...NOTIONAL_TRACKS].sort())
     for (const n of KC_GRAPH.notional) {
       expect(n.rules.length).toBeGreaterThanOrEqual(3)
       expect(n.rules.length).toBeLessThanOrEqual(6)

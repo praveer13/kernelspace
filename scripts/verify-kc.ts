@@ -9,7 +9,7 @@
  *              ref-map), a self-edge;
  *   shape      a cycle in requires or in requires ∪ contains; an asymmetric confusable set or one with
  *              more than 3 entries; thresholds other than THRESHOLD_KCS (6 core) plus RUST_ANCHOR_KC;
- *              a notional card outside 3-6 rules and 2-4 ignores, or a Wave 1 track without one;
+ *              a notional card outside 3-6 rules and 2-4 ignores, or a track without exactly one;
  *   coverage   in a lesson that sets Lesson.kcs: an untagged checkpoint item, Lesson.kcs outside 1-3,
  *              naming a KC that does not list the lesson, or naming a KC first taught in a later lesson
  *              (planTicket and the card queue read Lesson.kcs as "taught here", so a T4 KC would reach a T0 learner); a KC in some Lesson.kcs with fewer than 2
@@ -38,8 +38,8 @@ export const MAX_KCS = 200
 export const KC_ID = /^(r|t[0-7])\.[a-z0-9]+(-[a-z0-9]+)*$/
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const KINDS = new Set(['concept', 'procedure', 'fact', 'skill'])
-/** Tracks that need a notional-machine card in Wave 1 (§4.8). */
-const NOTIONAL_TRACKS = ['r', 't0', 't1', 't2']
+/** Tracks that need a notional-machine card: R and T0-T2 since Wave 1 (§4.8), all nine since wave-2 §4.3. */
+export const NOTIONAL_TRACKS = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']
 /**
  * Families the specs commit to (wave-1 §5.5; wave-2 §4.2 and §5) that land in parallel with this graph. Naming one before
  * its module exists is a warning; once the module exists, its Gen.kcs must agree with the graph.

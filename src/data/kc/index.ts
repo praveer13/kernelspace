@@ -1,7 +1,8 @@
 /**
- * The KC graph (docs/specs/wave-1.md §4 and wave-2.md §4; PLAN-100X V4): the 66 Wave 1 KCs over R, T0-T2 and
- * the T4/T5 KCs that Boot, the three generator families and the Wave 1 sims assess, plus the 31 Wave 2
- * contract KCs other PRs tag (task 2a-06). 2a-11 fills in the rest of T3-T7.
+ * The KC graph (docs/specs/wave-1.md §4 and wave-2.md §4; PLAN-100X V4) over all nine tracks: the 66 Wave 1
+ * KCs over R, T0-T2 and the T4/T5 KCs that Boot, the three generator families and the Wave 1 sims assess, the
+ * 31 Wave 2 contract KCs other PRs tag (task 2a-06), and the rest of T3-T7 at 2-3 per lesson (task 2a-11),
+ * with one notional machine per track.
  *
  * Static content, CI-verified by `bun run verify:kc`. The learner model never stores KC state; it
  * derives it from the ledger through src/lib/kc/resolve.ts.
