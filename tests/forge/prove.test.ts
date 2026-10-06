@@ -218,12 +218,12 @@ describe('fresh questions after 24 h', () => {
 
 describe('the panel', () => {
   // React separates adjacent text nodes with comments; flatten them so the checks read like the page does.
-  const render = (props: Parameters<typeof ProveIt>[0]) => renderToString(createElement(ProveIt, props)).replaceAll('<!-- -->', '')
+  const render = (props: Omit<Parameters<typeof ProveIt>[0], 'bundle'>) => renderToString(createElement(ProveIt, { bundle: lab01, ...props })).replaceAll('<!-- -->', '')
 
   test('locked until the checks are green', () => {
     const html = render({ unlocked: false, history: [] })
     expect(html).toContain('data-prove="locked"')
-    expect(html).toContain('Opens when all six checks are green')
+    expect(html).toContain('Opens when every required check is green')
     expect(html).not.toContain('<textarea')
   })
 

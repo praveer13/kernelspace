@@ -101,6 +101,15 @@ export interface RunResult {
   summary: string
 }
 
+/** One change the Modify step offers: the learner predicts the run it makes, then runs it. */
+export interface RunDial {
+  id: string
+  /** What the change is, e.g. "turn coalescing off". */
+  label: string
+  /** A whole config, not a patch: the dial's run is `run(config)`. */
+  config: RunConfig
+}
+
 /**
  * The in-browser reference of the Run and Modify steps, as data: a labelled stand-in, never the lab's own check.
  * `run` is pure and deterministic in `config`.
@@ -117,6 +126,12 @@ export interface ReferenceRunSpec {
   /** The Run step's second strip, and often the subject of the first prediction. */
   baseline?: RunConfig
   run: (config: RunConfig) => RunResult
+  /**
+   * The Modify step: `lead` introduces the reference ("Change one thing about the reference run (...)."), and each
+   * dial is one change to it. The step's evidence is the bundle's `modify` item, graded against the dial's run `value`.
+   * A lab without dials shows the step with nothing to change.
+   */
+  modify?: { lead: string; dials: readonly RunDial[] }
 }
 
 /* ------------------------------------------------------------------ */

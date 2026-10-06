@@ -48,13 +48,13 @@ describe('ForgeLab writes what the run earned, and a reference module nothing', 
 })
 
 describe('what ForgeLab mounts', () => {
-  test('lab 01 mounts the walk (with the drop zone in Make), the hint ladder and Prove it', () => {
+  test('a lab with a bundle mounts the walk (with the drop zone in Make), the hint ladder and Prove it, each given the bundle', () => {
     expect(page).toContain("import('@/components/forge/PrimmPanel')")
     expect(page).toContain("import('@/components/forge/HintLadder')")
     expect(page).toContain("import('@/components/forge/ProveIt')")
-    expect(page).toContain('<HintLadder reports={reports} />')
-    expect(page).toMatch(/<ProveIt unlocked=\{done \|\| requiredReportPassed\} \/>/)
-    expect(page).toMatch(/<PrimmPanel[\s\S]*\{doing\}[\s\S]*<\/PrimmPanel>/)
+    expect(page).toContain('<HintLadder bundle={bundle} reports={reports} />')
+    expect(page).toMatch(/<ProveIt bundle=\{bundle\} unlocked=\{done \|\| requiredReportPassed\} \/>/)
+    expect(page).toMatch(/<PrimmPanel\s+bundle=\{bundle\}[\s\S]*\{doing\}[\s\S]*<\/PrimmPanel>/)
   })
 
   test('the walk is a lazy chunk whose fallback is the same drop-zone content', () => {

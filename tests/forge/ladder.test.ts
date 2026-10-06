@@ -519,7 +519,7 @@ describe('the walkthrough to the first divergence', () => {
 
 describe('HintLadder renders', () => {
   const html = (reports: LabRunReport[], acks: Record<string, string> = {}) =>
-    renderToStaticMarkup(createElement(MemoryRouter, null, createElement(HintLadderView, { reports, acks, onAck: () => {}, now: () => 0 })))
+    renderToStaticMarkup(createElement(MemoryRouter, null, createElement(HintLadderView, { bundle: lab01, reports, acks, onAck: () => {}, now: () => 0 })))
   const ISO = '2026-10-04T09:00:00.000Z'
   const allAcks = (check: string) => Object.fromEntries((['R0', 'R1', 'R2', 'R3', 'R4', 'bottom'] as const).map((r) => [hintRef(check, r), ISO]))
 
