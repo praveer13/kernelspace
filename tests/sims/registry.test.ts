@@ -8,7 +8,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import { KC } from '../../src/data/kc/ids'
-import { buildRegistry, registry, resolveTasks } from '../../src/lib/sims/registry'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
+import { ExerciseView } from '../../src/pages/lesson/exercise'
+import type { ExerciseBlock } from '../../src/data/lessons/types'
+import { PENDING_TASK_IDS, buildRegistry, planExercise, registry, resolveTasks } from '../../src/lib/sims/registry'
 import type { SimTaskDef } from '../../src/lib/sims/types'
 
 const ROOT = join(import.meta.dir, '..', '..')
@@ -186,8 +191,10 @@ describe('lessons list registry tasks', () => {
     for (const lesson of ALL_LESSONS) {
       for (const b of lesson.blocks) {
         if (b.type !== 'exercise' || b.taskIds === undefined) continue
-        const found = resolveTasks(b.simId, b.machine, b.taskIds, reg)
-        expect(found.map((t) => t.id)).toEqual(b.taskIds)
+        // ids the zoo will register (PENDING_TASK_IDS) are listed ahead of their sim; everything else must exist
+        const expected = b.taskIds.filter((id) => !PENDING_TASK_IDS.includes(id))
+        const found = resolveTasks(b.simId, b.machine, expected, reg)
+        expect(found.map((t) => t.id)).toEqual(expected)
       }
     }
     for (const t of reg.tasks) {
@@ -225,5 +232,82 @@ describe('lessons list registry tasks', () => {
       't-sched-fifo',
     ])
     expect(resolveTasks('sim-allocator', 'rust', undefined, reg).map((t) => t.id)).toContain('t-rust-move')
+  })
+})
+
+/** Pending ids are listed in `PENDING_TASK_IDS` until the zoo's tasks exist (wave-2.md §2.3, §11.4). */
+describe('pending task ids', () => {
+  const ZOO = ['zoo.mla-ratio', 'zoo.swa-flat', 'zoo.dsa-reads', 'zoo.linear-state', 'zoo.hybrid-share', 'zoo.gdn-prefix']
+  /** What the lesson test accepts for a block's ids. */
+  const unresolved = (b: ExerciseBlock, r = reg) =>
+    b.taskIds === undefined ? [] : b.taskIds.filter((id) => !PENDING_TASK_IDS.includes(id) && resolveTasks(b.simId, b.machine, [id], r).length === 0)
+  /** The staleness rule: a pending id that some registry has registered. */
+  const stale = (r = reg) => PENDING_TASK_IDS.filter((id) => r.byId(id) !== undefined)
+  const zoo = (over: Partial<ExerciseBlock> = {}): ExerciseBlock => ({
+    type: 'exercise',
+    simId: 'sim-kv',
+    machine: 'zoo',
+    title: 'The zoo',
+    tasks: [],
+    taskIds: ZOO,
+    ...over,
+  })
+  /** A registry with one real sim-kv task, as the production one has. */
+  const withKv = buildRegistry({ '/src/components/sims/x.tasks.ts': { T: [outcome({ id: 'kv.gqa', simId: 'sim-kv', title: 'GQA' })] } })
+
+  test('the list holds the six zoo task ids of §11.4', () => {
+    expect([...PENDING_TASK_IDS].sort()).toEqual([...ZOO].sort())
+  })
+
+  test('an exercise block may list a pending id, and an unknown id that is not pending still fails', () => {
+    expect(unresolved(zoo())).toEqual([])
+    expect(unresolved(zoo({ taskIds: ['kv.gqa', 'zoo.mla-ratio'] }), withKv)).toEqual([])
+    expect(unresolved(zoo({ taskIds: ['kv.gqa', 'zoo.nope'] }), withKv)).toEqual(['zoo.nope'])
+  })
+
+  test('the list goes stale, and so fails, the moment a pending id is registered', () => {
+    expect(stale()).toEqual([])
+    const registered = buildRegistry({
+      '/src/components/sims/kvZoo.tasks.ts': { T: [outcome({ id: 'zoo.mla-ratio', simId: 'sim-kv', machine: 'zoo', title: 'MLA ratio' })] },
+    })
+    expect(stale(registered)).toEqual(['zoo.mla-ratio'])
+  })
+
+  test('planExercise: all ids pending hides the block', () => {
+    expect(planExercise('sim-kv', 'zoo', ZOO, withKv)).toEqual({ show: 'hidden' })
+    expect(planExercise('sim-kv', 'zoo', ['zoo.gdn-prefix'], withKv)).toEqual({ show: 'hidden' })
+  })
+
+  test('planExercise: pending and unknown ids are dropped, what remains runs inline, in the given order', () => {
+    expect(planExercise('sim-kv', undefined, ['zoo.mla-ratio', 'kv.gqa', 'kv.nope'], withKv)).toEqual({ show: 'inline', taskIds: ['kv.gqa'] })
+  })
+
+  test('planExercise: no id left, or another sim\'s id, falls back to the link card', () => {
+    expect(planExercise('sim-kv', undefined, ['kv.nope'], withKv)).toEqual({ show: 'card' })
+    expect(planExercise('sim-kv', undefined, ['zoo.mla-ratio', 'kv.nope'], withKv)).toEqual({ show: 'card' })
+    expect(planExercise('sim-roofline', undefined, ['kv.gqa'], withKv)).toEqual({ show: 'card' })
+    expect(planExercise('sim-kv', undefined, [], withKv)).toEqual({ show: 'card' })
+    expect(planExercise('sim-kv', undefined, undefined, withKv)).toEqual({ show: 'card' })
+  })
+
+  const html = (block: ExerciseBlock, r = withKv) =>
+    renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ExerciseView, { block, trackColor: '#fff', lessonId: 't5.l4', tasks: r })))
+
+  test('ExerciseView renders nothing for a block whose ids are all pending', () => {
+    expect(html(zoo())).toBe('')
+  })
+
+  test('ExerciseView drops unknown ids and mounts the sim inline with the rest', () => {
+    const out = html(zoo({ machine: undefined, taskIds: ['zoo.mla-ratio', 'kv.gqa', 'kv.nope'] }))
+    expect(out).toContain('data-inline=')
+    expect(out).toContain('data-exercise="sim-kv"')
+  })
+
+  test('ExerciseView falls back to the link card when no id remains', () => {
+    const out = html(zoo({ machine: undefined, tasks: ['Open the sim'], taskIds: ['zoo.mla-ratio', 'kv.nope'] }))
+    expect(out).not.toContain('data-inline')
+    expect(out).toContain('Guided tasks')
+    expect(out).toContain('Open the sim')
+    expect(html(zoo({ machine: undefined, tasks: ['Open the sim'], taskIds: undefined }))).toContain('Guided tasks')
   })
 })

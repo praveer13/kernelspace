@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { checkFamily, checkHashes, genSeeds, isRound, lintLiterals, type HashRows } from '../../scripts/verify-generators'
+import { checkFamily, checkHashes, genSeeds, isRound, lintLiterals, readHashRows } from '../../scripts/verify-generators'
 import { claimRef, partsText } from '../../src/lib/items/core'
 import { KC } from '../../src/data/kc/ids'
 import gen from '../../src/lib/items/families/frag'
@@ -10,7 +10,7 @@ import type { Instance, Level, Response } from '../../src/lib/items/types'
 const LEVELS = [0, 1, 2, 3] as const
 const SEEDS = genSeeds(200)
 const FAMILY_FILE = new URL('../../src/lib/items/families/frag.ts', import.meta.url)
-const hashFixture = JSON.parse(readFileSync(new URL('../fixtures/items/hashes.json', import.meta.url), 'utf8')) as HashRows
+const hashFixture = readHashRows('frag') // tests/fixtures/items/hashes/frag.json
 
 const nums = (s: unknown): number[] => String(s).split(',').map(Number)
 const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0)

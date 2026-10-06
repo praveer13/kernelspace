@@ -54,6 +54,9 @@ jobs:
       - run: bun run verify:mentor
       - run: bun run verify:search-index
 
+      # Wave 2 (docs/specs/wave-2.md §15.2): a stub that prints "pending: 2c-04" until the compile bank lands.
+      - run: bun run verify:rust-items
+
       # Ledger core properties (spec docs/specs/ledger-v3.md §13): pure, no browser needed.
       - run: bun run test
 

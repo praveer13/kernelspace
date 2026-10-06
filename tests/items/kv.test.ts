@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { checkFamily, checkHashes, genSeeds, lintLiterals, responseFromSolution, type HashRows } from '../../scripts/verify-generators'
+import { checkFamily, checkHashes, genSeeds, lintLiterals, readHashRows, responseFromSolution } from '../../scripts/verify-generators'
 import { byId, claimNumber } from '../../src/data/claims'
 import { BOOT, CHAT_TOKENS } from '../../src/lib/boot/model'
 import { partsText } from '../../src/lib/items/core'
@@ -41,7 +41,7 @@ describe('kv: the §5.6 suite', () => {
   })
 
   test('its hash rows match the fixture', () => {
-    const rows = JSON.parse(readFileSync(new URL('../fixtures/items/hashes.json', import.meta.url), 'utf8')) as HashRows
+    const rows = readHashRows('kv') // tests/fixtures/items/hashes/kv.json
     expect(checkHashes(kv, rows)).toEqual([])
     expect(Object.keys(rows.kv).sort()).toEqual(kv.variants.map((v) => v.id).sort())
   })

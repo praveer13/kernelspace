@@ -3,7 +3,7 @@
  * Renders every ContentBlock type: prose (markdown-lite), code compare tabs,
  * five callout variants, step-through SVG diagrams, statlines, quizzes,
  * exercise embed cards, isomorphism panels, collapsible deep-dives, and the
- * Wave 1 prequestion, play and exit-ticket blocks (lazy). ProseView, DiagramView
+ * Wave 1 prequestion, play and exit-ticket blocks and the Wave 2 item block (lazy). ProseView, DiagramView
  * and ExerciseView live in their own modules beside this one.
  */
 
@@ -41,6 +41,8 @@ import { ProseView } from './prose'
 const Prequestions = lazy(() => import('@/components/blocks/Prequestions'))
 const PlayBlock = lazy(() => import('@/components/blocks/PlayBlock'))
 const ExitTicketBlock = lazy(() => import('@/components/learner/ExitTicketBlock'))
+// Wave 2: generated items inside a lesson (a stub until 2a-12).
+const ItemBlock = lazy(() => import('@/components/blocks/ItemBlock'))
 
 /* ------------------------------------------------------------------ */
 /* callout (lesson.md §2.3, design.md §9.9)                            */
@@ -324,6 +326,12 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
       return (
         <Suspense fallback={<BlockFallback />}>
           <PlayBlock lessonId={lesson.id} playId={block.playId} title={block.title} trackColor={trackColor} />
+        </Suspense>
+      )
+    case 'item':
+      return (
+        <Suspense fallback={<BlockFallback />}>
+          <ItemBlock lessonId={lesson.id} blockIndex={lesson.blocks.indexOf(block)} block={block} trackColor={trackColor} />
         </Suspense>
       )
     default:

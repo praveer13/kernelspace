@@ -137,7 +137,14 @@ export function partText(p: PromptPart): string {
     }
     case 'code':
       return p.code
+    case 'table':
+      return `${p.caption}\n${[p.columns, ...p.rows.map((r) => r.map(cellText))].map((r) => r.join(' | ')).join('\n')}`
   }
+}
+
+/** A table cell as shown: text as written, numbers with thousands separators. */
+export function cellText(c: string | number): string {
+  return typeof c === 'number' ? formatNumber(c) : c
 }
 
 export function partsText(parts: readonly PromptPart[]): string {

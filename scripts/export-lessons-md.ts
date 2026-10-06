@@ -16,16 +16,28 @@ import { TRACKS } from '../src/lib/tracks'
 
 const SITE = 'https://kernelspace.naigap.com'
 
-function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number, firstDiagram: number): string {
+export function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number, firstDiagram: number, firstAlign: number): string {
   switch (b.type) {
     case 'prose':
     case 'deepdive':
       return b.md
     case 'code': {
-      if (b.tabs?.length) {
-        return b.tabs.map((t) => `**${t.label}**\n\n\`\`\`${t.lang}\n${t.code}\n\`\`\``).join('\n\n')
-      }
-      return `\`\`\`${b.lang ?? ''}\n${b.code ?? ''}\n\`\`\``
+      const main = b.tabs?.length
+        ? b.tabs.map((t) => `**${t.label}**\n\n\`\`\`${t.lang}\n${t.code}\n\`\`\``).join('\n\n')
+        : `\`\`\`${b.lang ?? ''}\n${b.code ?? ''}\n\`\`\``
+      // F4 (wave-2.md §17.2): the familiar-language versions, then the alignment items without their keys.
+      // Align options use a salt of their own, so they never shift the lesson-wide quiz permutations.
+      const alt = [
+        b.alt?.java !== undefined ? `**Java**\n\n\`\`\`java\n${b.alt.java}\n\`\`\`` : '',
+        b.alt?.python !== undefined ? `**Python**\n\n\`\`\`python\n${b.alt.python}\n\`\`\`` : '',
+      ].filter(Boolean)
+      const align = (b.align ?? []).map((q, i) => {
+        const order = exportOrder(`${lessonId}#align`, firstAlign + i, q.options.length)
+        const opts = order.map((authored, j) => `- (o${j + 1}) ${q.options[authored]}`).join('\n')
+        return `**Align ${i + 1}. ${q.q}**\n\n${opts}`
+      })
+      const tail = align.length > 0 ? [`${align.join('\n\n')}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`] : []
+      return [main, ...alt, ...tail].join('\n\n')
     }
     case 'callout':
       return `> **[${b.variant}]** ${b.md.replace(/\n/g, '\n> ')}`
@@ -75,6 +87,8 @@ function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number, fir
     }
     case 'play':
       return `**Play: ${b.title}**\n\n_Interactive: ${SITE}/play/${b.playId}. Ask the learner to play it before discussing; the reference run stays hidden until the debrief._`
+    case 'item':
+      return `**Practice: ${b.title}**\n\n_Practice with new numbers in the lesson._`
     case 'exercise':
       return `**Exercise: ${b.title}**\n\n${b.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}${b.note ? `\n\n_${b.note}_` : ''}`
     case 'field-note':
@@ -84,7 +98,7 @@ function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number, fir
   }
 }
 
-function lessonToMd(l: Lesson): string {
+export function lessonToMd(l: Lesson): string {
   const track = TRACKS.find((t) => t.id === l.trackId)
   const header = [
     `# ${l.id.toUpperCase()} — ${l.title}`,
@@ -96,11 +110,13 @@ function lessonToMd(l: Lesson): string {
   ].join('\n')
   let questions = 0 // lesson-wide question index, the same count verify-items uses
   let diagrams = 0 // diagram index, salts the option order of predictAt gates
+  let aligns = 0 // alignment-item index across the lesson's code blocks
   const body = l.blocks
     .map((b) => {
-      const md = blockToMd(b, l.id, questions, diagrams)
+      const md = blockToMd(b, l.id, questions, diagrams, aligns)
       if (b.type === 'quiz') questions += b.questions.length
       if (b.type === 'diagram') diagrams++
+      if (b.type === 'code') aligns += b.align?.length ?? 0
       return md
     })
     .filter(Boolean)

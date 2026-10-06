@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import {
   checkFamily,
   checkHashes,
@@ -9,25 +9,23 @@ import {
   isRound,
   lintLiterals,
   literalSelfTest,
+  readAllHashRows,
   responseFromSolution,
-  type HashRows,
+  checkHashRows,
 } from '../../scripts/verify-generators'
-import { claimRef, finishInstance, instanceRev, instanceText, makeRng, partsText, resolveVariant, rngFor, seedFor } from '../../src/lib/items/core'
+import { cellText, claimRef, finishInstance, instanceRev, instanceText, makeRng, partsText, resolveVariant, rngFor, seedFor } from '../../src/lib/items/core'
 import { gradeResponse } from '../../src/lib/items/grade'
 import { familyIds, loadAllFamilies, loadFamily } from '../../src/lib/items/registry'
-import type { Gen, Instance, Level } from '../../src/lib/items/types'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import PromptView from '../../src/components/items/PromptView'
+import type { Gen, Instance, Level, PromptPart } from '../../src/lib/items/types'
 import { rev32, stableStringify } from '../../src/lib/ledger/stable'
 import { splitmix32u } from '../../src/lib/rng'
 import demo from './fixture-family'
 
 const FAMILY_DIR = new URL('../../src/lib/items/families/', import.meta.url)
-const hashFixture: HashRows = (() => {
-  try {
-    return JSON.parse(readFileSync(new URL('../fixtures/items/hashes.json', import.meta.url), 'utf8')) as HashRows
-  } catch {
-    return {}
-  }
-})()
+const hashFixture = readAllHashRows() // one file per family under tests/fixtures/items/hashes/
 
 describe('seeds and the rng', () => {
   test('seedFor is splitmix32u(base ^ imul(i + 1, golden))() and spreads', () => {
@@ -408,5 +406,111 @@ describe('the numeric-literal lint (§5.4)', () => {
   test('isRound: two significant digits or a power of two', () => {
     for (const n of [1, 12, 40, 99, 100, 1500, 20000, 4096, 128, 0.5, 0.25, 0, 64]) expect(isRound(n)).toBe(true)
     for (const n of [257, 123, 1234, 0.123, 4097, Number.NaN, Infinity]) expect(isRound(n)).toBe(false)
+  })
+})
+
+describe('framework scaffolding for the Wave 2 families (wave-2.md §5.1)', () => {
+  /** One variant at one level, so a deliberately slow make costs a fraction of a second. */
+  const capacity = demo.variants.find((v) => v.id === 'capacity')!
+  const slim: Gen = { ...demo, variants: [{ ...capacity, levels: [1] }] }
+  const spin = (ms: number) => {
+    const t0 = performance.now()
+    while (performance.now() - t0 < ms) {
+      // busy wait
+    }
+  }
+  const slow: Gen = { ...slim, make: (s, l, v) => (spin(3), demo.make(s, l, v)) }
+  const timed = (gen: Gen) => checkFamily(gen, { seeds: 20, cues: false }).problems.filter((p) => /p95/.test(p))
+
+  test('Gen.budgetMs replaces the 1 ms speed limit, and the failure names the limit in force', () => {
+    expect(timed(slim)).toEqual([])
+    expect(timed(slow).join('\n')).toMatch(/max 1 ms/)
+    expect(timed({ ...slow, budgetMs: 100 })).toEqual([])
+    expect(timed({ ...slow, budgetMs: 2 }).join('\n')).toMatch(/max 2 ms/)
+  })
+
+  /** Five units behind a hundred seeds: the instances repeat, as a bank's must. */
+  const fiveUnits = (extra: Partial<Gen>): Gen => ({ ...demo, ...extra, make: (s, l, v) => demo.make(s % 5, l, v) })
+  const distinct = (gen: Gen) => checkFamily(gen, { seeds: 100, speed: false, cues: false }).problems.filter((p) => /distinct/.test(p))
+
+  test('without Gen.bank, repeats fail the 50 % distinct rule', () => {
+    expect(distinct(fiveUnits({})).length).toBeGreaterThan(0)
+  })
+
+  test('Gen.bank asks for min(50 % of seeds, 80 % of units) distinct instances instead', () => {
+    expect(distinct(fiveUnits({ bank: { units: 5 } }))).toEqual([])
+    const short = distinct(fiveUnits({ bank: { units: 50 } }))
+    expect(short.length).toBeGreaterThan(0)
+    expect(short[0]).toMatch(/bank of 50 units/)
+  })
+
+  test('a family with hashFixture "deferred" and no fixture warns; one with rows is checked like any other', () => {
+    const deferred: Gen = { ...demo, hashFixture: 'deferred' }
+    expect(checkHashRows(deferred, {})).toEqual({ problems: [], warnings: [expect.stringContaining('deferred')] })
+    expect(checkHashRows(demo, {}).problems).toHaveLength(1)
+    expect(checkHashRows(demo, {}).warnings).toEqual([])
+    const h = hashFamily(demo)
+    expect(checkHashRows(deferred, { demo: { ...h, 'which-plane': 'deadbeef' } }).problems.join('\n')).toContain('demo/which-plane: output drifted')
+    expect(checkHashRows(deferred, { demo: h })).toEqual({ problems: [], warnings: [] })
+  })
+
+  test('hash fixtures are one file per family, and the old shared file is gone', () => {
+    const dir = new URL('../fixtures/items/hashes/', import.meta.url)
+    expect(existsSync(new URL('../fixtures/items/hashes.json', import.meta.url))).toBe(false)
+    const ids = readdirSync(dir).sort().map((f) => f.replace(/\.json$/, ''))
+    expect(ids.every((id) => /^[a-z][a-z0-9-]*$/.test(id))).toBe(true)
+    expect(ids).toEqual(expect.arrayContaining(['frag', 'kv', 'roofline']))
+    expect(Object.keys(hashFixture).sort()).toEqual(ids)
+  })
+
+  test('every shipped family has its own fixture unless it defers one', async () => {
+    for (const gen of await loadAllFamilies()) {
+      if (gen.hashFixture !== 'deferred') expect(Object.keys(hashFixture)).toContain(gen.id)
+    }
+  })
+})
+
+describe('PromptPart table and numbered code', () => {
+  const table: PromptPart = { t: 'table', caption: 'Pool telemetry', columns: ['minute', 'free blocks'], rows: [['t0', 12000], ['t1', 8.5]] }
+
+  test('a table has text for lints and screen-reader fallbacks: caption, columns, rows, numbers formatted', () => {
+    const text = partsText([table])
+    expect(text).toContain('Pool telemetry')
+    expect(text).toContain('minute | free blocks')
+    expect(text).toContain('t0 | 12,000')
+    expect(text).toContain('t1 | 8.5')
+    expect(cellText(131072)).toBe('131,072')
+    expect(cellText('n/a')).toBe('n/a')
+  })
+
+  test('the code part keeps its text whether or not it is numbered', () => {
+    expect(partsText([{ t: 'code', code: 'a\nb', lines: true, mark: 2 }])).toBe('a\nb')
+  })
+
+  const html = (parts: PromptPart[]) => renderToStaticMarkup(createElement(PromptView, { prompt: { stem: parts } }))
+
+  test('PromptView renders a table as a real <table> with a caption, header cells and body rows', () => {
+    const out = html([{ t: 'text', text: 'Read the telemetry. ' }, table])
+    expect(out).toMatch(/<table[^>]*><caption[^>]*>Pool telemetry<\/caption>/)
+    expect(out.match(/<th scope="col"/g)).toHaveLength(2)
+    expect(out.match(/<tbody>.*<\/tbody>/)![0].match(/<tr/g)).toHaveLength(2)
+    expect(out).toContain('12,000')
+    expect(out).toContain('aria-label="Pool telemetry"')
+    expect(out).toContain('tabindex="0"') // the scroll box takes focus so a keyboard can scroll it at 360 px
+  })
+
+  test('PromptView numbers the lines of a `lines` code part and marks exactly the `mark` line', () => {
+    const out = html([{ t: 'code', code: 'let a = 1;\n\nlet b = a;', lines: true, mark: 3 }])
+    expect([...out.matchAll(/data-line="(\d+)"/g)].map((m) => m[1])).toEqual(['1', '2', '3'])
+    expect(out.match(/data-marked/g)).toHaveLength(1)
+    expect(out).toMatch(/data-line="3"[^>]*data-marked=""/)
+    expect(out).toContain('(marked line)')
+    expect(out).toMatch(/>1<\/span>/)
+  })
+
+  test('a `mark` alone numbers the lines too, and a plain multi-line code part still has no numbers', () => {
+    expect(html([{ t: 'code', code: 'x\ny', mark: 1 }])).toContain('data-line="2"')
+    expect(html([{ t: 'code', code: 'x\ny' }])).not.toContain('data-line')
+    expect(html([{ t: 'code', code: 'x' }])).not.toContain('data-line')
   })
 })
