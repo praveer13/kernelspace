@@ -12,6 +12,49 @@ const lesson: Lesson = {
   simId: 'sim-memory',
   blocks: [
     {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'Two loops add up the same 8192 × 8192 matrix of doubles, stored row by row. One loop walks along each row. The other walks down each column. How do they compare?',
+          options: [
+            'About the same time, with the same additions done in a different order',
+            'The column walk is many times slower, with each load landing far from the last',
+            'The row walk is many times slower, with more loads issued back to back',
+            'The column walk is somewhat faster, with each column fetched once and then reused later',
+          ],
+          correct: [1],
+          why: [
+            'The arithmetic is identical, but the memory traffic is not. Order decides how many bytes of each fetched line get used, so the times differ a lot.',
+            'Right: down a column, consecutive loads are a full row apart, so each one fetches a new 64-byte line and uses 8 bytes of it. The gap is about 20x on this matrix.',
+            'Backwards. Walking along a row reads consecutive addresses, which is the case the cache and prefetcher are built for.',
+            'A column is not fetched once: the matrix is 512 MiB, far larger than any cache, so each line is evicted before the next column returns to it.',
+          ],
+          revealAt: 'Three hardware mechanisms doing the damage',
+          kcs: ['t0.stride-traversal'],
+        },
+        {
+          kind: 'choice',
+          q: 'In a row-major matrix with 8192 columns of doubles, how far apart in memory are A[i][j] and A[i+1][j]?',
+          options: [
+            '8 bytes, one element, with column neighbors stored side by side',
+            '64 bytes, one cache line, with each row start placed on a cache-line boundary',
+            '64 KiB, one whole row, with the element below sitting a full row length further along',
+            '4 KiB, one page, with each row starting on a fresh page of physical memory',
+          ],
+          correct: [2],
+          why: [
+            'Side by side is true along a row, where j grows. Down a column the next element is in the next row, not the next slot.',
+            'A line boundary has nothing to do with it. Rows are 8192 doubles long, which is many lines, so the jump is far larger than one line.',
+            'Right: a row is 8192 × 8 B = 65,536 B, and the element below sits one full row ahead. That jump is the stride of a column walk.',
+            'Rows do not start on page boundaries in general, and a row here is 64 KiB, sixteen pages long. The stride is the row length, not the page size.',
+          ],
+          revealAt: 'Memory is one-dimensional',
+          kcs: ['t0.stride-traversal', 't0.cache-lines'],
+        },
+      ],
+    },
+    {
       type: 'prose',
       md: `Here is a puzzle. Two programs sum every element of the same 8192×8192 matrix of doubles — 512 MiB of data. Identical algorithm, identical arithmetic, identical output. One finishes in about **0.4 seconds**; the other takes **8 seconds**. Twenty times slower, and the slow one is arguably the more "natural" way to write it.
 
@@ -165,6 +208,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
             'Compilers reduce the index math to an add, and it costs about the same in both loop orders. A few cycles of arithmetic cannot compete with ~100 ns per DRAM miss.',
             'Missing SIMD costs at most 4–8x on arithmetic, but this loop is memory-bound, so vector units would still sit idle waiting for lines. Stride, not vectorization, is the root cause.',
           ],
+          kcs: ['t0.stride-traversal', 't0.cache-lines'],
         },
         {
           q: 'Why does the row/column performance gap nearly vanish when the matrix shrinks to fit in L2 cache?',
@@ -183,6 +227,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
             'Right: the ~20x gap comes from DRAM misses on every access, about 8x the traffic plus TLB thrash. With everything in L2, both orders hit cache and run at similar speed: a hierarchy effect.',
             'Prefetchers work at any size, including on large arrays. Row order benefits from them on big matrices, which is part of why the gap exists there but disappears in L2.',
           ],
+          kcs: ['t0.locality', 't0.stride-traversal'],
         },
         {
           q: 'The hardware prefetcher helps most when your access pattern is…',
@@ -201,6 +246,7 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
             'Regular is not enough: hardware prefetchers generally stop at 4 KiB page boundaries and track small strides, so a one-page stride never trains a stream and every access is a cold miss.',
             'The next address is known only after the current node loads, and mainstream prefetchers do not follow pointers. Each hop is a serialized miss, which is why linked lists are slow.',
           ],
+          kcs: ['t0.stride-traversal'],
         },
         {
           q: 'Java\'s double[][] makes the column walk especially slow compared with a flat C buffer because…',
@@ -219,10 +265,39 @@ Hold the thought until T4–T5 and watch it pay off. A transformer's weight matr
             'Object headers are padded so element data stays 8-byte aligned, and an aligned double never straddles lines. The header costs a few bytes per row, not extra misses per access.',
             'Bounds checks are predictable compare-and-branch operations that the JIT often hoists out of loops. They cost cycles, while a DRAM miss costs hundreds, so checks cannot dominate.',
           ],
+          kcs: ['t0.locality', 't0.runtime-costs'],
         },
       ],
     },
   ],
+  kcs: ['t0.stride-traversal', 't0.locality'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Both loops add the same matrix. Explain why the column-by-column walk is about 20 times slower.',
+        model:
+          'In a row-major matrix, column neighbors sit one row apart, 64 KiB here. Each load pulls in a new 64-byte line and uses 8 bytes of it, and the line is evicted before reuse. The stride is too wide for the prefetcher to follow, so every access pays DRAM latency.',
+        ideas: [
+          'Column neighbors are a full row apart (64 KiB), so each load lands in a new cache line',
+          'Only 8 of the 64 bytes fetched are used, and the line is evicted before reuse',
+          'The stride is too wide for the prefetcher, so every access pays DRAM latency',
+        ],
+        kcs: ['t0.stride-traversal', 't0.cache-lines'],
+      },
+      {
+        prompt: 'The gap nearly disappears when the matrix shrinks to 512 × 512. Explain what that tells you about where the penalty comes from.',
+        model:
+          'A 512 × 512 matrix of doubles is 2 MiB, which fits in L2 on many chips. After the first touch every access hits cache in either order. So the penalty is a hierarchy effect, DRAM misses without reuse, not extra instructions: the same loop is fast or slow depending on where its data lives.',
+        ideas: [
+          'The small matrix fits in cache, so both orders hit cache after the first touch',
+          'The large gap is DRAM misses, not instruction count',
+          'Same code, different speed: the penalty depends on where the data lives and how it is visited',
+        ],
+        kcs: ['t0.locality', 't0.stride-traversal'],
+      },
+    ],
+  },
 }
 
 export default lesson

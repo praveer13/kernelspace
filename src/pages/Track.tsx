@@ -1,6 +1,7 @@
 /**
  * Track detail (track.md): layered hero with ghost glyph + blueprint tint,
- * outcomes, full lesson list with hooks, linked-sim cards, prev/next track.
+ * outcomes, the notional-machine card (wave-1.md §4.8), full lesson list with hooks and
+ * lesson states (done / read / reading, §8.3), linked-sim cards, prev/next track.
  */
 
 import { Link, Navigate, useParams } from 'react-router'
@@ -23,8 +24,60 @@ import { getTrack, TRACKS, CAPSTONE } from '@/lib/tracks'
 import { TRACK_EXTRAS, lessonsForTrack, simsForTrack, lessonPath } from '@/data/lessons'
 import type { TrackId } from '@/data/lessons/types'
 import LessonRow from '@/pages/lesson/LessonRow'
+import { NOTIONAL_MACHINES } from '@/data/kc/notional'
+import type { NotionalMachine } from '@/lib/kc/types'
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number]
+
+/**
+ * The track's notional machine (wave-1.md §4.8): the simplified machine a learner should be able to run in their
+ * head, and what it leaves out. Only R and T0-T2 have one in Wave 1.
+ */
+function NotionalCard({ machine, color }: { machine: NotionalMachine; color: string }) {
+  return (
+    <section
+      aria-labelledby="notional-title"
+      data-notional={machine.track}
+      className="mx-auto max-w-app px-6 pb-8 lg:px-12"
+    >
+      <div className="rounded-lg border border-line bg-surface-1 p-5 sm:p-6" style={{ borderLeftColor: color, borderLeftWidth: 3 }}>
+        <p className="font-mono text-label uppercase text-text-3">Notional machine</p>
+        <h2 id="notional-title" className="mt-1 font-display text-h3 text-text-1">
+          {machine.title}
+        </h2>
+        <p className="mt-1 max-w-measure text-body-sm text-text-2">
+          The simple machine this track asks you to run in your head. Check a prediction against it before you run anything.
+        </p>
+        <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <div>
+            <h3 className="font-mono text-label uppercase text-text-3">Its rules</h3>
+            <ol className="mt-2 space-y-2">
+              {machine.rules.map((r, i) => (
+                <li key={i} className="flex gap-3 text-body-sm text-text-2">
+                  <span aria-hidden className="mt-0.5 w-4 shrink-0 text-right font-mono text-[11px] text-text-3">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{r}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div>
+            <h3 className="font-mono text-label uppercase text-text-3">What it ignores</h3>
+            <ul className="mt-2 space-y-2">
+              {machine.ignores.map((r, i) => (
+                <li key={i} className="flex gap-3 text-body-sm text-text-3">
+                  <span aria-hidden className="mt-2 h-1 w-1 shrink-0 rounded-full bg-text-3" />
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 function TrackNotFound({ id }: { id?: string }) {
   return (
@@ -63,13 +116,23 @@ function TrackView({ trackId }: { trackId: TrackId }) {
   const lessonStates = useProgress((s) => s.lessons)
   const pct = useProgress(selectTrackPct(trackId, lessons.length))
   const doneCount = lessons.filter((l) => lessonStates[l.id]?.status === 'done').length
+  // finished without passing: navigation only, never counted as done (owner answer O4)
+  const readCount = lessons.filter((l) => lessonStates[l.id]?.status === 'read').length
 
   const exerciseCount = lessons.filter((l) => l.exercise === 'sim' || l.exercise === 'code' || l.exercise === 'quiz+sim').length
   const hours = Math.round((lessons.reduce((n, l) => n + l.minutes, 0) / 60) * 2) / 2
 
-  const resume = lessons.find((l) => lessonStates[l.id]?.status !== 'done') ?? lessons[0]
-  const started = doneCount > 0
+  // resume skips done and read lessons (§8.3); a track of only done and read lessons reopens its first read one
+  const statusOf = (id: string) => lessonStates[id]?.status ?? 'unstarted'
+  const resume =
+    lessons.find((l) => statusOf(l.id) !== 'done' && statusOf(l.id) !== 'read') ??
+    lessons.find((l) => statusOf(l.id) !== 'done') ??
+    lessons[0]
+  const started = lessons.some((l) => statusOf(l.id) !== 'unstarted')
+  const spiral = lessons.find((l) => l.ticket?.form === 'spiral')
   const hasExam = lessons.some((l) => l.exam)
+  const passWord = lessons.some((l) => l.ticket) ? 'ticket' : 'checkpoint'
+  const notional = NOTIONAL_MACHINES.find((m) => m.track === trackId)
 
   const idx = TRACKS.findIndex((t) => t.id === trackId)
   const prevTrack = idx > 0 ? TRACKS[idx - 1] : null
@@ -135,7 +198,7 @@ function TrackView({ trackId }: { trackId: TrackId }) {
               </span>
               {hasExam && (
                 <span className="flex items-center gap-1.5 rounded-full border border-amber/40 bg-amber/10 px-3 py-1 font-mono text-[11px] text-amber">
-                  <GraduationCap size={11} /> includes exam
+                  <GraduationCap size={11} /> includes {spiral ? 'a spiral checkpoint' : 'an exam'}
                 </span>
               )}
               {prereqTrack && (
@@ -156,7 +219,10 @@ function TrackView({ trackId }: { trackId: TrackId }) {
                   <p className="font-display text-h4 text-text-1">
                     {doneCount}/{lessons.length}
                   </p>
-                  <p className="font-mono text-[11px] text-text-3">lessons done</p>
+                  <p className="font-mono text-[11px] text-text-3">
+                    lessons done
+                    {readCount > 0 && <span data-read-count> · {readCount} read, {passWord} not passed</span>}
+                  </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -205,6 +271,9 @@ function TrackView({ trackId }: { trackId: TrackId }) {
         </ul>
       </section>
 
+      {/* ------------------------ notional machine ------------------------ */}
+      {notional && <NotionalCard machine={notional} color={track.color} />}
+
       {/* --------------------------- lesson list --------------------------- */}
       <section className="mx-auto max-w-app px-6 pb-12 lg:px-12">
         <div className="mb-4 flex items-baseline justify-between gap-4">
@@ -228,9 +297,18 @@ function TrackView({ trackId }: { trackId: TrackId }) {
           </div>
         </div>
         {hasExam && (
-          <p className="mt-3 flex items-center gap-2 font-mono text-[11px] text-amber">
-            <GraduationCap size={12} />
-            the exam lesson requires ≥80% on its checkpoint quiz to mark complete.
+          <p className="mt-3 flex items-start gap-2 font-mono text-[11px] text-amber">
+            <GraduationCap size={12} className="mt-0.5 shrink-0" />
+            <span>
+              {spiral
+                ? 'the last lesson ends in a spiral checkpoint: 8 items, 6 right with a written or numeric one among them. A miss offers new numbers or continue anyway; nothing locks.'
+                : 'the exam lesson ends in a graded checkpoint. A miss never locks the next lesson.'}
+            </span>
+          </p>
+        )}
+        {readCount > 0 && (
+          <p className="mt-3 font-mono text-[11px] text-text-3">
+            A hollow check means read, {passWord} not passed. It counts for navigation only: percentages and badges count passed lessons.
           </p>
         )}
       </section>

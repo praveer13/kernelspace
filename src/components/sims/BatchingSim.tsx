@@ -4,6 +4,7 @@
  * batching; GPU slot timeline, utilization, TTFT/ITL, preemption,
  * chunked prefill — the scheduler-is-a-batcher aha.
  */
+// a11y-mirror-pending: wave 2
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ChevronDown, ChevronUp, Copy, Dices, Pause, Play, RotateCcw, StepForward, Trash2 } from 'lucide-react'

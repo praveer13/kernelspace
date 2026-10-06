@@ -1,0 +1,192 @@
+{
+  "lab": "rust-zero-r2",
+  "abi": 2,
+  "version": 2,
+  "commit": "20e87be",
+  "date": "2026-10-05",
+  "harness": "bda82aa0878a558fcfea63474e9ea3fc9477903e4373f3c8608b079d80419342",
+  "seeds": "crypto.getRandomValues per run (fresh), plus each check's default seed",
+  "mutantN": 1000,
+  "checks": {
+    "branch_expression": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "idle-before-disabled": 0,
+        "inclusive-range": 0,
+        "late-hot": 0,
+        "literal": 1,
+        "no-high-clamp": 1,
+        "no-warm": 0,
+        "non-strict-power": 0,
+        "nw-for-ne": 0,
+        "strictly-after": 0
+      }
+    },
+    "range_sum": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "idle-before-disabled": 0,
+        "inclusive-range": 1,
+        "late-hot": 0,
+        "literal": 1,
+        "no-high-clamp": 0,
+        "no-warm": 0,
+        "non-strict-power": 0,
+        "nw-for-ne": 0,
+        "strictly-after": 0
+      }
+    },
+    "while_search": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "idle-before-disabled": 0,
+        "inclusive-range": 0,
+        "late-hot": 0,
+        "literal": 1,
+        "no-high-clamp": 0,
+        "no-warm": 0,
+        "non-strict-power": 0,
+        "nw-for-ne": 0,
+        "strictly-after": 1
+      }
+    },
+    "loop_value": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "idle-before-disabled": 0,
+        "inclusive-range": 0,
+        "late-hot": 0,
+        "literal": 1,
+        "no-high-clamp": 0,
+        "no-warm": 0,
+        "non-strict-power": 1,
+        "nw-for-ne": 0,
+        "strictly-after": 0
+      }
+    },
+    "tuple_match": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "idle-before-disabled": 0,
+        "inclusive-range": 0,
+        "late-hot": 0,
+        "literal": 1,
+        "no-high-clamp": 0,
+        "no-warm": 0,
+        "non-strict-power": 0,
+        "nw-for-ne": 1,
+        "strictly-after": 0
+      }
+    },
+    "guarded_match": {
+      "seeded": true,
+      "n": 10001,
+      "referencePassRate": 1,
+      "mutants": {
+        "idle-before-disabled": 1,
+        "inclusive-range": 0,
+        "late-hot": 1,
+        "literal": 1,
+        "no-high-clamp": 0,
+        "no-warm": 1,
+        "non-strict-power": 0,
+        "nw-for-ne": 0,
+        "strictly-after": 0
+      }
+    }
+  },
+  "mutants": {
+    "idle-before-disabled": {
+      "defaultSeedFails": [
+        "guarded_match"
+      ],
+      "caughtBy": [
+        "guarded_match"
+      ]
+    },
+    "inclusive-range": {
+      "defaultSeedFails": [
+        "range_sum"
+      ],
+      "caughtBy": [
+        "range_sum"
+      ]
+    },
+    "late-hot": {
+      "defaultSeedFails": [
+        "guarded_match"
+      ],
+      "caughtBy": [
+        "guarded_match"
+      ]
+    },
+    "literal": {
+      "defaultSeedFails": [
+        "branch_expression",
+        "range_sum",
+        "while_search",
+        "loop_value",
+        "tuple_match",
+        "guarded_match"
+      ],
+      "caughtBy": [
+        "branch_expression",
+        "range_sum",
+        "while_search",
+        "loop_value",
+        "tuple_match",
+        "guarded_match"
+      ]
+    },
+    "no-high-clamp": {
+      "defaultSeedFails": [
+        "branch_expression"
+      ],
+      "caughtBy": [
+        "branch_expression"
+      ]
+    },
+    "no-warm": {
+      "defaultSeedFails": [
+        "guarded_match"
+      ],
+      "caughtBy": [
+        "guarded_match"
+      ]
+    },
+    "non-strict-power": {
+      "defaultSeedFails": [
+        "loop_value"
+      ],
+      "caughtBy": [
+        "loop_value"
+      ]
+    },
+    "nw-for-ne": {
+      "defaultSeedFails": [
+        "tuple_match"
+      ],
+      "caughtBy": [
+        "tuple_match"
+      ]
+    },
+    "strictly-after": {
+      "defaultSeedFails": [
+        "while_search"
+      ],
+      "caughtBy": [
+        "while_search"
+      ]
+    }
+  }
+}

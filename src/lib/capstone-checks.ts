@@ -8,6 +8,9 @@
  * and logits but deliberately does not store the K/V; the harness meters
  * every call, so the checks inspect the learner's own cache and measure
  * speedup from the learner's own decodeCached.
+ *
+ * In the app runStep5Harness runs only inside the Capstone sandbox worker, by
+ * way of capstone/steps.ts runStepJob (spec wave-1 §14.1); the page never calls it.
  */
 
 import {
@@ -302,10 +305,19 @@ export const STEP5_CHECKS: CheckSpec[] = [
     id: 'speedup',
     label: `measured speedup ≥ ${MIN_SPEEDUP}× over the naive decode`,
     run: (api) => {
-      const o = observe(api, SAMPLE_PROMPT_IDS, SAMPLE_SCRIPT_IDS.length)
-      if (!Number.isFinite(o.decodeMs)) return 'no decode steps ran'
-      const x = naiveMs / Math.max(1e-9, o.decodeMs)
+      const x = step5Speedup(api)
+      if (!Number.isFinite(x)) return 'no decode steps ran'
       return x >= MIN_SPEEDUP ? null : `only ${x.toFixed(1)}× — your decodeCached must reuse the cache`
     },
   },
 ]
+
+/**
+ * The learner's own speedup over the naive decode, from the flops their decode
+ * steps cost (F7). NaN when no decode step ran. The sandbox reports it as a metric.
+ */
+export function step5Speedup(api: Record<string, unknown>): number {
+  const o = observe(api, SAMPLE_PROMPT_IDS, SAMPLE_SCRIPT_IDS.length)
+  if (!Number.isFinite(o.decodeMs)) return NaN
+  return naiveMs / Math.max(1e-9, o.decodeMs)
+}

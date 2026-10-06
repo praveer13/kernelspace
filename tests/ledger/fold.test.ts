@@ -6,7 +6,8 @@ import { rev32, sha256Hex, stableStringify } from '../../src/lib/ledger/stable'
 import { dayOf } from '../../src/lib/ledger/time'
 import { factXp, summary, toProgressData, workingMap, xpOf } from '../../src/lib/ledger/view'
 import type { LedgerEvent, WorkingRecord } from '../../src/lib/ledger/types'
-import { XP, nextRank, rankForXp } from '../../src/lib/economy'
+import * as economy from '../../src/lib/economy'
+import { XP } from '../../src/lib/economy'
 import { evt, forSeeds, runOps, shuffle, PROPERTY_TIMEOUT_MS } from './gen'
 
 setDefaultTimeout(PROPERTY_TIMEOUT_MS)
@@ -72,7 +73,7 @@ describe('fold rules (spec §6.1)', () => {
       evt('complete', 'lesson:t0.l1', T1),
       evt('visit', 'lesson:t0.l1', T3),
     ])
-    expect(agg.lessons['t0.l1']).toEqual({ done: true, completedAt: T1, lastAt: T3 })
+    expect(agg.lessons['t0.l1']).toEqual({ done: true, completedAt: T1, lastAt: T3, read: true }) // a click is read, not passed
     expect(xpOf(agg)).toBe(XP.lesson)
     expect(Object.keys(agg.days)).toEqual([]) // a click is not graded work
   })
@@ -112,7 +113,7 @@ describe('fold rules (spec §6.1)', () => {
       evt('predict', 'boot:kv', T1, { rev: 'r', data: { value: 1, unit: 'x', truth: 2, src: 'boot' } }),
     ])
     expect(agg.lessons).toEqual({})
-    expect(xpOf(agg)).toBe(0)
+    expect(xpOf(agg)).toBe(2) // graded items pay their time: 3 × 30 s (the default) = 1.5 min, rounded
     expect(Object.keys(agg.days)).toEqual(['2026-09-01'])
   })
 
@@ -124,13 +125,13 @@ describe('fold rules (spec §6.1)', () => {
       evt('sim-task', 'sim:sim-kv/a', T2),
       evt('sim-task', 'sim:sim-kv/b', T2),
     ])
-    expect(agg.sims['sim-kv']).toEqual({ visits: 2, tasks: { a: true, b: true } })
+    expect(agg.sims['sim-kv']).toEqual({ visits: 2, tasks: { a: true, b: true }, outcomes: {} })
     expect(xpOf(agg)).toBe(2 * XP.exercise)
   })
 
   test('labs: checks union, total max, done and completedAt from ok runs, streak only with a pass', () => {
     const none = derive([evt('lab-check', 'lab:lab-a', T1, { score: 0, ok: false, data: { passed: [], total: 4 } })])
-    expect(none.labs['lab-a']).toEqual({ checks: {}, total: 4 })
+    expect(none.labs['lab-a']).toEqual({ checks: {}, unseen: {}, total: 4 })
     expect(Object.keys(none.days)).toEqual([])
 
     const agg = derive([
@@ -138,8 +139,8 @@ describe('fold rules (spec §6.1)', () => {
       evt('lab-check', 'lab:lab-a', T3, { score: 1, ok: true, data: { passed: ['c3', 'c4'], total: 4 } }),
       evt('lab-check', 'lab:lab-a', T2, { score: 1, ok: true, data: { passed: ['c1'], total: 4 } }),
     ])
-    expect(agg.labs['lab-a']).toEqual({ checks: { c1: true, c2: true, c3: true, c4: true }, total: 4, done: true, completedAt: T2 })
-    expect(xpOf(agg)).toBe(XP.lab)
+    expect(agg.labs['lab-a']).toEqual({ checks: { c1: true, c2: true, c3: true, c4: true }, unseen: {}, total: 4, done: true, completedAt: T2 })
+    expect(xpOf(agg)).toBe(0) // lab-a is not a Forge lab, so the economy table prices none of its checks
     expect(Object.keys(agg.days).length).toBe(3)
   })
 
@@ -155,12 +156,12 @@ describe('fold rules (spec §6.1)', () => {
 
   test('capstone: step is the highest index + 1, steps pay once', () => {
     const agg = derive([
-      evt('capstone-step', 'cap:s3', T1, { data: { index: 2 } }),
-      evt('capstone-step', 'cap:s1', T2, { data: { index: 0 } }),
-      evt('capstone-step', 'cap:s3', T3, { data: { index: 2 } }),
+      evt('capstone-step', 'cap:forward', T1, { data: { index: 2 } }),
+      evt('capstone-step', 'cap:tokenize', T2, { data: { index: 0 } }),
+      evt('capstone-step', 'cap:forward', T3, { data: { index: 2 } }),
     ])
-    expect(agg.capstone).toEqual({ steps: { s3: true, s1: true }, step: 3 })
-    expect(xpOf(agg)).toBe(2 * XP.capstoneStep)
+    expect(agg.capstone).toEqual({ steps: { forward: true, tokenize: true }, step: 3 })
+    expect(xpOf(agg)).toBe(45 + 30) // each step pays its own minutes (Capstone STEPS), once
   })
 
   test('exercise pays once; achievements and acks keep the earliest time', () => {
@@ -178,14 +179,14 @@ describe('fold rules (spec §6.1)', () => {
     expect(agg.acks).toEqual({ 'erratum:e1': T2 })
   })
 
-  test('XP facts: units per spec §6.3', () => {
-    expect(factXp('lesson:t0.l1')).toBe(100)
-    expect(factXp('quiz-pass:t0.l1')).toBe(40)
-    expect(factXp('exercise:t0.l1')).toBe(60)
-    expect(factXp('sim:s/t')).toBe(60)
-    expect(factXp('lab:x')).toBe(200)
-    expect(factXp('fw:engine')).toBe(250)
-    expect(factXp('cap:s1')).toBe(150)
+  test('XP facts: nominal minutes per wave-1.md §8.4 (tests/economy/xp.test.ts has the full table)', () => {
+    expect(factXp('lesson:t0.l1')).toBe(0)
+    expect(factXp('quiz-pass:t0.l1')).toBe(3)
+    expect(factXp('exercise:t0.l1')).toBe(0)
+    expect(factXp('sim:s/t')).toBe(0)
+    expect(factXp('lab:rust-allocator')).toBe(0) // a lab pays through its checks
+    expect(factXp('fw:engine')).toBe(30)
+    expect(factXp('cap:tokenize')).toBe(30)
     expect(factXp('weird:thing')).toBe(0)
   })
 
@@ -243,7 +244,7 @@ describe('view (spec §6.2)', () => {
         measurementEvidence: { fleet: { analysis: 'ok' } },
       },
       capstone: { step: 2, stepsDone: ['s2'], metrics: { ttft: 1, itl: 2, throughput: 3 } },
-      xp: XP.lesson + XP.quiz + 3 * XP.exercise + XP.lab + XP.fleetWeekAct + XP.capstoneStep,
+      xp: XP.quiz + XP.fleetWeekAct, // lessons, exercises and sim toggles pay 0; lab-b and cap:s2 are not in the economy table
       streakDays: ['2026-09-01', '2026-09-02', '2026-09-03'],
       achievements: ['fleet-week'],
       settings: { codeLang: 'rust' },
@@ -276,17 +277,18 @@ describe('view (spec §6.2)', () => {
   test('summary', () => {
     const agg = derive([
       evt('complete', 'lesson:t0.l1', T1),
+      evt('complete', 'lesson:t0.l2', T1),
+      evt('quiz', 'lesson:t0.l2', T1),
       evt('lab-check', 'lab:lab-b', T2, { data: { passed: ['c1', 'c2'], total: 2 } }),
     ])
-    expect(summary(agg)).toEqual({ lessonsDone: 1, xp: XP.lesson + XP.lab, activeDays: 1, labsDone: 1, events: 2 })
+    // lessonsDone counts passed lessons only: t0.l1 was clicked through (read)
+    expect(summary(agg)).toEqual({ lessonsDone: 1, xp: XP.quiz, activeDays: 2, labsDone: 1, events: 4 })
   })
 
-  test('economy re-exports behave as before', () => {
-    expect(rankForXp(0).name).toBe('RING 3')
-    expect(rankForXp(500).name).toBe('RING 2')
-    expect(rankForXp(5000).name).toBe('ROOT')
-    expect(nextRank(0)?.name).toBe('RING 2')
-    expect(nextRank(5000)).toBeNull()
+  test('XP decides no rank: the ring comes from the ledger (spec 8.5)', () => {
+    // with no RING 2 evidence the rank is RING 3, and XP has no threshold table to say otherwise
+    expect(economy.selectRings(derive([])).rank).toBe('RING 3')
+    for (const gone of ['RANKS', 'rankForXp', 'nextRank']) expect(gone in economy).toBe(false)
   })
 })
 

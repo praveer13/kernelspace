@@ -77,6 +77,8 @@ But the asymmetry cuts both ways, and it explains serving economics: **prefill**
       simId: 'sim-roofline',
       machine: 'cpu-gpu',
       title: 'Latency machine vs throughput machine',
+      taskIds: ['t-cpu-serial', 't-gpu-map', 't-gpu-divergence', 't-roof-occupancy'],
+      config: { m: 'H100', accessPattern: 'coalesced', warps: 16, registers: 32 },
       tasks: [
         'Run the serial dependency chain on the CPU model vs GPU model: watch the CPU win by 50× (latency wins).',
         'Run the elementwise map over 64M floats: watch the GPU win by 50× (throughput wins).',

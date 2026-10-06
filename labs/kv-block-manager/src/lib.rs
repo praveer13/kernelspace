@@ -24,49 +24,96 @@
 //!     how production engines corrupt themselves.
 //!   * `free` decrements refcounts; a block returns to the pool only at 0.
 //!     Leak one and check 6 (the churn gauntlet) will starve you.
+//!
+//! The checks below are the single source of truth:
+//!   * `cargo test` runs them on your machine, on their default seeds and on
+//!     32 extra seeds.
+//!   * `cargo build --release --target wasm32-unknown-unknown` bakes them
+//!     into the .wasm you drop into kernelspace → the site runs each check on
+//!     its own (template v2), with a fresh seed for the churn gauntlet, and
+//!     renders exactly these results.
+//!
+//! A `todo!()` in your code traps that check; the site shows it as "not
+//! implemented yet" with the panic text, and the other checks still run.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   paging          a wrong ceil in the block count, a translate that
+//!                   indexes the wrong block, or two sequences aliasing
+//!   capacity        an allocate that succeeds on a full pool, a failed
+//!                   allocate that still changes state, or a free that
+//!                   never recycles
+//!   fork_shares     a fork that copies blocks instead of the table
+//!   free_refcount   a free that returns blocks another sequence still uses
+//!   cow             an append into a shared tail that writes through it
+//!                   (or a copy that touches the parent)
+//!   gauntlet        every leak, double free or stale refcount the five
+//!                   above miss, such as an allocate or append that takes
+//!                   blocks before it fails: seeded churn, conservation
+//!                   after each op
+//!   adapter_...     optional: adapter pages from the same pool (T6.L9)
+//! ```
 
 mod manager;
 
-use kslab::{Check, Report};
+use kslab::{Check, CheckDef, Ctx, Lab, Rng};
 use manager::BlockManager;
 
 const POOL: usize = 8; // physical blocks in the small scenarios
 const BS: usize = 16; // tokens per block
 
-/* --------------------------- determinism ---------------------------- */
+#[cfg(not(feature = "reference"))]
+const LAB_ID: &str = "kv-block-manager";
+/// A `--features reference` build names itself, and earns no credit anywhere.
+#[cfg(feature = "reference")]
+const LAB_ID: &str = "kv-block-manager@reference";
 
-struct Rng(u64);
+/// The checks, in grading order. Ids and labels match `src/data/labs.ts`;
+/// stage 5 is the optional advanced extension, so finishing the six required
+/// checks reaches stage 4.
+pub static CHECKS: [CheckDef; 7] = [
+    CheckDef { id: "paging", label: PAGING, stage: 1, seeded: false, default_seed: 0, run: check_paging },
+    CheckDef { id: "capacity", label: CAPACITY, stage: 2, seeded: false, default_seed: 0, run: check_capacity },
+    CheckDef { id: "fork_shares", label: FORK_SHARES, stage: 3, seeded: false, default_seed: 0, run: check_fork_shares },
+    CheckDef { id: "cow", label: COW, stage: 4, seeded: false, default_seed: 0, run: check_cow },
+    CheckDef { id: "free_refcount", label: FREE_REFCOUNT, stage: 3, seeded: false, default_seed: 0, run: check_free_refcount },
+    CheckDef { id: "gauntlet", label: GAUNTLET, stage: 4, seeded: true, default_seed: 0x6A17, run: check_gauntlet },
+    CheckDef {
+        id: "adapter_unified_paging",
+        label: ADAPTER_UNIFIED_PAGING,
+        stage: 5,
+        seeded: false,
+        default_seed: 0,
+        run: check_adapter_unified_paging,
+    },
+];
 
-impl Rng {
-    fn next(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x >> 12;
-        x ^= x << 25;
-        x ^= x >> 27;
-        self.0 = x;
-        x.wrapping_mul(0x2545_F491_4F6C_DD1D)
-    }
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-}
+pub static LAB: Lab = Lab { id: LAB_ID, version: 3, checks: &CHECKS };
+
+const PAGING: &str = "block-table math and translation";
+const CAPACITY: &str = "pool exhaustion is atomic; freed blocks return";
+const FORK_SHARES: &str = "fork shares blocks via refcounts (zero-copy)";
+const COW: &str = "copy-on-write on append to shared tail";
+const FREE_REFCOUNT: &str = "refcounted free — shared blocks survive until the last owner";
+const GAUNTLET: &str = "2000-op churn: block conservation after every op";
+const ADAPTER_UNIFIED_PAGING: &str = "advanced: adapter weights share the paged KV pool";
 
 /* ------------------------------ checks ------------------------------ */
 
 /// 1. paging: block-table math — ceil(tokens/BS) blocks, correct
 ///    translation, isolation between sequences.
-pub fn check_paging() -> Check {
+pub fn check_paging(_: &Ctx) -> Check {
     const ID: &str = "paging";
-    const LABEL: &str = "block-table math and translation";
     let mut m = BlockManager::new(POOL, BS);
     if !m.allocate(1, 20) || !m.allocate(2, 16) || !m.allocate(3, 17) {
-        return Check::fail(ID, LABEL, "allocate failed on an empty 8-block pool");
+        return Check::fail(ID, PAGING, "allocate failed on an empty 8-block pool");
     }
     // 20→2 blocks, 16→1, 17→2 ⇒ 5 used, 3 free
     if m.free_blocks() != 3 {
         return Check::fail(
             ID,
-            LABEL,
+            PAGING,
             format!(
                 "expected 3 free blocks after 20+16+17 tokens, got {}",
                 m.free_blocks()
@@ -79,19 +126,19 @@ pub fn check_paging() -> Check {
     if a.is_none() || a != b {
         return Check::fail(
             ID,
-            LABEL,
+            PAGING,
             format!("tokens 0 and 15 must share a block, got {a:?} vs {b:?}"),
         );
     }
     if c.is_none() || c == a {
         return Check::fail(
             ID,
-            LABEL,
+            PAGING,
             format!("token 16 must be in the next block, got {c:?}"),
         );
     }
     if m.translate(1, 20).is_some() {
-        return Check::fail(ID, LABEL, "translate past the sequence end must be None");
+        return Check::fail(ID, PAGING, "translate past the sequence end must be None");
     }
     // isolation: no physical block shared between seqs without fork
     for s in 1..=3u32 {
@@ -101,7 +148,7 @@ pub fn check_paging() -> Check {
                 if x.is_some() && x == y {
                     return Check::fail(
                         ID,
-                        LABEL,
+                        PAGING,
                         format!("seqs {s} and {t} alias a block at token {tok} without fork"),
                     );
                 }
@@ -110,38 +157,37 @@ pub fn check_paging() -> Check {
     }
     Check::pass(
         ID,
-        LABEL,
+        PAGING,
         "ceil math, translation, and isolation all correct",
     )
 }
 
 /// 2. capacity: the pool is finite — failed allocations are clean no-ops,
 ///    freed blocks come back.
-pub fn check_capacity() -> Check {
+pub fn check_capacity(_: &Ctx) -> Check {
     const ID: &str = "capacity";
-    const LABEL: &str = "pool exhaustion is atomic; freed blocks return";
     let mut m = BlockManager::new(4, BS);
     if !m.allocate(1, 4 * BS) {
-        return Check::fail(ID, LABEL, "could not fill an empty pool");
+        return Check::fail(ID, CAPACITY, "could not fill an empty pool");
     }
     if m.free_blocks() != 0 {
         return Check::fail(
             ID,
-            LABEL,
+            CAPACITY,
             format!("pool should be full, {} blocks free", m.free_blocks()),
         );
     }
     if m.allocate(2, 1) {
         return Check::fail(
             ID,
-            LABEL,
+            CAPACITY,
             "allocate succeeded on a full pool — blocks from nowhere",
         );
     }
     if m.free_blocks() != 0 {
         return Check::fail(
             ID,
-            LABEL,
+            CAPACITY,
             "failed allocate mutated state — must be all-or-nothing",
         );
     }
@@ -149,37 +195,36 @@ pub fn check_capacity() -> Check {
     if m.free_blocks() != 4 {
         return Check::fail(
             ID,
-            LABEL,
+            CAPACITY,
             format!("free(1) should return 4 blocks, got {}", m.free_blocks()),
         );
     }
     if !m.allocate(2, BS) {
         return Check::fail(
             ID,
-            LABEL,
+            CAPACITY,
             "allocate failed right after free — blocks were not recycled",
         );
     }
-    Check::pass(ID, LABEL, "exhaustion is clean, recycling works")
+    Check::pass(ID, CAPACITY, "exhaustion is clean, recycling works")
 }
 
 /// 3. fork_shares: fork copies the block TABLE, not the blocks — zero
 ///    allocation, identical translation.
-pub fn check_fork_shares() -> Check {
+pub fn check_fork_shares(_: &Ctx) -> Check {
     const ID: &str = "fork_shares";
-    const LABEL: &str = "fork shares blocks via refcounts (zero-copy)";
     let mut m = BlockManager::new(POOL, BS);
     if !m.allocate(1, 40) {
-        return Check::fail(ID, LABEL, "allocate failed");
+        return Check::fail(ID, FORK_SHARES, "allocate failed");
     }
     let before = m.free_blocks();
     if !m.fork(1, 2) {
-        return Check::fail(ID, LABEL, "fork(1, 2) failed with free blocks available");
+        return Check::fail(ID, FORK_SHARES, "fork(1, 2) failed with free blocks available");
     }
     if m.free_blocks() != before {
         return Check::fail(
             ID,
-            LABEL,
+            FORK_SHARES,
             format!("fork allocated blocks ({before} → {} free) — fork is table copy + refcount, not memcpy", m.free_blocks()),
         );
     }
@@ -187,32 +232,31 @@ pub fn check_fork_shares() -> Check {
         if m.translate(1, t) != m.translate(2, t) {
             return Check::fail(
                 ID,
-                LABEL,
+                FORK_SHARES,
                 format!("token {t} diverged right after fork — nothing was written yet"),
             );
         }
     }
-    Check::pass(ID, LABEL, "40 tokens shared, zero blocks allocated")
+    Check::pass(ID, FORK_SHARES, "40 tokens shared, zero blocks allocated")
 }
 
 /// 4. cow: appending to a shared partial tail copies exactly one block;
 ///    the parent is untouched; the shared prefix stays shared.
-pub fn check_cow() -> Check {
+pub fn check_cow(_: &Ctx) -> Check {
     const ID: &str = "cow";
-    const LABEL: &str = "copy-on-write on append to shared tail";
     let mut m = BlockManager::new(POOL, BS);
     if !m.allocate(1, 40) || !m.fork(1, 2) {
-        return Check::fail(ID, LABEL, "setup failed");
+        return Check::fail(ID, COW, "setup failed");
     }
     let parent_tail = m.translate(1, 39);
     let before = m.free_blocks();
     if !m.append(2, 1) {
-        return Check::fail(ID, LABEL, "append(2, 1) failed with free blocks available");
+        return Check::fail(ID, COW, "append(2, 1) failed with free blocks available");
     }
     if m.free_blocks() != before - 1 {
         return Check::fail(
             ID,
-            LABEL,
+            COW,
             format!(
                 "CoW should consume exactly 1 block ({before} → {} free)",
                 m.free_blocks()
@@ -222,14 +266,14 @@ pub fn check_cow() -> Check {
     if m.translate(1, 39) != parent_tail {
         return Check::fail(
             ID,
-            LABEL,
+            COW,
             "the PARENT's tail moved during the child's append — CoW must not touch the parent",
         );
     }
     if m.translate(2, 39) == m.translate(1, 39) {
         return Check::fail(
             ID,
-            LABEL,
+            COW,
             "child still aliases the shared tail after append — no copy happened",
         );
     }
@@ -237,33 +281,32 @@ pub fn check_cow() -> Check {
         if m.translate(1, t) != m.translate(2, t) {
             return Check::fail(
                 ID,
-                LABEL,
+                COW,
                 format!("prefix token {t} diverged — CoW must copy only the tail block"),
             );
         }
     }
     Check::pass(
         ID,
-        LABEL,
+        COW,
         "one block copied, prefix still shared, parent untouched",
     )
 }
 
 /// 5. free_refcount: freeing one sharer frees nothing; freeing the last
 ///    sharer frees everything.
-pub fn check_free_refcount() -> Check {
+pub fn check_free_refcount(_: &Ctx) -> Check {
     const ID: &str = "free_refcount";
-    const LABEL: &str = "refcounted free — shared blocks survive until the last owner";
     let mut m = BlockManager::new(POOL, BS);
     if !m.allocate(1, 40) || !m.fork(1, 2) {
-        return Check::fail(ID, LABEL, "setup failed");
+        return Check::fail(ID, FREE_REFCOUNT, "setup failed");
     }
     let before = m.free_blocks(); // 5
     m.free(1);
     if m.free_blocks() != before {
         return Check::fail(
             ID,
-            LABEL,
+            FREE_REFCOUNT,
             format!(
                 "free(1) returned blocks still shared by seq 2 ({before} → {} free)",
                 m.free_blocks()
@@ -274,7 +317,7 @@ pub fn check_free_refcount() -> Check {
         if m.translate(2, t).is_none() {
             return Check::fail(
                 ID,
-                LABEL,
+                FREE_REFCOUNT,
                 format!("seq 2 lost token {t} when seq 1 was freed — refcount underflow"),
             );
         }
@@ -283,24 +326,23 @@ pub fn check_free_refcount() -> Check {
     if m.free_blocks() != POOL {
         return Check::fail(
             ID,
-            LABEL,
+            FREE_REFCOUNT,
             format!("pool should be whole again ({}/{})", m.free_blocks(), POOL),
         );
     }
-    Check::pass(ID, LABEL, "blocks outlive every owner but the last")
+    Check::pass(ID, FREE_REFCOUNT, "blocks outlive every owner but the last")
 }
 
-/// 6. gauntlet: 2000 deterministic mixed ops at churn. The invariant that
+/// 6. gauntlet: 2000 mixed ops at churn, drawn from the seed. The invariant that
 ///    must hold after EVERY op:
 ///      free_blocks + |distinct blocks referenced by live seqs| == POOL
 ///    Break refcounting anywhere (leak, double-free, aliasing) and this
 ///    equation breaks — a leaking manager eventually can't allocate at all.
-pub fn check_gauntlet() -> Check {
+pub fn check_gauntlet(ctx: &Ctx) -> Check {
     const ID: &str = "gauntlet";
-    const LABEL: &str = "2000-op churn: block conservation after every op";
     const N: usize = 64;
     let mut m = BlockManager::new(N, BS);
-    let mut rng = Rng(0x6A17);
+    let mut rng = Rng::seeded(ctx.seed);
     // seq slots 0..16; live[i] = Some(token_len) when alive
     let mut live: [Option<usize>; 16] = [None; 16];
     let live_ids = |live: &[Option<usize>; 16]| -> Vec<u32> {
@@ -342,14 +384,14 @@ pub fn check_gauntlet() -> Check {
             let Some(slot) = live.iter().position(|l| l.is_none()) else {
                 continue;
             };
-            let tokens = 1 + rng.below(96);
+            let tokens = 1 + rng.below(144);
             if m.allocate(slot as u32, tokens) {
                 live[slot] = Some(tokens);
             }
         } else if action < 55 {
             // append
             let id = ids[rng.below(ids.len())];
-            let n = 1 + rng.below(16);
+            let n = 1 + rng.below(40);
             if m.append(id, n) {
                 live[id as usize] = live[id as usize].map(|l| l + n);
             }
@@ -373,7 +415,7 @@ pub fn check_gauntlet() -> Check {
                 if m.free_blocks() + used != N {
                     return Check::fail(
                         ID,
-                        LABEL,
+                        GAUNTLET,
                         format!(
                             "op {op}: conservation broken — {} free + {used} referenced ≠ {N} total. A block leaked or was double-freed.",
                             m.free_blocks()
@@ -381,12 +423,12 @@ pub fn check_gauntlet() -> Check {
                     );
                 }
             }
-            Err(e) => return Check::fail(ID, LABEL, format!("op {op}: {e}")),
+            Err(e) => return Check::fail(ID, GAUNTLET, format!("op {op}: {e}")),
         }
     }
     Check::pass(
         ID,
-        LABEL,
+        GAUNTLET,
         "2000 ops, conservation held after every single one",
     )
 }
@@ -394,24 +436,23 @@ pub fn check_gauntlet() -> Check {
 /// Optional advanced extension — S-LoRA-style unified paging. Adapter
 /// weights and sequence KV draw from one physical block pool, remain
 /// isolated, and return capacity independently.
-pub fn check_adapter_unified_paging() -> Check {
+pub fn check_adapter_unified_paging(_: &Ctx) -> Check {
     const ID: &str = "adapter_unified_paging";
-    const LABEL: &str = "advanced: adapter weights share the paged KV pool";
     let mut m = BlockManager::new(12, BS);
     if !m.allocate(1, 3 * BS) {
-        return Check::fail(ID, LABEL, "could not allocate the three-page KV sequence");
+        return Check::fail(ID, ADAPTER_UNIFIED_PAGING, "could not allocate the three-page KV sequence");
     }
     if !m.load_adapter(7, 5) {
         return Check::fail(
             ID,
-            LABEL,
+            ADAPTER_UNIFIED_PAGING,
             "load_adapter is still the optional fail-closed stub",
         );
     }
     if m.free_blocks() != 4 {
         return Check::fail(
             ID,
-            LABEL,
+            ADAPTER_UNIFIED_PAGING,
             format!(
                 "3 KV + 5 adapter pages should leave 4 free, got {}",
                 m.free_blocks()
@@ -428,7 +469,7 @@ pub fn check_adapter_unified_paging() -> Check {
     {
         return Check::fail(
             ID,
-            LABEL,
+            ADAPTER_UNIFIED_PAGING,
             "adapter table is incomplete, unbounded, or aliases live KV",
         );
     }
@@ -436,7 +477,7 @@ pub fn check_adapter_unified_paging() -> Check {
     if m.load_adapter(7, 1) || m.allocate(2, 5 * BS) || m.free_blocks() != before {
         return Check::fail(
             ID,
-            LABEL,
+            ADAPTER_UNIFIED_PAGING,
             "duplicate/exhausted allocation was not an atomic no-op",
         );
     }
@@ -444,14 +485,14 @@ pub fn check_adapter_unified_paging() -> Check {
     if m.free_blocks() != 9 || m.translate(1, 2 * BS).is_none() {
         return Check::fail(
             ID,
-            LABEL,
+            ADAPTER_UNIFIED_PAGING,
             "unloading adapter pages damaged KV or leaked capacity",
         );
     }
     if !m.load_adapter(8, 9) || m.free_blocks() != 0 {
         return Check::fail(
             ID,
-            LABEL,
+            ADAPTER_UNIFIED_PAGING,
             "recycled adapter pages could not refill the unified pool",
         );
     }
@@ -460,40 +501,100 @@ pub fn check_adapter_unified_paging() -> Check {
     if m.free_blocks() != 12 {
         return Check::fail(
             ID,
-            LABEL,
+            ADAPTER_UNIFIED_PAGING,
             "final KV + adapter drain did not conserve all 12 pages",
         );
     }
     Check::pass(
         ID,
-        LABEL,
+        ADAPTER_UNIFIED_PAGING,
         "KV and two adapter lifecycles conserved one 12-page pool",
     )
 }
 
-/// The full suite, in grading order.
+/// The full suite on default seeds, in grading order (v1 report order).
 pub fn self_checks() -> Vec<Check> {
-    vec![
-        check_paging(),
-        check_capacity(),
-        check_fork_shares(),
-        check_cow(),
-        check_free_refcount(),
-        check_gauntlet(),
-        check_adapter_unified_paging(),
-    ]
+    CHECKS.iter().map(|c| (c.run)(&Ctx { seed: c.default_seed, fresh: false })).collect()
+}
+
+/* ------------------------------ probe ------------------------------- */
+
+/// `probe <seed>`: 200 seeded ops on your manager (32 blocks of 16 tokens),
+/// summarised in one line: live sequences, free blocks, blocks referenced and
+/// how many of those are shared through fork, and refused operations. The
+/// harness tracks each sequence's length itself and reads blocks only through
+/// `translate`, so the line is deterministic for a given seed and manager.
+pub fn probe(seed: u32) -> String {
+    const N: usize = 32;
+    const SLOTS: usize = 12;
+    let mut m = BlockManager::new(N, BS);
+    let mut rng = Rng::seeded(seed);
+    let mut live: [Option<usize>; SLOTS] = [None; SLOTS];
+    let mut refused = 0;
+    for _ in 0..200 {
+        let ids: Vec<usize> = (0..SLOTS).filter(|&i| live[i].is_some()).collect();
+        let free_slot = live.iter().position(|l| l.is_none());
+        let action = rng.below(100);
+        if action < 30 || ids.is_empty() {
+            let Some(slot) = free_slot else { continue };
+            let tokens = 1 + rng.below(64);
+            if m.allocate(slot as u32, tokens) {
+                live[slot] = Some(tokens);
+            } else {
+                refused += 1;
+            }
+        } else if action < 60 {
+            let id = ids[rng.below(ids.len())];
+            let n = 1 + rng.below(16);
+            if m.append(id as u32, n) {
+                live[id] = live[id].map(|l| l + n);
+            } else {
+                refused += 1;
+            }
+        } else if action < 75 {
+            let id = ids[rng.below(ids.len())];
+            let Some(slot) = free_slot else { continue };
+            if m.fork(id as u32, slot as u32) {
+                live[slot] = live[id];
+            } else {
+                refused += 1;
+            }
+        } else {
+            let id = ids[rng.below(ids.len())];
+            m.free(id as u32);
+            live[id] = None;
+        }
+    }
+    let mut table_entries = 0;
+    let mut seen = [false; N];
+    for (id, len) in live.iter().enumerate() {
+        if let Some(len) = len {
+            for b in 0..len.div_ceil(BS) {
+                table_entries += 1;
+                if let Some(p) = m.translate(id as u32, b * BS) {
+                    if p < N {
+                        seen[p] = true;
+                    }
+                }
+            }
+        }
+    }
+    let used = seen.iter().filter(|&&u| u).count();
+    let seqs = live.iter().filter(|l| l.is_some()).count();
+    format!(
+        "ops=200 seqs={seqs} free={} used={used} shared={} refused={refused}",
+        m.free_blocks(),
+        table_entries - used
+    )
 }
 
 /* ------------------------------ wasm ABI ---------------------------- */
 
+kslab::export_abi_v2!();
+
 #[no_mangle]
-pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
-    let report = Report {
-        lab: "kv-block-manager",
-        version: 2,
-        checks: self_checks(),
-    };
-    kslab::emit(&report)
+pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
+    kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
 }
 
 /* --------------------------- fleet bridge --------------------------- */
@@ -509,6 +610,8 @@ pub extern "C" fn ks_run(_in_ptr: u32, _in_len: u32) -> u64 {
      translate <seq> <token>               → <block id> | none
      free_blocks                           → <n>
      dump                                  → your dump() output, verbatim
+     probe <seed>                          → one summary line of a seeded
+                                             200-op scenario (see `probe`)
 */
 
 use std::cell::RefCell;
@@ -519,9 +622,17 @@ thread_local! {
 
 #[no_mangle]
 pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
-    let bytes = unsafe { std::slice::from_raw_parts(in_ptr as *const u8, in_len as usize) };
+    kslab::install_panic_hook();
+    let bytes = unsafe { kslab::input(in_ptr, in_len) };
     let cmd = String::from_utf8_lossy(bytes).into_owned();
-    let reply = FLEET_MANAGER.with(|m| dispatch(&mut m.borrow_mut(), cmd.trim()));
+    let reply = match cmd.split_whitespace().collect::<Vec<_>>()[..] {
+        // its own manager: a probe never disturbs the Fleet's
+        ["probe", seed] => match seed.parse::<u32>() {
+            Ok(seed) => probe(seed),
+            Err(_) => format!("err bad seed '{}'", kslab::clip(seed, 20)),
+        },
+        _ => FLEET_MANAGER.with(|m| dispatch(&mut m.borrow_mut(), cmd.trim())),
+    };
     kslab::emit_str(&reply)
 }
 

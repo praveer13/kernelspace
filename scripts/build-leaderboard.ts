@@ -6,7 +6,7 @@ import {
   LEADERBOARD_BENCHMARK_VERSION,
   LEADERBOARD_SCHEMA_VERSION,
   overallGoodput,
-  scoreReferenceBenchmark,
+  scoreReferenceInWorker,
   type LeaderboardDocument,
   type LeaderboardEntry,
 } from '../src/lib/leaderboard'
@@ -79,7 +79,8 @@ entries.forEach((entry, index) => {
   entry.rank = index + 1
 })
 
-const reference = scoreReferenceBenchmark(traces.burstgpt, traces.lmsysShape)
+/* the reference goes through the same one-shot fleet worker job as a submission */
+const reference = await scoreReferenceInWorker(traces.burstgpt, traces.lmsysShape)
 const epoch = process.env.SOURCE_DATE_EPOCH
 const gitEpoch = Bun.spawnSync([
   'git',

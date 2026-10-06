@@ -1,14 +1,16 @@
 import { AGGREGATE_VERSION } from './constants'
 import { canonicalEvent } from './merge'
-import { canonicalRef, parseQuizItemRef, parseSimTaskRef, refTail } from './refs'
+import { canonicalRef, parseHintRef, parseQuizItemRef, parseSimTaskRef, refTail } from './refs'
 import { ensureOwn, getOwn, setOwn } from './stable'
 import type {
   Aggregate,
+  AggregateV1,
   EventKind,
   IsoInstant,
   LabAgg,
   LedgerEvent,
   LessonAgg,
+  PlayAgg,
   SimAgg,
 } from './types'
 
@@ -42,6 +44,9 @@ export function emptyAggregate(): Aggregate {
     achievements: {},
     acks: {},
     completions: {},
+    plays: {},
+    proves: {},
+    itemSec: {},
   }
 }
 
@@ -51,8 +56,20 @@ const minIso = (a: IsoInstant | undefined, b: IsoInstant): IsoInstant => (a !== 
 
 /* Every key below comes from an imported ref, so lookups and writes go through own-property helpers. */
 const lessonOf = (agg: Aggregate, id: string): LessonAgg => ensureOwn(agg.lessons, id, () => ({}))
-const simOf = (agg: Aggregate, id: string): SimAgg => ensureOwn(agg.sims, id, () => ({ visits: 0, tasks: {} }))
-const labOf = (agg: Aggregate, id: string): LabAgg => ensureOwn(agg.labs, id, () => ({ checks: {} }))
+const simOf = (agg: Aggregate, id: string): SimAgg => ensureOwn(agg.sims, id, () => ({ visits: 0, tasks: {}, outcomes: {} }))
+const labOf = (agg: Aggregate, id: string): LabAgg => ensureOwn(agg.labs, id, () => ({ checks: {}, unseen: {} }))
+const playOf = (agg: Aggregate, id: string): PlayAgg => ensureOwn(agg.plays, id, () => ({ best: 0 }))
+
+/** `e.data` as a loose record: fold reads only the fields it needs and tolerates anything else. */
+const dataOf = (e: LedgerEvent): Record<string, unknown> => {
+  const data = (e as { data?: unknown }).data
+  return typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
+}
+
+const FORMS: ReadonlySet<unknown> = new Set(['ticket', 'spiral', 'testout'])
+const DAY_MS = 24 * 60 * 60 * 1000
+/** Nominal seconds of an item with no `nsec` (spec §8.4: XP v2 sizes sessions the same way). */
+const DEFAULT_NSEC = 30
 
 /** The check ids a lab run passed; tolerant of a malformed `data`. */
 function labPassed(e: LedgerEvent): string[] {
@@ -89,9 +106,12 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
         L.done = true
         L.completedAt = minIso(L.completedAt, e.at)
         L.lastAt = maxIso(L.lastAt, e.at)
+        const via = dataOf(e).via
+        if (via === undefined || via === 'read') L.read = true // a click, or "continue anyway": read, not passed (spec §8.7)
         setOwn(agg.facts, `lesson:${lesson}`, true)
       } else {
         setOwn(agg.completions, ref, minIso(getOwn(agg.completions, ref), e.at))
+        if (ref === 'boot' || ref === 'placement') setOwn(agg.facts, ref, true)
       }
       break
     }
@@ -110,12 +130,24 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
       const L = lessonOf(agg, lesson)
       L.quizBest = Math.max(L.quizBest ?? 0, e.score)
       L.lastAt = maxIso(L.lastAt, e.at)
-      if (e.ok) setOwn(agg.facts, `quiz-pass:${lesson}`, true)
+      if (e.ok) {
+        setOwn(agg.facts, `quiz-pass:${lesson}`, true)
+        // Any ok quiz passes the lesson (spec §3.4). The earliest wins; on equal instants the smaller form does.
+        const form = FORMS.has(dataOf(e).form) ? (dataOf(e).form as 'ticket' | 'spiral' | 'testout') : 'checkpoint'
+        if (L.passedAt === undefined || e.at < L.passedAt || (e.at === L.passedAt && form < (L.passVia ?? form))) {
+          L.passedAt = e.at
+          L.passVia = form
+        }
+      }
       break
     }
     case 'item':
-    case 'probe': {
-      // Exposure only: the `quiz` summary carries the score. Boot and card items add nothing but the day.
+    case 'probe':
+    case 'predict': {
+      // The `quiz` summary carries the score, so an item adds its time and, on a quiz ref, the lesson's last visit.
+      const nsec = dataOf(e).nsec
+      const sec = Math.round(Math.min(600, Math.max(0, typeof nsec === 'number' && Number.isFinite(nsec) ? nsec : DEFAULT_NSEC)))
+      setOwn(agg.itemSec, e.day, (getOwn(agg.itemSec, e.day) ?? 0) + sec) // whole seconds, so the sum is order-free
       const item = parseQuizItemRef(ref)
       if (item) {
         const L = lessonOf(agg, item.lessonId)
@@ -126,15 +158,31 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
     case 'sim-task': {
       const task = parseSimTaskRef(ref)
       if (!task) break
-      setOwn(simOf(agg, task.simId).tasks, task.taskId, true)
+      const S = simOf(agg, task.simId)
+      setOwn(S.tasks, task.taskId, true)
       setOwn(agg.facts, `sim:${task.simId}/${task.taskId}`, true)
+      if (e.ok && dataOf(e).outcome === true) {
+        setOwn(S.outcomes, task.taskId, true)
+        setOwn(agg.facts, `simo:${task.simId}/${task.taskId}`, true)
+      }
       break
     }
     case 'lab-check': {
       const lab = refTail(ref, 'lab:')
       if (lab === null) break
       const L = labOf(agg, lab)
-      for (const check of labPassed(e)) setOwn(L.checks, check, true)
+      for (const check of labPassed(e)) {
+        setOwn(L.checks, check, true)
+        setOwn(agg.facts, `labc:${lab}/${check}`, true)
+      }
+      const checks = dataOf(e).checks
+      if (e.provenance === 'unseen' && Array.isArray(checks)) {
+        // Credit only checks drawn at grade time (spec §3.4): `fresh`, or a run that reports no seed.
+        for (const c of checks as unknown[]) {
+          const d = typeof c === 'object' && c !== null ? (c as Record<string, unknown>) : {}
+          if (typeof d.id === 'string' && d.status === 'pass' && (d.fresh === true || d.seed === undefined)) setOwn(L.unseen, d.id, true)
+        }
+      }
       const total = (e.data as { total?: unknown } | undefined)?.total
       if (typeof total === 'number') L.total = Math.max(L.total ?? 0, total)
       if (e.ok) {
@@ -169,11 +217,40 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
       if (id !== null) setOwn(agg.achievements, id, minIso(getOwn(agg.achievements, id), e.at))
       break
     }
-    case 'ack':
-      setOwn(agg.acks, ref, minIso(getOwn(agg.acks, ref), e.at))
+    case 'play': {
+      const id = refTail(ref, 'play:')
+      if (id === null) break
+      const P = playOf(agg, id)
+      P.best = Math.max(P.best, e.score)
+      if (e.ok) {
+        const phase = dataOf(e).phase
+        if (phase === 'compose') P.composed = true
+        else if (phase === 'play') {
+          P.done = true
+          setOwn(agg.facts, `play:${id}`, true)
+        }
+      }
       break
+    }
+    case 'prove': {
+      const lab = refTail(ref, 'prove:')
+      if (lab === null || !e.ok) break
+      setOwn(agg.proves, lab, minIso(getOwn(agg.proves, lab), e.at))
+      setOwn(agg.facts, `prove:${lab}`, true)
+      break
+    }
+    case 'ack': {
+      setOwn(agg.acks, ref, minIso(getOwn(agg.acks, ref), e.at))
+      const hint = parseHintRef(ref)
+      if (hint?.rung === 'bottom') {
+        // H3 bottom-out: the learner saw the answer, so runs for the next 24 h are `assisted` (spec §13.2).
+        const L = labOf(agg, hint.labId)
+        L.assistedUntil = maxIso(L.assistedUntil, new Date(Date.parse(e.at) + DAY_MS).toISOString())
+      }
+      break
+    }
     default:
-      break // predict and the reserved graded kinds: streak day only
+      break // the reserved graded kinds: streak day only
   }
 
   // Streak: every graded event marks its day, except a lab run that passed nothing.
@@ -182,6 +259,39 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
     if (!passedNothing) setOwn(agg.days, e.day, true)
   }
   return agg
+}
+
+/**
+ * A version-1 aggregate (Wave 0b snapshot) as a version-2 one, new fields empty (spec §3.1). Every v1 field
+ * is copied unchanged, so the first Wave 1 paint shows the old numbers until the engine's full derive
+ * replaces them. Two things are inferred, because v1 never stored them:
+ * - every v1 `complete` had no `via`, so it is `read` (spec §8.7);
+ * - a lesson with the `quiz-pass:` fact is passed; the exact instant is unknown, so `lastAt` (an upper
+ *   bound) stands in until the derive.
+ */
+export function upgradeAggregate(v1: AggregateV1): Aggregate {
+  const out = emptyAggregate()
+  out.events = v1.events
+  out.fleetWeek = structuredClone(v1.fleetWeek)
+  out.capstone = structuredClone(v1.capstone)
+  out.facts = structuredClone(v1.facts)
+  out.days = structuredClone(v1.days)
+  out.achievements = structuredClone(v1.achievements)
+  out.acks = structuredClone(v1.acks)
+  out.completions = structuredClone(v1.completions)
+  for (const [id, L] of Object.entries(v1.lessons)) {
+    const lesson: LessonAgg = { ...structuredClone(L) }
+    if (L.done) lesson.read = true
+    const at = L.lastAt ?? L.completedAt
+    if (getOwn(v1.facts, `quiz-pass:${id}`) && at !== undefined) {
+      lesson.passedAt = at
+      lesson.passVia = 'checkpoint'
+    }
+    setOwn(out.lessons, id, lesson)
+  }
+  for (const [id, S] of Object.entries(v1.sims)) setOwn(out.sims, id, { ...structuredClone(S), outcomes: {} })
+  for (const [id, L] of Object.entries(v1.labs)) setOwn(out.labs, id, { ...structuredClone(L), unseen: {} })
+  return out
 }
 
 /** Pure single-event fold: a copy of `agg` with `e` applied. Same code path as `derive`, so I7 holds by construction. */

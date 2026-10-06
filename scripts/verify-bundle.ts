@@ -7,21 +7,46 @@
  * closure: the entry chunk, the route's chunk and their static imports, with every CSS file they
  * name. Dynamic imports (the ledger engine, other pages, lazy decoration) are not followed.
  * Which modules a route may not import is tests/boot/imports.test.ts's job; this gate measures bytes.
+ * Wave 1 (docs/specs/wave-1.md §16.1): /boot and /today are gated at 200 KB with a tighter target, the
+ * entry has a 125 KB target after the entry diet (B2), and the play closure, the generator family
+ * chunks, the search index and the FSRS + cards + composer figure are reported. A route whose page file does not exist yet is skipped.
  *
  *   bun scripts/verify-bundle.ts
  */
+import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
 
 const BUDGET_KB = 250
+/** Entry target after the entry diet (spec §6.9, §16.1): reported, not gated. */
+const ENTRY_TARGET_KB = 125
+/** Each generator family chunk, the search index chunk, and FSRS + cards + composer (spec §16.1): reported, not gated. */
+const FAMILY_REPORT_KB = 8
+const INDEX_REPORT_KB = 15
+const LEARNER_REPORT_KB = 6
 const KB = 1000
 
+interface RouteBudget {
+  route: string
+  src: string
+  /** Fails the gate when the closure exceeds it; null reports only. */
+  budgetKb: number | null
+  /** Reported, not gated. */
+  targetKb?: number
+}
+
 /**
- * Routes with their own budget: the JS + CSS closure, gzip.
- * /boot sits at about 198 KB of 200 KB, with steps 3 to 6 split into an on-demand chunk (about 8 KB, printed
- * but not counted; 206 KB with it). Any growth in the entry chunk or the shared CSS trips this gate.
+ * Routes with their own closure (JS + CSS, gzip).
+ * /boot sits at about 165 KB after the entry diet, with steps 3 to 6 split into an on-demand chunk (about 8 KB,
+ * printed but not counted). Any growth in the entry chunk or the shared CSS shows here. /today shares the
+ * 200 KB budget (its page ships in B18; until src/pages/Today.tsx exists the route is skipped). The play is
+ * reported against its 220 KB figure but not gated in Wave 1.
  */
-const ROUTE_BUDGETS: { route: string; src: string; budgetKb: number }[] = [{ route: '/boot', src: 'src/pages/Boot.tsx', budgetKb: 200 }]
+const ROUTE_BUDGETS: RouteBudget[] = [
+  { route: '/boot', src: 'src/pages/Boot.tsx', budgetKb: 200, targetKb: 165 },
+  { route: '/today', src: 'src/pages/Today.tsx', budgetKb: 200 },
+  { route: '/play/block-placement', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220 },
+]
 
 const dist = new URL('../dist/', import.meta.url)
 const html = await readFile(new URL('index.html', dist), 'utf8')
@@ -62,6 +87,7 @@ if (entryKb > BUDGET_KB) {
 } else {
   console.log(`ok   entry chunk ${entry} is ${entryKb.toFixed(1)} KB gzip (budget ${BUDGET_KB} KB)`)
 }
+console.log(`${entryKb <= ENTRY_TARGET_KB ? 'ok  ' : 'warn'} entry chunk target ${ENTRY_TARGET_KB} KB (not gated): ${entryKb.toFixed(1)} KB`)
 
 interface ManifestChunk {
   file: string
@@ -102,8 +128,12 @@ function routeKey(src: string): string | undefined {
   return Object.keys(manifest).find((k) => manifest[k].isDynamicEntry && manifest[k].name === name)
 }
 
-for (const { route, src, budgetKb } of ROUTE_BUDGETS) {
+for (const { route, src, budgetKb, targetKb } of ROUTE_BUDGETS) {
   const key = routeKey(src)
+  if (!key && !existsSync(new URL(`../${src}`, import.meta.url))) {
+    console.log(`skip ${route}: ${src} does not exist yet`)
+    continue
+  }
   if (!key) throw new Error(`manifest has no chunk for ${src}; is build.manifest on and ${route} still lazy?`)
   const files: { file: string; gzip: number }[] = []
   for (const { chunk } of closure(['index.html', key])) {
@@ -130,6 +160,10 @@ for (const { route, src, budgetKb } of ROUTE_BUDGETS) {
     }
   }
   if (onDemand.length > 0) console.log(`  on demand, not counted: ${onDemand.join(', ')}`)
+  if (budgetKb === null) {
+    console.log(`info ${route} closure is ${totalKb.toFixed(1)} KB gzip (reported, not gated${targetKb ? `; figure ${targetKb} KB` : ''})`)
+    continue
+  }
   if (totalKb > budgetKb) {
     console.error(`FAIL ${route} closure is ${totalKb.toFixed(1)} KB gzip, over the ${budgetKb} KB budget`)
     failed = true
@@ -140,6 +174,64 @@ for (const { route, src, budgetKb } of ROUTE_BUDGETS) {
       console.log(`warn ${route} full flow with on-demand chunks is ${(totalKb + onDemandKb).toFixed(1)} KB gzip (not gated)`)
     }
   }
+  if (targetKb !== undefined) {
+    console.log(`${totalKb <= targetKb ? 'ok  ' : 'warn'} ${route} target ${targetKb} KB (not gated): ${totalKb.toFixed(1)} KB`)
+  }
+}
+
+// Reported only: each generator family chunk (spec §5.1 keeps them outside /today's closure) and the search index.
+const chunksFor = (match: (key: string, chunk: ManifestChunk) => boolean) =>
+  Object.entries(manifest).filter(([key, chunk]) => match(key, chunk))
+
+const families = chunksFor((key) => key.startsWith('src/lib/items/families/'))
+if (families.length === 0) console.log('skip generator families: no src/lib/items/families/* chunks yet')
+for (const [key, chunk] of families) {
+  const kb = (await gzipSize(chunk.file)) / KB
+  console.log(`${kb <= FAMILY_REPORT_KB ? 'ok  ' : 'warn'} family ${key.split('/').pop()} is ${kb.toFixed(1)} KB gzip (report ${FAMILY_REPORT_KB} KB, not gated)`)
+}
+
+const indexes = chunksFor((key, chunk) => /search-index/.test(key) || /search-index/.test(chunk.file))
+if (indexes.length === 0) console.log('skip search index: no search-index chunk yet')
+for (const [, chunk] of indexes) {
+  const kb = (await gzipSize(chunk.file)) / KB
+  console.log(`${kb <= INDEX_REPORT_KB ? 'ok  ' : 'warn'} search index ${chunk.file.split('/').pop()} is ${kb.toFixed(1)} KB gzip (report ${INDEX_REPORT_KB} KB, not gated)`)
+}
+
+// Reported only: FSRS + cards + composer (spec §16.1, "inside /today"). Vite folds those modules into shared
+// chunks the manifest does not name, so the figure comes from bundling the three files on their own with
+// everything else they import left external (the ledger fold, the item core, rng, calibration, reentry), minified
+// and gzipped chunk by chunk. It is the code the three modules own, and it moves with them, not with their neighbours.
+const LEARNER_SRC = ['fsrs', 'cards', 'composer'].map((n) => `src/lib/learner/${n}.ts`)
+const learnerFiles = LEARNER_SRC.map((f) => new URL(`../${f}`, import.meta.url).pathname)
+if (learnerFiles.some((f) => !existsSync(f))) {
+  console.log('skip FSRS + cards + composer: a module does not exist yet')
+} else {
+  const built = await Bun.build({
+    entrypoints: learnerFiles,
+    target: 'browser',
+    format: 'esm',
+    minify: true,
+    splitting: true,
+    plugins: [
+      {
+        name: 'own-code-only',
+        setup(build) {
+          build.onResolve({ filter: /.*/ }, async (args) => {
+            if (!args.importer) return undefined
+            const alias = args.path.startsWith('@/') ? new URL(`../src/${args.path.slice(2)}`, import.meta.url).pathname : args.path
+            const resolved = alias.startsWith('.') ? new URL(alias, `file://${args.importer}`).pathname : alias
+            const hit = learnerFiles.some((f) => resolved === f || resolved === f.replace(/\.ts$/, ''))
+            return hit ? undefined : { path: args.path, external: true }
+          })
+        },
+      },
+    ],
+  })
+  if (!built.success) throw new Error(`bundling FSRS + cards + composer failed: ${built.logs.join('\n')}`)
+  let learnerBytes = 0
+  for (const out of built.outputs) learnerBytes += gzipSync(new Uint8Array(await out.arrayBuffer())).length
+  const kb = learnerBytes / KB
+  console.log(`${kb <= LEARNER_REPORT_KB ? 'ok  ' : 'warn'} FSRS + cards + composer is ${kb.toFixed(1)} KB gzip, own code (report ${LEARNER_REPORT_KB} KB, not gated)`)
 }
 
 if (failed) process.exit(1)

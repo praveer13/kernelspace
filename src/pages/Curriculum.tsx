@@ -3,231 +3,43 @@
  * the address-space stack (capstone on top → Rust Zero base; mobile reverses
  * into curriculum order), expandable track layers with LessonRows,
  * dashed connectors with `requires` notes, "not sure where to start" strip
- * with an 8-question placement modal spanning T0–T7.
+ * that opens the placement walk (≤ 20 items, wave-1.md §7.1). The "current"
+ * marker is the first lesson of the learner's path plan (paths.ts, placement
+ * applied) that is neither done nor read; a lesson only read is marked as such.
  */
 
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowRight,
+  BookOpenCheck,
   Check,
   ChevronDown,
   Compass,
   Flame,
   GraduationCap,
-  Play,
   Terminal,
-  X,
 } from 'lucide-react'
 import ProgressRing from '@/components/ProgressRing'
-import { rankForXp, selectStreak, TOTAL_LESSONS, useProgress } from '@/lib/progress'
+import { selectRings } from '@/lib/economy'
+import { selectStreak, TOTAL_LESSONS, useProgress } from '@/lib/progress'
 import { getTrack, TRACKS, CAPSTONE } from '@/lib/tracks'
-import {
-  ALL_LESSONS,
-  ORDERED_LESSON_IDS,
-  TRACK_EXTRAS,
-  lessonsForTrack,
-  simsForTrack,
-  lessonPath,
-} from '@/data/lessons'
+import { KCS } from '@/data/kc'
+import { ALL_LESSONS, ORDERED_LESSON_IDS, TRACK_EXTRAS, lessonsForTrack, simsForTrack } from '@/data/lessons'
 import type { TrackId } from '@/data/lessons/types'
 import LessonRow from '@/pages/lesson/LessonRow'
 import { cn } from '@/lib/utils'
-import { freshSeed, shuffledOrder } from '@/lib/rng'
+import { cachedPathPlan, lessonCode, pathOf, PATH_LABEL, type PathGraph } from '@/lib/learner/paths'
+import { currentLesson, readPlacement } from '@/lib/learner/placement'
+
+// the walk loads on demand: it pulls the item player and the generator families, which a map visit never needs
+const PlacementWalk = lazy(() => import('@/components/learner/PlacementWalk'))
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number]
 
-/* ------------------------------------------------------------------ */
-/* placement quiz                                                      */
-/* ------------------------------------------------------------------ */
-
-const PLACEMENT: { q: string; options: string[]; correct: number }[] = [
-  {
-    q: 'A pointer in C is best described as…',
-    options: ['An object reference with methods', 'An integer naming a byte address in memory', 'A garbage-collected handle', 'A database foreign key'],
-    correct: 1,
-  },
-  {
-    q: 'When the CPU needs data absent from all caches, it pays roughly…',
-    options: ['1 ns', '10 ns', '100 ns (DRAM)', '10 ms'],
-    correct: 2,
-  },
-  {
-    q: 'A page fault occurs when…',
-    options: [
-      'The printer jams',
-      'A virtual address has no mapped physical frame and the kernel must intervene',
-      'The TLB is flushed by a context switch',
-      'A malloc call returns NULL',
-    ],
-    correct: 1,
-  },
-  {
-    q: 'Rust\'s borrow rule that kills data races at compile time is…',
-    options: ['One reference per value', 'Many &T (shared) XOR one &mut T (exclusive)', 'References must be static', 'Mutexes on every type'],
-    correct: 1,
-  },
-  {
-    q: 'In LLM serving, the KV cache stores…',
-    options: [
-      'Model weights on disk',
-      'Per-token key/value attention tensors so decode avoids recomputing the past',
-      'Tokenized prompts',
-      'GPU driver state',
-    ],
-    correct: 1,
-  },
-  {
-    q: 'A kernel below the roofline ridge point is usually limited by…',
-    options: [
-      'Arithmetic units only',
-      'Memory bandwidth because it performs too few FLOPs per byte moved',
-      'The operating-system scheduler',
-      'Tokenizer vocabulary size',
-    ],
-    correct: 1,
-  },
-  {
-    q: 'In a wide expert-parallel MoE layer, the all-to-all moves…',
-    options: [
-      'Model checkpoints to object storage',
-      'Tokens to their routed expert devices, then results back to their home devices',
-      'Only optimizer gradients',
-      'HTTP requests between API gateways',
-    ],
-    correct: 1,
-  },
-  {
-    q: 'Serving goodput counts…',
-    options: [
-      'Every generated token regardless of latency',
-      'Only requests or tokens delivered inside the defined latency SLO',
-      'GPU utilization above 90%',
-      'The cheapest requests in the batch',
-    ],
-    correct: 1,
-  },
-]
-
-function recommendFor(score: number): TrackId {
-  return (['t0', 't1', 't2', 't3', 't4', 't5', 't6', 't7'] as TrackId[])[Math.min(score, 7)]
-}
-
-function PlacementModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState(0)
-  const [score, setScore] = useState(0)
-  const [picked, setPicked] = useState<number | null>(null)
-  // fresh option order per attempt (the modal remounts on each open); order[displayPosition] = authored index
-  const [orders] = useState(() => {
-    const seed = freshSeed()
-    return PLACEMENT.map((p, qi) => shuffledOrder(p.options.length, (seed ^ Math.imul(qi + 1, 0x85ebca6b)) | 0))
-  })
-  const finished = step >= PLACEMENT.length
-  const rec = recommendFor(score)
-  const recTrack = getTrack(rec)!
-  const recLessons = lessonsForTrack(rec)
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.98, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.98, opacity: 0 }}
-        transition={{ duration: 0.18 }}
-        className="w-full max-w-lg rounded-lg border border-line-bright bg-surface-1 p-6 shadow-[0_24px_80px_rgba(0,0,0,.6)]"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Placement check"
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <p className="font-mono text-label uppercase text-text-3">
-            placement check · {finished ? 'result' : `${step + 1}/${PLACEMENT.length}`}
-          </p>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-text-3 hover:text-text-1">
-            <X size={16} />
-          </button>
-        </div>
-
-        {!finished ? (
-          <>
-            <div className="mb-5 h-1 overflow-hidden rounded-full bg-surface-3">
-              <div className="h-full bg-accent transition-all duration-300" style={{ width: `${(step / PLACEMENT.length) * 100}%` }} />
-            </div>
-            <p className="font-display text-h4 text-text-1">{PLACEMENT[step].q}</p>
-            <div className="mt-5 space-y-2">
-              {orders[step].map((authored, i) => {
-                const opt = PLACEMENT[step].options[authored]
-                const right = authored === PLACEMENT[step].correct
-                const isCorrect = picked !== null && right
-                const isWrongPick = picked === i && !right
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    disabled={picked !== null}
-                    onClick={() => {
-                      setPicked(i)
-                      if (right) setScore((s) => s + 1)
-                      setTimeout(() => {
-                        setPicked(null)
-                        setStep((s) => s + 1)
-                      }, 700)
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-3 rounded-md border px-4 py-3 text-left text-body-sm transition-colors duration-150',
-                      isCorrect
-                        ? 'border-accent bg-accent-dim text-text-1'
-                        : isWrongPick
-                          ? 'border-danger bg-danger/10 text-text-1'
-                          : 'border-line bg-surface-2 text-text-2 hover:border-line-bright hover:text-text-1',
-                    )}
-                  >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border border-line font-mono text-[10px]">
-                      {isCorrect ? <Check size={11} className="text-accent" /> : String.fromCharCode(65 + i)}
-                    </span>
-                    {opt}
-                  </button>
-                )
-              })}
-            </div>
-          </>
-        ) : (
-          <div className="text-center">
-            <p className="font-mono text-[11px] text-text-3">
-              you scored {score}/{PLACEMENT.length} — your entry segment:
-            </p>
-            <p className="mt-3 font-display text-h2" style={{ color: recTrack.color }}>
-              {recTrack.code} · {recTrack.name}
-            </p>
-            <p className="mx-auto mt-2 max-w-sm text-body-sm text-text-2">{recTrack.promise}</p>
-            <div className="mt-6 flex justify-center gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md border border-line bg-surface-2 px-4 py-2 font-display text-body-sm font-medium text-text-1 transition-colors duration-150 hover:border-line-bright"
-              >
-                Browse the map
-              </button>
-              <Link
-                to={lessonPath(recLessons[0])}
-                className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 font-display text-body-sm font-semibold text-accent-foreground transition-all duration-150 hover:-translate-y-px"
-              >
-                <Play size={14} /> Start {recTrack.code}.L1
-              </Link>
-            </div>
-          </div>
-        )}
-      </motion.div>
-    </motion.div>
-  )
-}
+/** What a path plan reads: labs do not change which lesson is current. */
+const PLAN_GRAPH: PathGraph = { kcs: KCS, lessons: ALL_LESSONS, labs: [] }
 
 /* ------------------------------------------------------------------ */
 /* track layer (accordion)                                             */
@@ -237,10 +49,16 @@ function TrackLayer({
   trackId,
   open,
   onToggle,
+  currentId,
+  rTestOut,
 }: {
   trackId: TrackId
   open: boolean
   onToggle: () => void
+  /** The path plan's current lesson (any track), or null. */
+  currentId: string | null
+  /** A placement found Rust reading solid (or skipped it): R is offered as test-outs. */
+  rTestOut: boolean
 }) {
   const track = getTrack(trackId)!
   const extras = TRACK_EXTRAS[trackId]
@@ -252,8 +70,9 @@ function TrackLayer({
   const pct = Math.round((doneCount / lessons.length) * 100)
   const hours = Math.round((lessons.reduce((n, l) => n + l.minutes, 0) / 60) * 2) / 2
   const exerciseCount = lessons.filter((l) => l.exercise === 'sim' || l.exercise === 'code' || l.exercise === 'quiz+sim').length
-  const state = doneCount === lessons.length ? 'done' : doneCount > 0 ? 'in progress' : 'not started'
-  const resume = lessons.find((l) => lessonStates[l.id]?.status !== 'done') ?? lessons[0]
+  // read = finished without passing: navigation only, so it never moves the percentage or the badge's count
+  const readCount = lessons.filter((l) => lessonStates[l.id]?.status === 'read').length
+  const state = doneCount === lessons.length ? 'done' : doneCount > 0 || readCount > 0 ? 'in progress' : 'not started'
 
   return (
     <div className="relative">
@@ -301,7 +120,7 @@ function TrackLayer({
                   : 'border-line text-text-3',
             )}
           >
-            {state === 'done' ? `done ${doneCount}/${lessons.length}` : state}
+            {state === 'done' ? `done ${doneCount}/${lessons.length}` : readCount > 0 ? `${state} · ${readCount} read` : state}
           </span>
           <ProgressRing value={pct} size={48} color={track.color} />
           <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.25 }} className="shrink-0 text-text-3">
@@ -319,9 +138,21 @@ function TrackLayer({
               className="overflow-hidden"
             >
               <div className="border-t border-line px-3 py-3 pl-5">
+                {trackId === 'r' && rTestOut && (
+                  <p className="px-3 pb-3 font-mono text-[11px] text-text-3">
+                    placement found your Rust reading solid: open any lesson here and test out of it.
+                  </p>
+                )}
                 <div className="divide-y divide-line/60">
                   {lessons.map((l) => (
-                    <LessonRow key={l.id} lesson={l} trackColor={track.color} current={l.id === resume.id && doneCount > 0} />
+                    <div key={l.id}>
+                      <LessonRow lesson={l} trackColor={track.color} current={l.id === currentId} />
+                      {lessonStates[l.id]?.status === 'read' && (
+                        <p className="-mt-1.5 flex items-center gap-1.5 pb-2.5 pl-14 font-mono text-[11px] text-text-3">
+                          <BookOpenCheck size={12} aria-hidden /> read, not passed: its check is still open
+                        </p>
+                      )}
+                    </div>
                   ))}
                 </div>
                 {sims.length > 0 && (
@@ -360,14 +191,20 @@ export default function CurriculumPage() {
 
   const doneCount = ORDERED_LESSON_IDS.filter((id) => lessonStates[id]?.status === 'done').length
   const overallPct = Math.round((doneCount / ORDERED_LESSON_IDS.length) * 100)
-  const rank = rankForXp(xp)
+  // the highest ring earned from the ledger, never an XP threshold (spec 8.5)
+  const rank = useProgress((s) => selectRings(s.aggregate).rank)
 
-  const nextRecommended = useMemo(() => {
-    const id = ORDERED_LESSON_IDS.find((l) => lessonStates[l]?.status !== 'done') ?? ORDERED_LESSON_IDS[0]
-    return ALL_LESSONS.find((l) => l.id === id)!
-  }, [lessonStates])
+  // the path plan (paths.ts) with the placement applied: its first lesson that is neither done nor read is "current"
+  const path = pathOf(useProgress((s) => s.working['boot:path']))
+  const placementRaw = useProgress((s) => s.working['placement:result'])
+  const placement = useMemo(() => readPlacement(placementRaw), [placementRaw])
+  const plan = cachedPathPlan(path, PLAN_GRAPH, placement)
+  const started = ORDERED_LESSON_IDS.some((id) => (lessonStates[id]?.status ?? 'unstarted') !== 'unstarted')
+  const currentId = started || placement ? currentLesson(plan, (id) => lessonStates[id]?.status) : null
+  const firstId = currentId ?? plan.lessons[0] ?? ORDERED_LESSON_IDS[0]
+  const placedAt = placement ? getTrack(placement.entryTrack) : undefined
 
-  const [open, setOpen] = useState<Set<TrackId>>(() => new Set([nextRecommended.trackId]))
+  const [open, setOpen] = useState<Set<TrackId>>(() => new Set([(ALL_LESSONS.find((l) => l.id === firstId)?.trackId ?? 'r') as TrackId]))
   const [placementOpen, setPlacementOpen] = useState(searchParams.get('placement') === '1')
 
   const toggle = (t: TrackId) =>
@@ -413,6 +250,10 @@ export default function CurriculumPage() {
                 current
               </span>
               <span className="flex items-center gap-1.5">
+                <BookOpenCheck size={14} className="text-text-2" aria-hidden />
+                read, not passed
+              </span>
+              <span className="flex items-center gap-1.5">
                 <span className="h-4 w-4 rounded-full border border-line" />
                 todo
               </span>
@@ -424,7 +265,7 @@ export default function CurriculumPage() {
             {doneCount === 0 && (
               <p className="mt-5 inline-flex items-center gap-2 rounded-md border border-line bg-surface-1 px-3 py-2 font-mono text-[11px] text-text-2">
                 <span className="h-2 w-2 animate-pulse rounded-sm bg-accent" />
-                nothing allocated yet — the address space is all yours. Start at R.L1.
+                nothing allocated yet — the address space is all yours. Start at {lessonCode(firstId)}.
               </p>
             )}
           </motion.div>
@@ -449,7 +290,7 @@ export default function CurriculumPage() {
                 <div>
                   <p className="font-mono text-body-sm text-text-1">
                     {xp} XP <span className="text-text-3">·</span>{' '}
-                    <span className="text-accent">{rank.name}</span>
+                    <span className="text-accent">{rank}</span>
                   </p>
                   <p className="flex items-center gap-1.5 font-mono text-[11px] text-text-3">
                     <Flame size={11} className="text-amber" /> {streak} day uptime
@@ -461,12 +302,28 @@ export default function CurriculumPage() {
         </div>
       </section>
 
+      {/* ------------------------- the placement walk ------------------------- */}
+      {placementOpen && (
+        <section aria-label="Placement" className="mx-auto max-w-app px-6 pt-8 lg:px-12">
+          <Suspense fallback={<p className="rounded-lg border border-line bg-surface-1 p-5 text-body-sm text-text-2">Preparing the placement walk.</p>}>
+            <PlacementWalk path={path} onClose={closePlacement} />
+          </Suspense>
+        </section>
+      )}
+
       {/* --------------------------- the stack --------------------------- */}
       <section className="mx-auto max-w-app px-6 py-12 lg:px-12">
         {/* DOM order R..T7,capstone; desktop reverses → capstone on top */}
         <div className="flex flex-col gap-2 lg:flex-col-reverse">
           {TRACKS.map((t) => (
-            <TrackLayer key={t.id} trackId={t.id as TrackId} open={open.has(t.id as TrackId)} onToggle={() => toggle(t.id as TrackId)} />
+            <TrackLayer
+              key={t.id}
+              trackId={t.id as TrackId}
+              open={open.has(t.id as TrackId)}
+              onToggle={() => toggle(t.id as TrackId)}
+              currentId={currentId}
+              rTestOut={plan.testOut.length > 0}
+            />
           ))}
 
           {/* capstone layer (DOM-last = visual top on desktop) */}
@@ -503,15 +360,23 @@ export default function CurriculumPage() {
         <div className="mx-auto max-w-app px-6 py-12 lg:px-12">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-h3 text-text-1">Not sure where to start?</h2>
-            <button
-              type="button"
-              onClick={() => setPlacementOpen(true)}
-              className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-4 py-2 font-display text-body-sm font-medium text-text-1 transition-colors duration-150 hover:border-line-bright"
-            >
-              <Compass size={14} className="text-accent" />
-              take the 3-min placement check
-            </button>
+            {!placementOpen && (
+              <button
+                type="button"
+                onClick={() => setPlacementOpen(true)}
+                className="flex min-h-11 items-center gap-2 rounded-md border border-line bg-surface-2 px-4 py-2 font-display text-body-sm font-medium text-text-1 transition-colors duration-150 hover:border-line-bright"
+              >
+                <Compass size={14} className="text-accent" aria-hidden />
+                {placement ? 'retake the placement walk' : 'take the placement walk · up to 20 items, about 15 min'}
+              </button>
+            )}
           </div>
+          {placement && (
+            <p className="mb-6 max-w-measure text-body-sm text-text-2">
+              Your placement started you at {placedAt ? `${placedAt.code} · ${placedAt.name}` : placement.entryTrack.toUpperCase()}: {placement.solidKcs.length} solid,{' '}
+              {placement.missedKcs.length} to work on, on {PATH_LABEL[path]}. Nothing is locked: every layer below is open.
+            </p>
+          )}
           <div className="grid gap-4 md:grid-cols-3">
             {[
               {
@@ -552,7 +417,6 @@ export default function CurriculumPage() {
         </div>
       </section>
 
-      <AnimatePresence>{placementOpen && <PlacementModal onClose={closePlacement} />}</AnimatePresence>
     </div>
   )
 }

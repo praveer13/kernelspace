@@ -608,6 +608,458 @@
       "boundary": "One sequence, 16-bit (BF16/FP16) K and V: 2 (K and V) x layers x KV heads x head dim x 2 bytes."
     },
     {
+      "id": "model.llama3-70b.layers",
+      "kind": "spec",
+      "value": 80,
+      "label": "Llama-3-70B layers",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_hidden_layers\": 80",
+        "row": "num_hidden_layers"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "label": "Llama-3-70B KV heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_key_value_heads\": 8",
+        "row": "num_key_value_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.attn-heads",
+      "kind": "spec",
+      "value": 64,
+      "label": "Llama-3-70B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_attention_heads\": 64",
+        "row": "num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.hidden-size",
+      "kind": "spec",
+      "value": 8192,
+      "label": "Llama-3-70B hidden size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"hidden_size\": 8192",
+        "row": "hidden_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.head-dim",
+      "kind": "derived",
+      "value": 128,
+      "label": "Llama-3-70B head dimension",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.attn-heads"
+        ],
+        "formula": "hiddenSize / attnHeads"
+      },
+      "boundary": "No head_dim in config.json: hidden_size / num_attention_heads."
+    },
+    {
+      "id": "model.llama3-70b.ffn-size",
+      "kind": "spec",
+      "value": 28672,
+      "label": "Llama-3-70B FFN intermediate size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"intermediate_size\": 28672",
+        "row": "intermediate_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.llama3-70b.vocab",
+      "kind": "spec",
+      "value": 128256,
+      "label": "Llama-3-70B vocabulary size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/main/config.json",
+        "title": "Meta-Llama-3-70B config.json (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"vocab_size\": 128256",
+        "row": "vocab_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Embedding and output head are untied (\"tie_word_embeddings\": false)."
+    },
+    {
+      "id": "model.llama3-70b.params",
+      "kind": "derived",
+      "value": 70.55,
+      "unit": "B params",
+      "label": "Llama-3-70B parameters",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-70b.layers",
+          "model.llama3-70b.kv-heads",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.ffn-size",
+          "model.llama3-70b.vocab",
+          "model.llama3-70b.head-dim"
+        ],
+        "formula": "2 * vocab * hidden + layers * (2 * hidden * hidden + 2 * hidden * kvHeads * headDim + 3 * hidden * ffn + 2 * hidden) + hidden"
+      },
+      "boundary": "Counted from the config (untied embeddings, RMSNorm weights included); rounded to two decimals. Model cards round it to 70.6B."
+    },
+    {
+      "id": "model.qwen3-0-6b.layers",
+      "kind": "spec",
+      "value": 28,
+      "label": "Qwen3-0.6B layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 28",
+        "row": "num_hidden_layers"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.qwen3-0-6b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "label": "Qwen3-0.6B KV heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 8",
+        "row": "num_key_value_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.qwen3-0-6b.attn-heads",
+      "kind": "spec",
+      "value": 16,
+      "label": "Qwen3-0.6B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"num_attention_heads\": 16",
+        "row": "num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.qwen3-0-6b.head-dim",
+      "kind": "spec",
+      "value": 128,
+      "label": "Qwen3-0.6B head dimension",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/raw/main/config.json",
+        "title": "Qwen3-0.6B config.json (Qwen organisation, Hugging Face)",
+        "quote": "\"head_dim\": 128",
+        "row": "head_dim"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Explicit in config.json, not hidden_size / num_attention_heads (1024 / 16 = 64)."
+    },
+    {
+      "id": "model.mixtral-8x7b.layers",
+      "kind": "spec",
+      "value": 32,
+      "label": "Mixtral-8x7B layers",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 32",
+        "row": "num_hidden_layers"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "label": "Mixtral-8x7B KV heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 8",
+        "row": "num_key_value_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Base model v0.1. Only the feed-forward layers are experts; attention is dense GQA."
+    },
+    {
+      "id": "model.mixtral-8x7b.attn-heads",
+      "kind": "spec",
+      "value": 32,
+      "label": "Mixtral-8x7B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_attention_heads\": 32",
+        "row": "num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.hidden-size",
+      "kind": "spec",
+      "value": 4096,
+      "label": "Mixtral-8x7B hidden size",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"hidden_size\": 4096",
+        "row": "hidden_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.head-dim",
+      "kind": "derived",
+      "value": 128,
+      "label": "Mixtral-8x7B head dimension",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.mixtral-8x7b.hidden-size",
+          "model.mixtral-8x7b.attn-heads"
+        ],
+        "formula": "hiddenSize / attnHeads"
+      },
+      "boundary": "No head_dim in config.json: hidden_size / num_attention_heads."
+    },
+    {
+      "id": "model.mixtral-8x7b.ffn-size",
+      "kind": "spec",
+      "value": 14336,
+      "label": "Mixtral-8x7B expert FFN intermediate size",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"intermediate_size\": 14336",
+        "row": "intermediate_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The size of each expert, not of the layer: every one of the 8 experts has this shape."
+    },
+    {
+      "id": "model.mixtral-8x7b.vocab",
+      "kind": "spec",
+      "value": 32000,
+      "label": "Mixtral-8x7B vocabulary size",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"vocab_size\": 32000",
+        "row": "vocab_size"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Embedding and output head are untied (\"tie_word_embeddings\": false)."
+    },
+    {
+      "id": "model.mixtral-8x7b.experts",
+      "kind": "spec",
+      "value": 8,
+      "label": "Mixtral-8x7B experts per layer",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_local_experts\": 8",
+        "row": "num_local_experts"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.experts-per-token",
+      "kind": "spec",
+      "value": 2,
+      "label": "Mixtral-8x7B experts routed per token",
+      "source": {
+        "url": "https://huggingface.co/mistralai/Mixtral-8x7B-v0.1/raw/main/config.json",
+        "title": "Mixtral-8x7B-v0.1 config.json (Mistral AI, Hugging Face)",
+        "quote": "\"num_experts_per_tok\": 2",
+        "row": "num_experts_per_tok"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.mixtral-8x7b.params",
+      "kind": "derived",
+      "value": 46.7,
+      "unit": "B params",
+      "label": "Mixtral-8x7B total parameters (all experts resident)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.mixtral-8x7b.layers",
+          "model.mixtral-8x7b.kv-heads",
+          "model.mixtral-8x7b.hidden-size",
+          "model.mixtral-8x7b.ffn-size",
+          "model.mixtral-8x7b.vocab",
+          "model.mixtral-8x7b.head-dim",
+          "model.mixtral-8x7b.experts"
+        ],
+        "formula": "2 * vocab * hidden + layers * (2 * hidden * hidden + 2 * hidden * kvHeads * headDim + experts * 3 * hidden * ffn + hidden * experts + 2 * hidden) + hidden"
+      },
+      "boundary": "Counted from the config: dense GQA attention, a router, and every expert; rounded to two decimals. Memory must hold all of it."
+    },
+    {
+      "id": "model.mixtral-8x7b.active-params",
+      "kind": "derived",
+      "value": 12.88,
+      "unit": "B params",
+      "label": "Mixtral-8x7B parameters active per token",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.mixtral-8x7b.layers",
+          "model.mixtral-8x7b.kv-heads",
+          "model.mixtral-8x7b.hidden-size",
+          "model.mixtral-8x7b.ffn-size",
+          "model.mixtral-8x7b.vocab",
+          "model.mixtral-8x7b.head-dim",
+          "model.mixtral-8x7b.experts",
+          "model.mixtral-8x7b.experts-per-token"
+        ],
+        "formula": "2 * vocab * hidden + layers * (2 * hidden * hidden + 2 * hidden * kvHeads * headDim + expertsPerToken * 3 * hidden * ffn + hidden * experts + 2 * hidden) + hidden"
+      },
+      "boundary": "The same count with only the routed experts; rounded to two decimals. It sets compute and weight traffic per decoded token, not the memory."
+    },
+    {
+      "id": "model.kv.static-utilization-low",
+      "kind": "benchmark",
+      "value": 20.4,
+      "unit": "%",
+      "label": "KV cache memory holding real token states, worst existing system",
+      "source": {
+        "url": "https://arxiv.org/abs/2309.06180",
+        "title": "Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention (SOSP 2023), section 1",
+        "quote": "only 20.4% - 38.2% of the KV cache memory is used to store the actual token states in the existing systems"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "2023 systems that pre-allocate the maximum length per request (FasterTransformer, Orca), on the paper's workloads."
+    },
+    {
+      "id": "model.kv.static-utilization-high",
+      "kind": "benchmark",
+      "value": 38.2,
+      "unit": "%",
+      "label": "KV cache memory holding real token states, best existing system",
+      "source": {
+        "url": "https://arxiv.org/abs/2309.06180",
+        "title": "Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention (SOSP 2023), section 1",
+        "quote": "only 20.4% - 38.2% of the KV cache memory is used to store the actual token states in the existing systems"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The other end of the range in model.kv.static-utilization-low."
+    },
+    {
+      "id": "model.kv.static-utilization",
+      "kind": "derived",
+      "value": 29.3,
+      "unit": "%",
+      "label": "KV cache memory holding real token states under static reservation (mid-range)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "model.kv.static-utilization-low",
+          "model.kv.static-utilization-high"
+        ],
+        "formula": "(low + high) / 2"
+      },
+      "boundary": "The middle of the paper's measured range, rounded to one decimal. The KV calculator uses it for \"static reservation\"."
+    },
+    {
+      "id": "synthetic.kv.paged-waste",
+      "kind": "synthetic",
+      "value": 4,
+      "unit": "%",
+      "label": "KV calculator: memory lost to PagedAttention block rounding (course stand-in)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "No source for this exact figure: a round upper bound. The paper reports \"near-zero waste\"; the tail of one 16-token block per sequence is far below 4% at any context the calculator offers."
+    },
+    {
+      "id": "synthetic.kv.runtime-overhead",
+      "kind": "synthetic",
+      "value": 3,
+      "unit": "% of weight bytes",
+      "label": "KV calculator: activations, CUDA context and scratch as a share of the weights (course stand-in)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "No source: it only keeps the weights-plus-KV bar honest on a GPU that just fits. Real engines reserve a fraction of HBM (vLLM gpu_memory_utilization) and it varies."
+    },
+    {
+      "id": "synthetic.kv.runtime-base",
+      "kind": "synthetic",
+      "value": 1,
+      "unit": "GB",
+      "label": "KV calculator: fixed runtime reserve per run, CUDA context and workspace (course stand-in)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "No source: a round number chosen for the exercise, added to the share of the weights in synthetic.kv.runtime-overhead."
+    },
+    {
+      "id": "synthetic.kv.itl-slo",
+      "kind": "synthetic",
+      "value": 50,
+      "unit": "ms",
+      "label": "KV calculator: inter-token latency target for the bandwidth wall (course stand-in)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "No source: a round interactive-chat target chosen for the exercise."
+    },
+    {
+      "id": "synthetic.kv.custom-params",
+      "kind": "synthetic",
+      "value": 7,
+      "unit": "B params",
+      "label": "KV calculator: weight size assumed for the custom architecture (course stand-in)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "No source: a stand-in size for a shape the learner types in, so the custom preset has weights to fit beside its KV. It is not derived from the layers, KV heads or head dim entered."
+    },
+    {
       "id": "price.h100.median",
       "kind": "price",
       "value": 3.49,
@@ -741,6 +1193,116 @@
       "verifiedAt": "2026-10-04",
       "ttlDays": 365,
       "boundary": "No source: it only makes the Fleet cost card produce a plausible $/Mtok."
+    },
+    {
+      "id": "production.vllm.block-size",
+      "kind": "status",
+      "value": 16,
+      "unit": "tokens/block",
+      "label": "vLLM default KV cache block size",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/main/vllm/config/cache.py",
+        "title": "vLLM source: vllm/config/cache.py (CacheConfig)",
+        "quote": "DEFAULT_BLOCK_SIZE: ClassVar[int] = 16",
+        "row": "CacheConfig.DEFAULT_BLOCK_SIZE"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "When --block-size is not given. Hybrid and Mamba models track their own block sizes (mamba_block_size)."
+    },
+    {
+      "id": "production.vllm.v1-preemption",
+      "kind": "status",
+      "value": "recompute",
+      "label": "vLLM V1 default preemption mode",
+      "source": {
+        "url": "https://docs.vllm.ai/en/latest/configuration/optimization/",
+        "title": "vLLM docs: Optimization and Tuning (Preemption)",
+        "quote": "In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture.",
+        "row": "Preemption"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "V1 engine: a preempted request is recomputed, not swapped to CPU."
+    },
+    {
+      "id": "production.glibc.mmap-threshold",
+      "kind": "spec",
+      "value": 131072,
+      "unit": "bytes",
+      "label": "glibc malloc initial mmap threshold (128 KiB)",
+      "source": {
+        "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html",
+        "title": "mallopt(3), Linux man-pages",
+        "quote": "Balancing these factors leads to a default setting of 128*1024 for the M_MMAP_THRESHOLD parameter.",
+        "row": "M_MMAP_THRESHOLD"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The starting value. glibc raises it dynamically as larger mmapped blocks are freed, unless M_MMAP_THRESHOLD is set."
+    },
+    {
+      "id": "production.glibc.bins",
+      "kind": "spec",
+      "value": "fast, unsorted, small, large",
+      "label": "glibc malloc free-chunk bin kinds",
+      "source": {
+        "url": "https://sourceware.org/glibc/wiki/MallocInternals",
+        "title": "glibc wiki: MallocInternals",
+        "quote": "The normal bins are divided into \"small\" bins, where each chunk is the same size, and \"large\" bins, where chunks are a range of sizes.",
+        "row": "Arenas > bins"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Per arena, with a per-thread cache (tcache) in front. Fastbins do not coalesce; small and large bins do."
+    },
+    {
+      "id": "production.jemalloc.classes-per-doubling",
+      "kind": "spec",
+      "value": 4,
+      "unit": "classes per doubling",
+      "label": "jemalloc size classes per doubling in size",
+      "source": {
+        "url": "https://jemalloc.net/jemalloc.3.html",
+        "title": "jemalloc(3) manual page",
+        "quote": "there are four size classes for each doubling in size",
+        "row": "Size classes"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Classes that are multiples of the quantum; tiny requests round up to a power of two."
+    },
+    {
+      "id": "production.jemalloc.max-internal-frag",
+      "kind": "spec",
+      "value": 20,
+      "unit": "%",
+      "label": "jemalloc internal fragmentation bound from size-class spacing",
+      "source": {
+        "url": "https://jemalloc.net/jemalloc.3.html",
+        "title": "jemalloc(3) manual page",
+        "quote": "limits internal fragmentation to approximately 20% for all but the smallest size classes",
+        "row": "Size classes"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Rounding waste only, not slab or extent overhead."
+    },
+    {
+      "id": "production.jemalloc.small-classes",
+      "kind": "spec",
+      "value": "8, 16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256",
+      "unit": "bytes",
+      "label": "jemalloc smallest size classes on 64-bit",
+      "source": {
+        "url": "https://jemalloc.net/jemalloc.3.html",
+        "title": "jemalloc(3) manual page",
+        "quote": "lg [8] 16 [16, 32, 48, 64, 80, 96, 112, 128] 32 [160, 192, 224, 256]",
+        "row": "Table 1. Size classes > Small"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "64-bit, 16-byte quantum, 4 KiB pages; the table continues to 14 KiB."
     }
   ]
 }

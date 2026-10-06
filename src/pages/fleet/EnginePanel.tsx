@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, Pause, Play, RotateCcw, StepForward, Upload } from 'lucide-react'
-import { instantiateLab, LabAbiError, LabTrapError } from '@/lib/wasm-lab'
+import { describeFleetError, openFleetSession, type FleetSession } from '@/lib/fleet-session'
 import {
-  Engine,
   loadTraceStream,
-  makeRefManager,
-  makeRefQueue,
-  makeRefScheduler,
   makeRequestStream,
   makeServingMetrics,
   PRACTICE_SEED,
   type ManagerDump,
 } from '@/lib/fleet-model'
+import type { EngineSnapshot } from '@/workers/fleet-protocol'
 import {
   FLEET_TRAFFIC_PROFILES,
   getFleetTrafficProfile,
@@ -22,7 +19,7 @@ import {
   type FleetTrafficId,
 } from '@/lib/traces'
 import { cn } from '@/lib/utils'
-import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet/drivers'
+import { slotBytes } from '@/pages/fleet/drivers'
 import MetricsDashboard from '@/pages/fleet/MetricsDashboard'
 import type { SlotState } from '@/pages/fleet/slots'
 
@@ -32,6 +29,8 @@ const SPAN = 900
 interface PanelError {
   title: string
   detail: string
+  /** a fleet command outran its budget: offer "reset with reference drivers" */
+  timedOut?: boolean
 }
 
 type TrafficChoice = FleetTrafficId | 'local'
@@ -41,7 +40,7 @@ interface LocalTrace {
   artifact: TraceArtifact
 }
 
-export default function EnginePanel({ slots }: { slots: SlotState }) {
+export default function EnginePanel({ slots, onUseReference }: { slots: SlotState; onUseReference?: () => void }) {
   const [traffic, setTraffic] = useState<TrafficChoice>('synthetic')
   const [localTrace, setLocalTrace] = useState<LocalTrace | null>(null)
   const [tick, setTick] = useState(0)
@@ -66,47 +65,49 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
   const [violations, setViolations] = useState<string[]>([])
   const [divergence, setDivergence] = useState<string | null>(null)
   const [isDone, setIsDone] = useState(false)
-  const mineRef = useRef<Engine | null>(null)
-  const refRef = useRef<Engine | null>(null)
+  /* the live session, and whether a step is in flight (the 60 ms cadence skips a tick rather than queueing one) */
+  const liveRef = useRef<{ session: FleetSession<EngineSnapshot>; busy: boolean } | null>(null)
   const totalRef = useRef(REQ_COUNT)
   const buildTokenRef = useRef(0)
   const localTraceInputRef = useRef<HTMLInputElement>(null)
 
-  const buildEngines = useCallback(async (s: SlotState, which: TrafficChoice, local: LocalTrace | null) => {
+  const buildSession = useCallback(async (s: SlotState, which: TrafficChoice, local: LocalTrace | null, isCurrent: () => boolean) => {
     const profile = getFleetTrafficProfile(which === 'local' ? 'lmsys-shape' : which)
     const { config: cfg, intakeCap, drainPerTick: drain } = profile
-    const stream =
-      which === 'local'
-        ? local
-          ? traceToRequestStream(local.artifact)
-          : (() => {
-              throw new Error('choose a local trace artifact first')
-            })()
-        : profile.artifactUrl
-          ? await loadTraceStream(profile.artifactUrl)
-          : makeRequestStream(REQ_COUNT, SPAN, PRACTICE_SEED)
-    const referenceStream = stream.map((request) => ({
-      ...request,
-      ...(request.tokens ? { tokens: [...request.tokens] } : {}),
-    }))
-    const total = stream.length
-    const schedMine = s.sched ? makeWasmScheduler(await instantiateLab(s.sched.bytes)) : makeRefScheduler()
-    const mgrMine = s.mgr ? makeWasmManager(await instantiateLab(s.mgr.bytes), cfg.numBlocks, cfg.blockSize) : makeRefManager(cfg.numBlocks, cfg.blockSize)
-    const queueMine = s.queue ? makeWasmQueue(await instantiateLab(s.queue.bytes), intakeCap) : makeRefQueue(intakeCap)
-    const shadow = s.queue ? makeRefQueue(intakeCap) : undefined
-    const mine = new Engine(cfg, stream, schedMine, mgrMine, {
-      intake: queueMine,
-      intakeShadow: shadow,
-      drainPerTick: drain,
-    })
-    const reference = new Engine(
-      cfg,
-      referenceStream,
-      makeRefScheduler(),
-      makeRefManager(cfg.numBlocks, cfg.blockSize),
-      { intake: makeRefQueue(intakeCap), drainPerTick: drain },
-    )
-    return { mine, reference, total }
+    let stream
+    try {
+      stream =
+        which === 'local'
+          ? local
+            ? traceToRequestStream(local.artifact)
+            : (() => {
+                throw new Error('choose a local trace artifact first')
+              })()
+          : profile.artifactUrl
+            ? await loadTraceStream(profile.artifactUrl)
+            : makeRequestStream(REQ_COUNT, SPAN, PRACTICE_SEED)
+    } catch (cause) {
+      if (isCurrent()) setError({ title: 'trace failed to load', detail: cause instanceof Error ? cause.message : String(cause) })
+      return
+    }
+    if (!isCurrent()) return
+    try {
+      /* the worker instantiates the learner modules from the slot bytes and holds both engines */
+      const session = await openFleetSession({
+        mode: 'engine',
+        slots: slotBytes(s),
+        traffic: stream,
+        cfg: { engine: cfg, intakeCap, drainPerTick: drain },
+      })
+      if (!isCurrent()) {
+        session.close()
+        return
+      }
+      liveRef.current = { session, busy: false }
+      totalRef.current = session.total
+    } catch (cause) {
+      if (isCurrent()) setError(describeFleetError(cause))
+    }
   }, [])
 
   const reset = useCallback(() => {
@@ -116,20 +117,10 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
     setDivergence(null)
     setIsDone(false)
     setError(null)
-    mineRef.current = null
-    refRef.current = null
+    liveRef.current?.session.close()
+    liveRef.current = null
     const token = ++buildTokenRef.current
-    void buildEngines(slots, traffic, localTrace)
-      .then(({ mine, reference, total }) => {
-        if (buildTokenRef.current !== token) return
-        mineRef.current = mine
-        refRef.current = reference
-        totalRef.current = total
-      })
-      .catch((cause: unknown) => {
-        if (buildTokenRef.current !== token) return
-        setError({ title: 'trace failed to load', detail: cause instanceof Error ? cause.message : String(cause) })
-      })
+    void buildSession(slots, traffic, localTrace, () => buildTokenRef.current === token)
     setMine({
       met: 0,
       done: 0,
@@ -146,62 +137,52 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
     })
     setRef({ met: 0, done: 0, p95: 0 })
     setDump(null)
-  }, [slots, traffic, localTrace, buildEngines])
+  }, [slots, traffic, localTrace, buildSession])
 
   useEffect(() => {
     reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, traffic])
 
-  const step = useCallback(() => {
-    const me = mineRef.current
-    const re = refRef.current
-    if (!me || !re) return
-    if (me.done && re.done) {
-      setPlaying(false)
-      return
-    }
+  /* leaving the page, or switching panels, stops the worker */
+  useEffect(
+    () => () => {
+      buildTokenRef.current++
+      liveRef.current?.session.close()
+      liveRef.current = null
+    },
+    [],
+  )
+
+  const step = useCallback(async () => {
+    const live = liveRef.current
+    if (!live || live.busy) return
+    live.busy = true
     try {
-      if (!me.done) me.step()
-      if (!re.done) re.step()
-    } catch (e) {
-      setPlaying(false)
-      if (e instanceof LabTrapError) {
-        setError({ title: 'module trapped mid-run', detail: 'a todo!() or panic fired while the engine was driving your code.' })
-      } else if (e instanceof LabAbiError) {
-        setError({ title: 'ABI problem', detail: e.message })
-      } else {
-        setError({ title: 'engine error', detail: String(e) })
+      const snap = await live.session.step(1)
+      if (liveRef.current !== live) return
+      setMine(snap.mine)
+      setRef(snap.reference)
+      if (snap.violations.length > 0) setViolations(snap.violations)
+      if (snap.divergence) setDivergence(snap.divergence)
+      setDump(snap.dump)
+      setTick(snap.tick)
+      if (snap.done) {
+        setPlaying(false)
+        setIsDone(true)
       }
-      return
+    } catch (e) {
+      if (liveRef.current !== live) return
+      setPlaying(false)
+      setError(describeFleetError(e))
+    } finally {
+      live.busy = false
     }
-    const s = me.stats()
-    const rs = re.stats()
-    setMine({
-      met: s.sloMet,
-      done: s.completed,
-      p95: me.ttftP95(),
-      tpotP95: me.tpotP95(),
-      queueP95: me.queueP95(),
-      inputTokens: s.completedInputTokens,
-      outputTokens: s.completedOutputTokens,
-      autoPreempts: s.autoPreempts,
-      capMisses: s.capacityMisses,
-      shed: s.shed,
-      waiting: s.waitingNow,
-      running: s.runningNow,
-    })
-    setRef({ met: rs.sloMet, done: rs.completed, p95: re.ttftP95() })
-    if (me.violations.length > 0) setViolations(me.violations.slice(0, 3))
-    if (me.divergence.length > 0) setDivergence(me.divergence[0])
-    setDump(me.mgrDump())
-    setTick(me.tick)
-    if (me.done && re.done) setIsDone(true)
   }, [])
 
   useEffect(() => {
     if (!playing) return
-    const id = window.setInterval(step, 60)
+    const id = window.setInterval(() => void step(), 60)
     return () => window.clearInterval(id)
   }, [playing, step])
 
@@ -299,7 +280,7 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
         <button onClick={() => setPlaying((p) => !p)} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1" aria-label={playing ? 'pause' : 'play'}>
           {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </button>
-        <button onClick={step} disabled={playing} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1 disabled:opacity-40" aria-label="step one tick">
+        <button onClick={() => void step()} disabled={playing} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1 disabled:opacity-40" aria-label="step one tick">
           <StepForward className="h-4 w-4" />
         </button>
         <button onClick={reset} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1" aria-label="reset">
@@ -320,6 +301,15 @@ export default function EnginePanel({ slots }: { slots: SlotState }) {
             <div>
               <p className="font-mono text-sm text-danger">{error.title}</p>
               <p className="mt-1 text-body-sm text-text-2">{error.detail}</p>
+              {error.timedOut && onUseReference && (
+                <button
+                  type="button"
+                  onClick={onUseReference}
+                  className="mt-3 rounded border border-line bg-surface-1 px-3 py-1.5 font-mono text-[11px] text-text-1 hover:border-accent/50"
+                >
+                  reset with reference drivers
+                </button>
+              )}
             </div>
           </motion.div>
         )}

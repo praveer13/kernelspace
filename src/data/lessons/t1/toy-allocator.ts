@@ -10,7 +10,78 @@ const lesson: Lesson = {
   hook: 'Free lists, splitting, coalescing — the highest-ROI exercise in the course: KV-cache managers are fancy allocators.',
   exercise: 'sim',
   simId: 'sim-allocator',
+  kcs: ['t1.allocator-contract', 't1.split-coalesce', 't1.placement-policy'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'A free list holds many small adjacent free blocks, and a large request fails. Name the missing mechanism and say how it works.',
+        model:
+          'Coalescing is missing. On free, the allocator checks whether the neighbours are free too and fuses them into one larger block, in constant time if boundary tags store the size at both ends. Without it the heap splinters: plenty of free bytes, no contiguous range big enough.',
+        ideas: [
+          'Coalescing merges a freed block with its free neighbours',
+          'Boundary tags let the allocator find a neighbour in O(1)',
+          'Without it free memory splinters into pieces too small to use',
+        ],
+        kcs: ['t1.split-coalesce'],
+      },
+      {
+        prompt: 'Compare first fit and best fit on the same free list, and say what each one risks.',
+        model:
+          'First fit takes the first block that is big enough. It is fast, but crumbs collect at the front of the list. Best fit takes the smallest sufficient block, which sounds optimal but tends to leave tiny, unusable slivers. Neither removes fragmentation; both only change how fast it builds.',
+        ideas: [
+          'First fit is fast, but crumbs collect at the front',
+          'Best fit takes the smallest block that fits, but leaves slivers',
+          'Neither policy removes fragmentation, they only steer it',
+        ],
+        kcs: ['t1.placement-policy'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'Three adjacent free blocks each hold 16 bytes of payload, headers not counted, and a 40-byte request arrives. What lets the allocator serve it?',
+          options: [
+            'Handing out the three regions as separate pointers that the caller joins up',
+            'Splitting one of the free regions into bigger pieces that can hold the request',
+            'Asking the kernel for a fresh slab each time that a request turns out too large',
+            'Fusing the three neighbours into one larger free block as they were freed',
+          ],
+          correct: [3],
+          why: [
+            'malloc must return one contiguous pointer. The caller cannot join separate regions, because nothing guarantees they sit side by side.',
+            'Splitting only makes blocks smaller. It cannot turn a 16-byte region into a larger one, so it is no help for a bigger request.',
+            'Going back to the kernel for every large request would make malloc slow, and it would leave the free crumbs unused.',
+            'Right: coalescing fuses adjacent free blocks into one, so the three 16-byte payloads become a single range of 48 bytes, plus the two headers it absorbs. That holds 40 bytes.',
+          ],
+          revealAt: 'The two operations that matter',
+          kcs: ['t1.split-coalesce'],
+        },
+        {
+          kind: 'choice',
+          q: 'The free holes, in address order, are 100, 40 and 70 bytes, and a 35-byte request arrives. Which holes do best fit and first fit take?',
+          options: [
+            'Best fit takes the 100-byte hole, and first fit takes the 40-byte hole',
+            'Best fit takes the 40-byte hole, and first fit takes the 100-byte hole',
+            'Best fit takes the 40-byte hole, and first fit takes the 40-byte hole',
+            'Best fit takes the 70-byte hole, and first fit takes the 100-byte hole',
+          ],
+          correct: [1],
+          why: [
+            'Reversed. First fit scans from the head and stops at 100, which already fits. Best fit looks for the tightest hole, which is 40.',
+            'Right: first fit stops at the first hole that fits, the 100-byte one. Best fit scans for the smallest hole that fits, the 40-byte one.',
+            'First fit does not skip a hole that fits. The 100-byte hole comes first in address order and holds 35 bytes, so first fit stops there.',
+            'The 70-byte hole fits, but the 40-byte hole fits more tightly. Best fit takes the smallest sufficient hole, which is 40.',
+          ],
+          revealAt: 'Placement policy is a research field in one function',
+          kcs: ['t1.placement-policy'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `Every heap allocation you have ever made — every Java object, every Python list, every \`malloc\` — was served by a piece of code with exactly the same job description: *given a big slab of memory, hand out variable-size pieces, take them back in any order, and do not waste too much or take too long.* That code is the **allocator**, and in this lesson you will build a working one in about 60 lines of C.
@@ -125,6 +196,24 @@ Look past the pointer plumbing; the algorithm is two ideas.
         { caption: 'After many alloc/free cycles: the slab is a mosaic of used and free pieces. Two adjacent free crumbs (c3, c4) individually can\'t serve a 4 KiB request even though their bytes are contiguous.', active: ['c1', 'c2', 'c3', 'c4', 'c5'] },
         { caption: 'COALESCE: on free, merge with free neighbors into one bigger block. Crumbs become usable ranges again. Skip coalescing and the heap degenerates into gravel — external fragmentation wins.', active: ['c3', 'c4'], edges: ['c3->c4'] },
       ],
+      predictAt: {
+        step: 1,
+        prompt: 'The slab starts as one 1 MiB free block, and first-fit serves malloc(4 KiB). What does the free list hold afterwards?',
+        options: [
+          'One free block of about 1 MiB minus 4 KiB, left after the head is given out',
+          'Nothing, and the first block that fits is handed out whole to the caller',
+          'One free block of exactly 1 MiB, with the 4 KiB being borrowed from some other region',
+          'Two free blocks of about 512 KiB each, with the slab divided evenly into halves',
+        ],
+        correct: [0],
+        why: [
+          'Right: the head becomes the allocation and the tail stays on the free list, a block of about 1 MiB minus 4 KiB less a 16-byte header.',
+          'This is what happens without splitting, and the first malloc(8) would then consume the whole megabyte. Splitting keeps the tail free.',
+          'A free block cannot stay at full size after part of it is handed out. The 4 KiB comes out of the slab, so the remaining block shrinks.',
+          'The allocator carves exactly what was requested, not half. An even division would hand out 512 KiB for a 4 KiB request.',
+        ],
+        kcs: ['t1.split-coalesce'],
+      },
     },
     {
       type: 'prose',
@@ -193,6 +282,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
         'Replay that exact trace under first-fit, next-fit, and best-fit; rank their final ratio and failures.',
         'Use the unsafe inspector to double-free a block and watch two owners receive the same address.',
       ],
+      taskIds: ['alloc.coalesce-recover', 'alloc.policy-race'],
       note: `What you just operated is the reference design. glibc malloc = this + per-thread arenas + size classes. vLLM's KV manager = this with **one** size class (fixed blocks), which deletes the fit-search and most fragmentation in one move — the lesson T1.L4 and T5.L5 both build on.`,
     },
     {
@@ -215,6 +305,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
             'Describes scatter allocation. malloc must return one contiguous pointer, so it cannot stitch two separate blocks together; splitting divides a single block instead.',
             'Mixes up splitting with block layout. The header sits directly before its payload and is never freed separately; splitting just writes a fresh header for the remainder.',
           ],
+          kcs: ['t1.split-coalesce'],
         },
         {
           q: 'Without coalescing, a long-running heap tends to…',
@@ -233,6 +324,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
             'Confuses "not merged" with "not freed". toy_free still pushes the block onto the free list, so same-size or smaller requests can reuse it; only larger requests fail.',
             'Overstates the effect. Unmerged blocks are still reusable for equal or smaller requests, and the arena is a fixed slab, so address space does not run out at once.',
           ],
+          kcs: ['t1.split-coalesce'],
         },
         {
           q: 'Why do jemalloc/tcmalloc/glibc use segregated size classes?',
@@ -251,6 +343,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
             'Backwards. Rounding a request up to its class creates internal fragmentation by design; size classes bound that slack but do not eliminate it.',
             'Page-size limits are unrelated. A single free list can track large blocks, and large requests usually bypass size classes and go to mmap directly.',
           ],
+          kcs: ['t1.placement-policy'],
         },
         {
           q: 'A double-free in a free-list allocator is catastrophic because…',
@@ -269,6 +362,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
             'Misreads the damage. Pushing a block twice leaves the list populated; the harm is aliased ownership of one address, not an emptied list or malloc returning NULL.',
             'Assumes free() talks to the kernel. Small frees only update allocator state in user space, so there is no double release of pages and no kill from the kernel.',
           ],
+          kcs: ['t1.allocator-contract', 't1.memory-errors'],
         },
         {
           q: 'The strongest structural similarity between your toy allocator and vLLM\'s KV manager is…',
@@ -287,6 +381,7 @@ Step back and name what you built: a system that multiplexes a fixed resource am
             'Mistakes scope. The toy is a user-space library and vLLM runs as a user-space serving process; neither manages physical pages the way the kernel does.',
             'Neither uses a GC. Both free explicitly: toy_free on a pointer, and the KV manager when a sequence finishes or is preempted. Reachability is never traced.',
           ],
+          kcs: ['t1.allocator-contract'],
         },
       ],
     },

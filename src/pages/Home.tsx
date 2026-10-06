@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { motion, useReducedMotion } from 'framer-motion'
 import Lenis from 'lenis'
@@ -22,11 +22,12 @@ import TrackCard from '@/components/TrackCard'
 import CodeBlock from '@/components/CodeBlock'
 import { LinkButton } from '@/components/Button'
 import { lazyDecoration } from '@/lib/lazy-decoration'
-import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
+import { selectRings } from '@/lib/economy'
+import { TRACKS, CAPSTONE, SIMS } from '@/lib/tracks'
+import { isFirstVisit, useUpNext, type UpNextState } from '@/lib/learner/up-next'
 import {
   useProgress,
   selectDoneLessons,
-  rankForXp,
   TOTAL_LESSONS,
 } from '@/lib/progress'
 import {
@@ -71,20 +72,90 @@ const META_CHIPS = [
   '100% in-browser',
 ]
 
+/**
+ * "Today · 9 items · ~10 min" (wave-1.md §6.9). The count is Today's own session, composed by the same pure
+ * model once the browser is idle, because it needs the ledger engine and the lesson corpus, which Home does
+ * not otherwise load. Until then the card says only "Today", and it keeps its size so nothing shifts. A
+ * failure to load leaves that plain card: it is a link, never a gate.
+ */
+function TodayCard() {
+  const week = useProgress((s) => s.working['boot:week'])
+  const prefs = useProgress((s) => s.working['today:prefs'])
+  const placement = useProgress((s) => s.working['placement:result'])
+  const handoff = useProgress((s) => s.working['handoff:last'])
+  const [label, setLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    let live = true
+    const run = () =>
+      import('@/lib/learner/summary')
+        .then(async (m) => {
+          const preview = await m.loadPreview({ week, prefs, placement, handoff, width: window.innerWidth })
+          if (live) setLabel(m.todayCtaLabel(preview))
+        })
+        .catch(() => {})
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 600))
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout
+    const handle = idle(run)
+    return () => {
+      live = false
+      cancel(handle)
+    }
+  }, [week, prefs, placement, handoff])
+
+  return (
+    <Link
+      to="/today"
+      className="group flex w-full min-w-0 items-center justify-between gap-4 rounded-lg bg-accent px-5 py-4 text-accent-foreground transition-all duration-150 ease-snap hover:-translate-y-px hover:shadow-[0_8px_24px_rgba(62,242,164,.25)] active:scale-[.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:max-w-md"
+    >
+      <span className="min-w-0">
+        <span className="block font-display text-[17px] font-semibold leading-tight">{label ?? 'Today'}</span>
+        <span className="mt-0.5 block text-body-sm opacity-80">Your reviews first, then what is next.</span>
+      </span>
+      <ArrowRight size={18} strokeWidth={1.75} aria-hidden className="shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" />
+    </Link>
+  )
+}
+
+/**
+ * Resume: where `recommend()` says to go next (spec §7.3), the same answer the lesson footer and /progress give.
+ * It loads with the recommender, so until then (or if that fails) it is a plain link to the path, never a guess
+ * at a lesson: a placed learner must not be sent to R.L1 by a stand-in.
+ */
+function ResumeLink({ up, variant }: { up: UpNextState; variant: 'primary' | 'secondary' }) {
+  if (up.status !== 'ready') {
+    return (
+      <LinkButton to="/curriculum" icon={Play} variant={variant}>
+        Open your path
+      </LinkButton>
+    )
+  }
+  const { rec } = up
+  // titles read "T1.L4 · Title" or "Lab 01 · stage 1": the part before the first " · " is short enough for a button
+  const name = rec.title.split(' · ')[0]
+  const label =
+    rec.kind === 'boot' ? 'Start with Boot' : rec.kind === 'lesson' ? `Resume: ${name}` : rec.kind === 'lab' ? `Continue: ${rec.title}` : rec.title
+  return (
+    <LinkButton to={rec.to} icon={Play} variant={variant}>
+      {label}
+    </LinkButton>
+  )
+}
+
 function Hero() {
   const reduced = useReducedMotion()
-  const lessons = useProgress((s) => s.lessons)
   const done = useProgress(selectDoneLessons)
-  const xp = useProgress((s) => s.xp)
-  const rank = rankForXp(xp)
-  const nextId = ORDERED_LESSON_IDS.find((id) => lessons[id]?.status !== 'done') ?? null
-  const returning = done > 0
+  const ring = useProgress((s) => selectRings(s.aggregate).rank)
+  const hasLessonRecords = useProgress((s) => Object.keys(s.lessons).length > 0)
   // A first visit (no Boot, no lesson records) starts with Boot (spec §12.4, Addendum A3). There is no auto-redirect from `/`.
   const bootDone = useProgress((s) => s.completions.boot !== undefined)
-  const firstVisit = !bootDone && Object.keys(lessons).length === 0
-
-  const [nextTrack, nextLesson] = nextId ? nextId.split('.') : ['r', 'l1']
-  const nextTrackMeta = TRACKS.find((t) => t.id === nextTrack)
+  const graded = useProgress((s) => Object.keys(s.aggregate.days).length > 0)
+  // A learner who placed (the walk writes no graded event) and skipped Boot has already chosen where to start.
+  const placed = useProgress((s) => Boolean(s.working['placement:result']))
+  const firstVisit = isFirstVisit({ bootDone, hasLessonRecords, graded, placed })
+  // Boot completed, a placement, or any graded event (a passed lesson is one): the hero leads with Today (owner answer O6) and Resume is the secondary.
+  const returning = bootDone || graded || placed || done > 0
+  const up = useUpNext()
 
   const showParticles =
     !reduced && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
@@ -170,7 +241,7 @@ function Hero() {
                 />
               </div>
               <span className="whitespace-nowrap font-mono text-[11px] text-text-3">
-                {done}/{TOTAL_LESSONS} lessons · {rank.name}
+                {done}/{TOTAL_LESSONS} lessons · {ring}
               </span>
             </motion.div>
           )}
@@ -181,25 +252,28 @@ function Hero() {
             variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.8 } } }}
             className="mt-8 flex flex-wrap items-center gap-4"
           >
-            <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }}>
-              {returning && nextId ? (
-                <LinkButton to={`/lesson/${nextId}`} icon={Play}>
-                  {`Resume: ${nextTrackMeta?.code ?? 'R'} · Lesson ${nextLesson?.slice(1) ?? '1'}`}
-                </LinkButton>
+            <motion.div
+              variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }}
+              className={returning ? 'basis-full' : undefined}
+            >
+              {returning ? (
+                <TodayCard />
               ) : firstVisit ? (
                 <LinkButton to="/boot" icon={ArrowRight}>
                   Start with Boot: 10 minutes, any device
                 </LinkButton>
               ) : (
-                <LinkButton to="/tracks/r" icon={ArrowRight}>
-                  Start at Rust Zero
-                </LinkButton>
+                <ResumeLink up={up} variant="primary" />
               )}
             </motion.div>
             <motion.div variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }}>
-              <LinkButton to="/lab" variant="secondary">
-                Explore the lab
-              </LinkButton>
+              {returning ? (
+                <ResumeLink up={up} variant="secondary" />
+              ) : (
+                <LinkButton to="/lab" variant="secondary">
+                  Explore the lab
+                </LinkButton>
+              )}
             </motion.div>
             <motion.span
               variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } }}

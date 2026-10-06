@@ -33,8 +33,8 @@
  *
  * The cross-validated gates below target the options-only cue-ablation bar of PLAN-100X directly, so that no single
  * feature can be gamed. They run over the gated items: every item of a `whyRequired` lesson track, Fleet Week Act IV
- * (when gated) and the errata retrieval items (src/data/errata/*.ts `items`, always gated; they have no lessons, so the
- * lesson-pass metrics do not apply to them and their rates are reported separately). Multi-select items cannot be hit by one
+ * (when gated) and the errata retrieval items (src/data/errata/*.ts `items`, plus the placement anchors of src/data/placement/*.ts, always gated; they have no
+ * lessons, so the lesson-pass metrics do not apply to them and their rates are reported separately). Multi-select items cannot be hit by one
  * pick and count as misses. Chance is the mean of 1 / options over the evaluated single-key items.
  * (15) ODD-ONE-OUT, per item: for each binary feature (a reason connective: because, since, so, which means, as a result;
  * a parenthetical; a colon; a semicolon; a digit; an acronym; an absolute or hedge word; an enumeration of 2+ commas) the key may be
@@ -58,8 +58,16 @@
  * stem overlap) FAILS when its item hit rate over all gated items exceeds chance + MAX_HIT_OVER_CHANCE; the lesson items and
  * the errata items are also held to the bar on their own (the pooled rate can hide a leaking pool). Act IV (six items) is only
  * judged inside the pooled rate; the stem-overlap pair skips it (its stem is telemetry).
+ * (19) OWN POOLS: every choice prequestion (the `predict` blocks of the lesson files), every DiagramBlock.predictAt option set and
+ * every t2.l7 spiral item (`ticket.spiral`) is collected as a pool of its own (scripts/item-cues.ts collectOwnPools) and held, per pool, to
+ * the item-level bar of (18) (every length-rank, lexical and surface strategy at most chance + MAX_HIT_OVER_CHANCE), to the odd-one-out of (15)
+ * per item and to the adversary of (16) scored on the pool, with a why for every option; the pooled rate of (18) would hide a leaking pool.
+ * The surfaces that shuffle them (diagram.tsx, Prequestions.tsx) must draw a per-attempt freshSeed.
  * REPORTS (never fails): the item-level hit rate of each surface-feature strategy against chance, longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
  * surface-feature expectations per track, the odd-one-out, adversary, composite and cue-limit tables per feature, per track and per lesson, and a blind-strategy simulation.
+ *
+ * The pure strategy and feature code (length ranks, lexical cues, surface features, odd-one-out flags) lives in
+ * scripts/item-cues.ts, which verify-generators reuses for the generator multiple-choice variants.
  *
  *   bun scripts/verify-items.ts
  *   bun scripts/verify-items.ts --update-baseline [--force]
@@ -67,15 +75,37 @@
 
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import type { QuizQuestion } from '../src/components/QuizBlock'
+import { PRIMM_MC_ITEMS } from '../src/data/forge/rust-allocator/primm'
 import { ALL_LESSONS, TRACK_IDS } from '../src/data/lessons'
 import { INCIDENTS } from '../src/lib/fleet-week'
 import { exportOrder, shuffledOrder } from '../src/lib/rng'
+import {
+  BINARY_FLAGS,
+  collectOwnPools,
+  CUE_STRATEGIES,
+  FEATURES,
+  LEXICAL_STRATEGIES,
+  len,
+  longestIndices,
+  matchCount,
+  MAX_HIT_OVER_CHANCE,
+  oddOneOut,
+  OWN_POOLS,
+  poolCueFailures,
+  poolCueRows,
+  RANK_STRATEGIES,
+  REASON,
+  shortestIndices,
+  SURFACE_STRATEGIES,
+} from './item-cues'
 
 const BASELINE_URL = new URL('./baselines/verify-items.json', import.meta.url)
 const PASS_BAR = 0.8 // QuizBlock.tsx: score = correct / total >= 0.8
 const FLEET_TRACK = 'fleet-week'
+/** Lab 01's PRIMM multiple-choice items (src/data/forge/rust-allocator/primm.ts): one pseudo-lesson, gated like a lesson track. */
+const FORGE_TRACK = 'forge'
 /** The baseline file must not be able to switch a gate off: these tracks are gated whatever it says. It may add tracks, never drop one. */
-const MIN_GATED = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', FLEET_TRACK]
+const MIN_GATED = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', FLEET_TRACK, FORGE_TRACK]
 /** In a whyRequired track, at most this many lessons may be passed by always picking the shortest option. */
 const MAX_SHORTEST_PASSES = 1
 /** In a whyRequired track, no length-rank strategy may pass more than this many lessons in expectation... */
@@ -96,8 +126,6 @@ const WATCH_P = 0.1
 const MAX_SURFACE_AGGREGATE = 2.0
 /** Track label of the errata retrieval items (src/data/errata/*.ts `items`); they have no lessons. */
 const ERRATA_TRACK = 'errata'
-/** (16) The held-out item hit rate may exceed chance by at most this much (the PLAN-100X options-only cue-ablation bar); (18) the same for every single-feature strategy. */
-const MAX_HIT_OVER_CHANCE = 0.15
 /** (16) Held-out expected lessons passed by the cross-validated adversary, over the gated lesson tracks. */
 const MAX_ADVERSARY_EXPECTED = 2.0
 /** (17) Reviewer composite rules: expected lessons passed over the gated lesson tracks (every lesson must also stay below MAX_RANK_LESSON). */
@@ -162,6 +190,11 @@ for (const lesson of ALL_LESSONS) {
   }
 }
 
+// Lab 01 PRIMM items: not a lesson quiz, so they are graded here as one pseudo-lesson at PASS_BAR.
+PRIMM_MC_ITEMS.forEach((item, i) => {
+  items.push({ track: FORGE_TRACK, lessonId: 'lab01.primm', qi: i, ref: `lab01 ${item.id}`, q: item.q, needsExplanation: false })
+})
+
 // Fleet Week Act IV: each incident asks a cause question and a mitigation question.
 for (const incident of INCIDENTS) {
   for (const [kind, list] of [
@@ -185,7 +218,7 @@ for (const incident of INCIDENTS) {
   }
 }
 
-const trackKeys = [...TRACK_IDS, FLEET_TRACK]
+const trackKeys = [...TRACK_IDS, FLEET_TRACK, FORGE_TRACK]
 const failures: string[] = []
 
 /* ------------------------- (1) structure ------------------------- */
@@ -224,7 +257,6 @@ for (const item of items) {
 
 /* ------------------------- helpers ------------------------- */
 
-const len = (s: string) => s.trim().length
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 
@@ -235,21 +267,6 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
 }
 
-/** Indices of the longest option(s); more than one on a tie. */
-function longestIndices(q: QuizQuestion): number[] {
-  const lens = q.options.map(len)
-  const max = Math.max(...lens)
-  return lens.flatMap((l, i) => (l === max ? [i] : []))
-}
-
-/** Indices of the shortest option(s); more than one on a tie. */
-function shortestIndices(q: QuizQuestion): number[] {
-  const lens = q.options.map(len)
-  const min = Math.min(...lens)
-  return lens.flatMap((l, i) => (l === min ? [i] : []))
-}
-
-/** The key is strictly the longest option: a unique longest option that is correct. */
 function keyIsLongest(q: QuizQuestion): boolean {
   const top = longestIndices(q)
   return top.length === 1 && q.correct.includes(top[0])
@@ -369,7 +386,7 @@ for (let authored = 0; authored < N; authored++) {
 const MAX_EXPORT_SHARE = 0.4
 const exportedKeys: number[] = [] // exportedKeys[p] = keys exported at id o(p+1)
 for (const item of validItems) {
-  if (!item.lessonId) continue
+  if (!item.lessonId || item.track === FORGE_TRACK) continue // never exported to markdown
   const order = exportOrder(item.lessonId, item.qi, item.q.options.length)
   order.forEach((authored, pos) => {
     if (item.q.correct.includes(authored)) exportedKeys[pos] = (exportedKeys[pos] ?? 0) + 1
@@ -388,9 +405,14 @@ for (let pos = 0; pos < exportedKeys.length; pos++) {
 const SHUFFLED_SURFACES = [
   'src/components/QuizBlock.tsx',
   'src/components/sims/PlaygroundShell.tsx',
-  'src/pages/Curriculum.tsx',
+  // the placement walk replaced Curriculum's own modal: its items are shuffled by the item player's model
+  'src/lib/items/play.ts',
   'src/pages/FleetWeek.tsx',
+  // P1 diagram predictions shuffle their options themselves; the prequestions go through the item player (play.ts above)
+  'src/pages/lesson/diagram.tsx',
 ]
+/** Surfaces that draw a fresh seed per attempt, so a position cue cannot be learned across learners or visits. */
+const FRESH_SEED_SURFACES = ['src/components/blocks/Prequestions.tsx', 'src/pages/lesson/diagram.tsx']
 const importsShuffle = /import\s*\{[^}]*\bshuffledOrder\b[^}]*\}\s*from\s*'@\/lib\/rng'/
 for (const file of SHUFFLED_SURFACES) {
   let src = ''
@@ -402,6 +424,12 @@ for (const file of SHUFFLED_SURFACES) {
   }
   if (!importsShuffle.test(src)) failures.push(`surface: ${file} does not import shuffledOrder from '@/lib/rng'`)
   if (!src.includes('shuffledOrder(')) failures.push(`surface: ${file} never calls shuffledOrder(; options would render in authored order`)
+}
+for (const file of FRESH_SEED_SURFACES) {
+  const src = await readFile(new URL(`../${file}`, import.meta.url), 'utf8').catch(() => '')
+  if (!/import\s*\{[^}]*\bfreshSeed\b[^}]*\}\s*from\s*'@\/lib\/rng'/.test(src) || !src.includes('freshSeed')) {
+    failures.push(`surface: ${file} does not draw a per-attempt freshSeed from '@/lib/rng'; its option order would be the same for everyone`)
+  }
 }
 
 /* ------------------------- report ------------------------- */
@@ -469,98 +497,6 @@ const pickShortest = (q: QuizQuestion) => {
   const low = shortestIndices(q)
   return q.correct.length === 1 && low.includes(q.correct[0]) ? 1 / low.length : 0
 }
-
-/**
- * Pick the option at a length rank (0 = longest when `fromLongest`, else 0 = shortest). Ties are broken
- * uniformly, so the pick is uniform over the options sharing the length at that rank. Lengths do not move
- * when options are shuffled. A multi-select needs the full set, so one pick never passes it.
- */
-function pickRank(q: QuizQuestion, rank: number, fromLongest: boolean): number {
-  if (q.correct.length !== 1 || rank >= q.options.length) return 0
-  const lens = q.options.map(len).sort((a, b) => (fromLongest ? b - a : a - b))
-  const at = lens[rank]
-  const group = q.options.flatMap((o, i) => (len(o) === at ? [i] : []))
-  return group.includes(q.correct[0]) ? 1 / group.length : 0
-}
-
-const RANK_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] = [
-  { name: '1st-longest', pick: (q) => pickRank(q, 0, true) },
-  { name: '2nd-longest', pick: (q) => pickRank(q, 1, true) },
-  { name: '2nd-shortest', pick: (q) => pickRank(q, 1, false) },
-  { name: 'shortest', pick: (q) => pickRank(q, 0, false) },
-]
-
-/**
- * Lexical cues the length gate cannot see. A strategy picks uniformly among the options its predicate
- * matches; when it matches none (or every option) the cue says nothing and the pick is uniform over all
- * options. A multi-select needs the full set, so one pick never passes it.
- */
-function pickMatching(q: QuizQuestion, matches: (option: string) => boolean): number {
-  if (q.correct.length !== 1) return 0
-  const hit = q.options.flatMap((o, i) => (matches(o) ? [i] : []))
-  if (hit.length === 0) return 1 / q.options.length
-  return hit.includes(q.correct[0]) ? 1 / hit.length : 0
-}
-
-const LEXICAL_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] = [
-  { name: 'has-parentheses', pick: (q) => pickMatching(q, (o) => /[()]/.test(o)) },
-  { name: 'has-colon', pick: (q) => pickMatching(q, (o) => o.includes(':')) },
-  { name: 'has-", so"', pick: (q) => pickMatching(q, (o) => o.includes(', so')) },
-  { name: 'no-because/since', pick: (q) => pickMatching(q, (o) => !/\b(because|since)\b/i.test(o)) },
-]
-
-/* ---- surface-feature strategies: a family generalising the length and lexical cues above ---- */
-
-/** Absolute and hedge words: a distractor that claims too much ("always", "only") or a key that hedges ("just", "alone") both leak the key. */
-const ABSOLUTE_WORDS = ['always', 'never', 'only', 'all', 'none', 'every', 'just', 'alone', 'solely', 'merely', 'whatever']
-const ABSOLUTE = new RegExp(`\\b(${ABSOLUTE_WORDS.join('|')})\\b`, 'i')
-const matchCount = (o: string, re: RegExp) => (o.match(re) ?? []).length
-const tokensOf = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) ?? []
-
-/** Countable surface features of one option's text. */
-const FEATURES: { name: string; count: (option: string) => number }[] = [
-  { name: 'characters', count: (o) => len(o) },
-  { name: 'words', count: (o) => o.trim().split(/\s+/).filter(Boolean).length },
-  { name: 'commas', count: (o) => matchCount(o, /,/g) },
-  { name: 'clause-markers', count: (o) => matchCount(o, /[,;:()]/g) },
-  { name: 'parentheses', count: (o) => matchCount(o, /[()]/g) },
-  { name: 'semicolons', count: (o) => matchCount(o, /;/g) },
-  { name: 'capitalised', count: (o) => matchCount(o, /(?<![A-Za-z0-9])[A-Z]/g) },
-  { name: 'acronyms', count: (o) => matchCount(o, /(?<![A-Za-z0-9])[A-Z]{2,}[0-9]*(?![A-Za-z])/g) },
-  { name: 'digits', count: (o) => matchCount(o, /\d/g) },
-  { name: 'numbers', count: (o) => matchCount(o, /\d+/g) },
-  { name: 'absolutes', count: (o) => matchCount(o, new RegExp(ABSOLUTE.source, 'gi')) },
-]
-
-/**
- * Pick the option with the highest (or lowest) score; ties, including the case where every option ties, are
- * broken uniformly. Scores do not move when options are shuffled. A multi-select needs the full set, so one
- * pick never passes it.
- */
-function pickByScore(q: QuizQuestion, score: (option: string) => number, extreme: 'most' | 'fewest'): number {
-  if (q.correct.length !== 1) return 0
-  const scores = q.options.map(score)
-  const best = extreme === 'most' ? Math.max(...scores) : Math.min(...scores)
-  const group = scores.flatMap((s, i) => (s === best ? [i] : []))
-  return group.includes(q.correct[0]) ? 1 / group.length : 0
-}
-
-/** Distinct words (4+ letters when `minLength` is set) an option shares with the question stem. */
-function stemOverlap(q: QuizQuestion, minLength: number): (option: string) => number {
-  const stem = new Set(tokensOf(q.q).filter((w) => w.length >= minLength))
-  return (option) => new Set(tokensOf(option).filter((w) => stem.has(w))).size
-}
-
-const SURFACE_STRATEGIES: { name: string; pick: (q: QuizQuestion) => number }[] = [
-  ...FEATURES.flatMap((f) => [
-    { name: `most-${f.name}`, pick: (q: QuizQuestion) => pickByScore(q, f.count, 'most') },
-    { name: `fewest-${f.name}`, pick: (q: QuizQuestion) => pickByScore(q, f.count, 'fewest') },
-  ]),
-  { name: 'stem-overlap', pick: (q) => pickByScore(q, stemOverlap(q, 1), 'most') },
-  { name: 'stem-overlap-4+', pick: (q) => pickByScore(q, stemOverlap(q, 4), 'most') },
-  { name: 'avoid-absolutes', pick: (q) => pickMatching(q, (o) => !ABSOLUTE.test(o)) },
-]
-
 const byLesson = new Map<string, QuizQuestion[]>()
 const trackOfLesson = new Map<string, string>()
 for (const item of validItems) {
@@ -814,7 +750,6 @@ console.log(
 
 /* ---- (15)-(18) odd-one-out, cross-validated options-only adversary, composite rules, item-level cue limit ---- */
 
-const REASON = /\b(?:because|since|which means|as a result)\b|\bso(?![-\w])/gi
 const REPO_ROOT = new URL('../', import.meta.url)
 
 /** Source file of each lesson, found by its `id:` so lessons whose slug differs from the file name still resolve. */
@@ -850,6 +785,49 @@ const errataFile = new Map<Item, string>()
   }
 }
 
+// Placement anchors (src/data/placement/*.ts, any exported array of { id, q }): authored single-answer items with
+// no lesson, gated with the errata items (they share the 'errata' pool).
+{
+  const dir = new URL('src/data/placement/', REPO_ROOT)
+  const files = (await readdir(dir).catch(() => [] as string[])).filter((name) => name.endsWith('.ts')).sort()
+  for (const file of files) {
+    const mod = (await import(new URL(file, dir).href)) as Record<string, unknown>
+    for (const list of Object.values(mod)) {
+      if (!Array.isArray(list)) continue
+      for (const entry of list as { id?: string; q?: QuizQuestion }[]) {
+        if (typeof entry?.id !== 'string' || !entry.q) continue
+        const item: Item = { track: ERRATA_TRACK, lessonId: null, qi: -1, ref: `item:${entry.id}`, q: entry.q, needsExplanation: true }
+        const errs = structureErrors(item)
+        if (errs.length) {
+          failures.push(`structure: src/data/placement/${file} ${entry.id}: ${errs.join('; ')}`)
+        } else {
+          errataItems.push(item)
+          errataFile.set(item, `src/data/placement/${file}`)
+        }
+      }
+    }
+  }
+}
+
+// (19) The own pools: every choice prequestion, every DiagramBlock.predictAt option set and every t2.l7 spiral item.
+// They have no lesson, so the lesson-pass metrics do not apply; each pool is held to the item-level bar on its own
+// (the pooled rate would let a leaking pool hide behind the quizzes), and every item needs a why for each option.
+const ownItems: Item[] = []
+const ownFile = new Map<Item, string>()
+for (const e of collectOwnPools(ALL_LESSONS)) {
+  const item: Item = { track: e.pool, lessonId: null, qi: -1, ref: e.ref, q: e.q, needsExplanation: e.needsExplanation }
+  const errs = structureErrors(item)
+  if (e.q.why === undefined) errs.push('missing per-option why')
+  if (errs.length) {
+    failures.push(`structure: ${e.ref} (${e.pool}): ${errs.join('; ')}`)
+  } else {
+    ownItems.push(item)
+    ownFile.set(item, lessonFile.get(e.lessonId) ?? e.lessonId)
+  }
+}
+const ownPool = (pool: string) => ownItems.filter((i) => i.track === pool)
+for (const pool of OWN_POOLS) failures.push(...poolCueFailures(pool, ownPool(pool)))
+
 const gatedLessonItems = validItems.filter((i) => i.lessonId !== null && whyRequired.includes(i.track))
 const gatedFleetItems = validItems.filter((i) => i.track === FLEET_TRACK && whyRequired.includes(FLEET_TRACK))
 const gatedItems = [...gatedLessonItems, ...gatedFleetItems, ...errataItems]
@@ -871,31 +849,6 @@ const hitRateOf = (rows: Item[], p: (i: Item) => number) => (rows.length ? rows.
 const rate = (x: number) => (Number.isFinite(x) ? pct(x) : 'n/a')
 
 /* ---- (15) odd-one-out: no binary feature may single out the key, either way ---- */
-
-const BINARY_FLAGS: { name: string; has: (option: string) => boolean }[] = [
-  { name: 'a reason connective (because, since, so, which means, as a result)', has: (o) => matchCount(o, REASON) > 0 },
-  { name: 'a parenthetical', has: (o) => /[()]/.test(o) },
-  { name: 'a colon', has: (o) => o.includes(':') },
-  { name: 'a semicolon', has: (o) => o.includes(';') },
-  { name: 'a digit', has: (o) => /\d/.test(o) },
-  { name: 'an acronym', has: (o) => matchCount(o, /(?<![A-Za-z0-9])[A-Z]{2,}[0-9]*(?![A-Za-z])/g) > 0 },
-  { name: `an absolute or hedge word (${ABSOLUTE_WORDS.join(', ')})`, has: (o) => ABSOLUTE.test(o) },
-  { name: 'an enumeration (2+ commas)', has: (o) => matchCount(o, /,/g) >= 2 },
-]
-
-/** Messages for each flag on which a single-key item's key is the only option with the feature, or the only option without it. */
-function oddOneOut(q: QuizQuestion): string[] {
-  if (q.correct.length !== 1) return []
-  const key = q.correct[0]
-  const out: string[] = []
-  for (const flag of BINARY_FLAGS) {
-    const has = q.options.map(flag.has)
-    const withIt = has.filter(Boolean).length
-    if (has[key] && withIt === 1) out.push(`the key is the only option with ${flag.name}`)
-    if (!has[key] && withIt === q.options.length - 1) out.push(`the key is the only option without ${flag.name}`)
-  }
-  return out
-}
 
 const oddViolations = new Map<Item, string[]>()
 for (const item of gatedItems) {
@@ -995,9 +948,9 @@ for (const t of foldTracks) {
   const model = trainLogit(rest)
   for (const i of trainPool) if (i.track === t) heldOutP.set(i, logitPick(model, i.q))
 }
-if (trainPool.length && errataItems.length) {
+if (trainPool.length && (errataItems.length || ownItems.length)) {
   const model = trainLogit(trainPool)
-  for (const i of errataItems) heldOutP.set(i, logitPick(model, i.q))
+  for (const i of [...errataItems, ...ownItems]) heldOutP.set(i, logitPick(model, i.q))
 }
 const advP = (i: Item) => heldOutP.get(i) ?? 0
 
@@ -1034,6 +987,20 @@ if (errataRows.length && advHitErrata > chanceErrata + MAX_HIT_OVER_CHANCE) {
     `adversary: errata retrieval items are hit at ${pct(advHitErrata)} (chance ${pct(chanceErrata)} + ${MAX_HIT_OVER_CHANCE * 100} points = ${pct(chanceErrata + MAX_HIT_OVER_CHANCE)}) by a model trained on the gated tracks; rewrite their options`,
   )
 }
+
+// (19) The same model scores each own pool on its own: the pool is held out of training, so a rewrite that only moved
+// the cue from length to another feature still fails here.
+const ownAdversary = OWN_POOLS.map((pool) => {
+  const rows = ownPool(pool).filter(singleKey)
+  const hit = hitRateOf(rows, advP)
+  const chance = chanceOf(rows)
+  if (rows.length && hit > chance + MAX_HIT_OVER_CHANCE) {
+    failures.push(
+      `adversary: the ${rows.length} ${pool} items are hit at ${pct(hit)} (chance ${pct(chance)} + ${MAX_HIT_OVER_CHANCE * 100} points = ${pct(chance + MAX_HIT_OVER_CHANCE)}) by a model trained on the gated tracks; rewrite their options`,
+    )
+  }
+  return { pool, rows: rows.length, hit, chance }
+})
 
 /* ---- (17) reviewer composite rules ---- */
 
@@ -1081,7 +1048,6 @@ const compositeResults = COMPOSITES.map((c) => {
 
 /* ---- (18) item-level cue limit: every single-feature strategy, over all gated items ---- */
 
-const CUE_STRATEGIES = [...RANK_STRATEGIES, ...LEXICAL_STRATEGIES, ...SURFACE_STRATEGIES]
 const cueRows = CUE_STRATEGIES.map((s) => {
   // The stem-overlap pair reads the question, which Act IV does not have (its stem is telemetry).
   const rows = (s.name.startsWith('stem-overlap') ? gatedItems.filter((i) => i.track !== FLEET_TRACK) : gatedItems).filter(singleKey)
@@ -1188,6 +1154,20 @@ const cueRows = CUE_STRATEGIES.map((s) => {
     console.log(`  ${id.padEnd(8)}${`${odd}/${rows.length}`.padStart(5)}  adv ${(advLessons.get(id) as number).toFixed(2)}  ${comps.join('  ')}  ${lessonFile.get(id) ?? ''}`)
   }
 }
+
+console.log('')
+console.log(`own pools (prequestions, diagram predictions, spiral items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
+console.log(`  ${'pool'.padEnd(12)}${'items'.padStart(6)}${'worst strategy'.padStart(24)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'adv hit'.padStart(9)}  odd`)
+for (const pool of OWN_POOLS) {
+  const rows = poolCueRows(ownPool(pool))
+  const worst = rows.reduce((a, b) => (b.hit - b.chance > a.hit - a.chance ? b : a), rows[0])
+  const adv = ownAdversary.find((a) => a.pool === pool)
+  const odd = ownPool(pool).filter((i) => oddOneOut(i.q).length > 0).length
+  console.log(
+    `  ${pool.padEnd(12)}${String(worst.items).padStart(6)}${worst.name.padStart(24)}${rate(worst.hit).padStart(8)}${rate(worst.chance).padStart(8)}${rate(adv?.hit ?? NaN).padStart(9)}  ${odd}${worst.hit - worst.chance > MAX_HIT_OVER_CHANCE || (adv && adv.rows > 0 && adv.hit > adv.chance + MAX_HIT_OVER_CHANCE) || odd > 0 ? '  FAIL' : ''}`,
+  )
+}
+console.log(`  files: ${[...new Set([...ownFile.values()])].length} lesson files author ${ownItems.length} own-pool items`)
 
 console.log('')
 console.log(`blind-strategy simulation: ${byLesson.size} lessons with a quiz, per-attempt shuffling, pass at >= ${PASS_BAR * 100}%`)

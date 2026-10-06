@@ -77,6 +77,8 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
       simId: 'sim-roofline',
       machine: 'roofline',
       title: 'Occupancy & coalescing lab',
+      taskIds: ['t-roof-coalesce', 't-roof-occupancy', 't-roof-bank'],
+      config: { m: 'H100', accessPattern: 'strided', warps: 16, registers: 32, bankConflict: false },
       tasks: [
         'Run the column-walk kernel; record delivered bandwidth vs peak (~1/32).',
         'Switch to unit-stride (coalesced); confirm recovery — then transpose via shared memory instead and compare.',

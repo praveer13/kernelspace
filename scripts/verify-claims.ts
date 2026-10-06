@@ -29,6 +29,16 @@ function validUrl(s: string): boolean {
 
 /** Independent re-computation of each derived claim, keyed by id. `n` reads a claim it depends on. */
 type Reader = (id: string) => number
+
+/** Mixtral-8x7B in billions: dense GQA attention and a router in every layer, plus `routed` experts' feed-forward weights. */
+function mixtralParams(n: Reader, routed: number): number {
+  const hidden = n('model.mixtral-8x7b.hidden-size')
+  const kvDim = n('model.mixtral-8x7b.kv-heads') * n('model.mixtral-8x7b.head-dim')
+  const experts = n('model.mixtral-8x7b.experts')
+  const perLayer = 2 * hidden * hidden + 2 * hidden * kvDim + routed * 3 * hidden * n('model.mixtral-8x7b.ffn-size') + hidden * experts + 2 * hidden
+  const total = 2 * n('model.mixtral-8x7b.vocab') * hidden + n('model.mixtral-8x7b.layers') * perLayer + hidden
+  return Math.round(total / 1e7) / 100
+}
 const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'hw.h100-sxm.bf16-dense': (n) => Math.floor(n('hw.h100-sxm.bf16-sparse') / 2),
   'hw.b200.hbm-capacity': (n) => n('hw.dgx-b200.hbm-total') / 8,
@@ -36,6 +46,8 @@ const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'hw.b200.bf16-dense': (n) => (n('hw.hgx-b200.bf16-sparse-system') * 1000) / 8 / 2,
   'hw.b300.hbm-bw': (n) => n('hw.gb300-nvl72.hbm-bw') / 72,
   'model.llama3-8b.head-dim': (n) => n('model.llama3-8b.hidden-size') / n('model.llama3-8b.attn-heads'),
+  'model.llama3-70b.head-dim': (n) => n('model.llama3-70b.hidden-size') / n('model.llama3-70b.attn-heads'),
+  'model.mixtral-8x7b.head-dim': (n) => n('model.mixtral-8x7b.hidden-size') / n('model.mixtral-8x7b.attn-heads'),
   'model.llama3-8b.params': (n) => {
     const hidden = n('model.llama3-8b.hidden-size')
     const kvDim = n('model.llama3-8b.kv-heads') * n('model.llama3-8b.head-dim')
@@ -43,6 +55,16 @@ const DERIVATIONS: Record<string, (n: Reader) => number> = {
     const total = 2 * n('model.llama3-8b.vocab') * hidden + n('model.llama3-8b.layers') * perLayer + hidden
     return Math.round(total / 1e7) / 100 // billions, two decimals
   },
+  'model.llama3-70b.params': (n) => {
+    const hidden = n('model.llama3-70b.hidden-size')
+    const kvDim = n('model.llama3-70b.kv-heads') * n('model.llama3-70b.head-dim')
+    const perLayer = 2 * hidden * hidden + 2 * hidden * kvDim + 3 * hidden * n('model.llama3-70b.ffn-size') + 2 * hidden
+    const total = 2 * n('model.llama3-70b.vocab') * hidden + n('model.llama3-70b.layers') * perLayer + hidden
+    return Math.round(total / 1e7) / 100
+  },
+  'model.mixtral-8x7b.params': (n) => mixtralParams(n, n('model.mixtral-8x7b.experts')),
+  'model.mixtral-8x7b.active-params': (n) => mixtralParams(n, n('model.mixtral-8x7b.experts-per-token')),
+  'model.kv.static-utilization': (n) => (n('model.kv.static-utilization-low') + n('model.kv.static-utilization-high')) / 2,
   'model.llama3-8b.kv-bytes-per-token': (n) =>
     2 * n('model.llama3-8b.layers') * n('model.llama3-8b.kv-heads') * n('model.llama3-8b.head-dim') * 2,
   'price.act3.b200-node-hourly': (n) => 4 * n('price.b200.median'),

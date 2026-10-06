@@ -5,6 +5,7 @@
 
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { CodeTab } from '@/components/CodeBlock'
+import type { AuthoredItem, ConstructedPrompt } from '@/lib/items/types'
 
 export type TrackId = 'r' | 't0' | 't1' | 't2' | 't3' | 't4' | 't5' | 't6' | 't7'
 
@@ -85,6 +86,22 @@ export interface DiagramStep {
   edges?: string[]
 }
 
+/**
+ * P1 (Wave 1, docs/specs/wave-1.md §9.2): "what happens next?" before step `step`. The captions of
+ * `step` and every later step stay hidden until the learner commits a choice (or skips, once the
+ * KC is solid). Writes `item dia:<lessonId>#<blockIndex>` with `data.src: 'diagram'`.
+ */
+export interface DiagramPredict {
+  /** 0-based index of the first step whose caption is withheld; ≥ 1. */
+  step: number
+  prompt: string
+  /** 2-4 options with a parallel `why`; graded by authored index, shuffled per attempt. */
+  options: string[]
+  correct: number[]
+  why: string[]
+  kcs: string[]
+}
+
 export interface DiagramBlock {
   type: 'diagram'
   /** mono figure caption, e.g. `fig 1 — stack growth` */
@@ -94,6 +111,8 @@ export interface DiagramBlock {
   steps: DiagramStep[]
   /** viewBox height in arbitrary units (width fixed 100). default 60 */
   height?: number
+  /** P1: a prediction gate before a step (Wave 1, T0-T1). */
+  predictAt?: DiagramPredict
 }
 
 export interface StatChipData {
@@ -123,6 +142,54 @@ export interface ExerciseBlock {
   tasks: string[]
   /** collapsed "what just happened" explanation */
   note?: string
+  /**
+   * P2 (Wave 1, spec §10): registry task ids (src/lib/sims/registry.ts). When present the block
+   * mounts the sim inline through SimHost and lists these live tasks instead of `tasks`.
+   */
+  taskIds?: string[]
+  /** SimHost config for the inline mount (embed and phone modes never touch the URL). */
+  config?: unknown
+}
+
+/**
+ * P1 (Wave 1, spec §9.1): the two prequestions that open a core lesson. Answers are recorded but
+ * not marked until the section that teaches them (`revealAt`) or the exit ticket.
+ */
+export type Prequestion =
+  | {
+      kind: 'choice'
+      q: string
+      options: string[]
+      correct: number[]
+      why: string[]
+      /** Heading text of the H2 whose end reveals the answer. */
+      revealAt: string
+      kcs: string[]
+    }
+  | {
+      kind: 'numeric'
+      q: string
+      unit: string
+      truth: number
+      /** Within this factor counts as close (log-scored, like Boot's guess). */
+      okWithinFactor: number
+      revealAt: string
+      kcs: string[]
+      /** Claim ids behind `truth`. */
+      claims?: string[]
+    }
+
+/** P1: prequestions as the lesson's first block (one per lesson). Refs `pre:<lessonId>#<i>`. */
+export interface PredictBlock {
+  type: 'predict'
+  items: Prequestion[]
+}
+
+/** W1 (Wave 1, spec §11): a Play → Compose → Code play mounted inline (`/play/<playId>` full screen). */
+export interface PlayBlock {
+  type: 'play'
+  playId: string
+  title: string
 }
 
 /** OS ≡ LLM isomorphism panel (lesson.md §2.8). */
@@ -172,8 +239,23 @@ export type ContentBlock =
   | IsomorphismBlock
   | DeepdiveBlock
   | FieldNoteBlock
+  | PredictBlock
+  | PlayBlock
 
 /* ------------------------------ lesson ------------------------------ */
+
+/**
+ * V5 (Wave 1, spec §8.1): what the exit ticket draws on besides the lesson's checkpoint items.
+ * A lesson with `ticket` renders its `quiz` block as the exit ticket.
+ */
+export interface LessonTicket {
+  /** `ticket` (3 items) or `spiral` (8 items, a track's last lesson: t2.l7 in Wave 1). */
+  form: 'ticket' | 'spiral'
+  /** Self-checked constructed responses: the non-MCQ item when no generator covers the lesson's KCs. ≥ 1. */
+  cr: ConstructedPrompt[]
+  /** Spiral only: authored items on earlier KCs of the track (refs `item:<id>`). */
+  spiral?: AuthoredItem[]
+}
 
 export interface Lesson {
   /** Canonical id used by the progress store: `t1.l3`. */
@@ -195,6 +277,10 @@ export interface Lesson {
   /** Landscape-sensitive lesson freshness marker, YYYY-MM. */
   verifiedAt?: string
   blocks: ContentBlock[]
+  /** V4 (Wave 1): the KCs this lesson teaches, primary first (src/data/kc). The ticket draws on them. */
+  kcs?: string[]
+  /** V5 (Wave 1): present on T0-T2 lessons; turns the checkpoint into the exit ticket. */
+  ticket?: LessonTicket
 }
 
 /** Heading extracted from blocks for the "ON THIS PAGE" rail. */

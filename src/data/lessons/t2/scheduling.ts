@@ -132,6 +132,8 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
             'Misconception: the convoy is a cache effect. Cache pollution costs throughput, but a convoy appears on one core with perfectly warm caches; it is a queueing-order problem.',
             'Misconception: the convoy is queue overflow. It happens with an unbounded queue and nothing dropped; bounded queues and rejection belong to admission control, not to this effect.',
           ],
+          kcs: ['t2.sched-policies'],
+          miss: ['t2.convoy-is-switching', '', 't2.convoy-is-cache-effect', 't2.convoy-is-queue-overflow'],
         },
         {
           q: 'Priority inversion is best described as…',
@@ -150,6 +152,8 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
             'Misconception: inversion is deadlock. The holder can finish if it gets CPU, so it is a stall rather than a cycle, and raising the holder\'s priority (inheritance) resolves it.',
             'Misconception: inversion is priority aging. Aging is a deliberate anti-starvation boost; inversion is an unintended effect of a lock and needs no priority change by the kernel to occur.',
           ],
+          kcs: ['t2.priority-inversion'],
+          miss: ['t2.inversion-is-dispatch-bug', '', 't2.inversion-is-deadlock', 't2.inversion-is-aging'],
         },
         {
           q: 'Linux\'s default scheduler for ordinary threads (EEVDF, since 6.6) shares the CPU fairly by…',
@@ -168,6 +172,8 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
             'Misconception: fixed equal slices. Linux weights threads by nice value, so a nice -5 thread earns proportionally more CPU; fixed round-robin would ignore weights and slice requests.',
             'Misconception: epoch budgets. That resembles older epoch-based schedulers; EEVDF has no epoch, and decides continuously from lag and deadlines, so a sleeping thread\'s lag decays rather than accumulating a budget.',
           ],
+          kcs: ['t2.sched-policies'],
+          miss: ['t2.cfs-current', '', 't2.fixed-equal-slices', 't2.epoch-budgets'],
         },
         {
           q: 'Continuous batching maps to preemptive scheduling because…',
@@ -186,10 +192,42 @@ The deepest idea in modern serving is a scheduling observation: a GPU, like a CP
             'Misconception: inheritance is involved. Priority inheritance repairs lock-holder inversion; batch slots are not locks held for a waiter, and continuous batching has no such step.',
             'Misconception: length bucketing is the idea. Bucketing cuts padding but each batch still runs to completion, so one long output holds slots; that refines static batching, not scheduling per iteration.',
           ],
+          kcs: ['t2.admission-scheduling', 't2.sched-policies'],
+          miss: ['t2.batching-is-core-count', '', 't2.batching-uses-inheritance', 't2.batching-is-length-bucketing'],
         },
       ],
     },
   ],
+  kcs: ['t2.sched-policies', 't2.admission-scheduling', 't2.priority-inversion'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Explain why a scheduler needs admission control, and how continuous batching is an example of it.',
+        model:
+          'Past capacity no scheduling policy helps: queues grow without bound, or switching eats the CPU, and everyone misses deadlines. Admission rejects or queues work early and cheaply instead. Continuous batching admits a waiting sequence only when KV blocks are free, and re-decides the running set after every decode step.',
+        ideas: [
+          'Past capacity no scheduling policy helps: queues grow or switch overhead eats the CPU',
+          'Reject or queue work early and cheaply, rather than missing deadlines for everyone',
+          'Continuous batching admits a request only when KV blocks are free, and re-picks the batch each iteration',
+        ],
+        kcs: ['t2.admission-scheduling', 't2.sched-policies'],
+      },
+      {
+        prompt:
+          'Walk through priority inversion with three threads, and name the standard fix.',
+        model:
+          'A low-priority thread holds a lock. A high-priority thread blocks waiting for it. Medium-priority threads now preempt the low one, so it never gets the CPU to release the lock, and the high thread effectively runs below medium. Priority inheritance fixes it: the holder temporarily takes the waiter\'s priority until it unlocks.',
+        ideas: [
+          'A low-priority thread holds a lock that the high-priority thread needs, so high blocks',
+          'Medium threads keep preempting low, so the lock is never released',
+          'Priority inheritance: the holder borrows the waiter\'s priority until it unlocks',
+        ],
+        kcs: ['t2.priority-inversion'],
+      },
+    ],
+  },
 }
 
 export default lesson

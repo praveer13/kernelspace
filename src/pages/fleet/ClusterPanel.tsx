@@ -1,24 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, Pause, Play, RotateCcw, StepForward } from 'lucide-react'
-import { instantiateLab, LabAbiError, LabTrapError } from '@/lib/wasm-lab'
+import { describeFleetError, openFleetSession, type FleetSession } from '@/lib/fleet-session'
 import {
-  Cluster,
-  Engine,
-  makeRefManager,
-  makeRefQueue,
-  makeRefScheduler,
   makePrefixSharedRequestStream,
   makeServingMetrics,
   PRACTICE_SEED,
   routerLabel,
   type ClusterStats,
-  type ManagerDump,
   type RouterKind,
 } from '@/lib/fleet-model'
+import type { ClusterSnapshot, ClusterWorkerRow } from '@/workers/fleet-protocol'
 import { cn } from '@/lib/utils'
 import EpdPanel from '@/pages/fleet/EpdPanel'
-import { makeWasmManager, makeWasmQueue, makeWasmScheduler } from '@/pages/fleet/drivers'
+import { slotBytes } from '@/pages/fleet/drivers'
 import MetricsDashboard from '@/pages/fleet/MetricsDashboard'
 import type { SlotState } from '@/pages/fleet/slots'
 
@@ -48,39 +43,30 @@ const emptyAggregate = (): ClusterStats => ({
   completedOutputTokens: 0,
 })
 
-export default function ClusterPanel({ slots }: { slots: SlotState }) {
+interface PanelError {
+  message: string
+  /** a fleet command outran its budget: offer "reset with reference drivers" */
+  timedOut: boolean
+}
+
+export default function ClusterPanel({ slots, onUseReference }: { slots: SlotState; onUseReference?: () => void }) {
   const [topology, setTopology] = useState<'colocated' | 'epd'>('colocated')
   const [workerCount, setWorkerCount] = useState(2)
   const [router, setRouter] = useState<RouterKind>('jsq')
   const [tick, setTick] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<PanelError | null>(null)
   const [agg, setAgg] = useState<ClusterStats>(emptyAggregate)
-  const [workerRows, setWorkerRows] = useState<
-    { waiting: number; running: number; util: number; cacheEntries: number; dump: ManagerDump }[]
-  >([])
-  const clusterRef = useRef<Cluster | null>(null)
+  const [workerRows, setWorkerRows] = useState<ClusterWorkerRow[]>([])
+  const [done, setDone] = useState(false)
+  /* the live session, and whether a step is in flight (the 60 ms cadence skips a tick rather than queueing one) */
+  const liveRef = useRef<{ session: FleetSession<ClusterSnapshot>; busy: boolean } | null>(null)
+  const buildTokenRef = useRef(0)
 
-  const build = useCallback(async () => {
-    const workers: Engine[] = []
-    for (let i = 0; i < workerCount; i++) {
-      const sched = slots.sched ? makeWasmScheduler(await instantiateLab(slots.sched.bytes)) : makeRefScheduler()
-      const mgr = slots.mgr
-        ? makeWasmManager(await instantiateLab(slots.mgr.bytes), WORKER_CFG.numBlocks, WORKER_CFG.blockSize)
-        : makeRefManager(WORKER_CFG.numBlocks, WORKER_CFG.blockSize)
-      const queue = slots.queue
-        ? makeWasmQueue(await instantiateLab(slots.queue.bytes), INTAKE_CAP)
-        : makeRefQueue(INTAKE_CAP)
-      workers.push(
-        new Engine(WORKER_CFG, [], sched, mgr, { intake: queue, drainPerTick: DRAIN_PER_TICK }),
-      )
-    }
-    clusterRef.current = new Cluster(
-      makePrefixSharedRequestStream(REQ_COUNT, SPAN, PRACTICE_SEED),
-      workers,
-      router,
-    )
-  }, [workerCount, router, slots])
+  const fail = useCallback((cause: unknown) => {
+    const { title, detail, timedOut } = describeFleetError(cause)
+    setError({ message: timedOut ? detail : `${title}: ${detail}`, timedOut })
+  }, [])
 
   const reset = useCallback(() => {
     setPlaying(false)
@@ -88,61 +74,74 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
     setError(null)
     setAgg(emptyAggregate())
     setWorkerRows([])
-    void build()
-  }, [build])
+    setDone(false)
+    liveRef.current?.session.close()
+    liveRef.current = null
+    if (topology !== 'colocated') return
+    const token = ++buildTokenRef.current
+    /* the worker instantiates the learner stack once per cluster worker and holds the Cluster */
+    void openFleetSession({
+      mode: 'cluster',
+      slots: slotBytes(slots),
+      traffic: makePrefixSharedRequestStream(REQ_COUNT, SPAN, PRACTICE_SEED),
+      cfg: { worker: WORKER_CFG, workers: workerCount, router, intakeCap: INTAKE_CAP, drainPerTick: DRAIN_PER_TICK },
+    })
+      .then((session) => {
+        if (buildTokenRef.current !== token) {
+          session.close()
+          return
+        }
+        liveRef.current = { session, busy: false }
+      })
+      .catch((cause: unknown) => {
+        if (buildTokenRef.current === token) fail(cause)
+      })
+  }, [topology, workerCount, router, slots, fail])
 
   useEffect(() => {
     reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [build])
+  }, [reset])
 
-  const snapshot = useCallback(() => {
-    const c = clusterRef.current
-    if (!c) return
-    setAgg(c.aggregate())
-    setWorkerRows(
-      c.workers.map((w, index) => {
-        const s = w.stats()
-        const dump = w.mgrDump()
-        return {
-          waiting: s.waitingNow,
-          running: s.runningNow,
-          util: Math.round(((dump.numBlocks - dump.free) / dump.numBlocks) * 100),
-          cacheEntries: c.cacheEntries(index),
-          dump,
-        }
-      }),
-    )
-    setTick(c.tick)
-  }, [])
+  /* leaving the page, or switching panels, stops the worker */
+  useEffect(
+    () => () => {
+      buildTokenRef.current++
+      liveRef.current?.session.close()
+      liveRef.current = null
+    },
+    [],
+  )
 
-  const step = useCallback(() => {
-    const c = clusterRef.current
-    if (!c) return
-    if (c.done) {
-      setPlaying(false)
-      return
-    }
+  const step = useCallback(async () => {
+    const live = liveRef.current
+    if (!live || live.busy) return
+    live.busy = true
     try {
-      c.step()
+      const snap = await live.session.step(1)
+      if (liveRef.current !== live) return
+      setAgg(snap.agg)
+      setWorkerRows(snap.workers)
+      setTick(snap.tick)
+      if (snap.done) {
+        setPlaying(false)
+        setDone(true)
+      }
     } catch (e) {
+      if (liveRef.current !== live) return
       setPlaying(false)
-      if (e instanceof LabTrapError) setError('a module trapped mid-run — a todo!() or panic fired.')
-      else if (e instanceof LabAbiError) setError(e.message)
-      else setError(String(e))
-      return
+      fail(e)
+    } finally {
+      live.busy = false
     }
-    snapshot()
-  }, [snapshot])
+  }, [fail])
 
   useEffect(() => {
     if (!playing) return
-    const id = window.setInterval(step, 60)
+    const id = window.setInterval(() => void step(), 60)
     return () => window.clearInterval(id)
   }, [playing, step])
 
   const goodput = Math.round((agg.sloMet / REQ_COUNT) * 1000) / 10
-  const done = clusterRef.current?.done ?? false
   const observability = makeServingMetrics({
     totalRequests: REQ_COUNT,
     sloMet: agg.sloMet,
@@ -175,7 +174,7 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
         ))}
       </div>
       {topology === 'epd' ? (
-        <EpdPanel slots={slots} />
+        <EpdPanel slots={slots} onUseReference={onUseReference} />
       ) : (
         <div className="space-y-4">
       {/* controls */}
@@ -217,7 +216,7 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
           <button onClick={() => setPlaying((p) => !p)} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1" aria-label={playing ? 'pause' : 'play'}>
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </button>
-          <button onClick={step} disabled={playing} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1 disabled:opacity-40" aria-label="step one tick">
+          <button onClick={() => void step()} disabled={playing} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1 disabled:opacity-40" aria-label="step one tick">
             <StepForward className="h-4 w-4" />
           </button>
           <button onClick={reset} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1" aria-label="reset">
@@ -233,7 +232,18 @@ export default function ClusterPanel({ slots }: { slots: SlotState }) {
         {error && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/5 p-4">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
-            <p className="text-body-sm text-text-2">{error}</p>
+            <div>
+              <p className="text-body-sm text-text-2">{error.message}</p>
+              {error.timedOut && onUseReference && (
+                <button
+                  type="button"
+                  onClick={onUseReference}
+                  className="mt-3 rounded border border-line bg-surface-1 px-3 py-1.5 font-mono text-[11px] text-text-1 hover:border-accent/50"
+                >
+                  reset with reference drivers
+                </button>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -265,8 +265,9 @@ describe('through the real façade', () => {
     expect(outcome.firstSuccessMs).toBe(3 * 60_000) // 1 + 2 min after the visit
     expect(outcome.totalMs).toBe((1 + 2 + 5 + 1) * 60_000)
 
-    // Boot pays no XP (spec §12.4, Addendum A3) and the flow marks completion without crediting a lesson
-    expect(tab.progress.getState().xp).toBe(0)
+    // Economy v2 (wave-1.md §8.4) pays Boot its 10 nominal minutes, plus 5 graded items at the default 30 s
+    // (2.5 min, rounded); the flow marks completion without crediting a lesson
+    expect(tab.progress.getState().xp).toBe(10 + 3)
     expect(tab.progress.getState().completions.boot).toBeDefined()
     expect(tab.progress.getState().working['boot:path']).toBe('serving-first')
     expect(Object.keys(tab.progress.getState().lessons)).toHaveLength(0)
