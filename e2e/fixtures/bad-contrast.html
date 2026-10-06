@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bad contrast fixture</title>
+    <!-- On purpose: light grey text on white is about 1.6:1, so axe reports color-contrast as serious.
+         npm run a11y -- --fixture e2e/fixtures/bad-contrast.html must exit 1; if this page ever passes,
+         the harness is blind. -->
+  </head>
+  <body style="background: #ffffff">
+    <main>
+      <h1 style="color: #000000">Contrast fixture</h1>
+      <p style="color: #cccccc">This sentence is light grey on white and fails WCAG 1.4.3.</p>
+    </main>
+  </body>
+</html>
