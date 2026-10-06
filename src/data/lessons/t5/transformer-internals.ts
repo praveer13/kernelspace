@@ -10,7 +10,69 @@ const lesson: Lesson = {
   hook: 'QKV math, why the KV cache exists, FLOPs and bytes per token — the model, stripped to the parts that cost money.',
   exercise: 'sim',
   simId: 'sim-engine',
+  kcs: ['t5.forward-pass-costs', 't5.why-kv-cache'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain why a decode step does not re-run the whole prompt through the model, and what the engine keeps instead.',
+        model:
+          'Under causal masking, the key and value of a past token depend only on the tokens up to it, so they never change. The engine stores them per layer. Each step then projects only the new token and attends over the stored history: one forward pass instead of t. The price is cache memory that grows with every token.',
+        ideas: [
+          'Causal masking freezes the keys and values of past tokens',
+          'Each step projects only the new token and reads the stored K and V',
+          'The saved compute is paid for in cache memory per token',
+        ],
+        kcs: ['t5.why-kv-cache'],
+      },
+      {
+        prompt: 'A teammate says an 8B-parameter FP16 model costs about 16 GFLOPs and 16 GB of weight reads per token. Explain both numbers and what they imply for decode at batch size 1.',
+        model:
+          'Each parameter takes part in one multiply and one add per token, about 2 FLOPs, so 8e9 parameters give 16 GFLOPs. Each FP16 weight is 2 bytes and is read once, giving 16 GB. That is about one FLOP per byte, far below the ridge point, so decode at batch 1 waits on memory bandwidth.',
+        ideas: [
+          'About 2 FLOPs per parameter per token',
+          'Each FP16 weight is 2 bytes and is read once per token',
+          'Arithmetic intensity near 1 puts decode on the bandwidth side of the roofline',
+        ],
+        kcs: ['t5.forward-pass-costs', 't4.decode-bandwidth'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A model has read a 1,000-token prompt and is now generating token 1,001. What does the engine do with the keys and values of the first 1,000 tokens?',
+          options: [
+            'It recomputes them through every layer, since each new token changes what the earlier tokens mean',
+            'It reads copies stored on earlier steps, since causal attention never changes past keys and values',
+            'It discards them and keeps only the newest few, since distant tokens add almost nothing to the answer',
+            'It keeps only their embeddings and rebuilds keys and values each step, since embeddings take less memory',
+          ],
+          correct: [1],
+          why: [
+            'Meaning does not flow backwards. Under causal masking a token\'s keys and values depend only on the tokens up to it, so a new token cannot change them.',
+            'Right: past keys and values are frozen, so the engine stores them once per layer and reads them back, projecting only the new token.',
+            'That describes a sliding window, which only some models use. A standard decoder attends to every earlier token, so none is discarded.',
+            'Layer ℓ\'s keys and values come from that layer\'s input, so rebuilding them from embeddings means running layers 1 to ℓ−1 over the whole prefix again each step. That is the recompute the cache avoids.',
+          ],
+          revealAt: 'Why the KV cache exists',
+          kcs: ['t5.why-kv-cache'],
+        },
+        {
+          kind: 'numeric',
+          q: 'A decoder-only model with 8 billion parameters, stored in FP16, generates one token at batch size 1. About how many gigabytes of weights must be read from memory for that one token?',
+          unit: 'GB',
+          truth: 16,
+          okWithinFactor: 1.3,
+          revealAt: 'The forward pass as a cost ledger',
+          kcs: ['t5.forward-pass-costs'],
+          claims: ['model.llama3-8b.params'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `You do not need to understand why transformers *work* to understand why they're *expensive*. This lesson is the model from a systems seat: what tensors flow where, what each operation costs in FLOPs and bytes, and why one specific optimization — the KV cache — creates the entire memory-management problem that T2 prepared you for. We'll use a running 8B-parameter decoder-only model (LLaMA-3-8B-shaped: 32 layers, hidden 4096, 32 attention heads) so every number is concrete.
@@ -79,6 +141,24 @@ This worked example is an 8B-class model with full multi-head attention (32 KV h
         { caption: 'Attention reads the ENTIRE cached history (t tokens × 2 × d per layer) — this read, plus the weights, is why decode is bandwidth-bound. Attention FLOPs grow ∝ t; bytes grow ∝ t.', active: ['attn', 'kvc'], edges: ['kvc->attn'] },
         { caption: 'Output projection + MLP finish the layer; ×32 layers; logits → sample → the token joins the history and the loop repeats. ITL is this loop\'s period.', active: ['mlp', 'out'], edges: ['attn->out'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'The new token\'s query is ready, and its key and value have just been appended to the cache. What does attention now read from the cache?',
+        options: [
+          'Only the entry just appended, since earlier entries were already used by the earlier steps',
+          'Every cached key and value from the first token on, so the bytes read grow with the context',
+          'A fixed window of the most recent entries, so the bytes read stay flat as the context keeps growing',
+          'Nothing at all, since the query already carries what it needs from all the earlier tokens',
+        ],
+        correct: [1],
+        why: [
+          'Each step needs a fresh softmax over all earlier positions. An earlier step\'s use of an entry does not carry over, so one entry is not enough.',
+          'Right: the new query is scored against every cached key and mixes every cached value, so attention reads all t entries at every layer, and the bytes read grow with t.',
+          'A fixed window is a sliding-window design, which changes the model. Standard attention keeps and reads the whole history.',
+          'A query carries nothing about earlier tokens by itself. The history lives only in the cached keys and values it is scored against.',
+        ],
+        kcs: ['t5.why-kv-cache'],
+      },
     },
     {
       type: 'callout',
@@ -121,6 +201,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
             'The prompt is tokenized and embedded once, and the engine stores those embeddings so later steps skip the embedding lookup',
           ],
           correct: [1],
+          kcs: ['t5.why-kv-cache'],
           explanation:
             'Causal attention freezes the past: k_i and v_i depend only on tokens up to i. Cache them once and each step runs one new token through the model instead of the whole prefix. Attention still reads all t cached entries, so per-step cost still grows with context. The classic time-memory trade, and the memory half becomes T5\'s whole problem.',
           why: [
@@ -139,6 +220,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
             'About 128 KiB, storing keys and values at 2 bytes per element with 8 shared head groups across 32 layers',
           ],
           correct: [1],
+          kcs: ['t5.why-kv-cache'],
           explanation:
             '2 x L x d x bytes = 2 x 32 x 4096 x 2 = 524,288 B, about 512 KiB per token, with every query head keeping its own K and V. At 128k context that is 64 GiB, about 4x the weights. Real Llama-3-8B uses 8 KV heads and needs 128 KiB (T5.L4).',
           why: [
@@ -157,6 +239,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
             'In the embedding and output tables that sit outside the layers and are read at each decoding step',
           ],
           correct: [1],
+          kcs: ['t5.forward-pass-costs'],
           explanation:
             'SwiGLU MLPs with about 3.5d intermediate width dominate the parameter count. Attention gets the research attention; the MLP gets the transistor budget, a useful bias when reading optimization papers.',
           why: [
@@ -175,6 +258,7 @@ The remaining lessons put these to work: tokenization next (the input side), the
             'Limits each query head to a window of recent tokens and caps cache size once the window is full',
           ],
           correct: [1],
+          kcs: ['t5.gqa-kv-heads', 't5.why-kv-cache'],
           explanation:
             '8 KV heads instead of 32 query heads: KV cache divided by 4 and per-token KV reads divided by 4. On a bandwidth-bound decode loop that is a direct throughput and capacity win, paid for at training time.',
           why: [
