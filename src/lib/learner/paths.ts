@@ -76,7 +76,7 @@ export const PATH_LABEL: Readonly<Record<LearningPath, string>> = {
 export const MAX_R_RUN = 2
 
 /** Curriculum rank of each track: "before the entry track" compares these. */
-const TRACK_RANK: Readonly<Record<TrackId, number>> = { r: 0, t0: 1, t1: 2, t2: 3, t3: 4, t4: 5, t5: 6, t6: 7, t7: 8 }
+export const TRACK_RANK: Readonly<Record<TrackId, number>> = { r: 0, t0: 1, t1: 2, t2: 3, t3: 4, t4: 5, t5: 6, t6: 7, t7: 8 }
 
 /** serving-first's head before T5-T7 (PLAN §4 Wei). */
 const SERVING_HEAD: readonly string[] = ['t0.l1', 't0.l2', 't4.l3']
