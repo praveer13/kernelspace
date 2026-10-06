@@ -52,6 +52,22 @@ describe('the price of a fact (§8.4)', () => {
     expect(factMinutes('play:block-placement')).toBe(15)
   })
 
+  test('Wave 2 prices (wave-2.md §3.4): the Daily 10, a drill 5, a fleet run 10, the scheduler play 20; a team run and unknown ids pay nothing', () => {
+    expect(factMinutes('inc:daily/2027-05-03')).toBe(10)
+    expect(factMinutes('inc:drill/drain-stall')).toBe(5)
+    expect(factMinutes('inc:team/blue/2027-05-03')).toBe(0)
+    expect(factMinutes('inc:weekly/x')).toBe(0)
+    expect(factMinutes('inc:__proto__/x')).toBe(0)
+    expect(factMinutes('inc:daily')).toBe(0)
+    expect(factMinutes('fleet:act1')).toBe(10)
+    expect(factMinutes('fleet:')).toBe(0)
+    expect(factMinutes('fleet')).toBe(0)
+    expect(factMinutes('play:scheduler')).toBe(20)
+    const by = xpBySource({ facts: { 'inc:daily/2027-05-03': true, 'inc:drill/node-death': true, 'fleet:daily': true, 'play:scheduler': true }, itemSec: {} })
+    expect(by.fleet).toBe(10 + 5 + 10) // incidents and runs count under fleet
+    expect(by.practice).toBe(20) // the play counts under practice
+  })
+
   test('clicks, toggles and the legacy sim fact pay nothing; so do unknown facts', () => {
     for (const fact of ['lesson:t0.l1', 'exercise:t0.l1', 'sim:sim-kv/a', 'lab:rust-allocator', 'weird:thing', 'weird', '', 'boot:x', 'placement:x']) {
       expect(factMinutes(fact)).toBe(0)

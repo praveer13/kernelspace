@@ -11,6 +11,8 @@
 import {
   CAPSTONE_STEP_MINUTES,
   FLEET_ACT_MINUTES,
+  FLEET_RUN_MINUTES,
+  INCIDENT_MINUTES,
   LABS,
   PLAY_MINUTES,
   RING2_LAB,
@@ -50,7 +52,7 @@ export const XP = {
   fleetWeekAct: 30,
 } as const
 
-/** Flat price per fact prefix. Prefixes priced from the table (`labc`, `play`, `fw`, `cap`) are in `factMinutes`. */
+/** Flat price per fact prefix. Prefixes priced from the table (`labc`, `play`, `fw`, `cap`, `inc`, `fleet`) are in `factMinutes`. */
 export const FACT_UNITS = {
   lesson: XP.lesson,
   exercise: XP.exercise,
@@ -101,6 +103,13 @@ function price(fact: string): { minutes: number; source: XpSource } | null {
       const minutes = own(FLEET_ACT_MINUTES, tail)
       return minutes === undefined ? null : { minutes, source: 'fleet' }
     }
+    case 'inc': {
+      // `inc:daily/<date>` and `inc:drill/<fault>`: the first segment prices it.
+      const minutes = own(INCIDENT_MINUTES, tail.slice(0, Math.max(0, tail.indexOf('/'))))
+      return minutes === undefined ? null : { minutes, source: 'fleet' }
+    }
+    case 'fleet':
+      return tail === '' ? null : { minutes: FLEET_RUN_MINUTES, source: 'fleet' }
     case 'cap': {
       const minutes = own(CAPSTONE_STEP_MINUTES, tail)
       return minutes === undefined ? null : { minutes, source: 'capstone' }

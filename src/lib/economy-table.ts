@@ -55,10 +55,20 @@ export const FLEET_ACT_MINUTES: Readonly<Record<string, number>> = {
   incident: 20,
 }
 
-/** `play:<id>`: `PlayDef.minutes` (W1 declares the same number on the play def). */
+/** `play:<id>`: `PlayDef.minutes` (W1 declares the same number on the play def). The scheduler's price lands before 2b registers the play. */
 export const PLAY_MINUTES: Readonly<Record<string, number>> = {
   'block-placement': 15,
+  scheduler: 20,
 }
+
+/** `inc:daily/<date>` and `inc:drill/<fault>` (wave-2.md §3.4): nominal [estimated]; a team run pays nothing. */
+export const INCIDENT_MINUTES: Readonly<Record<string, number>> = {
+  daily: 10,
+  drill: 5,
+}
+
+/** `fleet:<mode>`: a run with an own component, nominal [estimated]. */
+export const FLEET_RUN_MINUTES = 10
 
 /** The 19 lessons whose exit tickets RING 2 needs (T0 · T1 · T2). */
 export const RING2_LESSONS: readonly string[] = [

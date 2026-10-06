@@ -39,10 +39,10 @@ const ok = (e: unknown) => expect(bad(e)).toBeNull()
 /* ------------------------------------------------------------------ */
 
 describe('versions and the schema guard', () => {
-  test('SCHEMA_VERSION 4 and AGGREGATE_VERSION 2', () => {
-    expect(SCHEMA_VERSION).toBe(4)
-    expect(AGGREGATE_VERSION).toBe(2)
-    expect(emptyAggregate().v).toBe(2)
+  test('SCHEMA_VERSION and AGGREGATE_VERSION are at least the Wave 1 values (contract-v32 pins today\'s)', () => {
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(4)
+    expect(AGGREGATE_VERSION).toBeGreaterThanOrEqual(2)
+    expect(emptyAggregate().v).toBe(AGGREGATE_VERSION)
   })
 
   test('a Wave 0b bundle (schema 3) goes read-only on a v4 snapshot, hello, store or file; a v4 bundle reads v3 data', () => {
@@ -67,12 +67,12 @@ describe('versions and the schema guard', () => {
     expect(old.status()).toMatchObject({ readOnly: true, reason: 'newer-schema' })
   })
 
-  test('exports carry schemaVersion 4; import accepts 1 to 4 and refuses 5; a Wave 0b bundle would refuse v4', () => {
+  test('exports carry the current schemaVersion; import accepts 1 to it and refuses the next; a Wave 0b bundle would refuse it', () => {
     const file = buildExportV3({ events: [], working: [], device: 'd', exportedAt: T1 })
-    expect(file).toMatchObject({ version: 3, schemaVersion: 4 })
+    expect(file).toMatchObject({ version: 3, schemaVersion: SCHEMA_VERSION })
     expect(file.schemaVersion).toBeGreaterThan(3) // a bundle at schema 3 compares this with its own and refuses (newer-schema)
-    for (const v of [1, 3, 4]) expect(parseImport(JSON.stringify({ ...file, schemaVersion: v })).ok).toBe(true)
-    expect(parseImport(JSON.stringify({ ...file, schemaVersion: 5 }))).toMatchObject({ ok: false, error: 'newer-schema' })
+    for (const v of [1, 3, 4, SCHEMA_VERSION]) expect(parseImport(JSON.stringify({ ...file, schemaVersion: v })).ok).toBe(true)
+    expect(parseImport(JSON.stringify({ ...file, schemaVersion: SCHEMA_VERSION + 1 }))).toMatchObject({ ok: false, error: 'newer-schema' })
   })
 })
 
@@ -640,7 +640,7 @@ describe('upgradeAggregate', () => {
       const events = d.ledger().events
       const v1 = deriveV1(events)
       const upgraded = upgradeAggregate(v1)
-      expect(upgraded.v).toBe(2)
+      expect(upgraded.v).toBe(AGGREGATE_VERSION)
       expect(stableStringify(v1Fields(upgraded))).toBe(stableStringify(v1Fields(derive(events))))
       expect(stableStringify(v1Fields(v1))).toBe(stableStringify(v1Fields(derive(events))))
     })
@@ -649,7 +649,7 @@ describe('upgradeAggregate', () => {
   test('the new fields come empty, read is inferred from the click, and a pass keeps an upper-bound instant', () => {
     const v1 = deriveV1(wave0bLedger())
     const up = upgradeAggregate(v1)
-    expect(up).toMatchObject({ v: 2, plays: {}, proves: {}, itemSec: {} })
+    expect(up).toMatchObject({ v: AGGREGATE_VERSION, plays: {}, proves: {}, itemSec: {} })
     expect(up.sims['sim-kv'].outcomes).toEqual({})
     expect(up.labs['lab-a'].unseen).toEqual({})
     expect(up.lessons['t0.l1']).toMatchObject({ read: true })
@@ -695,7 +695,7 @@ describe('hydrate from a Wave 0b snapshot', () => {
     expect(s.lessons['t0.l2']?.status).toBe('done')
     expect(s.lessons['t0.l3']?.status).toBe('reading')
     expect(s.xp).toBe(xpOf(upgradeAggregate(deriveV1(events)))) // facts re-priced by v2; item time (itemSec) is unknown until the derive
-    expect(s.aggregate.v).toBe(2)
+    expect(s.aggregate.v).toBe(AGGREGATE_VERSION)
     expect(s.ledger).toMatchObject({ ready: false, readOnly: false })
     expect(tab.loads()).toBe(1) // booted without waiting for idle
 
@@ -726,7 +726,7 @@ describe('hydrate from a Wave 0b snapshot', () => {
     const agg = { ...derive(wave0bLedger()) } as Partial<Aggregate>
     delete agg.plays
     const p = makeProfile()
-    p.storage.data.set(SNAPSHOT_KEY, JSON.stringify({ schemaVersion: 4, aggregateVersion: 2, aggregate: agg, working: [] }))
+    p.storage.data.set(SNAPSHOT_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, aggregateVersion: AGGREGATE_VERSION, aggregate: agg, working: [] }))
     const tab = startTab(p)
     expect(tab.progress.getState().lessons).toEqual({})
     tab.progress.getState().recordProve({ labId: 'lab-a', score: 1, ok: true, data: { v: 1, qids: ['a'], self: [1] } })
@@ -1026,7 +1026,7 @@ describe('exportV3({ sinceAt })', () => {
     expect(delta.working.map((w) => w.key)).toEqual(['handoff:last'])
     expect(delta.components).toEqual([])
     expect(delta.extras).toEqual({ capstoneDrafts: {} })
-    expect(delta).toMatchObject({ format: 'kernelspace-progress', version: 3, schemaVersion: 4 })
+    expect(delta).toMatchObject({ format: 'kernelspace-progress', version: 3, schemaVersion: SCHEMA_VERSION })
     expect(parseImport(serializeExport(delta)).ok).toBe(true) // still a complete export v3
     expect(buildExportV3({ events, working, device: 'd', exportedAt: T3, sinceAt: '2030-01-01T00:00:00.000Z' }).events).toEqual([])
   })
@@ -1089,7 +1089,7 @@ describe('invariants', () => {
   })
 
   test('SnapshotV2 carries aggregateVersion as a plain number', () => {
-    const snap: SnapshotV2 = { schemaVersion: 4, aggregateVersion: 2, writtenAt: T1, tab: 't', aggregate: emptyAggregate(), working: [] }
+    const snap: SnapshotV2 = { schemaVersion: SCHEMA_VERSION, aggregateVersion: AGGREGATE_VERSION, writtenAt: T1, tab: 't', aggregate: emptyAggregate(), working: [] }
     expect(workingMap([])).toEqual({})
     expect(snap.aggregateVersion).toBe(AGGREGATE_VERSION)
   })

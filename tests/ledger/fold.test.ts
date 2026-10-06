@@ -56,6 +56,16 @@ describe('refs', () => {
     expect(refMatchesKind('lab-check', 'lab:lab-a')).toBe(true)
     expect(refMatchesKind('ack', 'screen:welcome')).toBe(true)
   })
+
+  test('Wave 2 grammar per kind (contract-v32.test.ts has the full lists)', () => {
+    expect(refMatchesKind('incident', 'inc:daily/2027-05-03')).toBe(true)
+    expect(refMatchesKind('incident', 'inc:drill/node-death')).toBe(true)
+    expect(refMatchesKind('incident', 'x')).toBe(false)
+    expect(refMatchesKind('fleet-run', 'fleet:act1')).toBe(true)
+    expect(refMatchesKind('fleet-run', 'fleet:nope')).toBe(false)
+    expect(refMatchesKind('ack', 'packet:lesson/t5.l4')).toBe(true)
+    expect(refMatchesKind('ack', 'packet:lesson/')).toBe(false)
+  })
 })
 
 describe('fold rules (spec §6.1)', () => {
@@ -151,6 +161,20 @@ describe('fold rules (spec §6.1)', () => {
     ])
     expect(agg.fleetWeek).toEqual({ acts: { engine: true }, scores: { engine: 0.9 } })
     expect(xpOf(agg)).toBe(XP.fleetWeekAct)
+  })
+
+  test('incidents and fleet runs: counted per ref and mode, facts only when ok, streak day always (aggregate v3)', () => {
+    const data = { v: 1, src: 'daily', fault: 'drain-stall', severity: 1, probes: [], diagnosed: true, fixed: true, burn: 0, expertBurn: 0, streetlight: 0, components: [], date: '2027-05-03' }
+    const run = { v: 1, mode: 'act2', components: [{ slot: 'scheduler', labId: 'l', sha256: 'ab'.repeat(32) }], seeds: 'fresh', goodput: 10, refGoodput: 10 }
+    const agg = derive([
+      evt('incident', 'inc:daily/2027-05-03', T1, { data }),
+      evt('incident', 'inc:daily/2027-05-03', T2, { data, score: 0, ok: false }),
+      evt('fleet-run', 'fleet:act2', T3, { data: run, score: 0.5, ok: false }),
+    ])
+    expect(agg.incidents['inc:daily/2027-05-03']).toEqual({ n: 2, best: 1, okAt: T1 })
+    expect(agg.fleetRuns.act2).toEqual({ best: 0.5, own: true })
+    expect(agg.facts).toEqual({ 'inc:daily/2027-05-03': true })
+    expect(Object.keys(agg.days)).toHaveLength(3)
   })
 
   test('capstone: step is the highest index + 1, steps pay once', () => {
