@@ -26,6 +26,7 @@ import {
   type TickSample,
 } from '@/lib/fleet-model'
 import { splitmix32u } from '@/lib/rng'
+import { makeFaultInjector, type FaultSpec } from '@/lib/world/faults'
 import { instantiateLab } from '@/lib/wasm-lab'
 import { atlasRow } from '@/data/atlas'
 import { claimNumber } from '@/data/claims'
@@ -96,12 +97,10 @@ export type ModuleBytes = Record<LabKind, ArrayBuffer | null>
 export type ProgressFn = (fraction: number) => void
 
 /**
- * A fault the fleet suffers, as data: it crosses the worker boundary and is
- * interpreted inside the run (`makeFaultInjector`). Ticks are cluster ticks.
+ * Faults are data (FaultSpec v2) and their interpreter lives with the incident world in
+ * src/lib/world/faults.ts (wave-2 §9.1); re-exported here so Fleet Week's callers keep one import.
  */
-export type FaultSpec =
-  | { kind: 'node-death'; worker: number; atTick: number }
-  | { kind: 'flash-crowd'; fromTick: number; toTick: number; every: number }
+export { makeFaultInjector, type FaultSpec } from '@/lib/world/faults'
 
 /**
  * Act II: a seed-drawn worker dies at a seed-drawn tick (practice: worker 0 at t400),
@@ -112,32 +111,6 @@ export function act2Faults(seeds: FleetWeekSeeds, workers: number): FaultSpec[] 
     { kind: 'node-death', worker: seeds.deathPick % workers, atTick: seeds.deathTick },
     { kind: 'flash-crowd', fromTick: 600, toTick: 750, every: 3 },
   ]
-}
-
-/** Interpret FaultSpecs as a Cluster.disrupt hook; `events` and `injected()` report what fired. */
-export function makeFaultInjector(faults: FaultSpec[], rng: () => number) {
-  const events: string[] = []
-  let injected = 0
-  const disrupt = (c: Cluster, tick: number) => {
-    for (const f of faults) {
-      if (f.kind === 'node-death') {
-        // in-flight work on the dying worker is lost
-        if (tick === f.atTick && c.workers.length > 1 && !c.workers[f.worker].killed) {
-          const lost = c.workers[f.worker].kill()
-          events.push(`t${f.atTick}: NODE DEATH — worker ${f.worker} lost with ${lost} in-flight requests`)
-        }
-      } else if (tick >= f.fromTick && tick <= f.toTick && tick % f.every === 0) {
-        // extra arrivals slammed into the surviving fleet
-        const alive = c.workers.filter((w) => !w.killed)
-        if (alive.length > 0) {
-          const w = alive[rng() % alive.length]
-          w.inject({ id: 10000 + tick * 10 + (rng() % 10), arrival: tick, prompt: 64 + (rng() % 193), output: 16 + (rng() % 33) })
-          injected++
-        }
-      }
-    }
-  }
-  return { disrupt, events, injected: () => injected }
 }
 
 const CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
