@@ -6,7 +6,7 @@
  * the block's code, so editing a traced snippet without re-running scripts/aquascope/extract.ts fails
  * here (CI never runs Aquascope). The negative cases prove the check bites on a one-character edit.
  */
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -25,8 +25,11 @@ import {
   type TracedBlock,
 } from '../../src/data/aquascope/types'
 import { ALL_LESSONS } from '../../src/data/lessons'
+import type { CodeBlockData, Lesson } from '../../src/data/lessons/types'
 import { validateEvent } from '../../src/lib/ledger/codec'
 import { gradeItem, playView, resultFor } from '../../src/lib/items/play'
+import { getProgress, useProgress, type CodeLang } from '../../src/lib/progress'
+import { RenderBlock, pickCodeLang, shownAlt } from '../../src/pages/lesson/blocks'
 import { formatTraceFile, pathAt, prepare, toTrace } from '../../scripts/aquascope/extract'
 import { evt } from '../ledger/gen'
 
@@ -349,5 +352,98 @@ describe('AlignItem', () => {
     expect(html).toContain('align · Java ↔ Rust')
     expect(html).toContain('Which Rust line does the compiler reject')
     for (const o of Q.options) expect(html).toContain(o.replace(/'/g, '&#x27;'))
+  })
+
+  test("a question without kcs is recorded under the lesson's KCs, as exit tickets are", () => {
+    const bare: QuizQuestion = { ...Q, kcs: undefined }
+    const fallback = alignItem('r.l4', 0, bare, ['r.ownership', 'r.borrow-rules'])
+    expect(fallback.source === 'item' && fallback.item.kcs).toEqual(['r.ownership', 'r.borrow-rules'])
+    const own = alignItem('r.l4', 0, Q, ['r.ownership'])
+    expect(own.source === 'item' && own.item.kcs).toEqual(['r.borrow-rules'])
+  })
+})
+
+describe('the code block language switch (§17.2)', () => {
+  const JAVA = 'List<Integer> v = new ArrayList<>(List.of(1, 2, 3));'
+  const PY = 'v = [1, 2, 3]'
+  const block = (filename: string, alt: CodeBlockData['alt']): CodeBlockData => ({ type: 'code', filename, code: 'let mut v = vec![1, 2, 3];', lang: 'rust', alt })
+  const A = block('a.rs', { java: JAVA, python: PY })
+  const B = block('b.rs', { java: JAVA, python: PY })
+  const PY_ONLY = block('c.rs', { python: PY })
+  const lesson: Lesson = { ...ALL_LESSONS[0], id: 'x.l1', blocks: [A, B, PY_ONLY], ticket: undefined }
+  const render = (b: CodeBlockData) => renderToStaticMarkup(createElement(RenderBlock, { block: b, lesson, trackColor: '#fff', h2Start: 0 })).replace(/<!-- -->/g, '')
+  /** Which alternate a block shows beside its Rust, read from the alternate's filename header. */
+  const shown = (b: CodeBlockData) => {
+    const html = render(b)
+    return html.includes('Java · what you know') ? 'java' : html.includes('Python · what you know') ? 'python' : null
+  }
+  const checked = (b: CodeBlockData) => [...render(b).matchAll(/<input [^>]*>/g)].filter((m) => m[0].includes('checked')).map((m) => /value="(\w+)"/.exec(m[0])?.[1])
+
+  const initial = getProgress()
+  const setLang = (codeLang: CodeLang | undefined) => useProgress.setState({ settings: { ...getProgress().settings, codeLang } })
+  afterEach(() => useProgress.setState({ settings: initial.settings, ledger: initial.ledger, updateSettings: initial.updateSettings }))
+
+  test('shownAlt: the alternate settings.codeLang names, else the first authored one, and none for Rust', () => {
+    expect(shownAlt(['java', 'python'], undefined)).toBe('java')
+    expect(shownAlt(['java', 'python'], 'python')).toBe('python')
+    expect(shownAlt(['java', 'python'], 'rust')).toBeNull()
+    expect(shownAlt(['java', 'python'], 'c')).toBe('java')
+    expect(shownAlt(['python'], 'java')).toBe('python')
+    expect(shownAlt([], 'java')).toBeNull()
+  })
+
+  test('a block with alt renders a labelled radiogroup: each authored language and Rust only', () => {
+    setLang(undefined)
+    const html = render(A)
+    expect(html).toMatch(/role="radiogroup" aria-labelledby="[^"]+"/)
+    expect(html).toContain('Beside the Rust')
+    expect(html.match(/<input type="radio"/g)).toHaveLength(3)
+    for (const label of ['Java', 'Python', 'Rust only']) expect(html).toContain(`>${label}</span>`)
+    expect(render(PY_ONLY).match(/<input type="radio"/g)).toHaveLength(2)
+    expect(render(block('d.rs', undefined))).not.toContain('radiogroup')
+  })
+
+  test('the alternate shown follows settings.codeLang, with its radio checked', () => {
+    setLang(undefined)
+    expect([shown(A), checked(A)]).toEqual(['java', ['java']])
+    setLang('python')
+    expect([shown(A), checked(A)]).toEqual(['python', ['python']])
+    setLang('rust')
+    expect([shown(A), checked(A)]).toEqual([null, ['rust']])
+    setLang('c')
+    expect([shown(A), checked(A)]).toEqual(['java', ['java']])
+    setLang('java')
+    expect([shown(PY_ONLY), checked(PY_ONLY)]).toEqual(['python', ['python']])
+  })
+
+  test('choosing a language writes settings.codeLang', () => {
+    const calls: unknown[] = []
+    useProgress.setState({ updateSettings: (patch) => void calls.push(patch) })
+    pickCodeLang('python')
+    pickCodeLang('rust')
+    expect(calls).toEqual([{ codeLang: 'python' }, { codeLang: 'rust' }])
+  })
+
+  test('a pick in one block moves every block on the page', () => {
+    // the pick writes the one setting every block reads, so no block keeps a language of its own
+    useProgress.setState({ updateSettings: (patch) => setLang(patch.codeLang) })
+    pickCodeLang('python')
+    expect([shown(A), shown(B), shown(PY_ONLY)]).toEqual(['python', 'python', 'python'])
+    pickCodeLang('java')
+    expect([shown(A), shown(B), shown(PY_ONLY)]).toEqual(['java', 'java', 'python'])
+    pickCodeLang('rust')
+    expect([shown(A), shown(B), shown(PY_ONLY)]).toEqual([null, null, null])
+  })
+
+  test('a read-only tab keeps one page-wide pick and writes nothing', () => {
+    const calls: unknown[] = []
+    setLang('java')
+    useProgress.setState({ ledger: { ...initial.ledger, readOnly: true }, updateSettings: (patch) => void calls.push(patch) })
+    pickCodeLang('python')
+    expect(calls).toEqual([])
+    expect([shown(A), shown(B)]).toEqual(['python', 'python'])
+    // once the tab can write again, settings rules
+    useProgress.setState({ ledger: initial.ledger })
+    expect([shown(A), shown(B)]).toEqual(['java', 'java'])
   })
 })

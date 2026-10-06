@@ -7,7 +7,8 @@
  * does the compiler reject, and which permission is missing?" It is an authored choice item with a why
  * per option, played by the shared ItemCard (options in a fresh order per attempt, graded by authored
  * index) and written to the ledger as `item:<lessonId>.align.<n>` with `src: 'lesson'`, where n counts
- * alignment items across the lesson's code blocks (the same n the markdown export prints).
+ * alignment items across the lesson's code blocks in block order. A question without its own `kcs` is
+ * recorded under the lesson's, as exit tickets and placement do.
  */
 import { useState } from 'react'
 import ItemCard from '@/components/items/ItemCard'
@@ -21,9 +22,10 @@ import { freshSeed } from '@/lib/rng'
 /** The ledger caps an item's KCs (codec MAX_KCS); an authored item names 1-3. */
 const MAX_KCS = 3
 
-/** The authored item an alignment question plays as: `item:<lessonId>.align.<n>`. */
-export function alignItem(lessonId: string, n: number, q: QuizQuestion): PlayableItem {
-  return { source: 'item', item: { id: `${lessonId}.align.${n}`, q, kcs: (q.kcs ?? []).slice(0, MAX_KCS) } }
+/** The authored item an alignment question plays as: `item:<lessonId>.align.<n>`, under its own KCs or else the lesson's. */
+export function alignItem(lessonId: string, n: number, q: QuizQuestion, lessonKcs: readonly string[] = []): PlayableItem {
+  const kcs = q.kcs && q.kcs.length > 0 ? q.kcs : lessonKcs
+  return { source: 'item', item: { id: `${lessonId}.align.${n}`, q, kcs: kcs.slice(0, MAX_KCS) } }
 }
 
 /** The ledger event for one answer (src 'lesson', the authored pick, the item's KCs). */
@@ -53,17 +55,19 @@ export interface AlignItemProps {
   /** The item's index across the lesson's alignment items. */
   n: number
   q: QuizQuestion
+  /** The lesson's KCs, recorded when the question names none. */
+  lessonKcs?: readonly string[]
   /** The familiar language beside the Rust, for the eyebrow ("Java ↔ Rust"). */
   langLabel?: string
   /** Pinned option order (tests); a fresh order per attempt otherwise. */
   seed?: number
 }
 
-export default function AlignItem({ lessonId, n, q, langLabel, seed: seedProp }: AlignItemProps) {
+export default function AlignItem({ lessonId, n, q, lessonKcs, langLabel, seed: seedProp }: AlignItemProps) {
   const recordItems = useProgress((s) => s.recordItems)
   const [seed, setSeed] = useState(() => seedProp ?? freshSeed())
   const [wrong, setWrong] = useState(false)
-  const item = alignItem(lessonId, n, q)
+  const item = alignItem(lessonId, n, q, lessonKcs)
   const onResult = (r: ItemResult) => {
     recordItems([alignResponse(lessonId, r)])
     setWrong(!r.ok)

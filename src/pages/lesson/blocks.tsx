@@ -8,7 +8,7 @@
  * and ExerciseView live in their own modules beside this one.
  */
 
-import { Suspense, lazy, useId, useMemo, useState } from 'react'
+import { Suspense, lazy, useId, useMemo, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Lightbulb,
@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import CodeBlock from '@/components/CodeBlock'
 import QuizBlock from '@/components/QuizBlock'
-import { useProgress, type CodeLang } from '@/lib/progress'
+import { getProgress, useProgress, type CodeLang } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 import type {
   CalloutBlock,
@@ -239,10 +239,47 @@ const ALT_LABEL: Record<AltLang, string> = { java: 'Java', python: 'Python' }
  * The alternate shown beside the Rust: the one settings.codeLang names, the first one authored when
  * it names neither, and none when it says Rust.
  */
-function shownAlt(available: readonly AltLang[], codeLang: CodeLang | undefined): AltLang | null {
+// eslint-disable-next-line react-refresh/only-export-components -- exported for tests/lesson/permission.test.ts
+export function shownAlt(available: readonly AltLang[], codeLang: CodeLang | undefined): AltLang | null {
   if (available.length === 0 || codeLang === 'rust') return null
   return available.find((l) => l === codeLang) ?? available[0]
 }
+
+/*
+ * settings.codeLang is the one source of truth: every code block reads it, so a pick in any block moves
+ * them all. A read-only tab (§8.7) cannot write settings, so there the pick lives in this module instead,
+ * still one value for every block on the page.
+ */
+let pagePick: CodeLang | null = null
+const pagePickListeners = new Set<() => void>()
+
+/** The language every code block shows: the page's pick on a read-only tab, settings.codeLang otherwise. */
+function currentCodeLang(): CodeLang | undefined {
+  const s = getProgress()
+  return (s.ledger.readOnly ? pagePick : null) ?? s.settings.codeLang
+}
+
+function subscribeCodeLang(fn: () => void): () => void {
+  const off = useProgress.subscribe(fn)
+  pagePickListeners.add(fn)
+  return () => {
+    off()
+    pagePickListeners.delete(fn)
+  }
+}
+
+/** What the language switch does: write settings.codeLang, or, where settings cannot be written, the page's pick. */
+// eslint-disable-next-line react-refresh/only-export-components -- exported for tests/lesson/permission.test.ts
+export function pickCodeLang(next: CodeLang): void {
+  const s = getProgress()
+  if (s.ledger.readOnly) {
+    pagePick = next
+    for (const fn of pagePickListeners) fn()
+  } else s.updateSettings({ codeLang: next })
+}
+
+// The app renders only in the browser, so the server snapshot is the same live read (a static render in tests sees the store as it is).
+const useCodeLang = () => useSyncExternalStore(subscribeCodeLang, currentCodeLang, currentCodeLang)
 
 function LanguageSwitch({ available, shown, onPick }: { available: readonly AltLang[]; shown: AltLang | null; onPick: (lang: CodeLang) => void }) {
   const uid = useId()
@@ -273,12 +310,9 @@ function LanguageSwitch({ available, shown, onPick }: { available: readonly AltL
   )
 }
 
-function CodeView({ block, lessonId, alignStart }: { block: CodeBlockData; lessonId: string; alignStart: number }) {
-  const codeLang = useProgress((s) => s.settings.codeLang)
-  const updateSettings = useProgress((s) => s.updateSettings)
-  // The learner's pick on this page, so the switch answers even where settings cannot be written (a read-only tab).
-  const [picked, setPicked] = useState<CodeLang | null>(null)
-  const lang = picked ?? codeLang
+function CodeView({ block, lesson, alignStart }: { block: CodeBlockData; lesson: Lesson; alignStart: number }) {
+  const lessonId = lesson.id
+  const lang = useCodeLang()
   const tabs = useMemo(() => {
     if (!block.tabs) return undefined
     if (!lang) return block.tabs
@@ -291,10 +325,6 @@ function CodeView({ block, lessonId, alignStart }: { block: CodeBlockData; lesso
 
   const available = ALT_LANGS.filter((l) => block.alt?.[l] !== undefined)
   const alt = shownAlt(available, lang)
-  const pick = (next: CodeLang) => {
-    setPicked(next)
-    updateSettings({ codeLang: next })
-  }
   const rust = (
     <CodeBlock
       filename={block.filename}
@@ -307,7 +337,7 @@ function CodeView({ block, lessonId, alignStart }: { block: CodeBlockData; lesso
 
   return (
     <div className="my-6">
-      {available.length > 0 && <LanguageSwitch available={available} shown={alt} onPick={pick} />}
+      {available.length > 0 && <LanguageSwitch available={available} shown={alt} onPick={pickCodeLang} />}
       {alt ? (
         <div className="space-y-3">
           <CodeBlock filename={`${ALT_LABEL[alt]} · what you know`} code={block.alt?.[alt]} lang={alt} />
@@ -333,7 +363,7 @@ function CodeView({ block, lessonId, alignStart }: { block: CodeBlockData; lesso
       {block.align && block.align.length > 0 && (
         <Suspense fallback={<BlockFallback />}>
           {block.align.map((q, i) => (
-            <AlignItem key={i} lessonId={lessonId} n={alignStart + i} q={q} langLabel={alt ? ALT_LABEL[alt] : undefined} />
+            <AlignItem key={i} lessonId={lessonId} n={alignStart + i} q={q} lessonKcs={lesson.kcs} langLabel={alt ? ALT_LABEL[alt] : undefined} />
           ))}
         </Suspense>
       )}
@@ -341,7 +371,7 @@ function CodeView({ block, lessonId, alignStart }: { block: CodeBlockData; lesso
   )
 }
 
-/** Alignment items are numbered across the lesson's code blocks (`item:<lessonId>.align.<n>`), as the export numbers them. */
+/** Alignment items are numbered across the lesson's code blocks in block order (`item:<lessonId>.align.<n>`). */
 function alignStartOf(lesson: Lesson, block: ContentBlock): number {
   let n = 0
   for (const b of lesson.blocks) {
@@ -376,7 +406,7 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
     case 'prose':
       return <ProseView md={block.md} trackColor={trackColor} h2Start={h2Start} />
     case 'code':
-      return <CodeView block={block} lessonId={lesson.id} alignStart={alignStartOf(lesson, block)} />
+      return <CodeView block={block} lesson={lesson} alignStart={alignStartOf(lesson, block)} />
     case 'callout':
       return <CalloutView block={block} />
     case 'diagram':
