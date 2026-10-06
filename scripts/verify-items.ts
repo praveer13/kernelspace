@@ -58,6 +58,11 @@
  * stem overlap) FAILS when its item hit rate over all gated items exceeds chance + MAX_HIT_OVER_CHANCE; the lesson items and
  * the errata items are also held to the bar on their own (the pooled rate can hide a leaking pool). Act IV (six items) is only
  * judged inside the pooled rate; the stem-overlap pair skips it (its stem is telemetry).
+ * (19) OWN POOLS: every choice prequestion (the `predict` blocks of the lesson files), every DiagramBlock.predictAt option set and
+ * every t2.l7 spiral item (`ticket.spiral`) is collected as a pool of its own (scripts/item-cues.ts collectOwnPools) and held, per pool, to
+ * the item-level bar of (18) (every length-rank, lexical and surface strategy at most chance + MAX_HIT_OVER_CHANCE), to the odd-one-out of (15)
+ * per item and to the adversary of (16) scored on the pool, with a why for every option; the pooled rate of (18) would hide a leaking pool.
+ * The surfaces that shuffle them (diagram.tsx, Prequestions.tsx) must draw a per-attempt freshSeed.
  * REPORTS (never fails): the item-level hit rate of each surface-feature strategy against chance, longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
  * surface-feature expectations per track, the odd-one-out, adversary, composite and cue-limit tables per feature, per track and per lesson, and a blind-strategy simulation.
  *
@@ -75,6 +80,7 @@ import { INCIDENTS } from '../src/lib/fleet-week'
 import { exportOrder, shuffledOrder } from '../src/lib/rng'
 import {
   BINARY_FLAGS,
+  collectOwnPools,
   CUE_STRATEGIES,
   FEATURES,
   LEXICAL_STRATEGIES,
@@ -83,6 +89,9 @@ import {
   matchCount,
   MAX_HIT_OVER_CHANCE,
   oddOneOut,
+  OWN_POOLS,
+  poolCueFailures,
+  poolCueRows,
   RANK_STRATEGIES,
   REASON,
   shortestIndices,
@@ -391,7 +400,11 @@ const SHUFFLED_SURFACES = [
   // the placement walk replaced Curriculum's own modal: its items are shuffled by the item player's model
   'src/lib/items/play.ts',
   'src/pages/FleetWeek.tsx',
+  // P1 diagram predictions shuffle their options themselves; the prequestions go through the item player (play.ts above)
+  'src/pages/lesson/diagram.tsx',
 ]
+/** Surfaces that draw a fresh seed per attempt, so a position cue cannot be learned across learners or visits. */
+const FRESH_SEED_SURFACES = ['src/components/blocks/Prequestions.tsx', 'src/pages/lesson/diagram.tsx']
 const importsShuffle = /import\s*\{[^}]*\bshuffledOrder\b[^}]*\}\s*from\s*'@\/lib\/rng'/
 for (const file of SHUFFLED_SURFACES) {
   let src = ''
@@ -403,6 +416,12 @@ for (const file of SHUFFLED_SURFACES) {
   }
   if (!importsShuffle.test(src)) failures.push(`surface: ${file} does not import shuffledOrder from '@/lib/rng'`)
   if (!src.includes('shuffledOrder(')) failures.push(`surface: ${file} never calls shuffledOrder(; options would render in authored order`)
+}
+for (const file of FRESH_SEED_SURFACES) {
+  const src = await readFile(new URL(`../${file}`, import.meta.url), 'utf8').catch(() => '')
+  if (!/import\s*\{[^}]*\bfreshSeed\b[^}]*\}\s*from\s*'@\/lib\/rng'/.test(src) || !src.includes('freshSeed')) {
+    failures.push(`surface: ${file} does not draw a per-attempt freshSeed from '@/lib/rng'; its option order would be the same for everyone`)
+  }
 }
 
 /* ------------------------- report ------------------------- */
@@ -782,6 +801,25 @@ const errataFile = new Map<Item, string>()
   }
 }
 
+// (19) The own pools: every choice prequestion, every DiagramBlock.predictAt option set and every t2.l7 spiral item.
+// They have no lesson, so the lesson-pass metrics do not apply; each pool is held to the item-level bar on its own
+// (the pooled rate would let a leaking pool hide behind the quizzes), and every item needs a why for each option.
+const ownItems: Item[] = []
+const ownFile = new Map<Item, string>()
+for (const e of collectOwnPools(ALL_LESSONS)) {
+  const item: Item = { track: e.pool, lessonId: null, qi: -1, ref: e.ref, q: e.q, needsExplanation: e.needsExplanation }
+  const errs = structureErrors(item)
+  if (e.q.why === undefined) errs.push('missing per-option why')
+  if (errs.length) {
+    failures.push(`structure: ${e.ref} (${e.pool}): ${errs.join('; ')}`)
+  } else {
+    ownItems.push(item)
+    ownFile.set(item, lessonFile.get(e.lessonId) ?? e.lessonId)
+  }
+}
+const ownPool = (pool: string) => ownItems.filter((i) => i.track === pool)
+for (const pool of OWN_POOLS) failures.push(...poolCueFailures(pool, ownPool(pool)))
+
 const gatedLessonItems = validItems.filter((i) => i.lessonId !== null && whyRequired.includes(i.track))
 const gatedFleetItems = validItems.filter((i) => i.track === FLEET_TRACK && whyRequired.includes(FLEET_TRACK))
 const gatedItems = [...gatedLessonItems, ...gatedFleetItems, ...errataItems]
@@ -902,9 +940,9 @@ for (const t of foldTracks) {
   const model = trainLogit(rest)
   for (const i of trainPool) if (i.track === t) heldOutP.set(i, logitPick(model, i.q))
 }
-if (trainPool.length && errataItems.length) {
+if (trainPool.length && (errataItems.length || ownItems.length)) {
   const model = trainLogit(trainPool)
-  for (const i of errataItems) heldOutP.set(i, logitPick(model, i.q))
+  for (const i of [...errataItems, ...ownItems]) heldOutP.set(i, logitPick(model, i.q))
 }
 const advP = (i: Item) => heldOutP.get(i) ?? 0
 
@@ -941,6 +979,20 @@ if (errataRows.length && advHitErrata > chanceErrata + MAX_HIT_OVER_CHANCE) {
     `adversary: errata retrieval items are hit at ${pct(advHitErrata)} (chance ${pct(chanceErrata)} + ${MAX_HIT_OVER_CHANCE * 100} points = ${pct(chanceErrata + MAX_HIT_OVER_CHANCE)}) by a model trained on the gated tracks; rewrite their options`,
   )
 }
+
+// (19) The same model scores each own pool on its own: the pool is held out of training, so a rewrite that only moved
+// the cue from length to another feature still fails here.
+const ownAdversary = OWN_POOLS.map((pool) => {
+  const rows = ownPool(pool).filter(singleKey)
+  const hit = hitRateOf(rows, advP)
+  const chance = chanceOf(rows)
+  if (rows.length && hit > chance + MAX_HIT_OVER_CHANCE) {
+    failures.push(
+      `adversary: the ${rows.length} ${pool} items are hit at ${pct(hit)} (chance ${pct(chance)} + ${MAX_HIT_OVER_CHANCE * 100} points = ${pct(chance + MAX_HIT_OVER_CHANCE)}) by a model trained on the gated tracks; rewrite their options`,
+    )
+  }
+  return { pool, rows: rows.length, hit, chance }
+})
 
 /* ---- (17) reviewer composite rules ---- */
 
@@ -1094,6 +1146,20 @@ const cueRows = CUE_STRATEGIES.map((s) => {
     console.log(`  ${id.padEnd(8)}${`${odd}/${rows.length}`.padStart(5)}  adv ${(advLessons.get(id) as number).toFixed(2)}  ${comps.join('  ')}  ${lessonFile.get(id) ?? ''}`)
   }
 }
+
+console.log('')
+console.log(`own pools (prequestions, diagram predictions, spiral items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
+console.log(`  ${'pool'.padEnd(12)}${'items'.padStart(6)}${'worst strategy'.padStart(24)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'adv hit'.padStart(9)}  odd`)
+for (const pool of OWN_POOLS) {
+  const rows = poolCueRows(ownPool(pool))
+  const worst = rows.reduce((a, b) => (b.hit - b.chance > a.hit - a.chance ? b : a), rows[0])
+  const adv = ownAdversary.find((a) => a.pool === pool)
+  const odd = ownPool(pool).filter((i) => oddOneOut(i.q).length > 0).length
+  console.log(
+    `  ${pool.padEnd(12)}${String(worst.items).padStart(6)}${worst.name.padStart(24)}${rate(worst.hit).padStart(8)}${rate(worst.chance).padStart(8)}${rate(adv?.hit ?? NaN).padStart(9)}  ${odd}${worst.hit - worst.chance > MAX_HIT_OVER_CHANCE || (adv && adv.rows > 0 && adv.hit > adv.chance + MAX_HIT_OVER_CHANCE) || odd > 0 ? '  FAIL' : ''}`,
+  )
+}
+console.log(`  files: ${[...new Set([...ownFile.values()])].length} lesson files author ${ownItems.length} own-pool items`)
 
 console.log('')
 console.log(`blind-strategy simulation: ${byLesson.size} lessons with a quiz, per-attempt shuffling, pass at >= ${PASS_BAR * 100}%`)

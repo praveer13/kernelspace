@@ -148,9 +148,6 @@ export const captionVisible = (i: number, d: DiagramPredict | null, committed: b
 /** The prompt shows on the step just before the gated one, until a choice is committed. */
 export const promptVisible = (step: number, d: DiagramPredict | null, committed: boolean): boolean => !!d && !committed && step === d.step - 1
 
-/** Option display order (`order[position] = authored index`): stable per diagram, so a reload shows what was shown. */
-export const diagramSeed = (lessonId: string, blockIndex: number): number => hash32(diaRef(lessonId, blockIndex))
-
 /** Whether an authored option index is among the correct ones. A prediction is a single pick. */
 export const diagramPickOk = (d: DiagramPredict, pick: number): boolean => d.correct.includes(pick)
 

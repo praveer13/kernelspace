@@ -47,7 +47,7 @@ const lesson: Lesson = {
           q: 'main calls f, and f calls g. As the calls return, whose stack memory is released first?',
           options: [
             'The frame of f, the middle call, which links the other two frames together',
-            'The frame of g, the newest call, which was pushed after the other two',
+            'The frame of g, the newest call, which was pushed last and sits on top of the stack',
             'The frame of main, the oldest call, which holds the most data of the three',
             'All three frames together, once the program reaches the end of main',
           ],
@@ -56,7 +56,7 @@ const lesson: Lesson = {
             'The middle position gives no priority. Frames are released strictly newest first, whichever one calls which.',
             'Right: the stack is last in, first out. g was pushed last, so g is released first, then f, then main.',
             'Backwards. The oldest frame sits at the bottom of the stack and is released last, whatever it holds.',
-            'Frames do not wait for the program to end. Each is released the moment its function returns, with one subtract.',
+            'Frames do not wait for the program to end. Each is released the moment its function returns, with one add to rsp.',
           ],
           revealAt: 'The stack: memory with a discipline',
           kcs: ['t1.stack-frames'],
@@ -65,9 +65,9 @@ const lesson: Lesson = {
           kind: 'choice',
           q: 'Which fact about a value most directly forces it onto the heap instead of the stack?',
           options: [
-            'It holds several fields, more than a single register can carry along',
+            'It holds several fields, more than a single register can carry along with it',
             'It is read by more than one function while the program is running',
-            'It is created inside a loop body and is made over again on each pass',
+            'It is created inside a loop body and rebuilt on each pass',
             'It has to stay alive after the function that created it has returned',
           ],
           correct: [3],
@@ -128,7 +128,7 @@ The price for this perfection is a strict contract: **last in, first out.** Memo
         options: [
           'They are zeroed by the CPU, and the next call starts from clean memory',
           'They are copied to the heap, and main can still read add\'s locals later',
-          'They stay where they are below rsp, until a later call overwrites them',
+          'They stay put below rsp, until a later call overwrites them',
           'They are unmapped by the kernel, and any later access to them faults',
         ],
         correct: [2],

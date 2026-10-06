@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import type { DiagramPredict, Prequestion } from '../../src/data/lessons/types'
 import { BOOT_KCS } from '../../src/data/kc'
-import { gradeItem, resultFor } from '../../src/lib/items/play'
+import { gradeItem, playView, resultFor } from '../../src/lib/items/play'
 import { diagramPredictRev, prequestionRev } from '../../src/lib/kc/resolve'
 import { validateEvent } from '../../src/lib/ledger/codec'
 import type { ItemResponse, LedgerEvent } from '../../src/lib/ledger/types'
@@ -16,7 +17,6 @@ import {
   diaRef,
   diaResponse,
   diagramPickOk,
-  diagramSeed,
   eventsOf,
   expertFor,
   isExpert,
@@ -271,14 +271,76 @@ describe('the diagram gate (spec §9.2)', () => {
     expect(promptVisible(1, null, false)).toBe(false)
   })
 
-  test('the option order is stable per diagram, a permutation, and keyed by authored index', () => {
-    const seed = diagramSeed('t0.l2', 3)
-    expect(diagramSeed('t0.l2', 3)).toBe(seed)
-    expect(diagramSeed('t0.l2', 4)).not.toBe(seed)
-    const order = shuffledOrder(DIA.options.length, seed)
-    expect([...order].sort()).toEqual([0, 1, 2, 3])
+  test('the pick is judged by authored index, whatever the display order', () => {
     expect(diagramPickOk(DIA, 0)).toBe(true)
     expect(diagramPickOk(DIA, 3)).toBe(false)
+  })
+})
+
+describe('the option order is a seeded shuffle that is fresh per visit (like QuizBlock), and events keep authored indices', () => {
+  const seeds = Array.from({ length: 40 }, (_, i) => 1000 + i * 7919)
+
+  test('a choice prequestion shows its options in a seeded permutation: same seed, same order; other seeds, other orders', () => {
+    const item = prequestionItem('t1.l4', 0, CHOICE)
+    const order = (seed: number) => {
+      const v = playView(item, seed)
+      return v.kind === 'choice' ? v.options.map((o) => o.id).join('') : ''
+    }
+    expect(order(7)).toBe(order(7))
+    const seen = new Set(seeds.map(order))
+    expect(seen.size).toBeGreaterThan(3)
+    for (const o of seen) expect(o.split('').sort().join('')).toBe('012')
+  })
+
+  test('across seeds the key lands on every display position, so no position is a tell', () => {
+    const item = prequestionItem('t1.l4', 0, CHOICE)
+    const at = new Set<number>()
+    for (const seed of seeds) {
+      const v = playView(item, seed)
+      if (v.kind === 'choice') at.add(v.options.findIndex((o) => v.correct.includes(o.id)))
+    }
+    expect([...at].sort()).toEqual([0, 1, 2])
+  })
+
+  test('picking by display position records the authored index, graded against the authored key', () => {
+    const item = prequestionItem('t1.l4', 0, CHOICE)
+    for (const seed of seeds) {
+      const v = playView(item, seed)
+      if (v.kind !== 'choice') throw new Error('expected a choice view')
+      v.options.forEach((o, position) => {
+        const g = gradeItem(item, { kind: 'choice', picks: [o.id] })
+        const r = resultFor(item, { kind: 'choice', picks: [o.id] }, g, { seed, ms: 1000 })
+        const w = preResponse('t1.l4', 0, CHOICE, r)
+        expect(w.data).toMatchObject({ pick: [Number(o.id)], src: 'pre' })
+        expect(w.ok).toBe(Number(o.id) === CHOICE.correct[0])
+        expect(r.seed).toBe(seed)
+        expect(position).toBe(v.options.findIndex((x) => x.id === o.id))
+      })
+    }
+  })
+
+  test('a diagram prediction is a permutation too, and its event records the authored index and the seed', () => {
+    for (const seed of seeds) {
+      const order = shuffledOrder(DIA.options.length, seed)
+      expect([...order].sort()).toEqual([0, 1, 2, 3])
+      for (const authored of order) {
+        const w = diaResponse('t0.l2', 3, DIA, authored, { ms: 900, seed })
+        expect(w.data).toMatchObject({ pick: [authored], src: 'diagram' })
+        expect(w.ok).toBe(diagramPickOk(DIA, authored))
+        expect(w.seed).toBe(seed)
+      }
+    }
+    expect(new Set(seeds.map((s) => shuffledOrder(DIA.options.length, s).join(''))).size).toBeGreaterThan(8)
+  })
+
+  test('both surfaces draw a fresh seed per visit and hand it to the shuffle, rather than hashing the ref', () => {
+    const pre = readFileSync(new URL('../../src/components/blocks/Prequestions.tsx', import.meta.url), 'utf8')
+    expect(pre).toMatch(/freshSeed\(\)/)
+    expect(pre).toContain('seed={seeds[current]')
+    const dia = readFileSync(new URL('../../src/pages/lesson/diagram.tsx', import.meta.url), 'utf8')
+    expect(dia).toContain('useState(freshSeed)')
+    expect(dia).toMatch(/shuffledOrder\(predict\.options\.length, seed\)/)
+    expect(dia).not.toContain('diagramSeed')
   })
 })
 

@@ -39,7 +39,7 @@ const lesson: Lesson = {
             'Its own code is slow, with the futex wait call a function that needs optimizing',
             'It is blocked on a lock someone else holds, with the real cost in the lock holder',
             'It is busy computing, with 70% of samples meaning 70% of the CPU doing useful work',
-            'It is fine, with a wait frame meaning the thread finished its own work early',
+            'It is fine, with a wait frame meaning the thread has finished all of its own work early',
           ],
           correct: [1],
           why: [
@@ -96,9 +96,9 @@ That's the whole grammar. The skill is recognizing *shapes*: the allocator plate
         step: 1,
         prompt: 'Two of the four samples are identical: main → serve → tokenize. The profiler merges identical stacks into one bar. How wide should the tokenize bar be?',
         options: [
-          'Half the graph, with two of the four samples containing that same merged stack',
-          'One third, with each of the three distinct stacks drawn the same width',
-          'Twice as tall as the others, with repeated stacks drawn deeper instead of wider',
+          'Half of the graph, with two of the four samples containing that same merged stack',
+          'One third, with each distinct stack among the four samples drawn the same width',
+          'Twice as tall as the others, with identical stacks drawn deeper instead of wider',
         ],
         correct: [0],
         why: [
