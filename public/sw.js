@@ -8,6 +8,9 @@
         App code (src/main.tsx) also unregisters on ?nosw=1 (it sends a `kill` message first, so the live worker
         stops caching), and a navigation carrying it bypasses this worker.
      2. index.html is network-first with a 3 s timeout, then the precached shell. Hashed assets are cache-first.
+        A navigation to a static page that is not the app (capstone-sandbox.html, the Capstone's sandboxed frame)
+        bypasses the worker: answering with the shell would load the app inside the frame, which never answers
+        the sandbox handshake, so Capstone would fall back to "sandbox: worker only" with no hint why.
         Cache lookups pass ignoreVary: the Cache API enforces Vary, and a host that sends `Vary: Origin` (vite preview
         does) would otherwise miss every asset, because the precache request carried no Origin header.
      3. Schema handshake: pages post { t: 'hello', schemaVersion }. The highest value seen is kept, and a cached
@@ -51,6 +54,8 @@ if (kill) {
   const SHELL_URL = SCOPE + BUILD.shell
   const META_URL = `${SCOPE}__ks-sw-meta`
   const precached = new Set(BUILD.precache.map((path) => SCOPE + path))
+  /** Pages in public/ that are documents of their own, so a navigation to them is never answered with the app shell. */
+  const STATIC_PAGES = new Set([new URL(SCOPE).pathname + 'capstone-sandbox.html'])
 
   /** Highest schemaVersion any page has announced. Persisted, because the worker is stopped between events. */
   let seen = null
@@ -162,6 +167,7 @@ if (kill) {
 
     if (request.mode === 'navigate') {
       if (url.searchParams.get('nosw') === '1') return // the recovery link goes straight to the network
+      if (STATIC_PAGES.has(url.pathname)) return // never the app shell: a real network answer or a real error
       event.respondWith(networkFirst(request, cachedShell, offlineShell))
       return
     }
