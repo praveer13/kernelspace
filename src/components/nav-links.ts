@@ -19,8 +19,8 @@ export interface Destination {
 export const DESTINATIONS: readonly Destination[] = [
   // Changes (`/freshness`) belongs to Today: "review, Up Next, changes, the week".
   { id: 'today', to: '/today', label: 'Today', icon: CalendarCheck, holds: ['/today', '/freshness', '/field-notes'] },
-  { id: 'path', to: '/curriculum', label: 'Path', icon: Route, holds: ['/curriculum', '/tracks', '/lesson', '/glossary', '/play'] },
-  { id: 'build', to: '/forge', label: 'Build', icon: Hammer, holds: ['/forge', '/lab', '/fleet', '/week', '/capstone', '/leaderboard'] },
+  { id: 'path', to: '/curriculum', label: 'Path', icon: Route, holds: ['/curriculum', '/tracks', '/lesson', '/glossary', '/play', '/errors'] },
+  { id: 'build', to: '/forge', label: 'Build', icon: Hammer, holds: ['/forge', '/lab', '/fleet', '/daily', '/week', '/capstone', '/leaderboard'] },
   { id: 'me', to: '/progress', label: 'Me', icon: UserRound, holds: ['/progress'] },
 ]
 
@@ -29,6 +29,7 @@ export const BUILD_LINKS: readonly { to: string; label: string }[] = [
   { to: '/forge', label: 'Forge' },
   { to: '/lab', label: 'Sims' },
   { to: '/fleet', label: 'Fleet' },
+  { to: '/daily', label: 'Fleet Daily' },
   { to: '/week', label: 'Fleet Week' },
   { to: '/capstone', label: 'Capstone' },
   { to: '/leaderboard', label: 'Leaderboard' },
@@ -39,6 +40,7 @@ export const SECONDARY_LINKS: readonly { to: string; label: string }[] = [
   { to: '/', label: 'Home' },
   ...BUILD_LINKS.filter((l) => l.to !== '/forge'),
   { to: '/glossary', label: 'Glossary' },
+  { to: '/errors', label: 'Errors' },
   { to: '/freshness', label: 'Changes' },
 ]
 

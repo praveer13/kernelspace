@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { PLACEHOLDER, buildSw, collectPrecache, patchSw, type ManifestChunk, type SwBuild } from '../../scripts/build-sw-manifest'
+import { PLACEHOLDER, buildSw, collectPrecache, patchSw, workerFiles, type ManifestChunk, type SwBuild } from '../../scripts/build-sw-manifest'
 import { SCHEMA_VERSION } from '../../src/lib/ledger/constants'
 
 /**
@@ -16,7 +16,7 @@ function chunk(file: string, extra: Partial<ManifestChunk> = {}): ManifestChunk 
   return { file: `assets/${file}`, ...extra }
 }
 
-/** A manifest shaped like the real one: Today and Boot lazy, the engine and palette loaded by the entry, one page the SW must skip. */
+/** A manifest shaped like the real one: Today, Boot and Daily lazy, the engine and palette loaded by the entry, one page the SW must skip. */
 function fixture(extra: Record<string, ManifestChunk> = {}): Record<string, ManifestChunk> {
   return {
     'index.html': chunk('index-AAA.js', { css: ['assets/index-AAA.css'], dynamicImports: ['src/pages/Today.tsx', 'src/pages/Home.tsx'] }),
@@ -24,6 +24,9 @@ function fixture(extra: Record<string, ManifestChunk> = {}): Record<string, Mani
     '_shared-CCC.js': chunk('shared-CCC.js', { imports: ['index.html'] }),
     'src/pages/Boot.tsx': chunk('Boot-DDD.js', { isDynamicEntry: true, imports: ['index.html'], dynamicImports: ['src/pages/boot/later.ts'] }),
     'src/pages/boot/later.ts': chunk('later-EEE.js', { isDynamicEntry: true, imports: ['index.html'] }),
+    'src/pages/Daily.tsx': chunk('Daily-DA1.js', { isDynamicEntry: true, imports: ['index.html', '_daily-shared-DA2.js'], css: ['assets/Daily-DA1.css'], dynamicImports: ['src/components/daily/Probe.tsx'] }),
+    '_daily-shared-DA2.js': chunk('daily-shared-DA2.js', { imports: ['index.html'] }),
+    'src/components/daily/Probe.tsx': chunk('Probe-DA3.js', { isDynamicEntry: true, imports: ['index.html'] }),
     'src/lib/ledger/engine.ts': chunk('engine-FFF.js', { isDynamicEntry: true, imports: ['index.html'] }),
     'src/components/ledger/LedgerNotices.tsx': chunk('LedgerNotices-GGG.js', { isDynamicEntry: true, imports: ['index.html'] }),
     'src/components/CommandPalette.tsx': chunk('CommandPalette-HHH.js', { isDynamicEntry: true, imports: ['index.html', '_fuse-III.js'] }),
@@ -34,14 +37,18 @@ function fixture(extra: Record<string, ManifestChunk> = {}): Record<string, Mani
 }
 
 describe('collectPrecache', () => {
-  test('holds the entry, the /today and /boot closures, the shell lazies, claims and the shell', () => {
+  test('holds the entry, the /today, /boot and /daily closures, the shell lazies, claims and the shell', () => {
     const list = collectPrecache(fixture())
     expect(list).toEqual(
       [
         'assets/Boot-DDD.js',
         'assets/CommandPalette-HHH.js',
+        'assets/Daily-DA1.css',
+        'assets/Daily-DA1.js',
         'assets/LedgerNotices-GGG.js',
+        'assets/Probe-DA3.js',
         'assets/Today-BBB.js',
+        'assets/daily-shared-DA2.js',
         'assets/engine-FFF.js',
         'assets/fuse-III.js',
         'assets/index-AAA.css',
@@ -54,7 +61,7 @@ describe('collectPrecache', () => {
     )
   })
 
-  test('skips pages that are not Today or Boot', () => {
+  test('skips pages that are not Today, Boot or Daily', () => {
     expect(collectPrecache(fixture())).not.toContain('assets/Home-JJJ.js')
   })
 
@@ -79,6 +86,9 @@ describe('collectPrecache', () => {
     const noToday = fixture()
     delete noToday['src/pages/Today.tsx']
     expect(() => collectPrecache(noToday)).toThrow(/Today/)
+    const noDaily = fixture()
+    delete noDaily['src/pages/Daily.tsx']
+    expect(() => collectPrecache(noDaily)).toThrow(/Daily/)
     const noEngine = fixture()
     delete noEngine['src/lib/ledger/engine.ts']
     expect(() => collectPrecache(noEngine)).toThrow(/engine/)
@@ -90,6 +100,77 @@ describe('collectPrecache', () => {
     m['_Boot-ZZZ.js'] = { ...m['src/pages/Boot.tsx'], name: 'Boot' }
     delete m['src/pages/Boot.tsx']
     expect(collectPrecache(m)).toContain('assets/Boot-DDD.js')
+  })
+})
+
+describe('the /daily closure', () => {
+  test('holds the Daily page, its static imports, its CSS and its own lazy chunks, and nothing of other pages', () => {
+    const list = collectPrecache(fixture())
+    for (const f of ['Daily-DA1.js', 'Daily-DA1.css', 'daily-shared-DA2.js', 'Probe-DA3.js']) expect(list).toContain(`assets/${f}`)
+    expect(list).not.toContain('assets/Home-JJJ.js')
+  })
+
+  test('is found under a hashed key when another chunk imports modules the page holds', () => {
+    const m = fixture()
+    m['_Daily-ZZZ.js'] = { ...m['src/pages/Daily.tsx'], name: 'Daily' }
+    delete m['src/pages/Daily.tsx']
+    expect(collectPrecache(m)).toContain('assets/Daily-DA1.js')
+  })
+})
+
+describe('the fleet worker bundle', () => {
+  // Vite's manifest has no entry for a worker bundle: the files below are never reachable by the closure walk.
+  const ASSETS = ['assets/Today-BBB.js', 'assets/fleet.worker-W1.js', 'assets/lab.worker-W2.js', 'assets/fleet-session-S1.js']
+  const SOURCES: Record<string, string> = {
+    'assets/fleet.worker-W1.js': '(function(){"use strict";const a=1})()',
+  }
+  const read = (f: string) => SOURCES[f] ?? ''
+
+  test('the manifest fixture lists no worker, so the closure walk alone misses it', () => {
+    expect(Object.values(fixture()).some((c) => /worker/.test(c.file))).toBe(false)
+    expect(collectPrecache(fixture())).not.toContain('assets/fleet.worker-W1.js')
+  })
+
+  test('workerFiles finds the fleet worker bundle by name, and only that worker', () => {
+    expect(workerFiles(ASSETS, read)).toEqual(['assets/fleet.worker-W1.js'])
+  })
+
+  test('collectPrecache and buildSw precache the worker beside the /daily closure', () => {
+    const workers = workerFiles(ASSETS, read)
+    const list = collectPrecache(fixture(), workers)
+    expect(list).toContain('assets/fleet.worker-W1.js')
+    expect(list).toContain('assets/Daily-DA1.js')
+    expect(buildSw(fixture(), '<html></html>', workers).precache).toContain('assets/fleet.worker-W1.js')
+    // the build id covers the worker: a new worker bundle is a new precache
+    expect(buildSw(fixture(), '<html></html>', workers).id).not.toBe(buildSw(fixture(), '<html></html>').id)
+  })
+
+  test('the files the worker loads follow it, transitively, and files that are not in dist are ignored', () => {
+    const assets = [...ASSETS, 'assets/engine-X1.wasm', 'assets/chunk-C1.js', 'assets/deep-D1.json', 'assets/unrelated-U1.js']
+    const sources: Record<string, string> = {
+      'assets/fleet.worker-W1.js':
+        'import("./chunk-C1.js");fetch(new URL("/assets/engine-X1.wasm",import.meta.url));fetch("/assets/not-in-dist.js")',
+      'assets/chunk-C1.js': 'export default fetch(`/repo/assets/deep-D1.json`)',
+    }
+    expect(workerFiles(assets, (f) => sources[f] ?? '')).toEqual([
+      'assets/chunk-C1.js',
+      'assets/deep-D1.json',
+      'assets/engine-X1.wasm',
+      'assets/fleet.worker-W1.js',
+    ])
+  })
+
+  test('a self-referencing chunk does not loop', () => {
+    const assets = ['assets/fleet.worker-W1.js', 'assets/a-A1.js']
+    const sources: Record<string, string> = {
+      'assets/fleet.worker-W1.js': 'import "./a-A1.js"',
+      'assets/a-A1.js': 'import "./fleet.worker-W1.js"; import "./a-A1.js"',
+    }
+    expect(workerFiles(assets, (f) => sources[f] ?? '')).toEqual(['assets/a-A1.js', 'assets/fleet.worker-W1.js'])
+  })
+
+  test('fails loudly when the fleet worker bundle is not in dist', () => {
+    expect(() => workerFiles(['assets/Today-BBB.js', 'assets/lab.worker-W2.js'], read)).toThrow(/worker/)
   })
 })
 

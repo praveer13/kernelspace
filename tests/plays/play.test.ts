@@ -9,6 +9,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import Compose from '../../src/components/play/block-placement/Compose'
 import Debrief from '../../src/components/play/block-placement/Debrief'
@@ -499,8 +500,11 @@ describe('verify-plays: the play checks (§11.5)', () => {
     expect(out[1]).toContain('d.tsx')
   })
 
-  test('the route closure reaches the play and its mirror and debrief, and not a worker or a sim', () => {
-    const c = closureOf(join(SRC, 'pages', 'Play.tsx'), SRC)
+  test('the play the registry loads reaches its mirror and debrief, and not a worker or a sim', () => {
+    // The page resolves ids through the registry (wave-2.md §2.3), which loads each play on demand: the play's
+    // own closure starts at the module the registry imports.
+    expect(readFileSync(join(SRC, 'components', 'play', 'registry.ts'), 'utf8')).toContain("import('@/components/play/block-placement/Play')")
+    const c = closureOf(join(SRC, 'components', 'play', 'block-placement', 'Play.tsx'), SRC)
     for (const f of ['Play.tsx', 'Grid.tsx', 'Mirror.tsx', 'Debrief.tsx', 'Compose.tsx', 'ProductionCard.tsx']) {
       expect(c.files).toContain(`src/components/play/block-placement/${f}`)
     }

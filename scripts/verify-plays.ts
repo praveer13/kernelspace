@@ -206,13 +206,14 @@ async function checkPlays(failures: string[]): Promise<void> {
       practiceInBand: def.id !== 'block-placement' || checkPlacementBand(makePlacementTrace(PLAY_PRACTICE_SEED)).inBand,
     }
     failures.push(...checkPlay(facts, world))
-    const c = closureOf(join(srcDir, 'pages', 'Play.tsx'), srcDir)
-    const own = c.files.filter((f) => f.startsWith(`src/components/play/${def.id}/`) || f === 'src/data/plays.ts' || f === 'src/pages/Play.tsx')
+    // The page loads each play through the registry on demand, so the play's closure starts at the play itself.
+    const c = closureOf(join(dir, 'Play.tsx'), srcDir)
+    const own = c.files.filter((f) => f.startsWith(`src/components/play/${def.id}/`) || f === 'src/data/plays.ts')
     console.log(`  play ${def.id} (${def.lessonId}, ${def.minutes} min)`)
     console.log(`    mirror ${facts.mirror ? 'yes' : 'NO'}, debrief ${facts.debrief ? 'yes' : 'NO'}`)
     console.log(`    KCs ${def.kcs.join(', ')}`)
     console.log(`    claims ${def.productionClaims.join(', ')}`)
-    console.log(`    closure of /play/${def.id}: ${c.files.length} source modules, ${c.lines} lines, ${c.packages.length} packages (static imports from src/pages/Play.tsx)`)
+    console.log(`    closure of /play/${def.id}: ${c.files.length} source modules, ${c.lines} lines, ${c.packages.length} packages (static imports from the play's Play.tsx)`)
     console.log(`      the play's own: ${own.join(', ')}`)
     console.log(`      packages: ${c.packages.join(', ')}`)
   }

@@ -15,16 +15,20 @@ const GROUP_ICON: Partial<Record<SearchItem['group'], typeof FileText>> = {
 /** Pages, tracks and simulators: always searchable, with or without the generated index. */
 const STATIC_ITEMS: SearchItem[] = [
   { id: 'home', group: 'Pages', title: 'Home', crumb: '~/', to: '/', keywords: ['landing', 'start'] },
+  { id: 'today', group: 'Pages', title: 'Today', crumb: '~/today', to: '/today', keywords: ['review', 'up next', 'practice', 'cards', 'streak'] },
+  { id: 'boot', group: 'Pages', title: 'Boot', crumb: '~/boot', to: '/boot', keywords: ['start', 'onboarding', 'placement', 'begin'] },
   { id: 'curriculum', group: 'Pages', title: 'Curriculum', crumb: '~/curriculum', to: '/curriculum', keywords: ['tracks', 'lessons', 'map'] },
   { id: 'lab', group: 'Pages', title: 'Lab', crumb: '~/lab', to: '/lab', keywords: ['simulators', 'playground'] },
   { id: 'forge', group: 'Pages', title: 'Forge', crumb: '~/forge', to: '/forge', keywords: ['rust', 'labs', 'build', 'wasm'] },
   { id: 'fleet', group: 'Pages', title: 'Fleet', crumb: '~/fleet', to: '/fleet', keywords: ['cluster', 'serving', 'simulator'] },
+  { id: 'daily', group: 'Pages', title: 'Fleet Daily', crumb: '~/daily', to: '/daily', keywords: ['incident', 'daily', 'on-call', 'debug', 'probe', 'wordle'] },
   { id: 'fleet-week', group: 'Pages', title: 'Fleet Week', crumb: '~/week', to: '/week', keywords: ['capstone', 'incidents', 'portfolio'] },
   { id: 'leaderboard', group: 'Pages', title: 'Leaderboard', crumb: '~/leaderboard', to: '/leaderboard', keywords: ['scores', 'goodput', 'competition', 'personal best'] },
   { id: 'changes', group: 'Pages', title: 'Changes', crumb: '~/freshness', to: '/freshness', keywords: ['errata', 'corrections', 'freshness', 'what changed', 'report an error'] },
   { id: 'field-notes', group: 'Pages', title: 'Field Notes', crumb: '~/freshness · field notes', to: '/freshness?tab=field-notes', keywords: ['research', 'updates', 'verified', 'papers', 'freshness'] },
   { id: 'capstone', group: 'Pages', title: 'Capstone', crumb: '~/capstone', to: '/capstone', keywords: ['project', 'engine', 'build'] },
   { id: 'glossary', group: 'Pages', title: 'Glossary', crumb: '~/glossary', to: '/glossary', keywords: ['terms', 'isomorphism', 'concepts'] },
+  { id: 'errors', group: 'Pages', title: 'Error Museum', crumb: '~/errors', to: '/errors', keywords: ['errors', 'rust', 'compiler', 'borrow checker', 'museum'] },
   { id: 'progress', group: 'Pages', title: 'Progress', crumb: '~/progress', to: '/progress', keywords: ['dashboard', 'xp', 'rank', 'streak'] },
   ...TRACKS.map<SearchItem>((t) => ({
     id: `track-${t.id}`,
