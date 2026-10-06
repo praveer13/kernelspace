@@ -46,14 +46,14 @@ const lesson: Lesson = {
           q: 'A binary is dynamically linked against libc.so.6. When does the library\'s code get mapped into the process?',
           options: [
             'At link time, when the linker copies the library functions into the executable',
-            'At process start, when the loader maps the library and patches the jump table',
+            'At process start, when the loader maps the library and sets up the jump table',
             'At the first call, when the kernel scheduler fetches the library it still needs',
             'At compile time, when the compiler reads the header and pulls the code in',
           ],
           correct: [1],
           why: [
             'That is static linking. A dynamically linked binary stays small because the library code is not copied into it.',
-            'Right: dynamic linking records a promise in the binary, and the loader fulfils it at startup by mapping the .so and patching the PLT and GOT.',
+            'Right: dynamic linking records a promise in the binary, and the loader fulfils it at startup by mapping the .so and setting up the PLT and GOT, whose slots fill in at the first call to each function (lazy binding).',
             'The scheduler decides which thread runs, and it does not load libraries. Lazy binding resolves addresses at the first call, but the library is already mapped.',
             'A header only declares functions. The compiler never reads library code, and the definition is found much later.',
           ],

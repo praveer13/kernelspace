@@ -20,7 +20,7 @@ const lesson: Lesson = {
           options: [
             'About 10 seconds',
             'About 3.5 minutes',
-            'Roughly 2.5 hours',
+            'About 2.5 hours',
             'About 2.5 days',
           ],
           correct: [1],
@@ -40,7 +40,7 @@ const lesson: Lesson = {
             'Programs mostly work on small data, with the entire working set fitting inside the L1 cache',
             'Programs reuse recent bytes and touch neighbors, with each fetched line often wanted again',
             'Programs read memory in the order it was allocated, with allocation order matching the access order',
-            'Programs rarely write memory, with read-only data safe to hold in several caches at once',
+            'Programs rarely write memory, with read-only data safe to hold in several caches at the same time',
           ],
           correct: [1],
           why: [

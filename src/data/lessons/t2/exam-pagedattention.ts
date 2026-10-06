@@ -81,7 +81,7 @@ const SPIRAL: AuthoredItem[] = [
     q: {
       q: 'A function returns a pointer to one of its local arrays, and the caller reads through it after the call. What is that pointer?',
       options: [
-        'A pointer into a dead stack frame, whose bytes the next call is free to overwrite',
+        'A pointer into a dead stack frame that is still mapped, whose bytes the next call is free to overwrite',
         'A pointer to heap memory that was freed once, which stays safe to read until the allocator reuses it',
         'A valid pointer, because locals are zeroed on return and the caller reads a clean array of zeros',
         'A null pointer, because the compiler clears the address of every local when its frame is popped',
@@ -106,7 +106,7 @@ const SPIRAL: AuthoredItem[] = [
       options: [
         'Looks them up in the TLB first, because they name the page and the upper bits give the byte inside it',
         'Passes them through unchanged, because the offset inside a page equals the offset inside its frame',
-        'Splits them across the table levels, because each level takes its own share of the offset in turn',
+        'Splits them across the table levels, because each level takes a share of the offset',
         'Replaces them with the frame number, because a physical address carries no offset inside the page',
       ],
       correct: [1],
@@ -130,7 +130,7 @@ const SPIRAL: AuthoredItem[] = [
         'A minor fault on the first touch of a malloc\'d page, which maps a zeroed frame and retries the access at once',
         'A TLB miss on a resident page, which walks the page table in hardware and caches the translation it finds',
         'A major fault that reads a swapped-out page back from the SSD before the access can be retried',
-        'A copy-on-write fault after fork, which copies one 4 KiB frame in RAM and then retries the write',
+        'A copy-on-write fault after fork, which duplicates one 4 KiB frame within RAM and then retries the write',
       ],
       correct: [2],
       explanation:
@@ -151,7 +151,7 @@ const SPIRAL: AuthoredItem[] = [
       q: 'A service queues every request it receives, and traffic doubles past capacity. Which change best protects latency for the requests it does accept?',
       options: [
         'Add worker threads beyond the core count, so more of the waiting requests can run at the same time',
-        'Shorten the time slice, so every queued request gets a little CPU and none of them waits for long',
+        'Shorten the time slice, so every queued request gets a little CPU and none of them has to wait for very long',
         'Raise the priority of the oldest requests, so the ones waiting longest are served ahead of new arrivals',
         'Turn away the excess before it joins the run set, so the admitted requests still meet their deadlines',
       ],
@@ -174,7 +174,7 @@ const SPIRAL: AuthoredItem[] = [
       q: 'Which shared state fits a single atomic fetch-add better than a mutex?',
       options: [
         'An account balance and its audit log, which must always change together or not at all',
-        'A request counter that many threads increment, where only the running total matters',
+        'A request counter that many threads increment together, where only the final running total matters',
         'A linked list whose nodes are inserted and removed, where each update touches several pointers',
         'A cache map from keys to values, where lookups and inserts must see one consistent table',
       ],

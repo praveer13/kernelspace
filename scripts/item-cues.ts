@@ -1,10 +1,13 @@
 /**
- * Item-level surface-cue strategies shared by verify-items (lesson, Act IV and errata items) and
- * verify-generators (generator multiple-choice variants): length ranks, lexical cues, the surface-feature
+ * Item-level surface-cue strategies shared by verify-items (lesson, Act IV, errata, prequestion, diagram-prediction
+ * and spiral items) and verify-generators (generator multiple-choice variants): length ranks, lexical cues, the surface-feature
  * family, stem overlap and the odd-one-out binary flags. Pure and free of side effects, so a script can
  * import it without running a lint. A `CueQuestion` is the shape both callers reduce an item to; the
  * picks return the probability one blind pick hits the key (ties uniform; a multi-select is never hit).
  */
+
+import type { QuizQuestion } from '../src/components/QuizBlock'
+import type { Lesson } from '../src/data/lessons/types'
 
 /** The shape the strategies read: the stem, the option texts and the indices of the keys (a `QuizQuestion` fits). */
 export interface CueQuestion {
@@ -155,3 +158,88 @@ export function oddOneOut(q: CueQuestion): string[] {
 
 /** Every single-feature strategy of the item-level cue limit. */
 export const CUE_STRATEGIES: CueStrategy[] = [...RANK_STRATEGIES, ...LEXICAL_STRATEGIES, ...SURFACE_STRATEGIES]
+
+/* ---- the authored pools that are not lesson quizzes: each is held to the item-level bar on its own ---- */
+
+/** The pools of learner-facing multiple-choice items outside the lesson quizzes (Wave 1, the owner's item-validity rule). */
+export const OWN_POOLS = ['prequestion', 'predictAt', 'spiral'] as const
+export type OwnPool = (typeof OWN_POOLS)[number]
+
+/** One item of an own pool, reduced to what the lint reads. */
+export interface PoolEntry {
+  pool: OwnPool
+  /** The ledger ref: `pre:<lessonId>#<i>`, `dia:<lessonId>#<blockIndex>` or `item:<id>`. */
+  ref: string
+  /** The lesson the item is authored in. */
+  lessonId: string
+  q: QuizQuestion
+  /** Spiral items carry an authored explanation; prequestions and predictions are explained by their per-option why. */
+  needsExplanation: boolean
+}
+
+/**
+ * Every choice prequestion (`predict` blocks; numeric ones have no options), every `DiagramBlock.predictAt` option set
+ * and every spiral item (`ticket.spiral`), in lesson order. Refs match the ledger's, so a failure names the item.
+ */
+export function collectOwnPools(lessons: readonly Lesson[]): PoolEntry[] {
+  const out: PoolEntry[] = []
+  for (const lesson of lessons) {
+    lesson.blocks.forEach((block, bi) => {
+      if (block.type === 'predict') {
+        block.items.forEach((p, i) => {
+          if (p.kind !== 'choice') return
+          out.push({ pool: 'prequestion', ref: `pre:${lesson.id}#${i}`, lessonId: lesson.id, q: { q: p.q, options: p.options, correct: p.correct, why: p.why }, needsExplanation: false })
+        })
+      } else if (block.type === 'diagram' && block.predictAt) {
+        const d = block.predictAt
+        out.push({ pool: 'predictAt', ref: `dia:${lesson.id}#${bi}`, lessonId: lesson.id, q: { q: d.prompt, options: d.options, correct: d.correct, why: d.why }, needsExplanation: false })
+      }
+    })
+    for (const item of lesson.ticket?.spiral ?? []) {
+      out.push({ pool: 'spiral', ref: `item:${item.id}`, lessonId: lesson.id, q: item.q, needsExplanation: true })
+    }
+  }
+  return out
+}
+
+/** One strategy's result over one pool. */
+export interface PoolCueRow {
+  name: string
+  items: number
+  chance: number
+  hit: number
+}
+
+const meanOf = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN)
+
+/** Hit rate of every single-feature strategy over the single-key items of one pool, with the chance rate of the same items. */
+export function poolCueRows(items: { q: CueQuestion }[]): PoolCueRow[] {
+  const rows = items.filter((i) => i.q.correct.length === 1)
+  return CUE_STRATEGIES.map((s) => ({
+    name: s.name,
+    items: rows.length,
+    chance: meanOf(rows.map((i) => 1 / i.q.options.length)),
+    hit: meanOf(rows.map((i) => s.pick(i.q))),
+  }))
+}
+
+/**
+ * The failures of one pool held to the item-level bar on its own, as rule 18 does for the errata items: any single-feature
+ * strategy above chance + MAX_HIT_OVER_CHANCE, and any item whose key a binary feature isolates (odd-one-out). Empty when
+ * the pool is empty.
+ */
+export function poolCueFailures(pool: string, items: { ref: string; q: CueQuestion }[]): string[] {
+  const out: string[] = []
+  for (const r of poolCueRows(items)) {
+    if (r.items > 0 && r.hit > r.chance + MAX_HIT_OVER_CHANCE) {
+      out.push(
+        `cue: the strategy '${r.name}' hits ${(r.hit * 100).toFixed(1)}% of the ${r.items} ${pool} items on their own (chance ${(r.chance * 100).toFixed(1)}% + ${MAX_HIT_OVER_CHANCE * 100} points = ${((r.chance + MAX_HIT_OVER_CHANCE) * 100).toFixed(1)}%); rewrite the options so the feature does not separate the key`,
+      )
+    }
+  }
+  for (const i of items) {
+    const v = oddOneOut(i.q)
+    if (v.length) out.push(`odd-one-out: ${pool} ${i.ref} "${i.q.q.slice(0, 80)}": ${v.join('; ')}; rewrite the options so no binary feature isolates the key`)
+  }
+  return out
+}

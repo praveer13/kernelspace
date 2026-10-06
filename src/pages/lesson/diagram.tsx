@@ -20,7 +20,6 @@ import {
   blockKcs,
   captionVisible,
   depsFrom,
-  diagramSeed,
   diaResponse,
   eventsOf,
   expertFor,
@@ -29,7 +28,7 @@ import {
   savedPrediction,
 } from '@/lib/learner/prequestions'
 import { useProgress } from '@/lib/progress'
-import { shuffledOrder } from '@/lib/rng'
+import { freshSeed, shuffledOrder } from '@/lib/rng'
 import { cn } from '@/lib/utils'
 
 /** What the learner did at the gate: picked an option (authored index), or skipped as an expert. */
@@ -65,8 +64,9 @@ export function DiagramView({
   const cur = block.steps[step]
   const activeSet = useMemo(() => new Set(cur?.active ?? []), [cur])
   const edgeSet = useMemo(() => new Set(cur?.edges ?? []), [cur])
-  const seed = lessonId !== undefined && blockIndex !== undefined ? diagramSeed(lessonId, blockIndex) : 0
-  /** `order[position] = authored index`: stable per diagram, so a reload shows the options where they were. */
+  /** Drawn fresh on each visit, like QuizBlock's attempt seed, so the keys do not sit in the same display slot for everyone. */
+  const [seed] = useState(freshSeed)
+  /** `order[position] = authored index`. The prompt shows once (a commit or a reload ends the gate), so a fresh order never shows twice. */
   const order = useMemo(() => (predict ? shuffledOrder(predict.options.length, seed) : []), [predict, seed])
   const showPrompt = promptVisible(step, predict, committed)
   const focusNext = useRef(false)
