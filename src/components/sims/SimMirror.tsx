@@ -95,7 +95,7 @@ export default function SimMirror({ id, table, className }: SimMirrorProps) {
       <div
         id={id}
         // an open table scrolls, so it takes the keyboard (axe: scrollable-region-focusable); closed it is sr-only text
-        {...(open ? { tabIndex: 0, role: 'region', 'aria-label': 'Chart data table' } : {})}
+        {...(open ? { tabIndex: 0, role: 'region', 'aria-label': table.caption } : {})}
         className={open ? 'mt-2 max-h-72 overflow-auto rounded-sm border border-line bg-surface-1 p-2' : 'sr-only'}
       >
         <MirrorTableView table={table} />
