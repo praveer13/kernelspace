@@ -257,7 +257,8 @@ function authoredItem(s: WalkState, kc: KcId, n: number, level: Level, content: 
 function stepFor(s: WalkState, kc: KcId, n: number, content: WalkContent): Step | null {
   const level = levelOfItem(n, s.answers[kc] ?? [])
   const used = usedRefs(s)
-  const item = genItem(s, kc, level, content, used) ?? authoredItem(s, kc, n, level, content, used)
+  // the anchor keeps its own items (item:r.anchor.*) now that the compile family also serves its KC
+  const item = (kc === RUST_ANCHOR_KC ? null : genItem(s, kc, level, content, used)) ?? authoredItem(s, kc, n, level, content, used)
   return item ? { kc, n, level, item, seed: seedFor(s.seed, s.asked), ordinal: s.asked + 1 } : null
 }
 

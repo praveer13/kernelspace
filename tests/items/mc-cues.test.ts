@@ -51,24 +51,27 @@ function choiceFamily(options: (seed: number, level: Level) => (Pick<ChoiceOptio
 /** A deterministic 0..n-1 draw from a seed, so synthetic families are reproducible. */
 const roll = (seed: number, salt: number, n: number): number => Math.abs(Math.imul(seed ^ Math.imul(salt + 1, 0x9e3779b1), 0x85ebca6b) >>> 7) % n
 
+/** The shipped families' choice gates take seconds each (the compile family alone has ten choice variants). */
+const SLOW_MS = 60_000
+
 describe('the blind-strategy gate on the shipped families', () => {
   test('every choice variant of every family passes at 200 seeds over all levels', async () => {
     for (const gen of await loadAllFamilies()) {
       const r = checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS })
       expect(r.problems).toEqual([])
     }
-  })
+  }, SLOW_MS)
 
-  test('the gate really samples: frag fit-choice and roofline bound are judged at every level, and pooled', async () => {
+  test('the gate really samples: frag fit-choice, roofline bound and the compile items are judged at every level, and pooled', async () => {
     const wheres = new Set<string>()
     for (const gen of await loadAllFamilies()) for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
-    for (const v of ['frag/fit-choice', 'roofline/bound']) {
+    for (const v of ['frag/fit-choice', 'roofline/bound', 'compile/permission', 'compile/verdict.borrow-rules', 'compile/fix.borrow-rules']) {
       expect(wheres.has(v)).toBe(true)
       for (const l of LEVELS) expect(wheres.has(`${v}@L${l}`)).toBe(true)
     }
-    // numeric and estimate variants have no options, so nothing else is judged
-    expect([...wheres].every((w) => /^(frag\/fit-choice|roofline\/bound)(@L\d)?$/.test(w))).toBe(true)
-  })
+    // numeric and estimate variants have no options, so nothing else is judged (every compile item is a choice)
+    expect([...wheres].every((w) => /^(frag\/fit-choice|roofline\/bound|compile\/[a-z.-]+)(@L\d)?$/.test(w))).toBe(true)
+  }, SLOW_MS)
 
   test('checkFamily runs it by default, from at least 200 seeds even when asked for fewer', () => {
     const r = checkFamily(roofline, { seeds: 20, speed: false })
@@ -86,7 +89,7 @@ describe('the blind-strategy gate on the shipped families', () => {
         if (gen.id === 'roofline') expect(row.worst.hit - row.chance).toBeLessThan(0.1)
       }
     }
-  })
+  }, SLOW_MS)
 })
 
 describe('the gate catches what it is for', () => {
