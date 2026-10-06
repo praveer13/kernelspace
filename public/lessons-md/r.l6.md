@@ -51,23 +51,23 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
 
 **Q1. Which iterator consumes a Vec and yields owned elements?**
 
-- (o1) iter_mut()
-- (o2) windows()
-- (o3) iter()
-- (o4) into_iter()
+- (o1) iter_mut() moves each element out and lets the loop body modify it
+- (o2) drain(..) yields owned elements and leaves the Vec usable afterwards
+- (o3) iter() yields each element by value and copies it out of the Vec
+- (o4) into_iter() takes the Vec by value and yields each element in turn
 
 **Q2. When do lazy iterator adapters actually perform work?**
 
-- (o1) As soon as map is called
-- (o2) At compile time
-- (o3) When a consuming operation such as collect or sum drives them
-- (o4) Only on another thread
+- (o1) As soon as map is called and the closure runs over the whole input
+- (o2) On a background thread pool that starts as soon as the adapter is built
+- (o3) When a consumer such as collect or sum pulls items through the chain
+- (o4) When the adapter is dropped at the end of the scope it was built in
 
 **Q3. Why use HashMap::entry for a counter?**
 
-- (o1) It clones every key
-- (o2) It makes the map lock-free
-- (o3) It sorts the map
-- (o4) It combines lookup/insertion and returns mutable access to the value
+- (o1) It returns a copy of the stored value and avoids borrowing the map
+- (o2) It keeps a running count inside the map and needs no separate local variable at all
+- (o3) It locks the bucket and lets several threads increment one counter without a data race
+- (o4) It finds or inserts the slot with one hash lookup and gives mutable access
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

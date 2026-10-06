@@ -9,38 +9,38 @@ const lesson: Lesson = {
   minutes: 25,
   hook: 'T4\'s numbers were H100: 3.35 TB/s, 80 GB, ridge at ~295 FLOP/byte. Blackwell moves every one of those, adds a 4-bit floating point the tensor cores run natively, and changes the decode economics again. Time to re-derive.',
   exercise: 'read+quiz',
-  verifiedAt: '2026-08',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
-      md: `T4.L3's roofline doesn't care about marketing; it cares about two numbers. Blackwell changes both, and adds a third lever. **B200**: ~180 GB HBM3e per GPU as shipped in HGX/DGX B200 (1,440 GB across 8 GPUs; many sources cite 192 GB per GPU, but the shipped spec lists 1,440 GB per 8) at **~8 TB/s** (2.4× H100's bandwidth, ~2.25× the capacity). **GB200 NVL72**: 72 Blackwell GPUs in one NVLink domain at ~1.8 TB/s per GPU bidirectional — the "one giant GPU" fiction made physical, and the reason EP144 and CP-over-32-nodes are routine (T6.L2, T6.L4). And **FP4**: a native 4-bit floating point format the tensor cores execute, doubling FP8 throughput per FLOP and halving the bytes again.
+      md: `T4.L3's roofline doesn't care about marketing; it cares about two numbers. Blackwell changes both, and adds a third lever. **B200**: ~180 GB HBM3e per GPU as shipped in HGX/DGX B200 (1,440 GB across 8 GPUs; many sources cite 192 GB per GPU, but the shipped spec lists 1,440 GB per 8) at **~8 TB/s** (2.4× H100's bandwidth, ~2.25× the capacity). **GB200 NVL72**: 72 Blackwell GPUs in one NVLink domain at ~1.8 TB/s per GPU bidirectional — the "one giant GPU" fiction made physical. It makes wide groups cheaper rather than possible: EP144 decode already spans 18 H800 nodes and CP already runs across 16–32 H100 hosts, over the network between 8-GPU Hopper nodes (T6.L2, T6.L4). And **FP4**: a native 4-bit floating point format the tensor cores execute, doubling FP8 throughput per FLOP and cutting weight bytes ~1.8× versus FP8 (about 4.5 bits per weight once the block scales are counted).
 
-Run T4's decode arithmetic: tokens/s ≈ bandwidth ÷ bytes-per-token. B200 alone roughly doubles the H100 decode rate at FP8; FP4 halves the weight bytes again for models quantized to it. NVIDIA's B200 DeepSeek-R1 demo: **368 tok/s/user** on 8×B200 with NVFP4 weights + MTP-3 speculative + fused kernels — up from a 67 tok/s baseline, 5.5×, on the heaviest open model in production.`,
+Run T4's decode arithmetic: tokens/s ≈ bandwidth ÷ bytes-per-token. B200 alone roughly doubles the H100 decode rate at FP8; NVFP4 moves ~1.8× fewer weight bytes than FP8 for models quantized to it (4.5 bits against 8, not a clean half). NVIDIA's B200 DeepSeek-R1 demo: **368 tok/s/user** on 8×B200 with NVFP4 weights + MTP-3 speculative + fused kernels — up from a 67 tok/s baseline, 5.5×, on the heaviest open model in production.`,
     },
     {
       type: 'prose',
       md: `## FP4 honestly: what 4 bits buys and what it costs
 
-T4.L7's cliffs apply with interest. FP4 (NVFP4, E2M1 with **per-16-element microscaling** — a small FP8 scale per block, the trick that makes 4-bit survivable) halves weight bytes vs FP8. Where it wins:
+T4.L7's cliffs apply with interest. FP4 (NVFP4, E2M1 with **per-16-element microscaling** — a small FP8 scale per block, the trick that makes 4-bit survivable) stores about 4.5 bits per weight once the scales are counted, so ~1.8× fewer weight bytes than FP8, not half. Where it wins:
 
 - **Decode of huge models** — the bandwidth-bound path (T4.L3): bytes-per-token is the denominator, and MoE already spends it carefully (T6.L1). DeepSeek-R1 at NVFP4 was the flagship demo for a reason.
 - **Capacity** — a 671B-param MoE at FP4 weights. NVFP4 is not a flat 4 bits: each 16-element block carries an FP8 scale, so ~4.5 bits per weight. 671B × 4.5 bits ÷ 8 = ~377 GB of weights [derived]. One 8×B200 node holds 8 × 180 = 1,440 GB, so the weights take about a quarter of it and the rest goes to KV cache and activations. At FP8 the same model is ~671 GB, more than one 8×H100 node's 640 GB. (An NVL72 is a 72-GPU rack, not a node; you don't need one just to hold the weights.) Fleet composition changes (T7.L4 prices this).
 
-Where it bites: **activations and outliers**, same as T4.L7 but with less mantissa to hide behind. Weight-only FP4 with BF16/FP8 activations is the production recipe; end-to-end FP4 is where accuracy work is still happening. The quantization ladder you learned — weights tolerate 4 bits, activations want 8 — didn't change; the floor just dropped a rung.`,
+Where it bites: **activations and outliers**, same as T4.L7 but with less mantissa to hide behind. Recipes differ in how far they push it, and the checkpoint picks the recipe: vLLM v0.30 defaults to FlashInfer's CuTe DSL kernel for NVFP4 W4A16 checkpoints on SM100 (BF16 activations), Kimi K3 pairs MXFP4 weights with MXFP8 activations, and NVIDIA's DeepSeek-R1-FP4 checkpoint quantizes both the weights and the activations of the linear operators inside the transformer blocks to FP4. The quantization ladder you learned — weights tolerate low precision first, activations cost more accuracy risk — didn't change; the floor just dropped a rung.`,
     },
     {
       type: 'statline',
       stats: [
-        { value: '~180 GB', label: 'B200 HBM3e (as shipped)', hint: '~2.25× H100 capacity (many sources cite 192 GB; shipped DGX/HGX B200 lists 1,440 GB per 8 GPUs) — a 70B FP16 model (140 GB) + ~125k tokens of KV at 320 KB/token in one GPU.' },
+        { value: '~180 GB', label: 'B200 HBM3e (as shipped)', hint: '~2.25× H100 capacity (many sources cite 192 GB; shipped DGX/HGX B200 lists 1,440 GB per 8 GPUs) — a 70B FP16 model (140 GB) + ~120k tokens of KV at 320 KiB/token in one GPU.' },
         { value: '~8 TB/s', label: 'B200 HBM bandwidth', hint: '2.4× H100\'s 3.35 TB/s. Decode rates scale with it.' },
-        { value: '~1.8 TB/s', label: 'NVLink 5 per GPU', hint: 'GB200 NVL72: 72 GPUs, one domain. TP/EP/CP territory (T6.L4).' },
+        { value: '~1.8 TB/s', label: 'NVLink 5 per GPU', hint: 'GB200 NVL72: 72 GPUs, one domain. TP needs NVLink; EP and CP get cheaper (T6.L4).' },
         { value: '368 tok/s', label: 'DeepSeek-R1 per user on 8×B200', hint: 'NVFP4 + MTP3 + fused kernels, min-latency config (NVIDIA TRT-LLM blog).' },
       ],
     },
     {
       type: 'callout',
       variant: 'analogy',
-      md: `Blackwell is your **DDR4→DDR5 + L3-doubling upgrade**, but the business effect is bigger: when bytes-per-token halves and bandwidth doubles, the *same SLO* is met with a fraction of the fleet — or the same fleet meets a SLO that was previously fantasy. This is the T7 theme arriving early: hardware generations are no longer 20% events; they change which architectures are viable (Blackwell's NVL72 is why wide-EP decode is a thing you do, not a thing you admire).`,
+      md: `Blackwell is your **DDR4→DDR5 + L3-doubling upgrade**, but the business effect is bigger: when bytes-per-token fall ~1.8× and bandwidth rises ~2.4×, the *same SLO* is met with a fraction of the fleet — or the same fleet meets a SLO that was previously fantasy. This is the T7 theme arriving early: hardware generations are no longer 20% events; they change which architectures are affordable (Blackwell's NVL72 does not invent wide-EP decode, which DeepSeek ran over RDMA on Hopper; it makes it cheaper to run).`,
     },
     {
       type: 'quiz',
@@ -48,50 +48,74 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
         {
           q: 'FP4\'s biggest production win is…',
           options: [
-            'Training speed',
-            'Decode of bandwidth-bound giants: bytes-per-token halves, and 671B-class MoE fits a fraction of the prior fleet',
-            'Better accuracy than FP8',
-            'Simpler kernels',
+            'Faster training, with FP4 gradients cutting traffic against FP8 and finishing pretraining in fewer GPU-hours',
+            'Decode of bandwidth-bound giants like MoE models, with FP4 weights moving fewer bytes per token than FP8',
+            'Higher accuracy than FP8, with per-block FP4 scales giving finer dynamic range than one per-tensor scale',
+            'Simpler kernels, with one FP4 format removing the dequantize and scale steps that FP8 needs',
           ],
           correct: [1],
           explanation:
-            'On the bandwidth slope, halving weight bytes doubles the rate (T4.L3). The flagship demo was DeepSeek-R1 at NVFP4 on B200. Accuracy work lives in the microscaling (per-16-element FP8 scales) and keeping activations at 8 bits.',
+            'On the bandwidth slope, shrinking weight bytes raises the rate in proportion (T4.L3). NVFP4 is ~4.5 bits per weight with its block scales, so ~1.8× fewer bytes than FP8, not a clean 2×. The flagship demo was DeepSeek-R1 at NVFP4 on B200. Accuracy work lives in the microscaling (per-16-element FP8 scales) and in choosing which tensors can drop to 4 bits.',
+          why: [
+            'The production win is inference: weights read on every decode step. Training updates need higher-precision accumulation and master weights, so 4-bit weights are not a training-speed story.',
+            'Right: on the bandwidth-bound decode path, rate scales with fewer bytes per token. NVFP4 is ~4.5 bits with scales, ~1.8× fewer weight bytes than FP8, so big MoEs need less fleet.',
+            'Microscaling narrows the accuracy gap but 4 bits still carry less precision than FP8. FP4 trades a small accuracy risk for bytes, and recipes keep outlier-sensitive tensors wider to protect quality.',
+            'FP4 adds block scales and extra handling in the kernels, so they get more intricate, not simpler. The payoff is fewer bytes moved, not less code.',
+          ],
         },
         {
           q: 'GB200 NVL72 changes architecture (not just speed) because…',
           options: [
-            'It uses less power',
-            '72 GPUs share a ~1.8 TB/s/GPU NVLink domain — TP/EP/CP topologies that were fantasy at cluster scale become routine inside one rack',
-            'It is water cooled',
-            'It has more fans',
+            'It cuts the power drawn per chip, letting the facility pack more accelerators into each rack for more total compute',
+            'A whole rack of GPUs shares one fast NVLink domain, letting parallel groups that stopped at one server span the rack',
+            'Direct liquid cooling lets chips sustain boost clocks, raising per-chip throughput enough to change batch sizes',
+            'A Grace host processor beside each pair of accelerators gives the rack unified host memory, keeping cache inside the rack',
           ],
           correct: [1],
           explanation:
-            'T6.L4\'s rule — per-layer collectives need the NVLink tier — used to bound those axes to ~8 GPUs. NVL72 makes it 72. That is why wide-EP decode and CP-over-32-nodes are production patterns now.',
+            'T6.L4: only TP\'s per-layer all-reduces need the NVLink tier, and that tier used to end at ~8 GPUs. NVL72 makes it 72. EP\'s all-to-all and CP\'s ring attention also sit on the per-layer path, but they already run over RDMA when communication overlaps compute (DeepEP, ring attention). A 72-GPU NVLink domain makes wide EP and CP cheaper; it did not make them possible.',
+          why: [
+            'Power and cooling are facility concerns, not what changes the design. The architectural change is NVLink domain size, which sets how wide TP, EP and CP groups can stay on NVLink.',
+            'Right: TP\'s per-layer all-reduces need the NVLink tier, which used to end at about 8 GPUs. A 72-GPU domain lets TP, EP and CP span a rack without dropping to RDMA, which makes wide EP and CP cheaper. EP and CP already ran over RDMA with overlap, so NVL72 did not make them possible.',
+            'Cooling affects sustained clocks, a modest per-GPU effect. The topology change comes from the NVLink domain, which turns cross-node RDMA hops into in-domain hops.',
+            'Host memory extends capacity but at far lower bandwidth than HBM, so it is a tier, not a fix for per-layer collectives. The change that matters is the 72-GPU NVLink domain.',
+          ],
         },
         {
-          q: 'The production quantization recipe on Blackwell is…',
+          q: 'Production quantization recipes on Blackwell are…',
           options: [
-            'Everything FP4',
-            'FP4/FP8 weights with 8-bit activations — weights tolerate 4 bits (with microscaling), activations still want 8, same ladder as T4.L7 one rung lower',
-            'INT4 everywhere',
-            'BF16 always',
+            'Full FP4 for weights, activations and cache alike, with the tensor cores running FP4 natively',
+            'Block-scaled FP4 weights, with activations at FP4 or higher precision by recipe and outliers kept wider',
+            'INT4 with one per-tensor scale on a symmetric grid, with uniform resolution that avoids the coarse FP4 spacing',
+            'Weight-only FP4 with BF16 activations throughout, with no shipped recipe quantizing activations below 16 bits',
           ],
           correct: [1],
           explanation:
-            'The cliff didn\'t move: activations and outliers remain the fragile path. Weight-only FP4 + FP8/BF16 activations is what ships; end-to-end FP4 is still research-grade.',
+            'The cliff didn\'t move: activations and outliers remain the fragile path, so recipes differ in how far they push it. The checkpoint picks the recipe: vLLM v0.30 runs NVFP4 W4A16 checkpoints on SM100 through FlashInfer\'s CuTe DSL kernel, Kimi K3 pairs MXFP4 weights with MXFP8 activations, and NVIDIA\'s DeepSeek-R1-FP4 quantizes the weights and activations of its linear operators to FP4.',
+          why: [
+            'Native FP4 execution does not make every tensor safe at 4 bits. NVIDIA\'s DeepSeek-R1-FP4 card quantizes only the weights and activations of the linear operators in transformer blocks; the rest stays wider.',
+            'Right: weights tolerate 4 bits when block scales absorb the range. Activations vary by recipe (FP4 in NVIDIA\'s R1-FP4, FP8 in Kimi K3, BF16 in W4A16 checkpoints), and outlier-sensitive tensors stay wider.',
+            'One per-tensor scale lets outliers wreck 4-bit accuracy; the per-block scale is what makes 4 bits survivable. Blackwell\'s native path is NVFP4, not INT4 everywhere.',
+            'Weight-only W4A16 is one recipe, but NVIDIA\'s DeepSeek-R1-FP4 card also quantizes the activations of the linear operators to FP4. Activations are a risk to manage, not a ban.',
+          ],
         },
         {
           q: 'Re-deriving T4\'s roofline for B200: the decode rate roughly…',
           options: [
-            'Unchanged',
-            '~2.4× H100 at the same precision (bandwidth 8 vs 3.35 TB/s), plus another ~2× at FP4 vs FP8 weights on the bandwidth-bound path',
-            'Half of H100',
-            'Scales with FLOPs instead',
+            'Stays near 1x of H100, with decode limited by FLOP count and the extra FP4 and FP8 FLOPs going to prefill',
+            'Rises about 2.4 times over H100 at equal precision, with FP4 weights adding a further roughly 1.8 times over FP8',
+            'Falls below 1x of H100 per chip, with FP4 block scales adding reads that cancel the bandwidth gain over FP8',
+            'Follows peak FP4 FLOPs rather than bandwidth, with FP4 at twice the FP8 rate even if bandwidth stayed fixed',
           ],
           correct: [1],
           explanation:
-            'Decode is bandwidth-bound: tokens/s ≈ BW ÷ bytes/token. Bandwidth up 2.4×, bytes down 2× at FP4 — compounding levers, which is why the per-generation economics jumped instead of crept (T7.L4 prices it).',
+            'Decode is bandwidth-bound: tokens/s ≈ BW ÷ bytes/token. Bandwidth up 2.4×, weight bytes down ~1.8× at NVFP4 (4.5 bits vs 8) — compounding levers, which is why the per-generation economics jumped instead of crept (T7.L4 prices it).',
+          why: [
+            'Decode sits far below the ridge, so its rate follows bandwidth, not FLOPs. B200\'s ~8 TB/s against H100\'s 3.35 TB/s lifts the ceiling about 2.4× at equal precision.',
+            'Right: tokens/s ≈ bandwidth ÷ bytes per token. Bandwidth is ~2.4× higher (8 vs 3.35 TB/s), and NVFP4 at ~4.5 bits moves ~1.8× fewer weight bytes than FP8, so the gains compound.',
+            'The scales add about 0.5 bit per weight, so FP4 saves ~1.8× rather than 2×, still a net gain. Bandwidth also rose, so the rate cannot fall.',
+            'Decode has low arithmetic intensity, so extra FLOPs sit idle waiting for bytes. Peak TFLOPS help prefill and large batches, not the bandwidth-bound decode path.',
+          ],
         },
       ],
     },

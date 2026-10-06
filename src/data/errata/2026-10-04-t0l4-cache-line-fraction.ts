@@ -23,7 +23,7 @@ export default {
       correct: [1],
       why: [
         'One half would mean 32 of 64 bytes are read, which is a whole struct. The loop reads 8 bytes of each.',
-        'Right. 8 B from each of two structs is 16 useful bytes of 64, so bandwidth is divided by four.',
+        'Right: 8 B from each of two structs is 16 useful bytes of 64, so bandwidth is divided by four.',
         'That counts one deadline per line and forgets the second struct that sits in the same line.',
         'That would be 4 useful bytes of 64. The loop reads 8 bytes from each of two structs.',
       ],

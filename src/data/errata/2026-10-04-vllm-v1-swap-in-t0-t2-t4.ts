@@ -19,15 +19,15 @@ export default {
     {
       q: 'vLLM V1 runs out of free KV blocks and preempts a running sequence. What does it do with it?',
       options: [
-        'Copies its blocks to CPU RAM over PCIe, and copies them back when it resumes',
-        'Frees its blocks and sets num_computed_tokens to 0, to recompute on resume',
-        'Parks it with its blocks pinned until another running sequence finishes',
+        'Copies its blocks to host memory and copies them back on resume',
+        'Frees its blocks and resets num_computed_tokens to recompute',
+        'Parks the sequence with its blocks pinned until another one finishes',
         'Aborts the request and returns an out-of-memory error to the client',
       ],
       correct: [1],
       why: [
         'That was the V0 and PagedAttention-paper swap option. V1 does not copy blocks to host memory.',
-        'Right. The scheduler frees the victim blocks and sets num_computed_tokens to 0, so a preemption storm burns prefill FLOPs, not PCIe bandwidth.',
+        'Right: the scheduler frees the victim blocks and sets num_computed_tokens to 0, so a preemption storm burns prefill FLOPs, not PCIe bandwidth.',
         'Pinning the blocks would keep the memory the scheduler needs. Preemption exists to give blocks back.',
         'Preemption is not failure. The request stays queued and is recomputed when memory frees up.',
       ],

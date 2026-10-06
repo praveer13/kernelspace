@@ -28,9 +28,9 @@ where \`d_kv\` = num_kv_heads × head_dim (hidden size for MHA models; smaller f
 LLaMA-3-8B shape: 32 layers, 8 KV heads (GQA), head_dim 128 → \`d_kv = 8 × 128 = 1024\`. FP16:
 
 \`\`\`text
-per token  = 2 × 32 × 1024 × 2 B = 131,072 B = 128 KB
-128k ctx   = 128 KB × 131,072   ≈ 16 GB      (== the model's own weights)
-4k convo   = 128 KB × 4,096     ≈ 0.5 GB
+per token  = 2 × 32 × 1024 × 2 B = 131,072 B = 128 KiB
+128k ctx   = 128 KiB × 131,072  = 16 GiB     (≈ the model's own FP16 weights, ≈16 GB)
+4k convo   = 128 KiB × 4,096    = 0.5 GiB
 \`\`\`
 
 One 80 GB H100: 16 GB weights (FP16) + ~2 GB runtime leaves ~60 GB for KV — about **480k tokens** of cache. As 4k conversations, that's ~120 concurrent; as 128k documents, **3**. Context length is a concurrency tax, linear in both directions.`,
@@ -42,7 +42,7 @@ One 80 GB H100: 16 GB weights (FP16) + ~2 GB runtime leaves ~60 GB for KV — ab
 LLaMA-3-70B shape: 80 layers, 8 KV heads (GQA), head_dim 128 → \`d_kv = 1024\`. FP16:
 
 \`\`\`text
-per token  = 2 × 80 × 1024 × 2 B = 327,680 B = 320 KB
+per token  = 2 × 80 × 1024 × 2 B = 327,680 B = 320 KiB
 weights    = 70B × 2 B           = 140 GB    (2×80 GB GPUs, nothing left for KV)
 8 GPUs     = 640 GB − 140 GB     ≈ 500 GB KV ≈ 1.6 M tokens
 \`\`\`
@@ -53,8 +53,8 @@ Read those numbers again: to serve 70B with serious context, you need **8 GPUs �
       type: 'statline',
       stats: [
         { value: '2×L×d×b', label: 'the formula', hint: 'K and V × layers × KV dim × bytes/elem. All of T5.L4 in six symbols.' },
-        { value: '320 KB', label: '70B FP16 / token', hint: '80 layers, 8 KV heads × 128. GQA already included — MHA would be 8× worse.' },
-        { value: '40 GB', label: '70B 128k ctx', hint: 'One long document = half a GPU of cache. Capacity planning starts here.' },
+        { value: '320 KiB', label: '70B FP16 / token', hint: '80 layers, 8 KV heads × 128. GQA already included — MHA would be 8× worse.' },
+        { value: '40 GiB', label: '70B 128k ctx', hint: '≈43 GB. One long document = half a GPU of cache. Capacity planning starts here.' },
         { value: '×2 / ×4', label: 'FP8 / INT4 KV', hint: 'Cache quantization multiplies token capacity directly (T4.L7).' },
       ],
     },
@@ -64,7 +64,7 @@ Read those numbers again: to serve 70B with serious context, you need **8 GPUs �
 
 Every KV optimization is a multiplier on that formula. Price them:
 
-- **GQA/MQA** — fewer KV heads: ÷4 (8 vs 32) to ÷8. Free-ish (baked into the model, small quality cost paid at training time). Already counted above; *without* GQA our 70B would need 2.6 MB/token.
+- **GQA/MQA** — fewer KV heads: ÷4 (8 vs 32) to ÷8. Free-ish (baked into the model, small quality cost paid at training time). Already counted above; *without* GQA our 70B would need 2.5 MiB/token.
 - **KV quantization (FP8/INT4)** — b: 2 B → 1 B → 0.5 B: ×2 to ×4 tokens, tiny quality cost (T4.L7). Decode reads the whole cache per token, so this *also* multiplies decode bandwidth.
 - **Sliding-window attention** — cap the effective context (Mistral-style): cache stops growing at the window. Changes the model, not just the system.
 - **Prefix sharing** — share the system prompt's blocks across all requests (T5.L5): one copy of your 2k-token system prompt instead of one per request. At 100 concurrent requests: ~100× on the shared part.
@@ -75,12 +75,12 @@ And the formula's blind spot: it prices *residency*. The per-step **bandwidth** 
     {
       type: 'callout',
       variant: 'analogy',
-      md: `This is your **JVM heap sizing**, one layer down: \`-Xmx\` is HBM capacity; live objects are weights; the cache is your session store growing per user; GZIP session compression is FP8 KV; and "sessions × bytes/session > heap ⇒ OOM" is exactly "concurrent × context × 2Ld > HBM ⇒ preemption." You have done this capacity review before. The only new part is that the sessions cost 320 KB per *token*.`,
+      md: `This is your **JVM heap sizing**, one layer down: \`-Xmx\` is HBM capacity; live objects are weights; the cache is your session store growing per user; GZIP session compression is FP8 KV; and "sessions × bytes/session > heap ⇒ OOM" is exactly "concurrent × context × 2Ld > HBM ⇒ preemption." You have done this capacity review before. The only new part is that the sessions cost 320 KiB per *token*.`,
     },
     {
       type: 'callout',
       variant: 'warning',
-      md: `Don't confuse the two memory walls. **Capacity wall:** concurrent × context × per-token bytes > HBM → can't admit more requests (solve with paging, quant, offload). **Bandwidth wall:** per-step reads of weights+KV > what latency allows → ITL blows the SLO (solve with batching, quant, shorter cache). Teams routinely fix the wrong one: more GPUs don't speed ITL; faster kernels don't add capacity. Name the wall before you buy the fix.`,
+      md: `Don't confuse the two memory walls. **Capacity wall:** concurrent × context × per-token bytes > HBM → can't admit more requests (solve with paging, quant, offload). **Bandwidth wall:** per-step reads of weights+KV > what latency allows → ITL blows the SLO (solve with batching, quant, shorter cache). Teams routinely fix the wrong one: more replicas do not speed ITL; sharding one model across GPUs can, until communication dominates; faster kernels don't add capacity. Name the wall before you buy the fix.`,
     },
     {
       type: 'prose',
@@ -94,7 +94,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
       machine: 'calc',
       title: 'KV-cache calculator',
       tasks: [
-        'Reproduce the 8B numbers: keep FP16 weights and FP16 KV, then verify 128 KB/token and ~480k tokens on one 80 GB GPU.',
+        'Reproduce the 8B numbers: keep FP16 weights and FP16 KV, then verify 128 KiB/token and ~480k tokens on one 80 GB GPU.',
         'Model the 70B on 8 H100s: show FP16 weights at ≈140 GB and the remaining aggregate HBM available to KV.',
         'Hold weight precision fixed, flip FP16 → FP8 KV, then compare that gain with changing 32 → 8 KV heads.',
         'Use 2 GPUs and 32k context; read the capacity concurrency and bandwidth/ITL limits, then state which wall arrives first.',
@@ -107,45 +107,74 @@ Plug in any model shape and watch the numbers move: independently choose weight 
         {
           q: 'KV bytes per token equals…',
           options: [
-            'params × bytes',
-            '2 (K+V) × layers × KV-dim × bytes/elem',
-            'vocab × hidden × 4',
-            'context length × bytes',
+            'Parameters times bytes per element, a working copy of the weights that each token touches',
+            'Two times layers times key-value dimension times bytes per element, stored per context token',
+            'Two times layers times hidden size times context length times bytes, the cache being per sequence',
+            'Vocabulary size times hidden size times bytes per float, one embedding row stored per cached token',
           ],
           correct: [1],
           explanation:
-            'Per token, every layer stores one K and one V vector of d_kv = kv_heads × head_dim elements. 2 × L × d_kv × b — the most useful formula in serving.',
+            'Per token, every layer stores one K and one V vector of d_kv = kv_heads x head_dim elements. 2 x L x d_kv x b is the most useful formula in serving; multiply by context length to size a sequence.',
+          why: [
+            'Weights are fixed per model. The cache grows with every token generated, so it cannot be params x bytes; it depends on layers, KV heads, head size and dtype.',
+            'Right: one K and one V vector of d_kv (kv heads x head dim) elements per layer per token, times bytes per element. Multiplying by tokens in flight gives total cache size.',
+            'That is a per-sequence total, not a per-token figure: context length multiplies the per-token bytes afterwards. It also uses hidden size, which overcounts when GQA makes d_kv smaller.',
+            'The embedding table is read once per token at the input and is not stored per cached token. The cache holds per-layer K and V, not embedding rows.',
+          ],
         },
         {
-          q: 'For a 70B FP16 model (80 layers, d_kv=1024), a single 128k-token context costs about…',
-          options: ['1 GB', '10 GB', '40 GB — 320 KB × 131,072', '140 GB'],
+          q: 'For a 70B FP16 model (80 layers, d_kv = 1024), a single 128k-token context costs about…',
+          options: [
+            'About 20 GiB, from 80 layers x 1024 x 2 bytes x 128k tokens, counting only the key tensor',
+            'About 320 GiB, from 2.5 MiB per token as if the 64 query heads each stored their own keys and values',
+            'About 40 GiB, from 320 KiB per token for keys and values across 80 layers at 2 bytes and 1024 width',
+            'About 130 GiB, equal to the weights at 2 bytes per parameter on the premise that cache and model match',
+          ],
           correct: [2],
           explanation:
-            '2×80×1024×2 B = 320 KB/token; ×131,072 ≈ 40 GB. One long document = half an H100 of cache. Long context is a capacity product, not a quality feature.',
+            '2 x 80 x 1024 x 2 B = 320 KiB per token; x 131,072 is 40 GiB (about 43 GB). One long document is half an H100 of cache. Long context is a capacity product, not a quality feature.',
+          why: [
+            'That drops V. Both K and V are stored, so the per-token figure has a factor of 2 and the total is about double this.',
+            'That is full multi-head attention. Llama-3-70B has 8 KV heads (d_kv = 1024), so GQA already cuts the 2.5 MiB figure 8x to 320 KiB per token.',
+            'Right: 2 (K and V) x 80 layers x 1024 x 2 bytes is 327,680 B (320 KiB) per token, and 131,072 tokens of that is 40 GiB.',
+            'Only the 8B model at 128k comes close: its FP16 weights are ≈16 GB (≈15 GiB), its cache 16 GiB. For the 70B, weights are about 130 GiB and the cache 40 GiB.',
+          ],
         },
         {
           q: 'GQA reduces KV-cache size by…',
           options: [
-            'Compressing the cache with zlib',
-            'Sharing K/V across groups of query heads — KV-dim shrinks by the group factor (32→8 heads = ÷4)',
-            'Skipping layers',
-            'Using smaller vocabularies',
+            'Compressing stored keys and values with a lossless codec after each write, then decompressing inside the attention kernel',
+            'Sharing keys and values across groups of query heads, which shrinks the key-value dimension by the group factor',
+            'Storing keys and values in a narrower float format, which halves the bytes per element and is applied when the model loads',
+            'Skipping a fixed fraction of layers when writing the cache, which leaves some layers without keys or values for a token',
           ],
           correct: [1],
           explanation:
-            'd_kv = kv_heads × head_dim; fewer KV heads divides the per-token bytes (and the per-step cache reads) by the same factor — a training-time trade that serving inherits gratefully.',
+            'd_kv = kv_heads x head_dim; fewer KV heads divides the per-token bytes (and the per-step cache reads) by the same factor. It is a training-time trade that serving inherits gratefully.',
+          why: [
+            'GQA is a model architecture, not a codec. Decompressing in the kernel would add work to every step, whereas fewer KV heads cut both stored and read bytes.',
+            'Right: several query heads read one shared K/V head, so d_kv falls by the group factor and the per-token cache falls with it.',
+            'That is KV quantization, a separate multiplier on bytes per element. GQA leaves the element type alone and reduces how many K/V heads exist.',
+            'Every layer still writes K and V for every token. GQA keeps all layers and shrinks the number of K/V heads within each one.',
+          ],
         },
         {
-          q: 'More GPUs with the same model will NOT improve which metric?',
+          q: 'You add GPUs as extra independent replicas of the same model. Which number stays the same for a request that is already being served, at the same per-replica batch size?',
           options: [
-            'Concurrent request capacity',
-            'Per-token decode latency (ITL) — that\'s set by per-step bytes ÷ bandwidth, not by how many tokens fit',
-            'Maximum context length served',
-            'Goodput under SLO',
+            'Fleet capacity, meaning the concurrent requests the fleet can keep resident in cache at the same moment',
+            'Time between tokens, meaning each step reads the same weight and cache bytes at the same memory bandwidth',
+            'Goodput, meaning the requests per second the fleet serves within its latency targets as load grows past one device',
+            'Fleet throughput, meaning the tokens generated per second across the replicas running in parallel',
           ],
           correct: [1],
           explanation:
-            'Capacity scales with total HBM; ITL is a per-step bandwidth/efficiency number. Name the wall — capacity or bandwidth — before buying the fix.',
+            'Replicas add capacity and aggregate throughput, but one request still runs on one replica at that replica\'s bandwidth, so at the same per-replica batch size its ITL is unchanged. Sharding one model across GPUs (tensor parallelism) is different: it cuts bytes read per GPU per step, at the cost of communication.',
+          why: [
+            'Each replica brings its own HBM and therefore its own KV blocks, so the fleet admits proportionally more concurrent requests.',
+            'Right: at the same per-replica batch, a step does the same work as before, so ITL is unchanged. Only sharding the model (tensor parallelism) shortens a step.',
+            'More replicas absorb more load before queues build, so goodput at a given SLO rises with replica count.',
+            'Independent replicas run in parallel, so aggregate tokens per second grows roughly with replica count.',
+          ],
         },
       ],
     },

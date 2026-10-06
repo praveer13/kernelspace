@@ -50,23 +50,23 @@ The [R7 Forge drill](/forge/rust-zero-r7) builds a boxed recursive list, observe
 
 **Q1. What does Arc::clone(&x) copy?**
 
-- (o1) The current thread
-- (o2) The entire inner value
-- (o3) A mutable reference
-- (o4) Only a shared-ownership handle while incrementing the atomic count
+- (o1) The inner value when T is Clone, and a handle otherwise
+- (o2) The inner value in full, so each thread gets a private copy of the data
+- (o3) A mutable handle to the shared value, so the new owner may write through it
+- (o4) A new handle to the same allocation, bumping an atomic count
 
 **Q2. Why can Rc<T> not normally be sent to another thread?**
 
-- (o1) T is always mutable
-- (o2) It always points to the stack
-- (o3) Its reference count is non-atomic
-- (o4) It has no Drop implementation
+- (o1) Rc allocates in thread-local storage and other threads cannot address it
+- (o2) Rc keeps its value on the stack of the creating thread and it would dangle
+- (o3) Its strong and weak counts use non-atomic updates and clones may race
+- (o4) Rc lacks the internal lock that Arc adds around T and access would race
 
 **Q3. Which type expresses a non-owning edge that does not keep an Rc/Arc allocation alive?**
 
-- (o1) Box
-- (o2) Weak
-- (o3) Vec
-- (o4) &mut
+- (o1) A second Rc stored in a RefCell that hides it from the strong count
+- (o2) Weak whose upgrade gives no handle once the last strong handle is dropped
+- (o3) A Box holding a pointer to the data that observes it without owning it
+- (o4) A cloned Rc kept in a struct field that the count ignores until it is used
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

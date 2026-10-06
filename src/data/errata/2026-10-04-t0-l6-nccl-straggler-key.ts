@@ -15,16 +15,16 @@ export default {
     {
       q: 'In an allreduce profile, ranks 1 to 3 show wide wait bars and rank 4 shows none. Which rank is the straggler?',
       options: [
-        'Rank 4: it finishes first, and the others are waiting on it',
-        'Ranks 1 to 3: their wide bars show the slowest compute',
-        'Rank 4: it arrives last, so it never waits',
-        'No rank: a barrier makes every rank wait equally long',
+        'Rank 4: it finishes first and the other ranks wait on it',
+        'Ranks 1 to 3: their wide bars show the slowest compute times',
+        'Rank 4: it reaches the barrier last and has no wait time',
+        'No rank: the 4 ranks wait about equally long at a barrier',
       ],
       correct: [2],
       why: [
         'The rank with no wait bar did not finish early. It arrived last, so there was nobody left to wait for.',
         'A wide wait bar is time spent waiting, which means that rank arrived early.',
-        'Right. A barrier makes the slowest participant the one with no wait time; the wide bars show the cost of waiting, not the cause.',
+        'Right: a barrier makes the slowest participant the one with no wait time; the wide bars show the cost of waiting, not the cause.',
         'Ranks that arrive early wait longer than ranks that arrive late, so the waits differ.',
       ],
     },

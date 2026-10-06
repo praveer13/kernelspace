@@ -63,21 +63,57 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
       questions: [
         {
           q: 'What property makes match especially useful with enums?',
-          options: ['It runs arms in parallel', 'It must cover every possible variant', 'It allocates no stack', 'It accepts truthy values'],
+          options: [
+            'Arms fall through to the next arm, so each one must end with an explicit break',
+            'It must cover each variant, so a new variant breaks every incomplete match',
+            'It requires a trailing wildcard arm in every match, however many variants the enum has',
+            'It raises a runtime error when no arm matches the value',
+          ],
           correct: [1],
-          explanation: 'Exhaustive matching means a new variant produces useful compiler errors at every decision point that needs updating.',
+          explanation:
+            'Exhaustive matching means a new variant produces useful compiler errors at every decision point that needs updating.',
+          why: [
+            'Rust arms never fall through. The first matching arm runs and the match ends, so there is no break keyword to forget.',
+            'Right: exhaustiveness is checked at compile time. Adding a variant makes every match that omits it fail with E0004, which lists the missing pattern.',
+            'No wildcard is required when all variants are named. A wildcard is allowed but hides new variants, which is why named arms give better compiler help.',
+            'An uncovered case is rejected before the program runs, with E0004. There is no runtime match failure to find by testing.',
+          ],
         },
         {
           q: 'What values does 0..4 produce?',
-          options: ['0, 1, 2, 3', '0, 1, 2, 3, 4', '1, 2, 3, 4', 'Only 0 and 4'],
+          options: [
+            '0, 1, 2, 3 and the upper bound 4 is excluded',
+            '0, 1, 2, 3, 4 and both ends are included',
+            '1, 2, 3, 4 and counting starts at one',
+            '0, 1, 2, 3 in a for loop and 0 through 4 in a slice index',
+          ],
           correct: [0],
-          explanation: 'Standard ranges exclude the upper bound. Use 0..=4 for an inclusive range.',
+          explanation:
+            'Standard ranges exclude the upper bound. Use 0..=4 for an inclusive range.',
+          why: [
+            'Right: a..b is half-open, covering a up to b - 1. The inclusive form is a..=b, so 0..4 yields four values and ends at 3.',
+            'Ruby\'s 0..4 is inclusive, but Rust uses 0..=4 for that. Plain 0..4 stops at 3, so this carries a Ruby habit over wrongly.',
+            'Rust ranges start at whatever the left bound says, here 0. Nothing in the language is one-based, and the upper bound is the excluded end.',
+            'Slice ranges follow the same half-open rule, so v[0..4] selects four elements, indexes 0 to 3. No context makes the end inclusive.',
+          ],
         },
         {
           q: 'How can an infinite loop compute a value?',
-          options: ['return is mandatory', 'break can carry the loop result', 'All loops evaluate to true', 'Only by mutating a global'],
+          options: [
+            'A return statement is the way a loop hands back a value',
+            'A break can carry the result of the loop as in break n',
+            'Its last body expression becomes the loop value like a block tail',
+            'It needs a declared type on the loop before break carries a value',
+          ],
           correct: [1],
-          explanation: 'A loop expression can end with break value; the loop then evaluates to that value.',
+          explanation:
+            'A loop expression can end with break value; the loop then evaluates to that value.',
+          why: [
+            'return would exit the whole function, not produce the loop\'s value. Only loop can break with a value: it evaluates to it, while for and while give ().',
+            'Right: break n ends a loop and makes the whole loop expression evaluate to n. It works for loop only, because for and while may exit without producing a value.',
+            'A loop repeats its body, so no single tail value exists. The value comes only from a break expression that exits the loop.',
+            'No such syntax exists. The type is inferred from the break value, and every break in the loop must supply the same type.',
+          ],
         },
       ],
     },

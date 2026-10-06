@@ -14,17 +14,17 @@ export default {
     {
       q: 'NVFP4 stores about 4.5 bits per weight. How much memory do the weights of a 671B model need, and where do they fit?',
       options: [
-        'About 335 GB, so it needs a 2-node NVL72 pair',
-        'About 377 GB, so it needs a full 72-GPU NVL72 rack',
-        'About 671 GB, so it only fits across two 8xB200 nodes',
-        'About 377 GB, so it fits on one 8xB200 node',
+        'About 335 GB, held across a 2-node NVL72 pair with spare capacity',
+        'About 377 GB, needing a full 72-GPU NVL72 rack of nodes to hold them',
+        'About 671 GB, held across two 8xB200 nodes with a split model',
+        'About 377 GB, held on a single 8xB200 node with room to spare',
       ],
       correct: [3],
       why: [
         '335 GB is the 4-bit figure and ignores the block scales. NVL72 is a rack, not a pair of nodes, and one node is already enough.',
         'One 8xB200 node ships about 1,440 GB (about 180 GB per GPU), far more than the 377 GB of weights.',
         '671 GB is the FP8 figure, and even that fits in one 1,440 GB node.',
-        'Right. 671e9 x 4.5 / 8 is about 377 GB, which fits one node with room left for KV cache.',
+        'Right: 671e9 x 4.5 / 8 is about 377 GB, which fits one node with room left for KV cache.',
       ],
     },
   ],

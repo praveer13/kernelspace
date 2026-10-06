@@ -21,7 +21,7 @@ Both are, at heart, T0 ideas reincarnated on the GPU: occupancy is your I/O-boun
       type: 'prose',
       md: `## Occupancy: warps in residence
 
-An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KB ÷ per-thread usage), shared memory per SM (228 KB ÷ per-block usage), and block/warp slots. A kernel using 128 registers/thread and 100 KB shared/block might fit only 4 warps per SM: 6% occupancy. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
+An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KiB ÷ per-thread usage), shared memory per SM (228 KiB ÷ per-block usage), and block/warp slots. A kernel using 128 registers/thread and 100 KiB shared/block might fit only 4 warps per SM: 6% occupancy. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
 
 The tuning loop is mechanical: check occupancy (nsight-compute or compiler stats), find the binding budget, relax it — fewer live registers (smaller tiles), less shared per block, smaller blocks. **But** high occupancy is a means, not a goal: some of the fastest kernels run at 25% occupancy with heavy instruction-level parallelism. The rule that survives: *enough* warps (or enough ILP) to keep the memory pipeline full — measure, don't worship.`,
     },
@@ -41,7 +41,7 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
         { id: 'warp', x: 2, y: 8, w: 18, h: 10, label: 'warp (32 lanes)', sub: 'one load instr' },
         { id: 'coal', x: 30, y: 4, w: 30, h: 9, label: 'coalesced', sub: 'lanes → consecutive 4 B' },
         { id: 't1', x: 72, y: 4, w: 24, h: 9, label: '1 transaction', sub: '128 B, full BW', color: '#3EF2A4' },
-        { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KB' },
+        { id: 'scat', x: 30, y: 30, w: 30, h: 9, label: 'scattered', sub: 'lanes → stride 1 KiB' },
         { id: 't32', x: 72, y: 30, w: 24, h: 9, label: '32 transactions', sub: '~1/32 peak BW', color: '#FF5C6C' },
       ],
       edges: [
@@ -91,50 +91,74 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
         {
           q: 'SM occupancy is limited by…',
           options: [
-            'Only the warp slot count',
-            'The tightest of three budgets: registers per SM, shared memory per SM, and block/warp slots',
-            'The L2 cache size',
-            'The PCIe generation',
+            'The warp slot count on the multiprocessor, with registers and shared memory playing no part in residency',
+            'The tightest of three per-multiprocessor budgets among registers, shared memory and warp slots',
+            'The second-level cache capacity, which gives each resident warp a slice for its working set',
+            'The memory clock, which lets faster memory keep more loads in flight and more warps resident',
           ],
           correct: [1],
           explanation:
             'Any of the three can bind first — a fat-register kernel or a shared-hungry block caps resident warps regardless of slot count. Tuning = finding and relaxing the binding budget.',
+          why: [
+            'Registers and shared memory are allocated per resident warp and block. A kernel that uses a lot of either fits fewer warps than the slots allow.',
+            'Right: residency is set by whichever of registers, shared memory or block and warp slots runs out first. Tuning means finding and relaxing that one.',
+            'L2 is shared across SMs and is not partitioned per warp. Residency is set by per-SM resources: registers, shared memory and slots.',
+            'HBM speed changes how long a stalled warp waits, not how many warps fit. The count is fixed by per-SM resources.',
+          ],
         },
         {
           q: 'A warp load where lane i reads address base + 4×i results in…',
           options: [
-            '32 transactions',
-            'One 128-byte transaction — perfect coalescing, full delivered bandwidth',
-            'A bank conflict',
-            'A warp divergence',
+            '32 separate 4-byte transactions with one per lane as each lane issues its own independent load',
+            'One 128-byte transaction with 32 consecutive words sharing a segment at full bandwidth',
+            'A shared-memory bank conflict with 32 consecutive words mapping onto 1 bank',
+            'A divergent warp with 32 lanes computing 32 different addresses in that load',
           ],
           correct: [1],
           explanation:
             'Consecutive lanes → consecutive addresses: the coalescer merges the warp\'s accesses into a single wide transaction. This is the GPU\'s native access pattern, and layouts are chosen to produce it.',
+          why: [
+            'The hardware inspects all 32 addresses of the warp together. Consecutive 4-byte addresses fall in one 128-byte segment and merge into a single transaction.',
+            'Right: 32 consecutive 4-byte words fill one 128-byte segment, so the coalescer serves the whole warp with one transaction at full bandwidth.',
+            'Consecutive words map to different banks, which is the conflict-free pattern in shared memory. Conflicts need many lanes on one bank.',
+            'Divergence is about branching. Lanes may use different addresses in one instruction; all lanes still execute the same load.',
+          ],
         },
         {
           q: 'Staging a strided access through shared memory helps because…',
           options: [
-            'Shared memory is bigger than HBM',
-            'HBM reads become wide/coalesced, and the strided compute reads hit SRAM, which has no coalescing requirement (only bank conflicts, fixable with padding)',
-            'It reduces register pressure to zero',
-            'The compiler requires it',
+            'Shared memory reorders the strided global accesses on its own, with the hardware making them wide and needing no kernel change',
+            'Global reads become wide and coalesced, while the strided reads hit on-chip memory that has no coalescing rule',
+            'Shared memory is backed by the second-level cache, with repeated strided reads of a tile coming from it',
+            'Shared memory has more banks than global memory has channels, with strided reads spreading over more parallel units',
           ],
           correct: [1],
           explanation:
             'Separate the concerns: be polite to HBM (wide transactions), be arbitrary in SRAM. This staging pattern is the skeleton of tiled matmul and FlashAttention (T4.L6).',
+          why: [
+            'Nothing reorders for you. The kernel itself must issue coalesced loads into SRAM; only then can it read the scratchpad in any pattern.',
+            'Right: load coalesced from HBM into SRAM, then read in any order from SRAM, where only bank conflicts matter and +1 padding fixes them.',
+            'Shared memory is on-chip SRAM inside the SM and is not backed by L2. Its benefit is explicit staging, not caching.',
+            'Banks are SRAM internals and do not change HBM efficiency. HBM traffic is efficient only when the loads are coalesced.',
+          ],
         },
         {
           q: 'A 32-way shared-memory bank conflict occurs when…',
           options: [
-            '32 warps share one SM',
-            'All 32 lanes address words in the SAME SRAM bank, serializing the access 32-fold — typically fixed by padding tile rows',
-            'The block exceeds 1024 threads',
-            'Two kernels write the same array',
+            'More than 32 warps are resident on one multiprocessor and shared memory requests queue at the memory controller',
+            'The 32 lanes of a warp hit different addresses in the same bank and the access serializes 32-fold',
+            'A block uses more than 1024 threads and the hardware splits it into serialized waves that reuse the banks',
+            'Two kernels write one global array at once and their writes serialize on a single 128-byte cache line',
           ],
           correct: [1],
           explanation:
-            'SRAM bandwidth is per-bank; same-bank collisions serialize. The +1 padding trick skews strides across banks — the false-sharing lesson (T0.L4) wearing a different hat.',
+            'SRAM bandwidth is per-bank; different-address collisions in one bank serialize. The +1 padding trick skews strides across banks — the false-sharing lesson (T0.L4) wearing a different hat.',
+          why: [
+            'Bank conflicts arise between the lanes of one warp\'s own access. The number of resident warps affects occupancy, not banks.',
+            'Right: SRAM bandwidth is per bank, so 32 lanes on different addresses in one bank serialize 32-fold (one shared address is a broadcast). Padding the tile rows skews the strides across banks.',
+            'A block is capped at 1024 threads and a launch above that fails; it is not serialized into waves. Conflicts depend on addresses within one warp.',
+            'That is contention on global memory, a different problem. A bank conflict is among lanes of one warp in shared memory.',
+          ],
         },
       ],
     },

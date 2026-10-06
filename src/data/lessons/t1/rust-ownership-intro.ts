@@ -109,10 +109,10 @@ Next track: the operating system. You have built memory management by hand; now 
         {
           q: 'Rust\'s ownership rule is best stated as…',
           options: [
-            'Every value is reference-counted at runtime and freed when the count reaches zero',
-            'Each value has one owner, and it is dropped deterministically when that owner leaves scope',
-            'Every value must live on the stack, so leaving a scope frees it automatically',
-            'A compile-time garbage collector scans the program and frees unreachable values',
+            'Each value is reference-counted at runtime, being freed when the count reaches zero',
+            'Each value has one owner, with a deterministic drop when it leaves scope',
+            'Each value must live on the stack, with a scope exit freeing it automatically',
+            'A compile-time garbage collector scans the program, freeing unreachable values',
           ],
           correct: [1],
           explanation:
@@ -127,10 +127,10 @@ Next track: the operating system. You have built memory management by hand; now 
         {
           q: 'The borrow rules ("many &T XOR one &mut T, never outliving the owner") primarily eliminate…',
           options: [
-            'Stack overflow, because borrowed values are never copied onto the stack',
-            'All runtime panics, such as out-of-bounds indexing, integer overflow or unwrap on None',
-            'Dangling pointers and data races, enforced statically as readers-versus-one-writer',
-            'Memory leaks from cyclic references, since borrows can never form a cycle',
+            'Stack overflow, with borrowed values left uncopied on the stack',
+            'Runtime panics, including out-of-bounds indexing and unwrap on an empty Option',
+            'Dangling pointers and data races, enforced statically as readers versus one writer',
+            'Memory leaks from cyclic references, with borrows unable to form a cycle',
           ],
           correct: [2],
           explanation:
@@ -145,10 +145,10 @@ Next track: the operating system. You have built memory management by hand; now 
         {
           q: 'When Rust code needs shared ownership or cycles, the idiomatic escape is…',
           options: [
-            'static mut globals, which every function can reach without owning them',
-            'Wrapping the whole program in an unsafe block so the borrow checker is switched off',
+            'static mut globals, which any function can reach without owning them',
+            'Wrapping the program in an unsafe block, switching the borrow checker off',
             'Rc/Arc reference counting, or an arena with index handles in place of pointers',
-            'There is none; Rust cannot express graphs or cycles without a garbage collector',
+            'No escape exists, with Rust unable to express graphs or cycles without a garbage collector',
           ],
           correct: [2],
           explanation:
@@ -163,10 +163,10 @@ Next track: the operating system. You have built memory management by hand; now 
         {
           q: 'Dynamo\'s Rust code orchestrates KV transfers that NIXL (C++) performs. Why Rust for that layer over C++?',
           options: [
-            'Rust has more mature CUDA tooling and kernel libraries than C++, so GPU work is easier',
-            'C-class speed and control, with compile-time memory safety and no GC pauses',
-            'Rust binaries are smaller and start faster, which matters when scaling out replicas',
-            'C++ cannot interoperate with Python at all, whereas Rust has first-class bindings',
+            'Rust has more mature CUDA tooling and kernel libraries than C++, making GPU work easier',
+            'C-class speed and control, with compile-time memory safety and no GC pause jitter',
+            'Rust binaries are smaller and start faster, helping when GPU replicas scale out',
+            'C++ lacks any Python interoperability, whereas Rust has first-class bindings to the GPU stack',
           ],
           correct: [1],
           explanation:

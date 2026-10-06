@@ -19,17 +19,17 @@ export default {
     {
       q: 'In the PagedAttention paper, a swapped-out sequence has its KV blocks copied where, and what is PCIe in that picture?',
       options: [
-        'To disk, with PCIe as the storage device itself',
+        'To an SSD, with PCIe as the drive that the blocks are stored on',
         'To another GPU, with PCIe as the memory the blocks occupy',
         'To host DRAM, with PCIe as the memory the blocks occupy',
-        'To host DRAM, with PCIe as the link the blocks cross',
+        'To host DRAM, with PCIe as the link the blocks cross on the way',
       ],
       correct: [3],
       why: [
         'PCIe is an interconnect, not storage. The swap target in the paper is host memory.',
         'The swap target is host memory, and PCIe holds no data: it only carries it.',
         'The location is right but PCIe is not memory. It is the link between GPU and host.',
-        'Right. The blocks live in host DRAM and cross PCIe in both directions, so swap costs bandwidth where recomputation costs compute.',
+        'Right: the blocks live in host DRAM and cross PCIe in both directions, so swap costs bandwidth where recomputation costs compute.',
       ],
     },
   ],

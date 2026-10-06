@@ -21,7 +21,7 @@ export default {
       correct: [1],
       why: [
         'That is the FP16 figure: 2 FLOPs over 2 bytes per weight.',
-        'Right. 2 FLOPs per parameter over 1 byte per FP8 weight is 2 FLOP/B. FP16 weights give 1.',
+        'Right: 2 FLOPs per parameter over 1 byte per FP8 weight is 2 FLOP/B. FP16 weights give 1.',
         'That would need 4 bytes per weight, which is FP32.',
         'That would need half a byte per weight, which is 4-bit weights.',
       ],

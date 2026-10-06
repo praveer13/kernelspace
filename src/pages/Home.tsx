@@ -239,7 +239,7 @@ const MARQUEE: Array<[string, string]> = [
   ['NVMe', '150 µs'],
   ['H100 HBM3', '3.35 TB/s'],
   ['PCIe Gen5', '64 GB/s'],
-  ['KV cache @70B', '0.31 MB/token'],
+  ['KV cache @70B', '0.31 MiB/token'],
   ['decode', 'bandwidth-bound'],
   ['NVLink', '900 GB/s'],
   ['TLB hit', '~1 ns'],

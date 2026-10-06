@@ -19,7 +19,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## The data structures, concretely
 
-The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KB of KV per token, so one block holds 16 × 128 KB = 2 MB), a pool of N blocks is the entire serving capacity. Two structures run the show:
+The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KiB of KV per token, so one block holds 16 × 128 KiB = 2 MiB), a pool of N blocks is the entire serving capacity. Two structures run the show:
 
 - **The free-block queue** — your T1.L3 free list, minus the fit search (all blocks identical), kept in eviction order: \`alloc()\` pops the head, \`free()\` pushes the tail, O(1), no fragmentation between blocks ever.
 - **Per-sequence block tables** — a growable array of physical block ids: logical block \`i\` (tokens \`16i..16i+15\`) lives in physical block \`table[i]\`. The attention kernel translates per block as it reads — the MMU walk, one level deep.
@@ -122,7 +122,7 @@ class BlockManager:
       type: 'prose',
       md: `## What the indirection costs — and buys
 
-The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: a few percent on attention time — and attention is a minority of decode time (the MLP dominates, T5.L1). What it buys, from the paper and every deployment since: waste from 60–80% → **<4%**, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
+The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% → **<4%**, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
     },
     {
       type: 'exercise',
@@ -143,50 +143,74 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         {
           q: 'Prefix caching in vLLM is implemented as…',
           options: [
-            'A separate CPU-side memcached tier',
-            'Hashing token blocks and mapping the cached physical blocks into the new sequence\'s block table with refcount+1 — one copy, shared by all',
-            'Recomputing the prompt at FP8',
-            'Concatenating the prompts into one sequence',
+            'Copying the cached prompt\'s key and value tensors into freshly allocated blocks on a hit, giving each request a private copy',
+            'Hashing token blocks chained to the blocks before them, and mapping matching cached physical blocks into the new sequence\'s table',
+            'Keeping finished blocks in a host-side key-value store in host memory, and fetching them back over the bus when a matching request arrives',
+            'Merging requests that share a system prompt into one long shared sequence, and splitting the outputs afterwards',
           ],
           correct: [1],
           explanation:
-            'Refcounted block sharing makes prefix caching nearly free: no copy, no special path — the same COW machinery as beam forks. This is why "the block table" is the whole design.',
+            'Refcounted block sharing makes prefix caching nearly free: no copy, no special path, the same machinery as beam forks. This is why "the block table" is the whole design.',
+          why: [
+            'Copying would cost bandwidth and give every request its own memory, which is the duplication prefix caching removes. Matching blocks are mapped in place and shared.',
+            'Right: a hit maps the existing physical blocks into the new block table and bumps refcounts, so the prefix is stored once and shared by every request.',
+            'The default V1 prefix cache lives in GPU memory: freed blocks stay hashed in HBM until reallocated. A CPU tier is an optional add-on, not the mechanism.',
+            'Requests stay separate sequences with their own outputs and block tables. Sharing happens at the block level, not by concatenating different requests.',
+          ],
         },
         {
           q: 'The block size (default 16 tokens) trades off…',
           options: [
-            'Model quality vs speed',
-            'Internal waste in the tail block (bigger = more) against table length and kernel translation overhead (smaller = more)',
-            'GPU count vs PCIe bandwidth',
-            'Vocabulary size vs context length',
+            'Model quality, against kernel speed from fewer lookups as larger blocks coarsen attention',
+            'Internal waste in the half-empty tail block, against table length and lookup overhead in the kernel',
+            'External fragmentation between blocks, against allocation time spent finding a free slot in the pool',
+            'Transfer cost between devices, against how many blocks the pool can hold and thereby concurrency',
           ],
           correct: [1],
           explanation:
-            'The classic fixed-block pricing from T1.L4: waste lives in the tail, metadata lives in the table. 16 is the measured sweet spot — and the T1.L4 simulator predicted it.',
+            'The classic fixed-block pricing from T1.L4: waste lives in the tail, metadata lives in the table. 16 is the default because it is large enough to use the GPU efficiently and small enough to avoid much internal fragmentation.',
+          why: [
+            'Block size is purely a storage layout. Attention still covers every cached token exactly, so output is identical at any block size.',
+            'Right: on average half the last block is empty, so larger blocks waste more; smaller blocks mean longer tables and more per-block translation in the kernel.',
+            'Identical-size blocks cannot leave holes, so external fragmentation is zero, and alloc() pops the free-queue head in O(1). The cost sits in the tail and the table.',
+            'Tensor-parallel GPUs each hold their own slice of the KV heads; blocks are not shipped between GPUs during decode, so block size does not set a transfer cost.',
+          ],
         },
         {
-          q: 'When the free-block queue empties during decode, vLLM…',
+          q: 'In the current V1 engine, when the free-block queue empties during decode, vLLM…',
           options: [
-            'Crashes with OOM',
-            'Has already evicted every cached free block, so it preempts victim sequences — frees their blocks and recomputes them on resume (V1 has no CPU swap path) — then admits/resumes by priority',
-            'Pauses all generation permanently',
-            'Allocates from the CPU transparently at full speed',
+            'Swaps the lowest-priority sequence\'s blocks to host memory over the bus, and restores them when memory frees up',
+            'Preempts a running sequence once no cached free block is left to reallocate, freeing its blocks and recomputing it on resume',
+            'Spills new tokens\' key and value tensors into pinned host memory, and decode continues at lower bandwidth with no scheduler action',
+            'Raises an out-of-memory error for the whole engine, and aborts the in-flight requests with no scheduler recovery',
           ],
           correct: [1],
           explanation:
-            'Admission control + eviction, T2.L3 verbatim. The block table makes preemption a metadata operation; V1 always recomputes (V0 could also swap), like dropping file-backed pages rather than writing them out.',
+            'Admission control plus eviction, T2.L3 verbatim. The block table makes preemption a metadata operation; V1 always recomputes (V0 could also swap), like dropping file-backed pages rather than writing them out.',
+          why: [
+            'Swap to CPU was the V0 option. V1 dropped it: a preempted sequence loses its blocks and recomputes its prefill on resume, trading compute for PCIe traffic.',
+            'Right: cached free blocks are evicted before anything else, so an empty queue means preempting a victim, freeing its blocks and recomputing it later, often through prefix hits.',
+            'Attention kernels read KV from GPU memory. There is no transparent CPU fallback, and slower-bandwidth spill would break the decode loop; the scheduler must free blocks instead.',
+            'Blocks are pooled and returned to the free queue on completion or preemption. Running out triggers the scheduler, not a crash, so one sequence waits instead of the engine failing.',
+          ],
         },
         {
           q: 'The PagedAttention kernel\'s block-table indirection is affordable because…',
           options: [
-            'GPUs ignore indirection',
-            'The few-percent attention overhead is dwarfed by the 2–4× batch-size gain from reclaiming 60–80% wasted KV memory — and attention is a minority of decode time anyway',
-            'The block table fits in registers',
-            'Indirection is removed at compile time',
+            'Modern GPUs resolve the block-table lookup in hardware like a translation cache, and the indirection adds no measurable cost',
+            'The kernel runs measurably slower than a contiguous one, and the reclaimed memory grows batches enough to lift throughput',
+            'The kernel first gathers the blocks into one contiguous buffer, and attention then runs on contiguous memory at the price of one copy',
+            'The table is small enough to live in registers, and lookups stay out of memory while the kernel matches a contiguous-cache kernel',
           ],
           correct: [1],
           explanation:
-            'The MLP dominates decode FLOPs, and memory capacity was the binding constraint. A few percent of kernel time for double-digit capacity gains is the best trade in the field since the MMU.',
+            'Indirection has a real kernel cost, 20-26% higher attention latency than FasterTransformer in the paper. It is repaid because 60-80% of KV memory had been wasted: reclaiming it grows batches and gives 2-4x higher end-to-end throughput than FasterTransformer and Orca.',
+          why: [
+            'No hardware TLB exists for this lookup: the kernel reads the table and branches in software. That is the source of its measured overhead, which is not zero.',
+            'Right: the paper measured 20-26% higher attention-kernel latency, but attention is only part of a step and the memory saved allows larger batches, giving 2-4x higher throughput.',
+            'PagedAttention reads blocks in place. Gathering them into a buffer first would add a full pass over the cache, defeating the purpose of paging.',
+            'Tables are small but are read from memory per sequence, not held in registers, and the block gather still adds latency. The paper reports a measurable slowdown, not parity.',
+          ],
         },
       ],
     },

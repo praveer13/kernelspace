@@ -53,7 +53,7 @@ def dequantize(q: np.ndarray, scale: float):
 
 # per-GROUP (e.g. 128 weights): one scale each — the GPTQ/AWQ trick:
 # error stays local, quality jumps ~an order of magnitude vs per-tensor,
-# cost: +4 bits/weight of scale metadata at INT4.`,
+# cost: a 16-bit scale per 128 weights = +0.125 bits/weight.`,
         },
         {
           label: 'The math',
@@ -121,50 +121,74 @@ The simulator lets you type any float and see its bit pattern across FP32/FP16/B
         {
           q: 'Quantization speeds up LLM decode primarily because…',
           options: [
-            'Smaller numbers compute faster on ALUs',
-            'Decode is bandwidth-bound: fewer bytes per weight = more tokens/s through the same HBM, plus more model fits in memory',
-            'It removes the softmax',
-            'It reduces the number of layers',
+            'Smaller numbers go through the arithmetic units faster, so each matmul instruction finishes in fewer cycles',
+            'Decode is bandwidth-bound, so fewer bytes per weight means more tokens per second through the same memory',
+            'It prunes the least important layers, so each token passes through fewer layers and reads fewer weights',
+            'It removes the softmax and normalization steps that are the slowest operations in each transformer layer',
           ],
           correct: [1],
           explanation:
-            'The roofline argument (T4.L3): on the bandwidth slope, halving bytes per token doubles the rate. Compute-bound paths (prefill) only speed up with formats the tensor cores run natively faster (FP8).',
+            'The roofline argument (T4.L3): on the bandwidth slope, halving bytes per token doubles the rate, and more model fits in memory. Compute-bound paths (prefill) only speed up with formats the tensor cores run natively faster (FP8).',
+          why: [
+            'Decode ALUs are mostly idle, so faster arithmetic barely helps. The gain comes from reading fewer bytes per token.',
+            'Right: decode is limited by bytes moved per token, so halving bytes per weight roughly doubles the rate. It also lets more model fit in HBM.',
+            'Quantization changes bits per weight, not layer count. Every layer still runs; each weight is just smaller.',
+            'Softmax and normalization still run, usually at higher precision. They are small next to streaming the weights.',
+          ],
         },
         {
           q: 'BF16 exists because deep learning values…',
           options: [
-            'More mantissa bits than FP16',
-            'FP32\'s exponent RANGE over mantissa precision — activations/gradients span magnitudes, and overflow is worse than rounding',
-            'Exact integer arithmetic',
-            'Compatibility with FP64 hardware',
+            'More mantissa bits than FP16, since gradients need more significant digits than activations to train stably',
+            'The exponent range of FP32 over mantissa precision, since overflow hurts more than rounding',
+            'Exact integer arithmetic, since quantized training accumulates in integers and needs a format with no rounding',
+            'Direct compatibility with FP64 hardware, since BF16 tensors can be promoted to double precision without conversion',
           ],
           correct: [1],
           explanation:
             '8 exponent bits (like FP32) + 7 mantissa bits. Two significant digits that never overflow beat three that do — the format trade in one sentence.',
+          why: [
+            'BF16 has 7 mantissa bits against FP16\'s 10, so it is less precise. What it gains is exponent bits, which give FP32-like range.',
+            'Right: BF16 keeps FP32\'s 8 exponent bits and cuts the mantissa to 7. Values span magnitudes, and overflow is worse than coarser rounding.',
+            'BF16 is a floating-point format and rounds. Integer formats such as INT8 are a different tool, using a scale instead of an exponent.',
+            'BF16 converts to FP32 by padding the mantissa with zeros, since both have an 8-bit exponent. FP64 has an 11-bit exponent and is not involved.',
+          ],
         },
         {
           q: 'Per-group scales (group size 128) improve weight quantization because…',
           options: [
-            'They reduce metadata',
-            'Each group\'s scale hugs its local absmax, shrinking the per-weight error bound (scale/2) by roughly an order of magnitude for ~4 bits/weight of metadata',
-            'They allow negative weights',
-            'They eliminate the need for calibration',
+            'They cut metadata overhead with one scale per 128 weights and store less than the per-tensor scheme needs',
+            'Each group scale tracks a local absmax and shrinks the error bound at under 1 bit per weight of metadata',
+            'They make negative weights representable in the grid where a single symmetric scale per tensor cannot do so',
+            'They remove the need for calibration data with each group fitting its own range in a single pass',
           ],
           correct: [1],
           explanation:
-            'Error ≤ scale/2; one global scale is hostage to the tensor\'s biggest outlier. Local scales localize the damage — the single most effective quality knob in GPTQ/AWQ-class methods.',
+            'Error ≤ scale/2; one global scale is hostage to the tensor\'s biggest outlier. Local scales localize the damage. A 16-bit scale per 128 weights costs 16/128 = 0.125 bits per weight — the single most effective quality knob in GPTQ/AWQ-class methods.',
+          why: [
+            'Per-tensor stores one scale in total, so per-group stores more metadata, not less. The extra is small, 0.125 bits per weight for a 16-bit scale, and buys local accuracy.',
+            'Right: a local absmax means a smaller scale and a tighter scale/2 bound. A 16-bit scale per 128 weights adds only 0.125 bits per weight.',
+            'Symmetric quantization already represents negatives: q is signed (-127 to 127 at INT8, -7 to 7 at INT4). Group scales change the step size, not the sign range.',
+            'GPTQ and AWQ still use calibration samples to choose rounding and protect salient weights. Group scales reduce error but do not replace calibration.',
+          ],
         },
         {
           q: 'The standard quality ordering for what to quantize hardest is…',
           options: [
-            'Activations → weights → KV cache',
-            'Weights (4-bit OK with care) → KV cache (8-bit) → activations (prefer FP8 over INT4; accuracy cliff below)',
-            'Everything to INT4 equally',
-            'Nothing — quantization is always lossy',
+            'Activations at 4 bits and weights at 8 bits with the KV cache as the most fragile tensor',
+            'Weights at 4 bits and the KV cache at 8 bits with activations as the most fragile tensor',
+            'The three tensors equally down to INT4 with the accuracy loss per bit the same for each',
+            'No tensor at low precision with any quantization harming quality and production systems keeping FP16',
           ],
           correct: [1],
           explanation:
             'Weights tolerate aggressive quantization; activations are the fragile path (outliers, range) and want 8-bit with good range; KV sits between. Hence: INT4 weights + FP8 activations + FP8/INT8 KV as the common production mix.',
+          why: [
+            'Activations are the most fragile: outliers and wide dynamic range make low-bit formats lose accuracy fast. Weights tolerate 4 bits with calibration.',
+            'Right: weights hold at 4 bits with per-group scales and calibration, KV sits near 8 bits, and activations want FP8 for range.',
+            'Tensors differ: outlier-heavy activations break at 4 bits where per-group weights hold up. Uniform INT4 is where models degrade.',
+            'Production stacks routinely ship INT4 weights, FP8 activations and FP8 KV with small measured loss. Lossy is not the same as harmful.',
+          ],
         },
       ],
     },

@@ -72,7 +72,7 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
 
 Continuous batching (T5.L7) schedules *sequences*, but prefill is still atomic: one 100k-token prompt's prefill is a multi-second compute-bound job that, run whole, stalls every decode in the batch (ITL spike for all users — a convoy inside the continuous schedule). **Chunked prefill** slices the prefill into fixed-size chunks (e.g. 2k tokens) and interleaves them with decode iterations: each step mixes one prefill chunk + the running decodes.
 
-The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: ITL stays smooth for everyone, long prompts get processed without convoying, and total goodput rises. This is why every modern engine (vLLM, SGLang, TRT-LLM) runs mixed prefill+decode batches by default, and why disaggregation (T5.L9) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
+The roofline blessing: decode iterations are bandwidth-bound with idle compute, prefill chunks are compute-bound with spare bandwidth — **they backfill each other**. The batch's arithmetic intensity rises toward the roof from both sides: total goodput rises, and a long prompt no longer holds every decode for its whole prefill. It does not make ITL free. Each mixed step still carries up to one chunk of prefill, so a long prompt delays running decodes by about one chunk, not by the whole prefill, and the chunk budget trades ITL against TTFT: smaller chunks give better ITL, larger chunks give better TTFT. This is why every modern engine (vLLM, SGLang, TRT-LLM) runs mixed prefill+decode batches by default, and why disaggregation (T5.L9) exists as the *alternative* answer: instead of mixing on one GPU, send the two phases to different GPUs entirely.`,
     },
     {
       type: 'callout',
@@ -96,50 +96,74 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
         {
           q: 'Speculative decoding speeds up decode without quality loss because…',
           options: [
-            'The draft model is secretly as good as the target',
-            'Verification uses rejection sampling against the target\'s distributions, so accepted sequences are distributionally identical — speed comes from checking k tokens per weight-read',
-            'It quantizes the target model',
-            'It skips the softmax',
+            'The draft model is distilled from the target, and its guesses are accepted as-is while the target is rarely consulted',
+            'Rejection sampling keeps outputs identical to the target\'s distribution, and several tokens are scored per weight read',
+            'The target is quantized for the verify pass, and the small numeric error stays below the level that sampling noise reveals',
+            'Drafted tokens are accepted when they fall in the target\'s top few choices, and that stays close to the target while skipping steps',
           ],
           correct: [1],
           explanation:
             'Losslessness is the point: the target model verifies, and mismatches are resampled from an adjusted distribution. The speedup is a roofline conversion — idle ALUs traded for fewer serial steps.',
+          why: [
+            'The drafter is deliberately much weaker (for example 100M against 70B). Its guesses are only proposals; the target checks every one, so quality does not depend on the drafter.',
+            'Right: accepted sequences match the target\'s own distribution, and mismatches are resampled from an adjusted one. The gain is a roofline trade of idle ALUs for fewer serial steps.',
+            'Verification runs the deployed target model, at whatever precision it is served, with no extra quantization for the verify pass. Speculation reproduces that target\'s output distribution exactly because of its acceptance rule. Quantization is a separate, lossy decode remedy.',
+            'A top-k rule would be approximate and change the output distribution. Lossless speculation accepts token x with probability min(1, p_target(x) / p_draft(x)) and resamples on rejection.',
+          ],
         },
         {
           q: 'Verifying k drafted tokens costs about as much as ONE decode step because…',
           options: [
-            'The target model caches the drafts',
-            'One parallel pass over k positions re-reads the weights once — decode was bandwidth-bound with idle ALUs, so the extra math is nearly free',
-            'Drafts are verified on the CPU',
-            'k is always 1',
+            'The target reuses the drafts\' key and value tensors from the drafting phase, and verification compares tokens without any model math',
+            'One parallel pass over the drafted positions reads the weights once, and the extra arithmetic is nearly free on idle units',
+            'Verification is offloaded to the host processor, and it scores the drafted tokens while the accelerator decodes other requests',
+            'The drafted positions are checked in sequence and each reuses weights held in on-chip cache, keeping the cost near one decode step',
           ],
           correct: [1],
           explanation:
             'The weight read dominates the step and happens once regardless; scoring k positions is compute the bandwidth-bound regime wasn\'t using. AI × k on the same bytes — the whole trick.',
+          why: [
+            'Draft K/V comes from a different, smaller model and cannot stand in for the target\'s. The target must run its own forward pass over all k positions.',
+            'Right: the weight read dominates the step and happens once however many positions are scored. In the bandwidth-bound regime the extra FLOPs use units that were idle.',
+            'Verification is the target model\'s own forward pass and stays on the GPU. A CPU would score k tokens far slower than the GPU can simply decode them serially.',
+            'Weights are far larger than on-chip cache, so they are not held between positions. Verification is cheap because one pass scores all k positions, reading weights from HBM once.',
+          ],
         },
         {
           q: 'Chunked prefill improves goodput by…',
           options: [
-            'Reducing prompt token counts',
-            'Slicing long prefills and interleaving chunks with decode iterations — compute-bound chunks backfill the decodes\' idle ALUs, eliminating the ITL convoy',
-            'Compressing the KV cache',
-            'Running prefill on the CPU',
+            'Truncating or summarizing long prompts into fewer tokens before prefill, which shortens each iteration for the running sequences',
+            'Slicing long prefills and interleaving the chunks with decode steps, which fills idle compute and caps any stall at one chunk',
+            'Moving a long prompt\'s prefill to idle host cores while the accelerator keeps decoding, and copying its cache back before decode starts',
+            'Skipping attention over the oldest chunks of a long prompt, which cuts the prefill work that was blocking other sequences',
           ],
           correct: [1],
           explanation:
-            'Mixed batches raise arithmetic intensity from both sides: decode supplies spare FLOPs, prefill chunks supply spare bandwidth demand. ITL smooths out and total throughput rises — the default in modern engines.',
+            'Mixed batches raise arithmetic intensity from both sides: decode supplies spare FLOPs, prefill chunks supply spare bandwidth demand. ITL smooths out, with the stall per step capped by the chunk size, and total throughput rises — the default in modern engines.',
+          why: [
+            'Chunking does not change how many tokens are processed; every prompt token is still prefilled, only spread over several iterations. Total prefill work is unchanged.',
+            'Right: mixed batches raise arithmetic intensity from both sides. Decode leaves compute idle, chunks add compute-bound work, and the stall per iteration is bounded by the chunk size.',
+            'Prefill is compute-bound and far too heavy for CPU cores. Chunked prefill keeps everything on the GPU; it only changes how prefill is scheduled among decode steps.',
+            'Chunks still attend to all earlier prompt tokens through the KV cache, so the result is identical. Skipping chunks would change the output; chunking only reschedules the same work.',
+          ],
         },
         {
           q: 'Speculative decoding can HURT throughput when…',
           options: [
-            'The draft model is too small',
-            'Batch sizes are already large enough that decode nears the compute roof — verification FLOPs stop being free and become pure overhead',
-            'Prompts are short',
-            'The model uses GQA',
+            'The text is highly predictable boilerplate or code, and verification then rejects most drafted tokens and wastes each pass',
+            'Batch sizes are already large enough that decode nears the compute roof, and verification arithmetic stops being free',
+            'Decoding is greedy at temperature zero, and rejection sampling needs randomness to decide which drafted tokens to accept',
+            'The prompt is long, and verification must re-read the whole prompt\'s cached tensors once for each drafted position',
           ],
           correct: [1],
           explanation:
             'The freebie exists only while decode is bandwidth-bound. At max batch the ALUs are busy; extra verification math competes instead of backfilling. Engines gate speculation on batch occupancy for exactly this reason.',
+          why: [
+            'Predictable text raises the acceptance rate, so more drafted tokens survive each pass. Boilerplate and code are where speculation wins most.',
+            'Right: the freebie exists only while decode is bandwidth-bound. At large batch the ALUs are busy, so verifying tokens that get rejected competes for compute. Engines gate speculation on occupancy.',
+            'Greedy decoding works with speculation: a drafted token is accepted when it equals the target\'s argmax. Randomness is not required, and output equals non-speculative greedy.',
+            'Verification reads the prompt\'s K/V once for all k positions in one pass. A long prompt raises every step\'s cost equally and does not make speculation lose.',
+          ],
         },
       ],
     },

@@ -21,9 +21,9 @@ It is also, not coincidentally, the exact design vLLM copied for KV-cache manage
       type: 'prose',
       md: `## Translation: pages, frames, and the walk
 
-Virtual and physical memory are both cut into fixed-size chunks: **pages** (virtual, 4 KB typically) and **frames** (physical, same size). The page table maps *page number → frame number*; the offset within the page passes through unchanged. A 48-bit virtual address on x86-64 is really \`[VPN 36 bits | offset 12 bits]\`, and translation is: look up the VPN, get a frame, keep the offset.
+Virtual and physical memory are both cut into fixed-size chunks: **pages** (virtual, 4 KiB typically) and **frames** (physical, same size). The page table maps *page number → frame number*; the offset within the page passes through unchanged. A 48-bit virtual address on x86-64 is really \`[VPN 36 bits | offset 12 bits]\`, and translation is: look up the VPN, get a frame, keep the offset.
 
-One table can't hold 2³⁶ entries per process — that's 512 GB of metadata. So x86-64 uses a **4-level radix tree**: each level is a 4 KB page of 512 8-byte entries, and the walk descends \`PML4 → PDPT → PD → PT → data\`. Entries are allocated lazily, so a process pays page-table memory only for regions it actually maps. The register \`CR3\` points at the root; a context switch to another process means loading a different \`CR3\`.`,
+One table can't hold 2³⁶ entries per process — that's 512 GiB of metadata. So x86-64 uses a **4-level radix tree**: each level is a 4 KiB page of 512 8-byte entries, and the walk descends \`PML4 → PDPT → PD → PT → data\`. Entries are allocated lazily, so a process pays page-table memory only for regions it actually maps. The register \`CR3\` points at the root; a context switch to another process means loading a different \`CR3\`.`,
     },
     {
       type: 'diagram',
@@ -59,7 +59,7 @@ One table can't hold 2³⁶ entries per process — that's 512 GB of metadata. S
 
 Notice the horror: a 4-level walk is **four extra memory reads per memory access**. Unmitigated, virtual memory would quarter your effective bandwidth. The mitigation is the **TLB** (translation lookaside buffer): a small, fast cache of recent VPN→frame translations — tens to a few thousand entries, ~1 cycle lookup. TLB hit: translation is free. TLB miss: the walk (hardware "page walker" does it, ~10–100 ns) and the entry is cached.
 
-TLB reach matters: \`entries × page_size\`. With 1536 L2-TLB entries and 4 KB pages, that's 6 MB — smaller than your matrix from T0.L3, which is why that column walk thrashed *both* the data caches and the TLB. This is also the entire case for **huge pages** (2 MB/1 GB): same TLB, 512× the reach per entry. Databases and JVMs use \`-XX:+UseLargePages\`; GPU runtimes allocate HBM in huge pages for the same reason.`,
+TLB reach matters: \`entries × page_size\`. With 1536 L2-TLB entries and 4 KiB pages, that's 6 MiB — smaller than your matrix from T0.L3, which is why that column walk thrashed *both* the data caches and the TLB. This is also the entire case for **huge pages** (2 MiB/1 GiB): same TLB, 512× the reach per entry. Databases and JVMs use \`-XX:+UseLargePages\`; GPU runtimes allocate HBM in huge pages for the same reason.`,
     },
     {
       type: 'statline',
@@ -141,46 +141,46 @@ You will perform translations by hand: pick a virtual address, walk the four lev
         {
           q: 'A 4-level page walk on x86-64 exists because…',
           options: [
-            'Each level mirrors one cache tier (L1, L2, L3, DRAM), so a four-level walk matches the hardware memory hierarchy',
-            'A flat table for a 48-bit space would need ~512 GB of entries per process; the radix tree allocates only mapped regions',
-            'Each level is a 512-entry table sized to one 4 KB page, so the hardware walker fetches a whole level in one cache line',
-            'Smaller tables make context switches cheaper, since only the top level is saved and the lower levels stay in the TLB',
+            'Each level mirrors one cache tier from L1 through DRAM, with a four-level walk matching the hardware memory hierarchy',
+            'A flat table for a 48-bit space would need about 512 GiB per process, with the MMU walking a sparse radix tree',
+            'Each level is a 512-entry table sized to one 4096-byte page, with the MMU walker fetching a whole level in one cache line',
+            'Smaller tables make context switches cheaper, with only the top level saved and the lower 3 levels staying in the TLB',
           ],
           correct: [1],
           explanation:
-            '2^36 pages × 8 B entries is untenable flat. The tree allocates lower levels on demand, so sparse address spaces cost a few KB of page tables. CR3 points at the root; the walk consumes the VPN 9 bits at a time.',
+            '2^36 pages × 8 B entries is untenable flat. The tree allocates lower levels on demand, so sparse address spaces cost a few KiB of page tables. CR3 points at the root; the walk consumes the VPN 9 bits at a time.',
           why: [
-            'Misconception: levels match the cache tiers. Each level just consumes 9 address bits; the number of levels falls out of the 48-bit space and 4 KB pages, not the cache hierarchy.',
-            'Right: 2^36 pages at 8 B each is ~512 GB if flat. A radix tree allocates lower levels only for mapped regions, so a sparse address space costs a few KB of page tables.',
-            'Misconception: one cache line per level. A 4 KB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from 48 address bits at 9 each.',
+            'Misconception: levels match the cache tiers. Each level just consumes 9 address bits; the number of levels falls out of the 48-bit space and 4 KiB pages, not the cache hierarchy.',
+            'Right: 2^36 pages at 8 B each is ~512 GiB if flat. A radix tree allocates lower levels only for mapped regions, so a sparse address space costs a few KiB of page tables.',
+            'Misconception: one cache line per level. A 4 KiB table spans 64 lines; the walker reads one 8 B entry per level. Four levels follow from the 36 page-number bits (48 address bits minus the 12-bit page offset) at 9 bits per 512-entry level.',
             'Misconception: smaller tables make switches cheaper. A switch loads one root pointer (CR3) regardless of depth, and the TLB is flushed or PCID-tagged, not preserved level by level.',
           ],
         },
         {
           q: 'The TLB\'s job is to…',
           options: [
-            'Cache recently used data lines from DRAM near the core, so repeated reads of the same bytes avoid a slow memory trip',
-            'Cache recent virtual-page to physical-frame translations, so most accesses skip the four-level page walk',
-            'Hold the page-table entries of every resident page, so the kernel never walks the tables for memory a process already has',
-            'Cache the outcome of page-fault handling, so a page that was swapped in once is never faulted on again',
+            'Cache recently used data lines from DRAM near the core, with repeated reads of the same bytes avoiding a slow memory trip',
+            'Cache recent virtual-page to physical-frame translations in the MMU, with most of the accesses skipping the page walk',
+            'Hold the page-table entries of each resident page in the CPU, with the kernel skipping table walks for memory a process already has',
+            'Cache the outcome of page-fault handling in the TLB, with a page swapped in once not faulting again',
           ],
           correct: [1],
           explanation:
-            'Without it every load would cost 4 extra memory reads. With ~1k entries at 4 KB pages, TLB reach is a few MB — which is why huge pages (2 MB/1 GB) multiply reach 512× and why wide-stride access patterns thrash it.',
+            'Without it every load would cost 4 extra memory reads. With ~1k entries at 4 KiB pages, TLB reach is a few MiB — which is why huge pages (2 MiB/1 GiB) multiply reach 512× and why wide-stride access patterns thrash it.',
           why: [
             'Misconception: the TLB caches data. Data lines live in L1/L2/L3; the TLB stores only address translations, which is why a TLB hit can still be followed by a cache miss.',
             'Right: translation lookaside means the hardware keeps recent VPN-to-frame mappings. A hit skips the walk (about four dependent loads), so most accesses translate in about a cycle.',
-            'Misconception: the TLB holds all entries. It has roughly a thousand entries, covering a few MB at 4 KB pages; the full mapping lives in page tables, and walks happen on a miss.',
+            'Misconception: the TLB holds all entries. It has roughly a thousand entries, covering a few MiB at 4 KiB pages; the full mapping lives in page tables, and walks happen on a miss.',
             'Misconception: the TLB records fault outcomes. It caches valid translations; a page that is evicted later faults again, and the TLB entry is invalidated when the mapping changes.',
           ],
         },
         {
           q: 'Which access ends in SIGSEGV instead of being fixed up transparently by the page-fault handler?',
           options: [
-            'First touch of a malloc\'d region that the allocator reserved but the kernel has not yet backed with a physical frame',
-            'A dereference of address 0x0, which lies in a page the kernel deliberately leaves unmapped so that NULL bugs trap',
-            'A write to a page still shared copy-on-write with the other process after fork(), which needs a private copy first',
-            'First read of a page of a file that was mmap\'d but has not yet been read into the page cache from disk',
+            'First touch of a malloc\'d region, which the allocator reserved but the kernel has not yet backed with a physical RAM frame',
+            'A read or write at the null address, in a page the kernel deliberately leaves unmapped to catch NULL bugs',
+            'A write to a page still shared copy-on-write after a fork, needing a private copy of the RAM frame first',
+            'First read of a page of an mmap\'d file, which has not yet been read into the page cache from the SSD',
           ],
           correct: [1],
           explanation:
@@ -195,16 +195,16 @@ You will perform translations by hand: pick a virtual address, walk the four lev
         {
           q: 'Copy-on-write after fork() means…',
           options: [
-            'The child receives a full private copy of the parent\'s memory at fork time, which is why forking a large process is slow',
-            'Parent and child share frames read-only, and a frame is copied only when one of them writes to it, at fault time',
-            'Parent and child share frames read-write, and the kernel serialises their writes with a per-page lock so both see updates',
-            'Every write is first logged to the swap device, so a failed child can be rolled back without affecting the parent',
+            'The child receives a full private copy of the parent\'s memory at fork time, making forking a big process slow',
+            'Parent and child share frames write-protected, with a frame copied at fault time when one of them writes to it',
+            'Parent and child share frames writable, with the kernel serialising their writes through a per-page lock so both see updates',
+            'Each write is first logged to the swap device, with a failed child rolled back and leaving the parent untouched',
           ],
           correct: [1],
           explanation:
-            'COW makes fork() nearly free and keeps memory shared until it diverges. It is also exactly how vLLM forks a beam-search branch or shares a prompt prefix: same blocks, copy only the block being written.',
+            'COW makes fork() far cheaper than copying memory: only the page tables are copied, and the data stays shared until it diverges. It is also exactly how vLLM forks a beam-search branch or shares a prompt prefix: same blocks, copy only the block being written.',
           why: [
-            'Misconception: fork copies everything. Early Unix did; modern fork copies page tables and marks pages read-only, so cost scales with mapped regions, not with data size, and is far cheaper.',
+            'Misconception: fork copies everything. Early Unix did; modern fork copies page tables and marks pages read-only, so its cost scales with the page tables, about 1/512 of the mapped memory with 4 KiB pages, rather than with copying the data, and is far cheaper.',
             'Right: pages stay shared and read-only until a write faults. The kernel then copies just that page for the writer, so untouched memory is never duplicated.',
             'Misconception: shared read-write. That describes MAP_SHARED memory. After fork a write is private to the writer; the other process never sees it, which is the point of COW.',
             'Misconception: writes go to swap. Swap holds evicted pages under memory pressure; COW copies in RAM and has no rollback log, since the child simply gets its own copy.',

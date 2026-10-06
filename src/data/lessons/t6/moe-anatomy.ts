@@ -9,7 +9,7 @@ const lesson: Lesson = {
   minutes: 30,
   hook: 'DeepSeek-V3 has 256 experts and uses 8 per token. That one design decision changes every system you have learned so far — the memory math, the batching, the network, the scheduler. This is why T6 exists.',
   exercise: 'read+quiz',
-  verifiedAt: '2026-08',
+  verifiedAt: '2026-10',
   blocks: [
     {
       type: 'prose',
@@ -41,9 +41,9 @@ This is why MoE serving is a *scheduling and networking* discipline:
       type: 'prose',
       md: `## MLA: the other half of the DeepSeek trick
 
-T5.L4 taught you KV bytes/token = 2 × layers × kv_dim × bytes, and Llama-3-70B's 320 KB/token. DeepSeek's **Multi-head Latent Attention (MLA)** rewrites that line: instead of caching per-head K and V, the model stores one shared low-rank **latent vector** per token (~576 elements) and reconstructs per-head K/V on the fly with small up-projection matrices. KV cache per token: **~70 KB (BF16)** — 4.6× smaller than Llama-3-70B, ~7× smaller than full MHA.
+T5.L4 taught you KV bytes/token = 2 × layers × kv_dim × bytes, and Llama-3-70B's 327,680 B/token (320 KiB). DeepSeek's **Multi-head Latent Attention (MLA)** rewrites that line: instead of caching per-head K and V, the model stores one shared low-rank **latent vector** per token *per layer* (~576 elements: a 512-dim compressed latent plus a 64-dim RoPE key) and reconstructs per-head K/V on the fly with small up-projection matrices. KV cache per token: 576 × 2 B (BF16) = 1,152 B per layer × 61 layers = **70,272 B (≈68.6 KiB)**, against 327,680 B (320 KiB) for Llama-3-70B — about 4.7× smaller. The "×smaller than MHA" figure needs a baseline: the same 70B with full MHA (64 KV heads, 2 × 80 × 8192 × 2 B = 2,621,440 B per token) would be ≈37× bigger than MLA's 70,272 B.
 
-Run T5.L4's arithmetic again with 70 KB: the "cache is the payload" conclusion intensifies *less*, long context gets 4.6× cheaper, and the EP144 decode fleet can hold the giant batches that expert load-balancing requires. MLA is not an optimization bolted onto MoE — it is what *enables* the batch sizes MoE wants. When you design a serving stack, per-token KV bytes is the first number you ask for, and "what attention variant?" is why you had to ask.`,
+Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload" conclusion intensifies *less*, long context gets ~4.7× cheaper than Llama-3-70B, and the EP144 decode fleet can hold the giant batches that expert load-balancing requires. MLA is not an optimization bolted onto MoE — it is what *enables* the batch sizes MoE wants. When you design a serving stack, per-token KV bytes is the first number you ask for, and "what attention variant?" is why you had to ask.`,
     },
     {
       type: 'isomorphism',
@@ -75,50 +75,74 @@ Run T5.L4's arithmetic again with 70 KB: the "cache is the payload" conclusion i
         {
           q: 'The core inference-economic win of MoE is…',
           options: [
-            'Fewer total parameters to store',
-            'Per-token weight bandwidth drops ~k/N — decode reads only the routed experts\' weights, not the full model',
-            'The router makes attention cheaper',
-            'Experts quantize better than dense FFNs',
+            'Shrinking the total parameter count a lot, letting the whole model fit on fewer GPUs and cost less to store and serve',
+            'Running a small top-k subset of experts for each token, leaving active parameters far below the total capacity',
+            'Replacing most attention layers with a cheap router lookup, cutting the quadratic attention cost on long prompts',
+            'Quantizing expert FFNs harder than dense ones, reaching the same quality with far fewer bits per weight',
           ],
           correct: [1],
           explanation:
             'Decode is bandwidth-bound (T4): tokens/s ≈ BW ÷ bytes-per-token. MoE cuts the FFN bytes by ~k/N while keeping dense-level quality. The total parameter count is LARGER — capacity gets worse while per-token cost gets better. That trade is the whole point.',
+          why: [
+            'Backwards: an MoE has more total parameters than a dense model of similar quality (671B here). Capacity grows; the win is that only ~37B are active per token.',
+            'Right: only k of N experts run per token, so active parameters and FFN weight reads per token fall. Decode is bandwidth-bound, so tokens/s rises while capacity stays large.',
+            'The router is a tiny scoring layer in front of the expert FFNs. Attention is unchanged, so its cost still grows with context length and KV size.',
+            'Quantization is orthogonal to routing. Experts and dense FFNs are quantized with the same methods; MoE saves by running fewer weights per token, not by using fewer bits.',
+          ],
         },
         {
           q: 'The all-to-all problem refers to…',
           options: [
-            'Copying weights between GPUs at load time',
-            'Moving tokens to expert devices and back, twice per layer — a network cost that scales with layers × batch',
-            'Broadcasting the router\'s scores',
-            'Gradient exchange during training',
+            'Copying expert weights between GPUs after each router rebalance, stalling decode every time one happens',
+            'Sending tokens to their experts\' GPUs and the results back twice per layer, adding network cost as depth grows',
+            'Broadcasting the full router score matrix to each device, letting each GPU pick top-k experts for any token',
+            'Exchanging gradients across data-parallel replicas after each step, demanding a faster fabric than dense models',
           ],
           correct: [1],
           explanation:
             'Dispatch (tokens → experts) and combine (results → home), every MoE layer. At EP144 this spans 144 devices; latency floor = 2 × round-trip × layers. It is why MoE serving is a networking discipline, not a kernel one.',
+          why: [
+            'Weights stay put between rare rebalances. The per-forward cost is moving token activations to the experts\' GPUs, which happens every layer; weight migration is occasional and off the hot path.',
+            'Right: dispatch sends tokens to expert devices and combine returns results, per MoE layer. In DeepSeek-V3 that is 2 × 58 = 116 all-to-alls per forward pass, a network cost.',
+            'Router scores are tiny, and each token\'s top-k is computed on its home GPU. The heavy traffic is the token hidden states that follow the decision, not the scores.',
+            'Gradient exchange is a training collective. The all-to-all in question runs in every inference forward pass too, moving activations, which is why serving MoE is a networking problem.',
+          ],
         },
         {
           q: 'MLA\'s contribution to serving economics is…',
           options: [
-            'Faster attention kernels',
-            '~4.6× smaller KV per token (70 KB vs 320 KB for Llama-3-70B), enabling the giant batches expert load-balancing needs and cheaper long context',
-            'Better router accuracy',
-            'FP8 compatibility',
+            'Fusing attention kernels to read the KV cache faster, finishing each decode step sooner at equal cache size',
+            'Caching one shared low-rank latent per layer, shrinking the KV cache and letting far bigger batches fit',
+            'Skipping low-scoring attention heads with a learned gate, cutting both the attention math and the KV bytes',
+            'Storing the KV cache at lower precision, halving bytes per token while the cache layout stays unchanged',
           ],
           correct: [1],
           explanation:
-            'MLA caches one low-rank latent vector per token instead of per-head K/V. It shrinks the cache 4.6×, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
+            'MLA caches one low-rank latent vector per token per layer (512 compressed dims plus a 64-dim RoPE key) instead of per-head K/V. It shrinks the cache ~4.7× against Llama-3-70B, which is what lets the decode fleet hold the giant uniform batches MoE wants. Cache bytes/token is the first number to ask about any new model.',
+          why: [
+            'MLA changes what is cached, not how fast it is read. Faster kernels do not shrink KV bytes per token, so they do not raise how many sequences fit in HBM.',
+            'Right: the ~576-element latent is cached per layer (576 × 2 B = 1,152 B), so 61 layers give 70,272 B per token, about 4.7× less than Llama-3-70B\'s 327,680 B, and much bigger batches fit.',
+            'MLA skips no heads. It keeps all of them and rebuilds each head\'s K and V from the shared latent with up-projections; the saving is stored bytes, not skipped compute.',
+            'FP8 KV is a precision change that halves bytes. MLA changes the cached object itself to a low-rank latent, and the two choices are independent of each other.',
+          ],
         },
         {
           q: 'A "hot expert" hurts because…',
           options: [
-            'It quantizes poorly',
-            'It gets replicated',
-            'Its GPU becomes the batch\'s straggler at the combine barrier — every other device waits, exactly like a hot shard in a microservice fleet',
-            'The router degrades',
+            'Its GPU runs out of memory for the cache, leaving requests preempted and each expert\'s batch smaller',
+            'Routing collapses toward it as other experts go cold, leaving the router to send tokens there regardless of content',
+            'Its GPU becomes the straggler at the combine barrier, leaving the other devices waiting on the slowest expert',
+            'Replicating it onto a second GPU duplicates its weights, eating the memory the batch needed for cache',
           ],
           correct: [2],
           explanation:
             'The combine is a barrier: slowest expert sets the layer time. Load balance across experts is therefore the central scheduling objective of MoE serving — hence EPLB (T6.L2) and giant batches (uniformity through statistics).',
+          why: [
+            'Load skew changes how many tokens an expert processes, not how much memory it holds. Expert weights are fixed in size; the harm is waiting at the barrier.',
+            'Routing collapse is a training failure. At inference a hot expert is a popularity skew over real traffic; the router still discriminates by content, and the layer is simply slowed.',
+            'Right: the combine is a barrier, so the slowest expert sets layer time. The overloaded GPU is the straggler and the other devices idle, like one hot shard in a fan-out.',
+            'Replication is the remedy (EPLB), not the harm. It costs some HBM, but it is done because an unbalanced expert already stalls the whole layer at the barrier.',
+          ],
         },
       ],
     },

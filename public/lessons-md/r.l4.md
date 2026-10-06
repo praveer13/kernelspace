@@ -49,23 +49,23 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 
 **Q1. Which combination may exist at the same time for one value?**
 
-- (o1) References are never allowed together
-- (o2) One &mut T and any number of &T
-- (o3) Any number of &mut T
-- (o4) Many &T, or exactly one &mut T
+- (o1) At most one reference of either kind, even when both are plain reads
+- (o2) One &mut T alongside any number of shared &T references
+- (o3) Any number of &mut T when no two of them write the same element
+- (o4) Many &T references or one &mut T but not both at once
 
 **Q2. Why prefer &[T] to &Vec<T> in a read-only function parameter?**
 
-- (o1) A slice accepts more contiguous owners and exposes only the needed capability
-- (o2) Slices are always heap allocated
-- (o3) Slices copy all elements
-- (o4) Vec cannot be borrowed
+- (o1) Passing &[T] lets the caller supply arrays, Vecs and subranges
+- (o2) Passing &[T] copies the elements into a temporary buffer first
+- (o3) Passing &Vec<T> blocks indexing and iteration unless a slice type is used
+- (o4) Passing &Vec<T> moves the Vec into the callee and the caller loses it
 
 **Q3. Why can Vec::push conflict with a live element reference?**
 
-- (o1) push is asynchronous
-- (o2) References cannot point to integers
-- (o3) push consumes the Vec
-- (o4) push may reallocate and invalidate the referenced address
+- (o1) push consumes the Vec and leaves earlier references pointing at moved memory
+- (o2) Vec counts live element borrows at runtime and push panics when that count is nonzero
+- (o3) push shifts the existing elements by one slot and changes what a held reference sees
+- (o4) push can reallocate the buffer and leave a held reference pointing at freed memory
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

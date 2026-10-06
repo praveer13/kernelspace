@@ -50,23 +50,23 @@ The [R2 Forge drill](/forge/rust-zero-r2) asks for six pure functions: a branch 
 
 **Q1. What property makes match especially useful with enums?**
 
-- (o1) It allocates no stack
-- (o2) It accepts truthy values
-- (o3) It must cover every possible variant
-- (o4) It runs arms in parallel
+- (o1) It requires a trailing wildcard arm in every match, however many variants the enum has
+- (o2) It raises a runtime error when no arm matches the value
+- (o3) It must cover each variant, so a new variant breaks every incomplete match
+- (o4) Arms fall through to the next arm, so each one must end with an explicit break
 
 **Q2. What values does 0..4 produce?**
 
-- (o1) 0, 1, 2, 3
-- (o2) 0, 1, 2, 3, 4
-- (o3) Only 0 and 4
-- (o4) 1, 2, 3, 4
+- (o1) 0, 1, 2, 3 and the upper bound 4 is excluded
+- (o2) 0, 1, 2, 3, 4 and both ends are included
+- (o3) 0, 1, 2, 3 in a for loop and 0 through 4 in a slice index
+- (o4) 1, 2, 3, 4 and counting starts at one
 
 **Q3. How can an infinite loop compute a value?**
 
-- (o1) All loops evaluate to true
-- (o2) break can carry the loop result
-- (o3) return is mandatory
-- (o4) Only by mutating a global
+- (o1) Its last body expression becomes the loop value like a block tail
+- (o2) A break can carry the result of the loop as in break n
+- (o3) A return statement is the way a loop hands back a value
+- (o4) It needs a declared type on the loop before break carries a value
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

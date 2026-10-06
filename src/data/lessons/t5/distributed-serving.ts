@@ -19,7 +19,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## The three axes of parallelism
 
-- **Tensor parallelism (TP):** split each layer's *matrices* across GPUs — every GPU computes a shard of every matmul, then **all-reduce/all-gather** to combine. Latency-friendly (all GPUs work every step) but brutally communication-hungry: two collective ops per layer, per step. TP belongs *inside* a node, on NVLink (900 GB/s GPU-to-GPU on NVL72-class fabric) — over Ethernet it starves.
+- **Tensor parallelism (TP):** split each layer's *matrices* across GPUs — every GPU computes a shard of every matmul, then **all-reduce/all-gather** to combine. Latency-friendly (all GPUs work every step) but brutally communication-hungry: two collective ops per layer, per step. TP belongs *inside* a node, on NVLink (900 GB/s per GPU on H100-class NVLink, 1.8 TB/s per GPU on NVL72) — over Ethernet it starves.
 - **Pipeline parallelism (PP):** split *layers* across GPUs — GPU 0 runs layers 1–20, GPU 1 runs 21–40, activations flow forward. Communication is tiny (one activation tensor per boundary), but the pipeline *bubbles*: to keep all stages busy you need many micro-batches in flight, which complicates latency for single requests. PP tolerates slower interconnects; TP does not.
 - **Data parallelism (DP):** whole model replicas on different GPUs, requests load-balanced across them. Zero communication within requests, linear capacity scaling — the obvious choice *until* one replica can't hold the model+KV. DP scales requests; TP/PP scale the model.
 
@@ -29,7 +29,7 @@ Production serving mixes all three: TP within the node, PP across a few nodes fo
       type: 'statline',
       stats: [
         { value: '3.35 TB/s', label: 'HBM (intra-GPU)', hint: 'The reference speed everything else is measured against.' },
-        { value: '900 GB/s', label: 'NVLink (GPU↔GPU)', hint: 'NVL72-class: makes tensor parallelism inside a node practical.' },
+        { value: '900 GB/s', label: 'NVLink 4 (GPU↔GPU)', hint: 'H100/H200 NVLink inside an 8-GPU node: makes tensor parallelism practical. NVL72\'s NVLink 5 doubles it to 1.8 TB/s per GPU across 72 GPUs.' },
         { value: '~64 GB/s', label: 'PCIe gen5 x16', hint: 'The CPU-attach tier — the old vLLM V0 swap path crossed it; V1 recomputes instead.' },
         { value: '25–100 GB/s', label: 'RDMA (node↔node)', hint: 'RoCE/InfiniBand: the disaggregation highway for KV transfer.' },
       ],
@@ -90,50 +90,74 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
         {
           q: 'Tensor parallelism must stay on NVLink-class interconnects because…',
           options: [
-            'NVLink is newer than Ethernet',
-            'TP shards every matmul, requiring all-reduce collectives twice per layer per step — only intra-node bandwidth (~900 GB/s) keeps that off the critical path',
-            'TP requires shared power supplies',
-            'Ethernet cannot address GPUs',
+            'It keeps a full copy of the key-value cache on each device, and the copies need hardware coherence that fast links provide',
+            'It shards each matmul and needs two collective reductions per layer per step, and the intra-node bandwidth hides that traffic',
+            'It hands whole activations to the next device after each layer, and Ethernet latency is too high for such hand-offs between nodes',
+            'It must synchronize gradients at each step, and the strict synchronous reduction that needs is available only on fast links',
           ],
           correct: [1],
           explanation:
             'Communication per step is proportional to layers; over RDMA/Ethernet the collectives starve the compute. PP\'s boundary-only activations tolerate slow links; TP\'s per-layer all-reduces do not.',
+          why: [
+            'Each GPU holds a shard of the attention heads and their KV, not a full copy. The constraint is collective bandwidth and latency, not cache coherence.',
+            'Right: collective traffic scales with layer count on every step. NVLink-class bandwidth hides it, while Ethernet or RDMA-class links leave the GPUs waiting on all-reduce.',
+            'That describes pipeline parallelism: one activation tensor handed across a stage boundary. TP instead combines partial results with collectives inside every layer, which is why it is link-hungry.',
+            'Inference has no gradients. TP exchanges partial activations through all-reduce in each layer; the limit is bandwidth and latency, not training-style synchronization semantics.',
+          ],
         },
         {
           q: 'Pipeline parallelism\'s main weakness is…',
           options: [
-            'It requires NVLink',
-            'Pipeline bubbles: keeping all stages busy needs many micro-batches in flight, hurting single-request latency',
-            'It cannot cross nodes',
-            'It doubles memory use',
+            'Each stage boundary ships the layer\'s full cache to the next device, and inter-stage traffic grows with context length',
+            'Pipeline bubbles, where keeping the stages busy needs many micro-batches in flight and hurts the latency of a request',
+            'Each layer needs two collective reductions per step, and the scheme is as link-hungry as tensor parallelism',
+            'Each stage must hold a full copy of the model weights for its micro-batch, and memory use multiplies by the stage count',
           ],
           correct: [1],
           explanation:
             'The stage boundary is cheap (one activation tensor), but latency of one request through N stages with idle stages is the bubble. PP trades latency-friendliness for communication-lightness.',
+          why: [
+            'Only the activation tensor crosses a stage boundary, and each stage keeps the KV for its own layers. Inter-stage traffic is small, which is why PP tolerates slower links.',
+            'Right: stage boundaries are cheap, but a lone request traverses N stages while others idle. Filling the pipeline needs micro-batches, trading single-request latency for light communication.',
+            'That is tensor parallelism. PP has no per-layer collectives; it passes one activation per boundary and is the option that tolerates slower interconnects and node boundaries.',
+            'Each stage holds only its own slice of the layers, so total weight memory stays about one model\'s worth. Copying everything to every stage would be data parallelism.',
+          ],
         },
         {
           q: 'Prefill/decode disaggregation pays off primarily because…',
           options: [
-            'It halves the model size',
-            'The two phases have opposite roofline regimes and batching preferences — separate fleets get independent hardware, scaling, and ITL isolation from prompt spikes, at the cost of a KV transfer',
-            'It removes the scheduler',
-            'Networks are faster than HBM',
+            'Splitting the work across two fleets halves the weights each device stores, and that frees memory for a larger cache',
+            'Opposite roofline regimes let separate fleets tune and scale independently and isolate latency, at the price of a transfer',
+            'Prefill workers send only the final token and its logits to decode workers, and no cache transfer is needed',
+            'Cross-node links are faster than device memory, and moving the cache to a dedicated decode device beats reading it locally',
           ],
           correct: [1],
           explanation:
             'Compute-bound vs bandwidth-bound workloads tune differently; colocating them forces compromise. The KV transfer (budgeted into TTFT, pipelined under later chunks) is the price of isolation.',
+          why: [
+            'Disaggregation does not shard the model; each worker still holds a full copy (or its own TP group). Splitting weights across GPUs is tensor or pipeline parallelism.',
+            'Right: compute-bound prefill and bandwidth-bound decode tune differently, and isolation stops long prompts from spiking ITL. The KV transfer is the cost, budgeted into TTFT and pipelined.',
+            'Decode needs the whole prompt\'s K/V for every attention step. The KV transfer is the central cost, so the engineering game is hiding it, not eliminating it.',
+            'HBM runs at multiple TB/s while RDMA links run at tens of GB/s. Remote K/V is always slower than local, which is why the transfer adds to TTFT and must be hidden.',
+          ],
         },
         {
           q: 'Mooncake\'s architecture is best described as…',
           options: [
-            'A faster CUDA kernel',
-            'A distributed KV-cache store across cluster HBM+DRAM with cache-aware request routing — a database cluster whose payload is KV blocks',
-            'A model parallelism library',
-            'A quantization framework',
+            'A parallelism library that shards each layer\'s attention heads across nodes, so a request\'s cache never has to move',
+            'A distributed cache store for attention keys and values across the memory tiers, with cache-aware request routing between workers',
+            'A quantization framework that compresses stored blocks to a low bit width, so more prefixes fit in each device\'s memory',
+            'A load balancer that spreads requests by utilization, keeping each worker\'s cache strictly local and relying on per-engine prefix caching',
           ],
           correct: [1],
           explanation:
             'Placement, tiering (HBM/DRAM), eviction, transfer scheduling, prefix-reuse routing — storage engineering for the cache, with GPU workers as query engines. The course thesis, end-state.',
+          why: [
+            'That describes tensor parallelism. Mooncake is not a model-sharding library; it treats KV blocks as stored objects that move between workers.',
+            'Right: placement, tiering, eviction, transfer scheduling and prefix-reuse routing make it storage engineering for KV, with GPU workers acting as query engines.',
+            'Quantization is orthogonal and does not define Mooncake. Its idea is a shared cluster-wide cache with routing for reuse, not a smaller encoding of each block.',
+            'That is the opposite design. Mooncake pools KV across the cluster and routes toward the most reusable prefix; local-only caches with utilization-only balancing lose cross-worker reuse.',
+          ],
         },
       ],
     },

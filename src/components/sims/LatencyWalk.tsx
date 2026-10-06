@@ -6,9 +6,9 @@
  * plateaus appear as steps, exactly like the classic latency-walk measurement.
  *
  * Model notes (documented in the help modal):
- *   L1 32 KB / 0.5 ns · L2 1 MB / 5 ns · L3 32 MB / 15 ns · DRAM / 100 ns.
+ *   L1 32 KiB / 0.5 ns · L2 1 MiB / 5 ns · L3 32 MiB / 15 ns · DRAM / 100 ns.
  *   Stride < 64 B shares a cache line across accesses (latency × stride/64).
- *   Stride ≥ 4 KB adds a TLB-miss penalty and defeats the prefetcher.
+ *   Stride ≥ 4 KiB adds a TLB-miss penalty and defeats the prefetcher.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -48,7 +48,7 @@ const WS_MAX_IDX = WS_SIZES_KB.length - 1
 const STRIDES_B = [8, 64, 256, 1024, 4096]
 
 const fmtKb = (kb: number): string =>
-  kb >= 1024 ? `${kb / 1024} MB` : `${kb} KB`
+  kb >= 1024 ? `${kb / 1024} MiB` : `${kb} KiB`
 const fmtNs = (ns: number): string =>
   ns >= 100 ? `${ns.toFixed(0)} ns` : ns >= 10 ? `${ns.toFixed(1)} ns` : `${ns.toFixed(2)} ns`
 
@@ -84,8 +84,8 @@ interface Run {
 /* -------- chart geometry -------- */
 const CHART_H = 300
 const PAD = { l: 46, r: 14, t: 14, b: 30 }
-const X_MIN = Math.log2(WS_SIZES_KB[WS_MIN_IDX]) // 4 KB
-const X_MAX = Math.log2(WS_SIZES_KB[WS_MAX_IDX]) // 256 MB
+const X_MIN = Math.log2(WS_SIZES_KB[WS_MIN_IDX]) // 4 KiB
+const X_MAX = Math.log2(WS_SIZES_KB[WS_MAX_IDX]) // 256 MiB
 const Y_MIN = Math.log2(0.25) // ns
 const Y_MAX = Math.log2(400)
 
@@ -94,7 +94,7 @@ export default function LatencyWalk() {
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
 
-  const [wsIdx, setWsIdx] = useState(2) // 32 KB
+  const [wsIdx, setWsIdx] = useState(2) // 32 KiB
   const [strideB, setStrideB] = useState(8)
   const [prefetch, setPrefetch] = useState(true)
   const [showHbm, setShowHbm] = useState(false)
@@ -133,7 +133,7 @@ export default function LatencyWalk() {
       level.name === 'DRAM' ? 'warn' : 'ok',
     )
     if (strideB >= 4096)
-      log(t, 'TLB', 'stride ≥ 4 KB — every load a new page; prefetcher cannot help', 'warn')
+      log(t, 'TLB', 'stride ≥ 4 KiB — every load a new page; prefetcher cannot help', 'warn')
 
     /* guided-task detection (t0.l2) */
     if (wsKb <= 32) completeSimTask(SIM_ID, 't-lat-l1', 60)

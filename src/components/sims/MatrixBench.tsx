@@ -5,22 +5,22 @@
  * A synthetic-but-faithful bandwidth benchmark over an N×N f64 matrix.
  * Row-major walks memory sequentially, reusing every 64 B cache line for 8
  * doubles and letting the prefetcher run far ahead. Column-major strides by
- * N×8 B, using only one double per line; at N=8192 the stride is 64 KB,
+ * N×8 B, using only one double per line; at N=8192 the stride is 64 KiB,
  * defeating the prefetcher and thrashing the TLB.
  *
  * Model constants:
  *   f64 = 8 B · cache line = 64 B
- *   L1  32 KB / 0.5 ns  (~16 GB/s class)
- *   L2   4 MB / 5.0 ns   (~12.8 GB/s class)
- *   L3  32 MB / 15 ns    (~4.3 GB/s class)
+ *   L1  32 KiB / 0.5 ns  (~16 GB/s class)
+ *   L2   4 MiB / 5.0 ns   (~12.8 GB/s class)
+ *   L3  32 MiB / 15 ns    (~4.3 GB/s class)
  *   DRAM     / 85 ns     (~1.4 GB/s class)
  *   TLB miss penalty = +20 ns/access for page-crossing strides.
  *
- * Why L2=4 MB? 512²·8 B = 2 MB, so the whole matrix fits in L2. The active
- * column set is only N·64 B = 32 KB, which fits L1; once loaded, column-major
+ * Why L2=4 MiB? 512²·8 B = 2 MiB, so the whole matrix fits in L2. The active
+ * column set is only N·64 B = 32 KiB, which fits L1; once loaded, column-major
  * reuses those lines across the 8 columns that share each line. The gap between
  * row and column therefore nearly vanishes at 512², while at 8192² the total
- * matrix spills to DRAM and the 64 KB stride pays full TLB cost.
+ * matrix spills to DRAM and the 64 KiB stride pays full TLB cost.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -99,7 +99,7 @@ function matrixModel(
     // are reused across the 8 columns that share each line.
     const colLevel = kb <= L2_KB ? LEVELS[0] : level
     ns = doubles * colLevel.ns
-    // Prefetcher only helps small column strides; the 64 KB stride at 8192
+    // Prefetcher only helps small column strides; the 64 KiB stride at 8192
     // is far outside its window.
     if (prefetch && stride <= 256) ns *= 0.65
     // Page-crossing stride plus a working set larger than L2 = TLB thrash.
@@ -177,7 +177,7 @@ export default function MatrixBench() {
       log(
         t,
         'STRIDE',
-        `stride ${(n * 8) / 1024} KB — one double per line, TLB miss per access`,
+        `stride ${(n * 8) / 1024} KiB — one double per line, TLB miss per access`,
         'warn',
       )
     }
@@ -381,7 +381,7 @@ export default function MatrixBench() {
               <span className="ml-2 font-mono text-[9px] text-text-3">
                 {lastRun.order === 'row'
                   ? 'one line reused 8×'
-                  : `stride ${(lastRun.n * 8) / 1024} KB`}
+                  : `stride ${(lastRun.n * 8) / 1024} KiB`}
               </span>
             </div>
           )}
@@ -466,7 +466,7 @@ export default function MatrixBench() {
               <span className="font-mono text-[10px] text-text-2">column-major · stride N·8 B</span>
             </div>
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
-              at 8192² the column stride is 64 KB: one useful double per fetched line, a new page
+              at 8192² the column stride is 64 KiB: one useful double per fetched line, a new page
               every access, and no prefetcher rescue.
             </p>
           </ControlGroup>
@@ -479,8 +479,8 @@ export default function MatrixBench() {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`
   return `${bytes} B`
 }

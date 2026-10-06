@@ -107,10 +107,10 @@ You should now be able to trace a request through a modern async server: NIC int
         {
           q: 'epoll beat select/poll for C10k because…',
           options: [
-            'It hands socket buffers to userspace without copying, so each connection that becomes readable costs no kernel-to-user data copy',
-            'Interest is registered once and each wake returns only the ready fds, so work scales with ready events, not total connections',
-            'It spawns a kernel thread per connection, so waiting on 10k sockets proceeds in parallel instead of in one single-threaded scan loop',
-            'It signals readiness through shared memory without any system call, so the loop never traps into the kernel to wait',
+            'It hands socket buffers to userspace without copying, with each readable connection costing no kernel-to-user data copy',
+            'Interest is registered once and each wake returns the ready fds, with work scaling with ready events rather than total connections',
+            'It spawns a kernel thread per connection, with waiting on thousands of sockets proceeding in parallel instead of in a single-threaded scan loop',
+            'It signals readiness through shared memory without any system call, with the loop avoiding a trap into the kernel to wait',
           ],
           correct: [1],
           explanation:
@@ -125,10 +125,10 @@ You should now be able to trace a request through a modern async server: NIC int
         {
           q: 'io_uring\'s key advance over epoll is…',
           options: [
-            'It covers files as well as sockets, and moves submissions and completions through shared rings, removing most per-I/O syscalls',
-            'It adds a readiness mode for regular files, so epoll-style loops now work on disk reads that previously blocked the whole thread',
-            'It makes every read and write non-blocking, so single-threaded code no longer needs an event loop or async runtime',
-            'It lets the storage or network device write straight into user buffers, so it only helps on NVMe or DMA-capable hardware',
+            'It covers files as well as sockets, moving submissions and completions through shared SQ/CQ rings to remove most per-I/O syscalls',
+            'It adds a readiness mode for regular files, with epoll-style loops working on SSD reads that previously blocked the thread',
+            'It makes each read and write non-blocking, with single-threaded code no longer needing an event loop or async API',
+            'It lets the storage or network device write straight into user buffers, helping only on NVMe or DMA-capable hardware',
           ],
           correct: [0],
           explanation:
@@ -143,10 +143,10 @@ You should now be able to trace a request through a modern async server: NIC int
         {
           q: 'A suspended tokio task costs ~hundreds of bytes instead of ~1 MB because…',
           options: [
-            'Rust stacks start tiny and grow on demand, so an idle task keeps only a few hundred bytes of stack committed while it waits',
+            'Rust stacks start tiny and grow on demand, with an idle task keeping a few hundred bytes of OS stack committed',
             'An async fn compiles to a state machine holding only the locals live across each await, with no stack or OS thread',
-            'The runtime compresses suspended tasks and decompresses them on wake, trading some CPU cycles for a smaller resident memory footprint',
-            'Suspended tasks all share the worker thread\'s single stack, so only each task\'s registers are saved when it parks',
+            'The runtime compresses suspended tasks and decompresses them on wake, trading CPU cycles for a smaller resident memory footprint',
+            'Suspended tasks share the worker thread\'s single OS stack, with only each task\'s registers saved when it parks at an await',
           ],
           correct: [1],
           explanation:
@@ -161,10 +161,10 @@ You should now be able to trace a request through a modern async server: NIC int
         {
           q: 'Why is one blocking call inside async code so damaging?',
           options: [
-            'The blocking call leaves the event queue in an inconsistent state, so the loop drops wakeups that arrived while it was stuck',
-            'The blocking call holds the OS thread the loop runs on, so every task scheduled on that thread stalls behind it',
-            'Each blocking call forces a switch into kernel mode that flushes the TLB, so every pending connection pays a full context-switch penalty',
-            'Each blocking call allocates a new OS thread for its pending task, so thread count and memory balloon as connections grow',
+            'The blocking call leaves the OS event queue in an inconsistent state, with the loop dropping wakeups that arrived while it was stuck',
+            'The blocking call holds the OS thread the loop runs on, with each task scheduled on that thread stalling behind it',
+            'Each blocking call forces a switch into kernel mode that flushes the TLB, with each pending connection paying a full context-switch penalty',
+            'Each blocking call allocates a new OS thread for its pending task, with thread count and memory ballooning as connections grow',
           ],
           correct: [1],
           explanation:
