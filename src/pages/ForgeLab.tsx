@@ -30,7 +30,9 @@ import {
   STATE_WORD,
   buildRows,
   creditNote,
+  creditedRequiredPass,
   hasDetail,
+  requiredFailedCount,
   resultsOf,
   tally,
   unseenCount,
@@ -154,7 +156,11 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
         const required = lab.checks.filter((check) => !check.optional).map((check) => check.id)
         const earlier = useProgress.getState().aggregate.labs[lab.id]
         const credit = creditFor(report, { unseen: earlier?.unseen, assistedUntil: earlier?.assistedUntil }, required)
-        const note = creditNote(credit, report, { required: required.length, unseenSoFar: unseenCount(report, required, earlier?.unseen) })
+        const note = creditNote(credit, report, {
+          required: required.length,
+          unseenSoFar: unseenCount(report, required, earlier?.unseen),
+          requiredFailed: requiredFailedCount(report, required),
+        })
         focusResults.current = true
         setReports((prev) => [...prev, report])
         setRun({ kind: 'report', report, credit, note })
@@ -219,7 +225,9 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
 
   const rows = buildRows(lab.checks, report ? resultsOf(report) : live.results, run.kind === 'running' ? live.running : null)
   const counts = tally(rows)
-  const requiredReportPassed = report !== null && counts.requiredTotal > 0 && counts.required === counts.requiredTotal
+  const allRequiredGreen = counts.requiredTotal > 0 && counts.required === counts.requiredTotal
+  // A reference build (credit null) can be all green and still earns nothing: it never opens Prove it or the completion panel.
+  const requiredReportPassed = run.kind === 'report' && creditedRequiredPass(run.credit, counts)
 
   // What the latest graded (non-reference) run passed, for the stage panel; every run's, for attempts-to-green.
   const graded = reports.filter((r) => !r.reference)
@@ -437,7 +445,7 @@ cargo build --release --target wasm32-unknown-unknown`}
                     'running · one fresh instance per check'
                   )}
                 </p>
-                <p className={cn('font-mono text-[11px]', requiredReportPassed ? 'text-accent' : 'text-amber')}>
+                <p className={cn('font-mono text-[11px]', report !== null && allRequiredGreen ? 'text-accent' : 'text-amber')}>
                   {counts.required}/{counts.requiredTotal} required
                   {counts.advancedTotal > 0 && ` · ${counts.advanced}/${counts.advancedTotal} advanced`}
                 </p>

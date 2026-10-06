@@ -540,6 +540,20 @@ describe('HintLadder renders', () => {
     expect(out).toContain('not yet implemented: construct your allocator')
   })
 
+  test('two expanded checks never share an id: the locked-rung reasons carry the check id', () => {
+    const out = html([run([row('align'), row('coalesce')])], { [hintRef('align', 'R0')]: ISO, [hintRef('coalesce', 'R0')]: ISO })
+    expect(out).toContain('data-check="align"')
+    expect(out).toContain('data-check="coalesce"')
+    const ids = [...out.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]!)
+    expect(ids.length).toBeGreaterThan(10)
+    expect(new Set(ids).size).toBe(ids.length)
+    const why = ids.filter((id) => id.startsWith('hint-why-'))
+    expect(why).toContain('hint-why-align-R1-Open-R1')
+    expect(why).toContain('hint-why-coalesce-R1-Open-R1')
+    // every describedby points at a reason that is on the page
+    for (const m of out.matchAll(/aria-describedby="([^"]+)"/g)) expect(ids).toContain(m[1]!)
+  })
+
   test('the connected component is the default export', () => {
     expect(typeof HintLadderDefault).toBe('function')
   })

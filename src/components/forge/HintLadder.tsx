@@ -246,7 +246,7 @@ function CheckCard({ check, state, ctx, acks, clock, onAck, dispatch }: CardProp
           {(['R1', 'R2', 'R3', 'R4'] as const).map((rung) => (
             <Rung key={rung} id={heading(rung)} title={RUNG_TITLE[rung]}>
               {open[rung] === undefined ? (
-                <Gate rung={rung} state={state} ctx={ctx} onOpen={() => openRung(rung)} label={`Open ${rung}`} />
+                <Gate checkId={check.id} rung={rung} state={state} ctx={ctx} onOpen={() => openRung(rung)} label={`Open ${rung}`} />
               ) : rung === 'R1' ? (
                 <>
                   <p className="text-body-sm text-text-2">{ladder.r1.text}</p>
@@ -276,7 +276,7 @@ function CheckCard({ check, state, ctx, acks, clock, onAck, dispatch }: CardProp
           <Rung id={heading('bottom')} title={RUNG_TITLE.bottom}>
             {walk === null ? (
               <>
-                <Gate rung="bottom" state={state} ctx={ctx} onOpen={() => openRung('bottom')} label="Show the walkthrough" />
+                <Gate checkId={check.id} rung="bottom" state={state} ctx={ctx} onOpen={() => openRung('bottom')} label="Show the walkthrough" />
                 <p className="mt-1.5 text-[12px] text-text-3">
                   This shows where your last run first breaks the rules. Runs for the next {ASSISTED_HOURS} hours then count as assisted, until you pass on seeds you have not seen.
                 </p>
@@ -329,9 +329,10 @@ function Rung({ id, title, children }: { id: string; title: string; children: Re
 }
 
 /** A locked or available rung: the reason it is locked is text on the page, never only a tooltip. */
-function Gate({ rung, state, ctx, onOpen, label }: { rung: RungId; state: LadderState; ctx: Ctx; onOpen(): void; label: string }) {
+function Gate({ checkId, rung, state, ctx, onOpen, label }: { checkId: string; rung: RungId; state: LadderState; ctx: Ctx; onOpen(): void; label: string }) {
   const u = unlockOf(state, rung, ctx)
-  const why = `hint-why-${rung}-${label.replace(/\s+/g, '-')}`
+  // The check id is in the id: two expanded cards would otherwise share `hint-why-R1-Open-R1`.
+  const why = `hint-why-${checkId}-${rung}-${label.replace(/\s+/g, '-')}`
   return (
     <div className="flex flex-wrap items-center gap-3">
       <button type="button" className={BUTTON} disabled={!u.ok} aria-describedby={u.ok ? undefined : why} onClick={onOpen}>

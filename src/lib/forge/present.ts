@@ -103,6 +103,8 @@ export interface CreditContext {
   required: number
   /** Required checks passed on seeds drawn at grade time, in this run or an earlier unseen run. */
   unseenSoFar: number
+  /** Required checks this run did not pass (fail, trap, timeout, or not reported). 0 means every required check is green. */
+  requiredFailed: number
 }
 
 /**
@@ -118,6 +120,15 @@ export function creditNote(credit: Credit, report: LabRunReport, ctx: CreditCont
     }
   }
   if (credit === 'unseen') {
+    // `unseen` is the union of history (§12.3): after one unseen pass every later fresh-seed run keeps it, green or not.
+    if (ctx.requiredFailed > 0) {
+      const n = ctx.requiredFailed
+      return {
+        label: 'unseen',
+        detail: `An earlier run passed on seeds drawn when you dropped the file, and that unseen pass stands. This run failed ${n} required ${n === 1 ? 'check' : 'checks'}, so it earns nothing new.`,
+        tone: 'partial',
+      }
+    }
     return {
       label: 'unseen',
       detail: 'Every required check passed on seeds drawn when you dropped the file, so this run counts in full.',
@@ -158,6 +169,20 @@ export function unseenCount(report: LabRunReport, required: readonly string[], e
       : [],
   )
   return required.filter((id) => now.has(id) || earlier[id] === true).length
+}
+
+/**
+ * Whether the page treats the run as a finished lab: a graded run (credit is not null, so never a reference build)
+ * with every required check green. Prove it, the completion panel and the XP toast hang off this, so a reference
+ * build that passes everything still leaves them locked.
+ */
+export const creditedRequiredPass = (credit: Credit | undefined, counts: { required: number; requiredTotal: number }): boolean =>
+  credit !== undefined && credit !== null && counts.requiredTotal > 0 && counts.required === counts.requiredTotal
+
+/** Required ids this run did not pass. */
+export function requiredFailedCount(report: LabRunReport, required: readonly string[]): number {
+  const passed = new Set(report.checks.filter((c) => c.status === 'pass').map((c) => c.id))
+  return required.filter((id) => !passed.has(id)).length
 }
 
 /** `3/6 required` and, when the lab has them, `1/2 advanced`. Counts passed checks only. */

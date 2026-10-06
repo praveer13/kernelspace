@@ -28,7 +28,7 @@
  * Its sentence also named cells of the ghost's heap that were in use in the learner's. The rule
  * above found a decision in all 300, 3–12 ops (median, by learner) before the failure, and its
  * sentence names only the learner's heap: "At op 14 you put 2 cells in the 11-cell run at cell 1; the reference would have used the
- * 2-cell gap at cell 44. From there even the reference runs out: op 37 needed 10 cells, and your
+ * 2-cell gap at cell 44. From your heap at that point, even the reference policy runs out: op 37 needed 10 cells, and your
  * largest run was 8."
  *
  * Placement part: the block-placement model on `heap.ts`, its sentences, and the ledger results.
@@ -402,7 +402,7 @@ export function explainPlacement(f: DivergenceFacts<HeapOp, Placement, HeapView>
   }
   const mine = f.mine.at === undefined ? 'nowhere' : runPhrase(f.mineBefore, f.mine.at, k)
   const largest = cells(f.failedView.largestFree)
-  return `At op ${f.op + 1} you put ${plural(k, 'cell')} in ${mine}; the reference would have used ${alt ?? 'another run'}. From there even the reference runs out: op ${f.failedOp + 1} needed ${plural(need, 'cell')}, and your largest run was ${largest}.`
+  return `At op ${f.op + 1} you put ${plural(k, 'cell')} in ${mine}; the reference would have used ${alt ?? 'another run'}. From your heap at that point, even the reference policy runs out: op ${f.failedOp + 1} needed ${plural(need, 'cell')}, and your largest run was ${largest}.`
 }
 
 /** The play's summary with the placement debrief. */
