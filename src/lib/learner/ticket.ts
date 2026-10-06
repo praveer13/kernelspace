@@ -130,9 +130,20 @@ export function earlierKcsOf(lessonId: string, kcs: readonly Kc[]): KcId[] {
 export function taughtBy(lessonId: string, firstLesson: string | undefined): boolean {
   if (firstLesson === undefined) return false
   if (firstLesson === lessonId) return true
-  const first = lessonPos(firstLesson)
-  const at = lessonPos(lessonId)
-  return first !== null && at !== null && first <= at
+  const first = sequencePos(firstLesson)
+  const at = sequencePos(lessonId)
+  // R and T lessons are ordered only within their own sequence; across the braid a ticket stays conservative.
+  return first !== null && at !== null && first.seq === at.seq && first.pos <= at.pos
+}
+
+const R_LESSON_ID = /^r\.l(\d+)$/
+
+/** Position of a lesson in its own sequence: T0-T7 in curriculum order, or R in R order. */
+function sequencePos(id: string): { seq: 't' | 'r'; pos: number } | null {
+  const t = lessonPos(id)
+  if (t !== null) return { seq: 't', pos: t }
+  const r = R_LESSON_ID.exec(id)
+  return r ? { seq: 'r', pos: Number(r[1]) } : null
 }
 
 /* ------------------------------------------------------------------ */

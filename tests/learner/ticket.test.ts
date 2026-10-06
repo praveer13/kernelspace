@@ -224,6 +224,10 @@ describe('planTicket: only a KC the lesson has taught is generated (1b blocking 
     expect(taughtBy('t0.l1', undefined)).toBe(false) // a lab-only KC has no lesson
     expect(taughtBy('t0.l1', 'r.l1')).toBe(false) // R is not in the T0-T7 order
     expect(taughtBy('r.l1', 'r.l1')).toBe(true)
+    expect(taughtBy('r.l8', 'r.l7')).toBe(true) // R lessons are ordered among themselves
+    expect(taughtBy('r.l7', 'r.l8')).toBe(false)
+    expect(taughtBy('r.l10', 'r.l9')).toBe(true) // numeric, not string, order
+    expect(taughtBy('r.l3', 't0.l2')).toBe(false) // across the braid it stays conservative
   })
 
   test('a lesson naming a later-track KC never serves its family, and its authored constructed responses are served (400 seeds)', () => {
