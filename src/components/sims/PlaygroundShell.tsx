@@ -614,6 +614,9 @@ export function LogConsole({
           ref={scrollRef}
           onMouseEnter={() => setHovering(true)}
           onMouseLeave={() => setHovering(false)}
+          tabIndex={0}
+          role="region"
+          aria-label="log lines"
           className="scrollbar-slim h-40 overflow-y-auto px-4 pb-3 font-mono text-[13px] leading-[1.7]"
           aria-live="polite"
         >

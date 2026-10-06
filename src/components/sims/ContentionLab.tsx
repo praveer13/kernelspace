@@ -7,8 +7,7 @@
  *   2) ABA inspector: step-through replay of the classic lock-free stack ABA
  *      hazard, with a tagged-pointer toggle that makes the stale CAS fail.
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Play, RotateCcw, StepForward } from 'lucide-react'
 import {
@@ -21,6 +20,8 @@ import {
   usePrefersReducedMotion,
   useSimLog,
 } from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
+import type { MirrorTable } from '@/lib/sims/types'
 
 const SIM_ID = 'sim-vm'
 const MAX_THREADS = 16
@@ -187,6 +188,8 @@ export default function ContentionLab() {
   const [width, setWidth] = useState(720)
   const tickRef = useRef(0)
   const [cacheOwner, setCacheOwner] = useState(0)
+  const [announce, setAnnounce] = useState<string | undefined>(undefined)
+  const mirrorId = `${useId()}-mirror`
 
   const trace = useMemo(() => buildABATrace(abaTagged), [abaTagged])
   const stepInfo = trace[Math.min(abaStep, trace.length - 1)]
@@ -250,6 +253,9 @@ export default function ContentionLab() {
     const t = tickRef.current
     const opsMs = modelOpsMs(impl, threads)
     setRuns((prev) => [...prev.slice(-59), { id: t, impl, threads, opsMs }])
+    setAnnounce(
+      `Run ${t}: ${IMPL_META[impl].label}, ${threads} thread${threads === 1 ? '' : 's'}, ${fmtOpsMs(opsMs)} operations per millisecond.`,
+    )
     log(
       t,
       'BENCH',
@@ -277,6 +283,7 @@ export default function ContentionLab() {
 
   const resetCounter = useCallback(() => {
     setRuns([])
+    setAnnounce(undefined)
     tickRef.current += 1
     log(tickRef.current, 'RESET', 'counter benchmark runs cleared', 'op')
   }, [log])
@@ -400,6 +407,25 @@ export default function ContentionLab() {
 
   /* ---- derived info ---- */
   const currentOps = modelOpsMs(impl, threads)
+  /* DOM mirror of the chart: the three model curves at every thread count, with the measured runs beside them. */
+  const mirrorTable = useMemo<MirrorTable>(() => {
+    const rows = Array.from({ length: MAX_THREADS }, (_, i) => {
+      const thr = i + 1
+      const measured = runs.filter((r) => r.threads === thr).map((r) => `${IMPL_META[r.impl].label} ${fmtOpsMs(r.opsMs)}`)
+      return [
+        thr === threads ? `${thr} (selected)` : String(thr),
+        ...IMPLS.map((im) => fmtOpsMs(modelOpsMs(im, thr))),
+        measured.length > 0 ? measured.join(', ') : 'none',
+      ]
+    })
+    return {
+      caption: `Counter throughput in operations per millisecond against thread count: three model curves and ${runs.length} measured run${runs.length === 1 ? '' : 's'}. ${IMPL_META[impl].label} at ${threads} thread${threads === 1 ? '' : 's'} is selected.`,
+      columns: ['Threads', ...IMPLS.map((im) => `${IMPL_META[im].label} model`), 'Measured runs'],
+      rows,
+      announce,
+    }
+  }, [runs, threads, impl, announce])
+
   const peakImpl = runs.reduce<Impl | null>((best, r) => {
     if (!best) return r.impl
     const bestRun = runs.find((x) => x.impl === best)
@@ -439,8 +465,10 @@ export default function ContentionLab() {
                   style={{ width: '100%', height: CHART_H }}
                   role="img"
                   aria-label="Counter throughput versus thread count. Three model curves and measured runs."
+                  aria-describedby={mirrorId}
                 />
               </div>
+              <SimMirror id={mirrorId} table={mirrorTable} className="mt-3" />
 
               <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
                 <div>
