@@ -3,11 +3,12 @@
  * Renders every ContentBlock type: prose (markdown-lite), code compare tabs,
  * five callout variants, step-through SVG diagrams, statlines, quizzes,
  * exercise embed cards, isomorphism panels, collapsible deep-dives, and the
- * Wave 1 prequestion, play and exit-ticket blocks and the Wave 2 item block (lazy). ProseView, DiagramView
+ * Wave 1 prequestion, play and exit-ticket blocks and the Wave 2 item block (lazy), and on code blocks
+ * F4's language switch, permission diagram and alignment items (lazy). ProseView, DiagramView
  * and ExerciseView live in their own modules beside this one.
  */
 
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useId, useMemo, useState, useSyncExternalStore } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Lightbulb,
@@ -22,7 +23,8 @@ import {
 } from 'lucide-react'
 import CodeBlock from '@/components/CodeBlock'
 import QuizBlock from '@/components/QuizBlock'
-import { useProgress } from '@/lib/progress'
+import { getProgress, useProgress, type CodeLang } from '@/lib/progress'
+import { cn } from '@/lib/utils'
 import type {
   CalloutBlock,
   CodeBlockData,
@@ -43,6 +45,9 @@ const PlayBlock = lazy(() => import('@/components/blocks/PlayBlock'))
 const ExitTicketBlock = lazy(() => import('@/components/learner/ExitTicketBlock'))
 // Wave 2: generated items inside a lesson (a stub until 2a-12).
 const ItemBlock = lazy(() => import('@/components/blocks/ItemBlock'))
+// F4 (wave-2 §17): permission diagrams and alignment items load only with a code block that has them.
+const PermissionDiagram = lazy(() => import('@/components/lesson/PermissionDiagram'))
+const AlignItem = lazy(() => import('@/components/lesson/AlignItem'))
 
 /* ------------------------------------------------------------------ */
 /* callout (lesson.md §2.3, design.md §9.9)                            */
@@ -220,30 +225,127 @@ function FieldNoteView({ block, trackColor }: { block: FieldNoteBlock; trackColo
 }
 
 /* ------------------------------------------------------------------ */
-/* code wrapper — compare tabs default to settings.codeLang (§2.2)     */
+/* code wrapper — compare tabs default to settings.codeLang (§2.2);    */
+/* F4 (wave-2 §17): the familiar version beside the Rust, chosen by a   */
+/* language switch that writes settings.codeLang, then the permission  */
+/* diagram and the alignment items                                     */
 /* ------------------------------------------------------------------ */
 
-function CodeView({ block }: { block: CodeBlockData }) {
-  const codeLang = useProgress((s) => s.settings.codeLang)
+const ALT_LANGS = ['java', 'python'] as const
+type AltLang = (typeof ALT_LANGS)[number]
+const ALT_LABEL: Record<AltLang, string> = { java: 'Java', python: 'Python' }
+
+/**
+ * The alternate shown beside the Rust: the one settings.codeLang names, the first one authored when
+ * it names neither, and none when it says Rust.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- exported for tests/lesson/permission.test.ts
+export function shownAlt(available: readonly AltLang[], codeLang: CodeLang | undefined): AltLang | null {
+  if (available.length === 0 || codeLang === 'rust') return null
+  return available.find((l) => l === codeLang) ?? available[0]
+}
+
+/*
+ * settings.codeLang is the one source of truth: every code block reads it, so a pick in any block moves
+ * them all. A read-only tab (§8.7) cannot write settings, so there the pick lives in this module instead,
+ * still one value for every block on the page.
+ */
+let pagePick: CodeLang | null = null
+const pagePickListeners = new Set<() => void>()
+
+/** The language every code block shows: the page's pick on a read-only tab, settings.codeLang otherwise. */
+function currentCodeLang(): CodeLang | undefined {
+  const s = getProgress()
+  return (s.ledger.readOnly ? pagePick : null) ?? s.settings.codeLang
+}
+
+function subscribeCodeLang(fn: () => void): () => void {
+  const off = useProgress.subscribe(fn)
+  pagePickListeners.add(fn)
+  return () => {
+    off()
+    pagePickListeners.delete(fn)
+  }
+}
+
+/** What the language switch does: write settings.codeLang, or, where settings cannot be written, the page's pick. */
+// eslint-disable-next-line react-refresh/only-export-components -- exported for tests/lesson/permission.test.ts
+export function pickCodeLang(next: CodeLang): void {
+  const s = getProgress()
+  if (s.ledger.readOnly) {
+    pagePick = next
+    for (const fn of pagePickListeners) fn()
+  } else s.updateSettings({ codeLang: next })
+}
+
+// The app renders only in the browser, so the server snapshot is the same live read (a static render in tests sees the store as it is).
+const useCodeLang = () => useSyncExternalStore(subscribeCodeLang, currentCodeLang, currentCodeLang)
+
+function LanguageSwitch({ available, shown, onPick }: { available: readonly AltLang[]; shown: AltLang | null; onPick: (lang: CodeLang) => void }) {
+  const uid = useId()
+  const choices: { value: CodeLang; label: string; on: boolean }[] = [
+    ...available.map((l) => ({ value: l, label: ALT_LABEL[l], on: shown === l })),
+    { value: 'rust', label: 'Rust only', on: shown === null },
+  ]
+  return (
+    <div role="radiogroup" aria-labelledby={`${uid}-label`} className="mb-2 flex flex-wrap items-center gap-2">
+      <span id={`${uid}-label`} className="mr-1 font-mono text-label uppercase text-text-3">
+        Beside the Rust
+      </span>
+      {choices.map((c) => (
+        <label key={c.value} className="relative cursor-pointer">
+          <input type="radio" name={uid} value={c.value} checked={c.on} onChange={() => onPick(c.value)} className="peer sr-only" />
+          <span
+            className={cn(
+              'inline-flex min-h-8 items-center rounded-full border px-3 py-1 font-mono text-[12px] transition-colors duration-150',
+              'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
+              c.on ? 'border-accent bg-accent-dim text-text-1' : 'border-line-bright bg-surface-1 text-text-2 hover:text-text-1',
+            )}
+          >
+            {c.label}
+          </span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+function CodeView({ block, lesson, alignStart }: { block: CodeBlockData; lesson: Lesson; alignStart: number }) {
+  const lessonId = lesson.id
+  const lang = useCodeLang()
   const tabs = useMemo(() => {
     if (!block.tabs) return undefined
-    if (!codeLang) return block.tabs
-    const idx = block.tabs.findIndex((t) => t.lang === codeLang || t.label.toLowerCase() === codeLang)
+    if (!lang) return block.tabs
+    const idx = block.tabs.findIndex((t) => t.lang === lang || t.label.toLowerCase() === lang)
     if (idx <= 0) return block.tabs
     const re = [...block.tabs]
     const [pref] = re.splice(idx, 1)
     return [pref, ...re]
-  }, [block.tabs, codeLang])
+  }, [block.tabs, lang])
+
+  const available = ALT_LANGS.filter((l) => block.alt?.[l] !== undefined)
+  const alt = shownAlt(available, lang)
+  const rust = (
+    <CodeBlock
+      filename={block.filename}
+      tabs={tabs}
+      code={block.code}
+      lang={block.lang}
+      highlightLines={block.highlightLines}
+    />
+  )
 
   return (
     <div className="my-6">
-      <CodeBlock
-        filename={block.filename}
-        tabs={tabs}
-        code={block.code}
-        lang={block.lang}
-        highlightLines={block.highlightLines}
-      />
+      {available.length > 0 && <LanguageSwitch available={available} shown={alt} onPick={pickCodeLang} />}
+      {alt ? (
+        <div className="space-y-3">
+          <CodeBlock filename={`${ALT_LABEL[alt]} · what you know`} code={block.alt?.[alt]} lang={alt} />
+          {rust}
+        </div>
+      ) : (
+        rust
+      )}
       {block.chips && block.chips.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {block.chips.map((c) => (
@@ -253,8 +355,30 @@ function CodeView({ block }: { block: CodeBlockData }) {
           ))}
         </div>
       )}
+      {block.permissions && block.code !== undefined && (
+        <Suspense fallback={<BlockFallback />}>
+          <PermissionDiagram lessonId={lessonId} traceKey={block.permissions.trace} code={block.code} />
+        </Suspense>
+      )}
+      {block.align && block.align.length > 0 && (
+        <Suspense fallback={<BlockFallback />}>
+          {block.align.map((q, i) => (
+            <AlignItem key={i} lessonId={lessonId} n={alignStart + i} q={q} lessonKcs={lesson.kcs} langLabel={alt ? ALT_LABEL[alt] : undefined} />
+          ))}
+        </Suspense>
+      )}
     </div>
   )
+}
+
+/** Alignment items are numbered across the lesson's code blocks in block order (`item:<lessonId>.align.<n>`). */
+function alignStartOf(lesson: Lesson, block: ContentBlock): number {
+  let n = 0
+  for (const b of lesson.blocks) {
+    if (b === block) return n
+    if (b.type === 'code') n += b.align?.length ?? 0
+  }
+  return n
 }
 
 /* ------------------------------------------------------------------ */
@@ -282,7 +406,7 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
     case 'prose':
       return <ProseView md={block.md} trackColor={trackColor} h2Start={h2Start} />
     case 'code':
-      return <CodeView block={block} />
+      return <CodeView block={block} lesson={lesson} alignStart={alignStartOf(lesson, block)} />
     case 'callout':
       return <CalloutView block={block} />
     case 'diagram':
