@@ -4,13 +4,14 @@
  * real WebGPU execution with a graceful CPU fallback + honesty banner,
  * and a dispatch/workgroup visualizer linking code ↔ hardware.
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import type { ReactNode } from 'react'
 import { Check, ChevronDown, ChevronUp, Copy, Cpu, Play, RotateCcw, Trash2 } from 'lucide-react'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
 import { useProgress } from '@/lib/progress'
+import type { MirrorTable } from '@/lib/sims/types'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -86,6 +87,9 @@ function LogConsole({ lines, onClear }: { lines: LogLine[]; onClear: () => void 
           onMouseEnter={() => setStick(false)}
           onMouseLeave={() => setStick(true)}
           aria-live="polite"
+          role="log"
+          aria-label="activity log"
+          tabIndex={0}
           className="scrollbar-slim h-36 overflow-y-auto px-3 py-2 font-mono text-[12px] leading-[1.7]"
         >
           {lines.map((l) => (
@@ -1123,6 +1127,56 @@ export default function WgslSim() {
     return () => cancelAnimationFrame(raf)
   }, [result, reduced])
 
+  /* ---- DOM mirrors, one per canvas ----
+     The heat strip is summarised as segments of 16 elements; the dispatch grid is a table of its dimensions
+     (65,536 cells would be no help to a screen reader) plus the workgroup under the pointer. Both canvases
+     already draw their final frame at once under reduced motion. Only the output mirror announces, once per
+     completed run (SimMirror speaks it at most once a second). */
+  const heatMirrorId = `${useId()}-heat-mirror`
+  const vizMirrorId = `${useId()}-viz-mirror`
+  const heatMirror = useMemo<MirrorTable | null>(() => {
+    if (!result) return null
+    const seg = 16
+    const rowsOut: (string | number)[][] = []
+    for (let g = 0; g < result.heats.length; g += seg) {
+      const part = result.heats.slice(g, g + seg).map((v) => Math.abs(v))
+      let flagged = 0
+      if (result.mismatch > 0) for (let i = g; i < g + part.length; i++) if (i % 16 === 15) flagged++
+      rowsOut.push([
+        `${g}–${g + part.length - 1}`,
+        Math.max(...part).toFixed(2),
+        (part.reduce((a, v) => a + v, 0) / part.length).toFixed(2),
+        flagged,
+      ])
+    }
+    const timing = result.bars.map((b) => `${b.label} took ${b.ms.toFixed(3)} ms`).join(', ')
+    return {
+      caption: `Per-element output heat, ${result.heats.length} samples in index order summarised as ${rowsOut.length} segments (normalized absolute value). Flagged counts the elements drawn red because the result did not verify.`,
+      columns: ['Elements', 'Peak', 'Mean', 'Flagged'],
+      rows: rowsOut,
+      announce: `Dispatch ${result.ok ? 'verified' : 'failed verification'} (${result.checksum}) on ${result.backend === 'gpu' ? 'WebGPU' : 'the CPU model'}: ${timing}${
+        result.speedup !== undefined ? `, tiled is ${result.speedup.toFixed(1)} times faster` : ''
+      }.`,
+    }
+  }, [result])
+  const vizMirror = useMemo<MirrorTable>(() => {
+    const d = result?.dispatch
+    const rowsOut: (string | number)[][] = d
+      ? [
+          ['Grid', `${d.nx.toLocaleString()} × ${d.ny.toLocaleString()} workgroups${d.modeled ? ' (modeled)' : ''}`],
+          ['Workgroups', (d.nx * d.ny).toLocaleString()],
+          ['Workgroup size', `${d.wgX} × ${d.wgY} = ${(d.wgX * d.wgY).toLocaleString()} threads`],
+          ['Logical threads', d.threads.toLocaleString()],
+          ['Pointer on', hoverWg === null ? 'no workgroup' : `workgroup ${hoverWg}`],
+        ]
+      : [['Grid', 'no dispatch yet: run one to see its workgroups']]
+    return {
+      caption: 'Workgroup dispatch grid. Each canvas cell is one workgroup executing the kernel; the grid is described here by its dimensions.',
+      columns: ['Property', 'Value'],
+      rows: rowsOut,
+    }
+  }, [result, hoverWg])
+
   const maxMs = result ? Math.max(...result.bars.map((b) => b.ms)) : 1
   const gpuActive = backend === 'gpu' && !forceCpu
 
@@ -1321,10 +1375,17 @@ export default function WgslSim() {
                       </div>
                     )}
                   </div>
-                  <canvas ref={heatRef} className="h-8 w-full rounded-sm border border-line bg-ink" />
+                  <canvas
+                    ref={heatRef}
+                    className="h-8 w-full rounded-sm border border-line bg-ink"
+                    role="img"
+                    aria-label={`Per-element output heat strip, ${result.heats.length} samples. ${result.ok ? 'Verified.' : 'Verification failed.'}`}
+                    aria-describedby={heatMirrorId}
+                  />
                   <div className="mt-1 font-mono text-[10px] text-text-3">
                     per-element output heat (normalized |value|, left→right = index order)
                   </div>
+                  {heatMirror && <SimMirror id={heatMirrorId} table={heatMirror} className="mt-2" />}
                   {result.note && <div className="mt-1 font-mono text-[10px] text-amber">ⓘ {result.note}</div>}
                 </>
               )}
@@ -1348,6 +1409,7 @@ export default function WgslSim() {
                 className="h-44 w-full cursor-crosshair rounded-sm border border-line bg-ink"
                 role="img"
                 aria-label="workgroup dispatch grid — each cell is a workgroup executing your kernel"
+                aria-describedby={vizMirrorId}
               />
               <div className="mt-1 min-h-4 font-mono text-[10px] text-text-3">
                 {result && hoverWg !== null ? (
@@ -1360,6 +1422,7 @@ export default function WgslSim() {
                   'each cell = 1 workgroup · wavefront sweep ≈ 16 SMs × 4 resident (simulated) · hover to inspect'
                 )}
               </div>
+              <SimMirror id={vizMirrorId} table={vizMirror} className="mt-2" />
               {result && hoverWg !== null && (
                 <div className="mt-1 flex flex-wrap gap-[2px]">
                   {Array.from({ length: Math.min(64, result.dispatch.wgX * result.dispatch.wgY) }).map((_, i) => (
