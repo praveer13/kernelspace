@@ -5,7 +5,7 @@
  */
 import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { derive } from '../../src/lib/ledger/fold'
-import { SCHEMA_VERSION } from '../../src/lib/ledger/constants'
+import { AGGREGATE_VERSION, SCHEMA_VERSION } from '../../src/lib/ledger/constants'
 import { MemoryStore } from '../../src/lib/ledger/memory-store'
 import { OUTBOX_PREFIX, SNAPSHOT_KEY } from '../../src/lib/ledger/names'
 import { outboxKey, readOutbox } from '../../src/lib/ledger/outbox'
@@ -16,7 +16,7 @@ import { parseImport } from '../../src/lib/ledger/codec'
 import { createProgressStore, selectDoneLessons, selectStreak } from '../../src/lib/progress'
 import { splitmix32 } from '../../src/lib/rng'
 import { dataOf, makeProfile, startTab, tick } from './env'
-import { ACTS, FORMS, int, LABS, LESSONS, pick, PLAY, SEEDS, SIM, SIM_TASKS, STEPS, WAVE1_ITEM_REFS, chance, PROPERTY_TIMEOUT_MS } from './gen'
+import { ACTS, FAULTS, FLEET_MODES, FORMS, int, LABS, LESSONS, PACKET_REFS, pick, PLAY, SEEDS, SHAS, SIM, SIM_TASKS, SLOTS, STEPS, WAVE1_ITEM_REFS, chance, PROPERTY_TIMEOUT_MS, shuffle } from './gen'
 
 setDefaultTimeout(PROPERTY_TIMEOUT_MS)
 
@@ -433,7 +433,7 @@ describe('write path (§8.5, §8.6)', () => {
     await tick(30)
     const snap = JSON.parse(p.storage.data.get(SNAPSHOT_KEY)!) as SnapshotV2
     expect(snap.schemaVersion).toBe(SCHEMA_VERSION)
-    expect(snap.aggregateVersion).toBe(2)
+    expect(snap.aggregateVersion).toBe(AGGREGATE_VERSION)
     expect(snap.tab).toBe(tab.tabId)
     expect(snap.aggregate.events).toBe(1)
     expect(snap.aggregate.facts).toEqual({ 'lesson:t0.l1': true })
@@ -883,6 +883,64 @@ function runWave1Session(s: State) {
   s.recordQuizAttempt({ lessonId: 't0.l3', seed: 9, responses: [{ qi: 0, rev: 'a', pick: [0], ok: true, kcs: ['kc.a'] }] })
 }
 
+/** One incident as the façade is handed it; the random actions and the session share it. */
+function incidentResult(rand: () => number, src: 'daily' | 'drill' | 'team', date = '2026-10-04') {
+  const fault = pick(rand, FAULTS)
+  const ref = src === 'daily' ? (`inc:daily/${date}` as const) : src === 'drill' ? (`inc:drill/${fault}` as const) : (`inc:team/blue/${date}` as const)
+  const diagnosed = chance(rand, 0.7)
+  return {
+    ref,
+    seed: int(rand, 0, 0xffffffff),
+    ms: int(rand, 1000, 600_000),
+    data: {
+      v: 1 as const,
+      src,
+      fault,
+      severity: pick(rand, [1, 2, 3] as const),
+      hypothesis: diagnosed ? fault : ('unsure' as const),
+      probes: ['queue-depth', 'kv-pool'],
+      diagnosed,
+      fixed: chance(rand, 0.7),
+      burn: int(rand, 0, 300) / 10,
+      expertBurn: int(rand, 0, 100) / 10,
+      streetlight: int(rand, 0, 3),
+      components: shuffle(rand, SHAS).slice(0, int(rand, 0, 3)),
+      ...(src === 'drill' ? {} : { date }),
+    },
+  }
+}
+
+function fleetRunResult(rand: () => number) {
+  const mode = pick(rand, FLEET_MODES)
+  return {
+    seed: int(rand, 0, 0xffffffff),
+    data: {
+      v: 1 as const,
+      mode,
+      components: shuffle(rand, SLOTS).slice(0, int(rand, 0, 3)).map((slot) => ({ slot, labId: 'kv-block-manager', sha256: pick(rand, SHAS) })),
+      seeds: pick(rand, ['fresh', 'practice'] as const),
+      goodput: int(rand, 10, 90),
+      refGoodput: int(rand, 20, 80),
+    },
+  }
+}
+
+/** One of every synchronous Wave 2 action (wave-2.md §3.3); `installComponent` has its own tests in contract-v32. */
+function runWave2Session(s: State) {
+  const rand = splitmix32(32)
+  s.recordIncident(incidentResult(rand, 'daily'))
+  s.recordIncident(incidentResult(rand, 'drill'))
+  s.recordIncident(incidentResult(rand, 'team'))
+  s.recordFleetRun({ seed: 3, ms: 9000, data: { v: 1, mode: 'act1', components: [{ slot: 'allocator', labId: 'rust-allocator', sha256: SHAS[0] }], seeds: 'fresh', goodput: 40, refGoodput: 41, ttftP95: 800 } })
+  s.recordHelp('packet:lab/kv-block-manager/cow', { via: 'claude', chars: 4200, arm: 'packet' })
+  s.recordHelp('packet:lesson/t5.l4', { via: 'copy', chars: 0 })
+  s.completeFleetWeekAct('fleet', 0.5, { seed: 8, provenance: 'unseen', data: { goodput: 20, refGoodput: 40 } })
+  s.removeComponent('scheduler')
+  s.setWorking('exp:seed', 123456)
+  s.setWorking('zoo:config', '{"num_hidden_layers": 61}')
+  s.setWorking('daily:team', 'blue')
+}
+
 /** One of every action; used for the codec round-trip. */
 function runSession(s: State) {
   s.markLessonStatus('t0.l1', 'reading')
@@ -908,12 +966,13 @@ function runSession(s: State) {
   s.recordVisit('boot')
   s.setWorking('boot:week', { minutesPerWeek: 120, sessionMinutes: 30, phoneDays: [1], laptopDays: [3], slo: 0.9 })
   runWave1Session(s)
+  runWave2Session(s)
 }
 
 function randomAction(rand: () => number, s: State, clockAdvance: (m: number) => void) {
   clockAdvance(int(rand, 1, 3000))
   const lesson = pick(rand, LESSONS)
-  switch (int(rand, 0, 31)) {
+  switch (int(rand, 0, 39)) {
     case 0:
       return s.markLessonStatus(lesson, 'reading')
     case 1:
@@ -1027,6 +1086,22 @@ function randomAction(rand: () => number, s: State, clockAdvance: (m: number) =>
       ])
     case 30:
       return s.setWorking(pick(rand, ['queue:laptop', 'handoff:last', 'today:prefs', 'placement:result'] as const), { n: int(rand, 0, 9) })
+    case 32:
+      return s.recordIncident(incidentResult(rand, pick(rand, ['daily', 'drill', 'team'] as const)))
+    case 33:
+      return s.recordFleetRun(fleetRunResult(rand))
+    case 34:
+      return void s.installComponent({ slot: pick(rand, SLOTS), labId: 'kv-block-manager', version: int(rand, 1, 3), bytes: new Uint8Array([int(rand, 0, 3), 1, 2, 3]) })
+    case 35:
+      return s.removeComponent(pick(rand, SLOTS))
+    case 36:
+      return s.recordHelp(pick(rand, PACKET_REFS) as `packet:${string}`, { via: pick(rand, ['claude', 'chatgpt', 'copy'] as const), chars: int(rand, 0, 6000) })
+    case 37:
+      return s.completeFleetWeekAct(pick(rand, ACTS), Math.round(rand() * 100) / 100, { seed: int(rand, 0, 0xffffffff), provenance: pick(rand, ['practice', 'unseen'] as const), data: { goodput: int(rand, 1, 99) } })
+    case 38:
+      return s.setWorking(pick(rand, ['exp:seed', 'zoo:config', 'daily:team'] as const), pick(rand, ['x', 'y']))
+    case 39:
+      return s.recordIncident(incidentResult(rand, 'daily', `2026-10-${String(int(rand, 1, 28)).padStart(2, '0')}`))
     default:
       return s.recordQuizAttempt({ lessonId: lesson, seed: 1, responses: [{ qi: 0, rev: 'r0', pick: [0], ok: chance(rand, 0.5), kcs: ['kc.a', 'kc.b'] }] })
   }
@@ -1057,6 +1132,7 @@ describe('P7 optimistic agreement (I7)', () => {
           throw new Error(`seed ${seed} diverged after op ${i}\n${trace.join('\n')}\nfaçade: ${JSON.stringify(dataOf(tab.progress.getState()))}\nledger: ${JSON.stringify(expected)}`)
         }
         expect(stableStringify(last!.agg)).toBe(stableStringify(derive(events)))
+        expect(stableStringify(tab.progress.getState().aggregate)).toBe(stableStringify(derive(events))) // the optimistic fold, incidents and fleet runs included
       }
     }
   })

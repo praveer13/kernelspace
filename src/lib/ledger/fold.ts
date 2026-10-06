@@ -1,11 +1,17 @@
 import { AGGREGATE_VERSION } from './constants'
 import { canonicalEvent } from './merge'
-import { canonicalRef, parseHintRef, parseQuizItemRef, parseSimTaskRef, refTail } from './refs'
+import { canonicalRef, parseFleetRunRef, parseHintRef, parseIncidentRef, parseQuizItemRef, parseSimTaskRef, refTail } from './refs'
 import { ensureOwn, getOwn, setOwn } from './stable'
 import type {
   Aggregate,
   AggregateV1,
+  AggregateV2,
   EventKind,
+  FactKey,
+  FleetRunAgg,
+  FleetRunData,
+  IncidentAgg,
+  IncidentData,
   IsoInstant,
   LabAgg,
   LedgerEvent,
@@ -30,9 +36,9 @@ export const GRADED_KINDS: ReadonlySet<EventKind> = new Set<EventKind>([
   'prove',
 ])
 
-export function emptyAggregate(): Aggregate {
+function emptyAggregateV2(): AggregateV2 {
   return {
-    v: AGGREGATE_VERSION,
+    v: 2,
     events: 0,
     lessons: {},
     sims: {},
@@ -50,6 +56,27 @@ export function emptyAggregate(): Aggregate {
   }
 }
 
+export function emptyAggregate(): Aggregate {
+  return { ...emptyAggregateV2(), v: AGGREGATE_VERSION, incidents: {}, dailyDays: {}, fleetRuns: {} }
+}
+
+/**
+ * What an incident scores (wave-2.md §3.2): 0 unless the right fix landed in time, else the expert's burn
+ * (plus a minute, so a flawless expert is not divided by zero) over the learner's.
+ */
+export const incidentScore = (d: Pick<IncidentData, 'fixed' | 'burn' | 'expertBurn'>): number =>
+  d.fixed ? Math.min(1, (d.expertBurn + 1) / (d.burn + 1)) : 0
+
+/** An incident is `ok` when the learner named the fault and fixed it. */
+export const incidentOk = (d: Pick<IncidentData, 'diagnosed' | 'fixed'>): boolean => d.diagnosed && d.fixed
+
+/** A fleet run's score: goodput against the reference, capped at 1. */
+export const fleetRunScore = (d: Pick<FleetRunData, 'goodput' | 'refGoodput'>): number =>
+  Math.min(1, Math.max(0, d.goodput) / Math.max(1, d.refGoodput))
+
+/** Act I's rule (`fleet-week.ts`): within 3 requests per second of the reference. */
+export const fleetRunOk = (d: Pick<FleetRunData, 'goodput' | 'refGoodput'>): boolean => d.goodput >= d.refGoodput - 3
+
 /* max / min over ISO instants (lexical order is chronological). */
 const maxIso = (a: IsoInstant | undefined, b: IsoInstant): IsoInstant => (a !== undefined && a >= b ? a : b)
 const minIso = (a: IsoInstant | undefined, b: IsoInstant): IsoInstant => (a !== undefined && a <= b ? a : b)
@@ -59,6 +86,8 @@ const lessonOf = (agg: Aggregate, id: string): LessonAgg => ensureOwn(agg.lesson
 const simOf = (agg: Aggregate, id: string): SimAgg => ensureOwn(agg.sims, id, () => ({ visits: 0, tasks: {}, outcomes: {} }))
 const labOf = (agg: Aggregate, id: string): LabAgg => ensureOwn(agg.labs, id, () => ({ checks: {}, unseen: {} }))
 const playOf = (agg: Aggregate, id: string): PlayAgg => ensureOwn(agg.plays, id, () => ({ best: 0 }))
+const incidentOf = (agg: Aggregate, ref: string): IncidentAgg => ensureOwn(agg.incidents, ref, () => ({ n: 0, best: 0 }))
+const fleetRunOf = (agg: Aggregate, mode: string): FleetRunAgg => ensureOwn(agg.fleetRuns, mode, () => ({ best: 0, own: true }))
 
 /** `e.data` as a loose record: fold reads only the fields it needs and tolerates anything else. */
 const dataOf = (e: LedgerEvent): Record<string, unknown> => {
@@ -239,6 +268,30 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
       setOwn(agg.facts, `prove:${lab}`, true)
       break
     }
+    case 'incident': {
+      const inc = parseIncidentRef(ref)
+      if (inc === null) break
+      const I = incidentOf(agg, ref)
+      I.n += 1
+      I.best = Math.max(I.best, e.score)
+      if (e.ok) {
+        I.okAt = minIso(I.okAt, e.at)
+        if (inc.src === 'daily') setOwn(agg.dailyDays, inc.date, true)
+        if (inc.src !== 'team') setOwn(agg.facts, ref as FactKey, true)
+      }
+      break
+    }
+    case 'fleet-run': {
+      const mode = parseFleetRunRef(ref)
+      if (mode === null) break
+      const F = fleetRunOf(agg, mode)
+      F.best = Math.max(F.best, e.score)
+      if (e.ok) {
+        setOwn(agg.facts, `fleet:${mode}` as FactKey, true)
+        if (e.provenance === 'unseen') F.unseenOk = true
+      }
+      break
+    }
     case 'ack': {
       setOwn(agg.acks, ref, minIso(getOwn(agg.acks, ref), e.at))
       const hint = parseHintRef(ref)
@@ -250,7 +303,7 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
       break
     }
     default:
-      break // the reserved graded kinds: streak day only
+      break
   }
 
   // Streak: every graded event marks its day, except a lab run that passed nothing.
@@ -262,15 +315,15 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
 }
 
 /**
- * A version-1 aggregate (Wave 0b snapshot) as a version-2 one, new fields empty (spec §3.1). Every v1 field
+ * A version-1 aggregate (Wave 0b snapshot) as a version-2 one, new fields empty (wave-1.md §3.1). Every v1 field
  * is copied unchanged, so the first Wave 1 paint shows the old numbers until the engine's full derive
  * replaces them. Two things are inferred, because v1 never stored them:
  * - every v1 `complete` had no `via`, so it is `read` (spec §8.7);
  * - a lesson with the `quiz-pass:` fact is passed; the exact instant is unknown, so `lastAt` (an upper
  *   bound) stands in until the derive.
  */
-export function upgradeAggregate(v1: AggregateV1): Aggregate {
-  const out = emptyAggregate()
+function upgradeV1(v1: AggregateV1): AggregateV2 {
+  const out = emptyAggregateV2()
   out.events = v1.events
   out.fleetWeek = structuredClone(v1.fleetWeek)
   out.capstone = structuredClone(v1.capstone)
@@ -292,6 +345,19 @@ export function upgradeAggregate(v1: AggregateV1): Aggregate {
   for (const [id, S] of Object.entries(v1.sims)) setOwn(out.sims, id, { ...structuredClone(S), outcomes: {} })
   for (const [id, L] of Object.entries(v1.labs)) setOwn(out.labs, id, { ...structuredClone(L), unseen: {} })
   return out
+}
+
+/** A version-2 aggregate (Wave 1 snapshot) as a version-3 one: every v2 field unchanged, the incident and fleet-run maps empty until the derive (wave-2.md §3.1). */
+function upgradeV2(v2: AggregateV2): Aggregate {
+  return { ...structuredClone(v2), v: AGGREGATE_VERSION, incidents: {}, dailyDays: {}, fleetRuns: {} }
+}
+
+/**
+ * An older snapshot's aggregate as the current one (wave-2.md §3.1): v1 -> v2 -> v3. Nothing stored is rewritten (OD1);
+ * what the old fold never knew stays empty until the engine's full derive replaces the upgrade.
+ */
+export function upgradeAggregate(old: AggregateV1 | AggregateV2): Aggregate {
+  return upgradeV2(old.v === 1 ? upgradeV1(old) : old)
 }
 
 /** Pure single-event fold: a copy of `agg` with `e` applied. Same code path as `derive`, so I7 holds by construction. */

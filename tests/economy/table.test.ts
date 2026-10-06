@@ -7,11 +7,13 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { FORGE_LABS } from '../../src/data/labs'
 import { LESSONS_BY_TRACK } from '../../src/data/lessons'
-import { PLAY_IDS } from '../../src/data/plays'
+import { PLAY_IDS, PLAYS } from '../../src/data/plays'
 import { STEPS } from '../../src/lib/capstone/steps'
 import {
   CAPSTONE_STEP_MINUTES,
   FLEET_ACT_MINUTES,
+  FLEET_RUN_MINUTES,
+  INCIDENT_MINUTES,
   LABS,
   PLAY_MINUTES,
   RING2_LAB,
@@ -58,9 +60,17 @@ describe('capstone, acts, plays', () => {
     expect(FLEET_ACT_MINUTES).toEqual({ engine: 30, fleet: 30, business: 30, incident: 20 })
   })
 
-  test('block placement is 15 minutes, and PLAY_MINUTES covers exactly the plays /play/:playId serves', () => {
-    expect(PLAY_MINUTES).toEqual({ 'block-placement': 15 })
-    expect(Object.keys(PLAY_MINUTES).sort()).toEqual([...PLAY_IDS].sort())
+  test('every registered play is priced with its PlayDef.minutes; the scheduler is priced before 2b registers it', () => {
+    for (const [id, def] of Object.entries(PLAYS)) expect(PLAY_MINUTES[id]).toBe(def.minutes)
+    expect(PLAY_MINUTES['block-placement']).toBe(15)
+    // a price may run ahead of its play (2b registers the scheduler), but only the scheduler's
+    expect(Object.keys(PLAY_MINUTES).filter((id) => !PLAY_IDS.includes(id) && id !== 'scheduler')).toEqual([])
+    expect(PLAY_MINUTES.scheduler).toBe(20)
+  })
+
+  test('incidents and fleet runs are priced: daily 10, drill 5, a run 10 (wave-2.md §3.4)', () => {
+    expect(INCIDENT_MINUTES).toEqual({ daily: 10, drill: 5 })
+    expect(FLEET_RUN_MINUTES).toBe(10)
   })
 })
 

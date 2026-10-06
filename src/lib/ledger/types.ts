@@ -9,6 +9,7 @@
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { Erratum } from '@/data/errata/schema'
 import type { ProgressSettings, ProgressState } from '@/lib/progress'
+import type { ENGINE_SLOTS, FAULT_IDS, FLEET_RUN_MODES } from './constants'
 
 /* ------------------------------------------------------------------ */
 /* Primitives                                                          */
@@ -62,7 +63,7 @@ export type DiagramPredictRef = `dia:${string}#${number}`
 export type ConstructedRef = `cr:${string}#${number}`
 /** An authored item outside a lesson checkpoint (placement anchors, spiral items), `item:<id>`. */
 export type AuthoredItemRef = `item:${string}`
-/** `play:<playId>` (W1). */
+/** `play:<playId>` (W1; `play:scheduler` from Wave 2). */
 export type PlayRef = `play:${string}`
 /** `prove:<labId>` (H4). */
 export type ProveRef = `prove:${string}`
@@ -71,8 +72,18 @@ export type HintRef = `hint:${string}`
 /** The placement walk finished (`complete placement`). */
 export type PlacementRef = 'placement'
 
-/** `erratum:<erratumId>` (a change card was acknowledged), `screen:<screenId>` (a one-time screen was seen) or a hint rung. */
-export type AckRef = `erratum:${string}` | `screen:${string}` | HintRef
+/*
+ * Wave 2 refs (docs/specs/wave-2.md §3.2). The runtime grammar (refs.ts) accepts them from task 2a-01 on.
+ */
+/** An incident: the Fleet Daily, an Act IV or practice drill, or a team run. */
+export type IncidentRef = `inc:daily/${string}` | `inc:drill/${string}` | `inc:team/${string}/${string}`
+/** A run on your own components: `fleet:<mode>`. */
+export type FleetRunRef = `fleet:${string}`
+/** A context packet was copied out (H2): the help-seeking trace, never credit. */
+export type PacketRef = `packet:lab/${string}/${string}` | `packet:lesson/${string}` | `packet:sim/${string}`
+
+/** `erratum:<erratumId>` (a change card was acknowledged), `screen:<screenId>` (a one-time screen was seen), a hint rung or a context packet. */
+export type AckRef = `erratum:${string}` | `screen:${string}` | HintRef | PacketRef
 export type ItemRef =
   | QuizItemRef
   | CardItemRef
@@ -102,6 +113,8 @@ export type Ref =
   | PlayRef
   | ProveRef
   | PlacementRef
+  | IncidentRef
+  | FleetRunRef
 
 /* ------------------------------------------------------------------ */
 /* Provenance (V6) and confidence (V2)                                 */
@@ -157,7 +170,8 @@ interface Graded {
 /**
  * Surface that served an item. Wave 0b: quiz, boot, card, cold. Wave 1 (spec §3.2): today (a Today
  * session), ticket (exit ticket or spiral checkpoint), testout, placement, pre (prequestion),
- * diagram (predictAt), practice ("new numbers" outside Today).
+ * diagram (predictAt), practice ("new numbers" outside Today). Wave 2 (spec §3.2): lesson (an item block) and
+ * daily (a signature item served with the Daily).
  */
 export type ItemSrc =
   | 'quiz'
@@ -171,6 +185,8 @@ export type ItemSrc =
   | 'pre'
   | 'diagram'
   | 'practice'
+  | 'lesson'
+  | 'daily'
 
 /** Exit-ticket shapes (V5). A `quiz` event with `data.form` set is a ticket, spiral or test-out summary. */
 export type TicketForm = 'ticket' | 'spiral' | 'testout'
@@ -303,7 +319,10 @@ export interface LabCheckEvent extends Envelope<'lab-check', LabRef>, Graded {
   }
 }
 
-export interface FleetActEvent extends Envelope<'fleet-act', FleetActRef>, Graded {}
+export interface FleetActEvent extends Envelope<'fleet-act', FleetActRef>, Graded {
+  /** Wave 2: a Fleet Week act may carry run detail (`completeFleetWeekAct`'s `meta.data`). */
+  data?: JsonObject
+}
 
 export interface CapstoneStepEvent extends Envelope<'capstone-step', CapstoneRef>, Graded {
   data?: { index?: number }
@@ -320,9 +339,25 @@ export interface PlayData {
   divergenceOp?: number
   skipped?: boolean
   /** Compose: the dials, and whether they reproduce the reference exactly. */
-  spec?: { fit: string; coalesce: string; minSplit: number; classes: string }
+  spec?: PlacementSpecData | SchedSpecData
   equivalent?: boolean
   kcs?: string[]
+}
+
+/** Compose's dials for the block-placement play. */
+export interface PlacementSpecData {
+  fit: string
+  coalesce: string
+  minSplit: number
+  classes: string
+}
+
+/** Compose's dials for the scheduler play (wave-2.md §8.4): the four dials of `referenceScheduler`. */
+export interface SchedSpecData {
+  order: 'fcfs' | 'sjf'
+  guard: number
+  headroom: number
+  preempt: 'none' | 'newest'
 }
 
 export interface PlayEvent extends Envelope<'play', PlayRef>, Graded {
@@ -343,9 +378,60 @@ export interface ProveEvent extends Envelope<'prove', ProveRef>, Graded {
   data: ProveData
 }
 
-/** Kinds reserved for later waves (W3 incident, W4 fleet-run). No writers yet. */
-export interface ReservedGradedEvent extends Envelope<'incident' | 'fleet-run', Ref>, Graded {
-  data?: JsonObject
+export type FaultId = (typeof FAULT_IDS)[number]
+export type FleetRunMode = (typeof FLEET_RUN_MODES)[number]
+export type EngineSlot = (typeof ENGINE_SLOTS)[number]
+
+/** W3 (Wave 2, spec §3.2): one incident, played to a fix or to the clock. */
+export interface IncidentData {
+  v: 1
+  src: 'daily' | 'drill' | 'team'
+  fault: FaultId
+  severity: 1 | 2 | 3
+  /** Logged before the first probe. */
+  firstHypothesis?: FaultId | 'unsure'
+  /** At the time of the fix. */
+  hypothesis?: FaultId | 'unsure'
+  /** Probe ids in order, at most 12. */
+  probes: string[]
+  /** The last fix applied. */
+  fix?: string
+  /** `hypothesis === fault`. */
+  diagnosed: boolean
+  /** The right fix applied before the clock ran out. */
+  fixed: boolean
+  /** SLO burn-minutes, >= 0 (spec §9.3). */
+  burn: number
+  expertBurn: number
+  /** Zero-information probes (spec §9.3). */
+  streetlight: number
+  /** sha256 of the own components in the run, at most 8. Local only; redacted in donations (W12). */
+  components: string[]
+  /** `YYYY-MM-DD`, daily and team. */
+  date?: string
+  /** A Fleet Week drill. */
+  act4?: boolean
+  kcs?: string[]
+}
+
+/** W4 (Wave 2, spec §3.2): one fleet run with at least one own component in it. */
+export interface FleetRunData {
+  v: 1
+  mode: FleetRunMode
+  /** 1 to 8 entries. */
+  components: { slot: EngineSlot; labId: string; sha256: string }[]
+  seeds: 'fresh' | 'practice'
+  goodput: number
+  refGoodput: number
+  ttftP95?: number
+}
+
+export interface IncidentEvent extends Envelope<'incident', IncidentRef>, Graded {
+  data: IncidentData
+}
+
+export interface FleetRunEvent extends Envelope<'fleet-run', FleetRunRef>, Graded {
+  data: FleetRunData
 }
 
 export type VisitEvent = Envelope<'visit', LessonRef | SimRef | BootRef>
@@ -368,8 +454,12 @@ export type ExerciseEvent = Envelope<'exercise', LessonRef>
 export type AchievementEvent = Envelope<'achievement', AchievementRef>
 
 export interface AckEvent extends Envelope<'ack', AckRef> {
-  data?: { via?: string }
+  /** Hint rungs carry nothing, a context packet carries `HelpAckData` (spec §3.2). */
+  data?: JsonObject
 }
+
+/** H2 (Wave 2): how a packet left the page, how long it was and which arm of the randomization showed it. */
+export type HelpAckData = { via: 'claude' | 'chatgpt' | 'copy'; chars: number; arm?: 'ladder' | 'packet' }
 
 export type LedgerEvent =
   | ItemEvent
@@ -382,7 +472,8 @@ export type LedgerEvent =
   | CapstoneStepEvent
   | PlayEvent
   | ProveEvent
-  | ReservedGradedEvent
+  | IncidentEvent
+  | FleetRunEvent
   | VisitEvent
   | CompleteEvent
   | ExerciseEvent
@@ -429,6 +520,23 @@ export type WorkingKey =
   | 'handoff:last'
   /** Today preferences: `{phoneMode?: boolean, sessionMinutes?: number}`. */
   | 'today:prefs'
+  /* Wave 2 (spec §3.5); the codec accepts them from task 2a-01 on */
+  /** `EngineSlots`: which installed component fills each slot of your engine. */
+  | 'engine:slots'
+  /** The within-learner randomization seed (uint32, created once). */
+  | 'exp:seed'
+  /** The last `config.json` the zoo machine was given (device-local, never broadcast). */
+  | 'zoo:config'
+  /** The team code of the Daily (stretch). */
+  | 'daily:team'
+
+export interface EngineSlotEntry {
+  sha256: string
+  labId: string
+  version: number
+  at: IsoInstant
+}
+export type EngineSlots = Partial<Record<EngineSlot, EngineSlotEntry>>
 
 export interface WorkingRecord {
   key: WorkingKey
@@ -474,6 +582,9 @@ export type FactKey =
   | `labc:${string}`
   | `play:${string}`
   | `prove:${string}`
+  /* Wave 2 (spec §3.4): an ok daily or drill incident, an ok fleet run. */
+  | `inc:${string}`
+  | `fleet:${string}`
   | 'boot'
   | 'placement'
 
@@ -525,9 +636,28 @@ export interface PlayAgg {
   best: number
 }
 
+/** v3 (spec §3.4): per incident ref. */
+export interface IncidentAgg {
+  /** Distinct events on the ref. */
+  n: number
+  /** Best score. */
+  best: number
+  /** Earliest `at` of an `ok` event. */
+  okAt?: IsoInstant
+}
+
+/** v3 (spec §3.4): per fleet-run mode. */
+export interface FleetRunAgg {
+  best: number
+  /** Always true: a run is written only with an own component in it. */
+  own: true
+  /** An `ok` run whose provenance is `unseen` (seeds drawn at run time). */
+  unseenOk?: true
+}
+
 export interface Aggregate {
-  /** Aggregate format version; a mismatch means "rebuild from the ledger" (version 1 is upgraded in place, spec §3.1). */
-  v: 2
+  /** Aggregate format version; a mismatch means "rebuild from the ledger" (versions 1 and 2 are upgraded in place, spec §3.1). */
+  v: 3
   /** Number of distinct events folded. */
   events: number
   lessons: Record<string, LessonAgg>
@@ -551,11 +681,22 @@ export interface Aggregate {
   proves: Record<string, IsoInstant>
   /** v2: nominal seconds of graded items per local day (XP v2 caps the minutes per day). */
   itemSec: Record<LocalDay, number>
+  /** v3 (spec §3.4): per incident ref (`inc:daily/2027-05-03`). */
+  incidents: Record<string, IncidentAgg>
+  /** v3: local dates with an `ok` Fleet Daily. */
+  dailyDays: Record<LocalDay, true>
+  /** v3: per fleet-run mode. */
+  fleetRuns: Record<string, FleetRunAgg>
+}
+
+/** The Wave 1 aggregate under a version-2 snapshot; `upgradeAggregate` makes it an `Aggregate`. */
+export interface AggregateV2 extends Omit<Aggregate, 'v' | 'incidents' | 'dailyDays' | 'fleetRuns'> {
+  v: 2
 }
 
 /** The Wave 0b aggregate under a version-1 snapshot; `upgradeAggregate` makes it an `Aggregate`. */
 export interface AggregateV1
-  extends Omit<Aggregate, 'v' | 'lessons' | 'sims' | 'labs' | 'plays' | 'proves' | 'itemSec'> {
+  extends Omit<AggregateV2, 'v' | 'lessons' | 'sims' | 'labs' | 'plays' | 'proves' | 'itemSec'> {
   v: 1
   lessons: Record<string, Omit<LessonAgg, 'passedAt' | 'passVia' | 'read'>>
   sims: Record<string, Omit<SimAgg, 'outcomes'>>
@@ -565,7 +706,7 @@ export interface AggregateV1
 /** The derived snapshot under localStorage `kernelspace:v2`. Rebuildable from IndexedDB at any time. */
 export interface SnapshotV2 {
   schemaVersion: number
-  /** 2 now; a version-1 snapshot is upgraded at hydrate (spec §3.1). */
+  /** 3 now; a version-1 or version-2 snapshot is upgraded at hydrate (spec §3.1). */
   aggregateVersion: number
   writtenAt: IsoInstant
   /** Tab that wrote it. */
@@ -831,10 +972,10 @@ export interface LabRunMeta {
 }
 
 /** New façade actions (additive). Existing actions keep their signatures (spec §8.3); the Wave 1 actions are merged in (spec §3.3). */
-export interface LedgerFacadeActions extends LedgerFacadeActionsV31 {
+export interface LedgerFacadeActions extends LedgerFacadeActionsV31, LedgerFacadeActionsV32 {
   recordQuizAttempt(attempt: QuizAttempt): void
   recordItems(items: ItemResponse[]): void
-  acknowledge(ref: AckRef, data?: { via?: string }): void
+  acknowledge(ref: AckRef, data?: JsonObject): void
   completeRef(ref: BootRef, data?: JsonObject): void
   recordVisit(ref: LessonRef | SimRef | BootRef): void
   setWorking(key: WorkingKey, value: Json): void
@@ -919,10 +1060,67 @@ export interface LedgerFacadeActionsV31 {
   completePlacement(result: JsonObject): void
 }
 
-/** Options of the delta export (spec §6.6). */
+/* ---- Wave 2 façade additions (wave-2.md §3.3), merged into LedgerFacadeActions above. ---- */
+
+/** One incident played to a fix or to the clock. The façade derives `score`, `ok` and the provenance from `data` (spec §3.2). */
+export interface IncidentResult {
+  ref: IncidentRef
+  /** The incident's seed: drawn by `freshSeed()` for a drill, public for the Daily and a team run. */
+  seed: number
+  ms?: number
+  data: IncidentData
+}
+
+/** One run on your own components (`fleet:<mode>`). The façade derives `score`, `ok` and the provenance from `data`. */
+export interface FleetRunResult {
+  seed?: number
+  ms?: number
+  data: FleetRunData
+}
+
+/** A module to put in a slot of your engine. */
+export interface ComponentInstall {
+  slot: EngineSlot
+  labId: string
+  /** The lab's component version (`ks_*` ABI of the lab bundle); at least 1. */
+  version: number
+  name?: string
+  abi?: number
+  /** The module bytes. They go to the `components` store and never into the localStorage outbox (W12). */
+  bytes: ArrayBuffer | Uint8Array
+}
+
+/** Optional detail on a Fleet Week act (`completeFleetWeekAct`'s third argument). */
+export interface FleetActMeta {
+  seed?: number
+  provenance?: Extract<Provenance, 'practice' | 'unseen'>
+  /** Kept on the `fleet-act` event as `data`. */
+  data?: JsonObject
+}
+
+/** The Wave 2 actions (spec §3.3). Each skip rule is the façade's. */
+export interface LedgerFacadeActionsV32 {
+  /** One `incident` event. Never skipped: every play is evidence. */
+  recordIncident(r: IncidentResult): void
+  /** One `fleet-run` event. Skipped when no own component took part. */
+  recordFleetRun(r: FleetRunResult): void
+  /** Stores the module bytes, then fills the slot (`engine:slots`). Skipped when the slot already holds that hash. */
+  installComponent(c: ComponentInstall): Promise<{ sha256: string }>
+  /** Empties a slot (`engine:slots`). Skipped when it is empty. The bytes stay in the store. */
+  removeComponent(slot: EngineSlot): void
+  /** One `ack packet:…`. Never skipped: help-seeking is counted. */
+  recordHelp(ref: PacketRef, data: HelpAckData): void
+  /** `fleet-act` with the act's score, plus `seed`, `provenance` and `data` from `meta`. */
+  completeFleetWeekAct(actId: string, score: number, meta?: FleetActMeta): void
+}
+
+/**
+ * Options of the export. `includeComponentBytes` adds the bytes of the stored components, which holds at least the
+ * ones `engine:slots` names (spec §3.3). A delta (`sinceAt`) carries the components of slots changed since, bytes included.
+ */
 export interface ExportOptions {
   includeComponentBytes?: boolean
-  /** Only events and working records with `at` at or after this instant; no components or extras (a handoff, not a backup). */
+  /** Only events and working records with `at` at or after this instant, plus the components of slots changed since; no extras (a handoff, not a backup). */
   sinceAt?: IsoInstant
 }
 
@@ -941,10 +1139,16 @@ export interface LedgerClient {
   reset(): Promise<void>
   events(filter?: EventFilter): Promise<LedgerEvent[]>
   storageEstimate(): Promise<{ events: number; approxBytes: number; usage?: number; quota?: number }>
+  /** Metadata of every stored component (installed or imported), by hash. */
+  components(): Promise<ComponentMeta[]>
+  /** The bytes of one stored component, or null when only its metadata is here. */
+  componentBytes(sha256: string): Promise<ArrayBuffer | null>
 }
 
 /** The engine as the façade sees it (src/lib/ledger/engine.ts). */
 export interface LedgerEngine extends LedgerClient {
+  /** One IndexedDB transaction, idempotent by `sha256`. Refused while read-only. The façade's `installComponent` calls it before it writes `engine:slots`. */
+  putComponent(rec: ComponentRecord): Promise<void>
   /** Commit events and working records already in this tab's outbox, then broadcast. Resolves after the commit. */
   append(events: LedgerEvent[], working: WorkingRecord[]): Promise<void>
   /** Called after every full derive (boot, broadcast, import, undo, reset, re-projection). */

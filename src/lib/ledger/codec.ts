@@ -1,4 +1,4 @@
-import { EXPORT_FORMAT, IMPORT_MAX_BYTES, SCHEMA_VERSION } from './constants'
+import { ENGINE_SLOTS, EXPORT_FORMAT, FAULT_IDS, FLEET_RUN_MODES, IMPORT_MAX_BYTES, SCHEMA_VERSION } from './constants'
 import { derive, GRADED_KINDS } from './fold'
 import {
   mergeEvents,
@@ -7,7 +7,7 @@ import {
   normalizeLedger,
   type Ledger,
 } from './merge'
-import { isKnownKind, refMatchesKind } from './refs'
+import { isKnownKind, parseFleetRunRef, parseIncidentRef, refMatchesKind } from './refs'
 import { stableStringify } from './stable'
 import { dayOf, isIsoInstant, isLocalDay } from './time'
 import { summary } from './view'
@@ -50,11 +50,21 @@ export type Checked<T> = { ok: true; value: T } | { ok: false; reason: string }
 
 const PROVENANCES = new Set(['proved', 'unseen', 'lab-green', 'practice', 'assisted', 'field'])
 const CONFIDENCES = new Set(['guess', 'think', 'sure'])
-const ITEM_SRCS = new Set(['quiz', 'boot', 'card', 'cold', 'today', 'ticket', 'testout', 'placement', 'pre', 'diagram', 'practice'])
+const ITEM_SRCS = new Set(['quiz', 'boot', 'card', 'cold', 'today', 'ticket', 'testout', 'placement', 'pre', 'diagram', 'practice', 'lesson', 'daily'])
 const PREDICT_SRCS = new Set(['boot', 'lesson', 'pre', 'diagram', 'placement'])
 const PLAY_PHASES = new Set(['play', 'compose'])
 const CHECK_STATUSES = new Set(['pass', 'fail', 'trap', 'timeout'])
 const MAX_KCS = 6
+const INCIDENT_SRCS = new Set(['daily', 'drill', 'team'])
+const FAULTS: ReadonlySet<unknown> = new Set(FAULT_IDS)
+const HYPOTHESES: ReadonlySet<unknown> = new Set([...FAULT_IDS, 'unsure'])
+const FLEET_MODES: ReadonlySet<unknown> = new Set(FLEET_RUN_MODES)
+const SLOTS: ReadonlySet<unknown> = new Set(ENGINE_SLOTS)
+const HELP_VIAS = new Set(['claude', 'chatgpt', 'copy'])
+const MAX_PROBES = 12
+const MAX_RUN_COMPONENTS = 8
+const MAX_PACKET_CHARS = 6000
+const MAX_ZOO_CONFIG = 20_000
 const MAX_NSEC = 600
 const REV_REQUIRED = new Set<EventKind>(['item', 'probe', 'predict'])
 const MAX_ID_LENGTH = 200
@@ -67,6 +77,8 @@ const isNonEmptyString = (v: unknown, max = MAX_ID_LENGTH): v is string =>
 
 /** `__proto__` as an id segment of a ref or key (`lesson:__proto__`, `sim:x/__proto__`). Fold and view cope with it, but nothing legitimate uses it. */
 const hasProtoSegment = (s: string): boolean => s.split(/[:/#]/).includes('__proto__')
+
+const isSha256 = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v)
 
 const fail = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
 
@@ -82,8 +94,56 @@ function checkItemExtras(data: Record<string, unknown>): string | null {
   return null
 }
 
+/** `incident` data (wave-2.md §3.2). `ref` was already matched to the kind's grammar, so it parses. */
+function checkIncident(ref: string, data: unknown): string | null {
+  if (!isObject(data)) return 'data must be an object'
+  const parsed = parseIncidentRef(ref)
+  if (typeof data.src !== 'string' || !INCIDENT_SRCS.has(data.src) || data.src !== parsed?.src) return 'data.src must be daily, drill or team and match the ref'
+  if (!FAULTS.has(data.fault)) return 'data.fault is not a known fault'
+  if (data.severity !== 1 && data.severity !== 2 && data.severity !== 3) return 'data.severity must be 1, 2 or 3'
+  for (const key of ['firstHypothesis', 'hypothesis'] as const) {
+    if (data[key] !== undefined && !HYPOTHESES.has(data[key])) return `data.${key} must be a fault id or unsure`
+  }
+  if (!(Array.isArray(data.probes) && data.probes.length <= MAX_PROBES && data.probes.every((p) => typeof p === 'string'))) return `data.probes must be at most ${MAX_PROBES} strings`
+  if (data.fix !== undefined && typeof data.fix !== 'string') return 'data.fix must be a string'
+  for (const key of ['burn', 'expertBurn', 'streetlight'] as const) {
+    if (!(isFiniteNumber(data[key]) && data[key] >= 0)) return `data.${key} must be a finite number of at least 0`
+  }
+  if (typeof data.diagnosed !== 'boolean' || typeof data.fixed !== 'boolean') return 'data.diagnosed and data.fixed must be booleans'
+  if (!(Array.isArray(data.components) && data.components.length <= MAX_RUN_COMPONENTS && data.components.every(isSha256))) return `data.components must be at most ${MAX_RUN_COMPONENTS} sha-256 hashes`
+  if (parsed?.src === 'drill') {
+    if (data.date !== undefined && typeof data.date !== 'string') return 'data.date must be a string'
+  } else if (data.date !== (parsed as { date: string }).date) return 'data.date must equal the date of the ref'
+  if (data.act4 !== undefined && typeof data.act4 !== 'boolean') return 'data.act4 must be a boolean'
+  if (data.kcs !== undefined && !(Array.isArray(data.kcs) && data.kcs.length <= MAX_KCS && data.kcs.every((k) => typeof k === 'string'))) return `data.kcs must be at most ${MAX_KCS} strings`
+  return null
+}
+
+/** `fleet-run` data (wave-2.md §3.2). */
+function checkFleetRun(ref: string, data: unknown): string | null {
+  if (!isObject(data)) return 'data must be an object'
+  if (typeof data.mode !== 'string' || !FLEET_MODES.has(data.mode) || data.mode !== parseFleetRunRef(ref)) return 'data.mode must be a known mode and equal the ref'
+  const parts = data.components
+  const good = (c: unknown) => isObject(c) && SLOTS.has(c.slot) && isNonEmptyString(c.labId) && isSha256(c.sha256)
+  if (!(Array.isArray(parts) && parts.length >= 1 && parts.length <= MAX_RUN_COMPONENTS && parts.every(good))) return `data.components must list 1 to ${MAX_RUN_COMPONENTS} {slot, labId, sha256}`
+  if (data.seeds !== 'fresh' && data.seeds !== 'practice') return 'data.seeds must be fresh or practice'
+  if (!isFiniteNumber(data.goodput) || !isFiniteNumber(data.refGoodput)) return 'data needs finite goodput and refGoodput'
+  if (data.ttftP95 !== undefined && !isFiniteNumber(data.ttftP95)) return 'data.ttftP95 must be a number'
+  return null
+}
+
+/** Help acks (`packet:` refs, wave-2.md §3.2): how the packet left and how long it was. Hint and erratum acks carry nothing checked. */
+function checkAck(ref: string, data: unknown): string | null {
+  if (data !== undefined && !isObject(data)) return 'data must be an object'
+  if (!ref.startsWith('packet:')) return null
+  if (!isObject(data) || typeof data.via !== 'string' || !HELP_VIAS.has(data.via)) return 'data.via must be claude, chatgpt or copy'
+  if (!(Number.isInteger(data.chars) && (data.chars as number) >= 0 && (data.chars as number) <= MAX_PACKET_CHARS)) return `data.chars must be a whole number within [0, ${MAX_PACKET_CHARS}]`
+  if (data.arm !== undefined && data.arm !== 'ladder' && data.arm !== 'packet') return 'data.arm must be ladder or packet'
+  return null
+}
+
 /** Kind-specific `data` shape: only what fold and the selectors read. */
-function checkData(kind: EventKind, data: unknown): string | null {
+function checkData(kind: EventKind, ref: string, data: unknown): string | null {
   switch (kind) {
     case 'item':
     case 'probe':
@@ -119,6 +179,12 @@ function checkData(kind: EventKind, data: unknown): string | null {
     case 'capstone-step':
       if (data !== undefined && !(isObject(data) && (data.index === undefined || isFiniteNumber(data.index)))) return 'data.index must be a number'
       return null
+    case 'incident':
+      return checkIncident(ref, data)
+    case 'fleet-run':
+      return checkFleetRun(ref, data)
+    case 'ack':
+      return checkAck(ref, data)
     default:
       return data === undefined || isObject(data) ? null : 'data must be an object'
   }
@@ -154,7 +220,7 @@ export function validateEvent(x: unknown): Checked<LedgerEvent> {
     if (x.ms !== undefined && !(isFiniteNumber(x.ms) && x.ms >= 0)) return fail('ms must be a non-negative number')
     if (x.wasmSha256 !== undefined && !(typeof x.wasmSha256 === 'string' && /^[0-9a-f]{64}$/.test(x.wasmSha256))) return fail('wasmSha256 must be lowercase hex SHA-256')
   }
-  const dataProblem = checkData(kind, x.data)
+  const dataProblem = checkData(kind, x.ref, x.data)
   if (dataProblem) return fail(dataProblem)
   return { ok: true, value: x as unknown as LedgerEvent }
 }
@@ -171,6 +237,11 @@ const WORKING_EXACT = new Set([
   'queue:laptop',
   'handoff:last',
   'today:prefs',
+  // Wave 2 (wave-2.md §3.5)
+  'engine:slots',
+  'exp:seed',
+  'zoo:config',
+  'daily:team',
 ])
 const WORKING_PREFIXES = ['scroll:', 'sim-config:', 'fw:evidence:', 'settings:']
 
@@ -179,10 +250,36 @@ export function isWorkingKey(key: unknown): key is WorkingRecord['key'] {
   return WORKING_EXACT.has(key) || WORKING_PREFIXES.some((p) => key.length > p.length && key.startsWith(p))
 }
 
+/** The values the codec holds to a shape: only the Wave 2 keys that other code trusts (the slot map, the seed, the pasted config, the team code). */
+function checkWorkingValue(key: string, value: unknown): string | null {
+  switch (key) {
+    case 'engine:slots': {
+      if (!isObject(value)) return 'engine:slots must map slots to components'
+      for (const [slot, entry] of Object.entries(value)) {
+        if (!SLOTS.has(slot)) return `engine:slots has an unknown slot ${JSON.stringify(slot)}`
+        if (!isObject(entry) || !isSha256(entry.sha256) || !Number.isInteger(entry.version) || (entry.version as number) < 1 || !isIsoInstant(entry.at) || !isNonEmptyString(entry.labId)) {
+          return `engine:slots.${slot} needs a sha256, a labId, an integer version of at least 1 and an ISO at`
+        }
+      }
+      return null
+    }
+    case 'exp:seed':
+      return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 0xffffffff ? null : 'exp:seed must be a uint32'
+    case 'zoo:config':
+      return typeof value === 'string' && value.length <= MAX_ZOO_CONFIG ? null : `zoo:config must be a string of at most ${MAX_ZOO_CONFIG} characters`
+    case 'daily:team':
+      return isNonEmptyString(value) ? null : 'daily:team must be a non-empty string'
+    default:
+      return null
+  }
+}
+
 export function validateWorkingRecord(x: unknown): Checked<WorkingRecord> {
   if (!isObject(x)) return fail('not an object')
   if (!isWorkingKey(x.key)) return fail(`unknown working key ${JSON.stringify(x.key)}`)
   if (!('value' in x) || x.value === undefined) return fail('value is missing')
+  const valueProblem = checkWorkingValue(x.key, x.value)
+  if (valueProblem) return fail(valueProblem)
   if (!isIsoInstant(x.at)) return fail('at must be an ISO instant')
   if (!isNonEmptyString(x.dev)) return fail('dev must be a non-empty string')
   return { ok: true, value: x as unknown as WorkingRecord }
@@ -226,8 +323,19 @@ export interface ExportInput extends Ledger {
   exportedAt: string
   components?: ExportedComponent[]
   extras?: Extras
-  /** A delta (spec §6.6): only events and working records with `at` >= this. Components and extras are left out. */
+  /** A delta (spec §6.6): only events and working records with `at` >= this, and the components of slots changed since. Extras are left out. */
   sinceAt?: string
+}
+
+/** The hashes `engine:slots` names, restricted to slots filled at or after `since` when it is given. */
+export function slotHashes(working: readonly WorkingRecord[], since?: string): Set<string> {
+  const out = new Set<string>()
+  const slots = working.find((r) => r.key === 'engine:slots')?.value
+  if (!isObject(slots)) return out
+  for (const entry of Object.values(slots)) {
+    if (isObject(entry) && isSha256(entry.sha256) && (since === undefined || (typeof entry.at === 'string' && entry.at >= since))) out.add(entry.sha256)
+  }
+  return out
 }
 
 /**
@@ -247,9 +355,15 @@ export function buildExportV3(input: ExportInput): ExportV3 {
     device: input.device,
     events: mergeEvents(events),
     working: mergeWorking(working),
-    components: since === undefined ? mergeComponents(input.components ?? [], []) : [],
+    components: mergeComponents(since === undefined ? (input.components ?? []) : deltaComponents(input, since), []),
     extras: since === undefined ? (input.extras ?? { capstoneDrafts: {} }) : { capstoneDrafts: {} },
   }
+}
+
+/** The components a delta carries: those in slots changed since the marker. */
+function deltaComponents(input: ExportInput, since: string): ExportedComponent[] {
+  const changed = slotHashes(input.working, since)
+  return (input.components ?? []).filter((c) => changed.has(c.sha256))
 }
 
 /** Deterministic text (sorted keys): the same ledger always exports to the same bytes. */

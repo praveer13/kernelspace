@@ -27,6 +27,7 @@ import {
   mergeExtras,
   parseImport,
   previewImport as previewImportText,
+  slotHashes,
   validateEvent,
   validateWorkingRecord,
 } from './codec'
@@ -43,6 +44,7 @@ import type { Ledger } from './merge'
 import type {
   Aggregate,
   Checkpoint,
+  ComponentMeta,
   ComponentRecord,
   ConflictResolvers,
   EventFilter,
@@ -560,19 +562,22 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
   })
 
   async function exportV3(opts?: ExportOptions): Promise<ExportV3> {
-    const delta = opts?.sinceAt !== undefined
+    const since = opts?.sinceAt
+    const delta = since !== undefined
     const contents = await store.readAll()
     const components: ExportedComponent[] = []
-    for (const c of delta ? [] : contents.components) {
+    // A delta carries the components of slots changed since the marker, bytes included: a slot without its module is no handoff.
+    const changed = delta ? slotHashes([...working.values()], since) : null
+    for (const c of changed ? contents.components.filter((m) => changed.has(m.sha256)) : delta ? [] : contents.components) {
       const out: ExportedComponent = { ...c }
-      if (opts?.includeComponentBytes) {
+      if (opts?.includeComponentBytes || delta) {
         const bytes = await store.readComponentBytes(c.sha256)
         if (bytes) out.bytesB64 = bytesToBase64(new Uint8Array(bytes))
       }
       components.push(out)
     }
     const at = now()
-    const file = buildExportV3({ ...ledger(), device, exportedAt: at, components, extras: readExtras(storage), sinceAt: opts?.sinceAt })
+    const file = buildExportV3({ ...ledger(), device, exportedAt: at, components, extras: readExtras(storage), sinceAt: since })
     if (!guard.readOnly && !delta) { // a handoff delta is not a backup, so it leaves the backup nudge alone
       const rec: MetaRecords['lastExport'] = { at, events: file.events.length }
       try {
@@ -749,6 +754,25 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     return out
   }
 
+  /** The components store: metadata of everything installed or imported, bytes on demand. Read from the store, so another tab's install shows. */
+  async function components(): Promise<ComponentMeta[]> {
+    return (await store.readAll()).components
+  }
+
+  async function componentBytes(sha256: string): Promise<ArrayBuffer | null> {
+    return (await store.readComponentBytes(sha256)) ?? null
+  }
+
+  /** Content-addressed and idempotent: a hash that is already stored with its bytes is left alone. */
+  function putComponent(rec: ComponentRecord): Promise<void> {
+    if (guard.readOnly || closed) return Promise.reject(new Error('the ledger is read-only'))
+    return enqueue(async () => {
+      if (guard.readOnly) throw new Error('the ledger is read-only')
+      if (await store.readComponentBytes(rec.sha256)) return
+      await store.commit({ putComponents: [rec] }, resolvers)
+    })
+  }
+
   return {
     exportV3,
     previewImport,
@@ -757,6 +781,9 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     reset,
     events: eventsOf,
     storageEstimate,
+    components,
+    componentBytes,
+    putComponent,
     append,
     onAggregate(cb) {
       listeners.add(cb)

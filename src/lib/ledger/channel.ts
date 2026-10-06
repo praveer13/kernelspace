@@ -112,9 +112,9 @@ export function openLedgerChannel(opts: OpenChannelOptions): LedgerChannel {
   }
 }
 
-/** Working records that go on the channel: `scroll:*` is device-local and never broadcast (§5). */
+/** Working records that go on the channel: `scroll:*` and `zoo:config` are device-local and never broadcast (§5; wave-2.md §3.5). */
 export function broadcastableWorking(working: WorkingRecord[]): WorkingRecord[] {
-  return working.filter((w) => !w.key.startsWith('scroll:'))
+  return working.filter((w) => !w.key.startsWith('scroll:') && w.key !== 'zoo:config')
 }
 
 /** The slice of `window` the storage fallback needs. */

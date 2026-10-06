@@ -1,4 +1,6 @@
-import type { EventKind } from './types'
+import { FAULT_IDS, FLEET_RUN_MODES } from './constants'
+import { isLocalDay } from './time'
+import type { EventKind, FaultId, FleetRunMode } from './types'
 
 /**
  * Read-time ref migration (spec §4.3). Empty in Wave 0b. When V1 adds stable item ids,
@@ -65,6 +67,40 @@ export function parseHintRef(ref: string): { labId: string; checkId: string; run
   return { labId: tail.slice(0, slash), checkId: tail.slice(slash + 1, hash), rung: tail.slice(hash + 1) }
 }
 
+/** `inc:daily/<date>`, `inc:drill/<faultId>` or `inc:team/<code>/<date>` (wave-2.md §3.2) -> its parts. */
+export function parseIncidentRef(
+  ref: string,
+): { src: 'daily'; date: string } | { src: 'drill'; fault: FaultId } | { src: 'team'; code: string; date: string } | null {
+  const daily = refTail(ref, 'inc:daily/')
+  if (daily !== null) return isLocalDay(daily) ? { src: 'daily', date: daily } : null
+  const drill = refTail(ref, 'inc:drill/')
+  if (drill !== null) return (FAULT_IDS as readonly string[]).includes(drill) ? { src: 'drill', fault: drill as FaultId } : null
+  const team = refTail(ref, 'inc:team/')
+  const slash = team === null ? -1 : team.indexOf('/')
+  if (team === null || slash <= 0) return null
+  const date = team.slice(slash + 1)
+  return isLocalDay(date) ? { src: 'team', code: team.slice(0, slash), date } : null
+}
+
+/** `fleet:<mode>` -> the mode, or null. */
+export function parseFleetRunRef(ref: string): FleetRunMode | null {
+  const mode = refTail(ref, 'fleet:')
+  return mode !== null && (FLEET_RUN_MODES as readonly string[]).includes(mode) ? (mode as FleetRunMode) : null
+}
+
+/** `packet:lab/<labId>/<checkId>`, `packet:lesson/<lessonId>` or `packet:sim/<simId>` (H2): a context packet was copied out. */
+const isPacketRef = (ref: string): boolean => {
+  const lab = refTail(ref, 'packet:lab/')
+  if (lab !== null) {
+    const slash = lab.indexOf('/')
+    return slash > 0 && slash < lab.length - 1 && !lab.includes('/', slash + 1)
+  }
+  return ['packet:lesson/', 'packet:sim/'].some((p) => {
+    const id = refTail(ref, p)
+    return id !== null && !id.includes('/')
+  })
+}
+
 /**
  * Item, probe and predict refs: a quiz item, a Boot step, a change-card item, and the Wave 1 shapes
  * (spec §3.2): generated, prequestion, diagram, constructed response and authored `item:<id>`.
@@ -86,14 +122,14 @@ const REF_RULES: Record<EventKind, (ref: string) => boolean> = {
   'fleet-act': (ref) => nonEmpty(ref, 'fw:'),
   'capstone-step': (ref) => nonEmpty(ref, 'cap:'),
   play: (ref) => nonEmpty(ref, 'play:'),
-  incident: (ref) => ref.length > 0,
-  'fleet-run': (ref) => ref.length > 0,
+  incident: (ref) => parseIncidentRef(ref) !== null,
+  'fleet-run': (ref) => parseFleetRunRef(ref) !== null,
   prove: (ref) => nonEmpty(ref, 'prove:'),
   visit: (ref) => nonEmpty(ref, 'lesson:') || (nonEmpty(ref, 'sim:') && !ref.includes('/')) || ref === 'boot',
   complete: (ref) => nonEmpty(ref, 'lesson:') || ref === 'boot' || ref === 'placement',
   exercise: (ref) => nonEmpty(ref, 'lesson:'),
   achievement: (ref) => nonEmpty(ref, 'ach:'),
-  ack: (ref) => nonEmpty(ref, 'erratum:') || nonEmpty(ref, 'screen:') || parseHintRef(ref) !== null,
+  ack: (ref) => nonEmpty(ref, 'erratum:') || nonEmpty(ref, 'screen:') || parseHintRef(ref) !== null || isPacketRef(ref),
 }
 
 /** The ref grammar of each kind (spec §4.2), used by import validation. */
