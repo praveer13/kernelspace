@@ -9,7 +9,78 @@ const lesson: Lesson = {
   minutes: 20,
   hook: 'From source to a running process: the toolchain, symbol resolution, and the contract that lets strangers\' code call yours.',
   exercise: 'quiz',
+  kcs: ['t1.compile-link', 't1.abi'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'A build prints "undefined reference to foo", and a deployed binary prints "cannot open shared object file". Which stage speaks in each case, and what fixes each?',
+        model:
+          'Undefined reference comes from the linker: foo was declared but no object or library on the link line defines it, so add the defining .o or an -l flag. Cannot open shared object comes from the loader at startup: linking worked, but the .so is not on its search path, so fix the path or rpath.',
+        ideas: [
+          'Undefined reference is link time: no definition on the link line',
+          'Cannot open shared object is load time: the loader cannot find the .so',
+          'The fixes differ: add the .o or -l, or repair the search path',
+        ],
+        kcs: ['t1.compile-link'],
+      },
+      {
+        prompt: 'Why can a Rust data plane call a C++ CUDA library at all? Say what the ABI fixes.',
+        model:
+          'Both sides compile against the same calling convention, usually the C ABI. It fixes which registers carry arguments and results, stack alignment, which registers each side must preserve, and plain struct layout. With those fixed, separately compiled code from any language can call each other without ever seeing source.',
+        ideas: [
+          'The ABI fixes argument and return registers and stack alignment',
+          'It fixes which side saves which registers, and plain struct layout',
+          'So separately compiled code in any language can call each other',
+        ],
+        kcs: ['t1.abi'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A binary is dynamically linked against libc.so.6. When does the library\'s code get mapped into the process?',
+          options: [
+            'At link time, when the linker copies the library functions into the executable',
+            'At process start, when the loader maps the library and sets up its lazily filled jump table',
+            'At the first call, when the kernel scheduler fetches the library it still needs',
+            'At compile time, when the compiler reads the header and pulls the code in',
+          ],
+          correct: [1],
+          why: [
+            'That is static linking. A dynamically linked binary stays small because the library code is not copied into it.',
+            'Right: dynamic linking records a promise in the binary, and the loader fulfils it at startup by mapping the .so and setting up the PLT and GOT, whose slots fill in at the first call to each function (lazy binding).',
+            'The scheduler decides which thread runs, and it does not load libraries. Lazy binding resolves addresses at the first call, but the library is already mapped.',
+            'A header only declares functions. The compiler never reads library code, and the definition is found much later.',
+          ],
+          revealAt: 'The pipeline, stage by stage',
+          kcs: ['t1.compile-link'],
+        },
+        {
+          kind: 'choice',
+          q: 'Python\'s ctypes calls a C library that was built years earlier. What makes the call possible without recompiling either side?',
+          options: [
+            'Python embeds a C compiler, and it rebuilds the library for each new interpreter version',
+            'The library exports Python bytecode, and the interpreter can run it directly',
+            'The operating system translates each call between the two languages, as it is made',
+            'Both sides follow the same calling convention for names, registers and struct layout',
+          ],
+          correct: [3],
+          why: [
+            'Python does not embed a compiler. ctypes calls into the existing machine code as it stands, with no rebuild step.',
+            'A C library holds machine code, not bytecode. The interpreter calls that code through the ABI rather than running it.',
+            'The OS does not translate calls between languages. It loads both pieces of code, and they meet at the ABI.',
+            'Right: the C ABI fixes function names, which registers carry arguments and results, and plain struct layout, so unrelated toolchains agree.',
+          ],
+          revealAt: 'The ABI: the calling contract',
+          kcs: ['t1.abi'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `You type \`gcc main.c -o main\` (or \`cargo build\`, or your CI does) and a runnable artifact appears. Between the source and the process lies a pipeline every systems engineer should be able to narrate: **preprocess → compile → assemble → link → load**. Each stage has a distinct job, a distinct artifact, and a distinct failure mode you have absolutely seen in CI logs — "undefined reference," "relocation truncated," "cannot open shared object" — possibly without knowing which stage was speaking.
@@ -22,7 +93,7 @@ This is a guided tour with a purpose. The destination is the **ABI** — the app
 
 **Preprocessing** is textual: \`#include\` pastes headers, \`#define\` expands macros. Output: one giant translation unit. **Compilation** parses that into an AST, optimizes, and emits assembly for your target ISA. **Assembly** turns mnemonics into machine code, producing an **object file** (\`.o\`): machine code plus metadata — sections (\`.text\` code, \`.data\` initialized, \`.bss\` zero-init), a **symbol table** (names this file defines vs names it needs), and **relocation entries** (addresses to patch later, because the file doesn't know where anything will finally live).
 
-**Linking** is the matchmaker. It takes many object files and libraries, resolves every undefined symbol to a definition, assigns final addresses, patches the relocation entries, and emits an executable. Two flavors: **static** linking copies library code into the binary (big, self-contained, no version skew); **dynamic** linking records a promise — "needs \`libc.so.6\`" — that the **loader** fulfills at process start, mapping the shared library and patching a jump table (the PLT/GOT machinery).`,
+**Linking** is the matchmaker. It takes many object files and libraries, resolves every undefined symbol to a definition, assigns final addresses, patches the relocation entries, and emits an executable. Two flavors: **static** linking copies library code into the binary (big, self-contained, no version skew); **dynamic** linking records a promise — "needs \`libc.so.6\`" — that the **loader** fulfills at process start, mapping the shared library and setting up a jump table (the PLT/GOT machinery) whose slots fill in on each function's first call.`,
     },
     {
       type: 'code',
@@ -93,6 +164,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
             'Addresses are not final at compile time. The compiler leaves placeholders with relocations; the linker assigns addresses, and the loader may shift them again with ASLR.',
             'Page tables belong to a running process and live in the kernel. An object file has sections with flags, but no page table and nothing mapped yet.',
           ],
+          kcs: ['t1.compile-link'],
         },
         {
           q: '"undefined reference to `foo\'`" occurs at which stage?',
@@ -106,6 +178,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
             'Right: the linker searches all objects and libraries for a definition of foo, finds none, and reports undefined reference. Fix by adding the .o or -l library.',
             'Load-time failures look different, such as "cannot open shared object file", when the dynamic loader cannot find a .so. This message comes from the static linker.',
           ],
+          kcs: ['t1.compile-link'],
         },
         {
           q: 'The System V AMD64 ABI specifies, among other things…',
@@ -124,6 +197,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
             'Scheduling is an OS policy, not part of a calling convention. The ABI says how a call is made, not which thread or core runs it.',
             'Managed-language object layouts belong to each runtime. The C ABI covers only plain C types, which is why runtimes bridge through C-compatible structs.',
           ],
+          kcs: ['t1.abi'],
         },
         {
           q: 'Why is the C ABI the lingua franca of language interop?',
@@ -142,6 +216,7 @@ An LLM serving process is an ABI festival: Python orchestration calling into PyT
             'No standard imposes this. The C standard covers the C language only; languages offer C interop by their own choice.',
             'The C ABI carries raw pointers and no checking, so memory bugs cross the boundary freely. Safe wrappers have to be added on top.',
           ],
+          kcs: ['t1.abi'],
         },
       ],
     },

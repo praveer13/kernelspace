@@ -100,6 +100,7 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
             'Shadowing is lexical name lookup, not allocation. Both values are ordinary locals, and the old one is simply unreachable by name after the new let.',
             'Rust allows rebinding a name in the same scope; that is exactly shadowing. The error people remember, E0384, comes from assigning twice to a non-mut binding.',
           ],
+          kcs: ['r.bindings-expressions', 'r.scalar-types'],
         },
         {
           q: 'Why does removing the final semicolon from a Rust block matter?',
@@ -118,6 +119,7 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
             'That is return, which exits the function. A block\'s tail expression only gives the block a value, and the enclosing function keeps running after it.',
             'Every expression is evaluated either way. The semicolon only discards the result, so the line still runs and the block then has the unit value.',
           ],
+          kcs: ['r.bindings-expressions'],
         },
         {
           q: 'Which integer type is normally used for collection indexes?',
@@ -136,10 +138,12 @@ The starter **todo!()** bodies deliberately compile and then panic, so the first
             'Right: usize is as wide as a pointer on the target, so it can index any object in memory. Slices and Vecs index only with usize or ranges of it.',
             'isize does not implement indexing, and a signed type does not prevent underflow bugs. It would only turn an underflow into a negative index that is still invalid.',
           ],
+          kcs: ['r.scalar-types'],
         },
       ],
     },
   ],
+  kcs: ['r.bindings-expressions', 'r.scalar-types'],
 }
 
 export default lesson

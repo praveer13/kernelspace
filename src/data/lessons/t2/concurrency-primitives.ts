@@ -176,6 +176,8 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'Misconception: locking synchronises every core. A single atomic touches one cache line, not all cores, and an uncontended line is already in the local cache, so it costs tens of ns.',
             'Misconception: free. An atomic read-modify-write is not a plain store; it has real cost (~20 ns) and ordering effects, which is why a contended hot lock still matters.',
           ],
+          kcs: ['t2.mutex-atomics'],
+          miss: ['t2.mutex-always-syscall', '', 't2.lock-syncs-every-core', 't2.lock-is-free'],
         },
         {
           q: 'Acquire/release ordering exists because…',
@@ -194,6 +196,8 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'Misconception: mutexes need hand-placed fences. Lock and unlock already carry acquire and release semantics; atomicity of the lock word comes from the atomic instruction, not a fence.',
             'Misconception: lost writes. Cache coherence never loses a store; the hazard is that another core observes writes in a different order than program order, not that they disappear.',
           ],
+          kcs: ['t2.mutex-atomics'],
+          miss: ['t2.ordering-disables-coherence', '', 't2.mutex-needs-fence', 't2.writes-are-lost'],
         },
         {
           q: 'The ABA problem occurs because…',
@@ -212,6 +216,8 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'Misconception: ordering is the cause. Weak ordering can cause stale reads, but ABA happens with sequentially consistent CAS too, because the value truly matches at the time of the compare.',
             'Misconception: alignment. Unaligned CAS is a fault or a performance bug on most CPUs, and it is unrelated to ABA, which happens with perfectly aligned pointers.',
           ],
+          kcs: ['t2.aba'],
+          miss: ['t2.cas-not-atomic', '', 't2.aba-is-ordering', 't2.aba-is-alignment'],
         },
         {
           q: 'Java\'s LongAdder beats AtomicLong under high contention by…',
@@ -230,10 +236,42 @@ Contended, long critical section → mutex (sleep is a feature). Single-word sta
             'Misconception: finer locks. LongAdder takes no locks; it stripes atomic cells. Lock-per-segment is a different technique for maps, with locks rather than cells on the path.',
             'Misconception: weaker ordering. Increments are still atomic with ordering; store buffers do not combine atomic updates to a shared line, and contention remains until the line stops being shared.',
           ],
+          kcs: ['t2.mutex-atomics', 't0.false-sharing'],
+          miss: ['t2.adder-faster-instruction', '', 't2.adder-finer-locks', 't2.adder-weaker-ordering'],
         },
       ],
     },
   ],
+  kcs: ['t2.mutex-atomics', 't2.aba'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Sixteen threads increment one shared counter. When is a mutex fine, when is an atomic better, and what is the real scalability limit?',
+        model:
+          'Uncontended, a futex mutex costs one atomic operation, so a mutex suits longer critical sections and sleeps in the kernel only on contention. A single-word counter fits an atomic fetch-add. Under heavy contention both fight over one cache line that bounces between cores. Striping the count across padded per-core cells, as LongAdder does, removes the shared line.',
+        ideas: [
+          'A mutex suits longer critical sections: uncontended it is one atomic op, with a kernel sleep only on contention',
+          'Single-word state suits an atomic fetch-add with the weakest safe ordering',
+          'Contention on one cache line is the real limit, so stripe or pad the counter per core',
+        ],
+        kcs: ['t2.mutex-atomics'],
+      },
+      {
+        prompt:
+          'Describe the ABA problem in a lock-free stack, and name one fix.',
+        model:
+          'Thread 1 reads head = A and is preempted. Thread 2 pops A and B, then pushes A back at the same recycled address. Thread 1 resumes and its compare-and-swap sees head == A and succeeds, yet the nodes beneath have changed, so the stack is corrupted. A version tag on the pointer, hazard pointers or epochs prevent it.',
+        ideas: [
+          'Thread 1 reads A and is preempted while the list goes A, then B, then back to A',
+          'CAS compares values, not history, so it succeeds on the recycled address and corrupts the structure',
+          'Fix it with a tagged (versioned) pointer, hazard pointers, epoch reclamation, or a mutex',
+        ],
+        kcs: ['t2.aba'],
+      },
+    ],
+  },
 }
 
 export default lesson

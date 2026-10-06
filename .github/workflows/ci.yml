@@ -43,6 +43,16 @@ jobs:
       - run: bun run verify:errata
       - run: bun run verify:claims
 
+      # Wave 1 gates (docs/specs/wave-1.md §16.4). Reserved by the scaffold; each exits 0 with
+      # "pending: <task>" until its owner lands it, and then blocks like the rest.
+      - run: bun run verify:kc
+      - run: bun run verify:generators
+      - run: bun run verify:determinism
+      - run: bun run verify:plays
+      - run: bun run verify:guardrails
+      - run: bun run verify:mentor
+      - run: bun run verify:search-index
+
       # Ledger core properties (spec docs/specs/ledger-v3.md §13): pure, no browser needed.
       - run: bun run test
 

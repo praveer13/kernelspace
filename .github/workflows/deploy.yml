@@ -44,6 +44,16 @@ jobs:
       - run: bun run verify:errata
       - run: bun run verify:claims
 
+      # Wave 1 gates (docs/specs/wave-1.md §16.4). Reserved by the scaffold; each exits 0 with
+      # "pending: <task>" until its owner lands it, and then blocks like the rest.
+      - run: bun run verify:kc
+      - run: bun run verify:generators
+      - run: bun run verify:determinism
+      - run: bun run verify:plays
+      - run: bun run verify:guardrails
+      - run: bun run verify:mentor
+      - run: bun run verify:search-index
+
       # Ledger core properties (spec docs/specs/ledger-v3.md §13): pure, no browser needed.
       - run: bun run test
 
@@ -54,6 +64,9 @@ jobs:
 
       - name: Export freshness (if this fails the committed export is stale; run bun scripts/export-lessons-md.ts and commit)
         run: bun scripts/export-lessons-md.ts && git diff --exit-code -- public/lessons-md public/llms.txt
+
+      # Precache manifest for the service worker (docs/specs/wave-1.md §6.10), from the checked build.
+      - run: bun scripts/build-sw-manifest.ts
 
       # Known BrowserRouter URLs receive real index documents (HTTP 200 after
       # Pages' canonical trailing-slash redirect). Unknown URLs retain the SPA

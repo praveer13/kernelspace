@@ -13,7 +13,8 @@ export interface LessonView {
 function aggregateOf(lessons: Readonly<Record<string, LessonView>>, acks: Readonly<Record<string, IsoInstant>>): Aggregate {
   const agg = emptyAggregate()
   for (const [id, L] of Object.entries(lessons)) {
-    if (L.status === 'done' && L.completedAt) agg.lessons[id] = { done: true, completedAt: L.completedAt }
+    // A lesson that was only read keeps its reading time, so it still gets its cards (wave-1.md §3.4).
+    if ((L.status === 'done' || L.status === 'read') && L.completedAt) agg.lessons[id] = { done: true, completedAt: L.completedAt }
   }
   agg.acks = { ...acks }
   return agg

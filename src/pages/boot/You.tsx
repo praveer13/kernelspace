@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Button } from '@/components/Button'
 import type { LearningPath, WeekPlan } from '@/lib/ledger/types'
 import { useProgress } from '@/lib/progress'
@@ -41,6 +41,7 @@ interface YouProps {
 }
 
 export default function You({ onFinish }: YouProps) {
+  const navigate = useNavigate()
   const setWorking = useProgress((s) => s.setWorking)
   const installDismissed = useProgress((s) => s.working['boot:install-dismissed'] === true)
   const uid = useId()
@@ -61,6 +62,8 @@ export default function You({ onFinish }: YouProps) {
     if (path) setWorking('boot:path', path)
     if (weekTouched) setWorking('boot:week', { ...week })
     onFinish()
+    // Boot's last step ends in Today (wave-1.md §6.9): the first reviews and the week are there.
+    navigate('/today')
   }
 
   return (
@@ -226,7 +229,7 @@ export default function You({ onFinish }: YouProps) {
         )}
 
         <Button type="submit" className="w-full sm:w-auto">
-          Finish Boot
+          Go to Today
         </Button>
       </form>
     </section>

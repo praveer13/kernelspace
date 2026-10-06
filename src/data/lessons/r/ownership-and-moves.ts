@@ -73,6 +73,7 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
             'That describes shared ownership with reference counting, which needs Rc or Arc. Plain assignment keeps a single owner, and a becomes unusable.',
             'Rust does not leave a valid empty String behind, as C++ std::move may. The source binding is dead, so there is nothing left to read from a.',
           ],
+          kcs: ['r.ownership-moves'],
         },
         {
           q: 'Why is clone() intentionally explicit?',
@@ -91,6 +92,7 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
             'Clone is an ordinary trait method, and implementations like String\'s are safe code. Unsafe is not what the explicit call signals.',
             'The type itself decides, by implementing Clone or Copy. The compiler knows which types allow duplication, so no programmer vouching is involved.',
           ],
+          kcs: ['r.clone-copy-drop', 'r.ownership-moves'],
         },
         {
           q: 'What does Drop provide?',
@@ -109,10 +111,12 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
             'Drop runs automatically at the end of scope. Calling drop(x) merely moves x into a function that ends its life early; it is not required.',
             'Drop is a general destructor. File handles and MutexGuard values release their resources in Drop, so no separate manual close is needed.',
           ],
+          kcs: ['r.clone-copy-drop'],
         },
       ],
     },
   ],
+  kcs: ['r.ownership-moves', 'r.clone-copy-drop'],
 }
 
 export default lesson

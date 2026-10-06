@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router'
-import { motion } from 'framer-motion'
+import { cn } from '@/lib/utils'
 import {
   useProgress,
   selectDoneLessons,
@@ -39,7 +39,7 @@ function Sparkline({ data }: { data: number[] }) {
 
 /**
  * StatusBar — the "system monitor" (design.md §9.2).
- * Fixed bottom, lg+ only. XP as CPU%, lessons as MEM blocks, streak as uptime,
+ * Fixed bottom, lg+ only (below lg the BottomTabs bar takes the strip). XP as CPU%, lessons as MEM blocks, streak as uptime,
  * current route + a playful latency readout on the right.
  */
 export default function StatusBar() {
@@ -103,16 +103,16 @@ export default function StatusBar() {
   }
 
   return (
-    <motion.aside
-      initial={{ y: 40 }}
-      animate={{ y: visible ? 0 : 40 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="fixed inset-x-0 bottom-0 z-40 hidden h-10 border-t border-line bg-surface-1/90 backdrop-blur-md lg:block"
+    <aside
+      className={cn(
+        'fixed inset-x-0 bottom-0 z-40 hidden h-10 border-t border-line bg-surface-1/90 backdrop-blur-md transition-transform duration-300 ease-out-expo lg:block',
+        visible ? 'translate-y-0' : 'translate-y-10',
+      )}
       aria-label="Progress status bar"
     >
       <div className="mx-auto flex h-full max-w-app items-center gap-6 px-6 font-mono text-[11px] tracking-wide text-text-3 xl:px-12">
         {/* Zone 1 — CPU = XP utilization */}
-        <div className="flex items-center gap-2" title={`${xp} XP`}>
+        <div className="flex items-center gap-2" title={`${xp} XP (nominal minutes of graded work)`}>
           <span className="text-accent">▣</span>
           <span>
             CPU <span className="text-text-1">{cpuPct}%</span>
@@ -161,6 +161,6 @@ export default function StatusBar() {
           <span className="text-text-2">~{pathname === '/' ? '' : pathname}</span>
         </div>
       </div>
-    </motion.aside>
+    </aside>
   )
 }

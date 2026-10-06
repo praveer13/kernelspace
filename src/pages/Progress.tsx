@@ -1,11 +1,12 @@
 /**
  * PROGRESS — /progress (progress.md).
- * "htop for your brain": rank panel, KPI tweens, per-track memory-map bars,
- * GitHub-style heatmap, achievement catalog, export/import (merge or replace, with undo)/reset with double-confirm.
+ * "htop for your brain": ring panel with the RING 2 checklist, an XP explainer, first-review calibration, the week
+ * and hand-off (wave-1.md §6.9, §8.5), KPI tweens, per-track memory-map bars, GitHub-style heatmap, achievement
+ * catalog, export/import (merge or replace, with undo)/reset with double-confirm.
  * Consumes src/lib/progress.ts as-is.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { AnimatePresence, animate, motion, useInView, useReducedMotion } from 'framer-motion'
 import {
@@ -31,8 +32,6 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import {
   useProgress,
-  rankForXp,
-  nextRank,
   selectStreak,
   localDateKey,
   TOTAL_LESSONS,
@@ -47,7 +46,16 @@ import type { ImportFile } from '@/components/ledger/ImportPreview'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
 import { ALL_LESSONS } from '@/data/lessons'
 import ProgressRing from '@/components/ProgressRing'
+import { RINGS_PENDING, selectRings } from '@/lib/economy'
+import type { RingRecall } from '@/lib/learner/summary'
+import XpExplainer from '@/pages/progress/XpExplainer'
+import { useSummary } from '@/pages/progress/useSummary'
+import { useUpNext, type UpNextState } from '@/lib/learner/up-next'
+import { PLACEMENT_ROUTE } from '@/lib/learner/recommend'
 import { cn } from '@/lib/utils'
+
+// The review model (calibration, week, hand-off) loads on demand, after the rings have painted.
+const ReviewPanel = lazy(() => import('@/pages/progress/ReviewPanel'))
 
 /* ---------------- shared bits ---------------- */
 
@@ -235,14 +243,46 @@ const ACHIEVEMENTS: AchievementDef[] = [
   },
 ]
 
-/* ---------------- section 1: rank panel ---------------- */
+/* ---------------- section 1: ring panel ---------------- */
 
-function RankPanel() {
+/** One line of the RING 2 checklist: what is done of what, and where to go to do more. */
+function CheckRow({ done, label, count, to, action }: { done: boolean; label: string; count: string; to: string; action: string }) {
+  return (
+    <li className="flex items-center gap-3">
+      <span
+        aria-hidden
+        className={cn(
+          'flex size-4 shrink-0 items-center justify-center rounded-full border',
+          done ? 'border-accent bg-accent text-accent-foreground' : 'border-line-bright',
+        )}
+      >
+        {done && <Check size={11} strokeWidth={3} />}
+      </span>
+      <span className="min-w-0 flex-1 text-body-sm text-text-1">
+        {label} <span className="font-mono text-[12px] text-text-2">{count}</span>
+        <span className="sr-only">{done ? ', done' : ', not done'}</span>
+      </span>
+      <Link
+        to={to}
+        className="inline-flex min-h-11 shrink-0 items-center font-mono text-[12px] text-text-2 underline underline-offset-2 hover:text-accent"
+      >
+        {action}
+        <span className="sr-only"> {label}</span>
+      </Link>
+    </li>
+  )
+}
+
+/**
+ * The highest ring earned and what RING 2 still needs (§8.5). Rings are derived from the ledger, never revoked
+ * and never a gate; amber (mean predicted recall under 0.8 over the ring's ideas) is only a nudge to refresh.
+ */
+function RingPanel({ recall }: { recall: RingRecall | null }) {
   const xp = useProgress((s) => s.xp)
+  const aggregate = useProgress((s) => s.aggregate)
   const lessons = useProgress((s) => s.lessons)
   const sims = useProgress((s) => s.sims)
-  const rank = rankForXp(xp)
-  const next = nextRank(xp)
+  const { rank, ring2 } = useMemo(() => selectRings(aggregate), [aggregate])
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true })
   const shownXp = useCountUp(xp, inView)
@@ -252,7 +292,7 @@ function RankPanel() {
     ? Math.round((scored.reduce((a, l) => a + (l.quizScore ?? 0), 0) / scored.length) * 100)
     : 0
   const labTasks = Object.values(sims).reduce((a, s) => a + s.tasksDone.length, 0)
-  const pctToNext = next ? Math.min(100, (xp / next.minXp) * 100) : 100
+  const amber = ring2.earned && recall?.amber === true
 
   return (
     <motion.div
@@ -261,32 +301,52 @@ function RankPanel() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       className="relative overflow-hidden rounded-lg border border-line bg-surface-1 p-6"
+      data-ring-panel
     >
       <div className="absolute inset-x-0 top-0 h-px bg-grad-brand" aria-hidden />
-      <p className="font-mono text-[11px] uppercase tracking-[0.10em] text-text-3">rank</p>
-      <p className="mt-2 font-display text-[40px] font-bold leading-none text-text-1">
-        {rank.name}
+      <p className="font-mono text-[11px] uppercase tracking-[0.10em] text-text-3">highest ring earned</p>
+      <p className="mt-2 font-display text-[40px] font-bold leading-none text-text-1">{rank}</p>
+      <p className="mt-2 font-mono text-[11px] text-text-3">{RANK_FLAVOR[rank]}</p>
+      {amber && recall?.mean != null && (
+        <p data-ring-amber className="mt-3 rounded-md border border-amber/50 bg-amber/10 px-3 py-2 text-body-sm text-text-1">
+          Amber: predicted recall of RING 2's ideas is {Math.round(recall.mean * 100)} %. Your ring stays; a short review on Today brings it up.
+        </p>
+      )}
+
+      <h2 className="mt-5 font-mono text-[11px] uppercase tracking-[0.10em] text-text-3">
+        RING 2 {ring2.earned ? 'earned' : 'checklist'}
+      </h2>
+      <ul className="mt-2 space-y-0.5" data-ring2-checklist>
+        <CheckRow
+          done={ring2.rDrills.done === ring2.rDrills.total}
+          label="R drills"
+          count={`${ring2.rDrills.done}/${ring2.rDrills.total}`}
+          to={ring2.rDrills.missing[0] ? `/forge/${ring2.rDrills.missing[0]}` : '/forge'}
+          action={ring2.rDrills.done === ring2.rDrills.total ? 'open' : 'next drill'}
+        />
+        <CheckRow
+          done={ring2.lab01.done}
+          label="Lab 01"
+          count={`${ring2.lab01.checks.done}/${ring2.lab01.checks.total} checks`}
+          to="/forge/rust-allocator"
+          action={ring2.lab01.done ? 'open' : 'continue'}
+        />
+        <CheckRow
+          done={ring2.tickets.done === ring2.tickets.total}
+          label="Tickets"
+          count={`${ring2.tickets.done}/${ring2.tickets.total}`}
+          to={ring2.tickets.missing[0] ? `/lesson/${ring2.tickets.missing[0]}` : '/curriculum'}
+          action={ring2.tickets.done === ring2.tickets.total ? 'open' : 'next ticket'}
+        />
+      </ul>
+      <p className="mt-2 text-[13px] text-text-3">
+        Drills and the lab count when their checks pass on numbers you have not seen. A ticket counts when you pass it, not when you read the
+        lesson.
       </p>
-      <p className="mt-2 font-mono text-[11px] text-text-3">{RANK_FLAVOR[rank.name]}</p>
-      <div className="mt-5">
-        <div className="flex justify-between font-mono text-[11px] text-text-3">
-          <span>
-            {Math.round(shownXp)}
-            {next ? `/${next.minXp}` : ''} XP
-          </span>
-          <span>{next ? `next: ${next.name}` : 'max rank'}</span>
-        </div>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-3">
-          <motion.div
-            className="h-full rounded-full bg-grad-brand"
-            initial={{ width: 0 }}
-            animate={{ width: `${pctToNext}%` }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          />
-        </div>
-      </div>
+      <p className="mt-3 text-[13px] text-text-3">{RINGS_PENDING.join(', ')}: criteria arrive in Wave 2–3.</p>
+
       <p className="mt-4 border-t border-line pt-3 font-mono text-[11px] text-text-3">
-        lessons {done}/{TOTAL_LESSONS} · quizzes {quizAvg}% · lab tasks {labTasks}/{TOTAL_LAB_TASKS}
+        {Math.round(shownXp)} XP · lessons {done}/{TOTAL_LESSONS} · quizzes {quizAvg}% · lab tasks {labTasks}/{TOTAL_LAB_TASKS}
       </p>
     </motion.div>
   )
@@ -391,13 +451,11 @@ function KpiBand() {
 
 /* ---------------- section 3: track breakdown + address map ---------------- */
 
-function TrackBreakdown() {
+function TrackBreakdown({ nextId }: { nextId: string | null }) {
   const lessons = useProgress((s) => s.lessons)
   const stepsDone = useProgress((s) => s.capstone.stepsDone)
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
-
-  const nextId = ORDERED_LESSON_IDS.find((id) => lessons[id]?.status !== 'done') ?? null
 
   const rows = TRACKS.map((t) => {
     const doneN = Object.entries(lessons).filter(
@@ -1164,33 +1222,28 @@ function DataOwnership() {
 
 /* ---------------- section 7: up next ---------------- */
 
-function UpNext() {
-  const lessons = useProgress((s) => s.lessons)
+function UpNext({ up }: { up: UpNextState }) {
   const reduced = useReducedMotion()
-  const nextId = ORDERED_LESSON_IDS.find((id) => lessons[id]?.status !== 'done') ?? null
-
-  const reviewId = useMemo(() => {
-    if (nextId) return null
-    let worst: string | null = null
-    let worstScore = Infinity
-    for (const [id, l] of Object.entries(lessons)) {
-      if (l.quizScore != null && l.quizScore < worstScore) {
-        worstScore = l.quizScore
-        worst = id
-      }
-    }
-    return worst
-  }, [nextId, lessons])
-
-  const target = nextId ?? reviewId
-  if (!target) return null
-  const track = TRACKS.find((t) => t.id === target.split('.')[0])
+  if (up.status === 'loading') {
+    return <div data-up-next-slot aria-busy="true" className="min-h-[7rem] rounded-lg border border-line bg-surface-1" />
+  }
+  // the recommender could not load: a plain link to the path, never a guess at a lesson
+  if (up.status === 'error') {
+    return (
+      <Link to="/curriculum" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line bg-surface-1 px-5 py-3 font-display text-[15px] text-text-1">
+        <Play size={14} /> open your path →
+      </Link>
+    )
+  }
+  const { rec, offerPlacement } = up
+  const track = rec.kind === 'lesson' ? TRACKS.find((t) => t.id === rec.ref.split('.')[0]) : undefined
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      data-up-next={rec.kind}
       className="relative overflow-hidden rounded-lg border border-line bg-surface-1 p-5"
     >
       <div className="absolute inset-x-0 top-0 h-px overflow-hidden" aria-hidden>
@@ -1206,23 +1259,26 @@ function UpNext() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
-            {nextId ? 'recommended next instruction' : 'review'}
+            {rec.kind === 'today' ? 'review' : 'recommended next instruction'}
           </p>
           <p className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span
-              className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px]"
-              style={{ color: track?.color }}
-            >
-              {track?.code}
-            </span>
-            <span className="font-mono text-body-sm text-text-1">{target}</span>
-            <span className="font-mono text-[11px] text-text-3">
-              · {track?.name} · ~12min
-            </span>
+            {track && (
+              <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px]" style={{ color: track.color }}>
+                {track.code}
+              </span>
+            )}
+            <span className="font-mono text-body-sm text-text-1 [overflow-wrap:anywhere]">{rec.title}</span>
+            <span className="font-mono text-[11px] text-text-3">· ~{rec.minutes}min</span>
           </p>
+          <p className="mt-1.5 text-body-sm text-text-2">{rec.why}</p>
+          {offerPlacement && (
+            <Link to={PLACEMENT_ROUTE} className="mt-2 inline-flex min-h-11 items-center text-body-sm text-text-2 underline decoration-line-bright underline-offset-4 hover:text-text-1">
+              Already know some of this? Place yourself, about 15 min
+            </Link>
+          )}
         </div>
         <Link
-          to={`/lesson/${target}`}
+          to={rec.to}
           className="flex items-center gap-2 rounded-md bg-accent px-5 py-3 font-display text-[15px] font-semibold text-accent-foreground transition-all duration-150 ease-snap hover:-translate-y-px active:scale-[.97]"
         >
           <Play size={14} /> execute →
@@ -1238,6 +1294,9 @@ export default function Progress() {
   const streakDays = useProgress((s) => s.streakDays)
   const lessons = useProgress((s) => s.lessons)
   const hasAny = streakDays.length > 0 || Object.keys(lessons).length > 0
+  const { load, retry } = useSummary()
+  const up = useUpNext()
+  const nextLessonId = up.status === 'ready' && up.rec.kind === 'lesson' ? up.rec.ref : null
 
   return (
     <div className="bg-grad-radial-glow">
@@ -1256,21 +1315,28 @@ export default function Progress() {
             </p>
             {hasAny && (
               <div className="mt-6">
-                <UpNext />
+                <UpNext up={up} />
               </div>
             )}
           </motion.div>
-          <RankPanel />
+          <RingPanel recall={load.status === 'ready' ? load.summary.recall : null} />
+        </div>
+
+        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <XpExplainer />
+          <Suspense fallback={null}>
+            <ReviewPanel load={load} onRetry={retry} />
+          </Suspense>
         </div>
 
         <KpiBand />
-        <TrackBreakdown />
+        <TrackBreakdown nextId={nextLessonId} />
         <Heatmap />
         <Achievements />
         <DataOwnership />
         {!hasAny && (
           <div className="mt-14">
-            <UpNext />
+            <UpNext up={up} />
           </div>
         )}
         <div className="mt-16 font-mono text-[11px] text-text-3">

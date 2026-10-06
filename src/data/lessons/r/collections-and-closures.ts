@@ -79,6 +79,7 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
             'Right: into_iter takes self, so the Vec is consumed and each element is moved out by value. The Vec binding cannot be used afterwards.',
             'drain(..) yields owned elements but only borrows the Vec mutably, leaving it empty and usable. It removes elements rather than consuming the Vec.',
           ],
+          kcs: ['r.iterators-ownership', 'r.ownership-moves'],
         },
         {
           q: 'When do lazy iterator adapters actually perform work?',
@@ -97,6 +98,7 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
             'Dropping an unconsumed adapter runs nothing; the compiler even warns that iterators are lazy. Work happens only when something consumes items.',
             'Standard iterators are single-threaded. Parallel pipelines need a crate such as rayon, and even those start work only when consumed.',
           ],
+          kcs: ['r.iterators-ownership', 'r.closures-collections'],
         },
         {
           q: 'Why use HashMap::entry for a counter?',
@@ -115,10 +117,12 @@ The [R6 Forge drill](/forge/rust-zero-r6) asks for Vec filtering, stable sorting
             'entry returns a mutable reference into the map, not a copy. Updating a copy would never change the stored count.',
             'The map keeps no hidden counters. The count is simply the value stored under each key, which entry lets you update in place.',
           ],
+          kcs: ['r.closures-collections'],
         },
       ],
     },
   ],
+  kcs: ['r.iterators-ownership', 'r.closures-collections'],
 }
 
 export default lesson

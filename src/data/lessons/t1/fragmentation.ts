@@ -10,7 +10,69 @@ const lesson: Lesson = {
   hook: 'Why fixed-size blocks win — the physics that foreshadows PagedAttention\'s entire design.',
   exercise: 'sim',
   simId: 'sim-allocator',
+  kcs: ['t1.external-frag', 't1.internal-frag', 't1.fixed-blocks'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain why moving to fixed-size blocks removes external fragmentation, and what it costs.',
+        model:
+          'With one block size, any free block satisfies any request, so scattered free blocks are never unusable. The waste moves inside the blocks, as the partly filled tail block of each allocation. Choosing the block size sets that bound, and trades the waste against block-table metadata.',
+        ideas: [
+          'One block size means any free block fits any request',
+          'The waste moves inside the box, into the partly empty tail block',
+          'Block size trades that waste against metadata overhead',
+        ],
+        kcs: ['t1.fixed-blocks', 't1.external-frag'],
+      },
+      {
+        prompt: 'Give one example each of internal and external fragmentation, and say how each is measured.',
+        model:
+          'Internal: a 33-byte request rounded up to a 48-byte block wastes 15 bytes inside the allocation, measured as the sum of given minus requested. External: 60 free bytes split into holes of 20, too small for a 40-byte request, measured as 1 minus largest free block over total free.',
+        ideas: [
+          'Internal waste is bytes given minus bytes requested, inside blocks in use',
+          'External waste is free memory split into holes too small for a request',
+          'External is measured as 1 minus largest free block over total free',
+        ],
+        kcs: ['t1.internal-frag', 't1.external-frag'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'An allocator rounds every request up to the next power of two. In the worst case, how much of a block is wasted?',
+          options: [
+            'About one quarter of the block, as for a 1537-byte request placed in a 2048-byte slot',
+            'About one eighth of the block, as for a 1793-byte request placed in a 2048-byte slot',
+            'Close to half of the whole block, as for a 1025-byte request placed in a 2048-byte slot',
+            'Nearly nothing, as for a 2047-byte request placed in a 2048-byte slot',
+          ],
+          correct: [2],
+          why: [
+            'A real case, but not the worst. 1537 bytes in a 2048-byte slot wastes a quarter, and a request nearer 1024 bytes wastes more.',
+            'A real case, but not the worst. 1793 bytes in a 2048-byte slot wastes an eighth, and smaller requests in that class waste more.',
+            'Right: a request just over a power of two lands in a slot nearly twice its size, so close to half the block is wasted. 1025 bytes in 2048 wastes 1023.',
+            'A real case, but the best one. A request that nearly fills its slot wastes almost nothing, and the worst case sits at the other end of the class.',
+          ],
+          revealAt: 'Internal fragmentation: waste inside the box',
+          kcs: ['t1.internal-frag'],
+        },
+        {
+          kind: 'numeric',
+          q: 'A sequence holds 200 tokens, and its KV cache is stored in blocks of 16 tokens each. How many blocks does it occupy?',
+          unit: 'blocks',
+          truth: 13,
+          okWithinFactor: 1.05,
+          revealAt: 'The fixed-block maneuver',
+          kcs: ['t1.fixed-blocks'],
+          claims: ['production.vllm.block-size'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `Your allocator from lesson 3 had a quiet enemy. It never crashes, never leaks a byte you can point at — it just slowly makes memory *unusable*. A heap can report 60% free and still fail a 1 MB allocation, the way a parking lot can have 60 free spaces and nowhere to park a bus. That enemy is **fragmentation**, and it comes in exactly two species. Every memory system you will ever operate — malloc heaps, JVMs, OS page frames, GPU KV caches — chooses its poison between them.
@@ -24,6 +86,11 @@ This lesson gives you both species, their measurements, and the one design move 
 **Internal fragmentation** is memory you *allocated* but the customer never uses. Sources: alignment padding (rounding 33 bytes to 48), size-class rounding (a 9 KB request landing in a 16 KB slab), block headers, and fixed-structure slack. The waste is *inside* the allocation — invisible to the free list, unrecoverable until free.
 
 The accounting is easy: \`internal_waste = Σ(given − requested)\`. Size-class allocators bound it by design — with power-of-two classes the worst case is just under 50% (a 5-byte request in an 8-byte slot is fine; a 1025-byte request in a 2048 slot is not), which is why real systems use *denser* classes for small sizes (8, 16, 24, 32, 48, 64…) and sparser ones for large.`,
+    },
+    {
+      type: 'play',
+      playId: 'block-placement',
+      title: 'Place the blocks, then meet the reference',
     },
     {
       type: 'prose',
@@ -69,6 +136,24 @@ The metric that matters is: \`largest_free_block / total_free\`. When that ratio
         { caption: 'Now the same workload on FIXED-size blocks: any free block fits any request, by definition. External fragmentation is not reduced — it is logically impossible.', active: ['f2', 'f4', 'f5', 'f7'] },
         { caption: 'The cost moved inside the box: the last block of each allocation is partly empty (internal waste). Choose the block size and you choose the bound. This trade IS PagedAttention.', active: ['f1', 'f3'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'Run the same workload with every block the same size. Which failure can no longer happen?',
+        options: [
+          'A request that is rounded up to whole blocks, leaving bytes in its block unused',
+          'A malloc that fails although enough bytes are free, split into small holes',
+          'Free blocks that end up scattered across the heap, with used ones between',
+          'A last block that is left partly filled when the size requested is uneven',
+        ],
+        correct: [1],
+        why: [
+          'This still happens. Requests vary in size, so rounding up to whole blocks leaves slack, and that is internal waste.',
+          'Right: every free block is the right size for any request, so free memory can never be unusable. That is external fragmentation, and it cannot occur.',
+          'Free blocks still end up scattered, because frees arrive in any order. Scattering stops mattering, but it does not stop happening.',
+          'The tail block is still partly filled whenever a request is not a whole number of blocks. The waste has moved there, not gone away.',
+        ],
+        kcs: ['t1.fixed-blocks', 't1.external-frag'],
+      },
     },
     {
       type: 'prose',
@@ -107,6 +192,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
         'Switch to fixed blocks; rerun and confirm external fragmentation stays structurally zero.',
         'Sweep block size 16 B → 256 B; compare the reported internal waste and metadata overhead to locate the knee.',
       ],
+      taskIds: ['alloc.frag-first-fit', 'alloc.fixed-block-waste'],
       note: `You have now run the experiment the vLLM authors effectively ran against KV caches: contiguous/variable reservation strands most of the resource; fixed blocks strand a bounded sliver. **Block size is the only knob, and it prices waste against metadata** — remember this when T5 debates 16 vs 32 tokens per block.`,
     },
     {
@@ -138,6 +224,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
             'A leak means memory is held but unreachable, which would show as less free memory, not more. Here the free space is real and reusable, just fragmented.',
             'Nothing here suggests damaged metadata. A healthy allocator with intact headers fails the same way when the free ranges are too small and scattered.',
           ],
+          kcs: ['t1.external-frag'],
         },
         {
           q: 'Rounding a 33-byte request up to a 48-byte block is an example of…',
@@ -156,6 +243,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
             'Coalescing merges adjacent free blocks on free. Nothing is freed or merged here; the request is simply rounded up when the block is chosen.',
             'Splitting may happen to produce the block, but it divides a free block. The 15 wasted bytes come from rounding, which is a separate effect.',
           ],
+          kcs: ['t1.internal-frag'],
         },
         {
           q: 'Why do fixed-size-block designs eliminate external fragmentation?',
@@ -174,6 +262,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
             'Right: with one block size, every hole is exactly the right shape. Free blocks can be scattered anywhere and still be fully usable, so no unusable space forms.',
             'Placement order is not what matters. Blocks are freed in any order and stay scattered, yet each free block still serves any request.',
           ],
+          kcs: ['t1.fixed-blocks', 't1.external-frag'],
         },
         {
           q: 'Why can\'t a C allocator fix external fragmentation by compacting like a JVM GC?',
@@ -192,6 +281,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
             'Size is not the obstacle. Compacting collectors copy heaps of many gigabytes; the barrier for C is that it cannot find and fix the pointers, not copy cost.',
             'The OS does not restrict this. A process can memcpy its own heap memory freely; the trouble is that nobody can update the program\'s pointers to the old address.',
           ],
+          kcs: ['t1.external-frag'],
         },
         {
           q: 'vLLM\'s reported <4% KV-cache waste comes primarily from…',
@@ -210,6 +300,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
             'Offloading is a different technique that frees memory under pressure. It does not change how much of an active sequence\'s reservation sits unused.',
             'Weights are already shared across requests and live outside the KV cache, so sharing them has no effect on how much KV memory is wasted.',
           ],
+          kcs: ['t1.fixed-blocks', 't1.internal-frag'],
         },
       ],
     },

@@ -1,6 +1,27 @@
-import { useRef } from 'react'
-import { useInView } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+
+/** True once the element has scrolled into view (10% inset, as framer-motion's useInView did), then stays true. */
+function useInViewOnce(ref: React.RefObject<Element | null>): boolean {
+  // Without IntersectionObserver there is nothing to wait for, so the ring starts filled.
+  const [inView, setInView] = useState(() => typeof IntersectionObserver === 'undefined')
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true)
+          io.disconnect()
+        }
+      },
+      { rootMargin: '-10% 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [ref])
+  return inView
+}
 
 interface ProgressRingProps {
   /** 0..100 */
@@ -29,7 +50,7 @@ export default function ProgressRing({
   strokeWidth,
 }: ProgressRingProps) {
   const ref = useRef<SVGSVGElement>(null)
-  const inView = useInView(ref, { once: true, margin: '-10% 0px' })
+  const inView = useInViewOnce(ref)
   // Stays 0 until scrolled into view; the CSS transition animates the jump to `value`.
   const display = inView ? value : 0
 

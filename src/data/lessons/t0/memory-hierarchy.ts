@@ -12,6 +12,49 @@ const lesson: Lesson = {
   simId: 'sim-memory',
   blocks: [
     {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'Suppose one L1 cache hit took one second on a human clock. About how long would a load that must go all the way to DRAM take?',
+          options: [
+            'About 10 seconds',
+            'About 3.5 minutes',
+            'About 2.5 hours',
+            'About 2.5 days',
+          ],
+          correct: [1],
+          why: [
+            'That is closer to an L2 hit, about 10x L1. DRAM is off-chip and about 200x slower than L1, not one cache step further.',
+            'Right: about 100 ns against about 0.5 ns is 200x, which is 200 seconds, a bit over three minutes on this clock.',
+            'Too slow for DRAM. Two and a half hours would be about 9,000x L1, roughly 4.5 µs, a time scale far above main memory and below flash.',
+            'That is the NVMe SSD number, about 100 µs. DRAM sits three orders of magnitude closer than flash.',
+          ],
+          revealAt: 'The numbers, made human',
+          kcs: ['t0.latency-ladder'],
+        },
+        {
+          kind: 'choice',
+          q: 'A cache holds a tiny fraction of memory, yet most loads in ordinary programs hit it. What property of programs makes that work?',
+          options: [
+            'Programs mostly work on small data, with the entire working set fitting inside the L1 cache',
+            'Programs reuse recent bytes and touch neighbors, with each fetched line often wanted again',
+            'Programs read memory in the order it was allocated, with allocation order matching the access order',
+            'Programs rarely write memory, with read-only data safe to hold in several caches at the same time',
+          ],
+          correct: [1],
+          why: [
+            'Many programs work on far more data than L1 holds, tens of KiB at most. Caches still help them, so size alone cannot be the reason.',
+            'Right: temporal locality (reuse what you just used) and spatial locality (use its neighbors) are the two bets every cache and prefetcher makes.',
+            'Allocation order often differs from access order, as in a linked list or a hash map, and those programs miss often. Order of allocation is not the property.',
+            'Programs write plenty, and caches handle writes too. Read-only data is easier to keep, but it is not what makes a small cache effective.',
+          ],
+          revealAt: 'Why the hierarchy exists at all',
+          kcs: ['t0.locality'],
+        },
+      ],
+    },
+    {
       type: 'prose',
       md: `There is no such thing as "memory" on a modern machine. There is a **hierarchy** — a stack of progressively larger, slower, cheaper stores, from a few hundred registers at the top to terabytes of flash at the bottom. Every load instruction you have ever written starts at the top of that stack and walks down until it finds the data. The walk can take half a nanosecond or a tenth of a millisecond, and the difference is entirely about *where the bytes happen to be*.
 
@@ -24,7 +67,7 @@ This is the single most consequential performance fact in computing, and it is i
         { value: '~5 ns', label: 'L2 cache', hint: '~10 cycles. 256 KiB–2 MiB per core.' },
         { value: '~15 ns', label: 'L3 cache', hint: '~40 cycles. Tens of MiB shared across cores.' },
         { value: '~100 ns', label: 'DRAM', hint: '~300 cycles. This is the "×200 vs L1" number that runs the course.' },
-        { value: '~100 µs', label: 'NVMe SSD', hint: 'Random read. About 200,000 L1 accesses (100 µs ÷ 0.5 ns) could have happened instead.' },
+        { value: '~100 µs', label: 'NVMe SSD', hint: 'Random read from flash, the slowest level a load can fall to.' },
       ],
     },
     {
@@ -44,7 +87,7 @@ Every performance instinct you want is already in that paragraph. When a profile
 | DRAM | 32–512 GB | ~100 ns | ~3.5 minutes |
 | NVMe SSD | 1–8 TB | ~100 µs | ~2.5 days |
 
-These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200× L1) come from the Jeff Dean / Peter Norvig latency table; the ~100 µs random SSD read comes from Eskildsen's [napkin-math](https://github.com/sirupsen/napkin-math) (Dean's 2012 table lists 150 µs). L2 and L3 are typical rounded values (Dean lists L2 at 7 ns). Everything in this lesson, from the 200× DRAM ratio to the 200,000× NVMe ratio, uses this one set.`,
+These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200× L1) come from the Jeff Dean / Peter Norvig latency table; the ~100 µs random SSD read comes from Eskildsen's [napkin-math](https://github.com/sirupsen/napkin-math) (Dean's 2012 table lists 150 µs). L2 and L3 are typical rounded values (Dean lists L2 at 7 ns). Everything in this lesson, from the DRAM ratio to the NVMe ratio, uses this one set.`,
     },
     {
       type: 'diagram',
@@ -73,6 +116,24 @@ These are rounded, order-of-magnitude values. L1 (0.5 ns) and DRAM (100 ns, 200�
         { caption: 'If the OS swapped the page out, the CPU takes a page fault and reads from NVMe: ~100 µs, about 200,000× slower than L1. In T2 and T5 you will see why vLLM V1 avoids that trip for KV cache and recomputes instead.', active: ['ssd'], edges: ['dram->ssd'] },
         { caption: 'GPUs have their own version: HBM instead of DRAM. Enormous bandwidth (~3.35 TB/s on H100) but still finite — and it is the wall LLM decode runs into every single token.', active: ['hbm'] },
       ],
+      predictAt: {
+        step: 3,
+        prompt: 'A load misses every cache, and the page it needs was swapped out to an NVMe SSD. Compared with an L1 hit, about how many times slower is that one read?',
+        options: [
+          'About 200× slower',
+          'About 2,000× slower',
+          'About 200,000× slower',
+          'About 20,000,000× slower',
+        ],
+        correct: [2],
+        why: [
+          'That is the DRAM ratio, about 100 ns against about 0.5 ns. An NVMe read is three orders of magnitude slower again, so 200x understates it.',
+          'Too small: 2,000x would put the read near 1 µs. A real NVMe random read costs about 100 µs, a thousand times more than DRAM.',
+          'Right: about 100 µs against about 0.5 ns is roughly 200,000x, about two and a half days on the L1 = 1 second clock.',
+          'Too large: 20 million times L1 is about 10 ms, the cost of a spinning-disk seek. NVMe is flash and answers in about 100 µs.',
+        ],
+        kcs: ['t0.latency-ladder'],
+      },
     },
     {
       type: 'prose',
@@ -128,6 +189,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             'Right: about 100 ns against about 0.5 ns. On the "L1 = 1 second" scale DRAM is a 3 to 4 minute wait, the ratio behind nearly every cache optimization you will make.',
             'Overshoots by two orders of magnitude. Tens of microseconds is closer to flash than DRAM; an NVMe read at ~100 µs is the roughly 200,000x case. DRAM stays near 100 ns.',
           ],
+          kcs: ['t0.latency-ladder'],
         },
         {
           q: 'When the CPU needs 8 bytes from DRAM, how many bytes does the memory controller actually fetch?',
@@ -146,6 +208,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             '4 KiB is the virtual-memory page size, a unit of translation and OS paging, not of cache fills. CPU caches fill 64-byte lines, so a miss does not drag in a whole page.',
             'Prefetch hints only request extra lines; every demand miss still fetches a full line. Hardware prefetchers also run without any hints, so software requests do not set the fetch size.',
           ],
+          kcs: ['t0.cache-lines'],
         },
         {
           q: 'A Python loop over a list of 1M integers is far slower than the same loop over a numpy array mostly because…',
@@ -164,6 +227,7 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             'Elementwise numpy operations run on one thread by default; only some BLAS-backed routines use several cores. The gap exists on a single core, so parallelism is not the main cause.',
             'CPython ints do use arbitrary-precision digits, but a value under 2^30 occupies one digit with a fast path. The cost is the boxed object and interpreter overhead around the add, not bignum arithmetic.',
           ],
+          kcs: ['t0.runtime-costs', 't0.locality'],
         },
         {
           q: 'Why can\'t we simply build 128 GB of L1-speed SRAM and skip the hierarchy?',
@@ -182,10 +246,39 @@ In the simulator below you will walk this ladder yourself: fire accesses at diff
             'Backwards. SRAM is the faster technology and DRAM the denser, cheaper one. The hierarchy exists for cost and capacity reasons, and programmers do not choose between them; hardware moves lines automatically.',
             'Power density is part of the cost story, but it is not a controller defect. The fundamental limit is transistors, area and dollars per bit, which would be prohibitive well before any thermal limit.',
           ],
+          kcs: ['t0.latency-ladder'],
         },
       ],
     },
   ],
+  kcs: ['t0.latency-ladder', 't0.locality', 't0.cache-lines'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'A load of 8 bytes misses every cache. Explain why that is expensive twice over: once in time and once in bytes.',
+        model:
+          'The load pays full DRAM latency, about 100 ns against about 0.5 ns for L1, roughly 200 times more. The memory controller also returns a whole 64-byte cache line, not 8 bytes, so up to 56 bytes travel for nothing unless nearby data is used soon. Locality decides whether that was wasted.',
+        ideas: [
+          'DRAM latency is about 100 ns, roughly 200 times an L1 hit',
+          'The fetch is a whole 64-byte cache line, not the 8 bytes requested',
+          'Nearby bytes used soon make the line pay off; otherwise the rest is wasted bandwidth',
+        ],
+        kcs: ['t0.cache-lines', 't0.latency-ladder'],
+      },
+      {
+        prompt: 'Why do machines use a hierarchy instead of one big, fast memory? Say what the hierarchy bets on.',
+        model:
+          'Fast SRAM needs about six transistors per bit against one transistor and a capacitor for DRAM, so a large SRAM is too big, hot and costly. Machines buy a little fast memory and a lot of slow memory, and bet on locality: recently used data and its neighbors stay close, in 64-byte lines.',
+        ideas: [
+          'SRAM costs about six transistors per bit, against one transistor and a capacitor for DRAM',
+          'So machines buy a little fast memory and a lot of slow memory',
+          'The bet is locality: reuse of recent data and use of neighbors, moved in 64-byte lines',
+        ],
+        kcs: ['t0.locality', 't0.latency-ladder'],
+      },
+    ],
+  },
 }
 
 export default lesson
