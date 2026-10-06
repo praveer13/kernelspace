@@ -46,7 +46,7 @@ const lesson: Lesson = {
           q: 'A Rust program runs `let a = vec![1, 2, 3]`, then `let b = a`, then prints `a`. What happens?',
           options: [
             'It fails to compile, and the compiler reports a use of the moved value a',
-            'It prints the same three numbers, and both names share one copy of data',
+            'It prints the same three numbers, and both names share one copy of the data',
             'It prints an empty list, and a is left holding a vector with no items',
             'It compiles but panics at run time, and a was freed when the move happened',
           ],

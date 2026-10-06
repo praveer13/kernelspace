@@ -97,6 +97,20 @@ export function itemRef(item: PlayableItem): string {
   }
 }
 
+/** The KCs an item rates when it is answered (an authored item may carry several). */
+export function itemKcs(item: PlayableItem): readonly KcId[] {
+  switch (item.source) {
+    case 'gen':
+      return item.inst.kcs
+    case 'cr':
+      return item.cr.kcs
+    case 'item':
+      return item.item.kcs
+    case 'quiz':
+      return item.kcs
+  }
+}
+
 const levelOf = (item: PlayableItem): Level | undefined => (item.source === 'gen' ? item.inst.level : undefined)
 
 /**
@@ -254,7 +268,11 @@ export function composeSession(
       (a.card.kc < b.card.kc ? -1 : a.card.kc > b.card.kc ? 1 : 0),
   )
 
-  // 2. an item for each, while the nominal time lasts
+  // 2. an item for each, while the nominal time lasts. One avoid set serves the whole session, so no item
+  // is served twice; an item that carries several KCs rates all of them, so a later slot for one of those
+  // KCs is skipped (a second same-day review of both would inflate the evidence).
+  const avoid = new Set<string>()
+  const covered = new Set<KcId>()
   const slots: SessionSlot[] = []
   let usedSec = 0
   let built = 0
@@ -262,12 +280,13 @@ export function composeSession(
   for (const w of wanted) {
     if (full) break
     const kc = w.card.kc
+    if (covered.has(kc)) continue
     const count = w.tier === 0 ? PRIORITY_ITEMS : 1
-    const avoid = new Set<string>()
     for (let n = 0; n < count; n++) {
       const item = chooseItem(kc, pool, seedFor(seed, built++), avoid)
       if (!item) {
-        if (n === 0) content.needsContent?.(kc)
+        // every item the KC has was already served this session: covered, not missing content
+        if (n === 0 && !pool.authored(kc).some((it) => avoid.has(itemRef(it)))) content.needsContent?.(kc)
         break
       }
       const sec = itemSeconds(item)
@@ -276,6 +295,7 @@ export function composeSession(
         break
       }
       avoid.add(itemRef(item))
+      for (const k of itemKcs(item)) covered.add(k)
       usedSec += sec
       slots.push({ kc, item, level: levelOf(item), reason: REASONS[w.tier] })
     }
@@ -302,10 +322,13 @@ export function composeSession(
   const probes: SessionSlot[] = []
   for (const kc of cold) {
     if (probes.length >= MAX_PROBES) break
-    const item = chooseItem(kc, pool, seedFor(seed, built++), new Set())
+    if (covered.has(kc)) continue
+    const item = chooseItem(kc, pool, seedFor(seed, built++), avoid)
     if (!item) continue
     const sec = itemSeconds(item)
     if (usedSec + sec > budgetSec) continue
+    avoid.add(itemRef(item))
+    for (const k of itemKcs(item)) covered.add(k)
     usedSec += sec
     probes.push({ kc, item, level: levelOf(item), reason: 'probe' })
   }

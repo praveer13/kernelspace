@@ -12,6 +12,7 @@ import { ArrowLeftRight, ArrowRight, RotateCw, Search } from 'lucide-react'
 import { PAIRS, type Pair } from '@/data/glossary'
 import { TRACKS } from '@/lib/tracks'
 import { cn } from '@/lib/utils'
+import { scrollBehavior } from '@/lib/lesson-scroll'
 
 /* ------------------------------------------------------------------ */
 /* Hero translation card (auto-cycles 3 flagship pairs, 6s)            */
@@ -318,7 +319,7 @@ export default function Glossary() {
     const el = document.getElementById(slug)
     if (!el) return
     const t = window.setTimeout(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
       setFlashSlug(slug)
       window.setTimeout(() => setFlashSlug(null), 1200)
     }, 150)

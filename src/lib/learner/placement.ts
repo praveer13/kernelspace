@@ -108,14 +108,18 @@ export function startWalk(path: LearningPath, seed: number): WalkState {
   return { v: 1, seed: seed >>> 0, path, probes: [...PROBES], at: 0, answers: {}, verdicts: {}, asked: 0 }
 }
 
+/** Whether `skipAnchor` can still act: the anchor is optional on this path, still a probe, and not yet answered. */
+export function canSkipAnchor(state: WalkState): boolean {
+  return anchorOptional(state.path) && state.probes.includes(RUST_ANCHOR_KC) && !state.answers[RUST_ANCHOR_KC]?.length
+}
+
 /**
  * Drops the Rust anchor (`serving-first` only: elsewhere the anchor decides whether R is lessons or
  * test-outs, so it is not optional). Returns the state unchanged when the anchor is not optional or
- * already asked.
+ * already asked (`canSkipAnchor`).
  */
 export function skipAnchor(state: WalkState): WalkState {
-  const i = state.probes.indexOf(RUST_ANCHOR_KC)
-  if (!anchorOptional(state.path) || i < 0 || state.answers[RUST_ANCHOR_KC]?.length) return state
+  if (!canSkipAnchor(state)) return state
   const probes = state.probes.filter((kc) => kc !== RUST_ANCHOR_KC)
   return { ...state, probes, at: Math.min(state.at, probes.length) }
 }
@@ -260,8 +264,8 @@ function stepFor(s: WalkState, kc: KcId, n: number, content: WalkContent): Step 
 /**
  * Settles every KC whose answers already decide it, and returns the next item to ask, or `step: null` when
  * the walk is over. A KC with nothing left to ask is judged on what it has: a KC with one right answer and
- * no confirmation item is missed (the learner has not shown it twice), and a KC with no item at all gets no
- * verdict (it is in neither list). Pure: the same state and content give the same step.
+ * no confirmation item is missed (the learner has not shown it twice), and so is a KC with no item at all
+ * (nothing was shown, so `entryTrack` cannot skip past it). Pure: the same state and content give the same step.
  */
 export function advance(state: WalkState, content: WalkContent): { state: WalkState; step: Step | null } {
   let s = state
@@ -274,9 +278,9 @@ export function advance(state: WalkState, content: WalkContent): { state: WalkSt
       const room = answers.length < MAX_ITEMS_PER_KC && s.asked + 1 + (s.probes.length - s.at - 1) <= MAX_ITEMS
       const step = room ? stepFor(s, kc, answers.length, content) : null
       if (step) return { state: s, step }
-      verdict = answers.length > 0 ? 'missed' : null
+      verdict = 'missed'
     }
-    s = { ...s, at: s.at + 1, verdicts: verdict ? { ...s.verdicts, [kc]: verdict } : s.verdicts }
+    s = { ...s, at: s.at + 1, verdicts: { ...s.verdicts, [kc]: verdict } }
   }
   return { state: s, step: null }
 }

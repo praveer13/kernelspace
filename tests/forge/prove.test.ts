@@ -27,6 +27,8 @@ import {
   wordCount,
 } from '../../src/data/forge/rust-allocator/prove'
 import type { ProveAction, ProveAttempt, ProveCard } from '../../src/data/forge/rust-allocator/prove'
+import { buildRows, creditedRequiredPass, resultsOf, tally } from '../../src/lib/forge/present'
+import { creditFor } from '../../src/lib/forge/run'
 import { KC } from '../../src/data/kc/ids'
 import { makeProfile, startTab } from '../ledger/env'
 
@@ -222,6 +224,24 @@ describe('the panel', () => {
     expect(html).toContain('data-prove="locked"')
     expect(html).toContain('Opens when all six checks are green')
     expect(html).not.toContain('<textarea')
+  })
+
+  test('a green reference run leaves Prove it locked; a credited green run opens it', () => {
+    const results = [
+      { id: 'boot', label: 'boot', status: 'pass' as const, msg: 'ok' },
+      { id: 'align', label: 'align', status: 'pass' as const, msg: 'ok', seed: 1, fresh: true },
+    ]
+    const green = (reference: boolean) => ({ lab: 'rust-allocator', reference, abi: 2 as const, version: 2, checks: results, seeds: 'fresh' as const, ms: 5 })
+    const required = ['boot', 'align']
+    const unlockedBy = (reference: boolean) => {
+      const r = green(reference)
+      const counts = tally(buildRows(required.map((id) => ({ id, label: id })), resultsOf(r)))
+      return creditedRequiredPass(creditFor(r, {}, required), counts)
+    }
+    expect(unlockedBy(true)).toBe(false)
+    expect(render({ unlocked: unlockedBy(true), history: [] })).toContain('data-prove="locked"')
+    expect(unlockedBy(false)).toBe(true)
+    expect(render({ unlocked: unlockedBy(false), history: [], now: T, seed: 4 })).toContain('data-prove="active"')
   })
 
   test('first question: a textarea, a 0/12 counter, a disabled reveal and no model answer', () => {

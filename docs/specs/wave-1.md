@@ -148,11 +148,11 @@ Grammar additions in `refs.ts` (types in `types.ts`):
 
 | Ref | Kinds | Example | Written by |
 |---|---|---|---|
-| `gen:<family>/<variant>` | `item`, `probe` | `gen:kv/bytes-per-token` | Today, tickets, test-out, placement, practice |
+| `gen:<family>/<variant>` | `item`, `probe` | `gen:kv/bytes-per-token` | Today, tickets, test-out, practice |
 | `pre:<lessonId>#<i>` | `item`, `predict` | `pre:t1.l4#0` | prequestions (P1) |
 | `dia:<lessonId>#<blockIndex>` | `item` | `dia:t1.l3#5` | diagram `predictAt` (P1) |
 | `cr:<lessonId>#<i>` | `item` | `cr:t0.l4#0` | constructed responses (tickets) |
-| `item:<id>` | `item`, `probe` | `item:r.anchor.e0502-1` | placement anchors, spiral items, lab 01 PRIMM items, Prove-it follow-ups |
+| `item:<id>` | `item`, `probe` | `item:r.anchor.e0502-1` | spiral items, lab 01 PRIMM items, Prove-it follow-ups |
 | `play:<playId>` | `play` | `play:block-placement` | W1 |
 | `prove:<labId>` | `prove` | `prove:rust-allocator` | H4 v1 |
 | `hint:<labId>/<checkId>#<rung>` | `ack` | `hint:rust-allocator/coalesce#R2` | H3 |
@@ -161,7 +161,7 @@ Grammar additions in `refs.ts` (types in `types.ts`):
 - **Each ref must not contain `__proto__` segments** (existing codec rule).
 - `play` and `prove` move out of `ReservedGradedEvent`, keeping their graded checks; their `data` shapes are `PlayData` and `ProveData`.
 - **Codec.**
-  - `ITEM_SRCS` gains `today, ticket, testout, placement, pre, diagram, practice`.
+  - `ITEM_SRCS` gains `today, ticket, testout, placement, pre, diagram, practice`. **The placement walk writes no item events:** it persists one `complete placement` plus the working `placement:result` (§7.1), which carries the verdicts and recorded misconceptions, so it pays no item minutes. `placement` stays in `ITEM_SRCS` and `PREDICT_SRCS` so a later wave can record the walk's items without a schema bump; nothing writes it in Wave 1.
   - `checkData('predict')` accepts `src ∈ {boot, lesson, pre, diagram, placement}`.
   - `checkData('play')` requires `phase ∈ {play, compose}`, plus numeric `turns`, `survived` and `ghostSurvived`.
   - `checkData('prove')` requires equal-length `qids: string[]` and `self: number[]`.
@@ -296,7 +296,7 @@ Semantics:
 ### 4.5 Tagging
 
 - **Checkpoint items:** `QuizQuestion.kcs` inline, 1–3 ids, primary first. Required in T0–T2 and R.
-- **Lessons:** `Lesson.kcs` (2–3, primary first) on every lesson of T0–T2 and R.
+- **Lessons:** `Lesson.kcs` (1–3, primary first) on every lesson of T0–T2 and R. A lesson may name only KCs whose first lesson is this lesson or an earlier one in curriculum order (`verify-kc` fails otherwise): `Lesson.kcs` is what the exit ticket draws generated items from and what a pass creates cards for, so a later-track KC would serve a T4 or T5 problem to a T0 learner. T0.L1 therefore names only `t0.idea-reuse`; its roofline items stay tagged on the checkpoint questions but reach the learner in T4 and T5.
 - **Sim tasks:** registry `SimTaskDef.kcs`.
 - **Lab checks:** `ForgeLabCheck.kcs` (lab 01 in Wave 1).
 - **Generators:** `Gen.kcs`, per variant.
@@ -824,7 +824,7 @@ A lesson with `ticket` renders its `quiz` block as the **exit ticket** (blocks.t
 
 `planTicket(lesson, content, events, seed) → TicketPlan`:
 - **3 items on `Lesson.kcs`:**
-  - **item 1 (non-MCQ):** a generated numeric or estimate item if a family covers a lesson KC, at level 2 on a fresh seed (t1.l3, t1.l4 and t2.l7's spiral use `frag`). Otherwise the lesson's constructed response (`ticket.cr`, rotating on retries);
+  - **item 1 (non-MCQ):** a generated numeric or estimate item if a family covers a lesson KC that the lesson introduces or an earlier lesson did, at level 2 on a fresh seed (t1.l4 and t2.l7's spiral use `frag`). Otherwise the lesson's constructed response (`ticket.cr`, rotating on retries). **t1.l3's ticket serves a constructed response:** `frag`'s only `t1.placement-policy` variant is multiple choice, so there is no numeric placement variant to draw as a non-MCQ;
   - **items 2–3:** checkpoint questions from the lesson's `quiz` block, preferring KCs not covered by item 1 and questions not answered correctly in the learner's last attempt.
 - **Pass rule:** ≥ 2 of 3 correct **and** the non-MCQ correct. For a constructed response, "correct" means ≥ 2 of its 3 ideas ticked: self-assessed, practice weight (V6).
 - **Item order:** item 1 is shown last, so the MCQs warm up recall.
@@ -1415,7 +1415,7 @@ Injected into `index.html` **at build time only** (a small `transformIndexHtml` 
 ```
 default-src 'self';
 script-src 'self' 'wasm-unsafe-eval' https://giscus.app;
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://giscus.app;
 font-src 'self' https://fonts.gstatic.com;
 img-src 'self' data: blob: https:;
 connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co;
@@ -1426,6 +1426,7 @@ object-src 'none'; base-uri 'self'; form-action 'self'
 
 - **No `'unsafe-eval'`:** the Capstone's `new Function` moved to the sandbox. `'wasm-unsafe-eval'` covers Forge, Fleet and the real engine.
 - **`'unsafe-inline'` for styles** stays, for Radix and React style injection: low risk, and needed.
+- **`https://giscus.app` in `style-src`:** after the click, giscus's client adds `<link rel="stylesheet" href="https://giscus.app/default.css">`; without the entry the stylesheet is blocked and the discussion frame renders 300 px wide. Nothing else widens: `script-src`, `frame-src` and `connect-src` are as listed above.
 - **Meta CSP does not govern workers.** `gen-worker.js` imports transformers.js from jsdelivr inside its own worker. `frame-ancestors` cannot be set by a meta tag.
 - **Disclosed third parties** (PLAN §7.3): Google Fonts, the transformers.js CDN, giscus and GitHub.
 - **Acceptance:** a manual matrix (Chrome, Firefox, Safari) loads the routes listed in §16.2 plus the real-engine panel with **zero CSP violations** in the console, recorded in the PR.

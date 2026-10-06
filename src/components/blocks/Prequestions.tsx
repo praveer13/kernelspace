@@ -13,7 +13,8 @@
  * When every KC of the block is solid (a card with predicted recall >= 0.9, or placement-solid) the card
  * starts collapsed, "You know this. Skip, or answer anyway.", and a skip writes nothing.
  *
- * The shared item player (ItemCard) draws and grades each question; this file owns the sequence, the
+ * The shared item player (ItemCard) draws and grades each question, with the options in a seeded order that
+ * is fresh on each visit (a choice is graded and recorded by its authored index); this file owns the sequence, the
  * ledger write and the reveal. The pure parts are in src/lib/learner/prequestions.ts.
  */
 
@@ -37,6 +38,7 @@ import {
   type SavedGuess,
 } from '@/lib/learner/prequestions'
 import { useProgress } from '@/lib/progress'
+import { freshSeed } from '@/lib/rng'
 import { slugify } from '@/pages/lesson/markdown'
 
 export interface PrequestionsProps {
@@ -87,6 +89,8 @@ export default function Prequestions({ lessonId, items, trackColor }: Prequestio
   const [revealed, setRevealed] = useState<Record<number, Revealed>>({})
   const revealedRef = useRef<Record<number, Revealed>>({})
   const made = useRef(new Map<string, HTMLElement>())
+  /** One option-order seed per guess, drawn fresh on each visit (like QuizBlock's attempt seed); the event records authored indices. */
+  const [seeds] = useState(() => items.map(() => freshSeed()))
 
   // What the ledger already holds (a reload keeps the answers) and whether the block can be skipped.
   useEffect(() => {
@@ -213,6 +217,7 @@ export default function Prequestions({ lessonId, items, trackColor }: Prequestio
           <ItemCard
             key={`pre:${lessonId}#${current}`}
             item={prequestionItem(lessonId, current, item)}
+            seed={seeds[current] ?? 0}
             gen={PRE_GEN}
             deferVerdict
             eyebrow={`guess ${current + 1} of ${items.length}`}

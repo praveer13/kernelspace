@@ -16,13 +16,13 @@ import {
   seenInstances,
   stairEventOf,
   tally,
-  upNextFor,
   type SlotOutcome,
   type TodayContent,
   type TodayPrefs,
   type TodaySrc,
 } from '@/lib/learner/today'
 import type { PlacementResult, SessionPlan, SessionSlot } from '@/lib/learner/types'
+import { useUpNext } from '@/lib/learner/up-next'
 import { getLedgerClient } from '@/lib/ledger/client'
 import type { Json, LedgerEvent, LocalDay, WeekPlan } from '@/lib/ledger/types'
 import { dayOf } from '@/lib/ledger/time'
@@ -57,6 +57,8 @@ interface Loaded {
   day: LocalDay
   cards: DerivedCards
   seed: number
+  /** Whether the first item takes focus when the session mounts (decided once, at load). */
+  focusFirst: boolean
 }
 
 type Load = { status: 'loading' } | { status: 'error' } | ({ status: 'ready' } & Loaded)
@@ -87,8 +89,6 @@ const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(re
 export default function Today() {
   const working = useProgress((s) => s.working)
   const aggregate = useProgress((s) => s.aggregate)
-  const lessons = useProgress((s) => s.lessons)
-  const bootDone = useProgress((s) => s.completions.boot !== undefined)
   const lastExportAt = useProgress((s) => s.ledger.lastExportAt)
   const recordItems = useProgress((s) => s.recordItems)
   const setWorking = useProgress((s) => s.setWorking)
@@ -112,6 +112,8 @@ export default function Today() {
   const [frozen, setFrozen] = useState<SessionPlan | null>(null)
   const [sheet, setSheet] = useState(false)
   const runKey = useRef(0)
+  // The learner has put focus somewhere on this page (Edit week, the header) before the first item mounted.
+  const touched = useRef(false)
   // what this visit has served and answered, which the ledger read at load does not hold yet
   const seen = useRef<Set<string>>(new Set())
   const stair = useRef<ReturnType<typeof stairEventOf>[]>([])
@@ -129,7 +131,7 @@ export default function Today() {
         setEvents(evs)
         seen.current = seenInstances(evs)
         stair.current = []
-        setLoad({ status: 'ready', events: evs, content, cc, day: today, cards: deriveCards(evs, cc, today, weekPlan, { placement }), seed: freshSeed() })
+        setLoad({ status: 'ready', events: evs, content, cc, day: today, cards: deriveCards(evs, cc, today, weekPlan, { placement }), seed: freshSeed(), focusFirst: !touched.current })
       } catch {
         if (live) setLoad({ status: 'error' })
       }
@@ -234,17 +236,16 @@ export default function Today() {
     () => (done ? pendingHandoff(events, { last: parseHandoffMarker(handoffRaw), ...(lastExportAt ? { lastExportAt } : {}) }) : 0),
     [done, events, handoffRaw, lastExportAt],
   )
-  const upNext = useMemo(
-    () =>
-      ready
-        ? upNextFor({
-            bootDone,
-            lessons: ready.content.lessons.map((l) => ({ id: l.id, title: l.title, minutes: l.minutes, status: lessons[l.id]?.status ?? 'unstarted' })),
-            extraAvailable: Object.keys(ready.cards.cards).some((kc) => (pool?.families(kc).length ?? 0) > 0),
-          })
-        : null,
-    [ready, bootDone, lessons, pool],
-  )
+
+  const canExtra = ready !== null && pool !== null && Object.keys(ready.cards.cards).some((kc) => pool.families(kc).length > 0)
+  // Up Next is recommend(), the same answer the lesson footer, Home and Progress give (spec 7.3). Today's own
+  // "keep going" set stands in when everything is done and the learner has nothing left to extend.
+  const recommended = useUpNext()
+  const upNext = useMemo(() => {
+    if (recommended.status !== 'ready') return null
+    const { rec } = recommended
+    return rec.kind === 'today' && rec.ref === 'extra' && !canExtra ? null : rec
+  }, [recommended, canExtra])
   const line = useMemo(() => {
     if (!plan) return undefined
     const kind = dayKindOf(weekPlan, ready?.day ?? today, width)
@@ -273,14 +274,19 @@ export default function Today() {
     setFinished(false)
   }
 
-  const canExtra = ready !== null && pool !== null && Object.keys(ready.cards.cards).some((kc) => pool.families(kc).length > 0)
   const canPractice = ready !== null && pool !== null && ready.content.bootKcs.some((kc) => pool.families(kc).length > 0)
 
   const savePlan = (next: WeekPlan) => setWorking('boot:week', { ...next })
   const savePrefs = (next: TodayPrefs) => setWorking('today:prefs', { ...next })
 
   return (
-    <section className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12" data-page="today">
+    <section
+      className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12"
+      data-page="today"
+      onFocusCapture={() => {
+        touched.current = true
+      }}
+    >
       <Header
         day={ready?.day ?? today}
         plan={plan}
@@ -303,6 +309,7 @@ export default function Today() {
             <button
               type="button"
               onClick={() => {
+                touched.current = false
                 setLoad({ status: 'loading' })
                 setAttempt((n) => n + 1)
               }}
@@ -331,7 +338,7 @@ export default function Today() {
               slots={active.slots}
               grp={active.grp}
               gens={ready.content.gens}
-              focusFirst={active.kind !== 'review'}
+              focusFirst={active.kind !== 'review' || ready.focusFirst}
               onAnswer={onAnswer}
               onFinish={() => setFinished(true)}
             />

@@ -7,7 +7,7 @@ import type { ForgeLabCheck } from '../../src/data/labs'
 import { FORGE_LABS } from '../../src/data/labs'
 import { creditFor } from '../../src/lib/forge/run'
 import type { CheckResult, LabRunReport } from '../../src/lib/forge/types'
-import { buildRows, creditNote, hasDetail, resultsOf, tally, unseenCount } from '../../src/lib/forge/present'
+import { buildRows, creditNote, creditedRequiredPass, hasDetail, requiredFailedCount, resultsOf, tally, unseenCount } from '../../src/lib/forge/present'
 
 const lab01 = FORGE_LABS.find((l) => l.id === 'rust-allocator')!
 const expected: ForgeLabCheck[] = [
@@ -105,7 +105,7 @@ describe('what the run earned', () => {
     const r = report(green)
     const credit = creditFor(r, {}, REQUIRED)
     expect(credit).toBe('unseen')
-    const note = creditNote(credit, r, { required: 2, unseenSoFar: unseenCount(r, REQUIRED) })
+    const note = creditNote(credit, r, { required: 2, unseenSoFar: unseenCount(r, REQUIRED), requiredFailed: requiredFailedCount(r, REQUIRED) })
     expect(note.label).toBe('unseen')
     expect(note.tone).toBe('full')
   })
@@ -114,7 +114,7 @@ describe('what the run earned', () => {
     const r = report(green, { reference: true })
     const credit = creditFor(r, {}, REQUIRED)
     expect(credit).toBeNull()
-    const note = creditNote(credit, r, { required: 2, unseenSoFar: 2 })
+    const note = creditNote(credit, r, { required: 2, unseenSoFar: 2, requiredFailed: 0 })
     expect(note.label).toBe('reference module: no credit')
     expect(note.tone).toBe('none')
     expect(note.detail).toContain('nothing is recorded')
@@ -124,7 +124,7 @@ describe('what the run earned', () => {
     const r = report(green)
     const credit = creditFor(r, { assistedUntil: '2099-01-01T00:00:00.000Z', at: '2098-12-31T00:00:00.000Z' }, REQUIRED)
     expect(credit).toBe('assisted')
-    const note = creditNote(credit, r, { required: 2, unseenSoFar: 2 })
+    const note = creditNote(credit, r, { required: 2, unseenSoFar: 2, requiredFailed: 0 })
     expect(note.label).toBe('assisted')
     expect(note.detail).toContain('unseen-seed pass')
   })
@@ -133,15 +133,60 @@ describe('what the run earned', () => {
     const r = report([res('boot', 'pass'), res('align', 'pass')], { abi: 1, seeds: 'default' })
     const credit = creditFor(r, {}, REQUIRED)
     expect(credit).toBe('lab-green')
-    expect(creditNote(credit, r, { required: 2, unseenSoFar: 0 }).detail).toContain('rebuild for per-check results')
+    expect(creditNote(credit, r, { required: 2, unseenSoFar: 0, requiredFailed: 0 }).detail).toContain('rebuild for per-check results')
   })
 
   test('a v2 run with a red required check is lab-green and says how many are unseen so far', () => {
     const r = report([res('boot', 'pass'), res('align', 'fail', { seed: 3, fresh: true })])
     const credit = creditFor(r, {}, REQUIRED)
     expect(credit).toBe('lab-green')
-    const note = creditNote(credit, r, { required: 2, unseenSoFar: unseenCount(r, REQUIRED) })
+    const note = creditNote(credit, r, { required: 2, unseenSoFar: unseenCount(r, REQUIRED), requiredFailed: requiredFailedCount(r, REQUIRED) })
     expect(note.detail).toContain('1 of 2 so far')
+  })
+
+  test('a failing run after an unseen pass keeps the earlier pass and never says every check passed', () => {
+    const r = report([res('boot', 'pass'), res('align', 'fail', { seed: 3, fresh: true })])
+    const earlier = { boot: true, align: true } as const
+    const credit = creditFor(r, { unseen: earlier }, REQUIRED)
+    expect(credit).toBe('unseen')
+    const note = creditNote(credit, r, { required: 2, unseenSoFar: unseenCount(r, REQUIRED, earlier), requiredFailed: requiredFailedCount(r, REQUIRED) })
+    expect(note.label).toBe('unseen')
+    expect(note.tone).toBe('partial')
+    expect(note.detail).toContain('earlier run')
+    expect(note.detail).toContain('stands')
+    expect(note.detail).toContain('failed 1 required check,')
+    expect(note.detail).not.toContain('Every required check passed')
+  })
+
+  test('a spinning build (every check timed out) after an unseen pass counts every required check as failed', () => {
+    const r = report([res('boot', 'timeout'), res('align', 'timeout', { seed: 3, fresh: true }), res('extra', 'timeout')])
+    const earlier = { boot: true, align: true } as const
+    const credit = creditFor(r, { unseen: earlier }, REQUIRED)
+    expect(credit).toBe('unseen')
+    expect(requiredFailedCount(r, REQUIRED)).toBe(2)
+    const note = creditNote(credit, r, { required: 2, unseenSoFar: 2, requiredFailed: 2 })
+    expect(note.detail).toContain('failed 2 required checks')
+    expect(note.detail).not.toContain('Every required check passed')
+  })
+
+  test('a required check the module never reported counts as failed', () => {
+    expect(requiredFailedCount(report([res('boot', 'pass')]), REQUIRED)).toBe(1)
+    expect(requiredFailedCount(report(green), REQUIRED)).toBe(0)
+  })
+
+  test('the all-green run on fresh seeds still says every required check passed', () => {
+    const note = creditNote('unseen', report(green), { required: 2, unseenSoFar: 2, requiredFailed: 0 })
+    expect(note.detail).toContain('Every required check passed')
+    expect(note.tone).toBe('full')
+  })
+
+  test('a green reference run has no credit, so the lab is not passed and Prove it stays shut', () => {
+    const r = report(green, { reference: true })
+    const counts = tally(buildRows(expected, resultsOf(r)))
+    expect(counts.required).toBe(counts.requiredTotal)
+    expect(creditedRequiredPass(creditFor(r, {}, REQUIRED), counts)).toBe(false)
+    expect(creditedRequiredPass(creditFor(report(green), {}, REQUIRED), counts)).toBe(true)
+    expect(creditedRequiredPass(creditFor(report([res('boot', 'pass'), res('align', 'fail')]), {}, REQUIRED), tally(buildRows(expected, resultsOf(report([res('boot', 'pass'), res('align', 'fail')])))))).toBe(false)
   })
 
   test('unseenCount adds the checks an earlier unseen run already passed', () => {

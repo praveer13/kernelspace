@@ -400,7 +400,7 @@ export default function PlaygroundShell({
                       {doneCount}/{tasks.length}
                     </span>
                   </div>
-                  <ul className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+                  <ul tabIndex={0} aria-label="exercise tasks" className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
                     {tasks.map((task) => {
                       const done = tasksDone.includes(task.id)
                       return (

@@ -33,6 +33,15 @@ describe('ForgeLab writes what the run earned, and a reference module nothing', 
     expect(page).toContain('requiredReportPassed && run.credit !== null')
   })
 
+  test('Prove it and the completion panel hang off a credited pass, so a green reference run opens neither', () => {
+    expect(page).toContain("run.kind === 'report' && creditedRequiredPass(run.credit, counts)")
+    expect(page).not.toMatch(/requiredReportPassed = report !== null/)
+  })
+
+  test('the credit sentence is told how many required checks this run failed', () => {
+    expect(page).toContain('requiredFailed: requiredFailedCount(report, required)')
+  })
+
   test('the credit sentence is shown under every result', () => {
     expect(page).toContain('<CreditLine note={run.note} />')
   })
@@ -90,5 +99,16 @@ describe('reduced motion', () => {
 
   test('the spinner only turns when motion is allowed', () => {
     expect(page).toContain('motion-safe:animate-spin')
+  })
+})
+
+describe('the discussion consent control', () => {
+  test('"Always load on this device" has a label hit area of at least 44 x 44 px (min-h-11 min-w-11), still a native checkbox', () => {
+    const d = read('components/community/Discussion.tsx')
+    const label = /<label htmlFor=\{checkId\} className="([^"]+)"/.exec(d)?.[1] ?? ''
+    expect(label).toContain('min-h-11')
+    expect(label).toContain('min-w-11')
+    expect(d).toContain('type="checkbox"')
+    expect(d).toContain('Always load on this device')
   })
 })

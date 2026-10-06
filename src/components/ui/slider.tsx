@@ -11,6 +11,8 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledby,
   ...props
 }: React.ComponentProps<typeof SliderPrimitive.Root>) {
   const _values = React.useMemo(
@@ -53,7 +55,10 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
-          className="border-primary ring-ring/50 block size-4 shrink-0 rounded-full border bg-white shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledby}
+          // 24 px hit box (WCAG 2.5.8) around the 16 px dot; the dot is the ::before
+          className="relative block size-6 shrink-0 rounded-full before:absolute before:inset-1 before:rounded-full before:border before:border-primary before:bg-white before:shadow-sm before:ring-ring/50 before:transition-[color,box-shadow] hover:before:ring-4 focus-visible:before:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}
     </SliderPrimitive.Root>

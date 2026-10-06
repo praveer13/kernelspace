@@ -44,11 +44,11 @@ const lesson: Lesson = {
       items: [
         {
           kind: 'choice',
-          q: 'Three adjacent 16-byte regions are all free, and a 40-byte request arrives. What lets the allocator serve it?',
+          q: 'Three adjacent free blocks each hold 16 bytes of payload, headers not counted, and a 40-byte request arrives. What lets the allocator serve it?',
           options: [
             'Handing out the three regions as separate pointers that the caller joins up',
             'Splitting one of the free regions into bigger pieces that can hold the request',
-            'Asking the kernel for a fresh slab each time that a request is too large',
+            'Asking the kernel for a fresh slab each time that a request turns out too large',
             'Fusing the three neighbours into one larger free block as they were freed',
           ],
           correct: [3],
@@ -56,7 +56,7 @@ const lesson: Lesson = {
             'malloc must return one contiguous pointer. The caller cannot join separate regions, because nothing guarantees they sit side by side.',
             'Splitting only makes blocks smaller. It cannot turn a 16-byte region into a larger one, so it is no help for a bigger request.',
             'Going back to the kernel for every large request would make malloc slow, and it would leave the free crumbs unused.',
-            'Right: coalescing fuses adjacent free blocks into one, so the three 16-byte crumbs become a single range that can hold 40 bytes.',
+            'Right: coalescing fuses adjacent free blocks into one, so the three 16-byte payloads become a single range of 48 bytes, plus the two headers it absorbs. That holds 40 bytes.',
           ],
           revealAt: 'The two operations that matter',
           kcs: ['t1.split-coalesce'],
@@ -202,8 +202,8 @@ Look past the pointer plumbing; the algorithm is two ideas.
         options: [
           'One free block of about 1 MiB minus 4 KiB, left after the head is given out',
           'Nothing, and the first block that fits is handed out whole to the caller',
-          'One free block of exactly 1 MiB, with the 4 KiB borrowed from another region',
-          'Two free blocks of about 512 KiB each, with the slab divided evenly in half',
+          'One free block of exactly 1 MiB, with the 4 KiB being borrowed from some other region',
+          'Two free blocks of about 512 KiB each, with the slab divided evenly into halves',
         ],
         correct: [0],
         why: [

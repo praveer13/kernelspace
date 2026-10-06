@@ -7,13 +7,14 @@ import { inspectAttr } from 'plugin-inspect-react-code'
  * The app's Content-Security-Policy (spec wave-1 §14.2, PLAN §7.3). No 'unsafe-eval':
  * Capstone learner code runs in its own sandboxed frame (src/lib/capstone/sandbox.ts).
  * 'wasm-unsafe-eval' covers Forge, Fleet and the real engine. 'unsafe-inline' styles
- * stay for Radix and React style injection. A meta CSP does not govern workers
+ * stay for Radix and React style injection. giscus.app is the one extra style source: after the learner
+ * loads the discussion, giscus's client adds <link href="https://giscus.app/default.css">. A meta CSP does not govern workers
  * (gen-worker.js imports transformers.js from jsdelivr) and cannot set frame-ancestors.
  */
 export const CSP = [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval' https://giscus.app",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://giscus.app",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co",

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { checkChoiceCues, checkFamily, cueQuestion, MIN_CUE_SEEDS } from '../../scripts/verify-generators'
 import {
+  collectOwnPools,
   CUE_STRATEGIES,
   len,
   MAX_HIT_OVER_CHANCE,
@@ -10,15 +11,19 @@ import {
   MAX_RANK_SET_AGGREGATE,
   NAMED_RANK_SET_STRATEGIES,
   oddOneOut,
+  OWN_POOLS,
   passProbability,
   pickRank,
   pickRankSet,
+  poolCueFailures,
+  poolCueRows,
   POOLS_OF_LENGTH_STRATEGIES,
   RANK_STRATEGIES,
   SINGLE_RANK_STRATEGIES,
   type CueQuestion,
   type CueStrategy,
 } from '../../scripts/item-cues'
+import { ALL_LESSONS } from '../../src/data/lessons'
 import { INCIDENTS } from '../../src/lib/fleet-week'
 import { loadAllFamilies } from '../../src/lib/items/registry'
 import roofline from '../../src/lib/items/families/roofline'
@@ -405,5 +410,87 @@ describe('the old gates passed these fixtures; the new ones fail them', () => {
       expect(passProbability(asQuestions.map(s.pick))).toBeLessThan(MAX_RANK_LESSON)
       for (let k = 0; k < INCIDENTS.length; k++) expect(s.pick(asQuestions[2 * k]) * s.pick(asQuestions[2 * k + 1])).toBeLessThan(MAX_RANK_LESSON)
     }
+  })
+})
+
+/** A pool of `n` four-option items whose key takes the length rank `rank(i)` (0 = shortest) and whose texts are otherwise alike. */
+function rankedPool(n: number, rank: (i: number) => number): { ref: string; q: { q: string; options: string[]; correct: number[] } }[] {
+  return Array.from({ length: n }, (_, i) => {
+    const key = rank(i)
+    // option at rank r has 40 + 8 * r characters; the key is placed at display index i % 4 so the position says nothing
+    const at = i % 4
+    const ranks = [0, 1, 2, 3].filter((r) => r !== key)
+    const options = Array.from({ length: 4 }, (_, k) => {
+      const r = k === at ? key : (ranks.shift() as number)
+      return `${'w'.repeat(40 + 8 * r)}`.replace(/(.{6})/g, '$1 ').trim()
+    })
+    return { ref: `pre:fixture#${i}`, q: { q: 'Which one?', options, correct: [at] } }
+  })
+}
+
+describe('the own pools: prequestions, diagram predictions and spiral items are each held to the item-level bar on their own (owner rule, rule 19)', () => {
+  test('a prequestion pool whose key is the second-shortest option 11 times in 23 fails, as the review measured', () => {
+    const lopsided = rankedPool(23, (i) => (i < 11 ? 1 : [0, 2, 3][i % 3]))
+    const problems = poolCueFailures('prequestion', lopsided)
+    expect(problems.some((p) => /'2nd-shortest' hits 4\d\.\d% of the 23 prequestion items on their own/.test(p))).toBe(true)
+  })
+
+  test('a pool whose key is always the same length rank fails that rank, for each rank', () => {
+    const names = ['shortest', '2nd-shortest', '2nd-longest', '1st-longest']
+    names.forEach((name, rank) => {
+      const problems = poolCueFailures('predictAt', rankedPool(6, () => rank))
+      expect(problems.some((p) => p.includes(`'${name}' hits 100.0%`))).toBe(true)
+    })
+  })
+
+  test('a pool whose key takes every rank equally often passes', () => {
+    expect(poolCueFailures('prequestion', rankedPool(24, (i) => i % 4))).toEqual([])
+  })
+
+  test('each own pool is judged by every length strategy of spec 19.2 too: the one-rank, the named multi-rank and the ranks-* subsets', () => {
+    const names = poolCueRows(rankedPool(4, (i) => i)).map((r) => r.name)
+    for (const s of RANK_STRATEGIES) expect(names).toContain(s.name)
+    // keys only at the two middle ranks: picking at random between the middle options hits half of them
+    const problems = poolCueFailures('prequestion', rankedPool(8, (i) => 1 + (i % 2)))
+    for (const name of ['middle-length', 'ranks-1+2']) expect(problems.some((p) => p.includes(`'${name}' hits 50.0% of the 8 prequestion items on their own`))).toBe(true)
+  })
+
+  test('an item whose key a binary feature isolates is named, whichever pool it is in', () => {
+    const items = rankedPool(4, (i) => i)
+    items[0].q.options[items[0].q.correct[0]] += ' (see 3)'
+    const problems = poolCueFailures('spiral', items)
+    expect(problems.some((p) => p.startsWith('odd-one-out: spiral pre:fixture#0 ') && /a parenthetical/.test(p))).toBe(true)
+  })
+
+  test('the shipped lessons yield the three pools, and each passes on its own', () => {
+    const all = collectOwnPools(ALL_LESSONS)
+    const count = (pool: string) => all.filter((e) => e.pool === pool).length
+    expect(OWN_POOLS).toEqual(['prequestion', 'predictAt', 'spiral'])
+    expect(count('prequestion')).toBeGreaterThanOrEqual(23)
+    expect(count('predictAt')).toBeGreaterThanOrEqual(6)
+    expect(count('spiral')).toBeGreaterThanOrEqual(8)
+    for (const pool of OWN_POOLS) {
+      const items = all.filter((e) => e.pool === pool)
+      expect(poolCueFailures(pool, items)).toEqual([])
+      // a why for every option, parallel to the options
+      for (const e of items) expect(e.q.why?.length).toBe(e.q.options.length)
+    }
+  })
+
+  test('refs are the ledger refs: pre:<lesson>#<i>, dia:<lesson>#<block index>, item:<id>', () => {
+    for (const e of collectOwnPools(ALL_LESSONS)) {
+      expect(e.ref).toMatch(e.pool === 'prequestion' ? /^pre:t\d\.l\d+#\d+$/ : e.pool === 'predictAt' ? /^dia:t\d\.l\d+#\d+$/ : /^item:t2\.spiral\./)
+    }
+    const dia = collectOwnPools(ALL_LESSONS).find((e) => e.pool === 'predictAt')
+    const lesson = ALL_LESSONS.find((l) => l.id === dia?.lessonId)
+    const bi = Number(dia?.ref.split('#')[1])
+    expect(lesson?.blocks[bi]?.type).toBe('diagram')
+  })
+
+  test('verify-items collects the pools and runs the shared own-pool gate', () => {
+    const src = readFileSync(new URL('../../scripts/verify-items.ts', import.meta.url), 'utf8')
+    expect(src).toContain('collectOwnPools(ALL_LESSONS)')
+    expect(src).toContain('poolCueFailures(pool, ownPool(pool))')
+    expect(src).toContain("'src/pages/lesson/diagram.tsx'")
   })
 })

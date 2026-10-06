@@ -5,7 +5,7 @@
  *   G1  loop completion   prequestions → play → lab 01 stage 4 → unseen-seed pass → Today
  *   G2  first-review recall within ±10 points of predicted (n ≥ 100, interval reported)
  *   G3  7-day cold check, pooled accuracy of Today `probe` slots (n ≥ 50, Wilson interval, reported)
- *   G7  median Today session ≤ 12 minutes
+ *   G7  median Today session ≤ 12 minutes (over every session, as §17 defines it; the completed-only median is reported beside it)
  *
  * Everything is derived from the Evidence Ledger (events, plus the working records cards read). Nothing is
  * stored, nothing is sent: `scripts/partner-report.ts` runs these locally over exports a partner donated.
@@ -21,10 +21,12 @@ import { SYSTEMS_FORGE_LABS } from '@/data/labs'
 import { KCS } from '@/data/kc'
 import type { Kc } from '@/lib/kc/types'
 import { compareEvents } from '@/lib/ledger/merge'
+import { dayOf } from '@/lib/ledger/time'
 import type { IsoInstant, LedgerEvent, LocalDay, WorkingKey, WorkingRecord } from '@/lib/ledger/types'
 import { wilson } from './calibration'
 import { deriveCardsDetailed, type CardsContent, type CardsExtra, type CardsPlan, type FirstReview } from './cards'
 import { weekStartOf } from './planner'
+import { sessionSpanMs } from './today'
 import type { FirstReviewCalibration } from './types'
 
 /* ------------------------------------------------------------------ */
@@ -378,11 +380,8 @@ export function selectTodaySessions(events: Ledger): TodaySession[] {
   const out: TodaySession[] = []
   for (const [grp, items] of groups) {
     if (items.every((e) => dataOf(e).reason === 'extra')) continue
-    const first = items[0]
-    const last = items[items.length - 1]
-    const ms = (last as { ms?: unknown }).ms
-    const spanMs = Date.parse(last.at) - Date.parse(first.at) + (typeof ms === 'number' && ms >= 0 ? ms : 0)
-    if (!Number.isFinite(spanMs)) continue
+    const spanMs = sessionSpanMs(items, grp)
+    if (spanMs === null || !Number.isFinite(spanMs)) continue
     let of: number | null = null
     let maxSlot = -1
     for (const e of items) {
@@ -398,21 +397,21 @@ export function selectTodaySessions(events: Ledger): TodaySession[] {
 export interface TodayDuration {
   sessions: number
   completed: number
-  /** Median minutes over completed sessions: a session that was abandoned early is not a short session. */
+  /** Median minutes over completed sessions only, reported beside the gate's median. */
   medianMinutes: number | null
-  /** The same over every session, for comparison. */
+  /** Median minutes over every Today session, as §17 defines G7: this one is gated. */
   medianAllMinutes: number | null
-  /** `pass` at a completed-session median of at most `G7_MAX_MINUTES`; `insufficient` with no completed session. */
+  /** `pass` at an all-session median of at most `G7_MAX_MINUTES`; `insufficient` with no session. */
   status: 'pass' | 'fail' | 'insufficient'
 }
 
-/** G7 (spec §17): the median Today session, pooled over ledgers. */
+/** G7 (spec §17): the median over every partner Today session, pooled over ledgers; the completed-only median rides along. */
 export function selectTodayDuration(ledgers: readonly Ledger[]): TodayDuration {
   const all = ledgers.flatMap((events) => selectTodaySessions(events))
   const done = all.filter((s) => s.completed)
   const medianMinutes = median(done.map((s) => s.spanMs / 60_000))
   const medianAllMinutes = median(all.map((s) => s.spanMs / 60_000))
-  const status = medianMinutes === null ? 'insufficient' : medianMinutes <= G7_MAX_MINUTES ? 'pass' : 'fail'
+  const status = medianAllMinutes === null ? 'insufficient' : medianAllMinutes <= G7_MAX_MINUTES ? 'pass' : 'fail'
   return { sessions: all.length, completed: done.length, medianMinutes, medianAllMinutes, status }
 }
 
@@ -423,7 +422,7 @@ export function selectTodayDuration(ledgers: readonly Ledger[]): TodayDuration {
 export interface ExportRow {
   /** "#1": partners are never named in a report. */
   label: string
-  /** Monday of the week the export was made (week-level, like every date a partner donates). */
+  /** Monday of the week the export was made, by the learner's local day (week-level, like every date a partner donates). */
   week: LocalDay
   events: number
   loop: LoopCompletion
@@ -443,6 +442,16 @@ export interface DonatedLedger extends PartnerLedger {
   exportedAt: IsoInstant
 }
 
+/**
+ * The learner's local day of the export: `exportedAt` shifted by the offset of the ledger's latest event (its
+ * `tz`, minutes east of UTC). The UTC date would put a Sunday-evening export from a western zone in next week.
+ * A ledger with no event has no offset to read, so it falls back to UTC.
+ */
+function exportDay(l: DonatedLedger): LocalDay {
+  const latest = l.events.reduce<LedgerEvent | null>((m, e) => (m === null || compareEvents(e, m) > 0 ? e : m), null)
+  return dayOf(l.exportedAt, latest?.tz ?? 0)
+}
+
 /** All four gates over donated (and already stripped) ledgers. */
 export function buildOutcomeReport(ledgers: readonly DonatedLedger[], content: CardsContent, spec: LoopSpec = loopSpec()): OutcomeReport {
   const events = ledgers.map((l) => l.events)
@@ -453,7 +462,7 @@ export function buildOutcomeReport(ledgers: readonly DonatedLedger[], content: C
     g7: selectTodayDuration(events),
     rows: ledgers.map((l, i) => ({
       label: `#${i + 1}`,
-      week: weekStartOf(l.exportedAt.slice(0, 10)),
+      week: weekStartOf(exportDay(l)),
       events: l.events.length,
       loop: selectLoopCompletion(l.events, spec),
       sessions: selectTodaySessions(l.events).length,
@@ -477,8 +486,8 @@ export function formatOutcomeReport(r: OutcomeReport): string {
     `G2  first-review recall   n = ${g2.n} (needs ${G2_MIN_N}), predicted ${pct(g2.meanPredicted)}, observed ${pct(g2.observed)}${interval(g2.ci95)}`,
     `      gap ${g2.gap === null ? 'n/a' : `${(g2.gap * 100).toFixed(1)} points`} (bar ${G2_MAX_GAP * 100}) → ${g2.status.toUpperCase()}`,
     `G3  7-day cold check   n = ${g3.n} (needs ${G3_MIN_N}), accuracy ${pct(g3.accuracy)}${interval(g3.ci95)} → ${g3.status.toUpperCase()} (reported, no bar yet)`,
-    `G7  Today duration   median ${mins(g7.medianMinutes)} over ${g7.completed} completed sessions (bar ${G7_MAX_MINUTES} min) → ${g7.status.toUpperCase()}`,
-    `      all ${g7.sessions} sessions, finished or not: median ${mins(g7.medianAllMinutes)}`,
+    `G7  Today duration   median ${mins(g7.medianAllMinutes)} over all ${g7.sessions} sessions, finished or not (bar ${G7_MAX_MINUTES} min) → ${g7.status.toUpperCase()}`,
+    `      completed only: median ${mins(g7.medianMinutes)} over ${g7.completed} sessions`,
     '',
     'exports (week-level dates only)',
     ...r.rows.map((x) => `  ${x.label}  week of ${x.week}  ${x.events} events  loop ${x.loop.reached}/${LOOP_STEPS.length}${x.loop.complete ? ' complete' : ''}  ${x.sessions} Today sessions`),

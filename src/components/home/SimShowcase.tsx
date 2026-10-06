@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SIMS, getTrack } from '@/lib/tracks'
 import type { SimMeta } from '@/lib/tracks'
+import { scrollBehavior } from '@/lib/lesson-scroll'
 
 const MINT = '#3EF2A4'
 const CYAN = '#22D3EE'
@@ -292,10 +293,10 @@ export default function SimShowcase() {
     if (!el) return
     if (e.key === 'ArrowRight') {
       e.preventDefault()
-      el.scrollBy({ left: 356, behavior: 'smooth' })
+      el.scrollBy({ left: 356, behavior: scrollBehavior() })
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault()
-      el.scrollBy({ left: -356, behavior: 'smooth' })
+      el.scrollBy({ left: -356, behavior: scrollBehavior() })
     }
   }
 

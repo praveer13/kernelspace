@@ -22,7 +22,8 @@ import {
   Terminal,
 } from 'lucide-react'
 import ProgressRing from '@/components/ProgressRing'
-import { rankForXp, selectStreak, TOTAL_LESSONS, useProgress } from '@/lib/progress'
+import { selectRings } from '@/lib/economy'
+import { selectStreak, TOTAL_LESSONS, useProgress } from '@/lib/progress'
 import { getTrack, TRACKS, CAPSTONE } from '@/lib/tracks'
 import { KCS } from '@/data/kc'
 import { ALL_LESSONS, ORDERED_LESSON_IDS, TRACK_EXTRAS, lessonsForTrack, simsForTrack } from '@/data/lessons'
@@ -190,7 +191,8 @@ export default function CurriculumPage() {
 
   const doneCount = ORDERED_LESSON_IDS.filter((id) => lessonStates[id]?.status === 'done').length
   const overallPct = Math.round((doneCount / ORDERED_LESSON_IDS.length) * 100)
-  const rank = rankForXp(xp)
+  // the highest ring earned from the ledger, never an XP threshold (spec 8.5)
+  const rank = useProgress((s) => selectRings(s.aggregate).rank)
 
   // the path plan (paths.ts) with the placement applied: its first lesson that is neither done nor read is "current"
   const path = pathOf(useProgress((s) => s.working['boot:path']))
@@ -288,7 +290,7 @@ export default function CurriculumPage() {
                 <div>
                   <p className="font-mono text-body-sm text-text-1">
                     {xp} XP <span className="text-text-3">·</span>{' '}
-                    <span className="text-accent">{rank.name}</span>
+                    <span className="text-accent">{rank}</span>
                   </p>
                   <p className="flex items-center gap-1.5 font-mono text-[11px] text-text-3">
                     <Flame size={11} className="text-amber" /> {streak} day uptime

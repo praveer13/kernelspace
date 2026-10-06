@@ -214,7 +214,10 @@ export default function CodeBlock({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="max-h-[480px] overflow-auto scrollbar-slim"
+          tabIndex={0}
+          role="region"
+          aria-label={`${resolvedTabs.length > 1 ? tab.label : (filename ?? tab.label)} code`}
+          className="max-h-[480px] overflow-auto scrollbar-slim focus-visible:-outline-offset-2"
         >
           <pre className="min-w-max px-0 py-3 font-mono text-code">
             {lines.map((line, i) => {

@@ -10,8 +10,9 @@
  *   shape      a cycle in requires or in requires ∪ contains; an asymmetric confusable set or one with
  *              more than 3 entries; thresholds other than THRESHOLD_KCS (6 core) plus RUST_ANCHOR_KC;
  *              a notional card outside 3-6 rules and 2-4 ignores, or a Wave 1 track without one;
- *   coverage   in a lesson that sets Lesson.kcs: an untagged checkpoint item, Lesson.kcs outside 2-3 or
- *              naming a KC that does not list the lesson; a KC in some Lesson.kcs with fewer than 2
+ *   coverage   in a lesson that sets Lesson.kcs: an untagged checkpoint item, Lesson.kcs outside 1-3,
+ *              naming a KC that does not list the lesson, or naming a KC first taught in a later lesson
+ *              (planTicket and the card queue read Lesson.kcs as "taught here", so a T4 KC would reach a T0 learner); a KC in some Lesson.kcs with fewer than 2
  *              tagged items and no generator; an R lesson that no T-side KC requires (§4.3); a lab whose
  *              check KCs' prerequisites miss a readiness lesson; a lab check tag the KC's `labs` does
  *              not name (and the reverse once the lab is tagged); a generator family whose Gen.kcs
@@ -247,12 +248,16 @@ export function verifyKc(input: VerifyKcInput): VerifyKcResult {
   }
   for (const l of optedIn) {
     const lk = l.kcs ?? []
-    if (lk.length < 2 || lk.length > 3) err(l.id, `Lesson.kcs has ${lk.length} KCs (want 2-3, primary first)`)
+    if (lk.length < 1 || lk.length > 3) err(l.id, `Lesson.kcs has ${lk.length} KCs (want 1-3, primary first)`)
     for (const d of dupes(lk)) err(l.id, `Lesson.kcs repeats ${d}`)
     for (const id of lk) {
       const k = index.get(id)
       if (!k) err(l.id, `Lesson.kcs names unknown KC ${id}`)
       else if (!k.lessons.includes(l.id)) err(l.id, `Lesson.kcs names ${id}, whose lessons do not include ${l.id}`)
+      else {
+        const first = k.lessons[0]
+        if ((position.get(first) ?? -1) > (position.get(l.id) ?? -1)) err(l.id, `Lesson.kcs names ${id}, first taught in ${first}, later in curriculum order (name only KCs this lesson or an earlier one introduces)`)
+      }
     }
     for (const s of sites) if (s.lessonId === l.id && s.checkpoint && !s.kcs?.length) err(s.ref, 'untagged checkpoint item in a lesson that sets Lesson.kcs')
   }
@@ -331,7 +336,9 @@ export function verifyKc(input: VerifyKcInput): VerifyKcResult {
   for (const l of input.lessons) {
     if (!taught.has(l.id)) continue
     const theirs = l.kcs ? l.kcs.map((id) => index.get(id)).filter((k): k is Kc => !!k) : kcs.filter((k) => k.lessons.includes(l.id))
-    if (theirs.every((k) => k.requires.length === 0)) warn(l.id, 'none of its KCs requires anything')
+    // the first lesson of a track after R may open with KCs that need nothing (t0.l1 introduces ideas, not prerequisites)
+    const opensTrack = l.trackId !== 'r' && input.lessons.find((x) => x.trackId === l.trackId)?.id === l.id
+    if (!opensTrack && theirs.every((k) => k.requires.length === 0)) warn(l.id, 'none of its KCs requires anything')
   }
 
   /* ---------------- stats ---------------- */

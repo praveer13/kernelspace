@@ -67,7 +67,7 @@ const lesson: Lesson = {
           options: [
             'The memory-management hardware, which has no mapping to translate address zero',
             'The C compiler, which inserted a check on the pointer before each load of memory',
-            'The C library, which keeps a table of every pointer that is still valid',
+            'The C library, which keeps a table of every pointer that is still valid at that moment',
             'The linker, which reserved address zero as unusable when it laid out the program',
           ],
           correct: [0],
