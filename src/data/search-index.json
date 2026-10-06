@@ -64,11 +64,11 @@
     ["t6.l8","Agents, Structured Output, and Cache Locality","Agent loops re-send most of the same…",["Cache locality is the agentic throughput multiplier","The token mask is not a string mask"]],
     ["t6.l9","Multi-LoRA Serving: One Base, Many Tenants","A thousand fine-tunes do not need a…",["S-LoRA: page weights and KV in one allocator","Punica: keep one base batch heterogeneous","What one adapter costs in bytes"]],
     ["t6.l10","Security Boundaries for Agentic Inference","The model emits untrusted instructions,…",["Tool execution: a microVM is a boundary, not a policy","Confidential GPU inference: protect use, not intent","Prefix caches create a tenant-visible timing oracle"]],
-    ["t7.l1","The Objective Function: Goodput, SLOs, and Honest Metrics","Every previous track optimized…",["The metrics, hardened"]],
+    ["t7.l1","The Objective Function: Goodput, SLOs, and Honest Metrics","Every previous track optimized…",["The metrics, hardened","Counting goodput, and the error budget it spends"]],
     ["t7.l2","Benchmarking Methodology: Measure Like You Mean It","Most published inference numbers are…",["Rule 1: The traffic is the benchmark","Rule 2: Warmup and steady state, or it never happened","Rule 3: Percentiles need samples, and load needs steps","Rule 4: Compare stacks on identical everything"]],
-    ["t7.l3","The Pareto Frontier: tok/s/GPU vs tok/s/user","There is no fastest engine — there is a…",["The dial that moves you along the curve (and the ones that move the curve)"]],
+    ["t7.l3","The Pareto Frontier: tok/s/GPU vs tok/s/user","There is no fastest engine — there is a…",["Reading a frontier: dominated points and the floor","The dial that moves you along the curve (and the ones that move the curve)"]],
     ["t7.l4","Unit Economics: $/Mtok, tok/MW, and the 545% Margin Day","DeepSeek published a full day of…",["The napkin model that prices anything","The levers, priced"]],
-    ["t7.l5","Autoscaling & the Planner: Capacity as a Control Loop","The last lesson of the course: the…",["The Planner's playbook (Dynamo's, and yours)"]]
+    ["t7.l5","Autoscaling & the Planner: Capacity as a Control Loop","The last lesson of the course: the…",["The Planner's playbook (Dynamo's, and yours)","Sizing for the peak, and for losing a node","Reading an incident before changing anything"]]
   ],
   "kcs": [
     ["r.bindings-expressions","Bindings, shadowing and block values","","r.l1","bindings-are-immutable-shadowing-is-a-new-binding",[]],
@@ -210,18 +210,18 @@
     ["t6.isolation-boundaries","Isolation boundaries for tool code","","t6.l10","tool-execution-a-microvm-is-a-boundary-not-a-policy",[]],
     ["t6.cache-timing-oracle","Prefix caches as a timing oracle","","t6.l10","prefix-caches-create-a-tenant-visible-timing-oracle",[]],
     ["t6.tool-authorization","Authorizing tool calls","","t6.l10","tool-execution-a-microvm-is-a-boundary-not-a-policy",[]],
-    ["t7.slo-error-budget","SLOs and the error budget","","t7.l1","",[]],
-    ["t7.goodput","Goodput","","t7.l1","",[]],
+    ["t7.slo-error-budget","SLOs and the error budget","","t7.l1","counting-goodput-and-the-error-budget-it-spends",[]],
+    ["t7.goodput","Goodput","","t7.l1","counting-goodput-and-the-error-budget-it-spends",[]],
     ["t7.tail-percentiles","Tail percentiles","","t7.l1","",[]],
     ["t7.goodput-curve","The goodput curve","","t7.l2","",[]],
     ["t7.benchmark-hygiene","Honest benchmarks","","t7.l2","rule-1-the-traffic-is-the-benchmark",[]],
-    ["t7.pareto-frontier","The Pareto frontier","","t7.l3","",[]],
+    ["t7.pareto-frontier","The Pareto frontier","","t7.l3","reading-a-frontier-dominated-points-and-the-floor",[]],
     ["t7.frontier-shifts","Sliding along versus moving the frontier","","t7.l3","the-dial-that-moves-you-along-the-curve-and-the-ones-that-move-the-curve",[]],
     ["t7.cost-per-mtok","Cost per million tokens","","t7.l4","",[]],
     ["t7.output-token-premium","Why output tokens cost more","","t7.l4","",[]],
     ["t7.tokens-per-megawatt","Tokens per megawatt","","t7.l4","",[]],
-    ["t7.capacity-planning","Capacity planning","","t7.l5","",[]],
-    ["t7.incident-diagnosis","Incident diagnosis","","t7.l5","",[]],
+    ["t7.capacity-planning","Capacity planning","","t7.l5","sizing-for-the-peak-and-for-losing-a-node",[]],
+    ["t7.incident-diagnosis","Incident diagnosis","","t7.l5","reading-an-incident-before-changing-anything",[]],
     ["t7.leading-signals","Scaling on leading signals","","t7.l5","",[]]
   ],
   "claims": [
