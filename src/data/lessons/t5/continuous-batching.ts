@@ -10,12 +10,78 @@ const lesson: Lesson = {
   hook: 'The race-track animation: iteration-level scheduling vs static batching — the 2022 scheduling idea that multiplied every GPU\'s goodput.',
   exercise: 'sim',
   simId: 'sim-batching',
+  kcs: ['t5.continuous-batching', 't5.admission-headroom', 't5.sched-order'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain why continuous batching beats static batching on traffic with mixed output lengths.',
+        model:
+          'A static batch runs until its longest sequence finishes, so finished requests hold slots and KV blocks idle while others wait outside. Continuous batching edits the batch after every decode step: finished sequences leave and free their blocks at once, and waiting ones join if blocks allow. The batch stays full of live work.',
+        ideas: [
+          'A static batch holds finished slots and blocks until its longest sequence ends',
+          'The scheduler edits the batch after every decode step, so finished sequences leave at once',
+          'Waiting requests join whenever free blocks allow, so the batch stays full of live work',
+        ],
+        kcs: ['t5.continuous-batching'],
+      },
+      {
+        prompt: 'A scheduler admits the shortest prompt first. Say what can go wrong, and which two settings keep it safe.',
+        model:
+          'Short prompts keep arriving and jumping the queue, so a long request can wait without end: starvation. A guard fixes that by moving any request older than a set age to the front. The other setting is headroom: admit a request only if free blocks cover its prompt plus room for the tokens it will decode.',
+        ideas: [
+          'Shortest-first can starve a long request while short ones keep arriving',
+          'A starvation guard moves a request that has waited past a set age to the front',
+          'Headroom: admit only if free blocks cover the prompt plus room for its decode',
+        ],
+        kcs: ['t5.sched-order', 't5.admission-headroom'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'numeric',
+          q: 'Four requests need 8, 12, 20 and 40 decode steps. They run as one static batch of four slots for 40 steps, which is 160 slot-steps. How many of those slot-steps hold a request that has already finished?',
+          unit: 'slot-steps',
+          truth: 80,
+          okWithinFactor: 1.05,
+          revealAt: 'In the simulator',
+          kcs: ['t5.continuous-batching'],
+        },
+        {
+          kind: 'choice',
+          q: 'A scheduler always admits the waiting request with the shortest prompt first. Which request is most at risk?',
+          options: [
+            'A request with a very long prompt, since shorter ones keep arriving and keep going ahead of it',
+            'A request with a short prompt, since the engine can only afford a few short ones at once',
+            'The newest request, since it has used no blocks yet and loses nothing by waiting longer',
+            'A request with a long reply, since the scheduler reserves blocks for its whole output when it is admitted',
+          ],
+          correct: [0],
+          why: [
+            'Right: shortest-first lets short prompts keep jumping the queue, so a long prompt can wait without end. That is starvation, and it is why a guard promotes old requests.',
+            'A short prompt goes first under this order, so it waits the least. A cap on running sequences delays the long prompts behind it, not the short one.',
+            'Arrival time does not decide this order, and a new request with a short prompt is admitted at once. A long prompt is what puts a request at risk.',
+            'Admission looks at the prompt, and decode growth is covered by a small headroom, not a reservation for the whole reply. A long reply does not push a request back in the queue.',
+          ],
+          revealAt: 'The scheduler loop, in systems vocabulary',
+          kcs: ['t5.sched-order'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `T2.L4 ended with a promise: continuous batching is a 1960s scheduler wearing a GPU. This lesson pays it off. The problem it solves is the **convoy effect** you met in the scheduling lab: with *static* batching, a batch of sequences runs together until the **longest** finishes — a 500-token generation convoying 20-token generations, the GPU idling on padding and finished slots. Utilization numbers for naive static serving were dreadful (often <30%), and every finished request sat in the batch, burning KV space and compute, until the slowest sibling completed.
 
 The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at iteration granularity.** After *every single decode step*, the engine re-evaluates the batch: finished sequences leave immediately (freeing their blocks), waiting sequences join if memory allows, preempted ones are evicted and later resumed by recomputation. No one waits for anyone. The batch is the timeslice; the iteration is the quantum; the KV block manager is the admission controller. You learned this machine in T2 — here it is running the world's inference.`,
+    },
+    {
+      type: 'play',
+      playId: 'scheduler',
+      title: 'I was the scheduler',
     },
     {
       type: 'diagram',
@@ -41,6 +107,24 @@ The fix, popularized by Orca (2022) and made famous by vLLM: **schedule at itera
         { caption: 'The batch is always full of *live* work: utilization tracks demand, not the longest sequence. Same GPU, same model — 2–8× goodput in real deployments (paper: up to ~24× vs naive).', active: ['c3', 'legend'], edges: ['c2->c3'] },
         { caption: 'When blocks run out mid-flight, the scheduler PREEMPTS (vLLM V1 frees the victim\'s blocks and recomputes its prefill on resume, T5.L5) and resumes later — timesharing with HBM as the RAM. You have seen this OS before: it\'s T2, at 3 TB/s.', active: ['c4'], edges: ['c3->c4'] },
       ],
+      predictAt: {
+        step: 1,
+        prompt: 'Static batching held every finished slot until D ended. Now the engine edits the batch after every decode step. A has just finished and D still has 32 steps to go. What happens to A\'s slot?',
+        options: [
+          'It is freed with its blocks, and a waiting request joins at once if enough blocks are free',
+          'It stays reserved until the whole batch drains, and every request leaves together with D',
+          'It is held for a short grace period, in case the client of the finished request resumes it',
+          'It is handed to D, and the slowest request gets the freed memory and finishes sooner',
+        ],
+        correct: [0],
+        why: [
+          'Right: the scheduler edits the batch after every step, so a finished request frees its slot and blocks immediately and a waiting one can take them. Utilisation follows live work.',
+          'That is static batching, where the batch is edited only when it drains. Continuous batching exists to stop finished requests from holding slots until the slowest one ends.',
+          'A finished request has nothing left to resume, because its output is complete. Holding its blocks would only idle memory that waiting requests need.',
+          'Blocks are not donated to one running sequence. A finished request returns them to the pool, and admission decides who gets them, usually a waiting request, not D.',
+        ],
+        kcs: ['t5.continuous-batching'],
+      },
     },
     {
       type: 'prose',
@@ -53,7 +137,9 @@ Each iteration, the engine runs the same loop — annotate it with T2 names:
 3. **Run one model step** for the whole batch: one weight read, N sequences advanced (the T4.L3 batching win — arithmetic intensity × N). *The quantum of work.*
 4. **Sample, append tokens, free the finished:** sequences hitting EOS/length limits exit immediately; their blocks' refcounts drop and return to the free queue in O(1). *Reclamation.*
 
-Two refinements complete the picture. **Waiting-queue policy** is a research area by itself (FCFS vs shortest-remaining vs priority — the same taxonomy as T2.L4, with TTFT as the metric). And **prefill chunking** (T5.L8) interleaves sliced prefills into this loop so a 100k-token prompt doesn't become a 5-second convoy inside the "continuous" schedule.`,
+Two refinements complete the picture. **Waiting-queue policy** is a research area by itself (FCFS vs shortest-remaining vs priority — the same taxonomy as T2.L4, with TTFT as the metric). And **prefill chunking** (T5.L8) interleaves sliced prefills into this loop so a 100k-token prompt doesn't become a 5-second convoy inside the "continuous" schedule.
+
+Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: FCFS is fair but lets one huge prompt hold up the line, while shortest-prompt-first cuts the average wait and can starve a long request while short ones keep arriving, so it needs a **starvation guard** that moves any request that has waited past a set age to the front. **Headroom** decides whether to admit at all: decode grows every sequence by a token per iteration, so admit a request only when free blocks cover its prompt *plus* some tokens of room to decode, or a cache that is full at admission starts preempting mid-flight. Lab 06's reference policy sets exactly these dials: shortest prompt first, a guard at 2,000 iterations, 48 tokens of headroom and no preemption.`,
     },
     {
       type: 'statline',
@@ -94,6 +180,12 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
       note: `The cliff at overload is the deepest serving lesson: past capacity, no scheduling policy saves you — only admission control (queue and reject early) or more HBM. The scheduler's job is to make the trade visible and fair, not to repeal physics.`,
     },
     {
+      type: 'callout',
+      variant: 'info',
+      title: 'Build this: lab 06',
+      md: `[Lab 06, Goodput or Nothing](/forge/batching-scheduler) is this loop in Rust: once per iteration you choose who runs, who waits and who is preempted, and the harness grades goodput under an SLO. Its reference is the policy the play compares you with. Start with the first check, \`runs_clean\`: legal moves only, and light load completes.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -113,6 +205,8 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
             'No context switch is involved. Slots idle because the batch is only edited when it fully drains, not because the GPU flushes state when a sequence ends.',
             'Prefill runs in parallel across the batch\'s prompts, so startup is not serialized. The waste appears later, when finished sequences wait on the slowest one.',
           ],
+          kcs: ['t5.continuous-batching'],
+          miss: ['t5.static-small-batches', '', 't5.static-context-switch', 't5.static-serial-prefill'],
         },
         {
           q: 'Continuous batching schedules at what granularity?',
@@ -131,6 +225,8 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
             'That is vLLM V0\'s optional multi-step scheduling, not the definition. It re-formed the batch only every n steps to cut CPU scheduling cost, but new requests waited for the block to end and TTFT rose at low request rates. Continuous batching edits it after every step, and V1 cuts the CPU overhead instead.',
             'The quantum is one model step, not a wall-clock tick. A one-second period would leave finished slots idle for roughly twenty steps at about 50 ms each.',
           ],
+          kcs: ['t5.continuous-batching'],
+          miss: ['t5.batch-per-request', '', 't5.batch-per-block', 't5.batch-per-time-slice'],
         },
         {
           q: 'What makes preemption practical in an inference engine (vs a thread pool)?',
@@ -149,6 +245,8 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
             'A sequence is not stateless: its KV cache is large and unique. Preemption is practical because that state can be freed and recomputed, and recompute still costs real prefill FLOPs.',
             'Scheduling decisions are made between iterations, never mid-kernel or mid-layer. Preemption does not resume partial forward passes; it frees blocks and recomputes the prefill.',
           ],
+          kcs: ['t5.continuous-batching', 't5.admission-headroom'],
+          miss: ['t5.preempt-saves-registers', '', 't5.sequence-is-stateless', 't5.preempt-mid-layer'],
         },
         {
           q: 'Under sustained overload (arrivals > capacity), the correct system response is…',
@@ -167,6 +265,8 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
             'Timeouts add no capacity. With arrivals above the service rate the queue grows without bound, so longer waits only delay failures and raise tail latency for everyone.',
             'A larger running set needs more KV blocks than exist at overload, so it raises preemption and recompute. Batching amortizes weight reads but cannot create HBM.',
           ],
+          kcs: ['t5.admission-headroom', 't2.admission-scheduling'],
+          miss: ['t5.overload-fix-by-policy', '', 't5.overload-fix-by-timeout', 't5.overload-fix-by-bigger-batch'],
         },
       ],
     },
