@@ -29,6 +29,8 @@ Engines have state: prefix caches cold, CUDA graphs uncaptured, JIT uncompiled, 
 
 A p99 computed from 20 requests is astrology. Sweep concurrency in steps (1, 2, 4, 8 … until SLO collapse), hold each step for hundreds of requests, and report the **goodput curve** (T7.L1), not a point. Between steps: the knee — where TTFT/TPOT violate SLO — *is* the capacity number. This is exactly the Fleet's scoreboard: your goodput % is the area under an implicit curve you now know how to draw.
 
+Reading a sweep is a lookup. In a hypothetical run with p95 TPOT of 22, 24, 31, 48, 96 and 240 ms at concurrency 1, 2, 4, 8, 16 and 32, and an SLO of TPOT < 100 ms, the knee is **16**: the highest step that still meets the bound. Step 32 may still add tokens per second, but its goodput is lower, because the requests it adds arrive outside the SLO.
+
 ## Rule 4: Compare stacks on identical everything
 
 Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quantization), same traffic seed, same engine version, and both warmed. InferenceX's value is procedural: the suite re-runs every night and the runs are public — the difference between "SGLang beats vLLM by 12%" and "your harness differed by 12%."`,
@@ -57,6 +59,12 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
       md: `DistServe belongs in the benchmarking track because its objective is not raw tokens per second: it asks for the maximum arrival rate that satisfies both TTFT and TPOT constraints. Audit the evaluation as you read — workload distributions, phase-specific parallelism, KV-transfer topology, percentile targets, and the baseline's tuning budget. The paper is a worked example of goodput turning an architectural claim into a falsifiable curve.`,
     },
     {
+      type: 'item',
+      title: 'Find the knee in a new sweep',
+      family: 'goodput',
+      variants: ['knee'],
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -76,6 +84,8 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
             'Right: rules 1 and 4. Length distributions, arrival process, prefix ratio, warmup, power caps and engine versions all move the result. Check that everything except the engine was identical.',
             'Hardware is one axis, but rankings flip on identical chips too when traffic shape, prefix sharing or warmup differ. Pinning the GPU alone does not make two comparisons agree.',
           ],
+          kcs: ['t7.benchmark-hygiene'],
+          miss: ['t7.winner-is-noise', 't7.pinning-fixes-disagreement', '', 't7.winner-is-hardware-generation'],
         },
         {
           q: 'Warmup exists in benchmarking protocol because…',
@@ -94,6 +104,8 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
             'Discarding samples with no identified cause is arbitrary. Warmup is justified by named engine state, and its length is set by when TTFT and hit rates plateau.',
             'Connection setup is cheap and takes milliseconds. It cannot explain a transient lasting minutes, and a well-built harness opens connections before timing starts.',
           ],
+          kcs: ['t7.benchmark-hygiene'],
+          miss: ['t7.warmup-is-clocks', '', 't7.warmup-is-variance-trim', 't7.warmup-is-client-connections'],
         },
         {
           q: 'The capacity number of a serving system is found by…',
@@ -112,6 +124,8 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
             'Latency stays low at light load, then queues build and it goes vertical at the knee. A linear extrapolation from one moderate point hides that cliff, and one point cannot locate a knee.',
             'Right: rule 3. Percentiles need hundreds of requests per step and load needs steps. The knee where the SLO first breaks is the capacity, and the curve is the deliverable.',
           ],
+          kcs: ['t7.goodput-curve'],
+          miss: ['t7.capacity-is-max-batch-run', 't7.capacity-is-roofline', 't7.capacity-is-linear-extrapolation', ''],
         },
         {
           q: 'Prefix sharing ratio must be reported because…',
@@ -130,6 +144,8 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
             'Cache sizing is a real use of the ratio, but the ratio also decides how much prefill is skipped, which changes TTFT, throughput and cost. Leaving it out makes two benchmarks incomparable.',
             'It is a workload property that changes performance, not an accuracy or diversity measure. The effect shows up in prefill work avoided, not in output quality.',
           ],
+          kcs: ['t7.benchmark-hygiene'],
+          miss: ['t7.prefix-ratio-is-tokenizer-cost', '', 't7.prefix-ratio-is-cache-sizing-only', 't7.prefix-ratio-is-quality-metric'],
         },
       ],
     },
@@ -139,6 +155,34 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
       md: `The format the industry respects (steal it): (1) hardware + clocks + power cap; (2) model artifact hash + quantization; (3) traffic: length distributions, arrival process, prefix ratio, seed; (4) harness + versions; (5) warmup protocol and measurement window; (6) the goodput curve — goodput vs concurrency with TTFT/TPOT p50/p95 overlays; (7) the knee, stated as the capacity number with the SLO beside it. Your Fleet runs already produce (3), (6), (7) — a real GPU box and LLMPerf adds the rest. This document is a portfolio artifact (§6 of the plan).`,
     },
   ],
+  kcs: ['t7.goodput-curve', 't7.benchmark-hygiene'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Two blog posts disagree about which engine is faster. List what you would check before trusting either.',
+        model:
+          'Check the traffic: input and output length distributions, arrival process and prefix-sharing ratio. Check the state: warmup to steady state, then a measured window with hundreds of requests per step. Check the stack: same GPU, clocks, model artifact, engine version and harness. Any difference can explain the gap.',
+        ideas: [
+          'Traffic: length distributions, arrival process and prefix-sharing ratio',
+          'State: warmup to steady state, then a measured window with hundreds of requests per step',
+          'Stack: the same GPU and clocks, model artifact, engine version and harness',
+        ],
+        kcs: ['t7.benchmark-hygiene'],
+      },
+      {
+        prompt: 'Describe how you would find a system\'s capacity from a concurrency sweep, and what you would report.',
+        model:
+          'Step concurrency upward (1, 2, 4, 8 and on), holding each step for hundreds of requests, and record goodput with p95 TTFT and TPOT. The knee, the highest step that still meets every SLO bound, is the capacity. Report the curve with the SLO beside it, never a single peak tok/s.',
+        ideas: [
+          'Step concurrency upward, holding each step for hundreds of requests',
+          'The knee, the highest step where p95 TTFT and TPOT still meet the SLO, is the capacity',
+          'Report the curve with the SLO beside it, not a single peak tok/s',
+        ],
+        kcs: ['t7.goodput-curve'],
+      },
+    ],
+  },
 }
 
 export default lesson
