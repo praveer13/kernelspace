@@ -57,6 +57,7 @@ import { RenderBlock } from '@/pages/lesson/blocks'
 import { countH2, extractHeadings } from '@/pages/lesson/markdown'
 import { EXERCISE_META } from '@/pages/lesson/exercise-meta'
 import { cn } from '@/lib/utils'
+import { FINISH_BAR_SCROLL_PADDING, gradedSurfaceInView, scrollBehavior } from '@/lib/lesson-scroll'
 
 // the ticket, the test-out and the discussion load on demand: a lesson that is read first never pays for them
 const TestOut = lazy(() => import('@/components/learner/TestOut'))
@@ -652,21 +653,6 @@ function CapstoneLink() {
 /* focus helpers for `m` and the finish control                         */
 /* ------------------------------------------------------------------ */
 
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-/** Every scroll this page starts by itself: smooth, unless the learner asked for reduced motion. */
-const scrollBehavior = (): ScrollBehavior => (reducedMotion() ? 'auto' : 'smooth')
-
-/** The controls a finished-reading learner is about to use: the sticky finish bar must never sit over them. */
-const GRADED_SURFACES = '[data-ks-ticket], [data-ks-testout], section[aria-label="Checkpoint quiz"]'
-/** Whether any exit ticket, test-out or checkpoint quiz is (even partly) on screen. */
-function gradedSurfaceInView(): boolean {
-  for (const el of document.querySelectorAll<HTMLElement>(GRADED_SURFACES)) {
-    const r = el.getBoundingClientRect()
-    if (r.height > 0 && r.top < window.innerHeight && r.bottom > 0) return true
-  }
-  return false
-}
-
 /** Bring `root` to the middle of the screen and focus `target` (or `root` itself, which then needs a tabindex). */
 function reveal(root: HTMLElement, target: HTMLElement | null) {
   if (!target && !root.hasAttribute('tabindex')) root.setAttribute('tabindex', '-1')
@@ -826,6 +812,18 @@ function LessonView({ lesson }: { lesson: Lesson }) {
       ro.disconnect()
     }
   }, [lesson.id, setLessonScroll])
+
+  /* while the finish bar is up it covers the bottom of the page: pad the scroll area so a control scrolled or focused into view clears it */
+  const finishBarUp = showCompleteBar && !done && !read
+  useEffect(() => {
+    if (!finishBarUp) return
+    const root = document.documentElement
+    const before = root.style.scrollPaddingBottom
+    root.style.scrollPaddingBottom = FINISH_BAR_SCROLL_PADDING
+    return () => {
+      root.style.scrollPaddingBottom = before
+    }
+  }, [finishBarUp])
 
   /* scroll-spy on headings */
   useEffect(() => {
