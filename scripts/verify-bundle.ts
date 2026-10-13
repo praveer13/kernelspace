@@ -22,7 +22,7 @@ const BUDGET_KB = 250
 const ENTRY_TARGET_KB = 125
 /** Each generator family chunk, the search index chunk, and FSRS + cards + composer (spec §16.1): reported, not gated. */
 const FAMILY_REPORT_KB = 8
-const INDEX_REPORT_KB = 15
+const INDEX_REPORT_KB = 20
 const LEARNER_REPORT_KB = 6
 const KB = 1000
 

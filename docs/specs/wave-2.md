@@ -35,6 +35,7 @@ Section numbers below are cited by the task DAG (§24) and by `wave2-dag.json`.
 | D21 | **Playwright and axe-core become devDependencies** (PLAN §7.4 already says so), so "axe at 360 and 1280 px" and "the Daily works by keyboard" are commands. They run locally and nightly, never in the fast gate. No runtime dependency is added. | §22.2 |
 | D22 | **QR handoff stays out.** Wave 1 deferred it "to Wave 2" (wave-1 D11), but no Wave 2 line pays for it and iOS Safari has no native QR scanning. The file delta handoff stays. | §1 |
 | D23 | **Shared files have one owner.** Files every PR needs (ledger, economy, claims, lesson and item types, `verify-generators.ts`, `package.json`) are edited only in 2a level 0. No content task changes a lesson's title or hook, so `public/llms.txt` never changes in Wave 2. The DAG was checked mechanically for this rule (§24.1). | §24 |
+| D24 | **The ⌘K index budget is 20 KB gzip** (owner decision, 2026-10-13), up from Wave 1's 15 KB. The index loads only on the palette's first open, never at page load, and holding 15 KB had cost the concept crumbs and most of each lesson hook as the KC graph grew. `verify:search-index` still fails above the budget; build-search-index's clip lengths are restored after 2a-30 lands. | §7.4, §22 |
 
 ## Owner questions
 
