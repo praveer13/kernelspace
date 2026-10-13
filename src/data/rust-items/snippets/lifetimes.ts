@@ -1125,7 +1125,7 @@ export const SNIPPETS: RustSnippet[] = [
   },
 
   {
-    id: 'closure-field-capture',
+    id: 'closure-field-capture-sched',
     kcs: [AL, BR],
     title: 'Count a dispatch in a closure while queuing',
     domain: 'Scheduler',
@@ -2392,7 +2392,7 @@ export const SNIPPETS: RustSnippet[] = [
         permission: 'own',
         fixes: [
           good('len-first', 15, '    let n = w.len(); drop(t); n', 'Reading the length first is the last use of `w`, so the borrow of `t` has ended and `t` has O again at `drop`.'),
-          lure('clone', 'clone-drop', 15, '    drop(t.clone()); w.len()', 'It compiles because only a copy is dropped: `t` stays alive, so the memory this was meant to release is still held.'),
+          lure('clone', 'clone-drop', 15, '    let _ = drop(t.clone()); w.len()', 'It compiles because only a copy is dropped: `t` stays alive, so the memory this was meant to release is still held.'),
           lure('other', 'drop-ref', 15, '    drop(&t); w.len()', 'It compiles because dropping a reference does nothing: `t` is still alive and the borrow was never the problem.', 'r.drop-a-reference'),
         ],
       },
@@ -2678,7 +2678,7 @@ export const SNIPPETS: RustSnippet[] = [
         expect: { code: 'E0499', line: 5 },
         why: 'The first closure holds `a` `&mut` until the scope ends, and the second closure needs another `&mut` borrow of it: two threads would write one half.',
         fixes: [
-          good('use-b', 5, '        s.spawn(|| b[0] = 2);', '`b` is the other half, so the two threads write different blocks and the borrows do not overlap.'),
+          good('use-b', 5, '        s.spawn(|| b[0] += 2);', '`b` is the other half, so the two threads write different blocks and the borrows do not overlap.'),
           wrong('use-v', 5, '        s.spawn(|| v[3] = 2);', '`a` and `b` still borrow all of `v` `&mut`, and the closure needs unique access to `*v` while they live.', 'r.disjoint-index-is-not-disjoint'),
           wrong('move-a', 5, '        s.spawn(move || a[1] = 2);', '`move` would move `a` into the second thread, but the first closure already borrows it.', 'r.move-is-optional'),
         ],

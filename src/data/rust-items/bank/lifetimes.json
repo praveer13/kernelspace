@@ -187,8 +187,8 @@
         "shared-sched": {"result":{"code":"E0596","line":10,"message":"cannot borrow `s.queue` as mutable, as it is behind a `&` reference"}}
       }
     },
-    "closure-field-capture": {
-      "hash": "75ce26f1fe2d78ae804b8e0ef5b8ad2daed3d37355ba82a643c76ee3eafa23ed",
+    "closure-field-capture-sched": {
+      "hash": "38c13b278563d929a9bb4aa5aef70027721dc9a6be85ec7a9cc145886418cbfd",
       "variants": {
         "base": {"result":"compiles"},
         "move-closure": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `s`"},"fixes":{"drop-move":"compiles","method-call":{"code":"E0382","line":9},"deref-left":{"code":"E0614","line":8}}},
@@ -393,7 +393,7 @@
       }
     },
     "words-tied-to-self": {
-      "hash": "278f9ebddf8fc981243df45560da110c33b377be9162e7c4e69307f39a9e4f1b",
+      "hash": "796b439e594c280ee9a91f692e3ad5e26f413edbd759be935df2087e525e2540",
       "variants": {
         "base": {"result":"compiles"},
         "tied-to-self": {"result":{"code":"E0597","line":13,"message":"`lx` does not live long enough"},"fixes":{"name-a":"compiles","static-words":{"code":"none","line":5},"tie-self":{"code":"E0597","line":13}}},
@@ -446,7 +446,7 @@
       }
     },
     "fill-halves-scoped": {
-      "hash": "179fffb0f280f55a7fb9804c9a3c5a8e99bf59bf3ae32fc18da9ed5cd50e9561",
+      "hash": "7dbf2bdd6413a69dc5224f76bb4797579b73bbafa931b3d5be7423c8a0c936f7",
       "variants": {
         "base": {"result":"compiles"},
         "same-half": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*a` as mutable more than once at a time"},"fixes":{"use-b":"compiles","use-v":{"code":"E0500","line":3},"move-a":{"code":"E0505","line":5}}},
