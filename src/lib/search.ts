@@ -8,10 +8,10 @@
 
 import Fuse from 'fuse.js'
 
-export type SearchGroup = 'Lessons' | 'Concepts' | 'Numbers' | 'Glossary' | 'Pages' | 'Tracks' | 'Simulators'
+export type SearchGroup = 'Lessons' | 'Concepts' | 'Plays' | 'Numbers' | 'Glossary' | 'Pages' | 'Tracks' | 'Simulators'
 
 /** Result order in the palette. */
-export const GROUP_ORDER: readonly SearchGroup[] = ['Lessons', 'Concepts', 'Numbers', 'Glossary', 'Pages', 'Tracks', 'Simulators']
+export const GROUP_ORDER: readonly SearchGroup[] = ['Lessons', 'Concepts', 'Plays', 'Numbers', 'Glossary', 'Pages', 'Tracks', 'Simulators']
 
 /** The groups with a row for every page, track and sim; shown before the learner types. */
 export const STATIC_GROUPS: readonly SearchGroup[] = ['Pages', 'Tracks', 'Simulators']
@@ -24,6 +24,8 @@ export type LessonRow = [id: string, title: string, hook: string, h2s: string[]]
  * top. `claimIds` are the claims its numbers rest on.
  */
 export type KcRow = [id: string, title: string, can: string, lessonId: string, anchor: string, claimIds: string[]]
+/** A play of `PLAYS` (src/data/plays.ts): its route is `/play/<id>`; `minutes` is its nominal time. */
+export type PlayRow = [id: string, title: string, lessonId: string, minutes: number]
 export type ClaimRow = [id: string, label: string, value: number | string, unit: string]
 export type GlossaryRow = [slug: string, os: string, llm: string, lessonId: string, synonyms: string]
 
@@ -31,6 +33,7 @@ export interface SearchIndex {
   version: 1
   lessons: LessonRow[]
   kcs: KcRow[]
+  plays: PlayRow[]
   claims: ClaimRow[]
   glossary: GlossaryRow[]
 }
@@ -84,6 +87,14 @@ export function indexItems(index: SearchIndex): SearchItem[] {
       crumb: `concept · ${label(lessonId)} · ${can ? `you can ${can}` : (lessonTitles.get(lessonId) ?? '')}`,
       to: `/lesson/${lessonId}${anchor ? `#${anchor}` : ''}`,
       keywords: can ? [can, id] : [id],
+    })),
+    ...index.plays.map<SearchItem>(([id, title, lessonId, minutes]) => ({
+      id: `play-${id}`,
+      group: 'Plays',
+      title: `Play: ${title}`,
+      crumb: `play · ${label(lessonId)} · ${minutes} min`,
+      to: `/play/${id}`,
+      keywords: [id, title, 'play', 'by hand', lessonTitles.get(lessonId) ?? ''],
     })),
     ...index.claims.map<SearchItem>(([id, name, value, unit]) => ({
       id: `claim-${id}`,

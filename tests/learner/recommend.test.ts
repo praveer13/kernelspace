@@ -5,10 +5,12 @@ import { KCS } from '../../src/data/kc'
 import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import type { TrackId } from '../../src/data/lessons/types'
-import { PATHS, pathPlan } from '../../src/lib/learner/paths'
+import { PLAYS } from '../../src/data/plays'
+import { PATHS, firstLessons, pathPlan, playStep } from '../../src/lib/learner/paths'
 import {
   BOOT_WHY,
   EXTRA_WHY,
+  currentLessonFor,
   RESUME_DAYS,
   WHY_MAX,
   fit,
@@ -18,10 +20,11 @@ import {
   recommend,
   type RecommendContent,
   type RecommendLessonState,
+  type RecommendPlay,
   type RecommendState,
 } from '../../src/lib/learner/recommend'
 import type { DayKind, PlacementResult } from '../../src/lib/learner/types'
-import { isFirstVisit, loadUpNext, recommendNow, type UpNextInput } from '../../src/lib/learner/up-next'
+import { currentLessonNow, firstLessonsNow, isFirstVisit, loadUpNext, recommendNow, type UpNextInput } from '../../src/lib/learner/up-next'
 import type { Json, LearningPath } from '../../src/lib/ledger/types'
 
 const CONTENT: RecommendContent = { kcs: KCS, lessons: ALL_LESSONS, labs: FORGE_LABS }
@@ -159,6 +162,31 @@ describe('recommend(): the six rules in order', () => {
     expect(stage2).toMatchObject({ title: 'Lab 01 · stage 2', why: 'Lab 01 stage 2 is a 15-minute win' })
   })
 
+  test('4. every lab with staged checks is offered stage by stage: labs 02 and 03 on a fixture, lab 01 as shipped', () => {
+    // labs 02-03 gain stages when 2c-03 lands; the rule reads whatever `stage`s the checks carry, so a fixture proves it now
+    const staged = (id: string, stages: number[]) => {
+      const lab = FORGE_LABS.find((l) => l.id === id)!
+      return { ...lab, checks: lab.checks.map((c, i) => ({ ...c, stage: stages[i] })), stageMinutes: { 1: 3, 2: 20 } }
+    }
+    for (const [id, host, name] of [['kv-block-manager', 't5.l5', 'Lab 02'], ['bpe-tokenizer', 't5.l2', 'Lab 03']] as const) {
+      const lab = staged(id, [1, 1, 1, 2, 2, 2])
+      const content: RecommendContent = { ...CONTENT, labs: [lab] }
+      const lessons = doneUpTo('full-ramp', 1 + pathPlan('full-ramp', CONTENT).lessons.indexOf(host))
+      expect(recommend(fresh({ lessons }), content, NOW, 'laptop')).toMatchObject({ kind: 'lab', ref: id, title: `${name} · stage 1`, minutes: 3 })
+      const stage1 = lab.checks.filter((c) => c.stage === 1).map((c) => c.id)
+      expect(recommend(fresh({ lessons, labs: { [id]: { checksDone: stage1 } } }), content, NOW, 'laptop')).toMatchObject({ title: `${name} · stage 2`, minutes: 20 })
+      // an optional check never holds a stage open
+      const optional = { ...lab, checks: lab.checks.map((c) => (c.stage === 2 ? { ...c, optional: true } : c)) }
+      const finished = recommend(fresh({ lessons, labs: { [id]: { checksDone: stage1 } } }), { ...CONTENT, labs: [optional] }, NOW, 'laptop')
+      expect(finished.title).toBe(`${name} · ${lab.title}`)
+    }
+    // lab 01 as shipped carries stages 1-4 in labs.ts, so its first open stage is named
+    const lessons = doneUpTo('full-ramp', 1 + pathPlan('full-ramp', CONTENT).lessons.indexOf('t1.l3'))
+    expect(recommend(fresh({ lessons }), CONTENT, NOW, 'laptop')).toMatchObject({ ref: 'rust-allocator', title: 'Lab 01 · stage 1' })
+    const first = FORGE_LABS.find((l) => l.id === 'rust-allocator')!.checks.filter((c) => c.stage === 1).map((c) => c.id)
+    expect(recommend(fresh({ lessons, labs: { 'rust-allocator': { checksDone: first } } }), CONTENT, NOW, 'laptop').title).toBe('Lab 01 · stage 2')
+  })
+
   test('5. the next lesson of the plan, with the braid pair as the why', () => {
     expect(recommend(fresh(), CONTENT, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't0.l1', why: 'Next on the full ramp: lesson 1 of 68' })
     const r1 = recommend(fresh({ lessons: doneUpTo('full-ramp', 1) }), CONTENT, NOW, 'phone')
@@ -276,6 +304,181 @@ describe('recommend(): properties', () => {
       const { state, day } = randomState(seed)
       expect(recommend(state, content, NOW, day).why.length).toBeLessThanOrEqual(WHY_MAX)
     }
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Rule 5: plays                                                       */
+/* ------------------------------------------------------------------ */
+
+/** A fixture registry: the scheduler play in T5.L7, as 2b-11 will register it. */
+const SCHEDULER: RecommendPlay = { id: 'scheduler', lessonId: 't5.l7', title: 'I was the scheduler', minutes: 20 }
+const WITH_PLAY: RecommendContent = { ...CONTENT, plays: [SCHEDULER] }
+
+describe('rule 5 proposes a registered, undebriefed play after its host lesson', () => {
+  const upTo = (path: LearningPath, lesson: string) => doneUpTo(path, 1 + pathPlan(path, CONTENT).lessons.indexOf(lesson))
+
+  test('the play is a plan step right after its host lesson, on every path that has the host', () => {
+    for (const path of ['full-ramp', 'serving-first'] as const) {
+      const { steps } = pathPlan(path, WITH_PLAY)
+      const after = steps.slice(steps.indexOf('t5.l7') + 1, steps.indexOf('t5.l8'))
+      // serving-first has no labs; the full ramp's lab 06 (Build this) follows the play
+      expect(after).toEqual(path === 'full-ramp' ? [playStep('scheduler'), 'lab:batching-scheduler'] : [playStep('scheduler')])
+    }
+    expect(pathPlan('rust-systems', WITH_PLAY).steps.filter((s) => s.startsWith('play:'))).toEqual([])
+    // without a registry, the plan is the one Wave 1 shipped
+    expect(pathPlan('full-ramp', CONTENT).steps.some((s) => s.startsWith('play:'))).toBe(false)
+  })
+
+  test('after t5.l7 the scheduler play comes before t5.l8, on a phone day and a laptop day', () => {
+    for (const path of ['full-ramp', 'serving-first'] as const) {
+      for (const day of ['phone', 'laptop'] as const) {
+        const rec = recommend(fresh({ path, lessons: upTo(path, 't5.l7') }), WITH_PLAY, NOW, day)
+        expect({ path, day, rec }).toEqual({
+          path,
+          day,
+          rec: { kind: 'play', ref: 'scheduler', to: '/play/scheduler', title: 'Play: I was the scheduler', why: 'You passed T5.L7: now try it by hand (~20 min)', minutes: 20 },
+        })
+      }
+    }
+  })
+
+  test('the play comes before lab 06 on a laptop day ("Play, then Build this"); a lab already started is not held back', () => {
+    const lessons = upTo('full-ramp', 't5.l7')
+    expect(recommend(fresh({ lessons }), CONTENT, NOW, 'laptop')).toMatchObject({ kind: 'lab', ref: 'batching-scheduler' })
+    expect(recommend(fresh({ lessons }), WITH_PLAY, NOW, 'laptop').kind).toBe('play')
+    expect(recommend(fresh({ lessons, plays: { scheduler: { done: true } } }), WITH_PLAY, NOW, 'laptop')).toMatchObject({ kind: 'lab', ref: 'batching-scheduler' })
+    const started = { 'batching-scheduler': { done: false, checksDone: [FORGE_LABS.find((l) => l.id === 'batching-scheduler')!.checks[0].id] } }
+    expect(recommend(fresh({ lessons, labs: started }), WITH_PLAY, NOW, 'laptop')).toMatchObject({ kind: 'lab', ref: 'batching-scheduler' })
+  })
+
+  test('a debriefed play is not offered again; a play that is not registered is never offered', () => {
+    const lessons = upTo('full-ramp', 't5.l7')
+    expect(recommend(fresh({ lessons, plays: { scheduler: { done: true } } }), WITH_PLAY, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't5.l8' })
+    expect(recommend(fresh({ lessons, plays: { scheduler: {} } }), WITH_PLAY, NOW, 'phone').kind).toBe('play')
+    // pending: the content carries no registry entry, so the lesson goes on
+    expect(recommend(fresh({ lessons }), CONTENT, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't5.l8' })
+    expect(recommend(fresh({ lessons }), { ...CONTENT, plays: [] }, NOW, 'phone').kind).toBe('lesson')
+  })
+
+  test('the host lesson must be passed: a lesson only read, or the lesson before it, does not offer the play', () => {
+    const lessons = upTo('full-ramp', 't5.l6')
+    expect(recommend(fresh({ lessons }), WITH_PLAY, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't5.l7' })
+    const read = { ...lessons, 't5.l7': { status: 'read' as const, lastVisitedAt: daysAgo(40) } }
+    expect(recommend(fresh({ lessons: read }), WITH_PLAY, NOW, 'phone').kind).toBe('lesson')
+  })
+
+  test('a learner who went on past the play is not nagged, and a lesson being read outranks it', () => {
+    const past = { ...upTo('full-ramp', 't5.l7'), 't5.l8': done() }
+    expect(recommend(fresh({ lessons: past }), WITH_PLAY, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't5.l9' })
+    const reading = { ...upTo('full-ramp', 't5.l7'), 't5.l8': { status: 'reading' as const, lastVisitedAt: daysAgo(1), scrollPct: 30 } }
+    expect(recommend(fresh({ lessons: reading }), WITH_PLAY, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't5.l8' })
+    // due cards still come first
+    const due = { due: 4, priority: 0, minutes: 5, sessionDone: false }
+    expect(recommend(fresh({ lessons: upTo('full-ramp', 't5.l7'), today: due }), WITH_PLAY, NOW, 'phone').kind).toBe('today')
+  })
+
+  test('a lab on the same lesson follows the play, and the first of two plays on one lesson comes first', () => {
+    const lab = FORGE_LABS.find((l) => l.id === 'kv-block-manager')!
+    const two: RecommendContent = { ...CONTENT, plays: [{ ...SCHEDULER, id: 'a', lessonId: lab.lessonId }, { ...SCHEDULER, id: 'b', lessonId: lab.lessonId }] }
+    const { steps } = pathPlan('full-ramp', two)
+    expect(steps.slice(steps.indexOf(lab.lessonId), steps.indexOf(lab.lessonId) + 4)).toEqual([lab.lessonId, 'play:a', 'play:b', `lab:${lab.id}`])
+    const lessons = upTo('full-ramp', lab.lessonId)
+    expect(recommend(fresh({ lessons }), two, NOW, 'phone').ref).toBe('a')
+    expect(recommend(fresh({ lessons, plays: { a: { done: true } } }), two, NOW, 'phone').ref).toBe('b')
+  })
+
+  test('the shipped registry offers block placement after t1.l4, and only once', () => {
+    const real: RecommendContent = { ...CONTENT, plays: Object.values(PLAYS) }
+    const lessons = upTo('full-ramp', 't1.l4')
+    expect(recommend(fresh({ lessons }), real, NOW, 'phone')).toMatchObject({ kind: 'play', ref: 'block-placement', to: '/play/block-placement' })
+    expect(recommend(fresh({ lessons, plays: { 'block-placement': { done: true } } }), real, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't1.l5' })
+  })
+
+  test('every why stays within 90 characters with plays in the content', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const { state, day } = randomState(seed)
+      const plays = Object.fromEntries(ALL_LESSONS.slice(0, 3).map((l) => [l.id, { done: seed % 2 === 0 }]))
+      const rec = recommend({ ...state, plays }, { ...CONTENT, plays: [SCHEDULER, ...Object.values(PLAYS)] }, NOW, day)
+      expect(rec.why.length).toBeLessThanOrEqual(WHY_MAX)
+    }
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Curriculum's current marker, Boot's first lesson                    */
+/* ------------------------------------------------------------------ */
+
+describe('currentLessonFor: the lesson Up Next stands on', () => {
+  test('it is the plan lesson of rule 5, the lesson being read of rule 3, and never a lab, a play or Today', () => {
+    expect(currentLessonFor(fresh(), CONTENT, NOW)).toBe('t0.l1')
+    expect(currentLessonFor(fresh({ lessons: doneUpTo('full-ramp', 1) }), CONTENT, NOW)).toBe('r.l1')
+    const reading = { 't0.l3': { status: 'reading' as const, lastVisitedAt: daysAgo(1), scrollPct: 10 } }
+    expect(currentLessonFor(fresh({ lessons: reading }), CONTENT, NOW)).toBe('t0.l3')
+    const lessons = doneUpTo('full-ramp', 1 + pathPlan('full-ramp', CONTENT).lessons.indexOf('t1.l3'))
+    expect(recommend(fresh({ lessons }), CONTENT, NOW, 'laptop').kind).toBe('lab')
+    expect(currentLessonFor(fresh({ lessons }), CONTENT, NOW)).toBe('t1.l4')
+    const t5 = doneUpTo('full-ramp', 1 + pathPlan('full-ramp', CONTENT).lessons.indexOf('t5.l7'))
+    expect(currentLessonFor(fresh({ lessons: t5 }), WITH_PLAY, NOW)).toBe('t5.l8')
+    const due = { due: 9, priority: 1, minutes: 8, sessionDone: false }
+    expect(currentLessonFor(fresh({ lessons: t5, today: due }), WITH_PLAY, NOW)).toBe('t5.l8')
+  })
+
+  test('it goes to the prerequisite first, as the lesson footer does, and is null when the plan is done', () => {
+    const lessons = doneUpTo('full-ramp', 3)
+    delete lessons[pathPlan('full-ramp', CONTENT).lessons[1]]
+    for (const path of PATHS) {
+      expect(currentLessonFor(fresh({ path, lessons }), CONTENT, NOW)).toBe(recommend(fresh({ path, lessons }), CONTENT, NOW, 'phone').ref)
+    }
+    const all = Object.fromEntries(ALL_LESSONS.map((l) => [l.id, done()]))
+    expect(currentLessonFor(fresh({ lessons: all }), CONTENT, NOW)).toBeNull()
+  })
+
+  test('over the real content, a placed learner is never put on an R lesson off the plan', async () => {
+    const loaded = await loadUpNext()
+    const raw = { v: 1, at: daysAgo(1), entryTrack: 't2', solidKcs: [], missedKcs: [], misconceptions: [], rustAnchor: 'solid', items: 12 } as Json
+    const input: UpNextInput = { bootDone: true, lessons: {}, labs: {}, path: undefined, placement: raw, week: undefined }
+    expect(currentLessonNow(loaded, input, new Date(NOW))).toBe('t2.l1')
+  })
+})
+
+describe('Boot and Today name where the path begins', () => {
+  test('the full ramp opens with T0.L1 and no R lesson before it; rust-systems opens with R.L1 and reaches T1.L1 after five', () => {
+    const lessons = ALL_LESSONS
+    expect(firstLessons(pathPlan('full-ramp', CONTENT), lessons)).toEqual({ t: 't0.l1', r: [] })
+    expect(firstLessons(pathPlan('serving-first', CONTENT), lessons)).toEqual({ t: 't0.l1', r: [] })
+    expect(firstLessons(pathPlan('rust-systems', CONTENT), lessons)).toEqual({ t: 't1.l1', r: ['r.l1', 'r.l2', 'r.l3', 'r.l4', 'r.l5'] })
+    expect(firstLessons({ lessons: [] }, lessons)).toEqual({ t: null, r: [] })
+  })
+
+  test('a placed full-ramp learner whose braid opens with an R lesson gets that lesson as the partner', () => {
+    const plan = pathPlan('full-ramp', CONTENT, { entryTrack: 't2', rustAnchor: 'missed', missedKcs: ['r.borrow-rules'] })
+    const first = firstLessons(plan, ALL_LESSONS)
+    expect(first.t).not.toBeNull()
+    expect(first.r.length).toBeGreaterThan(0)
+    expect(first.r.length).toBeLessThanOrEqual(2)
+    expect(plan.lessons.slice(0, first.r.length)).toEqual(first.r)
+  })
+
+  test("Today's empty state, rule 5, opens with the same lesson Boot names (the R partner when the path starts with R, else the first T lesson)", async () => {
+    const loaded = await loadUpNext()
+    for (const path of PATHS) {
+      const { t, r } = firstLessonsNow(loaded, path, undefined)
+      const { rec } = recommendNow(loaded, { bootDone: true, lessons: {}, labs: {}, path, placement: undefined, week: undefined }, new Date(NOW), 1280)
+      expect({ path, ref: rec.ref }).toEqual({ path, ref: r[0]?.id ?? t?.id })
+      expect(t?.title.length).toBeGreaterThan(0)
+    }
+    expect(firstLessonsNow(loaded, 'rust-systems', undefined).r.map((l) => l.code)).toEqual(['R.L1', 'R.L2', 'R.L3', 'R.L4', 'R.L5'])
+    expect(firstLessonsNow(loaded, undefined, undefined).t?.code).toBe('T0.L1')
+  })
+
+  test("Boot's last step shows the line, and the surfaces read the one recommender", () => {
+    const src = (f: string) => readFileSync(join(import.meta.dir, '../../src', f), 'utf8')
+    expect(src('pages/boot/You.tsx')).toContain('firstLessonsNow')
+    expect(src('pages/boot/You.tsx')).toContain('data-boot-first-lesson')
+    expect(src('pages/Curriculum.tsx')).toContain('useCurrentLesson')
+    for (const f of ['pages/today/DoneCard.tsx', 'pages/today/EmptyState.tsx', 'pages/Lesson.tsx']) expect(src(f)).toContain('UpNextCard')
+    expect(src('pages/today/DoneCard.tsx')).not.toContain('export function UpNext')
   })
 })
 

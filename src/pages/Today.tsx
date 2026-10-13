@@ -246,6 +246,7 @@ export default function Today() {
     const { rec } = recommended
     return rec.kind === 'today' && rec.ref === 'extra' && !canExtra ? null : rec
   }, [recommended, canExtra])
+  const offerPlacement = recommended.status === 'ready' && recommended.offerPlacement
   const line = useMemo(() => {
     if (!plan) return undefined
     const kind = dayKindOf(weekPlan, ready?.day ?? today, width)
@@ -322,6 +323,7 @@ export default function Today() {
         {ready && !active && (
           <EmptyState
             upNext={upNext}
+            offerPlacement={offerPlacement}
             {...(canPractice ? { onPractice: () => start('practice') } : {})}
           />
         )}
@@ -349,6 +351,7 @@ export default function Today() {
             tally={outcomes.length > 0 ? tally(outcomes) : null}
             calibration={calibration}
             upNext={upNext}
+            offerPlacement={offerPlacement}
             pendingHandoff={pending}
             extra={active.kind !== 'review'}
             {...(canExtra ? { onKeepGoing: () => start('extra') } : {})}

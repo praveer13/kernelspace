@@ -224,6 +224,9 @@
     ["t7.incident-diagnosis","Incident diagnosis","","t7.l5","reading-an-incident-before-changing-anything",[]],
     ["t7.leading-signals","Scaling on leading signals","","t7.l5","",[]]
   ],
+  "plays": [
+    ["block-placement","Block placement","t1.l4",15]
+  ],
   "claims": [
     ["hw.h100-sxm.hbm-capacity","H100 SXM HBM capacity",80,"GB"],
     ["hw.h100-sxm.hbm-bw","H100 SXM HBM bandwidth",3.35,"TB/s"],

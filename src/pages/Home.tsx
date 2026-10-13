@@ -284,11 +284,12 @@ function Hero() {
           </motion.div>
         </div>
 
-        {/* Right — interactive memory grid */}
+        {/* Right — interactive memory grid. It eases in by scale only: text fading through partial opacity is
+            measured as low contrast by axe while it runs (the a11y harness scans about a second after load). */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.7, duration: 0.8, ease: EASE }}
+          initial={{ scale: 0.96, y: 12 }}
+          animate={{ scale: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.8, ease: EASE }}
           className="mx-auto w-full max-w-[520px]"
         >
           <MemoryGrid />

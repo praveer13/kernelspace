@@ -556,6 +556,7 @@ type UpNextLoad =
 function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: string }) {
   const lessons = useProgress((s) => s.lessons)
   const labs = useProgress((s) => s.labs)
+  const plays = useProgress((s) => s.aggregate.plays)
   const bootDone = useProgress((s) => s.completions.boot !== undefined)
   const path = useProgress((s) => s.working['boot:path'])
   const placementRaw = useProgress((s) => s.working['placement:result'])
@@ -564,14 +565,14 @@ function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: stri
 
   useEffect(() => {
     let live = true
-    Promise.all([import('@/data/kc'), import('@/data/labs'), import('@/lib/learner/recommend'), import('@/lib/learner/planner')])
-      .then(([kc, labsMod, rec, planner]) => {
+    Promise.all([import('@/data/kc'), import('@/data/labs'), import('@/data/plays'), import('@/lib/learner/recommend'), import('@/lib/learner/planner')])
+      .then(([kc, labsMod, playsMod, rec, planner]) => {
         if (!live) return
         const day = planner.dayKindOf(planner.normalizeWeekPlan(week), localDateKey() as LocalDay, window.innerWidth)
         setLoad({
           status: 'ready',
           recommend: rec.recommend,
-          content: { kcs: kc.KCS, lessons: ALL_LESSONS, labs: labsMod.FORGE_LABS },
+          content: { kcs: kc.KCS, lessons: ALL_LESSONS, labs: labsMod.FORGE_LABS, plays: Object.values(playsMod.PLAYS) },
           now: new Date().toISOString(),
           day,
         })
@@ -592,6 +593,7 @@ function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: stri
       bootDone,
       lessons: seen,
       labs,
+      plays,
       path: path === 'serving-first' || path === 'rust-systems' ? path : 'full-ramp',
       placement: parsePlacement(placementRaw),
       today: null,
@@ -601,7 +603,7 @@ function LessonUpNext({ lesson, trackColor }: { lesson: Lesson; trackColor: stri
     } catch {
       return null
     }
-  }, [load, lesson.id, bootDone, lessons, labs, path, placementRaw])
+  }, [load, lesson.id, bootDone, lessons, labs, plays, path, placementRaw])
 
   if (load.status === 'error' || (load.status === 'ready' && !rec)) return <NextLessonLink lesson={lesson} trackColor={trackColor} />
   if (!rec) return <div data-up-next-slot aria-busy="true" className="min-h-[9.5rem] rounded-lg border border-line bg-surface-1" />
