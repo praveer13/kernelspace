@@ -810,7 +810,7 @@ The **day-7 confirmation** rate (solid KCs right at their confirm review) is the
   - KCs: title, `can`, lessons;
   - claims: label, value, unit;
   - the pages, tracks and sims already indexed (`CommandPalette.tsx:18–49`).
-- **Loading:** the lazy palette (§6.9) imports it on first open. Fuse runs in that chunk. Target ≤ 15 KB gzip.
+- **Loading:** the lazy palette (§6.9) imports it on first open. Fuse runs in that chunk. Target ≤ 20 KB gzip (raised from 15 KB by the owner on 2026-10-13; wave-2 D24).
 - **Groups:** Lessons, Concepts, Numbers (claims), Glossary, Pages, Tracks, Sims.
 - **Destinations:** a KC opens its introducing lesson at the H2; a claim opens `/freshness?tab=claims#<id>`. B24 gives `ClaimsTable` row ids for that anchor.
 
@@ -1506,7 +1506,7 @@ object-src 'none'; base-uri 'self'; form-action 'self'
 | `/today` first-load closure | — | ≤ 200 KB | `verify:bundle` (fails; B2 adds the route) |
 | `/play/block-placement` closure | — | ≤ 220 KB | `verify:bundle` (reported, not gated, in Wave 1) |
 | each generator family chunk | — | ≤ 8 KB | reported |
-| search index chunk | — | ≤ 15 KB | reported |
+| search index chunk | — | ≤ 20 KB | reported |
 | FSRS + cards + composer (inside `/today`) | — | ≤ 6 KB | reported |
 | ledger engine (lazy) | — | ≤ 30 KB | as in the ledger spec |
 
@@ -1822,7 +1822,7 @@ PLAN §8's Wave 1 exit, restated so each line has a measurement.
 - **Accept:**
   - §7.4;
   - "PagedAttention", "KV cache" and "ridge" find lessons, KCs and claims;
-  - the index chunk ≤ 15 KB gzip;
+  - the index chunk ≤ 20 KB gzip (15 KB until 2026-10-13);
   - CI fails on a stale index.
 
 **Level 4**
