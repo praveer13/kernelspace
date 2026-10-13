@@ -3,7 +3,7 @@
  *
  * Regenerates src/data/search-index.json in memory and fails when the committed file differs, the way CI
  * does for public/lessons-md. It also checks that every row points somewhere real (lesson, H2 anchor, claim),
- * that the index gzips to the 15 KB budget, and that the acceptance queries find a lesson, a concept and a claim.
+ * that the index gzips to the 20 KB budget, and that the acceptance queries find a lesson, a concept and a claim.
  *
  *   bun run verify:search-index
  */
@@ -16,7 +16,7 @@ import { claimPath, indexItems, makeSearcher, type SearchIndex } from '../src/li
 import { buildSearchIndex, INDEX_PATH, serializeSearchIndex } from './build-search-index'
 
 /** Spec §16.1: the index chunk's gzip budget. The JSON is the chunk's payload, so it is gated here, ahead of verify:bundle's report of the built chunk. */
-export const BUDGET_BYTES = 15 * 1024
+export const BUDGET_BYTES = 20 * 1024 // owner decision 2026-10-13 (wave-2 D24): raised from 15 KB
 
 /** Queries that must each reach a lesson, a concept (KC) and a claim. */
 export const ACCEPTANCE_QUERIES = ['PagedAttention', 'KV cache', 'ridge']
