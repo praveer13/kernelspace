@@ -10,7 +10,8 @@
  *   shape      a cycle in requires or in requires ∪ contains; an asymmetric confusable set or one with
  *              more than 3 entries; thresholds other than THRESHOLD_KCS (6 core) plus RUST_ANCHOR_KC;
  *              a notional card outside 3-6 rules and 2-4 ignores, or a track without exactly one;
- *   coverage   in a lesson that sets Lesson.kcs: an untagged checkpoint item, Lesson.kcs outside 1-3,
+ *   coverage   in every lesson (wave-2 §4.4: coverage is unconditional, no longer opt-in): a lesson that does not
+ *              set Lesson.kcs, an untagged checkpoint item, Lesson.kcs outside 1-3,
  *              naming a KC that does not list the lesson, or naming a KC first taught in a later lesson
  *              (planTicket and the card queue read Lesson.kcs as "taught here", so a T4 KC would reach a T0 learner); a KC in some Lesson.kcs with fewer than 2
  *              tagged items and no generator; an R lesson that no T-side KC requires (§4.3); a lab whose
@@ -243,6 +244,7 @@ export function verifyKc(input: VerifyKcInput): VerifyKcResult {
 
   const optedIn = input.lessons.filter((l) => l.kcs !== undefined)
   for (const l of input.lessons) {
+    if (l.kcs === undefined) err(l.id, 'does not set Lesson.kcs (every lesson must, wave-2 §4.4)')
     const quizBlocks = l.blocks.filter((b) => b.type === 'quiz').length
     if (quizBlocks > 1) err(l.id, `${quizBlocks} quiz blocks; quiz refs count per block, so item tags would be ambiguous`)
   }
@@ -259,8 +261,9 @@ export function verifyKc(input: VerifyKcInput): VerifyKcResult {
         if ((position.get(first) ?? -1) > (position.get(l.id) ?? -1)) err(l.id, `Lesson.kcs names ${id}, first taught in ${first}, later in curriculum order (name only KCs this lesson or an earlier one introduces)`)
       }
     }
-    for (const s of sites) if (s.lessonId === l.id && s.checkpoint && !s.kcs?.length) err(s.ref, 'untagged checkpoint item in a lesson that sets Lesson.kcs')
   }
+  // wave-2 §4.4: coverage is unconditional, so a checkpoint item is tagged whether or not its lesson says so
+  for (const s of sites) if (s.checkpoint && !s.kcs?.length) err(s.ref, 'untagged checkpoint item in a lesson that sets Lesson.kcs')
 
   const itemCount = new Map<string, number>()
   for (const s of sites) for (const id of new Set(s.kcs ?? [])) itemCount.set(id, (itemCount.get(id) ?? 0) + 1)
@@ -432,7 +435,7 @@ async function main() {
   console.log(`kinds: ${Object.entries(s.byKind).map(([t, n]) => `${n} ${t}`).join(' · ')}`)
   console.log(`confusable: ${s.confusableSets.map((p) => `{${p.join(', ')}}`).join(' ')}`)
   console.log(`R pairing: ${s.pairing.map((p) => `${p.rLesson} ← ${p.edges.map((e) => e.split(' → ')[0]).join(', ') || '-'}`).join(' · ')}`)
-  console.log(`opted in (Lesson.kcs): ${s.optedIn.length > 0 ? s.optedIn.join(', ') : 'none yet'} · tagged items: ${s.taggedItems}`)
+  console.log(`lessons setting Lesson.kcs: ${s.optedIn.length} of ${ALL_LESSONS.length} · tagged items: ${s.taggedItems}`)
   for (const w of result.warnings) console.log(`warn ${w}`)
   if (result.errors.length > 0) {
     console.error(`verify-kc: ${result.errors.length} problem(s)`)
