@@ -185,10 +185,10 @@ const step = (text: PromptPart[], value: number, unit: string): SolutionStep => 
 
 /** The node: SGLang's run through its claims, or a hypothetical one. */
 function nodeParts(p: Params): PromptPart[] {
-  if (sglang(p)) return [t("In SGLang's DeepSeek reproduction each node has "), chip(SGLANG_GPUS, 'H100 GPUs'), t(' and generates '), chip(SGLANG_TPS, 'output tokens per second'), t(' across the node. ')]
+  if (sglang(p)) return [t("In SGLang's DeepSeek reproduction each node has "), chip(SGLANG_GPUS, 'H100 GPUs'), t(' and generates '), chip(SGLANG_TPS, 'tok/s'), t(' of output across the node. ')]
   const g = num(p, 'gpus')
-  if (p.tpsGpu !== undefined) return [t(`In a hypothetical node of ${g} GPUs, each GPU generates `), v(num(p, 'tpsGpu'), 'output tokens per second'), t('. ')]
-  return [t(`A hypothetical node of ${g} GPUs generates `), v(num(p, 'tps'), 'output tokens per second'), t(' across the node. ')]
+  if (p.tpsGpu !== undefined) return [t(`In a hypothetical node of ${g} GPUs, each GPU generates `), v(num(p, 'tpsGpu'), 'tok/s'), t(' of output. ')]
+  return [t(`A hypothetical node of ${g} GPUs generates `), v(num(p, 'tps'), 'tok/s'), t(' of output across the node. ')]
 }
 
 /** The GPU-hour price: a dated median, the lessons' assumption or a hypothetical number. */
@@ -217,7 +217,7 @@ function stemFor(variant: string, p: Params): PromptPart[] {
     case 'required-tps': {
       const g = num(p, 'gpus')
       const price = p.perNode === true ? [t(`The node rents for a hypothetical `), v(num(p, 'rate') * g, 'USD per hour'), t('. ')] : priceParts(p)
-      return [t(`A node has ${g} GPUs, and every token counts. `), ...price, t('To reach '), v(num(p, 'target'), 'USD per million output tokens'), t(', how many output tokens per second must each GPU sustain?')]
+      return [t(`A node has ${g} GPUs, and every token counts. `), ...price, t('To reach '), v(num(p, 'target'), 'USD'), t(' per million output tokens, how many output tokens per second must each GPU sustain?')]
     }
     case 'node-day':
       return [...nodeParts(p), ...priceParts(p), t('Price one full node-day (every GPU, 24 hours): what does a million output tokens cost, in USD?')]
@@ -244,7 +244,7 @@ function steps(variant: string, p: Params, truth: number): SolutionStep[] {
         step([t('Tokens per hour = tok/s × 3,600 s = '), v(nodeTps(p), 'tok/s'), t(' × 3,600')], tokens, 'tokens'),
       ]
       if (p.slo !== undefined) out.push(step([t('Tokens within the SLO per hour = tokens × '), v(num(p, 'slo'), '%')], tokens * useful(p), 'tokens'))
-      out.push(step([t('Cost per million tokens = cost per hour ÷ tokens per hour × 1,000,000')], truth, unit))
+      out.push(step([t(p.slo === undefined ? 'Cost per million tokens = cost per hour ÷ tokens per hour × 1,000,000' : 'Cost per million tokens = cost per hour ÷ tokens delivered within the SLO per hour × 1,000,000')], truth, unit))
       return out
     }
     case 'required-tps': {

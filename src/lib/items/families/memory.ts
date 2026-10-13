@@ -392,11 +392,11 @@ function calc(v: string, level: Level, sc: Scene): Calc {
   if (v === 'shard') {
     const bpw = bytesPerWeight(sc.dtype)
     const dense = (sc.paramsB * bpw) / (sc.tp * sc.pp)
-    const experts = sc.expertB > 0 ? (sc.expertB * bpw) / sc.ep : 0
+    const experts = sc.expertB > 0 ? (sc.expertB * bpw) / (sc.ep * sc.pp) : 0
     steps.push(step([text(`Bytes per weight in ${LABEL[sc.dtype]} = `), val(bitsOf(sc.dtype)), text(' bits ÷ '), val(BITS_PER_BYTE)], bpw, 'B'))
     steps.push(step([text('Dense weights per GPU = '), val(sc.paramsB, 'billion'), text(' × '), val(bpw, 'B'), text(' ÷ (TP '), val(sc.tp), text(' × PP '), val(sc.pp), text(')')], dense, 'GB'))
     if (sc.expertB > 0) {
-      steps.push(step([text('Expert weights per GPU = '), val(sc.expertB, 'billion'), text(' × '), val(bpw, 'B'), text(' ÷ EP '), val(sc.ep)], experts, 'GB'))
+      steps.push(step([text('Expert weights per GPU = '), val(sc.expertB, 'billion'), text(' × '), val(bpw, 'B'), text(' ÷ (EP '), val(sc.ep), text(' × PP '), val(sc.pp), text(')')], experts, 'GB'))
       steps.push(step([text('Weights per GPU = '), val(dense, 'GB'), text(' + '), val(experts, 'GB')], dense + experts, 'GB'))
     }
     if (binary) toBinary(dense + experts)
@@ -459,8 +459,8 @@ function stemFor(v: string, sc: Scene, unit: string): PromptPart[] {
             text(`A hypothetical mixture-of-experts model has ${sc.experts} routed experts of `),
             val(sc.expert, BILLION),
             text(' each plus '),
-            val(sc.shared, `${BILLION} of shared attention and dense layers`),
-            text(`; every token visits ${sc.topk} expert${sc.topk === 1 ? '' : 's'}. `),
+            val(sc.shared, BILLION),
+            text(` of shared attention and dense layers; every token visits ${sc.topk} expert${sc.topk === 1 ? '' : 's'}. `),
           ]
         : [text(`${info(sc.model).name} is a mixture of experts with `), countPart(sc, 'total', sc.paramsB), text(' in all, '), countPart(sc, 'active', sc.activeB), text(' of them active for each token. ')]
     return [...model, text('Its weights are '), stored(sc.dtype), text(ask)]
@@ -468,10 +468,10 @@ function stemFor(v: string, sc: Scene, unit: string): PromptPart[] {
   if (v === 'shard') {
     const moe = sc.expertB > 0
     const model: PromptPart[] = moe
-      ? [text('A hypothetical mixture-of-experts model has '), val(sc.paramsB, 'billion dense parameters'), text(' (attention and shared layers) and '), val(sc.expertB, 'billion routed-expert parameters'), text(', ')]
+      ? [text('A hypothetical mixture-of-experts model has '), val(sc.paramsB, 'billion'), text(' dense parameters (attention and shared layers) and '), val(sc.expertB, 'billion'), text(' routed-expert parameters, ')]
       : [text(`${subject(sc)} is dense, with `), countPart(sc, 'total', sc.paramsB), text(', ')]
     const split = moe
-      ? `The dense weights are split evenly over the TP × PP GPUs of a replica and every EP rank keeps its own copy of them; the experts are split across the ${sc.ep} EP ranks, each expert on one rank. `
+      ? `The dense weights are split evenly over the TP × PP GPUs of a replica and every EP rank keeps its own copy of them. Each pipeline stage holds only its own layers, and so only those layers' experts: ${sc.pp > 1 ? `the experts are split across the ${sc.pp} stages and then across the ${sc.ep} EP ranks of each stage` : `the experts are split across the ${sc.ep} EP ranks`}, each expert on one rank. `
       : 'The weights are split evenly over the TP × PP GPUs of a replica. '
     return [
       ...model,
@@ -649,7 +649,7 @@ const apart = (rho: number): number | null => (Number.isFinite(rho) && Math.abs(
 /** Weights per GPU of a shard scene: [dense, experts] in GB. */
 function shardParts(sc: Scene): [number, number] {
   const bpw = bytesPerWeight(sc.dtype)
-  return [(sc.paramsB * bpw) / (sc.tp * sc.pp), sc.expertB > 0 ? (sc.expertB * bpw) / sc.ep : 0]
+  return [(sc.paramsB * bpw) / (sc.tp * sc.pp), sc.expertB > 0 ? (sc.expertB * bpw) / (sc.ep * sc.pp) : 0]
 }
 
 const RATIO_RULES: readonly RatioRule[] = [
@@ -707,9 +707,20 @@ const RATIO_RULES: readonly RatioRule[] = [
       if (inst.variant !== 'shard') return null
       const sc = sceneOf(inst)
       const [dense, experts] = shardParts(sc)
-      return experts > 0 ? apart((dense + experts * sc.ep) / (dense + experts)) : null
+      return experts > 0 ? apart((dense + experts * sc.ep * sc.pp) / (dense + experts)) : null
     },
-    message: (inst) => `You kept every expert on each GPU: EP ${sceneOf(inst).ep} spreads them across ${sceneOf(inst).ep} ranks.`,
+    message: (inst) => `You kept every expert on each GPU: EP ${sceneOf(inst).ep} spreads them across ${sceneOf(inst).ep} ranks, and each pipeline stage holds only its own layers' experts.`,
+  },
+  {
+    id: 'memory.experts-ignore-pp',
+    // the experts split by EP alone: the old key, which forgot that a pipeline stage holds only its own layers' experts
+    ratio: (inst) => {
+      if (inst.variant !== 'shard') return null
+      const sc = sceneOf(inst)
+      const [dense, experts] = shardParts(sc)
+      return experts > 0 ? apart((dense + experts * sc.pp) / (dense + experts)) : null
+    },
+    message: (inst) => `You divided the experts by EP alone: each of the ${sceneOf(inst).pp} pipeline stages holds only its own layers, so a GPU holds only its stage's experts, split ${sceneOf(inst).ep} ways.`,
   },
   {
     id: 'memory.lora-one-target',

@@ -176,6 +176,16 @@ describe('spec: the numbers are right', () => {
     }
   })
 
+  test('expected-tokens: the stem tells the bonus token (after a clean sweep) from the correction token (at the first rejection), as draft-tokens does', () => {
+    for (const level of LEVELS) {
+      for (const inst of many('expected-tokens', level).slice(0, 20)) {
+        const text = partsText(inst.prompt.stem)
+        expect(text).toContain('the bonus token after a clean sweep')
+        expect(text).toContain('the correction token at the first rejection')
+      }
+    }
+  })
+
   test('speedup is E over the cost 1 + k·c, and is worth asking about', () => {
     for (const level of LEVELS) {
       for (const inst of many('speedup', level)) {

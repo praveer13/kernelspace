@@ -206,7 +206,7 @@ interface Spec {
   tail?: SolutionStep
 }
 
-const RULE = 'A round ends at the first rejection, and the target always adds one token of its own (the bonus token).'
+const RULE = 'A round ends at the first rejection, and the target always adds one token of its own: the bonus token after a clean sweep, or the correction token at the first rejection.'
 const numeric = (truth: number, unit: string, tolerance: Tolerance): AnswerSpec => ({ kind: 'numeric', truth, unit, tolerance })
 
 /** The first three steps of E: the power, the numerator and the denominator, then E itself. */
@@ -218,7 +218,7 @@ function eSteps(p: Params, unit?: string): SolutionStep[] {
     step([t(`α^(k+1) with α = ${fa(alpha)} and k + 1 = ${f(k + 1)}`)], { value: tail }),
     step([t('Numerator: 1 − α^(k+1)')], { value: 1 - tail }),
     step([t('Denominator: 1 − α')], { value: 1 - alpha }),
-    step([t('Tokens per step E = numerator ÷ denominator: the accepted prefix plus the bonus token')], { value: e, ...(unit ? { unit } : {}) }),
+    step([t('Tokens per step E = numerator ÷ denominator: the accepted prefix plus one token from the target (the bonus after a clean sweep, the correction at a rejection)')], { value: e, ...(unit ? { unit } : {}) }),
   ]
 }
 
