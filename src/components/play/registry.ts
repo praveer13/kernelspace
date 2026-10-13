@@ -4,12 +4,12 @@
  *
  * Three outcomes, so content can be placed before the play ships:
  * - registered: a lazy component, loaded when its block or page mounts;
- * - pending (`PENDING_PLAYS`): promised by a later task. The block renders nothing, so 2a's T5 content can place
- *   it before 2b-11 builds the play;
+ * - pending (`PENDING_PLAYS`): promised by a later task. The block renders nothing, so content can place it
+ *   before the play ships. 2b-11 registered 'scheduler', the one pending id, so the list is empty now;
  * - unknown: a typo or a stale id. The block and the page say so with an error card.
  *
- * 2b-11 registers 'scheduler' and removes it from PENDING_PLAYS; tests/plays/registry.test.ts fails while an id is
- * in both, so the list cannot go stale.
+ * An id registered is removed from PENDING_PLAYS; tests/plays/registry.test.ts fails while an id is in both, so
+ * the list cannot go stale.
  */
 
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
@@ -30,10 +30,14 @@ export const PLAY_REGISTRY: Readonly<Record<string, PlayEntry>> = {
     Component: lazy(() => import('@/components/play/block-placement/Play')),
     intro: 'Place memory blocks by hand against a hidden reference policy, then compose a policy of your own.',
   },
+  scheduler: {
+    Component: lazy(() => import('@/components/play/scheduler/Play')),
+    intro: 'Schedule a minute of real serving traffic by hand against a hidden reference scheduler, then compose a policy of your own.',
+  },
 }
 
 /** Play ids that a later task registers (spec §2.3). Their blocks render nothing until then. */
-export const PENDING_PLAYS: readonly string[] = ['scheduler']
+export const PENDING_PLAYS: readonly string[] = []
 
 export type PlayResolution =
   | { kind: 'play'; id: string; entry: PlayEntry }
