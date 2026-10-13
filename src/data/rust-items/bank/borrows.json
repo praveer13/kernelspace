@@ -84,7 +84,7 @@
       }
     },
     "adjacent-block-bumps": {
-      "hash": "e55bbaa08fb577a74dd80abe75bec9e6ace296c15b1fce9e54e75811e2551883",
+      "hash": "87fa32a2c69d11c5355a98d5bd1cd20d6a74d6d8b17688581f1cb076a0e58454",
       "variants": {
         "base": {"result":"compiles"},
         "use-both": {"result":{"code":"E0499","line":4,"message":"cannot borrow `s[_]` as mutable more than once at a time"}},
@@ -147,10 +147,10 @@
       }
     },
     "id-source-bump": {
-      "hash": "7ce23999a3544adc8dfe5b2ec3d05a2f3eeb3d499ac74281b8d5d25a7ad54dc6",
+      "hash": "17316d67e45d772fce91b21485945d867f67bf9fa10197c8c2c14f4ee8cb3bb8",
       "variants": {
         "base": {"result":"compiles"},
-        "push-bump": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*self` as mutable more than once at a time"},"fixes":{"bump-first":"compiles","bump-plus":{"code":"E0499","line":10},"read-next":{"code":"E0499","line":10}}},
+        "push-bump": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*self` as mutable more than once at a time"},"fixes":{"bump-first":"compiles","bump-plus":{"code":"E0499","line":10},"push-zero":"compiles"}},
         "insert-bump": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*self` as mutable more than once at a time"}},
         "extend-bump": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*self` as mutable more than once at a time"}},
         "push-field": {"result":"compiles"}
@@ -353,7 +353,7 @@
       }
     },
     "half-mix-blocks": {
-      "hash": "3bfc39a69363252c0cca14d5b4ad87bee4ddc229c87905ee1d66765f296e3a24",
+      "hash": "1d407ed9d2b93202dc5a3ea58c3175f523e35ea8098d3641c537e4866180ca8f",
       "variants": {
         "base": {"result":"compiles"},
         "shared-split": {"result":{"code":"E0594","line":3,"message":"cannot assign to `a[_]`, which is behind a `&` reference"},"fixes":{"split-mut":"compiles","swap-names":"compiles","sum-local":"compiles"}},

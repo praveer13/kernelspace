@@ -477,7 +477,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           { id: 'slice-swap', edit: { line: 5, text: '    s.swap(i, i + 1);' }, ok: true, why: '`swap` on the slice takes both indices itself and borrows `s` once, so no two `&mut` of it are alive together.' },
           { id: 'same-index', edit: { line: 4, text: '    let b = &mut s[i];' }, ok: false, miss: 'r.same-borrow-new-spelling', why: 'It borrows the same block as `a`, so `swap(a, b)` would let two names write one block.' },
-          { id: 'copy-vec', edit: { line: 4, text: '    let b = &mut s.to_vec()[i + 1];' }, ok: false, lure: 'other', miss: 'r.clone-to-silence', why: '`b` points into a temporary copy of the whole slice, so `swap` trades with the copy and the real block never changes.' },
+          { id: 'copy-vec', edit: { line: 4, text: '    let b = &mut s.to_vec()[i + 1];' }, ok: false, miss: 'r.clone-to-silence', why: '`to_vec` reads all of `s` while `a`, a `&mut` borrow of it, is still needed by `swap`, so the copy trips the checker too (E0502 at line 4).' },
         ],
       },
       {
@@ -819,7 +819,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           { id: 'bump-first', edit: { line: 10, text: '        self.ids.push(id);' }, ok: true, why: 'Line 9 has already called `bump`, so `push` takes `self.ids` with nothing else borrowed.' },
           { id: 'bump-plus', edit: { line: 10, text: '        self.ids.push(self.bump() + 0);' }, ok: false, miss: 'r.same-borrow-new-spelling', why: 'Adding zero changes nothing: `bump` is still called inside the arguments of a `push` that holds `self.ids`.' },
-          { id: 'read-next', edit: { line: 9, text: '        let id = self.next;' }, ok: false, lure: 'other', miss: 'r.drop-the-effect', why: 'It reads `next` and never calls `bump`, so the counter stops advancing and every record gets the same id.' },
+          { id: 'push-zero', edit: { line: 10, text: '        self.ids.push(0);' }, ok: false, lure: 'other', miss: 'r.drop-the-effect', why: 'It compiles, because a literal borrows nothing, but `bump` is never called, so the counter stops advancing and every record gets the id 0.' },
         ],
       },
       {
@@ -1929,7 +1929,7 @@ export const SNIPPETS: RustSnippet[] = [
         permission: 'write',
         fixes: [
           { id: 'split-mut', edit: { line: 2, text: '    let (a, b) = buf.split_at_mut(2);' }, ok: true, why: '`split_at_mut` returns `&mut` slices, so `a[0]` holds the W that `+=` needs.' },
-          { id: 'swap-names', edit: { line: 2, text: '    let (b, a) = buf.split_at_mut(2);' }, ok: false, lure: 'other', why: '`split_at_mut` gives `&mut` slices, so it compiles, but `a` is now the right half and the sum goes the wrong way.' },
+          { id: 'swap-names', edit: { line: 2, text: '    let (b, a) = buf.split_at_mut(2);' }, ok: false, lure: 'other', miss: 'r.drop-the-effect', why: '`split_at_mut` gives `&mut` slices, so it compiles, but `a` is now the right half and the sum goes the wrong way.' },
           { id: 'sum-local', edit: { line: 3, text: '    let _s = a[0] + b[0];' }, ok: false, lure: 'other', miss: 'r.drop-the-effect', why: 'It computes the sum into a local and drops it, so the first block never changes.' },
         ],
       },

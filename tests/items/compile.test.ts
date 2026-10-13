@@ -371,8 +371,11 @@ describe('compile: fix items', () => {
   const fixes = compile.variants.filter((v) => v.id.startsWith('fix.'))
 
   test('the authored fixes are the options, and the one ok fix is the key', () => {
-    // a fix pool per KC that has at least MIN_POOL fix variants in the bank (more groups add KCs)
-    expect(fixes.map((v) => v.id)).toEqual(expect.arrayContaining(['fix.borrow-rules', 'fix.ownership-moves']))
+    // exactly the KCs that have at least MIN_POOL fix variants in the bank (more groups add KCs)
+    const perKc = new Map<string, number>()
+    for (const u of UNITS) if (u.variant.fixes) for (const kc of u.snippet.kcs) perKc.set(kc, (perKc.get(kc) ?? 0) + 1)
+    const want = [...perKc].filter(([kc, n]) => COMPILE_KCS.includes(kc as never) && n >= MIN_POOL).map(([kc]) => compileVariantId('fix', kc as never))
+    expect(fixes.map((v) => v.id).sort()).toEqual(want.sort())
     for (const v of fixes) {
       for (const i of instances(v.id)) {
         const u = unitOf(i)!
