@@ -8,7 +8,7 @@
     ["r.l5","Structs, Enums, Option & Result","Make invalid states hard to express,…",["The question-mark operator is typed early return","Model six small domains"]],
     ["r.l6","Collections, Closures & Iterators","Own a sequence with Vec, index by key…",["Choose the iterator that matches ownership","Build the Forge data paths"]],
     ["r.l7","Smart Pointers: Box, Rc & Arc","Choose heap placement or shared…",["Clone the handle, not the payload","Pick the smallest ownership mechanism"]],
-    ["r.l8","Interior Mutability: Cell, RefCell & Mutex","When mutation must live behind shared…",["“Already borrowed” is a runtime borrow-checker error","Trigger the trap, then remove it"]],
+    ["r.l8","Interior Mutability: Cell, RefCell & Mutex","When mutation must live behind shared…",["One rule, three permissions","A write that needs only R","RefCell is the same rule, checked later","Make the guard shorter","Mutex: the same rule across threads","Trigger the trap, then remove it"]],
     ["r.l9","Practical Lifetimes","Read lifetime syntax as a contract…",["Read the contract from the caller's side","Prove borrowed views"]],
     ["r.l10","Atomics & Memory Orderings","Atomicity is only half the contract.…",["Compare-and-exchange is conditional ownership transfer","Practice before lock-free"]],
     ["t0.l1","Why Systems Thinking Matters for LLM Serving","The whole field re-derives 50 years of…",["The same fifty-year-old ideas","You are closer than you think","Why decode is bandwidth-bound — a preview","How this course works"]],
