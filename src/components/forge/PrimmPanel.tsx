@@ -351,7 +351,7 @@ function ModifyStep({ bundle, item: m1, answered, onAnswer, takeFocus }: ModifyS
       {committed !== null && chosen !== undefined && (
         <div className="mt-3 space-y-2">
           <p className="font-mono text-[10px] text-text-3">
-            Prediction locked: {committed.value} of {total} ops. Now run it.
+            Prediction locked: {m1.unit === 'ops' ? `${committed.value} of ${total} ops` : `${committed.value} ${m1.unit}`}. Now run it.
           </p>
           {/* The lock button has just unmounted: focus goes to the next control, the run button. */}
           <ReferenceRun key={chosen.id} bundle={bundle} config={chosen.config} title={`Your run: ${chosen.label}`} onFinished={finished} focusRun />
