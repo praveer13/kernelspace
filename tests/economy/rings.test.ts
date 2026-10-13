@@ -23,7 +23,7 @@ import {
   ROOT_LAB,
   ROOT_LESSONS,
 } from '../../src/lib/economy-table'
-import { RING_NAMES, selectColdChecks, selectRings, xpOf } from '../../src/lib/economy'
+import { RING_NAMES, ROOT_COLD_ACHIEVEMENT, selectColdChecks, selectRings, xpOf } from '../../src/lib/economy'
 import { ringSections } from '../../src/pages/progress/ring-rows'
 import { derive, upgradeAggregate } from '../../src/lib/ledger/fold'
 import type { Aggregate, LedgerEvent } from '../../src/lib/ledger/types'
@@ -556,6 +556,23 @@ describe('selectColdChecks', () => {
     for (let seed = 1; seed <= 20; seed++) expect(selectColdChecks(shuffle(splitmix32(seed), [...earned, ...misses]))).toEqual(after)
     // the misses first still reach the bar once enough right answers follow
     expect(selectColdChecks(coldChecks(40, 32, true)).met).toBe(true)
+  })
+
+  test('a merge that inserts earlier misses from another device never revokes ROOT (W8): the first time the bar was met is recorded', () => {
+    // device A reached the bar (40 of 40) and recorded when, as Progress does the first time it reads the met bar
+    const recorded = evt('achievement', `ach:${ROOT_COLD_ACHIEVEMENT}`, at(41))
+    const deviceA = [...rootLedger().slice(0, -40), ...coldChecks(40, 40), recorded]
+    expect(rootRings(deviceA).earned).toContain('ROOT')
+    // device B holds 30 misses from before any of A's checks; the merge puts them first in time order
+    const earlierMisses = Array.from({ length: 30 }, (_, i) => probe(-60 + i, false))
+    const merged = [...deviceA, ...earlierMisses]
+    expect(selectColdChecks(merged)).toEqual({ n: 70, correct: 40, met: true })
+    expect(rootRings(merged).earned).toContain('ROOT')
+    for (let seed = 1; seed <= 10; seed++) expect(rootRings(shuffle(splitmix32(seed), merged)).earned).toEqual(rootRings(merged).earned)
+    // without the record the prefix rule alone would lose it, which is why the record exists
+    expect(selectColdChecks([...coldChecks(40, 40), ...earlierMisses]).met).toBe(false)
+    // and the record alone is not an earned bar for a ledger that has none of the other ROOT parts
+    expect(rootRings([recorded]).earned).toEqual(['RING 3'])
   })
 
   test('the same event twice counts once', () => {

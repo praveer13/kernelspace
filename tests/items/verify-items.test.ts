@@ -238,7 +238,18 @@ describe('verify-items collects every pool and prints the bar', () => {
     expect(out).toContain('always-B 2-SD band: exact')
     for (const pool of ['prequestion', 'predictAt', 'spiral', 'align', 'primm']) expect(out).toMatch(new RegExp(`^  ${pool}\\s+\\d+`, 'm'))
     expect(out.trimEnd().endsWith('verify-items: ok')).toBe(true)
+    // a tree that passes every gate never prints FAIL in a table (F3: the own-pool row once did, by rounding at the limit)
+    expect(out).not.toContain('FAIL')
   }, 60_000)
+
+  test('the printed tables decide FAIL with the gate comparison (hit > chance + limit), never a difference', () => {
+    // the rounding that made a passing PRIMM pool print FAIL: 40 % against 25 % chance and a 15-point limit
+    expect(0.4 - 0.25 > 0.15).toBe(true)
+    expect(0.4 > 0.25 + 0.15).toBe(false)
+    expect(src).toContain('const overChance = (hit: number, chance: number): boolean => hit > chance + MAX_HIT_OVER_CHANCE')
+    expect(src).not.toMatch(/\.hit - \w+\.chance > MAX_HIT_OVER_CHANCE/)
+    expect(src).not.toContain('.some((d) => d > MAX_HIT_OVER_CHANCE)')
+  })
 
   test('the own-pool lists of Wave 1 are unchanged: the alignment pool is added beside them, not inside item-cues', () => {
     expect(collectOwnPools(ALL_LESSONS).every((e) => ['prequestion', 'predictAt', 'spiral'].includes(e.pool))).toBe(true)

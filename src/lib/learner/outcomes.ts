@@ -717,7 +717,11 @@ export interface PlacementLanding {
   lessons: string[]
 }
 
-/** F3 (spec §20.1): for each `complete placement`, the lesson of the first `visit` after it. */
+/**
+ * F3 (spec §20.1): for each `complete placement`, the lesson of the first `visit` after it. A learner who had
+ * already touched that lesson the same day writes no visit (older clients, or a lesson reached by another
+ * event first), so the first event on any `lesson:` ref after the placement counts as the landing too.
+ */
 export function selectPlacementLanding(ledgers: readonly Ledger[]): PlacementLanding {
   const lessons: string[] = []
   let placements = 0
@@ -731,7 +735,7 @@ export function selectPlacementLanding(ledgers: readonly Ledger[]): PlacementLan
       if (e.kind !== 'complete' || e.ref !== 'placement') return
       placements += 1
       for (let j = i + 1; j < list.length; j++) {
-        const id = list[j].kind === 'visit' ? lessonIdOf(list[j].ref) : null
+        const id = lessonIdOf(list[j].ref)
         if (id === null) continue
         lessons.push(id)
         landed += 1
