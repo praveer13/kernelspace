@@ -262,8 +262,8 @@ export function verifyKc(input: VerifyKcInput): VerifyKcResult {
       }
     }
   }
-  // wave-2 §4.4: coverage is unconditional, so a checkpoint item is tagged whether or not its lesson says so
-  for (const s of sites) if (s.checkpoint && !s.kcs?.length) err(s.ref, 'untagged checkpoint item in a lesson that sets Lesson.kcs')
+  // wave-2 §4.4: coverage is unconditional, so every checkpoint item is tagged whether or not its lesson sets Lesson.kcs
+  for (const s of sites) if (s.checkpoint && !s.kcs?.length) err(s.ref, 'untagged checkpoint item: every checkpoint item needs kcs')
 
   const itemCount = new Map<string, number>()
   for (const s of sites) for (const id of new Set(s.kcs ?? [])) itemCount.set(id, (itemCount.get(id) ?? 0) + 1)

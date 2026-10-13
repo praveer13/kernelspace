@@ -873,6 +873,8 @@ const stemOf = (i: Item): string => {
 const poolOf = (i: Item): 'lessons' | 'fleet-week' | 'errata' | 'primm' =>
   i.track === ERRATA_TRACK ? 'errata' : i.track === FLEET_TRACK ? 'fleet-week' : i.track === FORGE_TRACK ? PRIMM_POOL : 'lessons'
 const singleKey = (i: Item) => i.q.correct.length === 1
+/** The comparison every item-level gate makes: a hit rate above chance plus the limit. The printed tables use it too, so a passing pool never prints FAIL. */
+const overChance = (hit: number, chance: number): boolean => hit > chance + MAX_HIT_OVER_CHANCE
 const chanceOf = (rows: Item[]) => (rows.length ? rows.reduce((a, i) => a + 1 / i.q.options.length, 0) / rows.length : NaN)
 const hitRateOf = (rows: Item[], p: (i: Item) => number) => (rows.length ? rows.reduce((a, i) => a + p(i), 0) / rows.length : NaN)
 const rate = (x: number) => (Number.isFinite(x) ? pct(x) : 'n/a')
@@ -1157,7 +1159,7 @@ const cueRows = CUE_STRATEGIES.map((s) => {
   console.log(`  ${'strategy'.padEnd(26)}${'items'.padStart(6)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'lessons'.padStart(9)}${'fleet'.padStart(8)}${'errata'.padStart(8)}`)
   for (const r of cueRows) {
     console.log(
-      `  ${r.name.padEnd(26)}${String(r.rows).padStart(6)}${rate(r.hit).padStart(8)}${rate(r.chance).padStart(8)}${rate(r.lessons).padStart(9)}${rate(r.fleet).padStart(8)}${rate(r.errata).padStart(8)}${[r.hit - r.chance, r.lessons - chanceOf(lessonRows), r.errata - chanceOf(errataRows), ...(rankNames.has(r.name) ? [r.fleet - chanceOf(fleetRows)] : [])].some((d) => d > MAX_HIT_OVER_CHANCE) ? '  FAIL' : ''}`,
+      `  ${r.name.padEnd(26)}${String(r.rows).padStart(6)}${rate(r.hit).padStart(8)}${rate(r.chance).padStart(8)}${rate(r.lessons).padStart(9)}${rate(r.fleet).padStart(8)}${rate(r.errata).padStart(8)}${[overChance(r.hit, r.chance), overChance(r.lessons, chanceOf(lessonRows)), overChance(r.errata, chanceOf(errataRows)), ...(rankNames.has(r.name) ? [overChance(r.fleet, chanceOf(fleetRows))] : [])].some(Boolean) ? '  FAIL' : ''}`,
     )
   }
 
@@ -1195,8 +1197,10 @@ for (const pool of [...ALL_OWN_POOLS, PRIMM_POOL]) {
   const worst = rows.reduce((a, b) => (b.hit - b.chance > a.hit - a.chance ? b : a), rows[0])
   const adv = ownAdversary.find((a) => a.pool === pool)
   const odd = poolItems(pool).filter((i) => oddOneOut(i.q).length > 0).length
+  // FAIL uses the comparison of the gates above (`hit > chance + limit`, per strategy), not a difference: the two differ by rounding at the limit
+  const leaks = rows.some((r) => r.items > 0 && overChance(r.hit, r.chance))
   console.log(
-    `  ${pool.padEnd(12)}${String(worst.items).padStart(6)}${worst.name.padStart(24)}${rate(worst.hit).padStart(8)}${rate(worst.chance).padStart(8)}${rate(adv?.hit ?? NaN).padStart(9)}  ${odd}${worst.hit - worst.chance > MAX_HIT_OVER_CHANCE || (adv && adv.rows > 0 && adv.hit > adv.chance + MAX_HIT_OVER_CHANCE) || odd > 0 ? '  FAIL' : ''}`,
+    `  ${pool.padEnd(12)}${String(worst.items).padStart(6)}${worst.name.padStart(24)}${rate(worst.hit).padStart(8)}${rate(worst.chance).padStart(8)}${rate(adv?.hit ?? NaN).padStart(9)}  ${odd}${leaks || (adv && adv.rows > 0 && overChance(adv.hit, adv.chance)) || odd > 0 ? '  FAIL' : ''}`,
   )
 }
 console.log(`  files: ${[...new Set([...ownFile.values()])].length} lesson files author ${ownItems.length} own-pool items`)

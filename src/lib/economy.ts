@@ -225,11 +225,14 @@ export interface Ring0Status {
   tickets: Part
 }
 
+/** The achievement id (`ach:root-cold`) that records the first time ROOT's cold-check bar was met, so a merge cannot revoke it. */
+export const ROOT_COLD_ACHIEVEMENT = 'root-cold'
+
 /** Today `probe`s on a KC last exposed at least `ROOT_COLD.days` earlier (`selectColdChecks`). */
 export interface ColdChecks {
   n: number
   correct: number
-  /** The bar (`ROOT_COLD.n` checks, `ROOT_COLD.rate` right) was met at some point in time order, so a later miss never takes ROOT away. */
+  /** The bar (`ROOT_COLD.n` checks, `ROOT_COLD.rate` right) was met at some point in time order, or its first time is recorded (`ROOT_COLD_ACHIEVEMENT`), so a miss never takes ROOT away. */
   met: boolean
 }
 
@@ -289,11 +292,16 @@ const inOrder = (a: LedgerEvent, b: LedgerEvent): number => (a.at < b.at ? -1 : 
  * since the KC was last exposed on the event), not assisted. They need the events, which the aggregate does not
  * keep, so only a page that has read the ledger can pass the result to `selectRings`. `met` says the bar was
  * reached at some point in time order, so appended events never lower it and a later miss is no revocation (W8).
+ * A merge can insert earlier misses from another device, though, and that moves the prefix where the bar was
+ * reached; so the first time the bar is met is recorded as the `ach:root-cold` achievement (the earliest one
+ * wins, as for every achievement), and once it is in the ledger `met` holds in any merge.
  */
 export function selectColdChecks(events: Iterable<LedgerEvent>): ColdChecks {
   const seen = new Set<string>()
   const probes: LedgerEvent[] = []
+  let recorded = false
   for (const e of events) {
+    if (e.kind === 'achievement' && e.ref === `ach:${ROOT_COLD_ACHIEVEMENT}`) recorded = true
     if (e.kind !== 'probe' || seen.has(e.id)) continue
     const data = (e as { data?: unknown }).data
     if (typeof data !== 'object' || data === null || Array.isArray(data)) continue
@@ -311,7 +319,7 @@ export function selectColdChecks(events: Iterable<LedgerEvent>): ColdChecks {
     // compare as a ratio with a hair of slack: 0.8 is not exact in binary
     if (i + 1 >= ROOT_COLD.n && correct / (i + 1) >= ROOT_COLD.rate - 1e-9) met = true
   })
-  return { n: probes.length, correct, met }
+  return { n: probes.length, correct, met: met || recorded }
 }
 
 /**

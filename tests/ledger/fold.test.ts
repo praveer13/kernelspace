@@ -8,6 +8,7 @@ import { factXp, summary, toProgressData, workingMap, xpOf } from '../../src/lib
 import type { LedgerEvent, WorkingRecord } from '../../src/lib/ledger/types'
 import * as economy from '../../src/lib/economy'
 import { XP } from '../../src/lib/economy'
+import { makeProfile, startTab } from './env'
 import { evt, forSeeds, runOps, shuffle, PROPERTY_TIMEOUT_MS } from './gen'
 
 setDefaultTimeout(PROPERTY_TIMEOUT_MS)
@@ -298,6 +299,14 @@ describe('view (spec §6.2)', () => {
     expect(map['fw:doc']).toBe('new')
   })
 
+  test('the root-cold record keeps its earliest time across a merge and pays nothing', () => {
+    const early = evt('achievement', `ach:${economy.ROOT_COLD_ACHIEVEMENT}`, T1)
+    const late = evt('achievement', `ach:${economy.ROOT_COLD_ACHIEVEMENT}`, T3)
+    expect(derive([late, early]).achievements).toEqual({ [economy.ROOT_COLD_ACHIEVEMENT]: T1 })
+    expect(derive([early, late])).toEqual(derive([late, early]))
+    expect(xpOf(derive([early, late]))).toBe(0)
+  })
+
   test('summary', () => {
     const agg = derive([
       evt('complete', 'lesson:t0.l1', T1),
@@ -313,6 +322,27 @@ describe('view (spec §6.2)', () => {
     // with no RING 2 evidence the rank is RING 3, and XP has no threshold table to say otherwise
     expect(economy.selectRings(derive([])).rank).toBe('RING 3')
     for (const gone of ['RANKS', 'rankForXp', 'nextRank']) expect(gone in economy).toBe(false)
+  })
+})
+
+describe('the first visit after a placement (F3 landing)', () => {
+  test('is written even when the lesson was already touched that day; later visits that day still collapse', async () => {
+    const p = makeProfile()
+    const tab = startTab(p)
+    const { getState } = tab.progress
+    getState().markLessonStatus('r.l1', 'reading') // opened R.L1 before placing
+    p.clock.advance(5)
+    getState().completePlacement({ v: 1, at: p.clock.nowIso(), entryTrack: 't0' })
+    p.clock.advance(5)
+    getState().markLessonStatus('r.l1', 'reading') // lands on R.L1 again, the same day
+    p.clock.advance(5)
+    getState().markLessonStatus('r.l1', 'reading') // one visit per day again
+    await tab.progress.controls.flush()
+    const events = await (await tab.engine()).events()
+    expect(events.filter((e) => e.kind === 'visit')).toHaveLength(2)
+    const list = [...events].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+    const placed = list.findIndex((e) => e.kind === 'complete' && e.ref === 'placement')
+    expect(list[placed + 1]).toMatchObject({ kind: 'visit', ref: 'lesson:r.l1' })
   })
 })
 

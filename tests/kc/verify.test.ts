@@ -275,8 +275,8 @@ describe('coverage, for lessons that set Lesson.kcs', () => {
       tagQuiz(l, [['t2.process-thread'], ['t2.context-switch']])
     })
     const errors = errorsOf(input({ lessons }))
-    expect(errors).toContain('quiz:t2.l1#2: untagged checkpoint item in a lesson that sets Lesson.kcs')
-    expect(errors).toContain('quiz:t2.l1#3: untagged checkpoint item in a lesson that sets Lesson.kcs')
+    expect(errors).toContain('quiz:t2.l1#2: untagged checkpoint item: every checkpoint item needs kcs')
+    expect(errors).toContain('quiz:t2.l1#3: untagged checkpoint item: every checkpoint item needs kcs')
   })
 
   test('a KC in Lesson.kcs needs 2 tagged items or a generator', () => {

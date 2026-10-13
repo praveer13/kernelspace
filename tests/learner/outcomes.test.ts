@@ -931,6 +931,20 @@ describe('selectPlacementLanding', () => {
     expect(r).toEqual({ placements: 4, n: 3, onR1: 1, partners: 2, partnersOnR1: 1, lessons: ['t2.l3', 'r.l1', 't1.l1'] })
   })
 
+  test('a landing on R.L1 is found when the learner had already touched R.L1 that day and wrote no new visit', () => {
+    const j = new Journal()
+    j.add('visit', 'lesson:r.l1', d(0))
+    j.add('complete', 'placement', d(0))
+    j.add('complete', 'lesson:r.l1', d(0)) // the first event after the placement, on a lesson ref
+    const k = new Journal()
+    k.add('complete', 'placement', d(0))
+    k.add('visit', 'sim:alloc', d(0))
+    k.add('complete', 'lesson:t2.l3', d(0))
+    k.add('visit', 'lesson:r.l1', d(0))
+    const r = selectPlacementLanding([j.events, k.events])
+    expect(r).toMatchObject({ placements: 2, n: 2, onR1: 1, partners: 2, partnersOnR1: 1, lessons: ['r.l1', 't2.l3'] })
+  })
+
   test('a visit before the placement is not its landing', () => {
     const j = new Journal()
     j.add('visit', 'lesson:r.l1', d(0))
