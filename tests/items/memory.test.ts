@@ -197,6 +197,39 @@ describe('memory: claim-backed and synthetic scenes', () => {
     expect(truthOf(dense)).toBeCloseTo((claimNumber('model.llama3-70b.params') * bpw) / (num(dense, 'tp') * num(dense, 'pp')), 9)
   })
 
+  test('shard: a mixture of experts holds dense / (TP x PP) + experts / (EP x PP), each stage keeping only its own layers\' experts (D25)', () => {
+    // seed 11 at level 3: TP 4, PP 6, EP 2, 40 B dense and 340 B routed parameters in INT4 (half a byte per weight)
+    const i = memory.make(11, 3, 'shard')
+    expect([num(i, 'tp'), num(i, 'pp'), num(i, 'ep'), num(i, 'paramsB'), num(i, 'expertB'), i.params.dtype]).toEqual([4, 6, 2, 40, 340, 'int4'])
+    const gb = (40 * 0.5) / (4 * 6) + (340 * 0.5) / (2 * 6)
+    expect(gb).toBeCloseTo(15, 9)
+    expect(unitOf(i)).toBe('GiB')
+    expect(truthOf(i)).toBeCloseTo((gb * GB) / GIB, 9)
+    // the old key, experts / EP, was 79.9 GiB
+    expect((((40 * 0.5) / 24 + (340 * 0.5) / 2) * GB) / GIB).toBeCloseTo(79.9, 1)
+    const stem = partsText(i.prompt.stem)
+    expect(stem).toContain("holds only its own layers, and so only those layers' experts")
+    expect(stem).toContain('across the 6 stages and then across the 2 EP ranks of each stage')
+    const last = memory.solution(i).at(-2)
+    expect(last && partsText(last.text)).toBe('Weights per GPU = 0.8333 GB + 14.17 GB')
+    // the old key is a named slip
+    const g = memory.grade(i, slipped(i, ((40 * 0.5) / 24 + (340 * 0.5) / 2) / gb))
+    expect(g.ok).toBe(false)
+    expect(g.diagnosis?.id).toBe('memory.experts-ignore-pp')
+    expect(g.diagnosis?.message).toContain('6 pipeline stages')
+  })
+
+  test('shard: with PP = 1 the experts divide by EP alone and the stem does not mention stages', () => {
+    const i = find('shard', 2, (x) => x.params.expertB !== undefined && num(x, 'pp') === 1)
+    const bpw = { bf16: 2, fp8: 1, int4: 0.5 }[String(i.params.dtype) as 'bf16']
+    expect(truthOf(i)).toBeCloseTo((num(i, 'paramsB') * bpw) / num(i, 'tp') + (num(i, 'expertB') * bpw) / num(i, 'ep'), 9)
+    const stem = partsText(i.prompt.stem)
+    expect(stem).toContain(`the experts are split across the ${num(i, 'ep')} EP ranks`)
+    expect(stem).not.toContain('stages')
+    const rule = memory.ratioRules.find((r) => r.id === 'memory.experts-ignore-pp')
+    expect(typeof rule?.ratio === 'function' ? rule.ratio(i) : undefined).toBeNull()
+  })
+
   test('lora: a claim-backed adapter reads layers and hidden size; q and o are the hidden x hidden matrices', () => {
     const i = find('lora', 2, (x) => x.params.model === 'llama3-8b' && x.params.ask === 'bytes')
     expect(i.claims.map((c) => c.split('@')[0]).sort()).toEqual(['model.llama3-8b.hidden-size', 'model.llama3-8b.layers'])

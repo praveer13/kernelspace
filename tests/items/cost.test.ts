@@ -164,6 +164,12 @@ describe('the formulas, from the params alone', () => {
     const every = (num(i, 'rate') * num(i, 'gpus') * 1e6) / (num(i, 'tps') * 3600) // gen-literal-ok: hand check
     expect(truthOf(i)).toBeCloseTo(every / (num(i, 'slo') / 100), 9)
     expect(stem(i)).toContain('within the SLO')
+    // the last step divides by those tokens, not by "tokens per hour"
+    const last = cost.solution(i).at(-1)
+    expect(last && partsText(last.text)).toBe('Cost per million tokens = cost per hour ÷ tokens delivered within the SLO per hour × 1,000,000')
+    const plain = find('per-mtok', 0, () => true)
+    const plainLast = cost.solution(plain).at(-1)
+    expect(plainLast && partsText(plainLast.text)).toContain('÷ tokens per hour')
     expect(all('per-mtok', [0, 1, 2]).every((x) => x.params.slo === undefined)).toBe(true)
   })
 
