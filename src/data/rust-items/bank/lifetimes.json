@@ -1,0 +1,466 @@
+{
+  "group": "lifetimes",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "edition": "2024",
+  "snippets": {
+    "route-best-tag": {
+      "hash": "deffd08cf971c7b8dc22f39f41fa6d9a00608de9f8bbaf02d7db4f47d1e79de8",
+      "variants": {
+        "base": {"result":"compiles"},
+        "owned-tag": {"result":{"code":"E0597","line":5,"message":"`tag` does not live long enough"},"fixes":{"literal-tag":"compiles","clone-tag":{"code":"E0716","line":5},"slice-tag":{"code":"E0597","line":5}}},
+        "temp-tag": {"result":{"code":"E0716","line":5,"message":"temporary value dropped while borrowed"}},
+        "immutable-best": {"result":{"code":"E0384","line":5,"message":"cannot assign twice to immutable variable `best`"}}
+      }
+    },
+    "slot-index-keys": {
+      "hash": "432304a8a335f97de1b6c60998ea3b12c883e1932e2c58b7615de7206f17c514",
+      "variants": {
+        "base": {"result":"compiles"},
+        "by-value": {"result":{"code":"E0597","line":4,"message":"`id` does not live long enough"},"fixes":{"by-ref":"compiles","clone-id":{"code":"E0716","line":4},"into-iter":{"code":"E0597","line":4}}},
+        "temp-view": {"result":{"code":"E0716","line":4,"message":"temporary value dropped while borrowed"}},
+        "static-views": {"result":{"code":"E0597","line":3,"message":"`ids` does not live long enough"}}
+      }
+    },
+    "first-word-vocab": {
+      "hash": "7353f91d5ade5266abdaebc5968d0bc8492a2220511a5d5e0281288562468050",
+      "variants": {
+        "base": {"result":"compiles"},
+        "owned-line": {"result":{"code":"E0515","line":7,"message":"cannot return value referencing local variable `line`"},"fixes":{"borrow-vocab":"compiles","clone-line":{"code":"E0515","line":7},"static-ret":{"code":"E0515","line":7}}},
+        "ret-temp": {"result":{"code":"E0515","line":7,"message":"cannot return value referencing temporary value"}},
+        "by-value": {"result":{"code":"E0106","line":5,"message":"missing lifetime specifier"}}
+      }
+    },
+    "session-name-field": {
+      "hash": "bf831c83fb70924b8dcb404a43922c17c0871336ec8db32f4072426e495177c7",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-field": {"result":{"code":"E0106","line":3,"message":"missing lifetime specifier"},"fixes":{"own-it":"compiles","static-name":"compiles","named-lifetime":{"code":"E0261","line":3}}},
+        "vec-field": {"result":{"code":"E0106","line":3,"message":"missing lifetime specifier"}},
+        "ret-ref": {"result":{"code":"E0106","line":6,"message":"missing lifetime specifier"}}
+      }
+    },
+    "block-view-escape": {
+      "hash": "1cc488ae0293add03ffd2f5175a3f69aad6242a66da2e28bbd1600d1a1779465",
+      "variants": {
+        "base": {"result":"compiles"},
+        "local-vec": {"result":{"code":"E0515","line":7,"message":"cannot return value referencing local variable `head`"},"fixes":{"slice-pool":"compiles","clone-head":"compiles","ref-vec":{"code":"E0515","line":7}}},
+        "temp-vec": {"result":{"code":"E0515","line":7,"message":"cannot return value referencing temporary value"}},
+        "two-inputs": {"result":{"code":"E0106","line":5,"message":"missing lifetime specifier"}}
+      }
+    },
+    "label-temp-trim": {
+      "hash": "f074876dff0561852161036600fe36af9472c51a7cef13cae55bcf68b03c7d3b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "temp-trim": {"result":{"code":"E0716","line":2,"message":"temporary value dropped while borrowed"},"fixes":{"extend-temp":"compiles","clone-tag":{"code":"E0716","line":2},"ref-trim":{"code":"E0716","line":2}}},
+        "temp-chain": {"result":{"code":"E0716","line":3,"message":"temporary value dropped while borrowed"}},
+        "block-owner": {"result":{"code":"E0597","line":3,"message":"`t` does not live long enough"}}
+      }
+    },
+    "worker-name-thread": {
+      "hash": "505f64a527fcd1ff0a36bfab45e152c63657e7b4a5d3579a3fd05f8bbe8e1ee7",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0373","line":3,"message":"closure may outlive the current function, but it borrows `name`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-name":{"code":"E0373","line":3},"closure-arg":{"code":"E0593","line":3}}},
+        "move-then-use": {"result":{"code":"E0382","line":7,"message":"borrow of moved value: `name`"},"fixes":{"print-id":"compiles","clone-name":{"code":"E0382","line":7},"drop-name":{"code":"E0382","line":7}}},
+        "ref-param": {"result":{"code":"E0521","line":3,"message":"borrowed data escapes outside of function"},"fixes":{"own-id":"compiles","static-id":"compiles","named-id":{"code":"E0521","line":3}}}
+      }
+    },
+    "scorer-closure": {
+      "hash": "00aca1964df85043443623353c4d23a502ae70932b4f0713a7d1ef1da5bc678e",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0373","line":3,"message":"closure may outlive the current function, but it borrows `bias`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-bias":{"code":"E0373","line":3},"cast-bias":{"code":"E0373","line":3}}},
+        "ref-local": {"result":{"code":"E0716","line":2,"message":"temporary value dropped while borrowed"}}
+      }
+    },
+    "tally-scoped-threads": {
+      "hash": "6521d49c1cfc17859777d0656dcefb3dbf80545be4dd6fec82dabffdcdf6214f",
+      "variants": {
+        "base": {"result":"compiles"},
+        "plain-spawn": {"result":{"code":"E0597","line":4,"message":"`total` does not live long enough"},"fixes":{"scoped-spawn":"compiles","move-copy":"compiles","move-scope":{"code":"E0373","line":4}}},
+        "two-writers": {"result":{"code":"E0499","line":5,"message":"cannot borrow `total` as mutable more than once at a time"}},
+        "read-while-write": {"result":{"code":"E0502","line":5,"message":"cannot borrow `total` as immutable because it is also borrowed as mutable"}},
+        "drop-reqs": {"result":{"code":"E0373","line":4,"message":"closure may outlive the current function, but it borrows `reqs`, which is owned by the current function"}}
+      }
+    },
+    "stats-shared-ref": {
+      "hash": "c1bcb9fab70afb35a2ab7d70a33c30ebe966f4a6f50b471b73729866dbc77593",
+      "variants": {
+        "shared-ref": {"result":{"code":"E0594","line":6,"message":"cannot assign to `s.hits`, which is behind a `&` reference"},"fixes":{"mut-ref":"compiles","cell-field":{"code":"E0368","line":6},"static-ref":{"code":"E0594","line":6}}},
+        "rc-handle": {"result":{"code":"E0594","line":6,"message":"cannot assign to data in an `Rc`"}},
+        "ref-to-mut": {"result":{"code":"E0594","line":6,"message":"cannot assign to `s.hits`, which is behind a `&` reference"}},
+        "mut-binding": {"result":{"code":"E0594","line":6,"message":"cannot assign to `s.hits`, which is behind a `&` reference"}}
+      }
+    },
+    "rc-block-table": {
+      "hash": "09a3e383144ddfc2dd0e74299a82112210023750029b68a4c0a7e53839d52d15",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-through-rc": {"result":{"code":"E0596","line":6,"message":"cannot borrow data in an `Rc` as mutable"},"fixes":{"make-mut":"compiles","get-mut":"compiles","clone-rc":{"code":"E0596","line":6}}},
+        "move-out-of-rc": {"result":{"code":"E0507","line":6,"message":"cannot move out of an `Rc`"}},
+        "move-first": {"result":{"code":"E0382","line":5,"message":"the type `Rc` does not implement `Copy`"},"fixes":{"clone-handle":"compiles","clone-late":{"code":"E0382","line":5},"borrow-t":{"code":"E0382","line":5}}},
+        "get-mut-shared": {"result":{"code":"E0596","line":7,"message":"cannot borrow `b` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "hand-off-guard": {
+      "hash": "623d90f59232ed913b580a5156dd11d616b8785e96a0c76469bcb6028d168a76",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-drop": {"result":{"code":"BorrowMutError","line":10,"message":"RefCell already borrowed"},"fixes":{"drop-g":"compiles","bind-g":{"code":"BorrowMutError","line":10},"forget-g":{"code":"BorrowMutError","line":10}}},
+        "shared-peek": {"result":{"code":"BorrowError","line":8,"message":"RefCell already mutably borrowed"}},
+        "second-mut": {"result":{"code":"BorrowMutError","line":8,"message":"RefCell already borrowed"}},
+        "ref-push": {"result":{"code":"E0596","line":10,"message":"cannot borrow data in dereference of `Ref<'_, Vec<usize>>` as mutable"}}
+      }
+    },
+    "arc-mutex-counter": {
+      "hash": "7b836b59c60be3c4f394558e90ad50e30dd5351a84df3814ffe55acbb5bc8b51",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0373","line":7,"message":"closure may outlive the current function, but it borrows `c2`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-c2":{"code":"E0373","line":7},"closure-arg":{"code":"E0593","line":7}}},
+        "ref-handle": {"result":{"code":"E0597","line":6,"message":"`c` does not live long enough"}},
+        "moved-arc": {"result":{"code":"E0382","line":11,"message":"the type `Arc` does not implement `Copy`"},"fixes":{"clone-arc":"compiles","use-c2":{"code":"E0382","line":11},"borrow-c":{"code":"E0597","line":6}}}
+      }
+    },
+    "box-block-list": {
+      "hash": "aabd14592508821d9dbc5dd94882213490b5e9878ef13a57645ccdbc0403ea4a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-box": {"result":{"code":"E0507","line":2,"message":"cannot move out of `*b` which is behind a shared reference"},"fixes":{"borrow-inner":"compiles","clone-inner":"compiles","deref-twice":{"code":"E0507","line":2}}},
+        "use-after": {"result":{"code":"E0382","line":3,"message":"borrow of moved value: `*b`"},"fixes":{"use-v":"compiles","clone-first":"compiles","deref-b":{"code":"E0382","line":3}}},
+        "rc-instead": {"result":{"code":"E0507","line":2,"message":"cannot move out of an `Rc`"}},
+        "push-v": {"result":{"code":"E0596","line":3,"message":"cannot borrow `v` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "cell-flag-shared": {
+      "hash": "04456ebea3548a7e9f40d0cbefd0e5f3e1569578ac5248d4b15c271991df3f4d",
+      "variants": {
+        "assign-field": {"result":{"code":"E0594","line":8,"message":"cannot assign to `f.ready`, which is behind a `&` reference"},"fixes":{"use-set":"compiles","mut-param":"compiles","deref-cell":{"code":"E0614","line":8}}},
+        "get-mut": {"result":{"code":"E0596","line":8,"message":"cannot borrow `f.ready` as mutable, as it is behind a `&` reference"}},
+        "into-inner": {"result":{"code":"E0507","line":9,"message":"cannot move out of `f.ready` which is behind a shared reference"},"fixes":{"use-get":"compiles","use-take":"compiles","deref-flag":{"code":"E0507","line":9}}}
+      }
+    },
+    "slot-take-request": {
+      "hash": "83d3a574a48d9a439c823c60f7783beb4f9108678dc217511178eb3c0e77ac6a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-field": {"result":{"code":"E0507","line":8,"message":"cannot move out of `s.req` which is behind a mutable reference"},"fixes":{"take":"compiles","clone-req":"compiles","iter-req":{"code":"E0308","line":8}}},
+        "shared-slot": {"result":{"code":"E0596","line":8,"message":"cannot borrow `s.req` as mutable, as it is behind a `&` reference"}},
+        "rc-slot": {"result":{"code":"E0596","line":8,"message":"cannot borrow data in an `Rc` as mutable"}},
+        "map-field": {"result":{"code":"E0507","line":8,"message":"cannot move out of `s.req` which is behind a mutable reference"}}
+      }
+    },
+    "tap-reentry": {
+      "hash": "465b30f5779c22b64cd706d85bbb9d8dfc4b728d9a8701cd15334e6152389534",
+      "variants": {
+        "base": {"result":"compiles"},
+        "recurse-held": {"result":{"code":"BorrowMutError","line":6,"message":"RefCell already borrowed"},"fixes":{"drop-g":"compiles","bind-g":{"code":"BorrowMutError","line":6},"drop-ref":{"code":"BorrowMutError","line":6}}},
+        "shared-guard": {"result":{"code":"E0596","line":7,"message":"cannot borrow data in dereference of `Ref<'_, Vec<u32>>` as mutable"}},
+        "reborrow-inside": {"result":{"code":"BorrowError","line":7,"message":"RefCell already mutably borrowed"}},
+        "move-vec": {"result":{"code":"E0507","line":7,"message":"cannot move out of dereference of `RefMut<'_, Vec<u32>>`"}}
+      }
+    },
+    "rotate-owners-len": {
+      "hash": "4753cf8ba1d3f34b67a9b24dd6098e5c703ffb0b46ccc318cdf129ee3b0ac223",
+      "variants": {
+        "base": {"result":"compiles"},
+        "swap-len": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*o` as immutable because it is also borrowed as mutable"},"fixes":{"len-first":"compiles","clone-vec":"compiles","as-slice":{"code":"E0502","line":5}}},
+        "push-len": {"result":"compiles"},
+        "mem-swap": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*o` as mutable more than once at a time"},"fixes":{"swap-method":"compiles","clone-first":"compiles","swap-first-two":"compiles"}}
+      }
+    },
+    "slot-or-insert": {
+      "hash": "5af36c470dc0e1b35f2f80fd8115d88525c93fab692eed6406b9aadc09b2d089",
+      "variants": {
+        "base": {"result":"compiles"},
+        "cond-get": {"result":{"code":"E0502","line":6,"message":"cannot borrow `*m` as mutable because it is also borrowed as immutable"},"fixes":{"contains-key":"compiles","entry-first":"compiles","peek-only":"compiles"}},
+        "iter-remove": {"result":{"code":"E0502","line":6,"message":"cannot borrow `*m` as mutable because it is also borrowed as immutable"}},
+        "shared-map": {"result":{"code":"E0596","line":6,"message":"cannot borrow `*m` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "queue-via-method": {
+      "hash": "607586c1924cdb4893954edd9c1348bacb51b7af804e79298069197d7aea59fe",
+      "variants": {
+        "base": {"result":"compiles"},
+        "via-method": {"result":{"code":"E0503","line":11,"message":"cannot use `s.left` because it was mutably borrowed"},"fixes":{"field-borrow":"compiles","clone-q":"compiles","whole-s":{"code":"E0599","line":12}}},
+        "call-method": {"result":{"code":"E0499","line":11,"message":"cannot borrow `*s` as mutable more than once at a time"}},
+        "shared-sched": {"result":{"code":"E0596","line":10,"message":"cannot borrow `s.queue` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "closure-field-capture": {
+      "hash": "75ce26f1fe2d78ae804b8e0ef5b8ad2daed3d37355ba82a643c76ee3eafa23ed",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-closure": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `s`"},"fixes":{"drop-move":"compiles","method-call":{"code":"E0382","line":9},"deref-left":{"code":"E0614","line":8}}},
+        "same-field": {"result":{"code":"E0503","line":9,"message":"cannot use `s.left` because it was mutably borrowed"}},
+        "shared-sched": {"result":{"code":"E0596","line":8,"message":"cannot borrow `*s` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "split-first-two-blocks": {
+      "hash": "7019b04185b109c2e811dbbcc7bb559085c6bd33e12a1e0a6ed9fb48870a5eb4",
+      "variants": {
+        "base": {"result":"compiles"},
+        "index-twice": {"result":{"code":"E0499","line":3,"message":"cannot borrow `v[_]` as mutable more than once at a time"},"fixes":{"from-rest":"compiles","clone-b":{"code":"E0503","line":3},"range-b":{"code":"E0499","line":3}}},
+        "read-first": {"result":{"code":"E0503","line":5,"message":"cannot use `*v` because it was mutably borrowed"}},
+        "len-in-index": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*v` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "zero-tail-halves": {
+      "hash": "2a69daf30ea60cb74184de96bf54ea0786ac4acaf1d68d5f792235a5a541841d",
+      "variants": {
+        "base": {"result":"compiles"},
+        "range-overlap": {"result":{"code":"E0499","line":2,"message":"cannot borrow `*b` as mutable more than once at a time"},"fixes":{"split-at":"compiles","shared-tail":{"code":"E0502","line":2},"shared-split":{"code":"E0594","line":3}}},
+        "index-both": {"result":{"code":"E0503","line":3,"message":"cannot use `*b` because it was mutably borrowed"}},
+        "len-while-split": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*b` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "recycle-used-blocks": {
+      "hash": "f226d640728cb2093e381ac557d88150a489f6c730e2af077de2797108a33875",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-field": {"result":{"code":"E0507","line":4,"message":"cannot move out of `p.used` which is behind a mutable reference"},"fixes":{"take":"compiles","clone-used":"compiles","deref-used":{"code":"E0507","line":4}}},
+        "extend-self": {"result":{"code":"E0502","line":5,"message":"cannot borrow `p.free` as mutable because it is also borrowed as immutable"},"fixes":{"extend-used":"compiles","clone-free":"compiles","field-used":{"code":"E0507","line":5}}},
+        "take-shared": {"result":{"code":"E0596","line":4,"message":"cannot borrow `p.used` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "mark-done-fields": {
+      "hash": "c50b138b823769910a82bb9e65e9a22017ddc417142744ba907b1b9c9059cab6",
+      "variants": {
+        "base": {"result":"compiles"},
+        "same-field": {"result":{"code":"E0502","line":8,"message":"cannot borrow `s.reqs` as mutable because it is also borrowed as immutable"}},
+        "helper-fn": {"result":{"code":"E0502","line":8,"message":"cannot borrow `*s` as mutable because it is also borrowed as immutable"},"fixes":{"push-field":"compiles","reborrow-s":{"code":"E0502","line":8},"iter-mut":{"code":"E0499","line":8}}},
+        "shared-sched": {"result":{"code":"E0596","line":8,"message":"cannot borrow `s.done` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "lexer-over-text": {
+      "hash": "2a60941e8ac135ea8b7dc65f1f279e32f2f596380a6d1014ae0427b9d24273f3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "bare-ref": {"result":{"code":"E0106","line":1,"message":"missing lifetime specifier"},"fixes":{"name-it":"compiles","static-text":{"code":"E0597","line":4},"own-text":{"code":"E0308","line":4}}},
+        "temp-copy": {"result":{"code":"E0716","line":4,"message":"temporary value dropped while borrowed"},"fixes":{"borrow-t":"compiles","clone-t":{"code":"E0716","line":4},"mut-borrow":{"code":"E0596","line":4}}},
+        "drop-text": {"result":{"code":"E0505","line":5,"message":"cannot move out of `t` because it is borrowed"},"fixes":{"read-first":"compiles","clone-drop":"compiles","drop-ref":"compiles"}}
+      }
+    },
+    "big-priority-pick": {
+      "hash": "c5197371596ef1d1ecbb25fc6756236c4a086cb0546d68f1c28a5672d3613287",
+      "variants": {
+        "base": {"result":"compiles"},
+        "local-b": {"result":{"code":"E0716","line":9,"message":"temporary value dropped while borrowed"},"fixes":{"promote-b":"compiles","own-b":{"code":"E0716","line":9},"copy-b":{"code":"E0716","line":9}}},
+        "no-named": {"result":{"code":"E0106","line":1,"message":"missing lifetime specifier"},"fixes":{"name-both":"compiles","name-one":{"code":"E0621","line":2},"static-out":{"code":"none","line":2}}},
+        "ret-ref-top": {"result":{"code":"E0106","line":5,"message":"missing lifetime specifier"}}
+      }
+    },
+    "next-token-elided": {
+      "hash": "4e8e6419c7220da63e9beb92c4842663c39c4e767d8811850e60fdfca0b6a6d5",
+      "variants": {
+        "base": {"result":"compiles"},
+        "tied-to-self": {"result":{"code":"E0499","line":13,"message":"cannot borrow `*l` as mutable more than once at a time"},"fixes":{"name-a":"compiles","tie-mut":{"code":"none","line":12},"fresh-b":{"code":"E0499","line":13}}},
+        "shared-lexer": {"result":{"code":"E0596","line":12,"message":"cannot borrow `*l` as mutable, as it is behind a `&` reference"}},
+        "bare-src": {"result":{"code":"E0106","line":1,"message":"missing lifetime specifier"}}
+      }
+    },
+    "spawn-loop-var": {
+      "hash": "43b15dab64596fedee58e776aa215e47cbc4ebf9998d4a6002a1efffa08e465f",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0373","line":6,"message":"closure may outlive the current function, but it borrows `i`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-i":{"code":"E0373","line":6},"use-n":{"code":"E0373","line":6}}},
+        "immutable-hs": {"result":{"code":"E0596","line":6,"message":"cannot borrow `hs` as mutable, as it is not declared as mutable"}},
+        "join-borrowed": {"result":{"code":"E0507","line":9,"message":"cannot move out of `*h` which is behind a shared reference"}}
+      }
+    },
+    "boxed-scorer": {
+      "hash": "67a5e8865da461397552cbf983f8e00471d382baa0eefbc89388253e31488a1c",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0373","line":5,"message":"closure may outlive the current function, but it borrows `bias`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-bias":{"code":"E0373","line":5},"ref-bias":{"code":"E0515","line":5}}},
+        "once-twice": {"result":{"code":"E0382","line":10,"message":"use of moved value: `f`"},"fixes":{"back-to-fn":"compiles","fn-mut":{"code":"E0596","line":9},"keep-once":{"code":"E0507","line":10}}},
+        "local-ref": {"result":{"code":"E0515","line":5,"message":"cannot return value referencing temporary value"}}
+      }
+    },
+    "guard-temp-peek": {
+      "hash": "cfae19ef3370ccabf5e3ac3e46154e7090c19e2a072ea91808581deeab9f59f4",
+      "variants": {
+        "base": {"result":"compiles"},
+        "temp-guard": {"result":{"code":"E0716","line":5,"message":"temporary value dropped while borrowed"},"fixes":{"keep-guard":"compiles","last-block":"compiles","paren-guard":{"code":"E0716","line":5}}},
+        "drop-guard": {"result":{"code":"E0505","line":6,"message":"cannot move out of `g` because it is borrowed"},"fixes":{"read-first":"compiles","clone-g":"compiles","drop-ref":"compiles"}}
+      }
+    },
+    "index-names-map": {
+      "hash": "351997b83d2accde3ca3505b8491c33c2aa57a49908df2498597bc46848ea197",
+      "variants": {
+        "base": {"result":"compiles"},
+        "into-iter": {"result":{"code":"E0597","line":6,"message":"`n` does not live long enough"},"fixes":{"borrow-v":"compiles","clone-key":{"code":"E0716","line":6},"iter-mut":{"code":"E0596","line":5}}},
+        "temp-key": {"result":{"code":"E0716","line":6,"message":"temporary value dropped while borrowed"}},
+        "drop-source": {"result":{"code":"E0505","line":8,"message":"cannot move out of `v` because it is borrowed"},"fixes":{"len-first":"compiles","clone-drop":"compiles","drop-ref":"compiles"}}
+      }
+    },
+    "hot-slot-scope": {
+      "hash": "1fed218b1a96f60813c59bde960f8d15eddbc649b2b20531f98aeac6edb49d04",
+      "variants": {
+        "base": {"result":"compiles"},
+        "inner-ref": {"result":{"code":"E0597","line":6,"message":"`b` does not live long enough"},"fixes":{"promote":"compiles","clone-b":{"code":"E0716","line":6},"mut-b":{"code":"E0716","line":5}}},
+        "mut-ref": {"result":{"code":"E0596","line":6,"message":"cannot borrow `b` as mutable, as it is not declared as mutable"}},
+        "block-value": {"result":{"code":"E0716","line":6,"message":"temporary value dropped while borrowed"}}
+      }
+    },
+    "first-field-width": {
+      "hash": "cbee86661805f42ac35ddfb7bb4ba417eb24e9d416582e7b4e060ec25eb66897",
+      "variants": {
+        "base": {"result":"compiles"},
+        "temp-owned": {"result":{"code":"E0716","line":2,"message":"temporary value dropped while borrowed"},"fixes":{"borrow-s":"compiles","comma-space":"compiles","ref-copy":{"code":"E0716","line":2}}},
+        "temp-last": {"result":{"code":"E0716","line":2,"message":"temporary value dropped while borrowed"}}
+      }
+    },
+    "hook-registry": {
+      "hash": "c6971a44c057342b1d3e85ede416c2f23b01187ba9007611faab683147d9765b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0597","line":5,"message":"`n` does not live long enough"},"fixes":{"add-move":"compiles","clone-n":{"code":"E0597","line":5},"ref-n":{"code":"E0597","line":5}}},
+        "immutable-vec": {"result":{"code":"E0596","line":4,"message":"cannot borrow `v` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "chunk-workers": {
+      "hash": "687829705b81dd3320a67fd8af60315fb49b30038aa3c23af938996e3eb94323",
+      "variants": {
+        "base": {"result":"compiles"},
+        "borrowed-chunk": {"result":{"code":"E0597","line":5,"message":"`d` does not live long enough"}},
+        "no-move": {"result":{"code":"E0373","line":7,"message":"closure may outlive the current function, but it borrows `c`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-c":{"code":"E0373","line":7},"ref-c":{"code":"E0716","line":6}}},
+        "joined-twice": {"result":{"code":"E0382","line":11,"message":"borrow of moved value: `hs`"}}
+      }
+    },
+    "bump-while-reading": {
+      "hash": "f1d0a725b4d24d385e09e89dd2d4686c48ca280f821a1407f5f10e1acb6495e3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "get-in-cond": {"result":"compiles"},
+        "if-let": {"result":{"code":"BorrowMutError","line":8,"message":"RefCell already borrowed"},"fixes":{"plain-if":"compiles","clone-elem":{"code":"BorrowMutError","line":8},"bind-elem":{"code":"BorrowMutError","line":8}}},
+        "hold-ref": {"result":{"code":"BorrowMutError","line":8,"message":"RefCell already borrowed"},"fixes":{"no-binding":"compiles","clone-list":"compiles","ref-binding":{"code":"BorrowMutError","line":8}}},
+        "ref-push": {"result":{"code":"E0596","line":8,"message":"cannot borrow data in dereference of `Ref<'_, Vec<i32>>` as mutable"}}
+      }
+    },
+    "rc-handles-queue": {
+      "hash": "70a342aafd1b98c0f3c625a5f3aa9f700567d9122eec4585037d803ef2c716c3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "inline": {"result":{"code":"BorrowMutError","line":7,"message":"RefCell already borrowed"}},
+        "hold-ref": {"result":{"code":"BorrowMutError","line":7,"message":"RefCell already borrowed"}},
+        "move-handle": {"result":{"code":"E0382","line":9,"message":"the type `Rc` does not implement `Copy`"},"fixes":{"clone-handle":"compiles","fresh-queue":"compiles","read-h":{"code":"E0382","line":9}}},
+        "shared-f": {"result":{"code":"E0596","line":7,"message":"cannot borrow data in dereference of `Ref<'_, Vec<usize>>` as mutable"}}
+      }
+    },
+    "retain-dead-set": {
+      "hash": "52c898af413a443fd2d58a8ee7820b7398596f7431e42545009a11f1a2307662",
+      "variants": {
+        "base": {"result":"compiles"},
+        "via-method": {"result":{"code":"E0502","line":13,"message":"cannot borrow `s.q` as mutable because it is also borrowed as immutable"},"fixes":{"field-test":"compiles","assoc-call":{"code":"E0502","line":13},"reborrow-s":{"code":"E0502","line":13}}},
+        "len-in-retain": {"result":{"code":"E0502","line":13,"message":"cannot borrow `s.q` as mutable because it is also borrowed as immutable"}},
+        "shared-sched": {"result":{"code":"E0596","line":13,"message":"cannot borrow `s.q` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "cursor-last-node": {
+      "hash": "450a72f0a629d9d68afe5d7c093f5049b310c17f0de9a0a4745ac93f4524a658",
+      "variants": {
+        "base": {"result":"compiles"},
+        "as-mut": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*cur` as mutable more than once at a time"},"fixes":{"ref-mut":"compiles","deref-mut":{"code":"E0499","line":10},"take-next":{"code":"E0308","line":8}}},
+        "frozen-cursor": {"result":{"code":"E0384","line":8,"message":"cannot assign to immutable argument `cur`"},"fixes":{"mut-binding":"compiles","assign-through":{"code":"E0308","line":8},"shared-ref":{"code":"E0308","line":10}}}
+      }
+    },
+    "above-min-iter": {
+      "hash": "b13ab8614b2223bfe5cf5bbf7111b67d35d84c7275dd70f543c83f4f44db3b0e",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0373","line":5,"message":"closure may outlive the current function, but it borrows `min`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-min":{"code":"E0373","line":5},"ref-min":{"code":"E0373","line":5}}},
+        "owned-copy": {"result":{"code":"E0515","line":5,"message":"cannot return value referencing temporary value"}},
+        "by-value": {"result":{"code":"E0106","line":4,"message":"missing lifetime specifier"}}
+      }
+    },
+    "job-ref-thread": {
+      "hash": "3b4caf1e05448bdf791926ffc1ba8ac5ce817f14376c32010703669d98dcadf0",
+      "variants": {
+        "base": {"result":"compiles"},
+        "capture-ref": {"result":{"code":"E0521","line":9,"message":"borrowed data escapes outside of function"},"fixes":{"copy-id":"compiles","static-job":"compiles","deref-j":{"code":"E0521","line":9}}},
+        "ref-field": {"result":{"code":"E0521","line":9,"message":"borrowed data escapes outside of function"}},
+        "no-move": {"result":{"code":"E0373","line":9,"message":"closure may outlive the current function, but it borrows `id`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-id":{"code":"E0373","line":9},"ref-id":{"code":"E0373","line":9}}}
+      }
+    },
+    "take-from-cell-queue": {
+      "hash": "9e0413262e386e78dbcfcf72c793b8fcef435f912e608f65ca812de50cc14f30",
+      "variants": {
+        "index-move": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<String>`"}},
+        "ref-remove": {"result":{"code":"E0596","line":5,"message":"cannot borrow data in dereference of `Ref<'_, Vec<String>>` as mutable"}},
+        "into-inner": {"result":{"code":"E0507","line":5,"message":"cannot move out of `*c` which is behind a shared reference"}},
+        "mut-cell": {"result":{"code":"E0596","line":5,"message":"cannot borrow `*c` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "words-tied-to-self": {
+      "hash": "278f9ebddf8fc981243df45560da110c33b377be9162e7c4e69307f39a9e4f1b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "tied-to-self": {"result":{"code":"E0597","line":13,"message":"`lx` does not live long enough"},"fixes":{"name-a":"compiles","static-words":{"code":"none","line":5},"tie-self":{"code":"E0597","line":13}}},
+        "temp-text": {"result":{"code":"E0716","line":12,"message":"temporary value dropped while borrowed"}},
+        "drop-text": {"result":{"code":"E0505","line":15,"message":"cannot move out of `t` because it is borrowed"},"fixes":{"len-first":"compiles","clone-drop":"compiles","drop-ref":"compiles"}}
+      }
+    },
+    "drain-locked-queue": {
+      "hash": "0b851ffac8389597f58ffe4e4db9414614308deb9f0a9478534952ef4a4e06c8",
+      "variants": {
+        "move-guard": {"result":{"code":"E0507","line":4,"message":"cannot move out of dereference of `std::sync::MutexGuard<'_, Vec<u32>>`"},"fixes":{"take":"compiles","clone-all":"compiles","deref-twice":{"code":"E0308","line":4}}},
+        "into-inner": {"result":{"code":"E0507","line":4,"message":"cannot move out of `*m` which is behind a shared reference"}}
+      }
+    },
+    "peek-while-writing": {
+      "hash": "4ac44d990a1e40e07d789e2204303b2253ecc6b30985353aa72907051ae04ba8",
+      "variants": {
+        "base": {"result":"compiles"},
+        "extend-n": {"result":"compiles"},
+        "both-mut": {"result":{"code":"BorrowMutError","line":6,"message":"RefCell already borrowed"}},
+        "push-len": {"result":{"code":"BorrowError","line":6,"message":"RefCell already mutably borrowed"},"fixes":{"let-first":"compiles","push-zero":"compiles","index-first":{"code":"BorrowError","line":6}}},
+        "ref-push": {"result":{"code":"E0596","line":6,"message":"cannot borrow data in dereference of `Ref<'_, Vec<usize>>` as mutable"}}
+      }
+    },
+    "lease-returns-block": {
+      "hash": "ae94baca6bbb427551fec517d3779596dd5fdc3f6a9a2b439bfbd05c2b486c60",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-pool": {"result":{"code":"E0502","line":14,"message":"cannot borrow `*pool` as immutable because it is also borrowed as mutable"},"fixes":{"drop-first":"compiles","clone-pool":{"code":"E0502","line":14},"drop-lease-ref":{"code":"E0502","line":14}}},
+        "drop-pool": {"result":{"code":"E0505","line":14,"message":"cannot move out of `pool` because it is borrowed"}},
+        "move-field": {"result":{"code":"E0509","line":14,"message":"cannot move out of type `Lease<'_>`, which implements the `Drop` trait"}}
+      }
+    },
+    "cap-static-ref": {
+      "hash": "478d774fb8f1fbcd32600c1b2269268df4095f8f361595feef4a0e07effe740d",
+      "variants": {
+        "base": {"result":"compiles"},
+        "param-sum": {"result":{"code":"E0515","line":5,"message":"cannot return reference to temporary value"}},
+        "local-block": {"result":{"code":"E0515","line":5,"message":"cannot return reference to local variable `n`"}},
+        "const-call": {"result":{"code":"E0515","line":5,"message":"cannot return reference to temporary value"}}
+      }
+    },
+    "walk-radix-chain": {
+      "hash": "c628683ca0192ca79c9bb272cf0a82aee040dab478d5a51405ed3bfb64ab815f",
+      "variants": {
+        "base": {"result":"compiles"},
+        "match-borrow": {"result":{"code":"E0506","line":10,"message":"cannot assign to `cur` because it is borrowed"},"fixes":{"bind-first":"compiles","match-nx-ref":{"code":"E0308","line":10},"match-as-ref":{"code":"E0308","line":10}}},
+        "frozen-cur": {"result":{"code":"E0384","line":10,"message":"cannot assign to immutable argument `cur`"}},
+        "move-next": {"result":{"code":"E0507","line":8,"message":"cannot move out of dereference of `Ref<'_, Node>`"}}
+      }
+    },
+    "fill-halves-scoped": {
+      "hash": "179fffb0f280f55a7fb9804c9a3c5a8e99bf59bf3ae32fc18da9ed5cd50e9561",
+      "variants": {
+        "base": {"result":"compiles"},
+        "same-half": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*a` as mutable more than once at a time"},"fixes":{"use-b":"compiles","use-v":{"code":"E0500","line":3},"move-a":{"code":"E0505","line":5}}},
+        "plain-spawn": {"result":{"code":"E0521","line":4,"message":"borrowed data escapes outside of function"}},
+        "shared-v": {"result":{"code":"E0596","line":2,"message":"cannot borrow `*v` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "bump-hot-slots": {
+      "hash": "9cb096e8938f2d61ffea6dd2640eb18f5c9c3ead42abefe85cdede174840c9d3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-hot-after": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*v` as mutable more than once at a time"},"fixes":{"push-const":"compiles","count-hot":{"code":"E0499","line":5},"read-hot":{"code":"E0499","line":5}}},
+        "shared-v": {"result":{"code":"E0596","line":3,"message":"cannot borrow `*v` as mutable, as it is behind a `&` reference"}}
+      }
+    }
+  }
+}
