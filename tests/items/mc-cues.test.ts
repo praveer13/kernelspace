@@ -59,15 +59,15 @@ describe('the blind-strategy gate on the shipped families', () => {
     }
   })
 
-  test('the gate really samples: frag fit-choice and roofline bound are judged at every level, and pooled', async () => {
+  test('the gate really samples: every choice variant (frag fit-choice, roofline bound, the three sig variants) is judged at every level, and pooled', async () => {
     const wheres = new Set<string>()
     for (const gen of await loadAllFamilies()) for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
-    for (const v of ['frag/fit-choice', 'roofline/bound']) {
+    for (const v of ['frag/fit-choice', 'roofline/bound', 'sig/name-fault', 'sig/first-probe', 'sig/fix-for']) {
       expect(wheres.has(v)).toBe(true)
       for (const l of LEVELS) expect(wheres.has(`${v}@L${l}`)).toBe(true)
     }
     // numeric and estimate variants have no options, so nothing else is judged
-    expect([...wheres].every((w) => /^(frag\/fit-choice|roofline\/bound)(@L\d)?$/.test(w))).toBe(true)
+    expect([...wheres].every((w) => /^(frag\/fit-choice|roofline\/bound|sig\/(name-fault|first-probe|fix-for))(@L\d)?$/.test(w))).toBe(true)
   })
 
   test('checkFamily runs it by default, from at least 200 seeds even when asked for fewer', () => {
