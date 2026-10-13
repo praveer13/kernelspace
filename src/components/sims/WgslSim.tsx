@@ -748,18 +748,31 @@ export default function WgslSim() {
     if (gutterRef.current) gutterRef.current.scrollTop = ta.scrollTop
   }
 
+  // Tab indents, which would trap a keyboard user in the editor (WCAG 2.1.2): Escape releases the next Tab
+  // and Shift+Tab always moves focus, so the data tables below the editor stay reachable
+  const tabReleased = useRef(false)
   const onEditorKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      const ta = e.currentTarget
-      const { selectionStart: s, selectionEnd: en, value } = ta
-      const next = `${value.slice(0, s)}  ${value.slice(en)}`
-      setCode(next)
-      requestAnimationFrame(() => {
-        ta.selectionStart = s + 2
-        ta.selectionEnd = s + 2
-      })
+    if (e.key === 'Escape') {
+      tabReleased.current = true
+      return
     }
+    if (e.key !== 'Tab') {
+      tabReleased.current = false
+      return
+    }
+    if (e.shiftKey || tabReleased.current) {
+      tabReleased.current = false
+      return
+    }
+    e.preventDefault()
+    const ta = e.currentTarget
+    const { selectionStart: s, selectionEnd: en, value } = ta
+    const next = `${value.slice(0, s)}  ${value.slice(en)}`
+    setCode(next)
+    requestAnimationFrame(() => {
+      ta.selectionStart = s + 2
+      ta.selectionEnd = s + 2
+    })
   }
 
   const loadPreset = (id: PresetId) => {
