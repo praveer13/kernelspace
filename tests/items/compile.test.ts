@@ -343,9 +343,10 @@ describe('compile: permission items', () => {
       expect(i.prompt.stem.find((p) => p.t === 'code')).toMatchObject({ mark: u.variant.focus!.line, lines: true })
       expect(partsText(i.prompt.stem)).toContain(`\`${u.variant.focus!.path}\``)
     }
-    // every labelled variant in the bank is in the pool
+    // the pool is exactly the labelled variants of the bank (each content group adds its own), and the seeds draw only from it
     const labelled = UNITS.filter((u) => u.variant.permission).map((u) => u.key)
-    expect(new Set(all.map((i) => i.params.unit))).toEqual(new Set(labelled))
+    expect(new Set(POOLS.get('permission')!.map((u) => u.key))).toEqual(new Set(labelled))
+    for (const i of all) expect(labelled).toContain(i.params.unit as string)
   })
 
   test('a wrong pick says what the path still holds, or that the line does not need it', () => {
@@ -360,7 +361,9 @@ describe('compile: fix items', () => {
   const fixes = compile.variants.filter((v) => v.id.startsWith('fix.'))
 
   test('the authored fixes are the options, and the one ok fix is the key', () => {
-    expect(fixes.map((v) => v.id).sort()).toEqual(['fix.borrow-rules', 'fix.ownership-moves'])
+    // a fix variant for every (kind, KC) pool the bank holds MIN_POOL units for; the content groups add pools
+    expect(fixes.map((v) => v.id).sort()).toEqual([...POOLS.keys()].filter((id) => id.startsWith('fix.')).sort())
+    expect(fixes.map((v) => v.id)).toEqual(expect.arrayContaining(['fix.borrow-rules', 'fix.ownership-moves']))
     for (const v of fixes) {
       for (const i of instances(v.id)) {
         const u = unitOf(i)!
