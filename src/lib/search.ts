@@ -19,9 +19,9 @@ export const STATIC_GROUPS: readonly SearchGroup[] = ['Pages', 'Tracks', 'Simula
 /** Rows are positional tuples: the JSON ships once, so it drops the key names. */
 export type LessonRow = [id: string, title: string, hook: string, h2s: string[]]
 /**
- * `can` is the competence statement without "You can ", or '' when the build drops it to fit the budget (the crumb
- * then names the lesson). `anchor` is the id of the H2 the KC is introduced under, or '' to open the lesson at the
- * top. `claimIds` are the claims its numbers rest on.
+ * `can` is the competence statement without "You can ", clipped to fit the budget, or '' when the build drops
+ * it (the crumb then names the lesson). `anchor` is the id of the H2 the KC is introduced under, or '' to open
+ * the lesson at the top. `claimIds` are the claims its numbers rest on.
  */
 export type KcRow = [id: string, title: string, can: string, lessonId: string, anchor: string, claimIds: string[]]
 /** A play of `PLAYS` (src/data/plays.ts): its route is `/play/<id>`; `minutes` is its nominal time. */
