@@ -17,6 +17,7 @@
  *   bun scripts/aquascope/extract.ts                 every traced lesson block
  *   bun scripts/aquascope/extract.ts --lesson r.l4   one lesson (repeatable)
  *   bun scripts/aquascope/extract.ts --sample        re-extract sample.json from the code it carries
+ *   bun scripts/aquascope/extract.ts --errors        the Error Museum's traces (errors.json), one per bank error code
  *   bun scripts/aquascope/extract.ts --check         extract, compare with the committed files, write nothing
  *
  * A snippet without `fn main` is wrapped in one for the run, and line numbers are mapped back. A borrow
@@ -53,6 +54,7 @@ import {
 const ROOT = path.resolve(import.meta.dir, '../..')
 const OUT_DIR = path.join(ROOT, 'src/data/aquascope')
 const SAMPLE = path.join(OUT_DIR, 'sample.json')
+const ERRORS = path.join(OUT_DIR, 'errors.json')
 const TIMEOUT_MS = 120_000
 
 export const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
@@ -282,8 +284,10 @@ interface Target {
   file: string
   label: string
   blocks: { key: string; code: string }[]
-  /** sample.json keeps each trace's code (it has no lesson block). */
+  /** sample.json and errors.json keep each trace's code (they have no lesson block). */
   keepCode: boolean
+  /** errors.json: a hand-drawn trace whose hash still matches is kept when Aquascope cannot analyse its code. */
+  keepHand?: boolean
 }
 
 function lessonTargets(only: string[]): Target[] {
@@ -302,6 +306,13 @@ function lessonTargets(only: string[]): Target[] {
   return out
 }
 
+/** The committed hand-drawn trace for a block, when its hash still matches the block's code. */
+function handTrace(file: string, b: { key: string; code: string }): PermissionTrace | undefined {
+  if (!existsSync(file)) return undefined
+  const t = (JSON.parse(readFileSync(file, 'utf8')) as PermissionTraceFile).traces[b.key]
+  return t && t.source === 'hand' && t.sha256 === sha256(b.code) ? t : undefined
+}
+
 function sampleTarget(): Target {
   const file = JSON.parse(readFileSync(SAMPLE, 'utf8')) as PermissionTraceFile
   const blocks = Object.entries(file.traces).map(([key, t]) => {
@@ -311,14 +322,30 @@ function sampleTarget(): Target {
   return { file: SAMPLE, label: 'sample', blocks, keepCode: true }
 }
 
-function main(argv: string[]): number {
+/**
+ * The Error Museum (§15.6, 2c-18): one block per error code, the code variant src/lib/rust/museum.ts
+ * shows for it. The snippets live in the compile bank, so each trace keeps its code, as sample.json does.
+ * Aquascope analyses a body that reaches borrow checking; a code rustc reports earlier (E0106, a missing
+ * lifetime, stops before MIR) or at run time (BorrowMutError) has no body to analyse, so its trace is
+ * drawn by hand in the same format (`source: 'hand'`, Q9) and kept here while its hash still matches.
+ */
+async function errorsTarget(): Promise<Target> {
+  const { UNITS } = await import('../../src/lib/items/families/compile')
+  const { museumEntries } = await import('../../src/lib/rust/museum')
+  const blocks = museumEntries(UNITS).map((e) => ({ key: e.code, code: e.source }))
+  return { file: ERRORS, label: 'errors', blocks, keepCode: true, keepHand: true }
+}
+
+async function main(argv: string[]): Promise<number> {
   const only: string[] = []
   let sample = false
+  let errors = false
   let check = false
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--lesson') only.push(argv[++i] ?? '')
     else if (a === '--sample') sample = true
+    else if (a === '--errors') errors = true
     else if (a === '--check') check = true
     else {
       console.error(`extract: unknown argument ${a}`)
@@ -335,7 +362,7 @@ function main(argv: string[]): number {
     }
     throw e
   }
-  const targets = sample ? [sampleTarget()] : lessonTargets(only)
+  const targets = sample ? [sampleTarget()] : errors ? [await errorsTarget()] : lessonTargets(only)
   if (targets.length === 0) console.log('extract: no traced code blocks')
   let failed = 0
   for (const t of targets) {
@@ -350,6 +377,12 @@ function main(argv: string[]): number {
         failed += problems.length
         console.log(`extract: ${t.label}/${b.key}: ${trace.changes.length} changes, ${trace.uses.length} uses`)
       } catch (e) {
+        const kept = t.keepHand ? handTrace(t.file, b) : undefined
+        if (kept) {
+          file.traces[b.key] = kept
+          console.log(`extract: ${t.label}/${b.key}: kept the hand-drawn trace (${(e as Error).message.split('\n')[0].slice(0, 120)})`)
+          continue
+        }
         console.error(`extract: ${t.label}/${b.key}: ${(e as Error).message}`)
         failed++
       }
@@ -370,4 +403,4 @@ function main(argv: string[]): number {
   return failed === 0 ? 0 : 1
 }
 
-if (import.meta.main) process.exit(main(process.argv.slice(2)))
+if (import.meta.main) process.exit(await main(process.argv.slice(2)))

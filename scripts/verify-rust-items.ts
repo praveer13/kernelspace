@@ -14,7 +14,7 @@
  *   - the verdict quota: 20-30 % of verdict items have "compiles" as the key, and no family pool more
  *     than 30 % (the V1 lint fails a key that is strictly the longest option more often), so a fixed
  *     option set gives no cue;
- *   - at least 3 snippets per error code: a warning until 2c-18 freezes the bank.
+ *   - at least 3 snippets per error code, the Error Museum's floor (§15.6): a failure since 2c-18 froze the bank.
  * scripts/build-rust-items.ts runs rustc and writes the banks; this script never does.
  *
  *   bun scripts/verify-rust-items.ts
@@ -26,6 +26,7 @@ import { addsClone, applyEdit, ERROR_CODES, loadRustGroups, MAX_COLS, MAX_LINES,
 import type { BankOutcome, BankSnippet, Outcome, Permission, RustGroup, RustSnippet, SnippetVariant } from '../src/data/rust-items/types'
 import { KC } from '../src/data/kc/ids'
 import { stableStringify } from '../src/lib/ledger/stable'
+import { MIN_SNIPPETS_PER_CODE } from '../src/lib/rust/museum'
 
 /** The labs' pin (labs.yml RUST_TOOLCHAIN): the bank is built by exactly this compiler. */
 export const RUSTC_VERSION = '1.96.0'
@@ -33,7 +34,7 @@ export const EDITION = '2024'
 export const VERDICT_QUOTA = { min: 0.2, max: 0.3 } as const
 /** No KC pool of verdict items may have "compiles" as the key more often than this. */
 export const VERDICT_POOL_MAX = 0.3
-export const MIN_SNIPPETS_PER_CODE = 3
+export { MIN_SNIPPETS_PER_CODE }
 const ID = /^[a-z][a-z0-9-]*$/
 const MISS = /^[a-z0-9]+(\.[a-z0-9-]+)+$/
 const BAD_TEXT = /\b(NaN|Infinity|undefined)\b/
@@ -289,6 +290,15 @@ export function quotaProblems(q: Quota): string[] {
   return out
 }
 
+/** Error codes the bank holds in fewer than `MIN_SNIPPETS_PER_CODE` snippets: the Error Museum shows one entry per code, and a code needs company to be worth one. */
+export function codeProblems(groups: readonly RustGroup[]): string[] {
+  const out: string[] = []
+  for (const [code, ids] of [...codeCounts(groups)].sort()) {
+    if (ids.size < MIN_SNIPPETS_PER_CODE) out.push(`${code} has ${ids.size} snippet(s); the frozen bank holds at least ${MIN_SNIPPETS_PER_CODE} per error code (§15.2, §15.6)`)
+  }
+  return out
+}
+
 /** error code → the snippets that expect it in some variant */
 export function codeCounts(groups: readonly RustGroup[]): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>()
@@ -314,11 +324,8 @@ async function main(): Promise<void> {
   if (problems.length === 0) problems.push(...checkBanks(groups))
   const q = verdictQuota(groups)
   problems.push(...quotaProblems(q))
-  const warnings: string[] = []
+  problems.push(...codeProblems(groups))
   const counts = codeCounts(groups)
-  for (const [code, ids] of [...counts].sort()) {
-    if (ids.size < MIN_SNIPPETS_PER_CODE) warnings.push(`${code} has ${ids.size} snippet(s) (at least ${MIN_SNIPPETS_PER_CODE} once 2c-18 freezes the bank)`)
-  }
   const snippets = groups.reduce((a, g) => a + g.snippets.length, 0)
   const variants = groups.reduce((a, g) => a + g.snippets.reduce((b, s) => b + s.variants.length, 0), 0)
   const labelled = groups.reduce((a, g) => a + g.snippets.reduce((b, s) => b + s.variants.filter((v) => v.permission).length, 0), 0)
@@ -326,7 +333,6 @@ async function main(): Promise<void> {
   for (const g of groups) console.log(`  ${g.id}: ${g.snippets.length} snippets, bank ${g.bank ? g.bank.rustc : 'missing'}`)
   console.log(`  ${snippets} snippets, ${variants} code variants (${labelled} with a permission label, ${fixed} with fixes), ${counts.size} error codes`)
   if (q.units > 0) console.log(`  verdict quota: ${q.compiles}/${q.units} = ${((q.compiles / q.units) * 100).toFixed(1)} % compile`)
-  for (const w of warnings) console.warn(`warning: ${w}`)
   if (problems.length > 0) {
     for (const p of problems) console.error(p)
     console.error(`verify-rust-items: ${problems.length} problem(s) (docs/specs/wave-2.md §15.2)`)
