@@ -1,15 +1,16 @@
 /**
- * verify-plays: the canvas-mirror check of docs/specs/wave-1.md §10.5 and the play checks of §11.5.
+ * verify-plays: the canvas-mirror check of docs/specs/wave-1.md §10.5 (zero-waiver since wave-2.md §12.2) and the play
+ * checks of §11.5.
  *
- * Canvas mirrors. Every file in src/components/sims that renders a `<canvas>` must either render
- * `<SimMirror` or carry the waiver comment on a line of its own:
+ * Canvas mirrors. Every file in src/components/sims and src/components/telemetry that renders a plotted element (a
+ * `<canvas>`, or a telemetry `<Sparkline`) needs a mirror for each one: the element's `aria-describedby` (`describedBy`
+ * on a Sparkline) must name the id of a `<SimMirror` in the same file. A file with N canvases needs N mirrored canvases:
+ * one `<SimMirror` no longer satisfies a file with two. The Wave 1 waiver comment
  *
  *   // a11y-mirror-pending: wave 2
  *
- * The waiver lives in the sim's own file so each task removes its own. A file that renders a mirror and
- * still carries the waiver fails (a stale waiver hides the next regression). The waiver list is printed:
- * Wave 1 exits with six (BatchingSim, ContentionLab, MatrixBench, QuantizerSim, SchedulerLab, WgslSim).
- * Canvases outside src/components/sims are out of scope (the Lab gallery previews sit in an aria-hidden
+ * is now an error wherever it appears in those files (a retired waiver hides the next regression), and the run prints
+ * "0 waived". Canvases outside those two folders are out of scope (the Lab gallery previews sit in an aria-hidden
  * wrapper; Home's two canvases are labelled role="img" previews).
  *
  * Plays. A play in src/data/plays.ts fails without a mirror component (src/components/play/<id>/Mirror.tsx,
@@ -32,30 +33,68 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 
+/** The retired Wave 1 waiver: a scoped file that carries this marker anywhere is an error. */
 export const WAIVER = '// a11y-mirror-pending: wave 2'
+const WAIVER_MARKER = 'a11y-mirror-pending'
 
 export interface CanvasFinding {
   file: string
+  /** Plotted elements in the file: `<canvas` tags and `<Sparkline` uses. */
   canvases: number
-  status: 'mirrored' | 'waived' | 'missing' | 'stale-waiver'
+  /** How many of them name a `<SimMirror` id of the same file in `aria-describedby` (`describedBy` on a Sparkline). */
+  mirrored: number
+  /** `mirrored`: every one is; `missing`: some are not; `waiver`: the retired waiver comment is present (an error whatever else is true). */
+  status: 'mirrored' | 'missing' | 'waiver'
 }
 
-/** Source without comments, so a `<canvas>` or `<SimMirror` named in prose or a doc comment counts for nothing. */
+/** Source without comments, so a `<canvas` or `<SimMirror` named in prose or a doc comment counts for nothing. */
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
 }
 
-/** One finding per file that renders a canvas. */
+/** The source of the JSX tag that starts at `from` (after `<name`), up to its closing `>`: braces and quotes inside attributes are skipped. */
+function tagText(code: string, from: number): string {
+  let depth = 0
+  let quote = ''
+  for (let i = from; i < code.length; i++) {
+    const c = code[i]
+    if (quote) {
+      if (c === '\\') i++
+      else if (c === quote) quote = ''
+    } else if (c === '"' || c === "'" || c === '`') quote = c
+    else if (c === '{') depth++
+    else if (c === '}') depth--
+    else if (c === '>' && depth === 0) return code.slice(from, i)
+  }
+  return code.slice(from)
+}
+
+/** The value of attribute `name` in a tag's text, as written (`mirrorId` for `{mirrorId}`, `m` for `"m"`), or null when it is absent. */
+function attrOf(tag: string, name: string): string | null {
+  const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)'|\\{\\s*([^}]*?)\\s*\\})`).exec(tag)
+  return m ? (m[1] ?? m[2] ?? m[3]) : null
+}
+
+/** Every `<name` tag in the code, as its attribute text. */
+function tagsOf(code: string, name: string): string[] {
+  return [...code.matchAll(new RegExp(`<${name}(?=[\\s>/])`, 'g'))].map((m) => tagText(code, (m.index as number) + m[0].length))
+}
+
+/** One finding per file that renders a plotted element or carries the retired waiver. */
 export function checkCanvasMirrors(files: readonly { file: string; text: string }[]): CanvasFinding[] {
   const out: CanvasFinding[] = []
   for (const { file, text } of files) {
     const code = stripComments(text)
-    const canvases = (code.match(/<canvas[\s>/]/g) ?? []).length
-    if (canvases === 0) continue
-    const mirrored = /<SimMirror[\s>/]/.test(code)
-    const waived = text.split('\n').some((line) => line.trim() === WAIVER)
-    const status = mirrored ? (waived ? 'stale-waiver' : 'mirrored') : waived ? 'waived' : 'missing'
-    out.push({ file, canvases, status })
+    const mirrorIds = new Set(tagsOf(code, 'SimMirror').flatMap((t) => attrOf(t, 'id') ?? []))
+    const plotted = [
+      ...tagsOf(code, 'canvas').map((t) => attrOf(t, 'aria-describedby')),
+      ...tagsOf(code, 'Sparkline').map((t) => attrOf(t, 'describedBy')),
+    ]
+    const waived = text.includes(WAIVER_MARKER)
+    if (plotted.length === 0 && !waived) continue
+    const mirrored = plotted.filter((id) => id !== null && mirrorIds.has(id)).length
+    const status = waived ? 'waiver' : mirrored === plotted.length ? 'mirrored' : 'missing'
+    out.push({ file, canvases: plotted.length, mirrored, status })
   }
   return out
 }
@@ -266,25 +305,28 @@ async function checkPlays(failures: string[]): Promise<void> {
   console.log(`verify-plays: View3D: ${bad3d.length === 0 ? 'none outside GATE_3D' : `${bad3d.length} outside GATE_3D`}`)
 }
 
+/** The folders whose plotted elements need a mirror (wave-2.md §12.2). */
+export const MIRROR_SCOPE: readonly string[] = ['src/components/sims', 'src/components/telemetry']
+
 async function main(): Promise<void> {
-  const dir = join(import.meta.dir, '..', 'src', 'components', 'sims')
-  const files = readdirSync(dir)
+  const root = join(import.meta.dir, '..')
+  const files = MIRROR_SCOPE.flatMap((d) => walk(join(root, d)))
     .filter((f) => f.endsWith('.tsx'))
     .sort()
-    .map((f) => ({ file: `src/components/sims/${f}`, text: readFileSync(join(dir, f), 'utf8') }))
+    .map((f) => ({ file: relative(root, f), text: readFileSync(f, 'utf8') }))
   const findings = checkCanvasMirrors(files)
   const failures: string[] = []
 
   for (const f of findings) {
-    if (f.status === 'missing') failures.push(`${f.file}: renders <canvas> with no <SimMirror> and no "${WAIVER}" comment`)
-    if (f.status === 'stale-waiver') failures.push(`${f.file}: renders <SimMirror> but still carries "${WAIVER}"; remove the waiver`)
+    if (f.status === 'waiver') failures.push(`${f.file}: carries the retired waiver "${WAIVER}"; give every canvas a <SimMirror> and remove the comment`)
+    else if (f.status === 'missing') failures.push(`${f.file}: ${f.mirrored} of ${f.canvases} plotted elements name a <SimMirror> id in aria-describedby; each canvas needs its own mirror`)
   }
 
-  const waived = findings.filter((f) => f.status === 'waived')
+  const waived = findings.filter((f) => f.status === 'waiver')
   const mirrored = findings.filter((f) => f.status === 'mirrored')
-  console.log(`verify-plays: canvas mirrors: ${findings.length} sims render a canvas; ${mirrored.length} mirrored, ${waived.length} waived`)
-  for (const f of mirrored) console.log(`  mirrored  ${f.file}`)
-  for (const f of waived) console.log(`  waived    ${f.file}`)
+  const elements = findings.reduce((n, f) => n + f.canvases, 0)
+  console.log(`verify-plays: canvas mirrors: ${findings.length} files render a canvas or sparkline (${elements} elements); ${mirrored.length} mirrored, ${waived.length} waived`)
+  for (const f of findings) console.log(`  ${f.status === 'mirrored' ? 'mirrored' : f.status === 'waiver' ? 'waived  ' : 'MISSING '}  ${f.file} (${f.mirrored}/${f.canvases})`)
 
   await checkPlays(failures)
 
