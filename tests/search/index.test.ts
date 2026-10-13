@@ -69,6 +69,24 @@ describe('search results', () => {
     expect(seen).toEqual([...seen].sort((a, b) => a - b))
   })
 
+  test('a concept row shows and matches its competence text', () => {
+    const hit = search('PagedAttention').find((r) => r.group === 'Concepts')!
+    const row = index.kcs.find((k) => `kc-${k[0]}` === hit.id)!
+    expect(row[2].length).toBeGreaterThan(0)
+    expect(hit.crumb).toContain(`you can ${row[2]}`)
+    // The competence wording is searchable: a query made of its first words finds the concept.
+    const query = row[2].split(' ').slice(0, 4).join(' ')
+    expect(search(query).some((r) => r.id === hit.id)).toBe(true)
+  })
+
+  test('concept crumbs carry the competence text and lesson crumbs the hook, clipped to the budget', () => {
+    const items = indexItems(index)
+    const concepts = items.filter((i) => i.group === 'Concepts')
+    expect(concepts.filter((i) => i.crumb.includes('you can ')).length).toBeGreaterThan(concepts.length * 0.9)
+    expect(index.lessons.some((l) => l[2].length > 32)).toBe(true)
+    expect(Math.max(...index.lessons.map((l) => l[2].length))).toBeLessThanOrEqual(61)
+  })
+
   test('a typo still finds the concept', () => {
     expect(search('pagedatention').some((r) => r.group === 'Concepts')).toBe(true)
   })

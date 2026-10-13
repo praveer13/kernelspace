@@ -11,6 +11,7 @@
  *   bun scripts/build-search-index.ts
  */
 import { writeFileSync } from 'node:fs'
+import { gzipSync } from 'node:zlib'
 import { CLAIMS } from '../src/data/claims'
 import { PAIRS } from '../src/data/glossary'
 import { KCS } from '../src/data/kc'
@@ -24,11 +25,13 @@ export const INDEX_PATH = 'src/data/search-index.json'
 
 /**
  * Hooks and competence statements are crumbs in the palette; the full text is one click away. Cut to keep the chunk
- * under budget. CAN_MAX is 0 since the KC graph grew to every track (wave-2 §4, task 2a-11: 97 → 153 KCs, +2.7 KB
- * gzip): a concept row's crumb then names its lesson, which the index already carries, instead of a clipped "you can".
+ * under budget: the largest lengths that keep the index at 18 KB gzip, 2 KB under verify:search-index's 20 KB budget
+ * (wave-2 D24), so 2b and 2c content has room. They were 32 and 0 under Wave 1's 15 KB; at 0 a concept row's crumb
+ * fell back to its lesson title and the competence wording was not searchable. Raise them only with the size in hand
+ * (`bun scripts/build-search-index.ts` prints it).
  */
-const HOOK_MAX = 32
-const CAN_MAX = 0
+const HOOK_MAX = 60
+const CAN_MAX = 41
 
 /** `text` cut at a word boundary to at most `max` characters, with an ellipsis when something was cut. */
 export function clip(text: string, max: number): string {
@@ -37,8 +40,8 @@ export function clip(text: string, max: number): string {
   return `${head.slice(0, head.lastIndexOf(' '))}…`
 }
 
-/** A competence statement without its "You can " lead-in and final period: it opens the palette's crumb ('' when CAN_MAX is 0). */
-const canClause = (can: string) => (CAN_MAX > 0 ? clip(can.replace(/^You can /, '').replace(/\.$/, ''), CAN_MAX) : '')
+/** A competence statement without its "You can " lead-in and final period: it opens the palette's crumb ('' when `max` is 0). */
+const canClause = (can: string, max: number) => (max > 0 ? clip(can.replace(/^You can /, '').replace(/\.$/, ''), max) : '')
 
 const h2Of = (lesson: Lesson) => extractHeadings(lesson.blocks).filter((h) => h.level === 2)
 
@@ -83,14 +86,14 @@ export function kcAnchor(kcId: string, title: string, can: string, lesson: Lesso
   return best
 }
 
-export function buildSearchIndex(): SearchIndex {
+export function buildSearchIndex(hookMax = HOOK_MAX, canMax = CAN_MAX): SearchIndex {
   return {
     version: 1,
-    lessons: ALL_LESSONS.map((l) => [l.id, l.title, clip(l.hook, HOOK_MAX), h2Of(l).map((h) => h.text)]),
+    lessons: ALL_LESSONS.map((l) => [l.id, l.title, clip(l.hook, hookMax), h2Of(l).map((h) => h.text)]),
     // A lab-only KC (no lesson) has no page to open, so it is not indexed.
     kcs: KCS.flatMap((k) => {
       const lesson = lessonById(k.lessons[0])
-      return lesson ? [[k.id, k.title, canClause(k.can), lesson.id, kcAnchor(k.id, k.title, k.can, lesson), k.claims ?? []]] : []
+      return lesson ? [[k.id, k.title, canClause(k.can, canMax), lesson.id, kcAnchor(k.id, k.title, k.can, lesson), k.claims ?? []]] : []
     }),
     plays: Object.values(PLAYS).map((p) => [p.id, p.title, p.lessonId, p.minutes]),
     claims: CLAIMS.map((c) => [c.id, c.label, c.value, c.unit ?? '']),
@@ -115,5 +118,5 @@ export function serializeSearchIndex(index: SearchIndex): string {
 if (import.meta.main) {
   const text = serializeSearchIndex(buildSearchIndex())
   writeFileSync(INDEX_PATH, text)
-  console.log(`wrote ${INDEX_PATH} (${text.length} bytes)`)
+  console.log(`wrote ${INDEX_PATH} (${text.length} bytes, ${gzipSync(text).length} gzip)`)
 }
