@@ -24,6 +24,8 @@ import { Engine, makeRefManager, referenceScheduler } from '../../src/lib/fleet-
 const dir = new URL('../../public/traces/', import.meta.url)
 const minuteRaw = await Bun.file(new URL('burstgpt-v2-busiest-minute.json', dir)).json()
 const hourRaw = await Bun.file(new URL('burstgpt-v2-busiest-hour.json', dir)).json()
+// 2,000 seeds of three engine runs each take about 5 s, bun's default timeout; leave room for a loaded machine.
+const TIMEOUT_MS = 60_000
 let source: SchedSource
 beforeAll(async () => {
   source = await parseSchedSource(minuteRaw, hourRaw)
@@ -163,12 +165,13 @@ describe('runSched', () => {
 })
 
 describe('the band', () => {
-  test('isInBand agrees with checkSchedBand', () => {
-    for (let seed = 0; seed < 300; seed++) {
+  // The same 2,000 seeds measureAcceptance runs, so the short-circuit rule order cannot drift from checkSchedBand unseen.
+  test('isInBand agrees with checkSchedBand on 2,000 seeds', () => {
+    for (let seed = 0; seed < 2000; seed++) {
       const t = makeSchedTrace(source, seed)
       expect(isInBand(t)).toBe(checkSchedBand(t).inBand)
     }
-  })
+  }, TIMEOUT_MS)
 
   test('violations name the rules that fail, in order', () => {
     const band = checkSchedBand(practiceMinute(source))
@@ -187,7 +190,7 @@ describe('the band', () => {
     expect(m.rate).toBeGreaterThan(0.01)
     expect(m.rate).toBeLessThan(0.05)
     expect((1 - m.rate) ** MAX_DRAWS).toBeLessThan(1e-6)
-  })
+  }, TIMEOUT_MS)
 })
 
 describe('drawSchedTrace', () => {
