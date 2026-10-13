@@ -24,6 +24,14 @@ const choice = (i: Instance) => {
 }
 /** Every instance of a variant over the seeds, at level 0. */
 const instances = (variant: string): Instance[] => SEEDS.map((s) => compile.make(s, 0, variant))
+/** The instance a variant serves for one unit, scanning seeds until it is drawn: a content group's pools hold hundreds of units, more than 200 seeds reach. */
+function drawUnit(variant: string, unit: string): Instance {
+  for (let s = 1; s <= 20000; s++) {
+    const i = compile.make(s, 0, variant)
+    if (i.params.unit === unit) return i
+  }
+  throw new Error(`${variant} never draws ${unit}`)
+}
 
 /** A one-snippet group whose bank is what the authored outcomes say, for the checks to disagree with. */
 function group(s: RustSnippet): RustGroup {
@@ -315,7 +323,7 @@ describe('compile: verdict items', () => {
     const code = i.prompt.stem.find((p) => p.t === 'code')
     expect(code).toMatchObject({ t: 'code', lang: 'rust', lines: true, code: unitOf(i)!.code })
     const u = UNITS.find((x) => x.key === 'seed/block-table-first-block/borrow-first')!
-    const hit = SEEDS.map((s) => compile.make(s, 0, 'verdict.borrow-rules')).find((x) => x.params.unit === u.key)!
+    const hit = drawUnit('verdict.borrow-rules', u.key)
     const key = choice(hit).options.find((o) => o.id === 'E0502')!
     expect(key.why).toContain('rustc reports E0502 at line 7: "cannot borrow `table.blocks` as mutable')
   })
@@ -347,10 +355,14 @@ describe('compile: permission items', () => {
     const labelled = UNITS.filter((u) => u.variant.permission).map((u) => u.key)
     expect(new Set(POOLS.get('permission')!.map((u) => u.key))).toEqual(new Set(labelled))
     for (const i of all) expect(labelled).toContain(i.params.unit as string)
+    // and the seeds reach every labelled variant (a content group holds more units than 200 seeds draw)
+    const seen = new Set<string>()
+    for (let s = 1; s <= 20000 && seen.size < labelled.length; s++) seen.add(String(compile.make(s, 0, 'permission').params.unit))
+    expect(seen).toEqual(new Set(labelled))
   })
 
   test('a wrong pick says what the path still holds, or that the line does not need it', () => {
-    const i = instances('permission').find((x) => x.params.unit === 'seed/block-table-first-block/borrow-first')!
+    const i = drawUnit('permission', 'seed/block-table-first-block/borrow-first')
     const a = choice(i)
     expect(a.options.find((o) => o.id === 'read')!.why).toContain('still holds Read (R) at line 7; what it lacks is Write (W)')
     expect(a.options.find((o) => o.id === 'own')!.why).toContain('Line 7 does not need Own (O)')
@@ -376,7 +388,7 @@ describe('compile: fix items', () => {
   })
 
   test(`picking .clone() is diagnosed as ${CLONE_MISS}, and its why says what rustc did`, () => {
-    const i = instances('fix.borrow-rules').find((x) => x.params.unit === 'seed/block-table-first-block/borrow-first')!
+    const i = drawUnit('fix.borrow-rules', 'seed/block-table-first-block/borrow-first')
     const g = gradeResponse(i, { kind: 'choice', picks: ['clone-push'] })
     expect(g.ok).toBe(false)
     expect(g.diagnosis?.id).toBe(CLONE_MISS)
