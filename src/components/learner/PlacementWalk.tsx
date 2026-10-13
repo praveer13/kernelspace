@@ -28,11 +28,13 @@ import { getLedgerClient } from '@/lib/ledger/client'
 import type { LearningPath } from '@/lib/ledger/types'
 import { cachedPathPlan, lessonCode, type PathGraph } from '@/lib/learner/paths'
 import {
+  FRONTIER_PROBES,
   MAX_ITEMS,
   PROBES,
   advance,
   answerOf,
   canSkipAnchor,
+  isFrontier,
   authoredIndex,
   currentLesson,
   finishWalk,
@@ -83,7 +85,7 @@ async function loadAnswered(): Promise<Set<string>> {
 }
 
 async function loadContent(): Promise<WalkContent> {
-  const ids = [...new Set(PROBES.flatMap((kc) => kcById(kc)?.gen ?? []))]
+  const ids = [...new Set([...PROBES, ...FRONTIER_PROBES.map((f) => f.kc)].flatMap((kc) => kcById(kc)?.gen ?? []))]
   // a family that fails to load is left out: its KC falls back to checkpoint items, or goes unprobed
   const [settled, answered] = await Promise.all([Promise.allSettled(ids.map((id) => loadFamily(id))), loadAnswered()])
   const gens = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
@@ -225,7 +227,7 @@ export default function PlacementWalk({ path, onClose, className }: PlacementWal
         key={`${walk.seed}:${step.ordinal}`}
         item={step.item}
         seed={step.seed}
-        eyebrow={`Item ${step.ordinal} · topic ${p.topic} of ${p.topics} · about ${Math.max(1, p.minutes)} min left`}
+        eyebrow={`Item ${step.ordinal} · ${isFrontier(step.kc) ? 'frontier topic' : 'topic'} ${p.topic} of ${p.topics} · about ${Math.max(1, p.minutes)} min left`}
         autoFocus={step.ordinal > 1}
         onResult={onResult}
         onNext={next}
@@ -266,6 +268,8 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
   const plan = cachedPathPlan(path, GRAPH, result)
   const startId = currentLesson(plan, (id) => lessons[id]?.status)
   const start = startId ? ALL_LESSONS.find((l) => l.id === startId) : undefined
+  // a solid frontier KC's lesson: the walk cannot vouch for the whole track, the test-out there does the lesson
+  const frontier = result.solidKcs.filter(isFrontier).map((kc) => ({ kc, lesson: ALL_LESSONS.find((l) => l.id === kcById(kc)?.lessons[0]) }))
   return (
     <div className="space-y-4">
       <h3 ref={headingRef} tabIndex={-1} className="font-display text-h3 text-text-1 focus-visible:outline-none">
@@ -304,6 +308,29 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
           <ul className="mt-1 list-disc space-y-1 pl-5 text-body-sm text-text-2">
             {slips.map((s) => (
               <li key={s.id}>{s.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {frontier.length > 0 && (
+        <div>
+          <p className="font-mono text-label uppercase text-text-3">frontier</p>
+          <p className="mt-1 max-w-measure text-body-sm text-text-2">
+            Two questions past the core also came out solid. Twenty items cannot vouch for a whole track, so the lessons that teach them offer
+            the test-out first:
+          </p>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-body-sm text-text-2">
+            {frontier.map(({ kc, lesson }) => (
+              <li key={kc}>
+                {lesson ? (
+                  <Link to={lessonPath(lesson)} className="text-text-1 underline decoration-line-bright underline-offset-4 hover:decoration-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                    {lessonCode(lesson.id)}: test out of {kcById(kc)?.title ?? kc}
+                  </Link>
+                ) : (
+                  (kcById(kc)?.title ?? kc)
+                )}
+              </li>
             ))}
           </ul>
         </div>
