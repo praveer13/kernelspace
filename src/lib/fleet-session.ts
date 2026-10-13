@@ -4,7 +4,7 @@
  * Admitted learner wasm still never runs on the main thread: a session opens a worker, the worker
  * instantiates the slot bytes and holds the Engine, Cluster or EpdCluster, and the panels `await
  * session.step(n)` at their usual cadence. Every command has a budget (open 5 s, step 2 s, the
- * leaderboard job 10 s). When one expires the worker is terminated and the call rejects with a
+ * leaderboard job 10 s; an incident's probe, fix and wait take the step budget and its finish 5 s). When one expires the worker is terminated and the call rejects with a
  * FleetTimeoutError that names the tick the worker never finished; the page stays responsive throughout.
  *
  * One session owns one worker, so "respawn" is simply opening the next session.
@@ -12,6 +12,7 @@
 
 import { LabAbiError, LabTrapError } from './wasm-lab'
 import {
+  FLEET_FINISH_BUDGET_MS,
   FLEET_JOB_BUDGET_MS,
   FLEET_OPEN_BUDGET_MS,
   FLEET_STEP_BUDGET_MS,
@@ -22,12 +23,18 @@ import {
   type FleetRequest,
   type FleetSlotBytes,
   type FleetSnapshotByMode,
+  type IncidentFinish,
+  type IncidentFixReply,
+  type IncidentOpen,
+  type IncidentProbeReply,
+  type IncidentWaitReply,
   type LeaderboardJob,
   type LeaderboardJobResult,
   type PoolOpen,
   type PoolTickResult,
 } from '../workers/fleet-protocol'
 import type { FleetOp, ManagerDump } from './fleet-model'
+import type { FixId, Hypothesis, ProbeId } from './world/incident-spec'
 
 /** The slice of Worker the client uses; tests inject a fake through `FleetSessionOptions.spawn`. */
 export interface FleetWorkerLike {
@@ -41,6 +48,7 @@ export interface FleetBudgets {
   open: number
   step: number
   job: number
+  finish: number
 }
 
 export interface FleetSessionOptions {
@@ -50,7 +58,7 @@ export interface FleetSessionOptions {
   label?: string
 }
 
-export type FleetPhase = 'open' | 'step' | 'job'
+export type FleetPhase = 'open' | 'step' | 'job' | 'finish'
 
 /** A command outran its budget; the worker has been terminated. */
 export class FleetTimeoutError extends Error {
@@ -111,6 +119,7 @@ class Channel {
       open: options.budgets?.open ?? FLEET_OPEN_BUDGET_MS,
       step: options.budgets?.step ?? FLEET_STEP_BUDGET_MS,
       job: options.budgets?.job ?? FLEET_JOB_BUDGET_MS,
+      finish: options.budgets?.finish ?? FLEET_FINISH_BUDGET_MS,
     }
     this.booted = new Promise<void>((resolve, reject) => {
       this.worker.onmessage = (ev) => {
@@ -248,6 +257,61 @@ export async function openPoolSession(open: PoolOpen, options: FleetSessionOptio
       dump,
       async pool(ops, tick) {
         return expect(await channel.request({ cmd: 'pool', tick, ops }, 'step'), 'pool').result
+      },
+      close: () => channel.close(),
+    }
+  } catch (e) {
+    channel.close()
+    throw e
+  }
+}
+
+export interface IncidentClientSession {
+  /** the clock minute the alert fired; the learner's clock starts here */
+  readonly alert: number
+  /** the last minute the incident may run to */
+  readonly limit: number
+  /** Log or revise a hypothesis; it costs no time. */
+  hypothesis(h: Hypothesis): Promise<void>
+  /** Take a probe: the clock advances by its cost and the reply is what it shows. */
+  probe(id: ProbeId): Promise<IncidentProbeReply>
+  /** Apply a fix: the right one reverts the fault, any other wastes time. `effective` says which. */
+  fix(id: FixId): Promise<IncidentFixReply>
+  /** Let one incident minute pass. */
+  wait(): Promise<IncidentWaitReply>
+  /** Run the clock on to the end and score it against the expert on the same modules. */
+  finish(): Promise<IncidentFinish>
+  close(): void
+}
+
+/**
+ * Open an incident (§9.5) in a fleet worker: the incident cluster, built with the learner's module bytes in
+ * the slots (null slots run the reference drivers), run up to its alert. Rejects with FleetTimeoutError if
+ * that takes over 5 s, like the other modes. Every command after it is one at a time with a 2 s budget
+ * (`finish` 5 s); when one expires the worker is terminated and the call rejects with FleetTimeoutError.
+ */
+export async function openIncidentSession(open: IncidentOpen, options: FleetSessionOptions = {}): Promise<IncidentClientSession> {
+  const channel = new Channel(options, fleetLabel(open.slots))
+  try {
+    const ready = expect(await channel.request({ cmd: 'open', open }, 'open'), 'ready')
+    if (!ready.incident) throw new Error('fleet worker opened the incident without its alert')
+    return {
+      alert: ready.incident.alert,
+      limit: ready.incident.limit,
+      async hypothesis(hypothesis) {
+        expect(await channel.request({ cmd: 'hypothesis', hypothesis }, 'step'), 'hypothesis')
+      },
+      async probe(probe) {
+        return expect(await channel.request({ cmd: 'probe', probe }, 'step'), 'probe').result
+      },
+      async fix(fix) {
+        return expect(await channel.request({ cmd: 'fix', fix }, 'step'), 'fix').result
+      },
+      async wait() {
+        return expect(await channel.request({ cmd: 'wait' }, 'step'), 'wait').result
+      },
+      async finish() {
+        return expect(await channel.request({ cmd: 'finish' }, 'finish'), 'finish').result
       },
       close: () => channel.close(),
     }
