@@ -1,0 +1,17 @@
+{
+  "name": "kernelspace lab: The Token Mask Is the Grammar",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown && cd labs && cargo test -p xgrammar-lite --no-run",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "labs/xgrammar-lite/src/grammar.rs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}

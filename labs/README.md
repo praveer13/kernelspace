@@ -13,20 +13,35 @@ except nothing at all.
 **Lane A — your own machine (fastest if you have Rust)**
 
 Open any Forge drill or lab page and copy its **one-command workspace** line.
-It creates a fresh directory, downloads that exercise's standalone ZIP,
+It creates a fresh directory, downloads that exercise's standalone archive,
 extracts it, and enters the correct crate. The command stops rather than
-overwriting the directory if you already started that exercise. Then:
+overwriting the directory if you already started that exercise. The page has a
+tab for each shell:
+
+- **POSIX** (macOS, Linux): `curl` and `unzip`.
+- **tar** (macOS, Linux, Windows 10+ in `cmd.exe`): `curl -fsSL <origin>/labs/<lab>.tar.gz | tar xz`
+  inside a new folder. Every `.zip` has a `.tar.gz` beside it with the same files.
+- **PowerShell** (Windows): `iwr <origin>/labs/<lab>.zip -OutFile <lab>.zip; Expand-Archive <lab>.zip <lab>; cd <lab>/<crate>`.
+- **WSL**: the POSIX command inside the Linux shell, with the lab under your Linux
+  home (`~`), not under `/mnt/c`. Install Rust inside WSL too.
+
+Then:
 
 ```sh
 rustup target add wasm32-unknown-unknown   # one time
 cargo test                                  # red → green
 cargo build --release --target wasm32-unknown-unknown
-# drop target/wasm32-unknown-unknown/release/<crate_name>.wasm
+# drop <workspace>/target/wasm32-unknown-unknown/release/<crate_name>.wasm
 # onto the lab page
 ```
 
+The archive's root is a Cargo workspace, so cargo writes `target/` at that root,
+one folder above the crate (`../target/...` from inside it).
+
 Don't have Rust? `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-(Windows: https://rustup.rs)
+(Windows: https://rustup.rs. rustup-init.exe asks for the Microsoft C++ Build
+Tools, https://visualstudio.microsoft.com/visual-cpp-build-tools/, because
+`cargo test` links natively. WSL users skip them.)
 
 **Lane B — VS Code Dev Containers (zero local setup)**
 
@@ -35,9 +50,13 @@ toolchain and the wasm target preinstalled. Then the Lane A commands.
 
 **Lane C — GitHub Codespaces (zero machine)**
 
-Open the kernelspace repository in a Codespace — the repo's
-`.devcontainer` gives you the same environment. Burns your free GitHub
-quota, not ours.
+Each lab page links its own Codespace:
+`https://codespaces.new/praveer13/kernelspace?devcontainer_path=.devcontainer/labs/<lab>/devcontainer.json`.
+That config builds only that lab's crate (`cargo test -p <crate> --no-run`) and
+opens its `TODO(you)` file. In the Codespace the workspace root is `labs/`, so
+run `cd labs/<crate>` and the wasm lands in `labs/target/...`. A Codespace bills
+your own GitHub account, not ours; the lab page shows the current free monthly
+quota with its source.
 
 ## The loop
 

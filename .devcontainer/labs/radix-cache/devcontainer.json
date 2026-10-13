@@ -1,0 +1,17 @@
+{
+  "name": "kernelspace lab: The Prefix Is the Product",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown && cd labs && cargo test -p radix-cache --no-run",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "labs/radix-cache/src/cache.rs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}

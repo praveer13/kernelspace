@@ -1,0 +1,17 @@
+{
+  "name": "kernelspace lab: PagedAttention, From the Inside",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown && cd labs && cargo test -p kv-block-manager --no-run",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "labs/kv-block-manager/src/manager.rs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}
