@@ -91,7 +91,7 @@ export function makeGenPool(gens: ReadonlyMap<string, Gen>, familiesOf: (kc: KcI
       const offered = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(level))
       if (offered.length === 0) return null
       try {
-        return { source: 'gen', inst: gen.make(seed, level, offered[seed % offered.length].id) }
+        return { source: 'gen', inst: gen.make(seed, level, offered[seed % offered.length].id, kc) }
       } catch {
         return null
       }
