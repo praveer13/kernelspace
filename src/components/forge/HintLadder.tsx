@@ -7,6 +7,10 @@
  * `ack hint:<lab>/<check>#R<n>`, the bottom-out is `#bottom` (the ledger then credits the next 24 h of runs
  * `assisted`), and nothing here ever grants credit. A lab whose bundle has no walkthrough has no bottom-out.
  * A locked rung says what unlocks it; there are no hearts and no waits that cost anything.
+ *
+ * Help is randomized per check in labs 01 to 03 (wave-2.md §14.4, docs/prereg/hint-ladders.md): in the packet arm R0's
+ * teach-back stays and R1 to R4 and the bottom-out stay closed (the packet in AskPacket is the help); in the ladder arm
+ * the ladder is whole. Every ack of a randomized check carries `data.arm`. A rung opened before the arm was known stays open.
  */
 
 import { useEffect, useReducer, useRef, useState } from 'react'
@@ -16,6 +20,8 @@ import { ExternalLink, Lock } from 'lucide-react'
 import { clsx as cn } from 'clsx'
 import { useProgress } from '@/lib/progress'
 import type { HintRef } from '@/lib/ledger/types'
+import { ensureExpSeed, hintArm, isRandomizedLab, readExpSeed } from '@/lib/learner/experiments'
+import type { Arm } from '@/lib/learner/experiments'
 import type { CheckResult, LabRunReport } from '@/lib/forge/types'
 import {
   AFTER_BREAK,
@@ -57,6 +63,10 @@ const RUNG_TITLE: Record<RungId, string> = {
   bottom: 'Bottom-out · where yours first leaves the rules',
 }
 
+/** Said where R1 to R4 would be, in the packet arm. The assignment is random per check, and the page says so. */
+const PACKET_ARM_NOTE =
+  'For this check the help beyond R0 is your own agent: use "Ask with a packet" below. Which checks get hints and which get a packet is decided at random, to find out which helps you remember more. The pre-registration is docs/prereg/hint-ladders.md in the repository.'
+
 const ladderOf = (bundle: ForgeBundle, checkId: string): CheckLadder | undefined => bundle.ladder.find((l) => l.checkId === checkId)
 
 export interface HintLadderViewProps {
@@ -66,13 +76,15 @@ export interface HintLadderViewProps {
   reports: readonly LabRunReport[]
   /** The ledger's acks (`ref -> instant`): rungs already opened are open again after a reload. */
   acks: Readonly<Record<string, string>>
-  onAck(ref: HintRef): void
+  onAck(ref: HintRef, data?: { arm: Arm }): void
+  /** The learner's `exp:seed`; without it there is no arm and the ladder is whole. */
+  expSeed?: number
   /** The clock, for tests. Default: `Date.now`. */
   now?: () => number
 }
 
 /** The ladder for every red check of the latest run. Presentational: `HintLadder` wires it to the ledger. */
-export function HintLadderView({ bundle, reports, acks, onAck, now = Date.now }: HintLadderViewProps) {
+export function HintLadderView({ bundle, reports, acks, onAck, expSeed, now = Date.now }: HintLadderViewProps) {
   const latest = [...reports].reverse().find((r) => r.reference !== true)
   const red = latest === undefined ? [] : latest.checks.filter((c) => c.status !== 'pass' && ladderOf(bundle, c.id) !== undefined)
   const [t, setT] = useState(() => now())
@@ -119,6 +131,7 @@ export function HintLadderView({ bundle, reports, acks, onAck, now = Date.now }:
             check={c}
             state={states[c.id] ?? freshState()}
             ctx={{ red: redRuns(reports, c.id), now: t }}
+            arm={hintArm(bundle.labId, c.id, expSeed)}
             acks={acks}
             clock={now}
             onAck={onAck}
@@ -134,7 +147,13 @@ export function HintLadderView({ bundle, reports, acks, onAck, now = Date.now }:
 export default function HintLadder({ bundle, reports }: { bundle: ForgeBundle; reports: readonly LabRunReport[] }) {
   const acks = useProgress((s) => s.acks)
   const acknowledge = useProgress((s) => s.acknowledge)
-  return <HintLadderView bundle={bundle} reports={reports} acks={acks} onAck={(ref) => acknowledge(ref)} />
+  const ready = useProgress((s) => s.ledger.ready)
+  const expSeed = useProgress((s) => readExpSeed(s.working['exp:seed']))
+  // `exp:seed` is created once, the first time a randomized lab shows help (AskPacket does the same; the first one wins).
+  useEffect(() => {
+    if (ready && expSeed === undefined && isRandomizedLab(bundle.labId)) ensureExpSeed(useProgress.getState(), Math.random)
+  }, [ready, expSeed, bundle.labId])
+  return <HintLadderView bundle={bundle} reports={reports} acks={acks} expSeed={expSeed} onAck={(ref, data) => acknowledge(ref, data)} />
 }
 
 /* ------------------------------------------------------------------ */
@@ -146,13 +165,15 @@ interface CardProps {
   check: CheckResult
   state: LadderState
   ctx: Ctx
+  /** This check's arm of the help experiment, when its lab is randomized and the learner has a seed. */
+  arm: Arm | undefined
   acks: Readonly<Record<string, string>>
   clock: () => number
-  onAck(ref: HintRef): void
+  onAck(ref: HintRef, data?: { arm: Arm }): void
   dispatch(action: LadderAction, ctx: Ctx): void
 }
 
-function CheckCard({ bundle, check, state, ctx, acks, clock, onAck, dispatch }: CardProps) {
+function CheckCard({ bundle, check, state, ctx, arm, acks, clock, onAck, dispatch }: CardProps) {
   const ladder = ladderOf(bundle, check.id)
   const open = state.opened
   // A check whose rungs were opened before (acks restored after a reload) comes back expanded.
@@ -167,14 +188,18 @@ function CheckCard({ bundle, check, state, ctx, acks, clock, onAck, dispatch }: 
     document.getElementById(id)?.focus({ preventScroll: false })
   }, [open])
 
-  const heading = (rung: RungId) => `hint-${check.id}-${rung}`
+  const heading = (rung: RungId | 'closed') => `hint-${check.id}-${rung}`
+  // In the packet arm R1 to R4 stay closed unless they were opened before the arm was known.
+  const laterRungs = ['R1', 'R2', 'R3', 'R4'] as const
+  const closedRungs = arm === 'packet' ? laterRungs.filter((r) => open[r] === undefined) : []
+  const openRungs = laterRungs.filter((r) => !closedRungs.includes(r))
   const now = () => ({ red: ctx.red, now: clock() })
   const openRung = (rung: RungId) => {
     const at = now()
     if (open[rung] !== undefined || !unlockOf(state, rung, at).ok) return
     dispatch({ type: 'open', rung }, at)
     // `acknowledge` ignores a ref that is already in the ledger, so re-opening after a reload adds nothing.
-    onAck(hintRef(check.id, rung, bundle.labId))
+    onAck(hintRef(check.id, rung, bundle.labId), arm === undefined ? undefined : { arm })
     focusAfter.current = heading(rung)
   }
   const toggle = () => {
@@ -251,7 +276,15 @@ function CheckCard({ bundle, check, state, ctx, acks, clock, onAck, dispatch }: 
             )}
           </Rung>
 
-          {(['R1', 'R2', 'R3', 'R4'] as const).map((rung) => (
+          {closedRungs.length > 0 && (
+            <Rung id={heading('closed')} title={`${closedRungs[0]} to R4 · closed for this check`}>
+              <p className="text-body-sm text-text-2" data-packet-arm>
+                {PACKET_ARM_NOTE}
+              </p>
+            </Rung>
+          )}
+
+          {openRungs.map((rung) => (
             <Rung key={rung} id={heading(rung)} title={RUNG_TITLE[rung]}>
               {open[rung] === undefined ? (
                 <Gate checkId={check.id} rung={rung} state={state} ctx={ctx} onOpen={() => openRung(rung)} label={`Open ${rung}`} />
@@ -281,7 +314,7 @@ function CheckCard({ bundle, check, state, ctx, acks, clock, onAck, dispatch }: 
             </Rung>
           ))}
 
-          {bundle.walkthrough !== undefined && (
+          {bundle.walkthrough !== undefined && (arm !== 'packet' || open.bottom !== undefined) && (
             <Rung id={heading('bottom')} title={RUNG_TITLE.bottom}>
               {walk === null ? (
                 <>
