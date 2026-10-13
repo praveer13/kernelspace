@@ -7,10 +7,12 @@
  *   2. Today has due or priority cards, session open → Today
  *   3. a lesson being read, visited in the last 14 days → resume it
  *   4. a laptop day and a lab whose host lesson is done and whose next stage is open → that stage
- *      (a lab already started first, then the freshest)
+ *      (a lab already started first, then the freshest); any lab whose checks carry `stage`s is staged,
+ *      so labs 02 and 03 need no code when their checks gain stages
  *   5. the next lesson of the path plan that is neither done nor read (placement already applied);
  *      if a KC it builds on comes from a plan lesson that is not done (an earlier one, or an R lesson
- *      the braid's cap slid later), that lesson instead
+ *      the braid's cap slid later), that lesson instead; a registered play whose host lesson is done and
+ *      that is not yet debriefed comes first, while it is still the step right before the next lesson
  *   6. everything done                               → Today's extra practice
  *
  * Every why line is at most 90 characters (`WHY_MAX`): `fit` takes the first candidate that fits.
@@ -26,10 +28,12 @@ import {
   labOfStep,
   lessonCode,
   PATH_LABEL,
+  playOfStep,
   type PathGraph,
   type PathLab,
   type PathLesson,
   type PathPlanDetail,
+  type PathPlay,
 } from './paths'
 import type { DayKind, PlacementResult, Recommendation } from './types'
 
@@ -65,6 +69,12 @@ export interface TodaySummary {
   sessionDone: boolean
 }
 
+/** What Up Next reads of a play's progress (`aggregate.plays[id]` satisfies it). */
+export interface RecommendPlayState {
+  /** The debrief was reached (an `ok` result on phase `play`). */
+  done?: boolean
+}
+
 export interface RecommendState {
   /** Boot has been completed (`completions.boot`). */
   bootDone: boolean
@@ -75,6 +85,8 @@ export interface RecommendState {
   /** `placement:result`, or null when the learner has not placed. */
   placement: Pick<PlacementResult, 'entryTrack' | 'missedKcs' | 'solidKcs' | 'rustAnchor'> | null
   today: TodaySummary | null
+  /** Plays debriefed, by play id; a surface that does not offer plays leaves it out. */
+  plays?: Readonly<Record<string, RecommendPlayState>>
 }
 
 export interface RecommendLesson extends PathLesson {
@@ -93,10 +105,18 @@ export interface RecommendLab extends PathLab {
   stageMinutes?: Readonly<Record<number, number>>
 }
 
-/** Static content for Up Next: `Lesson` and `ForgeLab` satisfy the lesson and lab shapes. */
+/** A registered play: `PlayDef` satisfies it. A play that is only pending (no component yet) is not passed. */
+export interface RecommendPlay extends PathPlay {
+  title: string
+  /** Nominal minutes. */
+  minutes: number
+}
+
+/** Static content for Up Next: `Lesson`, `ForgeLab` and `PlayDef` satisfy the lesson, lab and play shapes. */
 export interface RecommendContent extends PathGraph {
   lessons: readonly RecommendLesson[]
   labs: readonly RecommendLab[]
+  plays?: readonly RecommendPlay[]
 }
 
 /* ------------------------------------------------------------------ */
@@ -217,9 +237,49 @@ function nextStage(lab: RecommendLab, done: ReadonlySet<string>): number | null 
 }
 
 /**
+ * A registered play to offer before the next lesson: its host lesson is done, it has not been debriefed,
+ * and it sits in the plan right before the first lesson that is neither done nor read. A learner who went on past the play (a later plan lesson is done or read) is not nagged,
+ * and a play is never a gate (W8).
+ */
+function pendingPlay(state: RecommendState, content: RecommendContent, plan: PathPlanDetail): RecommendPlay | null {
+  if (!content.plays?.length) return null
+  const plays = new Map(content.plays.map((p) => [p.id, p]))
+  let offer: RecommendPlay | null = null
+  for (const step of plan.steps) {
+    const id = playOfStep(step)
+    const play = id ? plays.get(id) : undefined
+    if (play) {
+      if (isDone(state, play.lessonId) && !state.plays?.[play.id]?.done) offer ??= play
+      continue
+    }
+    if (labOfStep(step)) continue
+    const s = statusOf(state, step)
+    if (s !== 'done' && s !== 'read') break
+    offer = null
+  }
+  return offer
+}
+
+/** The play of rule 5 as a recommendation. */
+function playRule(state: RecommendState, content: RecommendContent, plan: PathPlanDetail): Recommendation | null {
+  const offer = pendingPlay(state, content, plan)
+  if (!offer) return null
+  const code = lessonCode(offer.lessonId)
+  return {
+    kind: 'play',
+    ref: offer.id,
+    to: `/play/${offer.id}`,
+    title: `Play: ${offer.title}`,
+    why: fit(`You passed ${code}: now try it by hand (~${offer.minutes} min)`, `You passed ${code}: now try it by hand`),
+    minutes: Math.max(1, Math.round(offer.minutes)),
+  }
+}
+
+/**
  * Rule 4: on a laptop day, an open lab that is not finished: one already started first, then the one
  * whose host lesson is latest in the plan (the freshest), so a lab skipped long ago does not hold every
- * laptop day.
+ * laptop day. While a play is on offer (rule 5), only a lab already started competes with it: the play is the
+ * freshest step ("Play, then Build this": the scheduler play comes before lab 06, and before an older lab).
  */
 function labRule(
   state: RecommendState,
@@ -230,10 +290,12 @@ function labRule(
   if (day !== 'laptop') return null
   const inPlan = new Set(plan.lessons)
   const labs = new Map(content.labs.map((l) => [l.id, l]))
+  const playOnOffer = pendingPlay(state, content, plan) !== null
   const open = plan.steps.flatMap((step) => {
     const id = labOfStep(step)
     const lab = id ? labs.get(id) : undefined
     if (!lab || state.labs[lab.id]?.done || !isDone(state, lab.lessonId)) return []
+    if (playOnOffer && (state.labs[lab.id]?.checksDone?.length ?? 0) === 0) return []
     // a readiness lesson outside the plan (skipped by placement, tested out) does not hold the lab back
     if ((lab.readiness?.lessonIds ?? []).some((r) => inPlan.has(r) && !isDone(state, r))) return []
     return [lab]
@@ -340,8 +402,8 @@ function nextWhy(
   return n > 0 ? fit(`Next on ${PATH_LABEL[state.path]}: lesson ${n} of ${plan.lessons.length}`) : fit(`Next on ${PATH_LABEL[state.path]}`)
 }
 
-/** Rule 5. */
-function pathRule(state: RecommendState, content: RecommendContent, plan: PathPlanDetail): Recommendation | null {
+/** Rule 5's lesson: the next lesson of the plan, or the prerequisite it needs first. */
+function pathLesson(state: RecommendState, content: RecommendContent, plan: PathPlanDetail): Recommendation | null {
   const next = plan.lessons.find((id) => {
     const s = statusOf(state, id)
     return s !== 'done' && s !== 'read'
@@ -376,6 +438,20 @@ function pathRule(state: RecommendState, content: RecommendContent, plan: PathPl
     return lessonRec(lesson, why)
   }
   return lessonRec(lesson, nextWhy(lesson, state, content, plan, index))
+}
+
+/** Rule 5. */
+const pathRule = (state: RecommendState, content: RecommendContent, plan: PathPlanDetail): Recommendation | null =>
+  playRule(state, content, plan) ?? pathLesson(state, content, plan)
+
+/**
+ * The lesson Up Next stands on, for Curriculum's "current" marker: the lesson being read (rule 3), else the
+ * next one of the plan, prerequisite first (rule 5). Due cards, labs and plays are not lessons, so they
+ * never move the marker. Null when the plan is finished.
+ */
+export function currentLessonFor(state: RecommendState, content: RecommendContent, now: IsoInstant): string | null {
+  const plan = cachedPathPlan(state.path, content, state.placement)
+  return (resumeRule(state, content, plan, now) ?? pathLesson(state, content, plan))?.ref ?? null
 }
 
 /**

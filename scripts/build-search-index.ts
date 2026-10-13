@@ -1,10 +1,12 @@
 /**
  * build-search-index — the ⌘K index (docs/specs/wave-1.md §7.4, B24).
  *
- * Writes src/data/search-index.json from the lessons, the KC graph, the claims registry and the glossary
- * pairs. The file is committed; CI regenerates it and fails on a diff (`bun run verify:search-index`), the
- * way it does for public/lessons-md. The palette imports it as its own chunk on first open, so the file is
- * kept compact: positional rows, one per line, no authored prose beyond titles, hooks and headings.
+ * Writes src/data/search-index.json from the lessons, the KC graph (T3-T7 included), the plays of `PLAYS`, the
+ * claims registry and the glossary pairs. Pages (the Daily, the Error Museum) are the palette's static list, not
+ * the index (wave-2.md §7.4), so the bank's entries never reach it. The file is committed; CI regenerates it
+ * and fails on a diff (`bun run verify:search-index`), the way it does for public/lessons-md. The palette
+ * imports it as its own chunk on first open, so the file is kept compact: positional rows, one per line, no
+ * authored prose beyond titles, hooks and headings.
  *
  *   bun scripts/build-search-index.ts
  */
@@ -12,6 +14,7 @@ import { writeFileSync } from 'node:fs'
 import { CLAIMS } from '../src/data/claims'
 import { PAIRS } from '../src/data/glossary'
 import { KCS } from '../src/data/kc'
+import { PLAYS } from '../src/data/plays'
 import { ALL_LESSONS, lessonById } from '../src/data/lessons'
 import type { Lesson } from '../src/data/lessons/types'
 import { extractHeadings, slugify } from '../src/pages/lesson/markdown'
@@ -89,6 +92,7 @@ export function buildSearchIndex(): SearchIndex {
       const lesson = lessonById(k.lessons[0])
       return lesson ? [[k.id, k.title, canClause(k.can), lesson.id, kcAnchor(k.id, k.title, k.can, lesson), k.claims ?? []]] : []
     }),
+    plays: Object.values(PLAYS).map((p) => [p.id, p.title, p.lessonId, p.minutes]),
     claims: CLAIMS.map((c) => [c.id, c.label, c.value, c.unit ?? '']),
     glossary: PAIRS.map((p) => [p.slug, p.os, p.llm, p.lesson, p.syn.join(', ')]),
   }
@@ -101,6 +105,7 @@ export function serializeSearchIndex(index: SearchIndex): string {
   "version": ${index.version},
   "lessons": ${rows(index.lessons)},
   "kcs": ${rows(index.kcs)},
+  "plays": ${rows(index.plays)},
   "claims": ${rows(index.claims)},
   "glossary": ${rows(index.glossary)}
 }

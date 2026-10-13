@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Search, FileText, ArrowRight, BookOpen, Hash, Languages, Lightbulb } from 'lucide-react'
+import { Search, FileText, ArrowRight, BookOpen, Hash, Languages, Lightbulb, Play } from 'lucide-react'
 import { TRACKS, CAPSTONE, SIMS } from '@/lib/tracks'
 import { indexItems, makeSearcher, type SearchIndex, type SearchItem } from '@/lib/search'
 import { cn } from '@/lib/utils'
@@ -8,12 +8,18 @@ import { cn } from '@/lib/utils'
 const GROUP_ICON: Partial<Record<SearchItem['group'], typeof FileText>> = {
   Lessons: BookOpen,
   Concepts: Lightbulb,
+  Plays: Play,
   Numbers: Hash,
   Glossary: Languages,
 }
 
-/** Pages, tracks and simulators: always searchable, with or without the generated index. */
-const STATIC_ITEMS: SearchItem[] = [
+/**
+ * Pages, tracks and simulators: always searchable, with or without the generated index. The Daily and the Error
+ * Museum are pages, so they live here and never in the index (wave-2.md §7.4); their keywords are what a learner
+ * types ("daily", "on-call", "borrow checker").
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- exported for tests/search/palette-v2.test.ts; the file's one component stays the default export
+export const STATIC_ITEMS: SearchItem[] = [
   { id: 'home', group: 'Pages', title: 'Home', crumb: '~/', to: '/', keywords: ['landing', 'start'] },
   { id: 'today', group: 'Pages', title: 'Today', crumb: '~/today', to: '/today', keywords: ['review', 'up next', 'practice', 'cards', 'streak'] },
   { id: 'boot', group: 'Pages', title: 'Boot', crumb: '~/boot', to: '/boot', keywords: ['start', 'onboarding', 'placement', 'begin'] },
@@ -51,7 +57,7 @@ const STATIC_ITEMS: SearchItem[] = [
 
 /**
  * CommandPalette (design.md §9.3) — a lazy chunk opened by CommandPaletteHost on ⌘K / Ctrl+K / `/`.
- * Fuzzy search over a build-time index (src/data/search-index.json: lessons, concepts, claims and glossary
+ * Fuzzy search over a build-time index (src/data/search-index.json: lessons, concepts, plays, claims and glossary
  * terms, its own chunk fetched on the first open) plus the pages, tracks and simulators; ↑↓ navigate,
  * Enter jumps, esc closes. The host mounts it as soon as the chunk arrives, so opening is a class change:
  * it fades in and out with CSS transitions and is `invisible` (out of the tab order and the accessibility

@@ -8,10 +8,13 @@ import {
   MAX_R_RUN,
   PATHS,
   braid,
+  firstLessons,
   cachedPathPlan,
   labOfStep,
   labStep,
   pathOf,
+  playOfStep,
+  playStep,
   pathPlan,
   type PathGraph,
   type PathPlacement,
@@ -77,6 +80,32 @@ describe('the full-ramp braid', () => {
     const lines = plan.pairs.map((p) => `  ${p.r.padEnd(5)} before ${String(p.t).padEnd(5)} ${p.via ? `${p.via.kc} requires ${p.via.needs}` : '(no dependant)'}${p.slid ? ' [slid by the cap]' : ''}`)
     console.log(`full-ramp braid (R + T0-T2):\n  ${head.join(' ')}\n${lines.join('\n')}`)
     expect(head).toEqual(APPROVED_BRAID)
+  })
+
+  test('prints the whole ramp: no run of three R lessons anywhere, T3-T7 included (wave-2.md §7.3)', () => {
+    console.log(`full-ramp braid (all ${plan.lessons.length} lessons):\n  ${plan.lessons.join(' ')}`)
+    expect(longestRRun(plan.lessons)).toBeLessThanOrEqual(MAX_R_RUN)
+    // a stricter reading of "never 3 in a row": scan windows of three
+    for (let i = 0; i + 2 < plan.lessons.length; i++) expect(plan.lessons.slice(i, i + 3).every(isR)).toBe(false)
+    expect(plan.lessons.filter(isR)).toHaveLength(R_LESSONS.length)
+  })
+
+  test('T3-T7 lessons come after every R lesson their KCs require: R6-R10 land before their first dependant', () => {
+    const at = new Map(plan.lessons.map((id, i) => [id, i]))
+    const byKc = new Map(KCS.map((k) => [k.id, k]))
+    const edges: string[] = []
+    for (const k of KCS) {
+      if (!['t3', 't4', 't5', 't6', 't7'].includes(k.track)) continue
+      for (const q of k.requires) {
+        const r = byKc.get(q)
+        if (r?.track !== 'r') continue
+        edges.push(`${k.id} <- ${q}`)
+        expect({ edge: `${k.id} <- ${q}`, before: (at.get(r.lessons[0]) as number) < (at.get(k.lessons[0]) as number) }).toEqual({ edge: `${k.id} <- ${q}`, before: true })
+      }
+    }
+    // T3's own KCs lean on R6-R8 (closures, smart pointers, interior mutability)
+    expect(edges.filter((e) => e.startsWith('t3.')).length).toBeGreaterThanOrEqual(3)
+    for (const r of ['r.l6', 'r.l7', 'r.l8']) expect(at.get(r) as number).toBeLessThan(at.get('t3.l1') as number)
   })
 
   test('the rest of the ramp is T3-T7 in curriculum order', () => {
@@ -182,6 +211,21 @@ describe('braid() on fixtures', () => {
     expect(braid([kc('r.a', ['r.l1']), kc('t0.x', ['t0.l1'])], ['r.l1'], ['t0.l1']).lessons).toEqual(['t0.l1', 'r.l1'])
   })
 
+  test('R lessons first needed by T3 land right before it, two at a time at most (a fixture for the Wave 2 graph)', () => {
+    const kcs = [
+      kc('r.a', ['r.l1']),
+      kc('r.b', ['r.l2']),
+      kc('r.c', ['r.l3']),
+      kc('t2.x', ['t2.l1']),
+      kc('t3.x', ['t3.l1'], ['r.a', 'r.b', 'r.c']),
+      kc('t3.y', ['t3.l2']),
+    ]
+    const b = braid(kcs, ['r.l1', 'r.l2', 'r.l3'], ['t2.l1', 't3.l1', 't3.l2'])
+    expect(b.lessons).toEqual(['r.l1', 't2.l1', 'r.l2', 'r.l3', 't3.l1', 't3.l2'])
+    expect(b.pairs.map((p) => p.t)).toEqual(['t3.l1', 't3.l1', 't3.l1'])
+    expect(longestRRun(b.lessons)).toBe(2)
+  })
+
   test('is deterministic', () => {
     expect(braid(KCS, R_LESSONS, ALL_LESSONS.filter((l) => l.trackId !== 'r').map((l) => l.id))).toEqual(
       braid(KCS, R_LESSONS, ALL_LESSONS.filter((l) => l.trackId !== 'r').map((l) => l.id)),
@@ -208,6 +252,43 @@ describe('serving-first and rust-systems', () => {
     expect(labs).toEqual(['lab:rust-allocator', 'lab:mpmc-queue', 'lab:toy-executor'])
     for (const [lab, host] of [['lab:rust-allocator', 't1.l3'], ['lab:mpmc-queue', 't2.l5'], ['lab:toy-executor', 't3.l4']]) {
       expect(plan.steps.indexOf(lab)).toBe(plan.steps.indexOf(host) + 1)
+    }
+  })
+})
+
+describe('plays in a plan', () => {
+  const plays = [{ id: 'scheduler', lessonId: 't5.l7' }]
+  test('a play is a step right after its host lesson; a lesson-only graph has none', () => {
+    const plan = pathPlan('serving-first', { ...GRAPH, plays })
+    const at = plan.steps.indexOf('t5.l7')
+    expect(plan.steps.slice(at, at + 3)).toEqual(['t5.l7', playStep('scheduler'), 't5.l8'])
+    expect(plan.lessons).toEqual(pathPlan('serving-first', GRAPH).lessons)
+    expect(pathPlan('serving-first', GRAPH).steps.some((s) => playOfStep(s) !== null)).toBe(false)
+  })
+
+  test('a host the plan skipped has no play step, and the step names round-trip', () => {
+    const plan = pathPlan('full-ramp', { ...GRAPH, plays }, { entryTrack: 't6', rustAnchor: 'solid', missedKcs: [] })
+    expect(plan.lessons).not.toContain('t5.l7')
+    expect(plan.steps).not.toContain(playStep('scheduler'))
+    expect(playOfStep(playStep('scheduler'))).toBe('scheduler')
+    expect(playOfStep('lab:rust-allocator')).toBeNull()
+    expect(labOfStep(playStep('scheduler'))).toBeNull()
+    expect(playOfStep('t5.l7')).toBeNull()
+  })
+})
+
+describe('where a path begins (Boot, wave-2.md §7.3)', () => {
+  test('the first T lesson, and the R lessons before it', () => {
+    expect(firstLessons(pathPlan('full-ramp', GRAPH), ALL_LESSONS)).toEqual({ t: 't0.l1', r: [] })
+    expect(firstLessons(pathPlan('serving-first', GRAPH), ALL_LESSONS)).toEqual({ t: 't0.l1', r: [] })
+    expect(firstLessons(pathPlan('rust-systems', GRAPH), ALL_LESSONS)).toEqual({ t: 't1.l1', r: R_LESSONS.slice(0, 5) })
+  })
+
+  test('every placement still has a first T lesson on the full ramp, behind at most two R lessons', () => {
+    for (const p of placements()) {
+      const first = firstLessons(pathPlan('full-ramp', GRAPH, p), ALL_LESSONS)
+      expect(first.t).not.toBeNull()
+      expect(first.r.length).toBeLessThanOrEqual(MAX_R_RUN)
     }
   })
 })

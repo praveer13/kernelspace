@@ -15,11 +15,13 @@
  *   which happens only in a placed plan (anchor missed, early tracks skipped); recommend()'s rule 5 still
  *   sends that learner to the prerequisite first.
  * - `serving-first`: t0.l1, t0.l2, t4.l3, T5, T6, T7 (755 declared minutes). R arrives as reading items
- *   only, and labs are optional, so neither is a step.
+ *   only, and labs are optional, so neither is a step. A registered play is a step after its host lesson
+ *   (the scheduler play after t5.l7), on every path that has the host.
  * - `rust-systems`: R.L1-R.L5, T1 (lab 01 after t1.l3), R.L6-R.L10, T2 (lab 04 after t2.l5), T3 (lab 05
  *   after t3.l4).
  *
- * Labs follow their host lesson, or the last of their readiness lessons when that comes later. Placement
+ * Labs follow their host lesson, or the last of their readiness lessons when that comes later; a play
+ * follows its host lesson (`play:<id>` steps, wave-2.md §7.3). Placement
  * skips the lessons of tracks before `entryTrack` unless a missed KC of that track lives there, and turns
  * R into test-outs unless the Rust anchor was missed, so nobody placed is sent to R.L1 (the K3 metric).
  */
@@ -47,12 +49,21 @@ export interface PathLab {
   readiness?: { lessonIds: readonly string[] }
 }
 
+/** What a plan reads of a play. `PlayDef` from src/data/plays satisfies it. */
+export interface PathPlay {
+  id: string
+  /** The host lesson the play lives in. */
+  lessonId: string
+}
+
 export interface PathGraph {
   /** The KC graph (src/data/kc `KCS`). */
   kcs: readonly Kc[]
   /** Every lesson, in curriculum order (src/data/lessons `ALL_LESSONS`). */
   lessons: readonly PathLesson[]
   labs: readonly PathLab[]
+  /** Registered plays (src/data/plays `PLAYS`); a surface that does not offer plays leaves it out. */
+  plays?: readonly PathPlay[]
 }
 
 /** The placement fields a plan reads (`placement:result`). */
@@ -94,6 +105,12 @@ export const labStep = (labId: string): string => `lab:${labId}`
 
 /** The lab id of a `steps` entry, or null for a lesson. */
 export const labOfStep = (step: string): string | null => (step.startsWith('lab:') ? step.slice(4) : null)
+
+/** A `steps` entry for a play. */
+export const playStep = (playId: string): string => `play:${playId}`
+
+/** The play id of a `steps` entry, or null for a lesson or a lab. */
+export const playOfStep = (step: string): string | null => (step.startsWith('play:') ? step.slice(5) : null)
 
 /* ------------------------------------------------------------------ */
 /* The braid                                                           */
@@ -240,6 +257,14 @@ function withLabs(lessons: readonly string[], labs: readonly PathLab[]): string[
   return lessons.flatMap((id, i) => [id, ...(after.get(i) ?? [])])
 }
 
+/** Place each play right after its host lesson, when the host is in the plan; labs on the same lesson follow it. */
+function withPlays(steps: readonly string[], plays: readonly PathPlay[]): string[] {
+  if (plays.length === 0) return [...steps]
+  const hosted = new Map<string, string[]>()
+  for (const p of plays) hosted.set(p.lessonId, [...(hosted.get(p.lessonId) ?? []), playStep(p.id)])
+  return steps.flatMap((step) => [step, ...(hosted.get(step) ?? [])])
+}
+
 /**
  * The plan for `path`, adjusted for `placement` (null = not placed). Pure and deterministic: the same
  * content and placement give a deep-equal plan.
@@ -284,7 +309,7 @@ export function pathPlan(path: LearningPath, graph: PathGraph, placement: PathPl
 
   const inPlan = new Set(order)
   const skipped = candidates.filter((id) => !inPlan.has(id) && !testOut.includes(id))
-  return { path, lessons: order, steps: withLabs(order, labs), skipped, testOut, pairs }
+  return { path, lessons: order, steps: withPlays(withLabs(order, labs), graph.plays ?? []), skipped, testOut, pairs }
 }
 
 /**
@@ -299,6 +324,20 @@ export function cachedPathPlan(path: LearningPath, graph: PathGraph, placement: 
   let plan = byKey.get(key)
   if (!plan) byKey.set(key, (plan = pathPlan(path, graph, placement)))
   return plan
+}
+
+/** Where a path begins: its first T lesson, and the R lessons the plan runs before it (Boot's last step, §7.3). */
+export interface FirstLessons {
+  /** The first non-R lesson of the plan, or null when the plan has none. */
+  t: string | null
+  /** The R lessons before `t`, in order: empty on the full ramp (the braid opens with T0.L1), the Rust half on rust-systems. */
+  r: string[]
+}
+
+export function firstLessons(plan: Pick<PathPlan, 'lessons'>, lessons: readonly PathLesson[]): FirstLessons {
+  const track = new Map(lessons.map((l) => [l.id, l.trackId]))
+  const at = plan.lessons.findIndex((id) => track.get(id) !== 'r')
+  return at < 0 ? { t: null, r: [...plan.lessons] } : { t: plan.lessons[at], r: plan.lessons.slice(0, at) }
 }
 
 /** `R.L4`, `T1.L4`: how lessons are named in why lines. */

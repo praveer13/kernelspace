@@ -1,10 +1,20 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Button } from '@/components/Button'
 import type { LearningPath, WeekPlan } from '@/lib/ledger/types'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 import { StepBtn, StepTitle } from './ui'
+
+/** The line under the path choice: where the chosen path begins (wave-2.md §7.3). */
+function firstLessonLine(first: { t: { code: string; title: string } | null; r: { code: string; title: string }[] }): string | null {
+  const { t, r } = first
+  if (!t) return null
+  const name = (l: { code: string; title: string }) => `${l.code} · ${l.title}`
+  if (r.length === 0) return `Your first lesson is ${name(t)}.`
+  if (r.length === 1) return `Your path starts with ${name(r[0])}, then ${name(t)}.`
+  return `Your path starts with ${name(r[0])} and reaches ${name(t)} after ${r.length} Rust lessons.`
+}
 
 const PATHS: { id: LearningPath; name: string; blurb: string }[] = [
   { id: 'full-ramp', name: 'Full ramp', blurb: 'Rust Zero, then Track 0 up through serving. Best if systems are new to you.' },
@@ -44,6 +54,7 @@ export default function You({ onFinish }: YouProps) {
   const navigate = useNavigate()
   const setWorking = useProgress((s) => s.setWorking)
   const installDismissed = useProgress((s) => s.working['boot:install-dismissed'] === true)
+  const placementRaw = useProgress((s) => s.working['placement:result'])
   const uid = useId()
   const [job, setJob] = useState<boolean | null>(null)
   const [valueText, setValueText] = useState('')
@@ -51,6 +62,22 @@ export default function You({ onFinish }: YouProps) {
   const [week, setWeek] = useState<WeekPlan>(DEFAULT_WEEK)
   const [weekTouched, setWeekTouched] = useState(false)
   const [showInstall] = useState(needsIosInstallTip)
+  const [firstLine, setFirstLine] = useState<string | null>(null)
+
+  // The lessons and the KC graph load on demand (Boot imports neither), so the line appears a moment after the step.
+  // The path not yet chosen reads as the full ramp, which is where Today sends a learner who skips the choice.
+  useEffect(() => {
+    let live = true
+    import('@/lib/learner/up-next')
+      .then(async (m) => {
+        const loaded = await m.loadUpNext()
+        if (live) setFirstLine(firstLessonLine(m.firstLessonsNow(loaded, path ?? undefined, placementRaw)))
+      })
+      .catch(() => live && setFirstLine(null))
+    return () => {
+      live = false
+    }
+  }, [path, placementRaw])
 
   const editWeek = (patch: Partial<WeekPlan>) => {
     setWeek((w) => ({ ...w, ...patch }))
@@ -228,9 +255,14 @@ export default function You({ onFinish }: YouProps) {
           </div>
         )}
 
-        <Button type="submit" className="w-full sm:w-auto">
-          Go to Today
-        </Button>
+        <div>
+          <p aria-live="polite" data-boot-first-lesson className="mb-3 text-body-sm text-text-2 empty:hidden">
+            {firstLine}
+          </p>
+          <Button type="submit" className="w-full sm:w-auto">
+            Go to Today
+          </Button>
+        </div>
       </form>
     </section>
   )
