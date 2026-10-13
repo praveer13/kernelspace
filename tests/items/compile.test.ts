@@ -75,18 +75,18 @@ const SAMPLE: RustSnippet = {
 }
 
 describe('compile: the §5.6 suite', () => {
-  test('passes at 100 seeds with no problems; the only warning is the deferred hash fixture', () => {
+  test('passes at 100 seeds with no problems and no warnings (its hash fixture is written)', () => {
     const r = checkFamily(compile, { seeds: 100 })
     expect(r.problems).toEqual([])
-    expect(r.warnings.every((w) => w.includes('deferred until the family'))).toBe(true)
+    expect(r.warnings).toEqual([])
   })
 
   test('its source passes the literal lint', () => {
     expect(lintLiterals(FILE.pathname, readFileSync(FILE, 'utf8'))).toEqual([])
   })
 
-  test('is bank-backed with a deferred hash fixture until 2c-18 freezes the bank', () => {
-    expect(compile.hashFixture).toBe('deferred')
+  test('is bank-backed, and its hash fixture is no longer deferred since 2c-18 froze the bank', () => {
+    expect(compile.hashFixture).toBeUndefined()
     expect(compile.bank!.units).toBe(Math.min(...[...POOLS.values()].map((p) => p.length)))
     expect(compile.bank!.units).toBeGreaterThanOrEqual(MIN_POOL)
   })

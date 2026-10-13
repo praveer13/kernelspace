@@ -1,0 +1,409 @@
+{
+  "v": 1,
+  "traces": {
+    "BorrowError": {
+      "sha256": "3af69bdb20dd99a8a95fbf5ab55743a36275a1c597505184a3dd3c2c3e69154a",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 8,
+      "paths": ["q"],
+      "changes": [
+        {"line":4,"path":"q","before":"","after":"RO"},
+        {"line":6,"path":"q","before":"RO","after":"R"},
+        {"line":7,"path":"q","before":"R","after":""}
+      ],
+      "uses": [
+        {"line":5,"col":13,"path":"q","needs":"R","has":"RO"},
+        {"line":6,"col":5,"path":"q","needs":"R","has":"RO"},
+        {"line":6,"col":25,"path":"q","needs":"R","has":"R"},
+        {"line":7,"col":22,"path":"q","needs":"R","has":"RO"}
+      ],
+      "code": "use std::cell::RefCell;\n\nfn main() {\n    let q = RefCell::new(vec![1, 2]);\n    let n = q.borrow().len();\n    q.borrow_mut().push(q.borrow().len());\n    println!(\"{:?}\", q.borrow());\n}"
+    },
+    "BorrowMutError": {
+      "sha256": "9b73ea16afb6c44b93d9e11326935d34e66d416bfc40b396787ec7361d73701a",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 12,
+      "paths": ["q","n","i"],
+      "changes": [
+        {"line":4,"path":"q","before":"","after":"RO"},
+        {"line":5,"path":"n","before":"","after":"RO"},
+        {"line":6,"path":"n","before":"RO","after":""},
+        {"line":6,"path":"i","before":"","after":"RO"},
+        {"line":7,"path":"q","before":"RO","after":"R"},
+        {"line":7,"path":"i","before":"RO","after":""},
+        {"line":11,"path":"q","before":"RO","after":""}
+      ],
+      "uses": [
+        {"line":5,"col":13,"path":"q","needs":"R","has":"RO"},
+        {"line":6,"col":16,"path":"n","needs":"R","has":"RO"},
+        {"line":7,"col":20,"path":"q","needs":"R","has":"RO"},
+        {"line":7,"col":30,"path":"i","needs":"R","has":"RO"},
+        {"line":8,"col":13,"path":"q","needs":"R","has":"R"},
+        {"line":11,"col":20,"path":"q","needs":"R","has":"RO"}
+      ],
+      "code": "use std::cell::RefCell;\n\nfn main() {\n    let q = RefCell::new(vec![1, 2, 3]);\n    let n = q.borrow().len();\n    for i in 0..n {\n        if let 2 = q.borrow()[i] {\n            q.borrow_mut().push(4);\n        }\n    }\n    println!(\"{}\", q.borrow().len());\n}"
+    },
+    "E0106": {
+      "sha256": "6f5f713ec6f03bf0111dacb39786b902f406cb740087cddaf58576fefdb63fba",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 6,
+      "paths": [],
+      "changes": [],
+      "uses": [],
+      "code": "struct Lexer(&str);\n\nfn count(t: String) -> usize {\n    let lx = Lexer(&t);\n    lx.0.len()\n}"
+    },
+    "E0373": {
+      "sha256": "f2c9f8a8d4e2b2657932d7fe3bc59f723b577adb31b65531b13267abbc41b4d4",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 6,
+      "paths": ["v","*v","(*v)[_]","min","**x"],
+      "changes": [
+        {"line":4,"path":"v","before":"","after":"RO"},
+        {"line":4,"path":"*v","before":"","after":"R"},
+        {"line":4,"path":"(*v)[_]","before":"","after":"R"},
+        {"line":4,"path":"min","before":"","after":"RO"},
+        {"line":5,"path":"v","before":"RO","after":""},
+        {"line":5,"path":"*v","before":"R","after":""},
+        {"line":5,"path":"(*v)[_]","before":"R","after":""},
+        {"line":5,"path":"min","before":"RO","after":""}
+      ],
+      "uses": [
+        {"line":5,"col":5,"path":"v","needs":"R","has":"R"},
+        {"line":5,"col":24,"path":"**x","needs":"R","has":"RO"},
+        {"line":5,"col":30,"path":"min","needs":"R","has":"RO"}
+      ],
+      "code": "fn above(\n    v: &[u32],\n    min: u32,\n) -> impl Iterator<Item = &u32> {\n    v.iter().filter(|x| **x > min)\n}"
+    },
+    "E0381": {
+      "sha256": "1ea65e72909c275777fbec9b8ff3bcea5d6b6dd4c075e36ed82830fde8b81e69",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 8,
+      "paths": ["n","ids"],
+      "changes": [
+        {"line":1,"path":"n","before":"","after":"RO"},
+        {"line":4,"path":"n","before":"RO","after":""},
+        {"line":5,"path":"n","before":"RO","after":""}
+      ],
+      "uses": [
+        {"line":3,"col":11,"path":"n","needs":"R","has":""},
+        {"line":7,"col":4,"path":"ids","needs":"RO","has":""}
+      ],
+      "code": "fn warm(n: usize) -> Vec<u32> {\n    let ids: Vec<u32>;\n    match n {\n        0 => ids = Vec::new(),\n        _ => {}\n    }\n    ids\n}"
+    },
+    "E0382": {
+      "sha256": "c19a55f4050269cca4d6d6b396a9135ec2a5db9a8dd869a4e71cc807e9db8108",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["b","*b","v"],
+      "changes": [
+        {"line":1,"path":"b","before":"","after":"RO"},
+        {"line":1,"path":"*b","before":"","after":"R"},
+        {"line":2,"path":"b","before":"RO","after":""},
+        {"line":2,"path":"*b","before":"R","after":""},
+        {"line":2,"path":"v","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":2,"col":12,"path":"*b","needs":"RO","has":"R"},
+        {"line":3,"col":13,"path":"b","needs":"R","has":""}
+      ],
+      "code": "fn take(b: Box<Vec<u32>>) -> usize {\n    let v = *b;\n    let n = b.len() + v.len();\n    n\n}"
+    },
+    "E0384": {
+      "sha256": "b3700eeb1c95a1e9b5c26f406090fb1603d3af55461f06d06fdded7ca3abd006",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 6,
+      "paths": ["cur","next","old"],
+      "changes": [
+        {"line":2,"path":"cur","before":"","after":"RO"},
+        {"line":2,"path":"next","before":"","after":"RO"},
+        {"line":3,"path":"cur","before":"RO","after":""},
+        {"line":3,"path":"old","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":3,"col":14,"path":"cur","needs":"RO","has":"RO"}
+      ],
+      "code": "type V = Vec<u32>;\nfn rotate(cur: V, next: V) -> V {\n    let old = cur;\n    cur = next;\n    old\n}"
+    },
+    "E0499": {
+      "sha256": "392053d6f21fb8dd15c470dea3d3163fee89b89ed9d5c55682a4a6ccd76e63ef",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 3,
+      "paths": ["v","*v"],
+      "changes": [
+        {"line":1,"path":"v","before":"","after":"RO"},
+        {"line":1,"path":"*v","before":"","after":"RW"}
+      ],
+      "uses": [
+        {"line":2,"col":5,"path":"v","needs":"RW","has":"RW"},
+        {"line":2,"col":12,"path":"v","needs":"RW","has":""}
+      ],
+      "code": "fn append_len(v: &mut Vec<usize>) {\n    v.push(v.pop().unwrap());\n}"
+    },
+    "E0502": {
+      "sha256": "e0ab19f17daec4e8dcbfbae77947206dfed046ce1c1964120a0e54b67d97c5f8",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 4,
+      "paths": ["q","*q","ids"],
+      "changes": [
+        {"line":1,"path":"q","before":"","after":"RO"},
+        {"line":1,"path":"*q","before":"","after":"RW"},
+        {"line":2,"path":"q","before":"RO","after":"R"},
+        {"line":2,"path":"*q","before":"RW","after":"R"},
+        {"line":2,"path":"ids","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":2,"col":15,"path":"q","needs":"R","has":"RW"},
+        {"line":3,"col":5,"path":"q","needs":"RW","has":"R"},
+        {"line":3,"col":13,"path":"ids","needs":"RO","has":"RO"}
+      ],
+      "code": "fn mirror(q: &mut Vec<u64>) {\n    let ids = q.iter().copied();\n    q.extend(ids);\n}"
+    },
+    "E0503": {
+      "sha256": "f5d9615cc843719d53fcb35dd6cdf9898ec3c01431814e3436ffbe36dcc5c0f4",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["n","*n","m","*m"],
+      "changes": [
+        {"line":1,"path":"n","before":"","after":"RO"},
+        {"line":1,"path":"*n","before":"","after":"RW"},
+        {"line":2,"path":"n","before":"RO","after":""},
+        {"line":2,"path":"*n","before":"RW","after":""},
+        {"line":2,"path":"m","before":"","after":"RO"},
+        {"line":2,"path":"*m","before":"","after":"RW"}
+      ],
+      "uses": [
+        {"line":2,"col":17,"path":"*n","needs":"RW","has":"RW"},
+        {"line":3,"col":4,"path":"*m","needs":"RW","has":"RW"},
+        {"line":4,"col":4,"path":"*n","needs":"R","has":""}
+      ],
+      "code": "fn tick(n: &mut u32) -> u32 {\n    let m = &mut *n;\n    *m += 1;\n    *n + *m\n}"
+    },
+    "E0505": {
+      "sha256": "d33817db9f9c0ab5af4c0fd208479080b03fae1cba7e2c4f41e614a74354d05a",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["o","*o","b","n","*n"],
+      "changes": [
+        {"line":1,"path":"o","before":"","after":"RO"},
+        {"line":1,"path":"*o","before":"","after":"RW"},
+        {"line":1,"path":"b","before":"","after":"RO"},
+        {"line":2,"path":"b","before":"RO","after":"R"},
+        {"line":2,"path":"n","before":"","after":"RO"},
+        {"line":2,"path":"*n","before":"","after":"R"}
+      ],
+      "uses": [
+        {"line":2,"col":13,"path":"b","needs":"R","has":"RO"},
+        {"line":3,"col":5,"path":"o","needs":"RW","has":"RW"},
+        {"line":3,"col":11,"path":"b","needs":"RO","has":"R"}
+      ],
+      "code": "fn send(o: &mut Vec<Vec<u8>>, b: Vec<u8>) {\n    let n = &b[0];\n    o.push(b);\n    println!(\"{n:?}\");\n}"
+    },
+    "E0506": {
+      "sha256": "a41942bc7a8af815cb053569adadb91c5e1120b19eda46bb312a92be0660ea55",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["q","*q","head","head@Some.0","*head@Some.0"],
+      "changes": [
+        {"line":1,"path":"q","before":"","after":"RO"},
+        {"line":1,"path":"*q","before":"","after":"RW"},
+        {"line":2,"path":"q","before":"RO","after":"R"},
+        {"line":2,"path":"*q","before":"RW","after":"R"},
+        {"line":2,"path":"head","before":"","after":"RO"},
+        {"line":2,"path":"head@Some.0","before":"","after":"RO"},
+        {"line":2,"path":"*head@Some.0","before":"","after":"R"}
+      ],
+      "uses": [
+        {"line":2,"col":16,"path":"q","needs":"R","has":"RW"},
+        {"line":3,"col":4,"path":"*q","needs":"RW","has":"R"}
+      ],
+      "code": "fn reset(q: &mut Vec<u32>) {\n    let head = q.first();\n    *q = Vec::new();\n    println!(\"{head:?}\");\n}"
+    },
+    "E0507": {
+      "sha256": "005dea3c5f5e35a716a54d747da4bb58dbe7e63770770eaf08d3e63393c1d7c4",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["b","*b","**b"],
+      "changes": [
+        {"line":1,"path":"b","before":"","after":"RO"},
+        {"line":1,"path":"*b","before":"","after":"R"},
+        {"line":1,"path":"**b","before":"","after":"R"}
+      ],
+      "uses": [
+        {"line":2,"col":12,"path":"*b","needs":"RO","has":"R"}
+      ],
+      "code": "fn take(b: &Box<Vec<u32>>) -> usize {\n    let v = *b;\n    let n = v.len();\n    n\n}"
+    },
+    "E0508": {
+      "sha256": "6ef9eb3becee627c55861991a5c28f3654ace9fe7e6d3465d526b848e0fcff57",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["ns","ns[_]"],
+      "changes": [
+        {"line":1,"path":"ns","before":"","after":"RO"},
+        {"line":1,"path":"ns[_]","before":"","after":"R"}
+      ],
+      "uses": [
+        {"line":2,"col":12,"path":"ns","needs":"RO","has":"RO"}
+      ],
+      "code": "fn pair(ns: [String; 2]) -> usize {\n    let a = ns[0];\n    let b = &ns[1];\n    a.len() + b.len()\n}"
+    },
+    "E0509": {
+      "sha256": "3fedb1a4d7c3d341e9b87844e8654667992ae28c14148017787b5de6458b332e",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 14,
+      "paths": ["self","*self","(*self).open","(*self).addr","c","c.open","c.addr"],
+      "changes": [
+        {"line":7,"path":"self","before":"","after":"RO"},
+        {"line":7,"path":"*self","before":"","after":"RW"},
+        {"line":7,"path":"(*self).open","before":"","after":"RW"},
+        {"line":7,"path":"(*self).addr","before":"","after":"RW"},
+        {"line":8,"path":"self","before":"RO","after":""},
+        {"line":8,"path":"*self","before":"RW","after":""},
+        {"line":8,"path":"(*self).open","before":"RW","after":""},
+        {"line":8,"path":"(*self).addr","before":"RW","after":""},
+        {"line":12,"path":"c","before":"","after":"RWO"},
+        {"line":12,"path":"c.open","before":"","after":"RW"},
+        {"line":12,"path":"c.addr","before":"","after":"RW"},
+        {"line":13,"path":"c","before":"RWO","after":""},
+        {"line":13,"path":"c.open","before":"RW","after":""},
+        {"line":13,"path":"c.addr","before":"RW","after":""}
+      ],
+      "uses": [
+        {"line":13,"col":4,"path":"c","needs":"RO","has":"RW"}
+      ],
+      "code": "struct Conn {\n    addr: String,\n    open: bool,\n}\n\nimpl Drop for Conn {\n    fn drop(&mut self) {\n        self.open = false;\n    }\n}\n\nfn addr_of(mut c: Conn) -> String {\n    c.addr\n}"
+    },
+    "E0515": {
+      "sha256": "7b8cc979db6bd98fb225ee1c5efa818f1779e9c4983d05b9b97dec74fa70977c",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 8,
+      "paths": ["pool","*pool","(*pool)[_]","head","@24"],
+      "changes": [
+        {"line":5,"path":"pool","before":"","after":"RO"},
+        {"line":5,"path":"*pool","before":"","after":"R"},
+        {"line":5,"path":"(*pool)[_]","before":"","after":"R"},
+        {"line":6,"path":"pool","before":"RO","after":""},
+        {"line":6,"path":"*pool","before":"R","after":""},
+        {"line":6,"path":"(*pool)[_]","before":"R","after":""},
+        {"line":6,"path":"head","before":"","after":"RO"},
+        {"line":7,"path":"head","before":"RO","after":""}
+      ],
+      "uses": [
+        {"line":6,"col":24,"path":"@24","needs":"R","has":"R"},
+        {"line":7,"col":19,"path":"head","needs":"R","has":"RO"}
+      ],
+      "code": "struct View<'a> {\n    bytes: &'a [u8],\n}\n\nfn view(pool: &[u8]) -> View<'_> {\n    let head = pool[..4].to_vec();\n    View { bytes: &head }\n}"
+    },
+    "E0521": {
+      "sha256": "7753f936e70aef604d3b95e4144eba838e5fed6b660de314bf409f7df5e51be4",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 8,
+      "paths": ["id","*id","name","h"],
+      "changes": [
+        {"line":1,"path":"id","before":"","after":"RO"},
+        {"line":1,"path":"*id","before":"","after":"R"},
+        {"line":2,"path":"name","before":"","after":"RO"},
+        {"line":5,"path":"name","before":"RO","after":""},
+        {"line":5,"path":"h","before":"","after":"RO"},
+        {"line":6,"path":"h","before":"RO","after":""},
+        {"line":7,"path":"id","before":"RO","after":""},
+        {"line":7,"path":"*id","before":"R","after":""}
+      ],
+      "uses": [
+        {"line":2,"col":32,"path":"id","needs":"R","has":"RO"},
+        {"line":4,"col":19,"path":"name","needs":"R","has":"RO"},
+        {"line":4,"col":26,"path":"id","needs":"R","has":"RO"},
+        {"line":6,"col":5,"path":"h","needs":"RO","has":"RO"},
+        {"line":7,"col":15,"path":"id","needs":"R","has":"RO"}
+      ],
+      "code": "fn spawn_worker(id: &u32) {\n    let name = format!(\"worker-{id}\");\n    let h = std::thread::spawn(move || {\n        println!(\"{name} {id}\");\n    });\n    h.join().unwrap();\n    println!(\"{id} done\");\n}"
+    },
+    "E0594": {
+      "sha256": "0ae9f9afc9ad831733a4fd989312e964ed5eab4f7b579d14bea43c940fbb9606",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 11,
+      "paths": ["self","*self","(*self).epoch","(*self).blocks"],
+      "changes": [
+        {"line":7,"path":"self","before":"","after":"RO"},
+        {"line":7,"path":"*self","before":"","after":"R"},
+        {"line":7,"path":"(*self).epoch","before":"","after":"R"},
+        {"line":7,"path":"(*self).blocks","before":"","after":"R"}
+      ],
+      "uses": [
+        {"line":8,"col":8,"path":"self","needs":"RW","has":"R"}
+      ],
+      "code": "struct Table {\n    blocks: Vec<u32>,\n    epoch: u64,\n}\n\nimpl Table {\n    fn flush(&self) -> Vec<u32> {\n        self.epoch += 1;\n        std::mem::take(&mut self.blocks)\n    }\n}"
+    },
+    "E0596": {
+      "sha256": "4996783deb68ce6bd30a7e9a40911bbe25f13b5d0fa36f90291f557b4d72b4b9",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["a","*a","(*a).ids","b","*b","(*b).ids"],
+      "changes": [
+        {"line":3,"path":"a","before":"","after":"RO"},
+        {"line":3,"path":"*a","before":"","after":"RW"},
+        {"line":3,"path":"(*a).ids","before":"","after":"RW"},
+        {"line":3,"path":"b","before":"","after":"RO"},
+        {"line":3,"path":"*b","before":"","after":"R"},
+        {"line":3,"path":"(*b).ids","before":"","after":"R"}
+      ],
+      "uses": [
+        {"line":4,"col":24,"path":"a","needs":"RW","has":"RW"},
+        {"line":4,"col":36,"path":"b","needs":"RW","has":"R"}
+      ],
+      "code": "struct Table { ids: Vec<u32> }\n\nfn swap_ids(a: &mut Table, b: &Table) {\n    std::mem::swap(&mut a.ids, &mut b.ids);\n}"
+    },
+    "E0597": {
+      "sha256": "b39dfb9c78cdefad09acef6062dc0e86f277b1a420affa900a261880af7b9ad4",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 7,
+      "paths": ["ids","ix","id"],
+      "changes": [
+        {"line":1,"path":"ids","before":"","after":"RO"},
+        {"line":2,"path":"ix","before":"","after":"RWO"},
+        {"line":3,"path":"ids","before":"RO","after":""},
+        {"line":3,"path":"id","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":3,"col":14,"path":"ids","needs":"RO","has":"RO"},
+        {"line":4,"col":10,"path":"ix","needs":"RW","has":"RWO"},
+        {"line":4,"col":17,"path":"id","needs":"R","has":"RO"}
+      ],
+      "code": "fn index(ids: Vec<String>) -> usize {\n    let mut ix: Vec<&str> = vec![];\n    for id in ids {\n        ix.push(&id);\n    }\n    ix.len()\n}"
+    },
+    "E0716": {
+      "sha256": "7c8446107d1c8a7f871493db34f1df0a8c4fbf6e9a42e6f599f34fac05145cc7",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 5,
+      "paths": ["id"],
+      "changes": [
+        {"line":1,"path":"id","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":2,"col":16,"path":"id","needs":"R","has":"RO"}
+      ],
+      "code": "fn label(id: u32) -> usize {\n    let tag = id.to_string().trim();\n    let tag = tag.trim();\n    tag.len() + 1\n}"
+    }
+  }
+}

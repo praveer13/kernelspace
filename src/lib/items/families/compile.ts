@@ -23,8 +23,13 @@
  *
  * The bank is loaded at module evaluation (top-level await; synchronous under Vite's eager glob), so
  * `make` stays synchronous. A unit whose recorded result does not match its authored outcome is never
- * served (verify-rust-items fails on one in the fast gate). The hash fixture is deferred until 2c-18
- * freezes the bank.
+ * served (verify-rust-items fails on one in the fast gate). 2c-18 froze the bank: the family's hash
+ * fixture (tests/fixtures/items/hashes/compile.json) pins its output, so a change to a snippet, a group
+ * or this file's wording shows up as a drift to bump the version for, as in every other family.
+ *
+ * `practiceInstance` serves the Error Museum (/errors): an item on one error code, drawn from the units
+ * whose key is that code, built by the same functions `make` uses. It is not part of `make`, so the
+ * fixture and the pools do not depend on it.
  */
 
 import { KC } from '@/data/kc/ids'
@@ -272,6 +277,31 @@ function make(seed: number, level: Level, variant?: string): Instance {
   return finishInstance(gen, { variant: spec.id, seed, level, kcs: [...spec.kcs], nsec: spec.nsec, ...built })
 }
 
+/**
+ * The Error Museum's "practice this error" (§15.6): one item whose key is `code`, a pure function of
+ * (code, seed). The unit is drawn from those the bank confirms with that outcome; the kind (verdict,
+ * permission, fix) from what the unit supports; the variant is the pool of the unit's first KC that has
+ * one, so the item is recorded under a KC it assesses. Undefined when the bank holds no unit for `code`.
+ */
+export function practiceInstance(code: string, seed: number): Instance | undefined {
+  const level: Level = 2 // gen-literal-ok: the independent level
+  const rng = rngFor(ID, `practice.${code}`, level, seed)
+  const units = UNITS.filter((u) => u.result !== 'compiles' && u.result.code === code)
+  const kindsOf = (u: Unit): CompileKind[] => [
+    'verdict',
+    ...(u.variant.focus && u.variant.permission ? (['permission'] as const) : []),
+    ...(u.variant.fixes ? (['fix'] as const) : []),
+  ]
+  const variantOf = (u: Unit, kind: CompileKind): string | undefined =>
+    kind === 'permission' ? (POOLS.has('permission') ? 'permission' : undefined) : u.snippet.kcs.map((kc) => compileVariantId(kind, kc)).find((id) => POOLS.has(id))
+  const options = units.flatMap((u) => kindsOf(u).flatMap((kind) => (variantOf(u, kind) ? [{ u, kind, id: variantOf(u, kind)! }] : [])))
+  if (options.length === 0) return undefined
+  const { u, kind, id } = rng.pick(options)
+  const spec = VARIANTS.find((v) => v.id === id)!
+  const built = kind === 'verdict' ? makeVerdict(u, rng) : kind === 'permission' ? makePermission(u) : makeFix(u)
+  return finishInstance(gen, { variant: id, seed, level, kcs: [...spec.kcs], nsec: spec.nsec, ...built })
+}
+
 /** The unit an instance was drawn from. */
 export const unitOf = (inst: Instance): Unit | undefined => UNITS.find((u) => u.key === inst.params.unit)
 
@@ -295,7 +325,6 @@ const gen: Gen = {
   pins: [],
   // a variant's distinct instances are bounded by its pool; the smallest pool is what every variant must cover
   bank: { units: Math.min(...[...POOLS.values()].map((p) => p.length)) },
-  hashFixture: 'deferred',
 }
 
 export default gen
