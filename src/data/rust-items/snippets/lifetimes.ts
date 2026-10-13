@@ -417,7 +417,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-local',
         edit: at(2, '    let bias = &(*b * 2);'),
         expect: { code: 'E0716', line: 2 },
-        why: '`*b * 2` is a temporary `u32` dropped at the end of line 2, but `move` copies a reference to it into a closure that outlives the call.',
+        why: 'The `&` in the `let` extends the temporary `u32` to the end of `scorer`, but `move` copies a reference to it into a closure that outlives the call, so it is dropped while still borrowed.',
       },
     ],
   },
@@ -1253,7 +1253,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           good('split-at', 2, '    let (h, t) = b.split_at_mut(k);', '`split_at_mut` proves the halves disjoint inside, with unsafe code the checker cannot see, and hands out both `&mut`.'),
           wrong('shared-tail', 2, '    let (h, t) = (&mut b[..k], &b[k..]);', 'A `&` of the tail still conflicts with the `&mut` of the head, and `t[0] = …` would need W it does not have.', 'r.disjoint-index-is-not-disjoint'),
-          wrong('shared-split', 2, '    let (h, t) = b.split_at(k);', '`split_at` hands out shared slices, so `t[0] = …` has R but no W.'),
+          wrong('shared-split', 2, '    let (h, t) = b.split_at(k);', '`split_at` hands out shared slices, so `t[0] = …` has R but no W.', 'r.disjoint-index-is-not-disjoint'),
         ],
       },
       {
@@ -1426,7 +1426,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           good('borrow-t', 4, '    let lx = Lexer(&t);', '`t` is a `String` that `count` owns until it returns, so a borrow of it outlives every use of `lx`.'),
           lure('clone', 'clone-t', 4, '    let lx = Lexer(t.clone().as_str());', 'The clone is another temporary dropped at the end of line 4, so `lx` still points at a `String` that is gone.'),
-          wrong('mut-borrow', 4, '    let lx = Lexer(&mut t);', '`Lexer` holds a `&str`, not a `&mut String`, and `t` is not declared `mut` either.'),
+          wrong('mut-borrow', 4, '    let lx = Lexer(&mut t);', '`Lexer` holds a `&str`, not a `&mut String`, and `t` is not declared `mut` either.', 'r.mut-binding-vs-mut-ref'),
         ],
       },
       {
@@ -2381,7 +2381,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'temp-text',
         edit: at(12, '        let lx = Lexer { src: &t.clone() };'),
         expect: { code: 'E0716', line: 12 },
-        why: '`t.clone()` is a temporary `String` dropped at the end of line 12, but `lx` borrows it and is used on line 13.',
+        why: 'The `&` in the `let` extends the cloned `String` to the end of the inner block (line 14), but `w` still borrows it and is read on line 15, so the temporary is gone too early.',
       },
       {
         id: 'drop-text',

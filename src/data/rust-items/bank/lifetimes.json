@@ -67,7 +67,7 @@
       }
     },
     "scorer-closure": {
-      "hash": "6f0aae2ada6e24dfa7addd3e34317423cc93479a75f2e49dc8096a4efefbf289",
+      "hash": "00aca1964df85043443623353c4d23a502ae70932b4f0713a7d1ef1da5bc678e",
       "variants": {
         "base": {"result":"compiles"},
         "no-move": {"result":{"code":"E0373","line":3,"message":"closure may outlive the current function, but it borrows `bias`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-bias":{"code":"E0373","line":3},"cast-bias":{"code":"E0373","line":3}}},
@@ -206,7 +206,7 @@
       }
     },
     "zero-tail-halves": {
-      "hash": "cab5f2626af5119529e1d145d04858b48cd04a1e8c7312e0e0a95e05bf1035c0",
+      "hash": "2a69daf30ea60cb74184de96bf54ea0786ac4acaf1d68d5f792235a5a541841d",
       "variants": {
         "base": {"result":"compiles"},
         "range-overlap": {"result":{"code":"E0499","line":2,"message":"cannot borrow `*b` as mutable more than once at a time"},"fixes":{"split-at":"compiles","shared-tail":{"code":"E0502","line":2},"shared-split":{"code":"E0594","line":3}}},
@@ -233,7 +233,7 @@
       }
     },
     "lexer-over-text": {
-      "hash": "c07f5bd4d0e9f7bcfdc2e87ecc92c238b23a92c316f2a4dd4d86a80d564eb16b",
+      "hash": "2a60941e8ac135ea8b7dc65f1f279e32f2f596380a6d1014ae0427b9d24273f3",
       "variants": {
         "base": {"result":"compiles"},
         "bare-ref": {"result":{"code":"E0106","line":1,"message":"missing lifetime specifier"},"fixes":{"name-it":"compiles","static-text":{"code":"E0597","line":4},"own-text":{"code":"E0308","line":4}}},
@@ -393,7 +393,7 @@
       }
     },
     "words-tied-to-self": {
-      "hash": "4ca5792636781ec76620d0f155e87841ba658bb200719befbf2b0a53b53fbe43",
+      "hash": "278f9ebddf8fc981243df45560da110c33b377be9162e7c4e69307f39a9e4f1b",
       "variants": {
         "base": {"result":"compiles"},
         "tied-to-self": {"result":{"code":"E0597","line":13,"message":"`lx` does not live long enough"},"fixes":{"name-a":"compiles","static-words":{"code":"none","line":5},"tie-self":{"code":"E0597","line":13}}},
