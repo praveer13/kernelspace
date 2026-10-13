@@ -228,7 +228,7 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
           why: [
             'Right: Cell::set takes &self, so the call needs R, which hits holds. The change happens inside the type, which makes sure no reference to the inside exists.',
             'Cell does not alter permissions on a binding. If set needed W, the let would have to be mut, as it does for a plain usize, and this one does not.',
-            'set does not move or drop the Cell, so it needs no O. It moves a new value into the Cell and gives the old one back.',
+            'set does not move or drop the Cell, so it needs no O. It writes a new value into the Cell and drops the old one.',
             'The compiler checks std types like any others. It accepts this call because &self is satisfied by R, not because anything is skipped.',
           ],
           kcs: ['r.interior-mutability', 'r.borrow-rules'],
