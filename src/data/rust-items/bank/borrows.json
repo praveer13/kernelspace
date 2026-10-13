@@ -1,0 +1,471 @@
+{
+  "group": "borrows",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "edition": "2024",
+  "snippets": {
+    "queue-iter-mut-bumps": {
+      "hash": "f864b0ec1e6bafd7234228ebfa809e32ad3df1bc8cf221a4976caa51074340e1",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-inside": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*q` as mutable more than once at a time"},"fixes":{"range-loop":"compiles","shared-iter":{"code":"E0502","line":5},"spare-req":"compiles"}},
+        "len-inside": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*q` as immutable because it is also borrowed as mutable"}},
+        "remove-inside": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*q` as mutable more than once at a time"}}
+      }
+    },
+    "id-list-iter-pushes": {
+      "hash": "eab4a1c599fbd0a68c4264f0a9214118e1df89e3a8a4614f86595c16c0ad1daf",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*ids` as mutable because it is also borrowed as immutable"},"fixes":{"range-loop":"compiles","iter-mut":{"code":"E0499","line":3},"clone-push":"compiles"}},
+        "insert-front": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*ids` as mutable because it is also borrowed as immutable"}},
+        "clear-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*ids` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "block-pool-iter-inserts": {
+      "hash": "65c5d12f80232fea8854999893ad1add670359ddaa5cab8011e826d08f95e6b0",
+      "variants": {
+        "base": {"result":"compiles"},
+        "insert-inside": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*pool` as mutable because it is also borrowed as immutable"}},
+        "remove-inside": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*pool` as mutable because it is also borrowed as immutable"}},
+        "entry-inside": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*pool` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "live-set-retain-closure": {
+      "hash": "49c120a7e9f3162ef2d5e7cce17616318feb70decd404f558884b7b4449c6b9b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-in-closure": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*v` as mutable because it is also borrowed as immutable"},"fixes":{"use-copy":"compiles","deref-len":{"code":"E0502","line":3},"clone-len":{"code":"E0502","line":3}}},
+        "contains-in-closure": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*v` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "tail-token-borrow": {
+      "hash": "bdcc7e53dc436dde64636319525bfca0e52bfa0c2f208124bada7ac395b19356",
+      "variants": {
+        "base": {"result":"compiles"},
+        "borrow-tail": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*out` as mutable because it is also borrowed as immutable"},"fixes":{"copy-tail":"compiles","last-mut":{"code":"E0499","line":5},"clone-out":{"code":"E0716","line":4}}},
+        "tail-mut": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*out` as mutable more than once at a time"}},
+        "first-borrow": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*out` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "prefix-count-bump": {
+      "hash": "8838919f241d1a454224a4e145e211c3579b5adf8f1b08e97c52114a3f988eec",
+      "variants": {
+        "base": {"result":"compiles"},
+        "borrow-count": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*m` as mutable because it is also borrowed as immutable"},"fixes":{"copy-count":"compiles","deref-count":{"code":"E0502","line":5},"clone-map":{"code":"E0716","line":4}}},
+        "first-value": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*m` as mutable because it is also borrowed as immutable"}},
+        "max-value": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*m` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "slot-counter-entry": {
+      "hash": "4b4603d45010c01b70b1c965a449367d64e2614587edd83f8332cc6dc914c373",
+      "variants": {
+        "base": {"result":"compiles"},
+        "late-slot": {"result":{"code":"E0502","line":6,"message":"cannot borrow `*m` as immutable because it is also borrowed as mutable"}},
+        "second-entry": {"result":{"code":"E0499","line":6,"message":"cannot borrow `*m` as mutable more than once at a time"}},
+        "insert-with-slot": {"result":{"code":"E0499","line":6,"message":"cannot borrow `*m` as mutable more than once at a time"}}
+      }
+    },
+    "batch-drain-sum": {
+      "hash": "dbf2915fb9b8b39e40b6139c98166a9e38ad8350da3537a67d53b0bf71940687",
+      "variants": {
+        "base": {"result":"compiles"},
+        "len-inside": {"result":{"code":"E0502","line":4,"message":"cannot borrow `*b` as immutable because it is also borrowed as mutable"}},
+        "push-inside": {"result":{"code":"E0499","line":4,"message":"cannot borrow `*b` as mutable more than once at a time"}},
+        "index-inside": {"result":{"code":"E0502","line":4,"message":"cannot borrow `*b` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "mirror-queue-extend": {
+      "hash": "956634481673c9fb099285775d6697d334a35085267d23e152be25110d566c7e",
+      "variants": {
+        "base": {"result":"compiles"},
+        "lazy-ids": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*q` as mutable because it is also borrowed as immutable"},"fixes":{"to-vec":"compiles","lazy-take":{"code":"E0502","line":3},"clone-extend":"compiles"}},
+        "drain-ids": {"result":{"code":"E0499","line":3,"message":"cannot borrow `*q` as mutable more than once at a time"}},
+        "plain-iter": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*q` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "adjacent-block-bumps": {
+      "hash": "e55bbaa08fb577a74dd80abe75bec9e6ace296c15b1fce9e54e75811e2551883",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-both": {"result":{"code":"E0499","line":4,"message":"cannot borrow `s[_]` as mutable more than once at a time"}},
+        "swap-both": {"result":{"code":"E0499","line":4,"message":"cannot borrow `s[_]` as mutable more than once at a time"},"fixes":{"slice-swap":"compiles","same-index":{"code":"E0499","line":4},"copy-vec":{"code":"E0502","line":4}}},
+        "print-both": {"result":{"code":"E0499","line":4,"message":"cannot borrow `s[_]` as mutable more than once at a time"}}
+      }
+    },
+    "router-load-shift": {
+      "hash": "246262a50a181db9ee493539fc91cca35006a2f8f1fb3b1371d91585ab2bba6e",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-both": {"result":{"code":"E0499","line":6,"message":"cannot borrow `*m` as mutable more than once at a time"}},
+        "swap-both": {"result":{"code":"E0499","line":6,"message":"cannot borrow `*m` as mutable more than once at a time"}},
+        "shared-get": {"result":{"code":"E0594","line":7,"message":"cannot assign to `*b`, which is behind a `&` reference"},"fixes":{"get-mut":"compiles","get-or-zero":{"code":"E0594","line":7},"copy-value":"compiles"}}
+      }
+    },
+    "sampler-seed-access": {
+      "hash": "e16b35ed88db6cc169010d98762e3d0ee211978ef929618b6af81a6e0c48aa3b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-temp": {"result":{"code":"E0503","line":12,"message":"cannot use `s.temp` because it was mutably borrowed"}},
+        "read-seed": {"result":{"code":"E0503","line":12,"message":"cannot use `s.seed` because it was mutably borrowed"}},
+        "second-call": {"result":{"code":"E0499","line":12,"message":"cannot borrow `*s` as mutable more than once at a time"}}
+      }
+    },
+    "sched-head-peek": {
+      "hash": "6dec3218b1281fbdc65a6ace70f64dc445ec6c4bbd65b7f68ef87e0b9e7b132b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "via-method": {"result":{"code":"E0502","line":11,"message":"cannot borrow `s.log` as mutable because it is also borrowed as immutable"},"fixes":{"field-borrow":"compiles","extend-log":{"code":"E0502","line":11},"second-head":"compiles"}},
+        "push-queue": {"result":{"code":"E0502","line":11,"message":"cannot borrow `s.q` as mutable because it is also borrowed as immutable"}},
+        "reset-queue": {"result":{"code":"E0506","line":11,"message":"cannot assign to `s.q` because it is borrowed"}}
+      }
+    },
+    "queue-zip-self": {
+      "hash": "f380638f7914cfc55fa198f1b3c417c1934c4516eaea8ada5a04ca6fe9f3f18b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "zip-mut": {"result":{"code":"E0499","line":3,"message":"cannot borrow `*v` as mutable more than once at a time"}},
+        "zip-shared": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*v` as immutable because it is also borrowed as mutable"}},
+        "zip-copy": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*v` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "double-the-queue": {
+      "hash": "159e49b92c38cccddac63378d059bcb3131592116db6b52fb0617e409787627d",
+      "variants": {
+        "base": {"result":"compiles"},
+        "alias": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*q` as mutable because it is also borrowed as immutable"},"fixes":{"use-copy":"compiles","whole-slice":{"code":"E0502","line":7},"empty-src":"compiles"}},
+        "half-window": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*q` as mutable because it is also borrowed as immutable"}},
+        "as-slice": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*q` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "reborrow-parent": {
+      "hash": "03c36048580f20dc58444004ba51639fecb4c6d226614bdeec7bb04f3d6fd9d8",
+      "variants": {
+        "base": {"result":"compiles"},
+        "len-in-args": {"result":{"code":"E0502","line":4,"message":"cannot borrow `*v` as immutable because it is also borrowed as mutable"}},
+        "extend-from-parent": {"result":{"code":"E0502","line":4,"message":"cannot borrow `*v` as immutable because it is also borrowed as mutable"}},
+        "swap-both": {"result":{"code":"E0499","line":4,"message":"cannot borrow `*v` as mutable more than once at a time"}}
+      }
+    },
+    "id-source-bump": {
+      "hash": "7ce23999a3544adc8dfe5b2ec3d05a2f3eeb3d499ac74281b8d5d25a7ad54dc6",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-bump": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*self` as mutable more than once at a time"},"fixes":{"bump-first":"compiles","bump-plus":{"code":"E0499","line":10},"read-next":{"code":"E0499","line":10}}},
+        "insert-bump": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*self` as mutable more than once at a time"}},
+        "extend-bump": {"result":{"code":"E0499","line":10,"message":"cannot borrow `*self` as mutable more than once at a time"}},
+        "push-field": {"result":"compiles"}
+      }
+    },
+    "demote-pools": {
+      "hash": "086d61a1d2727d9391ac84dfead837ae460d2646b330695f786859cc608e177a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "index-both": {"result":{"code":"E0499","line":7,"message":"cannot borrow `*p` as mutable more than once at a time"},"fixes":{"use-halves":"compiles","same-index":{"code":"E0499","line":7},"clone-dst":{"code":"E0502","line":7}}},
+        "same-half": {"result":{"code":"E0499","line":7,"message":"cannot borrow `hot[_]` as mutable more than once at a time"}},
+        "half-and-whole": {"result":{"code":"E0499","line":7,"message":"cannot borrow `*p` as mutable more than once at a time"}}
+      }
+    },
+    "staging-copy-in": {
+      "hash": "5f4110fdad31dda8fea3778597f347a364a61b1bea78ce725e04505284266d7a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "same-buffer": {"result":{"code":"E0502","line":6,"message":"cannot borrow `*out` as mutable because it is also borrowed as immutable"},"fixes":{"use-buf":"compiles","full-range":{"code":"E0502","line":6},"empty-src":"compiles"}},
+        "shifted-window": {"result":{"code":"E0502","line":6,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"}},
+        "copy-first": {"result":"compiles"}
+      }
+    },
+    "cache-table-pair": {
+      "hash": "3e9828b3a63c63bc4bedce8cc79ce65136950c56cd5452660e985f8d3ed08090",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-src": {"result":{"code":"E0499","line":14,"message":"cannot borrow `*c` as mutable more than once at a time"}},
+        "extend-src": {"result":{"code":"E0499","line":14,"message":"cannot borrow `*c` as mutable more than once at a time"}},
+        "read-cache": {"result":{"code":"E0502","line":15,"message":"cannot borrow `c.hot` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "queue-reset-peeked": {
+      "hash": "15fb39786199bb267041c06f654048f3ac0e8afe4661b28bf4e4d826c1bafa5e",
+      "variants": {
+        "base": {"result":"compiles"},
+        "peek-ref": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*q` because it is borrowed"},"fixes":{"copy-head":"compiles","take-instead":{"code":"E0502","line":3},"clone-clear":"compiles"}},
+        "max-ref": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*q` because it is borrowed"}},
+        "window-ref": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*q` because it is borrowed"}}
+      }
+    },
+    "slot-owner-write": {
+      "hash": "84bde6eac53dfb480dc3a72ae44d3d32a6a2f55c1a7879f8368093c6a66fcb51",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-owner": {"result":{"code":"E0506","line":5,"message":"cannot assign to `s.owner` because it is borrowed"}},
+        "mut-owner": {"result":{"code":"E0506","line":5,"message":"cannot assign to `s.owner` because it is borrowed"}}
+      }
+    },
+    "running-total-bump": {
+      "hash": "65a892e133f14da5fb23740d9871fc28a77fe7ce4dcc247de256397d91b3c893",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-before": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*total` because it is borrowed"},"fixes":{"copy-before":"compiles","spell-out":{"code":"E0506","line":3},"mut-before":{"code":"E0503","line":3}}},
+        "mut-before": {"result":{"code":"E0503","line":3,"message":"cannot use `*total` because it was mutably borrowed"}}
+      }
+    },
+    "buffer-rotate-loop": {
+      "hash": "6f0c0d43e319bde703a596c11843ca4a3e1e774240e413a90dccda87e69b560b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "reset-inside": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*buf` because it is borrowed"}},
+        "take-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"}},
+        "swap-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"}},
+        "truncate-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "prompt-option-clear": {
+      "hash": "5a4eab6d745184347ccafdc5b71bea849c8537b2eda16be32f00d45e29169b51",
+      "variants": {
+        "base": {"result":"compiles"},
+        "as-deref": {"result":{"code":"E0506","line":5,"message":"cannot assign to `r.prompt` because it is borrowed"},"fixes":{"take-it":"compiles","as-ref-prompt":{"code":"E0506","line":5},"is-some":"compiles"}},
+        "as-ref": {"result":{"code":"E0506","line":5,"message":"cannot assign to `r.prompt` because it is borrowed"}},
+        "as-mut": {"result":{"code":"E0506","line":5,"message":"cannot assign to `r.prompt` because it is borrowed"}},
+        "iter-next": {"result":{"code":"E0506","line":5,"message":"cannot assign to `r.prompt` because it is borrowed"}}
+      }
+    },
+    "depth-counter-tick": {
+      "hash": "e6dfe92e397b968860af1c3a0969b2f52c9b61fbf6363adad4651d8afb34e1ae",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-first": {"result":{"code":"E0503","line":4,"message":"cannot use `*n` because it was mutably borrowed"},"fixes":{"m-first":"compiles","plus-zero":{"code":"E0503","line":4},"clone-n":{"code":"E0502","line":4}}},
+        "compare": {"result":{"code":"E0503","line":4,"message":"cannot use `*n` because it was mutably borrowed"}},
+        "times": {"result":{"code":"E0503","line":4,"message":"cannot use `*n` because it was mutably borrowed"}},
+        "m-first": {"result":"compiles"}
+      }
+    },
+    "table-retire-first": {
+      "hash": "587318121174508993ea2a9ed7e0f51afcb349eb29846959e4dd280b01c4b8bc",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-first": {"result":{"code":"E0505","line":6,"message":"cannot move out of `t` because it is borrowed"},"fixes":{"copy-first":"compiles","get-first":{"code":"E0505","line":6},"keep-table":"compiles"}},
+        "first-method": {"result":{"code":"E0505","line":6,"message":"cannot move out of `t` because it is borrowed"}},
+        "last-row": {"result":{"code":"E0505","line":6,"message":"cannot move out of `t` because it is borrowed"}}
+      }
+    },
+    "sampler-cool-down": {
+      "hash": "92b7ab62dd1d37c342d30ec617c47109cd9f5197eee91feddad4c8e168eff1fc",
+      "variants": {
+        "base": {"result":"compiles"},
+        "shared-param": {"result":{"code":"E0594","line":5,"message":"cannot assign to `s.temp`, which is behind a `&` reference"},"fixes":{"mut-param":"compiles","mut-binding":{"code":"E0594","line":5},"local-copy":"compiles"}},
+        "mut-binding": {"result":{"code":"E0594","line":5,"message":"cannot assign to `s.temp`, which is behind a `&` reference"}},
+        "by-value": {"result":{"code":"E0594","line":5,"message":"cannot assign to `s.temp`, as `s` is not declared as mutable"}}
+      }
+    },
+    "requests-mark-done": {
+      "hash": "93ada680ee9f0a53bc3308a3210c7b3548b47ea9aebe879156ad9cb025433a6b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "iter-shared": {"result":{"code":"E0594","line":5,"message":"cannot assign to `r.done`, which is behind a `&` reference"},"fixes":{"iter-mut":"compiles","as-slice-loop":{"code":"E0594","line":5},"ref-loop":{"code":"E0594","line":5}}},
+        "ref-loop": {"result":{"code":"E0594","line":5,"message":"cannot assign to `r.done`, which is behind a `&` reference"}},
+        "as-slice": {"result":{"code":"E0594","line":5,"message":"cannot assign to `r.done`, which is behind a `&` reference"}}
+      }
+    },
+    "map-flag-mark": {
+      "hash": "59d7f9d25cfed80dbe565dae331d5ecc005c4eac2f2472c3879f159205ee49ea",
+      "variants": {
+        "base": {"result":"compiles"},
+        "get-shared": {"result":{"code":"E0594","line":5,"message":"cannot assign to `*v`, which is behind a `&` reference"}},
+        "values": {"result":{"code":"E0594","line":5,"message":"cannot assign to `*v`, which is behind a `&` reference"}},
+        "iter-pairs": {"result":{"code":"E0594","line":5,"message":"cannot assign to `*v`, which is behind a `&` reference"}}
+      }
+    },
+    "id-buffer-binding": {
+      "hash": "93b9cad1035834ee9f06d4dd851174a7419a51c053c68e34c907f0d5d43e4c67",
+      "variants": {
+        "base": {"result":"compiles"},
+        "not-mut": {"result":{"code":"E0596","line":2,"message":"cannot borrow `ids` as mutable, as it is not declared as mutable"},"fixes":{"add-mut":"compiles","explicit-borrow":{"code":"E0596","line":2},"name-type":{"code":"E0596","line":2},"clone-ids":{"code":"E0596","line":2}}},
+        "vec-macro": {"result":{"code":"E0596","line":2,"message":"cannot borrow `ids` as mutable, as it is not declared as mutable"}},
+        "typed-not-mut": {"result":{"code":"E0596","line":2,"message":"cannot borrow `ids` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "prompt-head-clear": {
+      "hash": "fbddd03d9c199d6da8cbc4c1bc7b08f0f7cf8f56d1eceaf6fba4991a05f00fee",
+      "variants": {
+        "base": {"result":"compiles"},
+        "slice-ref": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"},"fixes":{"copy-head":"compiles","mut-slice":{"code":"E0499","line":3},"clone-clear":"compiles"}},
+        "slice-mut": {"result":{"code":"E0499","line":3,"message":"cannot borrow `*buf` as mutable more than once at a time"}},
+        "get-window": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"}},
+        "split-window": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "first-word-shorten": {
+      "hash": "605834a616b95b021595a714350e9ddd86f477ad76bc2a19abc92613e0279258",
+      "variants": {
+        "base": {"result":"compiles"},
+        "word-ref": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*text` as mutable because it is also borrowed as immutable"},"fixes":{"take-len":"compiles","split-off":{"code":"E0502","line":7},"clone-arg":{"code":"E0716","line":6}}},
+        "prefix-slice": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*text` as mutable because it is also borrowed as immutable"}},
+        "trim-ref": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*text` as mutable because it is also borrowed as immutable"}},
+        "as-str": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*text` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "window-extend-self": {
+      "hash": "5b9509156765f9a6b0a3a35f51ea523c041e6006f3a40a8aab870d595181d86b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "window-ref": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"}},
+        "window-mut": {"result":{"code":"E0499","line":3,"message":"cannot borrow `*buf` as mutable more than once at a time"}},
+        "extend-self": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as mutable because it is also borrowed as immutable"},"fixes":{"from-within":"compiles","extend-ref":{"code":"E0502","line":3},"clone-extend":"compiles"}},
+        "from-within": {"result":"compiles"}
+      }
+    },
+    "line-tag-suffix": {
+      "hash": "d24099726b4c929ce4187cf0e1dc4c466c0ec0d9d831bce713445aa8c1238290",
+      "variants": {
+        "base": {"result":"compiles"},
+        "trim-ref": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*line` as mutable because it is also borrowed as immutable"},"fixes":{"own-name":"compiles","ref-trim":{"code":"E0502","line":3},"clone-push":"compiles"}},
+        "prefix-slice": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*line` as mutable because it is also borrowed as immutable"}},
+        "as-str": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*line` as mutable because it is also borrowed as immutable"}},
+        "first-token": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*line` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "chunk-zero-pad": {
+      "hash": "30d71d98e0f051b802ad14ceb5d4af58c6f9b5a31ef1865626c8db8b7f212ea3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "touch-parent": {"result":{"code":"E0503","line":3,"message":"cannot use `*b` because it was mutably borrowed"}},
+        "read-parent": {"result":{"code":"E0503","line":3,"message":"cannot use `*b` because it was mutably borrowed"}},
+        "len-parent": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*b` as immutable because it is also borrowed as mutable"}},
+        "chunks-shared": {"result":{"code":"E0594","line":3,"message":"cannot assign to `c[_]`, which is behind a `&` reference"}}
+      }
+    },
+    "window-first-peak": {
+      "hash": "c346672f07d98181754f6137f271a9009ef5feb1ce1998b1f13b00517d214554",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-first": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*w` as mutable because it is also borrowed as immutable"},"fixes":{"copy-first":"compiles","reborrow-first":{"code":"E0502","line":7},"insert-end":{"code":"E0502","line":7}}},
+        "last-ref": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*w` as mutable because it is also borrowed as immutable"}},
+        "index-ref": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*w` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "adjacent-id-pairs": {
+      "hash": "861e9ccd580999e806f355098f79dd5cb4d39193e6faabdf1680d5d7f2b501f5",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*ids` as mutable because it is also borrowed as immutable"}},
+        "sort-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*ids` as mutable because it is also borrowed as immutable"}},
+        "truncate-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*ids` as mutable because it is also borrowed as immutable"}},
+        "swap-inside": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*ids` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "half-mix-blocks": {
+      "hash": "3bfc39a69363252c0cca14d5b4ad87bee4ddc229c87905ee1d66765f296e3a24",
+      "variants": {
+        "base": {"result":"compiles"},
+        "shared-split": {"result":{"code":"E0594","line":3,"message":"cannot assign to `a[_]`, which is behind a `&` reference"},"fixes":{"split-mut":"compiles","swap-names":"compiles","sum-local":"compiles"}},
+        "read-parent": {"result":{"code":"E0503","line":3,"message":"cannot use `*buf` because it was mutably borrowed"}},
+        "len-parent": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*buf` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "top-scores-sort": {
+      "hash": "a59ba257808c443e05f001a1142df3ac4cad0bf5c022509d71cc66038aeedfe1",
+      "variants": {
+        "base": {"result":"compiles"},
+        "top-ref": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*xs` as mutable because it is also borrowed as immutable"},"fixes":{"copy-top":"compiles","mut-top":{"code":"E0499","line":3},"clone-sort":"compiles"}},
+        "top-iter": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*xs` as mutable because it is also borrowed as immutable"}},
+        "top-first": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*xs` as mutable because it is also borrowed as immutable"}},
+        "top-mut": {"result":{"code":"E0499","line":3,"message":"cannot borrow `*xs` as mutable more than once at a time"}}
+      }
+    },
+    "pair-slots-if-let": {
+      "hash": "bd09b623daa95d660321c4233437eca905ae16325dfeba15c1b10f8c423992ae",
+      "variants": {
+        "base": {"result":"compiles"},
+        "index-twice": {"result":{"code":"E0499","line":5,"message":"cannot borrow `v[_]` as mutable more than once at a time"},"fixes":{"slice-swap":"compiles","same-index":{"code":"E0499","line":5},"copy-over":"compiles"}},
+        "index-again": {"result":{"code":"E0499","line":5,"message":"cannot borrow `v[_]` as mutable more than once at a time"}},
+        "read-again": {"result":{"code":"E0503","line":5,"message":"cannot use `v[_]` because it was mutably borrowed"}},
+        "len-again": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*v` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "push-len-two-phase": {
+      "hash": "1562226967c5cc3dde43dcfb26be677e7344a532edd3815ef07807708cfb630c",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-pop": {"result":{"code":"E0499","line":2,"message":"cannot borrow `*v` as mutable more than once at a time"},"fixes":{"pop-first":"compiles","push-len":"compiles","clone-push":"compiles"}},
+        "insert-pop": {"result":{"code":"E0499","line":2,"message":"cannot borrow `*v` as mutable more than once at a time"}},
+        "extend-iter": {"result":{"code":"E0502","line":2,"message":"cannot borrow `*v` as mutable because it is also borrowed as immutable"}},
+        "push-first": {"result":"compiles"}
+      }
+    },
+    "grid-row-peek": {
+      "hash": "9cc89a5fc3c4fd9586f1eea4bd56c76d48c00cd027d47533478a49c983436311",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-row": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*grid` as mutable because it is also borrowed as immutable"},"fixes":{"copy-row":"compiles","deref-row":{"code":"E0502","line":3},"other-cell":{"code":"E0502","line":3}}},
+        "len-arg": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*grid` as immutable because it is also borrowed as mutable"}},
+        "cell-arg": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*grid` as immutable because it is also borrowed as mutable"}}
+      }
+    },
+    "slot-release-enum": {
+      "hash": "c56f86813ff9ff2971bb9ef13155fb30fc018412dd20256228361e5875647324",
+      "variants": {
+        "base": {"result":"compiles"},
+        "bind-ref": {"result":{"code":"E0506","line":5,"message":"cannot assign to `*s` because it is borrowed"},"fixes":{"copy-n":"compiles","match-shared":{"code":"E0506","line":5},"spare-slot":"compiles"}},
+        "bind-shared": {"result":{"code":"E0506","line":5,"message":"cannot assign to `*s` because it is borrowed"}},
+        "bind-mut": {"result":{"code":"E0506","line":5,"message":"cannot assign to `*s` because it is borrowed"}}
+      }
+    },
+    "gain-reborrows": {
+      "hash": "74d3c78ec93d532a645c6ff977a866ca6559a4c7cc5b1b772393ac5822911fa7",
+      "variants": {
+        "base": {"result":"compiles"},
+        "both-live": {"result":{"code":"E0502","line":4,"message":"cannot borrow `*t` as immutable because it is also borrowed as mutable"}},
+        "times-t": {"result":{"code":"E0503","line":3,"message":"cannot use `*t` because it was mutably borrowed"}},
+        "shared-first": {"result":{"code":"E0594","line":3,"message":"cannot assign to `*w`, which is behind a `&` reference"}}
+      }
+    },
+    "drop-idle-requests": {
+      "hash": "283dc260dd8d28951b0f03cff6c3eebc3357989f39ae310c6998c2afb3ff111f",
+      "variants": {
+        "base": {"result":"compiles"},
+        "iter-remove": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*v` as mutable because it is also borrowed as immutable"},"fixes":{"range-loop":"compiles","iter-mut":{"code":"E0499","line":3},"clone-remove":"compiles"}},
+        "iter-mut-remove": {"result":{"code":"E0499","line":3,"message":"cannot borrow `*v` as mutable more than once at a time"}},
+        "drain-remove": {"result":{"code":"E0499","line":3,"message":"cannot borrow `*v` as mutable more than once at a time"}},
+        "rev-remove": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*v` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "top-id-insert": {
+      "hash": "aa0367ad998b801cb4ccea240dece0ab25baf50d2135d96c59128ec4d931d4d8",
+      "variants": {
+        "base": {"result":"compiles"},
+        "max-ref": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*s` as mutable because it is also borrowed as immutable"},"fixes":{"copy-top":"compiles","min-top":{"code":"E0502","line":5},"clone-insert":"compiles"}},
+        "min-ref": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*s` as mutable because it is also borrowed as immutable"}},
+        "next-ref": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*s` as mutable because it is also borrowed as immutable"}},
+        "get-ref": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*s` as mutable because it is also borrowed as immutable"}}
+      }
+    },
+    "closure-field-capture": {
+      "hash": "620589058a979c80da3e8de38bf0c48ee3b5476b49d90d2eecc23e3f49e6a56c",
+      "variants": {
+        "base": {"result":"compiles"},
+        "assign-n": {"result":{"code":"E0506","line":6,"message":"cannot assign to `e.n` because it is borrowed"}},
+        "read-n": {"result":{"code":"E0502","line":6,"message":"cannot borrow `e.n` as immutable because it is also borrowed as mutable"}},
+        "reads-v": {"result":{"code":"E0502","line":6,"message":"cannot borrow `e.v` as mutable because it is also borrowed as immutable"}},
+        "pops-v": {"result":{"code":"E0499","line":6,"message":"cannot borrow `e.v` as mutable more than once at a time"}}
+      }
+    },
+    "batch-send-peeked": {
+      "hash": "5382f2ff5439d790f42e2508e152f1f467259a6ec4c57780f05c669e5ffe2a64",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-first": {"result":{"code":"E0505","line":3,"message":"cannot move out of `b` because it is borrowed"},"fixes":{"copy-first":"compiles","head-slice":{"code":"E0505","line":3},"clone-batch":"compiles"}},
+        "last-ref": {"result":{"code":"E0505","line":3,"message":"cannot move out of `b` because it is borrowed"}},
+        "max-ref": {"result":{"code":"E0505","line":3,"message":"cannot move out of `b` because it is borrowed"}},
+        "head-slice": {"result":{"code":"E0505","line":3,"message":"cannot move out of `b` because it is borrowed"}}
+      }
+    },
+    "request-done-borrowed": {
+      "hash": "c237c65cf0e444966dd00b6b0ec26efac840733807b5ad4bf7096d8ec852a969",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-id": {"result":{"code":"E0505","line":5,"message":"cannot move out of `r` because it is borrowed"},"fixes":{"copy-id":"compiles","drop-text":"compiles","borrow-it":"compiles"}},
+        "ref-text": {"result":{"code":"E0505","line":5,"message":"cannot move out of `r` because it is borrowed"}},
+        "as-str": {"result":{"code":"E0505","line":5,"message":"cannot move out of `r` because it is borrowed"}}
+      }
+    }
+  }
+}

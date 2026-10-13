@@ -24,6 +24,14 @@ const choice = (i: Instance) => {
 }
 /** Every instance of a variant over the seeds, at level 0. */
 const instances = (variant: string): Instance[] => SEEDS.map((s) => compile.make(s, 0, variant))
+/** The instance a variant serves for one unit, scanning seeds until it is drawn: a content group's pools hold hundreds of units, more than 200 seeds reach. */
+function drawUnit(variant: string, unit: string): Instance {
+  for (let s = 1; s <= 20000; s++) {
+    const i = compile.make(s, 0, variant)
+    if (i.params.unit === unit) return i
+  }
+  throw new Error(`${variant} never draws ${unit}`)
+}
 
 /** A one-snippet group whose bank is what the authored outcomes say, for the checks to disagree with. */
 function group(s: RustSnippet): RustGroup {
@@ -315,7 +323,7 @@ describe('compile: verdict items', () => {
     const code = i.prompt.stem.find((p) => p.t === 'code')
     expect(code).toMatchObject({ t: 'code', lang: 'rust', lines: true, code: unitOf(i)!.code })
     const u = UNITS.find((x) => x.key === 'seed/block-table-first-block/borrow-first')!
-    const hit = SEEDS.map((s) => compile.make(s, 0, 'verdict.borrow-rules')).find((x) => x.params.unit === u.key)!
+    const hit = drawUnit('verdict.borrow-rules', u.key)
     const key = choice(hit).options.find((o) => o.id === 'E0502')!
     expect(key.why).toContain('rustc reports E0502 at line 7: "cannot borrow `table.blocks` as mutable')
   })
@@ -343,13 +351,16 @@ describe('compile: permission items', () => {
       expect(i.prompt.stem.find((p) => p.t === 'code')).toMatchObject({ mark: u.variant.focus!.line, lines: true })
       expect(partsText(i.prompt.stem)).toContain(`\`${u.variant.focus!.path}\``)
     }
-    // every labelled variant in the bank is in the pool
-    const labelled = UNITS.filter((u) => u.variant.permission).map((u) => u.key)
-    expect(new Set(all.map((i) => i.params.unit))).toEqual(new Set(labelled))
+    // every labelled variant in the bank is in the pool (a content group holds more units than 200 seeds draw)
+    const labelled = new Set(UNITS.filter((u) => u.variant.permission).map((u) => u.key))
+    for (const i of all) expect(labelled.has(String(i.params.unit))).toBe(true)
+    const seen = new Set<string>()
+    for (let s = 1; s <= 20000 && seen.size < labelled.size; s++) seen.add(String(compile.make(s, 0, 'permission').params.unit))
+    expect(seen).toEqual(labelled)
   })
 
   test('a wrong pick says what the path still holds, or that the line does not need it', () => {
-    const i = instances('permission').find((x) => x.params.unit === 'seed/block-table-first-block/borrow-first')!
+    const i = drawUnit('permission', 'seed/block-table-first-block/borrow-first')
     const a = choice(i)
     expect(a.options.find((o) => o.id === 'read')!.why).toContain('still holds Read (R) at line 7; what it lacks is Write (W)')
     expect(a.options.find((o) => o.id === 'own')!.why).toContain('Line 7 does not need Own (O)')
@@ -360,7 +371,8 @@ describe('compile: fix items', () => {
   const fixes = compile.variants.filter((v) => v.id.startsWith('fix.'))
 
   test('the authored fixes are the options, and the one ok fix is the key', () => {
-    expect(fixes.map((v) => v.id).sort()).toEqual(['fix.borrow-rules', 'fix.ownership-moves'])
+    // a fix pool per KC that has at least MIN_POOL fix variants in the bank (more groups add KCs)
+    expect(fixes.map((v) => v.id)).toEqual(expect.arrayContaining(['fix.borrow-rules', 'fix.ownership-moves']))
     for (const v of fixes) {
       for (const i of instances(v.id)) {
         const u = unitOf(i)!
@@ -373,7 +385,7 @@ describe('compile: fix items', () => {
   })
 
   test(`picking .clone() is diagnosed as ${CLONE_MISS}, and its why says what rustc did`, () => {
-    const i = instances('fix.borrow-rules').find((x) => x.params.unit === 'seed/block-table-first-block/borrow-first')!
+    const i = drawUnit('fix.borrow-rules', 'seed/block-table-first-block/borrow-first')
     const g = gradeResponse(i, { kind: 'choice', picks: ['clone-push'] })
     expect(g.ok).toBe(false)
     expect(g.diagnosis?.id).toBe(CLONE_MISS)
