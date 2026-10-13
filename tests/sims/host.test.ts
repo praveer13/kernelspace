@@ -4,6 +4,8 @@
  * Lab mode must stay today's URL behaviour; embed and phone modes must never write the URL.
  */
 import { describe, expect, test } from 'bun:test'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
@@ -36,8 +38,9 @@ import {
 } from '../../src/lib/sims/host'
 import type { ConfigSinks, SimHostInternal } from '../../src/lib/sims/host'
 import type { Observation, PredictSpec, SimHostMode } from '../../src/lib/sims/types'
-import { WAIVER, checkCanvasMirrors } from '../../scripts/verify-plays'
+import { MIRROR_SCOPE, WAIVER, checkCanvasMirrors } from '../../scripts/verify-plays'
 
+const ROOT = join(import.meta.dir, '..', '..')
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 function sinks() {
@@ -437,33 +440,58 @@ describe('mirror announcements (§10.5)', () => {
   })
 })
 
-describe('verify-plays: the canvas-mirror check (§10.5)', () => {
+describe('verify-plays: the zero-waiver canvas-mirror gate (§12.2)', () => {
   const file = (name: string, text: string) => ({ file: name, text })
   const status = (text: string) => checkCanvasMirrors([file('S.tsx', text)])[0]?.status
+  const mirror = (id: string) => `<SimMirror id={${id}} table={t} />`
 
-  test('a canvas with a mirror passes, with the waiver passes as waived, with neither fails', () => {
-    expect(status('<canvas ref={r} />\n<SimMirror id="m" table={t} />')).toBe('mirrored')
-    expect(status(`${WAIVER}\nconst a = <canvas className="x" />`)).toBe('waived')
+  test('a canvas whose aria-describedby names a SimMirror id passes; without a mirror it fails', () => {
+    expect(status(`<canvas ref={r} aria-describedby={mirrorId} />\n${mirror('mirrorId')}`)).toBe('mirrored')
     expect(status('const a = <canvas />')).toBe('missing')
+    expect(status(`<canvas aria-describedby="m" />\n<SimMirror id="m" table={t} />`)).toBe('mirrored')
   })
 
-  test('a mirror plus the waiver is a stale waiver', () => {
-    expect(status(`${WAIVER}\n<canvas />\n<SimMirror id="m" table={t} />`)).toBe('stale-waiver')
+  test('a mirror nobody points at, or a pointer to another id, does not count', () => {
+    expect(status(`<canvas />\n${mirror('m')}`)).toBe('missing')
+    expect(status(`<canvas aria-describedby={other} />\n${mirror('m')}`)).toBe('missing')
   })
 
-  test('a file with no canvas is not listed; counts every canvas', () => {
+  test('a file with N canvases needs N mirrored canvases: one mirror no longer covers two', () => {
+    const two = `<canvas ref={a} aria-describedby={aId} />\n<canvas\n  ref={b}\n  onMouseMove={(e) => go(e)}\n  aria-describedby={bId}\n/>`
+    const [one] = checkCanvasMirrors([file('B.tsx', `${two}\n${mirror('aId')}`)])
+    expect(one).toMatchObject({ canvases: 2, mirrored: 1, status: 'missing' })
+    const [both] = checkCanvasMirrors([file('B.tsx', `${two}\n${mirror('aId')}\n${mirror('bId')}`)])
+    expect(both).toMatchObject({ canvases: 2, mirrored: 2, status: 'mirrored' })
+  })
+
+  test('the retired waiver is an error, with or without a mirror, and with no canvas at all', () => {
+    expect(status(`${WAIVER}\nconst a = <canvas className="x" />`)).toBe('waiver')
+    expect(status(`${WAIVER}\n<canvas aria-describedby={m} />\n${mirror('m')}`)).toBe('waiver')
+    expect(status(`${WAIVER}\nconst x = 1`)).toBe('waiver')
+    expect(status(`/* ${WAIVER} */\n<canvas />`)).toBe('waiver')
+  })
+
+  test('a file with no canvas is not listed', () => {
     expect(checkCanvasMirrors([file('A.tsx', 'const x = 1')])).toEqual([])
-    expect(checkCanvasMirrors([file('B.tsx', `${WAIVER}\n<canvas ref={a} />\n<canvas\n  ref={b}\n/>`)])[0].canvases).toBe(2)
   })
 
   test('<canvas and <SimMirror named in a comment count for nothing', () => {
     expect(status('/** draws on a <canvas> */\n// <SimMirror here later\nconst x = 1')).toBeUndefined()
-    expect(status('// <SimMirror is coming\nconst a = <canvas />')).toBe('missing')
-    expect(status('const a = <canvas />\n// a11y-mirror-pending: wave 2 (a note, not the waiver line)\n')).toBe('missing')
+    expect(status('// <SimMirror id={m} is coming\nconst a = <canvas aria-describedby={m} />')).toBe('missing')
   })
 
-  test('the waiver must be a line of its own, not inside a block comment line with other text', () => {
-    expect(status(`/* ${WAIVER} */\n<canvas />`)).toBe('missing')
-    expect(status(`  ${WAIVER}  \n<canvas />`)).toBe('waived')
+  test('telemetry sparklines count: each <Sparkline needs describedBy naming a SimMirror id', () => {
+    expect(status(`<Sparkline values={v} describedBy={mirrorId} />\n${mirror('mirrorId')}`)).toBe('mirrored')
+    expect(status('<Sparkline values={v} color="x" />')).toBe('missing')
+    expect(status(`<Sparkline values={v} describedBy={mirrorId} />\n<Sparkline values={w} />\n${mirror('mirrorId')}`)).toBe('missing')
+  })
+
+  test('the shipped scope is clean: every sim and telemetry file mirrors every canvas, and nothing is waived', () => {
+    const files = MIRROR_SCOPE.flatMap((d) => readdirSync(join(ROOT, d)).filter((f) => f.endsWith('.tsx')).map((f) => ({ file: `${d}/${f}`, text: readFileSync(join(ROOT, d, f), 'utf8') })))
+    const findings = checkCanvasMirrors(files)
+    expect(findings.filter((f) => f.status !== 'mirrored')).toEqual([])
+    expect(findings.map((f) => f.file)).toContain('src/components/telemetry/TelemetryGrid.tsx')
+    expect(findings.find((f) => f.file.endsWith('QuantizerSim.tsx'))).toMatchObject({ canvases: 2, mirrored: 2 })
+    expect(findings.find((f) => f.file.endsWith('WgslSim.tsx'))).toMatchObject({ canvases: 2, mirrored: 2 })
   })
 })
