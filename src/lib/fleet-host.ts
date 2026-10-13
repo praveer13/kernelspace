@@ -1,8 +1,8 @@
 /**
  * fleet-host — the worker side of a Fleet session (docs/specs/wave-1.md §15.1).
  *
- * A host owns at most one session: an Engine pair, a Cluster, an EPD comparison or a pool-mode block
- * manager, with every learner module instantiated here from the slot bytes and the JS reference drivers
+ * A host owns at most one session: an Engine pair, a Cluster, an EPD comparison, a pool-mode block
+ * manager or an incident (world/incident-sim's session over a Cluster, §9.5), with every learner module instantiated here from the slot bytes and the JS reference drivers
  * beside it. fleet.worker.ts wires `handle` to postMessage; tests drive it in-process behind a fake
  * worker, so a session's steps can be compared with a direct Engine run on the same inputs.
  *
@@ -28,8 +28,10 @@ import {
 } from './fleet-model'
 import { runSchedulerJob } from './leaderboard-harness'
 import { instantiateLab, LabAbiError, LabTrapError } from './wasm-lab'
-import { makeWasmManager, makeWasmQueue } from '../pages/fleet/drivers'
+import { makeWasmManager, makeWasmQueue, type Mod } from '../pages/fleet/drivers'
 import { makeWasmScheduler } from './wasm-scheduler'
+import { IncidentSession, runExpert, type StackFactory } from './world/incident-sim'
+import type { FixId, Hypothesis, ProbeId } from './world/incident-spec'
 import type {
   ClusterOpen,
   ClusterSnapshot,
@@ -44,6 +46,12 @@ import type {
   FleetRequest,
   FleetSlotBytes,
   FleetSnapshot,
+  IncidentFinish,
+  IncidentFixReply,
+  IncidentOpen,
+  IncidentProbeReply,
+  IncidentReady,
+  IncidentWaitReply,
   PoolOpen,
   PoolOpResult,
   PoolTickResult,
@@ -51,13 +59,25 @@ import type {
 
 type Progress = (tick: number, scope?: string) => void
 
+/** An incident session's commands (§9.5). Each reports the tick it is about to run through `progress`, as `step` does. */
+interface IncidentCommands {
+  hypothesis(h: Hypothesis): void
+  probe(probe: ProbeId, progress: Progress): IncidentProbeReply
+  fix(fix: FixId, progress: Progress): IncidentFixReply
+  wait(progress: Progress): IncidentWaitReply
+  finish(progress: Progress): Promise<IncidentFinish>
+}
+
 interface HostSession {
-  /** requests in the run (0 for pool mode) */
+  /** requests in the run (0 for pool and incident modes) */
   total: number
   /** the initial dump a pool session reports on open */
   dump?: PoolTickResult['dump']
+  /** the alert minute and the limit an incident session opened at */
+  incident?: IncidentReady
   step?(ticks: number, progress: Progress): FleetSnapshot
   pool?(ops: FleetOp[], tick: number, progress: Progress): PoolTickResult
+  commands?: IncidentCommands
 }
 
 export interface FleetHost {
@@ -292,7 +312,105 @@ async function openPool(o: PoolOpen): Promise<HostSession> {
   }
 }
 
-function openSession(open: FleetOpen): Promise<HostSession> {
+/* ------------------------------ incident ------------------------------ */
+
+/** One worker's instantiated modules; a missing one runs the reference driver. */
+interface WorkerModules {
+  sched?: Mod
+  mgr?: Mod
+  queue?: Mod
+}
+
+/** Every worker gets its own instance of each module, since the modules hold state. */
+async function incidentModules(slots: FleetSlotBytes, workers: number): Promise<WorkerModules[]> {
+  const out: WorkerModules[] = []
+  for (let w = 0; w < workers; w++) {
+    out.push({
+      ...(slots.sched ? { sched: await instantiateLab(slots.sched) } : {}),
+      ...(slots.mgr ? { mgr: await instantiateLab(slots.mgr) } : {}),
+      ...(slots.queue ? { queue: await instantiateLab(slots.queue) } : {}),
+    })
+  }
+  return out
+}
+
+/** Where a stack reports the tick it is about to run: every worker's scheduler calls in, and the first call of a tick reports it. */
+interface TickReporter {
+  progress: Progress
+  scope: string | undefined
+}
+
+/**
+ * The stack factory over instantiated modules. The scheduler is wrapped so the host can report the tick
+ * a spinning module never finishes (a learner module can only run inside one of its calls).
+ */
+function incidentStack(mods: WorkerModules[], reporter: TickReporter): StackFactory {
+  let reported = -1
+  return (w, cfg, intakeCap) => {
+    const m = mods[w]
+    const inner = m.sched ? makeWasmScheduler(m.sched) : makeRefScheduler()
+    return {
+      sched: {
+        name: inner.name,
+        schedule(view) {
+          if (view.iter > reported) {
+            reported = view.iter
+            reporter.progress(view.iter, reporter.scope)
+          }
+          return inner.schedule(view)
+        },
+      },
+      mgr: m.mgr ? makeWasmManager(m.mgr, cfg.numBlocks, cfg.blockSize) : makeRefManager(cfg.numBlocks, cfg.blockSize),
+      queue: m.queue ? makeWasmQueue(m.queue, intakeCap) : makeRefQueue(intakeCap),
+    }
+  }
+}
+
+async function openIncident(o: IncidentOpen, progress: Progress): Promise<HostSession> {
+  const { spec, slots } = o
+  const reporter: TickReporter = { progress, scope: undefined }
+  const stack = incidentStack(await incidentModules(slots, spec.workers), reporter)
+  // the constructor simulates the warm-up to the alert, so a spinning module stalls `open`
+  const session = new IncidentSession(spec, { stack })
+  const ended = () => session.ended
+  let expert: Pick<IncidentFinish, 'expertBurn' | 'expert'> | null = null
+  const reportTo = (p: Progress) => {
+    reporter.progress = p
+    reporter.scope = undefined
+  }
+  return {
+    total: 0,
+    incident: { alert: session.alertMinute, limit: session.limit },
+    commands: {
+      hypothesis: (h) => session.hypothesis(h),
+      probe(probe, p) {
+        reportTo(p)
+        return { ...session.probe(probe), ended: ended() }
+      },
+      fix(fix, p) {
+        reportTo(p)
+        return { ...session.fix(fix), ended: ended() }
+      },
+      wait(p) {
+        reportTo(p)
+        return { ...session.wait(), ended: ended() }
+      },
+      async finish(p) {
+        reportTo(p)
+        const outcome = session.finish()
+        if (!expert) {
+          // the expert replays the incident on fresh instances of the same modules (W11): one scorer, one clock
+          const expertReporter: TickReporter = { progress: p, scope: 'the expert replay' }
+          const run = runExpert(spec, { stack: incidentStack(await incidentModules(slots, spec.workers), expertReporter) })
+          expert = { expertBurn: run.outcome.burn, expert: { actions: run.actions, named: run.named, steps: run.steps } }
+        }
+        return { ...outcome, ...expert, actions: [...session.actions] }
+      },
+    },
+  }
+}
+
+function openSession(open: FleetOpen, progress: Progress): Promise<HostSession> {
   switch (open.mode) {
     case 'engine':
       return openEngine(open)
@@ -302,6 +420,8 @@ function openSession(open: FleetOpen): Promise<HostSession> {
       return openEpd(open)
     case 'pool':
       return openPool(open)
+    case 'incident':
+      return openIncident(open, progress)
   }
 }
 
@@ -328,8 +448,14 @@ export function createFleetHost(): FleetHost {
     try {
       if (req.cmd === 'open') {
         session = null
-        session = await openSession(req.open)
-        emit({ type: 'ready', id, total: session.total, ...(session.dump ? { dump: session.dump } : {}) })
+        session = await openSession(req.open, (tick, scope) => emit({ type: 'tick', id, tick, ...(scope ? { scope } : {}) }))
+        emit({
+          type: 'ready',
+          id,
+          total: session.total,
+          ...(session.dump ? { dump: session.dump } : {}),
+          ...(session.incident ? { incident: session.incident } : {}),
+        })
       } else if (req.cmd === 'step') {
         if (!session?.step) throw new Error('no stepping session is open')
         const snapshot = session.step(req.ticks, (tick, scope) => emit({ type: 'tick', id, tick, ...(scope ? { scope } : {}) }))
@@ -337,6 +463,17 @@ export function createFleetHost(): FleetHost {
       } else if (req.cmd === 'pool') {
         if (!session?.pool) throw new Error('no pool session is open')
         emit({ type: 'pool', id, result: session.pool(req.ops, req.tick, (tick) => emit({ type: 'tick', id, tick })) })
+      } else if (req.cmd === 'hypothesis' || req.cmd === 'probe' || req.cmd === 'fix' || req.cmd === 'wait' || req.cmd === 'finish') {
+        const c = session?.commands
+        if (!c) throw new Error('no incident session is open')
+        const progress: Progress = (tick, scope) => emit({ type: 'tick', id, tick, ...(scope ? { scope } : {}) })
+        if (req.cmd === 'hypothesis') {
+          c.hypothesis(req.hypothesis)
+          emit({ type: 'hypothesis', id })
+        } else if (req.cmd === 'probe') emit({ type: 'probe', id, result: c.probe(req.probe, progress) })
+        else if (req.cmd === 'fix') emit({ type: 'fix', id, result: c.fix(req.fix, progress) })
+        else if (req.cmd === 'wait') emit({ type: 'wait', id, result: c.wait(progress) })
+        else emit({ type: 'finish', id, result: await c.finish(progress) })
       } else if (req.cmd === 'job') {
         const result = await runSchedulerJob(req.job, (scope, tick) => emit({ type: 'tick', id, tick, scope }))
         emit({ type: 'job', id, result })
