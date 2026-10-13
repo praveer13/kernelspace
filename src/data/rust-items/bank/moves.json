@@ -1,0 +1,455 @@
+{
+  "group": "moves",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "edition": "2024",
+  "snippets": {
+    "queue-for-loop-consumes": {
+      "hash": "d35e8d5258505f16d65a8dc57c78c0bb55a71e6b60c7e9ea7bc09bee8276aea5",
+      "variants": {
+        "base": {"result":"compiles"},
+        "consume-loop": {"result":{"code":"E0382","line":13,"message":"borrow of moved value: `queue`"},"fixes":{"borrow-loop":"compiles","clone-queue":"compiles","mut-loop":{"code":"E0596","line":9},"skip-len":"compiles"}},
+        "into-iter-loop": {"result":{"code":"E0382","line":13,"message":"borrow of moved value: `queue`"}},
+        "move-field": {"result":{"code":"E0507","line":10,"message":"cannot move out of `r.prompt` which is behind a shared reference"},"fixes":{"borrow-prompt":"compiles","clone-prompt":"compiles","consume-bytes":{"code":"E0507","line":10},"deref-prompt":{"code":"E0277","line":10}}}
+      }
+    },
+    "request-handoff-let": {
+      "hash": "7260b791d1aea3f687cc012e775c051f3fd975e5eae02cf2ca4387327cea07d9",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-moved": {"result":{"code":"E0382","line":10,"message":"borrow of moved value: `req`"},"fixes":{"read-queued":"compiles","clone-req":"compiles","borrow-req":{"code":"E0308","line":11},"into-req":{"code":"E0382","line":10}}},
+        "write-moved": {"result":{"code":"E0382","line":10,"message":"assign to part of moved value: `req`"},"fixes":{"write-queued":"compiles","clone-req":"compiles","borrow-req":{"code":"E0308","line":11}}},
+        "move-twice": {"result":{"code":"E0382","line":10,"message":"use of moved value: `req`"}}
+      }
+    },
+    "prefill-consumes-request": {
+      "hash": "114d74d7fa054f6de93d5104d3ba24a3e778c83ae6243c707b5e9628d11a57f8",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-after-consume": {"result":{"code":"E0382","line":13,"message":"use of moved value: `req`"},"fixes":{"use-copied-id":"compiles","clone-req":"compiles","ref-result":{"code":"E0382","line":13},"length-only":"compiles"}},
+        "consume-twice": {"result":{"code":"E0382","line":13,"message":"use of moved value: `req`"}},
+        "borrow-self": {"result":{"code":"E0507","line":6,"message":"cannot move out of `self.prompt` which is behind a shared reference"},"fixes":{"take-self":"compiles","clone-prompt":"compiles","mut-self":{"code":"E0507","line":6},"deref-prompt":{"code":"E0308","line":6}}}
+      }
+    },
+    "label-unwrap-tag": {
+      "hash": "b8c9ddff58f309a7a105e51d65693922d9a66ee6765449654313fcdd140b7d13",
+      "variants": {
+        "base": {"result":"compiles"},
+        "unwrap-through-ref": {"result":{"code":"E0507","line":8,"message":"cannot move out of `r.tag` which is behind a shared reference"},"fixes":{"as-deref":"compiles","clone-tag":"compiles","deref-request":{"code":"E0507","line":8},"take-tag":{"code":"E0596","line":8}}},
+        "as-mut-unwrap": {"result":{"code":"E0596","line":8,"message":"cannot borrow `r.tag` as mutable, as it is behind a `&` reference"}},
+        "unwrap-in-format": {"result":{"code":"E0507","line":9,"message":"cannot move out of `r.tag` which is behind a shared reference"}}
+      }
+    },
+    "sampling-copy-in-loop": {
+      "hash": "1c782aa18ef208c4e25d926f450b5bd09694f470ff2fea45684a23fa8db04e27",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-copy": {"result":{"code":"E0382","line":9,"message":"use of moved value: `s`"},"fixes":{"derive-copy":"compiles","clone-call":"compiles","borrow-call":{"code":"E0308","line":9},"derive-eq":{"code":"E0382","line":9}}},
+        "copy-twice": {"result":"compiles"}
+      }
+    },
+    "closure-borrows-batch": {
+      "hash": "1046e59123ea48a28119230eb363f79a1fdab49bd576a64342411d66196c9364",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-batch": {"result":{"code":"E0505","line":8,"message":"cannot move out of `batch` because it is borrowed"},"fixes":{"borrow-batch":"compiles","clone-batch":"compiles","mut-batch":{"code":"E0502","line":8},"move-closure":{"code":"E0382","line":8}}},
+        "move-closure": {"result":{"code":"E0382","line":8,"message":"borrow of partially moved value: `batch`"},"fixes":{"plain-closure":"compiles","clone-after":{"code":"E0382","line":8},"mut-borrow":{"code":"E0382","line":8}}}
+      }
+    },
+    "finish-partial-move": {
+      "hash": "d9ef5d728333dd0daabcb38f78fd4980d942fdf56969ec76cf6d614a00c2ff38",
+      "variants": {
+        "base": {"result":"compiles"},
+        "return-whole": {"result":{"code":"E0382","line":10,"message":"use of partially moved value: `resp`"},"fixes":{"borrow-text":"compiles","clone-text":"compiles","mut-text":{"code":"E0596","line":8},"clone-resp":{"code":"E0382","line":10}}},
+        "read-moved-field": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `resp.text`"},"fixes":{"read-text":"compiles","clone-text":"compiles","borrow-text":{"code":"E0308","line":10}}},
+        "move-text-twice": {"result":{"code":"E0382","line":9,"message":"use of moved value: `resp.text`"}}
+      }
+    },
+    "event-match-moves": {
+      "hash": "ba38413bcc9c89c8ebbdd3f60cc6f6fdefb0cfacf6dd59c9355c00a31fc20815",
+      "variants": {
+        "base": {"result":"compiles"},
+        "match-moves": {"result":{"code":"E0382","line":12,"message":"borrow of partially moved value: `ev`"},"fixes":{"match-ref":"compiles","clone-event":"compiles","deref-event":{"code":"E0614","line":8}}},
+        "drop-then-log": {"result":{"code":"E0382","line":12,"message":"borrow of moved value: `ev`"}},
+        "match-mut-ref": {"result":{"code":"E0596","line":8,"message":"cannot borrow `ev` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "evict-block-while-viewed": {
+      "hash": "a9fbd12a3ec6118f71b527a877a91b919d7996800feebe6354b8845ca6c7ac76",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-after-drop": {"result":{"code":"E0505","line":9,"message":"cannot move out of `block` because it is borrowed"},"fixes":{"reuse-len":"compiles","clone-data":"compiles","drop-view":"compiles","first-term":"compiles"}},
+        "view-after-drop": {"result":{"code":"E0505","line":9,"message":"cannot move out of `block` because it is borrowed"}},
+        "mut-view": {"result":{"code":"E0596","line":7,"message":"cannot borrow `block.data` as mutable, as `block` is not declared as mutable"}}
+      }
+    },
+    "recycle-lease-slot": {
+      "hash": "3c2f74cf11206a66154a4af24d050f75bff3bfc6ce0d65b0d99b633a16960401",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-after-push": {"result":{"code":"E0505","line":13,"message":"cannot move out of `lease` because it is borrowed"},"fixes":{"copy-slot":"compiles","clone-lease":"compiles","mut-slot":{"code":"E0596","line":11},"deref-lease":{"code":"E0614","line":13}}},
+        "read-after-push": {"result":{"code":"E0382","line":14,"message":"borrow of moved value: `lease`"}},
+        "push-twice": {"result":{"code":"E0382","line":14,"message":"use of moved value: `lease`"}},
+        "shared-pool": {"result":{"code":"E0596","line":13,"message":"cannot borrow `pool.free` as mutable, as it is behind a `&` reference"},"fixes":{"mut-pool":"compiles","mut-lease":{"code":"E0596","line":13},"insert-front":{"code":"E0596","line":13}}}
+      }
+    },
+    "seal-batch-field-order": {
+      "hash": "10d37e31f67594d4b4c0f229bc66195801ee6e7a52dd3e51edbae48ca11ae403",
+      "variants": {
+        "base": {"result":"compiles"},
+        "swap-fields": {"result":{"code":"E0382","line":8,"message":"borrow of moved value: `v`"},"fixes":{"size-first":"compiles","clone-ids":"compiles","capacity":{"code":"E0382","line":8},"size-zero":"compiles"}},
+        "early-move": {"result":{"code":"E0382","line":8,"message":"borrow of moved value: `v`"},"fixes":{"borrow-w":"compiles","clone-w":"compiles","deref-v":{"code":"E0277","line":7}}}
+      }
+    },
+    "prompt-concat-consumes": {
+      "hash": "02b055a67c5c2d0953611a6a081b6c852199251a488897f704f1167e2573d07a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "plus-moves": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `sys`"},"fixes":{"format-join":"compiles","clone-left":"compiles","from-sys":{"code":"E0382","line":4},"push-str":{"code":"E0599","line":3}}},
+        "moved-by-let": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `sys`"}},
+        "into-bytes": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `sys`"},"fixes":{"as-bytes":"compiles","clone-bytes":"compiles","ref-bytes":{"code":"E0507","line":3},"user-bytes":"compiles"}}
+      }
+    },
+    "claim-slot-unwrap": {
+      "hash": "ec0b4a3c34c4302d2ede31c2e807f5a7dab56718aa7ad2bcc46e69c5ea95aaec",
+      "variants": {
+        "base": {"result":"compiles"},
+        "unwrap-moves": {"result":{"code":"E0382","line":10,"message":"borrow of moved value: `slot`"},"fixes":{"take-first":"compiles","clone-slot":"compiles","as-ref":"compiles","ref-unwrap":{"code":"E0382","line":10}}},
+        "unwrap-twice": {"result":{"code":"E0382","line":10,"message":"borrow of moved value: `slot`"}},
+        "immutable-slot": {"result":{"code":"E0596","line":8,"message":"cannot borrow `slot` as mutable, as it is not declared as mutable"},"fixes":{"mut-slot":"compiles","ref-take":{"code":"E0596","line":8},"ref-param":{"code":"E0596","line":8}}}
+      }
+    },
+    "latency-window-consumes": {
+      "hash": "5172cbf4095e48e343b11d4e76e0168f6a8b1fe1c415353b7170e6f5d4698043",
+      "variants": {
+        "base": {"result":"compiles"},
+        "sum-consumes": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `ms`"},"fixes":{"iter-sum":"compiles","clone-sum":"compiles","count-only":"compiles","drain-sum":{"code":"E0596","line":2}}},
+        "index-after-move": {"result":{"code":"E0382","line":5,"message":"borrow of moved value: `ms`"}},
+        "sort-immutable": {"result":{"code":"E0596","line":3,"message":"cannot borrow `ms` as mutable, as it is not declared as mutable"},"fixes":{"mut-param":"compiles","sort-unstable":{"code":"E0596","line":3},"ref-param":{"code":"E0596","line":3}}}
+      }
+    },
+    "trace-request-twice": {
+      "hash": "061a5e59028faf62bab9d0348277496c07d15fe118c2a0487cec188dabfb3632",
+      "variants": {
+        "base": {"result":"compiles"},
+        "trace-by-value": {"result":{"code":"E0382","line":13,"message":"borrow of moved value: `req`"},"fixes":{"trace-ref":"compiles","clone-arg":"compiles","deref-arg":{"code":"E0507","line":12},"mut-arg":{"code":"E0382","line":13}}},
+        "trace-last": {"result":{"code":"E0382","line":14,"message":"use of moved value: `req`"}},
+        "mut-trace": {"result":{"code":"E0596","line":12,"message":"cannot borrow `req` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "tag-map-consumes": {
+      "hash": "e4c7bb1ba35904ca2212812beb3e170049ff16e2dd7d91b814d4ee0eef559883",
+      "variants": {
+        "base": {"result":"compiles"},
+        "map-moves": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `r.tag`"},"fixes":{"as-ref":"compiles","clone-tag":"compiles","take-tag":{"code":"E0596","line":8},"as-mut":{"code":"E0596","line":8}}},
+        "unwrap-moves": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `r.tag`"}}
+      }
+    },
+    "slice-head-then-own": {
+      "hash": "27a55250168e5c53cdddc1072d7429ecf1e005e65ca52bbc62bde27c38668b04",
+      "variants": {
+        "base": {"result":"compiles"},
+        "late-head": {"result":{"code":"E0505","line":4,"message":"cannot move out of `tokens` because it is borrowed"},"fixes":{"borrow-owned":"compiles","clone-owned":"compiles","mut-owned":{"code":"E0502","line":4}}},
+        "mut-head": {"result":{"code":"E0596","line":2,"message":"cannot borrow `tokens` as mutable, as it is not declared as mutable"},"fixes":{"mut-param":"compiles","ref-param":{"code":"E0596","line":2},"as-mut-slice":{"code":"E0596","line":2}}}
+      }
+    },
+    "flush-table-blocks": {
+      "hash": "6b4c42ad857d8698aec4c8f2c44aa88efb6ac8b8b15fb2e1318d5f5bc410e089",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-field": {"result":{"code":"E0507","line":9,"message":"cannot move out of `self.blocks` which is behind a mutable reference"},"fixes":{"take-blocks":"compiles","clone-blocks":"compiles","ref-blocks":{"code":"E0308","line":9},"replace-one-arg":{"code":"E0061","line":9}}},
+        "shared-self": {"result":{"code":"E0594","line":8,"message":"cannot assign to `self.epoch`, which is behind a `&` reference"},"fixes":{"mut-self":"compiles","plain-assign":{"code":"E0594","line":8},"clone-blocks":{"code":"E0594","line":8}}},
+        "bind-field": {"result":{"code":"E0507","line":8,"message":"cannot move out of `self.blocks` which is behind a mutable reference"}}
+      }
+    },
+    "longest-prompt-index": {
+      "hash": "87d308700549d1f86c6516f69396cce770dc00895f7e81826b9d6f0be8310bba",
+      "variants": {
+        "base": {"result":"compiles"},
+        "index-move": {"result":{"code":"E0507","line":2,"message":"cannot move out of index of `Vec<String>`"},"fixes":{"borrow-first":"compiles","clone-first":"compiles","whole-list":"compiles","mut-first":{"code":"E0596","line":2}}},
+        "for-move": {"result":{"code":"E0507","line":4,"message":"cannot move out of `*prompts` which is behind a shared reference"},"fixes":{"loop-ref":"compiles","clone-loop":"compiles","mut-loop":{"code":"E0277","line":4}}},
+        "remove-first": {"result":{"code":"E0596","line":2,"message":"cannot borrow `*prompts` as mutable, as it is behind a `&` reference"}},
+        "move-vec": {"result":{"code":"E0507","line":2,"message":"cannot move out of `*prompts` which is behind a shared reference"}}
+      }
+    },
+    "weights-behind-rc": {
+      "hash": "0a5a781f98aa8cdd187bf617c58565e9898c14d7af033b2d7d2a9274c6bea40a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-name": {"result":{"code":"E0507","line":9,"message":"cannot move out of an `Rc`"},"fixes":{"borrow-name":"compiles","clone-name":"compiles","mut-name":{"code":"E0596","line":9}}},
+        "move-all": {"result":{"code":"E0507","line":10,"message":"cannot move out of an `Rc`"}},
+        "push-through-rc": {"result":{"code":"E0596","line":10,"message":"cannot borrow data in an `Rc` as mutable"}}
+      }
+    },
+    "worker-state-match": {
+      "hash": "084e94c87751e0b2849b97f9f0f0e06533fb2621e0241e8100bc9e265506eb60",
+      "variants": {
+        "base": {"result":"compiles"},
+        "match-moves": {"result":{"code":"E0507","line":7,"message":"cannot move out of `self.state` as enum variant `Busy` which is behind a mutable reference"},"fixes":{"match-ref":"compiles","clone-state":"compiles","match-deref":{"code":"E0614","line":7}}},
+        "shared-assign": {"result":{"code":"E0594","line":11,"message":"cannot assign to `self.state`, which is behind a `&` reference"},"fixes":{"mut-self":"compiles","mut-borrow":{"code":"E0596","line":11},"extra-param":{"code":"E0594","line":11}}},
+        "move-then-reset": {"result":{"code":"E0507","line":11,"message":"cannot move out of `self.state` which is behind a mutable reference"}}
+      }
+    },
+    "collect-prompts-loop": {
+      "hash": "d9a09e8e7e879e16a4aa7941ec5aac721c76511a4cecd5f7df68e0b0e02bc914",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-owned": {"result":{"code":"E0507","line":9,"message":"cannot move out of `r.prompt` which is behind a shared reference"},"fixes":{"push-ref":"compiles","clone-push":"compiles","to-owned":"compiles","push-deref":{"code":"E0277","line":9}}},
+        "drain-shared": {"result":{"code":"E0596","line":8,"message":"cannot borrow `*reqs` as mutable, as it is behind a `&` reference"}},
+        "assign-through": {"result":{"code":"E0594","line":9,"message":"cannot assign to `r.id`, which is behind a `&` reference"}}
+      }
+    },
+    "plan-box-deref": {
+      "hash": "c3a555fb7c40a3a215f7a11265236fb61705885a23d6396f9d3555b78a0b5235",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ref-box": {"result":{"code":"E0507","line":7,"message":"cannot move out of `*plan` which is behind a shared reference"},"fixes":{"reborrow":"compiles","clone-plan":"compiles","triple-deref":{"code":"E0614","line":7}}},
+        "use-after-box": {"result":{"code":"E0382","line":8,"message":"borrow of moved value: `*plan`"},"fixes":{"double-inner":"compiles","clone-inner":"compiles","double-plan":{"code":"E0382","line":8}}},
+        "unbox-twice": {"result":{"code":"E0382","line":8,"message":"use of moved value: `*plan`"}}
+      }
+    },
+    "first-owner-array": {
+      "hash": "5d2ae91418f3e382968a62e336083fb9446936fab9622741496a2422bc6c2459",
+      "variants": {
+        "base": {"result":"compiles"},
+        "index-field": {"result":{"code":"E0508","line":4,"message":"cannot move out of type `[Slot; 4]`, a non-copy array"},"fixes":{"borrow-owner":"compiles","clone-owner":"compiles","deref-owner":{"code":"E0277","line":4},"into-bytes":{"code":"E0508","line":4}}},
+        "mut-owner": {"result":{"code":"E0596","line":4,"message":"cannot borrow `slots[_].owner` as mutable, as `slots` is not declared as mutable"}}
+      }
+    },
+    "guard-name-move": {
+      "hash": "aec4dd4c7f910320fdd7196ca703e9f4e2525bab0dfc1d2068ab782ed4c4a9ca",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-name": {"result":{"code":"E0509","line":12,"message":"cannot move out of type `Guard`, which implements the `Drop` trait"},"fixes":{"borrow-name":"compiles","clone-name":"compiles","mut-name":{"code":"E0596","line":12},"into-bytes":{"code":"E0509","line":12}}},
+        "destructure": {"result":{"code":"E0509","line":12,"message":"cannot move out of type `Guard`, which implements the `Drop` trait"}},
+        "drop-borrowed": {"result":{"code":"E0505","line":13,"message":"cannot move out of `g` because it is borrowed"}}
+      }
+    },
+    "conn-addr-take": {
+      "hash": "6dd9014301216716ac9b0fa9ca5e2aba04563055bae399ac505219c69bf469a8",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-field": {"result":{"code":"E0509","line":13,"message":"cannot move out of type `Conn`, which implements the `Drop` trait"},"fixes":{"take-addr":"compiles","clone-addr":"compiles","replace-one-arg":{"code":"E0061","line":13},"deref-addr":{"code":"E0308","line":13}}},
+        "pattern-move": {"result":{"code":"E0509","line":13,"message":"cannot move out of type `Conn`, which implements the `Drop` trait"}},
+        "immutable-take": {"result":{"code":"E0596","line":13,"message":"cannot borrow `c.addr` as mutable, as `c` is not declared as mutable"},"fixes":{"mut-param":"compiles","clone-take":"compiles","split-off":{"code":"E0596","line":13}}}
+      }
+    },
+    "batch-ids-drop-log": {
+      "hash": "f9c36ec184012f5367ed99ea08c2b5c6ab010e20f20b900e363e5a57fee9eef0",
+      "variants": {
+        "base": {"result":"compiles"},
+        "consume-ids": {"result":{"code":"E0509","line":11,"message":"cannot move out of type `Batch`, which implements the `Drop` trait"},"fixes":{"loop-ref":"compiles","clone-ids":"compiles","mut-loop":{"code":"E0277","line":12},"drain-ids":{"code":"E0596","line":11}}},
+        "destructure": {"result":{"code":"E0509","line":14,"message":"cannot move out of type `Batch`, which implements the `Drop` trait"}},
+        "explicit-drop": {"result":"compiles"},
+        "use-after-drop": {"result":{"code":"E0382","line":14,"message":"borrow of moved value: `b`"}}
+      }
+    },
+    "pick-slot-uninit": {
+      "hash": "fcedaa6b61a62f75775df8fd7e4b00623909d3886f55e2c966a3dd14c87270da",
+      "variants": {
+        "base": {"result":"compiles"},
+        "missing-else": {"result":{"code":"E0381","line":8,"message":"used binding `slot` is possibly-uninitialized"},"fixes":{"assign-cold":"compiles","init-early":{"code":"E0384","line":4},"return-zero":"compiles"}},
+        "read-first": {"result":{"code":"E0381","line":2,"message":"used binding `slot` is possibly-uninitialized"}},
+        "assign-twice": {"result":{"code":"E0384","line":8,"message":"cannot assign twice to immutable variable `slot`"},"fixes":{"mut-slot":"compiles","assign-sum":{"code":"E0384","line":8},"deref-assign":{"code":"E0614","line":8}}}
+      }
+    },
+    "warm-ids-uninit": {
+      "hash": "b4d1dfa4aabf43036307eb954f01bff78900cffeaf11c2e5c276d9fba55363bc",
+      "variants": {
+        "base": {"result":"compiles"},
+        "arm-missing": {"result":{"code":"E0381","line":7,"message":"used binding `ids` is possibly-uninitialized"},"fixes":{"assign-arm":"compiles","empty-vec":"compiles","init-early":{"code":"E0384","line":4}}},
+        "read-before-match": {"result":{"code":"E0381","line":3,"message":"used binding `ids` is possibly-uninitialized"}}
+      }
+    },
+    "count-assign-twice": {
+      "hash": "3de4cf66c63d9ee100ede1938463fd0440c39bd5106b883ac209906a58ac41da",
+      "variants": {
+        "base": {"result":"compiles"},
+        "immutable-total": {"result":{"code":"E0384","line":4,"message":"cannot assign twice to immutable variable `total`"},"fixes":{"mut-total":"compiles","plain-assign":{"code":"E0384","line":4},"shadow-total":"compiles"}},
+        "assign-through-ref": {"result":{"code":"E0594","line":4,"message":"cannot assign to `*r`, which is behind a `&` reference"}}
+      }
+    },
+    "clamp-budget-param": {
+      "hash": "7677502ea32532f3924cf993396b1a8fa533fa384f268a34b6753efafeda064a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "immutable-param": {"result":{"code":"E0384","line":3,"message":"cannot assign to immutable argument `budget`"},"fixes":{"mut-param":"compiles","shadow-budget":"compiles","deref-budget":{"code":"E0614","line":3},"ref-param":{"code":"E0308","line":2}}},
+        "assign-cap": {"result":{"code":"E0384","line":3,"message":"cannot assign to immutable argument `cap`"}}
+      }
+    },
+    "chain-block-ids": {
+      "hash": "d3b767cba6f371e465e05b124aa8e809677886a3f25d6dda90e13a00432ec15f",
+      "variants": {
+        "base": {"result":"compiles"},
+        "consume-self": {"result":{"code":"E0382","line":12,"message":"use of moved value: `id`"},"fixes":{"derive-copy":"compiles","clone-first":"compiles","ref-receiver":{"code":"E0507","line":11},"derive-debug":{"code":"E0382","line":12}}},
+        "drop-then-next": {"result":{"code":"E0382","line":12,"message":"borrow of moved value: `id`"}}
+      }
+    },
+    "lease-drop-order": {
+      "hash": "1226de3e30bdc8a1069bd51abbaf7b445da4afd03076e4f9191be4441e7b8844",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-after-drop": {"result":{"code":"E0382","line":13,"message":"use of moved value: `lease`"},"fixes":{"use-copy":"compiles","clone-read":{"code":"E0382","line":13},"return-zero":"compiles"}},
+        "drop-twice": {"result":{"code":"E0382","line":13,"message":"use of moved value: `lease`"}},
+        "drop-field": {"result":"compiles"},
+        "drop-borrowed": {"result":{"code":"E0505","line":12,"message":"cannot move out of `lease` because it is borrowed"}}
+      }
+    },
+    "share-weights-handles": {
+      "hash": "8690a333527efa0cb50211eda09b0903d3725ef784b52be9fc6d65bceec686ee",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-twice": {"result":{"code":"E0382","line":9,"message":"the type `Rc` does not implement `Copy`"},"fixes":{"rc-clone":"compiles","borrow-w":{"code":"E0505","line":9},"rc-new-deref":{"code":"E0507","line":8}}},
+        "read-after-move": {"result":{"code":"E0382","line":10,"message":"the type `Rc` does not implement `Copy`"}},
+        "push-through-handle": {"result":{"code":"E0596","line":10,"message":"cannot borrow data in an `Rc` as mutable"}}
+      }
+    },
+    "oldest-ring-slot": {
+      "hash": "908f1c836fc2089ba61dcda6cf4572396f3b589ba834f7b7891bcd1bc54363c4",
+      "variants": {
+        "base": {"result":{"code":"E0508","line":5,"message":"cannot move out of type `[Req; 3]`, a non-copy array"},"fixes":{"into-iter":"compiles","clone-slot":"compiles","ref-slot":{"code":"E0308","line":5},"unwrap-default":{"code":"E0277","line":5}}},
+        "vec-version": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<Req>`"},"fixes":{"into-iter":"compiles","clone-slot":"compiles","ref-slot":{"code":"E0308","line":5},"unwrap-default":{"code":"E0277","line":5}}},
+        "slice-ref": {"result":{"code":"E0508","line":5,"message":"cannot move out of type `[Req; 3]`, a non-copy array"}},
+        "field-of-slot": {"result":{"code":"E0508","line":5,"message":"cannot move out of type `[Req; 3]`, a non-copy array"}}
+      }
+    },
+    "name-pair-array": {
+      "hash": "ec8027fa1a5bdc2e2a94cfaa740dc0d1894e0a8b8b9845a31b137335d0c7e0e2",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-first": {"result":{"code":"E0508","line":2,"message":"cannot move out of type `[String; 2]`, a non-copy array"},"fixes":{"borrow-first":"compiles","clone-first":"compiles","into-bytes":{"code":"E0508","line":2},"deref-first":{"code":"E0277","line":2}}},
+        "move-second": {"result":{"code":"E0505","line":3,"message":"cannot move out of `ns[_]` because it is borrowed"}},
+        "into-iter-first": {"result":{"code":"E0382","line":3,"message":"borrow of moved value: `ns`"}}
+      }
+    },
+    "encode-twice-by-value": {
+      "hash": "a426faeba44e000b7018ce03cf697a94652f98c7163273e9a290155d6f5e83f6",
+      "variants": {
+        "base": {"result":"compiles"},
+        "first-by-value": {"result":{"code":"E0382","line":7,"message":"borrow of moved value: `batch`"},"fixes":{"borrow-arg":"compiles","clone-arg":"compiles","mut-arg":{"code":"E0596","line":6},"deref-arg":{"code":"E0507","line":6}}},
+        "mut-borrow": {"result":{"code":"E0596","line":7,"message":"cannot borrow `batch` as mutable, as it is not declared as mutable"}},
+        "both-by-value": {"result":{"code":"E0382","line":6,"message":"borrow of moved value: `batch`"}}
+      }
+    },
+    "session-insert-key": {
+      "hash": "fc88c54035097ec47c933fbb84133471267ac208f215dec3272603a088861a51",
+      "variants": {
+        "base": {"result":"compiles"},
+        "print-id": {"result":{"code":"E0382","line":7,"message":"borrow of moved value: `id`"},"fixes":{"print-len":"compiles","clone-key":"compiles","ref-key":{"code":"E0308","line":6}}},
+        "insert-twice": {"result":{"code":"E0382","line":7,"message":"use of moved value: `id`"}},
+        "get-after-insert": {"result":{"code":"E0382","line":7,"message":"borrow of moved value: `id`"}}
+      }
+    },
+    "extend-moves-batch": {
+      "hash": "5daccfad3a38cdabe9f5615a081dbd1dd9af7bffba9823778f497ff9f9ff59dc",
+      "variants": {
+        "base": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `b`"},"fixes":{"extend-ref":"compiles","clone-arg":"compiles","append":{"code":"E0308","line":3},"len-only":"compiles"}},
+        "chain-moves": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `b`"}},
+        "append-immutable": {"result":{"code":"E0596","line":3,"message":"cannot borrow `b` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "draft-params-update": {
+      "hash": "01ed255952be28b29c506a84c6c590b2912f435dc6c2d2f66aa594bff7615bbd",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-stop": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `b.stop`"},"fixes":{"read-p":"compiles","clone-update":"compiles","two-reads":{"code":"E0382","line":9},"zero":"compiles"}},
+        "pass-whole": {"result":{"code":"E0382","line":9,"message":"use of partially moved value: `b`"}},
+        "update-twice": {"result":{"code":"E0382","line":9,"message":"use of moved value: `b.stop`"}}
+      }
+    },
+    "retry-send-loop": {
+      "hash": "b48a29bd819c0b0367fbbb6de3872ff993b41e23a0fdd016155ff4e4dcf3af6e",
+      "variants": {
+        "base": {"result":{"code":"E0382","line":12,"message":"use of moved value: `req`"},"fixes":{"peek":"compiles","clone-send":"compiles","ref-send":{"code":"E0507","line":12},"mut-param":{"code":"E0382","line":12}}},
+        "ref-receiver": {"result":{"code":"E0507","line":12,"message":"cannot move out of a shared reference"}},
+        "send-then-peek": {"result":{"code":"E0382","line":12,"message":"use of moved value: `req`"}}
+      }
+    },
+    "cfg-expect-twice": {
+      "hash": "8c021cf3d61ae06ff6d9719ef638fa6907d30f1b2cefdecc7a3ffbf5df44af5a",
+      "variants": {
+        "base": {"result":{"code":"E0382","line":3,"message":"use of moved value: `c`"},"fixes":{"as-deref":"compiles","clone-opt":"compiles","take-opt":{"code":"E0596","line":2},"ref-opt":{"code":"E0507","line":2}}},
+        "view-after-move": {"result":{"code":"E0382","line":3,"message":"borrow of moved value: `c`"}},
+        "unwrap-or-default": {"result":{"code":"E0382","line":3,"message":"use of moved value: `c`"}}
+      }
+    },
+    "route-iter-dropped": {
+      "hash": "5f041343c8a8a5aee6b04b97b7a5e1bf1ef87d63c20bdce53ae974402dd51649",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-first-late": {"result":{"code":"E0505","line":5,"message":"cannot move out of `routes` because it is borrowed"},"fixes":{"use-len":"compiles","clone-routes":{"code":"E0716","line":2},"drop-iter":"compiles","first-again":{"code":"E0505","line":5}}},
+        "iter-after-drop": {"result":{"code":"E0505","line":5,"message":"cannot move out of `routes` because it is borrowed"}},
+        "into-iter-moved": {"result":{"code":"E0382","line":5,"message":"use of moved value: `routes`"}}
+      }
+    },
+    "head-of-queue-index": {
+      "hash": "80ad1d035a0523df653b2ece1732f1564026ffec9da1e99550ad80c091f27719",
+      "variants": {
+        "base": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<Request>`"},"fixes":{"remove-head":"compiles","clone-head":"compiles","pop-last":"compiles","first-deref":{"code":"E0507","line":5}}},
+        "shared-queue": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<Request>`"}},
+        "get-first": {"result":{"code":"E0507","line":5,"message":"cannot move out of a shared reference"}},
+        "take-first": {"result":"compiles"}
+      }
+    },
+    "sched-next-take": {
+      "hash": "6c6fa22eb614093280e8be6ba195885bb52c04f00bcf7ac17359444a0a5047b9",
+      "variants": {
+        "base": {"result":"compiles"},
+        "unwrap-field": {"result":{"code":"E0507","line":7,"message":"cannot move out of `self.next` which is behind a mutable reference"},"fixes":{"take-unwrap":"compiles","clone-next":"compiles","as-ref":"compiles","ref-unwrap":{"code":"E0507","line":7}}},
+        "shared-self": {"result":{"code":"E0596","line":7,"message":"cannot borrow `self.next` as mutable, as it is behind a `&` reference"},"fixes":{"mut-self":"compiles","as-ref":"compiles","extra-param":{"code":"E0596","line":7}}},
+        "expect-moves": {"result":{"code":"E0507","line":7,"message":"cannot move out of `self.next` which is behind a mutable reference"}}
+      }
+    },
+    "params-builder-chain": {
+      "hash": "afb1db7422242eedf5d9f01575bc06ed561adde4b8abf91295cb202b97e0b69b",
+      "variants": {
+        "base": {"result":{"code":"E0382","line":13,"message":"borrow of moved value: `b`"},"fixes":{"rebind":"compiles","clone-recv":"compiles","ref-recv":{"code":"E0507","line":12},"discard":{"code":"E0382","line":13}}},
+        "ref-receiver": {"result":{"code":"E0507","line":12,"message":"cannot move out of a shared reference"}},
+        "assign-field": {"result":{"code":"E0594","line":12,"message":"cannot assign to `b.n`, as `b` is not declared as mutable"},"fixes":{"mut-param":"compiles","ref-assign":{"code":"E0596","line":12},"ref-param":{"code":"E0594","line":12}}}
+      }
+    },
+    "rotate-reinit-binding": {
+      "hash": "4811fe7adc722e1629a8e2a6753161067d3fb78c2f5f7a814e5f3d1853c34979",
+      "variants": {
+        "base": {"result":"compiles"},
+        "read-moved": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `cur`"},"fixes":{"assign-only":"compiles","clone-old":"compiles","ref-old":{"code":"E0308","line":5}}},
+        "immutable-reinit": {"result":{"code":"E0384","line":4,"message":"cannot assign to immutable argument `cur`"},"fixes":{"mut-param":"compiles","ref-param":{"code":"E0308","line":4},"clone-from":{"code":"E0382","line":4}}},
+        "move-twice": {"result":{"code":"E0382","line":4,"message":"use of moved value: `cur`"}}
+      }
+    },
+    "swap-table-ids": {
+      "hash": "a24d7a0a809d8b124083c7ddfa2f13f1e64e329bdaf4f37b5c37c66f16d68e3b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "assign-move": {"result":{"code":"E0507","line":4,"message":"cannot move out of `b.ids` which is behind a mutable reference"},"fixes":{"swap":"compiles","clone-ids":"compiles","deref-ids":{"code":"E0308","line":4},"swap-value":{"code":"E0308","line":4}}},
+        "swap-shared": {"result":{"code":"E0596","line":4,"message":"cannot borrow `b.ids` as mutable, as it is behind a `&` reference"},"fixes":{"mut-b":"compiles","clone-ids":"compiles","ref-param":{"code":"E0596","line":4}}},
+        "same-table": {"result":{"code":"E0499","line":4,"message":"cannot borrow `a.ids` as mutable more than once at a time"}}
+      }
+    },
+    "tail-byte-then-own": {
+      "hash": "4459fbdfd0bb388801bf46a71f468214f9c977e71c2242d5dac716dd2be3e7c4",
+      "variants": {
+        "base": {"result":{"code":"E0505","line":3,"message":"cannot move out of `buf` because it is borrowed"},"fixes":{"copy-tail":"compiles","clone-buf":"compiles","last-mut":{"code":"E0596","line":2},"first-byte":"compiles"}},
+        "copy-tail": {"result":"compiles"},
+        "into-boxed": {"result":{"code":"E0505","line":3,"message":"cannot move out of `buf` because it is borrowed"}},
+        "mut-tail": {"result":{"code":"E0596","line":2,"message":"cannot borrow `buf` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "radix-node-depth": {
+      "hash": "af5e874c1e2e97ac69fbc16198c3d183c455df5f614179e4957ee9f1190217ad",
+      "variants": {
+        "base": {"result":"compiles"},
+        "owned-kids": {"result":{"code":"E0507","line":8,"message":"cannot move out of `n.kids` which is behind a shared reference"},"fixes":{"first-kid":"compiles","clone-kids":"compiles","deref-kids":{"code":"E0596","line":8},"remove-kid":{"code":"E0308","line":9}}},
+        "move-key": {"result":{"code":"E0507","line":8,"message":"cannot move out of `n.key` which is behind a shared reference"}},
+        "drain-kids": {"result":{"code":"E0596","line":8,"message":"cannot borrow `n.kids` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "first-big-uninit": {
+      "hash": "40c7f12f2197523acceb7ae93e44bfdd4e1ec232f096db8c326ef5a0e4aa62a1",
+      "variants": {
+        "base": {"result":{"code":"E0381","line":9,"message":"used binding `found` is possibly-uninitialized"},"fixes":{"init-mut":"compiles","init-only":{"code":"E0384","line":5},"mut-only":{"code":"E0381","line":9},"return-zero":"compiles"}},
+        "assign-no-break": {"result":{"code":"E0384","line":5,"message":"cannot assign twice to immutable variable `found`"}},
+        "read-in-loop": {"result":{"code":"E0381","line":4,"message":"used binding `found` isn't initialized"}}
+      }
+    }
+  }
+}
