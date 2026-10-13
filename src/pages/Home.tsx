@@ -566,7 +566,8 @@ function CurriculumPreview() {
 
 function LabShowcase() {
   return (
-    <section className="py-28">
+    // the strip slides in from 60px to the right (SimShowcase), which would widen the page until it is in view
+    <section className="overflow-x-clip py-28">
       <div className="mx-auto mb-10 flex max-w-app items-end justify-between gap-6 px-6 lg:px-12">
         <div>
           <p className="section-label">0x03 — the lab</p>
@@ -734,7 +735,7 @@ long array_sum(const long *xs, size_t n) {
 function CodeTeaser() {
   return (
     <section className="mx-auto max-w-app px-6 py-28 lg:px-12">
-      <div className="grid items-center gap-12 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
         <div>
           <p className="section-label">0x05 — we speak your language first</p>
           <h3 className="mt-4 font-display text-h2 text-text-1">

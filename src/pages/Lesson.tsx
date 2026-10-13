@@ -997,7 +997,7 @@ function LessonView({ lesson }: { lesson: Lesson }) {
               <span className="text-text-2">L{lesson.index}</span>
             </nav>
 
-            <h1 className="mt-4 font-display text-h1 text-text-1">{lesson.title}</h1>
+            <h1 className="mt-4 break-words font-display text-h1 text-text-1">{lesson.title}</h1>
 
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
               <span className="flex items-center gap-1.5 font-mono text-[11px] text-text-3">
