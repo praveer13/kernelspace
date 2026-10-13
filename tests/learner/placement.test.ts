@@ -236,10 +236,10 @@ describe('the walk', () => {
   test('the generated KCs get generated items, the others checkpoint items, and the anchor its own items', () => {
     const { steps } = drive(real, expert, 3)
     const by = (kc: KcId) => steps.filter((s) => s.kc === kc).map((s) => s.item.source)
-    for (const kc of ['t1.external-frag', 't4.bound-classification', 't5.kv-bytes-per-token']) {
+    for (const kc of ['t1.external-frag', 't4.bound-classification', 't5.kv-bytes-per-token', 't2.admission-scheduling']) {
       expect(by(kc)).toEqual(['gen', 'gen'])
     }
-    for (const kc of ['t0.locality', 't2.address-translation', 't2.admission-scheduling']) {
+    for (const kc of ['t0.locality', 't2.address-translation']) {
       for (const s of by(kc)) expect(['quiz', 'item']).toContain(s)
     }
     for (const s of steps.filter((x) => x.kc === RUST_ANCHOR_KC)) {
