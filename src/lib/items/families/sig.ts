@@ -24,10 +24,10 @@
  * hedge word or a reason connective, and the two with acronyms are paired with two without, so no
  * binary feature isolates a key (B27, scripts/item-cues.ts).
  *
- * KCS. A pool serving a card passes its KC to `make` (types.ts), because the KC of an instance is the KC of the
- * fault it shows: asked for `t5.kv-capacity`, the family draws a pool shrink, for `t2.admission-scheduling` a drain
- * stall, and so on, skipping the keys that draw another fault. Asked for `t7.incident-diagnosis`, or by a caller that
- * names no KC (the verifier), it takes the seed's own fault.
+ * KCS. `make(seed, level, variant)` takes no KC (the 2a contract, types.ts), so the fault, and with it the fault KC
+ * an instance carries, is the seed's own. A pool serving one fault KC can therefore draw an instance of another
+ * fault: its evidence lands on `t7.incident-diagnosis` and on the KC of the fault shown. Closing that gap needs a
+ * KC-aware `make`, which is a 2a level-0 change (recorded in the 2b-16 report), not something a family can do alone.
  *
  * SPEED. A cold table instance costs a simulation: about 2 ms at the median and under 4 ms at p95 on the
  * development host (`budgetMs` 10, where every other family keeps the default 1). The simulations are memoized by seed, so the two table variants, the four levels
@@ -73,7 +73,7 @@ const SYNTHETIC = {
   onset: 3,
   /** minutes after the alert the table covers */
   moments: 6,
-  /** keys tried before giving up on a seed: a run that does not show its fault, or (for a fault KC) a draw of another fault, is skipped; 1 in 4 matches, so 64 tries all miss about once in 10^8 */
+  /** keys tried before giving up on a seed: a run that does not show its fault is skipped (none of the first 1,000 verification seeds needed a redraw) */
   redraws: 64,
   /** memoized runs kept; a verification pass touches about 1,100 seeds */
   cache: 2048,
@@ -229,31 +229,26 @@ function simulate(key: string, incident: IncidentSpec): Telemetry | null {
   return { key, fault: incident.fault, rows }
 }
 
-/**
- * The incident a seed draws: the first key from `hex(seed)` whose reduced run shows its fault. `only` asks for
- * a fault (a pool serving that fault's KC); the keys that draw another fault are skipped without a run.
- */
-function incidentFor(seed: number, only?: IncidentFault): Telemetry {
+/** The incident a seed draws: the first key from `hex(seed)` whose reduced run shows its fault. */
+function incidentFor(seed: number): Telemetry {
   const id = hex(seed)
-  const memo = `${id}|${only ?? ''}`
-  const hit = sims.get(memo)
+  const hit = sims.get(id)
   if (hit) return hit
   for (let n = 0; n < SYNTHETIC.redraws; n++) {
     const key = n === 0 ? id : `${id}+${n}`
     const incident = generateIncident('sig', key)
-    if (only !== undefined && incident.fault !== only) continue
     const tel = simulate(key, incident)
     if (!tel) continue
     if (sims.size >= SYNTHETIC.cache) sims.delete(sims.keys().next().value as string)
-    sims.set(memo, tel)
+    sims.set(id, tel)
     return tel
   }
-  throw new RangeError(`sig: no incident for seed ${seed}${only ? ` and fault ${only}` : ''} shows its signature in ${SYNTHETIC.redraws} draws`)
+  throw new RangeError(`sig: no incident for seed ${seed} shows its signature in ${SYNTHETIC.redraws} draws`)
 }
 
 /** The cold cost of a table instance, without the memo: for tests/items/sig.test.ts. */
 export function coldTelemetry(seed: number): Telemetry {
-  sims.delete(`${hex(seed)}|`)
+  sims.delete(hex(seed))
   return incidentFor(seed)
 }
 
@@ -488,8 +483,8 @@ function finish(variant: string, level: Level, seed: number, params: Params, fau
 /** The probe whose column a transfer-level table leaves out: any, whatever the fault, and always leaving the faults separable. */
 const hideFor = (level: Level, r: Rng): ProbeId | '' => (level === TRANSFER ? r.pick(PROBE_IDS) : '')
 
-function makeTable(variant: 'name-fault' | 'fix-for', level: Level, seed: number, r: Rng, only?: IncidentFault): Instance {
-  const tel = incidentFor(seed, only)
+function makeTable(variant: 'name-fault' | 'fix-for', level: Level, seed: number, r: Rng): Instance {
+  const tel = incidentFor(seed)
   const hide = hideFor(level, r)
   const table = tableOf(tel, hide)
   const params: Params = { key: tel.key, fault: tel.fault, hide }
@@ -501,14 +496,9 @@ function makeTable(variant: 'name-fault' | 'fix-for', level: Level, seed: number
   return finish(variant, level, seed, params, tel.fault, stem, fixAnswer(table, tel.fault), calc)
 }
 
-function makeProbe(level: Level, seed: number, r: Rng, only?: IncidentFault): Instance {
-  const id = hex(seed)
-  let key = id
-  let incident = generateIncident('sig', key)
-  for (let n = 1; only !== undefined && incident.fault !== only && n < SYNTHETIC.redraws; n++) {
-    key = `${id}+${n}`
-    incident = generateIncident('sig', key)
-  }
+function makeProbe(level: Level, seed: number, r: Rng): Instance {
+  const key = hex(seed)
+  const incident = generateIncident('sig', key)
   const pool = GLANCES[incident.fault][level === TRANSFER ? 1 : 0]
   const glance = r.pick(pool)
   const pads = PROBE_IDS.map(() => r.int(0, SYNTHETIC.tails.length - 1)).join('')
@@ -522,14 +512,10 @@ function makeProbe(level: Level, seed: number, r: Rng, only?: IncidentFault): In
   return finish('first-probe', level, seed, params, incident.fault, stem, probeAnswer(glance, pads), probeSteps(glance))
 }
 
-/** The fault whose KC an instance must assess when a pool asks for `kc`; the diagnosis KC (or none) leaves the fault to the seed. */
-const FAULT_OF_KC = new Map<string, IncidentFault>(INCIDENT_FAULTS.map((f) => [FAULT_KC[f], f]))
-
-function make(seed: number, level: Level, variant?: string, kc?: KcId): Instance {
+function make(seed: number, level: Level, variant?: string): Instance {
   const vs = resolveVariant(gen, seed, level, variant)
   const r = rngFor(gen.id, vs.id, level, seed)
-  const only = kc === undefined ? undefined : FAULT_OF_KC.get(kc)
-  return vs.id === 'first-probe' ? makeProbe(level, seed, r, only) : makeTable(vs.id as 'name-fault' | 'fix-for', level, seed, r, only)
+  return vs.id === 'first-probe' ? makeProbe(level, seed, r) : makeTable(vs.id as 'name-fault' | 'fix-for', level, seed, r)
 }
 
 /** The solution is rebuilt from what the instance shows, so it never needs the run. */

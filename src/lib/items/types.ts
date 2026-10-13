@@ -170,12 +170,8 @@ export interface Gen {
   kcs: readonly KcId[]
   variants: readonly VariantSpec[]
   ratioRules: readonly RatioRule[]
-  /**
-   * Deterministic: the same (seed, level, variant, kc) gives a deep-equal Instance in every runtime. `kc` is the KC the
-   * caller is serving: a family whose instances carry different KCs (`sig`: the KC of the fault drawn) uses it to draw
-   * an instance that assesses that KC, so a pool never hands a card an off-KC item. Most families ignore it.
-   */
-  make(seed: number, level: Level, variant?: string, kc?: KcId): Instance
+  /** Deterministic: the same (seed, level, variant) gives a deep-equal Instance in every runtime. */
+  make(seed: number, level: Level, variant?: string): Instance
   grade(inst: Instance, response: Response): Grade
   solution(inst: Instance): SolutionStep[]
   pins: readonly Pin[]

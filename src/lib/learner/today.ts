@@ -292,7 +292,7 @@ export function makeInstance(gen: Gen, kc: KcId, level: Level, seed: number): In
   const variants = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(at))
   const variant = variants[(seed >>> 0) % variants.length]
   try {
-    return gen.make(seed >>> 0, at, variant.id, kc)
+    return gen.make(seed >>> 0, at, variant.id)
   } catch {
     return null
   }

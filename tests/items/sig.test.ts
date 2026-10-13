@@ -100,51 +100,6 @@ describe('the sig family (§9.6)', () => {
   })
 })
 
-describe('serving a KC (Gen.make\'s kc)', () => {
-  const FAULT_KCS: [IncidentFault, string][] = [
-    ['pool-shrink', 't5.kv-capacity'],
-    ['drain-stall', 't2.admission-scheduling'],
-    ['node-death', 't7.capacity-planning'],
-    ['tenant-burst', 't5.prefill-decode-interference'],
-  ]
-
-  test('asked for a fault KC, every variant draws that fault, and the instance carries the KC', () => {
-    for (const [fault, kc] of FAULT_KCS) {
-      for (const v of sig.variants) {
-        for (const s of seeds.slice(0, 30)) {
-          const i = sig.make(s, 2, v.id, kc)
-          expect(faultOf(i)).toBe(fault)
-          expect(i.kcs).toContain(kc)
-          expect(i.kcs).toContain('t7.incident-diagnosis')
-          expect(sig.make(s, 2, v.id, kc)).toEqual(i)
-        }
-      }
-    }
-  }, SLOW)
-
-  test('asked for the diagnosis KC, or for none, the seed draws its own fault', () => {
-    for (const s of seeds.slice(0, 30)) {
-      for (const v of sig.variants) {
-        const bare = sig.make(s, 2, v.id)
-        expect(sig.make(s, 2, v.id, 't7.incident-diagnosis')).toEqual(bare)
-        expect(sig.make(s, 2, v.id, 't4.ridge-point')).toEqual(bare)
-      }
-    }
-  })
-
-  test('a fault KC at level 3 still hides one column, and a pool that serves the KC through makeInstance gets an on-KC item', async () => {
-    const { makeInstance } = await import('../../src/lib/learner/today')
-    for (const [fault, kc] of FAULT_KCS) {
-      for (const s of seeds.slice(0, 20)) {
-        const i = makeInstance(sig, kc, 3, s)!
-        expect(i.family).toBe('sig')
-        expect(i.kcs).toContain(kc)
-        expect(faultOf(i)).toBe(fault)
-      }
-    }
-  }, SLOW)
-})
-
 describe('the fixed option sets and balanced keys', () => {
   test('name-fault offers the four catalog faults and fix-for their four fixes, in the same order every time', () => {
     for (const s of seeds.slice(0, 30)) {
