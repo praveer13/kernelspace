@@ -74,7 +74,7 @@
       [["r.analyzer-limits","r.borrow-rules"],["","E0502f","E0502p","E0596p"]],
       [["r.analyzer-limits","r.borrow-rules"],["","E0503f","E0499","E0596p"]],
       [["r.analyzer-limits","r.borrow-rules"],["","E0382f","E0503","E0596"]],
-      [["r.analyzer-limits","r.slices"],["","E0499f","E0503","E0502p"]],
+      [["r.analyzer-limits","r.slices"],["","E0499f","E0503","E0502"]],
       [["r.analyzer-limits","r.slices"],["","E0499f","E0503","E0502p"]],
       [["r.analyzer-limits","r.ownership-moves"],["","E0507pf","E0502pf","E0596p"]],
       [["r.analyzer-limits","r.borrow-rules"],["","E0502p","E0502pf","E0596p"]],
@@ -102,7 +102,7 @@
       [["r.analyzer-limits","r.borrow-rules"],["","E0502pf","E0505","E0509p"]],
       [["r.lifetimes"],["","E0515","E0515","E0515"]],
       [["r.interior-mutability","r.borrow-rules"],["","E0506pf","E0384p","E0507p"]],
-      [["r.analyzer-limits","r.slices"],["","E0499f","E0521","E0596p"]],
+      [["r.analyzer-limits","r.slices"],["","E0499f","E0521","E0596"]],
       [["r.borrow-rules"],["","E0499f","E0596p"]]
     ],
     "moves": [

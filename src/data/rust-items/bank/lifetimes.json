@@ -197,7 +197,7 @@
       }
     },
     "split-first-two-blocks": {
-      "hash": "2c560ba000a4a2b2f309b4c93011aa160ed4dc302ebd4bf66bf2e1691641a5ef",
+      "hash": "665706b9d1713d8ca5e6b4a584cccda134447f2729eb4de6b9f3f8b92b29439d",
       "variants": {
         "base": {"result":"compiles"},
         "index-twice": {"result":{"code":"E0499","line":3,"message":"cannot borrow `v[_]` as mutable more than once at a time"},"fixes":{"from-rest":"compiles","clone-b":{"code":"E0503","line":3},"range-b":{"code":"E0499","line":3}}},
@@ -446,7 +446,7 @@
       }
     },
     "fill-halves-scoped": {
-      "hash": "7dbf2bdd6413a69dc5224f76bb4797579b73bbafa931b3d5be7423c8a0c936f7",
+      "hash": "57c681db942a347ae3c3b651fb08c105746bccbe12e9df96d62b0249c658abaa",
       "variants": {
         "base": {"result":"compiles"},
         "same-half": {"result":{"code":"E0499","line":5,"message":"cannot borrow `*a` as mutable more than once at a time"},"fixes":{"use-b":"compiles","use-v":{"code":"E0500","line":3},"move-a":{"code":"E0505","line":5}}},
