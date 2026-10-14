@@ -1,7 +1,9 @@
 /**
  * Compose for the EPLB play (docs/specs/wave-3.md §5.2): two dials compile to a policy that plays the same 24 turns as you
  * did, on the play's own load and on five fresh ones, beside DeepSeek EPLB's rule. `ok` is "chose what the reference chooses
- * at every turn, or ended within 0.05 of it on every load"; each new spec is one `recordPlay` with phase `compose`.
+ * at every turn, or ended within 0.05 of it on every load"; each new spec is one `recordPlay` with phase `compose`, recorded
+ * against the play's load with that load's provenance. Only the verdict line is a live region, so a run announces the note and
+ * never reads the table aloud.
  *
  * The five fresh loads are drawn at the first run (not at mount, so a render stays pure) and kept for the session, so turning
  * one dial changes the policy and nothing else.
@@ -22,6 +24,7 @@ import {
   gapText,
   loadLabel,
   withDial,
+  type EplbComposeLoad,
   type EplbComposeReport,
   type EplbComposeRow,
 } from './session'
@@ -29,8 +32,8 @@ import {
 export interface ComposeProps {
   /** The play's own load: the first row of the table. */
   loads: readonly number[]
-  /** What the ledger records the compose runs against: the play's load seed. */
-  seed: number
+  /** What the ledger records the compose runs against: the play's load seed and its provenance (practice, or unseen for a new load). */
+  load: EplbComposeLoad
 }
 
 const CELL = 'border-b border-line/60 px-2 py-1.5'
@@ -54,7 +57,7 @@ function Rows({ label, rows }: { label: string; rows: readonly EplbComposeRow[] 
   )
 }
 
-export default function Compose({ loads, seed }: ComposeProps) {
+export default function Compose({ loads, load }: ComposeProps) {
   const uid = useId()
   const recordPlay = useProgress((s) => s.recordPlay)
   const [spec, setSpec] = useState<EplbPolicySpec>(DEFAULT_EPLB_SPEC)
@@ -73,7 +76,7 @@ export default function Compose({ loads, seed }: ComposeProps) {
     setReport({ report: rep, key })
     if (written.current.has(key)) return
     written.current.add(key)
-    recordPlay(eplbComposeRecord(spec, rep, seed, written.current.size))
+    recordPlay(eplbComposeRecord(spec, rep, load, written.current.size))
   }
 
   return (
@@ -123,10 +126,13 @@ export default function Compose({ loads, seed }: ComposeProps) {
         <Button onClick={run}>Run my policy</Button>
       </div>
 
-      <div role="status" aria-live="polite" className="mt-4">
+      <div className="mt-4" data-compose-result={report ? '' : undefined} data-ok={report ? (report.report.ok ? 'yes' : 'no') : undefined}>
+        {/* Only the verdict is announced: the live region is there before the first run, and the table stays outside it. */}
+        <p role="status" aria-live="polite" aria-atomic="true" data-compose-note className={cn('text-body-sm text-text-1', stale && 'opacity-60')}>
+          {report ? report.report.note : ''}
+        </p>
         {report && (
-          <div className={stale ? 'opacity-60' : undefined} data-compose-result data-ok={report.report.ok ? 'yes' : 'no'}>
-            <p className="text-body-sm text-text-1">{report.report.note}</p>
+          <div className={stale ? 'opacity-60' : undefined}>
             {stale && <p className="mt-1 font-mono text-[11px] text-amber">The dials changed since this run. Run again to see the new policy.</p>}
             <div
               role="region"

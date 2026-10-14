@@ -3,7 +3,7 @@
  * rules run under `bun test` (tests/plays/eplb.test.ts) and a component keeps none of its own. The world is
  * src/lib/world/eplb.ts (the layer, the turn rule, the ghost, the debrief's sentences); this file adds what a screen
  * needs on top of it: the prediction that opens the play, the turn the learner is on, the aria-live line per turn, the
- * pass tally across loads, Compose's dials and report, and the ledger writes.
+ * pass tally across loads (rebuilt from the ledger's play events), Compose's dials and report, and the ledger writes.
  *
  * THE LOOP. Predict (round robin without replicas: the busiest GPU's load over the mean, as a number), then 4 replicate
  * turns and 20 place turns by hand, then the debrief, then Compose. The ghost lives inside `play.ghost` (the lockstep
@@ -19,7 +19,7 @@
 
 import { byId } from '@/data/claims'
 import { EPLB } from '@/data/plays'
-import type { ItemResponse, PlayResult } from '@/lib/ledger/types'
+import type { ItemResponse, LedgerClient, LedgerEvent, PlayResult } from '@/lib/ledger/types'
 import { rev32 } from '@/lib/ledger/stable'
 import { splitmix32u } from '@/lib/rng'
 import {
@@ -283,10 +283,14 @@ export function gpuCaption(view: EplbView, title: string): string {
 /** Fresh loads the pass needs on top of the practice load (spec §5.2, step 5; W5: "passes on 3 fresh seeds"). */
 export const FRESH_LOADS_TO_PASS = 3
 
-/** How many loads the learner has passed by hand, within 0.05 of the reference. A skipped layer is the reference's, so it counts for nothing. */
+/**
+ * How many loads the learner has passed by hand, within 0.05 of the reference. A skipped layer is the reference's, so it counts for
+ * nothing. The ledger holds it: every debriefed play is a `play play:eplb` event (phase `play`) with its `ok`, its provenance and
+ * its load seed, so `tallyFromEvents` rebuilds the tally after a reload and `tallyAfter` keeps it in step with each debrief.
+ */
 export interface Tally {
   practice: boolean
-  /** Distinct new loads passed. */
+  /** Distinct new loads passed, by load seed. */
   fresh: readonly number[]
 }
 
@@ -295,11 +299,49 @@ export const EMPTY_TALLY: Tally = { practice: false, fresh: [] }
 /** Whether the debriefed layer is the learner's own and within 0.05 of the reference's. */
 export const passedByHand = (s: EplbSession): boolean => s.summary !== null && !s.summary.skipped && eplbPasses(s.summary.mineUnits, s.summary.ghostUnits)
 
+/** One load passed by hand: the practice load, or a new load once per seed. */
+function tallyWith(t: Tally, provenance: EplbProvenance, seed: number): Tally {
+  if (provenance === 'practice') return t.practice ? t : { ...t, practice: true }
+  return t.fresh.includes(seed) ? t : { ...t, fresh: [...t.fresh, seed] }
+}
+
 /** The tally after a debrief: the practice load passed, or a new load added (once per load). */
 export function tallyAfter(t: Tally, s: EplbSession): Tally {
   if (!passedByHand(s)) return t
-  if (s.provenance === 'practice') return t.practice ? t : { ...t, practice: true }
-  return t.fresh.includes(s.seed) ? t : { ...t, fresh: [...t.fresh, s.seed] }
+  return tallyWith(t, s.provenance, s.seed)
+}
+
+/** The play's ref in the ledger. */
+export const EPLB_PLAY_REF = `play:${EPLB_PLAY_ID}`
+
+/**
+ * The tally the recorded events hold, added to `t`. A pass is a `play play:eplb` event of phase `play` with `ok`, which `recordOf`
+ * sets only for a layer the learner finished by hand within 0.05 (the `skipped` flag is checked as well). Provenance `practice`
+ * is the practice load and `unseen` a new load, one per seed, as `tallyAfter` counts them. Compose runs (phase `compose`) are not
+ * plays by hand, and other events are ignored.
+ */
+export function tallyFromEvents(events: Iterable<LedgerEvent>, t: Tally = EMPTY_TALLY): Tally {
+  let out = t
+  for (const e of events) {
+    if (e.kind !== 'play' || e.ref !== EPLB_PLAY_REF || e.ok !== true) continue
+    const data = e.data as { phase?: unknown; skipped?: unknown } | undefined
+    if (data?.phase !== 'play' || data.skipped === true) continue
+    if (e.provenance === 'practice') out = tallyWith(out, 'practice', EPLB_PRACTICE_SEED)
+    else if (e.provenance === 'unseen' && typeof e.seed === 'number') out = tallyWith(out, 'unseen', e.seed)
+  }
+  return out
+}
+
+/** The ledger's tally, read through its events (in the app, the façade's `controls.engine()`). */
+export async function ledgerTally(client: Pick<LedgerClient, 'events'>): Promise<Tally> {
+  return tallyFromEvents(await client.events({ kinds: ['play'], refPrefix: EPLB_PLAY_REF }))
+}
+
+/** Two tallies as one: what the ledger held at mount and what this page added since, whichever arrived first. */
+export function mergeTally(a: Tally, b: Tally): Tally {
+  let out = b.practice ? tallyWith(a, 'practice', EPLB_PRACTICE_SEED) : a
+  for (const seed of b.fresh) out = tallyWith(out, 'unseen', seed)
+  return out
 }
 
 /** The pass is the practice load and three new ones. */
@@ -465,12 +507,19 @@ export function eplbComposeReport(spec: EplbPolicySpec, loadSets: readonly (read
   return { rows, ok, equivalent, within, note }
 }
 
-/** The ledger result of one Compose run. `tries` counts the specs run so far. */
-export function eplbComposeRecord(spec: EplbPolicySpec, report: EplbComposeReport, seed: number, tries: number): PlayResult {
+/** The load a Compose run is recorded against: the play's own, with the provenance the play's record gives it. */
+export type EplbComposeLoad = Pick<EplbSession, 'seed' | 'provenance'>
+
+/**
+ * The ledger result of one Compose run. `tries` counts the specs run so far. The record's seed and metric are the play's own load
+ * (the table's first row), so it carries that load's provenance, as the play's own record does: `practice` on the practice load,
+ * `unseen` on a new one. The five fresh loads beside it are drawn per session and are not recorded.
+ */
+export function eplbComposeRecord(spec: EplbPolicySpec, report: EplbComposeReport, load: EplbComposeLoad, tries: number): PlayResult {
   return eplbComposeResult(
     spec,
     { equivalent: report.equivalent, runs: report.rows.map((r) => ({ mineUnits: r.mineUnits, ghostUnits: r.ghostUnits })), tries },
-    { seed, provenance: 'practice', kcs: [...EPLB.kcs] },
+    { seed: load.seed, provenance: load.provenance, kcs: [...EPLB.kcs] },
   )
 }
 

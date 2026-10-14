@@ -121,12 +121,12 @@ test('/play/eplb: the practice load is played to the debrief by keyboard alone a
   await expect(page.locator('[data-debrief-side]')).toHaveCount(0)
   expect(await noSidewaysScroll(page)).toBe(true)
 
-  // Debrief: the heading takes focus, the prediction's error and the first divergence are there, and both layers are shown.
+  // Debrief: the heading takes focus, the prediction's error and the turn where the layer was lost are there, and both layers are shown.
   await page.keyboard.press('Enter')
   const debrief = page.locator('[data-phase="debrief"]')
   await expect(debrief).toBeVisible()
   await expect(debrief.locator('h3')).toBeFocused()
-  await expect(debrief.locator('h3')).toContainText('The first divergence is at turn')
+  await expect(debrief.locator('h3')).toContainText('Where the layer was lost: turn')
   await expect(debrief.locator('[data-prediction-error]')).toContainText(/You predicted 1\.50× for round robin without replicas; it gives 1\.41×\./)
   await expect(debrief.locator('[data-debrief-explanation]')).toContainText(/At turn \d+ you put #\d+'s copy .* on GPU 1/)
   await expect(debrief.locator('[data-debrief-explanation]')).toContainText('the least loaded with a free slot')
