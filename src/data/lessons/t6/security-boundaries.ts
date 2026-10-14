@@ -372,6 +372,12 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
       kcs: ['t6.isolation-boundaries', 't6.cache-timing-oracle', 't6.tool-authorization'],
     },
     {
+      type: 'item',
+      title: 'Time the cache hit and price the namespace with new numbers',
+      family: 'prefill',
+      variants: ['hit-gap', 'namespace-cost'],
+    },
+    {
       type: 'field-note',
       title: 'Firecracker security design',
       source: 'Firecracker project',

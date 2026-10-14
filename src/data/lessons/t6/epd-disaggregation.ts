@@ -92,6 +92,12 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
       kcs: ['t6.epd-phases', 't6.kv-tiering'],
     },
     {
+      type: 'item',
+      title: 'Split the fleet and time the hand-off with new numbers',
+      family: 'prefill',
+      variants: ['pd-ratio', 'transfer-ms'],
+    },
+    {
       type: 'quiz',
       questions: [
         {
