@@ -3,8 +3,11 @@ import { defineConfig } from '@playwright/test'
 // End-to-end keyboard walks (docs/specs/wave-2.md §22.2). `npm run e2e` builds, serves with `vite preview` and runs
 // e2e/*.spec.ts at 360 px. The directory sits outside ./tests, so `bun run test` never sees it, and CI runs it
 // only in nightly.yml. PW_CHROMIUM_EXECUTABLE points at another Chromium on hosts where the downloaded one
-// cannot start (scripts/a11y.mjs reads the same variable).
-const PORT = 4173
+// cannot start (scripts/a11y.mjs reads the same variable). Outside CI the config reuses a server already listening
+// on the port, so a stale `vite preview` from another tree would be tested instead of this build: PW_PORT=<port>
+// gives a run its own port (default 4173), and then the config starts its own server and fails if the port is
+// taken rather than reusing whatever listens there. CI is unchanged: it never reuses a server.
+const PORT = Number(process.env.PW_PORT) || 4173
 
 export default defineConfig({
   testDir: './e2e',
@@ -23,7 +26,7 @@ export default defineConfig({
   webServer: {
     command: `npm run build && npx vite preview --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}/`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI && !process.env.PW_PORT,
     timeout: 300_000,
   },
 })
