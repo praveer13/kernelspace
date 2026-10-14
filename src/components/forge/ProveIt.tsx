@@ -82,7 +82,7 @@ async function loadHistory(labId: string): Promise<ProveAttempt[]> {
     const events = await client.events({ kinds: ['prove'], refPrefix: `prove:${labId}` })
     const out: ProveAttempt[] = []
     for (const e of events) {
-      if (e.kind !== 'prove' || e.ref !== `prove:${labId}`) continue
+      if (e.kind !== 'prove' || e.ref !== `prove:${labId}` || e.data.v === 2) continue // v2 attempts (wave-3.md §7) have no question list
       out.push({ at: e.at, qids: e.data.qids, score: e.score })
     }
     return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
