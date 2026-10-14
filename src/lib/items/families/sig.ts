@@ -25,9 +25,9 @@
  * binary feature isolates a key (B27, scripts/item-cues.ts).
  *
  * KCS. `make(seed, level, variant)` takes no KC (the 2a contract, types.ts), so the fault, and with it the fault KC
- * an instance carries, is the seed's own. A pool serving one fault KC can therefore draw an instance of another
- * fault: its evidence lands on `t7.incident-diagnosis` and on the KC of the fault shown. Closing that gap needs a
- * KC-aware `make`, which is a 2a level-0 change (recorded in the 2b-16 report), not something a family can do alone.
+ * an instance carries, is the seed's own. The pools that serve a KC (Today, tickets, placement) redraw the seed
+ * until the instance carries the KC they serve, and fall back to authored items when 16 draws do not
+ * (src/lib/learner/on-kc.ts), so a fault-KC card never gets another fault's instance.
  *
  * SPEED. A cold table instance costs a simulation: about 2 ms at the median and under 4 ms at p95 on the
  * development host (`budgetMs` 10, where every other family keeps the default 1). The simulations are memoized by seed, so the two table variants, the four levels
