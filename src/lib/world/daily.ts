@@ -15,7 +15,7 @@
  *     transitions.
  *   - `readingView`: a probe's readings as sparkline series plus the table every sparkline is described by.
  *   - `shareString`, and `dailyResult` / `recordDaily`, which write the one `incident` event per date.
- *   - Your engine (§9.7, §10): `dailyBoxes` says which of the four boxes the Daily ran on are yours, `dailySlotBytes`
+ *   - Your engine (§9.7, §10): `dailyBoxes` says which of the three boxes that drive the Daily are yours, `dailySlotBytes`
  *     hands their bytes to the incident session, and `boxLines` / `engineLine` / `engineNote` say it in words.
  *
  * RECORDING (§9.7). `recordIncident` runs for the first completed attempt on a date only. The ledger already
@@ -345,10 +345,15 @@ export const readingHeadline = (probe: ProbeId, category: Category): string => `
 /* ------------------------------------------------------------------ */
 
 /**
- * The four boxes the Daily's incident session can run on yours (§9.5, §9.7): the scheduler, the block manager and
- * the intake queue drive every worker of the cluster, and the prefix router is loaded and checked there.
+ * The boxes that drive a run of the Daily (§9.5, §9.7): the scheduler, the block manager and the intake queue drive
+ * every worker of the incident cluster. The prefix router does not: incident clusters route by shortest queue, so
+ * a router of yours would choose no route. It is not counted, not named in the share string and not recorded in the
+ * event's components, and the Daily does not load it (a router that traps would fail a run it takes no part in).
  */
-export const DAILY_BOXES: readonly EngineSlot[] = ['scheduler', 'block-manager', 'intake', 'prefix-router']
+export const DAILY_BOXES: readonly EngineSlot[] = ['scheduler', 'block-manager', 'intake']
+
+/** The installed box that takes no part in the Daily: the debrief says so rather than claiming it. */
+const IDLE_BOX: EngineSlot = 'prefix-router'
 
 /** What the Daily needs to know of an installed module: its hash, its lab and its bytes (`null` when this device does not hold them). */
 export interface InstalledBox {
@@ -359,7 +364,7 @@ export interface InstalledBox {
 
 export type InstalledBoxes = Partial<Record<EngineSlot, InstalledBox | undefined>>
 
-/** One of the four boxes in one run of the Daily. */
+/** One box in one run of the Daily: one of the three that drive it, or the installed prefix router that does not. */
 export interface DailyBox {
   slot: EngineSlot
   /** "block manager" */
@@ -370,27 +375,36 @@ export interface DailyBox {
   sha256?: string
   /** installed, but the bytes are not on this device (an import without them), so the reference ran */
   missing?: boolean
+  /** installed, but it takes no part in the Daily (the prefix router): never `own`, never counted or recorded */
+  idle?: boolean
 }
 
 /**
- * The four boxes of a run. A box is yours when a module is installed in the slot and its bytes are here;
- * `reference` plays the whole Daily on the reference engine (the fallback after a module fails, and a
+ * The boxes of a run: the three that drive it, then the prefix router when one is installed (as an `idle` box, so
+ * the debrief can say it took no part). A box is yours when a module is installed in the slot and its bytes are
+ * here; `reference` plays the whole Daily on the reference engine (the fallback after a module fails, and a
  * learner's choice for a practice replay).
  */
 export function dailyBoxes(installed: InstalledBoxes, reference = false): DailyBox[] {
-  return DAILY_BOXES.map((slot) => {
+  const boxes = DAILY_BOXES.map((slot): DailyBox => {
     const label = ENGINE_SLOTS[slot].label
     const m = installed[slot]
     if (!m || reference) return { slot, label, own: false }
     if (m.bytes === null) return { slot, label, own: false, labId: m.labId, sha256: m.sha256, missing: true }
     return { slot, label, own: true, labId: m.labId, sha256: m.sha256 }
   })
+  const router = installed[IDLE_BOX]
+  if (router && !reference) boxes.push({ slot: IDLE_BOX, label: ENGINE_SLOTS[IDLE_BOX].label, own: false, labId: router.labId, sha256: router.sha256, idle: true })
+  return boxes
 }
 
-/** The bytes the incident session opens with: a box that is not yours is `null`, which runs the reference driver. */
+/**
+ * The bytes the incident session opens with: a box that is not yours is `null`, which runs the reference driver.
+ * The prefix router is always `null`: nothing in an incident cluster would ask it, so it is not loaded.
+ */
 export function dailySlotBytes(installed: InstalledBoxes, reference = false): FleetSlotBytes {
   const bytes = (slot: EngineSlot): ArrayBuffer | null => (reference ? null : (installed[slot]?.bytes ?? null))
-  return { sched: bytes('scheduler'), mgr: bytes('block-manager'), queue: bytes('intake'), router: bytes('prefix-router') }
+  return { sched: bytes('scheduler'), mgr: bytes('block-manager'), queue: bytes('intake'), router: null }
 }
 
 export const ownBoxes = (boxes: readonly DailyBox[]): DailyBox[] => boxes.filter((b) => b.own)
@@ -398,10 +412,22 @@ export const ownBoxes = (boxes: readonly DailyBox[]): DailyBox[] => boxes.filter
 /** The hashes of the modules that ran, for the `incident` event's `components` (local only, redacted in donations). */
 export const boxHashes = (boxes: readonly DailyBox[]): string[] => ownBoxes(boxes).map((b) => b.sha256 as string)
 
-/** How many of the four boxes are installed, for the Today card; `slots` is the working record `engine:slots`. */
-export const installedBoxCount = (slots: Partial<Record<EngineSlot, unknown>>): number => DAILY_BOXES.filter((s) => slots[s] !== undefined).length
+/**
+ * How many of the boxes that drive the Daily will run as yours, for the Today card. `slots` is the working record
+ * `engine:slots`; a box counts only when its bytes are on this device (an import can name a slot without them, and
+ * the Daily then runs the reference), so `readBytes` is asked for each named module.
+ */
+export async function ownedBoxCount(slots: Partial<Record<EngineSlot, { sha256: string }>>, readBytes: (sha256: string) => Promise<ArrayBuffer | null>): Promise<number> {
+  const found = await Promise.all(
+    DAILY_BOXES.map(async (slot) => {
+      const entry = slots[slot]
+      return entry !== undefined && (await readBytes(entry.sha256)) !== null
+    }),
+  )
+  return found.filter(Boolean).length
+}
 
-/** "your engine: 2 of 4 boxes", for the Today card and the page header. */
+/** "your engine: 2 of 3 boxes", for the Today card and the page header. */
 export const engineLine = (own: number): string => `your engine: ${own} of ${DAILY_BOXES.length} boxes`
 
 /** First eight hex digits of a content hash, as the schematic and the install panel show it. */
@@ -410,6 +436,7 @@ const shortSha = (sha: string): string => sha.slice(0, 8)
 /** One line per box for the debrief: whose it was, and which module when it was yours. */
 export function boxLines(boxes: readonly DailyBox[]): string[] {
   return boxes.map((b) => {
+    if (b.idle) return `${b.label}: not used (incident clusters route by shortest queue)`
     if (b.own) return `${b.label}: yours (${b.labId}, ${shortSha(b.sha256 as string)})`
     if (b.missing) return `${b.label}: reference (your installed module's bytes are not on this device)`
     return `${b.label}: reference`
@@ -418,14 +445,14 @@ export function boxLines(boxes: readonly DailyBox[]): string[] {
 
 /**
  * What the debrief says about the engine the incident ran on. A run with a box of yours says the expert played the
- * same boxes (W11); a prefix router of yours is loaded and checked, but the incident cluster routes by shortest queue.
+ * same boxes (W11); a prefix router of yours took no part, because the incident cluster routes by shortest queue.
  */
 export function engineNote(boxes: readonly DailyBox[]): string {
   const own = ownBoxes(boxes)
-  if (own.length === 0) return 'This Daily ran on the reference engine. Install a scheduler, block manager, intake queue or prefix router from the Forge, and the next one runs on yours.'
+  const router = boxes.some((b) => b.idle) ? ' Your prefix router took no part: incident clusters route by shortest queue, so it did not choose any route.' : ''
+  if (own.length === 0) return `This Daily ran on the reference engine. Install a scheduler, block manager or intake queue from the Forge, and the next one runs on yours.${router}`
   const names = own.map((b) => b.label)
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
-  const router = own.some((b) => b.slot === 'prefix-router') ? ' Your prefix router was loaded and checked on every worker; incident clusters route by shortest queue, so it did not choose any route.' : ''
   return `Your ${list} ran this incident. The expert played it on the same boxes, so a slower module costs both of you the same.${router}`
 }
 

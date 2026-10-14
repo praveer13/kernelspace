@@ -49,9 +49,11 @@ interface PanelError {
   timedOut: boolean
 }
 
-export default function ClusterPanel({ slots, onUseReference }: { slots: SlotState; onUseReference?: () => void }) {
-  /* your installed radix cache (the prefix-router slot); a fleet worker gives each cluster worker its own instance */
-  const routerBytes = useSlots((s) => s.installed['prefix-router']?.bytes ?? null)
+export default function ClusterPanel({ slots, routerOff = false, onUseReference }: { slots: SlotState; routerOff?: boolean; onUseReference?: () => void }) {
+  /* your installed radix cache (the prefix-router slot); a fleet worker gives each cluster worker its own instance.
+     `routerOff` runs the reference router for this visit after a reset, with the saved module left installed. */
+  const installedRouter = useSlots((s) => s.installed['prefix-router']?.bytes ?? null)
+  const routerBytes = routerOff ? null : installedRouter
   const [topology, setTopology] = useState<'colocated' | 'epd'>('colocated')
   const [workerCount, setWorkerCount] = useState(2)
   const [router, setRouter] = useState<RouterKind>('jsq')

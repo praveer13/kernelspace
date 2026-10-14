@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { createFleetHost } from '../../src/lib/fleet-host'
-import { makeRefManager, makeRefQueue } from '../../src/lib/fleet-model'
+import { makeRefManager, makeRefQueue, makeRefScheduler } from '../../src/lib/fleet-model'
 import { FleetTimeoutError, openIncidentSession, type FleetWorkerLike } from '../../src/lib/fleet-session'
 import { instantiateLab } from '../../src/lib/wasm-lab'
 import { makeWasmScheduler } from '../../src/lib/wasm-scheduler'
@@ -365,6 +365,108 @@ describe('the learner modules run in every worker', () => {
 
 /* -------------------------------- budgets -------------------------------- */
 
+const QUEUE_OK_AT = 1024
+const QUEUE_EMPTY_AT = 1040
+const PUSHES_AT = 3000
+
+/**
+ * A zero-import intake-queue module that counts its pushes and spins forever in `pop` once it has seen `afterPushes`
+ * of them: a learner queue that stalls mid-incident. `init` answers "ok", `push` "ok" (and holds nothing), and `pop`
+ * "empty" until then.
+ */
+function spinningQueueModule(afterPushes: number): ArrayBuffer {
+  const report = JSON.stringify({ lab: 'mpmc-queue', version: 3, checks: [{ id: 'c', label: 'c', pass: true, msg: 'ok' }] })
+  const i32 = (n: number): number[] => [0x41, ...sleb64(BigInt(n))]
+  const ksAlloc = [0x00, 0x41, ...sleb64(4096n), 0x0b]
+  const ksFree = [0x00, 0x0b]
+  const ksRun = [0x00, ...packed(REPORT_AT, report.length), 0x0b]
+  const byteAt = (offset: number): number[] => [0x20, 0x00, ...i32(offset), 0x6a, 0x2d, 0x00, 0x00] // local.get 0; i32.add; i32.load8_u
+  const ksInvoke = [
+    0x00,
+    ...byteAt(0), ...i32(105), 0x46, // the command starts with 'i': init
+    0x04, 0x7e,
+    ...packed(QUEUE_OK_AT, 2),
+    0x05,
+    ...byteAt(1), ...i32(117), 0x46, // 'pu...': push counts and says ok
+    0x04, 0x7e,
+    ...i32(PUSHES_AT), ...i32(PUSHES_AT), 0x28, 0x02, 0x00, ...i32(1), 0x6a, 0x36, 0x02, 0x00,
+    ...packed(QUEUE_OK_AT, 2),
+    0x05, // 'po...': pop spins once the count is reached
+    ...i32(PUSHES_AT), 0x28, 0x02, 0x00, ...i32(afterPushes), 0x4e,
+    0x04, 0x40, 0x03, 0x40, 0x0c, 0x00, 0x0b, 0x0b, // if (count >= n) loop { br 0 }
+    ...packed(QUEUE_EMPTY_AT, 5),
+    0x0b,
+    0x0b,
+    0x0b,
+  ]
+  const bytes = [
+    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+    ...section(1, vec([[0x60, 0x01, 0x7f, 0x01, 0x7f], [0x60, 0x02, 0x7f, 0x7f, 0x00], [0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7e]])),
+    ...section(3, vec([[0], [1], [2], [2]])),
+    ...section(5, vec([[0x00, 0x01]])),
+    ...section(7, vec([[...str('memory'), 0x02, 0x00], [...str('ks_alloc'), 0x00, 0], [...str('ks_free'), 0x00, 1], [...str('ks_run'), 0x00, 2], [...str('ks_invoke'), 0x00, 3]])),
+    ...section(10, vec([[...uleb(ksAlloc.length), ...ksAlloc], [...uleb(ksFree.length), ...ksFree], [...uleb(ksRun.length), ...ksRun], [...uleb(ksInvoke.length), ...ksInvoke]])),
+    ...section(
+      11,
+      vec(
+        [
+          [QUEUE_OK_AT, 'ok'],
+          [QUEUE_EMPTY_AT, 'empty'],
+          [REPORT_AT, report],
+        ].map(([at, text]) => [0x00, 0x41, ...sleb64(BigInt(at as number)), 0x0b, ...str(text as string)]),
+      ),
+    ),
+  ]
+  return new Uint8Array(bytes).buffer
+}
+
+class Spun extends Error {
+  constructor(
+    readonly tick: number,
+    readonly worker: number,
+  ) {
+    super('spun')
+  }
+}
+
+/**
+ * Where a queue that spins after `afterPushes` pushes (the module above) would first be inside `pop`: the cluster tick
+ * and the worker, found by playing the same incident in-process on reference drivers behind a counting queue.
+ * `pushedByAlert` reports how many pushes each worker has seen when the alert fires, so a caller can aim past the warm-up.
+ */
+function stuckPop(spec: IncidentSpec, afterPushes: number, wait = 0): { spun: Spun | null; pushedByAlert: number[] } {
+  const pushes: number[] = []
+  let session: IncidentSession | null = null
+  const stack: StackFactory = (w, cfg) => {
+    pushes[w] = 0
+    return {
+      sched: makeRefScheduler(),
+      mgr: makeRefManager(cfg.numBlocks, cfg.blockSize),
+      // the module's own behaviour: it accepts every push, holds nothing, and spins in `pop` once it has counted enough
+      queue: {
+        name: 'counting',
+        push: () => {
+          pushes[w]!++
+          return true
+        },
+        pop: () => {
+          if (pushes[w]! >= afterPushes) throw new Spun(session ? session.run.cluster.tick : -1, w)
+          return null
+        },
+      },
+    }
+  }
+  try {
+    session = new IncidentSession(spec, { stack })
+    const pushedByAlert = [...pushes]
+    for (let i = 0; i < wait; i++) session.wait()
+    return { spun: null, pushedByAlert }
+  } catch (e) {
+    if (!(e instanceof Spun)) throw e
+    return { spun: e, pushedByAlert: [] }
+  }
+}
+
 describe('budgets and FleetTimeoutError', () => {
   const spec = () => specFor('pool-shrink')
 
@@ -417,6 +519,28 @@ describe('budgets and FleetTimeoutError', () => {
     expect(error).toBeInstanceOf(FleetTimeoutError)
     expect((error as FleetTimeoutError).phase).toBe('finish')
     expect((error as FleetTimeoutError).budgetMs).toBe(30)
+  })
+
+  test('a queue that spins in pop is reported at the tick it is stuck on, not the scheduler’s last tick (F11)', async () => {
+    const spec = specFor('pool-shrink')
+    // aim two pushes past the warm-up, so the spin happens inside a command and not in `open`
+    const alert = stuckPop(spec, Number.MAX_SAFE_INTEGER).pushedByAlert
+    const after = Math.max(...alert) + 2
+    const want = stuckPop(spec, after, 30).spun
+    expect(want, 'the in-process run stalls inside a wait').not.toBeNull()
+    // a queue is popped before the scheduler runs in a tick, so the first worker's scheduler last ran at the tick before
+    expect(want!.worker).toBe(0)
+
+    // the real fleet worker, a real spinning wasm module, a short budget: the client terminates the thread
+    const session = await openIncidentSession(open(spec, { ...noModules, queue: spinningQueueModule(after) }), { budgets: { step: 800 } })
+    let error: unknown = null
+    for (let i = 0; i < 30 && error === null; i++) error = await session.wait().then(() => null, (e: unknown) => e)
+    expect(error).toBeInstanceOf(FleetTimeoutError)
+    const timeout = error as FleetTimeoutError
+    expect(timeout.phase).toBe('step')
+    expect(timeout.tick).toBe(want!.tick)
+    expect(timeout.message).toContain(`your intake queue stopped responding at tick ${want!.tick} `)
+    await expect(session.wait()).rejects.toBeInstanceOf(FleetTimeoutError)
   })
 
   test('an open that never returns times out with the open budget', async () => {

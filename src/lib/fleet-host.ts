@@ -361,37 +361,34 @@ async function incidentModules(slots: FleetSlotBytes, workers: number): Promise<
   return out
 }
 
-/** Where a stack reports the tick it is about to run: every worker's scheduler calls in, and the first call of a tick reports it. */
+/** Where a session reports the tick it is about to run, and which run inside the command that is (the expert's replay, say). */
 interface TickReporter {
   progress: Progress
   scope: string | undefined
 }
 
 /**
- * The stack factory over instantiated modules. The scheduler is wrapped so the host can report the tick
- * a spinning module never finishes (a learner module can only run inside one of its calls).
+ * The stack factory over instantiated modules. The tick a stalled module is inside is reported by the cluster
+ * (`onTick` below), not by a driver: the intake queue is popped before the scheduler runs, so a queue that spins at
+ * tick 412 would otherwise be reported as stuck at the scheduler's last tick, 411 (a learner module can only be
+ * stuck inside one of its own calls, and the page sees nothing after that).
  */
-function incidentStack(mods: WorkerModules[], reporter: TickReporter): StackFactory {
-  let reported = -1
+function incidentStack(mods: WorkerModules[]): StackFactory {
   return (w, cfg, intakeCap) => {
     const m = mods[w]
-    const inner = m.sched ? makeWasmScheduler(m.sched) : makeRefScheduler()
     return {
-      sched: {
-        name: inner.name,
-        schedule(view) {
-          if (view.iter > reported) {
-            reported = view.iter
-            reporter.progress(view.iter, reporter.scope)
-          }
-          return inner.schedule(view)
-        },
-      },
+      sched: m.sched ? makeWasmScheduler(m.sched) : makeRefScheduler(),
       mgr: m.mgr ? makeWasmManager(m.mgr, cfg.numBlocks, cfg.blockSize) : makeRefManager(cfg.numBlocks, cfg.blockSize),
       queue: m.queue ? makeWasmQueue(m.queue, intakeCap) : makeRefQueue(intakeCap),
     }
   }
 }
+
+/** The options of a session or replay whose stalls name the cluster tick they were in. */
+const incidentOptions = (mods: WorkerModules[], reporter: TickReporter) => ({
+  stack: incidentStack(mods),
+  onTick: (tick: number) => reporter.progress(tick, reporter.scope),
+})
 
 async function openIncident(o: IncidentOpen, progress: Progress, instantiate: Instantiate): Promise<HostSession> {
   const { spec, slots } = o
@@ -399,9 +396,8 @@ async function openIncident(o: IncidentOpen, progress: Progress, instantiate: In
   // is only proven here: every worker's instance loads and answers `reset`, and a stale or unfinished one fails `open`.
   await routerFor(slots, spec.workers, instantiate)
   const reporter: TickReporter = { progress, scope: undefined }
-  const stack = incidentStack(await incidentModules(slots, spec.workers), reporter)
   // the constructor simulates the warm-up to the alert, so a spinning module stalls `open`
-  const session = new IncidentSession(spec, { stack })
+  const session = new IncidentSession(spec, incidentOptions(await incidentModules(slots, spec.workers), reporter))
   const ended = () => session.ended
   let expert: Pick<IncidentFinish, 'expertBurn' | 'expert'> | null = null
   const reportTo = (p: Progress) => {
@@ -431,7 +427,7 @@ async function openIncident(o: IncidentOpen, progress: Progress, instantiate: In
         if (!expert) {
           // the expert replays the incident on fresh instances of the same modules (W11): one scorer, one clock
           const expertReporter: TickReporter = { progress: p, scope: 'the expert replay' }
-          const run = runExpert(spec, { stack: incidentStack(await incidentModules(slots, spec.workers), expertReporter) })
+          const run = runExpert(spec, incidentOptions(await incidentModules(slots, spec.workers), expertReporter))
           expert = { expertBurn: run.outcome.burn, expert: { actions: run.actions, named: run.named, steps: run.steps } }
         }
         return { ...outcome, ...expert, actions: [...session.actions] }

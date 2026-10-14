@@ -11,9 +11,19 @@ import { createFleetHost } from '../../src/lib/fleet-host'
 import { openIncidentSession, type FleetWorkerLike } from '../../src/lib/fleet-session'
 import { FIXES, INCIDENT_FAULTS, PROBE_IDS, generateIncident, burnPercent, type IncidentFault } from '../../src/lib/world/incident-spec'
 import { IncidentSession, runExpert } from '../../src/lib/world/incident-sim'
+import { readSlots } from '../../src/lib/engine/slots'
+import type { EngineSlot } from '../../src/lib/ledger/types'
 import {
   DAILY_EPOCH,
   HYPOTHESIS_OPTIONS,
+  type InstalledBoxes,
+  boxHashes,
+  boxLines,
+  dailyBoxes,
+  dailySlotBytes,
+  engineLine,
+  ownBoxes,
+  ownedBoxCount,
   daysBetween,
   daysFromCivil,
   dailyIncident,
@@ -443,4 +453,98 @@ describe('a Daily played through the session records once and scores like the ex
     expect(shareString(dailyNumber(date), done.probes.length, done.burn)).toMatch(/^KS-Daily #11 · \d+ probes? · burn \d+%$/)
     session.close()
   }, 60_000)
+})
+
+/* ------------------------------------------------------------------ */
+/* Boxes count only when they drive the run and their bytes are here    */
+/* ------------------------------------------------------------------ */
+
+describe('the boxes the Daily claims are the boxes that ran (F6, 2b-21)', () => {
+  const at = '2026-10-05T09:00:00.000Z'
+  const bytesOf = (n: number): ArrayBuffer => new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, n]).buffer as ArrayBuffer
+  const sha = (c: string) => c.repeat(64)
+  const entry = (sha256: string, labId: string) => ({ sha256, labId, version: 3, at })
+
+  /** A device whose `engine:slots` names modules, of which only those in `held` have their bytes (an import can carry the record and not the bytes). */
+  async function device(slots: Record<string, { sha256: string; labId: string }>, held: Record<string, ArrayBuffer>) {
+    const tab = startTab(
+      makeProfile({
+        seed: {
+          components: Object.values(slots).map((s) => ({ sha256: s.sha256, labId: s.labId, size: 9, addedAt: at, ...(held[s.sha256] ? { bytes: held[s.sha256] } : {}) })),
+          working: [{ key: 'engine:slots', value: Object.fromEntries(Object.entries(slots).map(([slot, s]) => [slot, entry(s.sha256, s.labId)])), at, dev: 'd' }],
+        },
+      }),
+    )
+    const engine = await tab.progress.controls.engine()
+    return { tab, named: readSlots(tab.progress.getState().working['engine:slots']), readBytes: (h: string) => engine.componentBytes(h) }
+  }
+
+  test('a slot named in engine:slots without its bytes is not counted: the Daily would run the reference', async () => {
+    const d = await device(
+      { scheduler: { sha256: sha('a'), labId: 'batching-scheduler' }, 'block-manager': { sha256: sha('b'), labId: 'kv-block-manager' }, intake: { sha256: sha('c'), labId: 'mpmc-queue' } },
+      { [sha('a')]: bytesOf(1) },
+    )
+    expect(Object.keys(d.named)).toEqual(['scheduler', 'block-manager', 'intake'])
+    // counted by name alone, all three would have been "yours"; only one has bytes and only one runs
+    expect(await ownedBoxCount(d.named, d.readBytes)).toBe(1)
+    expect(await ownedBoxCount({}, d.readBytes)).toBe(0)
+    // and the page agrees: the same device's boxes name one as yours
+    const installed: InstalledBoxes = {}
+    for (const [slot, e] of Object.entries(d.named)) installed[slot as EngineSlot] = { sha256: e.sha256, labId: e.labId, bytes: await d.readBytes(e.sha256) }
+    expect(ownBoxes(dailyBoxes(installed)).map((b) => b.slot)).toEqual(['scheduler'])
+    expect(engineLine(await ownedBoxCount(d.named, d.readBytes))).toBe('your engine: 1 of 3 boxes')
+  })
+
+  test('with every driving slot held all three count, and a prefix router beside them does not', async () => {
+    const d = await device(
+      {
+        scheduler: { sha256: sha('a'), labId: 'batching-scheduler' },
+        'block-manager': { sha256: sha('b'), labId: 'kv-block-manager' },
+        intake: { sha256: sha('c'), labId: 'mpmc-queue' },
+        'prefix-router': { sha256: sha('d'), labId: 'radix-cache' },
+      },
+      { [sha('a')]: bytesOf(1), [sha('b')]: bytesOf(2), [sha('c')]: bytesOf(3), [sha('d')]: bytesOf(4) },
+    )
+    expect(await ownedBoxCount(d.named, d.readBytes)).toBe(3)
+    expect(engineLine(3)).toBe('your engine: 3 of 3 boxes')
+  })
+
+  test('a prefix router alone: not counted, not "on my engine", not in the event, and not loaded', async () => {
+    const router: InstalledBoxes = { 'prefix-router': { sha256: sha('d'), labId: 'radix-cache', bytes: bytesOf(4) } }
+    const d = await device({ 'prefix-router': { sha256: sha('d'), labId: 'radix-cache' } }, { [sha('d')]: bytesOf(4) })
+    expect(await ownedBoxCount(d.named, d.readBytes)).toBe(0)
+
+    const boxes = dailyBoxes(router)
+    expect(ownBoxes(boxes)).toEqual([])
+    expect(boxHashes(boxes)).toEqual([])
+    // the share string asks `ownBoxes(boxes).length > 0`: the router adds nothing to it
+    expect(shareString(11, 1, 5.4, ownBoxes(boxes).length > 0)).not.toContain('on my engine')
+    // the debrief still tells the learner what happened to the router they installed
+    expect(boxes.map((b) => b.slot)).toEqual(['scheduler', 'block-manager', 'intake', 'prefix-router'])
+    expect(boxLines(boxes)[3]).toBe('prefix router: not used (incident clusters route by shortest queue)')
+
+    const date = '2026-10-23'
+    expect(dailyResult(date, dailyIncident(date), finished(), boxHashes(boxes)).data.components).toEqual([])
+    // the router's bytes never reach the incident session: a router that would fail to load cannot fail a Daily it takes no part in
+    expect(dailySlotBytes(router).router).toBeNull()
+    const garbage: InstalledBoxes = { 'prefix-router': { sha256: sha('e'), labId: 'radix-cache', bytes: new Uint8Array([1, 2, 3]).buffer as ArrayBuffer } }
+    const session = await openIncidentSession({ mode: 'incident', spec: dailyIncident(date), slots: dailySlotBytes(garbage) }, { spawn: () => new FakeWorker() })
+    expect(session.alert).toBeGreaterThan(0)
+    session.close()
+  })
+
+  test('a router beside a scheduler of yours: only the scheduler is counted, shared and recorded', () => {
+    const inst: InstalledBoxes = {
+      scheduler: { sha256: sha('a'), labId: 'batching-scheduler', bytes: bytesOf(1) },
+      'prefix-router': { sha256: sha('d'), labId: 'radix-cache', bytes: bytesOf(4) },
+    }
+    const boxes = dailyBoxes(inst)
+    expect(ownBoxes(boxes).map((b) => b.slot)).toEqual(['scheduler'])
+    expect(boxHashes(boxes)).toEqual([sha('a')])
+    expect(shareString(11, 1, 5.4, ownBoxes(boxes).length > 0)).toMatch(/ · on my engine$/)
+    const date = '2026-10-23'
+    expect(dailyResult(date, dailyIncident(date), finished(), boxHashes(boxes)).data.components).toEqual([sha('a')])
+    // a run on the reference engine (the fallback, or a choice) names no router either
+    expect(dailyBoxes(inst, true).map((b) => b.slot)).toEqual(['scheduler', 'block-manager', 'intake'])
+  })
 })
