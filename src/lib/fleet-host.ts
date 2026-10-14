@@ -2,8 +2,9 @@
  * fleet-host — the worker side of a Fleet session (docs/specs/wave-1.md §15.1).
  *
  * A host owns at most one session: an Engine pair, a Cluster, an EPD comparison, a pool-mode block
- * manager or an incident (world/incident-sim's session over a Cluster, §9.5), with every learner module instantiated here from the slot bytes and the JS reference drivers
- * beside it. fleet.worker.ts wires `handle` to postMessage; tests drive it in-process behind a fake
+ * manager, an incident (world/incident-sim's session over a Cluster, §9.5) or the tokenizer's token count (§10.5),
+ * with every learner module instantiated here from the slot bytes and the JS reference drivers beside it.
+ * A cluster's prefix router is the learner's radix cache when the `router` slot is filled (§10.3). fleet.worker.ts wires `handle` to postMessage; tests drive it in-process behind a fake
  * worker, so a session's steps can be compared with a direct Engine run on the same inputs.
  *
  * Imports nothing that spawns a worker of its own.
@@ -24,11 +25,12 @@ import {
   type ManagerDriver,
   type QueueDriver,
   type RequestSpec,
+  type RouterDriver,
   type SchedulerDriver,
 } from './fleet-model'
 import { runSchedulerJob } from './leaderboard-harness'
 import { instantiateLab, LabAbiError, LabTrapError } from './wasm-lab'
-import { makeWasmManager, makeWasmQueue, type Mod } from '../pages/fleet/drivers'
+import { makeWasmManager, makeWasmQueue, makeWasmRouter, makeWasmTokenCounter, type Mod } from '../pages/fleet/drivers'
 import { makeWasmScheduler } from './wasm-scheduler'
 import { IncidentSession, runExpert, type StackFactory } from './world/incident-sim'
 import type { FixId, Hypothesis, ProbeId } from './world/incident-spec'
@@ -55,6 +57,7 @@ import type {
   PoolOpen,
   PoolOpResult,
   PoolTickResult,
+  TokensOpen,
 } from '../workers/fleet-protocol'
 
 type Progress = (tick: number, scope?: string) => void
@@ -77,7 +80,20 @@ interface HostSession {
   incident?: IncidentReady
   step?(ticks: number, progress: Progress): FleetSnapshot
   pool?(ops: FleetOp[], tick: number, progress: Progress): PoolTickResult
+  /** tokens mode: the token count of each text */
+  count?(texts: string[]): number[]
   commands?: IncidentCommands
+}
+
+/** Loads a lab module from its bytes. */
+type Instantiate = (bytes: ArrayBuffer) => Promise<Mod>
+
+export interface FleetHostOptions {
+  /**
+   * How the prefix router and the token counter load their modules; defaults to `instantiateLab`. Tests hand in JS
+   * stand-ins for the version 3 verbs, since no wasm built from a private solution is ever committed.
+   */
+  instantiate?: Instantiate
 }
 
 export interface FleetHost {
@@ -97,6 +113,17 @@ async function managerFor(slots: Pick<FleetSlotBytes, 'mgr'>, numBlocks: number,
 
 async function queueFor(slots: Pick<FleetSlotBytes, 'queue'>, cap: number): Promise<QueueDriver> {
   return slots.queue ? makeWasmQueue(await instantiateLab(slots.queue), cap) : makeRefQueue(cap)
+}
+
+/**
+ * The prefix router over the radix-cache slot: one module instance per cluster worker, since a lab module's
+ * state is a singleton per instance. Undefined (the cluster keeps its reference router) when the slot is empty.
+ */
+async function routerFor(slots: Pick<FleetSlotBytes, 'router'>, workers: number, instantiate: Instantiate): Promise<RouterDriver | undefined> {
+  if (!slots.router) return undefined
+  const mods: Mod[] = []
+  for (let w = 0; w < workers; w++) mods.push(await instantiate(slots.router))
+  return makeWasmRouter(mods)
 }
 
 /* ------------------------------- engine ------------------------------- */
@@ -173,10 +200,10 @@ async function buildWorkers(slots: FleetSlotBytes, count: number, cfg: EngineCon
   return workers
 }
 
-async function openCluster(o: ClusterOpen): Promise<HostSession> {
+async function openCluster(o: ClusterOpen, instantiate: Instantiate): Promise<HostSession> {
   const { cfg } = o
   const workers = await buildWorkers(o.slots, cfg.workers, cfg.worker, cfg.intakeCap, cfg.drainPerTick)
-  const cluster = new Cluster(o.traffic, workers, cfg.router)
+  const cluster = new Cluster(o.traffic, workers, cfg.router, await routerFor(o.slots, cfg.workers, instantiate))
   const snapshot = (): ClusterSnapshot => ({
     mode: 'cluster',
     tick: cluster.tick,
@@ -366,8 +393,11 @@ function incidentStack(mods: WorkerModules[], reporter: TickReporter): StackFact
   }
 }
 
-async function openIncident(o: IncidentOpen, progress: Progress): Promise<HostSession> {
+async function openIncident(o: IncidentOpen, progress: Progress, instantiate: Instantiate): Promise<HostSession> {
   const { spec, slots } = o
+  // The incident cluster routes join-shortest-queue, which never asks a prefix cache, so the prefix-router slot
+  // is only proven here: every worker's instance loads and answers `reset`, and a stale or unfinished one fails `open`.
+  await routerFor(slots, spec.workers, instantiate)
   const reporter: TickReporter = { progress, scope: undefined }
   const stack = incidentStack(await incidentModules(slots, spec.workers), reporter)
   // the constructor simulates the warm-up to the alert, so a spinning module stalls `open`
@@ -410,18 +440,27 @@ async function openIncident(o: IncidentOpen, progress: Progress): Promise<HostSe
   }
 }
 
-function openSession(open: FleetOpen, progress: Progress): Promise<HostSession> {
+/* -------------------------------- tokens -------------------------------- */
+
+async function openTokens(o: TokensOpen, instantiate: Instantiate): Promise<HostSession> {
+  const count = makeWasmTokenCounter(await instantiate(o.slots.tokenizer))
+  return { total: 0, count: (texts) => texts.map(count) }
+}
+
+function openSession(open: FleetOpen, progress: Progress, instantiate: Instantiate): Promise<HostSession> {
   switch (open.mode) {
+    case 'tokens':
+      return openTokens(open, instantiate)
     case 'engine':
       return openEngine(open)
     case 'cluster':
-      return openCluster(open)
+      return openCluster(open, instantiate)
     case 'epd':
       return openEpd(open)
     case 'pool':
       return openPool(open)
     case 'incident':
-      return openIncident(open, progress)
+      return openIncident(open, progress, instantiate)
   }
 }
 
@@ -439,7 +478,8 @@ function failure(id: number, e: unknown): FleetReply {
   }
 }
 
-export function createFleetHost(): FleetHost {
+export function createFleetHost(options: FleetHostOptions = {}): FleetHost {
+  const instantiate = options.instantiate ?? instantiateLab
   let session: HostSession | null = null
   let queue: Promise<void> = Promise.resolve()
 
@@ -448,7 +488,7 @@ export function createFleetHost(): FleetHost {
     try {
       if (req.cmd === 'open') {
         session = null
-        session = await openSession(req.open, (tick, scope) => emit({ type: 'tick', id, tick, ...(scope ? { scope } : {}) }))
+        session = await openSession(req.open, (tick, scope) => emit({ type: 'tick', id, tick, ...(scope ? { scope } : {}) }), instantiate)
         emit({
           type: 'ready',
           id,
@@ -463,6 +503,9 @@ export function createFleetHost(): FleetHost {
       } else if (req.cmd === 'pool') {
         if (!session?.pool) throw new Error('no pool session is open')
         emit({ type: 'pool', id, result: session.pool(req.ops, req.tick, (tick) => emit({ type: 'tick', id, tick })) })
+      } else if (req.cmd === 'count') {
+        if (!session?.count) throw new Error('no token-count session is open')
+        emit({ type: 'count', id, counts: session.count(req.texts) })
       } else if (req.cmd === 'hypothesis' || req.cmd === 'probe' || req.cmd === 'fix' || req.cmd === 'wait' || req.cmd === 'finish') {
         const c = session?.commands
         if (!c) throw new Error('no incident session is open')

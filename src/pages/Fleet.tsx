@@ -33,6 +33,7 @@ import RouteFallback from '@/components/RouteFallback'
 const EnginePanel = lazy(() => import('@/pages/fleet/EnginePanel'))
 const ClusterPanel = lazy(() => import('@/pages/fleet/ClusterPanel'))
 const RealEnginePanel = lazy(() => import('@/pages/fleet/RealEnginePanel'))
+const TokenizerCompare = lazy(() => import('@/components/engine/TokenizerCompare'))
 
 /**
  * The Fleet — Phase 2's home. Three modes over one deterministic request
@@ -51,6 +52,7 @@ export default function Fleet() {
   const installed = useSlots((s) => s.installed)
   const ready = useSlots((s) => s.ready)
   const setSlot = useSlots((s) => s.setSlot)
+  const remove = useSlots((s) => s.remove)
   const install = useSlots((s) => s.install)
   const [slotError, setSlotError] = useState<string | null>(null)
   /* the kind being checked on fresh seeds, so a second drop waits and the page says what it is doing */
@@ -58,7 +60,8 @@ export default function Fleet() {
   /* a module that stops responding in a panel: "reset with reference drivers" clears all three slots */
   const useReference = useCallback(() => {
     for (const kind of ['sched', 'mgr', 'queue'] as const) setSlot(kind, null)
-  }, [setSlot])
+    remove('prefix-router') // a radix cache that stops responding is cleared with the rest
+  }, [setSlot, remove])
   const inputsRef = useRef<Record<LabKind, HTMLInputElement | null>>({ sched: null, mgr: null, queue: null })
 
   /* a drop is admitted (loadable, bridge, right lab), graded on fresh seeds in the lab worker, then installed
@@ -125,6 +128,13 @@ export default function Fleet() {
         </h2>
         <EngineSchematic installed={installed} className="mt-4" />
       </section>
+
+      {/* the token-count check: your tokenizer's counts beside Qwen3's (docs/specs/wave-2.md §10.5) */}
+      <ErrorBoundary label="the tokenizer comparison">
+        <Suspense fallback={<RouteFallback label="loading the tokenizer comparison" />}>
+          <TokenizerCompare className="mt-10" />
+        </Suspense>
+      </ErrorBoundary>
 
       {/* shared slots: installed modules (persisted) fill the three the panels drive */}
       <div className="mt-6 flex flex-wrap items-center gap-3">

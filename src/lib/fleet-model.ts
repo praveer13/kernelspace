@@ -992,7 +992,8 @@ export function routerLabel(router: RouterKind): string {
 }
 
 const PREFIX_CACHE_ENTRIES = 6
-const PREFIX_LOAD_GUARD = 3
+/** Prefix affinity only considers workers within this many requests of the least loaded one. */
+export const PREFIX_LOAD_GUARD = 3
 const COMPACT_SHARED_ROOT = 128
 
 function tokenPrefixLength(a: readonly number[], b: readonly number[]): number {
@@ -1011,7 +1012,7 @@ interface PrefixEntry {
  * leaf per long shared root models a compressed radix branch without
  * duplicating every chat turn in this fleet-level simulator.
  */
-class WorkerPrefixCache {
+export class WorkerPrefixCache {
   private clock = 0
   private entries: PrefixEntry[] = []
   private readonly capacity: number
@@ -1070,6 +1071,82 @@ class WorkerPrefixCache {
   }
 }
 
+/** A live worker the router may send a request to, with the requests it already holds. */
+export interface RouteCandidate {
+  index: number
+  load: number
+}
+
+/**
+ * The prefix-affinity choice (docs/specs/wave-2.md §10.3): among the candidates within `PREFIX_LOAD_GUARD` of the
+ * least loaded, the one whose cache holds the longest prefix of the prompt; ties go to the lighter load, then the
+ * lower index. `matchOf` is asked once per eligible worker, in candidate order. The reference router and the
+ * wasm router both choose through this, so they differ only in the cache behind `matchOf`.
+ */
+export function choosePrefixWorker(
+  candidates: readonly RouteCandidate[],
+  matchOf: (index: number) => number,
+): { index: number; hit: number } {
+  const minLoad = Math.min(...candidates.map((candidate) => candidate.load))
+  const eligible = candidates.filter((candidate) => candidate.load <= minLoad + PREFIX_LOAD_GUARD)
+  let chosen = eligible[0]
+  let chosenHit = matchOf(chosen.index)
+  for (const candidate of eligible.slice(1)) {
+    const hit = matchOf(candidate.index)
+    if (
+      hit > chosenHit ||
+      (hit === chosenHit && candidate.load < chosen.load) ||
+      (hit === chosenHit && candidate.load === chosen.load && candidate.index < chosen.index)
+    ) {
+      chosen = candidate
+      chosenHit = hit
+    }
+  }
+  return { index: chosen.index, hit: chosenHit }
+}
+
+/**
+ * The cluster's prefix-cache hook, beside `RouterKind`. It owns one cache per worker and answers where a prompt
+ * goes: with several candidates it chooses by prefix affinity, with one (round-robin and join-shortest-queue have
+ * already chosen) it only reports that worker's hit. Either way the routed worker's cache is touched.
+ * `makeRefRouter` is the reference; `makeWasmRouter` (pages/fleet/drivers.ts) drives the learner's radix cache.
+ */
+export interface RouterDriver {
+  name: string
+  /** `hit` is the tokens of `tokens` the chosen worker already holds, before this request is counted. */
+  route(tokens: readonly number[], candidates: readonly RouteCandidate[]): { index: number; hit: number }
+  /**
+   * Worker `index` finished prefilling `tokens`, so its cache holds them. Absent for a driver that already
+   * inserted the prompt when it routed it.
+   */
+  warm?(index: number, tokens: readonly number[]): void
+  /** A fresh node took worker `index`'s place: its cache is empty. */
+  reset(index: number): void
+  /** Entries worker `index`'s cache holds (the cluster panel's cache column). */
+  size(index: number): number
+}
+
+/** The reference router: the routing-side `WorkerPrefixCache` of each worker, filled as prefills finish. */
+export function makeRefRouter(workers: number, capacity = PREFIX_CACHE_ENTRIES): RouterDriver {
+  const caches = Array.from({ length: workers }, () => new WorkerPrefixCache(capacity))
+  return {
+    name: 'reference',
+    route(tokens, candidates) {
+      const chosen =
+        candidates.length === 1
+          ? { index: candidates[0].index, hit: caches[candidates[0].index].match(tokens) }
+          : choosePrefixWorker(candidates, (index) => caches[index].match(tokens))
+      caches[chosen.index].match(tokens, true)
+      return chosen
+    },
+    warm: (index, tokens) => caches[index].install(tokens),
+    reset: (index) => {
+      caches[index] = new WorkerPrefixCache(capacity)
+    },
+    size: (index) => caches[index]?.size ?? 0,
+  }
+}
+
 export interface ClusterStats {
   completed: number
   sloMet: number
@@ -1101,15 +1178,16 @@ export class Cluster {
   private cacheHitTokens = 0
   private promptTokens = 0
   private stream: RequestSpec[]
-  private prefixCaches: WorkerPrefixCache[]
   public workers: Engine[]
   public router: RouterKind
+  /** The prefix caches behind the router: the reference unless a learner's radix cache is plugged in. */
+  public routerDriver: RouterDriver
 
-  constructor(stream: RequestSpec[], workers: Engine[], router: RouterKind) {
+  constructor(stream: RequestSpec[], workers: Engine[], router: RouterKind, routerDriver?: RouterDriver) {
     this.stream = stream
     this.workers = workers
     this.router = router
-    this.prefixCaches = workers.map(() => new WorkerPrefixCache(PREFIX_CACHE_ENTRIES))
+    this.routerDriver = routerDriver ?? makeRefRouter(workers.length)
   }
 
   get done(): boolean {
@@ -1117,7 +1195,7 @@ export class Cluster {
   }
 
   cacheEntries(workerIndex: number): number {
-    return this.prefixCaches[workerIndex]?.size ?? 0
+    return this.routerDriver.size(workerIndex)
   }
 
   private load(index: number): number {
@@ -1135,12 +1213,14 @@ export class Cluster {
       if (open.length > 0) alive = open
     }
 
+    const only = (index: number, load: number) => this.routerDriver.route(request.tokens ?? [], [{ index, load }])
+
     if (this.router === 'rr') {
       const chosen = alive[this.rrCursor % alive.length]
       this.rrCursor++
       return {
         index: chosen.index,
-        hit: request.tokens ? this.prefixCaches[chosen.index].match(request.tokens, true) : 0,
+        hit: request.tokens ? only(chosen.index, chosen.load).hit : 0,
       }
     }
 
@@ -1150,27 +1230,11 @@ export class Cluster {
       )
       return {
         index: chosen.index,
-        hit: request.tokens ? this.prefixCaches[chosen.index].match(request.tokens, true) : 0,
+        hit: request.tokens ? only(chosen.index, chosen.load).hit : 0,
       }
     }
 
-    const minLoad = Math.min(...alive.map((candidate) => candidate.load))
-    const eligible = alive.filter((candidate) => candidate.load <= minLoad + PREFIX_LOAD_GUARD)
-    let chosen = eligible[0]
-    let chosenHit = this.prefixCaches[chosen.index].match(request.tokens)
-    for (const candidate of eligible.slice(1)) {
-      const hit = this.prefixCaches[candidate.index].match(request.tokens)
-      if (
-        hit > chosenHit ||
-        (hit === chosenHit && candidate.load < chosen.load) ||
-        (hit === chosenHit && candidate.load === chosen.load && candidate.index < chosen.index)
-      ) {
-        chosen = candidate
-        chosenHit = hit
-      }
-    }
-    this.prefixCaches[chosen.index].match(request.tokens, true)
-    return { index: chosen.index, hit: chosenHit }
+    return this.routerDriver.route(request.tokens, alive.map(({ index, load }) => ({ index, load })))
   }
 
   /** optional per-tick disruption hook (Fleet Week, world/faults): called before arrivals */
@@ -1206,7 +1270,7 @@ export class Cluster {
     const worker = this.workers[index]
     if (!worker?.killed) return false
     worker.revive(this.tick)
-    this.prefixCaches[index] = new WorkerPrefixCache(PREFIX_CACHE_ENTRIES)
+    this.routerDriver.reset(index)
     return true
   }
 
@@ -1221,7 +1285,7 @@ export class Cluster {
       if (worker.killed) continue
       worker.step()
       for (const warmed of worker.cacheReadyOut.splice(0)) {
-        if (warmed.tokens) this.prefixCaches[index].install(warmed.tokens)
+        if (warmed.tokens) this.routerDriver.warm?.(index, warmed.tokens)
       }
     }
     this.tick++

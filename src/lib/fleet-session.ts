@@ -32,6 +32,7 @@ import {
   type LeaderboardJobResult,
   type PoolOpen,
   type PoolTickResult,
+  type TokensOpen,
 } from '../workers/fleet-protocol'
 import type { FleetOp, ManagerDump } from './fleet-model'
 import type { FixId, Hypothesis, ProbeId } from './world/incident-spec'
@@ -84,11 +85,11 @@ export class FleetTimeoutError extends Error {
   }
 }
 
-const SLOT_NOUN = { sched: 'scheduler', mgr: 'block manager', queue: 'intake queue' } as const
+const SLOT_NOUN = { sched: 'scheduler', mgr: 'block manager', queue: 'intake queue', router: 'prefix router' } as const
 
 /** Names the uploaded module in a timeout message: the one the learner uploaded, or "stack" for several. */
 export function fleetLabel(slots: Partial<FleetSlotBytes>): string {
-  const mine = (['sched', 'mgr', 'queue'] as const).filter((k) => slots[k])
+  const mine = (['sched', 'mgr', 'queue', 'router'] as const).filter((k) => slots[k])
   return mine.length === 1 ? SLOT_NOUN[mine[0]!] : 'stack'
 }
 
@@ -257,6 +258,33 @@ export async function openPoolSession(open: PoolOpen, options: FleetSessionOptio
       dump,
       async pool(ops, tick) {
         return expect(await channel.request({ cmd: 'pool', tick, ops }, 'step'), 'pool').result
+      },
+      close: () => channel.close(),
+    }
+  } catch (e) {
+    channel.close()
+    throw e
+  }
+}
+
+export interface TokenSession {
+  /** The token count your tokenizer gives each text, in order. */
+  count(texts: string[]): Promise<number[]>
+  close(): void
+}
+
+/**
+ * Token-count mode (§10.5): your bpe-tokenizer in a fleet worker, asked for the token count of texts. Rejects
+ * with FleetTimeoutError if loading takes over 5 s and with LabTrapError when `count` is still a todo!(); a
+ * `count` that outruns 2 s stops the worker, as any other command does.
+ */
+export async function openTokenSession(open: TokensOpen, options: FleetSessionOptions = {}): Promise<TokenSession> {
+  const channel = new Channel(options, 'tokenizer')
+  try {
+    expect(await channel.request({ cmd: 'open', open }, 'open'), 'ready')
+    return {
+      async count(texts) {
+        return expect(await channel.request({ cmd: 'count', texts }, 'step'), 'count').counts
       },
       close: () => channel.close(),
     }
