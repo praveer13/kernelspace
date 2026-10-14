@@ -228,8 +228,8 @@ export const ADMIT_COUNT: ProveV2Template = {
 /**
  * `walk-past`: the admit list when the request at the head of the line does not fit. One request has waited 2,600 to
  * 3,000 iterations (`OLD_WAIT`), so aging puts it first in every module that passes `starvation`, and its prompt is 1 to
- * 300 tokens more than the cap leaves free beside the running requests: it does not fit even with no margin, though it
- * would fit an empty engine. On about half the seeds a second old request waits as well, with a prompt of 512 to 960
+ * 300 tokens more than the cap leaves free beside the running requests, and never more than they hold: it does not fit
+ * even with no margin, though it would fit an empty engine. On about half the seeds a second old request waits as well, with a prompt of 512 to 960
  * tokens that fits. Three to five young requests (distinct prompts from 64 to 448 in steps of 64, waits under 41)
  * fill the rest. The cap leaves room for every request but the blocked one at up to 96 tokens a sequence
  * (`WIDE_MARGIN`), so headroom is not asked and the free slots cut the list. A module that skips what does not fit

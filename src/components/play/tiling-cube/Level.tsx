@@ -33,11 +33,11 @@ export function ViewsLoading() {
   )
 }
 
-/** What replaces the views when their load failed (offline, or a deploy replaced the chunks); a reload is the retry. */
+/** What replaces the views when their load failed (offline, or a deploy replaced the chunks); a reload is the retry, and the session lives in React state, so it restarts the play. */
 export function ViewsFailed() {
   return (
     <div role="status" className="space-y-3" data-play-error="tiling-cube-views">
-      <p className="text-body-sm text-text-2">The views did not load, so you may be offline. Your prediction is saved; reload to try again.</p>
+      <p className="text-body-sm text-text-2">The views did not load, so you may be offline. Your prediction is recorded; a reload starts the play again from level 1.</p>
       <Button variant="secondary" onClick={() => window.location.reload()}>
         Reload to try again
       </Button>

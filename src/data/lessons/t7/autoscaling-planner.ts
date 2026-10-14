@@ -161,7 +161,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `You've built every piece the loop controls: the admission valve (lab 06), the block manager (lab 02), the intake queue (lab 04), the disaggregated fleets (T6.L3), the economics of the operating point (T7.L3–L4). The Planner closes the loop: **observe** (queue depth, TTFT/TPOT, KV utilization, GPU load) → **decide** (scale prefill? decode? rebalance the split? reroute?) → **act** (add/drain workers, adjust routing weights, shed load).
 
-Why this is hard and not just "HPA on a custom metric": inference capacity is *discrete and slow* (a new worker takes minutes to load 100s of GB of weights — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks, so even a planner that targets TTFT and ITL SLAs, as Dynamo's does, has to act on queue and utilization signals or traffic forecasts rather than wait for the measured latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
+Why this is hard and not just "HPA on a custom metric": inference capacity is *discrete and slow* (a new worker takes minutes to load its weights, 140 GB for a 70B model in BF16 — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks, so even a planner that targets TTFT and ITL SLAs, as Dynamo's does, has to act on queue and utilization signals or traffic forecasts rather than wait for the measured latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
     },
     {
       type: 'prose',
@@ -314,7 +314,7 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
             'Capacity is discrete and slow. Diurnal traffic is cron-shaped, so the cheapest capacity is pre-warmed; the next cheapest is a fast loader; the fallback is honest shedding.',
           why: [
             'Bigger batches raise per-token latency and push TPOT past its SLO. They do not shorten the minutes a new worker needs before it can serve anything.',
-            'A replica is not ready when its process starts. It must load hundreds of GB of weights into GPU memory first, which takes minutes and is the root of the problem.',
+            'A replica is not ready when its process starts. It must load its weights into GPU memory first, 140 GB for a 70B model in BF16, which takes minutes and is the root of the problem.',
             'Right: capacity is discrete and slow. Diurnal traffic is cron-shaped, so pre-warmed capacity is cheapest, fast loaders are next, and honest shedding is the fallback.',
             'Idle GPUs bill the same as busy ones, so a blanket multiple wastes margin every hour. It also fails the first time a spike exceeds the chosen multiple.',
           ],

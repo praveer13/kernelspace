@@ -464,6 +464,16 @@ describe('the debrief (§5.2)', () => {
     expect(html).toContain('does not count')
   })
 
+  test('a layer skipped after turns that matched the reference is headed as the reference’s, not as a match', () => {
+    const d = debrief(skip(playOut(practiceSession(), GHOST_LEARNER, 5)))
+    expect(d.summary?.skipped).toBe(true)
+    expect(d.summary?.divergence).toBeNull()
+    const html = renderToString(createElement(MemoryRouter, null, createElement(Debrief, { session: d, tally: EMPTY_TALLY, onAgain: () => {}, mode: 'page' })))
+    expect(html).toContain('The reference finished this layer</h3>')
+    expect(html).not.toContain('You matched the reference')
+    expect(html).toContain('does not count')
+  })
+
   test('the page links back to the lesson; the embed does not', () => {
     const d = debrief(playOut(practiceSession(), GHOST_LEARNER))
     const page = renderToString(createElement(MemoryRouter, null, createElement(Debrief, { session: d, tally: EMPTY_TALLY, onAgain: () => {}, mode: 'page' })))

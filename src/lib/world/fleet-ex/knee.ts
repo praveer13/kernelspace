@@ -10,8 +10,8 @@
  * linearly between knots, then clamped to 1,024 prompt and 128 output tokens so one request never fills the 4,096-token
  * pool. Arrivals clump: each gap is 5·g·u⁴ for u uniform in [0, 1), mean g = 2.6 ticks and coefficient of variation
  * 1.33 (the committed hour is index-sampled, so its own gaps are even, CV 0.33, and say nothing about bursts). Every
- * draw is a splitmix32 output and every step is +, − or ×, so a seed gives one trace in every browser (no Math.log, no
- * trig). tests/world/fleet-ex.test.ts re-reads the artifact and re-measures each of these numbers.
+ * draw is a splitmix32 output and every step is +, −, × or ÷, each correctly rounded under IEEE 754, so a seed gives one
+ * trace in every browser (no Math.log, no trig). tests/world/fleet-ex.test.ts re-reads the artifact and re-measures each of these numbers.
  *
  * THE SPEED (`kneeSpeed`). Each seed draws the multiplier its knee is set at (`kneeTarget`: 0.75, 1, 1.25 or 1.5,
  * equally often) and speeds the base process up so that Little's-law capacity (below) is 1.1 times the offered rate at

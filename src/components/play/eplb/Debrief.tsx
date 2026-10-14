@@ -66,6 +66,8 @@ export default function Debrief({ session, tally, onAgain, mode }: DebriefProps)
   // The turn `eplbDivergence` names is the last one after which even the reference's rule could not recover the layer, not the
   // first that differed from it: earlier turns may differ too. The heading says which, as the sentence's consequence clause does.
   if (decision) title = `Where the layer was lost: turn ${decision.op + 1}`
+  // A skipped layer was finished by the reference's rule, so neither "matched" nor "finished below" is the learner's.
+  else if (summary.skipped) title = 'The reference finished this layer'
   else if (summary.mineUnits < summary.ghostUnits) title = 'You finished below the reference'
 
   return (

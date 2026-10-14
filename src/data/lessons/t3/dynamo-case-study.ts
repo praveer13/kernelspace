@@ -73,7 +73,7 @@ Every bullet is a memory-management and concurrency problem where a 10 ms GC pau
           osLine: 'Move bytes without user-space copies.',
           llm: 'NIXL/UCX KV transfer',
           llmLine: 'RDMA reads of KV blocks between workers, orchestrated from Rust.',
-          breaks: 'Zero-copy I/O removes memcpy passes inside one host; a KV transfer still crosses the fabric, so even with no copy it costs link time (about 26 ms for a 4k-token prompt on a 70B model over a 50 GB/s link), and the engineering is hiding that time behind compute.',
+          breaks: 'Zero-copy I/O removes memcpy passes inside one host; a KV transfer still crosses the fabric, so even with no copy it costs link time (26.8 ms for a 4k-token prompt on a 70B model over a 50 GB/s link), and the engineering is hiding that time behind compute.',
         },
       ],
       principle:

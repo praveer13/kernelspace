@@ -72,11 +72,11 @@ export function AfterDebriefFailed() {
   )
 }
 
-/** What replaces a debrief when its load failed; the answers were recorded when they were given, and a reload is the retry. */
+/** What replaces a debrief when its load failed; the answers were recorded when they were given, and a reload is the retry, which restarts the play (the session lives in React state). */
 export function DebriefFailed() {
   return (
     <div role="status" className="space-y-3" data-play-error="tiling-cube-debrief">
-      <p className="text-body-sm text-text-2">The debrief did not load, so you may be offline. Your answers are saved; reload to try again.</p>
+      <p className="text-body-sm text-text-2">The debrief did not load, so you may be offline. Your answers are recorded; a reload starts the play again from level 1.</p>
       <Button variant="secondary" onClick={() => window.location.reload()}>
         Reload to try again
       </Button>

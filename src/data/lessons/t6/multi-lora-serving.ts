@@ -93,7 +93,7 @@ Each adapted matrix stores A (r × d_in) and B (d_out × r), so it holds **r × 
           osLine: 'variable objects map logical pages onto one physical pool',
           llm: 'S-LoRA Unified Paging',
           llmLine: 'adapter tensors and KV block tables compete in one HBM allocator',
-          breaks: 'A program that touches an unmapped page faults it in on demand and carries on; S-LoRA fetches the adapters a batch needs from main memory before that batch runs, and prefetches the next batch\'s adapters, predicted from the waiting queue, while the current batch runs (S-LoRA §5.2).',
+          breaks: 'A program that touches an unmapped page faults it in on demand and carries on; S-LoRA fetches the adapters a batch needs from main memory before that batch runs (S-LoRA §4.1), and prefetches the next batch\'s adapters, predicted from the waiting queue, while the current batch runs (§5.2).',
         },
         {
           os: 'scatter/gather I/O',
@@ -138,7 +138,7 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
     let kv = pool.reserve_kv(request.seq_id, request.prompt_tokens)?;
     Ok(Lease { adapter, kv })
 }`,
-      chips: ['one HBM pool', 'two object classes', 'all-or-nothing'],
+      chips: ['one HBM pool', 'two object classes', 'the lab: admit all or nothing'],
     },
     {
       type: 'callout',

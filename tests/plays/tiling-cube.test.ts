@@ -10,11 +10,11 @@ import { MemoryRouter } from 'react-router'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import Debrief from '../../src/components/play/tiling-cube/Debrief'
-import Level from '../../src/components/play/tiling-cube/Level'
+import Level, { ViewsFailed } from '../../src/components/play/tiling-cube/Level'
 import Mirror from '../../src/components/play/tiling-cube/Mirror'
 import Mirror2D from '../../src/components/play/tiling-cube/Mirror2D'
 import Views from '../../src/components/play/tiling-cube/Views'
-import TilingCubePlay, { DebriefLoading } from '../../src/components/play/tiling-cube/Play'
+import TilingCubePlay, { DebriefFailed, DebriefLoading } from '../../src/components/play/tiling-cube/Play'
 import ProductionCard from '../../src/components/play/tiling-cube/ProductionCard'
 import { PLAY_REGISTRY, resolvePlay } from '../../src/components/play/registry'
 import { FORGE_LABS } from '../../src/data/labs'
@@ -718,6 +718,17 @@ describe('the rendered pieces', () => {
     expect(html).toContain('Page Up and Page Down')
     expect(html).toContain('What this model leaves out')
     expect(html).toContain('Answer it now')
+  })
+
+  test('a mid-play load failure says what a reload keeps: the ledger has the answers, the play starts again', () => {
+    // The session lives in React state, so a reload restarts at level 1; the copy must not promise a resume.
+    for (const [fallback, kept] of [[ViewsFailed, 'Your prediction is recorded'], [DebriefFailed, 'Your answers are recorded']] as const) {
+      const html = renderToString(createElement(fallback))
+      expect(html).toContain('role="status"')
+      expect(html).toContain(kept)
+      expect(html).toContain('a reload starts the play again from level 1')
+      expect(html).not.toContain('saved; reload')
+    }
   })
 })
 

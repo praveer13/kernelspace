@@ -238,7 +238,7 @@ export default function CodeBlock({
                     hl ? 'border-accent bg-accent-dim/60' : 'border-transparent',
                   )}
                 >
-                  {/* text-3 is 4.1:1 on the highlight wash; text-2 is 6.7:1 (axe color-contrast wants 4.5:1) */}
+                  {/* text-3 is 4.1:1 on the highlight wash; text-2 is 6.6:1 (axe color-contrast wants 4.5:1) */}
                   <span className={cn('w-10 shrink-0 select-none pr-3 text-right text-xs leading-[1.65]', hl ? 'text-text-2' : 'text-text-3')}>
                     {n}
                   </span>
