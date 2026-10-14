@@ -1,6 +1,6 @@
 /**
  * sim-client — the page's handle on sim.worker: one lazily-started worker, one job at a
- * time. Every job carries fresh entropy; the worker draws the graded seed from it at grade time.
+ * time. Every job carries entropy (fresh, or a run record's to replay it); the worker draws the graded seed from it.
  *
  * Learner wasm runs inside that worker, so a module that spins can only stall the worker. A job
  * that exceeds SIM_TIMEOUT_MS has its worker terminated and respawned (mirroring lab-worker) and
@@ -116,18 +116,33 @@ async function dispatch<K extends SimJob['kind']>(
 }
 
 /**
- * Run one Fleet Week job in the worker. Resolves with its result; rejects with the worker's error
- * (a trapping module), a SimTimeoutError (a spinning one), or a start/crash error. Every outcome
- * leaves the next call with a working worker.
+ * Run one Fleet Week job in the worker and resolve with its result and the entropy it ran on
+ * (docs/specs/wave-3.md §10.2). `entropy` replays a run: a receipt's run record keeps the entropy, and the worker
+ * draws the same graded seeds from it, so the same job gives the same result. Without one, a fresh draw is used.
+ * Rejects with the worker's error (a trapping module), a SimTimeoutError (a spinning one), or a start/crash
+ * error. Every outcome leaves the next call with a working worker.
  */
+export function runSimWithEntropy<K extends SimJob['kind']>(
+  job: Extract<SimJob, { kind: K }>,
+  onProgress?: (fraction: number) => void,
+  entropy?: number,
+): Promise<{ result: SimResults[K]; entropy: number }> {
+  if (entropy !== undefined && !(Number.isInteger(entropy) && entropy >= 0 && entropy <= 0xffffffff)) {
+    return Promise.reject(new RangeError(`entropy must be a uint32, not ${entropy}`))
+  }
+  const request: SimRequest = { id: nextId++, job, entropy: entropy ?? freshSeed() }
+  const result = chain.then(() => dispatch<K>(request, onProgress))
+  chain = result.catch(() => {})
+  return result.then((r) => ({ result: r, entropy: request.entropy }))
+}
+
+/** Run one Fleet Week job in the worker (as runSimWithEntropy) and resolve with its result alone. */
 export function runSim<K extends SimJob['kind']>(
   job: Extract<SimJob, { kind: K }>,
   onProgress?: (fraction: number) => void,
+  entropy?: number,
 ): Promise<SimResults[K]> {
-  const request: SimRequest = { id: nextId++, job, entropy: freshSeed() }
-  const result = chain.then(() => dispatch<K>(request, onProgress))
-  chain = result.catch(() => {})
-  return result
+  return runSimWithEntropy(job, onProgress, entropy).then((r) => r.result)
 }
 
 /** The bytes of whatever the learner has uploaded (structured clone copies them; the slots stay intact). */
