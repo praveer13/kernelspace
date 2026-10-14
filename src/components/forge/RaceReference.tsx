@@ -132,7 +132,7 @@ export function RaceResult({ outcome }: { outcome: RaceOutcome }) {
               : `${gap} points behind the reference, inside the ${RACE_BAR_POINTS}-point bar.`
             : outcome.detail}
         </p>
-        <p className="mt-1 font-mono text-[11px] text-text-3">
+        <p className="mt-1 font-mono text-[11px] text-text-2">
           graded seed {seedLabel(outcome.seed)} ·{' '}
           {outcome.recorded
             ? outcome.within
@@ -171,7 +171,7 @@ function Bestiary({ goodput, rows, seed }: { goodput: number; rows: readonly Bes
   )
 }
 
-const W = 320
+const W = 240
 const PAD_X = 8
 const CELL = 24
 const AXIS_H = 20
@@ -190,7 +190,7 @@ export function BestiaryChart({ goodput, rows, label, describedBy, className }: 
   const y = (k: number) => H - AXIS_H - (k + 0.5) * CELL
   return (
     <figure className={className}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={label} aria-describedby={describedBy}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto h-auto w-full max-w-md" role="img" aria-label={label} aria-describedby={describedBy}>
         <line x1={PAD_X} x2={W - PAD_X} y1={H - AXIS_H} y2={H - AXIS_H} className="stroke-line-bright" strokeWidth="1" />
         {bins.map((b, i) => (
           <g key={b.lo}>
@@ -202,7 +202,7 @@ export function BestiaryChart({ goodput, rows, label, describedBy, className }: 
             {b.rows.map((r, k) => (
               <g key={r.id}>
                 <circle cx={cx(i)} cy={y(k)} r={CELL / 2 - 2} className={r.id === 'b1' ? 'fill-amber' : 'fill-text-3'} />
-                <text x={cx(i)} y={y(k) + 3} className="fill-ink" fontSize="9" fontWeight="600" textAnchor="middle">
+                <text x={cx(i)} y={y(k)} className="fill-ink" fontSize="10" fontWeight="600" textAnchor="middle" dominantBaseline="central">
                   {r.id.slice(1)}
                 </text>
               </g>
@@ -210,7 +210,7 @@ export function BestiaryChart({ goodput, rows, label, describedBy, className }: 
             {b.mine && (
               <g>
                 <rect x={cx(i) - (CELL / 2 - 2)} y={y(b.rows.length) - (CELL / 2 - 2)} width={CELL - 4} height={CELL - 4} rx="3" className="fill-accent" />
-                <text x={cx(i)} y={y(b.rows.length) + 3} className="fill-accent-foreground" fontSize="8" fontWeight="700" textAnchor="middle">
+                <text x={cx(i)} y={y(b.rows.length)} className="fill-accent-foreground" fontSize="9" fontWeight="700" textAnchor="middle" dominantBaseline="central">
                   you
                 </text>
               </g>
