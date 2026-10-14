@@ -24,6 +24,18 @@ export interface SweepResult {
   points: SweepPoint[]
 }
 
+/**
+ * One input of a seed's run that the learner reads before predicting: something the seed drew, never a number the
+ * sweep measures. The answer follows from these by reasoning (Little's law, the slower stage), not by reading it off.
+ */
+export interface SceneFact {
+  label: string
+  value: number
+  /** The top of a range (prompts 1,792 … 2,815), when the fact is one. */
+  to?: number
+  unit: string
+}
+
 export interface FleetExerciseDef {
   /** `knee` | `pd-split` (stretch adds four, §16.3). */
   id: string
@@ -42,10 +54,12 @@ export interface FleetExerciseDef {
   band(results: SweepResult): boolean
   /** The pass rule: this prediction is right for this seed's run. */
   pass(prediction: number, results: SweepResult): boolean
+  /** What this seed's run is given (its load, its lengths), shown before the prediction: a pure function of the seed. */
+  scene(seed: number): SceneFact[]
   /** Rows of the In-production card. */
   productionClaims: string[]
-  /** Phone mode's outcome. */
-  phone: { canonical: SweepResult }
+  /** Phone mode's seed and its outcome. */
+  phone: { seed: number; canonical: SweepResult }
 }
 
 /** The hands-on test counts a fleet block whose exercise is listed here; a later exercise adds an entry. */

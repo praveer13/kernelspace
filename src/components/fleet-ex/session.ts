@@ -2,21 +2,26 @@
  * The Fleet exercise panel's session (docs/specs/wave-3.md §5.3, task 3b-20): the pure model the component drives, so
  * the rules run under `bun test` (tests/fleet-ex/panel.test.ts) and the component keeps none of its own.
  *
- * A round is predict → run → explain → saved.
- *   1. Predict. A number, before any run: one of the sweep's points, locked once committed, with an optional "how sure".
- *   2. Run. `freshSeed()` draws a seed, the fleet worker sweeps the exercise on it, and the seed is kept only if the
+ * A round is draw → predict → explain → saved.
+ *   1. Draw. `freshSeed()` draws a seed, the fleet worker sweeps the exercise on it, and the seed is kept only if the
  *      exercise's band calls it a fair question (`drawFairSweep`); an out-of-band sweep is thrown away and another seed
  *      is drawn, so the learner never meets a coin flip. A seed the learner has already played is never drawn again.
+ *      The sweep's outcome stays hidden: the learner sees only the seed's scene (`def.scene(seed)`: its load, its
+ *      lengths), which is what the answer follows from.
+ *   2. Predict. A number, before any outcome is shown: one of the sweep's points, locked once committed, with an
+ *      optional "how sure". The lock grades it against the hidden sweep.
  *   3. Explain. The verdict, the chart and its table, then a line of at least 8 words (TaskPanel's rule) that unlocks
  *      the model answer and its three ideas, all three of which the line must cover before the round saves. The line
  *      is never stored: only the ticks are.
  *   4. Saved. One `item item:fleet.<id>` event (src `lesson`, `grp` = `<lessonId>#<block>`, the seed, provenance
- *      `unseen`). The first round of a block also writes the block's one `predict` event, as soon as its sweep is
- *      graded (its truth is not known before), the way an item block writes its one prediction before the practice.
+ *      `unseen`). The first round of a block also writes the block's one `predict` event, as soon as it is locked and
+ *      graded, the way an item block writes its one prediction before the practice.
  *
- * The exercise is done after `PASSES_NEEDED` right predictions on distinct fresh seeds, and `readExercise` rebuilds
- * that from the ledger's events, so a reload shows "3/3 · done" and never asks again. Nothing locks: another seed is
- * always on offer.
+ * The exercise is done after `PASSES_NEEDED` (3) right predictions in a row, on fresh seeds, whose answers are not all
+ * the same (`ANSWERS_NEEDED`, 2): repeating one value never gets there, and a guess that ignores the scene rarely
+ * strings three together (tests/fleet-ex/done-rule.test.ts measures both). `readExercise` rebuilds that from the
+ * ledger's events, so a reload shows "3/3 · done" and never asks again. Only a saved round is on the record: one left
+ * before it is saved neither counts nor breaks the run. Nothing locks: another seed is always on offer.
  */
 
 import { byId } from '@/data/claims'
@@ -26,14 +31,16 @@ import { MAX_EXPLAIN_CHARS, MIN_EXPLAIN_WORDS, explainReady, formatNumber, parse
 import type { MirrorTable } from '@/lib/sims/types'
 import { SIM_TICK_SECONDS } from '@/lib/fleet-model'
 import { getFleetTrafficProfile } from '@/lib/traces'
-import type { FleetExerciseDef, SweepPoint, SweepResult } from '@/lib/world/fleet-ex'
+import type { FleetExerciseDef, SceneFact, SweepPoint, SweepResult } from '@/lib/world/fleet-ex'
 import { KNEE_POINTS, KNEE_WINDOW_TICKS } from '@/lib/world/fleet-ex/knee'
 import { PD_ENGINE, PD_LOAD, PD_TRANSFER_RATE, PD_WINDOW_TICKS, PD_WORKERS } from '@/lib/world/fleet-ex/pd-split'
 
 export { MAX_EXPLAIN_CHARS, MIN_EXPLAIN_WORDS, explainReady, wordCount }
 
-/** Right predictions on distinct fresh seeds that finish the exercise. */
+/** Right predictions in a row, on fresh seeds, that finish the exercise. */
 export const PASSES_NEEDED = 3
+/** How many different right answers those predictions must include, so that repeating one value never finishes it. */
+export const ANSWERS_NEEDED = 2
 /** Seeds tried for one fair question before the round gives up (the bands accept 20 % or more, so 16 misses is a bug, never a learner's). */
 export const MAX_DRAWS = 16
 /** The ideas of the model answer, and how many the line must cover. */
@@ -87,11 +94,34 @@ export interface ExerciseState {
   predicted: boolean
   /** Saved rounds, oldest first. */
   played: Played[]
-  /** Right predictions on distinct seeds. */
+  /** Right predictions on distinct seeds, in all. */
   passes: number
+  /** Right predictions in a row at the end of the record (a round on a seed already played is passed over). */
+  run: number
+  /** Different right answers among the last `needs` rounds of that run. */
+  runAnswers: number
+  /** Some `needs` rounds in a row were all right, on at least `ANSWERS_NEEDED` different answers. */
   done: boolean
   /** Every seed a saved round used: the next draw skips them. */
   seeds: Set<number>
+}
+
+/**
+ * The done rule over saved rounds, oldest first: `needs` right in a row whose right answers are not all one value
+ * (`ANSWERS_NEEDED`). A miss starts the run again; a round on a seed already played neither extends nor breaks it.
+ * Once some window meets the rule the exercise stays done.
+ */
+export function runOf(played: readonly Played[], needs: number): { run: number; runAnswers: number; done: boolean } {
+  const seen = new Set<number>()
+  let trail: number[] = []
+  let done = false
+  for (const p of played) {
+    if (seen.has(p.seed)) continue
+    seen.add(p.seed)
+    trail = p.ok ? [...trail, p.truth] : []
+    if (trail.length >= needs && new Set(trail.slice(-needs)).size >= ANSWERS_NEEDED) done = true
+  }
+  return { run: trail.length, runAnswers: new Set(trail.slice(-needs)).size, done }
 }
 
 const rec = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
@@ -112,11 +142,14 @@ export function readExercise(events: readonly ExerciseEvent[], at: BlockAt): Exe
     }
   }
   const passes = new Set(played.filter((p) => p.ok).map((p) => p.seed)).size
-  return { predicted, played, passes, done: passes >= at.needs, seeds: new Set(played.map((p) => p.seed)) }
+  return { predicted, played, passes, ...runOf(played, at.needs), seeds: new Set(played.map((p) => p.seed)) }
 }
 
-/** "2/3" and, once finished, "3/3 · done". */
-export const progressText = (passes: number, needs: number): string => `${Math.min(passes, needs)}/${needs}${passes >= needs ? ' · done' : ''}`
+/** "2/3 right in a row · 1/2 different answers" and, once finished, "3/3 · done": the rule, said where the count is. */
+export function progressText(s: Pick<ExerciseState, 'run' | 'runAnswers' | 'done'>, needs: number): string {
+  if (s.done) return `${needs}/${needs} · done`
+  return `${Math.min(s.run, needs)}/${needs} right in a row · ${Math.min(s.runAnswers, ANSWERS_NEEDED)}/${ANSWERS_NEEDED} different answers`
+}
 
 /** The event as the ledger holds it once written, for the page to keep until it reloads. */
 export const exerciseEventOf = (r: ItemResponse, at: string, id: string): ExerciseEvent => ({
@@ -131,17 +164,19 @@ export const exerciseEventOf = (r: ItemResponse, at: string, id: string): Exerci
 
 /* ------------------------------ the round ------------------------------ */
 
-export type Phase = 'predict' | 'run' | 'explain' | 'saved'
+/** `start` waits for the learner to ask for a seed; `draw` finds a fair one; then the scene, the lock and the rest. */
+export type Phase = 'start' | 'draw' | 'predict' | 'explain' | 'saved'
 
 export interface Round {
   phase: Phase
-  /** When the round was shown, so the prediction's time on task is known. */
+  /** When the round was shown, and from the draw on when its scene was, so the prediction's time on task is known. */
   startedAt: number
+  seed?: number
+  /** The sweep on the seed, held from the draw and shown only after the lock. */
+  result?: SweepResult
   prediction?: number
   conf?: Confidence
   committedAt?: number
-  seed?: number
-  result?: SweepResult
   truth?: number
   ok?: boolean
   explain: string
@@ -151,36 +186,41 @@ export interface Round {
 }
 
 export type RoundAction =
+  | { type: 'draw' }
+  | { type: 'swept'; seed: number; result: SweepResult; at: number }
   | { type: 'commit'; prediction: number; conf?: Confidence; at: number }
-  | { type: 'swept'; seed: number; result: SweepResult }
   | { type: 'explain'; text: string }
   | { type: 'idea'; index: number }
   | { type: 'save'; at: number }
   | { type: 'next'; at: number }
 
-export const freshRound = (at: number): Round => ({ phase: 'predict', startedAt: at, explain: '', ideas: [] })
+/** A round that waits for the learner (`start`) or, after a saved one, goes straight to the draw. */
+export const freshRound = (at: number, phase: 'start' | 'draw' = 'start'): Round => ({ phase, startedAt: at, explain: '', ideas: [] })
 
 /** The line covers the model answer once it is long enough and all three ideas are ticked: what lets a round save. */
 export const canSave = (r: Round): boolean => r.phase === 'explain' && explainReady(r.explain) && r.ideas.length === IDEA_COUNT
 
 /**
- * Pure transition. An action out of phase is ignored, so a round reaches `saved` only through a committed prediction,
- * a sweep the exercise's band accepts, and an explanation that covers the three ideas.
+ * Pure transition. An action out of phase is ignored, so a round reaches `saved` only through a sweep the exercise's
+ * band accepts, a prediction committed while its outcome was hidden, and an explanation that covers the three ideas.
  */
 export function reduceRound(def: FleetExerciseDef, state: Round, action: RoundAction): Round {
   switch (action.type) {
-    case 'commit':
-      if (state.phase !== 'predict' || !def.points.includes(action.prediction)) return state
-      return { ...state, phase: 'run', prediction: action.prediction, conf: action.conf, committedAt: action.at }
-    case 'swept': {
-      if (state.phase !== 'run' || state.prediction === undefined || !def.band(action.result)) return state
+    case 'draw':
+      return state.phase === 'start' ? { ...state, phase: 'draw' } : state
+    case 'swept':
+      if (state.phase !== 'draw' || !def.band(action.result)) return state
+      return { ...state, phase: 'predict', seed: action.seed, result: action.result, startedAt: action.at }
+    case 'commit': {
+      if (state.phase !== 'predict' || state.result === undefined || !def.points.includes(action.prediction)) return state
       return {
         ...state,
         phase: 'explain',
-        seed: action.seed,
-        result: action.result,
-        truth: def.truth(action.result),
-        ok: def.pass(state.prediction, action.result),
+        prediction: action.prediction,
+        conf: action.conf,
+        committedAt: action.at,
+        truth: def.truth(state.result),
+        ok: def.pass(action.prediction, state.result),
       }
     }
     case 'explain':
@@ -194,7 +234,7 @@ export function reduceRound(def: FleetExerciseDef, state: Round, action: RoundAc
     case 'save':
       return canSave(state) ? { ...state, phase: 'saved', savedAt: action.at } : state
     case 'next':
-      return state.phase === 'saved' ? freshRound(action.at) : state
+      return state.phase === 'saved' ? freshRound(action.at, 'draw') : state
   }
 }
 
@@ -254,14 +294,14 @@ const kcsOf = (def: FleetExerciseDef): string[] => def.kcs.slice(0, MAX_KCS)
 function filled(r: Round): Required<Pick<Round, 'prediction' | 'seed' | 'truth' | 'ok' | 'committedAt'>> {
   const { prediction, seed, truth, ok, committedAt } = r
   if (prediction === undefined || seed === undefined || truth === undefined || ok === undefined || committedAt === undefined) {
-    throw new Error('a round writes its events only after its sweep')
+    throw new Error('a round writes its events only after its lock')
   }
   return { prediction, seed, truth, ok, committedAt }
 }
 
 /**
  * The block's `predict` event: the locked prediction against the sweep's answer on the round's seed, `src: 'lesson'`.
- * `ms` is the time from the round being shown to the lock.
+ * `ms` is the time from the round's scene being shown to the lock.
  */
 export function predictEvent(def: FleetExerciseDef, ctx: EventCtx, round: Round): ItemResponse {
   const f = filled(round)
@@ -344,9 +384,10 @@ function kneeCopy(): ExerciseCopy {
   return {
     setup:
       `One engine serves a burst-shaped trace: request lengths follow the quantiles of the committed BurstGPT busiest hour, and arrivals clump. ` +
-      `The same requests are replayed at ${KNEE_POINTS.length} load multipliers, ${formatNumber(first)}× to ${formatNumber(last)}×, each over a ${seconds(KNEE_WINDOW_TICKS)} s window. ` +
+      `Each seed draws its own arrival rate. The same requests are replayed at ${KNEE_POINTS.length} load multipliers of that rate, ${formatNumber(first)}× to ${formatNumber(last)}×, each over a ${seconds(KNEE_WINDOW_TICKS)} s window. ` +
       `The engine runs ${cfg.maxRunning} sequences at once, first come, first served, and a request counts toward goodput only if its first token arrives within ${cfg.sloTtft} ticks (${seconds(cfg.sloTtft)} s). ` +
-      `A flat-tick model (v1): one tick of ${MS_PER_TICK} ms advances every running sequence by one prefill chunk or one decode token.`,
+      `A flat-tick model (v1): one tick of ${MS_PER_TICK} ms advances every running sequence by one prefill chunk or one decode token. ` +
+      `With ${cfg.maxRunning} slots each held H ticks per request, the engine finishes at most ${cfg.maxRunning} ÷ (H × ${formatNumber(SIM_TICK_SECONDS)} s) requests a second (Little's law).`,
     xLabel: 'Load',
     pointLabel: (x) => `${formatNumber(x)}× load`,
     tickLabel: (x) => `${formatNumber(x)}×`,
@@ -366,9 +407,11 @@ function pdSplitCopy(): ExerciseCopy {
   return {
     setup:
       `${PD_WORKERS} identical workers are split into p that prefill and ${PD_WORKERS} − p that decode, for p = 1 … ${PD_WORKERS - 1}, on one seeded trace of long prompts. ` +
+      `Each seed draws its own prompt and output lengths. ` +
       `Each worker is a ${PD_ENGINE.maxRunning}-sequence engine. A prefill worker sends a finished prompt's KV to a decode worker at ${PD_TRANSFER_RATE} tokens per tick, and the transfer waits while the decode worker has no free blocks. ` +
       `The trace offers about ${formatNumber(PD_LOAD)}× the best split's estimated capacity over ${seconds(PD_WINDOW_TICKS)} s. A request counts toward goodput only if its first token lands within ${PD_ENGINE.sloTtft} ticks (${seconds(PD_ENGINE.sloTtft)} s) ` +
-      `and no gap between its tokens exceeds ${PD_ENGINE.sloItl ?? 0} ticks. A flat-tick model (v1): one tick of ${MS_PER_TICK} ms advances every running sequence by one prefill chunk or one decode token.`,
+      `and no gap between its tokens exceeds ${PD_ENGINE.sloItl ?? 0} ticks. A flat-tick model (v1): one tick of ${MS_PER_TICK} ms advances every running sequence by one prefill chunk or one decode token, ` +
+      `so a prompt holds a prefill slot for ⌈tokens ÷ ${PD_ENGINE.prefillChunk}⌉ ticks and an output holds a decode slot for one tick per token.`,
     xLabel: 'Prefill : decode',
     pointLabel: (x) => `${x} prefill, ${PD_WORKERS - x} decode`,
     tickLabel: (x) => `${x}:${PD_WORKERS - x}`,
@@ -389,6 +432,11 @@ const COPIES: Readonly<Record<string, () => ExerciseCopy>> = { knee: kneeCopy, '
 /** The panel's copy for an exercise id. A later exercise (§16.3) adds a line here; a test fails until every listed exercise has one. */
 export function copyFor(id: string): ExerciseCopy | null {
   return Object.hasOwn(COPIES, id) ? COPIES[id]() : null
+}
+
+/** A scene fact as the panel lists it: "Prompts: 1,792–2,815 tokens". */
+export function sceneLine(f: SceneFact): string {
+  return `${f.label}: ${formatNumber(f.value)}${f.to === undefined ? '' : `–${formatNumber(f.to)}`} ${f.unit}`
 }
 
 /* ------------------------------ what the sweep shows ------------------------------ */
