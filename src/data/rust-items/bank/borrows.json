@@ -102,7 +102,7 @@
       }
     },
     "sampler-seed-access": {
-      "hash": "e16b35ed88db6cc169010d98762e3d0ee211978ef929618b6af81a6e0c48aa3b",
+      "hash": "2ee76837ecae56e19a2f07e07b2eaeb15b3df6cc292cb37caf5934262f21588f",
       "variants": {
         "base": {"result":"compiles"},
         "read-temp": {"result":{"code":"E0503","line":12,"message":"cannot use `s.temp` because it was mutably borrowed"}},
@@ -201,7 +201,7 @@
       }
     },
     "running-total-bump": {
-      "hash": "a039cac9ff281fbd76632de613d90926cd2c83db8ded1a95b2e6865125cd1cd4",
+      "hash": "875df5008167d3ee6009a249ca84b0e94537c257d4618593af044e2c442b7ba0",
       "variants": {
         "base": {"result":"compiles"},
         "ref-before": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*total` because it is borrowed"},"fixes":{"copy-before":"compiles","spell-out":{"code":"E0506","line":3},"mut-before":{"code":"E0503","line":3}}},
@@ -324,7 +324,7 @@
       }
     },
     "chunk-zero-pad": {
-      "hash": "30d71d98e0f051b802ad14ceb5d4af58c6f9b5a31ef1865626c8db8b7f212ea3",
+      "hash": "801bca474c55c48a16bc2add6b0deb33322384d565e7ca8fb9dd63b04902c68c",
       "variants": {
         "base": {"result":"compiles"},
         "touch-parent": {"result":{"code":"E0503","line":3,"message":"cannot use `*b` because it was mutably borrowed"}},
@@ -353,7 +353,7 @@
       }
     },
     "half-mix-blocks": {
-      "hash": "447773ccf9a9f2768dd1b2f62a44c39f087b51ed2a6adaea550a3d046e412762",
+      "hash": "65cb6deb3303bd01d48fa9f300bf8b6cf99457a524fd218a215edb6790294443",
       "variants": {
         "base": {"result":"compiles"},
         "shared-split": {"result":{"code":"E0594","line":3,"message":"cannot assign to `a[_]`, which is behind a `&` reference"},"fixes":{"split-mut":"compiles","swap-names":"compiles","sum-local":"compiles"}},
@@ -372,7 +372,7 @@
       }
     },
     "pair-slots-if-let": {
-      "hash": "bd09b623daa95d660321c4233437eca905ae16325dfeba15c1b10f8c423992ae",
+      "hash": "e7ec541411575865a9080d0716fc0d1700831f52e7009c5d6c0b99ef80054aff",
       "variants": {
         "base": {"result":"compiles"},
         "index-twice": {"result":{"code":"E0499","line":5,"message":"cannot borrow `v[_]` as mutable more than once at a time"},"fixes":{"slice-swap":"compiles","same-index":{"code":"E0499","line":5},"copy-over":"compiles"}},
@@ -401,7 +401,7 @@
       }
     },
     "slot-release-enum": {
-      "hash": "c56f86813ff9ff2971bb9ef13155fb30fc018412dd20256228361e5875647324",
+      "hash": "569523687a58579615e9b4d55842bac4eff57a8f80664a75da39f5c120893eae",
       "variants": {
         "base": {"result":"compiles"},
         "bind-ref": {"result":{"code":"E0506","line":5,"message":"cannot assign to `*s` because it is borrowed"},"fixes":{"copy-n":"compiles","match-shared":{"code":"E0506","line":5},"spare-slot":"compiles"}},

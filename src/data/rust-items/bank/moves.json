@@ -22,7 +22,7 @@
       }
     },
     "prefill-consumes-request": {
-      "hash": "114d74d7fa054f6de93d5104d3ba24a3e778c83ae6243c707b5e9628d11a57f8",
+      "hash": "19f4406874cd60013ff0e89109618b775740ae893f715194f449202e4a5a4671",
       "variants": {
         "base": {"result":"compiles"},
         "read-after-consume": {"result":{"code":"E0382","line":13,"message":"use of moved value: `req`"},"fixes":{"use-copied-id":"compiles","clone-req":"compiles","ref-result":{"code":"E0382","line":13},"length-only":"compiles"}},
@@ -208,7 +208,7 @@
       }
     },
     "first-owner-array": {
-      "hash": "1f8cb47293663a058c6dcb7731a9f8540b3e668e90c45141368d461260152fc9",
+      "hash": "f7782b07d32ca08116eca36aa84337304b4488db032a5ccb014fdf19f6747fc6",
       "variants": {
         "base": {"result":"compiles"},
         "index-field": {"result":{"code":"E0508","line":4,"message":"cannot move out of type `[Slot; 4]`, a non-copy array"},"fixes":{"borrow-owner":"compiles","clone-owner":"compiles","deref-owner":{"code":"E0277","line":4},"into-bytes":{"code":"E0508","line":4}}},
@@ -285,7 +285,7 @@
       }
     },
     "lease-drop-order": {
-      "hash": "1226de3e30bdc8a1069bd51abbaf7b445da4afd03076e4f9191be4441e7b8844",
+      "hash": "49d86efc06f537e6cdff53cce6e3476179567a8214fa4119c96cb686e82305fe",
       "variants": {
         "base": {"result":"compiles"},
         "read-after-drop": {"result":{"code":"E0382","line":13,"message":"use of moved value: `lease`"},"fixes":{"use-copy":"compiles","clone-read":{"code":"E0382","line":13},"return-zero":"compiles"}},
@@ -304,7 +304,7 @@
       }
     },
     "oldest-ring-slot": {
-      "hash": "baef1791fb8836e3c7496c1b1db06601c824855bb9bb382b4b1466092da6abce",
+      "hash": "8ec7cda62ada707d00782a2792d62147ccc0454decd1c3c92a272eab45615cca",
       "variants": {
         "base": {"result":{"code":"E0508","line":5,"message":"cannot move out of type `[Req; 3]`, a non-copy array"},"fixes":{"into-iter":"compiles","clone-slot":"compiles","ref-slot":{"code":"E0308","line":5},"unwrap-default":{"code":"E0277","line":5}}},
         "vec-version": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<Req>`"},"fixes":{"into-iter":"compiles","clone-slot":"compiles","ref-slot":{"code":"E0308","line":5},"unwrap-default":{"code":"E0277","line":5}}},
@@ -313,7 +313,7 @@
       }
     },
     "name-pair-array": {
-      "hash": "06628c202f108420cffd9509c30a81d0eaff5e5db37c82246c2bd8e36b01908b",
+      "hash": "db898b431c9bdf3d48a3e1570ee35b9990b318c9e670ddf881d807014a441227",
       "variants": {
         "base": {"result":"compiles"},
         "move-first": {"result":{"code":"E0508","line":2,"message":"cannot move out of type `[String; 2]`, a non-copy array"},"fixes":{"borrow-first":"compiles","clone-first":"compiles","into-bytes":{"code":"E0508","line":2},"deref-first":{"code":"E0277","line":2}}},

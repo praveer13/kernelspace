@@ -24,7 +24,7 @@
       }
     },
     "admit-copies-the-id": {
-      "hash": "6c67d9773cc56546445d44a71298a6d34ae36aafa39df8873f76738995547b62",
+      "hash": "8d892d9a387fa6f1cebcc0f631434b6949b3e410f655abdf694260b6d7748c4d",
       "variants": {
         "base": {"result":"compiles"},
         "read-after-move": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `r`"},"fixes":{"use-copy":"compiles","clone-req":"compiles","borrow-id":{"code":"E0382","line":9}}},

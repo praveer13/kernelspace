@@ -218,8 +218,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 13, text: '    req.id as usize + p.len()' },
         expect: { code: 'E0382', line: 13 },
         why: '`into_prompt` takes `self` by value, so the call on line 12 moved `req`; reading `req.id` on line 13 needs R.',
-        focus: { line: 13, path: 'req.id', needs: ['read'] },
-        permission: 'read',
         fixes: [
           good('use-copied-id', 13, '    id as usize + p.len()', 'Line 11 already holds a copy of the id, so line 13 reads nothing of `req`.'),
           cloned('clone-req', 12, '    let p = req.clone().into_prompt();', 'It copies the whole request, prompt included, and consumes the copy, only to keep `req.id` readable.'),
@@ -1421,7 +1419,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'index-field',
         edit: { line: 4, text: '    let first = slots[0].owner;' },
         expect: { code: 'E0508', line: 4 },
-        why: 'rustc cannot track which array elements were moved out, so an element of an array has R and W but never O; moving `owner` out of `slots[0]` needs O.',
+        why: 'rustc cannot track which array elements were moved out, so an element of an array never has O (and `slots` is not declared `mut`, so its elements hold R only); moving `owner` out of `slots[0]` needs O.',
         fixes: [
           good('borrow-owner', 4, '    let first = &slots[0].owner;', 'A `&String` needs only R, which every element of the array has.'),
           cloned('clone-owner', 4, '    let first = slots[0].owner.clone();', 'It copies the owner string just to read its length.'),
@@ -1898,8 +1896,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 13, text: '    lease.slot' },
         expect: { code: 'E0382', line: 13 },
         why: '`drop(lease)` moved the lease into `drop`, which ended it, so `lease.slot` has no R left on line 13.',
-        focus: { line: 13, path: 'lease.slot', needs: ['read'] },
-        permission: 'read',
         fixes: [
           good('use-copy', 13, '    slot', 'Line 11 already copied the number out, so line 13 reads nothing of the dropped lease.'),
           cloned('clone-read', 13, '    lease.slot.clone()', 'The clone still reads `lease`, which was moved on line 12; copying a `u32` does not bring the lease back.'),
@@ -2000,7 +1996,7 @@ export const SNIPPETS: RustSnippet[] = [
       {
         id: 'base',
         expect: { code: 'E0508', line: 5 },
-        why: 'rustc cannot tell which array elements were moved out, so an element has R and W but never O; returning `r[i]` by value needs O.',
+        why: 'rustc cannot tell which array elements were moved out, so an element never has O (and `r` is not declared `mut`, so its elements hold R only); returning `r[i]` by value needs O.',
         fixes: [
           good('into-iter', 5, '    r.into_iter().nth(i).unwrap()', 'An array by value can be consumed by `into_iter`, which hands each element out with its O.'),
           cloned('clone-slot', 5, '    r[i].clone()', 'It returns a copy of the prompt string and leaves the original in an array that is dropped at the end of the call.'),
@@ -2012,7 +2008,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'vec-version',
         edit: { line: 4, text: 'fn oldest(r: Vec<Req>, i: usize) -> Req {' },
         expect: { code: 'E0507', line: 5 },
-        why: 'Indexing a `Vec` gives a place inside it, and a place inside a vector has R and W but never O; `r[i]` by value moves it out.',
+        why: 'Indexing a `Vec` gives a place inside it, and a place inside a vector never has O; `r[i]` by value moves it out.',
         focus: { line: 5, path: 'r[i]', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -2059,7 +2055,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'move-first',
         edit: { line: 2, text: '    let a = ns[0];' },
         expect: { code: 'E0508', line: 2 },
-        why: 'An element of an array has R and W but never O, because rustc cannot track which elements left; `let a = ns[0]` moves the string out.',
+        why: 'An element of an array never has O, because rustc cannot track which elements left (and `ns` is not declared `mut`, so its elements hold R only); `let a = ns[0]` moves the string out.',
         fixes: [
           good('borrow-first', 2, '    let a = &ns[0];', 'A `&String` needs only R, which every element has.'),
           cloned('clone-first', 2, '    let a = ns[0].clone();', 'It copies the first name to read its length.'),

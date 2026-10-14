@@ -357,7 +357,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'move-then-use',
         edit: at(7, '    println!("{name} done");'),
         expect: { code: 'E0382', line: 7 },
-        why: '`move` gave `name` to the thread, so `name` lost R, W and O here, and printing it on line 7 needs R.',
+        why: '`move` gave `name` to the thread, so `name` lost R and O here (it was never `mut`, so it had no W), and printing it on line 7 needs R.',
         focus: { line: 7, path: 'name', needs: ['read'] },
         permission: 'read',
         fixes: [
@@ -574,11 +574,11 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'move-first',
         edit: at(4, '    let mut a = t;'),
         expect: { code: 'E0382', line: 5 },
-        why: '`let a = t` moved the handle, so `t` lost R, W and O, and `Rc::clone(&t)` on line 5 needs R.',
+        why: '`let a = t` moved the handle, so `t` lost R and O (a parameter not declared `mut` never had W), and `Rc::clone(&t)` on line 5 needs R.',
         focus: { line: 5, path: 't', needs: ['read'] },
         permission: 'read',
         fixes: [
-          good('clone-handle', 4, '    let a = Rc::clone(&t);', '`Rc::clone(&t)` copies a handle, so `t` keeps R, W and O and line 5 can clone it again.'),
+          good('clone-handle', 4, '    let a = Rc::clone(&t);', '`Rc::clone(&t)` copies a handle, so `t` keeps R and O and line 5 can clone it again.'),
           lure('clone', 'clone-late', 5, '    let b = t.clone();', '`t` is already moved on line 4, so a clone of it on line 5 reads a moved value just the same.'),
           wrong('borrow-t', 5, '    let b = &t;', 'It still reads `t` on line 5 after the move: borrowing needs R, which the move took.', 'r.move-keeps-the-name'),
         ],
@@ -701,7 +701,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'moved-arc',
         edit: at(6, '    let c2 = c;'),
         expect: { code: 'E0382', line: 11 },
-        why: '`let c2 = c` moved the `Arc`, so `c` lost R, W and O, and `c.lock()` on line 11 needs R.',
+        why: '`let c2 = c` moved the `Arc`, so `c` lost R and O (it is not declared `mut`, so it had no W), and `c.lock()` on line 11 needs R.',
         focus: { line: 11, path: 'c', needs: ['read'] },
         permission: 'read',
         fixes: [
@@ -729,7 +729,7 @@ export const SNIPPETS: RustSnippet[] = [
       {
         id: 'base',
         expect: 'compiles',
-        why: 'A `Box` owns its `Vec`, so `*b` has R, W and O, and moving the vector out needs O: only a `Box` allows it.',
+        why: 'A `Box` owns its `Vec`, so `b` holds R and O of it (not W: `b` is not declared `mut`), and moving the vector out of `*b` needs O: only a `Box` allows it.',
       },
       {
         id: 'ref-box',
@@ -748,7 +748,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'use-after',
         edit: at(3, '    let n = b.len() + v.len();'),
         expect: { code: 'E0382', line: 3 },
-        why: '`let v = *b` moved the vector out of the box, so `b` lost R, W and O, and `b.len()` needs R.',
+        why: '`let v = *b` moved the vector out of the box, so `b` lost R and O (a parameter not declared `mut` never had W), and `b.len()` needs R.',
         focus: { line: 3, path: 'b', needs: ['read'] },
         permission: 'read',
         fixes: [
@@ -1138,7 +1138,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'move-closure',
         edit: at(8, '    let mut f = move || s.left -= 1;'),
         expect: { code: 'E0382', line: 9 },
-        why: 'A `move` closure takes the whole reference `s`, not just the field it names, so `s` lost R, W and O here, and `s.queue.push` needs them.',
+        why: 'A `move` closure takes the whole reference `s`, not just the field it names, so `s` lost R and O and `*s` lost R and W here, and `s.queue.push` needs R and W of the field.',
         fixes: [
           good('drop-move', 8, '    let mut f = || s.left -= 1;', 'Without `move` the closure borrows just the field `s.left`, so `s.queue` stays usable.'),
           wrong('method-call', 8, '    let mut f = move || s.spend();', '`spend(&mut self)` needs all of `*s`, and `move` takes the whole reference, so `s.queue.push` is rejected.', 'r.method-borrows-the-field'),
@@ -1195,8 +1195,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: at(5, '    Some(v[0] + *a)'),
         expect: { code: 'E0503', line: 5 },
         why: '`a` borrows `v[0]` `&mut` and is read after `v[0]`, so `v[0]` has lost R and W when it is read first.',
-        focus: { line: 5, path: 'v[0]', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'len-in-index',
@@ -1633,7 +1631,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'once-twice',
         edit: at(1, 'type F = Box<dyn FnOnce(u32) -> u32>;'),
         expect: { code: 'E0382', line: 10 },
-        why: 'A `FnOnce` closure is consumed by its first call, so `f` lost R, W and O at `f(3)`, and `f(4)` needs to use it again.',
+        why: 'A `FnOnce` closure is consumed by its first call, so `f` lost R and O at `f(3)` (line 9 declares it without `mut`, so it had no W), and `f(4)` needs to use it again.',
         fixes: [
           good('back-to-fn', 1, 'type F = Box<dyn Fn(u32) -> u32>;', '`Fn` can be called any number of times, because calling it only reads what the closure holds.'),
           wrong('fn-mut', 1, 'type F = Box<dyn FnMut(u32) -> u32>;', 'A `FnMut` closure can be called twice, but it needs `&mut` access to `f`, and line 9 declares it without `mut`.', 'r.fnonce-is-not-fnmut'),
@@ -2041,11 +2039,11 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'move-handle',
         edit: at(6, '    let h = q;'),
         expect: { code: 'E0382', line: 9 },
-        why: '`let h = q` moved the `Rc`, so `q` lost R, W and O, and `q.borrow()` on line 9 needs R.',
+        why: '`let h = q` moved the `Rc`, so `q` lost R and O (it is not declared `mut`, so it had no W), and `q.borrow()` on line 9 needs R.',
         focus: { line: 9, path: 'q', needs: ['read'] },
         permission: 'read',
         fixes: [
-          good('clone-handle', 6, '    let h = Rc::clone(&q);', '`Rc::clone(&q)` copies a handle and bumps a count, so `q` keeps R, W and O and shares the list.'),
+          good('clone-handle', 6, '    let h = Rc::clone(&q);', '`Rc::clone(&q)` copies a handle and bumps a count, so `q` keeps R and O and shares the list.'),
           lure('other', 'fresh-queue', 6, '    let h = Rc::new(RefCell::new(vec![]));', 'It compiles, but `h` is now a second, separate queue: what `f` adds never reaches `q`.', 'r.fresh-handle-is-not-a-share'),
           wrong('read-h', 9, '    let n = h.borrow().len();', 'The closure took `h` with `move`, so line 9 cannot name it either.', 'r.move-keeps-the-name'),
         ],
@@ -2519,9 +2517,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'drop-pool',
         edit: at(14, '    drop(pool);'),
         expect: { code: 'E0505', line: 14 },
-        why: '`l` borrows `*pool` until its `drop` runs, so `pool` has no O while the lease lives, and `drop(pool)` moves it.',
-        focus: { line: 14, path: 'pool', needs: ['own'] },
-        permission: 'own',
+        why: '`l` borrows `*pool` until its `drop` runs, so `pool` has lost R and O while the lease lives, and `drop(pool)` moves it, which needs both.',
       },
       {
         id: 'move-field',

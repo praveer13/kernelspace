@@ -187,7 +187,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'read-after-move',
         edit: { line: 9, text: '    println!("queued {}", r.id);' },
         expect: { code: 'E0382', line: 9 },
-        why: '`push` on line 8 moved `r` into the queue, so `r` lost R, W and O; reading `r.id` on line 9 needs R.',
+        why: '`push` on line 8 moved `r` into the queue, so `r` lost R and O (a parameter not declared `mut` never had W); reading `r.id` on line 9 needs R.',
         focus: { line: 9, path: 'r.id', needs: ['read'] },
         permission: 'read',
         fixes: [

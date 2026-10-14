@@ -569,16 +569,12 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 12, text: '    *seed += s.temp as u64;' },
         expect: { code: 'E0503', line: 12 },
         why: '`seed_mut` borrows the whole `Sampler` `&mut`, not just `seed`, and `seed` is still used on this line, so `s.temp` has lost R.',
-        focus: { line: 12, path: 's.temp', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'read-seed',
         edit: { line: 12, text: '    *seed += s.seed;' },
         expect: { code: 'E0503', line: 12 },
         why: '`seed` is a `&mut` into `s.seed` and is used after the read, so reading `s.seed` through `s` lacks R.',
-        focus: { line: 12, path: 's.seed', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'second-call',
@@ -1102,7 +1098,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let before = &*total;' },
         expect: { code: 'E0506', line: 3 },
         why: '`before` borrows `*total` with `&` until the print on line 4, which removes W, and `+=` on line 3 needs it.',
-        focus: { line: 3, path: 'total', needs: ['read', 'write'] },
+        focus: { line: 3, path: '*total', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           { id: 'copy-before', edit: { line: 2, text: '    let before = *total;' }, ok: true, why: 'A `u64` is Copy, so `before` holds a copy and the borrow ends on line 2.' },
@@ -1777,8 +1773,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 3, text: '        c[0] = b[0];' },
         expect: { code: 'E0503', line: 3 },
         why: 'The `&mut` borrow of the loop has taken R and W from `b`, so reading `b[0]` lacks R.',
-        focus: { line: 3, path: 'b[0]', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'len-parent',
@@ -1936,8 +1930,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 3, text: '    a[0] += buf[0];' },
         expect: { code: 'E0503', line: 3 },
         why: '`a` borrows `buf` `&mut` and is written by this `+=`, so reading `buf[0]` through the parent lacks R.',
-        focus: { line: 3, path: 'buf[0]', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'len-parent',
@@ -2046,8 +2038,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 5, text: '        *a += v[1];' },
         expect: { code: 'E0503', line: 5 },
         why: '`a` borrows `v` `&mut` and is written by this `+=`, so reading `v[1]` through `v` lacks R.',
-        focus: { line: 5, path: 'v[1]', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'len-again',
@@ -2184,9 +2174,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'bind-ref',
         edit: { line: 4, text: '    if let Slot::Used(n) = s {' },
         expect: { code: 'E0506', line: 5 },
-        why: 'Matching on `s` binds `n` as a `&mut u32` into the slot, and the print on line 6 keeps it alive, so assigning `*s` lacks W.',
-        focus: { line: 5, path: '*s', needs: ['write'] },
-        permission: 'write',
+        why: 'Matching on `s` binds `n` as a `&mut u32` into the slot, and the print on line 6 keeps it alive, so `*s` has lost R and W, and assigning it needs both.',
         fixes: [
           { id: 'copy-n', edit: { line: 4, text: '    if let Slot::Used(n) = *s {' }, ok: true, why: 'Matching the place `*s` copies the `u32`, so `n` borrows nothing.' },
           { id: 'match-shared', edit: { line: 4, text: '    if let Slot::Used(n) = &*s {' }, ok: false, miss: 'r.assign-ends-borrow', why: '`&*s` is a `&` borrow of the slot, so `n` is still a reference alive until line 6 and `*s` has no W.' },
