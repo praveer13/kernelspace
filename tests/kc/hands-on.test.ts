@@ -3,8 +3,8 @@
  * graded active block other than its checkpoint: an `item` block whose family and variants exist, an `exercise` block
  * with at least one registered outcome task, a `fleet` exercise block whose exercise is in `FLEET_EXERCISES`
  * (wave-3.md §4.2, 3a-05b), or a `play` block whose play is registered (a pending play does not
- * count). At least 10 of the 15 T6 and T7 lessons must be; the test prints the list. Each item block's variant KCs
- * must intersect its lesson's `Lesson.kcs`.
+ * count). All 15 T6 and T7 lessons must be, by id (wave-3.md §18.1 B1; 3c-01 raised the gate from 10); the test prints the
+ * list. Each item block's variant KCs must intersect its lesson's `Lesson.kcs`.
  */
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
@@ -16,8 +16,8 @@ import { loadFamily } from '../../src/lib/items/registry'
 import type { Gen } from '../../src/lib/items/types'
 import { buildRegistry, type Registry } from '../../src/lib/sims/registry'
 
-/** The gate: at least this many of the T6/T7 lessons are hands-on. */
-const HANDS_ON_MIN = 10
+/** The gate: every one of these lessons is hands-on (t6.l1-t6.l10, t7.l1-t7.l5). */
+const REQUIRED_IDS = [...Array.from({ length: 10 }, (_, i) => `t6.l${i + 1}`), ...Array.from({ length: 5 }, (_, i) => `t7.l${i + 1}`)]
 
 const SIMS_DIR = join(import.meta.dir, '..', '..', 'src', 'components', 'sims')
 
@@ -66,18 +66,35 @@ describe('hands-on T6/T7 lessons (spec §5.4)', () => {
     expect(T67).toHaveLength(15)
   })
 
-  test(`at least ${HANDS_ON_MIN} of them are hands-on, and the list is printed`, () => {
+  test('the required ids are exactly the T6/T7 lessons', () => {
+    expect(REQUIRED_IDS).toHaveLength(15)
+    expect(new Set(REQUIRED_IDS).size).toBe(15)
+    expect(T67.map((l) => l.id).sort()).toEqual([...REQUIRED_IDS].sort())
+  })
+
+  test('all 15 of them are hands-on, by id, and the list is printed', () => {
     const rows = T67.map((l) => ({ id: l.id, title: l.title, how: handsOnBlocks(l) }))
     const yes = rows.filter((r) => r.how.length > 0)
     const no = rows.filter((r) => r.how.length === 0)
     console.log(
       [
-        `hands-on T6/T7 lessons: ${yes.length} of ${rows.length} (gate: at least ${HANDS_ON_MIN})`,
+        `hands-on T6/T7 lessons: ${yes.length} of ${rows.length} (gate: all ${REQUIRED_IDS.length})`,
         ...yes.map((r) => `  yes ${r.id} ${r.title}: ${r.how.join('; ')}`),
         ...no.map((r) => `  no  ${r.id} ${r.title}`),
       ].join('\n'),
     )
-    expect(yes.length).toBeGreaterThanOrEqual(HANDS_ON_MIN)
+    // by id, so a failure names the lesson that lost its graded block
+    expect(no.map((r) => r.id)).toEqual([])
+    for (const id of REQUIRED_IDS) {
+      const row = rows.find((r) => r.id === id)
+      expect(row, id).toBeDefined()
+      expect(row?.how.length, `${id} is hands-on`).toBeGreaterThan(0)
+    }
+  })
+
+  test('a lesson with no graded active block fails the gate (the predicate is not vacuous)', () => {
+    const bare: Lesson = { ...(T67[0] as Lesson), blocks: T67[0]!.blocks.filter((b) => b.type !== 'item' && b.type !== 'play' && b.type !== 'exercise') }
+    expect(handsOnBlocks(bare)).toEqual([])
   })
 
   test('a pending play and an unregistered task do not count', () => {
