@@ -153,9 +153,10 @@ export interface CheckLadder {
   r1: { text: string; link: LessonLink }
   /** `fn` is the check's function in the zip's `src/lib.rs`; the text names it. */
   r2: { text: string; fn: string }
-  /** Pseudo-code, one line per `\n`. */
-  r3: string
-  r4: string
+  /** Pseudo-code, one line per `\n`. Absent on a faded bundle (`ForgeBundle.fade`). */
+  r3?: string
+  /** Absent on a faded bundle. */
+  r4?: string
 }
 
 export interface WalkStep {

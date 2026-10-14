@@ -14,7 +14,9 @@
  *
  * Scope: src/lib/items/families/**, src/lib/items/core.ts, src/lib/world/**, src/lib/fleet-*.ts and
  * src/lib/learner/{composer,placement,ticket,paths,recommend,item-block}.ts, plus src/lib/kv-zoo.ts
- * (wave-2.md §22.3; the zoo model is numeric, products and sums only). Scope files that do not exist
+ * (wave-2.md §22.3; the zoo model is numeric, products and sums only). Wave 3 adds
+ * src/lib/learner/{provenance,vrk,competence,cold-checks,forms,iso}.ts and src/lib/forge/prove2.ts
+ * (wave-3.md §17.3; the clock and entropy bans, not the Math one). Scope files that do not exist
  * yet are fine: each owning task lands its file under the lint already running.
  *
  * The hash fixtures (generator outputs for 100 seeds per family, tests/fixtures/items/hashes/<family>.json)
@@ -157,6 +159,9 @@ function scopeOf(rel: string): { numeric: boolean } | null {
   if (rel === 'src/lib/kv-zoo.ts') return { numeric: true }
   if (/^src\/lib\/fleet-[^/]*\.tsx?$/.test(rel)) return { numeric: false }
   if (/^src\/lib\/learner\/(composer|placement|ticket|paths|recommend|item-block)\.tsx?$/.test(rel)) return { numeric: false }
+  // Wave 3 (docs/specs/wave-3.md §17.3, 3a-05b): the pure learner files, and Prove-it v2's seeded question templates.
+  if (/^src\/lib\/learner\/(provenance|vrk|competence|cold-checks|forms|iso)\.tsx?$/.test(rel)) return { numeric: false }
+  if (rel === 'src/lib/forge/prove2.ts') return { numeric: false }
   return null
 }
 
