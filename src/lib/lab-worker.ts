@@ -202,7 +202,10 @@ export function driveLabCalls(
         const timer = timers.set(() => {
           settle()
           pool.discard(port)
-          reject(new LabTimeoutError(opts.budgetMs, 'invoke', false))
+          const timeout = new LabTimeoutError(opts.budgetMs, 'invoke', false)
+          // the class's invoke wording is Fleet's (the bridge /fleet drives); this list is a Prove-it question's calls
+          timeout.message = `your module did not answer all ${req.calls.length} calls within ${opts.budgetMs / 1000} s, so the grader stopped it. Look for an infinite loop in the code that handles them.`
+          reject(timeout)
         }, opts.budgetMs)
         const settle = () => {
           timers.clear(timer)

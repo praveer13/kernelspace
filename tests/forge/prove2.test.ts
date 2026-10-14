@@ -391,6 +391,12 @@ describe('proveFromModule: the result and its provenance', () => {
     expect((await attempt()).result.data).not.toHaveProperty('return')
   })
 
+  test('a wrong 30-day return, even on a credited module, starts no 24 h wait', async () => {
+    const r = await attempt({ answer: 0, ret: true })
+    expect(r.eligibility).toEqual({ credited: true })
+    expect(r.opensAt).toBeNull()
+  })
+
   test('a refused module is reported and nothing is graded', async () => {
     const r = await proveFromModule({
       labId: 'kv-block-manager',
@@ -445,8 +451,9 @@ describe('the ledger takes what prove2 builds', () => {
     expect(events[0]).toMatchObject({ kind: 'prove', ref: 'prove:kv-block-manager', provenance: 'practice', score: 0, seed: 3, wasmSha256: sha })
     expect(tab.progress.getState().aggregate.proved).toEqual({})
 
-    // the miss is a credited one: reading the ledger back, a retry is waiting
-    const history = attemptsOf(events, 'kv-block-manager')
+    // the miss is a credited one once the unseen run that graded this module is in the ledger: reading it back, a retry is waiting
+    const unseenRun: ProveEventLike = { kind: 'lab-check', ref: 'lab:kv-block-manager', at: new Date(Date.parse(events[0].at) - H).toISOString(), day: events[0].day, provenance: 'unseen', wasmSha256: sha }
+    const history = attemptsOf([unseenRun, ...events], 'kv-block-manager')
     expect(history).toEqual([{ at: events[0].at, qid: 'free-after', right: false }])
     expect(retryWindow(history, Date.parse(events[0].at) + H)).toEqual({ open: false, opensAt: Date.parse(events[0].at) + RETRY_AFTER_MS })
 
@@ -457,6 +464,34 @@ describe('the ledger takes what prove2 builds', () => {
     events = await stored(tab)
     expect(events.map((e) => e.provenance).sort()).toEqual(['practice', 'proved'])
     expect(tab.progress.getState().aggregate.proved['kv-block-manager']).toEqual(expect.any(String))
+  })
+})
+
+describe('a miss that was recorded as practice, read back from the ledger', () => {
+  const bytes = new Uint8Array([1, 2, 3]).buffer
+
+  test('a wrong attempt with no unseen run behind it leaves the retry window open', async () => {
+    const tab = startTab(makeProfile())
+    const plan = planQuestion(FREE_AFTER, 3)
+    const r = await proveFromModule({
+      labId: 'kv-block-manager',
+      template: FREE_AFTER,
+      plan,
+      answer: 0,
+      bytes,
+      graded: null,
+      history: [],
+      now: Date.now(),
+      run: fakeBridge(fakeBlockManager()).run,
+    })
+    if (r.kind === 'refused') throw new Error(r.message)
+    expect(r.opensAt).toBeNull()
+    tab.progress.getState().recordProve({ ...r.result, data: r.result.data as ProveData })
+    await tab.progress.controls.flush()
+    const events = (await (await tab.engine()).events()) as unknown as ProveEventLike[]
+    const history = attemptsOf(events, 'kv-block-manager')
+    expect(history).toEqual([{ at: events[0].at, qid: 'free-after', right: false, credited: false }])
+    expect(retryWindow(history, Date.parse(events[0].at) + H)).toEqual({ open: true, opensAt: null })
   })
 })
 
@@ -474,11 +509,59 @@ describe('reading attempts and the first prove event from events', () => {
       { kind: 'item', ref: 'item:x', at: '2026-10-02T13:00:00.000Z', day: '2026-10-02', data: v2(1, 1) },
       ev('2026-10-02T14:00:00.000Z', 'prove:kv-block-manager', { v: 2, qid: 'x' }),
     ]
+    // no graded run in these events, so none of the attempts is credited
     expect(attemptsOf(events, 'kv-block-manager')).toEqual([
-      { at: '2026-10-01T10:00:00.000Z', qid: 'free-after', right: false },
-      { at: '2026-10-02T10:00:00.000Z', qid: 'free-after', right: false },
-      { at: '2026-10-03T10:00:00.000Z', qid: 'blocks-of', right: true },
+      { at: '2026-10-01T10:00:00.000Z', qid: 'free-after', right: false, credited: false },
+      { at: '2026-10-02T10:00:00.000Z', qid: 'free-after', right: false, credited: false },
+      { at: '2026-10-03T10:00:00.000Z', qid: 'blocks-of', right: true, credited: false },
     ])
+  })
+
+  describe('which attempts were credited, read from the lab runs around them', () => {
+    const SHA = 'ab'.repeat(32)
+    const run = (at: string, provenance: string, sha: string | undefined = SHA, ref = 'lab:kv-block-manager'): ProveEventLike => ({ kind: 'lab-check', ref, at, day: at.slice(0, 10), provenance, ...(sha === undefined ? {} : { wasmSha256: sha }) })
+    const prove = (at: string, sha: string | null = SHA, extra: object = {}): ProveEventLike => ({
+      ...ev(at, 'prove:kv-block-manager', { ...v2(5, 6), ...extra }),
+      ...(sha === null ? {} : { wasmSha256: sha }),
+    })
+    const credited = (events: ProveEventLike[]) => attemptsOf(events, 'kv-block-manager').map((a) => a.credited !== false)
+
+    test('an attempt on the module the latest run graded unseen is credited', () => {
+      expect(credited([run('2026-10-01T09:00:00.000Z', 'unseen'), prove('2026-10-01T10:00:00.000Z')])).toEqual([true])
+    })
+
+    test('no run, a run that was not unseen, another module, a reference build, or a run after the attempt: not credited', () => {
+      const at = '2026-10-01T10:00:00.000Z'
+      expect(credited([prove(at)])).toEqual([false])
+      expect(credited([run('2026-10-01T09:00:00.000Z', 'lab-green'), prove(at)])).toEqual([false])
+      expect(credited([run('2026-10-01T09:00:00.000Z', 'unseen', 'cd'.repeat(32)), prove(at)])).toEqual([false])
+      expect(credited([run('2026-10-01T09:00:00.000Z', 'unseen', SHA, 'lab:kv-block-manager@reference'), prove(at)])).toEqual([false])
+      expect(credited([run('2026-10-01T11:00:00.000Z', 'unseen'), prove(at)])).toEqual([false])
+      expect(credited([run('2026-10-01T09:00:00.000Z', 'unseen'), prove(at, null)])).toEqual([false])
+    })
+
+    test('the latest run decides: a later run that was not unseen takes the credit away from the next attempt', () => {
+      const events = [
+        run('2026-10-01T09:00:00.000Z', 'unseen'),
+        prove('2026-10-01T10:00:00.000Z'),
+        run('2026-10-01T11:00:00.000Z', 'lab-green'),
+        prove('2026-10-01T12:00:00.000Z'),
+      ]
+      expect(credited(events)).toEqual([true, false])
+    })
+
+    test('a 30-day return is never a credited attempt, even on an unseen-graded module', () => {
+      const events = [run('2026-10-01T09:00:00.000Z', 'unseen'), prove('2026-10-01T10:00:00.000Z', SHA, { return: true })]
+      expect(credited(events)).toEqual([false])
+    })
+
+    test('a practice miss that was not credited leaves the retry window open; a credited miss closes it', () => {
+      const miss = '2026-10-01T10:00:00.000Z'
+      const now = Date.parse(miss) + H
+      expect(retryWindow(attemptsOf([prove(miss)], 'kv-block-manager'), now)).toEqual({ open: true, opensAt: null })
+      expect(retryWindow(attemptsOf([run('2026-10-01T09:00:00.000Z', 'unseen'), prove(miss)], 'kv-block-manager'), now)).toEqual({ open: false, opensAt: Date.parse(miss) + RETRY_AFTER_MS })
+      expect(retryWindow(attemptsOf([run('2026-10-01T09:00:00.000Z', 'unseen'), prove(miss, SHA, { return: true })], 'kv-block-manager'), now).open).toBe(true)
+    })
   })
 
   test('the first prove event, v1 or v2, of that lab', () => {

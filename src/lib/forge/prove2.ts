@@ -54,6 +54,9 @@ export interface ProveEventLike {
   ref: string
   at: string
   day: string
+  /** Of a `lab-check` event: the credit its run earned, and the module it graded (`attemptsOf` reads both). */
+  provenance?: string
+  wasmSha256?: string
   data?: unknown
 }
 
@@ -68,14 +71,30 @@ function sameAnswer(a: number | number[] | null, b: number | number[] | null): b
 /**
  * The v2 attempts among a lab's `prove` events, oldest first. v1 events (and anything malformed) are skipped: a v1
  * attempt neither opens nor waits out a v2 retry. Right means the recorded answer equals the recorded actual.
+ *
+ * Whether an attempt was credited is read back the way `proveFromModule` decided it: the lab's latest run at or before
+ * the attempt (a `lab-check` on `lab:<id>`, never an `@reference` build) must have had provenance `unseen` and the
+ * attempt's `wasmSha256`. Any other attempt, such as a practice miss on a module that was not graded `unseen`, is
+ * `credited: false` and never opens a 24 h wait. A 30-day return (`data.return`) is not a credited attempt either: it is
+ * a recall check on a lab already proved, so a miss there starts no wait, and a return never waits one out.
  */
 export function attemptsOf(events: readonly ProveEventLike[], labId: string): Prove2Attempt[] {
+  const runs = events
+    .filter((e) => e.kind === 'lab-check' && e.ref === `lab:${labId}`)
+    .map((e, i) => ({ t: ms(e.at), i, e }))
+    .sort((a, b) => a.t - b.t || a.i - b.i)
+  const creditedAt = (at: string, sha: string | undefined): boolean => {
+    let latest: ProveEventLike | null = null
+    for (const r of runs) if (r.t <= ms(at)) latest = r.e
+    return latest !== null && latest.provenance === 'unseen' && sha !== undefined && latest.wasmSha256 === sha
+  }
   const out: Prove2Attempt[] = []
   for (const e of events) {
     if (e.kind !== 'prove' || e.ref !== `prove:${labId}`) continue
     const d = e.data as Partial<ProveDataV2> | undefined
     if (typeof d !== 'object' || d === null || d.v !== 2 || typeof d.qid !== 'string' || !isNumberOrIds(d.answer)) continue
-    out.push({ at: e.at, qid: d.qid, right: d.actual !== undefined && sameAnswer(d.answer, d.actual) })
+    const credited = d.return !== true && creditedAt(e.at, e.wasmSha256)
+    out.push({ at: e.at, qid: d.qid, right: d.actual !== undefined && sameAnswer(d.answer, d.actual), ...(credited ? {} : { credited: false as const }) })
   }
   return out.sort((a, b) => ms(a.at) - ms(b.at))
 }
@@ -326,7 +345,7 @@ export async function proveFromModule(i: ProveAttemptInput): Promise<ProveAttemp
     ...(i.ms === undefined ? {} : { ms: i.ms }),
     ...(i.ret ? { ret: true } : {}),
   })
-  const opensAt = elig.credited ? (grade.right ? null : i.now + RETRY_AFTER_MS) : elig.reason === 'retry' ? (elig.opensAt ?? null) : null
+  const opensAt = elig.credited ? (grade.right || i.ret ? null : i.now + RETRY_AFTER_MS) : elig.reason === 'retry' ? (elig.opensAt ?? null) : null
   return { kind: 'graded', grade, eligibility: elig, result, opensAt }
 }
 

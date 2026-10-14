@@ -166,6 +166,7 @@ describe('driveLabCalls: one budget for the whole list', () => {
     const err = await run.catch((e: unknown) => e)
     expect(err).toBeInstanceOf(LabTimeoutError)
     expect((err as LabTimeoutError).title).toBe('timed out after 2 s')
+    expect((err as LabTimeoutError).message).toBe('your module did not answer all 2 calls within 2 s, so the grader stopped it. Look for an infinite loop in the code that handles them.')
     expect(h.discarded).toEqual([0])
   })
 
