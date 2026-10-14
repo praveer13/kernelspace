@@ -12,9 +12,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The unit suite runs in its own job, beside the gates below, so the two finish in about half the time.
+  # On a GitHub runner the suite takes about 6 minutes (twice this repo's dev host) and the gates about 4.
   fast-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,9 +58,6 @@ jobs:
       # Wave 2 (docs/specs/wave-2.md §15.2): a stub that prints "pending: 2c-04" until the compile bank lands.
       - run: bun run verify:rust-items
 
-      # Ledger core properties (spec docs/specs/ledger-v3.md §13): pure, no browser needed.
-      - run: bun run test
-
       - run: npm run build
 
       # Bundle budget (PLAN-100X §7.3): the entry chunk must stay <= 250 KB gzip.
@@ -66,3 +65,28 @@ jobs:
 
       - name: Export freshness (if this fails the committed export is stale; run bun scripts/export-lessons-md.ts and commit)
         run: bun scripts/export-lessons-md.ts && git diff --exit-code -- public/lessons-md public/llms.txt
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # The suite runs under Bun, pinned as in deploy.yml.
+      - name: Set up pinned Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - run: npm ci
+
+      # Unit and property suites (ledger core: spec docs/specs/ledger-v3.md §13): pure, no browser needed.
+      # package.json gives every test a 20 s default limit; a GitHub runner is about twice as slow as the dev host.
+      - run: bun run test

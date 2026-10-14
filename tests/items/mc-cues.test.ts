@@ -37,7 +37,9 @@ import demo from './fixture-family'
 
 const LEVELS = [0, 1, 2, 3] as const
 /** The tests that walk every family (each new family adds choice variants): Bun's 5 s default is too tight on a loaded machine. */
-const SLOW = 30000
+// the cue suites sample every family at 200 to 1,000 seeds: the slowest takes about 24.5 s on a GitHub runner,
+// about twice this host's time, so the limit leaves room for a slow runner
+const SLOW = 90_000
 const PLANE: VariantSpec = { id: 'which-plane', title: 'Which plane', kcs: ['t5.kv-bytes-per-token'], levels: LEVELS, nsec: 20 }
 
 /** A family whose one choice variant draws its options from `options(seed)`; the key is the option with `key: true`. */
