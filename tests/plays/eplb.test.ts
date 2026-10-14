@@ -10,6 +10,7 @@ import { MemoryRouter } from 'react-router'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import Board, { Layer, Predict } from '../../src/components/play/eplb/Board'
+import Compose from '../../src/components/play/eplb/Compose'
 import Debrief from '../../src/components/play/eplb/Debrief'
 import Mirror from '../../src/components/play/eplb/Mirror'
 import EplbPlay from '../../src/components/play/eplb/Play'
@@ -21,6 +22,7 @@ import {
   EPLB_COMPOSE_FRESH,
   EPLB_DIAL_DEFS,
   EPLB_LESSON,
+  EPLB_PLAY_REF,
   EPLB_RIGHT_FACTOR,
   EPLB_TURNS,
   FRESH_LOADS_TO_PASS,
@@ -36,6 +38,8 @@ import {
   errorLine,
   freshSession,
   gapText,
+  ledgerTally,
+  mergeTally,
   nextTurnLine,
   nextWithRoom,
   parsePrediction,
@@ -50,6 +54,7 @@ import {
   skip,
   stageOf,
   tallyAfter,
+  tallyFromEvents,
   tallyLine,
   viewOf,
   withDial,
@@ -62,6 +67,8 @@ import { KC } from '../../src/data/kc/ids'
 import { KCS } from '../../src/data/kc'
 import { EPLB, EPLB_PRODUCTION_ROWS, PLAYS, PLAY_IDS, PLAY_PRODUCTION_ROWS, getPlay } from '../../src/data/plays'
 import { PLAY_MINUTES } from '../../src/lib/economy-table'
+import type { LedgerEvent, PlayResult } from '../../src/lib/ledger/types'
+import { useProgress } from '../../src/lib/progress'
 import { estimateScore } from '../../src/lib/items/grade'
 import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
@@ -392,7 +399,7 @@ describe('the debrief (§5.2)', () => {
     expect(div.decision.kind).toBe('place')
     expect(passedByHand(d)).toBe(false)
     const html = renderToString(createElement(MemoryRouter, null, createElement(Debrief, { session: d, tally: EMPTY_TALLY, onAgain: () => {}, mode: 'page' })))
-    expect(html).toContain(`The first divergence is at turn ${div.decision.op + 1}`)
+    expect(html).toContain(`Where the layer was lost: turn ${div.decision.op + 1}`)
     expect(html).toContain(div.explanation.replace(/&/g, '&amp;').replace(/'/g, '&#x27;'))
     expect(div.decision.sentence).toContain(`At turn ${div.decision.op + 1}`)
     expect(div.decision.sentence).toContain('the least loaded with a free slot')
@@ -413,6 +420,35 @@ describe('the debrief (§5.2)', () => {
     expect(html).toContain('data-ranking')
     expect(html).toContain('you copied this')
     expect(html).toContain('the reference copies this')
+  })
+
+  test('a walk that differs at several turns is told where the layer was lost, the last turn the reference could recover from, not the first that differed', () => {
+    // copy the third-heaviest expert per copy at turns 1 to 3, then follow the reference's rule
+    const differs: number[] = []
+    const thirdHeaviest: Learner = {
+      copy: (v) => {
+        const ref = GHOST_LEARNER.copy(v)
+        if (v.turn >= 3) return ref
+        const order = v.perCopy.map((units, e) => ({ units, e })).sort((a, b) => b.units - a.units || a.e - b.e)
+        const pick = order[2].e
+        if (pick !== ref) differs.push(v.turn + 1)
+        return pick
+      },
+      place: GHOST_LEARNER.place,
+    }
+    const d = debrief(playOut(practiceSession(), thirdHeaviest))
+    const div = d.summary?.divergence
+    if (!div) throw new Error('no divergence')
+    const turn = div.decision.op + 1
+    // measured on the practice load: the copies differ from the reference's at turns 1, 2 and 3, and the walk back names turn 3
+    expect(differs).toEqual([1, 2, 3])
+    expect(turn).toBe(3)
+    expect(differs.filter((t) => t < turn).length).toBeGreaterThan(0)
+    expect(div.decision.sentence).toContain(`At turn ${turn}`)
+    expect(div.decision.sentence).toContain('From your layer after that turn, even the reference')
+    const html = renderToString(createElement(MemoryRouter, null, createElement(Debrief, { session: d, tally: EMPTY_TALLY, onAgain: () => {}, mode: 'page' })))
+    expect(html).toContain(`Where the layer was lost: turn ${turn}</h3>`)
+    expect(html).not.toContain('first divergence')
   })
 
   test('a skipped layer says so and does not count toward the pass', () => {
@@ -516,9 +552,23 @@ describe('the ledger (§5.2)', () => {
 
     const loads = practiceLoads()
     const rep = eplbComposeReport(REFERENCE_EPLB_SPEC, composeLoads(loads, 1))
-    const c = eplbComposeRecord(REFERENCE_EPLB_SPEC, rep, EPLB_PRACTICE_SEED, 1)
+    const c = eplbComposeRecord(REFERENCE_EPLB_SPEC, rep, practiceSession(), 1)
     expect(c).toMatchObject({ playId: 'eplb', ok: true, provenance: 'practice', seed: EPLB_PRACTICE_SEED, data: { phase: 'compose', equivalent: true, spec: REFERENCE_EPLB_SPEC, kcs: ['t6.expert-load-balance', 't6.all-to-all'] } })
     expect(c.data.metric).toEqual({ name: 'imbalance', mine: rep.rows[0].mine, ghost: rep.rows[0].ghost, lowerIsBetter: true })
+  })
+
+  test('a Compose run records the load it ran on with that load’s provenance, as the play’s record does: practice, or unseen for a new load', () => {
+    for (const s of [practiceSession(), freshSession(31)]) {
+      const rep = eplbComposeReport(REFERENCE_EPLB_SPEC, composeLoads(s.loads, 2))
+      const c = eplbComposeRecord(REFERENCE_EPLB_SPEC, rep, s, 1)
+      const play = recordOf(debrief(playOut(s, GHOST_LEARNER)))
+      expect([c.seed, c.provenance]).toEqual([s.seed, s.provenance])
+      expect([c.seed, c.provenance]).toEqual([play?.seed, play?.provenance])
+      // the metric is that load's: the table's first row
+      expect(c.data.metric).toMatchObject({ mine: rep.rows[0].mine, ghost: rep.rows[0].ghost })
+    }
+    expect(freshSession(31).provenance).toBe('unseen')
+    expect(freshSession(31).seed).not.toBe(EPLB_PRACTICE_SEED)
   })
 
   test('the events pass the ledger’s codec and fold: one prediction, one play and one Compose run; passing the play marks it done', async () => {
@@ -533,7 +583,7 @@ describe('the ledger (§5.2)', () => {
     if (!play) throw new Error('no result')
     state.recordPlay(play)
     const rep = eplbComposeReport(REFERENCE_EPLB_SPEC, composeLoads(done.loads, 3))
-    state.recordPlay(eplbComposeRecord(REFERENCE_EPLB_SPEC, rep, done.seed, 1))
+    state.recordPlay(eplbComposeRecord(REFERENCE_EPLB_SPEC, rep, done, 1))
     await tab.progress.controls.flush()
     const events = await (await tab.engine()).events()
     expect(events.filter((e) => e.kind === 'predict')).toHaveLength(1)
@@ -554,6 +604,70 @@ describe('the ledger (§5.2)', () => {
     const events = await (await tab.engine()).events()
     expect(events.filter((e) => e.kind === 'play')).toHaveLength(1)
     expect(tab.progress.getState().aggregate.plays.eplb?.done ?? false).toBe(false)
+  })
+
+  test('the pass tally survives a reload: rebuilt from the recorded plays, a practice pass and two new-load passes read 2 of 3', async () => {
+    const p = makeProfile()
+    const tab = startTab(p)
+    const record = (s: EplbSession) => {
+      const r = recordOf(s)
+      if (!r) throw new Error('no result')
+      tab.progress.getState().recordPlay(r)
+    }
+    const practice = debrief(playOut(practiceSession(), GHOST_LEARNER))
+    const first = debrief(playOut(freshSession(77), GHOST_LEARNER))
+    const second = debrief(playOut(freshSession(78), GHOST_LEARNER))
+    // what adds nothing: the first new load passed again, a skipped layer (the reference finished it, so it is no pass even on a
+    // load the learner never passed), a miss, and a Compose run that is ok on a new load
+    const again = debrief(playOut(freshSession(77), GHOST_LEARNER))
+    const skipped = debrief(skip(playOut(freshSession(79), GHOST_LEARNER, 5)))
+    const miss = debrief(playOut(freshSession(80), FILL_IN_ORDER))
+    const composed = freshSession(81)
+    for (const s of [practice, first, second, again, skipped, miss]) record(s)
+    tab.progress.getState().recordPlay(eplbComposeRecord(REFERENCE_EPLB_SPEC, eplbComposeReport(REFERENCE_EPLB_SPEC, composeLoads(composed.loads, 4)), composed, 1))
+    expect([first, second, skipped, miss, composed].map((s) => s.provenance)).toEqual(['unseen', 'unseen', 'unseen', 'unseen', 'unseen'])
+    expect(new Set([first.seed, second.seed, skipped.seed, miss.seed, composed.seed]).size).toBe(5)
+    expect(again.seed).toBe(first.seed)
+    expect(skipped.summary?.skipped).toBe(true)
+    expect(passedByHand(miss)).toBe(false)
+
+    // the page's own count, as it stood before the reload
+    const onPage = [practice, first, second, again, skipped, miss].reduce(tallyAfter, EMPTY_TALLY)
+    await tab.progress.controls.flush()
+
+    // a reload: a new tab on the same storage, reading the ledger through the façade's engine, as Play.tsx does at mount
+    const reload = startTab(p)
+    const held = await ledgerTally(await reload.progress.controls.engine())
+    expect(held).toEqual({ practice: true, fresh: [first.seed, second.seed] })
+    expect(held).toEqual(onPage)
+    expect(tallyLine(held)).toBe('Within 0.05 of the reference by hand: practice load yes, 2 of 3 new loads.')
+    expect(passed(held)).toBe(false)
+
+    // the events alone, without the engine's filter: Compose, other plays and other refs are not plays by hand on this one
+    const all = await (await reload.progress.controls.engine()).events()
+    expect(all.filter((e) => e.kind === 'play')).toHaveLength(7)
+    expect(tallyFromEvents(all)).toEqual(held)
+
+    // merged with what the page added before the read arrived: a union, once per load, in either order
+    const third = debrief(playOut(freshSession(82), GHOST_LEARNER))
+    const local = tallyAfter(tallyAfter(EMPTY_TALLY, third), first)
+    expect(mergeTally(local, held)).toEqual({ practice: true, fresh: [third.seed, first.seed, second.seed] })
+    expect(passed(mergeTally(held, local))).toBe(true)
+    expect(mergeTally(held, held)).toBe(held)
+  })
+
+  test('an empty ledger, and events that are not passes by hand, leave the tally empty', () => {
+    expect(tallyFromEvents([])).toEqual(EMPTY_TALLY)
+    const base = { id: 'x', v: 3, at: '2026-10-14T00:00:00.000Z', tz: 0, day: '2026-10-14', dev: 'd', score: 1, ok: true, seed: 5 }
+    const events = [
+      { ...base, kind: 'play', ref: EPLB_PLAY_REF, provenance: 'unseen', data: { phase: 'compose' } },
+      { ...base, kind: 'play', ref: EPLB_PLAY_REF, provenance: 'unseen', data: { phase: 'play', skipped: true } },
+      { ...base, kind: 'play', ref: EPLB_PLAY_REF, provenance: 'unseen', ok: false, data: { phase: 'play' } },
+      { ...base, kind: 'play', ref: 'play:scheduler', provenance: 'unseen', data: { phase: 'play' } },
+      { ...base, kind: 'play', ref: `${EPLB_PLAY_REF}x`, provenance: 'unseen', data: { phase: 'play' } },
+      { ...base, kind: 'item', ref: EPLB_PLAY_REF, provenance: 'unseen', data: { phase: 'play' } },
+    ] as unknown as LedgerEvent[]
+    expect(tallyFromEvents(events)).toEqual(EMPTY_TALLY)
   })
 })
 
@@ -819,6 +933,59 @@ describe('the board, mounted: arrows move, Enter places, and the filled slot is 
     expect(m.container.querySelector('[data-over]')).not.toBeNull()
     await m.unmount()
   })
+})
+
+/* ------------------------------------------------------------------ */
+/* Compose, mounted                                                     */
+/* ------------------------------------------------------------------ */
+
+describe('Compose, mounted: a run announces its verdict only, and records the load it ran on', () => {
+  let dom: DomKit
+  const recorded: PlayResult[] = []
+  let recordPlay: (r: PlayResult) => void
+  beforeAll(async () => {
+    dom = await installDom()
+    // the app's store, with its write swapped for a list, so a run writes nothing outside the test
+    recordPlay = useProgress.getState().recordPlay
+    useProgress.setState({ recordPlay: (r: PlayResult) => void recorded.push(r) })
+  })
+  afterAll(async () => {
+    useProgress.setState({ recordPlay })
+    await dom.uninstall()
+  })
+
+  const runButton = (c: MiniElement) => [...c.querySelectorAll('button')].find((b) => b.textContent === 'Run my policy') as unknown as MiniElement
+
+  for (const s of [practiceSession(), freshSession(31)]) {
+    test(`on ${s.provenance === 'practice' ? 'the practice load' : 'a new load'}: the live region holds the note alone, and the table sits outside it`, async () => {
+      recorded.length = 0
+      const m = await dom.mount(createElement(Compose, { loads: s.loads, load: { seed: s.seed, provenance: s.provenance } }))
+      const live = m.container.querySelectorAll('[aria-live]')
+      expect(live.length).toBe(1)
+      const region = live[0]
+      // there before the first run, so the first verdict is announced, and empty until then
+      expect(region.getAttribute('role')).toBe('status')
+      expect(region.textContent).toBe('')
+      expect(m.container.querySelector('table')).toBeNull()
+
+      await dom.press(runButton(m.container))
+      const table = m.container.querySelector('table')
+      expect(table).not.toBeNull()
+      expect(region.querySelector('table')).toBeNull()
+      expect(region.querySelectorAll('*').length).toBe(0)
+      // the plainest policy misses, and the region says so in the report's note, nothing more
+      const note = region.textContent ?? ''
+      expect(note).toMatch(/^Your spec was within 0\.05 of the reference on \d of 6 loads\. On .+ it ends at \d\.\d\d× against the reference's \d\.\d\d×\. Change a dial and run it again\.$/)
+      expect(note).not.toContain('Imbalance')
+      expect(m.container.querySelector('[data-compose-result]')?.getAttribute('data-ok')).toBe('no')
+      expect(m.container.querySelector('[data-compose-result]')?.textContent).toContain(note)
+
+      // the record: the play's load, with the provenance the play's own record carries
+      expect(recorded).toHaveLength(1)
+      expect(recorded[0]).toMatchObject({ playId: 'eplb', seed: s.seed, provenance: s.provenance, data: { phase: 'compose', spec: DEFAULT_EPLB_SPEC } })
+      await m.unmount()
+    })
+  }
 })
 
 /* ------------------------------------------------------------------ */

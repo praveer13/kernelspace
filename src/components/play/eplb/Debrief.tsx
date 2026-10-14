@@ -1,7 +1,9 @@
 /**
  * The EPLB debrief (docs/specs/wave-3.md §5.2): the first place the hidden reference appears. It gives the prediction's error,
- * then the first turn from which handing the rest of the layer to DeepSeek EPLB's rule would have met the reference, in the
- * sentences `eplbDivergence` writes from the learner's own layer, and shows the learner's final layer beside the reference's,
+ * then where the layer was lost: the last turn before which handing the rest of the layer to DeepSeek EPLB's rule would still have
+ * recovered it (to within 0.05 of the reference, or to the reference itself for a layer that passed), in the sentences
+ * `eplbDivergence` writes from the learner's own layer. Earlier turns may also differ from the reference; the heading names this
+ * one and says what it is. It then shows the learner's final layer beside the reference's,
  * each with its DOM tables. A layer at or below the reference's has no divergence to name. Nothing here runs before the learner
  * asks for it.
  */
@@ -61,7 +63,9 @@ export default function Debrief({ session, tally, onAgain, mode }: DebriefProps)
   const ghost = eplbView(session.play.ghost.state)
 
   let title = 'You matched the reference'
-  if (decision) title = `The first divergence is at turn ${decision.op + 1}`
+  // The turn `eplbDivergence` names is the last one after which even the reference's rule could not recover the layer, not the
+  // first that differed from it: earlier turns may differ too. The heading says which, as the sentence's consequence clause does.
+  if (decision) title = `Where the layer was lost: turn ${decision.op + 1}`
   else if (summary.mineUnits < summary.ghostUnits) title = 'You finished below the reference'
 
   return (

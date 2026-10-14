@@ -8,7 +8,7 @@
  * is also the DOM twin of the board. The hidden reference, DeepSeek EPLB's rule, runs inside the session (the lockstep runner
  * plays it up front) but nothing on this screen reads it: the debrief is the only reader, and it renders only after "See the
  * debrief". The prediction is recorded the moment it is locked in, the play when the debrief opens, and each Compose spec when it
- * runs.
+ * runs. The pass tally is read back from those play records at mount, so a reload keeps it.
  */
 
 import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -29,6 +29,8 @@ import {
   copyExpert,
   debrief,
   freshSession,
+  ledgerTally,
+  mergeTally,
   placeOn,
   practiceSession,
   predictEvent,
@@ -78,11 +80,12 @@ export function AfterDebriefFailed() {
 }
 
 /** Compose and the In-production card, lazy: a failed load shows the retry message instead of unmounting the play. */
-function AfterDebrief({ loads, seed }: { loads: EplbSession['loads']; seed: number }) {
+function AfterDebrief({ session }: { session: EplbSession }) {
+  const { loads, seed, provenance } = session
   return (
     <ErrorBoundary fallback={<AfterDebriefFailed />}>
       <Suspense fallback={<AfterDebriefLoading />}>
-        <Compose key={seed} loads={loads} seed={seed} />
+        <Compose key={seed} loads={loads} load={{ seed, provenance }} />
         <ProductionCard />
       </Suspense>
     </ErrorBoundary>
@@ -127,6 +130,25 @@ export default function EplbPlay({ mode }: EplbPlayProps) {
     shownAt.current ??= Date.now()
   }, [])
 
+  // The tally is the ledger's: every debriefed play is recorded with its `ok`, provenance and load seed, so a reload reads back
+  // what earlier sessions passed. Merged, not replaced, so a debrief that lands before the read keeps its pass. A ledger that
+  // cannot be read leaves this page's own count.
+  useEffect(() => {
+    let live = true
+    useProgress.controls
+      .engine()
+      .then(ledgerTally)
+      .then(
+        (held) => {
+          if (live) setTally((t) => mergeTally(t, held))
+        },
+        () => undefined,
+      )
+    return () => {
+      live = false
+    }
+  }, [])
+
   const onPredict = useCallback(
     (value: number) => {
       const next = withPrediction(session, value)
@@ -162,7 +184,7 @@ export default function EplbPlay({ mode }: EplbPlayProps) {
     return (
       <div className="space-y-6" data-play={EPLB.id} data-mode={mode} data-phase-now="debrief">
         <Debrief session={session} tally={tally} onAgain={again} mode={mode} />
-        <AfterDebrief loads={session.loads} seed={session.seed} />
+        <AfterDebrief session={session} />
         {mode === 'embed' && (
           <p className="font-mono text-[11px] text-text-3">
             <Link to={`/play/${EPLB.id}`} className="hover:text-accent">
