@@ -313,19 +313,29 @@ export interface Figure {
 const NUM = String.raw`[-−]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)(?:e[-+−]?\d+)?k?`
 /**
  * A number then a unit (%, ms, s, iters, tok/s, req/s or $, with their spelled-out forms, in any case), or $ then a
- * number. A unit ends where a word does, so a following slash is fine (`12 ms/token`, `5 s/req`).
+ * number. A unit ends where a word does, so a following slash is fine (`12 ms/token`, `5 s/req`). A rate's second is
+ * written `/s`, `/sec` or `/second(s)`.
  */
 const FIGURE = new RegExp(
-  String.raw`(?<![\w.$])(?:\$\s?${NUM}|${NUM}\s?(?:%|\$|(?:tok(?:ens)?|req(?:uests)?)\/s(?!\w)|(?:ms|milliseconds?|s|secs?|seconds?|iters?|iterations?)(?!\w)))`,
+  String.raw`(?<![\w.$])(?:\$\s?${NUM}|${NUM}\s?(?:%|\$|(?:tok(?:ens)?|req(?:uests)?)\/s(?:ec(?:ond)?s?)?(?!\w)|(?:ms|milliseconds?|s|secs?|seconds?|iters?|iterations?)(?!\w)))`,
   'gi',
 )
+
+/**
+ * "10s of ms" is "tens of ms", a plural and not ten seconds: a power of ten with an attached `s`, then `of` and a unit
+ * word. (`2s of stall` and `10 s of ms` are still figures: only the run-together plural reads as tens.)
+ */
+const TENS_OF = /^10+s$/i
+const OF_A_UNIT = /^\s+of\s+(?:ms|milliseconds?|secs?|seconds?|iters?|iterations?|tok(?:ens)?|req(?:uests)?)(?!\w)/i
 
 /** Every %, ms, s, iters, tok/s, req/s or $ figure in `text` that sits outside a receipt token, in order (§10.3). */
 export function uncitedFigures(text: string): Figure[] {
   // blank each token (same length, so indices hold) before looking for figures
   let blanked = text
   for (const r of parseReceipts(text)) blanked = blanked.slice(0, r.index) + ' '.repeat(r.length) + blanked.slice(r.index + r.length)
-  return Array.from(blanked.matchAll(FIGURE), (m) => ({ text: m[0], index: m.index }))
+  return Array.from(blanked.matchAll(FIGURE))
+    .filter((m) => !(TENS_OF.test(m[0]) && OF_A_UNIT.test(blanked.slice(m.index + m[0].length))))
+    .map((m) => ({ text: m[0], index: m.index }))
 }
 
 /** The counts an act records in `FleetActData.receipts`: receipts cited, receipts verified, figures left uncited. */
