@@ -168,6 +168,16 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>,
     },
     {
       type: 'prose',
+      md: `## Raster order: launch tiles so a wave shares L2
+
+A tile has one more dial than its size: *when* it runs. A big GEMM has far more output tiles than SMs, so the grid runs in **waves**. Say one CTA sits on each of the H100's 132 SMs (a persistent kernel); the first 132 tiles in launch order are the first wave. Two tiles of the wave in the same tile row read the same A slab, and two in the same tile column read the same B slab. The first to ask pulls the slab from HBM into **L2** (50 MB, shared by every SM); the others hit it there. So a wave's HBM traffic is its *distinct* slabs, not the sum over its tiles, and its intensity is \`132·2·Tm·Tn ÷ ((rows·Tm + cols·Tn)·b)\`, with \`rows\` and \`cols\` the distinct tile rows and columns the wave touches. It is the cube argument again, one level up: FLOPs are the wave's volume, bytes are its lit surface.
+
+Take a 16,384³ FP16 GEMM cut into 128 × 128 tiles, a grid of 128 × 128 tiles. **Row-major** launch hands out tiles along a tile row, so 132 tiles are one whole row (128 tiles) plus 4 of the next: 2 A panels and 128 B panels. Per step of K that is \`132·2·128·128 = 4,325,376\` FLOPs against \`(2·128 + 128·128)·2 = 33,280\` bytes, **≈ 130 FLOP/B**. A **grouped** launch (Triton's \`GROUP_SIZE_M\`) walks down a group of tile rows before moving one column right, so the same 132 tiles form a block of 11 rows by 12 columns: \`(11·128 + 12·128)·2 = 5,888\` bytes for the same FLOPs, **≈ 735 FLOP/B**. That is **5.7×** from launch order alone, with the same tiles, the same math and the same kernel. A square-ish wave has less surface for its area.
+
+Two limits. The shared slabs must stay in L2 while the wave runs: with two 64-deep stages the row-major wave keeps about 4 MB in flight and the grouped one under 1 MB, both far inside 50 MB. And nothing carries over between waves: A and B are 512 MiB each at this size, so the next wave starts cold. Triton's matmul tutorial launches in groups of 8 tile rows in every CUDA config it lists; 11 here is only the group height that makes 132 tiles a clean 11 × 12 block.`,
+    },
+    {
+      type: 'prose',
       md: `## FlashAttention: the same trick, one softmax harder
 
 Standard attention materializes the \`N × N\` score matrix \`S = QKᵀ\` in HBM — for a 128k-context model that matrix is *terabytes*-scale traffic and tens of GB of capacity. The 2022 FlashAttention paper (Tri Dao et al.) noticed two things: (1) attention is three matmul-shaped ops around a softmax, and (2) the softmax denominator is just a **reduction** (T4.L5), which can be computed *incrementally*. So: tile Q, K, V into SRAM-sized blocks; for each KV block, compute the partial scores *in SRAM*, update the softmax statistics **online** (rescaling the running max and sum — the "online softmax"), and accumulate the output — never writing the N×N matrix to HBM at all.
@@ -183,6 +193,11 @@ The result: the extra memory drops from \`O(N²)\` to \`O(N)\`, HBM accesses fal
       type: 'callout',
       variant: 'info',
       md: `Why not just bigger tiles forever? SRAM is 228 KiB/SM and registers 256 KiB/SM — tile size trades against **occupancy** (T4.L4): a giant tile leaves room for few warps, and latency-hiding suffers. Real GEMM libraries (cuBLAS, CUTLASS) auto-tune tile shapes per GPU generation. The craft is balancing reuse (AI) against residency (occupancy) — two of this track's lessons pulling in opposite directions, as physics intended.`,
+    },
+    {
+      type: 'play',
+      playId: 'tiling-cube',
+      title: 'Predict the intensity, then turn the cube',
     },
     {
       type: 'prose',
@@ -264,6 +279,25 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
             'Bank conflicts depend on access stride, and padding fixes them at any tile size. They are not what limits tile growth.',
           ],
           kcs: ['t4.tiling-intensity', 't4.occupancy'],
+        },
+        {
+          q: 'On a 16,384³ FP16 GEMM with 128 × 128 tiles, one wave of 132 CTAs does the same FLOPs under either launch order. A row-major wave reaches about 130 FLOP per HBM byte and a grouped one about 735. What changed?',
+          options: [
+            'The grouped wave touches far fewer distinct A and B slabs, so L2 serves most of the repeat reads of those slabs',
+            'The grouped order cuts the math in each tile, because tiles in one group skip part of their loop over K',
+            'The grouped order widens every tile, so each CTA stages a larger slab in its 228 KiB of shared memory and reuses it more',
+            'The grouped order lines up the loads of each CTA, so every HBM transaction carries more useful bytes',
+          ],
+          correct: [0],
+          explanation:
+            'Launch order decides which slabs a wave has in common. Row-major spreads 132 tiles over 2 tile rows and 128 columns, so it reads 130 panels; a grouped 11 × 12 block reads 23. The FLOPs, the tile and the kernel are unchanged, so intensity rises by the ratio of panel bytes, 5.7×.',
+          why: [
+            'Right: the wave is the same 132 tiles, but 11 rows by 12 columns share slabs through L2 where a long strip shares few. Fewer distinct panels means fewer HBM bytes for the same FLOPs.',
+            'Each tile still runs its whole K loop and does 2·128·128·K FLOPs, in either order. Grouping changes which tiles run together, not how much math each one does.',
+            'The tile stays 128 × 128 and its slabs keep their size. Per-tile reuse, T/2, is the same; the gain comes from tiles sharing slabs with each other through L2.',
+            'Each tile loads its slabs with the same coalesced pattern under either order. Launch order changes which tiles share a slab, not how a single load is laid out.',
+          ],
+          kcs: ['t4.raster-l2-reuse'],
         },
         {
           q: 'The closest database analog to matmul tiling is…',
