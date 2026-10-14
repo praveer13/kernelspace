@@ -91,13 +91,14 @@ describe('pins', () => {
   })
 
   test('the other pins are hand computations that the generator reproduces', () => {
-    expect(prefill.pins.length).toBe(6)
+    expect(prefill.pins.length).toBe(7)
     const truths = prefill.pins.map((p) => truthOf(p.make()))
     expect(truths[1]).toBeCloseTo((2000 / claimNumber(IN_TPS) / (500 / claimNumber(OUT_TPS))), 9) // gen-literal-ok: hand check
     expect(truths[2]).toBe(1.5) // 6,000 × 10 ÷ 20,000 = 3 prefill GPUs; 300 × 10 ÷ 1,500 = 2 decode GPUs
     expect(truths[3]).toBeCloseTo(131_072 * 20_000 / 1e9, 9) // gen-literal-ok: hand check
     expect(truths[4]).toBeCloseTo(100, 9) // gen-literal-ok: hand check
     expect(truths[5]).toBeCloseTo(0.9, 9) // gen-literal-ok: hand check
+    expect(truths[6]).toBeCloseTo((2000 / (claimNumber(IN_TPS) / claimNumber(NODE_GPUS))) * 1000, 9) // gen-literal-ok: hand check
     for (const p of prefill.pins) {
       const i = p.make()
       expect(i.level).toBe(0)
@@ -159,6 +160,30 @@ describe('claim-backed and synthetic scenes', () => {
         for (const i of real) expect(i.claims.some((c) => c.startsWith(`${IN_TPS}@`))).toBe(true)
       }
     }
+  })
+})
+
+describe("SGLang's node: one GPU's rate for a request and for a GPU-second (F6)", () => {
+  test('hit-gap times one request at the per-GPU rate namespace-cost uses, 8 times the node-rate gap, and both stems say why', () => {
+    const pin = prefill.pins.find((p) => p.name.includes("one GPU's share"))!
+    const i = pin.make()
+    expect(i.params).toEqual({ dep: 'sglang', c: 2000 })
+    expect(truthOf(i).toFixed(1)).toBe('305.9')
+    // the whole node's rate would give 38.2 ms, a gap the node's GPU count too small
+    expect(truthOf(i) / ((2000 / claimNumber(IN_TPS)) * 1000)).toBeCloseTo(claimNumber(NODE_GPUS), 9) // gen-literal-ok: hand check
+    expect(i.claims).toEqual([NODE_GPUS, IN_TPS].map((c) => `${c}@${byId[c].verifiedAt}`).sort())
+    for (const variant of ['hit-gap', 'namespace-cost']) {
+      for (const level of LEVELS) {
+        const sg = find(variant, level, (x) => x.params.dep === 'sglang')
+        expect(stem(sg)).toContain('data-parallel')
+        expect(stem(sg)).toContain("one GPU's share of the node rate")
+        const syn = find(variant, level, (x) => x.params.dep === 'synthetic')
+        expect(stem(syn)).toContain('A hypothetical prefill GPU processes')
+      }
+    }
+    expect(stem(i)).toContain("a hit takes its tokens out of that GPU's work")
+    expect(stem(find('namespace-cost', 2, (x) => x.params.dep === 'sglang'))).toContain("A GPU-second is one GPU's work")
+    expect(stem(find('hit-gap', 2, (x) => x.params.dep === 'synthetic'))).toContain("the probe's prompt is prefilled on one such GPU")
   })
 })
 
@@ -239,8 +264,10 @@ describe('the formulas, from the params alone', () => {
     const i = find('hit-gap', 2, (x) => x.params.dep === 'synthetic')
     expect(truthOf(i)).toBeCloseTo((num(i, 'c') / num(i, 'p')) * 1000, 9) // gen-literal-ok: hand check
     const sg = find('hit-gap', 2, (x) => x.params.dep === 'sglang')
-    expect(truthOf(sg)).toBeCloseTo((num(sg, 'c') / claimNumber(IN_TPS)) * 1000, 9) // gen-literal-ok: hand check
+    // one request is prefilled on one GPU of the node (data-parallel attention), so at the node rate over its GPUs
+    expect(truthOf(sg)).toBeCloseTo((num(sg, 'c') / (claimNumber(IN_TPS) / claimNumber(NODE_GPUS))) * 1000, 9) // gen-literal-ok: hand check
     expect(sg.params.p).toBeUndefined()
+    expect(partsText(prefill.solution(sg)[0].text)).toContain('Prefill rate one request gets = node rate ÷ GPUs per node')
     for (const x of all('hit-gap')) {
       expect(truthOf(x)).toBeGreaterThanOrEqual(5)
       expect(truthOf(x)).toBeLessThanOrEqual(2000)
