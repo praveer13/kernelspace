@@ -12,7 +12,7 @@
  * a generated-item response (`src: 'practice'`). The item, the compile family, the one group of the
  * bank it draws from and the item player all load on the click, so the page itself carries none of them.
  */
-import { lazy, Suspense, useId, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useId, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { PermissionTable } from '@/components/lesson/PermissionDiagram'
 import errorsFile from '@/data/aquascope/errors.json'
@@ -149,6 +149,23 @@ function afterClause(f: MuseumFix & { compiles: boolean }): string {
   return f.compiles ? 'rustc accepts it, but it changes what the code does.' : `It does not fix it: the code still fails with ${f.after}.`
 }
 
+/**
+ * A status line that can hold focus. Pressing "Try an item" (or "Another item", or "Try again") unmounts the control that
+ * had focus, so the line that replaces it takes focus while the item loads, and the item takes it from there (ItemCard
+ * `autoFocus`). `owed` is true from the press until the load ends.
+ */
+function Status({ owed, children }: { owed: MutableRefObject<boolean>; children: ReactNode }) {
+  const line = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (owed.current) line.current?.focus()
+  }, [owed])
+  return (
+    <p ref={line} role="status" tabIndex={-1} className="text-body-sm text-text-3">
+      {children}
+    </p>
+  )
+}
+
 /* ------------------------------ the entry ------------------------------ */
 
 /** A practice item and the family that checks it. */
@@ -175,10 +192,16 @@ export default function ErrorEntry({ entry, practice, seed: seedProp }: ErrorEnt
   const [seed, setSeed] = useState(() => seedProp ?? freshSeed())
   // the latest request: an earlier one that lands after "Another item" is dropped
   const asked = useRef(0)
+  // a press is waiting on the load, so focus is owed to a status line, then to the item or to the retry button
+  const owed = useRef(false)
+  useEffect(() => {
+    if (card !== null && card.status !== 'loading') owed.current = false
+  }, [card])
   const trace = traceFor(entry.code)
   const load = (s: number) => {
     if (!practice) return
     const mine = ++asked.current
+    owed.current = true
     setCard({ status: 'loading' })
     practice(entry.code, s).then(
       (got) => {
@@ -315,13 +338,7 @@ export default function ErrorEntry({ entry, practice, seed: seedProp }: ErrorEnt
           ) : (
             <div id={`${ids.practice}-card`} className="mt-2">
               {card.status === 'ready' ? (
-                <Suspense
-                  fallback={
-                    <p role="status" className="text-body-sm text-text-3">
-                      Loading the item…
-                    </p>
-                  }
-                >
+                <Suspense fallback={<Status owed={owed}>Loading the item…</Status>}>
                   <ItemCard
                     key={`${card.inst.rev}:${seed}`}
                     item={{ source: 'gen', inst: card.inst }}
@@ -335,20 +352,23 @@ export default function ErrorEntry({ entry, practice, seed: seedProp }: ErrorEnt
                   />
                 </Suspense>
               ) : card.status === 'loading' ? (
-                <p role="status" className="text-body-sm text-text-3">
-                  Loading an item on {entry.code}…
-                </p>
+                <Status owed={owed}>Loading an item on {entry.code}…</Status>
               ) : card.status === 'failed' ? (
                 <p role="alert" className="text-body-sm text-text-2">
                   The item could not load.{' '}
-                  <button type="button" className="min-h-11 underline underline-offset-2" onClick={() => load(seed)}>
+                  <button
+                    type="button"
+                    ref={(el) => {
+                      if (el && owed.current) el.focus()
+                    }}
+                    className="min-h-11 underline underline-offset-2"
+                    onClick={() => load(seed)}
+                  >
                     Try again
                   </button>
                 </p>
               ) : (
-                <p role="status" className="text-body-sm text-text-3">
-                  No item for {entry.code} yet.
-                </p>
+                <Status owed={owed}>No item for {entry.code} yet.</Status>
               )}
             </div>
           )}
