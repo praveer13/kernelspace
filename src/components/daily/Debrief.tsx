@@ -3,7 +3,7 @@ import type { IncidentClientSession } from '@/lib/fleet-session'
 import {
   BURN_BUDGET,
   CATEGORY_LABELS,
-  FAULT_LABELS,
+  FAULT_SHORT,
   FIXES,
   LIMIT_MINUTES,
   PROBES,
@@ -35,8 +35,9 @@ export interface DebriefProps {
   busy: boolean
   run: FlowRun
   /**
-   * The four boxes the incident ran on, whose they were (docs/specs/wave-2.md §9.7, 2b-21). Left out (Act IV's
-   * drills, which run on reference components) the debrief says nothing about the engine.
+   * The boxes the incident ran on, whose they were: the three that drive a cluster, then an installed prefix router
+   * named as not used (docs/specs/wave-2.md §9.7, D37). Left out (Act IV's drills, which run on reference
+   * components) the debrief says nothing about the engine.
    */
   boxes?: readonly DailyBox[]
   /** Called once with the scored incident, so the page can record it. Keep it stable (useCallback). */
@@ -45,7 +46,7 @@ export interface DebriefProps {
   children?: (result: IncidentFinish) => ReactNode
 }
 
-const hypothesisLabel = (h: Hypothesis | undefined): string => (h === undefined ? 'no hypothesis' : h === 'unsure' ? 'unsure' : `"${FAULT_LABELS[h]}"`)
+const hypothesisLabel = (h: Hypothesis | undefined): string => (h === undefined ? 'no hypothesis' : h === 'unsure' ? 'unsure' : `"${FAULT_SHORT[h]}"`)
 
 /**
  * Steps 5 and 6 of the flow (docs/specs/wave-2.md §9.7): the replay and the debrief. The replay is `finish`: the
@@ -85,8 +86,8 @@ export default function Debrief({ session, source, flow, busy, run, boxes, onRes
   const probes = flow.log.flatMap((e) => (e.kind === 'probe' ? [e] : []))
   const flags = streetlightOf(flow)
   const percent = burnPercent(result.burn)
-  const fixLine = result.fix ? FIXES[result.fix].label : null
-  const expertFix = FIXES[fixFor(result.expert.named)].label
+  const fixLine = result.fix ? FIXES[result.fix].short : null
+  const expertFix = FIXES[fixFor(result.expert.named)].short
   return (
     <section className="space-y-4" data-flow="debrief" data-debrief="done" aria-labelledby="debrief-heading">
       <div className="rounded-lg border border-line bg-surface-1 p-4 sm:p-5">
@@ -100,7 +101,7 @@ export default function Debrief({ session, source, flow, busy, run, boxes, onRes
         </p>
         <ul className="mt-3 space-y-1 text-body-sm text-text-2">
           <li>
-            The fault was &ldquo;{FAULT_LABELS[result.fault]}&rdquo;.{' '}
+            The fault was &ldquo;{FAULT_SHORT[result.fault]}&rdquo;.{' '}
             {result.diagnosed ? 'You named it.' : `You held ${hypothesisLabel(result.hypothesis)}.`}
             {result.firstHypothesis !== undefined && result.firstHypothesis !== result.hypothesis && ` You started with ${hypothesisLabel(result.firstHypothesis)}.`}
           </li>
@@ -142,12 +143,12 @@ export default function Debrief({ session, source, flow, busy, run, boxes, onRes
             <li key={`${s.probe}-${i}`}>
               <span className="text-text-1">{PROBES[s.probe].label}</span> ({PROBES[s.probe].cost} min): {CATEGORY_LABELS[s.category]}.{' '}
               {s.candidates.length === 1
-                ? `Only "${FAULT_LABELS[s.candidates[0]]}" fits.`
-                : `${s.candidates.length} suspects left: ${s.candidates.map((c) => FAULT_LABELS[c]).join('; ')}.`}
+                ? `Only "${FAULT_SHORT[s.candidates[0]]}" fits.`
+                : `${s.candidates.length} suspects left: ${s.candidates.map((c) => FAULT_SHORT[c]).join('; ')}.`}
             </li>
           ))}
           <li>
-            Then it applied &ldquo;{expertFix}&rdquo;, the fix for &ldquo;{FAULT_LABELS[result.expert.named]}&rdquo;.
+            Then it applied &ldquo;{expertFix}&rdquo;, the fix for &ldquo;{FAULT_SHORT[result.expert.named]}&rdquo;.
           </li>
         </ol>
         <p className="mt-2 text-[12px] text-text-3">The expert probes in USE order down the pipeline and skips any probe that cannot split the suspects.</p>

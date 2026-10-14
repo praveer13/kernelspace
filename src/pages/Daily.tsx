@@ -52,8 +52,9 @@ const hypothesisName = (h: HypothesisId): string => HYPOTHESIS_OPTIONS.find((o) 
  * date, the session and the record; the flow components take the session and the incident's source as props, so
  * Act IV's drills (2b-17) play the same flow on a fresh seed.
  *
- * Your engine (§9.7, 2b-21): the session opens on the modules installed in your scheduler, block manager, intake and
- * prefix-router slots (`useSlots`), and the debrief says which boxes were yours. The boxes are read once, when the
+ * Your engine (§9.7, 2b-21): the session opens on the modules installed in your scheduler, block manager and intake
+ * slots (`useSlots`), and the debrief says which boxes were yours and names an installed prefix router as not used
+ * (D37: incident clusters route by shortest queue). The boxes are read once, when the
  * session opens, so installing something in another tab mid-incident changes the next attempt and not this one. A
  * module that stops responding ends the attempt with its error card, and "Play on the reference engine" runs the same
  * Daily without your modules, so a broken install never locks the Daily out.
@@ -83,7 +84,7 @@ export default function Daily() {
   const installed = useSlots((s) => s.installed)
   /** play without your modules: the fallback after one fails, and a choice for a replay */
   const [reference, setReference] = useState(false)
-  /** the four boxes of the attempt in play: whose they were */
+  /** the boxes of the attempt in play (three, plus an unused prefix router when one is installed): whose they were */
   const [boxes, setBoxes] = useState<DailyBox[]>([])
   const canUseYours = useMemo(() => ownBoxes(dailyBoxes(installed)).length > 0, [installed])
 
