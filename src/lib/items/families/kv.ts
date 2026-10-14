@@ -2,7 +2,7 @@
  * `kv`: KV bytes and capacity (docs/specs/wave-1.md §5.5; KCs t5.kv-bytes-per-token, t5.kv-capacity,
  * t5.gqa-kv-heads).
  *
- * Four variants: the bytes one token costs, the bytes one sequence costs, and how many tokens or
+ * Version 1 has four variants: the bytes one token costs, the bytes one sequence costs, and how many tokens or
  * chats fit in the HBM left after the weights. Each draws either a claim-backed scene (a model's
  * config and, for capacity, a GPU row, all through `claimNumber`) or a hypothetical model whose
  * numbers are declared in SYNTHETIC and announced as hypothetical in the prompt (W4).
@@ -11,7 +11,7 @@
  * (the GQA mistake), or counted one layer. A capacity answer divides by the per-token cost, so every
  * slip there lands on the inverse ratio. The shared unit rules catch KB against KiB.
  *
- * Version 2 (docs/specs/wave-2.md §11.5) adds three variants for the Attention Zoo, each assessing a KC
+ * Version 2 (docs/specs/wave-2.md §11.5) adds three more variants, seven in all, for the Attention Zoo, each assessing a KC
  * the family already had: `mla-bytes` (the latent cache, kv.mla-as-gqa), `swa-capacity` (the context
  * that fits when window layers stop growing, kv.window-ignored) and `linear-state` (a recurrent state
  * that does not depend on the context, kv.state-grows). Their claim-backed scenes read the zoo.* claims
@@ -773,7 +773,8 @@ const zooKindBytes = (id: string, kind: string, t: number): number => {
   return zooBytes(m, t).groups.reduce((sum, g, i) => (m.groups[i].layer.kind === kind ? sum + g.stored : sum), 0)
 }
 const pinMla = (key: MlaKey): Instance => buildZoo(variantOf('mla-bytes'), 2, 1, realMla(key, 'bf16'))
-const pinState = (key: LinearKey, tokens: number): Instance => buildZoo(variantOf('linear-state'), 2, 1, realLinear(key, 'bf16', tokens))
+/** Each pin prices the state at the dtype kv-zoo does: the config's (Qwen3.5's mamba_ssm_dtype is float32), else BF16. Served instances draw their own stated dtype. */
+const pinState = (key: LinearKey, tokens: number): Instance => buildZoo(variantOf('linear-state'), 2, 1, realLinear(key, key === 'qwen3-5-397b' ? 'fp32' : 'bf16', tokens))
 /** A gpt-oss budget of exactly the bytes kv-zoo says its cache takes at `tokens`. */
 const pinWindow = (tokens: number): Instance => buildZoo(variantOf('swa-capacity'), 2, 1, realSwa(zooBytes(preset(SWA_MODEL), tokens).stored / GB))
 

@@ -46,7 +46,6 @@ import {
   CUSTOM_ID,
   PREFIX_REUSE_TEXT,
   SETUPS as ZOO_SETUPS,
-  ZOO_CONFIG_MAX_CHARS,
   ZOO_CTX_STEPS,
   baselineRatio,
   fmtBytes,
@@ -54,9 +53,9 @@ import {
   groupRows,
   normalizeZooConfig,
   pasteStatus,
-  READINGS as ZOO_READINGS,
-  setupMismatches as zooSetupMismatches,
+  runZoo,
   zooBaseline,
+  zooConfigToSave,
 } from '@/lib/sims/models/zoo'
 import { resolveTasks } from '@/lib/sims/registry'
 import { cn } from '@/lib/utils'
@@ -822,7 +821,8 @@ function ZooMachine({ initial }: { initial: unknown }) {
   const saveTimer = useRef(0)
   const save = (value: string) => {
     window.clearTimeout(saveTimer.current)
-    if (value.length > 0 && value.length <= ZOO_CONFIG_MAX_CHARS) setWorking('zoo:config', value)
+    const kept = zooConfigToSave(value)
+    if (kept !== null) setWorking('zoo:config', kept)
   }
   const edit = (value: string) => {
     setDraft(value)
@@ -844,32 +844,8 @@ function ZooMachine({ initial }: { initial: unknown }) {
   )
   const run = () => {
     if (observe === undefined) return
-    const state = { presetId, ctx }
-    const sent: string[] = []
-    for (const t of scoped) {
-      if (model === null || zooSetupMismatches(state, ZOO_SETUPS[t.observe as string]).length > 0) continue
-      const reading = ZOO_READINGS.find((r) => r.key === t.observe)
-      const value = reading?.read(model, ctx)
-      if (reading === undefined || value === null || value === undefined) continue
-      observe({ key: reading.key, value, unit: reading.unit, configHash: JSON.stringify(state) })
-      sent.push(t.title)
-    }
     runCount.current += 1
-    const n = runCount.current
-    if (sent.length > 0) {
-      setRunStatus({ n, text: `Run: reading sent for ${sent.join('; ')}.` })
-      return
-    }
-    const closest = scoped
-      .map((t) => ({ t, miss: zooSetupMismatches(state, ZOO_SETUPS[t.observe as string]) }))
-      .sort((a, b) => a.miss.length - b.miss.length)[0]
-    setRunStatus({
-      n,
-      text:
-        closest === undefined
-          ? 'Run: no task reads the zoo here.'
-          : `Run: nothing sent. The closest task, "${closest.t.title}", needs ${closest.miss.join(', ')}.`,
-    })
+    setRunStatus({ n: runCount.current, text: runZoo({ tasks: scoped, model, state: { presetId, ctx }, observe }).text })
   }
 
   const pickBtn = (active: boolean) =>
@@ -947,7 +923,7 @@ function ZooMachine({ initial }: { initial: unknown }) {
                   type="button"
                   onClick={() => {
                     setDraft('')
-                    setWorking('zoo:config', ' ')
+                    save('')
                   }}
                   className="mt-1 flex min-h-6 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2 py-1 font-mono text-[11px] text-text-2 hover:border-line-bright hover:text-text-1 [@media(pointer:coarse)]:min-h-11"
                 >
@@ -985,7 +961,7 @@ function ZooMachine({ initial }: { initial: unknown }) {
             </div>
           </div>
           <p className="font-mono text-[10px] text-text-3">
-            Bytes are BF16, summed over layers, for one request. KV is an append-only log with random reads; a recurrent state is a checkpoint you can resume from, but not from the middle.
+            Bytes are BF16 except where the model's config pins another dtype (Qwen3.5's recurrent state is float32), summed over layers, for one request. A sparse indexer's keys count as stored, because they sit in HBM. KV is an append-only log with random reads; a recurrent state is a checkpoint you can resume from, but not from the middle.
           </p>
         </div>
 

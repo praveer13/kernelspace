@@ -372,6 +372,7 @@
     ["zoo.qwen3-5-397b.linear-value-heads","Qwen3.5-397B linear-attention value heads",64,"heads"],
     ["zoo.qwen3-5-397b.linear-key-head-dim","Qwen3.5-397B linear-attention key head dimension (d_k)",128,"dims"],
     ["zoo.qwen3-5-397b.linear-value-head-dim","Qwen3.5-397B linear-attention value head dimension (d_v)",128,"dims"],
+    ["zoo.qwen3-5-397b.state-dtype","Qwen3.5-397B gated-DeltaNet state dtype (mamba_ssm_dtype)","float32",""],
     ["zoo.kimi-linear.layers","Kimi Linear transformer layers",27,"layers"],
     ["zoo.kimi-linear.mla-layers","Kimi Linear MLA (full-attention) layers",7,"layers"],
     ["zoo.kimi-linear.kda-layers","Kimi Linear KDA (linear) layers",20,"layers"],

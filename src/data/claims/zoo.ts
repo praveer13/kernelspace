@@ -13,8 +13,10 @@ import type { Claim } from './schema'
  * - Qwen3.5 is the hybrid preset, not Qwen3-Next: its config is public (Qwen3.5-397B-A17B, nested under
  *   `text_config`). The 3:1 linear:full pattern is counted from its `layer_types` list.
  * - DeepSeek-V4 ships: the Pro config is public at a pinned revision, with `compress_ratios` per layer.
- * Fields the configs do not carry are not claims here: the KV element size (a serving choice, not a config
- * field) and any sink-token count (see `sink-kv-tokens`).
+ * Bytes: every tensor is priced at the dtype its config gives (kv-zoo.ts header). KV entries and indexer keys are
+ * BF16, the torch_dtype of every pinned config, so that size is not a claim; the one other dtype a config pins is
+ * Qwen3.5's recurrent state (`state-dtype`, float32). Any sink-token count is a claim only where a config has one
+ * (see `sink-kv-tokens`).
  */
 const SHA = /^[0-9a-f]{40}$/
 
@@ -206,6 +208,26 @@ const QWEN35: Claim[] = configClaims(
   ],
   'qwen3-5-397b',
 )
+// The one claim whose value is a dtype name, not a count: the config pins the recurrent state's dtype, and the zoo
+// prices that state at it (4 bytes), not at the BF16 it uses for KV entries. Quoted as the file has it, so
+// verify-claims checks the string and `--online` finds it once.
+QWEN35.push({
+  id: 'zoo.qwen3-5-397b.state-dtype',
+  kind: 'spec',
+  value: 'float32',
+  label: 'Qwen3.5-397B gated-DeltaNet state dtype (mamba_ssm_dtype)',
+  source: {
+    url: `https://huggingface.co/${QWEN35_PIN.repo}/raw/${QWEN35_PIN.ref}/config.json`,
+    title: 'Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)',
+    quote: '"mamba_ssm_dtype": "float32",',
+    row: 'text_config.mamba_ssm_dtype',
+  },
+  pin: QWEN35_PIN,
+  verifiedAt: '2026-10-13',
+  ttlDays: 365,
+  boundary:
+    'Four bytes per element: each of the 45 linear layers holds 64 * 128 * 128 * 4 B = 4 MiB, twice the 2 MiB a BF16 state would take. The same file sets dtype bfloat16 for the model, which prices the full-attention KV entries.',
+})
 
 const KIMI_LINEAR: Claim[] = configClaims(
   KIMI_LINEAR_PIN,

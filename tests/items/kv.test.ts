@@ -406,12 +406,12 @@ describe('kv: the zoo variants (version 2)', () => {
     for (const t of ZOO_CONTEXTS) {
       // MLA's stored bytes grow with t at 70,272 B per token; a linear layer's state is the same at every context
       expect(zooBytes(v3, t).stored / t).toBe(70_272)
-      expect(zooBytes(qwen, t).groups[0].stored).toBe(94_371_840)
+      expect(zooBytes(qwen, t).groups[0].stored).toBe(188_743_680) // float32 state: the config's mamba_ssm_dtype
       expect(zooBytes(kimi, t).groups[0].stored).toBe(20_971_520)
     }
     expect(truthOf(pin('DeepSeek-V3 MLA').make())).toBe(70_272)
     expect(truthOf(pin('Kimi Linear MLA').make())).toBe(8_064)
-    expect(truthOf(pin('Qwen3.5 gated-DeltaNet').make())).toBeCloseTo(94.37184, 9)
+    expect(truthOf(pin('Qwen3.5 gated-DeltaNet').make())).toBeCloseTo(188.74368, 9)
     expect(truthOf(pin('Kimi Linear KDA').make())).toBeCloseTo(20.97152, 9)
     // a budget of exactly what kv-zoo stores at 128k (and at 1M) tokens fills at exactly that context
     expect(truthOf(pin('128k-token cache').make())).toBeCloseTo(131_072, 3)
