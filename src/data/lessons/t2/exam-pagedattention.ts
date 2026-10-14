@@ -245,6 +245,12 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
           llm: 'KV block',
           llmLine: 'Fixed 16-token units of logical/physical KV; any physical block serves any sequence.',
           breaks: 'A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (16 tokens) whose byte size depends on the model\'s layers, heads and dtype.',
+          work: {
+            backgrounds: ['backend', 'jvm'],
+            os: 'connection pool',
+            osLine: 'A fixed set of identical connections; any one serves any caller, which borrows it and gives it back.',
+            breaks: 'A connection returns to the pool whole, when its one caller is done; KV blocks are freed per sequence, and a block shared by several sequences returns only when its reference count reaches zero.',
+          },
         },
         {
           os: 'page table + MMU',
