@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { dailyNumber, dailyRef } from '../src/lib/world/daily'
 
 // Keyboard walk of the Fleet Daily (docs/specs/wave-2.md §9.7, §22.2; exit gate B6), at 360 x 740: a pinned date's Daily
 // is played from the alert to the share string with the keyboard alone. Tab and the arrow keys choose the hypothesis,
@@ -8,6 +9,8 @@ import { expect, test, type Page } from '@playwright/test'
 
 const PINNED_DATE = '2026-10-23'
 const PINNED_FAULT = 'pool-shrink'
+// The Daily's number follows DAILY_EPOCH, which stays provisional until the owner sets the ship date: derive it.
+const PINNED_NUMBER = dailyNumber(PINNED_DATE)
 
 test.use({ viewport: { width: 360, height: 740 }, permissions: ['clipboard-read', 'clipboard-write'] })
 
@@ -31,6 +34,28 @@ async function open(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready)
 }
 
+/** The burn of every `incident` event the ledger holds for the pinned Daily, read from IndexedDB (the aggregate keeps only the score). */
+async function storedBurns(page: Page): Promise<number[]> {
+  return page.evaluate(
+    (ref) =>
+      new Promise<number[]>((resolve, reject) => {
+        const open = indexedDB.open('kernelspace')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const db = open.result
+          const all = db.transaction('events', 'readonly').objectStore('events').getAll()
+          all.onerror = () => reject(all.error)
+          all.onsuccess = () => {
+            db.close()
+            const events = all.result as { kind: string; ref: string; data?: { burn?: number } }[]
+            resolve(events.filter((e) => e.kind === 'incident' && e.ref === ref).map((e) => e.data?.burn ?? NaN))
+          }
+        }
+      }),
+    dailyRef(PINNED_DATE),
+  )
+}
+
 const noHorizontalScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
 
 test('/daily: the pinned Daily is played from the alert to the share string by keyboard alone at 360 px', async ({ page }) => {
@@ -40,7 +65,7 @@ test('/daily: the pinned Daily is played from the alert to the share string by k
 
   // The alert names no fault and says what the budget is.
   const alert = page.locator('[data-flow="alert"]')
-  await expect(alert).toContainText('Fleet Daily #11')
+  await expect(alert).toContainText(`Fleet Daily #${PINNED_NUMBER}`)
   await expect(alert).toContainText('Error budget: 30 burn-minutes')
   await expect(alert).toContainText('Synthetic scenario')
 
@@ -117,7 +142,7 @@ test('/daily: the pinned Daily is played from the alert to the share string by k
 
   // The share string is copied from the keyboard.
   const share = debrief.locator('[data-share-string]')
-  await expect(share).toHaveText(/^KS-Daily #11 · 2 probes · burn \d+%$/)
+  await expect(share).toHaveText(new RegExp(`^KS-Daily #${PINNED_NUMBER} · 2 probes · burn \\d+%$`))
   const text = (await share.innerText()).trim()
   await tabTo(page, '[data-share] button')
   await expect(page.getByRole('button', { name: 'Copy result' })).toBeFocused()
@@ -136,7 +161,7 @@ test('/daily: the pinned Daily is played from the alert to the share string by k
   const card = page.locator('[data-daily-card]')
   await expect(card).toBeVisible()
   await expect(card).toHaveAttribute('data-played', 'true')
-  await expect(card).toContainText('Fleet Daily #11 · about 8 min')
+  await expect(card).toContainText(`Fleet Daily #${PINNED_NUMBER} · about 8 min`)
   await expect(card.getByRole('link', { name: /Replay as practice/ })).toBeVisible()
 })
 
@@ -154,7 +179,11 @@ test('/daily: a replay is practice, writes nothing, and the recorded burn stays 
   const debrief = page.locator('[data-flow="debrief"][data-debrief="done"]')
   await expect(debrief).toBeVisible({ timeout: 60_000 })
   await expect(page.locator('[data-record-note]')).toHaveText('Recorded as today’s Daily.')
-  await expect(debrief.locator('[data-share-string]')).toHaveText(/^KS-Daily #11 · 0 probes · burn \d+%$/)
+  await expect(debrief.locator('[data-share-string]')).toHaveText(new RegExp(`^KS-Daily #${PINNED_NUMBER} · 0 probes · burn \\d+%$`))
+  // the ledger writes in the background: wait for the one event, and keep its burn to compare after the replay
+  await expect.poll(() => storedBurns(page)).toHaveLength(1)
+  const [firstBurn] = await storedBurns(page)
+  expect(Number.isFinite(firstBurn)).toBe(true)
 
   // Replay it as practice, from the keyboard: the banner appears and nothing more is recorded.
   await tabTo(page, '[data-share] button')
@@ -171,4 +200,6 @@ test('/daily: a replay is practice, writes nothing, and the recorded burn stays 
   await page.keyboard.press('Enter')
   await expect(page.locator('[data-flow="debrief"][data-debrief="done"]')).toBeVisible({ timeout: 90_000 })
   await expect(page.locator('[data-record-note]')).toHaveText('Practice replay: nothing was written to your record.')
+  // the replay finished too, yet the stored attempt is still the first one, untouched
+  expect(await storedBurns(page)).toEqual([firstBurn])
 })

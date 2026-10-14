@@ -9,8 +9,10 @@
  * tests/forge/fixtures.ts: an object the host cannot tell from a module).
  */
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createElement } from 'react'
+import { renderToString } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
+import type { InstalledSlots } from '../../src/lib/engine/slots'
 import { REFUSALS } from '../../src/lib/engine/store'
 import { createFleetHost } from '../../src/lib/fleet-host'
 import {
@@ -30,8 +32,9 @@ import {
 } from '../../src/lib/fleet-model'
 import { LabAbiError, LabTrapError } from '../../src/lib/wasm-lab'
 import { generateIncident } from '../../src/lib/world/incident-spec'
+import ClusterPanel from '../../src/pages/fleet/ClusterPanel'
 import { makeWasmRouter, REBUILD_MESSAGE, slotBytes, type Mod } from '../../src/pages/fleet/drivers'
-import { EMPTY_SLOTS } from '../../src/pages/fleet/slots'
+import { EMPTY_SLOTS, useSlots } from '../../src/pages/fleet/slots'
 import type { FleetReply, FleetRequest, FleetSlotBytes } from '../../src/workers/fleet-protocol'
 
 /* ------------------------------ a radix cache stand-in ------------------------------ */
@@ -293,6 +296,9 @@ describe('makeWasmRouter agrees with WorkerPrefixCache on a conformance trace', 
    * guard bites and ties occur; now and then a worker is missing from the candidates, as a killed or cordoned node is. The
    * reference inserts each routed prompt as the wasm router does, so the two see the same cache contents; its
    * capacity is the stand-in's room, not the six-entry routing view, so the comparison is of routing, not eviction.
+   * This proves routing agreement at a 64-entry capacity (the reference is built with `makeRefRouter(workers, 64)`),
+   * not production eviction timing: the cluster's own routing view holds six entries, and when a prefix is evicted
+   * from it is not what this trace checks.
    */
   for (const workers of [2, 3, 4]) {
     test(`${workers} workers: the same worker and the same hit on all 240 requests`, () => {
@@ -450,11 +456,34 @@ describe('the fleet host carries the prefix-router slot', () => {
   })
 })
 
-describe('the cluster panel hands your installed radix cache to the session', () => {
-  const panel = readFileSync(join(import.meta.dir, '../../src/pages/fleet/ClusterPanel.tsx'), 'utf8')
+describe('the cluster panel shows your installed radix cache as the router', () => {
+  /**
+   * Effects do not run in a server render, so this checks the half of the wiring a render shows: the panel reads the
+   * prefix-router module from the slots store, and its label and worker rows follow it. That the same bytes reach the
+   * session is slotBytes (tested above). zustand serves a server render from the store's initial state, so that
+   * object carries the installed modules for the render and gets its own back after.
+   */
+  const render = (installed: InstalledSlots) => {
+    const initial = useSlots.getInitialState()
+    const before = initial.installed
+    initial.installed = installed
+    try {
+      return renderToString(createElement(MemoryRouter, null, createElement(ClusterPanel, { slots: EMPTY_SLOTS })))
+    } finally {
+      initial.installed = before
+    }
+  }
+  const radix: InstalledSlots = {
+    'prefix-router': { slot: 'prefix-router', labId: 'radix-cache', sha256: 'a'.repeat(64), bytes: new ArrayBuffer(8) } as InstalledSlots['prefix-router'],
+  }
 
-  test('the router slot comes from the installed prefix-router module and reaches slotBytes', () => {
-    expect(panel).toContain("useSlots((s) => s.installed['prefix-router']?.bytes ?? null)")
-    expect(panel).toContain('slotBytes(slots, routerBytes)')
+  test('with a prefix-router module installed the stack line says your radix cache routes', () => {
+    expect(render(radix)).toContain('your radix cache routes')
+  })
+
+  test('without one the panel keeps the reference router and says nothing of a radix cache', () => {
+    expect(render({})).not.toContain('radix cache')
+    // an installed module whose bytes are not on this device does not count
+    expect(render({ 'prefix-router': { ...radix['prefix-router']!, bytes: null } })).not.toContain('radix cache')
   })
 })
