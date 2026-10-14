@@ -46,21 +46,21 @@ print(first)`,
       },
       align: [
         {
-          q: 'The familiar version of this code compiles and prints 8. In the Rust version, which line does the compiler reject, and which permission is missing?',
+          q: 'In Java and Python the same four steps (take the first element, add 64 to the list, print the element) compile and print 8. In the Rust version, which line does the compiler reject, and which permission is missing?',
           options: [
-            'Line 2, where borrowing &batch[0] needs O on batch, and a plain let never grants O',
-            'Line 3, where push needs W on batch but the borrow on line 2 left it with R',
-            'Line 4, where println needs W on first because it formats the value it prints',
-            'Line 3, where push needs R on batch and the borrow took every permission away',
+            'Line 2, where borrowing &batch[0] needs W on batch, and the let mut has not granted it yet',
+            'Line 3, where push needs R on batch, and the borrow on line 2 took R, W and O away',
+            'Line 4, where println needs W on first, because it formats the value it prints',
+            'Line 3, where push needs W on batch, but the borrow on line 2 left it with R',
           ],
-          correct: [1],
+          correct: [3],
           explanation:
-            'While a shared reference is still going to be used, its source keeps R only. push changes the Vec, so it needs W, and line 3 comes before the last use of first on line 4.',
+            'While a shared reference is still going to be used, its source keeps R and loses W and O. push changes the Vec, so it needs W, and line 3 comes before the last use of first on line 4.',
           why: [
-            'The borrow on line 2 needs only R, and batch holds R, W and O there. O is for moving or dropping, which a borrow does neither.',
-            'Right: the borrow on line 2 takes W and O from batch until first is last used on line 4, and push needs W. The compiler reports E0502 on line 3.',
+            'The borrow on line 2 needs R, and batch holds R, W and O there. A let mut grants W from the start, and a borrow does not use it.',
+            'A shared borrow takes W and O and leaves batch with R, so a read would be fine. It is `&mut` that takes R away. The missing permission here is W, not R.',
             'Printing reads first, which needs R, and first holds it. Nothing on line 4 changes any value, so no W is involved.',
-            'A shared borrow leaves batch with R, so a read would be fine. It is `&mut` that takes R away. The missing permission here is W, not R.',
+            'Right: the borrow on line 2 takes W and O from batch until first is last used on line 4, and push needs W. The compiler reports E0502 on line 3.',
           ],
           kcs: ['r.borrow-rules', 'r.interior-mutability'],
         },
@@ -127,18 +127,18 @@ for (String entry : log) {
       },
       align: [
         {
-          q: 'In Java the equivalent mistake, adding to a list while iterating it, throws ConcurrentModificationException when the loop runs. In this Rust version, what happens and when?',
+          q: 'In Java, adding to a list while iterating over it throws ConcurrentModificationException when the loop runs. In this Rust version, where a Ref guard is alive when borrow_mut asks for the Vec, what happens and when?',
           options: [
-            'The compiler rejects line 5 with E0502, because seen still holds a shared borrow of log',
-            'It compiles and runs, and the push on line 5 lands in the Vec while seen is still alive',
-            'It compiles, then panics on line 5 with BorrowMutError since a Ref guard is still alive',
+            'The compiler rejects line 5 with E0502, because seen still holds a Ref guard on the log cell',
+            'It compiles and runs, and the push on line 5 lands in the Vec while `seen` is still alive now',
+            'It compiles, then panics on line 5 with BorrowMutError because a Ref guard is still alive',
             'It compiles, then panics on line 4 because borrow() needs the cell to be empty first',
           ],
           correct: [2],
           explanation:
-            'borrow and borrow_mut both take &self, so the compiler needs only R and accepts the program. RefCell counts its live guards instead: seen is still alive on line 5, so borrow_mut finds a reader and panics.',
+            'borrow and borrow_mut both take &self, so the compiler needs R and accepts the program. RefCell counts its live guards instead: seen is still alive on line 5, so borrow_mut finds a reader and panics.',
           why: [
-            'To the compiler, borrow and borrow_mut are two shared borrows of log, which never conflict, and both need only R. The exclusive-access check happens when the program runs.',
+            'To the compiler, borrow and borrow_mut are two shared borrows of log, which never conflict, and both need R. The exclusive-access check happens when the program runs.',
             'The conflict is caught: RefCell refuses to hand out a writer while a reader guard is alive. If it did not, the push could reallocate the Vec under seen.',
             'Right: the compiler sees nothing wrong, and at run time the cell counts one live reader when borrow_mut asks for exclusive access. It panics with BorrowMutError on line 5.',
             'borrow() succeeds whenever no writer is live, and on line 4 there is none. The refusal comes later, from borrow_mut.',
@@ -156,7 +156,7 @@ for (String entry : log) {
 | 4 | \`seen\` | 1 reader | \`borrow_mut\` needs 0 readers |
 | 5 | none new | 1 reader | panic: BorrowMutError |
 
-The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The [Error Museum](/errors) keeps BorrowMutError beside the compile-time codes, with the wrong fix that tempts people and the right one.
+The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The [Error Museum](/errors#BorrowMutError) keeps BorrowMutError beside the compile-time codes, with the wrong fix that tempts people and the right one.
 
 ## Make the guard shorter
 
@@ -253,42 +253,42 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
           kcs: ['r.interior-mutability', 'r.borrow-rules'],
         },
         {
-          q: 'What releases a std::sync::Mutex lock?',
+          q: 'A thread holds the MutexGuard from shared.lock().unwrap(). What ends its exclusive access, so that the next thread\'s lock() can return?',
           options: [
-            'Calling unlock() on the Mutex when the critical section ends, as with a Java ReentrantLock',
-            'Dropping the MutexGuard that lock() returned, at scope end or by an explicit drop(guard)',
-            'The end of the statement that called lock(), whether or not the guard was bound to a name',
-            'The scheduler when the holding thread calls sleep() in the critical section',
+            'Calling unlock() on the Mutex, which hands the O of the data back, as with a Java ReentrantLock',
+            'Dropping the guard, at scope end or with drop(guard), which ends the O that held the lock',
+            'The end of the statement that called lock(), even when the guard was bound to a name',
+            'The scheduler, when the holding thread calls sleep() inside the critical section',
           ],
           correct: [1],
           explanation:
-            'The guard owns the lock obligation. When the guard is dropped, its O ends and the lock is released deterministically.',
+            'The guard owns the lock obligation. When the guard is dropped, its O ends and the lock is released deterministically, so the next thread\'s lock() returns.',
           why: [
-            'std::sync::Mutex has no unlock method. The lock is released by dropping the guard, either at scope end or with an early drop(guard).',
-            'Right: the guard owns the lock, and its O ending unlocks. That happens at scope end or on an explicit drop(guard), even during a panic.',
+            'std::sync::Mutex has no unlock method, and nothing hands O back by hand. The lock is released by dropping the guard, at scope end or with an early drop(guard).',
+            'Right: the guard holds the exclusive access, and its O ending is the release. That happens at scope end or on an explicit drop(guard), even during a panic.',
             'A guard bound with let lives until its scope ends. Only an unbound temporary, as in lock().unwrap().push(1), drops at the end of its statement.',
             'A sleeping or blocked thread keeps holding the lock, which is how deadlocks happen. Nothing releases it until the guard is dropped.',
           ],
-          kcs: ['r.interior-mutability'],
+          kcs: ['r.interior-mutability', 'r.permissions'],
         },
         {
-          q: 'Which type lets a single-threaded counter of Copy values change through a shared reference, which holds R only, with no guard and no lock?',
+          q: 'Code holds R on a single-threaded counter of Copy values, through a shared reference, and must change it with no guard and no lock. Which type makes that compile?',
           options: [
-            'Cell<usize> that sets and gets the value by copy with no borrow tracking',
-            'Rc<usize> that shares ownership and lets each owner update the counter',
-            'RefCell<usize> that mutates through a shared reference and is the general choice',
-            'Arc<Mutex<usize>> that is the standard way to share a mutable counter',
+            'Cell<usize>, whose set and get need R and copy the value in and out',
+            'Rc<usize>, which shares ownership and lets each owner update the counter',
+            'RefCell<usize>, which mutates through a shared reference and is the general choice',
+            'Arc<Mutex<usize>>, which is the standard way to share a mutable counter',
           ],
           correct: [0],
           explanation:
-            'Cell provides simple get/set interior mutability for Copy values without borrow guards: no reference into it ever exists, so no aliasing check is needed.',
+            'Cell takes &self, so its set and get need only R. No reference into it ever exists, so the write needs no guard and no aliasing check.',
           why: [
-            'Right: Cell copies values in and out with get and set, so no reference into it exists. It needs no guard, borrow flag or lock.',
+            'Right: Cell copies values in and out with get and set, so no reference into it exists and R is all a call needs. It needs no guard, borrow flag or lock.',
             'Rc shares ownership but hands out only shared access while it is shared: get_mut returns None once a second Rc exists, and make_mut would clone the counter instead of updating it. A shared counter needs Cell or RefCell inside the Rc.',
-            'RefCell works but hands out Ref and RefMut guards and keeps a runtime borrow flag that can panic. The question rules out guards.',
+            'RefCell works with R alone but hands out Ref and RefMut guards and keeps a run-time borrow flag that can panic. The question rules out guards.',
             'It works but pays for atomic counting and a lock a single thread never needs, and it hands out a guard. It is overkill here.',
           ],
-          kcs: ['r.interior-mutability'],
+          kcs: ['r.interior-mutability', 'r.permissions'],
         },
       ],
     },

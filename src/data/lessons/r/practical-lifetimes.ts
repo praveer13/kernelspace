@@ -59,10 +59,10 @@ print(prompt, reply, winner)`,
       },
       align: [
         {
-          q: 'The Java and Python versions run and print system: be brief ok! system: be brief. Which Rust line does the compiler reject, and which permission is missing there?',
+          q: 'The same program in Java or Python runs and prints system: be brief ok! system: be brief. Which Rust line does the compiler reject, and which permission is missing there?',
           options: [
-            "Line 5, `reply.push('!')`: it needs Write, and `reply` lost it to the loan `winner` holds",
-            "Line 5, `reply.push('!')`: it needs Own, and `reply` handed that over to `winner` on line 4",
+            'Line 5, `reply.push(\'!\')`: it needs Write, and `reply` lost it to the loan that `winner` holds',
+            'Line 5, `reply.push(\'!\')`: it needs Own, and `reply` handed that over to `winner` on line 4',
             'Line 4, `longer(&prompt, &reply)`: it needs Own of both strings, and a plain call cannot take Own',
             'Line 6, `println!`: it needs Write on `winner`, and a returned reference holds Read only',
           ],
@@ -70,8 +70,8 @@ print(prompt, reply, winner)`,
           explanation:
             'Line 4 lends Read on both strings, so each lender loses Write and Own until `winner` is last used on line 6. The push on line 5 needs Write and finds only Read.',
           why: [
-            "Right: the signature makes `winner` a loan on both inputs, so `reply` is down to Read while `winner` lives. `push` needs Read and Write, which is E0502. At run time `winner` is `prompt`'s text, but the compiler reads the signature, not the run.",
-            "`push` takes `&mut self` and moves nothing, so it never asks for Own. `reply` did lose Own to the loan, but the permission the push needs and lacks is Write.",
+            'Right: the signature makes `winner` a loan on both inputs, so `reply` is down to Read while `winner` lives. `push` needs Read and Write, which is E0502. At run time `winner` is `prompt`\'s text, but the compiler reads the signature, not the run.',
+            '`push` takes `&mut self` and moves nothing, so it never asks for Own. `reply` did lose Own to the loan, but the permission the push needs and lacks is Write.',
             'A `&` borrow needs only Read, and both strings hold it on line 4. Taking a reference never needs Own; it takes Write and Own away from the lender instead.',
             'Printing needs only Read, and `winner` holds it. The error is earlier: line 5 changes a string that `winner` may still point into.',
           ],
@@ -195,16 +195,16 @@ print(block.tokens[0])`,
       },
       align: [
         {
-          q: "The Java and Python versions run, because their Block holds the whole list. In Rust, what does the `'a` on `Block<'a>` record that Java's field type does not?",
+          q: "In Java and Python the same program runs, because a Block there holds a reference to the whole list object. In Rust, what does the `'a` on `Block<'a>` record that Java's field type does not?",
           options: [
-            'That a Block is a loan, so `tokens` lacks Write and Own while a Block lives',
-            'That a Block owns its tokens, so `tokens` gives up Own to the Block as soon as it is built',
-            'That a Block keeps the tokens alive, so a later `push` cannot free the old buffer behind it',
+            'That a Block is a loan on the slice, so `tokens` keeps only Read until the Block is last used',
+            'That a Block owns its tokens, so `tokens` gives up Own and Write to the Block as soon as it is built',
+            'That a Block keeps the Vec alive, so a later `push` cannot free the old buffer behind it here',
             'That a Block copies the slice, so later changes to `tokens` never reach the Block',
           ],
           correct: [0],
           explanation:
-            "The parameter says the Block borrows. While one is in use, `tokens` has Read but lost Write and Own, so the push on line 8 is E0502. Java's field holds the list object and not its buffer, so `add` can grow the list without leaving the Block pointing at a moved buffer.",
+            'The parameter says the Block borrows. While one is in use, `tokens` has Read but lost Write and Own, so the push on line 8 is E0502. Java\'s field holds the list object and not its buffer, so `add` can grow the list without leaving the Block pointing at a moved buffer.',
           why: [
             'Right: `Block { tokens: &tokens }` lends Read and takes Write and Own from `tokens` until the Block is last used. `push` needs Write, and that is what the parameter makes visible.',
             'A Block holds `&[u32]`, a reference, so building one moves nothing. `tokens` keeps Own and only loses it temporarily, while the loan is live.',
@@ -249,6 +249,8 @@ fn cached_entry(map: &mut HashMap<u32, String>, key: u32) -> &String {
     {
       type: 'prose',
       md: `On the path where \`get\` finds a value, \`hit\` is returned, so its loan must last as long as the caller's reference. Today's compiler applies that to the whole function, including the path where \`get\` found nothing and no reference exists. So the insert finds \`*map\` without W, although no run breaks. A more precise analysis, Polonius, accepts it, and stable rustc does not yet. Look the key up once with \`entry\` and the question is settled before any reference is returned. [R4](/lesson/r.l4) lists the other limits you will meet early.
+
+The compile items for the lifetimes group have no page of their own, so practise them from the Error Museum entries they come from: [E0106](/errors#E0106), [E0373](/errors#E0373), [E0515](/errors#E0515), [E0521](/errors#E0521), [E0597](/errors#E0597) and [E0716](/errors#E0716). Each shows the diagram, the fix that keeps the program's behaviour, the clone that changes it, and practice items. The conditional return above is E0502, which has its own [entry](/errors#E0502).
 
 ## Prove borrowed views
 

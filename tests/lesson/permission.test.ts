@@ -347,7 +347,7 @@ describe('AlignItem', () => {
   })
 
   test('renders the question in the shared player with its alignment eyebrow', () => {
-    const html = renderToStaticMarkup(createElement(AlignItem, { lessonId: 'r.l4', n: 0, q: Q, langLabel: 'Java', seed: 5 }))
+    const html = renderToStaticMarkup(createElement(AlignItem, { lessonId: 'r.l4', n: 1, q: Q, langLabel: 'Java', seed: 5 }))
     expect(html).toContain('aria-label="Alignment item 1"')
     expect(html).toContain('align · Java ↔ Rust')
     expect(html).toContain('Which Rust line does the compiler reject')
@@ -356,9 +356,9 @@ describe('AlignItem', () => {
 
   test("a question without kcs is recorded under the lesson's KCs, as exit tickets are", () => {
     const bare: QuizQuestion = { ...Q, kcs: undefined }
-    const fallback = alignItem('r.l4', 0, bare, ['r.ownership', 'r.borrow-rules'])
+    const fallback = alignItem('r.l4', 1, bare, ['r.ownership', 'r.borrow-rules'])
     expect(fallback.source === 'item' && fallback.item.kcs).toEqual(['r.ownership', 'r.borrow-rules'])
-    const own = alignItem('r.l4', 0, Q, ['r.ownership'])
+    const own = alignItem('r.l4', 1, Q, ['r.ownership'])
     expect(own.source === 'item' && own.item.kcs).toEqual(['r.borrow-rules'])
   })
 })
