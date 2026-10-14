@@ -13,6 +13,8 @@ import { SPIRAL_ITEMS, earlierKcsOf, isNonMcq, makeGenPool, planTicket, type Tic
 
 const T2 = ALL_LESSONS.filter((l) => l.trackId === 't2')
 const MISS_ID = /^[a-z0-9]+\.[a-z0-9]+(-[a-z0-9]+)*$/
+// P3 (wave-3.md §11.2): a lure that takes one KC for another of paging, block tables and the radix cache is `confuse.<kc id>`.
+const CONFUSE_ID = /^confuse\.[a-z0-9]+\.[a-z0-9]+(-[a-z0-9]+)*$/
 const words = (s: string) => s.trim().split(/\s+/).length
 
 const questionsOf = (l: Lesson): QuizQuestion[] =>
@@ -65,7 +67,7 @@ describe('T2 lessons: KCs and tickets', () => {
             expect(miss).toBe('')
             return
           }
-          expect(MISS_ID.test(miss)).toBe(true)
+          expect(MISS_ID.test(miss) || CONFUSE_ID.test(miss)).toBe(true)
           named.add(miss)
         })
         // one misconception per lure

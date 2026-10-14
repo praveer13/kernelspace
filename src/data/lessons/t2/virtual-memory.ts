@@ -109,6 +109,25 @@ Hold the pattern: **trap → kernel inspects → fix mapping → transparent ret
           breaks: 'Offloaded KV is not demand-faulted back page by page: a sequence must be fully resident to decode, so it is restored whole before it can run.',
         },
       ],
+      principle:
+        'Paging is indirection, laziness and faults. Remove the hardware and the structure stays while the guarantees go: a block table maps and shares like a page table, but nothing in it enforces protection.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'Entries are filled lazily on first need; a page gets a frame when it is first touched and a sequence gets a KV block when its last one fills',
+          'The MMU walks a page table in hardware and checks access rights; a block table is software read by the attention kernel with no protection between sequences',
+          'Forked processes share frames by reference count until one writes; sequences share prompt KV blocks by reference count until one of them diverges',
+          'Memory under pressure can move to a slower tier and be restored when needed; the kernel pages frames out to disk and an engine can offload KV to host memory',
+        ],
+        correct: [1],
+        why: [
+          'Holds on both sides, so it is not the break: both allocate on demand instead of reserving the worst case up front.',
+          'Right: hardware walks the page table, caches results in the TLB and enforces permissions. The block table is ordinary data read by a kernel, and nothing stops one sequence\'s table from naming another\'s blocks.',
+          'Holds on both sides, so it is not the break: shared units carry a count and are copied or freed according to it, a frame for fork and a block for a prompt prefix.',
+          'Holds on both sides, so it is not the break: each system can push cold memory to a slower tier and bring it back, disk for the OS and host memory for KV.',
+        ],
+      },
+      kcs: ['t2.address-translation', 't2.tlb', 't2.page-faults'],
     },
     {
       type: 'callout',
@@ -217,6 +236,26 @@ You will perform translations by hand: pick a virtual address, walk the four lev
           ],
           kcs: ['t2.copy-on-write', 't2.page-faults'],
           miss: ['t2.fork-copies-everything', '', 't2.cow-shared-writable', 't2.cow-writes-to-swap'],
+        },
+        {
+          q: 'A load instruction names a virtual address. How does an x86-64 CPU reach the physical byte?',
+          options: [
+            'The process\'s own code splits the address and indexes a table it keeps in memory, as an attention kernel does with a block table, and then adds the offset',
+            'The MMU hashes the bytes of the target page and looks the hash up, with two processes holding identical contents landing on the same physical frame in RAM',
+            'The MMU splits the address, indexes the page tables with its upper bits and joins the frame it finds with the page offset, with no program code involved',
+            'The CPU scans a list of every physical address the process owns for the one matching the virtual address, with the TLB holding the first few entries of that list',
+          ],
+          correct: [2],
+          explanation:
+            'The MMU indexes four table levels with 9-bit slices of the virtual page number, takes the frame number from the last entry, and appends the unchanged 12-bit offset. No program code and no content hash is involved; the TLB only caches the result.',
+          why: [
+            'Misconception: translation is software the program runs. An attention kernel does chase a block table in code, but a page-table walk is done by the MMU on every access that misses the TLB, over tables the kernel owns, with no instructions from the program.',
+            'Misconception: translation is looked up by content. A cache of reusable results can be keyed by a hash of the contents, as a prefix cache is, but page tables are indexed by the address\'s page number alone; identical bytes in two processes get separate frames unless the kernel deliberately merges them.',
+            'Right: the hardware takes the virtual page number from the upper bits, walks the tables one 9-bit slice per level to the frame number, and keeps the low 12 offset bits unchanged, so the program never runs any translation code.',
+            'Misconception: translation is a search. The MMU never compares against a list of addresses; it uses slices of the address as table indexes, so the cost is a fixed four reads on a TLB miss, and a hit skips them.',
+          ],
+          kcs: ['t2.address-translation'],
+          miss: ['confuse.t5.block-tables', 'confuse.t5.prefix-cache-keys', '', 't2.translation-is-a-search'],
         },
       ],
     },
