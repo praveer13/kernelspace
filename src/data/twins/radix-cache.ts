@@ -15,8 +15,9 @@ import type { TwinItem, TwinModule } from './types'
  * agrees with the crate's own tests (match_prefix_splits_on_a_partial_match, match_prefix_page_aligns_the_query,
  * insert_splits_on_a_partial_overlap, split_copies_stats_and_restamps_the_child).
  *
- * The lab's cache is a toy of this structure: refcounted blocks, a lookup that only reads, whole-entry eviction. The
- * questions are the three places where the production code differs in a way the lab's checks would not catch.
+ * The lab's cache is a toy of this structure: refcounted blocks, a lookup that refreshes recency but never reshapes
+ * the tree, whole-entry eviction. The questions are the three places where the production code differs in a way the
+ * lab's checks would not catch.
  *
  * Authoring rules from verify:items (the twin pool's own bar): the key is never the longest option (the pool's baseline
  * allows none), key lengths spread over ranks 2, 3 and 4, and no option carries a colon, a reason connective or a
@@ -38,7 +39,7 @@ const q1: TwinItem = {
     why: [
       'KV is stored per token, but the tree is page-granular. match_len counts 3 equal tokens and rounds down to a multiple of page_size, giving 2, and split_node_ asserts that its split length is a nonzero page multiple. A page the query matches half of is not shared.',
       "Right. match_prefix_helper_ finds the child by the page [1,2]; match_len counts 3 equal tokens and rounds down to 2 (3 / 2 * 2), less than the node's 6-token key. So the walk calls split_node_(child, 2), pushes the new head node's 2 KV indices and stops. The lookup itself reshapes the tree.",
-      "The count is right, the tree is not. When the common length is shorter than the node's key, match_prefix_helper_ calls split_node_ during the lookup itself and ends the match at the new head node. A lookup that never changes the tree is the lab's contract, not the core's.",
+      "The count is right, the tree is not. When the common length is shorter than the node's key, match_prefix_helper_ calls split_node_ during the lookup itself and ends the match at the new head node. The lab's lookup makes the entry it hits hot, which changes recency but never the tree's structure. The core's lookup changes the structure too.",
       "Matching is by shared prefix, not by whole entries. The walk goes down an edge for as long as the tokens agree, so a query that is only partly a prefix of a cached request still hits its shared part. A lookup that hits when a whole entry is a prefix is the lab's chat_hit_rate failure.",
     ],
   },

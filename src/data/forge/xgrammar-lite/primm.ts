@@ -192,9 +192,18 @@ const named = (p: Probe, i: number) => `#${i} ${p.vocab[i]}`
 /** The last `n` characters, with an ellipsis when something was cut. */
 const tail = (s: string, n = 12) => (s.length <= n ? s : `…${s.slice(s.length - n + 1)}`)
 
+/**
+ * Document text inside a sentence for a screen reader: in curly quotes, which no document holds (its quotes are
+ * straight), so where the text ends is clear.
+ */
+const quoted = (text: string) => `“${text}”`
+
+/** A token as the frame's alt reads it: its index, then its text quoted. */
+const spoken = (p: Probe, i: number) => `#${i} ${quoted(p.vocab[i])}`
+
 /** Up to `max` names, then how many more: what a screen reader hears for the legal set. */
 function listed(p: Probe, indices: readonly number[], max = 8): string {
-  const shown = indices.slice(0, max).map((i) => named(p, i))
+  const shown = indices.slice(0, max).map((i) => spoken(p, i))
   return indices.length > max ? `${shown.join(', ')} and ${indices.length - max} more` : shown.join(', ')
 }
 
@@ -221,13 +230,14 @@ function frameOf(p: Probe, n: number): RunFrame {
   ]
   if (p.options.mask === 'first-byte') stats.push({ label: 'wrongly allowed', value: String(step.wrong.length) })
   const names = step.legal.length === 0 ? 'nothing' : listed(p, step.legal)
-  const picked = step.pick < 0 ? 'No token can be picked.' : `Picked ${named(p, step.pick)}; the status is ${status}.`
+  const picked = step.pick < 0 ? 'No token can be picked.' : `Picked ${spoken(p, step.pick)}; the status is ${status}.`
+  const sofar = step.before === '' ? 'Nothing is written yet.' : `The text so far is ${quoted(step.before)}.`
   return {
     op: n + 1,
     // picked 100, wrongly allowed 20, legal 55, not allowed 0 (drawn at the strip's 10% floor)
     cells: p.vocab.map((_, i) => (i === step.pick ? 100 : wrong.has(i) ? 20 : legal.has(i) ? 55 : 0)),
     stats,
-    alt: `Step ${n + 1} of ${p.steps.length}, one cell per vocabulary token (${p.vocab.length}), darker for an allowed one. After ${step.before === '' ? 'nothing' : step.before} the mask allows ${step.legal.length}: ${names}. ${picked}`,
+    alt: `Step ${n + 1} of ${p.steps.length}, one cell per vocabulary token (${p.vocab.length}), darker for an allowed one. ${sofar} The mask allows ${step.legal.length}: ${names}. ${picked}`,
   }
 }
 
@@ -307,6 +317,10 @@ const choice = (id: string, step: ChoicePrimm['step'], q: Omit<QuizQuestion, 'kc
 })
 
 const REFERENCE_STEPS = probe(PROBE_SEED).steps.length
+/** The two Modify dials' runs, which m1's explanation describes. */
+const FIRST_BYTE_RUN = probe(PROBE_SEED, { mask: 'first-byte', vocab: 'mixed' })
+const CHARS_RUN = probe(PROBE_SEED, { mask: 'whole', vocab: 'chars' })
+const firstByteLast = FIRST_BYTE_RUN.steps[FIRST_BYTE_RUN.steps.length - 1]
 
 export const PRIMM_ITEMS: readonly PrimmItem[] = [
   /* ---- Predict, before the learner downloads anything ---- */
@@ -334,7 +348,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     why: [
       'It starts well and ends badly. The key, the comma and the digits 1 and 0 are all legal, since 10 is a count. The third digit makes 100, which is over 99, so the token fails at its last digit.',
       'A zero is a whole number here, so after 0 only the closing brace can follow. The 7 after it is rejected, because JSON writes 7 and never 07.',
-      'Every byte fits. The enum value `"answer"` is complete, the comma and the quoted key `"count"` follow, 7 is in range, and the brace closes the object. It crosses five states in one token and is legal.',
+      'Every byte fits. The enum value `"answer"` is complete, the comma and the quoted key `"count"` follow, 7 is in range, and the brace closes the object. That is six pieces of JSON in one token, from the string to the brace, and all of them are legal.',
       'After the comma the object needs a quoted key, so the `c` is rejected on the spot, the byte right after the comma. The rest of the token never matters.',
     ],
     explanation:
@@ -407,8 +421,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     prompt: `The reference run ends on step ${REFERENCE_STEPS}, at Complete. On which step does your changed run end? A run that fails ends on the step where it fails.`,
     unit: 'steps',
     factor: 1.6,
-    explain:
-      'A decode run ends in one of three ways: Complete; a pick the matcher rejects, because the mask let through a token it should have blocked; or an empty mask. The line above says which one your change reached. Longer tokens finish the document in fewer steps, so fewer mask computations.',
+    explain: `A decode run ends in one of three ways: Complete; a pick the matcher rejects, because the mask let through a token it should have blocked; or an empty mask. The line above says which one your change reached. The first-byte mask ends in a rejection: after \`${firstByteLast.before}\` it allows \`${FIRST_BYTE_RUN.vocab[firstByteLast.pick]}\`, because a quote can open the next key, but the matcher rejects the \`${FIRST_BYTE_RUN.text[badByte(FIRST_BYTE_RUN.text)]}\` at byte ${badByte(FIRST_BYTE_RUN.text)}, so the run ends on step ${FIRST_BYTE_RUN.steps.length}. The ${CHARS_RUN.vocab.length} single characters reach Complete, but at one byte a step: ${CHARS_RUN.steps.length} steps for the ${CHARS_RUN.text.length} bytes of \`${CHARS_RUN.text}\`, where the reference’s fragments wrote ${probe(PROBE_SEED).text.length} bytes in ${REFERENCE_STEPS} steps.`,
   },
 ]
 
