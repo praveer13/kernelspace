@@ -12,6 +12,7 @@
  *  - `verify:items -- --subset item:lab07.twin.,item:lab06.twin.` selects exactly these six items.
  */
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { getClaim } from '../../src/data/claims'
 import '../../src/data/claims/lazy/twins'
 import { FORGE_LABS } from '../../src/data/labs'
@@ -278,7 +279,7 @@ describe('lab 07 question 1: match_prefix at page_size 2 splits the node at the 
     expect(tokenWise.matchPrefix([1, 2, 3, 9]).kv).toEqual([10, 11, 12])
     expect(tokenWise.shape()).toBe('root([1,2,3]([4,5,6]))')
     expect(optionsWith(item, 'tokens 1, 2 and 3', 'splits the node at 3 into [1,2,3] and [4,5,6]', 'new [1,2,3] node')).toHaveLength(1)
-    // a read-only lookup: right count, no split
+    // the lab's lookup: right count, no split
     expect(optionsWith(item, 'tokens 1 and 2,', 'leaves the tree untouched', 'original [1,2,3,4,5,6] node')).toHaveLength(1)
     // whole-entry matching: nothing
     expect(optionsWith(item, 'returns nothing', 'leaves the tree untouched')).toHaveLength(1)
@@ -290,6 +291,16 @@ describe('lab 07 question 1: match_prefix at page_size 2 splits the node at the 
       optionsWith(item, 'returns nothing')[0],
     ]
     expect([...picked].sort()).toEqual([0, 1, 2, 3])
+  })
+
+  test('the why of the no-split option says what the lab’s lookup does change: recency, as lab 07’s brief says, not structure', () => {
+    const why = item.q.why![optionsWith(item, 'leaves the tree untouched', 'original [1,2,3,4,5,6] node')[0]]
+    expect(why).toContain('makes the entry it hits hot, which changes recency but never the tree\'s structure')
+    expect(why).not.toContain('never changes the tree')
+    const cacheRs = readFileSync('labs/radix-cache/src/cache.rs', 'utf8')
+    expect(cacheRs).toContain('a lookup that does not make an entry hot')
+    expect(cacheRs).toContain("A hit refreshes the entry's recency.")
+    expect(cacheRs).toContain('pub fn match_prefix(&mut self')
   })
 
   test('the ragged page: [1,2,3] at page_size 2 has an aligned length of 2 (the trailing token never enters the walk)', () => {
@@ -495,6 +506,9 @@ describe('lab 06 question 3: one token budget, spent on the running requests fir
     expect(optionsWith(item, '2,048 tokens', 'separate budgets')).toHaveLength(1)
     expect(chunk({ chunked: true, separateBudgets: false, capToBudget: false })).toBe(6000)
     expect(optionsWith(item, '6,000 tokens', 'the whole prompt in one step')).toHaveLength(1)
+    // the why of the no-cap option gives the ratio, which is not a whole three
+    expect((prompt / budget).toFixed(2)).toBe('2.93')
+    expect(item.q.why![optionsWith(item, '6,000 tokens')[0]]).toContain('nearly three times max_num_batched_tokens: 6,000 / 2,048 = 2.93')
     expect(chunk({ chunked: false, separateBudgets: false, capToBudget: true })).toBe(0)
     expect(optionsWith(item, '0 tokens', 'waits until the running requests finish')).toHaveLength(1)
   })

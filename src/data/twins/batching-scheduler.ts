@@ -81,7 +81,7 @@ const q3: TwinItem = {
     correct: [2],
     why: [
       'There is one budget. token_budget starts at max_num_scheduled_tokens and every scheduled token, decode or prefill, subtracts from it. The NOTE at the top of schedule() says there is no "decoding phase" nor "prefill phase".',
-      "Fitting in memory is the admission gate; the step's token budget is separate and caps the chunk with num_new_tokens = min(num_new_tokens, request_token_budget). 6,000 tokens in one step would be three times max_num_batched_tokens.",
+      "Fitting in memory is the admission gate; the step's token budget is separate and caps the chunk with num_new_tokens = min(num_new_tokens, request_token_budget). 6,000 tokens in one step would be nearly three times max_num_batched_tokens: 6,000 / 2,048 = 2.93.",
       'Right. The running loop goes first and takes one token per decode request from token_budget (2,048 - 40 = 2,008). In the waiting loop request_token_budget = min(token_budget, input_budget - draft_slots) = 2,008, and with enable_chunked_prefill on, num_new_tokens = min(6,000, 2,008). The other 3,992 tokens follow in later steps.',
       'That is the behaviour with chunked prefill off, where `not enable_chunked_prefill and num_new_tokens > request_token_budget` ends the loop. It is on by default, so the prompt is cut to the budget instead of waiting.',
     ],
