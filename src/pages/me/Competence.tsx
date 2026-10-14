@@ -27,8 +27,7 @@ export default function Competence({ statements, unmet }: { statements: readonly
 
       {statements.length === 0 ? (
         <p className="mt-4 text-body-sm text-text-2" data-figure="competence" data-n={unmet} data-enough={false}>
-          Not enough data yet (n = {plural(unmet, 'idea')} with new-number answers so far, none with enough). Today&apos;s generated questions and Prove-it
-          build this up.
+          Not enough data yet (n = {plural(unmet, 'idea')} with new-number answers). Today&apos;s generated questions and Prove-it build this up.
         </p>
       ) : (
         <>
