@@ -29,14 +29,21 @@ async function tagControls(page: Page): Promise<number> {
   }, PAGE)
 }
 
-/** Wait for the scroll that focus caused to finish (the page scrolls smoothly), so the check reads where the control ends up. */
+/**
+ * Wait for the scroll that focus caused to finish (the page scrolls smoothly), so the check reads where the control ends up.
+ * The scroll starts a frame or more after focus moves, and later under load: a control that sits in the viewport but under
+ * the bottom tabs (the first one, at 360 x 800) is scrolled up by a few pixels, by the bar's scroll-padding-bottom. Two
+ * frames pass first, and three equal readings in a row end the wait, so "has not started yet" is not read as "has finished".
+ */
 async function scrollSettled(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))))
   let last = -1
-  for (let i = 0; i < 40; i++) {
+  let same = 0
+  for (let i = 0; i < 60 && same < 3; i++) {
     const y = await page.evaluate(() => Math.round(scrollY))
-    if (y === last) return
+    same = y === last ? same + 1 : 0
     last = y
-    await page.waitForTimeout(40)
+    if (same < 3) await page.waitForTimeout(40)
   }
 }
 
@@ -62,6 +69,8 @@ async function tabThrough(page: Page, count: number): Promise<number[]> {
     if (idx < 0) continue
     if (reached.at(-1) !== idx) reached.push(idx)
     await scrollSettled(page)
+    // a few more frames of grace; a control that stays covered still fails
+    for (let w = 0; w < 25 && !(await focusUnobscured(page)); w++) await page.waitForTimeout(40)
     expect(await focusUnobscured(page), `control ${idx} is covered when focused: ${await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 120))}`).toBe(true)
   }
   return reached
@@ -71,6 +80,8 @@ async function settled(page: Page) {
   await page.waitForSelector('[data-mirror="summary"]')
   await page.waitForSelector('[data-ring-panel]')
   await expect(page.getByText('Reset everything').first()).toBeVisible()
+  // FormsCard is the lazy section with no placeholder: it joins the page after the Mirror, so wait for it too
+  await page.waitForSelector('[data-forms-card]')
   await page.evaluate(() => document.fonts.ready)
 }
 
