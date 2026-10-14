@@ -196,10 +196,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
       title: 'Roofline playground',
       taskIds: [
         'roof.ridge',
-        't-roof-fleet-router',
-        't-roof-fleet-decode',
-        't-roof-fleet-paged-attn',
-        't-roof-fleet-prefill',
+        'roof.fleet-router',
+        'roof.fleet-decode',
+        'roof.fleet-paged-attn',
+        'roof.fleet-prefill',
         'roof.decode-bound',
         'roof.batch-to-ridge',
         'roof.fp8-ridge',
@@ -207,7 +207,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
       config: { m: 'H100', dtype: 'fp16', batch: 1 },
       tasks: [
         'Predict the B200 FP16 ridge from its datasheet numbers (2.25 PFLOP/s, 8 TB/s), then pick B200 in the simulator and compare. Submit the number, not a regime label.',
-        'Complete all four Fleet kernel rows. Each needs a numeric AI and the correct compute/bandwidth classification before it is plotted.',
+        'Predict the arithmetic intensity of each of the four Fleet kernel rows from its GFLOP and GB, then place each on the B200 and say which side of the ridge it lands on.',
         'Predict whether decode at batch 1 on the H100 is bandwidth-bound or compute-bound, then plot decode and read the result off the chart.',
         'Predict which batch size first lifts decode to the ridge on the H100 at FP16, then sweep the batch slider and find the knee.',
         'Predict the H100 ridge at the FP8 ceiling, then switch the precision ceiling and compare; try INT4 and note the decode rate multiplies.',
