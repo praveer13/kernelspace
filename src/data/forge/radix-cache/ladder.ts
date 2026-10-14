@@ -91,7 +91,7 @@ export const LADDER: Record<string, CheckLadder> = {
       ideas: [
         'It fills a cache of three entries, looks up A, then inserts D, and expects B, the coldest, to be the one evicted.',
         'It pins C with an outside owner and expects eviction to skip it and take another leaf instead.',
-        'It stores a prompt, an extension of it and a third prompt, then adds a fourth: the third must go, not the older prompt that has a descendant.',
+        'It stores a prompt, its extension and a third, looks up the extension, then adds a fourth: the third, now the coldest leaf, goes, not the older interior prompt.',
       ],
     },
     r1: {

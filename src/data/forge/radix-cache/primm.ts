@@ -180,7 +180,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
       'Every request is a system prompt followed by a turn that no earlier request had, so no cached prompt is a prefix of it and the lookup answers 0 each time. The check wants at least 65% of the tokens reused, and gets none.',
     ],
     explanation:
-      'Stages 1 to 3 only ask for whole entries, so a lookup that insists on one passes them. The saving in chat traffic is in the partial prefix that requests share, and `chat_hit_rate` is where that is first asked for. `block_conservation` goes red too, in the same stage.',
+      'Stages 1 to 3 only ask for whole entries, so a lookup that insists on one passes them. The saving in chat traffic is in the partial prefix that requests share, and `chat_hit_rate` is where that is first asked for.',
   }),
 
   /* ---- Investigate: the harness ---- */

@@ -375,6 +375,30 @@ describe('items (§8.2): ids, refs, tags, whys', () => {
     expect(q?.options[q.correct[0]].startsWith('4 blocks')).toBe(true)
   })
 
+  test('eviction_order’s third R0 idea: the lookup of the extension before the newcomer is what makes the third prompt the coldest leaf', () => {
+    // check_eviction_order's third scenario: base, child (extends base), side; child looked up; newcomer inserted
+    const lookup = LIB_RS.indexOf('tree.match_prefix(&child); // child hot')
+    expect(lookup).toBeGreaterThan(LIB_RS.indexOf('store(&mut tree, &pool2, &side)'))
+    expect(lookup).toBeLessThan(LIB_RS.indexOf('store(&mut tree, &pool2, &newcomer)'))
+    const evicted = (touch: boolean) => {
+      const pool = new BlockPool(32)
+      const cache = new RadixCache(pool, 3)
+      const base = ids(5_000, 32)
+      const child = [...base, ...ids(6_000, 16)]
+      const side = ids(7_000, 16)
+      for (const p of [base, child, side]) expect(store(cache, pool, p)).toBe(true)
+      if (touch) cache.matchPrefix(child)
+      expect(store(cache, pool, ids(8_000, 16))).toBe(true)
+      return { side: cache.matchPrefix(side).len === 0, child: cache.matchPrefix(child).len < child.length }
+    }
+    // with the lookup the third prompt goes; without it the extension is the coldest leaf and would go instead
+    expect(evicted(true)).toEqual({ side: true, child: false })
+    expect(evicted(false)).toEqual({ side: false, child: true })
+    const idea = bundle.ladder.find((c) => c.checkId === 'eviction_order')?.r0.ideas[2] ?? ''
+    expect(idea).toContain('looks up the extension, then adds a fourth')
+    expect(idea).toContain('the third, now the coldest leaf, goes')
+  })
+
   test('i3’s scenario on the page’s own tree: with Z just looked up, the coldest leaf is Y, and X, the oldest, stays', () => {
     const pool = new BlockPool(32)
     const cache = new RadixCache(pool, 3)
@@ -644,6 +668,18 @@ describe('Prove-it v1 (§8.2): six questions, three drawn', () => {
     expect(cal.mutants.evict_internal.caughtBy).toContain('eviction_order')
     expect(cal.mutants.exact_only.caughtBy).toContain('chat_hit_rate')
     expect(cal.mutants.share_tail.caughtBy).toContain('cow_divergence')
+  })
+
+  test('p2’s explanation names only chat_hit_rate: the calibration’s exact_only also fails block_conservation, but only through the reference insert', () => {
+    // exact_only is caught by block_conservation in calibration.json, yet not because of the whole-entry lookup itself:
+    // the reference insert picks its shared blocks before it evicts at the entry limit, and with the lookup no longer
+    // touching the family's entry, that entry can be the victim whose blocks were just picked (the retain then fails).
+    // An insert that evicts first passes block_conservation with the same lookup, so the explanation does not claim it.
+    const cal = JSON.parse(read('labs/radix-cache/calibration.json')) as { mutants: Record<string, { caughtBy: string[] }> }
+    expect(cal.mutants.exact_only.caughtBy).toEqual(['block_conservation', 'chat_hit_rate'])
+    const p2 = PRIMM_MC_ITEMS.find((i) => i.id === 'lab07.primm.p2')?.q
+    expect(p2?.explanation).toContain('`chat_hit_rate` is where that is first asked for')
+    expect(p2?.explanation).not.toContain('block_conservation')
   })
 
   test('the panel draws its questions from the bundle, with none of another lab’s', () => {
