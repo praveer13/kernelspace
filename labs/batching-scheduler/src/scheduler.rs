@@ -38,6 +38,50 @@
 //!          skip — don't stop at — requests that don't fit yet.
 //!   * Want to race a baseline? examples/ has FCFS and SJF policies on
 //!     the same simulator. `cargo run --example calibrate`.
+//!
+//! Build it in four stages. Each one turns specific checks green. Go in
+//! order: a later stage reuses what an earlier one built. Look for the
+//! `STAGE` markers below; the signatures never change.
+//!
+//!   STAGE 1  runs_clean                     a legal `schedule`: admit what
+//!                                           fits, in arrival order
+//!   STAGE 2  slo_light, burst               fill the batch each call, not one
+//!                                           request at a time
+//!   STAGE 3  convoy, starvation             order by prompt size, keep
+//!                                           headroom, age the oldest
+//!   STAGE 4  goodput_score, overload_seeded the replay traces and a fresh
+//!                                           overload (the last is optional)
+//!
+//! Check a stage on your machine with `cargo test <check id>`, for example
+//! `cargo test runs_clean`. A `todo!()` traps only the checks that reach it.
+//!
+//! Which check catches which mistake:
+//!
+//! ```text
+//!   runs_clean       an illegal action (an id that is not waiting, more
+//!                    than max_running, resident memory over mem_cap), or an
+//!                    admit list that is always empty
+//!   slo_light        admitting so slowly that light traffic misses its TTFT
+//!                    bound: one request per call, or none at all
+//!   burst            a batch that never fills: one request admitted at a
+//!                    time, or so much headroom per running sequence that the
+//!                    batch stays tiny
+//!   convoy           first-come-first-served, which sends the 8192-token
+//!                    whale first; largest-first; a huge headroom. No check
+//!                    catches too little headroom (even none), so keep the
+//!                    ~48 tokens per running sequence because decode growth
+//!                    thrashes the pool otherwise, not because you are graded
+//!   starvation       pure smallest-first: with no aging the three longs never
+//!                    run under an endless stream of shorts
+//!   goodput_score    a policy that passes the checks above and still falls
+//!                    short on real-shaped traffic: first-come-first-served,
+//!                    largest-first or a huge headroom each miss a floor on
+//!                    the three fixed replays (55% synthetic overload, 85%
+//!                    BurstGPT, 70% LMSYS shape)
+//!   overload_seeded  first-come-first-served on a freshly drawn 2.4x
+//!                    overload (optional): where `goodput_score` replays one
+//!                    fixed trace, this one is redrawn every run
+//! ```
 
 use crate::{Action, State};
 
@@ -47,10 +91,29 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
+    // STAGE 1 · runs_clean
+    //   No state is needed yet.
     pub fn new() -> Self {
         todo!("construct your scheduler")
     }
 
+    // STAGE 1 · runs_clean
+    //   Walk `state.waiting` in order and admit while a slot is free and the
+    //   whole prompt fits under `mem_cap` minus what is resident.
+    // STAGE 2 · slo_light, burst
+    //   Keep walking: one call should admit everything that fits, not the
+    //   first request only. Skip a request that does not fit yet; do not
+    //   stop at it.
+    // STAGE 3 · convoy, starvation
+    //   Sort the candidates smallest prompt first (FIFO within a size) and
+    //   move requests older than about 900 to 1600 iterations to the front.
+    //   Also leave about 48 tokens of headroom per running sequence: advice
+    //   (too little is not caught by any check), though a huge one fails
+    //   convoy and burst.
+    // STAGE 4 · goodput_score, overload_seeded
+    //   The stage 3 shape is the reference shape and clears the floors. If
+    //   one trace misses, tune the headroom and the age limit, and read your
+    //   three scores with `cargo run --example calibrate -- --mine`.
     pub fn schedule(&mut self, state: &State) -> Action {
         let _ = state;
         todo!("guard the ancient, smallest-first the rest, admit what fits")
