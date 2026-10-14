@@ -427,6 +427,59 @@ describe('planTicket: spiral', () => {
   })
 })
 
+/* ------------------------------ items are on-KC (2b final review, blocking 1) ------------------------------ */
+
+describe('makeGenPool: a ticket never gets an off-KC item', () => {
+  // sig's instance carries t7.incident-diagnosis and the KC of the fault its seed drew: the pool redraws until it is the one asked for
+  const FAULT_KCS = ['t2.admission-scheduling', 't5.prefill-decode-interference', 't5.kv-capacity', 't7.capacity-planning']
+  let sig: Gen
+  let sigPool: TicketPool
+  beforeAll(async () => {
+    sig = await loadFamily('sig')
+    sigPool = makeGenPool(new Map([['frag', frag], ['sig', sig]]), (kc) => kcById(kc)?.gen ?? [])
+  })
+
+  test('a sig item asked for each of the four fault KCs always carries that KC, and the same seed draws the same item', () => {
+    for (const kc of FAULT_KCS) {
+      expect(sigPool.families(kc)).toEqual(['sig'])
+      let served = 0
+      for (let seed = 1; seed <= 40; seed++) {
+        const item = sigPool.make('sig', kc, MEASURE_LEVEL, seed * 7919)
+        expect(sigPool.make('sig', kc, MEASURE_LEVEL, seed * 7919)).toEqual(item)
+        if (item?.source !== 'gen') continue
+        served++
+        expect(item.inst.kcs).toEqual(['t7.incident-diagnosis', kc])
+      }
+      expect(served).toBeGreaterThan(36)
+    }
+  })
+
+  test('a spiral that fills its earlier items from sig gets one on each fault KC it asks for', () => {
+    // t2.admission-scheduling is one of t2.l7's real earlier KCs; frag's numeric variants give the spiral its non-MCQ
+    expect(earlierKcsOf('t2.l7', KCS)).toContain('t2.admission-scheduling')
+    const fragKc = 't1.external-frag'
+    const spiral = lessonOf('t2.l7', T2_L7, 6, 2, { form: 'spiral', spiral: [] })
+    for (let seed = 1; seed <= 20; seed++) {
+      const plan = mustPlan(planTicket(spiral, content(sigPool, { earlier: [fragKc, ...FAULT_KCS] }), [], seed))
+      const faults = plan.items.flatMap((it) => (it.source === 'gen' && it.inst.family === 'sig' ? [it.inst.kcs[1]] : []))
+      // the frag non-MCQ takes the first earlier KC; the next three are sig items, each on the KC it was asked for, in
+      // the spiral's order (a KC whose 16 draws all miss, about 1 in 100, is passed over for the next one)
+      expect(faults).toHaveLength(3)
+      expect(faults).toEqual(FAULT_KCS.filter((kc) => faults.includes(kc)))
+    }
+  })
+
+  test('when no draw carries the KC the ticket falls back to its constructed response, never an off-KC item', () => {
+    const offKc: Gen = { ...frag, make: (s, l, v) => ({ ...frag.make(s, l, v), kcs: ['t0.locality'] }) }
+    const pool = makeGenPool(new Map([['frag', offKc]]), (kc) => kcById(kc)?.gen ?? [])
+    for (const kc of T1_L4) expect(pool.make('frag', kc, MEASURE_LEVEL, 42)).toBeNull()
+    for (let seed = 1; seed <= 10; seed++) {
+      const plan = mustPlan(planTicket(lessonOf('t1.l4', T1_L4), content(pool), [], seed))
+      expect(plan.items.map((i) => i.source)).toEqual(['quiz', 'quiz', 'cr'])
+    }
+  })
+})
+
 /* ------------------------------ track-end spirals (spec §6.2, task 2a-17) ------------------------------ */
 
 describe('earlierKcsOf and the spirals of T3-T7', () => {
