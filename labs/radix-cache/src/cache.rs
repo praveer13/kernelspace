@@ -31,7 +31,8 @@
 //!   STAGE 1  exact_match                    `new`, `insert`, `match_prefix`,
 //!                                           `entry_count` for one prompt
 //!   STAGE 2  longest_prefix                 the deepest cached ancestor wins
-//!   STAGE 3  eviction_order, cow_divergence `evict_lru` on leaves only; a
+//!   STAGE 3  eviction_order, cow_divergence `evict_lru` on leaves only and
+//!                                           the entry limit in `insert`; a
 //!                                           shared block, a private tail
 //!   STAGE 4  block_conservation,            2,000 operations and a drain; a
 //!            chat_hit_rate                  hit rate over 240 chat requests
@@ -49,10 +50,12 @@
 //!   eviction_order      a lookup that does not make an entry hot; the
 //!                       hottest leaf evicted instead of the coldest; a leaf
 //!                       with an outside owner evicted; a prefix that has a
-//!                       descendant evicted before it
+//!                       descendant evicted before it; an entry limit that
+//!                       is never enforced (it stores a fourth entry into a
+//!                       cache that holds three)
 //!   block_conservation  a retain without its release (a leak), a release
-//!                       twice, an entry limit that is never enforced, an
-//!                       eviction that forgets to release the block table
+//!                       twice, an eviction that forgets to release the
+//!                       block table, over 2,000 operations and a drain
 //!   cow_divergence      a partial tail shared with the writer that diverges,
 //!                       or a whole prefix block copied instead of shared
 //!   chat_hit_rate       a lookup that hits only when a whole cached entry is
@@ -98,11 +101,15 @@ impl RadixCache {
     // STAGE 1 · exact_match
     //   Retain the table the cache keeps exactly once. An exact duplicate is a
     //   touch, not a second entry.
+    // STAGE 3 · eviction_order
+    //   At the entry limit, make room first: evict the coldest leaf before
+    //   the new entry goes in. The check inserts a fourth entry into a cache
+    //   that holds three.
     // STAGE 3 · cow_divergence
     //   Reuse the canonical block for every whole shared block; a divergent
     //   partial tail stays private.
     // STAGE 4 · block_conservation
-    //   At the entry limit, make room first; leave nothing half-applied.
+    //   Leave nothing half-applied: a failed insert must not keep a retain.
     /// Insert one completed prompt. `blocks` is a temporary prefill-owned
     /// full block table; retain the canonical table the cache will own.
     pub fn insert(&mut self, tokens: &[u32], blocks: &[usize]) -> bool {

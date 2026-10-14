@@ -67,8 +67,10 @@
 //!                    time, or so much headroom per running sequence that the
 //!                    batch stays tiny
 //!   convoy           first-come-first-served, which sends the 8192-token
-//!                    whale first; largest-first; a headroom of zero (decode
-//!                    growth thrashes the pool) or a huge one
+//!                    whale first; largest-first; a huge headroom. No check
+//!                    catches too little headroom (even none), so keep the
+//!                    ~48 tokens per running sequence because decode growth
+//!                    thrashes the pool otherwise, not because you are graded
 //!   starvation       pure smallest-first: with no aging the three longs never
 //!                    run under an endless stream of shorts
 //!   goodput_score    a policy that passes the checks above and still falls
@@ -103,9 +105,11 @@ impl Scheduler {
     //   first request only. Skip a request that does not fit yet; do not
     //   stop at it.
     // STAGE 3 · convoy, starvation
-    //   Sort the candidates smallest prompt first (FIFO within a size), leave
-    //   about 48 tokens of headroom per running sequence, and move requests
-    //   older than ~900 iterations to the front.
+    //   Sort the candidates smallest prompt first (FIFO within a size) and
+    //   move requests older than about 900 to 1600 iterations to the front.
+    //   Also leave about 48 tokens of headroom per running sequence: advice
+    //   (too little is not caught by any check), though a huge one fails
+    //   convoy and burst.
     // STAGE 4 · goodput_score, overload_seeded
     //   The stage 3 shape is the reference shape and clears the floors. If
     //   one trace misses, tune the headroom and the age limit, and read your

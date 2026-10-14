@@ -51,9 +51,11 @@
 //!                                           thread: the sequence numbers
 //!                                           and the CAS claim
 //!   STAGE 2  backpressure                   a full ring hands `Err(v)` back
-//!                                           with the caller's own `v`
-//!   STAGE 3  wraparound, slot_conservation  the release store that gives a
-//!                                           popped slot to the next lap
+//!                                           with the caller's own `v`, and a
+//!                                           popped slot is free for the next
+//!                                           push: `pop` releases it
+//!   STAGE 3  wraparound, slot_conservation  the same release over many laps
+//!                                           of the ring
 //!   STAGE 4  model_gauntlet, burst_model    every branch at once, on seeds
 //!                                           drawn when you grade
 //!
@@ -68,7 +70,8 @@
 //!                       8th push fails), a pop that reads the wrong slot
 //!   backpressure        a full ring that says Ok, an Err that hands back a
 //!                       different value, a freed slot that the next push
-//!                       never gets
+//!                       never gets (the check pops once, then pushes again:
+//!                       `pop` must release the slot it emptied)
 //!   wraparound          a pop that releases its slot at `pos + 1` instead of
 //!                       `pos + capacity`, so it is stale on the next lap; a
 //!                       release that is skipped now and then
@@ -115,8 +118,13 @@ impl Queue {
 
     // STAGE 1 · fifo
     //   The mirror image on `head`: expected = h + 1, and dif < 0 is None.
-    // STAGE 3 · wraparound, slot_conservation
+    // STAGE 2 · backpressure
     //   Release the slot for the NEXT lap: seq = h + capacity, not h + 1.
+    //   The check pops once and pushes again, so the freed slot must be
+    //   reusable already.
+    // STAGE 3 · wraparound, slot_conservation
+    //   Nothing new to write: they run the release over many laps. A release
+    //   that is skipped now and then, or that lands at h + 1, shows up here.
     // STAGE 4 · model_gauntlet, burst_model
     //   Nothing new to write: these run every branch above in random order.
     pub fn pop(&self) -> Option<u64> {
