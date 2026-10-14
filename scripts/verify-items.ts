@@ -418,7 +418,8 @@ const SHUFFLED_SURFACES = [
   'src/components/sims/PlaygroundShell.tsx',
   // the placement walk replaced Curriculum's own modal: its items are shuffled by the item player's model
   'src/lib/items/play.ts',
-  'src/pages/FleetWeek.tsx',
+  // Act IV (src/pages/FleetWeek.tsx) left this list in 2b-17: its drills show no option list to shuffle. The hypothesis and
+  // fix controls are the Daily's fixed menus, the fault is a fresh draw per drill, so position says nothing about it.
   // P1 diagram predictions shuffle their options themselves; the prequestions go through the item player (play.ts above)
   'src/pages/lesson/diagram.tsx',
 ]

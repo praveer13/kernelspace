@@ -1,169 +1,114 @@
+/**
+ * Act IV's credit lives in the progress store, not in the page (docs/specs/wave-2.md §9.8, task 2b-17).
+ *
+ * Until 2b-17 the act credited only a learner's first call on each of three static incidents, kept as
+ * `{attempted, credited}` ids in the working record `fw:evidence:incident`, and one missed first call closed the act.
+ * Drills on fresh seeds replace that: a retry is a new incident, so nothing closes. The same record now holds the
+ * passed drills (`credited`: fault, seed and score), and these tests hold what that means across reloads and for a
+ * learner whose store still carries the old ledger.
+ */
 import { describe, expect, test } from 'bun:test'
-import {
-  EMPTY_INCIDENT_LEDGER,
-  gradeIncidentCall,
-  incidentLedgerFrom,
-  incidentMisses,
-  INCIDENT_CLOSED_NOTE,
-  INCIDENTS,
-} from '../../src/lib/fleet-week'
+import { drillCreditsFrom, drillFor, drillKey, recordDrill } from '../../src/lib/fleet-week'
+import { fixFor, type IncidentFault } from '../../src/lib/world/incident-spec'
+import type { FinishedIncident } from '../../src/lib/world/daily'
 import { makeProfile, startTab } from '../ledger/env'
 
-const total = INCIDENTS.length
+function seedFor(fault: IncidentFault, skip = 0): number {
+  let left = skip
+  for (let seed = 1; ; seed++) if (drillFor(seed).spec.fault === fault && left-- === 0) return seed
+}
 
-describe('Act IV credits first-attempt calls only', () => {
-  test('three first-attempt correct calls pass the act', () => {
-    let ledger = EMPTY_INCIDENT_LEDGER
-    let last = null as ReturnType<typeof gradeIncidentCall> | null
-    for (const inc of INCIDENTS) {
-      last = gradeIncidentCall(ledger, inc, true, true)
-      ledger = last.ledger
-      expect(last.practice).toBe(false)
-    }
-    expect(last?.result.pass).toBe(true)
-    expect(ledger.credited.length).toBe(total)
-  })
-
-  test('a wrong first call followed by the revealed answer earns no credit', () => {
-    const first = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], false, true)
-    expect(first.result.pass).toBe(false)
-    expect(first.ledger.credited).toEqual([])
-    const retry = gradeIncidentCall(first.ledger, INCIDENTS[0], true, true)
-    expect(retry.practice).toBe(true)
-    expect(retry.result.pass).toBe(false)
-    expect(retry.ledger.credited).toEqual([])
-    expect(retry.result.practice).toBe(true)
-    let ledger = retry.ledger
-    for (const inc of INCIDENTS.slice(1)) ledger = gradeIncidentCall(ledger, inc, true, true).ledger
-    const done = gradeIncidentCall(ledger, INCIDENTS[1], true, true)
-    expect(done.result.pass).toBe(false)
-    expect(ledger.credited.length).toBe(total - 1)
-  })
-
-  test('a practice call never changes the ledger', () => {
-    const first = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], true, true)
-    const again = gradeIncidentCall(first.ledger, INCIDENTS[0], true, true)
-    expect(again.ledger).toEqual(first.ledger)
-  })
+const finished = (fault: IncidentFault, over: Partial<FinishedIncident> = {}): FinishedIncident => ({
+  fault,
+  severity: 1,
+  firstHypothesis: 'unsure',
+  hypothesis: fault,
+  probes: ['intake'],
+  fix: fixFor(fault),
+  diagnosed: true,
+  fixed: true,
+  burn: 8,
+  expertBurn: 6,
+  streetlight: 0,
+  ...over,
 })
 
-describe('the first-call ledger survives a reload', () => {
-  test('a persisted first-call miss still marks later calls as practice', async () => {
+describe('the credits survive a reload', () => {
+  test('a passed drill is still credited in a second tab, and its seed is no longer fresh', async () => {
     const profile = makeProfile()
     const first = startTab(profile)
-    const missed = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], false, false)
-    first.progress.getState().setFleetWeekEvidence('incident', missed.ledger)
+    const seed = seedFor('pool-shrink')
+    expect(recordDrill(first.progress, drillFor(seed), finished('pool-shrink')).verdict).toBe('credited')
     await first.progress.controls.flush()
 
     const second = startTab(profile) // a reload: new tab, same storage
-    const stored = second.progress.getState().fleetWeek.measurementEvidence?.incident
-    const ledger = incidentLedgerFrom(stored)
-    expect(ledger.attempted).toEqual([INCIDENTS[0].id])
-    const retry = gradeIncidentCall(ledger, INCIDENTS[0], true, true)
-    expect(retry.practice).toBe(true)
-    expect(retry.result.practice).toBe(true)
-    expect(retry.result.pass).toBe(false)
-    expect(retry.ledger.credited).toEqual([])
+    const credits = drillCreditsFrom(second.progress.getState().fleetWeek.measurementEvidence?.incident)
+    expect(credits).toEqual([{ fault: 'pool-shrink', seed, score: 0.778 }]) // (expert 6 + 1) / (burn 8 + 1), in thousandths
   })
 
-  test('a malformed stored ledger is read as empty or filtered, never trusted', () => {
-    const [first, second] = INCIDENTS.map((i) => i.id)
-    expect(incidentLedgerFrom(undefined)).toEqual(EMPTY_INCIDENT_LEDGER)
-    expect(incidentLedgerFrom({ attempted: 'x', credited: [1, first] })).toEqual(EMPTY_INCIDENT_LEDGER)
-    expect(incidentLedgerFrom({ attempted: [first], credited: [first, second] })).toEqual({ attempted: [first], credited: [first] })
+  test('the act stays done after a reload, and a later pass does not complete it again', async () => {
+    const profile = makeProfile()
+    const first = startTab(profile)
+    for (const fault of ['pool-shrink', 'drain-stall', 'node-death'] as const) recordDrill(first.progress, drillFor(seedFor(fault)), finished(fault))
+    expect(first.progress.getState().fleetWeek.actsDone).toContain('incident')
+    await first.progress.controls.flush()
+
+    const second = startTab(profile)
+    expect(second.progress.getState().fleetWeek.actsDone).toContain('incident')
+    const again = recordDrill(second.progress, drillFor(seedFor('tenant-burst')), finished('tenant-burst'))
+    expect(again.verdict).toBe('credited')
+    expect(again.credits).toHaveLength(4)
+    await second.progress.controls.flush()
+    const acts = (await (await second.engine()).events({ kinds: ['fleet-act'] })).filter((e) => e.ref === 'fw:incident')
+    expect(acts).toHaveLength(1)
   })
 
-  test('repeated and unknown ids are dropped, so credited.length cannot stand in for diagnosed incidents', () => {
-    const [first, second] = INCIDENTS.map((i) => i.id)
-    const forged = { attempted: [first, first, 'made-up', first], credited: [first, first, 'made-up', first] }
-    const ledger = incidentLedgerFrom(forged)
-    expect(ledger).toEqual({ attempted: [first], credited: [first] })
-    expect(incidentLedgerFrom({ attempted: ['nope'], credited: ['nope'] })).toEqual(EMPTY_INCIDENT_LEDGER)
-    // three "credits" for one incident, then one honest first call on a second incident: still not done
-    const graded = gradeIncidentCall(ledger, INCIDENTS[1], true, true)
-    expect(graded.ledger.credited).toEqual([first, second])
-    expect(graded.result.pass).toBe(false)
-    // the same holds when a caller hands gradeIncidentCall the forged ledger directly
-    const direct = gradeIncidentCall(forged, INCIDENTS[1], true, true)
-    expect(direct.ledger.credited).toEqual([first, second])
-    expect(direct.result.pass).toBe(false)
-  })
-
-  test('an incident outside INCIDENTS is never credited', () => {
-    const stray = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, { id: 'made-up', title: 'incident 99 — not real' }, true, true)
-    expect(stray.practice).toBe(true)
-    expect(stray.ledger).toEqual(EMPTY_INCIDENT_LEDGER)
-    expect(stray.result.pass).toBe(false)
+  test('a drill on a credited seed, replayed in the second tab, is practice', async () => {
+    const profile = makeProfile()
+    const first = startTab(profile)
+    const seed = seedFor('node-death')
+    recordDrill(first.progress, drillFor(seed), finished('node-death'))
+    await first.progress.controls.flush()
+    const second = startTab(profile)
+    const g = recordDrill(second.progress, drillFor(seed), finished('node-death'))
+    expect(g.verdict).toBe('practice')
+    expect(second.progress.getState().aggregate.incidents['inc:drill/node-death']?.n).toBe(1)
   })
 })
 
-describe('a missed first call closes Act IV and the UI says so', () => {
-  test('the result after a missed first call says later calls are practice and fresh incidents arrive later', () => {
-    const missed = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], false, true)
-    expect(missed.practice).toBe(false)
-    expect(missed.result.pass).toBe(false)
-    expect(missed.result.closed).toBe(true)
-    expect(missed.result.headline).not.toContain('look at the telemetry again')
-    expect(missed.result.detail).toContain('practice only')
-    expect(missed.result.detail).toContain('closed for now')
-    expect(missed.result.detail).toContain('earns no XP')
-    expect(missed.result.detail).toContain('later update')
-    expect(incidentMisses(missed.ledger)).toBe(1)
+describe('a store that still carries the first-call ledger is not closed', () => {
+  test('a missed first call on a static incident no longer blocks anything: the next fresh drill counts', async () => {
+    const profile = makeProfile()
+    const first = startTab(profile)
+    // what the old page wrote after one missed first call
+    first.progress.getState().setFleetWeekEvidence('incident', { attempted: ['kv-thrash'], credited: [] })
+    await first.progress.controls.flush()
+
+    const second = startTab(profile)
+    const stored = second.progress.getState().fleetWeek.measurementEvidence?.incident
+    expect(stored?.attempted).toEqual(['kv-thrash'])
+    expect(drillCreditsFrom(stored)).toEqual([])
+    const g = recordDrill(second.progress, drillFor(seedFor('drain-stall')), finished('drain-stall'))
+    expect(g.verdict).toBe('credited')
+    expect(g.result.detail).not.toMatch(/closed|first call/i)
   })
 
-  test('a practice call after a miss says the act stays closed and nothing is credited', () => {
-    const missed = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], false, false)
-    const retry = gradeIncidentCall(missed.ledger, INCIDENTS[0], true, true)
-    expect(retry.practice).toBe(true)
-    expect(retry.result.closed).toBe(true)
-    expect(retry.result.detail).toContain('closed it for now')
-    expect(retry.result.detail).toContain('later update')
-    expect(retry.ledger).toEqual(missed.ledger)
+  test('the old credited ids are ignored, so three of them are not three passed faults', () => {
+    const store = startTab(makeProfile()).progress
+    store.getState().setFleetWeekEvidence('incident', { attempted: ['kv-thrash', 'intake-stall', 'no-admission'], credited: ['kv-thrash', 'intake-stall', 'no-admission'] })
+    expect(drillCreditsFrom(store.getState().fleetWeek.measurementEvidence?.incident)).toEqual([])
+    const g = recordDrill(store, drillFor(seedFor('pool-shrink')), finished('pool-shrink'))
+    expect(g.credits).toHaveLength(1)
+    expect(g.pass).toBe(false)
+    expect(store.getState().fleetWeek.actsDone).not.toContain('incident')
   })
 
-  test('a correct first call after an earlier miss is graded and marked but cannot complete the act', () => {
-    let ledger = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], false, true).ledger
-    let last = gradeIncidentCall(ledger, INCIDENTS[1], true, true)
-    ledger = last.ledger
-    // the first call on an incident not yet called is not practice: it is recorded and marked ✓...
-    expect(last.practice).toBe(false)
-    expect(ledger.attempted).toEqual([INCIDENTS[0].id, INCIDENTS[1].id])
-    expect(ledger.credited).toEqual([INCIDENTS[1].id])
-    // ...but the act is closed, and the result says so without calling anything "credited"
-    expect(last.result.pass).toBe(false)
-    expect(last.result.closed).toBe(true)
-    expect(last.result.detail).toContain('Correct and marked')
-    expect(last.result.detail).toContain('stays closed')
-    expect(last.result.detail).toContain('earns no XP')
-    expect(last.result.detail).not.toContain('Credited')
-    expect(last.result.detail).not.toContain('cannot be credited')
-    last = gradeIncidentCall(ledger, INCIDENTS[2], true, true)
-    expect(last.practice).toBe(false)
-    expect(last.result.pass).toBe(false)
-    expect(last.result.detail).toContain('later update')
-    expect(last.ledger.credited.length).toBe(total - 1)
-    // the missed incident stays practice, and no later call on any incident can pass
-    const repeat = gradeIncidentCall(last.ledger, INCIDENTS[0], true, true)
-    expect(repeat.practice).toBe(true)
-    expect(repeat.ledger).toEqual(last.ledger)
-    for (const inc of INCIDENTS) expect(gradeIncidentCall(last.ledger, inc, true, true).result.pass).toBe(false)
-  })
-
-  test('before any miss the act is open and the notice is not shown', () => {
-    const first = gradeIncidentCall(EMPTY_INCIDENT_LEDGER, INCIDENTS[0], true, true)
-    expect(first.result.closed).toBe(false)
-    expect(first.result.detail).toContain('a miss closes the act')
-    expect(incidentMisses(first.ledger)).toBe(0)
-  })
-
-  test('the standing notice says what the code does: repeat calls are practice, first calls on other incidents are graded and marked, no XP', () => {
-    expect(INCIDENT_CLOSED_NOTE).toContain('earns no XP')
-    expect(INCIDENT_CLOSED_NOTE).toContain('Repeat calls on an incident are practice')
-    expect(INCIDENT_CLOSED_NOTE).toContain('graded and marked')
-    expect(INCIDENT_CLOSED_NOTE).toContain('cannot complete the act')
-    expect(INCIDENT_CLOSED_NOTE).toContain('later update')
-    // the old note said every later call is practice and never credited; first calls on other incidents are not
-    expect(INCIDENT_CLOSED_NOTE).not.toContain('never credited')
-    expect(INCIDENT_CLOSED_NOTE).not.toContain('Calls from here on are practice')
+  test('a hand-edited record cannot credit a fault whose seed generates another one', () => {
+    const store = startTab(makeProfile()).progress
+    const seed = seedFor('pool-shrink')
+    store.getState().setFleetWeekEvidence('incident', {
+      credited: [`drain-stall:${drillKey(seed)}:1000`, `node-death:${drillKey(seed)}:1000`, `tenant-burst:${drillKey(seed)}:1000`],
+    })
+    expect(drillCreditsFrom(store.getState().fleetWeek.measurementEvidence?.incident)).toEqual([])
   })
 })

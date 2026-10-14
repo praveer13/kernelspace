@@ -17,15 +17,16 @@ import {
   makeRng,
   routerLabel,
   type ClusterStats,
-  type EngineConfig,
-  type EngineStats,
   type RouterKind,
   type SchedulerDriver,
   type SchedAction,
   type SchedView,
-  type TickSample,
 } from '@/lib/fleet-model'
-import { splitmix32u } from '@/lib/rng'
+import type { FleetActMeta, IncidentData, IncidentResult } from '@/lib/ledger/types'
+import { incidentScore } from '@/lib/ledger/fold'
+import { freshSeed, splitmix32u } from '@/lib/rng'
+import { kcsFor, type FinishedIncident, type IncidentSource } from '@/lib/world/daily'
+import { FAULT_LABELS, INCIDENT_FAULTS, fixFor, generateIncident, type FixId, type IncidentFault, type IncidentSpec } from '@/lib/world/incident-spec'
 import { makeFaultInjector, type FaultSpec } from '@/lib/world/faults'
 import { instantiateLab } from '@/lib/wasm-lab'
 import { atlasRow } from '@/data/atlas'
@@ -41,10 +42,8 @@ export interface ActResult {
   metrics: [string, string][]
   /** The graded seed this run drew (null for the fixed practice scenario); the same seed replays it exactly. */
   seed?: number | null
-  /** An uncredited practice call: informational, not a verdict on the act. */
+  /** An uncounted practice run: informational, not a verdict on the act. */
   practice?: boolean
-  /** Act IV only: a first call was missed, so the act cannot be completed (no XP) until incidents on unseen seeds exist. */
-  closed?: boolean
 }
 
 export interface MeasurementEvidence {
@@ -114,8 +113,6 @@ export function act2Faults(seeds: FleetWeekSeeds, workers: number): FaultSpec[] 
 }
 
 const CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
-/** Intake-stall's node: the Act III rack's pool and batch, so the scheduler is never short of blocks or slots. */
-const INTAKE_STALL_CFG = { numBlocks: 2048, blockSize: 16, maxRunning: 96, sloTtft: 40, prefillChunk: 128 }
 const WORKER_CFG = { numBlocks: 128, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128 }
 const REQ_COUNT = 240
 const SPAN = 900
@@ -579,10 +576,18 @@ export function gradeAct3Doc(choiceId: string, claimCost: number, doc: string, e
 
 /* ------------------------------ ACT 4 ------------------------------ */
 
+/*
+ * Act IV is probe drills (docs/specs/wave-2.md §9.8). A drill is an incident session on reference components,
+ * generated from a seed drawn by `freshSeed()` when the drill starts and played with the Daily's hypothesis,
+ * probe and fix flow; the session's `finish` scores it. The act passes after one passed drill on each of three
+ * distinct faults. A retry is a new drill on a new seed, so nothing closes, and a drill on a seed the learner
+ * has already seen (a replay, or no fresh seed at all) is practice and never counts.
+ */
+
 /**
  * One selectable cause or mitigation. `why` follows the quiz convention: the key's starts with
- * "Right: ", a distractor's names the misconception and why the telemetry rules it out. The Act IV
- * page shows the chosen option's and the right one's after each call; scripts/verify-items.ts lints it.
+ * "Right: ", a distractor's names the misconception and why the telemetry rules it out. The debrief shows the
+ * learner's pick and the key; scripts/verify-items.ts lints every one.
  */
 export interface IncidentOption {
   id: string
@@ -591,406 +596,405 @@ export interface IncidentOption {
   why?: string
 }
 
+/**
+ * One catalog fault as a pair of menus. Every entry holds the same hypothesis menu in `causes` and the same
+ * fix menu in `mitigations` (same texts, same order); only `correct` and the whys vary. That is the menu a
+ * drill's flow shows, so `verify-items` checks the options a learner chooses between, and a shared option set
+ * gives a length or wording cue nothing to find.
+ */
 export interface Incident {
-  seed: number | null
   id: string
   title: string
   briefing: string
-  telemetry: TickSample[]
   causes: IncidentOption[]
   mitigations: IncidentOption[]
 }
 
 /**
- * What one incident runs: the node, the intake queue in front of it, the drain that feeds the scheduler and the
- * scheduler itself. The fault is whichever of these is wrong. `runIncident` takes the same fields as a change,
- * so a test can ask what each keyed mitigation (and each distractor) would do on the learner's own seed.
+ * The fix menu's order. It is not the order of the faults, so a rule that picks the same position in both menus
+ * (always the first, always the longest) does not land on one fault's pair of keys.
  */
-export interface IncidentScenario {
-  cfg: EngineConfig
-  sched: SchedulerDriver
-  intakeCapacity: number
-  drainPerTick: number
-}
+const FIX_MENU: readonly FixId[] = ['replace-node', 'limit-tenant', 'restore-pool', 'restore-drain']
 
-/** What a run of an incident reports: the telemetry the learner sees, plus the end-of-run numbers it is graded against. */
-export interface IncidentRun {
-  /** one TickSample every 10 ticks, as the Act IV page draws them */
-  series: TickSample[]
-  stats: EngineStats
-  goodput: number
-  ttftP95: number
-  tpotP95: number
-  queueP95: number
-  ticks: number
-}
-
-/** Over-admission at small sizes: the scheduler fits prompts only, with no headroom for decode growth. */
-const NAIVE_SJF: SchedulerDriver = {
-  name: 'naive-sjf',
-  schedule: (v: SchedView) => {
-    const w = [...v.waiting].sort((a, b) => a.prompt - b.prompt || a.arrival - b.arrival)
-    const used = v.running.reduce((a, r) => a + r.prompt + r.decoded, 0)
-    const slots = v.maxRunning - v.running.length
-    const admit: number[] = []
-    let u = used
-    for (const r of w) {
-      if (admit.length >= slots) break
-      if (u + r.prompt > v.memCap) continue
-      admit.push(r.id)
-      u += r.prompt
-    }
-    return { admit, preempt: [] }
+/** Why each hypothesis is right or wrong for the fault that is actually running: `CAUSE_WHYS[running][option]`. */
+const CAUSE_WHYS: Record<IncidentFault, Record<IncidentFault, string>> = {
+  'pool-shrink': {
+    'pool-shrink':
+      'Right: free KV blocks sit near zero and auto-preempts keep rising while every worker is up and the intake queue is normal. A misconfigured memory fraction shrank the pool, so the same traffic evicts and recomputes, and first tokens arrive late while TPOT stays flat.',
+    'drain-stall':
+      'A stalled drain starves the scheduler: its waiting list would be near empty and KV would sit mostly free. Here the waiting list is long and free blocks are near zero, so requests do reach the scheduler and memory is what refuses them.',
+    'node-death':
+      'A dead worker shows as one worker down and requests lost in flight at the onset. Every worker is up here and nothing was lost; the pressure is in the KV pool on all of them.',
+    'tenant-burst':
+      'A flooding tenant moves TPOT, with long prompts dominating the latency split. Here TPOT is flat and no tenant stands out, so who is sending the prompts does not explain a pool that is nearly out of blocks.',
+  },
+  'drain-stall': {
+    'pool-shrink':
+      'A shrunken pool shows free blocks near zero and auto-preempts rising. Here KV is mostly free and nothing is preempted, so memory is not the constraint; the requests are held upstream of it.',
+    'drain-stall':
+      "Right: the intake queue is full and shedding while the scheduler's waiting list is near empty and KV is mostly free. Requests are held in front of the engine because the drain feeds the scheduler too slowly, so the GPUs idle while queue delay and shed climb.",
+    'node-death':
+      'A dead worker shows as one worker down and requests lost in flight at the onset. Every worker is up and the errors here are requests shed at the queue, not requests lost mid-run.',
+    'tenant-burst':
+      "A flooding tenant raises TPOT, with long prompts dominating the latency split and a long scheduler waiting list. Here the waiting list is near empty and TPOT is not the metric that moved: requests are stuck before the scheduler.",
+  },
+  'node-death': {
+    'pool-shrink':
+      "A shrunken pool shows free blocks near zero on every worker that is up. The survivor's KV is in a normal range and the liveness probe shows one worker down, which a pool story cannot explain.",
+    'drain-stall':
+      'A stalled drain fills the intake queue and leaves the scheduler waiting list near empty, and it never loses a request already running. Here the waiting list is long, the intake queue is normal and requests were lost in flight.',
+    'node-death':
+      'Right: one worker is down in the liveness probe and the requests running on it were lost at the onset, so the survivor carries all the traffic. That gives a long waiting list and late first tokens, with the KV pool and the intake queue otherwise normal.',
+    'tenant-burst':
+      'A flooding tenant raises TPOT while every worker stays up. Here a worker is down and requests were lost, so capacity left the fleet; no tenant shifted it by sending long prompts.',
+  },
+  'tenant-burst': {
+    'pool-shrink':
+      'A shrunken pool shows free blocks near zero, preempts rising and a flat TPOT. Here KV is low rather than exhausted and TPOT is the metric that moved, with long prompts dominating the split.',
+    'drain-stall':
+      'A stalled drain leaves the scheduler waiting list near empty and KV mostly free. Here the waiting list is long and KV is low, so requests do reach the scheduler; it is the running ones that are slow.',
+    'node-death':
+      'A dead worker shows as one worker down and requests lost in flight. Every worker is up and nothing was lost; the slowdown is TPOT for requests that already started, and long prompts dominate it.',
+    'tenant-burst':
+      "Right: TPOT p95 is up and long prompts dominate the latency split, with every worker up and KV low but not exhausted. One tenant's long prefills take the engine's iterations away from everyone else's decodes.",
   },
 }
 
-/** No admission control: everything waiting is admitted, whether or not the pool can back it. */
-const GREEDY_SCHEDULER: SchedulerDriver = {
-  name: 'greedy',
-  schedule: (v: SchedView) => ({ admit: v.waiting.map((r) => r.id), preempt: [] }),
+/** Why each fix is right or wrong for the fault that is running: `FIX_WHYS[running][fix]`. */
+const FIX_WHYS: Record<IncidentFault, Record<FixId, string>> = {
+  'pool-shrink': {
+    'restore-pool':
+      'Right: putting the KV memory fraction back restores the usable blocks, which ends the preempt-and-recompute cycle that delays first tokens. It reverts the misconfiguration itself, and it takes one minute to roll out.',
+    'restore-drain':
+      'The drain rate is not the constraint: the intake queue is normal and the scheduler already has a long waiting list. Draining faster only hands more requests to a pool that cannot hold them.',
+    'replace-node':
+      'No worker is down, so there is nothing to replace, and a fresh node would come up with the same shrunken pool. The wrong fix costs five minutes of burn and leaves the fault in place.',
+    'limit-tenant':
+      'No tenant stands out in the latency split, so there is no noisy tenant to cap. Capping admissions would only turn away traffic in a fleet that is short of memory, not of fairness.',
+  },
+  'drain-stall': {
+    'restore-pool':
+      'Memory is not short: KV is mostly free and nothing is waiting at the scheduler. More blocks add capacity that already sits idle, so goodput does not move and the shedding goes on.',
+    'restore-drain':
+      'Right: the bottleneck is the intake drain, so restoring its rate lets the queue empty into a scheduler that has room. Shed stops, queue delay falls, and it takes one minute to roll out.',
+    'replace-node':
+      'Every worker is up, so a replacement changes nothing about the rate at which requests leave the queue. The wrong fix costs five minutes of burn while the queue keeps shedding.',
+    'limit-tenant':
+      'The latency split shows no tenant dominating, and the queue is full of ordinary requests. Capping one tenant does not speed up a drain that is slow for everybody.',
+  },
+  'node-death': {
+    'restore-pool':
+      "The survivor's KV pool is in a normal range, so there are no blocks to give back. The shortfall is a worker that is no longer serving, which no memory setting restores.",
+    'restore-drain':
+      'The intake queue is normal and the survivor already drains it every tick, so a faster drain moves nothing. The overload shows in the waiting list, because there is one engine less to admit from it.',
+    'replace-node':
+      'Right: the liveness probe shows one worker down, so capacity is what is missing. A replacement node joins the router and takes its share of the traffic back, and it takes one minute to roll out.',
+    'limit-tenant':
+      'No tenant dominates the latency split; the load is ordinary traffic on half the engines. Capping a tenant sheds requests the surviving worker could not have served anyway, and the dead worker stays dead.',
+  },
+  'tenant-burst': {
+    'restore-pool':
+      'KV is low but not exhausted and nothing is being preempted, so more blocks would sit unused. The delay is TPOT, from long prefills taking iterations, not a shortage of memory.',
+    'restore-drain':
+      'The intake queue is normal and the waiting list is long, so requests already leave the queue as fast as the scheduler can take them. A faster drain only lengthens the waiting list behind the same long prompts.',
+    'replace-node':
+      'Every worker is up and none was lost, so another node changes nothing about which prompts are running. The wrong fix costs five minutes of burn while the tenant keeps flooding.',
+    'limit-tenant':
+      "Right: capping the noisy tenant's admissions stops its long prefills from taking iterations from everyone else's decodes, so TPOT comes back. It reverts the cause rather than the symptom, and it takes one minute to roll out.",
+  },
 }
 
-/** The drain a healthy intake runs at (the engine default for every other act). */
-export const HEALTHY_DRAIN_PER_TICK = 8
-
-/**
- * The faults, as parameters. kv-thrash is a pool of 96 blocks under a scheduler with no headroom (decode growth
- * overflows, auto-preempt storm). intake-stall is a big, mostly idle node (the Act III rack's pool and batch) behind
- * an intake that drains 1 request per tick: only a flash crowd outruns that, so shed arrives in steps while the
- * scheduler has nothing waiting. no-admission is the Act I node behind a scheduler that admits everything.
- * tests/fleet/incident-consistency.test.ts holds each briefing and key to these numbers on 32 graded seeds.
- */
-export const INCIDENT_SCENARIOS: Record<string, IncidentScenario> = {
-  'kv-thrash': { cfg: { ...CFG, numBlocks: 96 }, sched: NAIVE_SJF, intakeCapacity: 32, drainPerTick: HEALTHY_DRAIN_PER_TICK },
-  'intake-stall': { cfg: INTAKE_STALL_CFG, sched: makeRefScheduler(), intakeCapacity: 32, drainPerTick: 1 },
-  'no-admission': { cfg: CFG, sched: GREEDY_SCHEDULER, intakeCapacity: 32, drainPerTick: HEALTHY_DRAIN_PER_TICK },
-}
-
-/** Run an incident's scenario on these seeds to completion, with `change` applied on top (the counterfactual). */
-export function runIncident(
-  id: string,
-  seeds: FleetWeekSeeds,
-  change: Partial<Omit<IncidentScenario, 'cfg'>> & { cfg?: Partial<EngineConfig> } = {},
-): IncidentRun {
-  const base = INCIDENT_SCENARIOS[id]
-  if (!base) throw new Error(`no incident scenario "${id}"`)
-  const cfg = { ...base.cfg, ...change.cfg }
-  const e = new Engine(cfg, traceFor(seeds), change.sched ?? base.sched, makeRefManager(cfg.numBlocks, cfg.blockSize), {
-    intake: makeRefQueue(change.intakeCapacity ?? base.intakeCapacity),
-    drainPerTick: change.drainPerTick ?? base.drainPerTick,
-  })
-  const series: TickSample[] = []
-  e.recorder = (s) => {
-    if (s.tick % 10 === 0) series.push(s)
-  }
-  const ticks = drain(e, REQ_COUNT)
-  return {
-    series,
-    stats: e.stats(),
-    goodput: e.goodput(REQ_COUNT),
-    ttftP95: e.ttftP95(),
-    tpotP95: e.tpotP95(),
-    queueP95: e.queueP95(),
-    ticks,
-  }
-}
-
-export const INCIDENTS: Omit<Incident, 'telemetry' | 'seed'>[] = [
-  {
-    id: 'kv-thrash',
-    title: 'incident 01 — the p99 that climbed all shift',
+const BRIEFINGS: Record<IncidentFault, { title: string; briefing: string }> = {
+  'pool-shrink': {
+    title: 'incident 01 — the first tokens that kept slipping',
     briefing:
-      'gen_ai.server.time_to_first_token p95 has been climbing for hours while TPOT stays comparatively flat. Auto-preempts are nonzero and rising; free blocks hover near zero. Nothing was deployed today — but the traffic got longer-context this week.',
-    causes: [
-      {
-        id: 'sched-bug',
-        label: 'scheduler regression that admits too few requests per step, leaving the pool mostly idle',
-        correct: false,
-        why: 'The pool is not idle: free blocks sit near zero. Preemption only hits requests that were already admitted, so rising auto-preempts show the scheduler is admitting plenty and memory is the constraint.',
-      },
-      {
-        id: 'pool-small',
-        label: 'capacity wall, with allocations failing in a pool too small for the new contexts',
-        correct: true,
-        why: 'Right: near-zero free blocks plus rising auto-preempts mean allocations fail and preempted requests restart by recompute. Longer contexts take more blocks each, so the same pool holds fewer sequences and TTFT climbs.',
-      },
-      {
-        id: 'net-stall',
-        label: 'network stall between workers, delaying the first token while decode stays normal',
-        correct: false,
-        why: 'A transfer stall would delay first tokens, but by itself it would not explain near-zero free blocks together with rising auto-preempts. Those are KV-allocation signals, so the pool is the better-supported cause.',
-      },
-      {
-        id: 'queue-lie',
-        label: 'intake queue silently dropping requests, with clients retrying in bursts behind each other',
-        correct: false,
-        why: 'Retry bursts would raise queue delay, but they do not explain free blocks near zero together with nonzero, rising auto-preempts. That signature points at the KV pool, not at intake.',
-      },
-    ],
-    mitigations: [
-      {
-        id: 'restart',
-        label: 'restart workers on an hourly schedule, to reclaim leaked blocks and clear any stale state over time',
-        correct: false,
-        why: 'Nothing is leaking: blocks return to the pool when requests finish. The pressure is live demand from long contexts, so a restart drops in-flight work and the preempt storm returns as traffic refills the pool.',
-      },
-      {
-        id: 'bigger-pool',
-        label: 'grow the pool with more memory, quantized blocks or an offload tier while capping admitted context',
-        correct: true,
-        why: 'Right: more usable blocks (HBM, FP8 KV at half the bytes of 16-bit, or an offload tier) lift the capacity wall: doubling the pool already cuts TTFT p95 and lifts goodput, and quadrupling it nearly ends the preempts. A cap on admitted context stops one long request from evicting many others.',
-      },
-      {
-        id: 'smaller-batch',
-        label: 'lower max_running to cut preemptions, accepting a throughput ceiling in the meantime',
-        correct: false,
-        why: 'Fewer concurrent sequences leaves the pool just as small for the new contexts: preemptions are not reliably cut and goodput stays well below what adding blocks gives. It caps throughput and the cause is untouched.',
-      },
-      {
-        id: 'chunked-prefill',
-        label: 'enable chunked prefill, so long prompts stop blocking the decode steps of running requests',
-        correct: false,
-        why: 'Chunked prefill smooths prefill-decode interference, which shows up as TPOT spikes. TPOT is flat here; the pain is preemption from block exhaustion, and chunking leaves goodput far below what adding blocks gives.',
-      },
-    ],
+      'TTFT p95 is up while TPOT stays flat. Every worker is up and the intake queue is short, but free KV blocks hover near zero, auto-preempts rise, and the scheduler has a long waiting list.',
   },
-  {
-    id: 'intake-stall',
+  'drain-stall': {
     title: 'incident 02 — shed climbing, GPUs idle',
     briefing:
-      'The queue-delay p95 is high and the shed count jumps at every traffic burst, yet workers sit mostly empty: running is low, free blocks are plentiful and the scheduler waiting list is empty. Nothing is preempted, and TPOT is normal once a request starts.',
-    causes: [
-      {
-        id: 'drain',
-        label: 'intake drain below the arrival rate, so the queue fills and sheds despite idle capacity',
-        correct: true,
-        why: 'Right: the scheduler has nothing waiting, running is low and free blocks are plentiful, so requests are held upstream. A drain slower than a traffic burst fills intake and sheds, while TPOT stays normal and GPUs idle.',
-      },
-      {
-        id: 'pool-small',
-        label: 'pool too small, so blocks run out and preempted requests re-queue until the backlog sheds',
-        correct: false,
-        why: 'A full pool shows near-zero free blocks, preemptions and a long scheduler waiting list. Here free blocks are plentiful, nothing is preempted and nothing is waiting, so memory is not the constraint.',
-      },
-      {
-        id: 'hot-expert',
-        label: 'hot expert straggler, so one overloaded expert gates each step and slows the whole worker',
-        correct: false,
-        why: 'A straggler stretches step time, so TPOT would rise for requests already running. TPOT is normal once a request starts, which places the stall before the engine, not inside a step.',
-      },
-      {
-        id: 'sched-bug',
-        label: 'scheduler stuck with an admit step that returns nothing, so requests pile up while workers sit idle',
-        correct: false,
-        why: 'A stuck scheduler would show a long waiting list, because requests reach it and are not admitted. The waiting list is near zero, so the bottleneck sits upstream, at the intake drain.',
-      },
-    ],
-    mitigations: [
-      {
-        id: 'bigger-pool',
-        label: 'grow the pool to let each worker hold more sequences once the backlog finally arrives',
-        correct: false,
-        why: 'Memory is not short: nothing is waiting at the scheduler and workers are mostly empty. More blocks add capacity that already sits idle, so goodput does not move and the drain bottleneck, and the shedding, stay untouched.',
-      },
-      {
-        id: 'fix-drain',
-        label: 'fix the drain configuration to match what admission can absorb, then rerun the test',
-        correct: true,
-        why: 'Right: the bottleneck is the drain rate, so match it to what admission can absorb. Re-running the flash-crowd test confirms that shed more than halves and queue delay falls rather than assuming they do.',
-      },
-      {
-        id: 'restart',
-        label: 'restart the router to flush the queue, then watch whether the shed count returns',
-        correct: false,
-        why: 'A restart may clear the backlog briefly, but the drain is still slower than a traffic burst, so the next burst fills the queue and sheds again. It treats a configuration fault as a transient hang.',
-      },
-      {
-        id: 'bigger-queue',
-        label: 'enlarge the intake queue to buffer a flash crowd instead of shedding, and revisit the drain later',
-        correct: false,
-        why: 'A larger buffer stops the shedding but not the wait: the queue still empties at the same slow rate, so queue delay ends up higher than before and buffered requests wait past the SLO. Goodput gains no more than the fix gives.',
-      },
-    ],
+      "Queue delay is high and the shed count jumps at every burst, yet the engines sit mostly idle: the scheduler's waiting list is nearly empty and KV is mostly free. TPOT is normal once a request starts.",
   },
-  {
-    id: 'no-admission',
-    title: 'incident 03 — goodput fell off a cliff at launch',
+  'node-death': {
+    title: 'incident 03 — the minute a worker stopped answering',
     briefing:
-      'Launch day: far more requests are in flight than the pool can hold. Goodput collapses and TTFT p95 explodes; TPOT for requests that already started is comparatively stable. The batch stays full while completions crawl.',
-    causes: [
-      {
-        id: 'no-admission',
-        label: 'no admission control, so everything is admitted at once and the batch overcommits memory until queueing hurts latency',
-        correct: true,
-        why: 'Right: with no gate, launch-day concurrency lands in one full batch that overcommits KV. Completions crawl, TTFT p95 explodes and goodput collapses, while TPOT for started requests holds.',
-      },
-      {
-        id: 'pool-small',
-        label: 'pool sized too small for launch-day contexts, so blocks run out and requests are preempted and recomputed repeatedly',
-        correct: false,
-        why: 'Pool size adds pressure but is not the root cause: an admit-everything policy overruns any finite pool at some load, and even on a pool twice the size it earns no more goodput than a gated engine. The full batch with crawling completions points at missing admission control.',
-      },
-      {
-        id: 'net-stall',
-        label: 'network partition between router and workers, so every launch-day request including short prompts gets a delayed first token',
-        correct: false,
-        why: 'A partition would stall or fail requests already in flight, so TPOT would not be stable. The batch is full and workers are busy, so the engine is overloaded rather than disconnected.',
-      },
-      {
-        id: 'quant',
-        label: 'quantization regression from a recent build or kernel change, so each decode step slows and goodput drops',
-        correct: false,
-        why: 'A slower kernel would raise TPOT for every request already started. TPOT is comparatively stable, so no per-step slowdown explains the collapse; the damage is in batch size and memory overcommit, not the model build.',
-      },
-    ],
-    mitigations: [
-      {
-        id: 'bigger-pool',
-        label: 'grow the pool, so the oversized launch-day batch fits without any preemption',
-        correct: false,
-        why: 'More blocks raise the ceiling but not the policy: on a pool twice the size, admit-everything still earns no more goodput than a gated engine on the original pool. A larger pool cannot replace a gate and a shed path.',
-      },
-      {
-        id: 'admission',
-        label: 'add admission control that sizes each admit to memory headroom, so the rest is shed honestly',
-        correct: true,
-        why: 'Right: a size- and headroom-aware gate admits only what fits and holds or sheds the rest honestly, so KV never overcommits, goodput recovers and admitted requests keep meeting the SLO. Lab 06 builds this shape.',
-      },
-      {
-        id: 'smaller-model',
-        label: 'switch to a smaller model for launch week, so each decode step is cheaper and the batch drains faster',
-        correct: false,
-        why: 'A smaller model lowers per-step cost but changes quality and means a deploy mid-incident. Every request is still admitted at once, so the batch still overcommits and the missing gate remains.',
-      },
-      {
-        id: 'more-nodes',
-        label: 'double the fleet tonight, so the extra concurrency spreads across twice as many workers behind the router',
-        correct: false,
-        why: 'Extra nodes spread load only as well as the router balances it, and each still admits everything. Provisioning takes time and money, and any burst past the new capacity collapses the same way.',
-      },
-    ],
+      'TTFT p95 is up fleet-wide and some requests failed in flight at one moment. One worker is no longer stepping, and the survivor has a long waiting list. KV and the intake queue look normal.',
   },
-]
-
-export function loadIncident(id: string, seeds: FleetWeekSeeds): Incident | null {
-  const def = INCIDENTS.find((i) => i.id === id)
-  if (!def) return null
-  return { ...def, seed: seeds.seed, telemetry: runIncident(id, seeds).series }
+  'tenant-burst': {
+    title: 'incident 04 — everyone slowed down at once',
+    briefing:
+      "TPOT p95 is up and TTFT follows, with every worker up and nothing lost. One tenant's long prompts dominate the latency split, and KV runs low without running out.",
+  },
 }
 
 /**
- * Act IV credits only a learner's first call on each incident. The WhyList reveals the right
- * cause and mitigation after any call and the same incident can be re-opened, so a later call
- * proves recall of that reveal, not diagnosis from the telemetry. Later calls are practice:
- * graded and explained, but never counted toward the act or its XP.
- *
- * The act needs every incident right on its first call, so one missed first call closes it: no
- * call can undo that, and the act stays closed until incidents on unseen seeds exist. A closed act
- * still grades and records the first call on an incident that has not been called yet (it is not
- * practice), but `pass` can no longer be true, so no Act IV XP is awarded.
+ * The hypothesis menu as a multiple-choice item: one sentence per catalog fault, the same four in every entry. Every
+ * sentence has the same character and word count and none carries a comma, a colon, a figure, an acronym or a
+ * hedge word, so no length or wording rule can tell the key from the rest; scripts/verify-items.ts holds them to it.
  */
-export interface IncidentLedger {
-  /** Incident ids with at least one call (the first call is the only one that counts). */
-  attempted: string[]
-  /** Incident ids whose first call named the right cause and the right mitigation. */
-  credited: string[]
+const CAUSE_LABELS: Record<IncidentFault, string> = {
+  'pool-shrink': 'The cache memory pool shrank after a faulty setting',
+  'drain-stall': 'The intake drain stalled far below the arrival rate',
+  'node-death': 'A worker node died and dropped its running requests',
+  'tenant-burst': 'One tenant flooded the fleet with very long prompts',
 }
 
-export const EMPTY_INCIDENT_LEDGER: IncidentLedger = { attempted: [], credited: [] }
-
-const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
-
-const INCIDENT_IDS: ReadonlySet<string> = new Set(INCIDENTS.map((i) => i.id))
-
-/**
- * Distinct ids, first seen first, that name a real incident. A stored list is untrusted (an import, an old build,
- * a hand edit): `allDone` counts `credited.length`, so a repeated or invented id would stand in for an incident
- * that was never diagnosed.
- */
-const incidentIds = (v: unknown): string[] => [...new Set(strings(v))].filter((id) => INCIDENT_IDS.has(id))
-
-/**
- * The ledger is kept in the progress store's working state (`fw:evidence:incident`), not in component
- * state, so a reload or leaving the page cannot hand a learner a fresh first call on an incident whose
- * answer they have already seen. Reading it dedupes both lists and drops ids that are not in INCIDENTS.
- */
-export function incidentLedgerFrom(stored: { attempted?: unknown; credited?: unknown } | undefined): IncidentLedger {
-  if (!stored) return EMPTY_INCIDENT_LEDGER
-  const attempted = incidentIds(stored.attempted)
-  return { attempted, credited: incidentIds(stored.credited).filter((id) => attempted.includes(id)) }
+/** The fix menu as a multiple-choice item, written to the same rule as `CAUSE_LABELS`. */
+const FIX_LABELS: Record<FixId, string> = {
+  'replace-node': 'Replace the dead worker node with a healthy one',
+  'limit-tenant': "Cap the noisy tenant's admissions at a low rate",
+  'restore-pool': 'Put the cache memory fraction back where it was',
+  'restore-drain': 'Put the intake drain rate back where it belongs',
 }
 
-/** Incidents whose first call was missed. Any one of them closes the act, because it needs every incident right first time. */
-export const incidentMisses = (ledger: IncidentLedger): number => ledger.attempted.length - ledger.credited.length
+const causeMenu = (running: IncidentFault): IncidentOption[] =>
+  INCIDENT_FAULTS.map((fault) => ({ id: fault, label: CAUSE_LABELS[fault], correct: fault === running, why: CAUSE_WHYS[running][fault] }))
+
+const fixMenu = (running: IncidentFault): IncidentOption[] =>
+  FIX_MENU.map((fix) => ({ id: fix, label: FIX_LABELS[fix], correct: fixFor(running) === fix, why: FIX_WHYS[running][fix] }))
+
+/** One entry per catalog fault, each holding the shared hypothesis and fix menus (§9.8). */
+export const INCIDENTS: Incident[] = INCIDENT_FAULTS.map((fault) => ({
+  id: fault,
+  title: BRIEFINGS[fault].title,
+  briefing: BRIEFINGS[fault].briefing,
+  causes: causeMenu(fault),
+  mitigations: fixMenu(fault),
+}))
+
+/* ------------------------------- drills ------------------------------- */
+
+/** Q5: the right fault, the right fix, and a burn within this multiple of the expert's plus `DRILL_BURN_SLACK`. */
+export const DRILL_BURN_FACTOR = 2
+export const DRILL_BURN_SLACK = 5
+/** Q5: the act passes after one passed drill on each of this many distinct faults. */
+export const DRILL_FAULTS_NEEDED = 3
+
+/** What a finished drill reports that the rule reads (a slice of the session's `finish`). */
+export interface DrillFacts {
+  diagnosed: boolean
+  fixed: boolean
+  burn: number
+  expertBurn: number
+}
+
+export const drillPassed = (d: DrillFacts): boolean => d.diagnosed && d.fixed && d.burn <= DRILL_BURN_FACTOR * d.expertBurn + DRILL_BURN_SLACK
+
+/** A drill's score: the ledger's incident score for a passed drill (the expert's burn over yours), 0 otherwise. */
+export const drillScore = (d: DrillFacts): number => (drillPassed(d) ? incidentScore(d) : 0)
+
+/** A drill's seed as the incident's key and the ref's tail: eight hex digits, as `seedLabel` shows it. */
+export const drillKey = (seed: number): string => (seed >>> 0).toString(16).padStart(8, '0')
+
+/** What a drill plays: its seed, and the incident that seed generates. */
+export interface Drill {
+  seed: number
+  /** a replay of an incident the learner has already seen: played, debriefed, never recorded or counted */
+  practice: boolean
+  source: IncidentSource
+  spec: IncidentSpec
+}
+
+export function drillFor(seed: number, practice = false): Drill {
+  const source: IncidentSource = { ns: 'drill', key: drillKey(seed) }
+  return { seed: seed >>> 0, practice, source, spec: generateIncident(source.ns, source.key) }
+}
+
+/** A new drill on a seed drawn now: unseen, though not secret, as the labs' seeds are. `draw` is injectable for tests. */
+export const startDrill = (draw: () => number = freshSeed): Drill => drillFor(draw())
+
+/** The same incident again, for practice: it never writes an event and never counts. */
+export const replayDrill = (d: Drill): Drill => ({ ...d, practice: true })
+
+/** One passed drill that counts toward the act. At most one per fault is kept. */
+export interface DrillCredit {
+  fault: IncidentFault
+  seed: number
+  score: number
+}
+
+/** The credits, as the strings the progress store keeps in `fw:evidence:incident` (`credited`): fault, seed, score in thousandths. */
+export const encodeCredits = (credits: readonly DrillCredit[]): string[] =>
+  credits.map((c) => `${c.fault}:${drillKey(c.seed)}:${Math.round(c.score * 1000)}`)
+
+const CREDIT_RE = /^([a-z-]+):([0-9a-f]{8}):(\d{1,4})$/
 
 /**
- * Shown for as long as a missed first call is on record. First-attempt-only credit has no way back inside
- * the current incident set: the act reopens only with incidents on seeds the learner has not seen.
+ * Read the credits back. The stored list is untrusted (an import, an old build whose `credited` held static incident
+ * ids, a hand edit), so an entry survives only if it parses, names a catalog fault, and that fault is the one its
+ * seed generates; the first entry per fault and per seed wins.
  */
-export const INCIDENT_CLOSED_NOTE =
-  'A first call was missed, and Act IV needs every incident right on its first call, so the act is closed for now and earns no XP. Repeat calls on an incident are practice: graded and explained, but not marked. First calls on incidents you have not called yet are still graded and marked, but they cannot complete the act. Fresh incidents on unseen seeds arrive in a later update, and those will count.'
-
-export function gradeIncidentCall(
-  ledger: IncidentLedger,
-  incident: { id: string; title: string },
-  causeOk: boolean,
-  mitigationOk: boolean,
-  total: number = INCIDENTS.length,
-): { ledger: IncidentLedger; practice: boolean; result: ActResult } {
-  // never trust the caller's ledger either: a repeated or unknown id would inflate credited.length
-  const prior = incidentLedgerFrom(ledger)
-  const ok = causeOk && mitigationOk
-  // an id outside INCIDENTS can never be credited
-  const practice = !INCIDENT_IDS.has(incident.id) || prior.attempted.includes(incident.id)
-  const next: IncidentLedger = practice
-    ? prior
-    : {
-        attempted: [...prior.attempted, incident.id],
-        credited: ok ? [...prior.credited, incident.id] : prior.credited,
-      }
-  const name = incident.title.split('—')[0].trim()
-  const missed = incidentMisses(next)
-  const metrics: [string, string][] = [
-    ['first calls right', `${next.credited.length}/${total}`],
-    ['cause', causeOk ? 'correct' : 'wrong'],
-    ['mitigation', mitigationOk ? 'correct' : 'wrong'],
-  ]
-  const verdict = `cause ${causeOk ? '✓' : '✗'} · mitigation ${mitigationOk ? '✓' : '✗'}`
-  const closed = missed > 0
-  if (practice) {
-    return {
-      ledger: next,
-      practice,
-      result: {
-        pass: false,
-        practice: true,
-        closed,
-        score: next.credited.length / total,
-        headline: ok ? `${name} diagnosed, not credited` : 'not diagnosed',
-        detail: closed
-          ? `${verdict}. Practice call: Act IV credits only first calls and a missed first call has closed it for now, so nothing here is credited. Fresh incidents on unseen seeds arrive in a later update.`
-          : `${verdict}. Only the first call on an incident counts toward the act and XP; this one was practice.`,
-        metrics,
-      },
-    }
+export function drillCreditsFrom(stored: { credited?: unknown } | undefined): DrillCredit[] {
+  const raw = stored && Array.isArray(stored.credited) ? stored.credited : []
+  const out: DrillCredit[] = []
+  for (const entry of raw) {
+    const m = typeof entry === 'string' ? CREDIT_RE.exec(entry) : null
+    if (!m) continue
+    const fault = INCIDENT_FAULTS.find((f) => f === m[1])
+    const seed = parseInt(m[2], 16)
+    const score = Number(m[3]) / 1000
+    if (!fault || score > 1) continue
+    if (drillFor(seed).spec.fault !== fault) continue
+    if (out.some((c) => c.fault === fault || c.seed === seed)) continue
+    out.push({ fault, seed, score })
   }
-  const allDone = next.credited.length >= total
-  const left = total - next.attempted.length
-  let detail: string
-  if (allDone) detail = 'all three incidents diagnosed with the right fix on the first call. The Planner would hire you.'
-  else if (!ok) detail = `${verdict}. That was the first call on this incident, so it is now practice only: the right answer is shown below and a later call here will not count. Act IV needs every incident right on its first call, so it is closed for now and earns no XP. Fresh incidents on unseen seeds arrive in a later update.`
-  else if (closed) detail = `${verdict}. Correct and marked, but ${missed} incident(s) were missed on the first call, so Act IV stays closed and earns no XP. Fresh incidents on unseen seeds arrive in a later update.`
-  else detail = `${left} incident(s) left to call for the first time. Each needs the right cause and mitigation on its first call; a miss closes the act for now.`
+  return out
+}
+
+/** The mean score of the credits: the act's score. */
+export const actScore = (credits: readonly DrillCredit[]): number => (credits.length === 0 ? 0 : credits.reduce((a, c) => a + c.score, 0) / credits.length)
+
+export type DrillVerdict =
+  /** passed on a new fault: counts */
+  | 'credited'
+  /** passed, but on a fault that already counts */
+  | 'repeat-fault'
+  /** played on a seed the learner had seen, or on no fresh seed: never counts, passed or not */
+  | 'practice'
+  /** not passed; the next drill is a new incident */
+  | 'failed'
+
+export interface DrillGrade {
+  verdict: DrillVerdict
+  /** the credits after this drill */
+  credits: DrillCredit[]
+  /** the act is passed with these credits */
+  pass: boolean
+  result: ActResult
+}
+
+/** The drill being graded: what it reported, on which seed (`null` for a practice drill on a fixed seed). */
+export interface DrillAttempt extends DrillFacts {
+  fault: IncidentFault
+  seed: number | null
+}
+
+const faultName = (f: IncidentFault) => FAULT_LABELS[f]
+
+/**
+ * Grade one drill against the credits so far. Pure: `recordDrill` writes what it decides. A drill counts only if it
+ * was on a fresh seed (`seed !== null`), passed, and is on a fault that does not count yet; a seed that already
+ * earned a credit is not fresh again.
+ */
+export function gradeDrill(prior: readonly DrillCredit[], attempt: DrillAttempt, needed: number = DRILL_FAULTS_NEEDED): DrillGrade {
+  const passed = drillPassed(attempt)
+  const fresh = attempt.seed !== null && !prior.some((c) => c.seed === attempt.seed)
+  let verdict: DrillVerdict
+  if (!fresh) verdict = 'practice'
+  else if (!passed) verdict = 'failed'
+  else verdict = prior.some((c) => c.fault === attempt.fault) ? 'repeat-fault' : 'credited'
+  const credits = verdict === 'credited' ? [...prior, { fault: attempt.fault, seed: attempt.seed as number, score: drillScore(attempt) }] : [...prior]
+  const pass = credits.length >= needed
+  const left = Math.max(0, needed - credits.length)
+  const burn = `burn ${round1(attempt.burn)} against the expert's ${round1(attempt.expertBurn)} (limit ${round1(DRILL_BURN_FACTOR * attempt.expertBurn + DRILL_BURN_SLACK)})`
+  const why = !attempt.diagnosed
+    ? 'you did not hold the right fault when you fixed it'
+    : !attempt.fixed
+      ? 'the right fix did not go in before the clock ran out'
+      : `${burn}, so the fleet burned too much budget`
+  const headline =
+    verdict === 'credited'
+      ? `drill passed: ${faultName(attempt.fault)}`
+      : verdict === 'repeat-fault'
+        ? `passed again: ${faultName(attempt.fault)} already counts`
+        : verdict === 'practice'
+          ? passed
+            ? 'practice drill: not counted'
+            : 'practice drill'
+          : 'drill not passed'
+  const detail =
+    verdict === 'credited'
+      ? pass
+        ? `${burn}. That is ${credits.length} distinct faults passed on fresh seeds, so Act IV is done.`
+        : `${burn}. ${left} more ${left === 1 ? 'fault' : 'faults'} to go; each needs its own passed drill.`
+      : verdict === 'repeat-fault'
+        ? `${burn}. A second pass on the same fault does not add to the three; take a drill on a fault you have not passed.`
+        : verdict === 'practice'
+          ? 'This incident was already seen (a replay), so it is practice: the debrief is yours, nothing is recorded and it does not count. A new drill draws a new seed.'
+          : `${why}. Retries are free: the next drill is a new incident on a new seed, and nothing is closed.`
   return {
-    ledger: next,
-    practice,
+    verdict,
+    credits,
+    pass,
     result: {
-      pass: allDone,
-      closed,
-      score: next.credited.length / total,
-      headline: ok ? `correct — ${name} diagnosed` : 'wrong call — this incident is now practice only',
+      pass,
+      practice: verdict === 'practice',
+      score: actScore(credits),
+      headline,
       detail,
-      metrics,
+      metrics: [
+        ['faults passed', `${credits.length}/${needed}`],
+        ['this drill', passed ? 'passed' : 'not passed'],
+        ['burn', `${round1(attempt.burn)} burn-min (expert ${round1(attempt.expertBurn)})`],
+        ['drill seed', attempt.seed === null ? 'practice (seen)' : `0x${drillKey(attempt.seed)}`],
+      ],
+      seed: attempt.seed,
     },
   }
+}
+
+const round1 = (n: number): number => Math.round(n * 10) / 10
+
+/**
+ * The `incident` event of a drill (`src: 'drill'`, `act4: true`). Its ref names the fault (`inc:drill/<faultId>`, the
+ * ledger's grammar), so the aggregate keeps one entry per fault; the drill's own seed rides on the event. The façade
+ * grades it `unseen` for any drill, which is why a practice replay is never recorded.
+ */
+export function drillResult(drill: Drill, done: FinishedIncident, components: string[] = []): IncidentResult {
+  const data: IncidentData = {
+    v: 1,
+    src: 'drill',
+    fault: done.fault,
+    severity: done.severity,
+    ...(done.firstHypothesis === undefined ? {} : { firstHypothesis: done.firstHypothesis }),
+    ...(done.hypothesis === undefined ? {} : { hypothesis: done.hypothesis }),
+    probes: done.probes,
+    ...(done.fix === undefined ? {} : { fix: done.fix }),
+    diagnosed: done.diagnosed,
+    fixed: done.fixed,
+    burn: done.burn,
+    expertBurn: done.expertBurn,
+    streetlight: done.streetlight,
+    components,
+    act4: true,
+    kcs: kcsFor(done.fault),
+  }
+  return { ref: `inc:drill/${done.fault}`, seed: drill.seed, data }
+}
+
+/** The slice of the progress store `recordDrill` reads and writes. */
+export interface DrillStore {
+  getState(): {
+    fleetWeek: { actsDone: string[]; measurementEvidence?: Record<string, { credited?: string[] } | undefined> }
+    recordIncident(r: IncidentResult): void
+    setFleetWeekEvidence(actId: string, patch: { credited?: string[] }): void
+    completeFleetWeekAct(actId: string, score: number, meta?: FleetActMeta): void
+  }
+}
+
+/**
+ * Record a finished drill and grade it against the learner's credits, which live in the progress store's working
+ * state (`fw:evidence:incident`), so a reload or a second tab cannot reset them.
+ *   - A fresh drill writes its `incident` event (provenance `unseen`, the drill's own seed), pass or fail.
+ *   - A practice drill writes nothing, passed or not.
+ *   - The drill that makes the third distinct fault completes the act once, with the mean drill score, the seed
+ *     of that drill, provenance `unseen` and the faults and seeds that earned it.
+ */
+export function recordDrill(store: DrillStore, drill: Drill, done: FinishedIncident, components: string[] = []): DrillGrade {
+  const state = store.getState()
+  const prior = drillCreditsFrom(state.fleetWeek.measurementEvidence?.incident)
+  const grade = gradeDrill(prior, { ...done, seed: drill.practice ? null : drill.seed })
+  if (grade.verdict === 'practice') return grade
+  state.recordIncident(drillResult(drill, done, components))
+  if (grade.verdict === 'credited') {
+    state.setFleetWeekEvidence('incident', { credited: encodeCredits(grade.credits) })
+    if (grade.pass && !state.fleetWeek.actsDone.includes('incident')) {
+      state.completeFleetWeekAct('incident', actScore(grade.credits), {
+        seed: drill.seed,
+        provenance: 'unseen',
+        data: { faults: grade.credits.map((c) => c.fault), seeds: grade.credits.map((c) => drillKey(c.seed)) },
+      })
+    }
+  }
+  return grade
 }

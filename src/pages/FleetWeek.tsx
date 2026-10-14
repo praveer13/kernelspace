@@ -1,32 +1,54 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play, X } from 'lucide-react'
 import { ClaimValue } from '@/components/ClaimValue'
-import { TelemetryGrid } from '@/components/telemetry/TelemetryGrid'
+import Alert from '@/components/daily/Alert'
+import Debrief from '@/components/daily/Debrief'
+import FixMenu from '@/components/daily/FixMenu'
+import Hypothesis from '@/components/daily/Hypothesis'
+import ProbeBar from '@/components/daily/ProbeBar'
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
   ACT3_COST_LABEL,
   gradeMeasurementSubmission,
   gradeAct3Doc,
-  gradeIncidentCall,
-  incidentLedgerFrom,
-  incidentMisses,
+  drillCreditsFrom,
+  drillKey,
+  recordDrill,
+  replayDrill,
+  startDrill,
+  DRILL_BURN_SLACK,
+  DRILL_FAULTS_NEEDED,
   HW_MENU,
-  INCIDENT_CLOSED_NOTE,
   INCIDENTS,
   seedLabel,
   type Act2Choice,
   type ActResult,
   type Act3Eval,
-  type Incident,
+  type Drill,
+  type DrillGrade,
   type IncidentOption,
   type MeasurementActId,
   type MeasurementEvidence,
 } from '@/lib/fleet-week'
 import type { RouterKind } from '@/lib/fleet-model'
-import { freshSeed, shuffledOrder } from '@/lib/rng'
+import { describeFleetError, openIncidentSession, type IncidentClientSession } from '@/lib/fleet-session'
+import {
+  HYPOTHESIS_OPTIONS,
+  readingHeadline,
+  sinceAlert,
+  startFlow,
+  withFix,
+  withHypothesis,
+  withProbe,
+  withWait,
+  type FlowRun,
+  type FlowState,
+} from '@/lib/world/daily'
+import { FAULT_LABELS, FIXES, INCIDENT_FAULTS, type FixId, type Hypothesis as HypothesisId, type IncidentFault, type ProbeId } from '@/lib/world/incident-spec'
+import type { FleetSlotBytes, IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
 import { moduleBytes, runSim, SimTimeoutError } from '@/workers/sim-client'
 import { cn } from '@/lib/utils'
 
@@ -34,7 +56,7 @@ const ACTS = [
   { id: 'engine', title: 'Act I — The Engine', brief: 'your stack vs the reference on the fleet trace', xp: XP.fleetWeekAct },
   { id: 'fleet', title: 'Act II — The Fleet', brief: 'node death + flash crowd: pick the topology, absorb it', xp: XP.fleetWeekAct },
   { id: 'business', title: 'Act III — The Business', brief: 'price the hardware, defend the claim — we execute it', xp: XP.fleetWeekAct },
-  { id: 'incident', title: 'Act IV — The Incident', brief: 'three broken systems, real telemetry, name the cause', xp: XP.fleetWeekAct },
+  { id: 'incident', title: 'Act IV — The Incident', brief: 'probe drills on fresh seeds: name the fault, apply the fix', xp: XP.fleetWeekAct },
 ]
 
 const EMPTY_MEASUREMENT_EVIDENCE: NonNullable<
@@ -95,14 +117,14 @@ function ResultPanel({ result }: { result: ActResult }) {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-4 rounded-md border p-4', result.pass ? 'border-accent/50 bg-accent/10' : result.practice ? 'border-line bg-surface-2' : 'border-amber/50 bg-amber/5')}>
       <p className={cn('font-mono text-sm', result.pass ? 'text-accent' : result.practice ? 'text-text-2' : 'text-amber')}>
-        {result.pass ? 'PASS' : result.practice ? 'PRACTICE' : result.closed ? 'CLOSED' : 'NOT YET'} — {result.headline}
+        {result.pass ? 'PASS' : result.practice ? 'PRACTICE' : 'NOT YET'} — {result.headline}
       </p>
       <p className="mt-1 text-body-sm text-text-2">{result.detail}</p>
       <div className="mt-3 grid gap-x-6 gap-y-1 font-mono text-[11px] text-text-2 sm:grid-cols-2">
         {result.metrics.map(([k, v], i) => (
           <div key={i} className="flex justify-between gap-4">
-            <span className="text-text-3">{k}</span>
-            <span className="text-right">{v}</span>
+            <span className="text-text-2">{k}</span>
+            <span className="text-right text-text-1">{v}</span>
           </div>
         ))}
       </div>
@@ -434,18 +456,18 @@ function ActBusiness() {
 
 /* ------------------------------ ACT 4 ------------------------------ */
 
-/** The call just graded: the options as authored, with the picks as authored indices (the display order is reshuffled for the retry). */
-interface IncidentCall {
-  causes: IncidentOption[]
-  mitigations: IncidentOption[]
-  cause: number
-  mitigation: number
-}
+/** The reference drivers in every slot: drills run on reference components (docs/specs/wave-2.md §9.8). */
+const NO_SLOTS: FleetSlotBytes = { sched: null, mgr: null, queue: null }
 
-/** Why the chosen option and the right one are what they are, in the same shape as QuizBlock's why list. */
-function WhyList({ heading, options, picked }: { heading: string; options: IncidentOption[]; picked: number }) {
+type DrillPhase = 'idle' | 'opening' | 'play' | 'debrief' | 'failed'
+
+/**
+ * Why the learner's pick and the key are what they are, in the same shape as QuizBlock's why list. `picked` is the
+ * authored index of the pick, or -1 when there was none ("unsure", or no fix applied): then only the key shows.
+ */
+function WhyList({ heading, options, picked, labelOf }: { heading: string; options: IncidentOption[]; picked: number; labelOf: (o: IncidentOption) => string }) {
   // the pick first when it is wrong (its misconception), then the key
-  const shown = [...(options[picked]?.correct ? [] : [picked]), ...options.flatMap((o, i) => (o.correct ? [i] : []))]
+  const shown = [...(picked < 0 || options[picked]?.correct ? [] : [picked]), ...options.flatMap((o, i) => (o.correct ? [i] : []))]
   return (
     <div>
       <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">{heading}</p>
@@ -461,7 +483,7 @@ function WhyList({ heading, options, picked }: { heading: string; options: Incid
                 <span className={cn('mr-1.5 font-mono text-[10px] uppercase', right ? 'text-accent' : 'text-danger')}>
                   {right ? (isPick ? 'your pick, correct' : 'correct answer') : 'your pick, wrong'}
                 </span>
-                <span className="mb-1 block font-mono text-[11px] text-text-3">{o.label}</span>
+                <span className="mb-1 block font-mono text-[11px] text-text-3">{labelOf(o)}</span>
                 {o.why}
               </span>
             </li>
@@ -472,129 +494,246 @@ function WhyList({ heading, options, picked }: { heading: string; options: Incid
   )
 }
 
+/** The pick of a finished drill as an index into the fault's menu, or -1 for no pick. */
+const pickedIndex = (options: IncidentOption[], id: string | undefined): number => (id === undefined ? -1 : options.findIndex((o) => o.id === id))
+
+const faultLabel = (o: IncidentOption): string => FAULT_LABELS[o.id as IncidentFault] ?? o.label
+const fixLabel = (o: IncidentOption): string => FIXES[o.id as FixId]?.label ?? o.label
+
+const BUTTON = 'min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground'
+const BUTTON_QUIET = 'min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright'
+
+/**
+ * Act IV (docs/specs/wave-2.md §9.8): probe drills on unseen seeds. A drill is the Daily's flow on an incident
+ * generated from a seed drawn the moment the drill starts; the act passes after one passed drill on each of three
+ * distinct faults, and a drill that is not passed is followed by a new one, so nothing closes. A replay of an
+ * incident the learner has seen is practice: played and debriefed, never recorded or counted.
+ */
 function ActIncident() {
-  const { running, result, error, finish, setRunning, setError } = useActRunner('incident')
-  const [idx, setIdx] = useState(0)
-  const [incident, setIncident] = useState<Incident | null>(null)
-  // cause / mitigation are authored indices; the display order is reshuffled per attempt
-  const [cause, setCause] = useState<number | null>(null)
-  const [mitigation, setMitigation] = useState<number | null>(null)
-  // only the first call on each incident counts; the act and its XP need all of them right on that call.
-  // Persisted in working state so a reload or a revisit cannot reset which incidents are already practice.
   const stored = useProgress((s) => s.fleetWeek.measurementEvidence?.incident)
-  const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
-  const ledger = useMemo(() => incidentLedgerFrom(stored), [stored])
-  const missed = incidentMisses(ledger)
-  const [call, setCall] = useState<IncidentCall | null>(null)
-  const [seed, setSeed] = useState(freshSeed)
-  const causeOrder = useMemo(() => (incident ? shuffledOrder(incident.causes.length, seed) : []), [incident, seed])
-  const mitigationOrder = useMemo(() => (incident ? shuffledOrder(incident.mitigations.length, seed ^ 0x9e3779b1) : []), [incident, seed])
+  const credits = useMemo(() => drillCreditsFrom(stored), [stored])
+  const [drill, setDrill] = useState<Drill | null>(null)
+  const [session, setSession] = useState<IncidentClientSession | null>(null)
+  const [flow, setFlow] = useState<FlowState | null>(null)
+  const [phase, setPhase] = useState<DrillPhase>('idle')
+  const [failure, setFailure] = useState<{ title: string; detail: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [announcement, setAnnouncement] = useState('')
+  const [graded, setGraded] = useState<{ grade: DrillGrade; done: IncidentFinish } | null>(null)
+  const region = useRef<HTMLDivElement>(null)
+  const recorded = useRef<Drill | null>(null)
 
-  // only the latest click may touch state, so a slow or failed earlier load cannot overwrite or strand a newer one
-  const openSeq = useRef(0)
-  const open = useCallback(async (i: number) => {
-    const seq = ++openSeq.current
-    setRunning(true)
-    setError(null)
-    setIncident(null)
-    setCause(null)
-    setMitigation(null)
-    setCall(null)
-    setIdx(i)
-    setSeed(freshSeed())
-    try {
-      const loaded = await runSim({ kind: 'incident', id: INCIDENTS[i].id })
-      if (seq === openSeq.current) setIncident(loaded)
-    } catch (e) {
-      if (seq === openSeq.current) setError(describeError(e))
-    } finally {
-      if (seq === openSeq.current) setRunning(false)
+  const fail = useCallback((e: unknown) => {
+    setFailure(describeFleetError(e, 'The drill stopped'))
+    setPhase('failed')
+  }, [])
+
+  const begin = useCallback((next: Drill) => {
+    setSession(null)
+    setFlow(null)
+    setGraded(null)
+    setFailure(null)
+    setAnnouncement('')
+    setPhase('opening')
+    setDrill(next)
+  }, [])
+
+  // One session per drill. A new drill (or leaving the page) closes the worker of the one before it.
+  useEffect(() => {
+    if (!drill) return
+    let live = true
+    let opened: IncidentClientSession | null = null
+    openIncidentSession({ mode: 'incident', spec: drill.spec, slots: NO_SLOTS }).then(
+      (s) => {
+        if (!live) {
+          s.close()
+          return
+        }
+        opened = s
+        setSession(s)
+        setFlow(startFlow(s.alert, s.limit))
+        setPhase('play')
+      },
+      (e) => {
+        if (live) fail(e)
+      },
+    )
+    return () => {
+      live = false
+      opened?.close()
     }
-  }, [setRunning, setError])
+  }, [drill, fail])
 
-  const submit = useCallback(() => {
-    if (!incident || cause === null || mitigation === null) return
-    const causeOk = incident.causes[cause].correct
-    const mitOk = incident.mitigations[mitigation].correct
-    const graded = gradeIncidentCall(ledger, incident, causeOk, mitOk)
-    if (!graded.practice) setEvidence('incident', graded.ledger)
-    setCall({ causes: incident.causes, mitigations: incident.mitigations, cause, mitigation })
-    // every retry gets a fresh order and a clean selection, so positions can't be memorised
-    setSeed(freshSeed())
-    setCause(null)
-    setMitigation(null)
-    finish(graded.result)
-  }, [incident, cause, mitigation, ledger, setEvidence, finish])
+  const run = useCallback<FlowRun>(
+    async (command) => {
+      setBusy(true)
+      try {
+        return await command()
+      } catch (e) {
+        fail(e)
+        return null
+      } finally {
+        setBusy(false)
+      }
+    },
+    [fail],
+  )
 
+  // A started drill takes focus (the button that started it is gone); then, once a hypothesis is logged, the first probe.
+  useEffect(() => {
+    if (phase === 'play') region.current?.focus()
+  }, [phase, drill])
+  const hadHypothesis = useRef(false)
+  useEffect(() => {
+    const has = flow?.hypothesis != null
+    if (has && !hadHypothesis.current) region.current?.querySelector<HTMLButtonElement>('[data-probe]:not(:disabled)')?.focus()
+    hadHypothesis.current = has
+  }, [flow?.hypothesis])
+
+  const onLogged = (h: HypothesisId) => {
+    setFlow((f) => f && withHypothesis(f, h))
+    setAnnouncement(`Hypothesis logged: ${HYPOTHESIS_OPTIONS.find((o) => o.id === h)?.label ?? h}. The probes are open.`)
+  }
+  const onReading = (probe: ProbeId, reply: IncidentProbeReply) => {
+    setFlow((f) => f && withProbe(f, probe, reply))
+    setAnnouncement(`${readingHeadline(probe, reply.category)}. Incident clock ${sinceAlert(reply.minute, flow?.alert ?? 0)}.`)
+    if (reply.ended) setPhase('debrief')
+  }
+  const onFix = (fix: FixId, reply: IncidentFixReply) => {
+    setFlow((f) => f && withFix(f, fix, reply))
+    if (reply.effective) setAnnouncement('That was the fix. Replaying the incident to recovery.')
+    if (reply.effective || reply.ended) setPhase('debrief')
+  }
+  const onWait = (reply: IncidentWaitReply) => {
+    setFlow((f) => f && withWait(f, reply))
+    setAnnouncement(`One minute passed. Incident clock ${sinceAlert(reply.minute, flow?.alert ?? 0)}.`)
+    if (reply.ended) setPhase('debrief')
+  }
+
+  // Called once per drill by the debrief: record it, grade it against the credits, show the verdict.
+  const onResult = useCallback(
+    (done: IncidentFinish) => {
+      if (!drill || recorded.current === drill) return
+      recorded.current = drill
+      const grade = recordDrill(useProgress, drill, done)
+      setGraded({ grade, done })
+      setAnnouncement(`The debrief is ready. ${grade.result.headline}.`)
+    },
+    [drill],
+  )
+
+  const open = phase === 'play' && flow !== null && !flow.ended
+  const passedFaults = credits.length
   return (
     <div>
-      <p className="mb-3 max-w-3xl text-body-sm text-text-2">
-        Diagnose from the same surface you instrumented: TTFT, TPOT, queue delay, KV state,
-        goodput, and cost. The incident sparklines use those timing events plus pressure counters;
-        identify the first metric that moves, not the loudest symptom at the end. Only your first call
-        on each incident counts toward the act; it is marked ✓ if right and ○ if missed. The answer is
-        revealed after every call, so any repeat call on the same incident is practice. The act needs
-        all three incidents right on the first call, and only then earns its XP. A missed first call
-        closes it until fresh incidents arrive in a later update: first calls on the other incidents
-        are still graded and marked, but they cannot complete the act.
+      <p className="max-w-3xl text-body-sm text-text-2">
+        Probe drills. Each drill is a new incident on a seed drawn the moment you start it: read the alert, log a hypothesis, probe the pipeline on the incident
+        clock, then apply a fix. A drill passes when you held the right fault, applied its fix, and burned no more than twice the expert&rsquo;s budget plus{' '}
+        {DRILL_BURN_SLACK} burn-minutes. Pass one drill on each of {DRILL_FAULTS_NEEDED} different faults to finish the act. A drill you do not pass costs nothing:
+        the next one is a different incident, so there is nothing to memorise. Drills run on the reference components.
       </p>
-      <div className="flex flex-wrap gap-2 font-mono text-[12px]">
-        {INCIDENTS.map((d, i) => (
-          <button key={d.id} onClick={() => void open(i)} className={cn('rounded border px-3 py-1.5', idx === i ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>
-            {ledger.credited.includes(d.id) ? '✓ ' : ledger.attempted.includes(d.id) ? '○ ' : ''}{d.title.split('—')[0].trim()}
-          </button>
-        ))}
-      </div>
-      {missed > 0 && (
-        <p role="status" className="mt-3 max-w-3xl rounded-md border border-amber/50 bg-amber/5 px-3.5 py-2.5 text-body-sm text-text-2">
-          {INCIDENT_CLOSED_NOTE}
-        </p>
+      <ul className="mt-3 flex flex-wrap gap-2 font-mono text-[12px]" aria-label="Faults passed so far" data-faults>
+        {INCIDENT_FAULTS.map((f) => {
+          const passed = credits.some((c) => c.fault === f)
+          return (
+            <li key={f} data-passed={passed ? 'yes' : 'no'} className={cn('rounded border px-3 py-1.5', passed ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3')}>
+              {passed ? '✓ ' : '○ '}
+              {FAULT_LABELS[f]}
+              <span className="sr-only">{passed ? ', passed' : ', not passed yet'}</span>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="mt-2 font-mono text-[11px] text-text-3" data-progress>
+        {passedFaults}/{DRILL_FAULTS_NEEDED} distinct faults passed
+      </p>
+
+      {phase === 'idle' && (
+        <button type="button" onClick={() => begin(startDrill())} className={cn('mt-4', BUTTON)} data-start-drill>
+          {passedFaults === 0 ? 'Start a drill' : 'Start another drill'}
+        </button>
       )}
-      {running && <p className="mt-3 font-mono text-[12px] text-text-3"><Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />loading telemetry…</p>}
-      <ActError message={error} />
-      {incident && (
-        <div className="mt-4 space-y-4">
-          <p className="font-mono text-[11px] text-text-3">graded seed {seedLabel(incident.seed)}</p>
-          <p className="max-w-3xl text-body-sm text-text-2">{incident.briefing}</p>
-          <TelemetryGrid series={incident.telemetry} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">root cause</p>
-              <div className="mt-2 space-y-1.5">
-                {causeOrder.map((ai, pos) => (
-                  <Option key={incident.causes[ai].id} tag={String.fromCharCode(65 + pos)} active={cause === ai} onClick={() => setCause(ai)} label={incident.causes[ai].label} />
-                ))}
+
+      {drill && (
+        <div ref={region} role="group" tabIndex={-1} aria-label="Incident drill" className="mt-4 space-y-4 outline-none" data-drill data-phase={phase} data-practice={drill.practice ? 'yes' : 'no'}>
+          <p className="font-mono text-[11px] text-text-3" data-drill-seed>
+            {drill.practice ? `replay of 0x${drillKey(drill.seed)} (practice: not recorded, not counted)` : `drill seed 0x${drillKey(drill.seed)}, drawn when this drill started`}
+          </p>
+
+          {phase === 'opening' && (
+            <p role="status" className="rounded-lg border border-line bg-surface-1 p-4 text-body-sm text-text-2" data-opening>
+              <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" aria-hidden />
+              Opening the incident: warming the fleet up to the alert…
+            </p>
+          )}
+
+          {phase === 'failed' && failure && (
+            <div role="alert" className="rounded-lg border border-danger/50 bg-surface-1 p-4" data-failure>
+              <h3 className="font-display text-h3 text-text-1">{failure.title}</h3>
+              <p className="mt-2 text-body-sm text-text-2">{failure.detail}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => begin(drill.practice ? drill : startDrill())} className={BUTTON}>
+                  Try again
+                </button>
               </div>
             </div>
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">mitigation</p>
-              <div className="mt-2 space-y-1.5">
-                {mitigationOrder.map((ai, pos) => (
-                  <Option key={incident.mitigations[ai].id} tag={String.fromCharCode(65 + pos)} active={mitigation === ai} onClick={() => setMitigation(ai)} label={incident.mitigations[ai].label} />
-                ))}
-              </div>
-            </div>
-          </div>
-          <RunButton running={false} label={ledger.attempted.includes(incident.id) ? 'practice call (not credited)' : missed > 0 ? 'call it (marked, act stays closed)' : 'call it'} onClick={submit} disabled={cause === null || mitigation === null} />
+          )}
+
+          {session && flow && phase !== 'failed' && (
+            <>
+              <Alert source={drill.source} session={session} clock={flow.clock} />
+              {phase === 'play' && (
+                <>
+                  <Hypothesis session={session} logged={flow.hypothesis} busy={busy} run={run} onLogged={onLogged} />
+                  <ProbeBar
+                    session={session}
+                    alert={flow.alert}
+                    enabled={open && flow.hypothesis !== null}
+                    closedReason={flow.hypothesis === null ? 'Log a hypothesis first: the probes open once you commit to a suspect.' : undefined}
+                    log={flow.log}
+                    busy={busy}
+                    run={run}
+                    onReading={onReading}
+                  />
+                  <FixMenu session={session} enabled={open && flow.hypothesis !== null} busy={busy} run={run} onFix={onFix} onWait={onWait} onGiveUp={() => setPhase('debrief')} />
+                </>
+              )}
+              {phase === 'debrief' && (
+                <Debrief session={session} source={drill.source} flow={flow} busy={busy} run={run} onResult={onResult}>
+                  {(result) => {
+                    if (!graded || graded.done !== result) return null
+                    const menu = INCIDENTS.find((i) => i.id === result.fault)
+                    return (
+                      <>
+                        <ResultPanel result={graded.grade.result} />
+                        {menu && (
+                          <section aria-label="Why your hypothesis and fix were right or wrong" className="grid gap-4 sm:grid-cols-2">
+                            <WhyList heading="hypothesis" options={menu.causes} picked={pickedIndex(menu.causes, result.hypothesis)} labelOf={faultLabel} />
+                            <WhyList heading="fix" options={menu.mitigations} picked={pickedIndex(menu.mitigations, result.fix)} labelOf={fixLabel} />
+                          </section>
+                        )}
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button type="button" onClick={() => begin(startDrill())} className={BUTTON} data-next-drill>
+                            {graded.grade.pass ? 'Another drill' : 'Next drill (a new incident)'}
+                          </button>
+                          <button type="button" onClick={() => begin(replayDrill(drill))} className={BUTTON_QUIET} data-replay-drill>
+                            Replay this incident as practice
+                          </button>
+                        </div>
+                      </>
+                    )
+                  }}
+                </Debrief>
+              )}
+            </>
+          )}
         </div>
       )}
-      {result && <ResultPanel result={result} />}
-      {call && (
-        <section aria-label="Why your call was right or wrong" className="mt-4 grid gap-4 sm:grid-cols-2">
-          <WhyList heading="root cause" options={call.causes} picked={call.cause} />
-          <WhyList heading="mitigation" options={call.mitigations} picked={call.mitigation} />
-        </section>
-      )}
-    </div>
-  )
-}
 
-function Option({ active, onClick, label, tag }: { active: boolean; onClick: () => void; label: string; tag?: string }) {
-  return (
-    <button onClick={onClick} className={cn('block w-full rounded border px-3 py-2 text-left font-mono text-[12px] transition-colors', active ? 'border-accent/60 bg-accent/10 text-text-1' : 'border-line bg-ink text-text-2 hover:border-text-3')}>
-      {tag && <span className="mr-2 text-text-3">{tag}.</span>}
-      {label}
-    </button>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" data-live>
+        {announcement}
+      </div>
+    </div>
   )
 }
 

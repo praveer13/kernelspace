@@ -1,10 +1,10 @@
 /**
- * sim.worker — runs Fleet Week's batch acts off the main thread (PLAN-100X §7.3).
+ * sim.worker — runs Fleet Week's batch acts (I–III) off the main thread (PLAN-100X §7.3).
  * Learner wasm modules arrive as bytes and are instantiated here, so a slow or
  * trapping module can only stall this worker, never the page.
  */
 
-import { evalAct3, loadIncident, runAct1, runAct2 } from '@/lib/fleet-week'
+import { evalAct3, runAct1, runAct2 } from '@/lib/fleet-week'
 import { drawGradedSeeds } from '@/lib/graded-seed'
 import type { SimJob, SimRequest, SimResponse, SimResults } from '@/workers/sim-protocol'
 
@@ -24,8 +24,6 @@ async function run(
       return runAct2(job.modules, job.choice, seeds, onProgress)
     case 'act3':
       return evalAct3(seeds, onProgress)
-    case 'incident':
-      return loadIncident(job.id, seeds)
   }
 }
 
