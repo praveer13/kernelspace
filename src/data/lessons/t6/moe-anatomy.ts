@@ -60,20 +60,42 @@ Run T5.L4's arithmetic again with 70,272 B per token: the "cache is the payload"
           osLine: 'Dense model: every token reads every weight.',
           llm: 'N sharded services behind a router',
           llmLine: 'MoE: a router sends each token to top-k specialist experts.',
+          breaks: 'A service router picks a shard once per request; the MoE router picks the top-k experts for each token at each MoE layer, and under expert parallelism each pick is a network trip (a dispatch and a combine all-to-all, 2 × 58 = 116 per forward pass in DeepSeek-V3).',
         },
         {
           os: 'hot partition → fleet-wide straggler',
           osLine: 'One overloaded shard makes every fan-out request miss its p99.',
           llm: 'hot expert → combine-barrier stall',
           llmLine: 'One popular expert makes the whole batch wait at the all-to-all.',
+          breaks: 'A hot service shard can be hedged, retried elsewhere or split by key; a token\'s experts are fixed by the router and each lives on one GPU, so the remedies are bigger batches or EPLB copies of the hot expert, which cost HBM.',
         },
         {
           os: 'session affinity for cache locality',
           osLine: 'Sticky routing so the same user lands on the warm shard.',
           llm: 'EP-aware batching / EPLB',
           llmLine: 'Shape traffic so experts stay balanced and tokens travel less.',
+          breaks: 'Session affinity trades balance for locality by pinning a user to one warm shard; EPLB trades memory for balance, copying hot experts onto more GPUs and packing the copies evenly, while the router still decides where each token goes.',
         },
       ],
+      principle:
+        'A fan-out runs at the speed of its slowest branch. In MoE the router decides per token, the network carries each decision, and the finish time of a layer follows the busiest GPU, not the average.',
+      breakItem: {
+        q: 'MoE is mapped onto a fleet of sharded services. Where does that mapping break?',
+        options: [
+          'A hot shard delays the whole fan-out request, and a hot expert delays the whole layer while other GPUs wait at the barrier',
+          'A front-end router splits traffic so each shard sees part of it, and the MoE router splits tokens so each expert sees part of them',
+          'A service router chooses one shard per request, and the MoE router chooses its top-k experts for each token at each MoE layer',
+          'Sticky routing keeps related requests near their warm state, and EP-aware batching keeps tokens near the experts serving them',
+        ],
+        correct: [2],
+        why: [
+          'This holds on both sides: a fan-out finishes when its slowest branch does, whether that is a hot shard or the GPU holding a hot expert. The pair says exactly this, so it is not where the analogy stops.',
+          'This holds on both sides: a router in front gives each shard, or each expert, a share of the work. The analogy agrees here; the difference is how often the router decides.',
+          'Right: a service router decides once per request, while the MoE router decides for each token at each MoE layer, and under expert parallelism each decision costs a dispatch and a combine all-to-all. That is 2 × 58 = 116 trips per forward pass in DeepSeek-V3.',
+          'This holds on both sides: placing related work near the state or the experts it needs saves traffic. The pair claims this, so it is a match; EPLB differs in its goal, which is balance.',
+        ],
+      },
+      kcs: ['t6.moe-active-params', 't6.all-to-all'],
     },
     {
       type: 'quiz',

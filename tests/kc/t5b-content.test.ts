@@ -17,6 +17,8 @@ import { SPIRAL_ITEMS, earlierKcsOf, isNonMcq, makeGenPool, planTicket, type Tic
 const IDS = ['t5.l6', 't5.l7', 't5.l8', 't5.l9', 't5.l10']
 const T5B = ALL_LESSONS.filter((l) => IDS.includes(l.id))
 const MISS_ID = /^[a-z0-9]+\.[a-z0-9]+(-[a-z0-9]+)*$/
+/** A miss id is a slug, or `confuse.<kcId>` (wave-3.md §11.2): the learner took one KC for another. */
+const isMissId = (miss: string) => MISS_ID.test(miss) || (miss.startsWith('confuse.') && kcById(miss.slice('confuse.'.length)) !== undefined)
 const words = (s: string) => s.trim().split(/\s+/).length
 const lesson = (id: string) => T5B.find((l) => l.id === id) as Lesson
 
@@ -65,7 +67,7 @@ describe('t5.l6-l10: KCs, tickets and tags', () => {
         q.options.forEach((_, i) => {
           const miss = q.miss?.[i] ?? ''
           if (q.correct.includes(i)) return expect(miss).toBe('')
-          expect(MISS_ID.test(miss)).toBe(true)
+          expect(isMissId(miss)).toBe(true)
           named.add(miss)
         })
         expect(named.size).toBe(q.options.length - q.correct.length)

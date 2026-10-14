@@ -112,14 +112,35 @@ The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SK
           osLine: 'One process alternates CPU-bound and IO-bound phases; each starves the other\'s tuning.',
           llm: 'colocated engine',
           llmLine: 'One GPU alternates compute-bound prefill and bandwidth-bound decode — compromise everywhere.',
+          breaks: 'A monolith\'s phases belong to one job, so a slow phase delays only that job; a colocated GPU runs one request\'s prefill beside other users\' decode steps, so a single long prompt can stall everyone\'s next token.',
         },
         {
           os: 'separate services + queue',
           osLine: 'Split by workload profile; scale independently; pay a network hop between stages.',
           llm: 'disaggregated serving',
           llmLine: 'Prefill fleet + decode fleet + KV transfer fabric; TTFT pays the hop, ITL gains the isolation.',
+          breaks: 'A service hop carries a small message; this hop carries the KV cache (1.3 GB for a 4k-token prompt on a 70B model, about 26 ms over a 50 GB/s link), so the split only pays when contexts are long and the fleet is big.',
         },
       ],
+      principle:
+        'Split stages by workload profile only when the profile gap outweighs the hop. Independent scaling and tuning carry over from microservices, but the hand-off here is gigabytes of KV, so the split must pay for that transfer.',
+      breakItem: {
+        q: 'Disaggregated serving is mapped onto splitting a monolith into services. Where does that mapping break?',
+        options: [
+          'A service hand-off sends a small message, and the prefill-to-decode hand-off sends the whole KV cache of the prompt',
+          'A monolith compromises between its CPU-bound and IO-bound phases, and a colocated engine compromises between prefill and decode on one GPU',
+          'Separate services scale independently on their own load, and separate prefill and decode fleets scale independently as well',
+          'A split adds a network hop between stages, and disaggregation adds a hop whose latency appears in time-to-first-token',
+        ],
+        correct: [0],
+        why: [
+          'Right: a microservice call carries a request-sized message, while disaggregation moves the KV cache, about 1.3 GB for a 4k-token prompt on a 70B model. The hop is a bandwidth bill, so contexts must be long enough to amortize it.',
+          'This holds on both sides: a monolith compromises between its phases, and a colocated engine compromises between prefill and decode. The pair claims exactly this, so it is not where the analogy stops.',
+          'This holds on both sides: separate services and separate prefill and decode fleets can each be scaled to their own load. The analogy agrees here, so it is not a break.',
+          'This holds on both sides: any split puts a network hop between stages, with its latency and its failures. The pair already says TTFT pays the hop, so this is a match.',
+        ],
+      },
+      kcs: ['t5.pd-disaggregation', 't5.interconnect-ladder'],
     },
     {
       type: 'prose',

@@ -54,20 +54,42 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
           osLine: 'CPU-heavy upload workers that normalize input and hand off.',
           llm: 'encode fleet',
           llmLine: 'Vision/audio encoders: pixels → embeddings, massively parallel, no KV.',
+          breaks: 'Upload transcoding usually runs off the request path, after the user has moved on; the encode stage runs in line before prefill, so its time adds straight to time-to-first-token.',
         },
         {
           os: 'write-heavy primary',
           osLine: 'Compute-bound ingestion, scaled on FLOPs.',
           llm: 'prefill fleet',
           llmLine: 'Compute-bound: big batches, tensor-core saturated, produces KV.',
+          breaks: 'A primary owns durable data, so losing it loses data; prefill\'s KV is derived from the prompt, so a lost entry or a lost worker costs only a recompute.',
         },
         {
           os: 'read replicas + cache tier',
           osLine: 'Bandwidth-bound reads scaled on memory, hot state tiered.',
           llm: 'decode fleet + KV tiers',
           llmLine: 'Bandwidth-bound: KV-resident batches, HBM↔DRAM↔SSD hierarchy behind it.',
+          breaks: 'Read replicas serve read-only copies of data written elsewhere; a decode worker appends to its sequences\' KV on each step, so its hot state is written continuously and stays on that worker while the sequence runs.',
         },
       ],
+      principle:
+        'Give each stage the hardware that matches its bottleneck. Web tiers carry over: compute-bound, bandwidth-bound and stateless stages scale apart, but each hand-off sits on the path to the first token, and the KV is derived state.',
+      breakItem: {
+        q: 'EPD is mapped onto a three-tier web architecture. Where does that mapping break?',
+        options: [
+          'Each tier is sized for its own bottleneck, and the encode, prefill and decode fleets each get GPU hardware that fits their own work',
+          'A primary owns durable data that cannot be rebuilt, and prefill\'s KV comes from the prompt and can be recomputed',
+          'Each tier scales independently of the others, and each fleet adds workers for its queue without touching other fleets',
+          'A slow tier delays the response the user sees, and a slow encode or prefill stage delays the TTFT of the request just the same',
+        ],
+        correct: [1],
+        why: [
+          'This holds on both sides: each tier, like each fleet, is sized for its own bottleneck. The pairs claim exactly this, so it is not where the analogy stops.',
+          'Right: a primary is the system of record, so losing it loses data. Prefill\'s KV is derived from the prompt, so a lost entry or worker costs only a recompute, which is why these workers can be treated as disposable.',
+          'This holds on both sides: web tiers and EPD fleets each scale on their own queue without resizing the others. The analogy agrees here, so it is not a break.',
+          'This holds on both sides: every stage sits on the path to the user\'s first response, so a slow encode or prefill stage delays time to first token. That is a match, not a break.',
+        ],
+      },
+      kcs: ['t6.epd-phases', 't6.kv-tiering'],
     },
     {
       type: 'quiz',
