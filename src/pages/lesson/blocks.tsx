@@ -124,13 +124,13 @@ function IsomorphismView({ block }: { block: IsomorphismBlock }) {
       <div className="space-y-3">
         {block.pairs.map((p, i) => (
           <div key={i}>
-            <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-              <div className="rounded-md border border-[#22D3EE]/30 bg-[#22D3EE]/5 p-3.5">
+            <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+              <div className="min-w-0 break-words rounded-md border border-[#22D3EE]/30 bg-[#22D3EE]/5 p-3.5">
                 <div className="font-mono text-body-sm font-medium text-[#22D3EE]">{p.os}</div>
                 <div className="mt-1 text-body-sm text-text-2">{p.osLine}</div>
               </div>
-              <div className="flex items-center font-mono text-h4 text-text-3">≡</div>
-              <div className="rounded-md border border-[#FB7185]/30 bg-[#FB7185]/5 p-3.5">
+              <div className="flex items-center justify-center font-mono text-h4 text-text-3">≡</div>
+              <div className="min-w-0 break-words rounded-md border border-[#FB7185]/30 bg-[#FB7185]/5 p-3.5">
                 <div className="font-mono text-body-sm font-medium text-[#FB7185]">{p.llm}</div>
                 <div className="mt-1 text-body-sm text-text-2">{p.llmLine}</div>
               </div>

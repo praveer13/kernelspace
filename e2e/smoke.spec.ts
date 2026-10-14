@@ -47,3 +47,19 @@ test('/today: Tab reaches every control', async ({ page }) => {
   const missed = labels.filter((_, i) => !seen.includes(i))
   expect(missed, `controls Tab never reached:\n${missed.join('\n')}`).toEqual([])
 })
+
+// Reflow (WCAG 1.4.10): axe does not test it, so measure it. These pages scrolled sideways before their fixes
+// (Home's code comparison, long lesson titles, the isomorphism panel); the full sweep is `npm run a11y`.
+for (const route of ['/', '/lesson/t4.l7', '/lesson/t6.l4', '/lesson/t6.l9']) {
+  test(`${route}: no sideways scroll at 360 and 320 px`, async ({ page }) => {
+    for (const width of [360, 320]) {
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto(route)
+      await expect(page.locator('main')).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      await page.evaluate(() => document.fonts.ready)
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      expect(overflow, `${route} scrolls sideways by ${overflow}px at ${width}px`).toBeLessThanOrEqual(0)
+    }
+  })
+}

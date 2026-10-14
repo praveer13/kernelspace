@@ -10,7 +10,68 @@ const lesson: Lesson = {
   hook: 'Two optimizations that fight the same enemy — decode\'s serial bandwidth wall — from opposite directions: skip steps, and backfill idle FLOPs.',
   exercise: 'quiz',
   verifiedAt: '2026-08',
+  kcs: ['t5.prefill-decode-interference', 't5.speculative-decoding'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Say why speculative decoding does not change the model\'s output, and when it hurts throughput.',
+        model:
+          'The target scores every drafted token, accepts one with probability min(1, p_target / p_draft) and resamples on a rejection, so the output follows the target\'s own distribution. It wins only while decode has idle compute. At large batch the units are busy, so verifying tokens that get rejected costs real throughput.',
+        ideas: [
+          'The target verifies every drafted token and resamples on rejection, so output matches its distribution',
+          'Verification is cheap only because decode leaves compute idle',
+          'At large batch there is no idle compute, so rejected drafts cost throughput',
+        ],
+        kcs: ['t5.speculative-decoding'],
+      },
+      {
+        prompt: 'Explain how chunked prefill shortens the stall that a long prompt causes, and what the chunk size trades.',
+        model:
+          'It slices the prompt into fixed-size chunks and mixes one chunk into each decode iteration. A running user then waits about one chunk per step, not the whole prefill. Decode leaves compute idle and chunks add compute-bound work, so goodput rises. Smaller chunks favour ITL, larger chunks favour TTFT.',
+        ideas: [
+          'Slice the prompt into chunks and mix one into each decode iteration',
+          'A running user waits about one chunk per step, not the whole prefill',
+          'Smaller chunks give better ITL and larger chunks give better TTFT',
+        ],
+        kcs: ['t5.prefill-decode-interference'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'numeric',
+          q: 'A small draft model proposes 4 tokens. The target accepts each one with probability 0.7, independently, and always adds one token of its own. On average, how many tokens does one verification step emit?',
+          unit: 'tokens',
+          truth: 2.77,
+          okWithinFactor: 1.15,
+          revealAt: 'Speculative decoding: the draft-verify trick',
+          kcs: ['t5.speculative-decoding'],
+        },
+        {
+          kind: 'choice',
+          q: 'A 100,000-token prompt arrives while 30 other users are mid-reply, and the engine prefills it in one piece. What do those 30 users see?',
+          options: [
+            'Every reply freezes for seconds, since whole iterations go to the long prefill before decoding resumes',
+            'No change at all, since prefill and decode run on separate units of the GPU and never compete for time',
+            'Slightly slower tokens, since only the memory that the long prompt takes is lost to the other users',
+            'Their replies restart from the first token, since the scheduler frees every running sequence to make room',
+          ],
+          correct: [0],
+          why: [
+            'Right: a whole-prompt prefill is one multi-second compute-bound job, and every running decode waits for it. All users see an ITL spike, and chunking exists to bound that stall.',
+            'Prefill and decode share the same units and the same iteration loop. A long prefill takes the step, so the decode work of the other users waits behind it.',
+            'Memory is not the main loss. The long prompt takes whole iterations of compute, so each running user\'s next token is late by about the length of the prefill, not by a few blocks.',
+            'Running sequences are not restarted. They keep their blocks and wait for the iteration to end, which is why the stall shows up as a long gap between tokens.',
+          ],
+          revealAt: 'Chunked prefill: the other convoy fix',
+          kcs: ['t5.prefill-decode-interference'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `T5.L3 left decode with three possible medicine shapes: cheaper steps (quantization), amortized steps (batching), or *fewer* steps. This lesson covers the third shape — **speculative decoding**, the most elegant trick in the stack — plus its quiet sibling **chunked prefill**, which fixes a different crack in the continuous-batching façade: long prompts convoying the iteration loop. Both are about the same insight from T4.L3: **decode wastes the compute roof; anything that converts wasted FLOPs into fewer or denser steps is free throughput.**`,
@@ -56,6 +117,24 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
         { caption: 'Distribution check: " the quick brown" matches the target\'s own choices — accepted. Bonus: the pass also yields the NEXT token for free. 4 tokens for ~1 step\'s price.', active: ['accept'], edges: ['verify->accept'] },
         { caption: '" dog" disagrees — rejected (rejection sampling keeps output EXACTLY target-equivalent; this is lossless). Resume from the mismatch. Speedup = accepted/round ≈ 1.5–2.5×.', active: ['reject'], edges: ['verify->reject'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'The target has scored all four drafted tokens in one pass. Its own choices match the first three (" the quick brown") and differ at " dog". How many tokens does this round add to the output?',
+        options: [
+          '3 tokens, the accepted prefix, since the rejected token and everything after it is thrown away',
+          '4 tokens, since the accepted prefix is joined by the target\'s own token at the mismatch',
+          '1 token, since one verification step costs one decode step and so emits one token',
+          '0 tokens, since a rejection anywhere in the round voids every drafted token and restarts it',
+        ],
+        correct: [1],
+        why: [
+          'This misses the extra token. The pass that rejects " dog" also gives the target\'s own token for that position, so the round emits the three accepted tokens plus one more.',
+          'Right: three accepted tokens plus the target\'s own token at the mismatch (or a bonus token when all four pass). Four tokens for about the price of one decode step.',
+          'Cost and output are different things. The wide pass costs about one decode step but scores four positions, so it can emit several tokens, not one.',
+          'A rejection only discards the tokens from the mismatch onward. The accepted prefix stays, because the target\'s own choices matched it exactly.',
+        ],
+        kcs: ['t5.speculative-decoding'],
+      },
     },
     {
       type: 'statline',
@@ -65,6 +144,12 @@ The economics are pure T4.L3: decode steps are bandwidth-bound with idle ALUs; v
         { value: 'k ≈ 4–8', label: 'draft length', hint: 'Separate draft model, cheap per token. E = (1 − α^(k+1)) / (1 − α) flattens as k grows; T6.L6 shows why MTP stops at k ≈ 2–4.' },
         { value: '~free', label: 'verify FLOPs', hint: 'The wide pass uses ALUs that decode was leaving idle — the roofline pays you back.' },
       ],
+    },
+    {
+      type: 'item',
+      title: 'Count the tokens of a speculative round',
+      family: 'spec',
+      variants: ['expected-tokens', 'draft-tokens'],
     },
     {
       type: 'prose',
@@ -110,6 +195,8 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
             'Verification runs the deployed target model, at whatever precision it is served, with no extra quantization for the verify pass. Speculation reproduces that target\'s output distribution exactly because of its acceptance rule. Quantization is a separate, lossy decode remedy.',
             'A top-k rule would be approximate and change the output distribution. Lossless speculation accepts token x with probability min(1, p_target(x) / p_draft(x)) and resamples on rejection.',
           ],
+          kcs: ['t5.speculative-decoding'],
+          miss: ['t5.spec-drafter-distilled', '', 't5.spec-verify-quantized', 't5.spec-top-k-accept'],
         },
         {
           q: 'Verifying k drafted tokens costs about as much as ONE decode step because…',
@@ -128,6 +215,8 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
             'Verification is the target model\'s own forward pass and stays on the GPU. A CPU would score k tokens far slower than the GPU can simply decode them serially.',
             'Weights are far larger than on-chip cache, so they are not held between positions. Verification is cheap because one pass scores all k positions, reading weights from HBM once.',
           ],
+          kcs: ['t5.speculative-decoding', 't4.decode-bandwidth'],
+          miss: ['t5.spec-reuses-draft-kv', '', 't5.spec-verify-on-host', 't5.spec-sequential-cached-weights'],
         },
         {
           q: 'Chunked prefill improves goodput by…',
@@ -146,6 +235,8 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
             'Prefill is compute-bound and far too heavy for CPU cores. Chunked prefill keeps everything on the GPU; it only changes how prefill is scheduled among decode steps.',
             'Chunks still attend to all earlier prompt tokens through the KV cache, so the result is identical. Skipping chunks would change the output; chunking only reschedules the same work.',
           ],
+          kcs: ['t5.prefill-decode-interference'],
+          miss: ['t5.chunking-truncates-prompts', '', 't5.chunking-uses-host-cores', 't5.chunking-skips-attention'],
         },
         {
           q: 'Speculative decoding can HURT throughput when…',
@@ -164,6 +255,8 @@ Variants worth recognizing in the wild: **Medusa/EAGLE** — draft with extra he
             'Greedy decoding works with speculation: a drafted token is accepted when it equals the target\'s argmax. Randomness is not required, and output equals non-speculative greedy.',
             'Verification reads the prompt\'s K/V once for all k positions in one pass. A long prompt raises every step\'s cost equally and does not make speculation lose.',
           ],
+          kcs: ['t5.speculative-decoding', 't4.bound-classification'],
+          miss: ['t5.spec-fails-on-predictable-text', '', 't5.spec-needs-sampling', 't5.spec-rereads-prompt'],
         },
       ],
     },

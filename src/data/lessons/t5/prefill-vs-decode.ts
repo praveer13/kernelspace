@@ -9,7 +9,78 @@ const lesson: Lesson = {
   minutes: 20,
   hook: 'TTFT vs ITL — the two phases, the metrics that run the business, and why goodput is the only number that matters.',
   exercise: 'quiz',
+  kcs: ['t5.prefill-vs-decode', 't5.latency-metrics'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain why prefill sets time to first token while decode sets the time between tokens, using what limits each phase.',
+        model:
+          'Prefill runs the whole prompt in one parallel pass, so each weight read serves thousands of tokens and the tensor cores are the limit; its cost grows with prompt length and sets TTFT. Decode makes one token per step, so each step streams weights and cache for little arithmetic; memory bandwidth sets ITL.',
+        ideas: [
+          'Prefill reuses each weight read across all prompt tokens, so compute limits it',
+          'Decode streams weights and cache for one token per step, so bandwidth limits it',
+          'Prompt length drives TTFT, while bytes read per step drive ITL',
+        ],
+        kcs: ['t5.prefill-vs-decode'],
+      },
+      {
+        prompt: 'A vendor reports 10,000 tokens per second and gives no latency numbers. Say what you would ask for, and why.',
+        model:
+          'Ask for goodput: throughput counting only requests that meet stated TTFT and ITL targets. A large batch can raise raw tokens per second while pushing every request past its latency limit, so the headline number can hide a collapse. Also ask for TTFT and ITL percentiles measured at that same load.',
+        ideas: [
+          'Raw throughput can be raised by giving up latency',
+          'Goodput counts only work delivered within the TTFT and ITL targets',
+          'Ask for latency percentiles measured at the same load',
+        ],
+        kcs: ['t5.latency-metrics'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A 4,000-token prompt goes through the model in a single forward pass. What mostly limits how long that pass takes?',
+          options: [
+            'Memory bandwidth, since the weights are streamed from HBM with little arithmetic done per byte moved',
+            'Arithmetic, since each weight read is reused across thousands of prompt tokens in one pass',
+            'Kernel launch overhead, since a pass is hundreds of small kernels whose launches add up over the pass',
+            'KV-cache capacity, since the prompt must fit in cache blocks before any arithmetic can start',
+          ],
+          correct: [1],
+          why: [
+            'That is decode. One token per step does about one FLOP per byte moved. A long prompt gives each weight read thousands of tokens of math, which is why prefill is not bandwidth-bound.',
+            'Right: with thousands of tokens sharing each weight read, the tensor cores become the limit. Prefill time grows with prompt length and sets TTFT.',
+            'Launch overhead is a fixed cost that large matmuls hide. With a 4,000-token prompt the kernels run long enough that arithmetic dominates.',
+            'Capacity decides whether the request can be admitted at all. Once it is admitted, the pass is limited by how fast the GPU can do the math, not by how much room is left.',
+          ],
+          revealAt: 'The metrics, defined properly',
+          kcs: ['t5.prefill-vs-decode'],
+        },
+        {
+          kind: 'choice',
+          q: 'An engine grows its decode batch from 16 requests to 64. What happens to the time between tokens each user sees, and to total tokens per second?',
+          options: [
+            'Users see the same pace and the total stays flat, since the GPU was already busy at 16',
+            'Users see a slower pace and the total rises, since each step reads more cache for one weight read',
+            'Users see a faster pace and the total rises, since a larger batch keeps the tensor cores better fed',
+            'Users see a slower pace and the total falls, since extra requests compete for the same bandwidth',
+          ],
+          correct: [1],
+          why: [
+            'At 16 the weights are read once for only 16 tokens, so the GPU is mostly waiting on memory. More requests per weight read raise the total.',
+            'Right: one weight read now serves more sequences, so tokens per second rise, but every step also streams each sequence\'s cache, so each user waits longer between tokens.',
+            'A bigger batch does not speed up a user. Each step does more work, so the time between tokens stays the same or grows; the gain is in the total.',
+            'Extra requests do add cache reads, but they share one weight read, so total throughput still rises until compute or cache memory runs out.',
+          ],
+          revealAt: 'The tension: batching buys throughput, costs latency',
+          kcs: ['t5.latency-metrics'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `Training is a throughput problem: giant batches, backprop, days of saturated compute, no humans waiting. Inference is a **latency** business wrapped around a **throughput** business: a user is staring at a spinner (latency) while the provider counts tokens per GPU-hour (margin). Every design decision in serving is a negotiation between those two masters.
@@ -72,6 +143,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
             'Both phases are bandwidth-bound, and differ in that prefill reads the prompt tokens while decode reads the generated ones one at a time',
           ],
           correct: [1],
+          kcs: ['t5.prefill-vs-decode'],
           explanation:
             'Two roofline regimes: prefill sits at the compute roof, decode on the bandwidth slope. Hence separate metrics, separate optimizations, and increasingly separate GPUs (disaggregation).',
           why: [
@@ -90,6 +162,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
             'The share of requests that finish with a success status and a complete response, regardless of latency',
           ],
           correct: [1],
+          kcs: ['t5.latency-metrics'],
           explanation:
             'Raw throughput can always be bought by sacrificing latency; goodput measures what you can serve while keeping the user-facing promises. Capacity reviews should speak goodput.',
           why: [
@@ -108,6 +181,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
             'GPUs lower their clocks at sustained high utilization, which throttles bigger batches until the extra work stops paying for itself',
           ],
           correct: [1],
+          kcs: ['t5.latency-metrics'],
           explanation:
             'Same trade as thread-pool sizing: utilization rises with concurrency until queueing and per-step work eat the latency budget. Engines pick a point on the curve; SLOs pick it for you.',
           why: [
@@ -126,6 +200,7 @@ Three structural differences worth stating once. **(1) No backward pass:** infer
             'The cache must be appended in order, and thread blocks cannot write to memory concurrently, which makes each step finish writing first',
           ],
           correct: [1],
+          kcs: ['t5.prefill-vs-decode'],
           explanation:
             'Training sees the full sequence in parallel; inference must generate it in order. Every decode optimization is one of those three shapes, a useful taxonomy for reading new papers.',
           why: [

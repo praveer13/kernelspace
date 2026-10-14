@@ -1,5 +1,5 @@
 /**
- * seed-candidates — the KC review worksheet (docs/specs/wave-1.md §4.3). Not run in CI.
+ * seed-candidates — the KC review worksheet (docs/specs/wave-1.md §4.3; wave-2.md §4.1, §4.4). Not run in CI.
  *
  * For each lesson it prints the raw material a KC is seeded from: H2 headings (one candidate concept
  * each; merge siblings until the lesson has 2-3 KCs), statline chip rows (one `fact` KC per row),
@@ -8,7 +8,12 @@
  * the checkpoint items still to be tagged. Beside each lesson it shows what the graph already says,
  * so a reviewer reads one worksheet instead of nine files.
  *
- *   bun scripts/kc/seed-candidates.ts            # R and T0-T2 (the Wave 1 scope)
+ * For the content tasks that tag T3-T7 (wave-2 2a-22 … 2a-28) it also lists the KCs a lesson's `Lesson.kcs`
+ * may name (those that list the lesson and are introduced there or earlier, the verify-kc rule) and the
+ * stem of each untagged checkpoint item, so a tagger reads the item and the candidates side by side.
+ *
+ *   bun scripts/kc/seed-candidates.ts            # T3-T7 (the Wave 2 scope)
+ *   bun scripts/kc/seed-candidates.ts --wave1    # R and T0-T2
  *   bun scripts/kc/seed-candidates.ts t4 t5      # any tracks
  *   bun scripts/kc/seed-candidates.ts --all
  */
@@ -20,9 +25,17 @@ import { KC_GRAPH } from '../../src/data/kc'
 const args = process.argv.slice(2)
 const tracks: TrackId[] = args.includes('--all')
   ? TRACK_IDS
-  : args.length > 0
-    ? TRACK_IDS.filter((t) => args.includes(t))
-    : ['r', 't0', 't1', 't2']
+  : args.includes('--wave1')
+    ? ['r', 't0', 't1', 't2']
+    : args.length > 0
+      ? TRACK_IDS.filter((t) => args.includes(t))
+      : ['t3', 't4', 't5', 't6', 't7']
+
+/** An item stem on one line, cut for the worksheet. */
+const stem = (q: string) => {
+  const line = q.replace(/\s+/g, ' ').trim()
+  return line.length > 90 ? `${line.slice(0, 89)}…` : line
+}
 
 /** `T1.L4`, `t2.l7`, `R.L3` inside prose. */
 const XREF = /\b(r|t[0-7])\.l(\d{1,2})\b/gi
@@ -106,19 +119,25 @@ for (const l of ALL_LESSONS) {
   if (hosted.length > 0) console.log(`  hosts lab: ${hosted.map((lab) => `${lab.id} (${lab.checks.map((c) => c.id).join(', ')})`).join('; ')}`)
 
   let qi = 0
-  const untagged: number[] = []
+  const untagged: { i: number; q: string }[] = []
   for (const b of l.blocks) {
     if (b.type !== 'quiz') continue
     for (const q of b.questions) {
-      if (!q.kcs?.length) untagged.push(qi)
+      if (!q.kcs?.length) untagged.push({ i: qi, q: q.q })
       qi++
     }
   }
   items += qi
-  console.log(`  checkpoint items: ${qi}${untagged.length > 0 ? ` (untagged: #${untagged.join(', #')})` : ', all tagged'}`)
+  console.log(`  checkpoint items: ${qi}${untagged.length > 0 ? ` (untagged: #${untagged.map((u) => u.i).join(', #')})` : ', all tagged'}`)
+  for (const u of untagged) console.log(`    #${u.i} ${stem(u.q)}`)
 
   const graph = kcsTeaching(l.id)
   console.log(`  graph: ${graph.map((k) => `${k.id}${k.lessons[0] === l.id ? '' : ' (revisit)'}`).join(', ') || '(none yet)'}`)
+  // Lesson.kcs may name only KCs that list this lesson and are introduced here or earlier (verify-kc)
+  const at = order.get(l.id) ?? -1
+  const nameable = graph.filter((k) => (order.get(k.lessons[0]) ?? Infinity) <= at)
+  console.log(`  Lesson.kcs may name (${nameable.length}): ${nameable.map((k) => `${k.id} [${k.kind}${k.gen?.length ? `, gen ${k.gen.join('+')}` : ''}]`).join(', ') || '-'}`)
+  if (nameable.length < 2) console.log('  ! fewer than 2 nameable KCs: Lesson.kcs cannot hold 2-3 here')
   if (l.kcs) console.log(`  Lesson.kcs: ${l.kcs.join(', ')}`)
 }
 

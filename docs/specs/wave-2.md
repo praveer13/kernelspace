@@ -36,6 +36,7 @@ Section numbers below are cited by the task DAG (§24) and by `wave2-dag.json`.
 | D22 | **QR handoff stays out.** Wave 1 deferred it "to Wave 2" (wave-1 D11), but no Wave 2 line pays for it and iOS Safari has no native QR scanning. The file delta handoff stays. | §1 |
 | D23 | **Shared files have one owner.** Files every PR needs (ledger, economy, claims, lesson and item types, `verify-generators.ts`, `package.json`) are edited only in 2a level 0. No content task changes a lesson's title or hook, so `public/llms.txt` never changes in Wave 2. The DAG was checked mechanically for this rule (§24.1). | §24 |
 | D24 | **The ⌘K index budget is 20 KB gzip** (owner decision, 2026-10-13), up from Wave 1's 15 KB. The index loads only on the palette's first open, never at page load, and holding 15 KB had cost the concept crumbs and most of each lesson hook as the KC graph grew. `verify:search-index` still fails above the budget; build-search-index's clip lengths are restored after 2a-30 lands. | §7.4, §22 |
+| D25 | **Erratum to §5.3: a pipeline stage holds only its own layers' experts, so the `shard` key divides experts by EP × PP.** The spec's formula, dense ÷ (TP·PP) + experts ÷ EP, ignored PP for the experts. Each MoE layer's experts sit in that layer and a stage holds only its layers, so with PP > 1 a GPU holds at most experts ÷ (EP·PP). Seed 11 at level 3 (TP 4, PP 6, EP 2, 40 B dense and 340 B routed parameters in INT4): the spec's key gave 79.9 GiB per GPU, the physical figure is 0.83 + 85/6 ≈ 15 GB (13.97 GiB). The 2a final review found it: about 64 % of level-2 and level-3 shard items marked correct pipeline reasoning wrong. The stem now says each stage keeps only its own layers' experts, and the old key is the named slip `memory.experts-ignore-pp`. | §5.3, 2a final review |
 
 ## Owner questions
 
@@ -453,10 +454,10 @@ Claims (2a-04): `price.h100.median`, `price.b200.median` (exist, `prices.ts`), c
 | `weight-bytes` | params × bits ÷ 8 at BF16, FP8 or INT4 | numeric (GB) |
 | `fp4-fit` | NVFP4 at its effective bits per weight (a claim): weights, then the GPUs of a given HBM needed with h % left for KV | numeric (GPUs) |
 | `active-bytes` | an MoE's bytes read per decode step (active params) against its resident bytes (total params) | numeric (GB) |
-| `shard` | bytes per GPU: dense ÷ (TP·PP) + experts ÷ EP | numeric (GB) |
+| `shard` | bytes per GPU: dense ÷ (TP·PP) + experts ÷ (EP·PP) | numeric (GB) |
 | `lora` | adapter bytes = r × (d_in + d_out) × targets × layers × bytes, and adapters that fit in X GiB | numeric |
 
-Claims: DeepSeek-V3/R1 total and active parameters (new, `models.ts`), NVFP4 effective bits (new spec claim), HBM capacities (exist). Diagnoses: `memory.bits-as-bytes` (×8), `memory.fp4-no-scales` (4 ÷ 4.5), `memory.total-for-active`, `memory.unsharded` (×TP·PP), `memory.gb-gib` (×1.0737). Pins: 671 B × 4.5 ÷ 8 ≈ 377 GB (t6.l5, erratum #5) and Llama-3-70B at BF16.
+Claims: DeepSeek-V3/R1 total and active parameters (new, `models.ts`), NVFP4 effective bits (new spec claim), HBM capacities (exist). Diagnoses: `memory.bits-as-bytes` (×8), `memory.fp4-no-scales` (4 ÷ 4.5), `memory.total-for-active`, `memory.unsharded` (×TP·PP), `memory.experts-ignore-pp` (experts divided by EP alone, ×PP), `memory.gb-gib` (×1.0737). Pins: 671 B × 4.5 ÷ 8 ≈ 377 GB (t6.l5, erratum #5) and Llama-3-70B at BF16.
 
 **`spec`** (KCs `t6.spec-acceptance`, `t5.speculative-decoding`). All scenario numbers synthetic.
 

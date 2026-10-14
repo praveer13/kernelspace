@@ -45,6 +45,12 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
       md: `MTP is the **JIT's inline cache grown a brain**: T0.L5's speculate-and-deopt, except the speculation is now produced by the same optimizer that runs the slow path. And the batch-level trade is your thread-pool lesson again: at full occupancy (compute-bound), speculation adds FLOPs you don't have; at low occupancy it's free — "spare capacity" is the only thing being spent.`,
     },
     {
+      type: 'item',
+      title: 'Price a draft length with new numbers',
+      family: 'spec',
+      variants: ['expected-tokens', 'speedup', 'best-k'],
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -64,6 +70,8 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
             'That describes Medusa heads, which are shallow independent predictors whose acceptance drops on hard text. MTP is a transformer block fed by the target\'s hidden states.',
             'Saved memory is not the speedup. Speed comes from accepted tokens per verification pass, so a low acceptance rate erases the gain however small the drafter is.',
           ],
+          kcs: ['t6.self-drafting'],
+          miss: ['t6.mtp-skips-verify', '', 't6.mtp-is-medusa', 't6.drafter-memory-is-speedup'],
         },
         {
           q: 'Speculative decoding pays off most when…',
@@ -82,6 +90,8 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
             'MoE routing does not collapse acceptance: the published MTP gains, up to 2–3×, are on DeepSeek-R1, a MoE. Acceptance depends on how predictable the text is, not on the target being dense.',
             'Acceptance depends on how predictable the continuation is (code, JSON, low temperature), not on prompt length. Short prompts also say nothing about whether the batch has idle compute.',
           ],
+          kcs: ['t6.spec-acceptance'],
+          miss: ['t6.spec-for-throughput', '', 't6.spec-needs-dense', 't6.prompt-length-sets-acceptance'],
         },
         {
           q: 'The output quality cost of speculative decoding is…',
@@ -100,6 +110,8 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
             'Right: accepting each draft token with probability min(1, p/q) and resampling on rejection reproduces the target\'s distribution exactly. You spend spare compute, not quality.',
             'The guarantee holds at any temperature, because p and q are the temperature-adjusted distributions. Temperature changes the acceptance rate (lower is higher), not correctness.',
           ],
+          kcs: ['t5.speculative-decoding'],
+          miss: ['t6.spec-lossy-draft', 't6.spec-threshold-accept', '', 't6.spec-exact-only-greedy'],
         },
         {
           q: 'Why can speculative decoding stay profitable at larger batches on a MoE than on a dense model?',
@@ -118,6 +130,8 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
             'Sparse activation lowers the cost per token but not to zero. Verifying k tokens can route to more experts than one decode step touches, and once the batch saturates compute, extra tokens cost FLOPs again.',
             'Acceptance depends on how predictable the text is and how well the head matches the target, not on total parameter count. The MoE advantage comes from idle compute over a wider batch range.',
           ],
+          kcs: ['t6.spec-acceptance'],
+          miss: ['t6.router-is-drafter', '', 't6.sparse-verify-free', 't6.params-raise-acceptance'],
         },
       ],
     },
@@ -127,6 +141,36 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
       md: `EAGLE (and EAGLE-3, the version most engines integrated in 2025) made the draft **feature-level autoregression**: the head consumes the target's hidden states (not just tokens), one lightweight layer deep, trained to predict the next feature vector — better acceptance than Medusa with a fraction of the parameters. The 2026 shape in production: MTP-style modules for the frontier MoE stacks, EAGLE-3-class heads for open-weight deployments, draft-models for exotic cases. All three are in vLLM and SGLang today; TRT-LLM runs MTP-3 on the DeepSeek-R1 B200 records. If you implement one thing from this lesson: acceptance-rate instrumentation — you cannot tune what you don't count.`,
     },
   ],
+  kcs: ['t6.spec-acceptance', 't6.self-drafting'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'A drafter is accepted with probability 0.8 per token and you draft k = 3 tokens. How many tokens does one verification step emit on average, and what does the formula add up?',
+        model:
+          'E = (1 − α^(k+1)) / (1 − α) = 1 + 0.8 + 0.64 + 0.512 = 2.952, about 3 tokens per step. Each term is the chance that the first token, the first two, and so on are accepted; the leading 1 is the bonus token. Speedup divides E by the step cost 1 + k·c.',
+        ideas: [
+          'E sums 1 + α + α² + … + α^k, which is 2.952 here, about 3 tokens per step',
+          'The leading 1 is the bonus token that every verification pass produces',
+          'Speedup is E divided by the step cost 1 + k·c, so a longer draft stops paying when its added cost outruns its added tokens',
+        ],
+        kcs: ['t6.spec-acceptance'],
+      },
+      {
+        prompt:
+          'Why does an MTP or EAGLE head draft better than a separate small model, and why is speculation an interactivity technique rather than a throughput one?',
+        model:
+          'The head reads the target\'s own hidden states, so its drafts stay close to the target\'s distribution and acceptance is higher; there is also one checkpoint to host. Speculation spends idle compute: at small batch, decode is bandwidth-bound, so verifying k tokens per weight read is nearly free. A saturated batch has no idle compute to spend.',
+        ideas: [
+          'The head consumes the target\'s hidden states, so drafts track the target and acceptance rises',
+          'Decode at small batch leaves compute idle, so verifying k tokens per weight read is nearly free',
+          'A compute-saturated batch has no spare FLOPs, so the gain shrinks or vanishes',
+        ],
+        kcs: ['t6.self-drafting'],
+      },
+    ],
+  },
 }
 
 export default lesson

@@ -582,11 +582,17 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
     record([], now)
   }
 
-  /** One visit per lesson per local day (§8.3). */
+  /**
+   * One visit per lesson per local day (§8.3), except that the first visit after `complete placement` is always
+   * written: F3 reads the landing from the first visit after the placement, and a lesson the learner had already
+   * touched that day (R.L1, say) would otherwise leave none.
+   */
   function visitLesson(lessonId: string): void {
     const s = stamp()
     const lastAt = getOwn(agg.lessons, lessonId)?.lastAt
-    if (lastAt !== undefined && dayOf(lastAt, clock.tzOffsetMinutes(lastAt)) === s.day) return
+    const placedAt = workingRecs.get('placement:result')?.at
+    const sinceThen = placedAt === undefined || (lastAt !== undefined && lastAt >= placedAt)
+    if (lastAt !== undefined && sinceThen && dayOf(lastAt, clock.tzOffsetMinutes(lastAt)) === s.day) return
     record([ev(s, 'visit', `lesson:${lessonId}`)], [])
   }
 

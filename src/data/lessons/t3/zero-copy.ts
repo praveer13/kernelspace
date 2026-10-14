@@ -12,7 +12,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `In T0 you learned that memory bandwidth is the scarce resource. A copy is the most expensive "simple" thing a program does: a stray \`.clone()\` on a 100 MB buffer burns ~30 µs of pure bandwidth and pollutes half your cache — and in a serving pipeline, copies multiply: socket → parse → tokenize → transfer → kernel. **Zero-copy** is the discipline of passing *views* instead of *payloads* at every layer boundary, and Rust is unusually good at it because the borrow checker can prove a view never outlives its buffer.
+      md: `In T0 you learned that memory bandwidth is the scarce resource. A copy is the most expensive "simple" thing a program does: a stray \`.clone()\` on a 100 MiB buffer burns ~30 µs of pure bandwidth and pollutes half your cache — and in a serving pipeline, copies multiply: socket → parse → tokenize → transfer → kernel. **Zero-copy** is the discipline of passing *views* instead of *payloads* at every layer boundary, and Rust is unusually good at it because the borrow checker can prove a view never outlives its buffer.
 
 This lesson is the two halves of high-performance Rust: slices and borrowing views (the safe 99%), and \`unsafe\` (the audited 1%) — when you need it, and how professionals fence it in.`,
     },
@@ -23,7 +23,7 @@ This lesson is the two halves of high-performance Rust: slices and borrowing vie
 A slice \`&[T]\` is a fat pointer: \`(ptr, len)\` — 16 bytes describing a contiguous run of memory owned by someone else. \`&str\` is the same idea for UTF-8 text. Because slices *borrow*, the compiler guarantees the view can't escape its source: no dangling window, ever. That guarantee is what makes zero-copy APIs routine instead of terrifying:
 
 \`\`\`text
-let buf: Vec<u8> = read_frame();        // owned: 64 KB on the heap
+let buf: Vec<u8> = read_frame();        // owned: 64 KiB on the heap
 let header: &[u8] = &buf[0..16];        // view #1 — 16 bytes of metadata
 let payload: &[u8] = &buf[16..];        // view #2 — zero copies so far
 route(header, payload);                 // pass views, not clones
@@ -133,6 +133,8 @@ Serving systems live or die on copy discipline: every tensor moved between devic
             'That is Python slicing. A Rust slice copies nothing, so the original cannot be freed while the slice lives, and the borrow checker enforces it.',
             'Plain slices carry no refcount. That is what bytes::Bytes adds; a &[T] stays valid only through a borrow of its owner.',
           ],
+          kcs: ['t3.zero-copy-buffers', 'r.slices'],
+          miss: ['t3.slice-is-an-owned-array', '', 't3.slice-copies-the-range', 't3.slice-is-refcounted'],
         },
         {
           q: 'bytes::Bytes achieves zero-copy sharing by…',
@@ -151,6 +153,8 @@ Serving systems live or die on copy discipline: every tensor moved between devic
             'A borrowed slice cannot outlive its frame, which is exactly the limit Bytes removes. Reference counting lets a slice move across threads and tasks without a lifetime parameter.',
             'There is no pool-wide free. Each underlying buffer is released when its own last handle drops, which is why the count exists.',
           ],
+          kcs: ['t3.zero-copy-buffers'],
+          miss: ['t3.bytes-is-copy-on-write', '', 't3.bytes-borrows-the-vec', 't3.bytes-is-a-pool'],
         },
         {
           q: 'Inside an unsafe block, Rust…',
@@ -169,6 +173,8 @@ Serving systems live or die on copy discipline: every tensor moved between devic
             'Indexing a slice is still bounds-checked inside unsafe, and overflow behaviour is unchanged. Skipping a check takes an explicit unchecked method such as get_unchecked.',
             'A safe function can contain an unsafe block; that is how safe wrappers work. The author vouches for the invariants, so callers inherit no obligation.',
           ],
+          kcs: ['t3.unsafe-boundaries'],
+          miss: ['t3.unsafe-disables-the-borrow-checker', '', 't3.unsafe-skips-bounds-checks', 't3.unsafe-taints-callers'],
         },
         {
           q: 'The professional pattern for unsafe Rust is…',
@@ -187,10 +193,42 @@ Serving systems live or die on copy discipline: every tensor moved between devic
             'Unsafe is not all-or-nothing. One audited block does not void the guarantees of surrounding safe code, and banning it outright rules out FFI, raw device memory, and the standard library itself.',
             'Exposing raw obligations pushes proof work onto every caller, who cannot see the invariants. A public unsafe fn is for cases that cannot be wrapped; the default is a safe wrapper.',
           ],
+          kcs: ['t3.unsafe-boundaries'],
+          miss: ['t3.unsafe-everywhere-in-hot-paths', '', 't3.any-unsafe-voids-safety', 't3.expose-unsafe-to-callers'],
         },
       ],
     },
   ],
+  kcs: ['t3.zero-copy-buffers', 't3.unsafe-boundaries'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Explain why a parser that returns slices of its input buffer is zero-copy, and what bytes::Bytes adds when the buffer must outlive the stack frame.',
+        model:
+          'A slice is a pointer and a length into memory someone else owns, so returning sub-slices copies no payload, and the borrow checker stops them outliving the buffer. When the buffer must outlive the frame, Bytes reference-counts one immutable buffer: slicing bumps the count and changes the offset, so views cross threads and tasks without a memcpy.',
+        ideas: [
+          'A slice is a pointer plus a length into memory the caller owns, so sub-slices copy no payload',
+          'The borrow checker keeps every view from outliving its buffer',
+          'Bytes refcounts one immutable buffer, so slicing it bumps a count and views can cross threads',
+        ],
+        kcs: ['t3.zero-copy-buffers'],
+      },
+      {
+        prompt:
+          'Say what an unsafe block unlocks, and how a team keeps unsafe code from spreading.',
+        model:
+          'unsafe unlocks five operations the compiler cannot verify, such as dereferencing a raw pointer or calling FFI, and borrow checking stays on. Teams keep the unsafe core tiny behind a safe public API, write a SAFETY comment stating why each block is sound, and run the code under Miri, so one module carries the proof.',
+        ideas: [
+          'unsafe adds a few unverifiable operations, such as raw-pointer dereference, and leaves borrow checking on',
+          'Keep the unsafe core tiny behind a safe public API so callers inherit no obligation',
+          'Write a SAFETY comment for every block and test the module under Miri',
+        ],
+        kcs: ['t3.unsafe-boundaries'],
+      },
+    ],
+  },
 }
 
 export default lesson

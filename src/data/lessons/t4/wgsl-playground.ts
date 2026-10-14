@@ -10,7 +10,58 @@ const lesson: Lesson = {
   hook: 'Vector add → parallel reduction, editable WGSL in the browser: write a real GPU kernel where you can break it and see why.',
   exercise: 'code',
   simId: 'sim-wgsl',
+  kcs: ['t4.compute-grid', 't4.parallel-reduction'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'A kernel runs over N elements with 256 invocations per workgroup. Say how many workgroups to dispatch, and why each invocation needs a tail guard.',
+        model:
+          'Dispatch ceil(N / 256) workgroups, so every element has an owner. Each invocation finds its element from global_invocation_id. When N is not a multiple of 256, the last workgroup has invocations past the end, so each checks its index against N before touching memory, or it reads and writes out of range.',
+        ideas: [
+          'Dispatch ceil(N / 256) workgroups so every element is covered once',
+          'Each invocation finds its element from its global invocation id',
+          'The last workgroup has invocations past the end, so each checks its index against N',
+        ],
+        kcs: ['t4.compute-grid'],
+      },
+      {
+        prompt: 'Describe how a tree reduction sums 256 values in one workgroup, and why each round needs a barrier.',
+        model:
+          'Each invocation loads one value into shared memory. Every round halves the active set, so 128 invocations add pairs, then 64, and so on, for eight rounds. A barrier after each round makes every write visible before the next round reads it. Without it the sums race. One value per workgroup is written out.',
+        ideas: [
+          'Load values into shared memory, then halve the active invocations every round, for about log2 of 256 rounds',
+          'A barrier after each round makes the previous round\'s writes visible',
+          'The workgroup writes one partial, and a second pass combines the partials',
+        ],
+        kcs: ['t4.parallel-reduction'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'numeric',
+          q: 'A vector add has 16,777,216 elements and each workgroup holds 256 invocations. How many workgroups must the dispatch launch so that every element is covered once?',
+          unit: 'workgroups',
+          truth: 65536,
+          okWithinFactor: 1.05,
+          revealAt: 'The programming model in one paragraph',
+          kcs: ['t4.compute-grid'],
+        },
+        {
+          kind: 'numeric',
+          q: 'A workgroup sums 256 values in shared memory by halving the number of active invocations each round, 128 then 64 and so on. How many rounds until one total remains?',
+          unit: 'rounds',
+          truth: 8,
+          okWithinFactor: 1.05,
+          revealAt: 'Reduction: the kernel that teaches cooperation',
+          kcs: ['t4.parallel-reduction'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `Time to write GPU code. No CUDA install, no driver roulette: **WebGPU** — the modern web GPU API (the shared spirit of Vulkan/Metal/DX12) — runs compute shaders on the actual GPU of the machine reading this page, and its shading language **WGSL** is close enough to CUDA C++ that every skill transfers. In this lesson you'll read two canonical kernels line by line — **vector add** (the "hello world" that teaches the programming model) and **parallel reduction** (the kernel that teaches tree-based cooperation) — then edit and run them in the playground.
@@ -152,6 +203,7 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
             'The workgroup index is scaled by workgroup size (blockDim), not by the number of workgroups. Scaling by gridDim would collide and skip elements.',
             'It indexes invocations, not warps. Warp-scoped ids come from a separate, optional subgroup feature, not from this built-in.',
           ],
+          kcs: ['t4.compute-grid'],
         },
         {
           q: 'workgroupBarrier() exists to…',
@@ -170,6 +222,7 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
             'It orders memory within the workgroup only and does not make writes visible to other workgroups. Cross-group results wait for another dispatch.',
             'A barrier waits for arrival, not for elapsed time. Slower lanes simply hold the others until they reach it.',
           ],
+          kcs: ['t4.parallel-reduction'],
         },
         {
           q: 'The tree reduction\'s advantage over "everyone atomicAdds one output" is…',
@@ -188,6 +241,7 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
             'Atomics are exact; contention only serializes them. The sum is correct, so the cost is throughput rather than correctness.',
             'The tree needs a barrier after every round so each round sees the previous round\'s writes. Dropping one is the canonical race.',
           ],
+          kcs: ['t4.parallel-reduction'],
         },
         {
           q: 'vec_add does one add per element and moves 12 bytes (two 4-byte reads, one 4-byte write). It will always be limited by…',
@@ -206,6 +260,7 @@ The playground keeps every WGSL preset editable. The 16M vector-add option execu
             'Workgroup size can change occupancy but not the ceiling. Even with perfect occupancy the kernel is held to AI × bandwidth, far below the compute roof.',
             'vec_add has no barriers at all; each invocation is independent. Barriers matter in the reduction kernel, not here.',
           ],
+          kcs: ['t4.bound-classification', 't4.compute-grid'],
         },
       ],
     },

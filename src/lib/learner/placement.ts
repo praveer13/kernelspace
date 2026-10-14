@@ -6,7 +6,11 @@
  * lazily) and the ledger stay outside this module.
  *
  * The walk probes `THRESHOLD_KCS` in curriculum order, then the Rust anchor (optional and last on
- * `serving-first`). Per KC:
+ * `serving-first`). When all six core KCs come out solid it adds two **frontier** probes between them and
+ * the anchor, `t6.fp4-capacity` (the `memory/fp4-fit` variant) and `t7.goodput` (`goodput/slo-count`), on the
+ * same rules (docs/specs/wave-2.md §7.1): a 20-item walk cannot vouch for T6 or T7 as a whole, so `entryTrack`
+ * ignores them, but a solid frontier KC earns a card with a day-7 `confirmDay` like any other, and its lesson
+ * offers the test-out first. Per KC:
  *   - one independent item (level 2);
  *   - a right answer gets a confirmation: level 3 (a changed surface) after a confident answer, level 2
  *     (a second look, not a harder one) after a *guess*;
@@ -15,7 +19,9 @@
  *   - a confident right followed by a wrong confirmation is a conflict: one tie-break item (level 2)
  *     decides it, two right out of three being solid. That is the only path to a third item.
  *   - at most 3 items per KC, and at most 20 in all: a KC's extra item is asked only while every KC still
- *     to come keeps its first. With two items per KC the walk is 14 items long.
+ *     to come keeps its first. With two items per KC the walk is 14 items long, and an expert's (frontier
+ *     probes included) 18. The frontier is added only while it fits: each frontier KC two items, every other
+ *     KC still to come one.
  * An item the learner skips ("not sure") is a miss that names no misconception.
  *
  * Items are generated where a family covers the KC (frag, roofline, kv); otherwise checkpoint and spiral
@@ -35,7 +41,7 @@
  */
 
 import type { TrackId } from '@/data/lessons/types'
-import { RUST_ANCHOR_KC, THRESHOLD_KCS } from '@/data/kc/ids'
+import { KC, RUST_ANCHOR_KC, THRESHOLD_KCS } from '@/data/kc/ids'
 import { seedFor } from '@/lib/items/core'
 import { kcsFor, playView, refFor, type ItemResult } from '@/lib/items/play'
 import type { AuthoredItem, Level, PlayableItem } from '@/lib/items/types'
@@ -62,6 +68,18 @@ const GEN_TRIES = 12
 
 /** The probes in order: the six threshold KCs, then the Rust anchor. */
 export const PROBES: readonly KcId[] = [...THRESHOLD_KCS, RUST_ANCHOR_KC]
+
+/**
+ * The frontier probes (spec §7.1), asked after the six core KCs when all are solid. `variant` is the variant
+ * of the KC's family that its first item uses (a confirmation prefers another one when the family has it).
+ */
+export const FRONTIER_PROBES: readonly { kc: KcId; variant: string }[] = [
+  { kc: KC.fp4Capacity, variant: 'fp4-fit' },
+  { kc: KC.goodput, variant: 'slo-count' },
+]
+
+/** Whether `kc` is a frontier probe. */
+export const isFrontier = (kc: KcId): boolean => FRONTIER_PROBES.some((f) => f.kc === kc)
 
 /** On `serving-first` the anchor is optional (R arrives as reading items only there). */
 export const anchorOptional = (path: LearningPath): boolean => path === 'serving-first'
@@ -223,15 +241,18 @@ export interface Step {
 
 const usedRefs = (s: WalkState): Set<string> => new Set(Object.values(s.answers).flatMap((as) => as.map((a) => a.ref)))
 
-function genItem(s: WalkState, kc: KcId, level: Level, content: WalkContent, used: ReadonlySet<string>): PlayableItem | null {
+function genItem(s: WalkState, kc: KcId, n: number, level: Level, content: WalkContent, used: ReadonlySet<string>): PlayableItem | null {
   const families = content.pool.families(kc)
   if (families.length === 0) return null
+  // a frontier KC's first item is its named variant; if no seed in GEN_TRIES lands on it, any variant of the KC will do
+  const pinned = n === 0 ? FRONTIER_PROBES.find((f) => f.kc === kc)?.variant : undefined
   let last: PlayableItem | null = null
   for (let t = 0; t < GEN_TRIES; t++) {
     const seed = seedFor(s.seed, 100 + s.asked * GEN_TRIES + t)
     const item = content.pool.make(families[seed % families.length], kc, level, seed)
     if (!item) continue
     last = item
+    if (pinned && item.source === 'gen' && item.inst.variant !== pinned) continue
     // a second look at a KC is a different variant when the family has one
     if (!used.has(refFor(item))) return item
   }
@@ -258,8 +279,21 @@ function stepFor(s: WalkState, kc: KcId, n: number, content: WalkContent): Step 
   const level = levelOfItem(n, s.answers[kc] ?? [])
   const used = usedRefs(s)
   // the anchor keeps its own items (item:r.anchor.*) now that the compile family also serves its KC
-  const item = (kc === RUST_ANCHOR_KC ? null : genItem(s, kc, level, content, used)) ?? authoredItem(s, kc, n, level, content, used)
+  const item = (kc === RUST_ANCHOR_KC ? null : genItem(s, kc, n, level, content, used)) ?? authoredItem(s, kc, n, level, content, used)
   return item ? { kc, n, level, item, seed: seedFor(s.seed, s.asked), ordinal: s.asked + 1 } : null
+}
+
+/**
+ * Adds the frontier probes (between the six core KCs and the anchor) once the core is settled and every core
+ * KC is solid, and only while they fit: each frontier KC needs its two items and every probe still to come
+ * its one. A walk whose tie-breaks used the budget goes on without them.
+ */
+function withFrontier(s: WalkState): WalkState {
+  if (s.at !== THRESHOLD_KCS.length || s.probes.some(isFrontier)) return s
+  if (!THRESHOLD_KCS.every((kc) => s.verdicts[kc] === 'solid')) return s
+  if (s.asked + 2 * FRONTIER_PROBES.length + (s.probes.length - s.at) > MAX_ITEMS) return s
+  const frontier = FRONTIER_PROBES.map((f) => f.kc)
+  return { ...s, probes: [...s.probes.slice(0, s.at), ...frontier, ...s.probes.slice(s.at)] }
 }
 
 /**
@@ -270,7 +304,9 @@ function stepFor(s: WalkState, kc: KcId, n: number, content: WalkContent): Step 
  */
 export function advance(state: WalkState, content: WalkContent): { state: WalkState; step: Step | null } {
   let s = state
-  while (s.at < s.probes.length) {
+  for (;;) {
+    s = withFrontier(s)
+    if (s.at >= s.probes.length) break
     const kc = s.probes[s.at]
     const answers = s.answers[kc] ?? []
     let verdict = verdictOf(answers)

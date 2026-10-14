@@ -36,6 +36,8 @@ import demo from './fixture-family'
  */
 
 const LEVELS = [0, 1, 2, 3] as const
+/** The tests that walk every family (each new family adds choice variants): Bun's 5 s default is too tight on a loaded machine. */
+const SLOW = 30000
 const PLANE: VariantSpec = { id: 'which-plane', title: 'Which plane', kcs: ['t5.kv-bytes-per-token'], levels: LEVELS, nsec: 20 }
 
 /** A family whose one choice variant draws its options from `options(seed)`; the key is the option with `key: true`. */
@@ -51,27 +53,31 @@ function choiceFamily(options: (seed: number, level: Level) => (Pick<ChoiceOptio
 /** A deterministic 0..n-1 draw from a seed, so synthetic families are reproducible. */
 const roll = (seed: number, salt: number, n: number): number => Math.abs(Math.imul(seed ^ Math.imul(salt + 1, 0x9e3779b1), 0x85ebca6b) >>> 7) % n
 
-/** The shipped families' choice gates take seconds each (the compile family alone has ten choice variants). */
-const SLOW_MS = 60_000
-
 describe('the blind-strategy gate on the shipped families', () => {
   test('every choice variant of every family passes at 200 seeds over all levels', async () => {
     for (const gen of await loadAllFamilies()) {
       const r = checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS })
       expect(r.problems).toEqual([])
     }
-  }, SLOW_MS)
+  }, SLOW)
 
-  test('the gate really samples: frag fit-choice, roofline bound and the compile items are judged at every level, and pooled', async () => {
+  test('the gate really samples: every choice variant, frag fit-choice and roofline bound among them, is judged at every level, and pooled', async () => {
     const wheres = new Set<string>()
-    for (const gen of await loadAllFamilies()) for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
-    for (const v of ['frag/fit-choice', 'roofline/bound', 'compile/permission', 'compile/verdict.borrow-rules', 'compile/fix.borrow-rules']) {
+    // a variant is a choice variant when its instances are choices, so a new family's choice variants are judged without editing this list
+    const choice = new Set<string>()
+    for (const gen of await loadAllFamilies()) {
+      for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
+      for (const v of gen.variants) if (gen.make(1, v.levels[0], v.id).answer.kind === 'choice') choice.add(`${gen.id}/${v.id}`)
+    }
+    for (const v of ['frag/fit-choice', 'roofline/bound']) {
+      expect(choice.has(v)).toBe(true)
       expect(wheres.has(v)).toBe(true)
       for (const l of LEVELS) expect(wheres.has(`${v}@L${l}`)).toBe(true)
     }
-    // numeric and estimate variants have no options, so nothing else is judged (every compile item is a choice)
-    expect([...wheres].every((w) => /^(frag\/fit-choice|roofline\/bound|compile\/[a-z.-]+)(@L\d)?$/.test(w))).toBe(true)
-  }, SLOW_MS)
+    // numeric and estimate variants have no options, so nothing else is judged
+    expect([...wheres].every((w) => choice.has(w.split('@')[0]))).toBe(true)
+    expect([...choice].every((v) => wheres.has(v))).toBe(true)
+  }, SLOW)
 
   test('checkFamily runs it by default, from at least 200 seeds even when asked for fewer', () => {
     const r = checkFamily(roofline, { seeds: 20, speed: false })
@@ -89,7 +95,7 @@ describe('the blind-strategy gate on the shipped families', () => {
         if (gen.id === 'roofline') expect(row.worst.hit - row.chance).toBeLessThan(0.1)
       }
     }
-  }, SLOW_MS)
+  }, SLOW)
 })
 
 describe('the gate catches what it is for', () => {
@@ -482,7 +488,7 @@ describe('the own pools: prequestions, diagram predictions and spiral items are 
 
   test('refs are the ledger refs: pre:<lesson>#<i>, dia:<lesson>#<block index>, item:<id>', () => {
     for (const e of collectOwnPools(ALL_LESSONS)) {
-      expect(e.ref).toMatch(e.pool === 'prequestion' ? /^pre:t\d\.l\d+#\d+$/ : e.pool === 'predictAt' ? /^dia:t\d\.l\d+#\d+$/ : /^item:t2\.spiral\./)
+      expect(e.ref).toMatch(e.pool === 'prequestion' ? /^pre:t\d\.l\d+#\d+$/ : e.pool === 'predictAt' ? /^dia:t\d\.l\d+#\d+$/ : /^item:t\d\.spiral\./)
     }
     const dia = collectOwnPools(ALL_LESSONS).find((e) => e.pool === 'predictAt')
     const lesson = ALL_LESSONS.find((l) => l.id === dia?.lessonId)

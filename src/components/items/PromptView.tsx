@@ -10,17 +10,18 @@ import type { Prompt, PromptPart, SolutionStep } from '@/lib/items/types'
 import { cn } from '@/lib/utils'
 
 // Inline chips keep their text height: WCAG 2.5.8 exempts targets inside a sentence, and a 44 px hit area would overlap the neighbouring lines.
-const CHIP = 'rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[0.92em] text-text-1'
+// A chip wraps rather than overflows (WCAG 1.4.10 Reflow): generators keep chip text under 28 characters, and break-words is the backstop for a long claim value.
+const CHIP = 'box-decoration-clone break-words rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[0.92em] text-text-1'
 
 function Part({ part }: { part: PromptPart }) {
   switch (part.t) {
     case 'text':
       return <>{part.text}</>
     case 'value':
-      return <span className={cn(CHIP, 'whitespace-nowrap')}>{partText(part)}</span>
+      return <span className={CHIP}>{partText(part)}</span>
     case 'claim':
       // the chip shows the scaled value and unit the prompt asked for, not the claim's default text
-      return <ClaimValue id={part.claim} format={() => partText(part)} className={cn(CHIP, 'whitespace-nowrap text-accent no-underline')} />
+      return <ClaimValue id={part.claim} format={() => partText(part)} className={cn(CHIP, 'text-accent no-underline')} />
     case 'code':
       if (part.lines || part.mark !== undefined) return <NumberedCode code={part.code} mark={part.mark} />
       return part.code.includes('\n') ? (
@@ -129,7 +130,7 @@ export function StepList({ steps, reveal, label, className }: StepListProps) {
                       ?<span className="sr-only"> blank step: your answer goes in the answer field</span>
                     </span>
                   ) : (
-                    <span className={cn(CHIP, 'whitespace-nowrap')}>
+                    <span className={CHIP}>
                       {formatNumber(s.result.value)}
                       {s.result.unit ? ` ${s.result.unit}` : ''}
                     </span>

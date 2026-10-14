@@ -54,6 +54,12 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
       ],
     },
     {
+      type: 'item',
+      title: 'Price a node-day with new numbers',
+      family: 'cost',
+      variants: ['node-day'],
+    },
+    {
       type: 'callout',
       variant: 'analogy',
       md: `Wide EP is **your sharded cache fleet with a fan-out router**, and the three mechanisms map one-to-one: DeepEP ≈ the RPC layer with separate bulk and latency paths (gRPC streaming vs unary), EPLB ≈ consistent hashing + hot-key replication (your memcached tier's hot-key problem, with GPUs), dual-batch overlap ≈ every event-loop lesson from T2.L6 — never block, interleave. The genuinely new thing is only the payload: tokens instead of requests, experts instead of shards.`,
@@ -87,6 +93,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
             'Prefill uses the same dispatch and combine; DeepEP has a bandwidth-oriented mode for it. EP32 already spans several nodes, so it is not confined to one NVLink domain.',
             'DeepSeek-V3 has 256 routed experts plus one shared, not 144. EP width is a deployment choice made per phase, not a number fixed by the model.',
           ],
+          kcs: ['t6.expert-load-balance', 't6.all-to-all'],
         },
         {
           q: 'EPLB keeps the combine barrier cheap by…',
@@ -105,6 +112,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
             'Smaller batches make expert load noisier, not flatter, because uniformity comes from large-batch statistics. EPLB balances through placement and replication instead.',
             'Barrier delay comes from load skew, not faulty hardware, and rerouting tokens changes which expert answers them, which hurts quality. EPLB balances load without changing routing.',
           ],
+          kcs: ['t6.expert-load-balance'],
         },
         {
           q: 'Dual-batch overlap exists to…',
@@ -123,6 +131,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
             'That is large-batch load balancing (T6.L1). Dual-batch overlap keeps the same total tokens and splits them in two to overlap phases, not to enlarge the batch.',
             'Replication is EPLB\'s tool, and replicated experts still need dispatch and combine. Dual-batch overlap leaves placement alone and overlaps communication with compute.',
           ],
+          kcs: ['t6.comm-overlap'],
         },
         {
           q: 'DeepEP ships two dispatch protocols because…',
@@ -141,6 +150,7 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
             'Both modes are first-class paths. The split reflects physics: large transfers amortize overheads, while decode needs registered buffers and no handshake on every layer.',
             'The split is by phase, not by train versus serve. The same model dispatches differently in prefill and decode because the bandwidth and latency tradeoff differs.',
           ],
+          kcs: ['t6.comm-overlap', 't6.all-to-all'],
         },
       ],
     },
@@ -150,6 +160,36 @@ The same pattern appears as DualPipe in training and as "PDL" (programmatic depe
       md: `The two documents worth a weekend each: **DeepSeek's open-infra week** (github.com/deepseek-ai/open-infra-index) — the production numbers including the 545% margin day and the 56.3% KV-cache hit rate; and **SGLang's "large-scale EP" writeup** (lmsys.org, May 2025) — 96×H100, P/D disaggregation + wide EP with DeepEP/DeepGEMM/EPLB, 52.3k input / 22.3k output tok/s/node, ~$0.20/M output tokens. A vLLM-team follow-up (Dec 2025) reached 2.2k output tok/s per H200 in production-like multi-node configs. These are the reference points for every T6/T7 calculation.`,
     },
   ],
+  kcs: ['t6.ep-economics', 't6.expert-load-balance', 't6.comm-overlap'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Why does EPLB replicate hot experts rather than move them, and what does that buy at the combine barrier?',
+        model:
+          'Expert weights are small next to the KV cache, so a second copy on another GPU is cheap, and replicas split the hot expert\'s tokens. Placement is reassigned periodically from measured per-expert load. The combine barrier then costs about the mean load across GPUs instead of the maximum.',
+        ideas: [
+          'Expert weights are small next to the KV cache, so a second copy on another GPU is cheap',
+          'Replicas split the hot expert\'s tokens, and placement is reassigned from measured per-expert load',
+          'The combine barrier then costs about the mean load instead of the max',
+        ],
+        kcs: ['t6.expert-load-balance'],
+      },
+      {
+        prompt:
+          'How does dual-batch overlap hide the all-to-all, and what does it not remove?',
+        model:
+          'The batch splits into two micro-batches. While one computes attention or FFN, the other runs its dispatch or combine, so the GPUs and the network are both busy. The transfer leaves the critical path but still happens: if it takes longer than the compute it hides under, the stall returns.',
+        ideas: [
+          'Two micro-batches alternate: one computes while the other dispatches or combines',
+          'The transfer is hidden behind compute, so it leaves the critical path',
+          'It is hidden, not removed: a transfer longer than the compute it hides under still stalls',
+        ],
+        kcs: ['t6.comm-overlap'],
+      },
+    ],
+  },
 }
 
 export default lesson

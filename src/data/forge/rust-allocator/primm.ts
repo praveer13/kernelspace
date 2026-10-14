@@ -370,7 +370,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     options: [
       'So `free` is timed with the heap full, which is its slowest case for 4 KiB blocks',
       'So `alloc` has to return None once, which covers the failure path of the heap',
-      'So the leftover tail cannot answer the request, and only merging can',
+      'So the leftover tail cannot answer the 64 KiB request, and only merging can',
       'So the 64 KiB request is aligned to 4 KiB, which first-fit would skip',
     ],
     correct: [2],
@@ -402,7 +402,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab01.primm.i5', 'investigate', [KC.allocatorContract], {
     q: 'Your allocator passes `cargo test`. The page grades the seeded checks (`align`, `no_overlap` and `fragmentation`) on seeds it draws when you drop the file. What does that change for a correct allocator?',
     options: [
-      'Nothing, because a correct allocator passes any seed and a tuned one fails',
+      'Nothing, because a correct one passes any seed and a tuned one fails',
       'Each drop needs a fresh `cargo build`, because the seed is baked into the module',
       'Some seeds fail by chance, so a correct allocator may need a second try',
       'No seed is drawn, so a lucky constant for the default seed still passes',
