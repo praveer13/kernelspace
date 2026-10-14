@@ -160,6 +160,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
   const usedRef = useRef<ReadonlySet<number>>(new Set())
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const drawRef = useRef<HTMLButtonElement>(null)
   const drawingRef = useRef<HTMLParagraphElement>(null)
   const explainRef = useRef<HTMLTextAreaElement>(null)
   const ideaRef = useRef<HTMLInputElement>(null)
@@ -238,6 +239,10 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
   useEffect(() => {
     if (revealed) ideaRef.current?.focus()
   }, [revealed])
+  // "Run it on a fresh seed here instead" unmounts the phone outcome that held focus: the draw button is what comes next
+  useEffect(() => {
+    if (forceEmbed && load === 'ready') drawRef.current?.focus({ preventScroll: true })
+  }, [forceEmbed, load])
 
   const commit = () => {
     const prediction = parsePrediction(def, draft)
@@ -330,7 +335,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                       Each round draws a fresh seed and shows what it gives the engine. You predict from that; the sweep&apos;s outcome stays hidden until you lock in.
                       Three right in a row, on at least {ANSWERS_NEEDED} different answers, finishes the exercise. A round you lock in and leave before saving counts as a miss.
                     </p>
-                    <button type="button" data-fleet-draw onClick={() => dispatch({ type: 'draw' })} className={cn(primaryBtn, 'mt-3', hitArea(false))}>
+                    <button type="button" ref={drawRef} data-fleet-draw onClick={() => dispatch({ type: 'draw' })} className={cn(primaryBtn, 'mt-3', hitArea(false))}>
                       Draw a fresh seed
                     </button>
                   </div>

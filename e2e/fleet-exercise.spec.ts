@@ -3,11 +3,13 @@ import { lessonById } from '../src/data/lessons'
 import { FLEET_EXERCISES } from '../src/lib/world/fleet-ex'
 
 // Keyboard walk of a Fleet exercise block (docs/specs/wave-3.md §5.3, §17.2, 3c-06): /lesson/t7.l2's load knee at 360
-// and 320 px, no pointer, against the real fleet worker. Tab reaches the block, Enter draws a fresh seed, the scene is
-// read (the knee's offered rate and slot-hold time), the prediction is typed and sent with Enter, the verdict and the
-// chart with its table follow, a line of eight words opens the model answer, Space ticks its three ideas and Enter
-// saves. /lesson/t6.l3's P:D split is walked as far as its verdict. A last test locks a round, reloads the page and
-// finds the round counted as a miss, because the lock was recorded and the save never was (D39, D48).
+// and 320 px, no pointer, against the real fleet worker. At those widths the panel is in phone mode: Tab reaches the
+// prediction on the canonical seed, Enter shows that seed's outcome (which earns nothing), and "Run it on a fresh seed
+// here instead" hands focus to the draw button. Enter draws a fresh seed, the scene is read (the knee's offered rate and
+// slot-hold time), the prediction is typed and sent with Enter, the verdict and the chart with its table follow, a line
+// of eight words opens the model answer, Space ticks its three ideas and Enter saves. /lesson/t6.l3's P:D split is
+// walked as far as its verdict. A last test locks a round, reloads the page and finds the round counted as a miss,
+// because the lock was recorded and the save never was (D39, D48).
 // The block's ids come from the lesson's own data, so a rewording there cannot break the walk.
 
 const BLOCK = '[data-block="fleet-exercise"]'
@@ -50,13 +52,39 @@ async function open(page: Page, lesson: string, exercise: string) {
   await page.evaluate(() => document.fonts.ready)
   const block = page.locator(`${BLOCK}[data-exercise="${exercise}"]`)
   await expect(block).toHaveCount(1)
-  await expect(block.locator('[data-fleet-draw]')).toBeVisible()
+  await expect(block.locator('[data-fleet-draw], [data-phone]')).toBeVisible()
   return block
 }
 
-/** Draws a seed with the keyboard, waits for its scene and for focus to land on the prediction field. */
-async function drawByKeyboard(page: Page, block: ReturnType<Page['locator']>) {
+/**
+ * Phone mode (any viewport under 640 px): predicts on the canonical seed, reads its outcome and chooses to run a fresh
+ * seed, all by keyboard. Returns the canonical verdict. In embed mode it does nothing.
+ */
+async function phoneToEmbed(page: Page, block: ReturnType<Page['locator']>, guess: () => Promise<number> = () => kneeFromScene(block)): Promise<'right' | 'off' | null> {
+  if ((await block.getAttribute('data-mode')) !== 'phone') return null
   await tabUntil(page, (a) => a.inBlock, 400, 'the Fleet exercise block')
+  await focusIs(page, 'data-fleet-predict')
+  await page.keyboard.type(String(await guess()))
+  await page.keyboard.press('Enter')
+  const verdict = block.locator('[data-verdict]')
+  await expect(verdict).toBeVisible()
+  await expect(verdict).toBeFocused()
+  const result = (await verdict.getAttribute('data-verdict')) as 'right' | 'off'
+  // the canonical outcome shows its table open, and it earns nothing: the progress line is empty and the ledger untouched
+  await expect(block.locator('[data-sweep-chart] table tbody tr')).not.toHaveCount(0)
+  await expect(block.locator('[data-fleet-progress]')).toHaveText('')
+  await tabUntil(page, (a) => a.name === 'Run it on a fresh seed here instead', 4, 'the run-it-here button')
+  await page.keyboard.press('Enter')
+  await expect(block).toHaveAttribute('data-mode', 'embed')
+  // the button that was pressed is gone: focus lands on the draw button, not on the page
+  await expect(block.locator('[data-fleet-draw]')).toBeFocused()
+  return result
+}
+
+/** Draws a seed with the keyboard, waits for its scene and for focus to land on the prediction field. */
+async function drawByKeyboard(page: Page, block: ReturnType<Page['locator']>, guess?: () => Promise<number>) {
+  await phoneToEmbed(page, block, guess)
+  if (!(await active(page)).inBlock) await tabUntil(page, (a) => a.inBlock, 400, 'the Fleet exercise block')
   expect((await active(page)).name).toBe('Draw a fresh seed')
   await page.keyboard.press('Enter')
   await focusIs(page, 'data-fleet-predict')
@@ -90,11 +118,11 @@ for (const width of [360, 320]) {
       const block = await open(page, 't7.l2', 'knee')
       expect(await noSidewaysScroll(page)).toBe(true)
       await expect(block.getByText(kneeBlock.title, { exact: true }).first()).toBeVisible()
-      await expect(block.locator('[data-fleet-progress]')).toHaveText('0/3 right in a row · 0/2 different answers')
       // the In-production rows come with the claims they read
       await expect(block.getByText('max_num_seqs').first()).toBeVisible()
 
       await drawByKeyboard(page, block)
+      await expect(block.locator('[data-fleet-progress]')).toHaveText('0/3 right in a row · 0/2 different answers')
       expect(await noSidewaysScroll(page)).toBe(true)
       const scene = (await block.locator('[data-fleet-scene]').textContent()) ?? ''
       expect(scene).toContain('Offered at 1×')
@@ -132,8 +160,12 @@ for (const width of [360, 320]) {
       await expect(save).toBeEnabled()
       expect(await noSidewaysScroll(page)).toBe(true)
       await tabUntil(page, (a) => a.name === 'Save result', 1, 'Save result')
-      // every control walked is a target of at least 24 px (WCAG 2.2 target size)
-      const heights = await block.locator('button:visible, input:visible, textarea:visible').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))
+      // every control of the walk is a target of at least 24 px (WCAG 2.2 target size; a tick box is the label around it,
+      // which is what a tap lands on). The claim chips of the In-production rows sit inside sentences and are not the walk's.
+      const heights = await block
+        .locator('[data-fleet-predict], [data-fleet-explain], [data-fleet-idea], [data-fleet-save], [data-fleet-lock], [data-fleet-reveal]')
+        .evaluateAll((els) => els.filter((e) => e.getClientRects().length > 0).map((e) => (e.closest('label') ?? e).getBoundingClientRect().height))
+      expect(heights.length).toBeGreaterThanOrEqual(5)
       expect(Math.min(...heights)).toBeGreaterThanOrEqual(24)
       await page.keyboard.press('Enter')
 
@@ -157,7 +189,7 @@ test('/lesson/t6.l3: the P:D split shows its scene, takes a worker count and sho
   const block = await open(page, 't6.l3', 'pd-split')
   expect(await noSidewaysScroll(page)).toBe(true)
   await expect(block.getByText(pdBlock.title, { exact: true }).first()).toBeVisible()
-  await drawByKeyboard(page, block)
+  await drawByKeyboard(page, block, async () => 4)
   const scene = (await block.locator('[data-fleet-scene]').textContent()) ?? ''
   expect(scene).toContain('Prompts')
   expect(scene).toContain('Outputs')
@@ -187,7 +219,9 @@ test('a round locked and left unsaved is a miss after a reload: the run of right
   await page.reload()
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   const again = page.locator(`${BLOCK}[data-exercise="knee"]`)
-  await expect(again.locator('[data-fleet-draw]')).toBeVisible()
+  await expect(again.locator('[data-fleet-draw], [data-phone]')).toBeVisible()
+  // the page is in phone mode again: the learner's earlier rounds are on the embed side
+  await phoneToEmbed(page, again)
   await expect(again.locator('[data-fleet-played] li')).toHaveCount(1)
   await expect(again.locator('[data-fleet-played]')).toContainText('left before saving, counts as off')
   await expect(again.locator('[data-fleet-progress]')).toHaveText('0/3 right in a row · 0/2 different answers')

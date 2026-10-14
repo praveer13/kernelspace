@@ -42,6 +42,7 @@ import {
 } from '../../src/components/fleet-ex/session'
 import { byId, getClaim } from '../../src/data/claims'
 import '../../src/data/claims/lazy/serving3'
+import { lessonById } from '../../src/data/lessons'
 import type { FleetExerciseBlock } from '../../src/data/lessons/types'
 import { validateEvent } from '../../src/lib/ledger/codec'
 import type { ItemResponse, LedgerEvent } from '../../src/lib/ledger/types'
@@ -458,6 +459,40 @@ describe('what the sweep says', () => {
     expect(String(table.rows[2][0])).toContain('3 prefill, 5 decode')
     expect(c.tickLabel(2)).toBe('2:6')
     expect(verdictText(pd, c, pd.truth(r), r).detail).toContain(`${pd.truth(r)} prefill, ${8 - pd.truth(r)} decode`)
+  })
+})
+
+describe('the lesson blocks (3c-06)', () => {
+  /** The exercise's block in its own lesson, with its index among the lesson's blocks. */
+  function blockOf(def: FleetExerciseDef): { lesson: NonNullable<ReturnType<typeof lessonById>>; index: number; block: FleetExerciseBlock } {
+    const lesson = lessonById(def.lessonId)!
+    const found = lesson.blocks.flatMap((b, index) => (b.type === 'exercise' && 'fleet' in b && b.fleet === def.id ? [{ lesson, index, block: b }] : []))
+    expect(found).toHaveLength(1)
+    return found[0]
+  }
+
+  test('each exercise sits once in the lesson it names, with its own title, before that lesson’s quiz and after its item block', () => {
+    for (const def of [knee, pd]) {
+      const { lesson, index, block } = blockOf(def)
+      expect(lesson.id).toBe(def.lessonId)
+      expect(block.title).toBe(def.title)
+      const quiz = lesson.blocks.findIndex((b) => b.type === 'quiz')
+      expect(index).toBeLessThan(quiz)
+      expect(lesson.blocks[index + 1].type).toBe('quiz')
+      expect(lesson.blocks.findIndex((b) => b.type === 'item')).toBeLessThan(index)
+      // the exercise assesses KCs its lesson teaches
+      for (const kc of def.kcs) expect(lesson.kcs).toContain(kc)
+    }
+  })
+
+  test('each block carries a note that says what happened, in terms of the model the panel runs', () => {
+    for (const def of [knee, pd]) {
+      const note = blockOf(def).block.note ?? ''
+      expect(note.split(/\s+/).length).toBeGreaterThan(60)
+      expect(note).toContain('flat-tick')
+    }
+    expect(blockOf(knee).block.note).toContain('Little')
+    expect(blockOf(pd).block.note).toContain('prefill')
   })
 })
 
@@ -915,6 +950,25 @@ describe('the panel, mounted', () => {
     expect(again.container.textContent).not.toContain('left before saving')
     expect(again.container.querySelectorAll('[data-fleet-played] li')).toHaveLength(3)
     await again.unmount()
+  })
+
+  test('the lesson’s own block shows its note once the exercise is done, and not before', async () => {
+    const real = lessonById(LESSON)!.blocks.find((b): b is FleetExerciseBlock => b.type === 'exercise' && 'fleet' in b)!
+    const [a, b, c] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.5), seedsWhere(knee, 1, true)[0]]
+    const history: ExerciseEvent[] = [a, b, c].flatMap((s, i) => {
+      const round = savedRound(knee, s, knee.truth(sweepOf(knee, s)))
+      return [itemEvent(knee, CTX, round)].map((e) => exerciseEventOf(e, new Date(T0 + i * 1000).toISOString(), `h${i}`))
+    })
+    const early = await open(rig([]), { block: real })
+    expect(q(early, '[data-fleet-note]')).toBeNull()
+    await early.unmount()
+    const done = await open(rig([], {}, history), { block: real })
+    expect(progress(done)).toBe('3/3 · done')
+    const note = q(done, '[data-fleet-note]')
+    expect(note.textContent).toContain('What just happened')
+    expect(note.textContent).toContain('Every seed set its knee at a different load')
+    expect(note.textContent).toContain("Little's law")
+    await done.unmount()
   })
 
   test('another block’s events do not count here', async () => {
