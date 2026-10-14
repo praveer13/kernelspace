@@ -11,6 +11,7 @@ import {
   CUBE_PRACTICE_SEED,
   ctasPerSm,
   H100,
+  l2Note,
   maxRunnableTile,
   maxTile,
   occupancy,
@@ -151,6 +152,52 @@ describe('raster order and the L2 window', () => {
     const short = waveAI({ ...BASE, m: 1024, n: 1024, raster: 'row', group: 1 })
     expect([short.tiles, short.rows, short.cols]).toEqual([64, 8, 8])
   })
+
+  test('a GEMM smaller than one tile, or a grouped raster with no whole group height, is refused rather than giving NaN', () => {
+    // m < tm and n < tn: no whole tile, 0 tiles, 0 ÷ 0
+    expect(() => waveAI({ ...BASE, m: 64, n: 16384, raster: 'row', group: 1 })).toThrow(RangeError)
+    expect(() => waveAI({ ...BASE, m: 16384, n: 100, raster: 'grouped', group: 4 })).toThrow(/no whole 128 × 128 tile/)
+    // group 0 divides by zero in Triton's mapping; a fractional group is no launchable GROUP_SIZE_M either
+    expect(() => waveAI({ ...wave, raster: 'grouped', group: 0 })).toThrow(/whole group height/)
+    expect(() => waveAI({ ...wave, raster: 'grouped', group: 2.5 })).toThrow(RangeError)
+    expect(() => tileAt(3, 5, 4, 'grouped', 0)).toThrow(RangeError)
+    // the row raster ignores the group, so it prices the same wave whatever the group says
+    const row = waveAI({ ...wave, raster: 'row', group: 0 })
+    expect(Number.isFinite(row.ai)).toBe(true)
+    expect(row.ai).toBe(waveAI({ ...wave, raster: 'row' }).ai)
+    // exactly one tile each way is a wave of one tile, a finite figure
+    const one = waveAI({ ...BASE, m: 128, n: 128, raster: 'grouped', group: 1 })
+    expect([one.tiles, one.rows, one.cols]).toEqual([1, 1, 1])
+    expect(one.ai).toBe(64)
+  })
+
+  test("level 4's L2 sentence reads the waves' fits: both, one or neither", () => {
+    const row = waveAI({ ...wave, raster: 'row' })
+    const grouped = waveAI({ ...wave, raster: 'grouped' })
+    expect([row.fits, grouped.fits]).toEqual([true, true])
+    expect(l2Note(row, grouped)).toBe("Both waves' slabs fit the 50 MB L2 (4.3 MB and 0.8 MB).")
+    // a hypothetical 2 MB L2: the row-major wave's 4.3 MB of slabs overflow it, the grouped wave's 0.8 MB fit
+    const small: TilingHw = { ...H100, l2Bytes: 2e6 }
+    const rowS = waveAI({ ...wave, raster: 'row' }, small)
+    const groupedS = waveAI({ ...wave, raster: 'grouped' }, small)
+    expect([rowS.fits, groupedS.fits]).toEqual([false, true])
+    const one = l2Note(rowS, groupedS, small)
+    expect(one).toContain("The grouped wave's slabs fit the 2 MB L2 (0.8 MB), but the row-major wave's (4.3 MB) do not")
+    expect(one).toContain(`its ${rowS.ai.toFixed(1)} FLOP/B is an upper bound`)
+    expect(one).not.toContain('Both')
+    // a real H100 wave whose slabs do not fit: 8 stages of 128-deep FP32 slabs, row-major, 68.2 MB against 50 MB
+    const deep = { ...wave, k: 128, stages: 8, dtype: 'fp32' as const }
+    const rowD = waveAI({ ...deep, raster: 'row' })
+    const groupedD = waveAI({ ...deep, raster: 'grouped' })
+    expect([rowD.fits, groupedD.fits]).toEqual([false, true])
+    expect(l2Note(rowD, groupedD)).toContain("but the row-major wave's (68.2 MB) do not")
+    // the reverse case and neither
+    expect(l2Note(groupedS, rowS, small)).toContain("The row-major wave's slabs fit")
+    const tiny: TilingHw = { ...H100, l2Bytes: 0.7e6 }
+    const none = l2Note(waveAI({ ...wave, raster: 'row' }, tiny), waveAI({ ...wave, raster: 'grouped' }, tiny), tiny)
+    expect(none).toBe("Neither wave's slabs fit the 0.7 MB L2 (4.3 MB and 0.8 MB), so both figures are upper bounds: slabs evicted before every tile has read them are read from HBM again.")
+    expect(none).toContain('both figures are upper bounds')
+  })
 })
 
 describe('the debriefs (§6.3)', () => {
@@ -182,6 +229,8 @@ describe('the debriefs (§6.3)', () => {
     expect(by('occupancy')).toContain(`${ctasPerSm(BASE)} CTAs per SM`)
     expect(by('raster')).toContain(`${waveAI({ ...wave, raster: 'row' }).ai.toFixed(1)} FLOP/B`)
     expect(by('raster')).toContain(`${waveAI({ ...wave, raster: 'grouped' }).ai.toFixed(1)} FLOP/B`)
+    // the L2 sentence is built from the two waves' fits, not written in
+    expect(by('raster')).toContain(l2Note(waveAI({ ...wave, raster: 'row' }), waveAI({ ...wave, raster: 'grouped' })))
     expect(by('fp8')).toContain(`T ≥ ${tileToReach(ridge('fp8'), 'fp8')}`)
     expect(by('flash')).toContain(`${qBlockAI(QBLOCK).toFixed(1)} FLOP/B`)
   })

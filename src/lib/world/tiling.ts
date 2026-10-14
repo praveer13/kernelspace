@@ -175,7 +175,7 @@ export interface WaveSpec extends TileConfig {
   m: number
   n: number
   raster: Raster
-  /** tile rows per group of the grouped raster (Triton's GROUP_SIZE_M); ignored by the row raster */
+  /** tile rows per group of the grouped raster (Triton's GROUP_SIZE_M), a whole number ≥ 1; ignored by the row raster */
   group: number
   /** CTAs in the wave: one per SM, a persistent kernel (default: the SM count) */
   ctas?: number
@@ -200,9 +200,16 @@ export interface Wave {
   fits: boolean
 }
 
-/** Tile `pid`'s (row, column) under a raster, on a grid of `rowsT` × `colsT` tiles. Grouped is Triton's mapping. */
+/** Whether a group height is one Triton's grouped raster can launch: a whole number of tile rows, at least one. */
+const validGroup = (group: number): boolean => Number.isInteger(group) && group >= 1
+
+/**
+ * Tile `pid`'s (row, column) under a raster, on a grid of `rowsT` × `colsT` tiles. Grouped is Triton's mapping. A
+ * grouped raster with no whole group height (0, as GROUP_SIZE_M = 0 would) divides by zero, so it is refused.
+ */
 export function tileAt(pid: number, rowsT: number, colsT: number, raster: Raster, group: number): [number, number] {
   if (raster === 'row') return [Math.floor(pid / colsT), pid % colsT]
+  if (!validGroup(group)) throw new RangeError(`a grouped raster needs a whole group height of at least 1 tile row, not ${group}`)
   const inGroup = group * colsT
   const first = Math.floor(pid / inGroup) * group
   const height = Math.min(rowsT - first, group)
@@ -214,8 +221,16 @@ export function tileAt(pid: number, rowsT: number, colsT: number, raster: Raster
  * Level 4: the first wave of a GEMM's tiles, one CTA per SM. Its tiles read each A panel and B panel they touch
  * once from HBM and share it through L2, so the wave's intensity is tiles·2·Tm·Tn ÷ ((rows·Tm + cols·Tn)·b).
  * Nothing survives between waves (a 16,384² A is 512 MiB, far past L2), so a wave is the unit of reuse.
+ *
+ * The model counts whole tiles (a partial edge tile is masked work it does not price), so a GEMM must hold at
+ * least one whole tile each way, and a grouped raster a whole group height of at least 1. Anything else has no
+ * wave to price (0 tiles, or a division by a zero group) and is refused with a RangeError rather than giving NaN.
  */
 export function waveAI(w: WaveSpec, hw: TilingHw = H100): Wave {
+  if (!(w.tm > 0 && w.tn > 0 && w.m >= w.tm && w.n >= w.tn)) {
+    throw new RangeError(`a ${w.m} × ${w.n} GEMM holds no whole ${w.tm} × ${w.tn} tile, so it has no wave to price`)
+  }
+  if (w.raster === 'grouped' && !validGroup(w.group)) throw new RangeError(`a grouped raster needs a whole group height of at least 1 tile row, not ${w.group}`)
   const rowsT = Math.floor(w.m / w.tm)
   const colsT = Math.floor(w.n / w.tn)
   const tiles = Math.min(w.ctas ?? hw.smCount, rowsT * colsT)
@@ -237,6 +252,21 @@ export function waveAI(w: WaveSpec, hw: TilingHw = H100): Wave {
   return { tiles, rows, cols, cells, flopsPerK, bytesPerK, ai: flopsPerK / bytesPerK, l2Bytes, fits: l2Bytes <= hw.l2Bytes }
 }
 
+/**
+ * Level 4's sentence on L2, read from the two waves' `fits`: a wave whose slabs overflow L2 has slabs evicted before
+ * every tile has read them, which are read from HBM again, so its shared-slab figure is only an upper bound.
+ */
+export function l2Note(row: Wave, grouped: Wave, hw: TilingHw = H100): string {
+  const l2Mb = hw.l2Bytes / MB
+  const l2 = `the ${fmt(l2Mb, Number.isInteger(l2Mb) ? 0 : 1)} MB L2`
+  const size = (w: Wave): string => `${fmt(w.l2Bytes / MB, 1)} MB`
+  const refetch = 'slabs evicted before every tile has read them are read from HBM again'
+  if (row.fits && grouped.fits) return `Both waves' slabs fit ${l2} (${size(row)} and ${size(grouped)}).`
+  if (!row.fits && !grouped.fits) return `Neither wave's slabs fit ${l2} (${size(row)} and ${size(grouped)}), so both figures are upper bounds: ${refetch}.`
+  const [fit, over, overName] = row.fits ? [row, grouped, 'grouped'] : [grouped, row, 'row-major']
+  return `The ${overName === 'grouped' ? 'row-major' : 'grouped'} wave's slabs fit ${l2} (${size(fit)}), but the ${overName} wave's (${size(over)}) do not, so its ${fmt(over.ai, 1)} FLOP/B is an upper bound: ${refetch}.`
+}
+
 /** One tile row's bound under the row raster, T·N ÷ (T + N) for a square FP16 tile: where the plan's ≈127 comes from. */
 export function rowBound(t: number, n: number): number {
   return (t * n) / (t + n)
@@ -249,9 +279,12 @@ export function ridge(dtype: Dtype, hw: TilingHw = H100): number {
   return (bytesOf(dtype) === 1 ? hw.fp8Flops : hw.bf16Flops) / hw.hbmBps
 }
 
+/** A ridge within this share of a whole side counts as that side, so float noise (1,100 ÷ 1.1 = 1,000.0000000000001) does not add one. */
+const WHOLE_SLACK = 1e-9
+
 /** The smallest whole square tile whose intensity, T ÷ b, reaches a ridge: 591 at FP8 and at FP16 on H100. */
 export function tileToReach(r: number, dtype: Dtype): number {
-  return Math.ceil(r * bytesOf(dtype))
+  return Math.ceil(r * bytesOf(dtype) * (1 - WHOLE_SLACK))
 }
 
 /* ------------------------------ FlashAttention ------------------------------ */
@@ -372,7 +405,7 @@ function buildLevels(): CubeLevel[] {
       variant: 'raster-ai',
       kc: 't4.raster-l2-reuse',
       reference: [square(BASE.tm, '128 × 128, grouped 11 × 12')],
-      debrief: `On a 16,384³ GEMM, a row-major wave of ${row.tiles} tiles touches ${row.rows} tile rows and ${row.cols} columns: ${fmt(row.ai, 1)} FLOP/B. Grouped ${grouped.rows} × ${grouped.cols}, a wave of as many tiles touches ${grouped.rows + grouped.cols} panels: ${fmt(grouped.ai, 1)} FLOP/B, ${fmt(grouped.ai / row.ai, 1)}× from raster order alone. Both waves' slabs fit the ${fmt(H100.l2Bytes / MB)} MB L2.`,
+      debrief: `On a 16,384³ GEMM, a row-major wave of ${row.tiles} tiles touches ${row.rows} tile rows and ${row.cols} columns: ${fmt(row.ai, 1)} FLOP/B. Grouped ${grouped.rows} × ${grouped.cols}, a wave of as many tiles touches ${grouped.rows + grouped.cols} panels: ${fmt(grouped.ai, 1)} FLOP/B, ${fmt(grouped.ai / row.ai, 1)}× from raster order alone. ${l2Note(row, grouped)}`,
       principle: 'Launch order decides which slabs L2 can share: a squarer wave reads fewer panels.',
     },
     {
