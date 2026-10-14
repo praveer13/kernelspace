@@ -14,7 +14,7 @@ import ZooChart from '../../src/components/sims/ZooChart'
 import { ZOO_TASKS } from '../../src/components/sims/kvZoo.tasks'
 import { byId } from '../../src/data/claims'
 import { KC } from '../../src/data/kc/ids'
-import { ZOO_CONTEXTS, ZOO_PRESETS, layerBytes, zooBytes, zooPresetById } from '../../src/lib/kv-zoo'
+import { ZOO_CONTEXTS, ZOO_PRESETS, layerBytes, parseConfig, zooBytes, zooPresetById } from '../../src/lib/kv-zoo'
 import { gradePrediction, splitCanonical } from '../../src/lib/sims/host'
 import {
   BASELINE_ID,
@@ -34,11 +34,14 @@ import {
   prefixReuse,
   readSetup,
   readVsStored,
+  runZoo,
   setupMismatches,
+  zooConfigToSave,
   zooMirror,
 } from '../../src/lib/sims/models/zoo'
 import { PENDING_TASK_IDS, buildRegistry } from '../../src/lib/sims/registry'
-import type { PredictSpec } from '../../src/lib/sims/types'
+import type { Observation, PredictSpec } from '../../src/lib/sims/types'
+import { makeProfile, startTab } from '../ledger/env'
 import fixture from '../fixtures/zoo/second-reader.json'
 
 const reg = buildRegistry({ '/src/components/sims/kvZoo.tasks.ts': { ZOO_TASKS } })
@@ -299,58 +302,41 @@ describe("kv-zoo's preset numbers against the second reader's fixture", () => {
     }
   })
 
-  /** Qwen3.5's linear state, priced at four bytes by the fixture and at the KV dtype by kv-zoo (see below); zero for the rest. */
-  const dtypeShift = (f: FixtureModel): number =>
-    f.fields.stateBytesPerLinearLayerAtBf16 === undefined
-      ? 0
-      : f.fields.linear_layers * (f.fields.stateBytesPerLinearLayerAtBf16 - f.fields.stateBytesPerLinearLayer)
-
-  test('bytes read per decode step equal the fixture exactly for six presets, and Qwen3.5 by its state dtype', () => {
+  // One byte convention, stated in kv-zoo.ts and in the second reader's CONVENTIONS, so no number needs a shim:
+  // every tensor is priced at the dtype the pinned config gives (Qwen3.5's state is float32), and a sparse
+  // indexer's keys are stored as well as read (they sit in HBM beside the cache).
+  test('bytes stored equal the fixture exactly, for all seven presets at the four contexts', () => {
     for (const f of models) {
       const p = presetOf(f)
-      for (const t of fixture.contexts) expect(zooBytes(p, t).read, `${p.id} at ${t}`).toBe(f.contexts[String(t)].readTotal + dtypeShift(f))
-    }
-  })
-
-  test('bytes stored equal the fixture exactly for the four presets with no convention to settle', () => {
-    for (const f of models) {
-      const p = presetOf(f)
-      if (!['llama3-70b', 'deepseek-v3', 'gpt-oss-120b', 'kimi-linear'].includes(p.id)) continue
       for (const t of fixture.contexts) expect(zooBytes(p, t).stored, `${p.id} at ${t}`).toBe(f.contexts[String(t)].stored)
     }
   })
 
-  // Two conventions differ, and both are the fixture's own named fields rather than a tolerance.
-  //  1. The fixture's `stored` leaves out a sparse indexer's keys and lists what the indexer reads as `readIndexer`.
-  //     kv-zoo stores those keys, because a step cannot read what is not stored (read <= stored): its capacity is
-  //     the fixture's `stored + readIndexer`. This is DeepSeek-V3.2 and DeepSeek-V4-Pro.
-  //  2. Qwen3.5's config names its linear state float32 (`mamba_ssm_dtype`); the fixture prices that state at four
-  //     bytes, kv-zoo at the KV dtype (BF16, two). The fixture gives the BF16 state beside it
-  //     (`stateBytesPerLinearLayerAtBf16`), which is what kv-zoo holds.
-  test('bytes stored equal the fixture plus its two named conventions, exactly', () => {
+  test('bytes read per decode step equal the fixture exactly, for all seven presets at the four contexts', () => {
     for (const f of models) {
       const p = presetOf(f)
-      for (const t of fixture.contexts) {
-        const c = f.contexts[String(t)]
-        expect(zooBytes(p, t).stored, `${p.id} at ${t}`).toBe(c.stored + c.readIndexer + dtypeShift(f))
-      }
+      for (const t of fixture.contexts) expect(zooBytes(p, t).read, `${p.id} at ${t}`).toBe(f.contexts[String(t)].readTotal)
     }
   })
 
-  test('only DeepSeek-V3.2, DeepSeek-V4-Pro and Qwen3.5 differ from the fixture without a convention, and each by its named field', () => {
-    const differs = models
-      .filter((f) => {
-        const p = presetOf(f)
-        return fixture.contexts.some((t) => zooBytes(p, t).stored !== f.contexts[String(t)].stored)
-      })
-      .map((f) => presetOf(f).id)
-    expect(differs).toEqual(['qwen3-5-397b', 'deepseek-v3-2', 'deepseek-v4-pro'])
+  test('each convention is visible in the fixture: indexer keys are stored, the state is float32', () => {
+    const v32 = models.find((f) => presetOf(f).id === 'deepseek-v3-2')
+    const qwen = models.find((f) => presetOf(f).id === 'qwen3-5-397b')
+    if (!v32 || !qwen) throw new Error('missing fixture model')
+    // 61 layers · (576 + 128) · 2 B = 85,888 B per token, and 1k tokens of it
+    expect(v32.contexts['1024'].stored).toBe(87_949_312)
+    expect(v32.contexts['1024'].stored).toBe(v32.bytesPerToken * 1024)
+    for (const f of models) for (const t of fixture.contexts) expect(f.contexts[String(t)].readTotal, `${f.repo} at ${t}`).toBeLessThanOrEqual(f.contexts[String(t)].stored)
+    // 45 linear layers · 64 · 128 · 128 · 4 B = 188,743,680 B flat
+    expect(qwen.fields.stateBytesPerElement).toBe(4)
+    expect(qwen.fields.stateBytesPerLinearLayer).toBe(4_194_304)
+    expect(zooBytes(presetOf(qwen), 1024).groups[0].stored).toBe(45 * 4_194_304)
   })
 
-  test('bytes per token agree where a model has no constant part or indexer', () => {
+  test('bytes per token agree where a model has no constant part', () => {
     for (const f of models) {
       const p = presetOf(f)
-      if (f.constantBytes !== 0 || f.contexts['1024'].readIndexer !== 0) continue
+      if (f.constantBytes !== 0) continue
       expect(zooBytes(p, 1).stored, p.id).toBe(f.bytesPerToken)
     }
   })
@@ -358,7 +344,6 @@ describe("kv-zoo's preset numbers against the second reader's fixture", () => {
   test('the machine shows the fixture numbers: its table mirror at each pinned context', () => {
     for (const f of models) {
       const p = presetOf(f)
-      if (f.contexts['1024'].readIndexer !== 0 || f.fields.stateBytesPerLinearLayerAtBf16 !== undefined) continue
       const table = zooMirror(p, DEFAULT_ZOO_STATE.ctx, null)
       for (const t of fixture.contexts) {
         const row = table.rows[ZOO_CTX_STEPS.indexOf(t)]
@@ -367,6 +352,42 @@ describe("kv-zoo's preset numbers against the second reader's fixture", () => {
         expect(row[2]).toBe(fmtBytes(f.contexts[String(t)].readTotal))
       }
     }
+  })
+})
+
+describe('the byte convention reaches pasted configs too', () => {
+  const text = {
+    num_hidden_layers: 4,
+    layer_types: ['linear_attention', 'linear_attention', 'linear_attention', 'full_attention'],
+    num_key_value_heads: 2,
+    head_dim: 256,
+    linear_num_value_heads: 8,
+    linear_key_head_dim: 16,
+    linear_value_head_dim: 16,
+  }
+  const stateAt = (cfg: unknown) => {
+    const r = parseConfig(cfg)
+    if (!r.ok) throw new Error(r.error.message)
+    return zooBytes(r.model, 1024).groups[0].stored
+  }
+
+  test('a linear state is priced at the config\'s mamba_ssm_dtype, and at the KV dtype when it names none', () => {
+    expect(stateAt({ text_config: { ...text, mamba_ssm_dtype: 'float32' } })).toBe(3 * 8 * 16 * 16 * 4)
+    expect(stateAt({ text_config: { ...text, mamba_ssm_dtype: 'bfloat16' } })).toBe(3 * 8 * 16 * 16 * 2)
+    expect(stateAt({ text_config: text })).toBe(3 * 8 * 16 * 16 * 2)
+  })
+
+  test('the state dtype is a named error when the zoo cannot price it', () => {
+    const r = parseConfig({ text_config: { ...text, mamba_ssm_dtype: 'float8' } })
+    expect(r).toMatchObject({ ok: false, error: { kind: 'bad-field', field: 'text_config.mamba_ssm_dtype' } })
+  })
+
+  test('a state dtype does not scale with b, a KV entry does', () => {
+    const qwen = preset('qwen3-5-397b')
+    const wide = zooBytes(qwen, 1024, 4)
+    const base = zooBytes(qwen, 1024)
+    expect(wide.groups[0].stored).toBe(base.groups[0].stored)
+    expect(wide.groups[1].stored).toBe(2 * base.groups[1].stored)
   })
 })
 
@@ -461,6 +482,94 @@ describe('the zoo machine model', () => {
     const parsed = pasteStatus('{"num_hidden_layers": 80, "num_key_value_heads": 8, "num_attention_heads": 64, "hidden_size": 8192}')
     expect(parsed.state).toBe('ok')
     if (parsed.state === 'ok') expect(zooBytes(parsed.model, 1).stored).toBe(zooBytes(preset(BASELINE_ID), 1).stored)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Run, and the paste box's saved text                                  */
+/* ------------------------------------------------------------------ */
+
+describe("the Run button (the machine's handler is runZoo)", () => {
+  const tasks = ZOO_TASKS.map((t) => ({ title: t.title, observe: t.observe }))
+  const press = (presetId: string, ctx: number) => {
+    const got: Observation[] = []
+    const r = runZoo({ tasks, model: preset(presetId), state: { presetId, ctx }, observe: (o) => got.push(o) })
+    return { got, ...r }
+  }
+
+  test('Run on Kimi Linear at 128k sends the readings of the tasks that setup matches, with the expected values', () => {
+    const { got, text, sent } = press('kimi-linear', 131072)
+    expect(got.map((o) => o.key).sort()).toEqual(['zoo.hybrid-share', 'zoo.linear-state'])
+    const share = got.find((o) => o.key === 'zoo.hybrid-share')
+    expect(share).toEqual({ key: 'zoo.hybrid-share', value: readSetup('zoo.hybrid-share')?.value, unit: '%', configHash: JSON.stringify({ presetId: 'kimi-linear', ctx: 131072 }) })
+    // the share of Kimi Linear's KV bytes at 128k held by its MLA layers
+    const k = zooBytes(preset('kimi-linear'), 131072)
+    expect(share?.value).toBeCloseTo((k.groups[1].stored / k.stored) * 100, 1)
+    expect(sent).toHaveLength(2)
+    expect(text).toBe(`Run: reading sent for ${sent.join('; ')}.`)
+  })
+
+  test('Run on DeepSeek-V3.2 at 128k sends the DSA verdict under its key', () => {
+    const { got } = press('deepseek-v3-2', 131072)
+    expect(got).toHaveLength(1)
+    expect(got[0].key).toBe('zoo.dsa-reads')
+    expect(got[0].value).toBe(readSetup('zoo.dsa-reads')?.value)
+  })
+
+  test('with the wrong context the status names the missing control and nothing is sent', () => {
+    const { got, text } = press('deepseek-v3-2', 1024)
+    expect(got).toEqual([])
+    expect(text).toContain('Run: nothing sent.')
+    expect(text).toContain('context: 128k')
+  })
+
+  test('with the wrong model the status names the model to pick', () => {
+    const { got, text } = press('llama3-70b', 131072)
+    expect(got).toEqual([])
+    expect(text).toMatch(/needs model: /)
+  })
+
+  test('with no readable model (a bad paste) nothing is sent and the status still names what to change', () => {
+    const got: Observation[] = []
+    const r = runZoo({ tasks, model: null, state: { presetId: CUSTOM_ID, ctx: 131072 }, observe: (o) => got.push(o) })
+    expect(got).toEqual([])
+    expect(r.text).toContain('nothing sent')
+    expect(r.text).toContain('model: ')
+  })
+
+  test('no tasks on the page: Run says no task reads the zoo here', () => {
+    const r = runZoo({ tasks: [], model: preset('kimi-linear'), state: { presetId: 'kimi-linear', ctx: 131072 }, observe: () => {} })
+    expect(r.text).toBe('Run: no task reads the zoo here.')
+  })
+})
+
+describe('the paste box: emptying it clears the saved config', () => {
+  const CONFIG = '{"num_hidden_layers": 2}'
+
+  test('an empty box is saved as the empty string, and only a box over the cap is not kept', () => {
+    expect(zooConfigToSave('')).toBe('')
+    expect(zooConfigToSave(CONFIG)).toBe(CONFIG)
+    expect(zooConfigToSave('x'.repeat(ZOO_CONFIG_MAX_CHARS))).not.toBeNull()
+    expect(zooConfigToSave('x'.repeat(ZOO_CONFIG_MAX_CHARS + 1))).toBeNull()
+  })
+
+  test('select-all and delete leaves an empty config after a reload, not the old one, and no sentinel is needed', async () => {
+    const profile = makeProfile()
+    const write = (tab: ReturnType<typeof startTab>, text: string) => {
+      const kept = zooConfigToSave(text)
+      if (kept !== null) tab.progress.getState().setWorking('zoo:config', kept)
+    }
+    const first = startTab(profile)
+    write(first, CONFIG)
+    await first.progress.controls.flush()
+    expect(startTab(profile).progress.getState().working['zoo:config']).toBe(CONFIG)
+
+    const second = startTab(profile)
+    write(second, '') // the box emptied by select-all and delete
+    await second.progress.controls.flush()
+    const reloaded = startTab(profile).progress.getState().working['zoo:config']
+    expect(reloaded).toBe('')
+    expect(pasteStatus(typeof reloaded === 'string' ? reloaded : CONFIG).state).toBe('empty')
   })
 })
 

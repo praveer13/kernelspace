@@ -13,7 +13,7 @@ import { layerBytes, parseConfig, zooBytes, zooPresetById } from '@/lib/kv-zoo'
 import type { LayerGroup, ZooLayer, ZooModel } from '@/lib/kv-zoo'
 import type { CanonicalOutcome } from '@/lib/sims/host'
 import { fmtCtx } from '@/lib/sims/models/kv'
-import type { MirrorTable } from '@/lib/sims/types'
+import type { MirrorTable, Observation } from '@/lib/sims/types'
 
 export { fmtCtx }
 
@@ -29,6 +29,13 @@ export const BASELINE_ID = 'llama3-70b'
 
 /** The paste box's cap, the same as the `zoo:config` working key's (§3.5). */
 export const ZOO_CONFIG_MAX_CHARS = 20_000
+
+/**
+ * What the paste box writes to `zoo:config` for the text it holds, or null when the text is too long to keep.
+ * An empty box is a value like any other: emptying it by select-all and delete clears the saved config, so the
+ * old one does not come back after a reload (the key accepts the empty string, codec.ts).
+ */
+export const zooConfigToSave = (text: string): string | null => (text.length <= ZOO_CONFIG_MAX_CHARS ? text : null)
 
 export const zooBaseline = (): ZooModel => {
   const p = zooPresetById(BASELINE_ID)
@@ -210,7 +217,7 @@ export function zooMirror(model: ZooModel, ctx: number, baseline: ZooModel | nul
   const columns = ['Context', 'Stored', 'Read per step']
   if (baseline !== null) columns.push(`${baseline.name} stored`)
   return {
-    caption: `${model.name}: bytes stored and bytes read per decode step, BF16`,
+    caption: `${model.name}: bytes stored and bytes read per decode step, BF16 except where the config pins another dtype`,
     columns,
     rows: ZOO_CTX_STEPS.map((t) => {
       const z = zooBytes(model, t)
@@ -311,6 +318,35 @@ export function readSetup(key: string): { value: number | string; unit: string }
   if (reading === undefined || setup === undefined) return null
   const value = reading.read(modelOfSetup(setup), ctxOfSetup(setup))
   return value === null ? null : { value, unit: reading.unit }
+}
+
+/** What the Run button does: send each task's reading that the controls match, and say what happened. */
+export function runZoo(args: {
+  tasks: readonly { title: string; observe?: string }[]
+  model: ZooModel | null
+  state: ZooState
+  observe: (o: Observation) => void
+}): { sent: string[]; text: string } {
+  const { tasks, model, state, observe } = args
+  const sent: string[] = []
+  for (const t of tasks) {
+    const setup = t.observe === undefined ? undefined : SETUPS[t.observe]
+    if (model === null || setup === undefined || setupMismatches(state, setup).length > 0) continue
+    const reading = READINGS.find((r) => r.key === t.observe)
+    const value = reading?.read(model, state.ctx)
+    if (reading === undefined || value === null || value === undefined) continue
+    observe({ key: reading.key, value, unit: reading.unit, configHash: JSON.stringify(state) })
+    sent.push(t.title)
+  }
+  if (sent.length > 0) return { sent, text: `Run: reading sent for ${sent.join('; ')}.` }
+  const closest = tasks
+    .flatMap((t) => (t.observe !== undefined && SETUPS[t.observe] !== undefined ? [{ t, miss: setupMismatches(state, SETUPS[t.observe]) }] : []))
+    // fewest controls to change, and on a tie the task whose model is already picked (only the context is off)
+    .sort((a, b) => a.miss.length - b.miss.length || Number(a.miss.some((m) => m.startsWith('model'))) - Number(b.miss.some((m) => m.startsWith('model'))))[0]
+  return {
+    sent,
+    text: closest === undefined ? 'Run: no task reads the zoo here.' : `Run: nothing sent. The closest task, "${closest.t.title}", needs ${closest.miss.join(', ')}.`,
+  }
 }
 
 /* ------------------------------------------------------------------ */

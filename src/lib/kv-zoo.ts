@@ -3,8 +3,14 @@
  *
  * A model is a layer pattern: how many layers of each kind, and each kind's parameters. For every kind the
  * model gives two numbers at context t, summed over layers: the bytes the cache **stores** (capacity) and the
- * bytes one decode step **reads** (bandwidth). `b` is bytes per element at the stored dtype; the configs do not
- * carry it (it is a serving choice), so it is a parameter, BF16 (2) by default.
+ * bytes one decode step **reads** (bandwidth).
+ *
+ * One byte convention, shared with the second reader (scripts/zoo/second-reader.ts, wave-2.md §11.3): every tensor
+ * is priced at the dtype the pinned config gives it. KV entries and indexer keys use `b`, the config's own
+ * torch_dtype or dtype, which is BF16 (2) in all seven pinned configs (gpt-oss names none; its attention sits
+ * outside mxfp4, so it is BF16 too); `b` stays a parameter, BF16 by default. A recurrent state uses the dtype the
+ * config names for it when it names one: Qwen3.5's `mamba_ssm_dtype` is float32, so its state costs 4 bytes per
+ * element whatever `b` is. Weight quantization (fp8, mxfp4) never enters: it prices weights, not the cache.
  *
  *   kind     stored at context t                               read per decode step
  *   full     2·kvHeads·headDim·b·t                             = stored
@@ -15,11 +21,13 @@
  *   hca      entry·(⌈t/m′⌉ + min(t, W))·b                      = stored
  *   linear   heads·d_k·d_v·b, constant in t                    = stored
  *
- * These are the serving dossier's per-layer forms (serving-landscape.md:261–267), with one decision of this task
- * made explicit: a lightning indexer scores every cached unit at every step, so its keys are stored and read in
- * full. DSA's indexer keeps one index key per token; CSA's keeps one per compressed entry. The keys are counted
- * in both curves, which is why DSA's reads still grow with t, only with a much smaller slope than its capacity.
- * Nothing is counted at t = 0: no request, no cache.
+ * These are the serving dossier's per-layer forms (serving-landscape.md:261–267), with one decision made explicit
+ * (and shared with the second reader): a lightning indexer scores every cached unit at every step, so its keys sit
+ * in HBM beside the cache and are **stored** as well as read. DSA's indexer keeps one index key per token; CSA's
+ * keeps one per compressed entry. They are counted in both curves, so a step never reads more than is stored, and
+ * DSA's reads still grow with t, only with a much smaller slope than its capacity. (Spec §11.1's table lists dsa's
+ * stored bytes "as its base kind"; the indexer keys are the addition.) Nothing is counted at t = 0: no request,
+ * no cache.
  *
  * The framing for the UI is the evidence's: "KV is an append-only log with random reads; a recurrent state is a
  * checkpoint you can resume from, but not from the middle" (serving-landscape.md:94, 269).
@@ -31,7 +39,7 @@
  * No React, no DOM, no clock.
  */
 
-import { claimNumber } from '@/data/claims'
+import { claimNumber, getClaim } from '@/data/claims'
 
 /* ------------------------------------------------------------------ */
 /* Layer kinds                                                         */
@@ -98,6 +106,8 @@ export interface LinearLayer {
   heads: number
   keyDim: number
   valueDim: number
+  /** Bytes per element of the state when the config names its dtype (Qwen3.5: mamba_ssm_dtype float32 = 4); otherwise it follows `b`. */
+  stateBytes?: number
 }
 
 export type ZooLayer = FullLayer | MlaLayer | SwaLayer | DsaLayer | CsaLayer | HcaLayer | LinearLayer
@@ -126,8 +136,14 @@ export interface ByteCount {
   read: number
 }
 
-/** Bytes per element: BF16. The configs do not carry the KV dtype; the zoo prices every kind at the same one. */
+/** Bytes per element of the KV entries and indexer keys: BF16, the torch_dtype or dtype of every pinned config. */
 export const DEFAULT_ELEMENT_BYTES = 2
+
+/** Bytes per element of the dtype names a config uses for a tensor. */
+export const DTYPE_BYTES: Readonly<Record<string, number>> = { bfloat16: 2, float16: 2, float32: 4 }
+
+/** Bytes per element a layer's own tensors are priced at: the dtype its config pins, else `b`. */
+const elementBytes = (layer: ZooLayer, b: number): number => (layer.kind === 'linear' && layer.stateBytes !== undefined ? layer.stateBytes : b)
 
 /** The four contexts every preset is pinned at: 1k, 32k, 128k and 1M tokens, powers of two as in KvCacheSim. */
 export const ZOO_CONTEXTS: readonly number[] = [1024, 32768, 131072, 1048576]
@@ -193,7 +209,8 @@ function layerElements(layer: ZooLayer, t: number): ByteCount {
 export function layerBytes(layer: ZooLayer, t: number, b: number = DEFAULT_ELEMENT_BYTES): ByteCount {
   checkContext(t)
   const e = layerElements(layer, t)
-  return { stored: e.stored * b, read: e.read * b }
+  const w = elementBytes(layer, b)
+  return { stored: e.stored * w, read: e.read * w }
 }
 
 export interface ZooBytes extends ByteCount {
@@ -208,7 +225,8 @@ export function zooBytes(model: ZooModel, t: number, b: number = DEFAULT_ELEMENT
   let read = 0
   const groups = model.groups.map(({ count, layer }) => {
     const e = layerElements(layer, t)
-    const g = { stored: count * e.stored * b, read: count * e.read * b }
+    const w = elementBytes(layer, b)
+    const g = { stored: count * e.stored * w, read: count * e.read * w }
     stored += g.stored
     read += g.read
     return g
@@ -238,7 +256,7 @@ export const layerCount = (model: ZooModel): number => model.groups.reduce((n, g
 /* ------------------------------------------------------------------ */
 
 /** Reads `zoo.<slug>.<suffix>` and records the id, so each preset lists exactly the claims it was built from. */
-function reader(slug: string): { n: (suffix: string) => number; ids: string[] } {
+function reader(slug: string): { n: (suffix: string) => number; dtype: (suffix: string) => number; ids: string[] } {
   const ids: string[] = []
   return {
     ids,
@@ -246,6 +264,15 @@ function reader(slug: string): { n: (suffix: string) => number; ids: string[] } 
       const id = `zoo.${slug}.${suffix}`
       ids.push(id)
       return claimNumber(id)
+    },
+    // a dtype claim quotes the config's name for it ("float32"); the zoo prices it at that many bytes
+    dtype: (suffix) => {
+      const id = `zoo.${slug}.${suffix}`
+      ids.push(id)
+      const name = getClaim(id).value
+      const bytes = typeof name === 'string' ? DTYPE_BYTES[name] : undefined
+      if (bytes === undefined) throw new Error(`claim ${id} is not a dtype the zoo knows: ${String(name)}`)
+      return bytes
     },
   }
 }
@@ -292,12 +319,13 @@ function gptOss120b(): ZooModel {
 }
 
 function qwen35(): ZooModel {
-  const { n, ids } = reader('qwen3-5-397b')
+  const { n, dtype, ids } = reader('qwen3-5-397b')
   const linear: LinearLayer = {
     kind: 'linear',
     heads: n('linear-value-heads'),
     keyDim: n('linear-key-head-dim'),
     valueDim: n('linear-value-head-dim'),
+    stateBytes: dtype('state-dtype'),
   }
   return {
     id: 'qwen3-5-397b',
@@ -306,7 +334,7 @@ function qwen35(): ZooModel {
       { count: n('linear-layers'), layer: linear, label: 'linear (GDN)' },
       { count: n('full-layers'), layer: { kind: 'full', kvHeads: n('kv-heads'), headDim: n('head-dim') }, label: 'full (GQA)' },
     ],
-    note: 'A hybrid: three gated-DeltaNet layers with a constant state to every full-attention layer.',
+    note: 'A hybrid: three gated-DeltaNet layers with a constant float32 state to every full-attention layer.',
     claimIds: ids,
   }
 }
@@ -518,6 +546,15 @@ function kimiLayers(s: Scope, layers: number): ZooLayer[] {
   return [...kda.map(() => linear), ...full.map(() => attention)]
 }
 
+/** The state dtype a config pins with `mamba_ssm_dtype`, as `stateBytes`; nothing when it names none. */
+function stateDtype(s: Scope): { stateBytes?: number } {
+  const v = s.obj.mamba_ssm_dtype
+  if (v === undefined || v === null) return {}
+  const bytes = typeof v === 'string' ? DTYPE_BYTES[v] : undefined
+  if (bytes === undefined) return fail('bad-field', fieldName(s, 'mamba_ssm_dtype'), `${fieldName(s, 'mamba_ssm_dtype')} must be bfloat16, float16 or float32, got ${JSON.stringify(v)}`)
+  return { stateBytes: bytes }
+}
+
 /** Hugging Face `layer_types`: one name per layer. */
 function typedLayers(s: Scope, layers: number): ZooLayer[] {
   const types = list(s, 'layer_types')
@@ -537,6 +574,7 @@ function typedLayers(s: Scope, layers: number): ZooLayer[] {
           heads: int(s, 'linear_num_value_heads'),
           keyDim: int(s, 'linear_key_head_dim'),
           valueDim: int(s, 'linear_value_head_dim'),
+          ...stateDtype(s),
         }
       default:
         return unknownType(type)
@@ -589,7 +627,8 @@ function uniformLayers(s: Scope, layers: number): ZooLayer[] {
  * Reads a pasted (or downloaded) config.json into a zoo model. The fields it reads are the ones the presets'
  * claims quote: num_hidden_layers; num_key_value_heads, num_attention_heads, head_dim or hidden_size;
  * kv_lora_rank and qk_rope_head_dim (MLA); index_topk and index_head_dim (DSA, CSA); sliding_window;
- * layer_types with linear_num_value_heads, linear_key_head_dim and linear_value_head_dim; linear_attn_config
+ * layer_types with linear_num_value_heads, linear_key_head_dim, linear_value_head_dim and mamba_ssm_dtype (the
+ * state's dtype; absent means the KV dtype); linear_attn_config
  * (Kimi); compress_ratios (DeepSeek-V4). A multimodal config is read from its text_config. Sinks are 0: no
  * config field stores sink tokens (see the `zoo.gpt-oss-120b.sink-kv-tokens` claim). Anything the zoo has no
  * formula for is a named error, never a guess.

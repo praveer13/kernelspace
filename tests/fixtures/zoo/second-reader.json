@@ -8,13 +8,13 @@
     1048576
   ],
   "conventions": [
-    "b is the config dtype field in bytes (bfloat16 = 2); gpt-oss has no dtype field and its attention stays outside mxfp4, so it is read as bfloat16",
+    "every tensor is priced at the dtype the pinned config gives it: KV entries and indexer keys at the config dtype field in bytes (bfloat16 = 2; gpt-oss has no dtype field and its attention stays outside mxfp4, so it is read as bfloat16), a recurrent state at the dtype the config names for it",
+    "indexer keys are stored: they are kept in HBM for the indexer, so stored counts one key per token for DSA and one per compressed entry for CSA, and readTotal never exceeds stored",
     "contexts are 1024, 32768, 131072 and 1048576 tokens",
-    "stored is the KV cache one request holds at context t; readMain is what one decode step reads from it; readIndexer is what a sparse indexer reads to choose tokens",
-    "spec 11.1 reads DSA as readMain + readIndexer and CSA as readMain; readTotal is readMain + readIndexer for both",
+    "stored is the cache one request holds at context t; readMain is what one decode step reads from the KV entries; readIndexer is what a sparse indexer reads to choose tokens; readTotal is readMain + readIndexer, a step's whole read",
     "only num_hidden_layers layers are counted; multi-token-prediction modules are left out",
     "conv states of linear layers and the DeepSeek-V4 compressor scratch buffers are left out, as the spec formulas leave them out",
-    "a linear layer keeps its state at the dtype the config names for it (Qwen3.5 mamba_ssm_dtype float32); stateBytesPerLinearLayerAtBf16 gives the same state at the KV dtype",
+    "a linear layer keeps its state at the dtype the config names for it (Qwen3.5 mamba_ssm_dtype float32 = 4 bytes); Kimi Linear names none, so its state follows the config dtype",
     "gpt-oss attention sinks are one learned logit per head with no config field, so they store no tokens"
   ],
   "models": [
@@ -324,8 +324,7 @@
         "linear_value_head_dim": 128,
         "stateBytesPerElement": 4,
         "entryBytesPerLayerToken": 2048,
-        "stateBytesPerLinearLayer": 4194304,
-        "stateBytesPerLinearLayerAtBf16": 2097152
+        "stateBytesPerLinearLayer": 4194304
       },
       "kinds": [
         {
@@ -569,65 +568,65 @@
         {
           "kind": "dsa-mla",
           "layers": 61,
-          "slopeBytesPerLayerToken": 1152,
+          "slopeBytesPerLayerToken": 1408,
           "constantBytesPerLayer": 0,
-          "formula": "stored (kv_lora_rank + qk_rope_head_dim) * b * t; read entry * min(t, index_topk) plus the indexer, index_head_dim * b * t"
+          "formula": "stored (kv_lora_rank + qk_rope_head_dim + index_head_dim) * b * t; read entry * min(t, index_topk) plus the indexer, index_head_dim * b * t"
         }
       ],
-      "bytesPerToken": 70272,
+      "bytesPerToken": 85888,
       "constantBytes": 0,
       "contexts": {
         "1024": {
-          "stored": 71958528,
+          "stored": 87949312,
           "readMain": 71958528,
           "readIndexer": 15990784,
           "readTotal": 87949312,
           "byKind": {
             "dsa-mla": {
               "layers": 61,
-              "stored": 71958528,
+              "stored": 87949312,
               "readMain": 71958528,
               "readIndexer": 15990784
             }
           }
         },
         "32768": {
-          "stored": 2302672896,
+          "stored": 2814377984,
           "readMain": 143917056,
           "readIndexer": 511705088,
           "readTotal": 655622144,
           "byKind": {
             "dsa-mla": {
               "layers": 61,
-              "stored": 2302672896,
+              "stored": 2814377984,
               "readMain": 143917056,
               "readIndexer": 511705088
             }
           }
         },
         "131072": {
-          "stored": 9210691584,
+          "stored": 11257511936,
           "readMain": 143917056,
           "readIndexer": 2046820352,
           "readTotal": 2190737408,
           "byKind": {
             "dsa-mla": {
               "layers": 61,
-              "stored": 9210691584,
+              "stored": 11257511936,
               "readMain": 143917056,
               "readIndexer": 2046820352
             }
           }
         },
         "1048576": {
-          "stored": 73685532672,
+          "stored": 90060095488,
           "readMain": 143917056,
           "readIndexer": 16374562816,
           "readTotal": 16518479872,
           "byKind": {
             "dsa-mla": {
               "layers": 61,
-              "stored": 73685532672,
+              "stored": 90060095488,
               "readMain": 143917056,
               "readIndexer": 16374562816
             }
@@ -661,9 +660,9 @@
         {
           "kind": "csa",
           "layers": 30,
-          "slopeBytesPerLayerToken": 256,
+          "slopeBytesPerLayerToken": 320,
           "constantBytesPerLayer": 131072,
-          "formula": "entry * ceil(t / 4) + entry * sliding_window; read entry * min(ceil(t / 4), index_topk) + entry * sliding_window; indexer reads index_head_dim * b * ceil(t / 4)"
+          "formula": "(entry + index_head_dim * b) * ceil(t / 4) + entry * sliding_window; read entry * min(ceil(t / 4), index_topk) + entry * sliding_window; indexer reads index_head_dim * b * ceil(t / 4)"
         },
         {
           "kind": "hca",
@@ -673,18 +672,18 @@
           "formula": "entry * ceil(t / 128) + entry * sliding_window; every stored entry is read"
         }
       ],
-      "bytesPerToken": 7928,
+      "bytesPerToken": 9848,
       "constantBytes": 7995392,
       "contexts": {
         "1024": {
-          "stored": 16113664,
+          "stored": 18079744,
           "readMain": 16113664,
           "readIndexer": 1966080,
           "readTotal": 18079744,
           "byKind": {
             "csa": {
               "layers": 30,
-              "stored": 11796480,
+              "stored": 13762560,
               "readMain": 11796480,
               "readIndexer": 1966080
             },
@@ -697,14 +696,14 @@
           }
         },
         "32768": {
-          "stored": 267780096,
+          "stored": 330694656,
           "readMain": 47579136,
           "readIndexer": 62914560,
           "readTotal": 110493696,
           "byKind": {
             "csa": {
               "layers": 30,
-              "stored": 255590400,
+              "stored": 318504960,
               "readMain": 35389440,
               "readIndexer": 62914560
             },
@@ -717,14 +716,14 @@
           }
         },
         "131072": {
-          "stored": 1047134208,
+          "stored": 1298792448,
           "readMain": 71958528,
           "readIndexer": 251658240,
           "readTotal": 323616768,
           "byKind": {
             "csa": {
               "layers": 30,
-              "stored": 1010565120,
+              "stored": 1262223360,
               "readMain": 35389440,
               "readIndexer": 251658240
             },
@@ -737,14 +736,14 @@
           }
         },
         "1048576": {
-          "stored": 8321105920,
+          "stored": 10334371840,
           "readMain": 299499520,
           "readIndexer": 2013265920,
           "readTotal": 2312765440,
           "byKind": {
             "csa": {
               "layers": 30,
-              "stored": 8056995840,
+              "stored": 10070261760,
               "readMain": 35389440,
               "readIndexer": 2013265920
             },

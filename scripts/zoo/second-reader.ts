@@ -10,13 +10,17 @@
  *   bun scripts/zoo/second-reader.ts owner/name@sha [owner/name@sha ...] [--out file]   read and print or write
  *   bun scripts/zoo/second-reader.ts --check [file]                                      re-read the fixture's own list
  *
- * Conventions every number follows (they are also written into the fixture):
- *   - b is the config's own dtype field in bytes (bfloat16 = 2); gpt-oss has none, so its attention (which its
- *     quantization config leaves out of mxfp4) is read as bf16.
+ * Conventions every number follows (they are also written into the fixture, and kv-zoo.ts follows the same two):
+ *   - every tensor is priced at the dtype the pinned config gives it. KV entries and indexer keys use the
+ *     config's own dtype field (bfloat16 = 2); gpt-oss has none, so its attention (which its quantization config
+ *     leaves out of mxfp4) is read as bf16. A recurrent state uses the dtype the config names for it:
+ *     Qwen3.5's mamba_ssm_dtype is float32, so that state is 4 bytes per element.
+ *   - a sparse-attention indexer's keys are stored: they sit in HBM beside the cache, so "stored" counts them
+ *     (DSA one key per token, CSA one per compressed entry) and a step never reads more than is stored.
  *   - contexts are powers of two: 1024, 32768, 131072, 1048576.
- *   - "stored" is the KV cache a request holds at context t; "readMain" is what one decode step reads from it;
- *     "readIndexer" is what a sparse-attention indexer reads to pick its tokens. DSA's per-step read, as spec
- *     §11.1 gives it, is readMain + readIndexer; CSA's is readMain alone, so both are listed.
+ *   - "stored" is the cache a request holds at context t; "readMain" is what one decode step reads from the
+ *     KV entries; "readIndexer" is what a sparse-attention indexer reads to pick its tokens. A step's whole
+ *     read is readTotal = readMain + readIndexer.
  *   - only the layers counted by num_hidden_layers are read. Multi-token-prediction modules are left out.
  *   - conv states of linear layers and the compressor scratch buffers of DeepSeek-V4 are left out, as the
  *     spec's formulas leave them out.
@@ -125,7 +129,8 @@ function readLlama(c: Cfg): Reading {
 }
 
 // DeepSeek-V3: every layer is MLA. One latent per token: (kv_lora_rank + qk_rope_head_dim) * b.
-// DeepSeek-V3.2 is the same cache with a sparse indexer in front of it: stored in full, read top-k.
+// DeepSeek-V3.2 is the same cache with a sparse indexer in front of it: the latents and the indexer's keys are
+// all stored, the main attention reads the top-k latents and the indexer reads every key.
 function readDeepseekMla(c: Cfg, sparse: boolean): Reading {
   const dt = configDtype(c)
   if (dt === null) throw new Error('deepseek config has no dtype field')
@@ -173,10 +178,10 @@ function readDeepseekMla(c: Cfg, sparse: boolean): Reading {
       {
         kind: 'dsa-mla',
         layers,
-        slope: entry,
+        slope: entry + indexEntry,
         constant: 0,
-        formula: 'stored (kv_lora_rank + qk_rope_head_dim) * b * t; read entry * min(t, index_topk) plus the indexer, index_head_dim * b * t',
-        stored: (t) => entry * t,
+        formula: 'stored (kv_lora_rank + qk_rope_head_dim + index_head_dim) * b * t; read entry * min(t, index_topk) plus the indexer, index_head_dim * b * t',
+        stored: (t) => (entry + indexEntry) * t,
         readMain: (t) => entry * Math.min(t, topK),
         readIndexer: (t) => indexEntry * t,
       },
@@ -273,7 +278,6 @@ function readQwen35(c: Cfg): Reading {
       stateBytesPerElement: state.bytes,
       entryBytesPerLayerToken: entry,
       stateBytesPerLinearLayer: stateBytes,
-      stateBytesPerLinearLayerAtBf16: vHeads * dk * dv * dt.bytes,
     },
     groups: [
       {
@@ -360,7 +364,7 @@ function readKimiLinear(c: Cfg): Reading {
 // DeepSeek-V4: one key-value head of head_dim whose vector is both key and value, so an entry is
 // head_dim * num_key_value_heads * b. compress_ratios gives each layer's m: 4 is CSA (compressed entries,
 // the indexer picks index_topk of them), 128 is HCA (all compressed entries are read). Both also keep the last
-// sliding_window uncompressed tokens. The list runs one past num_hidden_layers (the extra slot is the
+// sliding_window uncompressed tokens. CSA also stores one indexer key (index_head_dim * b) per compressed entry. The list runs one past num_hidden_layers (the extra slot is the
 // multi-token-prediction module), and that slot is not counted.
 function readDeepseekV4(c: Cfg): Reading {
   const dt = configDtype(c)
@@ -397,10 +401,10 @@ function readDeepseekV4(c: Cfg): Reading {
       {
         kind: 'csa',
         layers: csa,
-        slope: entry / 4,
+        slope: (entry + indexEntry) / 4,
         constant: entry * window,
-        formula: 'entry * ceil(t / 4) + entry * sliding_window; read entry * min(ceil(t / 4), index_topk) + entry * sliding_window; indexer reads index_head_dim * b * ceil(t / 4)',
-        stored: (t) => entry * ceilDiv(t, 4) + entry * window,
+        formula: '(entry + index_head_dim * b) * ceil(t / 4) + entry * sliding_window; read entry * min(ceil(t / 4), index_topk) + entry * sliding_window; indexer reads index_head_dim * b * ceil(t / 4)',
+        stored: (t) => (entry + indexEntry) * ceilDiv(t, 4) + entry * window,
         readMain: (t) => entry * Math.min(ceilDiv(t, 4), topK) + entry * window,
         readIndexer: (t) => indexEntry * ceilDiv(t, 4),
       },
@@ -541,13 +545,13 @@ async function download(s: Source): Promise<Uint8Array> {
 }
 
 export const CONVENTIONS: string[] = [
-  'b is the config dtype field in bytes (bfloat16 = 2); gpt-oss has no dtype field and its attention stays outside mxfp4, so it is read as bfloat16',
+  'every tensor is priced at the dtype the pinned config gives it: KV entries and indexer keys at the config dtype field in bytes (bfloat16 = 2; gpt-oss has no dtype field and its attention stays outside mxfp4, so it is read as bfloat16), a recurrent state at the dtype the config names for it',
+  'indexer keys are stored: they are kept in HBM for the indexer, so stored counts one key per token for DSA and one per compressed entry for CSA, and readTotal never exceeds stored',
   'contexts are 1024, 32768, 131072 and 1048576 tokens',
-  'stored is the KV cache one request holds at context t; readMain is what one decode step reads from it; readIndexer is what a sparse indexer reads to choose tokens',
-  'spec 11.1 reads DSA as readMain + readIndexer and CSA as readMain; readTotal is readMain + readIndexer for both',
+  'stored is the cache one request holds at context t; readMain is what one decode step reads from the KV entries; readIndexer is what a sparse indexer reads to choose tokens; readTotal is readMain + readIndexer, a step\'s whole read',
   'only num_hidden_layers layers are counted; multi-token-prediction modules are left out',
   'conv states of linear layers and the DeepSeek-V4 compressor scratch buffers are left out, as the spec formulas leave them out',
-  'a linear layer keeps its state at the dtype the config names for it (Qwen3.5 mamba_ssm_dtype float32); stateBytesPerLinearLayerAtBf16 gives the same state at the KV dtype',
+  'a linear layer keeps its state at the dtype the config names for it (Qwen3.5 mamba_ssm_dtype float32 = 4 bytes); Kimi Linear names none, so its state follows the config dtype',
   'gpt-oss attention sinks are one learned logit per head with no config field, so they store no tokens',
 ]
 
