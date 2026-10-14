@@ -4,7 +4,7 @@
  * Admitted learner wasm still never runs on the main thread: a session opens a worker, the worker
  * instantiates the slot bytes and holds the Engine, Cluster or EpdCluster, and the panels `await
  * session.step(n)` at their usual cadence. Every command has a budget (open 5 s, step 2 s, the
- * leaderboard job 10 s; an incident's probe, fix and wait take the step budget and its finish 5 s). When one expires the worker is terminated and the call rejects with a
+ * leaderboard job and a Fleet exercise's sweep 10 s; an incident's probe, fix and wait take the step budget and its finish 5 s). When one expires the worker is terminated and the call rejects with a
  * FleetTimeoutError that names the tick the worker never finished; the page stays responsive throughout.
  *
  * One session owns one worker, so "respawn" is simply opening the next session.
@@ -35,6 +35,7 @@ import {
   type TokensOpen,
 } from '../workers/fleet-protocol'
 import type { FleetOp, ManagerDump } from './fleet-model'
+import type { SweepResult } from './world/fleet-ex'
 import type { FixId, Hypothesis, ProbeId } from './world/incident-spec'
 
 /** The slice of Worker the client uses; tests inject a fake through `FleetSessionOptions.spawn`. */
@@ -354,6 +355,21 @@ export async function runFleetJob(job: LeaderboardJob, options: FleetSessionOpti
   const channel = new Channel(options, 'scheduler')
   try {
     return expect(await channel.request({ cmd: 'job', job }, 'job'), 'job').result
+  } finally {
+    channel.close()
+  }
+}
+
+/**
+ * A Fleet exercise's sweep as a one-shot job (§5.3, 10 s): the worker runs `FLEET_EXERCISES[id].sweep(seed)` and the
+ * result comes back whole. The worker is gone afterwards. The session knows no exercise by name: a new one adds a
+ * fleet-ex module and nothing here. Rejects with FleetTimeoutError past the job budget, and with an Error for an
+ * unknown id or a seed that is not a uint32.
+ */
+export async function runFleetExercise(id: string, seed: number, options: FleetSessionOptions = {}): Promise<SweepResult> {
+  const channel = new Channel(options, 'exercise')
+  try {
+    return expect(await channel.request({ cmd: 'job', job: { kind: 'exercise', id, seed } }, 'job'), 'exercise').result
   } finally {
     channel.close()
   }

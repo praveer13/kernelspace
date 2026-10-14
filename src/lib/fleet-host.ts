@@ -3,7 +3,8 @@
  *
  * A host owns at most one session: an Engine pair, a Cluster, an EPD comparison, a pool-mode block
  * manager, an incident (world/incident-sim's session over a Cluster, §9.5) or the tokenizer's token count (§10.5),
- * with every learner module instantiated here from the slot bytes and the JS reference drivers beside it.
+ * with every learner module instantiated here from the slot bytes and the JS reference drivers beside it. A `job` is
+ * either the leaderboard harness or a Fleet exercise's sweep, which runs on the reference drivers (§5.3).
  * A cluster's prefix router is the learner's radix cache when the `router` slot is filled (§10.3). fleet.worker.ts wires `handle` to postMessage; tests drive it in-process behind a fake
  * worker, so a session's steps can be compared with a direct Engine run on the same inputs.
  *
@@ -29,10 +30,12 @@ import {
   type SchedulerDriver,
 } from './fleet-model'
 import { runSchedulerJob } from './leaderboard-harness'
+import { FLEET_EXERCISES } from './world/fleet-ex'
 import { instantiateLab, LabAbiError, LabTrapError } from './wasm-lab'
 import { makeWasmManager, makeWasmQueue, makeWasmRouter, makeWasmTokenCounter, type Mod } from '../pages/fleet/drivers'
 import { makeWasmScheduler } from './wasm-scheduler'
 import { IncidentSession, runExpert, type StackFactory } from './world/incident-sim'
+import type { SweepResult } from './world/fleet-ex'
 import type { FixId, Hypothesis, ProbeId } from './world/incident-spec'
 import type {
   ClusterOpen,
@@ -43,6 +46,7 @@ import type {
   EpdResult,
   EpdSide,
   EpdSnapshot,
+  ExerciseJob,
   FleetOpen,
   FleetReply,
   FleetRequest,
@@ -54,6 +58,7 @@ import type {
   IncidentProbeReply,
   IncidentReady,
   IncidentWaitReply,
+  LeaderboardJob,
   PoolOpen,
   PoolOpResult,
   PoolTickResult,
@@ -241,12 +246,21 @@ async function openEpd(o: EpdOpen): Promise<HostSession> {
   const total = o.traffic.length
   const fresh = () => o.traffic.map(cloneRequest)
 
-  const colocated = new Cluster(fresh(), await buildWorkers(slots, 2, col, cfg.intakeCap, cfg.drainPerTick, false), 'jsq')
+  // The split is {prefill, decode} workers (1 + 1 unless the open says otherwise). The colocated topology is the same
+  // GPUs, each a full engine; the split cuts its pools from their total blocks: a prefill worker gets half of one
+  // engine's blocks and the decode workers share the rest, which for 1 + 1 is the two-worker cut this always made.
+  const { prefill: nPrefill, decode: nDecode } = cfg.workers ?? { prefill: 1, decode: 1 }
+  for (const n of [nPrefill, nDecode]) {
+    if (!Number.isInteger(n) || n < 1) throw new Error(`an EPD split needs at least one prefill and one decode worker, not ${nPrefill} + ${nDecode}`)
+  }
+  const colocated = new Cluster(fresh(), await buildWorkers(slots, nPrefill + nDecode, col, cfg.intakeCap, cfg.drainPerTick, false), 'jsq')
   const pCfg = { ...col, numBlocks: Math.floor(col.numBlocks / 2), prefillOnly: true }
-  const dCfg = { ...col, numBlocks: col.numBlocks * 2 - pCfg.numBlocks }
-  const [pre] = await buildWorkers(slots, 1, pCfg, cfg.intakeCap, cfg.drainPerTick, true)
-  const [dec] = await buildWorkers(slots, 1, dCfg, cfg.intakeCap, cfg.drainPerTick, false)
-  const split = new EpdCluster(fresh(), [pre], [dec], { prefillCfg: pCfg, decodeCfg: dCfg, transferRate: cfg.transferRate })
+  const dCfg = { ...col, numBlocks: Math.floor(((nPrefill + nDecode) * col.numBlocks - nPrefill * pCfg.numBlocks) / nDecode) }
+  const pres = await buildWorkers(slots, nPrefill, pCfg, cfg.intakeCap, cfg.drainPerTick, true)
+  const decs = await buildWorkers(slots, nDecode, dCfg, cfg.intakeCap, cfg.drainPerTick, false)
+  const [pre] = pres
+  const [dec] = decs
+  const split = new EpdCluster(fresh(), pres, decs, { prefillCfg: pCfg, decodeCfg: dCfg, transferRate: cfg.transferRate })
 
   let phase: EpdSnapshot['phase'] = 'colocated'
   let ticks = 0
@@ -460,6 +474,20 @@ function openSession(open: FleetOpen, progress: Progress, instantiate: Instantia
   }
 }
 
+/* ------------------------------- exercise ------------------------------- */
+
+const isExerciseJob = (job: LeaderboardJob | ExerciseJob): job is ExerciseJob => 'kind' in job && job.kind === 'exercise'
+
+/**
+ * A Fleet exercise's sweep (§5.3). The host finds the exercise by id in `FLEET_EXERCISES` and calls its `sweep`; no
+ * exercise is named here, so a later one adds a fleet-ex module and changes neither this file nor the protocol.
+ */
+function runExercise(id: string, seed: number): SweepResult {
+  if (!Object.hasOwn(FLEET_EXERCISES, id)) throw new Error(`unknown Fleet exercise "${id}"`)
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error(`an exercise seed is a uint32, not ${seed}`)
+  return FLEET_EXERCISES[id].sweep(seed)
+}
+
 /* --------------------------------- host --------------------------------- */
 
 function failure(id: number, e: unknown): FleetReply {
@@ -514,8 +542,12 @@ export function createFleetHost(options: FleetHostOptions = {}): FleetHost {
         else if (req.cmd === 'wait') emit({ type: 'wait', id, result: c.wait(progress) })
         else emit({ type: 'finish', id, result: await c.finish(progress) })
       } else if (req.cmd === 'job') {
-        const result = await runSchedulerJob(req.job, (scope, tick) => emit({ type: 'tick', id, tick, scope }))
-        emit({ type: 'job', id, result })
+        if (isExerciseJob(req.job)) {
+          emit({ type: 'exercise', id, result: runExercise(req.job.id, req.job.seed) })
+        } else {
+          const result = await runSchedulerJob(req.job, (scope, tick) => emit({ type: 'tick', id, tick, scope }))
+          emit({ type: 'job', id, result })
+        }
       } else {
         session = null
         emit({ type: 'closed', id })

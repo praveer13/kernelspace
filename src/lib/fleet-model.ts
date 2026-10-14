@@ -1447,12 +1447,13 @@ export class EpdCluster {
     this.tick++
   }
 
-  aggregate(): { completed: number; sloMet: number; shed: number; autoPreempts: number; avgDelay: number; ttftP95: number; inFlight: number } {
+  aggregate(): { completed: number; sloMet: number; shed: number; autoPreempts: number; avgDelay: number; ttftP95: number; tpotP95: number; inFlight: number } {
     let completed = 0
     let sloMet = 0
     let shed = 0
     let autoPreempts = 0
     let ttfts: number[] = []
+    let tpots: number[] = []
     for (const w of [...this.prefillWorkers, ...this.decodeWorkers]) {
       const s = w.stats()
       completed += s.completed
@@ -1460,6 +1461,7 @@ export class EpdCluster {
       shed += s.shed
       autoPreempts += s.autoPreempts
       ttfts = ttfts.concat(s.ttfts)
+      tpots = tpots.concat(s.tpots)
     }
     const avgDelay = this.transferDelays.length
       ? Math.round((this.transferDelays.reduce((a, b) => a + b, 0) / this.transferDelays.length) * 10) / 10
@@ -1471,6 +1473,7 @@ export class EpdCluster {
       autoPreempts,
       avgDelay,
       ttftP95: p95(ttfts),
+      tpotP95: p95(tpots),
       inFlight: this.transfers.length,
     }
   }

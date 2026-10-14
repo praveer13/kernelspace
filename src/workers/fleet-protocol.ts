@@ -16,6 +16,7 @@ import type {
 } from '../lib/fleet-model'
 import type { LabHarnessResult } from '../lib/leaderboard'
 import type { TraceArtifact } from '../lib/traces'
+import type { SweepResult } from '../lib/world/fleet-ex'
 import type { FixId, Hypothesis, IncidentAction, IncidentSpec, ProbeId } from '../lib/world/incident-spec'
 import type { ExpertRun, FixResult, IncidentOutcome, ProbeResult } from '../lib/world/incident-sim'
 
@@ -64,14 +65,20 @@ export interface ClusterOpen {
   cfg: { worker: EngineConfig; workers: number; router: RouterKind; intakeCap: number; drainPerTick: number }
 }
 
-/** Runs the colocated topology and then the prefill/decode split on the same traffic, one tick at a time. */
+/**
+ * Runs the colocated topology and then the prefill/decode split on the same traffic, one tick at a time. `workers` is
+ * the split's {prefill, decode} worker counts (default 1 + 1); the colocated topology gets the same number of
+ * workers in total, each a full engine.
+ */
 export interface EpdOpen {
   mode: 'epd'
   slots: FleetSlotBytes
   traffic: RequestSpec[]
   cfg: {
-    /** two colocated workers; the EPD pools are cut from the same total blocks */
+    /** one colocated worker's engine; the EPD pools are cut from the same total blocks (a prefill worker gets half of one) */
     colocated: EngineConfig
+    /** prefill and decode worker counts, each at least 1; left out it is 1 + 1, the two-worker comparison */
+    workers?: { prefill: number; decode: number }
     transferRate: number
     intakeCap: number
     drainPerTick: number
@@ -228,6 +235,18 @@ export interface LeaderboardJobResult {
   fleet: { goodput: number; ticks: number; completed: number } | null
 }
 
+/**
+ * A Fleet exercise as a one-shot job (docs/specs/wave-3.md §5.3): the worker runs `FLEET_EXERCISES[id].sweep(seed)`
+ * and replies with its SweepResult. The worker looks the exercise up by id and knows no exercise by name, so a new
+ * exercise adds a module under src/lib/world/fleet-ex and changes nothing here. It takes the job budget (10 s).
+ */
+export interface ExerciseJob {
+  kind: 'exercise'
+  id: string
+  /** a uint32 */
+  seed: number
+}
+
 /* ------------------------------ incident ------------------------------ */
 
 /** What `open` reports for an incident: the clock minute the alert fired and the last minute the incident may run to. */
@@ -265,7 +284,7 @@ export type FleetRequest =
   | { id: number; cmd: 'step'; ticks: number }
   /** `tick` is the panel's tick number, echoed as progress so a timeout can name it */
   | { id: number; cmd: 'pool'; tick: number; ops: FleetOp[] }
-  | { id: number; cmd: 'job'; job: LeaderboardJob }
+  | { id: number; cmd: 'job'; job: LeaderboardJob | ExerciseJob }
   /* tokens mode: the token count of each text, in order */
   | { id: number; cmd: 'count'; texts: string[] }
   /* incident sessions: one command at a time, like the rest. `id` is the request id, so the probe and fix ids have their own fields. */
@@ -285,6 +304,7 @@ export type FleetReply =
   | { type: 'step'; id: number; snapshot: FleetSnapshot }
   | { type: 'pool'; id: number; result: PoolTickResult }
   | { type: 'job'; id: number; result: LeaderboardJobResult }
+  | { type: 'exercise'; id: number; result: SweepResult }
   | { type: 'count'; id: number; counts: number[] }
   | { type: 'hypothesis'; id: number }
   | { type: 'probe'; id: number; result: IncidentProbeReply }
