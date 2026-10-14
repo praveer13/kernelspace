@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { createElement } from 'react'
 import type { QuizQuestion } from '../../src/components/QuizBlock'
 import { IsomorphismView } from '../../src/components/lesson/Isomorphism'
+import { ALL_LESSONS } from '../../src/data/lessons'
 import type { IsomorphismBlock, Lesson } from '../../src/data/lessons/types'
 import { useProgress } from '../../src/lib/progress'
 import type { ItemResponse } from '../../src/lib/ledger/types'
@@ -363,5 +364,30 @@ describe('the work row (§11.3): shown for a matching background, never graded',
     await dom.until(() => m.container.querySelector('[data-work-pair]') !== null)
     expect(m.container.querySelector('[data-work-pair]')!.textContent).toContain('a connection returns whole')
     await m.unmount()
+  })
+})
+
+describe('the authored panels (docs/specs/wave-3.md §11.2)', () => {
+  const panels = ALL_LESSONS.flatMap((l) => l.blocks.flatMap((b) => (b.type === 'isomorphism' ? [{ id: l.id, b }] : [])))
+
+  test('every pair of every panel says where it breaks', () => {
+    expect(panels.length).toBeGreaterThan(0)
+    for (const { id, b } of panels) for (const p of b.pairs) expect(p.breaks?.trim() ?? '', `${id}: ${p.os}`).not.toBe('')
+  })
+
+  test('a panel with a break item carries a principle of at most 40 words, its KCs, four options with a why each and one key', () => {
+    const withItem = panels.filter(({ b }) => b.breakItem)
+    expect(withItem.length).toBeGreaterThan(0)
+    for (const { id, b } of withItem) {
+      const words = (b.principle ?? '').trim().split(/\s+/).filter(Boolean).length
+      expect(words, `${id} principle`).toBeGreaterThan(0)
+      expect(words, `${id} principle`).toBeLessThanOrEqual(40)
+      expect(b.kcs?.length ?? 0, `${id} kcs`).toBeGreaterThan(0)
+      const q = b.breakItem!
+      expect(q.options.length, `${id} options`).toBe(4)
+      expect(q.why?.length, `${id} why`).toBe(4)
+      expect(q.why!.every((w) => w.trim() !== ''), `${id} why text`).toBe(true)
+      expect(q.correct.length, `${id} correct`).toBe(1)
+    }
   })
 })

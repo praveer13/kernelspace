@@ -187,20 +187,42 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           osLine: 'File identity + offset names deterministic bytes.',
           llm: 'token-prefix key',
           llmLine: 'Model configuration + exact token ids name deterministic K/V.',
+          breaks: 'A page-cache key names a place whose bytes can change, so the kernel tracks dirty pages and invalidates; a prefix key names content, so its K/V never changes and an entry is only ever kept or evicted.',
         },
         {
           os: 'copy-on-write page',
           osLine: 'Readers share; the first writer receives a private page.',
           llm: 'shared prefix block',
           llmLine: 'Requests share immutable KV; divergent tails allocate privately.',
+          breaks: 'A copy-on-write fault copies the shared page before the first write; prefix caching shares only full blocks, so a divergent request starts a fresh block and nothing is copied.',
         },
         {
           os: 'NUMA-aware placement',
           osLine: 'Run work near the memory it will read, unless that node is saturated.',
           llm: 'prefix-affinity routing',
           llmLine: 'Route near cached KV, bounded by a worker-load guard.',
+          breaks: 'A task on the wrong NUMA node still reads the same memory, only slower; a request on a worker without the prefix recomputes it from scratch, which can still beat waiting in a hot worker\'s queue, so the guard sends it there on purpose.',
         },
       ],
+      principle:
+        'A cache key must name everything that determines the bytes. Key by content, not location, and a hit is never wrong, only a miss is costly; routing then decides whether a hit is worth the queue.',
+      breakItem: {
+        q: 'Prefix caching is mapped onto a storage hierarchy. Where does that mapping break?',
+        options: [
+          'A page-cache read skips the disk on a hit, and a prefix-cache hit skips the prefill compute for the cached tokens',
+          'Page-cache pages are shared while nobody writes them, and prefix blocks are shared until a request diverges from them',
+          'NUMA placement favours the node near the data until it saturates, and prefix routing favours the worker holding the prefix until it is loaded',
+          'A page-cache entry can turn dirty on a write or stale when its file changes, and a prefix entry names fixed content that is kept or evicted',
+        ],
+        correct: [3],
+        why: [
+          'This holds on both sides: a cache hit skips the expensive step, whether that is a disk read or a prefill. The pair claims exactly this, so it is not where the analogy stops.',
+          'This holds on both sides: page-cache pages and prefix blocks are shared while nobody writes them, and a divergent writer gets memory of its own. The analogy agrees here, even though the copy differs.',
+          'This holds on both sides: NUMA placement and prefix-affinity routing both favour the node near the data and stop favouring it once it is saturated. That agreement is the third pair, not its break.',
+          'Right: a file offset names a place, and the bytes there can change, so the kernel tracks dirty pages and invalidates. A prefix key names tokens, model and adapter, so the K/V behind it never changes.',
+        ],
+      },
+      kcs: ['t5.prefix-cache-keys', 't5.prefix-routing'],
     },
     {
       type: 'deepdive',
@@ -230,7 +252,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           options: [
             'The tail prefill and each decode step, and a hit lets the engine replay the response from last time',
             'Prefill for the cached system prompt, as the tail is still prefilled and decoding proceeds as usual',
-            'Tokenization and embedding lookup for the whole prompt, as the cache stores token ids rather than tensors',
+            'The block-table walk for the cached prompt, as the table already maps those tokens and a hit skips reading it',
             'Nothing, as reuse needs the whole prompt to match a cached entry exactly and a new tail breaks the match',
           ],
           correct: [1],
@@ -238,11 +260,11 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           why: [
             'Treats the cache as a response cache. APC stores K/V for prompt tokens only; the tail still needs prefill and every output token still needs its own decode step.',
             'Right: reuse starts at the first miss. Cached K/V replaces prefill for the shared prefix, while new-tail prefill and autoregressive decode still run.',
-            'Confuses what is cached. The cache holds K/V tensors, not token ids, and the engine still tokenizes to compute block hashes. The saving is prefill FLOPs.',
+            'Takes the block table for the cache. The table is one sequence\'s map from logical to physical blocks and is read for every block, cached or not; a hit adds shared blocks to it. The saving is prefill FLOPs for those tokens.',
             'Assumes all-or-nothing matching. Block-hash lookup walks the prompt until the first miss, so a shared prefix is reused even when the tail differs.',
           ],
           kcs: ['t5.prefix-cache-keys'],
-          miss: ['t5.apc-replays-responses', '', 't5.apc-caches-token-ids', 't5.apc-needs-whole-prompt'],
+          miss: ['t5.apc-replays-responses', '', 'confuse.t5.block-tables', 't5.apc-needs-whole-prompt'],
         },
         {
           q: 'Why does radix-cache eviction choose leaves?',
@@ -287,7 +309,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           options: [
             'The normalized prompt text after whitespace and Unicode cleanup, as identical text tokenizes identically',
             'The exact token ids plus the model and adapter settings plus a tenant salt, as K/V and isolation depend on them',
-            'The token ids plus the sampling parameters, as temperature and top-p change which tokens the cache should hold',
+            'The virtual block number inside the request, as a TLB-style lookup translates that address to the block holding the K/V',
             'The token ids plus the client session id, as one user\'s cached prefix must be hidden from other users\' requests',
           ],
           correct: [1],
@@ -295,11 +317,11 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           why: [
             'Equal text does not guarantee equal token ids across tokenizer versions or special-token handling, and text ignores model and adapter. K/V is a function of token ids and weights.',
             'Right: the cache identity must name deterministic K/V. Token ids, model, adapter and multimodal inputs fix the tensors; a salt partitions tenants against timing side channels.',
-            'Sampling happens after the forward pass over the prompt. Prefill K/V is identical for any temperature or top-p, so including them would only fragment the cache.',
+            'A virtual block number is a place inside one request\'s own address space, like a virtual page translated by a TLB. Position 3 of two unrelated prompts has the same number, so the key says nothing about content. A cache identity must name the tokens, model and adapter.',
             'A per-session key never lets two users share a system prompt, which removes most of the cache\'s value. Isolation needs a trust-domain salt, not one entry per session.',
           ],
           kcs: ['t5.prefix-cache-keys'],
-          miss: ['t5.key-is-text', '', 't5.key-includes-sampling', 't5.key-is-per-session'],
+          miss: ['t5.key-is-text', '', 'confuse.t2.address-translation', 't5.key-is-per-session'],
         },
       ],
     },

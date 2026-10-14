@@ -215,20 +215,42 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
           osLine: 'Add pods when the metric crosses the line; lag kills you at spike.',
           llm: 'Planner on queue age + KV utilization + TPOT',
           llmLine: 'Leading signals chosen per phase; scale the binding fleet, not "the service".',
+          breaks: 'HPA scales one homogeneous deployment on a pod-level metric; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so no single number tells it what to add.',
         },
         {
           os: 'cold JVM pool',
           osLine: 'Keep-warm for the 9am spike because JIT+load is slow.',
           llm: 'keep-warm GPU pool + fast loaders',
           llmLine: 'Minutes of weight-load: capacity arrives late unless pre-warmed.',
+          breaks: 'A cold JVM serves slowly while it warms up; a new GPU worker serves nothing until its weights, hundreds of GB, have loaded, which takes minutes, so the pool has to be sized for the spike before it arrives.',
         },
         {
           os: 'graceful degradation ladder',
           osLine: 'Queue → 429 → reduced feature set, by policy, in advance.',
           llm: 'queue → honest shed → degrade output classes',
           llmLine: 'A retryable busy beats a silent SLO breach. Decided before the incident, not during.',
+          breaks: 'A web ladder switches optional features off; the rungs here trade the answer itself, since a deeper queue raises everyone\'s TTFT and degrading shortens outputs, so each rung needs an explicit bound chosen in advance.',
         },
       ],
+      principle:
+        'Capacity is slow and discrete, so act on leading signals and decide the degradation ladder in advance. The autoscaler pattern carries over, but the unit scaled is a phase with its own physics, and a worker takes minutes to arrive.',
+      breakItem: {
+        q: 'The Planner is mapped onto your web autoscaler. Where does that mapping break?',
+        options: [
+          'An autoscaler should act on a signal that leads the damage, and the Planner acts on queue age before TTFT breaks',
+          'A web tier answers overload with a clear retryable error, and an inference fleet sheds with a retryable 429 instead of timing out',
+          'A cold JVM serves slowly while it warms up, and a new GPU worker serves nothing until its hundreds of GB of weights have loaded',
+          'Keeping spare capacity warm for a predictable peak costs money all day, and a keep-warm GPU pool costs more for each idle worker',
+        ],
+        correct: [2],
+        why: [
+          'This holds on both sides: a metric that leads the failure leaves time to react, in a web tier as in the Planner. The pair claims exactly this, so it is not where the analogy stops.',
+          'This holds on both sides: a fast, retryable refusal beats a silent timeout for web and inference users alike. The analogy agrees here, so it is not a break.',
+          'Right: a cold JVM still serves, only slowly, while a new GPU worker serves nothing until its weights, hundreds of GB, have loaded, which takes minutes. Capacity has to be ordered before the spike, not at it.',
+          'This holds on both sides: warm spare capacity is paid for whether or not it is used, so headroom trades against the bill in a web tier and in a GPU pool alike.',
+        ],
+      },
+      kcs: ['t7.leading-signals', 't7.capacity-planning'],
     },
     {
       type: 'item',
