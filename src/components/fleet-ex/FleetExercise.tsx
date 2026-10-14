@@ -1,17 +1,19 @@
 /**
- * A Fleet exercise inside a lesson (docs/specs/wave-3.md §5.3, task 3b-20): predict a number, run the sweep in the
- * fleet worker on a fresh seed, explain what you saw, and repeat until three predictions are right on distinct seeds.
- * `ExerciseView` mounts it for a `fleet` block (3a-03), so only fleet blocks (3c-06) reach it.
+ * A Fleet exercise inside a lesson (docs/specs/wave-3.md §5.3, task 3b-20): draw a fresh seed, read what it gives the
+ * engine, predict a number, see the sweep the fleet worker ran on it, explain what you saw, and repeat until three
+ * predictions in a row are right on at least two different answers. `ExerciseView` mounts it for a `fleet` block
+ * (3a-03), so only fleet blocks (3c-06) reach it.
  *
- * Each round is predict → run → explain → saved (session.ts). The prediction comes first and locks. The sweep is drawn
- * on `freshSeed()` and kept only if it is a fair question; the chart and its table follow the verdict. The explain step
- * wants a line of 8 words or more, which opens the model answer and its three ideas, and all three must be ticked
- * before the round saves. The line is never stored. A saved round writes one `item item:fleet.<id>` event; the first
- * round of the block also writes its one `predict`. A reload rebuilds the count from those events, so "3/3 · done"
- * is never asked twice. Nothing locks: more seeds are always on offer.
+ * Each round is draw → predict → explain → saved (session.ts). The sweep runs on `freshSeed()` and is kept only if it
+ * is a fair question; its outcome stays hidden while the learner reads the seed's scene and locks a prediction, and the
+ * chart and its table follow the verdict. The explain step wants a line of 8 words or more, which opens the model
+ * answer and its three ideas, and all three must be ticked before the round saves. The line is never stored. A saved
+ * round writes one `item item:fleet.<id>` event; the first round of the block also writes its one `predict`. A reload
+ * rebuilds the count from those events, so "3/3 · done" is never asked twice. Nothing locks: more seeds are always on
+ * offer.
  *
- * On a phone (or with the phone preference) the predict step is the same but the outcome is the exercise's canonical
- * one, a fixed seed that earns nothing; the fresh-seed run is one tap away ("run it here instead").
+ * On a phone (or with the phone preference) the predict step is the same, on the exercise's canonical seed and its
+ * scene, and the outcome is that seed's, which earns nothing; the fresh-seed run is one tap away ("run it here instead").
  *
  * The worker, the ledger, the clock and the seed come in through `env`, so tests replace them (as ProveFromModule's do).
  */
@@ -29,6 +31,7 @@ import { ProseView } from '@/pages/lesson/prose'
 import ProductionRows from './ProductionRows'
 import SweepChart from './SweepChart'
 import {
+  ANSWERS_NEEDED,
   IDEA_COUNT,
   MAX_EXPLAIN_CHARS,
   MIN_EXPLAIN_WORDS,
@@ -47,6 +50,7 @@ import {
   progressText,
   readExercise,
   reduceRound,
+  sceneLine,
   sweepTable,
   verdictText,
   wordCount,
@@ -78,8 +82,8 @@ export interface FleetExerciseProps {
 }
 
 const liveEnv: FleetExerciseEnv = {
-  // the worker client and its wasm bridge load only when a sweep runs
-  run: async (id, seed) => (await import('@/lib/fleet-session')).runFleetExercise(id, seed),
+  // the worker client loads only when a sweep runs, through ./live (it says why it is not imported directly)
+  run: async (id, seed) => (await import('./live')).runSweep(id, seed),
   seed: freshSeed,
   now: () => Date.now(),
   history: async (refPrefix) => (await useProgress.controls.engine()).events({ refPrefix }),
@@ -121,7 +125,7 @@ interface Failure {
 /** What a failed sweep says. A timeout is named by its class so the worker client stays out of this chunk until a sweep runs. */
 function failureOf(e: unknown): Failure {
   if (e instanceof NoFairSeed) return { title: 'No fair seed turned up', detail: 'Sixteen fresh seeds in a row made a sweep that is not a fair question. That is a fault in the exercise, not in your prediction. Try again.' }
-  if (e instanceof Error && e.name === 'FleetTimeoutError') return { title: 'The sweep took too long', detail: 'The fleet worker did not answer within its 10 s budget and was stopped. Your prediction is still locked. Run it again.' }
+  if (e instanceof Error && e.name === 'FleetTimeoutError') return { title: 'The sweep took too long', detail: 'The fleet worker did not answer within its 10 s budget and was stopped. Nothing was asked yet. Run it again.' }
   return { title: 'The sweep did not run', detail: e instanceof Error ? e.message : String(e) }
 }
 
@@ -153,7 +157,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
   const usedRef = useRef<ReadonlySet<number>>(new Set())
 
   const inputRef = useRef<HTMLInputElement>(null)
-  const lockedRef = useRef<HTMLParagraphElement>(null)
+  const drawingRef = useRef<HTMLParagraphElement>(null)
   const explainRef = useRef<HTMLTextAreaElement>(null)
   const ideaRef = useRef<HTMLInputElement>(null)
   const savedRef = useRef<HTMLParagraphElement>(null)
@@ -187,14 +191,14 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
     [env],
   )
 
-  // The run: draw fair seeds until one sweeps in band; a second press of "run again" draws anew.
-  const running = round.phase === 'run'
+  // The draw: fair seeds until one sweeps in band, its outcome held back until the lock; "run it again" draws anew.
+  const drawing = round.phase === 'draw'
   useEffect(() => {
-    if (!running) return
+    if (!drawing) return
     let live = true
     drawFairSweep(def, { used: usedRef.current, draw: env.seed, run: env.run }).then(
       ({ seed, result }) => {
-        if (live) dispatch({ type: 'swept', seed, result })
+        if (live) dispatch({ type: 'swept', seed, result, at: env.now() })
       },
       (e: unknown) => {
         if (live) setFailure(failureOf(e))
@@ -203,13 +207,13 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
     return () => {
       live = false
     }
-  }, [running, runs, def, env])
+  }, [drawing, runs, def, env])
 
   useEffect(() => {
     usedRef.current = state.seeds
   }, [state.seeds])
 
-  // The block's one prediction event, as soon as the first sweep is graded.
+  // The block's one prediction event, as soon as the first lock is graded.
   useEffect(() => {
     if (round.phase !== 'explain' || predictedRef.current) return
     predictedRef.current = true
@@ -221,8 +225,9 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
     const was = prevPhase.current
     prevPhase.current = round.phase
     if (was === round.phase) return
-    const next = round.phase === 'run' ? lockedRef : round.phase === 'explain' ? explainRef : round.phase === 'saved' ? savedRef : inputRef
-    next.current?.focus({ preventScroll: true })
+    const next =
+      round.phase === 'draw' ? drawingRef : round.phase === 'predict' ? inputRef : round.phase === 'explain' ? explainRef : round.phase === 'saved' ? savedRef : null
+    next?.current?.focus({ preventScroll: true })
   }, [round.phase])
   useEffect(() => {
     if (revealed) ideaRef.current?.focus()
@@ -278,7 +283,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
           <span className="font-display text-body-sm font-medium text-text-1">{block.title}</span>
         </div>
         <p role="status" aria-live="polite" data-fleet-progress className="font-mono text-body-sm text-text-2">
-          {load === 'ready' && mode === 'embed' ? progressText(state.passes, PASSES_NEEDED) : ''}
+          {load === 'ready' && mode === 'embed' ? progressText(state, PASSES_NEEDED) : ''}
         </p>
       </div>
 
@@ -305,14 +310,54 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
 
             {load === 'ready' && (
               <>
-                {state.played.length > 0 && (round.phase === 'predict' || round.phase === 'saved') && <Played played={state.played} copy={copy} />}
-                {state.done && round.phase === 'predict' && (
+                {state.played.length > 0 && round.phase !== 'draw' && round.phase !== 'explain' && <Played played={state.played} copy={copy} />}
+                {state.done && round.phase !== 'explain' && round.phase !== 'saved' && (
                   <p className="mt-3 text-body-sm text-text-1" data-fleet-done>
-                    {PASSES_NEEDED} right predictions on new seeds. Done. There are always more seeds.
+                    {PASSES_NEEDED} right predictions in a row on new seeds, on at least {ANSWERS_NEEDED} different answers. Done. There are always more seeds.
                   </p>
                 )}
 
-                {/* 1. predict: a number, before any run */}
+                {/* 1. draw: a fresh seed whose sweep is a fair question; its outcome stays hidden */}
+                {round.phase === 'start' && (
+                  <div className="mt-4">
+                    <p className="text-body-sm text-text-2">
+                      Each round draws a fresh seed and shows what it gives the engine. You predict from that; the sweep&apos;s outcome stays hidden until you lock in.
+                      Three right in a row, on at least {ANSWERS_NEEDED} different answers, finishes the exercise.
+                    </p>
+                    <button type="button" data-fleet-draw onClick={() => dispatch({ type: 'draw' })} className={cn(primaryBtn, 'mt-3', hitArea(false))}>
+                      Draw a fresh seed
+                    </button>
+                  </div>
+                )}
+                {round.phase === 'draw' && (
+                  <div className="mt-3">
+                    <p ref={drawingRef} tabIndex={-1} className="flex items-start gap-2 text-body-sm text-text-2 outline-none">
+                      <CircleDashed size={14} className="mt-0.5 shrink-0 text-text-3" aria-hidden />
+                      <span>{failure === null ? 'Drawing a fresh seed and running the sweep in the fleet worker. Its outcome stays hidden until you predict…' : 'The sweep stopped.'}</span>
+                    </p>
+                    {failure !== null && (
+                      <div role="alert" className="mt-2 rounded-sm border-l-2 border-amber bg-surface-3 px-2.5 py-2 text-body-sm">
+                        <p className="font-medium text-text-1">{failure.title}</p>
+                        <p className="text-text-2">{failure.detail}</p>
+                        <button
+                          type="button"
+                          data-fleet-retry
+                          onClick={() => {
+                            setFailure(null)
+                            setRuns((n) => n + 1)
+                          }}
+                          className={cn(quietBtn, 'mt-2', hitArea(false))}
+                        >
+                          Run it again
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {round.seed !== undefined && <Scene id={`${uid}-scene`} def={def} seed={round.seed} fresh />}
+
+                {/* 2. predict: a number, from the scene, before any outcome is shown */}
                 {(round.phase === 'predict' || round.prediction !== undefined) && (
                   <fieldset className="mt-4 min-w-0" disabled={round.phase !== 'predict'}>
                     <legend className="mb-1.5 text-body-sm font-medium text-text-1">Predict {def.unit}.</legend>
@@ -336,7 +381,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                         }}
                         aria-label={`Your prediction: ${def.unit}`}
                         aria-invalid={invalid}
-                        aria-describedby={`${uid}-allowed${invalid ? ` ${uid}-err` : ''}`}
+                        aria-describedby={`${uid}-scene ${uid}-allowed${invalid ? ` ${uid}-err` : ''}`}
                         className={cn(hitArea(false), 'h-9 w-28 min-w-0 rounded-sm border border-line bg-ink px-2 font-mono text-body-sm text-text-1 disabled:opacity-70 [@media(pointer:coarse)]:h-11')}
                       />
                       <span id={`${uid}-allowed`} className="font-mono text-[11px] text-text-3">
@@ -376,37 +421,8 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                 {round.phase === 'predict' && (
                   <button type="button" data-fleet-lock onClick={commit} className={cn(primaryBtn, 'mt-3', hitArea(false))}>
                     <Lock size={13} strokeWidth={2} aria-hidden />
-                    Lock in my prediction and run the sweep
+                    Lock in my prediction
                   </button>
-                )}
-
-                {/* 2. run */}
-                {round.phase === 'run' && (
-                  <div className="mt-3">
-                    <p ref={lockedRef} tabIndex={-1} className="flex items-start gap-2 text-body-sm text-text-2 outline-none">
-                      <CircleDashed size={14} className="mt-0.5 shrink-0 text-text-3" aria-hidden />
-                      <span>
-                        Locked. {failure === null ? 'Drawing a fresh seed and running the sweep in the fleet worker…' : 'The sweep stopped.'}
-                      </span>
-                    </p>
-                    {failure !== null && (
-                      <div role="alert" className="mt-2 rounded-sm border-l-2 border-amber bg-surface-3 px-2.5 py-2 text-body-sm">
-                        <p className="font-medium text-text-1">{failure.title}</p>
-                        <p className="text-text-2">{failure.detail}</p>
-                        <button
-                          type="button"
-                          data-fleet-retry
-                          onClick={() => {
-                            setFailure(null)
-                            setRuns((n) => n + 1)
-                          }}
-                          className={cn(quietBtn, 'mt-2', hitArea(false))}
-                        >
-                          Run it again
-                        </button>
-                      </div>
-                    )}
-                  </div>
                 )}
 
                 {/* the verdict is always mounted, so a result that arrives with its text already in place is still announced */}
@@ -425,9 +441,6 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                       <span className="block text-text-2">{verdict.detail}</span>
                     </p>
                     <SweepChart result={round.result} xLabel={copy.xLabel} tickLabel={copy.tickLabel} answer={round.truth} pick={round.prediction} table={table} />
-                    <p className="font-mono text-[11px] text-text-3" data-seed>
-                      Seed {round.seed}, drawn fresh. The sweep ran in the fleet worker.
-                    </p>
 
                     {round.phase === 'explain' && (
                       <div>
@@ -498,8 +511,8 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                         <p ref={savedRef} tabIndex={-1} className="flex items-center gap-2 text-text-1 outline-none" data-saved>
                           {round.ok === true && <Check size={14} className="text-accent" aria-hidden />}
                           {round.ok === true
-                            ? `Saved. A right prediction on a new seed: ${progressText(state.passes, PASSES_NEEDED)}.`
-                            : 'Saved. Not a pass: a right prediction on another seed counts.'}
+                            ? `Saved. A right prediction on a new seed: ${progressText(state, PASSES_NEEDED)}.`
+                            : `Saved. A miss starts the run again: ${PASSES_NEEDED} right in a row, on at least ${ANSWERS_NEEDED} different answers, finishes it.`}
                         </p>
                         <button type="button" data-fleet-another onClick={another} className={cn(quietBtn, hitArea(false))}>
                           {state.done ? 'Another seed' : 'Try a new seed'}
@@ -545,6 +558,24 @@ function Played({ played, copy }: { played: ReturnType<typeof readExercise>['pla
   )
 }
 
+/** What this seed gives the engine: the facts the answer follows from, and never the sweep's outcome. */
+function Scene({ id, def, seed, fresh }: { id: string; def: Def; seed: number; fresh: boolean }) {
+  const facts = useMemo(() => def.scene(seed), [def, seed])
+  return (
+    <div id={id} className="mt-4 rounded-sm border border-line bg-surface-2 px-2.5 py-2" data-fleet-scene>
+      <p className="font-mono text-[10px] uppercase tracking-wide text-text-3" data-seed>
+        Seed {seed}
+        {fresh ? ', drawn fresh' : ', the same on every phone'}
+      </p>
+      <ul className="mt-1 space-y-0.5 text-body-sm text-text-1">
+        {facts.map((f) => (
+          <li key={f.label}>{sceneLine(f)}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 /**
  * Phone mode: the same prediction, then the exercise's canonical outcome, a fixed seed that earns nothing and writes
  * nothing, because the same answer every time is no evidence. The chart and its table sit open beside each other.
@@ -573,7 +604,8 @@ function PhoneOutcome({ def, copy, allowed, onEmbed }: { def: Def; copy: Exercis
 
   return (
     <div className="mt-4" data-phone>
-      <fieldset className="min-w-0" disabled={locked !== null}>
+      <Scene id={`${uid}-scene`} def={def} seed={def.phone.seed} fresh={false} />
+      <fieldset className="mt-4 min-w-0" disabled={locked !== null}>
         <legend className="mb-1.5 text-body-sm font-medium text-text-1">Predict {def.unit}.</legend>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -594,7 +626,7 @@ function PhoneOutcome({ def, copy, allowed, onEmbed }: { def: Def; copy: Exercis
             }}
             aria-label={`Your prediction: ${def.unit}`}
             aria-invalid={invalid}
-            aria-describedby={`${uid}-allowed${invalid ? ` ${uid}-err` : ''}`}
+            aria-describedby={`${uid}-scene ${uid}-allowed${invalid ? ` ${uid}-err` : ''}`}
             className="h-11 w-28 min-w-0 rounded-sm border border-line bg-ink px-2 font-mono text-body-sm text-text-1 disabled:opacity-70"
           />
           <span id={`${uid}-allowed`} className="font-mono text-[11px] text-text-3">

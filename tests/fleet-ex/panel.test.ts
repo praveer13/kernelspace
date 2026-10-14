@@ -1,6 +1,7 @@
 /**
- * The Fleet exercise panel (docs/specs/wave-3.md §5.3, task 3b-20): the pure session (the round's transitions, the
- * fair-seed draw, the events and their restoring, the copy and the In-production rows) and the panel mounted in a small
+ * The Fleet exercise panel (docs/specs/wave-3.md §5.3, task 3b-20; fix BF8: the scene before the prediction, and the
+ * done rule): the pure session (the round's transitions, the fair-seed draw, the events and their restoring, the copy
+ * and the In-production rows) and the panel mounted in a small
  * DOM (tests/dom/mini-dom.ts) against the real sweeps, with the worker, the ledger and the clock injected. The mounted
  * tests assert on the DOM, focus, `aria-live` regions and the events written, never on source text. What a browser
  * alone answers (axe, reflow at 360 and 320 px, the real worker) is the a11y harness's and Playwright's, run for the
@@ -10,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import FleetExercise, { type FleetExerciseEnv, type FleetExerciseProps } from '../../src/components/fleet-ex/FleetExercise'
 import {
+  ANSWERS_NEEDED,
   IDEA_COUNT,
   MAX_DRAWS,
   NoFairSeed,
@@ -32,6 +34,7 @@ import {
   progressText,
   readExercise,
   reduceRound,
+  sceneLine,
   sweepTable,
   verdictText,
   type ExerciseEvent,
@@ -71,6 +74,11 @@ function seedsWhere(def: FleetExerciseDef, n: number, inBand: boolean, from = 10
   return out
 }
 
+/** The first seed from `from` that is a fair question whose answer is `x`. */
+function seedWithTruth(def: FleetExerciseDef, x: number, from = 300): number {
+  for (let s = from; ; s++) if (def.band(sweepOf(def, s)) && def.truth(sweepOf(def, s)) === x) return s
+}
+
 /** A point of the sweep that is not the answer. */
 const wrongOn = (def: FleetExerciseDef, seed: number): number => def.points.find((p) => p !== def.truth(sweepOf(def, seed)))!
 
@@ -83,11 +91,16 @@ function stamp(r: ItemResponse, n: number): LedgerEvent {
   return { id: `e${n}`, v: 1, at, tz: 0, day: at.slice(0, 10), dev: 'd', ...r } as unknown as LedgerEvent
 }
 
+/** A round on the seed, drawn and shown at T0, waiting for its prediction. */
+function shownRound(def: FleetExerciseDef, seed: number): Round {
+  const r = reduceRound(def, freshRound(T0 - 9000), { type: 'draw' })
+  return reduceRound(def, r, { type: 'swept', seed, result: sweepOf(def, seed), at: T0 })
+}
+
 /** A round driven through the reducer to its saved state: the prediction on the seed, the line, the ticks. */
 function savedRound(def: FleetExerciseDef, seed: number, prediction: number, conf?: 'guess' | 'think' | 'sure'): Round {
-  let r = freshRound(T0)
+  let r = shownRound(def, seed)
   r = reduceRound(def, r, { type: 'commit', prediction, conf, at: T0 + 4000 })
-  r = reduceRound(def, r, { type: 'swept', seed, result: sweepOf(def, seed) })
   r = reduceRound(def, r, { type: 'explain', text: LINE })
   for (let i = 0; i < IDEA_COUNT; i++) r = reduceRound(def, r, { type: 'idea', index: i })
   return reduceRound(def, r, { type: 'save', at: T0 + 30000 })
@@ -98,17 +111,31 @@ describe('the round', () => {
   const result = sweepOf(knee, seed)
   const truth = knee.truth(result)
 
-  test('a number first: only one of the sweep’s points commits, and an out-of-phase action does nothing', () => {
+  test('a fair seed first, then a number: nothing commits before the scene, only the sweep’s points commit, and an out-of-phase action does nothing', () => {
     const r0 = freshRound(T0)
-    for (const bad of [0.3, 1.1, 3, NaN]) expect(reduceRound(knee, r0, { type: 'commit', prediction: bad, at: 1 })).toBe(r0)
-    expect(reduceRound(knee, r0, { type: 'swept', seed, result })).toBe(r0)
-    expect(reduceRound(knee, r0, { type: 'explain', text: LINE })).toBe(r0)
-    expect(reduceRound(knee, r0, { type: 'idea', index: 0 })).toBe(r0)
-    expect(reduceRound(knee, r0, { type: 'save', at: 1 })).toBe(r0)
-    const locked = reduceRound(knee, r0, { type: 'commit', prediction: 1, conf: 'think', at: T0 + 5 })
-    expect(locked).toMatchObject({ phase: 'run', prediction: 1, conf: 'think', committedAt: T0 + 5 })
-    // locked: a second commit changes nothing
+    expect(r0.phase).toBe('start')
+    for (const a of [
+      { type: 'commit', prediction: 1, at: 1 },
+      { type: 'swept', seed, result, at: 1 },
+      { type: 'explain', text: LINE },
+      { type: 'idea', index: 0 },
+      { type: 'save', at: 1 },
+      { type: 'next', at: 1 },
+    ] as const) expect(reduceRound(knee, r0, a)).toBe(r0)
+    const drawing = reduceRound(knee, r0, { type: 'draw' })
+    expect(drawing.phase).toBe('draw')
+    expect(reduceRound(knee, drawing, { type: 'commit', prediction: 1, at: 1 })).toBe(drawing)
+    const shown = reduceRound(knee, drawing, { type: 'swept', seed, result, at: T0 + 2 })
+    // the scene is up and the outcome is held, ungraded
+    expect(shown).toMatchObject({ phase: 'predict', seed, result, startedAt: T0 + 2 })
+    expect(shown.truth).toBeUndefined()
+    expect(shown.ok).toBeUndefined()
+    for (const bad of [0.3, 1.1, 3, NaN]) expect(reduceRound(knee, shown, { type: 'commit', prediction: bad, at: 1 })).toBe(shown)
+    const locked = reduceRound(knee, shown, { type: 'commit', prediction: 1, conf: 'think', at: T0 + 5 })
+    expect(locked).toMatchObject({ phase: 'explain', prediction: 1, conf: 'think', committedAt: T0 + 5, truth, ok: truth === 1 })
+    // locked: a second commit or another sweep changes nothing
     expect(reduceRound(knee, locked, { type: 'commit', prediction: 2, at: 9 })).toBe(locked)
+    expect(reduceRound(knee, locked, { type: 'swept', seed: seed + 1, result, at: 9 })).toBe(locked)
   })
 
   test('parsePrediction reads a typed number and accepts only the exercise’s points', () => {
@@ -124,21 +151,18 @@ describe('the round', () => {
 
   test('a sweep that is not a fair question never reaches the learner, even if it is handed over', () => {
     const [unfair] = seedsWhere(knee, 1, false)
-    const locked = reduceRound(knee, freshRound(T0), { type: 'commit', prediction: 1, at: 1 })
-    expect(reduceRound(knee, locked, { type: 'swept', seed: unfair, result: sweepOf(knee, unfair) })).toBe(locked)
+    const drawing = reduceRound(knee, freshRound(T0), { type: 'draw' })
+    expect(reduceRound(knee, drawing, { type: 'swept', seed: unfair, result: sweepOf(knee, unfair), at: 1 })).toBe(drawing)
   })
 
-  test('the sweep grades the pick with the exercise’s own pass rule', () => {
-    const locked = (p: number) => reduceRound(knee, freshRound(T0), { type: 'commit', prediction: p, at: 1 })
-    const right = reduceRound(knee, locked(truth), { type: 'swept', seed, result })
-    expect(right).toMatchObject({ phase: 'explain', seed, truth, ok: true })
-    const off = reduceRound(knee, locked(wrongOn(knee, seed)), { type: 'swept', seed, result })
-    expect(off).toMatchObject({ phase: 'explain', seed, truth, ok: false })
+  test('the lock grades the pick against the held sweep with the exercise’s own pass rule', () => {
+    const locked = (p: number) => reduceRound(knee, shownRound(knee, seed), { type: 'commit', prediction: p, at: 1 })
+    expect(locked(truth)).toMatchObject({ phase: 'explain', seed, truth, ok: true })
+    expect(locked(wrongOn(knee, seed))).toMatchObject({ phase: 'explain', seed, truth, ok: false })
   })
 
   test('the line must reach 8 words before an idea can be ticked, and all three ticks before the round saves', () => {
-    let r = reduceRound(knee, freshRound(T0), { type: 'commit', prediction: truth, at: 1 })
-    r = reduceRound(knee, r, { type: 'swept', seed, result })
+    let r = reduceRound(knee, shownRound(knee, seed), { type: 'commit', prediction: truth, at: 1 })
     r = reduceRound(knee, r, { type: 'explain', text: 'one two three four five six seven' })
     expect(reduceRound(knee, r, { type: 'idea', index: 0 })).toBe(r)
     r = reduceRound(knee, r, { type: 'explain', text: 'one two three four five six seven eight' })
@@ -157,14 +181,13 @@ describe('the round', () => {
     const saved = reduceRound(knee, r, { type: 'save', at: 3 })
     expect(saved.phase).toBe('saved')
     expect(reduceRound(knee, saved, { type: 'save', at: 4 })).toBe(saved)
-    // another seed starts from nothing
-    expect(reduceRound(knee, saved, { type: 'next', at: 9 })).toEqual(freshRound(9))
+    // another seed starts from nothing, drawing at once
+    expect(reduceRound(knee, saved, { type: 'next', at: 9 })).toEqual(freshRound(9, 'draw'))
     expect(reduceRound(knee, r, { type: 'next', at: 9 })).toBe(r)
   })
 
   test('the typed line is cut at 280 characters', () => {
-    let r = reduceRound(knee, freshRound(T0), { type: 'commit', prediction: truth, at: 1 })
-    r = reduceRound(knee, r, { type: 'swept', seed, result })
+    const r = reduceRound(knee, shownRound(knee, seed), { type: 'commit', prediction: truth, at: 1 })
     expect(reduceRound(knee, r, { type: 'explain', text: 'x '.repeat(300) }).explain).toHaveLength(280)
   })
 })
@@ -233,7 +256,7 @@ describe('the events', () => {
     expect(validateEvent(stamp(ev, 1)).ok).toBe(true)
   })
 
-  test('the predict event: the locked pick against the sweep’s answer, with the time to the lock', () => {
+  test('the predict event: the locked pick against the sweep’s answer, with the time from the scene to the lock', () => {
     const round = savedRound(knee, seed, wrongOn(knee, seed))
     const ev = predictEvent(knee, CTX, round)
     expect(ev).toMatchObject({
@@ -250,10 +273,10 @@ describe('the events', () => {
     expect(validateEvent(stamp(ev, 2)).ok).toBe(true)
   })
 
-  test('a round that has not been swept writes nothing', () => {
-    const locked = reduceRound(knee, freshRound(T0), { type: 'commit', prediction: 1, at: T0 + 1 })
-    expect(() => itemEvent(knee, CTX, locked)).toThrow('after its sweep')
-    expect(() => predictEvent(knee, CTX, locked)).toThrow('after its sweep')
+  test('a round whose prediction is not locked writes nothing', () => {
+    const shown = shownRound(knee, seed)
+    expect(() => itemEvent(knee, CTX, shown)).toThrow('after its lock')
+    expect(() => predictEvent(knee, CTX, shown)).toThrow('after its lock')
   })
 
   test('both exercises’ events pass the ledger codec, and the grp and the nominal seconds are the item block’s', () => {
@@ -285,22 +308,36 @@ describe('readExercise: restored from events', () => {
   const right = (s: number) => savedRound(knee, s, knee.truth(sweepOf(knee, s)))
 
   test('nothing yet: not predicted, no rounds, not done', () => {
-    expect(readExercise([], AT)).toMatchObject({ predicted: false, played: [], passes: 0, done: false })
-    expect(progressText(0, 3)).toBe('0/3')
+    const st = readExercise([], AT)
+    expect(st).toMatchObject({ predicted: false, played: [], passes: 0, run: 0, runAnswers: 0, done: false })
+    expect(progressText(st, 3)).toBe('0/3 right in a row · 0/2 different answers')
   })
 
-  test('three right predictions on distinct seeds finish it; a miss and a repeat of a seed do not count', () => {
+  test('three right in a row on two different answers finish it; a miss restarts the run, a repeated seed does not count', () => {
+    const [x, y] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.25)]
     const miss = savedRound(knee, s1, wrongOn(knee, s1))
-    const evs = [...events(miss, 1, true), ...events(right(s2), 3, false), ...events(right(s2), 5, false)]
+    const evs = [...events(miss, 1, true), ...events(right(x), 3, false), ...events(right(x), 5, false)]
     const mid = readExercise(evs, AT)
-    expect(mid).toMatchObject({ predicted: true, passes: 1, done: false })
-    expect(mid.played.map((p) => [p.seed, p.ok])).toEqual([[s1, false], [s2, true], [s2, true]])
-    const done = readExercise([...evs, ...events(right(s3), 7, false)], AT)
-    expect(done).toMatchObject({ passes: 2, done: false })
-    const all = readExercise([...evs, ...events(right(s3), 7, false), ...events(right(s4), 9, false)], AT)
-    expect(all).toMatchObject({ passes: 3, done: true })
-    expect([...all.seeds].sort()).toEqual([s1, s2, s3, s4].sort())
-    expect(progressText(all.passes, 3)).toBe('3/3 · done')
+    expect(mid).toMatchObject({ predicted: true, passes: 1, run: 1, runAnswers: 1, done: false })
+    expect(mid.played.map((p) => [p.seed, p.ok])).toEqual([[s1, false], [x, true], [x, true]])
+    const two = readExercise([...evs, ...events(right(y), 7, false)], AT)
+    expect(two).toMatchObject({ passes: 2, run: 2, runAnswers: 2, done: false })
+    expect(progressText(two, 3)).toBe('2/3 right in a row · 2/2 different answers')
+    const all = readExercise([...evs, ...events(right(y), 7, false), ...events(right(s4), 9, false)], AT)
+    expect(all).toMatchObject({ passes: 3, run: 3, done: true })
+    expect([...all.seeds].sort()).toEqual([s1, x, y, s4].sort())
+    expect(progressText(all, 3)).toBe('3/3 · done')
+    // a miss between the rights starts the run again
+    const broken = readExercise([...evs, ...events(savedRound(knee, s2, wrongOn(knee, s2)), 7, false), ...events(right(y), 9, false), ...events(right(s4), 11, false)], AT)
+    expect(broken).toMatchObject({ passes: 3, run: 2, done: false })
+  })
+
+  test('naming the one answer that keeps being right never finishes it', () => {
+    const same = seedsWhere(knee, 40, true).filter((s) => knee.truth(sweepOf(knee, s)) === 1.5).slice(0, 4)
+    expect(same).toHaveLength(4)
+    const st = readExercise(same.flatMap((s, i) => events(right(s), 1 + 2 * i, i === 0)), AT)
+    expect(st).toMatchObject({ passes: 4, run: 4, runAnswers: 1, done: false })
+    expect(progressText(st, 3)).toBe('3/3 right in a row · 1/2 different answers')
   })
 
   test('another block, another exercise, another surface and a seedless event are not this block’s', () => {
@@ -369,6 +406,11 @@ describe('what the sweep says', () => {
 })
 
 describe('the copy and the In-production rows', () => {
+  test('a scene fact reads as a line: a value or a range, then its unit', () => {
+    expect(sceneLine({ label: 'Prompts', value: 1792, to: 2815, unit: 'tokens' })).toBe('Prompts: 1,792–2,815 tokens')
+    expect(sceneLine({ label: 'Offered at 1×', value: 7.125, unit: 'requests per second' })).toBe('Offered at 1×: 7.125 requests per second')
+  })
+
   test('every listed exercise has copy: a setup that reads its own constants, three ideas and a model answer', () => {
     for (const def of Object.values(FLEET_EXERCISES)) {
       const c = copyFor(def.id)
@@ -387,13 +429,14 @@ describe('the copy and the In-production rows', () => {
     expect(s).toContain('8 sequences')
     expect(s).toContain('40 ticks (2 s)')
     expect(s).toContain('40 s window')
-    expect(s).toContain('6 load multipliers, 0.5× to 2×')
+    expect(s).toContain('6 load multipliers of that rate, 0.5× to 2×')
+    expect(s).toContain('8 ÷ (H × 0.05 s) requests a second (Little\'s law)')
     expect(s).toContain('50 ms')
   })
 
   test('the P:D setup states its workers, SLOs and transfer rate: 8 workers, 12 slots, 80 ticks (4 s), 2 ticks, 256 tokens a tick, 1.2×', () => {
     const s = copyFor('pd-split')!.setup
-    for (const part of ['8 identical workers', '12-sequence engine', '256 tokens per tick', '80 ticks (4 s)', '2 ticks', '20 s', '1.2×']) expect(s).toContain(part)
+    for (const part of ['8 identical workers', '12-sequence engine', '256 tokens per tick', '80 ticks (4 s)', '2 ticks', '20 s', '1.2×', '⌈tokens ÷ 128⌉ ticks']) expect(s).toContain(part)
   })
 
   test('every claim an exercise names has a row, resolves, and is pinned to a release (a row never states a number of its own)', () => {
@@ -454,7 +497,7 @@ describe('the panel, mounted', () => {
   const props = (r: Rig, over: Partial<FleetExerciseProps> = {}): FleetExerciseProps => ({ block: block(), lessonId: LESSON, index: BLOCK, env: r.env, ...over })
   const open = async (r: Rig, over: Partial<FleetExerciseProps> = {}): Promise<Mounted> => {
     const page = await dom.mount(createElement(FleetExercise, props(r, over)))
-    await dom.until(() => page.container.querySelector('[data-fleet-predict]') !== null)
+    await dom.until(() => page.container.querySelector('[data-fleet-draw]') !== null || page.container.querySelector('[data-phone]') !== null)
     return page
   }
   const q = (page: Mounted, sel: string) => page.container.querySelector(sel) as MiniElement
@@ -464,9 +507,16 @@ describe('the panel, mounted', () => {
       el.dispatchEvent(new MiniEvent('input', { bubbles: true }))
     })
   const progress = (page: Mounted) => q(page, '[data-fleet-progress]').textContent
+  const START = '0/3 right in a row · 0/2 different answers'
 
+  /** Asks for the first seed and waits for its scene and the field. */
+  async function draw(page: Mounted): Promise<void> {
+    await dom.press(q(page, '[data-fleet-draw]'))
+    await dom.until(() => q(page, '[data-fleet-predict]') !== null)
+  }
   /** Predicts `value`, locks, waits for the verdict. */
   async function predict(page: Mounted, value: number | string): Promise<void> {
+    await dom.until(() => q(page, '[data-fleet-predict]') !== null && q(page, '[data-fleet-lock]') !== null)
     await type(q(page, '[data-fleet-predict]'), String(value))
     await dom.press(q(page, '[data-fleet-lock]'))
     await dom.until(() => q(page, '[data-verdict]') !== null)
@@ -479,26 +529,50 @@ describe('the panel, mounted', () => {
     await dom.press(q(page, '[data-fleet-save]'))
     await dom.until(() => q(page, '[data-saved]') !== null)
   }
+  /** "Try a new seed": the next round draws at once, and its scene and field follow. */
+  async function another(page: Mounted): Promise<void> {
+    await dom.press(q(page, '[data-fleet-another]'))
+    await dom.until(() => q(page, '[data-fleet-lock]') !== null)
+  }
 
-  test('a number comes first: the field is labelled, nothing has run, and the sweep waits for the lock', async () => {
+  test('nothing runs until the learner asks for a seed, and the rule is said before the first round', async () => {
     const [a] = seedsWhere(knee, 1, true)
     const r = rig([a])
     const page = await open(r)
-    const input = q(page, '[data-fleet-predict]')
-    expect(page.container.querySelector(`label[for="${input.getAttribute('id')}"]`) ?? input.getAttribute('aria-label')).toBeTruthy()
-    expect(input.getAttribute('aria-label')).toContain(knee.unit)
-    expect(q(page, '[data-sweep-chart]')).toBeNull()
-    expect(q(page, '[data-fleet-explain]')).toBeNull()
     expect(r.runs).toHaveLength(0)
-    expect(r.recorded).toHaveLength(0)
-    expect(page.container.textContent).toContain('one of 0.5, 0.75, 1, 1.25, 1.5, 2')
-    expect(progress(page)).toBe('0/3')
+    expect(q(page, '[data-fleet-predict]')).toBeNull()
+    expect(q(page, '[data-fleet-scene]')).toBeNull()
+    expect(progress(page)).toBe(START)
+    expect(page.container.textContent).toContain(`Three right in a row, on at least ${ANSWERS_NEEDED} different answers, finishes the exercise.`)
     await page.unmount()
   })
 
-  test('something that is not one of the points gets a message (role alert), keeps the input, and runs nothing', async () => {
+  test('the scene comes first: the seed and what it gives the engine, then a labelled field described by it, and no outcome until the lock', async () => {
+    const [a] = seedsWhere(knee, 1, true)
+    const r = rig([a])
+    const page = await open(r)
+    await draw(page)
+    expect(r.runs).toEqual([a])
+    const scene = q(page, '[data-fleet-scene]')
+    expect(scene.textContent).toContain(`Seed ${a}, drawn fresh`)
+    for (const f of knee.scene(a)) expect(scene.textContent).toContain(sceneLine(f))
+    const input = q(page, '[data-fleet-predict]')
+    expect(input.getAttribute('aria-label')).toContain(knee.unit)
+    expect(input.getAttribute('aria-describedby')!.split(' ')).toContain(scene.getAttribute('id'))
+    expect(dom.document.activeElement).toBe(input)
+    // the sweep ran but nothing of its outcome is on the page
+    expect(q(page, '[data-sweep-chart]')).toBeNull()
+    expect(q(page, '[data-verdict]')).toBeNull()
+    expect(page.container.textContent).not.toContain('req/s')
+    expect(r.recorded).toHaveLength(0)
+    expect(page.container.textContent).toContain('one of 0.5, 0.75, 1, 1.25, 1.5, 2')
+    await page.unmount()
+  })
+
+  test('something that is not one of the points gets a message (role alert), keeps the input, and shows nothing', async () => {
     const r = rig([seedsWhere(knee, 1, true)[0]])
     const page = await open(r)
+    await draw(page)
     const input = q(page, '[data-fleet-predict]')
     await type(input, '1.3')
     await dom.press(q(page, '[data-fleet-lock]'))
@@ -507,9 +581,8 @@ describe('the panel, mounted', () => {
     expect(input.value).toBe('1.3')
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect(input.getAttribute('aria-describedby')).toContain(alert.getAttribute('id') ?? '?')
-    expect(r.runs).toHaveLength(0)
     expect(q(page, '[data-sweep-chart]')).toBeNull()
-    // the Enter key locks too
+    // the Enter key locks too, and the sweep is not run again
     await type(input, '1')
     await dom.act(() => input.dispatchEvent(new MiniEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' })))
     await dom.until(() => q(page, '[data-verdict]') !== null)
@@ -517,10 +590,11 @@ describe('the panel, mounted', () => {
     await page.unmount()
   })
 
-  test('the lock runs the sweep on the drawn seed, then shows the verdict, an SVG chart described by its table, and the seed', async () => {
+  test('the lock shows the verdict, an SVG chart described by its table, and keeps the seed', async () => {
     const [a] = seedsWhere(knee, 1, true)
     const r = rig([a])
     const page = await open(r)
+    await draw(page)
     const truth = knee.truth(sweepOf(knee, a))
     await predict(page, truth)
     expect(r.runs).toEqual([a])
@@ -546,13 +620,16 @@ describe('the panel, mounted', () => {
     await page.unmount()
   })
 
-  test('the first sweep writes the block’s one predict event, before anything is explained', async () => {
+  test('the first lock writes the block’s one predict event, before anything is explained', async () => {
     const [a] = seedsWhere(knee, 1, true)
     const r = rig([a])
     const page = await open(r)
+    await draw(page)
     await predict(page, wrongOn(knee, a))
     expect(r.recorded).toHaveLength(1)
     expect(r.recorded[0]).toMatchObject({ kind: 'predict', ref: 'item:fleet.knee', ok: false, seed: a, provenance: 'unseen', data: { src: 'lesson', grp: `${LESSON}#${BLOCK}` } })
+    // the time on task runs from the scene to the lock: the clock ticks a second per read
+    expect(r.recorded[0].ms).toBeGreaterThan(0)
     await page.unmount()
   })
 
@@ -560,6 +637,7 @@ describe('the panel, mounted', () => {
     const [a] = seedsWhere(knee, 1, true)
     const r = rig([a])
     const page = await open(r)
+    await draw(page)
     await predict(page, knee.truth(sweepOf(knee, a)))
     const reveal = q(page, '[data-fleet-reveal]')
     expect(reveal.disabled).toBe(true)
@@ -586,26 +664,29 @@ describe('the panel, mounted', () => {
     expect(JSON.stringify(r.recorded)).not.toContain('requests miss the SLO')
     expect(JSON.stringify(r.recorded)).not.toContain('queue grows')
     // saved: the count moves and focus lands on the saved line
-    expect(progress(page)).toBe('1/3')
-    expect(q(page, '[data-saved]').textContent).toContain('Saved. A right prediction on a new seed: 1/3.')
+    expect(progress(page)).toBe('1/3 right in a row · 1/2 different answers')
+    expect(q(page, '[data-saved]').textContent).toContain('Saved. A right prediction on a new seed: 1/3 right in a row · 1/2 different answers.')
     expect(dom.document.activeElement).toBe(q(page, '[data-saved]'))
     await page.unmount()
   })
 
-  test('a wrong prediction saves as a miss that does not count, and the next round writes an item but no second predict', async () => {
+  test('a wrong prediction saves as a miss that starts the run again, and the next round writes an item but no second predict', async () => {
     const [a, b] = seedsWhere(knee, 2, true)
     const r = rig([a, b])
     const page = await open(r)
+    await draw(page)
     await predict(page, wrongOn(knee, a))
     expect(q(page, '[data-verdict]').getAttribute('data-verdict')).toBe('off')
     expect(q(page, '[data-verdict]').textContent).toContain('% below the peak')
     expect(page.container.textContent).toContain('your pick')
     await explainAndSave(page)
-    expect(q(page, '[data-saved]').textContent).toContain('Not a pass')
-    expect(progress(page)).toBe('0/3')
+    expect(q(page, '[data-saved]').textContent).toContain('A miss starts the run again')
+    expect(progress(page)).toBe(START)
     expect(r.recorded.map((e) => [e.kind, e.ok])).toEqual([['predict', false], ['item', false]])
-    // another seed: a fresh prediction field, focused, and the earlier round listed
-    await dom.press(q(page, '[data-fleet-another]'))
+    // another seed: drawn at once, a fresh prediction field, focused, and the earlier round listed
+    await another(page)
+    expect(r.runs).toEqual([a, b])
+    expect(q(page, '[data-seed]').textContent).toContain(`Seed ${b}`)
     expect(q(page, '[data-fleet-predict]').value).toBe('')
     expect(dom.document.activeElement).toBe(q(page, '[data-fleet-predict]'))
     expect(page.container.querySelector('[data-fleet-played]')!.textContent).toContain('1. you said')
@@ -613,28 +694,44 @@ describe('the panel, mounted', () => {
     await explainAndSave(page)
     expect(r.recorded.map((e) => e.kind)).toEqual(['predict', 'item', 'item'])
     expect(r.recorded.map((e) => e.seed)).toEqual([a, a, b])
-    expect(progress(page)).toBe('1/3')
+    expect(progress(page)).toBe('1/3 right in a row · 1/2 different answers')
     await page.unmount()
   })
 
-  test('done after three right predictions on distinct fresh seeds, and a seed already played is never drawn again', async () => {
-    const [a, b, c] = seedsWhere(knee, 3, true)
+  test('done after three right in a row on two different answers, and a seed already played is never drawn again', async () => {
+    const [a, b, c] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.25), seedsWhere(knee, 1, true)[0]]
     // freshSeed() hands out `b` twice: the second draw is a seed already played, so the panel skips it without a run
     const r = rig([a, b, b, c])
     const page = await open(r)
+    await draw(page)
     for (const s of [a, b, c]) {
       await predict(page, knee.truth(sweepOf(knee, s)))
       await explainAndSave(page)
-      if (s !== c) await dom.press(q(page, '[data-fleet-another]'))
+      if (s !== c) await another(page)
     }
     expect(r.runs).toEqual([a, b, c])
     expect(progress(page)).toBe('3/3 · done')
     expect(r.recorded.filter((e) => e.kind === 'item').map((e) => e.seed)).toEqual([a, b, c])
     expect(r.recorded.filter((e) => e.kind === 'predict')).toHaveLength(1)
-    await dom.press(q(page, '[data-fleet-another]'))
-    expect(page.container.textContent).toContain('3 right predictions on new seeds. Done. There are always more seeds.')
-    // nothing locks: the field is there for another seed
+    // nothing locks: another seed is drawn and asked
+    await another(page)
+    expect(page.container.textContent).toContain('3 right predictions in a row on new seeds, on at least 2 different answers. Done. There are always more seeds.')
     expect(q(page, '[data-fleet-predict]')).not.toBeNull()
+    await page.unmount()
+  })
+
+  test('three right that all name the same answer are not done, and the progress line says why', async () => {
+    const same = seedsWhere(knee, 40, true).filter((s) => knee.truth(sweepOf(knee, s)) === 0.75).slice(0, 3)
+    const r = rig(same)
+    const page = await open(r)
+    await draw(page)
+    for (const s of same) {
+      await predict(page, 0.75)
+      await explainAndSave(page)
+      if (s !== same[2]) await another(page)
+    }
+    expect(progress(page)).toBe('3/3 right in a row · 1/2 different answers')
+    expect(q(page, '[data-fleet-done]')).toBeNull()
     await page.unmount()
   })
 
@@ -643,14 +740,15 @@ describe('the panel, mounted', () => {
     const [fair] = seedsWhere(knee, 1, true)
     const r = rig([unfair, fair])
     const page = await open(r)
-    await predict(page, 1)
+    await draw(page)
     expect(r.runs).toEqual([unfair, fair])
     expect(q(page, '[data-seed]').textContent).toContain(`Seed ${fair}`)
     await page.unmount()
   })
 
   test('after a reload the count comes from the ledger: 3/3 · done, the earlier rounds listed, nothing asked or run', async () => {
-    const [a, b, c, d] = seedsWhere(knee, 4, true)
+    const [a, b, c] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.5), seedsWhere(knee, 1, true)[0]]
+    const [d] = seedsWhere(knee, 2, true).filter((s) => s !== c)
     const history: ExerciseEvent[] = [a, b, c].flatMap((s, i) => {
       const round = savedRound(knee, s, knee.truth(sweepOf(knee, s)))
       return [...(i === 0 ? [predictEvent(knee, CTX, round)] : []), itemEvent(knee, CTX, round)].map((e, j) =>
@@ -660,11 +758,13 @@ describe('the panel, mounted', () => {
     const r = rig([a, d], {}, history)
     const page = await open(r)
     expect(progress(page)).toBe('3/3 · done')
-    expect(page.container.textContent).toContain('3 right predictions on new seeds. Done.')
+    expect(page.container.textContent).toContain('3 right predictions in a row on new seeds, on at least 2 different answers. Done.')
     expect(page.container.querySelectorAll('[data-fleet-played] li')).toHaveLength(3)
+    expect(r.runs).toHaveLength(0)
     // the one prediction is already on the ledger: a new round writes an item only
-    await predict(page, knee.truth(sweepOf(knee, d)))
+    await draw(page)
     expect(r.runs).toEqual([d]) // `a` was played, so it was skipped without a run
+    await predict(page, knee.truth(sweepOf(knee, d)))
     expect(r.recorded.map((e) => e.kind)).toEqual([])
     await explainAndSave(page)
     expect(r.recorded.map((e) => e.kind)).toEqual(['item'])
@@ -676,12 +776,12 @@ describe('the panel, mounted', () => {
     const round = savedRound(knee, a, knee.truth(sweepOf(knee, a)))
     const history = [exerciseEventOf(itemEvent(knee, { lessonId: LESSON, index: BLOCK + 3 }, round), new Date(T0).toISOString(), 'x')]
     const page = await open(rig([a], {}, history))
-    expect(progress(page)).toBe('0/3')
+    expect(progress(page)).toBe(START)
     expect(q(page, '[data-fleet-played]')).toBeNull()
     await page.unmount()
   })
 
-  test('a worker failure is said in words in an alert, the prediction stays locked, and running it again works', async () => {
+  test('a worker failure is said in words in an alert, nothing is asked yet, and running it again works', async () => {
     const [a] = seedsWhere(knee, 1, true)
     let fail = true
     const r = rig([a, a], {
@@ -691,16 +791,16 @@ describe('the panel, mounted', () => {
       },
     })
     const page = await open(r)
-    await type(q(page, '[data-fleet-predict]'), '1')
-    await dom.press(q(page, '[data-fleet-lock]'))
+    await dom.press(q(page, '[data-fleet-draw]'))
     await dom.until(() => page.container.querySelector('[role="alert"]') !== null)
     expect(page.container.querySelector('[role="alert"]')!.textContent).toContain('The sweep took too long')
-    expect(q(page, '[data-fleet-predict]').value).toBe('1')
+    expect(q(page, '[data-fleet-predict]')).toBeNull()
     expect(r.recorded).toHaveLength(0)
     fail = false
     await dom.press(q(page, '[data-fleet-retry]'))
-    await dom.until(() => q(page, '[data-verdict]') !== null)
+    await dom.until(() => q(page, '[data-fleet-predict]') !== null)
     expect(page.container.querySelector('[role="alert"]')).toBeNull()
+    expect(q(page, '[data-seed]').textContent).toContain(`Seed ${a}`)
     await page.unmount()
   })
 
@@ -715,10 +815,10 @@ describe('the panel, mounted', () => {
     const page = await dom.mount(createElement(FleetExercise, props(r)))
     await dom.until(() => page.container.querySelector('[role="alert"]') !== null)
     expect(page.container.querySelector('[role="alert"]')!.textContent).toContain('Could not load your earlier rounds')
-    expect(q(page, '[data-fleet-predict]')).toBeNull()
+    expect(q(page, '[data-fleet-draw]')).toBeNull()
     ok = true
     await dom.press(page.container.querySelector('[role="alert"] button') as MiniElement)
-    await dom.until(() => q(page, '[data-fleet-predict]') !== null)
+    await dom.until(() => q(page, '[data-fleet-draw]') !== null)
     await page.unmount()
   })
 
@@ -732,15 +832,17 @@ describe('the panel, mounted', () => {
     await page.unmount()
   })
 
-  test('the P:D split mounts with its own copy and its disaggregation rows, and predicts a worker count', async () => {
+  test('the P:D split mounts with its own copy and its disaggregation rows, shows its lengths, and predicts a worker count', async () => {
     const [a] = seedsWhere(pd, 1, true)
     const r = rig([a])
     const page = await open(r, { block: block('pd-split'), lessonId: 't6.l3', index: 2 })
     expect(page.container.textContent).toContain('8 identical workers')
-    expect(page.container.textContent).toContain('one of 1, 2, 3, 4, 5, 6, 7')
     const rows = page.container.querySelectorAll('[data-production] li')
     expect(rows.map((li) => li.getAttribute('data-claim'))).toEqual(pd.productionClaims)
     expect(rows[1].textContent).toContain('--disaggregation-mode prefill|decode')
+    await draw(page)
+    expect(page.container.textContent).toContain('one of 1, 2, 3, 4, 5, 6, 7')
+    for (const f of pd.scene(a)) expect(q(page, '[data-fleet-scene]').textContent).toContain(sceneLine(f))
     await predict(page, pd.truth(sweepOf(pd, a)))
     expect(q(page, '[data-verdict]').textContent).toContain('prefill')
     expect(page.container.textContent).toContain('TPOT p95 (ms)')
@@ -750,15 +852,20 @@ describe('the panel, mounted', () => {
     await page.unmount()
   })
 
-  test('phone mode asks for the number first, then shows the canonical outcome with its table open, and writes and runs nothing', async () => {
+  test('phone mode shows the canonical seed’s scene, asks for the number, then shows its outcome with the table open, and writes and runs nothing', async () => {
     const r = rig([])
     const page = await open(r, { env: { ...r.env, mode: 'phone' } })
     expect(q(page, '[data-phone]')).not.toBeNull()
+    const scene = q(page, '[data-fleet-scene]')
+    expect(scene.textContent).toContain(`Seed ${knee.phone.seed}, the same on every phone`)
+    for (const f of knee.scene(knee.phone.seed)) expect(scene.textContent).toContain(sceneLine(f))
+    expect(q(page, '[data-fleet-predict]').getAttribute('aria-describedby')!.split(' ')).toContain(scene.getAttribute('id'))
     await type(q(page, '[data-fleet-predict]'), '1.3')
     await dom.press(q(page, '[data-fleet-lock]'))
     expect(page.container.querySelector('[role="alert"]')!.textContent).toContain('Enter one of the points')
     expect(q(page, '[data-sweep-chart]')).toBeNull()
     const canonical = knee.phone.canonical
+    expect(canonical).toEqual(sweepOf(knee, knee.phone.seed))
     const truth = knee.truth(canonical)
     await type(q(page, '[data-fleet-predict]'), String(truth))
     await dom.press(q(page, '[data-fleet-lock]'))
@@ -780,7 +887,7 @@ describe('the panel, mounted', () => {
   test('phone mode names a wrong pick and still earns nothing', async () => {
     const r = rig([])
     const page = await open(r, { env: { ...r.env, mode: 'phone' } })
-    await type(q(page, '[data-fleet-predict]'), String(wrongOn(knee, 0)))
+    await type(q(page, '[data-fleet-predict]'), String(wrongOn(knee, knee.phone.seed)))
     await dom.press(q(page, '[data-fleet-lock]'))
     expect(q(page, '[data-verdict]').getAttribute('data-verdict')).toBe('off')
     expect(r.recorded).toHaveLength(0)
