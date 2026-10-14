@@ -521,6 +521,8 @@ export class MiniDocument extends MiniNode {
   body: MiniElement
   visibilityState = 'visible'
   readyState = 'complete'
+  /** React asks `'oninput' in document` once, when it loads: without it a text input falls back to IE's `attachEvent` and focusing one throws. */
+  oninput = null
   constructor() {
     super(null)
     this.ownerDocument = this
