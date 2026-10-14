@@ -18,7 +18,7 @@ const IDS = ['t5.l6', 't5.l7', 't5.l8', 't5.l9', 't5.l10']
 const T5B = ALL_LESSONS.filter((l) => IDS.includes(l.id))
 const MISS_ID = /^[a-z0-9]+\.[a-z0-9]+(-[a-z0-9]+)*$/
 /** A miss id is a slug, or `confuse.<kcId>` (wave-3.md §11.2): the learner took one KC for another. */
-const isMissId = (miss: string) => MISS_ID.test(miss) || (miss.startsWith('confuse.') && kcById(miss.slice('confuse.'.length)) !== undefined)
+const isMissId = (miss: string) => (miss.startsWith('confuse.') ? kcById(miss.slice('confuse.'.length)) !== undefined : MISS_ID.test(miss))
 const words = (s: string) => s.trim().split(/\s+/).length
 const lesson = (id: string) => T5B.find((l) => l.id === id) as Lesson
 
@@ -54,7 +54,9 @@ describe('t5.l6-l10: KCs, tickets and tags', () => {
 
     test(`${l.id}: every checkpoint question is tagged with 1-3 KCs, and every lure names its misconception`, () => {
       const qs = [...questionsOf(l).map((q, i) => ({ where: `${l.id} q${i + 1}`, q })), ...(l.ticket?.spiral ?? []).map((s) => ({ where: `item:${s.id}`, q: s.q }))]
-      expect(questionsOf(l)).toHaveLength(4)
+      // t5.l6's fifth question carries the confuse lures of wave-3.md §11.2, beside the four it had; an item takes at most
+      // four options (item-pools.ts, MAX_RANK_SUBSET_OPTIONS), so the lures were added as a question, not as options.
+      expect(questionsOf(l)).toHaveLength(l.id === 't5.l6' ? 5 : 4)
       for (const { where, q } of qs) {
         if (!where.startsWith('item:')) {
           expect(q.kcs?.length ?? 0).toBeGreaterThanOrEqual(1)
@@ -232,5 +234,46 @@ describe('t5.l10: the T5 spiral checkpoint', () => {
       expect(plan?.items).toHaveLength(3)
       expect(plan?.items.filter(isNonMcq)).toHaveLength(1)
     }
+  })
+})
+
+describe('confuse.<KC> lures on t5.l5 and t5.l6 (wave-3.md §11.2, §15.1)', () => {
+  const P3 = ['t2.address-translation', 't5.block-tables', 't5.prefix-cache-keys']
+  const anyLesson = (id: string) => ALL_LESSONS.find((l) => l.id === id) as Lesson
+  /** The confuse lures on a lesson's quiz items for one KC. */
+  const luresOn = (id: string, kc: string) =>
+    questionsOf(anyLesson(id)).flatMap((q) => ((q.kcs ?? []).includes(kc) ? (q.miss ?? []).filter((m) => m.startsWith('confuse.')) : []))
+
+  test('t5.l6 tags two lures on t5.prefix-cache-keys items: taken for a block table, taken for address translation', () => {
+    expect(luresOn('t5.l6', 't5.prefix-cache-keys').sort()).toEqual(['confuse.t2.address-translation', 'confuse.t5.block-tables'])
+  })
+
+  test('t5.l5 tags two lures on t5.block-tables items: taken for a prefix-cache key, taken for address translation', () => {
+    expect(luresOn('t5.l5', 't5.block-tables').sort()).toEqual(['confuse.t2.address-translation', 'confuse.t5.prefix-cache-keys'])
+  })
+
+  test('a confuse lure is never the key, names another P3 KC than its item\'s, and has a why', () => {
+    for (const id of ['t5.l5', 't5.l6']) {
+      for (const q of questionsOf(anyLesson(id))) {
+        for (const [i, m] of (q.miss ?? []).entries()) {
+          if (!m.startsWith('confuse.')) continue
+          const named = m.slice('confuse.'.length)
+          expect(P3).toContain(named)
+          expect(q.kcs ?? []).not.toContain(named)
+          expect(q.correct).not.toContain(i)
+          expect(q.why?.[i]?.trim()).toBeTruthy()
+        }
+      }
+    }
+  })
+
+  // 3b-17 first made these lures by replacing distractors; the misconceptions they replaced stay, with their miss ids,
+  // because learners' ledgers already hold misses under them.
+  test('the lures sit beside the misconceptions they first replaced, not in their place', () => {
+    const misses = questionsOf(lesson('t5.l6')).flatMap((q) => q.miss ?? [])
+    expect(misses).toContain('t5.apc-caches-token-ids')
+    expect(misses).toContain('t5.key-includes-sampling')
+    const options = questionsOf(anyLesson('t5.l5')).flatMap((q) => q.options)
+    expect(options.some((o) => o.startsWith('Merging requests that share a system prompt'))).toBe(true)
   })
 })
