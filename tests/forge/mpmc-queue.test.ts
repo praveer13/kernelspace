@@ -55,7 +55,7 @@ import {
 } from '../../src/data/forge/mpmc-queue/primm'
 import { PRIMM_MC_ITEMS as ALLOCATOR_MC } from '../../src/data/forge/rust-allocator/primm'
 import { PROVE_LAB_ID, PROVE_QUESTIONS, buildProveResult, followUpRef, pickQuestions } from '../../src/data/forge/mpmc-queue/prove'
-import { AFTER_WRAP, FULL_COUNT, LAST_POP, PROVE2, RING, TRACE_OPS } from '../../src/data/forge/mpmc-queue/prove2'
+import { AFTER_WRAP, FULL_COUNT, LAST_POP, PROVE2, RING, TRACE_OPS, popped } from '../../src/data/forge/mpmc-queue/prove2'
 import type { ProveV2Template } from '../../src/data/forge/types'
 import { KC } from '../../src/data/kc/ids'
 import { FORGE_LABS } from '../../src/data/labs'
@@ -590,6 +590,17 @@ describe('items (§8.2): ids, refs, tags, whys', () => {
     expect('err' in q.push(99)).toBe(true)
     const p2 = PRIMM_MC_ITEMS.find((i) => i.id === 'lab04.primm.p2')!
     expect(p2.q.options[p2.q.correct[0]]).toContain('`backpressure` in stage 2')
+    // the gauntlet option's why counts the checks before stage 4 that fail: three, in stages 2 and 3
+    const stage = (id: string) => checks.find((c) => c.id === id)?.stage ?? 99
+    const before = failing('no-recycle').filter((id) => stage(id) < 4)
+    expect(before).toEqual(['backpressure', 'wraparound', 'slot_conservation'])
+    expect(new Set(before.map(stage))).toEqual(new Set([2, 3]))
+    expect(calibration.checks.model_gauntlet.mutants['no-recycle']).toBe(1)
+    const gauntletWhy = p2.q.why?.[3] ?? ''
+    expect(gauntletWhy).toContain('Three checks in two earlier stages')
+    for (const id of before) expect(gauntletWhy).toContain(`\`${id}\``)
+    expect(gauntletWhy).toContain('`backpressure` in stage 2, then `wraparound` and `slot_conservation` in stage 3')
+    expect(gauntletWhy).toContain('every seed the calibration ran')
   })
 
   test('p2’s options name the checks in stage order, so "going through the stages in order" is well defined', () => {
@@ -624,14 +635,28 @@ describe('items (§8.2): ids, refs, tags, whys', () => {
     expect(leaks).toContain('slot_conservation')
     expect(leaks).not.toContain('fifo')
     expect(leaks).not.toContain('backpressure')
-    // the 50th pop is the first that is not released: slot 0 of a 4-slot ring misses its next push in lap 13
-    const q = new Ring(4, 'leak-slot')
-    let pushes = 0
-    for (let lap = 0; lap < 20; lap++) {
-      for (let i = 0; i < 4; i++) if ('ok' in q.push(++pushes) === false) break
-      for (let i = 0; i < 4; i++) q.pop()
+    // the why's 'soon after the 50th pop': the 50th pop (position 49) is the first not released. In wraparound's
+    // 4-slot ring that is slot 1, whose next push (position 53, the second of cycle 13) is refused two pops later;
+    // in slot_conservation's 16-slot ring it is slot 1 again, refused at the second push of cycle 4, 14 pops later.
+    const leak = (cap: number) => new Ring(cap, 'leak-slot')
+    expect(runCheck('wraparound', leak)).toBe('cycle 13: push failed')
+    expect(runCheck('slot_conservation', leak)).toBe('cycle 4: the ring is leaking slots')
+    const q = leak(4)
+    let refused: { tail: number; pops: number } | null = null
+    for (let cycle = 0; refused === null && cycle < 1000; cycle++) {
+      for (let i = 0; refused === null && i < 4; i++) if ('err' in q.push(cycle * 4 + i + 1)) refused = { tail: q.tail, pops: q.pops }
+      if (refused === null) for (let i = 0; i < 4; i++) q.pop()
     }
-    expect(pushes).toBeLessThan(80)
+    expect(refused).toEqual({ tail: 53, pops: 52 })
+    expect(53 % 4).toBe(49 % 4)
+    const q16 = leak(16)
+    let refused16: { tail: number; pops: number } | null = null
+    for (let cycle = 0; refused16 === null && cycle < 100; cycle++) {
+      for (let v = 0; refused16 === null && v < 16; v++) if ('err' in q16.push(v)) refused16 = { tail: q16.tail, pops: q16.pops }
+      if (refused16 === null) for (let i = 0; i < 16; i++) q16.pop()
+    }
+    expect(refused16).toEqual({ tail: 65, pops: 64 })
+    expect(65 % 16).toBe(49 % 16)
     // one thread: a correct queue passes everything, so no mutant list here includes a wrong memory ordering
     expect(failing(undefined)).toEqual([])
     expect(MUTANTS).toHaveLength(7)
@@ -1123,10 +1148,18 @@ describe('the answer is not the story’s: it differs across seeds, and a plausi
       const replies = await fakeBridge(fakeQueue()).run(new ArrayBuffer(0), plan.calls)
       expect(replies.filter((r) => r === 'full').length).toBeGreaterThanOrEqual(1)
       expect(plan.calls.filter((c) => c === 'pop').length).toBeGreaterThanOrEqual(3)
+      // pops that return a value, not pop calls: a pop on the empty queue pops nothing (with empty pops counted, some
+      // seeds kept a trace with one real pop before the last)
+      expect(replies.filter((r) => /^\d+$/.test(r)).length, `seed ${seed}`).toBeGreaterThanOrEqual(3)
       expect(replies[replies.length - 1]).toMatch(/^\d+$/)
       const firstPushed = plan.calls[1].split(' ')[1]
       expect(replies[replies.length - 1]).not.toBe(firstPushed)
     }
+  })
+
+  test('popped counts the values pops returned: ok, full and empty replies pop nothing', () => {
+    expect(popped(['ok', 'full', 'empty', '42', 'ok', 'empty', '17'])).toEqual(['42', '17'])
+    expect(popped(['empty', 'empty', 'empty'])).toEqual([])
   })
 
   test('after-wrap: 6 pushes and 5 pops, no push refused and no pop empty, the fifth pop returns the fifth value pushed', async () => {

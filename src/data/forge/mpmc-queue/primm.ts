@@ -237,7 +237,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
       'The `fifo` check pushes eight values and pops all eight, and never pushes after a pop. No slot is used twice there, so a release at `h + 1` still passes it.',
       'That check fills a 4-slot ring, is refused once, pops once and pushes again. That push needs slot 0 to read `seq = 4`, and the release left it at 1, so the push calls the ring full. This is the first red check.',
       'It goes red there too, because a jam after the first lap is the same mistake. But `backpressure` in stage 2 reaches it first when you go through the stages in order.',
-      'The gauntlet fails on this mistake as well, on nearly every seed, but it is the last stage. Two earlier checks reach the false full before it does.',
+      'The gauntlet fails on this mistake as well, on every seed the calibration ran, but it is in the last stage. Three checks in two earlier stages reach the false full before it does: `backpressure` in stage 2, then `wraparound` and `slot_conservation` in stage 3.',
     ],
     explanation: 'A pop that frees its slot at `h + 1` is wrong only for the next lap. The first check that pushes after a pop is `backpressure`.',
   }),

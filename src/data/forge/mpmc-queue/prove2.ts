@@ -88,14 +88,15 @@ function replay(cap: number, ops: readonly Op[], model: 'fifo' | 'stack' | 'over
   })
 }
 
-/** The replies that are pops' (a push replies `ok` or `full`). */
-const popped = (replies: readonly string[]): string[] => replies.filter((r) => r !== 'ok' && r !== 'full')
+/** The values pops returned: a push replies `ok` or `full`, and a pop that finds the queue empty replies `empty`, which pops nothing. */
+export const popped = (replies: readonly string[]): string[] => replies.filter((r) => /^\d+$/.test(r))
 
 /**
  * `last-pop`: the last pop's reply after a trace on a 4-slot queue that refuses some pushes. A refused push is not in
  * the queue, so the value it carried never comes out, and the oldest value left is the answer. A trace is kept only
- * when a push is refused, the last op is a pop that finds a value, and the two wrong models (a full queue that
- * overwrites its oldest value, and a stack) both answer something else.
+ * when a push is refused, at least three pops return a value (a pop on the empty queue does not count), the last op is
+ * one of them, and the two wrong models (a full queue that overwrites its oldest value, and a stack) both answer
+ * something else.
  */
 export const LAST_POP: ProveV2Template = {
   id: 'last-pop',
