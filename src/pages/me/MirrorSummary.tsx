@@ -106,13 +106,25 @@ function Vrk30Section({ vrk }: { vrk: Vrk30 }) {
   )
 }
 
-/** `load` replaces the ledger read, for tests that mount the section on a fixture ledger. */
-export default function MirrorSummary({ load }: { load?: () => Promise<MirrorInput> }) {
+/**
+ * `load` replaces the ledger read, for tests that mount the section on a fixture ledger. `onSettled` is called once the
+ * read has ended, in a figure or in an error, and again after a retry ends: /me holds what sits below the Mirror back until
+ * then, so the section grows into empty space instead of pushing content that is already on screen.
+ *
+ * The loading line is one line, the height of the Suspense fallback in Me.tsx (h-6): the ready content is as tall as the
+ * ledger makes it (a few hundred pixels with an empty ledger, more with a full one, and taller again at 360 px), so no
+ * placeholder height is right for both, and none is reserved.
+ */
+export default function MirrorSummary({ load, onSettled }: { load?: () => Promise<MirrorInput>; onSettled?: () => void }) {
   const { state, retry } = useMirror(load)
+  const settled = state.status !== 'loading'
+  useEffect(() => {
+    if (settled) onSettled?.()
+  }, [settled, onSettled])
 
   if (state.status === 'loading') {
     return (
-      <p role="status" className="min-h-[24rem] font-mono text-body-sm text-text-3">
+      <p role="status" className="h-6 font-mono text-body-sm leading-6 text-text-3">
         Reading your ledger…
       </p>
     )

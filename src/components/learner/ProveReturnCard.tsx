@@ -10,7 +10,7 @@ import { daysBetween } from '@/lib/learner/reentry'
  *
  * This is the lazy mount and nothing more. It asks the ledger for `prove` events (Today has the engine loaded already)
  * and only when one is at least 30 local days old loads the card itself (ProveReturnBody: the due labs, the question,
- * the lab worker, the forms). A learner with nothing due fetches nothing, and /today's static closure does not grow:
+ * the lab worker, the forms). A learner with nothing due, or whose due returns are all answered, fetches nothing, and /today's static closure does not grow:
  * this module imports only what the closure already holds, and the rest is its own chunk. ProveReturnBody decides
  * which lab, if any, can be asked, so this check only has to be cheap and never wrong the other way.
  */
@@ -30,11 +30,34 @@ function localDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Whether any `prove` event is old enough for its lab's return to be due (the body works out which lab, and whether it was answered). */
+const atMs = (iso: string): number => {
+  const t = Date.parse(iso)
+  return Number.isNaN(t) ? 0 : t
+}
+
+/**
+ * Whether some lab's return can be due: a lab whose first `prove` event (the earliest by instant, as prove2.ts's
+ * `firstProve`) is 30 or more local days old and which has no answered return among the prove events read (a prove event
+ * with `data.return`, as prove-return.ts's `returnAnswered`). A learner who answered every return they were due therefore
+ * loads nothing. A return answered as a v1 follow-up is an `item` event, which this check does not read, so that learner
+ * still loads the body once per visit and it renders nothing. The body decides which lab can be asked; this check may say
+ * yes too often and must never say no to a lab that is due.
+ */
 async function anyDue(env: Partial<ReturnEnv> | undefined): Promise<boolean> {
   const today = env?.today?.() ?? localDay(new Date())
   const events = env?.events === undefined ? await (await getLedgerClient()).events({ kinds: ['prove'] }) : await env.events()
-  return events.some((e) => e.kind === 'prove' && daysBetween(e.day, today) >= AFTER_DAYS)
+  const first = new Map<string, { at: number; day: string }>()
+  const answered = new Set<string>()
+  for (const e of events) {
+    if (e.kind !== 'prove' || !e.ref.startsWith('prove:')) continue
+    const d: unknown = e.data
+    if (typeof d === 'object' && d !== null && (d as { return?: unknown }).return === true) answered.add(e.ref)
+    const at = atMs(e.at)
+    const best = first.get(e.ref)
+    if (best === undefined || at < best.at) first.set(e.ref, { at, day: e.day })
+  }
+  for (const [ref, f] of first) if (!answered.has(ref) && daysBetween(f.day, today) >= AFTER_DAYS) return true
+  return false
 }
 
 export default function ProveReturnCard({ variant, env }: ProveReturnCardProps) {

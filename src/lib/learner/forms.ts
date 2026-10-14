@@ -10,6 +10,8 @@
  * - **Unseen.** Three disjoint seed sets per track come from the learner's `exp:seed`
  *   (`hash32('forms:' + track + ':' + set + ':' + i + ':' + expSeed)`), so the seeds differ between learners, and no
  *   two items of a track's three forms share a fingerprint (`Instance.rev`), so a form never repeats an item of another.
+ *   The sets are drawn in set order 0, 1, 2, each against the fingerprints of the sets below it, so what a seed set holds
+ *   (a collision's bumped draw included) depends on the learner's seed and the set alone, never on which form it serves.
  * - **Counterbalanced.** Which seed set is form A, B or C is one of the 6 permutations, `armOf('forms', track, expSeed, 6)`
  *   (experiments.ts), so across learners each set serves each form equally often and a set that happens to be harder
  *   does not look like learning.
@@ -51,6 +53,8 @@ export type FormId = 'A' | 'B' | 'C'
 export type FormSet = 0 | 1 | 2
 
 export const FORM_IDS: readonly FormId[] = ['A', 'B', 'C']
+/** The three seed sets, in the order they are drawn. */
+const SEED_SETS: readonly FormSet[] = [0, 1, 2]
 /** Items in a form. One item is 100 ÷ 12 = 8.3 points, so only track-level results are shown, with intervals. */
 export const FORM_SLOTS = 12
 /** Every form item is drawn at the independent level (family docs: level 2 = independent, single KC). */
@@ -262,18 +266,21 @@ export function buildForms(track: string, input: FormsInput): TrackForms | null 
   }
   const byKc = new Map(covered.map((c) => [c.kc, c] as const))
   const order = formOrder(track, input.expSeed)
+  // Draw by seed set (0, 1, 2), not in form order A, B, C: the dedupe set a draw meets then holds only the sets below it,
+  // so a set's bumped draw is the same whichever form the shuffle assigns it to (a fingerprint collision moves the same slot).
   const used = new Set<string>()
   let failed = false
-  const forms = {} as Record<FormId, FormPlan>
-  FORM_IDS.forEach((id, j) => {
-    const set = order[j]
-    const slots: FormSlot[] = []
+  const bySet: FormSlot[][] = [[], [], []]
+  for (const set of SEED_SETS) {
     for (const b of blueprint) {
       const inst = guarded(run, () => drawSlot(track, set, b, byKc.get(b.kc)!, input, used), null)
-      if (inst !== null) slots.push({ ...b, family: inst.family, variant: inst.variant, inst })
+      if (inst !== null) bySet[set].push({ ...b, family: inst.family, variant: inst.variant, inst })
       else if (run.missing === null) failed = true
     }
-    forms[id] = { id, set, slots }
+  }
+  const forms = {} as Record<FormId, FormPlan>
+  FORM_IDS.forEach((id, j) => {
+    forms[id] = { id, set: order[j], slots: bySet[order[j]] }
   })
   if (run.missing) throw run.missing
   if (failed) return null

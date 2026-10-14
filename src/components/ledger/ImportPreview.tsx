@@ -3,8 +3,8 @@
  * The engine derives the result in memory (`previewImport`), so what the learner reads here is exactly what
  * `importFile` will do. Merge is the default; replace says what it drops. Both leave one level of undo.
  *
- * `DialogFrame` is the shared Radix shell (focus trap, Escape, labelled title and description) that /progress
- * also uses for the reset confirmation.
+ * `DialogFrame` is the shared Radix shell (focus trap, Escape, labelled title and description) that /me's data
+ * ownership section (src/pages/me/DataOwnership.tsx, which mounts this dialog) also uses for the reset confirmation.
  */
 
 import { useEffect, useRef, useState } from 'react'

@@ -1,7 +1,8 @@
 /**
- * "Your engine" on /progress (docs/specs/wave-2.md §10.4, §2.3): the schematic of the eight slots, which of them
+ * "Your engine" on /me (docs/specs/wave-2.md §10.4, §2.3): the schematic of the eight slots, which of them
  * are your own modules, and where to fill the rest. Reads the installed modules from the Fleet's slot store, so
- * what /progress shows is what /fleet runs. It takes no props, so Progress mounts it as it did the stub.
+ * what /me shows is what /fleet runs. It takes no props, so the journey section (src/pages/me/Journey.tsx, one of the
+ * two sections Progress.tsx was folded into in 3b-06) mounts it lazily as it did the stub.
  */
 import { Link } from 'react-router'
 import { useSlots } from '@/pages/fleet/slots'

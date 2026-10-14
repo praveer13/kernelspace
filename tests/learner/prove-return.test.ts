@@ -245,6 +245,65 @@ describe('ProveReturnCard on Today', () => {
     await none.unmount()
   })
 
+  /** What the card asked for: `events` is its own cheap read (once), anything more means the body chunk loaded and searched. */
+  function counted(events: ProveEventLike[], over: Partial<ReturnEnv> = {}) {
+    const calls = { events: 0, bundle: 0, installed: 0 }
+    const r = rig(events, {
+      events: async () => (calls.events++, events),
+      bundle: async (id) => (calls.bundle++, loadForgeBundle(id).catch(() => undefined)),
+      installed: async () => (calls.installed++, null),
+      ...over,
+    })
+    return { r, calls }
+  }
+
+  test('an answered return loads nothing: the cheap check reads the events once and the body chunk and its due-lab search never run', async () => {
+    // the first prove is 31 days old, so a check that only looks at age would load the body; the return was answered, so this one does not
+    const answered = counted([v1Prove(FIRST, ['a'], [1]), v2Prove(TODAY, { return: true })])
+    const page = await open(answered.r)
+    await dom.act(() => new Promise((r) => setTimeout(r, 60)))
+    expect(page.container.innerHTML).toBe('')
+    expect(answered.calls).toEqual({ events: 1, bundle: 0, installed: 0 })
+    await page.unmount()
+    // control: the same ledger without the return does load it (the body reads the events again and asks for the bundle)
+    const open1 = counted([v1Prove(FIRST, ['a'], [1])])
+    const due = await open(open1.r)
+    await settle(due, '[data-prove-return]')
+    expect(open1.calls.events).toBeGreaterThan(1)
+    expect(open1.calls.bundle).toBeGreaterThan(0)
+    await due.unmount()
+  })
+
+  test('one lab answered and another not: the unanswered one still loads the card; the order of the events does not matter', async () => {
+    const events = [v1Prove('2026-10-01', ['a'], [1], 'bpe-tokenizer'), v2Prove('2026-11-03', { return: true }, 'bpe-tokenizer'), v1Prove(FIRST, ['a'], [1])]
+    for (const ordered of [events, [...events].reverse()]) {
+      const { r, calls } = counted(ordered, { bundle: async (id) => (id === 'kv-block-manager' ? kv : undefined) })
+      const page = await open(r)
+      await settle(page, '[data-prove-return]')
+      expect(q(page, '[data-prove-return]').getAttribute('data-lab')).toBe('kv-block-manager')
+      expect(calls.events).toBeGreaterThan(1)
+      await page.unmount()
+    }
+  })
+
+  test('the return is counted from the first prove, not from a later one; a fresh re-prove of an old lab does not hide a due return', async () => {
+    const { r, calls } = counted([v1Prove(FIRST, ['a'], [1]), v1Prove('2026-11-03', ['a'], [1])])
+    const page = await open(r)
+    await settle(page, '[data-prove-return]')
+    expect(calls.events).toBeGreaterThan(1)
+    await page.unmount()
+  })
+
+  test('a return answered as a v1 follow-up item is not a prove event: the card loads the body, which finds nothing to ask and shows nothing', async () => {
+    const itemReturn: ProveEventLike = { kind: 'item', ref: kvRef('cow-trigger'), at: at(TODAY), day: TODAY, data: { src: 'today', return: true } }
+    const { r, calls } = counted([v1Prove(FIRST, ['a'], [1]), itemReturn])
+    const page = await open(r)
+    await dom.until(() => calls.events > 1)
+    await dom.act(() => new Promise((res) => setTimeout(res, 30)))
+    expect(page.container.innerHTML).toBe('')
+    await page.unmount()
+  })
+
   test('v1: a follow-up question, the model answer after your own, then the ticks, recorded as a return item', async () => {
     const ids = PROVE_QUESTIONS.slice(0, 3).map((x) => x.id)
     const r = rig([v1Prove(FIRST, ids, [1, 0, 1])], {}, false)

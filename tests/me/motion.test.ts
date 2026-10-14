@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { MemoryRouter } from 'react-router'
+import { MotionConfigContext } from 'framer-motion'
 import { effectiveOpacity, installDom, type DomKit, type Mounted, type MiniElement } from '../dom/mini-dom'
 
 /**
@@ -95,5 +96,48 @@ describe('the lazy /me sections and motion', () => {
     const moving = await mountMe()
     for (const bar of moving.container.querySelectorAll('a[href^="/tracks/"] .h-full')) expect(bar.style.width).toMatch(/^0(px|%)?$/)
     await moving.unmount()
+  })
+})
+
+describe('MotionScope itself', () => {
+  /**
+   * The tests above read the first frame, and Journey's own `useReducedMotion()` branches (`initial={reduced ? false : ...}`)
+   * switch the entrances off whether or not a MotionScope wraps it, so they pass without one. What only the scope gives is
+   * the `MotionConfig` that turns `reducedMotion` to "user" for every motion element below it, the elements with no branch of
+   * their own (a heatmap cell's `whileHover={{ scale: 1.15 }}`) and any added later. So this reads that: the nearest
+   * MotionConfigContext provider above a motion element of the journey, from the React tree behind the DOM node. (A hover
+   * gives the same answer in a browser, but it runs on motion-dom's frame loop, which binds the clock of whichever test
+   * file imported it first, so it cannot be told from here.)
+   */
+  const FIBER = '__reactFiber$'
+  type Fiber = { type?: unknown; return?: Fiber | null; memoizedProps?: { value?: unknown } }
+  function motionConfigAbove(el: MiniElement): { reducedMotion?: string } | null {
+    const key = Object.keys(el).find((k) => k.startsWith(FIBER))
+    let fiber = key ? ((el as unknown as Record<string, Fiber>)[key] ?? null) : null
+    for (; fiber; fiber = fiber.return ?? null) {
+      const t = fiber.type as { _context?: unknown } | undefined
+      if (t === MotionConfigContext || t?._context === MotionConfigContext) return (fiber.memoizedProps?.value ?? null) as { reducedMotion?: string } | null
+    }
+    return null
+  }
+
+  test('a motion element of the journey sits under a MotionConfig with reducedMotion "user"', async () => {
+    reduceMotion(true)
+    const page = await mountMe()
+    // the heatmap cell has no reduced-motion branch of its own for its hover, the ring panel is the journey's first motion element
+    const cell = page.container.querySelector('[title$="activities"], [title$="activity"]')!
+    for (const el of [cell, page.container.querySelector('[data-ring-panel]')!]) {
+      const config = motionConfigAbove(el)
+      expect(config, 'no MotionConfig above the element: the journey is not inside MotionScope').not.toBeNull()
+      expect(config!.reducedMotion).toBe('user')
+    }
+    await page.unmount()
+  })
+
+  test('control: the probe sees nothing above a motion element that has no MotionScope', async () => {
+    const { motion } = await import('framer-motion')
+    const page = await dom.mount(createElement(motion.div, { 'data-bare': true }))
+    expect(motionConfigAbove(page.container.querySelector('[data-bare]')!)).toBeNull()
+    await page.unmount()
   })
 })

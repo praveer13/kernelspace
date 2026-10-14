@@ -323,6 +323,53 @@ describe('the lazy Mirror section on a fixture ledger', () => {
   })
 })
 
+describe('/me: the Mirror reserves no height, and nothing below it moves when it resolves', () => {
+  test('its loading state is one line (h-6), not a fixed 24 rem, and the section says when it has settled, in a figure or an error', async () => {
+    let release: (i: MirrorInput) => void = () => undefined
+    const load = () => new Promise<MirrorInput>((res) => (release = res))
+    let settled = 0
+    const onSettled = () => void settled++
+    const page = await dom.mount(createElement(MemoryRouter, null, createElement(MirrorSummary, { load, onSettled })))
+    const status = page.container.querySelector('[role="status"]')!
+    expect(status.className).toContain('h-6')
+    expect(status.className).not.toMatch(/min-h-/)
+    expect(settled).toBe(0)
+    await dom.act(() => release(INPUT([])))
+    await dom.until(() => page.container.querySelector('[data-mirror="summary"]') !== null)
+    expect(settled).toBe(1)
+    await page.unmount()
+
+    let failed = 0
+    const bad = await dom.mount(createElement(MemoryRouter, null, createElement(MirrorSummary, { load: () => Promise.reject(new Error('no ledger')), onSettled: () => void failed++ })))
+    await dom.until(() => bad.container.querySelector('[role="alert"]') !== null)
+    expect(failed).toBe(1)
+    await bad.unmount()
+  })
+
+  test('the page holds the sections below the Mirror back until it has settled, so none is on screen to be pushed down', async () => {
+    const page = await dom.mount(createElement(MemoryRouter, { initialEntries: ['/me'] }, createElement(Me)))
+    let belowFirst = false
+    await dom.until(() => {
+      const below = page.container.querySelector('[data-ring-panel], [data-forms-card]') !== null
+      const mirror = page.container.querySelector('[data-mirror="summary"], [role="alert"]') !== null
+      if (below && !mirror) belowFirst = true
+      return below && (page.container.textContent ?? '').includes('data ownership')
+    })
+    expect(belowFirst).toBe(false)
+    await page.unmount()
+  })
+
+  test('the source: the Mirror carries no fixed min-h, and only the sections after it wait on mirrorSettled', () => {
+    const me = src('pages/Me.tsx')
+    // the fallback has the loading line's height, so the swap from one to the other moves nothing
+    expect(me.slice(0, me.indexOf('<MirrorSummary'))).toContain('<SectionFallback tall="h-6" />')
+    expect(src('pages/me/MirrorSummary.tsx')).not.toContain('min-h-[24rem]')
+    const gate = me.indexOf('{mirrorSettled && (')
+    expect(me.indexOf('<MirrorSummary')).toBeLessThan(gate)
+    for (const s of ['FormsCard', 'Journey', 'DataOwnership']) expect(me.search(new RegExp(`<${s} />`))).toBeGreaterThan(gate)
+  })
+})
+
 describe('/me: the order of the page, and what its sections import', () => {
   test('VRK30, cold checks, calibration, competence, the forms mount, then the journey and data ownership', async () => {
     const page = await dom.mount(createElement(MemoryRouter, { initialEntries: ['/me'] }, createElement(Me)))
@@ -349,7 +396,7 @@ describe('/me: the order of the page, and what its sections import', () => {
     expect(me).toContain("const MirrorSummary = lazy(() => import('@/pages/me/MirrorSummary'))")
     expect(me).toContain("const FormsCard = lazy(() => import('@/components/me/FormsCard'))")
     // document order in the page: the Mirror, the forms mount, the journey, data ownership
-    const at = (s: string) => me.indexOf(`<${s} />`)
+    const at = (s: string) => me.search(new RegExp(`<${s}( [^>]*)? />`))
     expect([at('MirrorSummary'), at('FormsCard'), at('Journey'), at('DataOwnership')]).toEqual([...[at('MirrorSummary'), at('FormsCard'), at('Journey'), at('DataOwnership')]].sort((a, b) => a - b))
     expect(at('MirrorSummary')).toBeGreaterThan(0)
   })

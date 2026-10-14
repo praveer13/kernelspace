@@ -37,6 +37,10 @@ import { TRACKS, getTrack } from '@/lib/tracks'
  * bank loads in groups on demand. It shows k of 12 per form with its Wilson 95 % interval, B − A labelled "including the
  * pretest effect", and C beside B. Every figure states its n. No framer-motion; no lesson content in the static closure
  * (the lessons load when the card opens); the question player is a lazy chunk of its own.
+ *
+ * A read-only tab (another tab or a newer build owns the ledger) never starts a form: `recordItems` returns early there,
+ * so an answer would be graded, shown and silently lost. The card offers no Start or Continue, says why, and still shows
+ * each form's state and the scores the ledger already holds.
  */
 
 const ItemCard = lazy(() => import('@/components/items/ItemCard'))
@@ -89,6 +93,9 @@ type Drawn = { status: 'loading' } | { status: 'error' } | { status: 'ready'; pl
 /* ------------------------------------------------------------------ */
 /* One form's state, in words                                          */
 /* ------------------------------------------------------------------ */
+
+/** Why a read-only tab starts no form: the ledger write that would record its answers returns early there. */
+const READ_ONLY_LINE = 'This tab is read-only, so a form cannot start here: its answers could not be saved. Open the app in one tab to start or continue a form.'
 
 function stateLine(w: FormWindow, shape: TrackShape): string {
   const { id, tally } = w
@@ -202,12 +209,15 @@ function TrackRow({
   shape,
   data,
   marks,
+  canStart,
   onStart,
 }: {
   forms: TrackForms
   shape: TrackShape
   data: FormsData
   marks: LessonMarks
+  /** False in a read-only tab: an answer there is dropped, so no form is offered (the card says why). */
+  canStart: boolean
   onStart(formId: FormId): void
 }) {
   const tallies = useMemo(() => tallyForms(data.events, forms.track, data.now), [data.events, forms.track, data.now])
@@ -223,7 +233,7 @@ function TrackRow({
             <li key={w.id} data-form={w.id} data-state={w.state} data-n={w.tally.answered} className="min-w-0">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <p className="min-w-0 font-mono text-[11px] uppercase tracking-[0.10em] text-text-3">Form {w.id}</p>
-                {w.state === 'open' && (
+                {w.state === 'open' && canStart && (
                   <button
                     type="button"
                     onClick={() => onStart(w.id)}
@@ -297,6 +307,8 @@ export default function FormsCard({ load, record: recordProp }: { load?: () => P
   const readOnly = useProgress((s) => s.ledger.readOnly)
   const recordItems = useProgress((s) => s.recordItems)
   const record = recordProp ?? recordItems
+  // a read-only tab drops what recordItems is given, so a form must not start on it (a test's `record` is its own write)
+  const unsaved = readOnly && recordProp === undefined
 
   // The learner's seed is made once, here, when the card opens (it waits for the ledger and never runs in a read-only tab).
   useEffect(() => {
@@ -380,6 +392,7 @@ export default function FormsCard({ load, record: recordProp }: { load?: () => P
   const liveMarks: LessonMarks = load ? (data?.marks ?? {}) : marks
 
   const start = (track: string, formId: FormId) => {
+    if (unsaved) return
     baseline.current = data?.events.length ?? 0
     recorded.current = 0
     setRunning({ track, formId })
@@ -393,7 +406,7 @@ export default function FormsCard({ load, record: recordProp }: { load?: () => P
     record(items)
   }
 
-  const runningForms = running ? plans[running.track] : null
+  const runningForms = running && !unsaved ? plans[running.track] : null
 
   return (
     <section
@@ -438,9 +451,7 @@ export default function FormsCard({ load, record: recordProp }: { load?: () => P
               </div>
             ) : data && data.expSeed === undefined ? (
               <p role="status" className="text-body-sm text-text-2" data-forms-waiting>
-                {!load && readOnly
-                  ? 'This tab is read-only, so forms cannot start here. Open the app in one tab.'
-                  : 'Waiting for your ledger to finish loading…'}
+                {unsaved ? READ_ONLY_LINE : 'Waiting for your ledger to finish loading…'}
               </p>
             ) : !data || drawn.status === 'loading' ? (
               <p role="status" className="font-mono text-body-sm text-text-3" data-forms-loading>
@@ -448,6 +459,11 @@ export default function FormsCard({ load, record: recordProp }: { load?: () => P
               </p>
             ) : (
               <>
+                {unsaved && (
+                  <p role="status" className="mb-3 text-body-sm text-text-1" data-forms-readonly>
+                    {READ_ONLY_LINE} Scores already in your ledger are shown below.
+                  </p>
+                )}
                 {withForms.length === 0 ? (
                   <p className="text-body-sm text-text-2">No track has enough generated questions for forms yet.</p>
                 ) : (
@@ -459,6 +475,7 @@ export default function FormsCard({ load, record: recordProp }: { load?: () => P
                         shape={shapes[t.id]!}
                         data={data}
                         marks={liveMarks}
+                        canStart={!unsaved}
                         onStart={(formId) => start(t.id, formId)}
                       />
                     ))}
