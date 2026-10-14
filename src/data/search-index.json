@@ -227,7 +227,8 @@
   ],
   "plays": [
     ["block-placement","Block placement","t1.l4",15],
-    ["scheduler","I was the scheduler","t5.l7",20]
+    ["scheduler","I was the scheduler","t5.l7",20],
+    ["tiling-cube","The Tiling Cube","t4.l6",25]
   ],
   "claims": [
     ["hw.h100-sxm.hbm-capacity","H100 SXM HBM capacity",80,"GB"],
