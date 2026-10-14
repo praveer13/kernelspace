@@ -5,9 +5,12 @@ import { Link } from 'react-router'
  * /me, the Mirror's route (wave-3.md §2.2, §12.5). 3b-06 folded Progress into two lazy sections, so this file holds
  * only the head and imports neither framer-motion nor lesson content; its static closure is what verify:bundle gates
  * at 200 KB. App.tsx routes it with plain `lazy`. Each section that uses framer-motion renders inside its own
- * `MotionScope` (src/pages/me/*), so reduced motion is honoured. 3b-06b fills the head with the Mirror (VRK30, cold
- * checks, calibration, competence) above the journey.
+ * `MotionScope` (src/pages/me/*), so reduced motion is honoured. 3b-06b added the Mirror above the journey, in the order
+ * of §12.5: VRK30, cold checks, calibration with the optimism offset, competence statements (all one lazy section,
+ * MirrorSummary, which uses no framer-motion), then the forms' mount, then what 3b-06 moved.
  */
+const MirrorSummary = lazy(() => import('@/pages/me/MirrorSummary'))
+const FormsCard = lazy(() => import('@/components/me/FormsCard'))
 const Journey = lazy(() => import('@/pages/me/Journey'))
 const DataOwnership = lazy(() => import('@/pages/me/DataOwnership'))
 
@@ -27,6 +30,15 @@ export default function Me() {
         </header>
 
         <div className="mt-8">
+          <Suspense fallback={<SectionFallback tall="min-h-[24rem]" />}>
+            <MirrorSummary />
+          </Suspense>
+        </div>
+        <Suspense fallback={null}>
+          <FormsCard />
+        </Suspense>
+
+        <div className="mt-14">
           <Suspense fallback={<SectionFallback tall="min-h-[24rem]" />}>
             <Journey />
           </Suspense>
