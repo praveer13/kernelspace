@@ -600,11 +600,12 @@ describe('Up Next on Today, Home and Progress', () => {
 
   test('no surface keeps a stand-in: all three take Up Next from recommend()', () => {
     const src = (f: string) => readFileSync(join(import.meta.dir, '../../src', f), 'utf8')
-    for (const page of ['pages/Today.tsx', 'pages/Home.tsx', 'pages/Progress.tsx']) expect(src(page)).toContain('useUpNext')
-    expect(src('pages/Progress.tsx')).not.toContain('~12min')
-    for (const f of ['pages/Today.tsx', 'pages/Home.tsx', 'pages/Progress.tsx', 'lib/learner/today.ts', 'lib/progress.ts']) {
+    // Progress is /me's Journey section since 3b-06 (wave-3.md §12.5)
+    for (const page of ['pages/Today.tsx', 'pages/Home.tsx', 'pages/me/Journey.tsx']) expect(src(page)).toContain('useUpNext')
+    expect(src('pages/me/Journey.tsx')).not.toContain('~12min')
+    for (const f of ['pages/Today.tsx', 'pages/Home.tsx', 'pages/Me.tsx', 'pages/me/Journey.tsx', 'lib/learner/today.ts', 'lib/progress.ts']) {
       expect(src(f)).not.toMatch(/upNextFor|selectNextLesson/)
     }
-    expect(src('pages/Progress.tsx')).not.toMatch(/ORDERED_LESSON_IDS\.find/)
+    expect(src('pages/me/Journey.tsx')).not.toMatch(/ORDERED_LESSON_IDS\.find/)
   })
 })

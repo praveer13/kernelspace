@@ -1,20 +1,19 @@
 /**
- * PROGRESS — /progress (progress.md).
- * "htop for your brain": ring panel with the RING 2 checklist, an XP explainer, first-review calibration, the week
- * and hand-off (wave-1.md §6.9, §8.5), KPI tweens, per-track memory-map bars, GitHub-style heatmap, achievement
- * catalog, export/import (merge or replace, with undo)/reset with double-confirm.
- * Consumes src/lib/progress.ts as-is.
+ * /me, the journey: Progress's sections as they were, folded into one lazy section (wave-3.md §12.5, task 3b-06).
+ * Rings with their checklists, the KPI band, the memory map, achievements, your engine, Up Next and the activity
+ * heatmap. This section uses framer-motion, so it renders inside `MotionScope` (reduced motion is honoured; the
+ * route itself is plain `lazy`, App.tsx). It imports no lesson content. Progress divided the lab tasks done by the free-text
+ * tasks of the lesson blocks, a count that pulled all lesson content for a figure that was not what a learner completes
+ * (D17: those link cards earn nothing); the sim registry would have been 36 KB gzip for a better one. So the line has no total.
  */
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { AnimatePresence, animate, motion, useInView, useReducedMotion } from 'framer-motion'
+import { animate, motion, useInView, useReducedMotion } from 'framer-motion'
 import {
   Braces,
-  Check,
   Cog,
   Cpu,
-  Download,
   Flame,
   Gauge,
   Grid3X3,
@@ -22,29 +21,15 @@ import {
   Lock,
   Play,
   Power,
-  RotateCcw,
   Server,
   ShieldCheck,
   Sparkles,
-  Trash2,
-  Upload,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import {
-  useProgress,
-  selectStreak,
-  localDateKey,
-  TOTAL_LESSONS,
-} from '@/lib/progress'
+import { useProgress, selectStreak, localDateKey, TOTAL_LESSONS } from '@/lib/progress'
 import type { ProgressState } from '@/lib/progress'
-import { getLedgerClient } from '@/lib/ledger/client'
-import { IMPORT_MAX_BYTES } from '@/lib/ledger/constants'
-import { readOnlyNote } from '@/lib/ledger/read-only'
-import type { LedgerClient, LedgerStatus } from '@/lib/ledger/types'
-import ImportPreviewDialog, { DialogFrame } from '@/components/ledger/ImportPreview'
-import type { ImportFile } from '@/components/ledger/ImportPreview'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
-import { ALL_LESSONS } from '@/data/lessons'
+import { MotionScope } from '@/lib/motion'
 import ProgressRing from '@/components/ProgressRing'
 import { selectRings } from '@/lib/economy'
 import type { AmberRing } from '@/lib/learner/ring-recall'
@@ -59,9 +44,8 @@ import { cn } from '@/lib/utils'
 
 // The review model (calibration, week, hand-off) loads on demand, after the rings have painted.
 const ReviewPanel = lazy(() => import('@/pages/progress/ReviewPanel'))
-// Mount points that 2b-12 and 2a-21 fill (wave-2.md §2.3); each renders nothing until then.
+// Mount point that 2b-12 fills (wave-2.md §2.3); it renders nothing until then.
 const EngineCard = lazy(() => import('@/components/engine/EngineCard'))
-const DonateExport = lazy(() => import('@/components/ledger/DonateExport'))
 
 /* ---------------- shared bits ---------------- */
 
@@ -89,16 +73,6 @@ const RANK_FLAVOR: Record<string, string> = {
 }
 
 const CAPSTONE_FLAGS_KEY = 'kernelspace:capstone:flags'
-
-const TOTAL_LAB_TASKS = ALL_LESSONS.reduce(
-  (total, lesson) =>
-    total +
-    lesson.blocks.reduce(
-      (lessonTotal, block) => lessonTotal + (block.type === 'exercise' && 'tasks' in block ? block.tasks.length : 0),
-      0,
-    ),
-  0,
-)
 
 const LAST_LESSON_ADDRESS = Math.max(0, TOTAL_LESSONS - 1)
 const MID_LESSON_ADDRESS = Math.floor(LAST_LESSON_ADDRESS / 2)
@@ -265,6 +239,7 @@ function RingPanel() {
   const rings = useMemo(() => selectRings(aggregate, cold), [aggregate, cold])
   const sections = useMemo(() => ringSections(rings, cold !== undefined), [rings, cold])
   const { rank } = rings
+  const reduced = useReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true })
   const shownXp = useCountUp(xp, inView)
@@ -279,7 +254,7 @@ function RingPanel() {
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, scale: 0.97 }}
+      initial={reduced ? false : { opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       className="relative overflow-hidden rounded-lg border border-line bg-surface-1 p-6"
@@ -308,7 +283,7 @@ function RingPanel() {
       </p>
 
       <p className="mt-4 border-t border-line pt-3 font-mono text-[11px] text-text-3">
-        {Math.round(shownXp)} XP · lessons {done}/{TOTAL_LESSONS} · quizzes {quizAvg}% · lab tasks {labTasks}/{TOTAL_LAB_TASKS}
+        {Math.round(shownXp)} XP · lessons {done}/{TOTAL_LESSONS} · quizzes {quizAvg}% · lab tasks {labTasks}
       </p>
     </motion.div>
   )
@@ -321,6 +296,7 @@ function KpiBand() {
   const streakDays = useProgress((s) => s.streakDays)
   const streak = useProgress(selectStreak)
   const sims = useProgress((s) => s.sims)
+  const reduced = useReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
 
@@ -399,7 +375,7 @@ function KpiBand() {
       ].map((content, i) => (
         <motion.div
           key={i}
-          initial={{ opacity: 0, y: 24 }}
+          initial={reduced ? false : { opacity: 0, y: 24 }}
           animate={inView ? { opacity: 1, y: 0 } : undefined}
           transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
           className="rounded-md border border-line bg-surface-1 p-5"
@@ -416,6 +392,7 @@ function KpiBand() {
 function TrackBreakdown({ nextId }: { nextId: string | null }) {
   const lessons = useProgress((s) => s.lessons)
   const stepsDone = useProgress((s) => s.capstone.stepsDone)
+  const reduced = useReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
 
@@ -436,7 +413,7 @@ function TrackBreakdown({ nextId }: { nextId: string | null }) {
             return (
               <motion.div
                 key={track.id}
-                initial={{ opacity: 0, y: 12 }}
+                initial={reduced ? false : { opacity: 0, y: 12 }}
                 animate={inView ? { opacity: 1, y: 0 } : undefined}
                 transition={{ duration: 0.4, delay: i * 0.1 }}
               >
@@ -459,7 +436,7 @@ function TrackBreakdown({ nextId }: { nextId: string | null }) {
                     <motion.div
                       className="h-full rounded-full"
                       style={{ backgroundColor: track.color }}
-                      initial={{ width: 0 }}
+                      initial={{ width: reduced ? `${pct}%` : 0 }}
                       animate={inView ? { width: `${pct}%` } : undefined}
                       transition={{ duration: 0.8, delay: 0.2 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
                     />
@@ -473,7 +450,7 @@ function TrackBreakdown({ nextId }: { nextId: string | null }) {
           })}
           {/* capstone row */}
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={reduced ? false : { opacity: 0, y: 12 }}
             animate={inView ? { opacity: 1, y: 0 } : undefined}
             transition={{ duration: 0.4, delay: 0.6 }}
           >
@@ -495,7 +472,7 @@ function TrackBreakdown({ nextId }: { nextId: string | null }) {
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-3">
                 <motion.div
                   className="h-full rounded-full bg-grad-brand"
-                  initial={{ width: 0 }}
+                  initial={{ width: reduced ? `${(stepsDone.length / 7) * 100}%` : 0 }}
                   animate={inView ? { width: `${(stepsDone.length / 7) * 100}%` } : undefined}
                   transition={{ duration: 0.8, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
                 />
@@ -509,7 +486,7 @@ function TrackBreakdown({ nextId }: { nextId: string | null }) {
 
         {/* address map (xl only) */}
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={reduced ? false : { opacity: 0 }}
           animate={inView ? { opacity: 1 } : undefined}
           transition={{ duration: 0.6, delay: 0.3 }}
           className="hidden rounded-md border border-line bg-surface-1 p-4 xl:block"
@@ -524,7 +501,7 @@ function TrackBreakdown({ nextId }: { nextId: string | null }) {
                 return (
                   <motion.div
                     key={id}
-                    initial={{ opacity: 0 }}
+                    initial={reduced ? false : { opacity: 0 }}
                     animate={inView ? { opacity: 1 } : undefined}
                     transition={{ delay: 0.4 + i * 0.03 }}
                     className="flex-1"
@@ -697,6 +674,7 @@ function Heatmap() {
 
 function Achievements() {
   const state = useProgress()
+  const reduced = useReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
   const unlocked = new Set(state.achievements)
@@ -717,7 +695,7 @@ function Achievements() {
           return (
             <motion.div
               key={a.id}
-              initial={{ opacity: 0, scale: 0.9 }}
+              initial={reduced ? false : { opacity: 0, scale: 0.9 }}
               animate={inView ? { opacity: 1, scale: 1 } : undefined}
               transition={{ duration: 0.4, delay: i * 0.06, ease: [0.3, 1.4, 0.4, 1] }}
               title={earned ? a.name : `locked — ${a.cond}`}
@@ -761,433 +739,7 @@ function Achievements() {
   )
 }
 
-/* ---------------- section 6: data ownership ---------------- */
-
-const BACKUP_NUDGE_DAYS = 30
-const DAY_MS = 86_400_000
-
-/** Whole days since `since` (an ISO instant or a local `YYYY-MM-DD`). Kept outside the component so render stays pure. */
-function daysSince(since: string): number {
-  const t = since.length === 10 ? new Date(`${since}T00:00:00`).getTime() : Date.parse(since)
-  return Number.isFinite(t) ? Math.floor((Date.now() - t) / DAY_MS) : 0
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MiB`
-  return `${(n / 1024 ** 3).toFixed(1)} GiB`
-}
-
-const UNDO_LABELS: Record<NonNullable<LedgerStatus['undo']>['reason'], string> = {
-  'import-merge': 'import (merge)',
-  'import-replace': 'import (replace)',
-  reset: 'reset',
-}
-
-type Estimate = Awaited<ReturnType<LedgerClient['storageEstimate']>>
-
-function DataOwnership() {
-  const ledger = useProgress((s) => s.ledger)
-  const lessons = useProgress((s) => s.lessons)
-  const streakDays = useProgress((s) => s.streakDays)
-  const resetProgress = useProgress((s) => s.resetProgress)
-  const [toast, setToast] = useState<string | null>(null)
-  const [pending, setPending] = useState<ImportFile | null>(null)
-  const [importError, setImportError] = useState<string | null>(null)
-  const [resetStep, setResetStep] = useState<0 | 1 | 2>(0)
-  const [resetText, setResetText] = useState('')
-  const [estimate, setEstimate] = useState<Estimate | 'unavailable' | null>(null)
-  const [working, setWorking] = useState<'export' | 'import' | 'undo' | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const chooseRef = useRef<HTMLButtonElement>(null)
-  const resetRef = useRef<HTMLButtonElement>(null)
-  const clientRef = useRef<Promise<LedgerClient> | null>(null)
-  const [client, setClient] = useState<LedgerClient | null>(null)
-
-  // One engine handle for the page; a failed chunk load clears it so the next click retries.
-  const withClient = () => {
-    clientRef.current ??= getLedgerClient().then(
-      (c) => {
-        setClient(c)
-        return c
-      },
-      (err) => {
-        clientRef.current = null
-        throw err
-      },
-    )
-    return clientRef.current
-  }
-
-  const readOnly = ledger.readOnly
-  const readOnlyReason = readOnly ? readOnlyNote(ledger.reason) : null
-  const undoAt = ledger.undo?.at
-
-  // The storage line: the engine's own count plus the browser's quota. It refreshes whenever an import,
-  // undo or reset changes the ledger (their checkpoint changes `undo.at`) or the engine finishes loading.
-  useEffect(() => {
-    let live = true
-    withClient()
-      .then((c) => c.storageEstimate())
-      .then((e) => live && setEstimate(e))
-      .catch(() => live && setEstimate('unavailable'))
-    return () => {
-      live = false
-    }
-  }, [ledger.ready, undoAt])
-
-  const flashToast = (msg: string) => {
-    setToast(msg)
-    window.setTimeout(() => setToast(null), 3500)
-  }
-
-  const doExport = async () => {
-    if (readOnly || working) return
-    setWorking('export')
-    try {
-      const file = await (await withClient()).exportV3()
-      const json = JSON.stringify(file)
-      const blob = new Blob([json], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `kernelspace-progress-${localDateKey(new Date(file.exportedAt))}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      flashToast(`exported ${file.events.length.toLocaleString()} events · ${formatBytes(blob.size)}`)
-    } catch {
-      flashToast('export failed — nothing was changed')
-    } finally {
-      setWorking(null)
-    }
-  }
-
-  const onFile = async (file: File) => {
-    if (readOnly) return
-    setImportError(null)
-    if (file.size > IMPORT_MAX_BYTES) {
-      setImportError(`this file is over ${IMPORT_MAX_BYTES / (1024 * 1024)} MiB`)
-      return
-    }
-    setWorking('import')
-    try {
-      const text = await file.text()
-      const preview = await (await withClient()).previewImport(text, 'merge')
-      if ('error' in preview) setImportError(preview.detail ?? "this file can't be imported")
-      else setPending({ name: file.name, text, preview })
-    } catch {
-      setImportError('could not read that file')
-    } finally {
-      setWorking(null)
-    }
-  }
-
-  const onApplied = (r: { mode: 'merge' | 'replace'; added: number; removed: number }) => {
-    setPending(null)
-    flashToast(
-      r.mode === 'merge'
-        ? `merged · ${r.added.toLocaleString()} new events · undo available`
-        : `replaced · +${r.added.toLocaleString()} −${r.removed.toLocaleString()} events · undo available`,
-    )
-  }
-
-  const doUndo = async () => {
-    if (readOnly || working) return
-    setWorking('undo')
-    try {
-      const ok = await (await withClient()).undo()
-      flashToast(ok ? 'undone — your progress is back as it was' : 'nothing to undo')
-    } catch {
-      flashToast('undo failed — nothing was changed')
-    } finally {
-      setWorking(null)
-    }
-  }
-
-  const doReset = () => {
-    resetProgress()
-    setResetStep(0)
-    setResetText('')
-    flashToast('progress cleared — day 0 · undo available')
-  }
-
-  // Backup nudge: 30 days since the last export, or (never exported) since the first graded day.
-  const hasAny = streakDays.length > 0 || Object.keys(lessons).length > 0
-  const since = ledger.lastExportAt ?? (streakDays.length > 0 ? [...streakDays].sort()[0] : null)
-  const age = since ? daysSince(since) : 0
-  const nudge = ledger.ready && !readOnly && hasAny && since !== null && age >= BACKUP_NUDGE_DAYS
-
-  const btn =
-    'rounded-md border border-line bg-surface-2 px-4 py-2 font-mono text-xs text-text-1 transition-colors enabled:hover:border-line-bright disabled:cursor-not-allowed disabled:opacity-40'
-  const rows = [
-    {
-      icon: Download,
-      title: 'Export progress',
-      desc: 'Download everything as one JSON file (export v3): your events, settings and Capstone drafts.',
-      action: (
-        <button
-          type="button"
-          onClick={() => void doExport()}
-          disabled={readOnly}
-          aria-busy={working !== null}
-          className={btn}
-        >
-          {working === 'export' ? 'exporting…' : 'download'}
-        </button>
-      ),
-    },
-    {
-      icon: Upload,
-      title: 'Import progress',
-      desc: 'Restore or combine an export v3 file. You see what changes before anything is written, and you can undo it.',
-      action: (
-        <button
-          ref={chooseRef}
-          type="button"
-          onClick={() => !working && fileRef.current?.click()}
-          disabled={readOnly}
-          aria-busy={working !== null}
-          className="rounded-md border border-dashed border-line-bright px-4 py-2 font-mono text-xs text-text-2 transition-colors enabled:hover:border-accent enabled:hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {working === 'import' ? 'reading…' : 'choose file'}
-        </button>
-      ),
-    },
-    ...(ledger.undo
-      ? [
-          {
-            icon: RotateCcw,
-            title: `Undo last ${UNDO_LABELS[ledger.undo.reason]}`,
-            desc: `Puts your progress back as it was before the ${UNDO_LABELS[ledger.undo.reason]} on ${new Date(ledger.undo.at).toLocaleString()}. Anything you have done since stays. Available until your next import or reset.`,
-            action: (
-              <button
-                type="button"
-                onClick={() => void doUndo()}
-                disabled={readOnly}
-                aria-busy={working !== null}
-                className={btn}
-              >
-                {working === 'undo' ? 'undoing…' : 'undo'}
-              </button>
-            ),
-          },
-        ]
-      : []),
-    {
-      icon: Trash2,
-      title: 'Reset everything',
-      desc: 'Clear your lessons, quiz and lab results, XP, streak, achievements and saved settings from this browser. Undo is available until your next import or reset.',
-      action: (
-        <button
-          ref={resetRef}
-          type="button"
-          onClick={() => !working && setResetStep(1)}
-          disabled={readOnly}
-          aria-busy={working !== null}
-          className="rounded-md border border-danger/60 px-4 py-2 font-mono text-xs text-danger transition-colors enabled:hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          reset
-        </button>
-      ),
-    },
-  ]
-
-  return (
-    <div className="mt-14">
-      <h2 className="font-display text-h3 text-text-1">data ownership</h2>
-      {readOnlyReason && (
-        <p
-          role="status"
-          className="mt-4 rounded-md border border-amber/50 bg-amber/5 px-4 py-3 text-body-sm text-text-1"
-        >
-          Export, import, undo and reset are turned off. {readOnlyReason}
-        </p>
-      )}
-      {nudge && (
-        <div
-          role="region"
-          aria-label="Backup reminder"
-          className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-accent/40 bg-accent/5 px-4 py-3"
-        >
-          <p className="min-w-0 flex-1 text-body-sm text-text-1">
-            {ledger.lastExportAt
-              ? `Your last backup was ${age} days ago.`
-              : `You have been learning for ${age} days and have not downloaded a backup.`}{' '}
-            <span className="text-text-2">
-              Browsers can clear site data without asking; a downloaded export is the copy that survives it.
-            </span>
-          </p>
-          <button type="button" onClick={() => void doExport()} aria-busy={working !== null} className={btn}>
-            download backup
-          </button>
-        </div>
-      )}
-      <div className="mt-5 divide-y divide-line rounded-lg border border-line bg-surface-1">
-        {rows.map((row) => (
-          <div
-            key={row.title}
-            className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-surface-2"
-          >
-            <row.icon size={18} strokeWidth={1.75} className="shrink-0 text-text-3" />
-            <div className="min-w-0 flex-1">
-              <p className="text-body-sm font-medium text-text-1">{row.title}</p>
-              <p className="text-body-sm text-text-3">{row.desc}</p>
-            </div>
-            {row.action}
-          </div>
-        ))}
-      </div>
-      <p className="mt-3 font-mono text-[11px] text-text-3">
-        {readOnly
-          ? 'stored locally · size unavailable while this tab is read-only'
-          : estimate === null
-            ? 'stored locally · measuring…'
-            : estimate === 'unavailable'
-              ? 'stored locally · size unavailable'
-              : `stored locally · ${estimate.events.toLocaleString()} events · ~${formatBytes(estimate.approxBytes)}${
-                estimate.usage !== undefined && estimate.quota !== undefined
-                  ? ` · this site uses ${formatBytes(estimate.usage)} of ${formatBytes(estimate.quota)}`
-                  : ''
-              }${
-                ledger.persisted === true
-                  ? ' · protected from eviction'
-                  : ledger.persisted === false
-                    ? ' · the browser may clear it when space is short'
-                    : ''
-              }`}
-        {' · no account · no tracking'}
-      </p>
-      {importError && (
-        <p role="alert" className="mt-2 font-mono text-[12px] text-danger">
-          {importError}
-        </p>
-      )}
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        tabIndex={-1}
-        aria-hidden="true"
-        data-testid="import-file"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) void onFile(f)
-          e.target.value = ''
-        }}
-      />
-
-      {pending && client && (
-        <ImportPreviewDialog
-          file={pending}
-          client={client}
-          returnFocus={chooseRef}
-          onClose={() => setPending(null)}
-          onApplied={onApplied}
-        />
-      )}
-
-      {resetStep > 0 && (
-        <DialogFrame
-          role="alertdialog"
-          returnFocus={resetRef}
-          tone={resetStep === 2 ? 'danger' : 'default'}
-          onClose={() => {
-            setResetStep(0)
-            setResetText('')
-          }}
-          title={resetStep === 1 ? 'Reset everything?' : 'Type RESET to confirm'}
-          description={
-            resetStep === 1 ? (
-              <>
-                <span className="block">
-                  <strong className="font-medium text-text-1">This clears</strong> every lesson, checkpoint
-                  answer, sim task, lab result, Fleet Week and Capstone step, achievement, XP point and
-                  streak day, plus your saved settings and scroll positions, in this browser.
-                </span>
-                <span className="mt-2 block">
-                  <strong className="font-medium text-text-1">This keeps</strong> any file you exported,
-                  your compiled lab modules, your Capstone drafts and flags, and your leaderboard best.
-                </span>
-                <span className="mt-2 block">
-                  Undo is available until your next import or reset. A backup is safer: export first.
-                </span>
-              </>
-            ) : (
-              'This is the last step. Your progress is cleared as soon as you confirm.'
-            )
-          }
-        >
-          {resetStep === 2 && (
-            <input
-              value={resetText}
-              onChange={(e) => setResetText(e.target.value)}
-              aria-label="Type RESET to confirm"
-              placeholder="RESET"
-              autoComplete="off"
-              autoFocus
-              className="mt-4 w-full rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-sm text-text-1 placeholder:text-text-3 focus:border-danger focus:outline-none"
-            />
-          )}
-          <div className="mt-5 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setResetStep(0)
-                setResetText('')
-              }}
-              className="rounded-md border border-line bg-surface-2 px-4 py-2 font-mono text-xs text-text-2 hover:border-line-bright"
-            >
-              {resetStep === 1 ? 'keep my progress' : 'cancel'}
-            </button>
-            {resetStep === 1 ? (
-              <button
-                type="button"
-                onClick={() => setResetStep(2)}
-                className="rounded-md border border-danger/60 px-4 py-2 font-mono text-xs text-danger hover:bg-danger/10"
-              >
-                continue →
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={resetText !== 'RESET'}
-                onClick={doReset}
-                className="rounded-md bg-danger px-4 py-2 font-mono text-xs font-semibold text-ink transition-all enabled:hover:brightness-110 disabled:opacity-40"
-              >
-                wipe it
-              </button>
-            )}
-          </div>
-        </DialogFrame>
-      )}
-
-      {/* announced to screen readers; the visible toast below is decoration */}
-      <div role="status" aria-live="polite" className="sr-only">
-        {toast}
-      </div>
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            aria-hidden="true"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.25 }}
-            className="fixed bottom-16 right-6 z-[80] flex items-center gap-2 rounded-md border border-line bg-surface-2 px-4 py-2.5 font-mono text-xs text-text-1 shadow-lg lg:bottom-14"
-          >
-            <Check size={13} className="text-accent" />
-            {toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-/* ---------------- section 7: up next ---------------- */
+/* ---------------- section 6: up next ---------------- */
 
 function UpNext({ up }: { up: UpNextState }) {
   if (up.status === 'loading') {
@@ -1206,67 +758,42 @@ function UpNext({ up }: { up: UpNextState }) {
 
 /* ---------------- page assembly ---------------- */
 
-export default function Progress() {
-  const streakDays = useProgress((s) => s.streakDays)
-  const lessons = useProgress((s) => s.lessons)
-  const hasAny = streakDays.length > 0 || Object.keys(lessons).length > 0
+function JourneyBody() {
   const { load, retry } = useSummary()
   const up = useUpNext()
   const nextLessonId = up.status === 'ready' && up.rec.kind === 'lesson' ? up.rec.ref : null
 
   return (
-    <div className="bg-grad-radial-glow">
-      <section className="mx-auto max-w-app px-6 pb-24 pt-24 lg:px-12">
-        <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <p className="section-label">0x06 — process stats</p>
-            <h1 className="mt-4 font-display text-display-lg text-text-1">Progress</h1>
-            <p className="mt-4 max-w-[60ch] text-body text-text-2">
-              Everything below lives in this browser: an append-only ledger in IndexedDB. Export
-              it, move it, nuke it — it's yours.
-            </p>
-            {hasAny && (
-              <div className="mt-6">
-                <UpNext up={up} />
-              </div>
-            )}
-          </motion.div>
-          <RingPanel />
+    <>
+      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+        <div>
+          <UpNext up={up} />
         </div>
+        <RingPanel />
+      </div>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
-          <XpExplainer />
-          <Suspense fallback={null}>
-            <ReviewPanel load={load} onRetry={retry} />
-          </Suspense>
-        </div>
+      <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <XpExplainer />
+        <Suspense fallback={null}>
+          <ReviewPanel load={load} onRetry={retry} />
+        </Suspense>
+      </div>
 
-        <KpiBand />
-        <Suspense fallback={null}>
-          <EngineCard />
-        </Suspense>
-        <TrackBreakdown nextId={nextLessonId} />
-        <Heatmap />
-        <Achievements />
-        <DataOwnership />
-        <Suspense fallback={null}>
-          <DonateExport />
-        </Suspense>
-        {!hasAny && (
-          <div className="mt-14">
-            <UpNext up={up} />
-          </div>
-        )}
-        <div className="mt-16 font-mono text-[11px] text-text-3">
-          <Link to="/curriculum" className="hover:text-accent">
-            ← back to curriculum
-          </Link>
-        </div>
-      </section>
-    </div>
+      <KpiBand />
+      <Suspense fallback={null}>
+        <EngineCard />
+      </Suspense>
+      <TrackBreakdown nextId={nextLessonId} />
+      <Heatmap />
+      <Achievements />
+    </>
+  )
+}
+
+export default function Journey() {
+  return (
+    <MotionScope>
+      <JourneyBody />
+    </MotionScope>
   )
 }

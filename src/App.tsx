@@ -8,7 +8,7 @@ import RouteFallback from '@/components/RouteFallback'
 /**
  * A lazy page that (transitively) imports framer-motion. It loads `MotionScope` beside the page
  * and renders inside it, so reduced motion is honoured (PLAN-100X §7.3) without the entry chunk
- * ever importing framer-motion. Boot, Today, Daily, Errors, Play and NotFound stay on plain `lazy`.
+ * ever importing framer-motion. Boot, Today, Daily, Errors, Play, NotFound and Me stay on plain `lazy`.
  */
 function lazyMotion(load: () => Promise<{ default: ComponentType }>) {
   return lazy(async () => {
@@ -31,7 +31,6 @@ const Lesson = lazyMotion(() => import('@/pages/Lesson'))
 const Lab = lazyMotion(() => import('@/pages/Lab'))
 const Playground = lazyMotion(() => import('@/pages/Playground'))
 const Glossary = lazyMotion(() => import('@/pages/Glossary'))
-const Me = lazyMotion(() => import('@/pages/Me'))
 const Capstone = lazyMotion(() => import('@/pages/Capstone'))
 const Forge = lazyMotion(() => import('@/pages/Forge'))
 const ForgeLab = lazyMotion(() => import('@/pages/ForgeLab'))
@@ -39,6 +38,9 @@ const Fleet = lazyMotion(() => import('@/pages/Fleet'))
 const FleetWeek = lazyMotion(() => import('@/pages/FleetWeek'))
 const Leaderboard = lazyMotion(() => import('@/pages/Leaderboard'))
 const Changes = lazyMotion(() => import('@/pages/Changes'))
+// Me is plain `lazy`: lazyMotion would load src/lib/motion.tsx (framer-motion) beside the page, where verify:bundle's
+// closure never sees it. Its sections that use framer-motion scope themselves (src/pages/me/*; wave-3.md §12.5).
+const Me = lazy(() => import('@/pages/Me'))
 const Boot = lazy(() => import('@/pages/Boot'))
 const Today = lazy(() => import('@/pages/Today'))
 const Daily = lazy(() => import('@/pages/Daily'))
