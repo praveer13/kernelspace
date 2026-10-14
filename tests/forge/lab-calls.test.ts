@@ -8,8 +8,8 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { driveLabCalls, disposeLabWorker, runLabCalls } from '../../src/lib/lab-worker'
 import { LabAbiError, LabTimeoutError, LabTrapError } from '../../src/lib/wasm-lab'
-import type { LabPool, LabPort, Timers } from '../../src/lib/forge/run'
-import { CALL_REPLY_MAX_BYTES, capReply, type LabWorkerReply, type LabWorkerRequest } from '../../src/workers/lab-protocol'
+import type { LabExports, LabPool, LabPort, Timers } from '../../src/lib/forge/run'
+import { CALL_REPLY_MAX_BYTES, capReply, invokeCall, readCallReply, type LabWorkerReply, type LabWorkerRequest } from '../../src/workers/lab-protocol'
 import { tinyLabWasm } from './fixtures'
 
 afterAll(() => disposeLabWorker())
@@ -66,6 +66,72 @@ describe('the lab worker answers a list of calls', () => {
 
   test('bytes that are not a lab are a LabAbiError', async () => {
     await expect(runLabCalls(new Uint8Array([1, 2, 3]).buffer, ['init'])).rejects.toBeInstanceOf(LabAbiError)
+  })
+
+  test('an empty reply is a reply: the empty string, graded like any other, never a refusal', async () => {
+    // The bridge echoes its input, so an empty command gets a reply of length 0 (lab 06's preempt list when none is preempted).
+    // 'c' answers the letter of its call count: the empty reply was the second call of the same instance, not a lost one.
+    expect(await runLabCalls(bridge(), ['init', '', 'c'])).toEqual(['init', '', 'c'])
+    expect(await runLabCalls(bridge(), [''])).toEqual([''])
+  })
+})
+
+/* ------------------------------ reading a reply ------------------------------ */
+
+describe('a ks_invoke reply, read from a fake module', () => {
+  /** A module as plain exports: one page of memory, ks_invoke answering `packed` whatever it is sent. */
+  const fake = (packed: bigint | (() => bigint)): LabExports & { freed: number } => {
+    const memory = new WebAssembly.Memory({ initial: 1 })
+    new Uint8Array(memory.buffer, 100, 5).set(new TextEncoder().encode('hello'))
+    const ex = {
+      freed: 0,
+      memory,
+      ks_run: () => 0n,
+      ks_alloc: () => 1024,
+      ks_free: () => {
+        ex.freed++
+      },
+      ks_invoke: () => (typeof packed === 'function' ? packed() : packed),
+    }
+    return ex
+  }
+  const at = (ptr: number, len: number) => (BigInt(ptr) << 32n) | BigInt(len)
+  const PAGE = 65536
+
+  test('a reply of length 0 is the empty string, wherever it points, and the input is still freed', () => {
+    for (const ptr of [0, 100, PAGE - 1, PAGE, PAGE * 4, 0xffff_ffff]) {
+      const ex = fake(at(ptr, 0))
+      expect(invokeCall(ex, 'preempt')).toBe('')
+      expect(ex.freed).toBe(1)
+    }
+    expect(readCallReply(new ArrayBuffer(0), 0n)).toBe('')
+  })
+
+  test('a reply inside memory is read as UTF-8, up to the last byte', () => {
+    expect(invokeCall(fake(at(100, 5)), 'x')).toBe('hello')
+    const ex = fake(at(PAGE - 1, 1))
+    new Uint8Array(ex.memory.buffer)[PAGE - 1] = 0x37
+    expect(invokeCall(ex, 'x')).toBe('7')
+  })
+
+  test('a reply that runs past the end of memory is still an ABI violation', () => {
+    for (const [ptr, len] of [[PAGE, 1], [PAGE - 1, 2], [0, PAGE + 1], [0xffff_ffff, 0xffff_ffff]]) {
+      const err = (() => {
+        try {
+          invokeCall(fake(at(ptr, len)), 'x')
+        } catch (e) {
+          return e
+        }
+      })()
+      expect(err).toBeInstanceOf(LabAbiError)
+      expect((err as Error).message).toContain('past the end of its memory')
+    }
+  })
+
+  test('a trap in ks_invoke is a LabTrapError, and a module without the bridge is refused', () => {
+    expect(() => invokeCall(fake(() => { throw new WebAssembly.RuntimeError('unreachable') }), 'x')).toThrow(LabTrapError)
+    const noBridge: LabExports = { ...fake(0n), ks_invoke: undefined }
+    expect(() => invokeCall(noBridge, 'x')).toThrow(LabAbiError)
   })
 })
 
