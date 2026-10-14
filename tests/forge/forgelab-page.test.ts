@@ -136,8 +136,12 @@ describe('ForgeLab mounts the twin, the race and Prove-it v2 with what InstallBu
   // React's lazy keeps the component it first loaded, so after the restore a probe still on a page renders nothing,
   // as the stub it stood in for does.
   let probing = true
+  // A probe named here suspends (throws this promise) until it is released: a lazy chunk that has not loaded yet.
+  const held: Record<string, Promise<void> | undefined> = {}
   const probe = (name: string) => (props: Record<string, unknown>) => {
     if (!probing) return null
+    const hold = held[name]
+    if (hold !== undefined) throw hold
     seen[name] = props
     return createElement('i', { 'data-probe': name })
   }
@@ -209,6 +213,56 @@ describe('ForgeLab mounts the twin, the race and Prove-it v2 with what InstallBu
     // the credited pass is written to the ledger, and the twin is told the lab is done
     await dom.until(() => seen.twin!.done === true)
     expect(seen.twin).toMatchObject({ lab, done: true })
+    await page.unmount()
+    for (const handle of timers) clearTimeout(handle)
+  })
+
+  /** Mounts the lab page and drops a module on it, as the test above does; the page's timers are kept for `done`. */
+  const dropModule = async () => {
+    const routes = createElement(Routes, null, createElement(Route, { path: '/forge/:labId', element: createElement((await import('../../src/pages/ForgeLab')).default) }))
+    const page = await dom.mount(createElement(MemoryRouter, { initialEntries: [`/forge/${lab.id}`] }, routes))
+    await dom.until(() => page.container.querySelector('[data-hint-ladder]') !== null && page.container.querySelector('[data-step-body="make"]') !== null)
+    const timers: ReturnType<typeof setTimeout>[] = []
+    ;(window as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((fn: () => void, ms?: number) => {
+      const handle = setTimeout(fn, ms)
+      timers.push(handle)
+      return handle
+    }) as typeof setTimeout
+    const input = page.container.querySelector('input[type="file"]') as MiniElement
+    Object.defineProperty(dom.document.body, 'matches', { value: () => false, configurable: true })
+    const file = { name: 'lab.wasm', arrayBuffer: async () => new Uint8Array([0, 97, 115, 109]).buffer }
+    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    await dom.act(() => input.dispatchEvent(new MiniEvent('change', { bubbles: true })))
+    return { page, timers }
+  }
+  /** Whether the element, or an ancestor, is hidden the way React hides what a suspended boundary already showed. */
+  const hidden = (el: MiniElement | null): boolean => {
+    for (let n = el; n; n = n.parentElement as MiniElement | null) if (n.style.display === 'none') return true
+    return false
+  }
+
+  test('each lazy mount has its own boundary: a race or Prove-it v2 chunk still loading hides nothing already shown (3a-06)', async () => {
+    let release = () => {}
+    const pending = new Promise<void>((r) => (release = r))
+    held.race = pending
+    held.prove = pending
+    const { page, timers } = await dropModule()
+    // both chunks are still loading: the install button, the hints and Prove it are on the page, and visible
+    await dom.until(() => page.container.querySelector('[data-probe="install"]') !== null)
+    expect(page.container.querySelector('[data-probe="race"]')).toBeNull()
+    expect(page.container.querySelector('[data-probe="prove"]')).toBeNull()
+    for (const sel of ['[data-probe="install"]', '[data-hint-ladder]', '[data-probe="twin"]']) {
+      const el = page.container.querySelector(sel) as MiniElement | null
+      expect(el).not.toBeNull()
+      expect(hidden(el)).toBe(false)
+    }
+    // the chunks arrive: they join the page, and the rest is still there
+    held.race = undefined
+    held.prove = undefined
+    release()
+    await dom.until(() => page.container.querySelector('[data-probe="race"]') !== null && page.container.querySelector('[data-probe="prove"]') !== null)
+    expect(hidden(page.container.querySelector('[data-hint-ladder]') as MiniElement | null)).toBe(false)
+    expect(hidden(page.container.querySelector('[data-probe="install"]') as MiniElement | null)).toBe(false)
     await page.unmount()
     for (const handle of timers) clearTimeout(handle)
   })

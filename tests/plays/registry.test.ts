@@ -111,9 +111,9 @@ describe('the Wave 2 routes (spec §2.2)', () => {
     }
   })
 
-  test('prepare-pages writes a shell for /daily, /errors and /play/scheduler, so GitHub Pages answers 200', () => {
+  test('prepare-pages writes a shell for /daily, /errors, /play/scheduler and the two Wave 3 plays, so GitHub Pages answers 200', () => {
     const routes = /const staticRoutes = \[([\s\S]*?)\]/.exec(read('scripts/prepare-pages.mjs'))![1]
-    for (const r of ['daily', 'errors', 'play/scheduler', 'play/block-placement']) expect(routes).toContain(`'${r}'`)
+    for (const r of ['daily', 'errors', 'play/scheduler', 'play/block-placement', 'play/tiling-cube', 'play/eplb']) expect(routes).toContain(`'${r}'`)
   })
 
   test('verify-bundle gates /daily at 200 KB and only reports /play/scheduler and /errors', () => {

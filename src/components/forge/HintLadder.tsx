@@ -11,6 +11,9 @@
  * Help is randomized per check in labs 01 to 03 (wave-2.md §14.4, docs/prereg/hint-ladders.md): in the packet arm R0's
  * teach-back stays and R1 to R4 and the bottom-out stay closed (the packet in AskPacket is the help); in the ladder arm
  * the ladder is whole. Every ack of a randomized check carries `data.arm`. A rung opened before the arm was known stays open.
+ *
+ * A faded bundle (`fade: 'r2'`, wave-3.md D13 and D26; labs 04 to 08) authors R0 to R2 only: no gate is rendered for a rung
+ * the check's ladder lacks, there is no bottom-out, and the packet in AskPacket follows R2.
  */
 
 import { useEffect, useReducer, useRef, useState } from 'react'
@@ -69,6 +72,10 @@ const PACKET_ARM_NOTE =
 
 const ladderOf = (bundle: ForgeBundle, checkId: string): CheckLadder | undefined => bundle.ladder.find((l) => l.checkId === checkId)
 
+/** The rungs a check's ladder has, in order (D26): a faded bundle (`fade: 'r2'`) authors R0 to R2 only, so R3 and R4 get no gate. */
+const rungsOf = (ladder: CheckLadder | undefined): readonly RungId[] =>
+  RUNGS.filter((r) => (r === 'R3' ? ladder?.r3 !== undefined : r === 'R4' ? ladder?.r4 !== undefined : true))
+
 export interface HintLadderViewProps {
   /** The lab's bundle: its ladder, walkthrough, discussion label and id (the acks' namespace). */
   bundle: ForgeBundle
@@ -107,7 +114,7 @@ export function HintLadderView({ bundle, reports, acks, onAck, expSeed, now = Da
   const unlockedKey = red
     .map((c) => {
       const s = states[c.id] ?? freshState()
-      const next = RUNGS.find((r) => s.opened[r] === undefined)
+      const next = rungsOf(ladderOf(bundle, c.id)).find((r) => s.opened[r] === undefined)
       return next !== undefined && next !== 'R0' && unlockOf(s, next, { red: redRuns(reports, c.id), now: t }).ok ? `${c.id} ${next}` : ''
     })
     .filter((k) => k !== '')
@@ -189,8 +196,10 @@ function CheckCard({ bundle, check, state, ctx, arm, acks, clock, onAck, dispatc
   }, [open])
 
   const heading = (rung: RungId | 'closed') => `hint-${check.id}-${rung}`
-  // In the packet arm R1 to R4 stay closed unless they were opened before the arm was known.
-  const laterRungs = ['R1', 'R2', 'R3', 'R4'] as const
+  // In the packet arm R1 and later stay closed unless they were opened before the arm was known.
+  // A faded ladder has no R3 or R4 and no bottom-out: the packet follows R2.
+  const laterRungs = rungsOf(ladder).filter((r) => r !== 'R0')
+  const lastRung = laterRungs[laterRungs.length - 1]
   const closedRungs = arm === 'packet' ? laterRungs.filter((r) => open[r] === undefined) : []
   const openRungs = laterRungs.filter((r) => !closedRungs.includes(r))
   const now = () => ({ red: ctx.red, now: clock() })
@@ -277,7 +286,7 @@ function CheckCard({ bundle, check, state, ctx, arm, acks, clock, onAck, dispatc
           </Rung>
 
           {closedRungs.length > 0 && (
-            <Rung id={heading('closed')} title={`${closedRungs[0]} to R4 · closed for this check`}>
+            <Rung id={heading('closed')} title={`${closedRungs[0]} to ${lastRung} · closed for this check`}>
               <p className="text-body-sm text-text-2" data-packet-arm>
                 {PACKET_ARM_NOTE}
               </p>
@@ -314,7 +323,7 @@ function CheckCard({ bundle, check, state, ctx, arm, acks, clock, onAck, dispatc
             </Rung>
           ))}
 
-          {bundle.walkthrough !== undefined && (arm !== 'packet' || open.bottom !== undefined) && (
+          {bundle.walkthrough !== undefined && lastRung === 'R4' && (arm !== 'packet' || open.bottom !== undefined) && (
             <Rung id={heading('bottom')} title={RUNG_TITLE.bottom}>
               {walk === null ? (
                 <>

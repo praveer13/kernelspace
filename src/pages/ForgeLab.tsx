@@ -395,10 +395,15 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
               </ol>
 
               {run.kind === 'report' && (
-                <Suspense fallback={null}>
-                  <InstallButton lab={lab} report={run.report} credit={run.credit} bytes={run.bytes} />
-                  <RaceReference lab={lab} bytes={run.bytes} report={run.report} credit={run.credit} />
-                </Suspense>
+                // One boundary per lazy mount: the first mount of a chunk that has not loaded suspends only itself, so what is already shown stays.
+                <>
+                  <Suspense fallback={null}>
+                    <InstallButton lab={lab} report={run.report} credit={run.credit} bytes={run.bytes} />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <RaceReference lab={lab} bytes={run.bytes} report={run.report} credit={run.credit} />
+                  </Suspense>
+                </>
               )}
 
               {run.kind === 'report' && requiredReportPassed && run.credit !== null && (
@@ -697,8 +702,12 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
                 <HintLadder bundle={bundle} reports={reports} />
                 <AskPacket lab={lab} reports={reports} ladderIds={bundle.ladder.map((l) => l.checkId)} />
                 <ProveIt bundle={bundle} unlocked={done || requiredReportPassed} />
-                {run.kind === 'report' && <ProveFromModule lab={lab} bundle={bundle} bytes={run.bytes} report={run.report} credit={run.credit} />}
               </Suspense>
+              {run.kind === 'report' && (
+                <Suspense fallback={null}>
+                  <ProveFromModule lab={lab} bundle={bundle} bytes={run.bytes} report={run.report} credit={run.credit} />
+                </Suspense>
+              )}
             </div>
           )}
         </>

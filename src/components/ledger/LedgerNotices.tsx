@@ -21,15 +21,15 @@ export default function LedgerNotices() {
       {ledger.backend === 'memory' && (
         <Notice>
           Storage is limited here: export your progress regularly.{' '}
-          <Link to="/progress" className="text-accent underline underline-offset-2">
-            open progress
+          <Link to="/me" className="text-accent underline underline-offset-2">
+            open Me
           </Link>
         </Notice>
       )}
       {ledger.cleared && !clearedSeen && (
         <Notice onDismiss={() => setClearedSeen(true)}>
           This browser cleared your saved progress. Restore it from your last export.{' '}
-          <Link to="/progress" className="text-accent underline underline-offset-2">
+          <Link to="/me" className="text-accent underline underline-offset-2">
             import an export
           </Link>
         </Notice>
