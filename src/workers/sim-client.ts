@@ -11,7 +11,7 @@
 import type { ModuleBytes } from '@/lib/fleet-week'
 import { freshSeed } from '@/lib/rng'
 import type { SlotState } from '@/pages/fleet/slots'
-import type { SimJob, SimRequest, SimResponse, SimResults } from '@/workers/sim-protocol'
+import type { SimRequest, SimRequestJob, SimResponse, SimResults } from '@/workers/sim-protocol'
 
 /** A job's run budget (worker startup excluded). An honest act with the reference stack takes about 0.2 s (headless Chromium); this leaves slow devices and heavy learner modules wide headroom. */
 export const SIM_TIMEOUT_MS = 10_000
@@ -71,7 +71,7 @@ function discard(h: Handle) {
   if (handle === h) handle = null
 }
 
-async function dispatch<K extends SimJob['kind']>(
+async function dispatch<K extends SimRequestJob['kind']>(
   request: SimRequest,
   onProgress?: (fraction: number) => void,
 ): Promise<SimResults[K]> {
@@ -122,8 +122,8 @@ async function dispatch<K extends SimJob['kind']>(
  * Rejects with the worker's error (a trapping module), a SimTimeoutError (a spinning one), or a start/crash
  * error. Every outcome leaves the next call with a working worker.
  */
-export function runSimWithEntropy<K extends SimJob['kind']>(
-  job: Extract<SimJob, { kind: K }>,
+export function runSimWithEntropy<K extends SimRequestJob['kind']>(
+  job: Extract<SimRequestJob, { kind: K }>,
   onProgress?: (fraction: number) => void,
   entropy?: number,
 ): Promise<{ result: SimResults[K]; entropy: number }> {
@@ -137,8 +137,8 @@ export function runSimWithEntropy<K extends SimJob['kind']>(
 }
 
 /** Run one Fleet Week job in the worker (as runSimWithEntropy) and resolve with its result alone. */
-export function runSim<K extends SimJob['kind']>(
-  job: Extract<SimJob, { kind: K }>,
+export function runSim<K extends SimRequestJob['kind']>(
+  job: Extract<SimRequestJob, { kind: K }>,
   onProgress?: (fraction: number) => void,
   entropy?: number,
 ): Promise<SimResults[K]> {

@@ -251,6 +251,11 @@ export function referenceGoodput(seeds: FleetWeekSeeds, cfg = CFG): number {
   return simulateEngine(seeds, cfg).goodput(REQ_COUNT)
 }
 
+/** Act I's goodput on this seed with `sched` as the scheduler and every other part the reference: the bestiary's measure (wave-3.md §8.3). */
+export function schedulerGoodput(seeds: FleetWeekSeeds, sched: SchedulerDriver): number {
+  return simulateEngine(seeds, CFG, sched).goodput(REQ_COUNT)
+}
+
 export interface FleetBaseline {
   completedPct: number
   goodput: number
