@@ -5,12 +5,14 @@
  *
  * For every lab with a Forge bundle (src/data/forge/<labId>/index.ts) that has a ladder, and for every required check
  * of that lab (src/data/labs.ts):
- * - the ladder has R0 to R4, and R0 has the prompt and exactly three ideas;
+ * - the ladder has R0 to R4, and R0 has the prompt and exactly three ideas; a bundle with `fade: 'r2'` (wave-3.md
+ *   §4.2, §8.2: ladders stop at R2 and the packet follows) needs R0 to R2 and may omit R3 and R4;
  * - the word limits hold: R1 ≤ 60, R2 ≤ 40, R4 ≤ 80 (the prompt and each idea ≤ 30);
  * - R1 links to a lesson H2 that exists, and R2 names the check's function in lib.rs, which exists;
  * - R3 is at most three lines and is not Rust: no `fn `, `impl `, `pub `, `let `, `mut ` or `struct `,
  *   no `;`, no `::` and no line that ends a block with `{` or `}`;
  * - no rung quotes a `_solutions` file (labs/_solutions never ships, owner answer O1);
+ * every other rule stands for a faded bundle, and applies to an R3 or R4 it does write;
  * there is no ladder for a check the lab does not require, and the bundle's Ask-a-human label reads "[lab NN]".
  * Limits live in lab 01's ladder.ts (`LIMITS`), so the component and the lint cannot drift apart.
  */
@@ -33,6 +35,8 @@ export interface LintDeps {
   libRs: string
   /** Lesson id -> the ids of its H2s as the lesson page renders them. */
   h2s: ReadonlyMap<string, ReadonlySet<string>>
+  /** `'r2'`: the bundle's ladders stop at R2, so R3 and R4 are optional. `lintBundle` sets it from the bundle. */
+  fade?: 'r2'
 }
 
 /** Rust-looking R3 content: a keyword that starts a declaration, a statement end or a block edge. */
@@ -43,11 +47,12 @@ const BLOCK_EDGE = /[{}]\s*$/
 /** Every problem with the ladder, one line each; empty when it passes. */
 export function lintLadder(ladder: Readonly<Record<string, CheckLadder>>, deps: LintDeps): string[] {
   const problems: string[] = []
+  const faded = deps.fade === 'r2'
   for (const id of Object.keys(ladder)) if (!deps.required.includes(id)) problems.push(`${id}: a ladder for a check the lab does not require`)
   for (const id of deps.required) {
     const c = ladder[id] as CheckLadder | undefined
     if (c === undefined) {
-      problems.push(`${id}: no ladder (every required check needs R0 to R4)`)
+      problems.push(`${id}: no ladder (every required check needs R0 to ${faded ? 'R2' : 'R4'})`)
       continue
     }
     const bad = (msg: string) => problems.push(`${id}: ${msg}`)
@@ -86,8 +91,8 @@ export function lintLadder(ladder: Readonly<Record<string, CheckLadder>>, deps: 
     }
     if (c.r2?.fn !== undefined && !new RegExp(`\\bfn ${c.r2.fn}\\(`).test(deps.libRs)) bad(`R2 points at ${c.r2.fn}, which lib.rs does not define`)
 
-    // R3
-    if (text('R3', c.r3)) {
+    // R3 (a faded bundle may omit it; one it writes is held to the same rules)
+    if ((c.r3 !== undefined || !faded) && text('R3', c.r3)) {
       const lines = c.r3.split('\n')
       if (lines.length > LIMITS.r3Lines) bad(`R3 has ${lines.length} lines (limit ${LIMITS.r3Lines})`)
       if (lines.some((l) => l.trim() === '')) bad('R3 has an empty line')
@@ -98,8 +103,8 @@ export function lintLadder(ladder: Readonly<Record<string, CheckLadder>>, deps: 
       if (c.r3.includes('`')) bad('R3 is pseudo-code, not a code span')
     }
 
-    // R4
-    if (text('R4', c.r4)) limit('R4', c.r4, LIMITS.r4Words)
+    // R4 (as R3)
+    if ((c.r4 !== undefined || !faded) && text('R4', c.r4)) limit('R4', c.r4, LIMITS.r4Words)
 
     // No rung quotes a private file.
     const all = [c.r0?.prompt, ...ideas, c.r1?.text, c.r2?.text, c.r3, c.r4]
@@ -126,7 +131,7 @@ const LABEL = /^\[lab \d\d\]$/
 export function lintBundle(bundle: ForgeBundle, deps: LintDeps): string[] {
   const { ladder, problems } = ladderOf(bundle)
   if (!LABEL.test(bundle.discussionsLabel)) problems.push(`discussionsLabel is ${JSON.stringify(bundle.discussionsLabel)} (it reads "[lab NN]")`)
-  return [...problems, ...lintLadder(ladder, deps)]
+  return [...problems, ...lintLadder(ladder, bundle.fade === undefined ? deps : { ...deps, fade: bundle.fade })]
 }
 
 async function main(): Promise<number> {
@@ -145,7 +150,7 @@ async function main(): Promise<number> {
     const libRs = readFileSync(join(ROOT, 'labs', lab.crateDir ?? lab.id, 'src', 'lib.rs'), 'utf8')
     const problems = lintBundle(bundle, { required, libRs, h2s })
     for (const p of problems) failures.push(`${bundle.labId}: ${p}`)
-    done.push(`${bundle.labId} ${required.length} checks, ${required.length * 5} rungs`)
+    done.push(`${bundle.labId} ${required.length} checks, ${required.length * (bundle.fade === 'r2' ? 3 : 5)} rungs`)
   }
   if (failures.length > 0) {
     console.error(`lint-mentor: ${failures.length} problem${failures.length === 1 ? '' : 's'}`)

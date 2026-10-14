@@ -183,6 +183,77 @@ describe('the lint runs on a bundle, so every lab with a ladder is held to the s
     expect(lintBundle(bundle(), { ...DEPS, libRs: 'fn unrelated() {}' }).join('\n')).toContain('lib.rs does not define')
   })
 
+  /** Lab 01's bundle with `fade: 'r2'` and no R3 or R4, the shape the faded labs 04 to 08 author. */
+  const faded = () => {
+    const b = { ...bundle(), fade: 'r2' as const }
+    for (const c of b.ladder) {
+      delete c.r3
+      delete c.r4
+    }
+    return b
+  }
+
+  test('a bundle with fade "r2" needs R0 to R2 only: R3 and R4 may be left out', () => {
+    expect(lintBundle(faded(), DEPS)).toEqual([])
+    expect(lintLadder(Object.fromEntries(faded().ladder.map((c) => [c.checkId, c])), { ...DEPS, fade: 'r2' })).toEqual([])
+  })
+
+  test('without the fade the same ladder still needs R0 to R4, check by check', () => {
+    const bare = { ...faded(), fade: undefined }
+    const problems = lintBundle(bare, DEPS)
+    for (const id of REQUIRED) {
+      expect(problems).toContain(`${id}: R3 is missing`)
+      expect(problems).toContain(`${id}: R4 is missing`)
+    }
+    expect(problems).toHaveLength(REQUIRED.length * 2)
+    const noR4 = bundle()
+    delete noR4.ladder[0].r4
+    expect(lintBundle(noR4, DEPS)).toEqual([`${noR4.ladder[0].checkId}: R4 is missing`])
+    expect(lintBundle(lab01, DEPS)).toEqual([])
+  })
+
+  test('a faded bundle still needs R0, R1 and R2, with their limits and links', () => {
+    const edit = (f: (c: CheckLadder) => void) => {
+      const b = faded()
+      f(b.ladder[0])
+      return lintBundle(b, DEPS).join('\n')
+    }
+    expect(edit((c) => (c.r0.ideas = c.r0.ideas.slice(0, 2)))).toContain('R0 has 2 ideas')
+    expect(edit((c) => (c.r0.prompt = ''))).toContain('R0 prompt is missing')
+    expect(edit((c) => (c.r1.text = ''))).toContain('R1 is missing')
+    expect(edit((c) => (c.r1.link.anchor = 'no-such-heading'))).toContain('not an H2')
+    expect(edit((c) => (c.r2.text = 'Look at the check.'))).toContain('does not name lib.rs')
+    expect(edit((c) => (c.r2.fn = 'check_nothing'))).toContain('lib.rs does not define')
+    expect(edit((c) => (c.r2.text = '')).includes('R2 is missing')).toBe(true)
+    expect(edit(() => undefined)).toBe('')
+  })
+
+  test('every other rule stands under the fade: a missing ladder, an extra one, a label, _solutions, and an R3 or R4 it does write', () => {
+    const missing = faded()
+    missing.ladder.pop()
+    expect(lintBundle(missing, DEPS)).toEqual([expect.stringContaining('no ladder (every required check needs R0 to R2)')])
+
+    const extra = faded()
+    extra.ladder.push({ ...structuredClone(extra.ladder[0]), checkId: 'ghost' })
+    expect(lintBundle(extra, DEPS).join('\n')).toContain('ghost: a ladder for a check the lab does not require')
+
+    expect(lintBundle({ ...faded(), discussionsLabel: 'lab 04' }, DEPS)[0]).toContain('discussionsLabel')
+
+    const quoted = faded()
+    quoted.ladder[0].r2.text += ' See labs/_solutions/rust-allocator/allocator.rs.'
+    expect(lintBundle(quoted, DEPS).join('\n')).toContain('_solutions')
+
+    const rust = faded()
+    rust.ladder[0].r3 = 'pub fn new(capacity: usize) -> Self'
+    expect(lintBundle(rust, DEPS).join('\n')).toContain('R3 reads as Rust')
+    const long = faded()
+    long.ladder[0].r4 = Array.from({ length: 81 }, (_, i) => `w${i}`).join(' ')
+    expect(lintBundle(long, DEPS).join('\n')).toContain('R4 has 81 words')
+    const empty = faded()
+    empty.ladder[0].r3 = ''
+    expect(lintBundle(empty, DEPS).join('\n')).toContain('R3 is missing')
+  })
+
   test('the lint script’s own entry passes from the command line, as `bun run verify:mentor` runs it', async () => {
     const run = Bun.spawnSync(['bun', `${ROOT}scripts/lint-mentor.ts`], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' })
     expect(run.stderr.toString()).toBe('')
