@@ -16,10 +16,14 @@
  *     mutant caught by a required check on ≥ 99 % of fresh seeds (§12.4).
  * Crates still on template v1 pass on the v1 rules until their C12 task migrates them.
  *
- * Zip freshness (C18): `python3 scripts/pack-labs.py` is re-run into a temp dir, and every public/labs/<zip> must hold
- * exactly the same members with the same bytes. A zip packed before a lab source, the guardrail kit or a check id
- * changed is stale; the zip is the learner's workspace, so it must match the sources the checks ran on. No member of a
- * zip may be under `_solutions` or `target`, or be a .wasm, .rlib or .rmeta.
+ * Archive freshness (C18, 2c-07): `python3 scripts/pack-labs.py` is re-run into a temp dir, and every public/labs/<zip> and
+ * its <lab>.tar.gz must hold exactly the same members with the same bytes (and modes, for the tar.gz) as the fresh pack,
+ * and the tar.gz must hold the zip's members. An archive packed before a lab source, the guardrail kit or a check id
+ * changed is stale; it is the learner's workspace, so it must match the sources the checks ran on. No member may be under
+ * `_solutions` or `target`, or be a .wasm, .rlib or .rmeta.
+ *
+ * Codespaces (2c-07): every lab has `.devcontainer/labs/<id>/devcontainer.json` that builds only its own crate
+ * (`cargo … -p <package>`, never the whole workspace) and opens its TODO file.
  */
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -28,7 +32,7 @@ import { basename, join, resolve } from 'node:path'
 import { FORGE_LABS, type ForgeLab } from '../src/data/labs'
 import { abiOf, instantiator, listChecks } from '../src/lib/forge/run'
 import type { ListReply } from '../src/lib/forge/types'
-import { readZip } from './verify-guardrails'
+import { memberDrift, readTar, readZip, tarName, type TarMember } from './verify-guardrails'
 
 const ROOT = resolve(import.meta.dir, '..')
 const LABS = join(ROOT, 'labs')
@@ -133,32 +137,48 @@ const isPrivate = (name: string) => {
   return parts.includes('_solutions') || parts.includes('target') || /\.(wasm|rlib|rmeta)$/.test(name)
 }
 
-/** The committed zip against a fresh `pack-labs.py` run: same members in the same order, same bytes, nothing private. */
-function checkZipFresh(l: ForgeLab, fresh: string) {
-  const name = basename(l.zip)
+/** Members of one archive in order; a zip carries no modes here, a tar.gz does. */
+type Archive = Map<string, { data: Buffer; mode?: number }>
+
+const readArchive = (path: string): Archive =>
+  path.endsWith('.zip') ? new Map([...readZip(path)].map(([n, data]) => [n, { data }])) : new Map<string, TarMember>(readTar(path))
+
+/** An archive on disk against a fresh `pack-labs.py` run: same members in the same order, same bytes and modes, nothing private. */
+function checkArchiveFresh(l: ForgeLab, name: string, fresh: string): Archive | null {
   const committedPath = join(ROOT, 'public', 'labs', name)
   if (!existsSync(committedPath)) {
     fail(l.id, `public/labs/${name} is missing`)
-    return
+    return null
   }
-  let committed: Map<string, Buffer>
-  let packed: Map<string, Buffer>
+  let committed: Archive
+  let packed: Archive
   try {
-    committed = readZip(committedPath)
-    packed = readZip(join(fresh, name))
+    committed = readArchive(committedPath)
+    packed = readArchive(join(fresh, name))
   } catch (e) {
     fail(l.id, `${name}: ${e instanceof Error ? e.message : String(e)}`)
-    return
+    return null
   }
   const leaked = [...committed.keys()].filter(isPrivate)
   if (leaked.length > 0) fail(l.id, `${name} ships private or build files: ${leaked.join(', ')}`)
   const drift = [
     ...[...packed.keys()].filter((n) => !committed.has(n)).map((n) => `missing ${n}`),
     ...[...committed.keys()].filter((n) => !packed.has(n)).map((n) => `unexpected ${n}`),
-    ...[...packed.keys()].filter((n) => committed.has(n) && !committed.get(n)!.equals(packed.get(n)!)).map((n) => `changed ${n}`),
+    ...[...packed.keys()].filter((n) => committed.has(n) && !committed.get(n)!.data.equals(packed.get(n)!.data)).map((n) => `changed ${n}`),
+    ...[...packed.keys()].filter((n) => committed.has(n) && committed.get(n)!.mode !== packed.get(n)!.mode).map((n) => `mode of ${n}`),
   ]
   if (drift.length === 0 && [...committed.keys()].join('\n') !== [...packed.keys()].join('\n')) drift.push('members are in a different order')
-  if (drift.length > 0) fail(l.id, `public/labs/${name} is stale (${drift.join('; ')}): run python3 scripts/pack-labs.py and commit the zips`)
+  if (drift.length > 0) fail(l.id, `public/labs/${name} is stale (${drift.join('; ')}): run python3 scripts/pack-labs.py and commit the archives`)
+  return committed
+}
+
+function checkZipFresh(l: ForgeLab, fresh: string) {
+  const name = basename(l.zip)
+  const zip = checkArchiveFresh(l, name, fresh)
+  const tar = checkArchiveFresh(l, tarName(name), fresh)
+  if (!zip || !tar) return
+  const plain = (a: Archive) => new Map([...a].map(([n, m]) => [n, m.data]))
+  for (const d of memberDrift(plain(zip), plain(tar))) fail(l.id, `public/labs/${tarName(name)} differs from ${name} (${d})`)
 }
 
 function checkZipsFresh() {
@@ -166,7 +186,7 @@ function checkZipsFresh() {
   try {
     const r = sh(['python3', join(ROOT, 'scripts', 'pack-labs.py'), '--out', dir], ROOT)
     if (!r.ok) {
-      failures.push(`pack-labs.py failed, so zip freshness is unchecked:\n${r.out.trim().replace(/^/gm, '    ')}`)
+      failures.push(`pack-labs.py failed, so archive freshness is unchecked:\n${r.out.trim().replace(/^/gm, '    ')}`)
       return
     }
     for (const l of labs) checkZipFresh(l, dir)
@@ -175,8 +195,34 @@ function checkZipsFresh() {
   }
 }
 
+/** The lab's Codespaces config: it builds its own crate only and opens its TODO file (wave-2.md §16.2). */
+function checkDevcontainer(l: ForgeLab) {
+  const rel = `.devcontainer/labs/${l.id}/devcontainer.json`
+  const path = join(ROOT, rel)
+  if (!existsSync(path)) {
+    fail(l.id, `${rel} is missing`)
+    return
+  }
+  let dc: { postCreateCommand?: unknown; customizations?: { codespaces?: { openFiles?: unknown } } }
+  try {
+    dc = JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    fail(l.id, `${rel} is not JSON`)
+    return
+  }
+  const post = typeof dc.postCreateCommand === 'string' ? dc.postCreateCommand : ''
+  if (!post.includes('rustup target add wasm32-unknown-unknown')) fail(l.id, `${rel}: postCreateCommand must add the wasm32 target`)
+  if (!new RegExp(`cargo [a-z ]*-p ${packageName(l)}( |$)`).test(post)) fail(l.id, `${rel}: postCreateCommand must build only \`-p ${packageName(l)}\``)
+  if (/--workspace|--all\b/.test(post) || /cargo build\s*$/.test(post)) fail(l.id, `${rel}: postCreateCommand builds the whole workspace`)
+  const open = dc.customizations?.codespaces?.openFiles
+  const todo = `labs/${l.crateDir ?? l.id}/${l.editFile}`
+  if (!Array.isArray(open) || !open.includes(todo)) fail(l.id, `${rel}: customizations.codespaces.openFiles must list ${todo}`)
+  if (!existsSync(join(ROOT, todo))) fail(l.id, `${rel}: ${todo} does not exist`)
+}
+
 const t0 = performance.now()
 checkZipsFresh()
+for (const l of labs) checkDevcontainer(l)
 const zipFailures = failures.length
 if (build) {
   console.log('building every lab template (wasm32-unknown-unknown, release)…')
@@ -233,7 +279,7 @@ for (const l of labs) {
 }
 
 console.log(rows.join('\n'))
-console.log(`${labs.length} lab(s), ${Math.round((performance.now() - t0) / 1000)} s. Zips: ${zipFailures === 0 ? 'all match a fresh pack-labs run' : `${zipFailures} problem(s)`}.`)
+console.log(`${labs.length} lab(s), ${Math.round((performance.now() - t0) / 1000)} s. Archives and devcontainers: ${zipFailures === 0 ? 'every zip and tar.gz matches a fresh pack-labs run' : `${zipFailures} problem(s)`}.`)
 if (failures.length > 0) {
   for (const f of failures) console.error(`FAIL: ${f}`)
   process.exit(1)

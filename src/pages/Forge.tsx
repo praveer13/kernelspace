@@ -11,7 +11,7 @@ const STEPS = [
   {
     icon: Download,
     title: 'get the lab',
-    body: 'Download the template crate — or open the repo in Codespaces / a dev container. One file has TODO(you) markers. Only that file is yours.',
+    body: 'Paste one command (POSIX, tar, PowerShell or WSL), download the ZIP or .tar.gz, or open that lab in its own Codespace. One file has TODO(you) markers. Only that file is yours.',
   },
   {
     icon: Terminal,
@@ -42,6 +42,11 @@ const LAB_GROUPS = [
   },
 ] as const
 
+/*
+ * Entrances slide and never fade. A card that starts at opacity 0 is blended into the page for the first half second, and
+ * its small text-3 labels measure below 4.5:1 for as long as that lasts (axe ran inside the fade, at 360 and 1280).
+ * At rest they are 5.4:1 on surface-1, so no colour changes.
+ */
 export default function Forge() {
   const labs = useProgress((s) => s.labs)
   const labAgg = useProgress((s) => s.aggregate.labs)
@@ -49,8 +54,8 @@ export default function Forge() {
     <div className="mx-auto max-w-app px-6 pb-24 pt-24 lg:px-12">
       {/* hero */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ y: 16 }}
+        animate={{ y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         className="mx-auto max-w-2xl text-center"
       >
@@ -82,8 +87,8 @@ export default function Forge() {
         {STEPS.map((s, i) => (
           <motion.div
             key={s.title}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: 16 }}
+            animate={{ y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 + i * 0.08, ease: [0.16, 1, 0.3, 1] }}
             className="rounded-lg border border-line bg-surface-1 p-5"
           >
@@ -121,8 +126,8 @@ export default function Forge() {
               return (
                 <motion.div
                   key={lab.id}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ y: 16 }}
+                  animate={{ y: 0 }}
                   transition={{ duration: 0.5, delay: 0.2 + delayIndex * 0.035, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <Link
@@ -177,8 +182,8 @@ export default function Forge() {
 
       {/* honesty box */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        initial={{ y: 8 }}
+        animate={{ y: 0 }}
         transition={{ duration: 0.5, delay: 0.45 }}
         className="mt-12 flex items-start gap-3 rounded-lg border border-line bg-surface-1 p-5"
       >

@@ -4,6 +4,8 @@ name: Labs
 # (docs/specs/wave-1.md §12.7). Slower than the fast gate, so it is not part of ci.yml or deploy.yml:
 # it runs only on changes that can affect a lab, and it is expected to finish in under 6 minutes.
 # The scaffold (B1) reserves the job; C1 fills scripts/verify-labs.ts.
+# It also recompiles the compile bank (docs/specs/wave-2.md §15.2) with the same pinned rustc: the
+# bank's results must be exactly what this compiler says about the snippets as they are now.
 on:
   pull_request:
     paths:
@@ -19,6 +21,9 @@ on:
       - 'scripts/verify-wasm-lab.ts'
       - 'scripts/calibrate-lab-seeds.ts'
       - 'scripts/pack-labs.py'
+      - 'src/data/rust-items/**'
+      - 'scripts/build-rust-items.ts'
+      - 'scripts/verify-rust-items.ts'
       - '.github/workflows/labs.yml'
   workflow_dispatch:
 
@@ -73,3 +78,8 @@ jobs:
 
       - run: npm ci
       - run: bun run verify:labs
+
+      # Every code variant and fix, compiled again: fails on an outcome that differs from the authored
+      # one, or on a bank file that differs from what this rustc writes (bun scripts/build-rust-items.ts).
+      - name: Check the compile bank against rustc
+        run: bun scripts/build-rust-items.ts --check

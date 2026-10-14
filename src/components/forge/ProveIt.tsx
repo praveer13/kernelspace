@@ -1,6 +1,6 @@
 /**
- * H4 v1 Prove it, no AI, for lab 01 (docs/specs/wave-1.md §13.3). Three of six questions about the
- * learner's own allocator, one at a time:
+ * H4 v1 Prove it, no AI (docs/specs/wave-1.md §13.3; wave-2.md §13.1). Three of a lab's questions (its bundle's
+ * `prove`, six or more) about the learner's own code, one at a time:
  *
  *   write   at least 12 words, in the learner's own words
  *   reveal  the model answer and the three ideas it covers appear; the answer is locked
@@ -9,7 +9,7 @@
  * When the third is graded, one `prove` event is recorded: score = the fraction "got it", provenance
  * `practice` (self-graded, so outside rings and VRK30). A retry opens 24 h after the last attempt and
  * draws questions the learner has not been served. The state machine and the draw are in
- * src/data/forge/rust-allocator/prove.ts.
+ * src/lib/forge/prove.ts.
  */
 
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -19,7 +19,6 @@ import { clsx as cn } from 'clsx'
 import {
   MIN_ANSWER_WORDS,
   MAX_ANSWER_CHARS,
-  PROVE_LAB_ID,
   PROVE_PICK,
   activeIndex,
   answerReady,
@@ -32,15 +31,16 @@ import {
   reduceCards,
   retryOpensAt,
   wordCount,
-} from '@/data/forge/rust-allocator/prove'
-import type { ProveAction, ProveAttempt, ProveCard, ProveQuestion } from '@/data/forge/rust-allocator/prove'
+} from '@/lib/forge/prove'
+import type { ProveAction, ProveAttempt, ProveCard } from '@/lib/forge/prove'
+import type { ForgeBundle, ProveQuestion } from '@/data/forge/types'
 import { getLedgerClient } from '@/lib/ledger/client'
 import type { ProveResult } from '@/lib/ledger/types'
 import { useProgress } from '@/lib/progress'
 
 export interface ProveItProps {
-  /** Default `rust-allocator`. */
-  labId?: string
+  /** The lab's bundle: its `prove` pool and its id (the `prove:<lab>` ref the attempts are written under). */
+  bundle: ForgeBundle
   /** False until every required check is green; the panel then says what unlocks it. Default true. */
   unlocked?: boolean
   /** Past attempts. Left out, the panel reads them from the ledger. */
@@ -91,7 +91,8 @@ async function loadHistory(labId: string): Promise<ProveAttempt[]> {
   }
 }
 
-export default function ProveIt({ labId = PROVE_LAB_ID, unlocked = true, history, now, seed, onRecorded }: ProveItProps) {
+export default function ProveIt({ bundle, unlocked = true, history, now, seed, onRecorded }: ProveItProps) {
+  const { labId, prove: pool } = bundle
   const recordProve = useProgress((s) => s.recordProve)
   const uid = useId()
   const [loaded, setLoaded] = useState<readonly ProveAttempt[] | null>(history ?? null)
@@ -117,7 +118,7 @@ export default function ProveIt({ labId = PROVE_LAB_ID, unlocked = true, history
   }, [history, labId, unlocked])
 
   // Drawn once per mount, from the history as it was then: recording an attempt must not reshuffle the page.
-  const questions = useMemo<ProveQuestion[] | null>(() => (loaded === null ? null : pickQuestions(loaded, drawSeed)), [loaded, drawSeed])
+  const questions = useMemo<ProveQuestion[] | null>(() => (loaded === null ? null : pickQuestions(loaded, drawSeed, pool)), [loaded, drawSeed, pool])
   const opensAt = loaded === null ? null : retryOpensAt(loaded, mountedAt)
 
   const active = activeIndex(cards)
@@ -142,7 +143,7 @@ export default function ProveIt({ labId = PROVE_LAB_ID, unlocked = true, history
           Prove it, no AI
         </h3>
         <p className="mt-1 text-body-sm text-text-3">
-          Opens when all six checks are green: {PROVE_PICK} questions about your own code, answered with your agent closed.
+          Opens when every required check is green: {PROVE_PICK} questions about your own code, answered with your agent closed.
         </p>
       </section>
     )

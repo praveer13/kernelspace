@@ -1,0 +1,17 @@
+{
+  "name": "kernelspace lab: The Front Door",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "postCreateCommand": "rustup target add wasm32-unknown-unknown && cd labs && cargo test -p bpe-tokenizer --no-run",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "labs/bpe-tokenizer/src/tokenizer.rs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  }
+}

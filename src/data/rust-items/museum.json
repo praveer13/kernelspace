@@ -1,0 +1,807 @@
+[
+  {
+    "code": "E0382",
+    "cluster": "moves",
+    "means": "a use of a value after it was moved",
+    "panic": false,
+    "key": "lifetimes/box-block-list/use-after",
+    "title": "Take the block list out of its box",
+    "domain": "KvBlockTable",
+    "source": "fn take(b: Box<Vec<u32>>) -> usize {\n    let v = *b;\n    let n = b.len() + v.len();\n    n\n}",
+    "line": 3,
+    "message": "borrow of moved value: `*b`",
+    "why": "`let v = *b` moved the vector out of the box, so `b` lost R and O (a parameter not declared `mut` never had W), and `b.len()` needs R.",
+    "focus": {
+      "line": 3,
+      "path": "b",
+      "needs": [
+        "read"
+      ]
+    },
+    "permission": "read",
+    "fix": {
+      "id": "use-v",
+      "line": 3,
+      "text": "    let n = v.len();",
+      "after": "compiles",
+      "why": "The vector now lives in `v`, so its length is read from there."
+    },
+    "wrong": {
+      "id": "clone-first",
+      "line": 2,
+      "text": "    let v = (*b).clone();",
+      "after": "compiles",
+      "why": "It leaves the box full by copying every block into `v`, only so the length can be read twice.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3"
+    ],
+    "snippets": 40,
+    "variants": 71
+  },
+  {
+    "code": "E0499",
+    "cluster": "borrows",
+    "means": "two `&mut` borrows of one place alive at once",
+    "panic": false,
+    "key": "borrows/push-len-two-phase/push-pop",
+    "title": "Append the queue length to the queue",
+    "domain": "AdmissionQueue",
+    "source": "fn append_len(v: &mut Vec<usize>) {\n    v.push(v.pop().unwrap());\n}",
+    "line": 2,
+    "message": "cannot borrow `*v` as mutable more than once at a time",
+    "why": "The reserved `&mut` of `push` allows only reads in the arguments, and `pop` needs W, so it is a second `&mut` of `v`.",
+    "fix": {
+      "id": "pop-first",
+      "line": 2,
+      "text": "    if let Some(t) = v.pop() { v.push(t); }",
+      "after": "compiles",
+      "why": "`pop` finishes in the `if let` head and returns an owned `usize`, so `push` borrows `v` with nothing else alive."
+    },
+    "wrong": {
+      "id": "clone-push",
+      "line": 2,
+      "text": "    v.clone().push(v.pop().unwrap());",
+      "after": "compiles",
+      "why": "It pops the last id and pushes it onto a copy that is dropped, so the id is lost.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3",
+      "r.l4"
+    ],
+    "snippets": 33,
+    "variants": 48
+  },
+  {
+    "code": "E0502",
+    "cluster": "borrows",
+    "means": "a `&mut` borrow while a `&` borrow is alive, or the reverse",
+    "panic": false,
+    "key": "borrows/mirror-queue-extend/lazy-ids",
+    "title": "Append a copy of the queue to itself",
+    "domain": "AdmissionQueue",
+    "source": "fn mirror(q: &mut Vec<u64>) {\n    let ids = q.iter().copied();\n    q.extend(ids);\n}",
+    "line": 3,
+    "message": "cannot borrow `*q` as mutable because it is also borrowed as immutable",
+    "why": "The lazy iterator `ids` still reads `q` and is handed to `extend` on line 3, so `q` lacks W when `extend` needs it.",
+    "focus": {
+      "line": 3,
+      "path": "q",
+      "needs": [
+        "read",
+        "write"
+      ]
+    },
+    "permission": "write",
+    "fix": {
+      "id": "to-vec",
+      "line": 2,
+      "text": "    let ids = q.to_vec();",
+      "after": "compiles",
+      "why": "The vector owns its ids, so no borrow of `q` is alive when `extend` needs W."
+    },
+    "wrong": {
+      "id": "clone-extend",
+      "line": 3,
+      "text": "    q.clone().extend(ids);",
+      "after": "compiles",
+      "why": "It extends a copy of the queue and drops it: the real queue never grows.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3",
+      "r.l4",
+      "r.l8",
+      "r.l9"
+    ],
+    "snippets": 44,
+    "variants": 90
+  },
+  {
+    "code": "E0505",
+    "cluster": "moves",
+    "means": "a move out of a value while it is borrowed",
+    "panic": false,
+    "key": "borrows/batch-send-peeked/ref-first",
+    "title": "Peek at a batch head, then hand the batch on",
+    "domain": "Batch",
+    "source": "fn send(o: &mut Vec<Vec<u8>>, b: Vec<u8>) {\n    let n = &b[0];\n    o.push(b);\n    println!(\"{n:?}\");\n}",
+    "line": 3,
+    "message": "cannot move out of `b` because it is borrowed",
+    "why": "`n` borrows into `b` and is printed on line 4, so `b` has lost O until then (a parameter not declared `mut` never had W), and `push` moves it, which needs O.",
+    "focus": {
+      "line": 3,
+      "path": "b",
+      "needs": [
+        "read",
+        "own"
+      ]
+    },
+    "permission": "own",
+    "fix": {
+      "id": "copy-first",
+      "line": 2,
+      "text": "    let n = b[0];",
+      "after": "compiles",
+      "why": "A `u8` is Copy, so `n` holds a copy and nothing borrows `b` when it moves."
+    },
+    "wrong": {
+      "id": "clone-batch",
+      "line": 3,
+      "text": "    o.push(b.clone());",
+      "after": "compiles",
+      "why": "It hands on a copy of every byte in the batch and keeps the original alive only to print one number.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3"
+    ],
+    "snippets": 18,
+    "variants": 28
+  },
+  {
+    "code": "E0506",
+    "cluster": "borrows",
+    "means": "an assignment to a place while it is borrowed",
+    "panic": false,
+    "key": "borrows/queue-reset-peeked/peek-ref",
+    "title": "Peek at the head, then empty the queue",
+    "domain": "AdmissionQueue",
+    "source": "fn reset(q: &mut Vec<u32>) {\n    let head = q.first();\n    *q = Vec::new();\n    println!(\"{head:?}\");\n}",
+    "line": 3,
+    "message": "cannot assign to `*q` because it is borrowed",
+    "why": "`head` is a reference into `*q` that line 4 still prints, so `*q` has lost W until then, and assigning a new vector to it needs W.",
+    "focus": {
+      "line": 3,
+      "path": "*q",
+      "needs": [
+        "write"
+      ]
+    },
+    "permission": "write",
+    "fix": {
+      "id": "copy-head",
+      "line": 2,
+      "text": "    let head = q.first().copied();",
+      "after": "compiles",
+      "why": "The head is a `u32`, so `head` can hold a copy and no borrow of `*q` is alive at the assignment."
+    },
+    "wrong": {
+      "id": "clone-clear",
+      "line": 3,
+      "text": "    q.clone().clear();",
+      "after": "compiles",
+      "why": "It empties a copy of the queue and drops it, so the real queue keeps every request.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l4"
+    ],
+    "snippets": 10,
+    "variants": 19
+  },
+  {
+    "code": "E0597",
+    "cluster": "lifetimes",
+    "means": "a value dropped while something still borrows it",
+    "panic": false,
+    "key": "lifetimes/slot-index-keys/by-value",
+    "title": "Index request ids in a list of views",
+    "domain": "Scheduler",
+    "source": "fn index(ids: Vec<String>) -> usize {\n    let mut ix: Vec<&str> = vec![];\n    for id in ids {\n        ix.push(&id);\n    }\n    ix.len()\n}",
+    "line": 4,
+    "message": "`id` does not live long enough",
+    "why": "The loop moves each `String` into `id`, which is dropped at the end of its pass, but `ix` keeps a `&str` into it and is read on line 6.",
+    "fix": {
+      "id": "by-ref",
+      "line": 3,
+      "text": "    for id in ids.iter() {",
+      "after": "compiles",
+      "why": "Looping over `ids.iter()` lends each id instead of moving it, so the views point into `ids`, which lives until the function returns."
+    },
+    "wrong": {
+      "id": "clone-id",
+      "line": 4,
+      "text": "        ix.push(&id.clone());",
+      "after": "E0716",
+      "why": "The view is of a copy, and the copy is a temporary dropped at the end of line 4, so `ix` still holds a dangling borrow.",
+      "clone": true,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l9"
+    ],
+    "snippets": 11,
+    "variants": 13
+  },
+  {
+    "code": "E0716",
+    "cluster": "lifetimes",
+    "means": "a temporary dropped at the end of its statement while still borrowed",
+    "panic": false,
+    "key": "lifetimes/label-temp-trim/temp-trim",
+    "title": "Trim a label built from an id",
+    "domain": "Batch",
+    "source": "fn label(id: u32) -> usize {\n    let tag = id.to_string().trim();\n    let tag = tag.trim();\n    tag.len() + 1\n}",
+    "line": 2,
+    "message": "temporary value dropped while borrowed",
+    "why": "`to_string()` is a temporary dropped at the end of line 2, but `tag` is a slice into it and is read on later lines.",
+    "fix": {
+      "id": "extend-temp",
+      "line": 2,
+      "text": "    let tag = &id.to_string();",
+      "after": "compiles",
+      "why": "A `&` taken straight in a `let` extends the temporary to the end of the block, so the second `tag` has a `String` to slice."
+    },
+    "wrong": {
+      "id": "clone-tag",
+      "line": 3,
+      "text": "    let tag = tag.clone();",
+      "after": "E0716",
+      "why": "The trouble is on line 2, where the temporary dies; cloning the slice on line 3 does not keep the `String` alive.",
+      "clone": true,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l9"
+    ],
+    "snippets": 12,
+    "variants": 15
+  },
+  {
+    "code": "BorrowMutError",
+    "cluster": "cells",
+    "means": "a `borrow_mut` on a RefCell that is already borrowed, a panic at run time",
+    "panic": true,
+    "key": "lifetimes/bump-while-reading/if-let",
+    "title": "Bump the queue when a request id is seen",
+    "domain": "Scheduler",
+    "source": "use std::cell::RefCell;\n\nfn main() {\n    let q = RefCell::new(vec![1, 2, 3]);\n    let n = q.borrow().len();\n    for i in 0..n {\n        if let 2 = q.borrow()[i] {\n            q.borrow_mut().push(4);\n        }\n    }\n    println!(\"{}\", q.borrow().len());\n}",
+    "line": 8,
+    "message": "RefCell already borrowed",
+    "why": "In an `if let`, the temporary `Ref` lives until the end of the block, so the cell is still borrowed when `borrow_mut` runs on line 8: the `&mut` rule, checked at run time.",
+    "fix": {
+      "id": "plain-if",
+      "line": 7,
+      "text": "        if q.borrow().get(i) == Some(&2) {",
+      "after": "compiles",
+      "why": "The condition of a plain `if` drops its temporary `Ref` before the block runs, so the cell is free again."
+    },
+    "wrong": {
+      "id": "clone-elem",
+      "line": 7,
+      "text": "        if let 2 = q.borrow()[i].clone() {",
+      "after": "BorrowMutError",
+      "why": "Cloning the element changes what the pattern matches on, not when the `Ref` is dropped: it still lives to the end of the block.",
+      "clone": true,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l8"
+    ],
+    "snippets": 6,
+    "variants": 9
+  },
+  {
+    "code": "E0106",
+    "cluster": "lifetimes",
+    "means": "a returned or stored reference with no lifetime to tie it to",
+    "panic": false,
+    "key": "lifetimes/lexer-over-text/bare-ref",
+    "title": "Hold a view of the prompt in a lexer",
+    "domain": "Tokenizer",
+    "source": "struct Lexer(&str);\n\nfn count(t: String) -> usize {\n    let lx = Lexer(&t);\n    lx.0.len()\n}",
+    "line": 1,
+    "message": "missing lifetime specifier",
+    "why": "A reference stored in a struct must say how long it is valid, and `&str` with no lifetime names nothing the struct could be tied to.",
+    "fix": {
+      "id": "name-it",
+      "line": 1,
+      "text": "struct Lexer<'a>(&'a str);",
+      "after": "compiles",
+      "why": "The struct declares `'a`, and the field uses it, so every `Lexer` is tied to the text it borrows."
+    },
+    "wrong": {
+      "id": "static-text",
+      "line": 1,
+      "text": "struct Lexer(&'static str);",
+      "after": "E0597",
+      "why": "A `'static` field asks for text that lives for the whole program, and `&t` borrows a local `String` that is dropped on return.",
+      "clone": false,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l9"
+    ],
+    "snippets": 8,
+    "variants": 11
+  },
+  {
+    "code": "E0373",
+    "cluster": "lifetimes",
+    "means": "a closure that may outlive the function while it borrows a local",
+    "panic": false,
+    "key": "lifetimes/above-min-iter/no-move",
+    "title": "Return the blocks above a minimum size",
+    "domain": "BlockPool",
+    "source": "fn above(\n    v: &[u32],\n    min: u32,\n) -> impl Iterator<Item = &u32> {\n    v.iter().filter(|x| **x > min)\n}",
+    "line": 5,
+    "message": "closure may outlive the current function, but it borrows `min`, which is owned by the current function",
+    "why": "Without `move` the closure borrows the parameter `min`, which is dropped when `above` returns, but the iterator is handed to the caller.",
+    "fix": {
+      "id": "add-move",
+      "line": 5,
+      "text": "    v.iter().filter(move |x| **x > min)",
+      "after": "compiles",
+      "why": "`move` copies the `u32` into the closure, so the iterator carries its own `min` out of the function."
+    },
+    "wrong": {
+      "id": "clone-min",
+      "line": 5,
+      "text": "    v.iter().filter(|x| **x > min.clone())",
+      "after": "E0373",
+      "why": "The clone is made when the closure runs, and the closure still borrows `min` to reach it: the borrow, and the error, remain.",
+      "clone": true,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l9"
+    ],
+    "snippets": 9,
+    "variants": 9
+  },
+  {
+    "code": "E0381",
+    "cluster": "moves",
+    "means": "a read of a binding that was never given a value",
+    "panic": false,
+    "key": "moves/warm-ids-uninit/arm-missing",
+    "title": "Warm a cache with one id per request",
+    "domain": "PrefixCache",
+    "source": "fn warm(n: usize) -> Vec<u32> {\n    let ids: Vec<u32>;\n    match n {\n        0 => ids = Vec::new(),\n        _ => {}\n    }\n    ids\n}",
+    "line": 7,
+    "message": "used binding `ids` is possibly-uninitialized",
+    "why": "When `n` is not 0 nothing assigns `ids`, so line 7 moves a binding that holds no value.",
+    "fix": {
+      "id": "assign-arm",
+      "line": 5,
+      "text": "        _ => ids = vec![1; n],",
+      "after": "compiles",
+      "why": "Each arm now assigns `ids` once, so line 7 always has a vector to return."
+    },
+    "wrong": {
+      "id": "empty-vec",
+      "line": 5,
+      "text": "        _ => ids = vec![],",
+      "after": "compiles",
+      "why": "It compiles, but the warm cache is empty for every `n`, not `n` ones.",
+      "clone": false,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l1"
+    ],
+    "snippets": 3,
+    "variants": 6
+  },
+  {
+    "code": "E0384",
+    "cluster": "moves",
+    "means": "a second assignment to a binding not declared `mut`",
+    "panic": false,
+    "key": "moves/rotate-reinit-binding/immutable-reinit",
+    "title": "Rotate the active batch for the next one",
+    "domain": "Batch",
+    "source": "type V = Vec<u32>;\nfn rotate(cur: V, next: V) -> V {\n    let old = cur;\n    cur = next;\n    old\n}",
+    "line": 4,
+    "message": "cannot assign to immutable argument `cur`",
+    "why": "A binding not declared `mut` has no W, and a moved binding does not get one back: `cur = next` is an assignment to it.",
+    "focus": {
+      "line": 4,
+      "path": "cur",
+      "needs": [
+        "write"
+      ]
+    },
+    "permission": "write",
+    "fix": {
+      "id": "mut-param",
+      "line": 2,
+      "text": "fn rotate(mut cur: V, next: V) -> V {",
+      "after": "compiles",
+      "why": "Declaring the parameter `mut` gives it W, so it can hold a new value after the move."
+    },
+    "wrong": {
+      "id": "ref-param",
+      "line": 2,
+      "text": "fn rotate(ref cur: V, next: V) -> V {",
+      "after": "E0308",
+      "why": "`ref` binds a reference to the argument, which is not a `V` any more, and it still gives R only.",
+      "clone": false,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l1"
+    ],
+    "snippets": 8,
+    "variants": 9
+  },
+  {
+    "code": "E0503",
+    "cluster": "borrows",
+    "means": "a use of a value while it is mutably borrowed",
+    "panic": false,
+    "key": "borrows/depth-counter-tick/read-first",
+    "title": "Bump a depth counter through a reborrow, then read it",
+    "domain": "DecodeLoop",
+    "source": "fn tick(n: &mut u32) -> u32 {\n    let m = &mut *n;\n    *m += 1;\n    *n + *m\n}",
+    "line": 4,
+    "message": "cannot use `*n` because it was mutably borrowed",
+    "why": "`m` is still read after `*n`, so `*n` has lent out R and W to the reborrow and reading it lacks R.",
+    "focus": {
+      "line": 4,
+      "path": "*n",
+      "needs": [
+        "read"
+      ]
+    },
+    "permission": "read",
+    "fix": {
+      "id": "m-first",
+      "line": 4,
+      "text": "    *m + *n",
+      "after": "compiles",
+      "why": "With `*m` read first, `m` is finished before `*n` is read, so the reborrow is over."
+    },
+    "wrong": {
+      "id": "clone-n",
+      "line": 4,
+      "text": "    n.clone() + *m",
+      "after": "E0502",
+      "why": "`clone` reads `*n` too, so it needs the same R that `m` has taken, and it copies a `u32` for nothing.",
+      "clone": true,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l4"
+    ],
+    "snippets": 11,
+    "variants": 15
+  },
+  {
+    "code": "E0507",
+    "cluster": "moves",
+    "means": "a move out of a place behind a reference",
+    "panic": false,
+    "key": "lifetimes/box-block-list/ref-box",
+    "title": "Take the block list out of its box",
+    "domain": "KvBlockTable",
+    "source": "fn take(b: &Box<Vec<u32>>) -> usize {\n    let v = *b;\n    let n = v.len();\n    n\n}",
+    "line": 2,
+    "message": "cannot move out of `*b` which is behind a shared reference",
+    "why": "Through a `&Box`, `*b` has R but no O, because the caller still owns the box, and `let v = *b` moves the vector out, which needs O.",
+    "focus": {
+      "line": 2,
+      "path": "*b",
+      "needs": [
+        "read",
+        "own"
+      ]
+    },
+    "permission": "own",
+    "fix": {
+      "id": "borrow-inner",
+      "line": 2,
+      "text": "    let v = &**b;",
+      "after": "compiles",
+      "why": "A borrow of the inner vector needs only R, and `len` reads through the reference."
+    },
+    "wrong": {
+      "id": "clone-inner",
+      "line": 2,
+      "text": "    let v = (**b).clone();",
+      "after": "compiles",
+      "why": "It compiles because it copies every block into a new `Vec`, only to take its length.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3"
+    ],
+    "snippets": 30,
+    "variants": 44
+  },
+  {
+    "code": "E0508",
+    "cluster": "moves",
+    "means": "a move out of an array element by index",
+    "panic": false,
+    "key": "moves/name-pair-array/move-first",
+    "title": "Add up the lengths of two names in an array",
+    "domain": "Replica",
+    "source": "fn pair(ns: [String; 2]) -> usize {\n    let a = ns[0];\n    let b = &ns[1];\n    a.len() + b.len()\n}",
+    "line": 2,
+    "message": "cannot move out of type `[String; 2]`, a non-copy array",
+    "why": "An element of an array never has O, because rustc cannot track which elements left (and `ns` is not declared `mut`, so its elements hold R only); `let a = ns[0]` moves the string out.",
+    "fix": {
+      "id": "borrow-first",
+      "line": 2,
+      "text": "    let a = &ns[0];",
+      "after": "compiles",
+      "why": "A `&String` needs only R, which every element has."
+    },
+    "wrong": {
+      "id": "clone-first",
+      "line": 2,
+      "text": "    let a = ns[0].clone();",
+      "after": "compiles",
+      "why": "It copies the first name to read its length.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3"
+    ],
+    "snippets": 3,
+    "variants": 5
+  },
+  {
+    "code": "E0509",
+    "cluster": "moves",
+    "means": "a move out of a field of a type that implements Drop",
+    "panic": false,
+    "key": "moves/conn-addr-take/move-field",
+    "title": "Hand back the address of a closing connection",
+    "domain": "Replica",
+    "source": "struct Conn {\n    addr: String,\n    open: bool,\n}\n\nimpl Drop for Conn {\n    fn drop(&mut self) {\n        self.open = false;\n    }\n}\n\nfn addr_of(mut c: Conn) -> String {\n    c.addr\n}",
+    "line": 13,
+    "message": "cannot move out of type `Conn`, which implements the `Drop` trait",
+    "why": "A type with a `Drop` impl must reach `drop` whole, so `c.addr` has R and W but not O; returning the field by value moves it out.",
+    "focus": {
+      "line": 13,
+      "path": "c.addr",
+      "needs": [
+        "read",
+        "own"
+      ]
+    },
+    "permission": "own",
+    "fix": {
+      "id": "take-addr",
+      "line": 13,
+      "text": "    std::mem::take(&mut c.addr)",
+      "after": "compiles",
+      "why": "It moves the string out and puts an empty one back, so the connection is whole when `drop` runs."
+    },
+    "wrong": {
+      "id": "clone-addr",
+      "line": 13,
+      "text": "    c.addr.clone()",
+      "after": "compiles",
+      "why": "It returns a copy and leaves the original in the connection until `drop` ends it.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3"
+    ],
+    "snippets": 4,
+    "variants": 7
+  },
+  {
+    "code": "E0515",
+    "cluster": "lifetimes",
+    "means": "a returned reference to data the function owns",
+    "panic": false,
+    "key": "lifetimes/block-view-escape/local-vec",
+    "title": "Hand out a view of the first block bytes",
+    "domain": "KvBlockTable",
+    "source": "struct View<'a> {\n    bytes: &'a [u8],\n}\n\nfn view(pool: &[u8]) -> View<'_> {\n    let head = pool[..4].to_vec();\n    View { bytes: &head }\n}",
+    "line": 7,
+    "message": "cannot return value referencing local variable `head`",
+    "why": "`to_vec` copies the bytes into a `Vec` that `view` owns and drops on return, and the `View` would point into it.",
+    "fix": {
+      "id": "slice-pool",
+      "line": 6,
+      "text": "    let head = pool.split_at(4).0;",
+      "after": "compiles",
+      "why": "The first part of `pool` is a slice of bytes the caller owns, so the `View` can leave the function."
+    },
+    "wrong": {
+      "id": "clone-head",
+      "line": 6,
+      "text": "    let head = pool.clone();",
+      "after": "compiles",
+      "why": "Cloning a slice reference copies the reference, not the bytes, so `head` is the whole pool, not its first four bytes.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l9"
+    ],
+    "snippets": 6,
+    "variants": 11
+  },
+  {
+    "code": "E0521",
+    "cluster": "lifetimes",
+    "means": "borrowed data escaping the function",
+    "panic": false,
+    "key": "lifetimes/worker-name-thread/ref-param",
+    "title": "Start a worker thread and log its name",
+    "domain": "Worker",
+    "source": "fn spawn_worker(id: &u32) {\n    let name = format!(\"worker-{id}\");\n    let h = std::thread::spawn(move || {\n        println!(\"{name} {id}\");\n    });\n    h.join().unwrap();\n    println!(\"{id} done\");\n}",
+    "line": 3,
+    "message": "borrowed data escapes outside of function",
+    "why": "`move` moves the reference `id` into the thread, but the reference is only valid while the caller's `u32` is, which may end before the thread does.",
+    "fix": {
+      "id": "own-id",
+      "line": 1,
+      "text": "fn spawn_worker(id: u32) {",
+      "after": "compiles",
+      "why": "An owned `u32` is copied into the thread, so the thread does not depend on the caller's variable."
+    },
+    "wrong": {
+      "id": "static-id",
+      "line": 1,
+      "text": "fn spawn_worker(id: &'static u32) {",
+      "after": "compiles",
+      "why": "It compiles, but callers can now pass only references that live for the whole program, such as a constant, not a counter they own.",
+      "clone": false,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l9"
+    ],
+    "snippets": 3,
+    "variants": 4
+  },
+  {
+    "code": "E0594",
+    "cluster": "borrows",
+    "means": "an assignment through a `&` reference or to a binding not declared `mut`",
+    "panic": false,
+    "key": "moves/flush-table-blocks/shared-self",
+    "title": "Flush the blocks out of a table",
+    "domain": "KvBlockTable",
+    "source": "struct Table {\n    blocks: Vec<u32>,\n    epoch: u64,\n}\n\nimpl Table {\n    fn flush(&self) -> Vec<u32> {\n        self.epoch += 1;\n        std::mem::take(&mut self.blocks)\n    }\n}",
+    "line": 8,
+    "message": "cannot assign to `self.epoch`, which is behind a `&` reference",
+    "why": "Through a `&Table`, `self.epoch` has R but no W, and `+=` writes it.",
+    "focus": {
+      "line": 8,
+      "path": "self.epoch",
+      "needs": [
+        "read",
+        "write"
+      ]
+    },
+    "permission": "write",
+    "fix": {
+      "id": "mut-self",
+      "line": 7,
+      "text": "    fn flush(&mut self) -> Vec<u32> {",
+      "after": "compiles",
+      "why": "A `&mut self` carries W for every field, so the epoch can change and the blocks can be taken."
+    },
+    "wrong": {
+      "id": "clone-blocks",
+      "line": 9,
+      "text": "        self.blocks.clone()",
+      "after": "E0594",
+      "why": "The write on line 8 is still behind a `&`, and the copy would leave every block in the table.",
+      "clone": true,
+      "compiles": false
+    },
+    "lessons": [
+      "r.l4"
+    ],
+    "snippets": 15,
+    "variants": 24
+  },
+  {
+    "code": "E0596",
+    "cluster": "borrows",
+    "means": "a `&mut` borrow of a place not declared `mut`",
+    "panic": false,
+    "key": "moves/swap-table-ids/swap-shared",
+    "title": "Swap the block ids of two tables",
+    "domain": "KvBlockTable",
+    "source": "struct Table { ids: Vec<u32> }\n\nfn swap_ids(a: &mut Table, b: &Table) {\n    std::mem::swap(&mut a.ids, &mut b.ids);\n}",
+    "line": 4,
+    "message": "cannot borrow `b.ids` as mutable, as it is behind a `&` reference",
+    "why": "Through a `&Table`, `b.ids` has R but no W, and `swap` borrows both places `&mut`.",
+    "focus": {
+      "line": 4,
+      "path": "b.ids",
+      "needs": [
+        "read",
+        "write"
+      ]
+    },
+    "permission": "write",
+    "fix": {
+      "id": "mut-b",
+      "line": 3,
+      "text": "fn swap_ids(a: &mut Table, b: &mut Table) {",
+      "after": "compiles",
+      "why": "A `&mut Table` carries the W that `swap` needs on both sides."
+    },
+    "wrong": {
+      "id": "clone-ids",
+      "line": 4,
+      "text": "    a.ids = b.ids.clone();",
+      "after": "compiles",
+      "why": "It reads `b` with R and copies the ids, so `a` gets them but `b` keeps its own and nothing is swapped.",
+      "clone": true,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l3",
+      "r.l4"
+    ],
+    "snippets": 48,
+    "variants": 54
+  },
+  {
+    "code": "BorrowError",
+    "cluster": "cells",
+    "means": "a `borrow` on a RefCell that is already mutably borrowed, a panic at run time",
+    "panic": true,
+    "key": "lifetimes/peek-while-writing/push-len",
+    "title": "Record the queue length in the queue",
+    "domain": "PrefixCache",
+    "source": "use std::cell::RefCell;\n\nfn main() {\n    let q = RefCell::new(vec![1, 2]);\n    let n = q.borrow().len();\n    q.borrow_mut().push(q.borrow().len());\n    println!(\"{:?}\", q.borrow());\n}",
+    "line": 6,
+    "message": "RefCell already mutably borrowed",
+    "why": "The receiver `q.borrow_mut()` runs first and its `RefMut` lives to the end of the statement, so `borrow()` in the argument finds the cell mutably borrowed: R is taken while `&mut` lives.",
+    "fix": {
+      "id": "let-first",
+      "line": 6,
+      "text": "    q.borrow_mut().push(n);",
+      "after": "compiles",
+      "why": "The length was read on line 5 and its `Ref` is gone, so `push` finds the cell free."
+    },
+    "wrong": {
+      "id": "push-zero",
+      "line": 6,
+      "text": "    q.borrow_mut().push(0);",
+      "after": "compiles",
+      "why": "It compiles and stops the panic, but it pushes 0 instead of the length that line 5 recorded.",
+      "clone": false,
+      "compiles": true
+    },
+    "lessons": [
+      "r.l8"
+    ],
+    "snippets": 3,
+    "variants": 3
+  }
+]

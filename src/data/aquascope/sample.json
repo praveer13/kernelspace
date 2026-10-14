@@ -1,0 +1,63 @@
+{
+  "v": 1,
+  "traces": {
+    "push-after-last-use": {
+      "sha256": "2735d036ee54507c18a93fc4ba77b59ac6a44ee5df3139615aa105b4e69a9851",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 6,
+      "paths": ["v","first","*first"],
+      "changes": [
+        {"line":2,"path":"v","before":"","after":"RWO"},
+        {"line":3,"path":"first","before":"","after":"RO"},
+        {"line":3,"path":"*first","before":"","after":"R"},
+        {"line":3,"path":"v","before":"RWO","after":"R"},
+        {"line":4,"path":"first","before":"RO","after":""},
+        {"line":4,"path":"*first","before":"R","after":""},
+        {"line":4,"path":"v","before":"R","after":"RWO"},
+        {"line":5,"path":"v","before":"RWO","after":""}
+      ],
+      "uses": [
+        {"line":3,"col":17,"path":"v","needs":"R","has":"RWO"},
+        {"line":4,"col":15,"path":"first","needs":"R","has":"RO"},
+        {"line":5,"col":5,"path":"v","needs":"RW","has":"RWO"}
+      ],
+      "code": "fn main() {\n    let mut v = vec![1, 2, 3];\n    let first = &v[0];\n    println!(\"{first}\");\n    v.push(4);\n}"
+    },
+    "push-while-borrowed": {
+      "sha256": "577ce6ed9395213508f4b5e8215e89f8894aa7b5de2bc642ae50811e53da3765",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 6,
+      "paths": ["v","first","*first"],
+      "changes": [
+        {"line":2,"path":"v","before":"","after":"RWO"},
+        {"line":3,"path":"first","before":"","after":"RO"},
+        {"line":3,"path":"*first","before":"","after":"R"},
+        {"line":3,"path":"v","before":"RWO","after":"R"}
+      ],
+      "uses": [
+        {"line":3,"col":17,"path":"v","needs":"R","has":"RWO"},
+        {"line":4,"col":5,"path":"v","needs":"RW","has":"R"}
+      ],
+      "code": "fn main() {\n    let mut v = vec![1, 2, 3];\n    let first = &v[0];\n    v.push(4);\n    println!(\"{first}\");\n}"
+    },
+    "use-after-move": {
+      "sha256": "a647a1b447c6de2d7188b3f0fbe80af891ed233bfe433ecc3911b721e240f9ea",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 3,
+      "paths": ["s","t"],
+      "changes": [
+        {"line":1,"path":"s","before":"","after":"RO"},
+        {"line":2,"path":"s","before":"RO","after":""},
+        {"line":2,"path":"t","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":2,"col":8,"path":"s","needs":"RO","has":"RO"},
+        {"line":3,"col":11,"path":"s","needs":"R","has":""}
+      ],
+      "code": "let s = String::from(\"hello\");\nlet t = s;\nprintln!(\"{s} {t}\");"
+    }
+  }
+}

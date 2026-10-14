@@ -1,14 +1,15 @@
 /**
- * verify-guardrails — the H1 guardrail kit in every lab zip (docs/specs/wave-1.md §13.4).
+ * verify-guardrails — the H1 guardrail kit in every lab zip and .tar.gz (docs/specs/wave-1.md §13.4, wave-2.md §16.1).
  *
- * Unzips each lab zip and checks that
+ * Unpacks each lab archive, the zip and the .tar.gz beside it, and checks that
  *   - the five kit files are present and nothing private ships;
  *   - settings.json denies edits to that zip's TODO(you) file and wires the PreToolUse hook;
  *   - AGENTS.md lists exactly the lab's required check ids (from src/data/labs.ts), the explanation gate,
  *     the ladder and the AI-use card, and CLAUDE.md is `@AGENTS.md`;
- *   - the zip's own ks-guard.sh passes the fixture matrix under `sh`.
+ *   - the zip's own ks-guard.sh passes the fixture matrix under `sh`;
+ *   - the .tar.gz holds exactly the zip's members with the same bytes, and its hook is executable.
  *
- * Two sets of zips are checked. The generator's output (pack-labs.py into a temp dir) always has to be
+ * Two sets of archives are checked. The generator's output (pack-labs.py into a temp dir) always has to be
  * 18/18. The committed public/labs/*.zip were repacked by C18, which flipped REQUIRE_COMMITTED: a committed zip
  * with no kit fails like any other. (With the flag off, a kit-less zip is reported as awaiting repack.)
  *
@@ -18,7 +19,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { inflateRawSync } from 'node:zlib'
+import { gunzipSync, inflateRawSync } from 'node:zlib'
 import { dumpLabs, type LabDump } from './dump-labs'
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -132,6 +133,65 @@ export function readZip(path: string): Map<string, Buffer> {
   return files
 }
 
+// ---- a small tar.gz reader (the same reason) ---------------------------------------------------------------
+
+export interface TarMember {
+  data: Buffer
+  mode: number
+}
+
+/** `<lab>.zip` to `<lab>.tar.gz`: the archive pack-labs.py writes beside every zip. */
+export const tarName = (zip: string) => zip.replace(/\.zip$/, '.tar.gz')
+
+const tarString = (block: Buffer, from: number, len: number) => {
+  const field = block.subarray(from, from + len)
+  const end = field.indexOf(0)
+  return field.toString('utf8', 0, end < 0 ? len : end)
+}
+
+const tarOctal = (block: Buffer, from: number, len: number) => parseInt(tarString(block, from, len).trim() || '0', 8)
+
+/** Regular files of a gzipped ustar or GNU tar, in order. Anything but plain files and GNU long names is an error. */
+export function readTar(path: string): Map<string, TarMember> {
+  const tar = gunzipSync(readFileSync(path))
+  const files = new Map<string, TarMember>()
+  let longName: string | null = null
+  let p = 0
+  while (p + 512 <= tar.length) {
+    const block = tar.subarray(p, p + 512)
+    if (block.every((b) => b === 0)) break
+    const sum = tarOctal(block, 148, 8)
+    const actual = block.reduce((acc, b, i) => acc + (i >= 148 && i < 156 ? 32 : b), 0)
+    if (sum !== actual) throw new Error(`${path}: bad tar header checksum at byte ${p}`)
+    const size = tarOctal(block, 124, 12)
+    const type = String.fromCharCode(block[156] || 48)
+    const body = tar.subarray(p + 512, p + 512 + size)
+    p += 512 + Math.ceil(size / 512) * 512
+    if (type === 'L') {
+      longName = tarString(body, 0, body.length)
+      continue
+    }
+    if (type !== '0') throw new Error(`${path}: unsupported tar entry type "${type}"`)
+    const prefix = tarString(block, 345, 155)
+    const name = longName ?? (prefix ? `${prefix}/${tarString(block, 0, 100)}` : tarString(block, 0, 100))
+    longName = null
+    if (files.has(name)) throw new Error(`${path}: ${name} appears twice`)
+    files.set(name, { data: Buffer.from(body), mode: tarOctal(block, 100, 8) })
+  }
+  return files
+}
+
+/** What differs between a zip's members and a .tar.gz's: names, order and bytes, as readable lines. */
+export function memberDrift(zip: Map<string, Buffer>, tar: Map<string, Buffer>): string[] {
+  const drift = [
+    ...[...zip.keys()].filter((n) => !tar.has(n)).map((n) => `missing ${n}`),
+    ...[...tar.keys()].filter((n) => !zip.has(n)).map((n) => `unexpected ${n}`),
+    ...[...zip.keys()].filter((n) => tar.has(n) && !zip.get(n)!.equals(tar.get(n)!)).map((n) => `changed ${n}`),
+  ]
+  if (drift.length === 0 && [...zip.keys()].join('\n') !== [...tar.keys()].join('\n')) drift.push('members are in a different order')
+  return drift
+}
+
 // ---- one zip -----------------------------------------------------------------------------------------------
 
 /** The ids listed as `- \`id\`: label` lines under one `## <heading>` of AGENTS.md. */
@@ -153,9 +213,9 @@ export function zipHasKit(files: Map<string, Buffer>): boolean {
   return [...files.keys()].some((n) => n.startsWith('.claude/'))
 }
 
-export function checkZip(lab: LabDump, files: Map<string, Buffer>, shells: string[]): string[] {
+export function checkZip(lab: LabDump, files: Map<string, Buffer>, shells: string[], archive = lab.zip): string[] {
   const errors: string[] = []
-  const err = (m: string) => errors.push(`${lab.zip}: ${m}`)
+  const err = (m: string) => errors.push(`${archive}: ${m}`)
   for (const f of KIT_FILES) if (!files.has(f)) err(`missing ${f}`)
   for (const n of files.keys()) {
     const parts = n.split('/')
@@ -231,6 +291,33 @@ export function availableShells(): string[] {
   return shells
 }
 
+/** Both archives of one lab, checked as the learner will unpack them. */
+function checkLab(lab: LabDump, dir: string, where: string, shells: string[], errors: string[]): boolean {
+  const before = errors.length
+  const zip = readZip(join(dir, lab.zip))
+  errors.push(...checkZip(lab, zip, shells))
+  const tar = tarName(lab.zip)
+  const tarPath = join(dir, tar)
+  if (!existsSync(tarPath)) {
+    errors.push(`${tar}: not in ${where}`)
+    return false
+  }
+  let members: Map<string, TarMember>
+  try {
+    members = readTar(tarPath)
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : String(e))
+    return false
+  }
+  const files = new Map([...members].map(([name, m]) => [name, m.data]))
+  // the zip's hook matrix already ran on identical bytes, so the tar needs the structural checks and the drift check
+  errors.push(...checkZip(lab, files, [], tar))
+  for (const d of memberDrift(zip, files)) errors.push(`${tar}: differs from ${lab.zip} (${d})`)
+  const guard = members.get('.claude/hooks/ks-guard.sh')
+  if (guard && (guard.mode & 0o111) === 0) errors.push(`${tar}: .claude/hooks/ks-guard.sh is not executable`)
+  return errors.length === before
+}
+
 function main(): number {
   const requireCommitted = REQUIRE_COMMITTED || process.argv.includes('--require-committed')
   const labs = dumpLabs()
@@ -245,35 +332,29 @@ function main(): number {
       return 1
     }
     let ok = 0
-    for (const lab of labs) {
-      const e = checkZip(lab, readZip(join(tmp, lab.zip)), shells)
-      if (e.length === 0) ok++
-      errors.push(...e)
-    }
-    console.log(`verify-guardrails: generated zips ${ok}/${labs.length} compliant (hook matrix under ${shells.join(', ')})`)
+    for (const lab of labs) if (checkLab(lab, tmp, 'the pack-labs output', shells, errors)) ok++
+    console.log(`verify-guardrails: generated zip + tar.gz pairs ${ok}/${labs.length} compliant (hook matrix under ${shells.join(', ')})`)
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }
 
   let committed = 0
   let stale = 0
+  const dir = join(ROOT, 'public/labs')
   for (const lab of labs) {
-    const path = join(ROOT, 'public/labs', lab.zip)
+    const path = join(dir, lab.zip)
     if (!existsSync(path)) {
       errors.push(`${lab.zip}: not in public/labs`)
       continue
     }
-    const files = readZip(path)
-    if (!zipHasKit(files) && !requireCommitted) {
+    if (!zipHasKit(readZip(path)) && !requireCommitted) {
       stale++
       continue
     }
-    const e = checkZip(lab, files, shells)
-    if (e.length === 0) committed++
-    errors.push(...e)
+    if (checkLab(lab, dir, 'public/labs', shells, errors)) committed++
   }
   const note = stale > 0 ? `, ${stale} awaiting the C18 repack (--require-committed enforces)` : ''
-  console.log(`verify-guardrails: committed zips ${committed}/${labs.length} compliant${note}`)
+  console.log(`verify-guardrails: committed zip + tar.gz pairs ${committed}/${labs.length} compliant${note}`)
 
   for (const e of errors) console.error(`  ${e}`)
   if (errors.length > 0) {

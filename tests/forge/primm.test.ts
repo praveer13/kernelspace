@@ -13,6 +13,7 @@ import {
   PRIMM_ITEMS,
   PRIMM_MC_ITEMS,
   PRIMM_STEPS,
+  RUN_SPEC,
   REFERENCE,
   STAGES,
   attemptsToGreen,
@@ -32,6 +33,10 @@ import {
   stageRows,
   type NumberPrimm,
 } from '../../src/data/forge/rust-allocator/primm'
+import { PRIMM_MC_ITEMS as BPE_MC_ITEMS } from '../../src/data/forge/bpe-tokenizer/primm'
+import { PRIMM_MC_ITEMS as KV_MC_ITEMS } from '../../src/data/forge/kv-block-manager/primm'
+import { poolCueFailures, poolCueRows } from '../../scripts/item-cues'
+import lab01 from '../../src/data/forge/rust-allocator'
 import { createHeap, viewOf } from '../../src/lib/world/heap'
 import { isKnownKind, refMatchesKind } from '../../src/lib/ledger/refs'
 
@@ -417,7 +422,7 @@ describe('item wording', () => {
 /** Server renders only: there is no DOM in this suite, so interaction (focus after submit, the peek click) is checked in a browser. */
 describe('the panel as rendered (ARIA and focus structure)', () => {
   const panel = (initial: 'predict' | 'run' | 'investigate' | 'modify' | 'make') =>
-    renderToStaticMarkup(createElement(PrimmPanel, { checks, passed: new Set<string>(), initial }))
+    renderToStaticMarkup(createElement(PrimmPanel, { bundle: lab01, checks, passed: new Set<string>(), initial }))
 
   test('every graded item mounts an empty live region the verdict is written into, and no result yet', () => {
     for (const step of ['predict', 'investigate'] as const) {
@@ -440,9 +445,69 @@ describe('the panel as rendered (ARIA and focus structure)', () => {
   })
 
   test('the reference run has one persistent button and a status region that starts empty', () => {
-    const html = renderToStaticMarkup(createElement(ReferenceRun, { config: REFERENCE, title: 'Reference' }))
+    const html = renderToStaticMarkup(createElement(ReferenceRun, { bundle: lab01, config: { ...REFERENCE }, title: 'Reference' }))
     expect(html.match(/<button/g)?.length).toBe(1)
     expect(html).toContain('data-run-button="idle"')
     expect(html).toMatch(/<p role="status" aria-live="polite"[^>]*data-caption="true"><\/p>/)
+  })
+})
+
+describe('lab 01’s reference run as bundle data (docs/specs/wave-2.md §13.1)', () => {
+  const spec = lab01.primm.run
+
+  test('the bundle carries primm.ts’s own items, steps and run, and PRIMM_MC_ITEMS is still exported from primm.ts', () => {
+    expect(spec).toBe(RUN_SPEC)
+    expect(lab01.primm.items).toEqual([...PRIMM_ITEMS])
+    expect(lab01.primm.steps).toEqual([...PRIMM_STEPS])
+    expect(PRIMM_MC_ITEMS.length).toBeGreaterThan(0)
+    expect(spec.item).toEqual({ id: 'lab01.primm.r1', nsec: 45 })
+  })
+
+  test('a run through the spec is runChurn’s run: same ops, same frames, same observed value', () => {
+    for (const config of [REFERENCE, BUMP, { ...REFERENCE, fit: 'worst' as const }, { ...REFERENCE, coalesce: false }]) {
+      const direct = runChurn(config)
+      const via = spec.run({ ...config })
+      expect(via.total).toBe(direct.total)
+      expect(via.value).toBe(direct.survived)
+      expect(via.truth).toBe(direct.total)
+      expect(via.clean).toBe(direct.clean)
+      expect(via.summary).toBe(describeRun(direct))
+      expect(via.frames.map((f) => f.op)).toEqual(direct.samples.map((s) => s.op))
+      expect(via.frames.map((f) => f.cells)).toEqual(direct.samples.map((s) => s.map))
+      expect(via.frames[0].cells).toHaveLength(CHURN.buckets)
+      expect(via.frames[0].stats.map((x) => x.label)).toEqual(['live bytes', 'largest free run'])
+    }
+  })
+
+  test('the reference config is the Run step’s reference and the baseline is the bump allocator', () => {
+    expect(spec.reference).toEqual({ ...REFERENCE })
+    expect(spec.baseline).toEqual({ ...BUMP })
+    expect(spec.title(spec.reference)).toBe('Reference: first-fit with coalescing')
+    expect(spec.title(spec.baseline!)).toBe('Bump allocator: never takes a freed block back')
+    expect(spec.run(spec.reference).clean).toBe(true)
+    expect(spec.run(spec.baseline!).clean).toBe(false)
+    expect(spec.disclaimer).toContain('not check 6 itself')
+  })
+
+  test('the stages are numbered 1 to 4 in order, as the checks in labs.ts expect', () => {
+    expect(lab01.stages.map((s) => s.n)).toEqual([1, 2, 3, 4])
+    expect(new Set(checks.map((c) => c.stage))).toEqual(new Set([1, 2, 3, 4]))
+  })
+})
+
+describe('the PRIMM choice pool of the three labs leaves margin (2c final review: lab 01 sat on the limit)', () => {
+  const all = [...PRIMM_MC_ITEMS, ...KV_MC_ITEMS, ...BPE_MC_ITEMS].map((i) => ({ ref: i.id, q: i.q }))
+
+  test('twelve items: 5 + 4 + 3, every one with four options', () => {
+    expect([PRIMM_MC_ITEMS.length, KV_MC_ITEMS.length, BPE_MC_ITEMS.length]).toEqual([5, 4, 3])
+    for (const { q } of all) expect(q.options.length).toBe(4)
+  })
+
+  test('no single-feature strategy hits more than 4 of the 12 (33%), and each lab clears the bar on its own', () => {
+    expect(poolCueFailures('primm', all)).toEqual([])
+    for (const row of poolCueRows(all)) expect(row.hit * row.items, row.name).toBeLessThanOrEqual(4 + 1e-9)
+    for (const items of [PRIMM_MC_ITEMS, KV_MC_ITEMS, BPE_MC_ITEMS]) {
+      expect(poolCueFailures('lab', items.map((i) => ({ ref: i.id, q: i.q })))).toEqual([])
+    }
   })
 })

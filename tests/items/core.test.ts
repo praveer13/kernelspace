@@ -189,12 +189,13 @@ describe('the registry', () => {
     await expect(loadFamily('no-such-family')).rejects.toThrow('unknown generator family')
   })
 
+  // the compile family's ten choice variants each run the blind-strategy gate at 200 seeds a level
   test('every shipped family passes the whole §5.6 suite at 100 seeds', async () => {
     for (const gen of await loadAllFamilies()) {
       expect(checkFamily(gen, { seeds: 100 }).problems).toEqual([])
       expect(checkHashes(gen, hashFixture)).toEqual([])
     }
-  })
+  }, 60_000)
 })
 
 describe('verify-generators: a sound family', () => {

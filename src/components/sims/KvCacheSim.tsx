@@ -304,7 +304,8 @@ export default function KvCacheSim() {
       onFocus={() => setHoverTerm(id)}
       onBlur={() => setHoverTerm(null)}
       className={cn(
-        'rounded-[3px] px-1 transition-colors duration-180',
+        // WCAG 2.5.8: a one-letter term ('2', 'B=8') is still a 24 px target at 320 px
+        'inline-flex min-h-6 min-w-6 items-center justify-center rounded-[3px] px-1 transition-colors duration-180',
         hoverTerm === id ? 'bg-accent-dim text-accent' : 'text-text-2',
       )}
     >

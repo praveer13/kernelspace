@@ -1,0 +1,55 @@
+{
+  "v": 1,
+  "traces": {
+    "clone-keeps-source": {
+      "sha256": "33e4bf32d9925c64a832c813515f2f53c091ae4e38fe7033689ca6a9f13b16af",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 4,
+      "paths": ["tokens","snapshot","moved"],
+      "changes": [
+        {"line":1,"path":"tokens","before":"","after":"RO"},
+        {"line":2,"path":"snapshot","before":"","after":"RO"},
+        {"line":3,"path":"moved","before":"","after":"RO"},
+        {"line":3,"path":"tokens","before":"RO","after":""},
+        {"line":4,"path":"moved","before":"RO","after":""},
+        {"line":4,"path":"snapshot","before":"RO","after":""}
+      ],
+      "uses": [
+        {"line":2,"col":21,"path":"tokens","needs":"R","has":"RO"},
+        {"line":3,"col":12,"path":"tokens","needs":"RO","has":"RO"},
+        {"line":4,"col":11,"path":"snapshot","needs":"R","has":"RO"},
+        {"line":4,"col":24,"path":"moved","needs":"R","has":"RO"}
+      ]
+    },
+    "needs-write": {
+      "sha256": "5d09724616ae672c0281e53a56aa878f84b325ec27f5e45d25366339ee8e1570",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 2,
+      "paths": ["log"],
+      "changes": [
+        {"line":1,"path":"log","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":2,"col":3,"path":"log","needs":"RW","has":"RO"}
+      ]
+    },
+    "use-after-move": {
+      "sha256": "e62a122a4f5797cc8d24d8a2236351f268c4fcaef79733d87925a1714423239d",
+      "source": "aquascope",
+      "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
+      "lines": 3,
+      "paths": ["prompt","queued"],
+      "changes": [
+        {"line":1,"path":"prompt","before":"","after":"RO"},
+        {"line":2,"path":"prompt","before":"RO","after":""},
+        {"line":2,"path":"queued","before":"","after":"RO"}
+      ],
+      "uses": [
+        {"line":2,"col":13,"path":"prompt","needs":"RO","has":"RO"},
+        {"line":3,"col":11,"path":"prompt","needs":"R","has":""}
+      ]
+    }
+  }
+}

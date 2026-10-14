@@ -39,7 +39,12 @@ function Part({ part }: { part: PromptPart }) {
 /** Code with a line-number gutter (the numbers are text, so a screen reader hears them) and one marked line. */
 function NumberedCode({ code, mark }: { code: string; mark?: number }) {
   return (
-    <pre className="my-2 max-w-full overflow-x-auto rounded-md border border-line bg-surface-2 py-3 font-mono text-[12px] leading-relaxed text-text-1">
+    <pre
+      role="region"
+      aria-label="Code"
+      tabIndex={0}
+      className="my-2 max-w-full overflow-x-auto rounded-md border border-line bg-surface-2 py-3 font-mono text-[12px] leading-relaxed text-text-1"
+    >
       <code className="block min-w-max">
         {code.split('\n').map((line, i) => {
           const n = i + 1

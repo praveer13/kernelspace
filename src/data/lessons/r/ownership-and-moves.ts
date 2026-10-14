@@ -6,117 +6,263 @@ const lesson: Lesson = {
   trackId: 'r',
   index: 3,
   title: 'Ownership, Moves, Clones & Drops',
-  minutes: 32,
+  minutes: 36,
   hook: 'Every resource has one owner. Follow the obligation through moves and the borrow checker stops feeling supernatural.',
   exercise: 'code',
   blocks: [
     {
       type: 'prose',
-      md: `Python and Java track object liveness at runtime. Rust makes a simpler promise at compile time: every resource has one owner, assignment normally transfers that ownership, and the resource is dropped exactly once when its owner leaves scope.
+      md: `## Read, Write and Own on every path
 
-Think of ownership as a cleanup obligation, not as possession. A move hands that obligation to a new binding. The old binding is dead from that line onward.`,
-    },
-    {
-      type: 'prose',
-      md: `## Copy is cheap duplication; Clone is explicit work
+Python and Java decide at run time whether an object is still reachable. Rust decides at compile time whether a name may still touch a value, and it keeps those books with three permissions. At every line, each path (a variable such as \`s\`, or a place inside one such as \`s.0\`) holds some of them:
 
-Small scalar values such as integers implement **Copy**, so assignment duplicates their bits. Heap-owning values such as **String** and **Vec** move by default. Calling **clone()** performs an explicit deep copy when that is truly the desired semantics.
+- **Read (R):** the path can be read: printed, compared, lent out as a view.
+- **Write (W):** the path can be changed in place. A plain \`let\` does not grant it; \`let mut\` does.
+- **Own (O):** the path may be moved or dropped. The binding that holds O owns the value, and with it the cleanup obligation: the resource is dropped exactly once, when its owner leaves scope.
 
-Do not use clone as borrow-checker punctuation. Ask who should own the value after the call. Often the correct repair is returning ownership, borrowing in R4, or moving the value into the longer-lived component.`,
+A fresh \`let s = String::from(...)\` holds R and O. A \`let mut\` holds all three. Everything in this lesson, moves, clones and drops, is a statement about which of the three a line needs and which it takes away. The compiler rejects a line exactly when it needs a permission its path no longer holds.`,
     },
     {
       type: 'code',
-      filename: 'moves.rs',
+      filename: 'needs_write.rs',
       lang: 'rust',
-      code: `fn normalize(mut name: String) -> String {
-    name.make_ascii_lowercase();
-    name                         // move ownership back to caller
-}
+      code: `let log = String::from("req-17");
+log.push_str(" ok");        // E0596: push_str needs W, and let grants only R and O`,
+      permissions: { trace: 'needs-write' },
+      chips: ['let holds R and O', 'mut adds W', 'a use needs permissions'],
+    },
+    {
+      type: 'prose',
+      md: `The diagram under the code is the model made visible. Each row is a line, each column a path, and a letter is shown only while the path holds it. A **+** marks a permission the line gives and a **−** one it takes away. When a use needs a letter the path does not hold, the row says what is missing, and that is the line the compiler rejects. Here \`push_str\` needs Write and \`log\` never had it.`,
+    },
+    {
+      type: 'prose',
+      md: `## A move gives away Read and Own
 
-let original = String::from("Decode");
-let snapshot = original.clone(); // explicit second buffer
-let normalized = normalize(original);
-// original is dead; normalized owns its buffer
-
-drop(snapshot);                  // deterministic cleanup, usually implicit`,
-      chips: ['one drop obligation', 'moves are usually zero-copy', 'clone is visible cost'],
+Assignment normally **moves** a heap-owning value such as a \`String\` or \`Vec\`. The new binding gains the permissions and the old binding loses every one it held. The old binding is dead from that line onward, so any later use needs a permission it no longer has.`,
+    },
+    {
+      type: 'code',
+      filename: 'move.rs',
+      lang: 'rust',
+      code: `let prompt = String::from("Explain paging");
+let queued = prompt;               // a move: prompt hands its R and O to queued
+println!("{prompt} {queued}");     // E0382: prompt holds nothing now`,
+      permissions: { trace: 'use-after-move' },
+      alt: {
+        java: `String prompt = "Explain paging";
+String queued = prompt;               // two names for one object
+System.out.println(prompt + " " + queued);   // runs: the GC keeps it alive`,
+        python: `prompt = "Explain paging"
+queued = prompt                       # two names for one object
+print(prompt, queued)                 # runs: reference counting keeps it alive`,
+      },
+      align: [
+        {
+          q: 'In Java and Python the same three steps run and print both strings, because the two names refer to one live object. In the Rust version, which line does the compiler reject, and why?',
+          options: [
+            'Line 2: a String has one Own, and the assignment would hand it to two bindings at once',
+            'Line 3: queued holds no Write, and printing has to write the text out to the terminal',
+            'Line 3: the earlier move left prompt holding nothing, so printing it needs Read',
+            'Line 1: String::from takes Own of the literal, so nothing is left to assign to prompt',
+          ],
+          correct: [2],
+          explanation:
+            'The move on line 2 takes Read and Own from prompt and gives them to queued. Line 2 itself is fine; line 3 needs Read on prompt, which no longer exists.',
+          why: [
+            'Line 2 is accepted. A move needs Read and Own on its source, and prompt holds both there; the assignment is how the one Own changes hands.',
+            'Printing reads and never writes, so queued does not need Write. The rejected path is prompt, which has lost Read, not queued.',
+            'Right: the move on line 2 is legal because prompt held Read and Own then. It leaves prompt with nothing, so printing it on line 3 lacks Read.',
+            'String::from builds a new owned String and needs nothing from the literal that Rust would reject. Line 1 compiles.',
+          ],
+          kcs: ['r.permissions'],
+        },
+      ],
+      chips: ['a move loses R and O', 'the new owner gains them', 'use after move needs R'],
     },
     {
       type: 'callout',
       variant: 'warning',
       title: 'Moved does not mean erased',
-      md: `A move usually copies only the small stack representation — pointer, length, capacity — then forbids the source binding. The heap bytes stay where they are. Rust gets zero-copy transfer and prevents two owners from freeing the same allocation.`,
+      md: `A move usually copies only the small stack representation — pointer, length, capacity — then takes every permission from the source binding. The heap bytes stay where they are. Rust gets zero-copy transfer and prevents two owners from freeing the same allocation.`,
+    },
+    {
+      type: 'prose',
+      md: `## Copy duplicates bits; Clone is explicit work
+
+Small scalar values such as integers implement **Copy**. Assignment duplicates their bits and the source keeps every permission it had, so there is nothing to lose. Heap-owning values move by default.
+
+Calling **clone()** is different work. It needs only Read on the source, so the source keeps what it had, and it builds a second buffer with an owner of its own. You can see that in the diagram: the clone line changes nothing for \`tokens\`, and a new path appears holding R and O. On the last line both copies lose everything: a path holds nothing after its last use.`,
+    },
+    {
+      type: 'code',
+      filename: 'clone.rs',
+      lang: 'rust',
+      code: `let tokens = vec![12, 40, 7];
+let snapshot = tokens.clone();     // reads tokens, builds a second buffer
+let moved = tokens;                // tokens gives up R and O
+println!("{snapshot:?} {moved:?}");`,
+      permissions: { trace: 'clone-keeps-source' },
+      chips: ['clone needs R only', 'new buffer, new owner', 'the cost is an allocation and a copy'],
+    },
+    {
+      type: 'prose',
+      md: `## When clone is the wrong fix
+
+A clone silences E0382 by buying a second owner. That is right when two independent buffers are what you want: a snapshot to compare against, or a copy handed to another thread. It is wrong when the code only needed to **read**. The code below pays for a full copy of the vector on every call, to keep a name alive for a function that never needed to own anything.
+
+Ask which permission the callee really needs. If it is only Read, lend it. A signature that takes a read-only view (R4) leaves the caller holding R, W and O, and copies nothing. Reach for clone when you need an owner, and never as punctuation to quiet the compiler.`,
+    },
+    {
+      type: 'code',
+      filename: 'wrong_fix.rs',
+      lang: 'rust',
+      code: `fn total(batch: Vec<u32>) -> u32 {
+    batch.iter().sum()
+}
+
+let batch = vec![12, 40, 7];
+let a = total(batch.clone());      // copies the buffer so total can own it
+let b = total(batch.clone());      // copies it again, only to read it`,
+      alt: {
+        java: `static int total(List<Integer> batch) {
+    return batch.stream().mapToInt(Integer::intValue).sum();
+}
+
+List<Integer> batch = List.of(12, 40, 7);
+int a = total(batch);              // passes a reference, nothing is copied
+int b = total(batch);`,
+        python: `def total(batch):
+    return sum(batch)
+
+batch = [12, 40, 7]
+a = total(batch)                   # passes a reference, nothing is copied
+b = total(batch)`,
+      },
+      align: [
+        {
+          q: 'In Java and Python, total(batch) runs twice on the same list, because each call receives a reference to it and nothing is copied. Which change to the Rust gets the same behaviour, and what does batch keep?',
+          options: [
+            'Clone before each call: a clone moves nothing, so the copy costs the program nothing at the call',
+            'Declare batch with let mut: the Write it gains lets total take the vector twice',
+            'Make total take a view of the vector: it asks for Read, and batch keeps what it held',
+            'Call drop(batch) after the first call: the second call then gets a fresh vector',
+          ],
+          correct: [2],
+          explanation:
+            'total only reads, so it should ask for Read. Lending a view leaves batch with everything it had and copies no data; clone buys an owner the function never needed.',
+          why: [
+            'A clone does allocate and copy the whole buffer on every call, and that is the cost the shared-reference version never pays. Moving nothing does not make it free.',
+            'Write is not the missing permission. A mut binding adds W, but a call that takes the Vec by value still needs O, which the first call took.',
+            'Right: the other languages share one object because the callee only reads. In Rust that is a read-only view, which asks for R and leaves the owner untouched.',
+            'Dropping batch destroys it, and drop gives no fresh vector back. After it the name holds no permissions, so the second call fails too.',
+          ],
+          kcs: ['r.clone-copy-drop'],
+        },
+      ],
+      chips: ['clone buys an owner', 'read-only needs only R', 'borrowing comes in R4'],
+    },
+    {
+      type: 'callout',
+      variant: 'info',
+      title: 'Read the error as a missing permission',
+      md: `E0382 (use of a moved value) says the path no longer holds Read, because a move took it. E0596 says the path never held Write. R4 adds E0499 and E0502, where a live loan removes permissions from the lender. Each has an entry in the [Error Museum](/errors) with its diagram and the clone that tempts you.`,
+    },
+    {
+      type: 'prose',
+      md: `## Drop follows Own
+
+When a scope ends, Rust drops each value whose owner is leaving, exactly once, in reverse order of declaration. The binding that still holds O at that point runs the destructor. A value that was moved away is dropped by its new owner, which is why a move can never cause a double free. \`drop(x)\` is only a move into a function that ends the value early.`,
     },
     {
       type: 'prose',
       md: `## Learn by repairing move errors
 
-The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundaries, collections, and match arms. Six checks distinguish Copy from move, return an owned value, clone only when two independent buffers are required, consume a Vec, and use **mem::replace** to move a field safely. Read every compiler diagnostic from the first error down; later errors are often consequences.`,
+The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundaries, collections, and match arms. Six checks distinguish Copy from move, return an owned value, clone only when two independent buffers are required, consume a Vec, and use **mem::replace** to move a field safely. Before you edit, name the permission the failing line needs and the line that took it. Read every compiler diagnostic from the first error down; later errors are often consequences.`,
     },
     {
       type: 'quiz',
       questions: [
         {
-          q: 'After let b = a for a String, what happened?',
+          q: 'After let b = a for a String, which permissions does a hold?',
           options: [
-            'The buffer was deep-copied and a and b are independent owners',
-            'b becomes the sole owner of the buffer and a is no longer usable',
-            'a and b both point at the buffer and the last one to leave scope frees it',
-            'The buffer was freed at once and a holds an empty String that is still usable',
+            'Read alone, because the String is still in memory and Rust lets a look at it right after the move',
+            'None, because the move gave Read and Own to b and left a without either one of them',
+            'Read and Own, because the assignment copied the String and both bindings keep them',
+            'Read and Write, because a move takes only the Own permission and leaves a the rest',
           ],
           correct: [1],
           explanation:
-            'The pointer/length/capacity representation moves to b. Rust invalidates a so only one owner can eventually drop the buffer.',
+            'A move takes every permission from the source. b becomes the sole path with Read and Own, and a later use of a fails with E0382.',
           why: [
-            'Assignment never deep-copies a String. Copying the heap bytes takes an explicit clone(); a plain let b = a moves the existing buffer to b.',
-            'Right: the pointer, length and capacity move to b, and later use of a fails with E0382. Only one owner remains to free the buffer.',
-            'That describes shared ownership with reference counting, which needs Rc or Arc. Plain assignment keeps a single owner, and a becomes unusable.',
-            'Rust does not leave a valid empty String behind, as C++ std::move may. The source binding is dead, so there is nothing left to read from a.',
+            'The buffer being in memory is not what the compiler checks. It tracks permissions, and the move removed Read from a along with the rest.',
+            'Right: the move leaves a with no permissions, and b holds Read and Own. A later use of a needs Read and fails with E0382.',
+            'Assignment of a String does not duplicate it. Only a clone() builds a second buffer, and two paths holding Own would mean two drops.',
+            'A move removes every permission the source held, not just Own. A plain let never granted Write, so what a loses is its Read as well as its Own.',
           ],
-          kcs: ['r.ownership-moves'],
+          kcs: ['r.ownership-moves', 'r.permissions'],
         },
         {
-          q: 'Why is clone() intentionally explicit?',
+          q: 'What does s.clone() need from s, and what does it give back?',
           options: [
-            'Implicit duplication would call drop() twice on the same buffer, so the call must be spelled out',
-            'Duplicating a heap value can copy a lot of data, so clone() makes the cost visible',
-            'clone() is built on unsafe pointer copies, so each use must be deliberate and auditable',
-            'The compiler cannot tell if a type is safe to clone(), so the programmer must vouch for it',
+            'It needs Own of s, and returns the same buffer under a new name, leaving s dead',
+            'It needs Write on s, and returns a shared handle to the buffer, leaving s counted',
+            'It needs Read on s, and returns a separate buffer with an owner, leaving s intact',
+            'It needs nothing from s, and returns a bitwise copy of the pointer, leaving s alone',
           ],
-          correct: [1],
+          correct: [2],
           explanation:
-            'Rust keeps potentially expensive duplication visible at the call site rather than hiding it behind assignment.',
+            'clone() takes Read on the source and builds a second buffer with an owner of its own. The source is unchanged, and the cost is the allocation and the copy.',
           why: [
-            'A bitwise copy would double-drop the buffer, which is why String is not Copy. That is not why clone is explicit: a clone builds a separate buffer and exposes the cost.',
-            'Right: a clone may allocate and copy arbitrary amounts of data. Rust leaves cheap bit copies to Copy types and makes every costly duplicate visible.',
-            'Clone is an ordinary trait method, and implementations like String\'s are safe code. Unsafe is not what the explicit call signals.',
-            'The type itself decides, by implementing Clone or Copy. The compiler knows which types allow duplication, so no programmer vouching is involved.',
+            'Needing Own would be a move, and the source would be dead. A clone leaves s usable, and its result is a separate buffer, not the same one.',
+            'Sharing a buffer between owners is what Rc does, with a count. A String clone never shares, and it does not need Write on the source.',
+            'Right: clone reads s and builds a separate buffer with its own Own. The source keeps its permissions, and the price is an allocation and a copy.',
+            'Copying the pointer bits is what plain assignment would do, and it would leave two owners of one buffer. A clone builds new heap bytes instead.',
           ],
-          kcs: ['r.clone-copy-drop', 'r.ownership-moves'],
+          kcs: ['r.clone-copy-drop', 'r.permissions'],
         },
         {
-          q: 'What does Drop provide?',
+          q: 'A worker thread must sort the tokens while the handler keeps the original order to compare against afterwards. Why is handing the worker tokens.clone() the right fix here, when it was the wrong one for total(batch)?',
           options: [
-            'Cleanup run by a background collector some time after the owner leaves scope',
-            'Deterministic cleanup of what the value owns such as memory or a file',
-            'Cleanup that runs when the code calls drop by hand as it would call close in C',
-            'Cleanup of heap memory while files and locks are left to a manual close call',
+            'Two buffers are wanted, since the worker needs its own W and O and the handler needs the original',
+            'A clone is free for the worker until it writes, because the copy is made lazily on the first write',
+            'A clone takes Own of tokens, so the handler hands the buffer over and the worker becomes its owner',
+            'E0382 always means a second owner is wanted, so cloning is the repair for every use after a move',
+          ],
+          correct: [0],
+          explanation:
+            'Clone is the right tool when two independent owners are the goal. Sorting needs W on a buffer, and the handler still needs the unsorted original, so no loan of one buffer can serve both. total(batch) only needed Read, which a view supplies.',
+          why: [
+            'Right: sorting writes, and a loan of the handler\'s buffer would take that buffer away from the handler. The job wants two buffers with an owner each, which is what a clone builds, at the price of an allocation and a copy.',
+            'Rust has no lazy copy for Vec. clone allocates and copies the whole buffer immediately, whether or not the worker ever writes.',
+            'clone needs only Read on its source, so the handler keeps everything it held. If the handler gave up Own, it would have nothing to compare against.',
+            'Not every E0382 wants a clone. When the callee only needs to read, as in total(batch), a read-only view fixes it without a copy.',
+          ],
+          kcs: ['r.clone-copy-drop', 'r.permissions'],
+        },
+        {
+          q: 'At the end of a scope, which permission decides which binding runs Drop?',
+          options: [
+            'Read, because the binding that used the value last is the one that runs Drop at scope end',
+            'Own, because the binding that still holds it runs Drop and a moved-from one runs nothing',
+            'Write, because the binding that changed the value last is the one that runs Drop at scope end',
+            'None, because Drop runs later, when a collector notices that nothing refers to the value',
           ],
           correct: [1],
           explanation:
-            'When the owner leaves scope, Rust runs its destructor exactly once, covering memory and resources such as files or locks.',
+            'Drop runs exactly once, at the end of the scope of the binding that still holds Own. A value moved elsewhere is dropped by its new owner.',
           why: [
-            'Rust has no collector. Drop runs at a fixed point, when the owner leaves scope, and does not wait for any background thread or timer.',
-            'Right: Drop runs at a predictable point, once, when ownership ends. It can release any resource the type owns, including files and mutex guards.',
-            'Drop runs automatically at the end of scope. Calling drop(x) merely moves x into a function that ends its life early; it is not required.',
-            'Drop is a general destructor. File handles and MutexGuard values release their resources in Drop, so no separate manual close is needed.',
+            'Reading is not tied to cleanup. A reader holds no obligation, and the last reader leaving scope drops nothing.',
+            'Right: Own carries the cleanup obligation. Exactly one binding holds it, so Drop runs once, and a moved-from binding runs nothing.',
+            'Writing is not tied to cleanup. A value nobody ever modified is still dropped by its owner, and the last writer owes nothing.',
+            'Rust has no collector. Drop runs at a fixed point, when the owning scope ends, with no background thread or delay.',
           ],
           kcs: ['r.clone-copy-drop'],
         },
       ],
     },
   ],
-  kcs: ['r.ownership-moves', 'r.clone-copy-drop'],
+  kcs: ['r.ownership-moves', 'r.clone-copy-drop', 'r.permissions'],
 }
 
 export default lesson

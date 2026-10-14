@@ -37,8 +37,9 @@ import {
   wordCount,
 } from '../../src/data/forge/rust-allocator/ladder'
 import type { CheckLadder, Ctx, LadderAction, LadderState, RungId } from '../../src/data/forge/rust-allocator/ladder'
+import lab01 from '../../src/data/forge/rust-allocator'
 import HintLadderDefault, { HintLadderView } from '../../src/components/forge/HintLadder'
-import { lintLadder } from '../../scripts/lint-mentor'
+import { lintBundle, lintLadder } from '../../scripts/lint-mentor'
 import type { LintDeps } from '../../scripts/lint-mentor'
 import { creditFor } from '../../src/lib/forge/run'
 import type { CheckResult, LabRunReport } from '../../src/lib/forge/types'
@@ -155,6 +156,41 @@ describe('the authored ladder (what verify:mentor holds to its limits)', () => {
   })
 })
 
+describe('the lint runs on a bundle, so every lab with a ladder is held to the same limits', () => {
+  const bundle = () => ({ ...lab01, ladder: structuredClone(lab01.ladder) })
+
+  test('lab 01’s bundle passes, and its ladder is the authored one, one entry per required check', () => {
+    expect(lintBundle(lab01, DEPS)).toEqual([])
+    expect(lab01.ladder.map((c) => c.checkId)).toEqual([...LADDER_CHECK_IDS])
+  })
+
+  test('a check laddered twice, a ladder for a non-required check and a label that is not "[lab NN]" are caught', () => {
+    const twice = bundle()
+    twice.ladder.push(structuredClone(twice.ladder[0]))
+    expect(lintBundle(twice, DEPS)).toContain('boot: laddered twice')
+
+    const extra = bundle()
+    extra.ladder.push({ ...structuredClone(extra.ladder[0]), checkId: 'ghost' })
+    expect(lintBundle(extra, DEPS).join('\n')).toContain('ghost: a ladder for a check the lab does not require')
+
+    for (const label of ['lab 01', '[lab 1]', '[Lab 01]', '']) expect(lintBundle({ ...bundle(), discussionsLabel: label }, DEPS)[0]).toContain('discussionsLabel')
+  })
+
+  test('R2 is checked against the lab’s own lib.rs: a function only another lab defines fails', () => {
+    const b = bundle()
+    b.ladder[0].r2.fn = 'check_nothing'
+    expect(lintBundle(b, DEPS).join('\n')).toContain('lib.rs does not define')
+    expect(lintBundle(bundle(), { ...DEPS, libRs: 'fn unrelated() {}' }).join('\n')).toContain('lib.rs does not define')
+  })
+
+  test('the lint script’s own entry passes from the command line, as `bun run verify:mentor` runs it', async () => {
+    const run = Bun.spawnSync(['bun', `${ROOT}scripts/lint-mentor.ts`], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' })
+    expect(run.stderr.toString()).toBe('')
+    expect(run.exitCode).toBe(0)
+    expect(run.stdout.toString()).toContain('rust-allocator 6 checks, 30 rungs')
+  })
+})
+
 /* ------------------------------ unlock rules ------------------------------ */
 
 describe('the unlock rules', () => {
@@ -249,6 +285,10 @@ describe('the unlock rules', () => {
     expect(unlockOf(s, 'R3', at(4, 600)).ok).toBe(false)
     expect(unlockOf(s, 'R3', at(5, 600)).ok).toBe(true)
     expect(restoreState(acks, 'align', at(1)).opened).toEqual({})
+    // another lab's acks are read by its own id, and lab 01's are not mistaken for them
+    expect(restoreState(acks, 'coalesce', { ...at(4, 500), labId: 'kv-block-manager' }).opened).toEqual({})
+    const other = Object.fromEntries((['R0', 'R1'] as const).map((r) => [hintRef('cow', r, 'kv-block-manager'), '2026-10-04T09:00:00.000Z']))
+    expect(Object.keys(restoreState(other, 'cow', { ...at(2), labId: 'kv-block-manager' }).opened)).toEqual(['R0', 'R1'])
   })
 })
 
@@ -257,6 +297,8 @@ describe('the unlock rules', () => {
 describe('the ledger: one ack per rung, and the bottom-out opens a 24 h assisted window', () => {
   test('hint refs have the shape the ledger parses', () => {
     expect(hintRef('coalesce', 'R2')).toBe('hint:rust-allocator/coalesce#R2')
+    expect(hintRef('cow', 'R2', 'kv-block-manager')).toBe('hint:kv-block-manager/cow#R2')
+    expect(parseHintRef(hintRef('cow', 'R2', 'kv-block-manager'))).toEqual({ labId: 'kv-block-manager', checkId: 'cow', rung: 'R2' })
     expect(hintRef('coalesce', 'bottom')).toBe('hint:rust-allocator/coalesce#bottom')
     expect(parseHintRef(hintRef('no_overlap', 'R4'))).toEqual({ labId: 'rust-allocator', checkId: 'no_overlap', rung: 'R4' })
     for (const id of REQUIRED) for (const r of ['R0', 'R1', 'R2', 'R3', 'R4', 'bottom'] as const) expect(refMatchesKind('ack', hintRef(id, r))).toBe(true)
@@ -319,6 +361,22 @@ describe('ask a human: a prefilled Q&A post, under 2 KB, never code', () => {
     expect(body).toContain(GOOD_R0)
     expect(body).toContain('No code is attached')
     expect([...u.searchParams.keys()].sort()).toEqual(['body', 'category', 'title'])
+  })
+
+  test('the title and the body’s first line take the lab’s label, lab 01’s when none is given', () => {
+    const msg = 'a 48 KiB request failed'
+    expect(parts(askHumanUrl({ label: lab01.discussionsLabel, checkId: 'boot', message: msg })).title).toBe('[lab 01] boot: a 48 KiB request failed')
+    const two = parts(askHumanUrl({ label: '[lab 02]', checkId: 'cow', message: msg, r0: GOOD_R0 }))
+    expect(two.title).toBe('[lab 02] cow: a 48 KiB request failed')
+    expect(two.body.startsWith('Lab 02 · check `cow`')).toBe(true)
+    expect(two.body).not.toContain('Lab 01')
+    expect(parts(askHumanUrl({ checkId: 'boot', message: msg })).body.startsWith('Lab 01 · check `boot`')).toBe(true)
+  })
+
+  test('a long label still leaves the URL under the budget', () => {
+    const url = askHumanUrl({ label: '[lab 03]', checkId: 'leftmost_nonoverlap', message: 'x'.repeat(5000), r0: 'y'.repeat(5000) })
+    expect(url.length).toBeLessThanOrEqual(URL_BUDGET)
+    expect(parts(url).title.startsWith('[lab 03] leftmost_nonoverlap: ')).toBe(true)
   })
 
   test('the body without an R0 answer omits that section', () => {
@@ -461,7 +519,7 @@ describe('the walkthrough to the first divergence', () => {
 
 describe('HintLadder renders', () => {
   const html = (reports: LabRunReport[], acks: Record<string, string> = {}) =>
-    renderToStaticMarkup(createElement(MemoryRouter, null, createElement(HintLadderView, { reports, acks, onAck: () => {}, now: () => 0 })))
+    renderToStaticMarkup(createElement(MemoryRouter, null, createElement(HintLadderView, { bundle: lab01, reports, acks, onAck: () => {}, now: () => 0 })))
   const ISO = '2026-10-04T09:00:00.000Z'
   const allAcks = (check: string) => Object.fromEntries((['R0', 'R1', 'R2', 'R3', 'R4', 'bottom'] as const).map((r) => [hintRef(check, r), ISO]))
 

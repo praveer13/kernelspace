@@ -10,10 +10,14 @@
  * Wave 1 (docs/specs/wave-1.md §16.1): /boot and /today are gated at 200 KB with a tighter target, the
  * entry has a 125 KB target after the entry diet (B2), and the play closure, the generator family
  * chunks, the search index and the FSRS + cards + composer figure are reported. A route whose page file does not exist yet is skipped.
+ * Wave 2 (§22.1) reports the compile bank: each group's chunk and "compile bank data (all groups)" against its
+ * 30 KB figure. One check here does fail: no chunk may hold a compile bank file's data (a snippet's source hash or
+ * the rustc version line from src/data/rust-items/bank/*.json). Those stay with the scripts and tests; the app
+ * loads the manifest, the served groups and the museum's payload that scripts/build-rust-items.ts writes from them.
  *
  *   bun scripts/verify-bundle.ts
  */
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
 
@@ -24,6 +28,8 @@ const ENTRY_TARGET_KB = 125
 const FAMILY_REPORT_KB = 8
 const INDEX_REPORT_KB = 20
 const LEARNER_REPORT_KB = 6
+/** The compile bank's groups together (spec §22.1): reported, not gated. */
+const BANK_REPORT_KB = 30
 const KB = 1000
 
 interface RouteBudget {
@@ -205,6 +211,45 @@ if (families.length === 0) console.log('skip generator families: no src/lib/item
 for (const [key, chunk] of families) {
   const kb = (await gzipSize(chunk.file)) / KB
   console.log(`${kb <= FAMILY_REPORT_KB ? 'ok  ' : 'warn'} family ${key.split('/').pop()} is ${kb.toFixed(1)} KB gzip (report ${FAMILY_REPORT_KB} KB, not gated)`)
+}
+
+// Reported only: the compile bank (spec §22.1). Each group is one chunk the compile family loads when an item draws
+// from it (src/data/rust-items/groups.ts); the manifest the family draws with sits inside the family chunk above.
+const GROUP_PREFIX = 'src/data/rust-items/served/'
+const groups = chunksFor((key) => key.startsWith(GROUP_PREFIX))
+if (groups.length === 0) console.log('skip compile bank: no src/data/rust-items/served/* chunks')
+else {
+  let bankKb = 0
+  for (const [key, chunk] of groups) {
+    const kb = (await gzipSize(chunk.file)) / KB
+    bankKb += kb
+    console.log(`info compile bank group ${key.slice(GROUP_PREFIX.length).replace(/\.ts$/, '')} is ${kb.toFixed(1)} KB gzip (${chunk.file.split('/').pop()})`)
+  }
+  console.log(
+    `${bankKb <= BANK_REPORT_KB ? 'ok  ' : 'warn'} compile bank data (all groups) is ${bankKb.toFixed(1)} KB gzip in ${groups.length} chunks (figure ${BANK_REPORT_KB} KB, not gated; a learner loads only the groups their items draw from)`,
+  )
+}
+
+// Gated: no chunk holds a compile bank file's data. A bank's source hashes and rustc version line are distinctive, so
+// finding one in a chunk means a bank file (or the scripts' loader, src/data/rust-items/index.ts) was bundled.
+const BANK_DIR = new URL('../src/data/rust-items/bank/', import.meta.url)
+const bankMarks = new Set<string>()
+for (const name of existsSync(BANK_DIR) ? readdirSync(BANK_DIR).filter((n) => n.endsWith('.json')) : []) {
+  const bank = JSON.parse(readFileSync(new URL(name, BANK_DIR), 'utf8')) as { rustc?: string; snippets?: Record<string, { hash?: string }> }
+  if (bank.rustc) bankMarks.add(bank.rustc)
+  for (const s of Object.values(bank.snippets ?? {})) if (s.hash) bankMarks.add(s.hash)
+}
+const leaks: string[] = []
+for (const { name } of sizes) {
+  const text = await readFile(new URL(`assets/${name}`, dist), 'utf8')
+  const hits = [...bankMarks].filter((m) => text.includes(m))
+  if (hits.length > 0) leaks.push(`${name} (${hits.length} mark(s), e.g. ${hits[0].slice(0, 24)}…)`)
+}
+if (leaks.length > 0) {
+  console.error(`FAIL compile bank data in the bundle: ${leaks.join(', ')}; the app loads src/data/rust-items/manifest.json and served/*, never bank/*.json or src/data/rust-items/index.ts`)
+  failed = true
+} else {
+  console.log(`ok   no chunk holds compile bank data (${bankMarks.size} source hashes and rustc version lines checked)`)
 }
 
 const indexes = chunksFor((key, chunk) => /search-index/.test(key) || /search-index/.test(chunk.file))

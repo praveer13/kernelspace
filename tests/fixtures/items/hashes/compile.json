@@ -1,0 +1,17 @@
+{
+  "fix.analyzer-limits": "54bc4244",
+  "fix.borrow-rules": "9494a66d",
+  "fix.clone-copy-drop": "a1ca616f",
+  "fix.interior-mutability": "15cd3b78",
+  "fix.lifetimes": "d4f3f813",
+  "fix.ownership-moves": "423cd16f",
+  "fix.slices": "c5a39e15",
+  "permission": "80c550f7",
+  "verdict.analyzer-limits": "123242b8",
+  "verdict.borrow-rules": "528938db",
+  "verdict.clone-copy-drop": "c9601749",
+  "verdict.interior-mutability": "f345b9be",
+  "verdict.lifetimes": "42269387",
+  "verdict.ownership-moves": "42b6451d",
+  "verdict.slices": "c4286a55"
+}

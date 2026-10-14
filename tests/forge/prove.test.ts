@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
+import lab01 from '../../src/data/forge/rust-allocator'
 import ProveIt from '../../src/components/forge/ProveIt'
 import {
   MIN_ANSWER_WORDS,
@@ -217,12 +218,12 @@ describe('fresh questions after 24 h', () => {
 
 describe('the panel', () => {
   // React separates adjacent text nodes with comments; flatten them so the checks read like the page does.
-  const render = (props: Parameters<typeof ProveIt>[0]) => renderToString(createElement(ProveIt, props)).replaceAll('<!-- -->', '')
+  const render = (props: Omit<Parameters<typeof ProveIt>[0], 'bundle'>) => renderToString(createElement(ProveIt, { bundle: lab01, ...props })).replaceAll('<!-- -->', '')
 
   test('locked until the checks are green', () => {
     const html = render({ unlocked: false, history: [] })
     expect(html).toContain('data-prove="locked"')
-    expect(html).toContain('Opens when all six checks are green')
+    expect(html).toContain('Opens when every required check is green')
     expect(html).not.toContain('<textarea')
   })
 
@@ -279,5 +280,26 @@ describe('the panel', () => {
     const shown = [...html.matchAll(/data-qid="([a-z-]+)"/g)].map((m) => m[1])
     expect(shown).toHaveLength(1)
     expect(served).not.toContain(shown[0])
+  })
+})
+
+describe('Prove-it as bundle data (docs/specs/wave-2.md §13.1)', () => {
+  test('the bundle’s pool is prove.ts’s, at least six questions of the ProveQuestion shape', () => {
+    expect(lab01.prove).toEqual([...PROVE_QUESTIONS])
+    expect(lab01.prove.length).toBeGreaterThanOrEqual(6)
+    for (const q of lab01.prove) {
+      expect(q.id).toMatch(/^[a-z][a-z0-9-]*$/)
+      expect(q.prompt).not.toBe('')
+      expect(q.model).not.toBe('')
+      expect(q.ideas).toHaveLength(3)
+      expect(q.kcs.length).toBeGreaterThan(0)
+    }
+  })
+
+  test('a draw from the bundle serves PROVE_PICK distinct questions of it', () => {
+    const drawn = pickQuestions([], 5, lab01.prove)
+    expect(drawn).toHaveLength(PROVE_PICK)
+    expect(new Set(drawn.map((q) => q.id)).size).toBe(PROVE_PICK)
+    for (const q of drawn) expect(lab01.prove).toContain(q)
   })
 })

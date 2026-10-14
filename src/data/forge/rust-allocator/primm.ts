@@ -17,29 +17,25 @@ import { KC } from '@/data/kc/ids'
 import type { ForgeLabCheck } from '@/data/labs'
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { ItemResponse } from '@/lib/ledger/types'
-import { rev32 } from '@/lib/ledger/stable'
+import { attemptsToGreen as attemptsToGreenOf, observationResponse, stageRows as stageRowsOf } from '@/lib/forge/primm'
 import { splitmix32u } from '@/lib/rng'
 import type { AuthoredItem } from '@/lib/items/types'
 import { alignedStart, allocWith, createHeap, freeId, runFits, viewOf, type HeapOptions } from '@/lib/world/heap'
 import { firstFit, worstFit } from '@/lib/world/placement'
 import type { HeapOp, HeapTrace, HeapView, PlacementDriver } from '@/lib/world/types'
+import type { ChoicePrimm, NumberPrimm, PrimmItem, PrimmStep, PrimmStepId, ReferenceRunSpec, RunConfig, RunResult, StageInfo } from '../types'
+
+// The shapes live in ../types (the Forge bundle contract), and what PRIMM does for every lab lives in
+// src/lib/forge/primm.ts; both are re-exported so lab 01's imports keep working.
+export type { ChoicePrimm, NumberPrimm, PrimmItem, StageInfo }
+export { currentStage, gradeChoice, gradeNumber, greenStage, itemRev, itemResponse, predictGraded, primmRef } from '@/lib/forge/primm'
+export type { PrimmAnswer, PrimmGrade, StageRow } from '@/lib/forge/primm'
 
 export const PRIMM_LAB = 'rust-allocator'
-/** Every PRIMM item's ledger ref is `item:` plus its id. */
-export const primmRef = (id: string) => `item:${id}` as const
 
 /* ------------------------------------------------------------------ */
 /* The Make step: four stages                                          */
 /* ------------------------------------------------------------------ */
-
-export interface StageInfo {
-  n: 1 | 2 | 3 | 4
-  title: string
-  /** Nominal minutes; every stage is at most 25 (PLAN §5.0). */
-  minutes: number
-  /** What the stage builds, one line. */
-  goal: string
-}
 
 /** The stage markers in `labs/rust-allocator/src/allocator.rs`. Which checks belong to which stage comes from labs.ts. */
 export const STAGES: readonly StageInfo[] = [
@@ -49,64 +45,12 @@ export const STAGES: readonly StageInfo[] = [
   { n: 4, title: 'Coalesce', minutes: 25, goal: 'Merge on `free`, so churn near 75% never strands a span.' },
 ]
 
-export interface StageRow {
-  stage: StageInfo
-  checks: { id: string; label: string; passed: boolean }[]
-  /** Every check of the stage passed. */
-  green: boolean
-}
+/** The stages with their checks (labs.ts `stage`) and which of them passed: the shared `stageRows`, bound to lab 01's stages. */
+export const stageRows = (checks: readonly ForgeLabCheck[], passed: ReadonlySet<string>) => stageRowsOf(STAGES, checks, passed)
 
-const required = (checks: readonly ForgeLabCheck[]) => checks.filter((c) => c.optional !== true)
-
-/** The stages with their checks (labs.ts `stage`) and which of them passed. A stage with no checks is never green. */
-export function stageRows(checks: readonly ForgeLabCheck[], passed: ReadonlySet<string>): StageRow[] {
-  return STAGES.map((stage) => {
-    const mine = required(checks)
-      .filter((c) => c.stage === stage.n)
-      .map((c) => ({ id: c.id, label: c.label, passed: passed.has(c.id) }))
-    return { stage, checks: mine, green: mine.length > 0 && mine.every((c) => c.passed) }
-  })
-}
-
-/** The first stage that is not green yet (what to build next), or null when all four are. */
-export function currentStage(rows: readonly StageRow[]): StageInfo | null {
-  return rows.find((r) => !r.green)?.stage ?? null
-}
-
-/** The highest stage k with stages 1..k all green (0 when stage 1 is not): the `stage` of a `lab-check` event. */
-export function greenStage(rows: readonly StageRow[]): number {
-  let k = 0
-  for (const r of rows) {
-    if (!r.green) break
-    k = r.stage.n
-  }
-  return k
-}
-
-/**
- * Attempts-to-green per stage (spec §13.1, descriptive only): `runs` are the passed check ids of each lab run,
- * oldest first. A stage is green on the first run where all its checks pass. Its count is the number of runs from
- * the run after the previous stage went green, up to and including its own; 0 when it came green on the same run
- * as the stage before. Null while a stage has never been green.
- */
-export function attemptsToGreen(runs: readonly (readonly string[])[], checks: readonly ForgeLabCheck[]): (number | null)[] {
-  const out: (number | null)[] = []
-  let previous = 0
-  for (const stage of STAGES) {
-    const ids = required(checks)
-      .filter((c) => c.stage === stage.n)
-      .map((c) => c.id)
-    const at = ids.length === 0 ? -1 : runs.findIndex((r) => ids.every((id) => r.includes(id)))
-    if (at < 0) {
-      out.push(null)
-      continue
-    }
-    const run = at + 1
-    out.push(Math.max(0, run - previous))
-    previous = Math.max(previous, run)
-  }
-  return out
-}
+/** Attempts-to-green per stage (spec §13.1, descriptive only), over lab 01's stages. */
+export const attemptsToGreen = (runs: readonly (readonly string[])[], checks: readonly ForgeLabCheck[]): (number | null)[] =>
+  attemptsToGreenOf(STAGES, runs, checks)
 
 /* ------------------------------------------------------------------ */
 /* The reference run: a churn shaped like check 6                       */
@@ -345,38 +289,6 @@ export function describeRun(run: ChurnRun): string {
 
 type KcList = AuthoredItem['kcs']
 
-interface ItemBase {
-  /** `lab01.primm.p1`; the ledger ref is `item:<id>`. */
-  id: string
-  step: 'predict' | 'investigate' | 'modify'
-  /** Nominal seconds (XP and session sizing, spec §8.4). */
-  nsec: number
-}
-
-/** A multiple-choice item. Options are shuffled per attempt by the panel; the answer is the authored index. */
-export interface ChoicePrimm extends ItemBase {
-  kind: 'choice'
-  item: AuthoredItem
-}
-
-/** A numeric answer: `numeric` is exact (the truth is fixed), `estimate` is a Fermi guess against a computed truth. */
-export interface NumberPrimm extends ItemBase {
-  kind: 'numeric' | 'estimate'
-  prompt: string
-  unit: string
-  kcs: KcList
-  /** `numeric`: the exact answer. */
-  truth?: number
-  /** `estimate`: right when within this factor of the truth, either way. */
-  factor?: number
-  /** Wrong answers that name a mistake, `numeric` only. */
-  lures?: { value: number; miss: string; message: string }[]
-  /** Said after the answer, whatever it was. */
-  explain: string
-}
-
-export type PrimmItem = ChoicePrimm | NumberPrimm
-
 const choice = (
   id: string,
   step: ChoicePrimm['step'],
@@ -422,17 +334,17 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab01.primm.i1', 'investigate', [KC.splitCoalesce], {
     q: 'The repaired lab no longer lets a free list that never merges slip through. You write first-fit with split, but `free` only puts the span back and merges nothing. Which checks does it fail?',
     options: [
-      '`coalesce` and `fragmentation` fail, rest pass',
-      '`coalesce`, `reuse` and `fragmentation` fail',
-      '`no_overlap` and `fragmentation` fail, rest pass',
-      'All six pass, as they did before the repair',
+      '`coalesce`, `reuse` and `fragmentation` all fail',
+      '`no_overlap` and `fragmentation` fail, and the rest pass',
+      'All six checks pass, as they did before the repair',
+      '`coalesce` and `fragmentation` fail, the other four pass',
     ],
-    correct: [0],
+    correct: [3],
     why: [
-      'Freed neighbours stay apart, so the 64 KiB request in `coalesce` fails, and so does the churn in `fragmentation`. A freed block still comes back whole, so `reuse` passes.',
       'A same-size request after a free finds that block again, so `reuse` is green. Not merging only shows when a bigger request needs the neighbours.',
       'Spans that are only put back unmerged never overlap anything, so `no_overlap` is green. The failures come from space that is free but split.',
       'That was true before the repair: the old `coalesce` was served from the untouched tail and passed. The repaired one uses the tail up first.',
+      'Freed neighbours stay apart, so the 64 KiB request in `coalesce` fails, and so does the churn in `fragmentation`. A freed block still comes back whole, so `reuse` passes.',
     ],
     explanation: 'Not merging leaves free space in pieces. The repaired `coalesce` and `fragmentation` both need a piece bigger than any one freed block.',
   }),
@@ -457,9 +369,9 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     q: '`coalesce` takes every byte of the heap it can before it frees 16 neighbouring 4 KiB blocks and asks for 64 KiB. Why fill the heap first?',
     options: [
       'So `free` is timed with the heap full, which is its slowest case for 4 KiB blocks',
-      'So `alloc` has to return None once, which covers the failure path of the heap',
-      'So the leftover tail cannot answer the 64 KiB request, and only merging can',
-      'So the 64 KiB request is aligned to 4 KiB, which first-fit would skip',
+      'So `alloc` has to return None once, which covers the failure path',
+      'So the leftover tail cannot answer the 64 KiB request, only merged blocks can',
+      'So the 64 KiB request is aligned to 4 KiB, which a first-fit search would skip',
     ],
     correct: [2],
     why: [
@@ -474,8 +386,8 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     q: '`fragmentation` can fail with "alloc(9216) returned None ... yet the 12288 bytes from offset 400384 hold no live block". What is your `None` compared against?',
     options: [
       'The largest block in your free list, which the harness reads through a hook',
-      'The total free bytes, so any request below that total must succeed',
-      'A gap the harness works out from the live spans, not from your free list',
+      'The total free bytes, so every request below that amount must succeed',
+      'A gap the harness works out from the live spans, never your free list',
       'A reference allocator the harness runs on the same operations beside yours',
     ],
     correct: [2],
@@ -490,10 +402,10 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab01.primm.i5', 'investigate', [KC.allocatorContract], {
     q: 'Your allocator passes `cargo test`. The page grades the seeded checks (`align`, `no_overlap` and `fragmentation`) on seeds it draws when you drop the file. What does that change for a correct allocator?',
     options: [
-      'Nothing, because a correct one passes any seed and a tuned one fails',
+      'Nothing, because a correct one passes every seed and a tuned one fails',
       'Each drop needs a fresh `cargo build`, because the seed is baked into the module',
       'Some seeds fail by chance, so a correct allocator may need a second try',
-      'No seed is drawn, so a lucky constant for the default seed still passes',
+      'No seed is drawn, so a lucky constant for the default seed always passes',
     ],
     correct: [0],
     why: [
@@ -531,9 +443,9 @@ export const PRIMM_STEPS = [
   { id: 'investigate', title: 'Investigate', blurb: 'Five questions about what the harness checks and why.' },
   { id: 'modify', title: 'Modify', blurb: 'Change one thing about the reference run, predict the result, then run it.' },
   { id: 'make', title: 'Make', blurb: 'Build the allocator in four stages. Each is green on this page before the next.' },
-] as const
+] as const satisfies readonly PrimmStep[]
 
-export type PrimmStepId = (typeof PRIMM_STEPS)[number]['id']
+export type { PrimmStepId }
 
 /**
  * The Run step's own item: the reference run's observed value. Watching a strip is not an answer, so it carries
@@ -542,111 +454,57 @@ export type PrimmStepId = (typeof PRIMM_STEPS)[number]['id']
  */
 export const RUN_ITEM = { id: 'lab01.primm.r1', nsec: 45 }
 
-/** Whether the Predict step still takes graded answers: not after the run was shown first (the "show me anyway" peek). */
-export const predictGraded = (peeked: boolean, alreadyAnswered: boolean) => alreadyAnswered || !peeked
-
-/* ------------------------------------------------------------------ */
-/* Grading and the ledger                                               */
-/* ------------------------------------------------------------------ */
-
-export interface PrimmGrade {
-  ok: boolean
-  /** In [0, 1]. */
-  score: number
-  /** One or two sentences: the verdict, then the key step. */
-  feedback: string
-  /** Misconception id of a recognised wrong answer. */
-  miss?: string
-}
-
-/** Grades a pick (authored index). The feedback is the option's own `why`, then the key's. */
-export function gradeChoice(item: ChoicePrimm, pick: number): PrimmGrade {
-  const { q } = item.item
-  const ok = q.correct.length === 1 && q.correct[0] === pick
-  const own = q.why?.[pick] ?? ''
-  const key = q.why?.[q.correct[0]] ?? ''
-  return { ok, score: ok ? 1 : 0, feedback: ok ? own : `${own} ${key}`.trim() }
-}
-
-const closeEnough = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b))
-
-/**
- * Grades a number. `numeric`: exact, with a named mistake when the answer is a known lure. `estimate`: right within
- * the item's factor of `truth`; the score falls off with the log error, as the generators' estimates do (spec §5.2).
- */
-export function gradeNumber(item: NumberPrimm, value: number, truth: number): PrimmGrade {
-  if (item.kind === 'numeric') {
-    const ok = closeEnough(value, truth)
-    const lure = item.lures?.find((l) => closeEnough(l.value, value))
-    return {
-      ok,
-      score: ok ? 1 : 0,
-      feedback: ok ? `Yes, ${truth} ${item.unit}. ${item.explain}` : `${lure?.message ?? `Not ${value}.`} ${item.explain}`.trim(),
-      ...(lure ? { miss: lure.miss } : {}),
-    }
-  }
-  const factor = item.factor ?? 2
-  const ratio = value <= 0 || truth <= 0 ? Infinity : Math.max(value / truth, truth / value)
-  const ok = ratio <= factor
-  const score = ratio === Infinity ? 0 : Math.max(0, 1 - Math.log10(ratio) / Math.log10(factor * 5))
-  const verdict = ok
-    ? `Close enough: ${truth} ops, and you said ${value}.`
-    : `The run says ${truth} ops; you said ${value}, ${ratio === Infinity ? 'which cannot be right' : `a factor of ${Math.round(ratio * 10) / 10} ${value > truth ? 'too high' : 'too low'}`}.`
-  return { ok, score, feedback: `${verdict} ${item.explain}` }
-}
-
-/** What a response to a PRIMM item is worth to the ledger: one `item` event, `src: practice`, tagged with its KCs. */
-export interface PrimmAnswer {
-  item: PrimmItem
-  grade: PrimmGrade
-  /** Choice items: the picked authored index. */
-  pick?: number
-  /** Number items: the learner's answer and the truth it was graded against. */
-  value?: number
-  truth?: number
-  ms?: number
-}
-
-/** Short content fingerprint: an edit to a prompt or an option changes it, so old events never claim the new text. */
-export function itemRev(item: PrimmItem): string {
-  return item.kind === 'choice'
-    ? rev32({ id: item.id, q: item.item.q.q, options: item.item.q.options, correct: item.item.q.correct })
-    : rev32({ id: item.id, prompt: item.prompt, unit: item.unit, truth: item.truth ?? null })
-}
-
-export function itemResponse(a: PrimmAnswer): ItemResponse {
-  const kcs = a.item.kind === 'choice' ? a.item.item.kcs : a.item.kcs
-  return {
-    kind: 'item',
-    ref: primmRef(a.item.id),
-    rev: itemRev(a.item),
-    score: a.grade.score,
-    ok: a.grade.ok,
-    provenance: 'practice',
-    ...(a.ms !== undefined ? { ms: a.ms } : {}),
-    data: {
-      src: 'practice',
-      kcs: [...kcs],
-      nsec: a.item.nsec,
-      ...(a.pick !== undefined ? { pick: [a.pick] } : {}),
-      ...(a.value !== undefined ? { value: a.value } : {}),
-      ...(a.truth !== undefined ? { truth: a.truth } : {}),
-      ...(a.grade.miss !== undefined ? { miss: a.grade.miss } : {}),
-    },
-  }
-}
-
 /** The Run step's evidence: what the reference run observed (ops served of the trace). An observation, not a graded answer: no KCs. */
-export function runResponse(run: ChurnRun, ms?: number): ItemResponse {
+export const runResponse = (run: ChurnRun, ms?: number): ItemResponse =>
+  observationResponse(RUN_ITEM, { config: run.config as unknown as RunConfig, value: run.survived, truth: run.total }, ms)
+
+/* ------------------------------------------------------------------ */
+/* The reference run as bundle data                                     */
+/* ------------------------------------------------------------------ */
+
+const mib = CHURN.capacity / (1 << 20)
+const bucketKiB = CHURN.capacity / 1024 / CHURN.buckets
+
+/** What `ReferenceRun` shows for a config, in the bundle's lab-neutral shape (frames, stats, one-line summary). */
+function runSpecResult(config: RunConfig): RunResult {
+  const run = runChurn(config as unknown as ChurnConfig)
   return {
-    kind: 'item',
-    ref: primmRef(RUN_ITEM.id),
-    rev: rev32({ id: RUN_ITEM.id, config: run.config }),
-    score: 1,
-    ok: true,
-    provenance: 'practice',
-    ...(ms !== undefined ? { ms } : {}),
-    data: { src: 'practice', kcs: [], nsec: RUN_ITEM.nsec, value: run.survived, truth: run.total },
+    config,
+    total: run.total,
+    value: run.survived,
+    truth: run.total,
+    clean: run.clean,
+    summary: describeRun(run),
+    frames: run.samples.map((s) => ({
+      op: s.op,
+      cells: s.map,
+      stats: [
+        { label: 'live bytes', value: kib(s.liveBytes) },
+        { label: 'largest free run', value: kib(s.largestFree) },
+      ],
+      alt: `The ${mib} MiB heap in address order, ${CHURN.buckets} buckets of ${bucketKiB} KiB. ${kib(s.liveBytes)} live, largest free run ${kib(s.largestFree)}.`,
+    })),
   }
 }
 
+/** Lab 01's Run and Modify steps as data: the bundle's `primm.run`. */
+export const RUN_SPEC: ReferenceRunSpec = {
+  item: RUN_ITEM,
+  title: (config) =>
+    config.fit === 'bump'
+      ? 'Bump allocator: never takes a freed block back'
+      : `Reference: ${FIT_LABEL[config.fit as Fit] ?? config.fit}${config.coalesce ? ' with coalescing' : ' without coalescing'}`,
+  disclaimer: 'This is the page’s own churn, shaped like check 6 (same heap, same request sizes), not check 6 itself.',
+  reference: { ...REFERENCE },
+  baseline: { ...BUMP },
+  run: runSpecResult,
+  modify: {
+    lead: `Change one thing about the reference run (${FIT_LABEL[REFERENCE.fit]} with coalescing, near ${REFERENCE.occupancyPct}%).`,
+    dials: [
+      { id: 'nocoal', label: 'turn coalescing off', config: { ...REFERENCE, coalesce: false } },
+      { id: 'worst', label: 'first-fit becomes worst-fit', config: { ...REFERENCE, fit: 'worst' } },
+      { id: 'occ45', label: 'occupancy 75% becomes 45%', config: { ...REFERENCE, occupancyPct: 45 } },
+      { id: 'occ90', label: 'occupancy 75% becomes 90%', config: { ...REFERENCE, occupancyPct: 90 } },
+    ],
+  },
+}
