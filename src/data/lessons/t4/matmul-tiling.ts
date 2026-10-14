@@ -200,7 +200,7 @@ You'll drag the tile size across a live matmul: watch HBM traffic fall \`∝ 1/T
       tasks: [
         'Predict the arithmetic intensity of a 128 × 128 FP16 tile, then drag the tile slider from T = 16 up to 128 and compare. Naive matmul is the T = 1 case, below the slider, so compute it by hand.',
         'Sweep tile T = 16 → 128: plot HBM traffic (∝ 1/T) and delivered TFLOPs; locate the compute roof.',
-        'Oversize the tile until shared memory limits occupancy; observe the U-shaped performance curve.',
+        'Oversize the tile until the accumulators fill the register file and CTAs per SM falls to 1; observe the U-shaped performance curve.',
         'Predict FlashAttention\'s intensity at 32k context, then flip the attention view from naive (materialize S) to flash (online softmax) and compare HBM bytes.',
       ],
       note: `The U-curve is the whole craft: too small a tile → bandwidth starves; too big → occupancy starves. And the attention comparison is the industry's favorite before/after: same math, several times fewer HBM accesses (about 9× in Dao et al., Fig. 2) — the definition of a systems win.`,
