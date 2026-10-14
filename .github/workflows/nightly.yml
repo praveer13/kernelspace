@@ -3,7 +3,7 @@ name: Nightly
 # Slow checks that would blow the 10-minute PR fast gate (PLAN-100X §7.4).
 # verify:seeds scans 10,000 graded Fleet Week seeds for degenerate ones; it takes
 # minutes, so it lives here instead of in ci.yml and deploy.yml.
-# a11y (axe at 360 and 1280 px over the routes in scripts/a11y.mjs) and e2e (the Playwright
+# a11y (axe and the sideways-scroll check at 360, 320 and 1280 px over the routes in scripts/a11y.mjs) and e2e (the Playwright
 # keyboard walks in e2e/) need a browser (docs/specs/wave-2.md §22.2).
 # Nothing here blocks anything: no other workflow needs these jobs, and when one fails the
 # report job opens one issue (or comments on the open one) with a link to the run.
