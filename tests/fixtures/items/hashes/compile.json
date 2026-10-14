@@ -1,17 +1,17 @@
 {
-  "fix.analyzer-limits": "f2499a01",
-  "fix.borrow-rules": "d9cb348a",
-  "fix.clone-copy-drop": "ec03e429",
+  "fix.analyzer-limits": "6998b9d9",
+  "fix.borrow-rules": "2f552842",
+  "fix.clone-copy-drop": "38ae910b",
   "fix.interior-mutability": "059a3566",
-  "fix.lifetimes": "19ab0988",
-  "fix.ownership-moves": "d8a842b1",
-  "fix.slices": "2ac06df3",
-  "permission": "87a7e2af",
+  "fix.lifetimes": "f038878a",
+  "fix.ownership-moves": "98f5d84a",
+  "fix.slices": "2fa66cb7",
+  "permission": "92d819e2",
   "verdict.analyzer-limits": "c4fbe5df",
   "verdict.borrow-rules": "fd441686",
-  "verdict.clone-copy-drop": "c29bceb0",
+  "verdict.clone-copy-drop": "ff99dc82",
   "verdict.interior-mutability": "7443a520",
-  "verdict.lifetimes": "a99c2aaa",
-  "verdict.ownership-moves": "1a15ed7b",
-  "verdict.slices": "0b840d7d"
+  "verdict.lifetimes": "b8442d0a",
+  "verdict.ownership-moves": "321c6941",
+  "verdict.slices": "fe9ba959"
 }

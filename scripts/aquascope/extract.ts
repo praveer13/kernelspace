@@ -126,6 +126,9 @@ export function pathAt(line: string, col: number): string {
   return `@${col}`
 }
 
+/** Plain code-unit order, the same on every machine (not `localeCompare`). */
+const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
 /** Prepares a snippet for cargo: wrapped in `fn main` when it has none. `offset` lines precede the snippet. */
 export function prepare(code: string): { source: string; offset: number } {
   if (/^\s*(pub\s+)?fn\s+main\s*\(/m.test(code)) return { source: `${code.replace(/\n$/, '')}\n`, offset: 0 }
@@ -165,8 +168,9 @@ export function toTrace(results: BodyResult[], code: string, offset: number): Pe
       uses.push({ line, col: b.location.column, path: pathAt(src[line - 1] ?? '', b.location.column), needs: rawPerms(b.expected), has: rawPerms(b.actual) })
     }
   }
-  const changes = [...byKey.values()].filter((c) => c.before !== c.after).sort((a, b) => a.line - b.line)
-  uses.sort((a, b) => a.line - b.line || a.col - b.col)
+  // Aquascope lists the paths of one line in a run-dependent order, so ties are broken on every field
+  const changes = [...byKey.values()].filter((c) => c.before !== c.after).sort((a, b) => a.line - b.line || cmp(a.path, b.path) || cmp(a.before, b.before) || cmp(a.after, b.after))
+  uses.sort((a, b) => a.line - b.line || a.col - b.col || cmp(a.path, b.path) || cmp(a.needs, b.needs) || cmp(a.has, b.has))
   const order: string[] = []
   for (const x of [...changes, ...uses].sort((a, b) => a.line - b.line)) if (!order.includes(x.path)) order.push(x.path)
   return {
@@ -241,7 +245,6 @@ function parseResults(stdout: string): BodyResult[] | null {
   }
 }
 
-/** Runs Aquascope on one snippet; retries with --should-fail when the compiler rejects it. */
 /** Runs `f` in a throwaway binary crate whose main.rs is `source`, then removes the crate. */
 function inCrate<T>(env: Record<string, string>, source: string, f: (crate: string) => T): T {
   const dir = mkdtempSync(path.join(tmpdir(), 'ks-aquascope-'))
@@ -256,6 +259,7 @@ function inCrate<T>(env: Record<string, string>, source: string, f: (crate: stri
   }
 }
 
+/** Runs Aquascope on one snippet; retries with --should-fail when the compiler rejects it. */
 function extractOne(code: string, env: Record<string, string>): PermissionTrace {
   const { source, offset } = prepare(code)
   return inCrate(env, source, (crate) => {

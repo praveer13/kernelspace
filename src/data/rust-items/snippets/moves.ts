@@ -28,8 +28,8 @@ const CLONE_MISS = 'r.clone-to-silence'
 
 /** Misconceptions a wrong fix records when a learner picks it (a clone lure records `r.clone-to-silence` by default). */
 const MISS = {
-  /** `let b = a` leaves `a` usable, as a Java or Python reference would. */
-  alias: 'r.assign-aliases',
+  /** A moved name is taken to stay readable, whatever the line that reads it is spelled like. */
+  keepsName: 'r.move-keeps-the-name',
   /** Adding `mut`, or lending `&mut`, is taken to cure any borrow-check error. */
   mutCures: 'r.mut-cures-error',
   /** `*r` is taken to take the value out of a reference. */
@@ -161,7 +161,7 @@ export const SNIPPETS: RustSnippet[] = [
           good('read-queued', 10, '    println!("staged {}", queued.id);', 'The request lives in `queued` now, and `queued` holds the R this read needs.'),
           cloned('clone-req', 9, '    let mut queued = req.clone();', 'It copies the prompt string only so that `req` stays readable for one print.'),
           bad('borrow-req', 9, '    let mut queued = &req;', 'It stops the move, but `queued` becomes a `&Request`, and the function returns a `Request`.', MISS.refEverywhere),
-          bad('into-req', 9, '    let mut queued = req.into();', '`into` takes `req` by value, so it moves it just as the plain `let` did.', MISS.alias),
+          bad('into-req', 9, '    let mut queued = req.into();', '`into` takes `req` by value, so it moves it just as the plain `let` did.', MISS.selfBorrows),
         ],
       },
       {
@@ -688,7 +688,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           good('size-first', 8, '    Batch { n: v.len(), ids: v }', 'Reading the length first, then moving the vector, never touches `v` after the move.'),
           cloned('clone-ids', 8, '    Batch { ids: v.clone(), n: v.len() }', 'It copies every id into the batch and drops the original, which the struct could have taken as it was.'),
-          bad('capacity', 8, '    Batch { ids: v, n: v.capacity() }', 'Reading the capacity is a read like `len`, and `v` has no R after the move.', MISS.alias),
+          bad('capacity', 8, '    Batch { ids: v, n: v.capacity() }', 'Reading the capacity is a read like `len`, and `v` has no R after the move.', MISS.keepsName),
           drift('size-zero', 8, '    Batch { ids: v, n: 0 }', 'It compiles because nothing reads `v` after the move, but the batch now claims to hold 0 requests.'),
         ],
       },
@@ -736,7 +736,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           good('format-join', 2, '    let full = format!("{sys}{user}");', '`format!` borrows both strings and builds a new one, so `sys` stays whole.'),
           cloned('clone-left', 2, '    let full = sys.clone() + user;', 'It copies the system prompt so that `+` can consume the copy.'),
-          bad('from-sys', 2, '    let full = String::from(sys) + user;', '`String::from(sys)` takes the string by value, so it moves `sys` just as `+` did.', MISS.alias),
+          bad('from-sys', 2, '    let full = String::from(sys) + user;', '`String::from(sys)` takes the string by value, so it moves `sys` just as `+` did.', MISS.keepsName),
           bad('push-str', 2, '    let full = sys.push_str(user);', '`push_str` needs `&mut` access, which needs W, and it returns nothing to name `full`.', MISS.mutCures),
         ],
       },
@@ -1142,7 +1142,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 4, text: '    for p in *prompts {' },
         expect: { code: 'E0507', line: 4 },
         why: '`*prompts` is the vector itself, behind a shared reference, and `for` moves what it loops over, which needs O.',
-        focus: { line: 4, path: 'prompts', needs: ['read', 'own'] },
+        focus: { line: 4, path: '*prompts', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
           good('loop-ref', 4, '    for p in prompts {', '`prompts` is already a `&Vec`, so looping over it lends R to each element.'),
@@ -1155,15 +1155,13 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let first = prompts.remove(0);' },
         expect: { code: 'E0596', line: 2 },
         why: '`remove` shifts the elements, so it borrows the vector `&mut`, which needs W; a `&Vec` has R only.',
-        focus: { line: 2, path: 'prompts', needs: ['read', 'write'] },
-        permission: 'write',
       },
       {
         id: 'move-vec',
         edit: { line: 2, text: '    let first = *prompts;' },
         expect: { code: 'E0507', line: 2 },
         why: '`*prompts` is the whole vector behind a shared reference, and binding it by value moves it out, which needs O.',
-        focus: { line: 2, path: 'prompts', needs: ['read', 'own'] },
+        focus: { line: 2, path: '*prompts', needs: ['read', 'own'] },
         permission: 'own',
       },
     ],
@@ -1373,8 +1371,8 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-box',
         edit: { line: 6, text: 'fn run(plan: &Box<Plan>) -> usize {' },
         expect: { code: 'E0507', line: 7 },
-        why: 'Through a `&Box<Plan>` the plan has R but no O, and `*plan` would move it out of the box the caller still owns.',
-        focus: { line: 7, path: 'plan', needs: ['read', 'own'] },
+        why: 'Through a `&Box<Plan>`, `*plan` (the box itself) has R but no O, and `let inner = *plan` would move it out of the reference, though the caller still owns it.',
+        focus: { line: 7, path: '*plan', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
           good('reborrow', 7, '    let inner = &**plan;', 'Two derefs reach the plan itself, and `&` takes only R of it.'),
@@ -1392,7 +1390,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           good('double-inner', 8, '    inner.steps.len() * 2', 'Both terms are the same length, and `inner` holds the plan now.'),
           cloned('clone-inner', 7, '    let inner = (*plan).clone();', 'It copies the plan so that the box can be read as well, though both terms measure the same steps.'),
-          bad('double-plan', 8, '    plan.steps.len() * 2', 'The plan was moved out on line 7, so the box has nothing left to read.', MISS.alias),
+          bad('double-plan', 8, '    plan.steps.len() * 2', 'The plan was moved out on line 7, so the box has nothing left to read.', MISS.keepsName),
         ],
       },
       {
@@ -2286,7 +2284,7 @@ export const SNIPPETS: RustSnippet[] = [
         fixes: [
           good('read-p', 9, '    p.stop.len() * 2', 'The string lives in `p` now, which holds the R that `len` needs.'),
           cloned('clone-update', 8, '    let p = Params { k: 1, ..b.clone() };', 'It copies the stop string into `p` so that `b` keeps its own, though only one of them is read.'),
-          bad('two-reads', 9, '    p.stop.len() + b.stop.len() * 2', 'The extra term still reads `b.stop`, which line 8 moved.', MISS.alias),
+          bad('two-reads', 9, '    p.stop.len() + b.stop.len() * 2', 'The extra term still reads `b.stop`, which line 8 moved.', MISS.keepsName),
           drift('zero', 9, '    0', 'It compiles because nothing reads `p` or `b` any more, but the result is 0.'),
         ],
       },
@@ -2488,8 +2486,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 5, text: '    *q.get(0).unwrap()' },
         expect: { code: 'E0507', line: 5 },
         why: '`get` hands out a `&Request`, and `*` on it moves the request out of the queue, which needs O.',
-        focus: { line: 5, path: 'q', needs: ['read', 'own'] },
-        permission: 'own',
       },
       {
         id: 'take-first',
@@ -2593,7 +2589,7 @@ export const SNIPPETS: RustSnippet[] = [
           good('rebind', 12, '    let b = b.n(8);', 'The method gives the params back, so rebinding the result keeps one owner and `b.len()` reads it.'),
           cloned('clone-recv', 12, '    b.clone().n(8);', 'It compiles, but the setter runs on a copy that is dropped at once, so the setting is lost.'),
           bad('ref-recv', 12, '    (&b).n(8);', 'A `&Params` gives R and never O, and `n(self, ..)` needs O to take the params.', MISS.selfBorrows),
-          bad('discard', 12, '    let _ = b.n(8);', 'The result is discarded but `b` is still moved into the call, so line 13 reads a moved path.', MISS.alias),
+          bad('discard', 12, '    let _ = b.n(8);', 'The result is discarded but `b` is still moved into the call, so line 13 reads a moved path.', MISS.keepsName),
         ],
       },
       {
@@ -2647,7 +2643,7 @@ export const SNIPPETS: RustSnippet[] = [
         focus: { line: 4, path: 'cur', needs: ['read'] },
         permission: 'read',
         fixes: [
-          good('assign-only', 4, '    cur = next;', 'Assigning first brings R, W and O back, and nothing reads the moved vector.'),
+          good('read-old', 4, '    let n = old.len(); cur = next;', 'The vector moved into `old`, which holds the R that `len` needs, so the read stays and `cur` is only assigned.'),
           cloned('clone-old', 3, '    let old = cur.clone();', 'It copies the whole batch so that `cur` stays readable for one length.'),
           bad('ref-old', 3, '    let old = &cur;', 'It borrows instead of moving, but the function returns a `Vec`, not a `&Vec`.', MISS.refEverywhere),
         ],

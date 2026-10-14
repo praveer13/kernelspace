@@ -159,9 +159,9 @@ export const SNIPPETS: RustSnippet[] = [
       },
       {
         id: 'owned-line',
-        edit: at(6, '    let line = t.vocab[0].to_lowercase();'),
+        edit: at(6, '    let line = t.vocab[0].to_string();'),
         expect: { code: 'E0515', line: 7 },
-        why: '`to_lowercase` builds a new `String` that `head` owns and drops on return, so the `&str` into it would point at freed memory.',
+        why: '`to_string` copies the entry into a new `String` that `head` owns and drops on return, so the `&str` into it would point at freed memory.',
         fixes: [
           good('borrow-vocab', 6, '    let line = t.vocab[0].as_str();', 'Borrowing the entry that `t` owns ties the result to the tokenizer, which outlives the call.'),
           lure('clone', 'clone-line', 6, '    let line = (t.vocab[0]).clone();', 'A clone is a new `String` owned by this function too: it is dropped on return, and the returned slice still points into it.'),
@@ -1099,8 +1099,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: at(10, '    let q = s.q();'),
         expect: { code: 'E0503', line: 11 },
         why: 'The signature `q(&mut self)` borrows the whole of `*s`, not just the queue, so `s.left` has lost R and W until the last use of `q` on line 12.',
-        focus: { line: 11, path: 's.left', needs: ['read'] },
-        permission: 'read',
         fixes: [
           good('field-borrow', 10, '    let q = &mut s.queue;', 'Borrowing the field directly leaves `s.left` alone, because the checker sees through the path.'),
           lure('clone', 'clone-q', 10, '    let q = &mut s.queue.clone();', 'It compiles, but `q` is now a copy of the queue that is dropped at the end of the call, so the real queue never gets the token.'),
@@ -1164,8 +1162,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: at(9, '    s.left += 1;'),
         expect: { code: 'E0503', line: 9 },
         why: 'The closure holds a `&mut` borrow of `s.left` until `f()` on line 10, so `s.left` has lost R and W, and `+=` needs both.',
-        focus: { line: 9, path: 's.left', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'shared-sched',

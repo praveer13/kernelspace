@@ -304,7 +304,7 @@ export const SNIPPETS: RustSnippet[] = [
         expect: { code: 'E0499', line: 4 },
         why: '`a` still borrows `owners` `&mut` through `first`, and the checker does not see that index 1 lies outside `a`: it rejects a second `&mut` of `owners` although this one is safe.',
         fixes: [
-          { id: 'from-tail', edit: { line: 4, text: '    let second = &mut b[0];' }, ok: true, why: '`b` is the part of `owners` after index 1, so `b[0]` is the same block, borrowed through the split.' },
+          { id: 'from-tail', edit: { line: 4, text: '    let second = &mut b[0];' }, ok: true, why: '`b` is the part of `owners` that starts at index 1, so `b[0]` is `owners[1]`, the same block, borrowed through the split.' },
           { id: 'same-half', edit: { line: 4, text: '    let second = &mut a[0];' }, ok: false, why: '`a[0]` is the block `first` already borrows: two `&mut` to one place is the real error the checker exists for.' },
           { id: 'copy-owner', edit: { line: 4, text: '    let second = b[0];' }, ok: false, why: '`b[0]` copies the owner id, so `second` is a `u32`, and `swap` needs two `&mut` places to swap.' },
         ],

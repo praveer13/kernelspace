@@ -291,12 +291,13 @@ describe('extract.ts conversion', () => {
     expect(t.source).toBe('aquascope')
     expect(t.tool?.toolchain).toBe('nightly-2026-05-01')
     expect(t.lines).toBe(codeLines(snippet))
-    expect(t.paths).toEqual(['v', 'r', '*r'])
+    // ties on a line are broken on the path, so Aquascope's run order never shows
+    expect(t.paths).toEqual(['v', '*r', 'r'])
     expect(t.changes).toEqual([
       { line: 1, path: 'v', before: '', after: 'RWO' },
-      { line: 2, path: 'v', before: 'RWO', after: 'R' },
-      { line: 2, path: 'r', before: '', after: 'RO' },
       { line: 2, path: '*r', before: '', after: 'R' },
+      { line: 2, path: 'r', before: '', after: 'RO' },
+      { line: 2, path: 'v', before: 'RWO', after: 'R' },
       { line: 4, path: 'r', before: 'RO', after: '' },
     ])
     expect(t.uses).toEqual([
@@ -305,6 +306,20 @@ describe('extract.ts conversion', () => {
     ])
     expect(traceShapeProblems('t', t)).toEqual([])
     expect(traceProblems('t', [{ key: 'k', code: snippet }], { v: 1, traces: { k: t } }, sha256)).toEqual([])
+  })
+
+  test('the same output in another order of paths, tables and boundaries gives the same trace', () => {
+    const body = (output as { Ok: { boundaries: unknown[]; steps: { state: { state: unknown[] }[] }[] } }[])[0].Ok
+    const shuffled = [
+      {
+        Ok: {
+          boundaries: [...body.boundaries].reverse(),
+          // the two tables that compose on line 4 keep their order; the paths inside a table and the lines move
+          steps: [...body.steps].reverse().map((st) => ({ ...st, state: st.state.map((tb) => ({ ...tb, state: [...tb.state].reverse() })) })),
+        },
+      },
+    ]
+    expect(formatTraceFile({ v: 1, traces: { k: toTrace(shuffled as never, snippet, 1) } })).toBe(formatTraceFile({ v: 1, traces: { k: toTrace(output as never, snippet, 1) } }))
   })
 })
 

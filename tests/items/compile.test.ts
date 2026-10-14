@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { firstError, formatBank, panicOutcome } from '../../scripts/build-rust-items'
+import { firstError, formatBank, limiter, panicOutcome } from '../../scripts/build-rust-items'
 import { checkFamily, genSeeds, lintLiterals } from '../../scripts/verify-generators'
 import { checkBanks, checkSnippets, compareSnippet, COMPILE_KCS as GRAPH_COMPILE_KCS, phoneProblems, quotaProblems, snippetHash, verdictQuota } from '../../scripts/verify-rust-items'
 import { addsClone, CLONE_MISS, ERROR_CODES, loadRustGroups, MAX_COLS, MAX_LINES, variantCode } from '../../src/data/rust-items'
@@ -280,6 +280,41 @@ describe('compile: rustc output', () => {
     })
     expect(panicOutcome("thread 'main' panicked at /tmp/x/main.rs:9:5:\nRefCell already mutably borrowed\n", main)?.code).toBe('BorrowError')
     expect(panicOutcome("thread 'main' panicked at /tmp/x/main.rs:4:5:\nindex out of bounds\n", main)?.code).toBe('panic')
+  })
+
+  test('the build limiter never runs more tasks at once than --jobs, whoever arrives while a slot is handed over', async () => {
+    let seed = 7
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      return seed % n
+    }
+    for (const jobs of [1, 2, 3, 5]) {
+      const limit = limiter(jobs)
+      let active = 0
+      let peak = 0
+      const started: Promise<void>[] = []
+      const spawn = (depth: number): void => {
+        started.push(
+          limit(async () => {
+            active++
+            peak = Math.max(peak, active)
+            const hops = rand(4)
+            for (let i = 0; i < hops; i++) await null
+            // a task that arrives while a finishing task is waking its waiter
+            if (depth < 3 && rand(2) === 0) spawn(depth + 1)
+            for (let i = rand(3); i > 0; i--) await null
+            active--
+          }),
+        )
+      }
+      for (let i = 0; i < 200; i++) {
+        spawn(0)
+        if (rand(3) === 0) await null
+      }
+      for (let i = 0; i < started.length; i++) await started[i]
+      expect({ jobs, peak: peak <= jobs }).toEqual({ jobs, peak: true })
+      expect(active).toBe(0)
+    }
   })
 
   test('the committed bank is byte-for-byte what formatBank writes, so --check can compare files', () => {

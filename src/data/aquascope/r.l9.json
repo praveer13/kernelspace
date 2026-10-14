@@ -6,14 +6,14 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 10,
-      "paths": ["tokens","block","block.tokens","*block.tokens","(*block.tokens)[_]"],
+      "paths": ["tokens","(*block.tokens)[_]","*block.tokens","block","block.tokens"],
       "changes": [
         {"line":6,"path":"tokens","before":"","after":"RWO"},
-        {"line":7,"path":"tokens","before":"RWO","after":"R"},
+        {"line":7,"path":"(*block.tokens)[_]","before":"","after":"R"},
+        {"line":7,"path":"*block.tokens","before":"","after":"R"},
         {"line":7,"path":"block","before":"","after":"RO"},
         {"line":7,"path":"block.tokens","before":"","after":"RO"},
-        {"line":7,"path":"*block.tokens","before":"","after":"R"},
-        {"line":7,"path":"(*block.tokens)[_]","before":"","after":"R"}
+        {"line":7,"path":"tokens","before":"RWO","after":"R"}
       ],
       "uses": [
         {"line":7,"col":33,"path":"tokens","needs":"R","has":"RWO"},
@@ -25,22 +25,22 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 11,
-      "paths": ["prompt","reply","winner","*winner","left","*left","right","*right"],
+      "paths": ["prompt","reply","*winner","winner","*left","*right","left","right"],
       "changes": [
         {"line":2,"path":"prompt","before":"","after":"RO"},
         {"line":3,"path":"reply","before":"","after":"RWO"},
+        {"line":4,"path":"*winner","before":"","after":"R"},
         {"line":4,"path":"prompt","before":"RO","after":"R"},
         {"line":4,"path":"reply","before":"RWO","after":"R"},
         {"line":4,"path":"winner","before":"","after":"RO"},
-        {"line":4,"path":"*winner","before":"","after":"R"},
-        {"line":9,"path":"left","before":"","after":"RO"},
         {"line":9,"path":"*left","before":"","after":"R"},
-        {"line":9,"path":"right","before":"","after":"RO"},
         {"line":9,"path":"*right","before":"","after":"R"},
-        {"line":10,"path":"left","before":"RO","after":""},
+        {"line":9,"path":"left","before":"","after":"RO"},
+        {"line":9,"path":"right","before":"","after":"RO"},
         {"line":10,"path":"*left","before":"R","after":""},
-        {"line":10,"path":"right","before":"RO","after":""},
-        {"line":10,"path":"*right","before":"R","after":""}
+        {"line":10,"path":"*right","before":"R","after":""},
+        {"line":10,"path":"left","before":"RO","after":""},
+        {"line":10,"path":"right","before":"RO","after":""}
       ],
       "uses": [
         {"line":4,"col":25,"path":"prompt","needs":"R","has":"RO"},
@@ -57,7 +57,7 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 11,
-      "paths": ["prompt","reply","winner","left","*left","right","*right"],
+      "paths": ["prompt","reply","winner","*left","*right","left","right"],
       "changes": [
         {"line":2,"path":"prompt","before":"","after":"RO"},
         {"line":3,"path":"reply","before":"","after":"RWO"},
@@ -65,14 +65,14 @@
         {"line":6,"path":"prompt","before":"RO","after":""},
         {"line":6,"path":"reply","before":"RWO","after":""},
         {"line":6,"path":"winner","before":"RO","after":""},
-        {"line":9,"path":"left","before":"","after":"RO"},
         {"line":9,"path":"*left","before":"","after":"R"},
-        {"line":9,"path":"right","before":"","after":"RO"},
         {"line":9,"path":"*right","before":"","after":"R"},
-        {"line":10,"path":"left","before":"RO","after":""},
+        {"line":9,"path":"left","before":"","after":"RO"},
+        {"line":9,"path":"right","before":"","after":"RO"},
         {"line":10,"path":"*left","before":"R","after":""},
-        {"line":10,"path":"right","before":"RO","after":""},
-        {"line":10,"path":"*right","before":"R","after":""}
+        {"line":10,"path":"*right","before":"R","after":""},
+        {"line":10,"path":"left","before":"RO","after":""},
+        {"line":10,"path":"right","before":"RO","after":""}
       ],
       "uses": [
         {"line":4,"col":31,"path":"prompt","needs":"R","has":"RO"},
