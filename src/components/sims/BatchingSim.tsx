@@ -1343,8 +1343,9 @@ export default function BatchingSim() {
                 {snap.queue.slice(0, 24).map((r) => (
                   <motion.span
                     key={r.id}
-                    initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    // motion only, never an opacity fade: text caught mid-fade fails color-contrast (axe) for a few frames
+                    initial={reduced ? false : { scale: 0.8 }}
+                    animate={{ scale: 1 }}
                     transition={{ duration: 0.2 }}
                     className={cn(
                       'rounded-sm border px-1.5 py-0.5 font-mono text-[10px]',
@@ -1386,9 +1387,11 @@ export default function BatchingSim() {
                       <motion.div
                         key={r.id}
                         layout="position"
-                        initial={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={reduced ? { opacity: 0 } : { opacity: 0, x: 80 }}
+                        // motion only, never an opacity fade: the r<id> and token labels are text, and text caught
+                        // mid-fade fails color-contrast (axe flagged it right after play)
+                        initial={reduced ? false : { y: -6 }}
+                        animate={{ y: 0 }}
+                        exit={reduced ? undefined : { x: 80 }}
                         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                         className="flex items-center gap-2"
                       >
