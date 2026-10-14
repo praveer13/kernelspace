@@ -23,7 +23,7 @@ The new letter: **E — encode.** Multimodal models need a third worker class: t
 
 Disaggregation lives or dies on KV transfer (T5.L9's ~25 ms budget line). Two artifacts turned that from a custom project into plumbing:
 
-**NIXL** (NVIDIA Inference Xfer Library; a C++ library with Rust bindings, not a Rust one): point-to-point KV-cache transfer over RDMA/InfiniBand/RoCE/UCX/NVLink/SSD. Abstract descriptor lists, one-sided RDMA reads of KV blocks between workers, GPU-direct where the fabric allows. The interface inference stacks actually call; the thing T2.L6's zero-copy lesson becomes at cluster scale.
+**NIXL** (NVIDIA Inference Xfer Library; a C++ library with Rust bindings, not a Rust one): point-to-point KV-cache transfer over RDMA / InfiniBand / RoCE / UCX / NVLink / SSD. Abstract descriptor lists, one-sided RDMA reads of KV blocks between workers, GPU-direct where the fabric allows. The interface inference stacks actually call; the thing T2.L6's zero-copy lesson becomes at cluster scale.
 
 **KVBM** (KV Block Manager): Dynamo's block manager — the lab-02 data structure, industrialized — handling **tiering**: GPU HBM ↔ CPU DRAM ↔ SSD ↔ remote object store. Written in Rust (the T3.L6 decision, shipped). Your paged block manager manages one pool; KVBM managed a *hierarchy* of pools with placement, eviction, and migration between tiers. T2.L3's swap lesson, third incarnation.
 
@@ -90,6 +90,12 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
         ],
       },
       kcs: ['t6.epd-phases', 't6.kv-tiering'],
+    },
+    {
+      type: 'item',
+      title: 'Split the fleet and time the hand-off with new numbers',
+      family: 'prefill',
+      variants: ['pd-ratio', 'transfer-ms'],
     },
     {
       type: 'quiz',

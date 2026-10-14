@@ -42,6 +42,12 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
       md: `This is **blue-green deployment as a control loop**: the trainer is CI producing a new artifact every few minutes, the rollout fleet is production that must run the new build without downtime, and "version skew = garbage" is your canary rule taken to its extreme — one mixed-weight batch doesn't 500 a request, it corrupts the gradient. And weight sync is your cache-invalidation problem: broadcast invalidation (pause, push, resume) vs write-through streaming vs TTL (periodic reload). Same tradeoffs, 400 GB payload.`,
     },
     {
+      type: 'item',
+      title: 'Speed up the rollout and count the idle slots with new numbers',
+      family: 'rollout',
+      variants: ['rollout-share', 'long-tail'],
+    },
+    {
       type: 'quiz',
       questions: [
         {

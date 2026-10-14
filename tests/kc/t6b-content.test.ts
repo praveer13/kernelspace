@@ -96,13 +96,15 @@ describe('T6b lessons: KCs and tickets', () => {
 describe('T6b hands-on item blocks (spec §5.4)', () => {
   const EXPECT: Record<string, { family: string; variants: string[] }> = {
     't6.l6': { family: 'spec', variants: ['expected-tokens', 'speedup', 'best-k'] },
+    't6.l7': { family: 'rollout', variants: ['rollout-share', 'long-tail'] },
     't6.l8': { family: 'cost', variants: ['cache-discount'] },
     't6.l9': { family: 'memory', variants: ['lora'] },
+    't6.l10': { family: 'prefill', variants: ['hit-gap', 'namespace-cost'] },
   }
 
   for (const l of LESSONS) {
     const want = EXPECT[l.id]
-    test(`${l.id}: ${want ? `one ${want.family} item block` : 'no item block (Wave 3 gives it a family)'}`, async () => {
+    test(`${l.id}: ${want ? `one ${want.family} item block` : 'no item block'}`, async () => {
       const blocks = itemBlocksOf(l)
       if (!want) {
         expect(blocks).toHaveLength(0)
