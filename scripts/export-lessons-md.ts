@@ -16,7 +16,14 @@ import { TRACKS } from '../src/lib/tracks'
 
 const SITE = 'https://kernelspace.naigap.com'
 
-export function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: number, firstDiagram: number, firstAlign: number): string {
+export function blockToMd(
+  b: ContentBlock,
+  lessonId: string,
+  firstQuestion: number,
+  firstDiagram: number,
+  firstAlign: number,
+  firstIso = 0,
+): string {
   switch (b.type) {
     case 'prose':
     case 'deepdive':
@@ -55,10 +62,21 @@ export function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: numb
       const opts = order.map((authored, j) => `- (o${j + 1}) ${gate.options[authored]}`).join('\n')
       return `${head}\n\n**Predict before step ${gate.step + 1}: ${gate.prompt}**\n\n${opts}\n\n_Later steps and answers withheld: ask the learner to commit to a prediction and explain it before discussing._`
     }
-    case 'isomorphism':
-      return `_${b.title ?? 'isomorphism'}_\n\n${b.pairs
-        .map((p) => `- **${p.os}** (${p.osLine}) ≡ **${p.llm}** (${p.llmLine})`)
-        .join('\n')}`
+    case 'isomorphism': {
+      // P3 (wave-3.md §11.1): each pair with where it breaks, then the break item without its key (options in a
+      // salt of their own, so they never shift the quiz permutations) and the principle the learner reaches.
+      const pairs = b.pairs
+        .map((p) => `- **${p.os}** (${p.osLine}) ≡ **${p.llm}** (${p.llmLine})${p.breaks ? `\n  - where it breaks: ${p.breaks}` : ''}`)
+        .join('\n')
+      const item = b.breakItem
+      const check = item
+        ? `\n\n**Where does it break? ${item.q}**\n\n${exportOrder(`${lessonId}#iso`, firstIso, item.options.length)
+            .map((authored, j) => `- (o${j + 1}) ${item.options[authored]}`)
+            .join('\n')}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`
+        : ''
+      const principle = b.principle ? `\n\n**Principle:** ${b.principle}` : ''
+      return `_${b.title ?? 'isomorphism'}_\n\n${pairs}${check}${principle}`
+    }
     case 'quiz': {
       // Answer keys are withheld: tutors fed this markdown must not see them.
       // Options use stable ids (o1, o2, …) in a fixed per-question permutation, not authored
@@ -90,6 +108,8 @@ export function blockToMd(b: ContentBlock, lessonId: string, firstQuestion: numb
     case 'item':
       return `**Practice: ${b.title}**\n\n_Practice with new numbers in the lesson._`
     case 'exercise':
+      // A Fleet exercise (wave-3.md §5.3) is a prediction on a seeded sweep, so its note stays in the lesson.
+      if ('fleet' in b) return `**Exercise: ${b.title}**\n\n_Run it in the lesson: ${SITE}/lesson/${lessonId}. Ask the learner to predict the sweep before discussing._`
       return `**Exercise: ${b.title}**\n\n${b.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}${b.note ? `\n\n_${b.note}_` : ''}`
     case 'field-note':
       return `> **Field note · ${b.title}**\n> ${b.source} · ${b.published} · verified ${b.verified}\n>\n> ${b.md.replace(/\n/g, '\n> ')}\n>\n> [Read the primary source](${b.href})`
@@ -111,12 +131,14 @@ export function lessonToMd(l: Lesson): string {
   let questions = 0 // lesson-wide question index, the same count verify-items uses
   let diagrams = 0 // diagram index, salts the option order of predictAt gates
   let aligns = 0 // alignment-item index across the lesson's code blocks
+  let isos = 0 // break-item index across the lesson's isomorphism blocks
   const body = l.blocks
     .map((b) => {
-      const md = blockToMd(b, l.id, questions, diagrams, aligns)
+      const md = blockToMd(b, l.id, questions, diagrams, aligns, isos)
       if (b.type === 'quiz') questions += b.questions.length
       if (b.type === 'diagram') diagrams++
       if (b.type === 'code') aligns += b.align?.length ?? 0
+      if (b.type === 'isomorphism' && b.breakItem) isos++
       return md
     })
     .filter(Boolean)
@@ -124,11 +146,10 @@ export function lessonToMd(l: Lesson): string {
   return `${header}${body}\n`
 }
 
-mkdirSync('public/lessons-md', { recursive: true })
-let count = 0
-for (const l of ALL_LESSONS) {
-  writeFileSync(`public/lessons-md/${l.id}.md`, lessonToMd(l))
-  count++
+function writeLessons(): number {
+  mkdirSync('public/lessons-md', { recursive: true })
+  for (const l of ALL_LESSONS) writeFileSync(`public/lessons-md/${l.id}.md`, lessonToMd(l))
+  return ALL_LESSONS.length
 }
 
 /* llms.txt — the agent manifest (llmstxt.org shape) */
@@ -170,5 +191,9 @@ ${byTrack}
 - [Fleet Week](${SITE}/week): the 4-act capstone
 `
 
-writeFileSync('public/llms.txt', llmsTxt)
-console.log(`exported ${count} lessons + llms.txt`)
+// Importing this module (tests do) writes nothing; running it as a script does.
+if (import.meta.main) {
+  const count = writeLessons()
+  writeFileSync('public/llms.txt', llmsTxt)
+  console.log(`exported ${count} lessons + llms.txt`)
+}

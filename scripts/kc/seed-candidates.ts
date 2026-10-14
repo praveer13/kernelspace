@@ -54,7 +54,8 @@ function blockText(b: ContentBlock): string {
     case 'quiz':
       return b.questions.map((q) => [q.q, ...q.options, q.explanation ?? ''].join('\n')).join('\n')
     case 'exercise':
-      return [b.title, ...b.tasks, b.note ?? ''].join('\n')
+      // A Fleet exercise block (wave-3.md §2.3) has no task list: print its title and fleet id.
+      return 'tasks' in b ? [b.title, ...b.tasks, b.note ?? ''].join('\n') : [b.title, `fleet exercise ${b.fleet}`, b.note ?? ''].join('\n')
     default:
       return ''
   }

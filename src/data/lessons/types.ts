@@ -6,6 +6,8 @@
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { CodeTab } from '@/components/CodeBlock'
 import type { AuthoredItem, ConstructedPrompt } from '@/lib/items/types'
+import type { KcId } from '@/lib/kc/types'
+import type { Background } from '@/lib/ledger/types'
 
 export type TrackId = 'r' | 't0' | 't1' | 't2' | 't3' | 't4' | 't5' | 't6' | 't7'
 
@@ -145,7 +147,7 @@ export interface QuizBlockData {
   questions: QuizQuestion[]
 }
 
-export interface ExerciseBlock {
+export interface SimExerciseBlock {
   type: 'exercise'
   simId: SimId
   /** Initial simulator machine/mode selected when opening this exercise. */
@@ -163,6 +165,21 @@ export interface ExerciseBlock {
   /** SimHost config for the inline mount (embed and phone modes never touch the URL). */
   config?: unknown
 }
+
+/**
+ * Wave 3 (docs/specs/wave-3.md §2.3, §5.3): a Fleet exercise. `fleet` is a `FLEET_EXERCISES` id
+ * (`src/lib/world/fleet-ex`); the panel runs the sweep in the lesson, so the block carries no tasks.
+ */
+export interface FleetExerciseBlock {
+  type: 'exercise'
+  fleet: string
+  title: string
+  /** collapsed "what just happened" explanation */
+  note?: string
+}
+
+/** A sim exercise (a link card or an inline SimHost mount) or a Fleet exercise; narrow with `'fleet' in block`. */
+export type ExerciseBlock = SimExerciseBlock | FleetExerciseBlock
 
 /**
  * P1 (Wave 1, spec §9.1): the two prequestions that open a core lesson. Answers are recorded but
@@ -231,12 +248,20 @@ export interface IsomorphismPair {
   llmLine: string
   /** Where the analogy stops holding — one sentence, shown under the pair. */
   breaks?: string
+  /** P3 (wave-3.md §11.3): a work analogue shown to learners of these backgrounds instead of the OS side. */
+  work?: { backgrounds: Background[]; os: string; osLine: string; breaks: string }
 }
 
 export interface IsomorphismBlock {
   type: 'isomorphism'
   title?: string
   pairs: IsomorphismPair[]
+  /** ≤ 40 words, shown after the break (wave-3.md §11.1). */
+  principle?: string
+  /** "Where does this analogy break?" (item pool `iso`, wave-3.md §11.1). */
+  breakItem?: QuizQuestion
+  /** The block's KCs; default: the lesson's. */
+  kcs?: KcId[]
 }
 
 export interface DeepdiveBlock {
