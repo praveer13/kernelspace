@@ -215,7 +215,7 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
           osLine: 'Add pods when the metric crosses the line; lag kills you at spike.',
           llm: 'Planner on queue age + KV utilization + TPOT',
           llmLine: 'Leading signals chosen per phase; scale the binding fleet, not "the service".',
-          breaks: 'HPA scales one homogeneous deployment on one metric; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so no single number tells it what to add.',
+          breaks: 'HPA scales one homogeneous deployment on a pod-level metric; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so no single number tells it what to add.',
         },
         {
           os: 'cold JVM pool',

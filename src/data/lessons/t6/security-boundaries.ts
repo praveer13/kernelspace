@@ -334,7 +334,7 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
           osLine: 'User space proposes; the kernel validates arguments and authority.',
           llm: 'tool-call broker',
           llmLine: 'The model proposes; deterministic code validates schema, identity, and policy.',
-          breaks: 'A syscall comes from code with fixed behaviour; a tool call comes from a model that text in its context can steer (prompt injection), so schema-valid arguments are not authorization and the broker must check identity and policy in ordinary code.',
+          breaks: 'A process\'s intent is fixed by its code; a tool call comes from a model whose intent any text in its context can steer (prompt injection), so schema-valid arguments are not authorization and the broker must check identity and policy in ordinary code.',
         },
         {
           os: 'process capability',
@@ -348,7 +348,7 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
           osLine: 'A process cannot infer or read another process by default.',
           llm: 'tenant cache namespace',
           llmLine: 'KV and prefix identity include tenant and model context by construction.',
-          breaks: 'Hardware stops a process from reading another\'s memory however it probes; a shared cache needs no read of the other tenant\'s data, because a hit is faster than a miss and that timing is itself an observable bit, and separating namespaces costs hit rate.',
+          breaks: 'Direct reads of another process\'s memory are blocked by hardware; a shared cache needs no read of the other tenant\'s data, because a hit is faster than a miss and that timing is itself an observable bit, and separating namespaces costs hit rate.',
         },
       ],
       principle:
@@ -356,14 +356,14 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
       breakItem: {
         q: 'The security pairs map OS isolation mechanisms onto agentic inference. Where does that mapping break?',
         options: [
-          'A syscall comes from fixed code, and a tool call comes from a model that text in its context can steer',
+          'A process\'s intent is fixed by its code, and a model\'s intent is steered by any text in its context',
           'The kernel validates the arguments before it acts on a syscall, and the broker validates schema, identity and policy before a tool runs',
           'A process holds an explicit handle rather than ambient access, and a tool worker holds a scoped credential rather than ambient access',
           'Separate address spaces keep one process from reading another, and separate cache namespaces keep one tenant from reading another\'s prefixes',
         ],
         correct: [0],
         why: [
-          'Right: the kernel can treat a syscall\'s caller as a program with fixed behaviour, but a model can be steered by the text it reads. Schema-valid arguments are therefore not authorization, and the broker has to check identity and policy in ordinary code.',
+          'Right: a process\'s intent is fixed by its code, but a model\'s can be steered by any text it reads. Schema-valid arguments are therefore not authorization, and the broker has to check identity and policy in ordinary code.',
           'This holds on both sides: a kernel and a tool broker both validate a proposed action before carrying it out. The pair claims exactly this, so it is not where the analogy stops.',
           'This holds on both sides: a process capability and a single-use credential both make authority an explicit, narrow thing to hold. The analogy agrees here, so it is not a break.',
           'This holds on both sides: separated address spaces and separated cache namespaces both stop one party reading another\'s data directly. The difference is a signal that namespaces leave open, hit-versus-miss timing.',

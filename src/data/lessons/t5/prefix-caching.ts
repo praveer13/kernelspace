@@ -252,7 +252,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           options: [
             'The tail prefill and each decode step, and a hit lets the engine replay the response from last time',
             'Prefill for the cached system prompt, as the tail is still prefilled and decoding proceeds as usual',
-            'Tokenization and embedding lookup for the whole prompt, as the cache stores token ids rather than tensors',
+            'The block-table walk for the cached prompt, as the table already maps those tokens and a hit skips reading it',
             'Nothing, as reuse needs the whole prompt to match a cached entry exactly and a new tail breaks the match',
           ],
           correct: [1],
@@ -260,11 +260,11 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           why: [
             'Treats the cache as a response cache. APC stores K/V for prompt tokens only; the tail still needs prefill and every output token still needs its own decode step.',
             'Right: reuse starts at the first miss. Cached K/V replaces prefill for the shared prefix, while new-tail prefill and autoregressive decode still run.',
-            'Confuses what is cached. The cache holds K/V tensors, not token ids, and the engine still tokenizes to compute block hashes. The saving is prefill FLOPs.',
+            'Takes the block table for the cache. The table is one sequence\'s map from logical to physical blocks and is read for every block, cached or not; a hit adds shared blocks to it. The saving is prefill FLOPs for those tokens.',
             'Assumes all-or-nothing matching. Block-hash lookup walks the prompt until the first miss, so a shared prefix is reused even when the tail differs.',
           ],
           kcs: ['t5.prefix-cache-keys'],
-          miss: ['t5.apc-replays-responses', '', 't5.apc-caches-token-ids', 't5.apc-needs-whole-prompt'],
+          miss: ['t5.apc-replays-responses', '', 'confuse.t5.block-tables', 't5.apc-needs-whole-prompt'],
         },
         {
           q: 'Why does radix-cache eviction choose leaves?',
@@ -309,7 +309,7 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           options: [
             'The normalized prompt text after whitespace and Unicode cleanup, as identical text tokenizes identically',
             'The exact token ids plus the model and adapter settings plus a tenant salt, as K/V and isolation depend on them',
-            'The token ids plus the physical block ids that first held them, as the block table already says where the K/V sits',
+            'The virtual block number inside the request, as a TLB-style lookup translates that address to the block holding the K/V',
             'The token ids plus the client session id, as one user\'s cached prefix must be hidden from other users\' requests',
           ],
           correct: [1],
@@ -317,11 +317,11 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           why: [
             'Equal text does not guarantee equal token ids across tokenizer versions or special-token handling, and text ignores model and adapter. K/V is a function of token ids and weights.',
             'Right: the cache identity must name deterministic K/V. Token ids, model, adapter and multimodal inputs fix the tensors; a salt partitions tenants against timing side channels.',
-            'Physical block ids are handed out by the allocator when a block is filled, so the same tokens prefilled again, on another worker or after an eviction, land in different blocks. The block table maps one sequence\'s logical blocks to physical ones; a cache identity has to come from content, so any request with the same tokens finds the entry.',
-            'A per-session key copies the page table, which is per process because each process has its own address space. A prefix key is content-addressed, so two users with one system prompt should hit one entry; isolation takes a trust-domain salt, not one entry per session.',
+            'A virtual block number is a place inside one request\'s own address space, like a virtual page translated by a TLB. Position 3 of two unrelated prompts has the same number, so the key says nothing about content. A cache identity must name the tokens, model and adapter.',
+            'A per-session key never lets two users share a system prompt, which removes most of the cache\'s value. Isolation needs a trust-domain salt, not one entry per session.',
           ],
           kcs: ['t5.prefix-cache-keys'],
-          miss: ['t5.key-is-text', '', 'confuse.t5.block-tables', 'confuse.t2.address-translation'],
+          miss: ['t5.key-is-text', '', 'confuse.t2.address-translation', 't5.key-is-per-session'],
         },
       ],
     },
