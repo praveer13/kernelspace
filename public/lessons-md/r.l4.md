@@ -182,7 +182,7 @@ To tell a real error from a safe one, ask what the line would do if the compiler
 
 ## Repair borrows, not symptoms
 
-The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable slice updates, non-overlapping **split_at_mut**, strings as **&str**, early borrow endings, and returning a subslice. Each function should operate without cloning or allocating unless its signature explicitly returns an owned value. The codes you meet here, E0499 and E0502, each have a page in the [Error Museum](/errors).
+The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable slice updates, non-overlapping **split_at_mut**, strings as **&str**, early borrow endings, and returning a subslice. Each function should operate without cloning or allocating unless its signature explicitly returns an owned value. The compile items for the lifetimes group, which cover these analyzer limits, have no page of their own, so practise them from the Error Museum entries they come from: [E0499](/errors#E0499) and [E0502](/errors#E0502). Each shows the diagram, the fix that keeps the program's behaviour, the clone that changes it, and practice items.
 
 ---
 

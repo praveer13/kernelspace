@@ -182,9 +182,9 @@ print(block.tokens[0])
 **Align 1. In Java and Python the same program runs, because a Block there holds a reference to the whole list object. In Rust, what does the `'a` on `Block<'a>` record that Java's field type does not?**
 
 - (o1) That a Block is a loan on the slice, so `tokens` keeps only Read until the Block is last used
-- (o2) That a Block keeps the Vec alive, so a later `push` cannot free the old buffer behind it here
+- (o2) That a Block keeps the buffer alive, so a later `push` cannot free it while the Block exists
 - (o3) That a Block copies the slice, so later changes to `tokens` never reach the Block
-- (o4) That a Block owns its tokens, so `tokens` gives up Own and Write to the Block as soon as it is built
+- (o4) That a Block owns its tokens, so building one moves the Vec, and `tokens` loses Own and Write
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
 
