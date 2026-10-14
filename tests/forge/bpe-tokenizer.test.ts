@@ -30,7 +30,9 @@ import {
   fullTable,
   idsAt,
   maxMerges,
+  piecesAt,
   tokensAt,
+  wordPieces,
 } from '../../src/data/forge/bpe-tokenizer/primm'
 import { PROVE_LAB_ID, PROVE_QUESTIONS, followUpRef } from '../../src/data/forge/bpe-tokenizer/prove'
 import type { NumberPrimm } from '../../src/data/forge/types'
@@ -42,7 +44,7 @@ import { gradeChoice, gradeNumber, itemResponse, observationResponse, primmRef, 
 import { pickQuestions } from '../../src/lib/forge/prove'
 import { isKnownKind, refMatchesKind } from '../../src/lib/ledger/refs'
 import type { CheckResult, LabRunReport } from '../../src/lib/forge/types'
-import { CONTRACT_TEXT, CORPUS, HarnessRng, bytesOf, decode, encode, seededText, trainBpe, type Merge } from '../../src/lib/world/bpe'
+import { CONTRACT_TEXT, CORPUS, HarnessRng, bytesOf, decode, encode, ratio2, seededText, trainBpe, type Merge } from '../../src/lib/world/bpe'
 import { lintBundle } from '../../scripts/lint-mentor'
 import { poolCueFailures } from '../../scripts/item-cues'
 import { extractHeadings } from '../../src/pages/lesson/markdown'
@@ -50,6 +52,7 @@ import { extractHeadings } from '../../src/pages/lesson/markdown'
 const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8')
 const LIB_RS = read('labs/bpe-tokenizer/src/lib.rs')
 const TOKENIZER_RS = read('labs/bpe-tokenizer/src/tokenizer.rs')
+const PRIMM_SOURCE = read('src/data/forge/bpe-tokenizer/primm.ts')
 const kcValues = new Set<string>(Object.values(KC))
 const lab = FORGE_LABS.find((l) => l.id === 'bpe-tokenizer')
 if (lab === undefined) throw new Error('lab 03 is missing from labs.ts')
@@ -245,6 +248,15 @@ describe('stages: labs.ts, tokenizer.rs and the harness agree', () => {
     for (const s of STAGES) expect(TOKENIZER_RS).toMatch(new RegExp(`STAGE ${s.n}\\b[^\\n]*≈ ${s.minutes} min`))
   })
 
+  test('the header says what leftmost_nonoverlap catches: its table has one rule, so a skipped final rule is the only rule', () => {
+    const row = /^\/\/! {3}leftmost_nonoverlap {3}([^\n]*(?:\n\/\/! {20,}[^\n]*)*)/m.exec(TOKENIZER_RS)
+    if (row === null) throw new Error('the check table in tokenizer.rs is missing leftmost_nonoverlap')
+    const text = row[1].replace(/\n\/\/!\s+/g, ' ')
+    expect(text).not.toContain('last rule of the table never applied')
+    expect(text).toContain('only rule')
+    expect(LIB_RS).toMatch(/Tokenizer::new\(vec!\[\(97, 97, 256\)\]\)/)
+  })
+
   test('the stage panel counts four stages and offers the next command', () => {
     const html = renderToStaticMarkup(createElement(StagePanel, { bundle, checks: lab.checks, passed: new Set(['bytes_are_ids']) }))
     expect(html).toContain('Build in four stages')
@@ -430,6 +442,32 @@ describe('the answers are true of the harness', () => {
     expect(gradeNumber(p1, 23, 23).feedback).toContain('23 tokens')
   })
 
+  test('p1: the explanation says what the 48-merge run really does to "user" and "values", not one or two tokens each', () => {
+    const p1 = num('lab03.primm.p1')
+    // the reference run's own pieces, computed from the page's BPE (CF4: the old text said one or two tokens each)
+    expect(piecesAt(REFERENCE_MERGES).join('|')).toBe('t|he |schedul|er| |bat|che|s the |k|ey|s an|d v|al|u|e|s |f|o|r| the |u|s|er')
+    expect(wordPieces('user')).toEqual(['u', 's', 'er'])
+    expect(wordPieces('values')).toEqual(['d v', 'al', 'u', 'e', 's '])
+    expect(p1.explain).toContain('"user" is u|s|er')
+    expect(p1.explain).toContain('"values" is spread over five tokens')
+    expect(p1.explain).not.toContain('one or two tokens each')
+  })
+
+  test('the strip prints the bytes-per-token ratio the harness prints (ratio2, not toFixed)', () => {
+    const bytes = bytesOf(RUN_TEXT).length
+    for (const merges of [0, 1, 24, REFERENCE_MERGES, 96, maxMerges()]) {
+      const run = RUN_SPEC.run({ merges })
+      const last = run.frames[run.frames.length - 1]
+      const tokens = tokensAt(merges)
+      expect(last.stats.find((x) => x.label === 'bytes per token')?.value).toBe(ratio2(bytes, tokens))
+      if (merges > 0) expect(run.summary).toContain(`${ratio2(bytes, tokens)} bytes per token`)
+    }
+    // the half-way case where the two roundings differ: 9 bytes over 8 tokens is 1.125, Rust prints 1.12 and toFixed 1.13
+    expect(ratio2(9, 8)).toBe('1.12')
+    expect(PRIMM_SOURCE).toContain('ratio2')
+    expect(PRIMM_SOURCE).not.toContain('.toFixed(2)')
+  })
+
   test('p2: a leftmost-first encoder goes red on merge_priority first, and not on stage 1 or leftmost_nonoverlap', () => {
     const impl: Impl = { encode: leftmostFirst, decode }
     expect(failures(impl)).toEqual(['merge_priority', 'contract'])
@@ -496,7 +534,21 @@ describe('the answers are true of the harness', () => {
     expect(CHECKS.merge_priority(impl, 0)).toBe(true)
     expect(CHECKS.leftmost_nonoverlap(impl, 0)).toBe(true)
     const q = mc('lab03.primm.i5').q
-    expect(q.options[q.correct[0]]).toContain('merges the lowest-rank pair once and stops')
+    expect(q.options[q.correct[0]]).toContain('merges the lowest-rank pair once, and stops')
+  })
+
+  test('i5: the quoted message is the one check_contract gives that encoder (the fixed sentence is compared first)', () => {
+    const merges = trainBpe(CORPUS, 48)
+    const got = oneRound(CONTRACT_TEXT, merges)
+    const want = expectedIds()
+    // lib.rs: the fixed sentence is compared before the seeded texts, and a mismatch reports the first differing index
+    expect(LIB_RS.indexOf('encode produced wrong ids')).toBeLessThan(LIB_RS.indexOf('still have a merge rule'))
+    const at = got.findIndex((x, i) => x !== want[i])
+    expect(at).toBe(1)
+    const message = `encode produced wrong ids (first diff at index ${at})`
+    const q = mc('lab03.primm.i5').q
+    expect(q.q).toContain(`"${message}"`)
+    expect(q.q).not.toContain('still have a merge rule')
   })
 
   test('m1: the prompt quotes the reference count, and the three dials’ answers are in the grading band for a sensible guess', () => {

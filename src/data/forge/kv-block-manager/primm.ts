@@ -38,7 +38,7 @@ export const PRIMM_LAB = 'kv-block-manager'
  * comes from labs.ts. Stage 5, the optional adapter extension, is not a stage of the walk: it never blocks completion.
  */
 export const STAGES: readonly StageInfo[] = [
-  { n: 1, title: 'Paging', minutes: 5, goal: 'A pool, a block table per sequence, and `translate`. The first green.' },
+  { n: 1, title: 'Paging', minutes: 2, goal: 'A pool, a block table per sequence, and `translate`. The first green.' },
   { n: 2, title: 'Capacity', minutes: 10, goal: 'An `allocate` that is all-or-nothing, and a `free` that returns blocks.' },
   { n: 3, title: 'Sharing', minutes: 20, goal: 'Refcounts: `fork` copies the table, `free` gives a block back only at zero.' },
   { n: 4, title: 'Copy-on-write', minutes: 25, goal: '`append` copies a shared partial tail, and 2,000 churn ops conserve every block.' },
@@ -259,10 +259,10 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab02.primm.p2', 'predict', [KC.blockRefcounts], {
     q: 'You write a manager whose `allocate`, `fork` and `append` are right, but `free(seq)` hands every block of that table back to the pool, shared or not. Going through the stages in stage order (1, 2, 3, 4), which check goes red first?',
     options: [
-      '`capacity` in stage 2, because an allocate right after a free finds the pool short of blocks',
+      '`capacity` in stage 2, because every allocate right after a free finds the pool short of blocks',
       '`fork_shares` in stage 3, because the copied table leaves both sequences pointing at one block',
-      '`cow` in stage 4, because the copy of the tail lands in a block that was already freed',
-      '`free_refcount` in stage 3, because freeing one sharer returns blocks the other uses',
+      '`cow` in stage 4, because the copy of the tail lands in a block that has already been freed',
+      '`free_refcount` in stage 3, because freeing one sharer returns all blocks the other uses',
     ],
     correct: [3],
     why: [
@@ -295,8 +295,8 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     q: 'A fork copies the block table and bumps refcounts, and copies no tokens. The copy of a block comes later, when one sequence appends. Why does copy-on-write wait for the append?',
     options: [
       'Because a fork can run when the pool is full, so a copy would have no block',
-      'Because a fork writes nothing, and sharing stays safe until someone writes the shared tail',
-      'Because refcounts only count the sequences that write, and a fork has not written anything yet',
+      'Because a fork writes nothing, so sharing stays safe until someone writes into the shared tail',
+      'Because refcounts only count the sequences that write, and a fork has not yet written anything at all',
       'Because a copy at fork time would move the parent’s table to new blocks',
     ],
     correct: [1],
@@ -344,10 +344,10 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab02.primm.i5', 'investigate', [KC.blockRefcounts], {
     q: 'The `gauntlet` fails with: "op 311: conservation broken, 3 free + 62 referenced ≠ 64 total". The two numbers add up to 65. What does that tell you?',
     options: [
-      'A block is in the pool and in a table: something freed a block still in use',
-      'A block leaked: no sequence holds it, and the pool does not have it either',
+      'A block is in the pool and in a table: something has freed a block in use',
+      'A block leaked: no table holds it, and the pool does not have it any more',
       'The pool is too small for the traffic, so an allocate should have been refused earlier',
-      'A `translate` returned the wrong offset inside a block, but the right block',
+      'A `translate` returned the wrong offset inside a block, though the block was the right one',
     ],
     correct: [0],
     why: [

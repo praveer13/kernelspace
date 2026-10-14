@@ -38,7 +38,7 @@
 //! at most 25 minutes. Go in order: a later stage reuses what an earlier one
 //! built. Look for the `STAGE` markers below; the signatures never change.
 //!
-//!   STAGE 1  paging                         ≈ 5 min    `new`, `allocate`,
+//!   STAGE 1  paging                         ≈ 2 min    `new`, `allocate`,
 //!                                                      `translate`, `free_blocks`
 //!   STAGE 2  capacity                       ≈ 10 min   all-or-nothing
 //!                                                      `allocate`; `free`
@@ -93,7 +93,7 @@ pub struct BlockManager {
 }
 
 impl BlockManager {
-    // STAGE 1 · paging · ≈ 5 min
+    // STAGE 1 · paging · ≈ 2 min
     //   Keep `block_size`, a pool of `num_blocks` free physical ids, and a
     //   table per sequence. Nothing is shared yet.
     pub fn new(num_blocks: usize, block_size: usize) -> Self {

@@ -100,6 +100,14 @@ describe('stages: labs.ts, manager.rs and the harness agree (§13.2)', () => {
     }
   })
 
+  test('stage 1 is the two-minute win (§13.2) in the bundle, the code marker and the header table alike', () => {
+    const src = read('labs/kv-block-manager/src/manager.rs')
+    expect(STAGES[0].minutes).toBe(2)
+    expect(src).toMatch(/^\/\/!\s+STAGE 1\s+paging\s+≈ 2 min\b/m)
+    expect(src).toMatch(/^\s*\/\/ STAGE 1 · paging · ≈ 2 min$/m)
+    expect(src).not.toContain('≈ 5 min')
+  })
+
   test('the signatures did not change', () => {
     const src = read('labs/kv-block-manager/src/manager.rs')
     expect(src).toContain('pub fn new(num_blocks: usize, block_size: usize) -> Self')

@@ -334,17 +334,17 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab01.primm.i1', 'investigate', [KC.splitCoalesce], {
     q: 'The repaired lab no longer lets a free list that never merges slip through. You write first-fit with split, but `free` only puts the span back and merges nothing. Which checks does it fail?',
     options: [
-      '`coalesce` and `fragmentation` fail, rest pass',
-      '`coalesce`, `reuse` and `fragmentation` fail',
-      '`no_overlap` and `fragmentation` fail, rest pass',
-      'All six pass, as they did before the repair',
+      '`coalesce`, `reuse` and `fragmentation` all fail',
+      '`no_overlap` and `fragmentation` fail, and the rest pass',
+      'All six checks pass, as they did before the repair',
+      '`coalesce` and `fragmentation` fail, the other four pass',
     ],
-    correct: [0],
+    correct: [3],
     why: [
-      'Freed neighbours stay apart, so the 64 KiB request in `coalesce` fails, and so does the churn in `fragmentation`. A freed block still comes back whole, so `reuse` passes.',
       'A same-size request after a free finds that block again, so `reuse` is green. Not merging only shows when a bigger request needs the neighbours.',
       'Spans that are only put back unmerged never overlap anything, so `no_overlap` is green. The failures come from space that is free but split.',
       'That was true before the repair: the old `coalesce` was served from the untouched tail and passed. The repaired one uses the tail up first.',
+      'Freed neighbours stay apart, so the 64 KiB request in `coalesce` fails, and so does the churn in `fragmentation`. A freed block still comes back whole, so `reuse` passes.',
     ],
     explanation: 'Not merging leaves free space in pieces. The repaired `coalesce` and `fragmentation` both need a piece bigger than any one freed block.',
   }),
@@ -369,9 +369,9 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     q: '`coalesce` takes every byte of the heap it can before it frees 16 neighbouring 4 KiB blocks and asks for 64 KiB. Why fill the heap first?',
     options: [
       'So `free` is timed with the heap full, which is its slowest case for 4 KiB blocks',
-      'So `alloc` has to return None once, which covers the failure path of the heap',
-      'So the leftover tail cannot answer the 64 KiB request, and only merging can',
-      'So the 64 KiB request is aligned to 4 KiB, which first-fit would skip',
+      'So `alloc` has to return None once, which covers the failure path',
+      'So the leftover tail cannot answer the 64 KiB request, only merged blocks can',
+      'So the 64 KiB request is aligned to 4 KiB, which a first-fit search would skip',
     ],
     correct: [2],
     why: [
@@ -386,8 +386,8 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     q: '`fragmentation` can fail with "alloc(9216) returned None ... yet the 12288 bytes from offset 400384 hold no live block". What is your `None` compared against?',
     options: [
       'The largest block in your free list, which the harness reads through a hook',
-      'The total free bytes, so any request below that total must succeed',
-      'A gap the harness works out from the live spans, not from your free list',
+      'The total free bytes, so every request below that amount must succeed',
+      'A gap the harness works out from the live spans, never your free list',
       'A reference allocator the harness runs on the same operations beside yours',
     ],
     correct: [2],
@@ -402,10 +402,10 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab01.primm.i5', 'investigate', [KC.allocatorContract], {
     q: 'Your allocator passes `cargo test`. The page grades the seeded checks (`align`, `no_overlap` and `fragmentation`) on seeds it draws when you drop the file. What does that change for a correct allocator?',
     options: [
-      'Nothing, because a correct one passes any seed and a tuned one fails',
+      'Nothing, because a correct one passes every seed and a tuned one fails',
       'Each drop needs a fresh `cargo build`, because the seed is baked into the module',
       'Some seeds fail by chance, so a correct allocator may need a second try',
-      'No seed is drawn, so a lucky constant for the default seed still passes',
+      'No seed is drawn, so a lucky constant for the default seed always passes',
     ],
     correct: [0],
     why: [

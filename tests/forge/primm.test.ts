@@ -33,6 +33,9 @@ import {
   stageRows,
   type NumberPrimm,
 } from '../../src/data/forge/rust-allocator/primm'
+import { PRIMM_MC_ITEMS as BPE_MC_ITEMS } from '../../src/data/forge/bpe-tokenizer/primm'
+import { PRIMM_MC_ITEMS as KV_MC_ITEMS } from '../../src/data/forge/kv-block-manager/primm'
+import { poolCueFailures, poolCueRows } from '../../scripts/item-cues'
 import lab01 from '../../src/data/forge/rust-allocator'
 import { createHeap, viewOf } from '../../src/lib/world/heap'
 import { isKnownKind, refMatchesKind } from '../../src/lib/ledger/refs'
@@ -489,5 +492,22 @@ describe('lab 01’s reference run as bundle data (docs/specs/wave-2.md §13.1)'
   test('the stages are numbered 1 to 4 in order, as the checks in labs.ts expect', () => {
     expect(lab01.stages.map((s) => s.n)).toEqual([1, 2, 3, 4])
     expect(new Set(checks.map((c) => c.stage))).toEqual(new Set([1, 2, 3, 4]))
+  })
+})
+
+describe('the PRIMM choice pool of the three labs leaves margin (2c final review: lab 01 sat on the limit)', () => {
+  const all = [...PRIMM_MC_ITEMS, ...KV_MC_ITEMS, ...BPE_MC_ITEMS].map((i) => ({ ref: i.id, q: i.q }))
+
+  test('twelve items: 5 + 4 + 3, every one with four options', () => {
+    expect([PRIMM_MC_ITEMS.length, KV_MC_ITEMS.length, BPE_MC_ITEMS.length]).toEqual([5, 4, 3])
+    for (const { q } of all) expect(q.options.length).toBe(4)
+  })
+
+  test('no single-feature strategy hits more than 4 of the 12 (33%), and each lab clears the bar on its own', () => {
+    expect(poolCueFailures('primm', all)).toEqual([])
+    for (const row of poolCueRows(all)) expect(row.hit * row.items, row.name).toBeLessThanOrEqual(4 + 1e-9)
+    for (const items of [PRIMM_MC_ITEMS, KV_MC_ITEMS, BPE_MC_ITEMS]) {
+      expect(poolCueFailures('lab', items.map((i) => ({ ref: i.id, q: i.q })))).toEqual([])
+    }
   })
 })

@@ -15,7 +15,7 @@
 import { KC } from '@/data/kc/ids'
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { AuthoredItem } from '@/lib/items/types'
-import { CORPUS, bytesOf, encodeWith, trainBpe, type Merge } from '@/lib/world/bpe'
+import { CORPUS, bytesOf, decode, encodeWith, ratio2, trainBpe, type Merge } from '@/lib/world/bpe'
 import type { ChoicePrimm, NumberPrimm, PrimmItem, PrimmStep, ReferenceRunSpec, RunConfig, RunResult, StageInfo } from '../types'
 
 export const PRIMM_LAB = 'bpe-tokenizer'
@@ -63,7 +63,8 @@ const clampMerges = (config: RunConfig): number => {
   return Number.isFinite(n) ? Math.min(maxMerges(), Math.max(0, n)) : REFERENCE_MERGES
 }
 
-const bytesPerToken = (bytes: number, tokens: number) => (tokens === 0 ? '0.00' : (bytes / tokens).toFixed(2))
+/** Bytes per token as the harness's `probe` prints it (`ratio2` rounds half to even, as Rust's `{:.2}` does), so page and harness agree. */
+const bytesPerToken = ratio2
 
 /** Byte length of every id in the table: a byte is 1, a merge is the sum of its two children. */
 function byteLengths(): Map<number, number> {
@@ -77,6 +78,29 @@ export const idsAt = (merges: number, text: string = RUN_TEXT): number[] => enco
 
 /** The Run step's second number: tokens of `RUN_TEXT` under the first `merges` rules. */
 export const tokensAt = (merges: number, text: string = RUN_TEXT): number => idsAt(merges, text).length
+
+/** The tokens of `text` under the first `merges` rules, each as the text it stands for. */
+export function piecesAt(merges: number, text: string = RUN_TEXT): string[] {
+  const table = fullTable()
+  return idsAt(merges, text).map((id) => decode([id], table))
+}
+
+/** The tokens of the first `merges` rules that overlap the first occurrence of `word` in `text`, borders and all. */
+export function wordPieces(word: string, merges: number = REFERENCE_MERGES, text: string = RUN_TEXT): string[] {
+  const from = text.indexOf(word)
+  if (from < 0) return []
+  const to = from + word.length
+  const out: string[] = []
+  let at = 0
+  for (const piece of piecesAt(merges, text)) {
+    if (at < to && at + piece.length > from) out.push(piece)
+    at += piece.length
+  }
+  return out
+}
+
+const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+const countWord = (n: number) => COUNT_WORDS[n] ?? String(n)
 
 /** What `ReferenceRun` shows for a config `{ merges }`, in the bundle's lab-neutral shape. */
 function runResult(config: RunConfig): RunResult {
@@ -163,15 +187,15 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     unit: 'tokens',
     factor: 1.4,
     explain:
-      'Every merge fuses a pair the corpus repeats, and this sentence is built from the corpus’s own words, so most of its bytes land inside merged pieces. Words like "the", "user" and "values" become one or two tokens each. Text the corpus never used, such as other scripts, would merge far less.',
+      `Every merge fuses a pair the corpus repeats, and this sentence is built from the corpus’s own words, so most of its bytes land inside merged pieces. But 48 merges are few: pieces run across word borders, and a word is not one token. In the reference run "user" is ${wordPieces('user').join('|')} and "values" is spread over ${countWord(wordPieces('values').length)} tokens, so the count lands well above one token per word. Text the corpus never used, such as other scripts, would merge far less.`,
   },
   choice('lab03.primm.p2', 'predict', [KC.bpeMerges], {
     q: 'You write `encode` so that it always merges the leftmost adjacent pair that has a rule, instead of the lowest-rank pair anywhere in the sequence. Going through the stages in stage order (1, 2, 3, 4), which check goes red first?',
     options: [
       '`bytes_are_ids` in stage 1, because it needs the merge loop',
-      '`merge_priority` in stage 2, because its two rules compete on "abc"',
+      '`merge_priority` in stage 2, because its two rules compete for the b of "abc"',
       '`leftmost_nonoverlap` in stage 2, because "aaa" has two pairs',
-      '`contract` in stage 4, because 48 rules give many pairs to choose from',
+      '`contract` in stage 4, because the 48 rules give it many pairs to choose from',
     ],
     correct: [1],
     why: [
@@ -220,10 +244,10 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
   choice('lab03.primm.i3', 'investigate', [KC.tokenizerBytes], {
     q: 'Id 259 was merged from 256 and 258, and 258 was itself merged from two byte ids. Your `decode` expands 259 into its two children and no further. Which checks go red?',
     options: [
-      '`robust_decode` and `roundtrip`, because bad ids and nested ids both need expanding',
+      '`robust_decode` and `roundtrip`, because every bad id and nested id needs expanding',
       '`roundtrip` only, because `contract` compares ids and decodes none',
       '`bytes_are_ids` and `roundtrip`, because byte ids are expanded the same way',
-      '`roundtrip` and `contract`, because both read ids back from trained tables',
+      '`roundtrip` and `contract`, since both unpack every id from trained tables',
     ],
     correct: [3],
     why: [
@@ -252,21 +276,22 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     explain: '"ab" is 2 bytes, U+FFFD is 3 (EF BF BD) and "a" is 1: 6 bytes, with the bad id replaced and the ids around it intact.',
   },
   choice('lab03.primm.i5', 'investigate', [KC.bpeMerges], {
-    q: 'Your encoder passes `merge_priority` and `leftmost_nonoverlap`, but `contract` fails with "ids 99 and 257 at index 14 still have a merge rule — encode stopped early". What does your `encode` most likely do?',
+    q: 'Your encoder passes `merge_priority` and `leftmost_nonoverlap`, but `contract` fails with "encode produced wrong ids (first diff at index 1)". What does your `encode` most likely do?',
     options: [
       'It leaves out the last rule of the table, so a pair that rule names stays unmerged',
-      'It merges the highest rank first, so later rules fire before earlier ones',
-      'It expands merge ids one level, so a nested id comes back as the wrong bytes',
-      'It merges the lowest-rank pair once and stops, so new pairs go unchecked',
+      'It merges the highest rank first, so later rules fire before the earlier ones',
+      'It expands merge ids one level (not all the way down), so a nested id comes back wrong',
+      'It merges the lowest-rank pair once, and stops (so new pairs go unchecked)',
     ],
     correct: [3],
     why: [
       'That would break `leftmost_nonoverlap`, whose only rule is its last one, and the stem says that check passes.',
       'A highest-rank-first encoder returns the wrong ids on "abc", so `merge_priority` would be red as well. The stem says it passes.',
-      'That is a decode bug. It would break the decode(encode(text)) comparison, and the message would not say that a merge rule still applies.',
-      'One round is enough for the two small tables, which need a single merge each. The 48-rule table needs many rounds, because every merge makes new pairs that other rules name. Looping until nothing changes fixes it.',
+      'That is a decode bug. `contract` compares the ids first, and a decode bug leaves them right, so the failure would be about the round trip, not about wrong ids.',
+      'One round is enough for the two small tables, which need a single merge each. The 48-rule table needs many rounds, because every merge makes new pairs that other rules name, so the ids of the fixed sentence go wrong at once. Looping until nothing changes fixes it.',
     ],
-    explanation: 'The two small tables fit in one round. The trained 48-rule table does not, because merging makes new pairs that other rules name.',
+    explanation:
+      'The two small tables fit in one round. The 48-rule table does not, because merging makes new pairs that other rules name. `contract` compares the ids of its fixed sentence before it looks for a rule that still applies, so a one-round encoder is told its ids are wrong, not that it stopped early.',
   }),
 
   /* ---- Modify: one dial, predict, run ---- */
