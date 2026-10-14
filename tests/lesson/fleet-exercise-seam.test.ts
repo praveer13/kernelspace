@@ -1,7 +1,7 @@
 /**
  * The Fleet exercise seam (docs/specs/wave-3.md §2.3, §5.3; task 3a-03): ExerciseView narrows a block on `fleet`,
  * mounts the lazy FleetExercise stub for it (which renders nothing until 3b-20), and still draws a sim block as
- * before; FLEET_EXERCISES starts empty. Mounted in a small DOM (tests/dom/mini-dom.ts).
+ * before; FLEET_EXERCISES lists `knee` and `pd-split` since 3b-03. Mounted in a small DOM (tests/dom/mini-dom.ts).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
@@ -50,7 +50,7 @@ describe('ExerciseView on a fleet block', () => {
 })
 
 describe('FLEET_EXERCISES', () => {
-  test('is empty until 3b-03 adds the load knee and the P:D split', () => {
-    expect(Object.keys(FLEET_EXERCISES)).toEqual([])
+  test('lists the load knee and the P:D split (3b-03)', () => {
+    expect(Object.keys(FLEET_EXERCISES)).toEqual(['knee', 'pd-split'])
   })
 })

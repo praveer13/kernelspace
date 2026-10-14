@@ -563,6 +563,7 @@ export interface FleetExerciseDef {
                                     // or a stated model for an exercise the engine cannot express (labelled so)
   truth(results: SweepResult): number     // the right answer for this seed's run
   band(results: SweepResult): boolean     // the seed is a fair question
+  pass(prediction: number, results: SweepResult): boolean  // the pass rule (3b-03): both exercises ask for the exact point
   productionClaims: string[]        // rows of the In-production card
   phone: { canonical: SweepResult } // phone mode's outcome
 }

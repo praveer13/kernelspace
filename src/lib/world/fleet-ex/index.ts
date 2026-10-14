@@ -1,10 +1,13 @@
 /**
  * Fleet exercises (docs/specs/wave-3.md §5.3): a seeded sweep of the Fleet engine at several points, and the one
- * number a learner predicts from it. 3a-03 creates the contract with no exercise; 3b-03 adds `knee` and `pd-split`.
- * The fleet worker's `exercise` job dispatches by id, so a later exercise adds a module and a table entry here.
+ * number a learner predicts from it. 3a-03 created the contract, 3b-03 adds `knee` and `pd-split`. The fleet worker's
+ * `exercise` job dispatches by id (`FLEET_EXERCISES[id].sweep(seed)`), so a later exercise adds a module and a table
+ * entry here and never edits the protocol, the host or the session.
  */
 
 import type { KcId } from '@/lib/kc/types'
+import { kneeExercise } from './knee'
+import { pdSplitExercise } from './pd-split'
 
 export interface SweepPoint {
   /** The swept value: a load multiplier, a prefill-worker count. */
@@ -37,11 +40,16 @@ export interface FleetExerciseDef {
   truth(results: SweepResult): number
   /** The seed is a fair question. */
   band(results: SweepResult): boolean
+  /** The pass rule: this prediction is right for this seed's run. */
+  pass(prediction: number, results: SweepResult): boolean
   /** Rows of the In-production card. */
   productionClaims: string[]
   /** Phone mode's outcome. */
   phone: { canonical: SweepResult }
 }
 
-/** Empty until 3b-03. The hands-on test counts a fleet block whose exercise is listed here. */
-export const FLEET_EXERCISES: Readonly<Record<string, FleetExerciseDef>> = {}
+/** The hands-on test counts a fleet block whose exercise is listed here; a later exercise adds an entry. */
+export const FLEET_EXERCISES: Readonly<Record<string, FleetExerciseDef>> = {
+  [kneeExercise.id]: kneeExercise,
+  [pdSplitExercise.id]: pdSplitExercise,
+}
