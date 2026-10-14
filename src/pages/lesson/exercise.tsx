@@ -13,7 +13,7 @@ import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, FlaskConical, Plus, Square } from 'lucide-react'
 import { SIM_INFO } from '@/data/lessons'
-import type { ExerciseBlock } from '@/data/lessons/types'
+import type { ExerciseBlock, SimExerciseBlock } from '@/data/lessons/types'
 import { useProgress } from '@/lib/progress'
 import { resolveInlineMode, usePhoneViewport } from '@/lib/sims/host'
 import { planExercise, registry, type Registry } from '@/lib/sims/registry'
@@ -22,14 +22,16 @@ import { renderInline } from './markdown'
 
 // The sim, the registry and the task panels load only for a block that mounts inline.
 const SimHost = lazy(() => import('@/components/sims/SimHost'))
+// Wave 3: a Fleet exercise's panel (a stub that renders nothing until 3b-20).
+const FleetExercise = lazy(() => import('@/components/fleet-ex/FleetExercise'))
 
-function labUrlFor(block: ExerciseBlock, lessonId: string): string {
+function labUrlFor(block: SimExerciseBlock, lessonId: string): string {
   const labSearch = new URLSearchParams({ from: lessonId })
   if (block.machine) labSearch.set('machine', block.machine)
   return `/lab/${block.simId}?${labSearch.toString()}`
 }
 
-function ExerciseHeader({ block, trackColor, labUrl }: { block: ExerciseBlock; trackColor: string; labUrl: string }) {
+function ExerciseHeader({ block, trackColor, labUrl }: { block: SimExerciseBlock; trackColor: string; labUrl: string }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
       <div className="flex items-center gap-3">
@@ -92,7 +94,7 @@ function WhatJustHappened({ md, trackColor, locked }: { md: string; trackColor: 
 }
 
 /** An exercise block with `taskIds`: the sim inline, or the phone-mode tasks on a phone. */
-function InlineExercise({ block, taskIds, trackColor, lessonId }: { block: ExerciseBlock; taskIds: string[]; trackColor: string; lessonId: string }) {
+function InlineExercise({ block, taskIds, trackColor, lessonId }: { block: SimExerciseBlock; taskIds: string[]; trackColor: string; lessonId: string }) {
   const phoneViewport = usePhoneViewport()
   const prefs = useProgress((s) => s.working['today:prefs'])
   const [forceEmbed, setForceEmbed] = useState(false)
@@ -139,14 +141,24 @@ export function ExerciseView({
   block,
   trackColor,
   lessonId,
+  blockIndex = 0,
   tasks = registry,
 }: {
   block: ExerciseBlock
   trackColor: string
   lessonId: string
+  /** The block's index in the lesson; a Fleet exercise keys its events on it. */
+  blockIndex?: number
   /** The registry that says which ids exist; tests pass their own, since `bun test` has no Vite glob. */
   tasks?: Registry
 }) {
+  if ('fleet' in block) {
+    return (
+      <Suspense fallback={null}>
+        <FleetExercise block={block} lessonId={lessonId} index={blockIndex} />
+      </Suspense>
+    )
+  }
   // Wave 2 (spec §2.3): ids that no task registers yet (the zoo's, until 2b-13) hide the block; other unknown ids are dropped.
   const plan = planExercise(block.simId, block.machine, block.taskIds, tasks)
   if (plan.show === 'hidden') return null
@@ -154,7 +166,7 @@ export function ExerciseView({
   return <ExerciseCard block={block} trackColor={trackColor} lessonId={lessonId} />
 }
 
-function ExerciseCard({ block, trackColor, lessonId }: { block: ExerciseBlock; trackColor: string; lessonId: string }) {
+function ExerciseCard({ block, trackColor, lessonId }: { block: SimExerciseBlock; trackColor: string; lessonId: string }) {
   const sim = SIM_INFO[block.simId]
   const Icon = sim?.icon ?? FlaskConical
   const labUrl = labUrlFor(block, lessonId)

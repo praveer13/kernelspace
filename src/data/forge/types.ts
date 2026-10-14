@@ -8,6 +8,7 @@
  */
 
 import type { AuthoredItem } from '@/lib/items/types'
+import type { KcId } from '@/lib/kc/types'
 
 /* ------------------------------------------------------------------ */
 /* Stages and PRIMM                                                     */
@@ -198,6 +199,29 @@ export interface ProveQuestion {
 }
 
 /* ------------------------------------------------------------------ */
+/* Prove-it v2 (docs/specs/wave-3.md §7.2)                              */
+/* ------------------------------------------------------------------ */
+
+/** One question template: a seeded list of verb calls, and what the learner predicts the module replies. */
+export interface ProveV2Template {
+  /** `free-after` */
+  id: string
+  /** The KCs of the checks it exercises. */
+  kcs: KcId[]
+  /** The plausible mistake that changes the answer (for the test). */
+  bug: string
+  /** At most 12 calls; `story` tells them in words; the answer is a number or an ordered id list, never an option. */
+  make(seed: number): { calls: string[]; story: string[]; ask: string; answer: 'number' | 'ids' }
+  /** The module's answer, read from its replies to `calls`. */
+  read(replies: string[]): number | number[]
+}
+
+/** `ForgeBundle.prove2`. */
+export interface ProveV2Spec {
+  templates: ProveV2Template[]
+}
+
+/* ------------------------------------------------------------------ */
 /* The bundle                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -219,4 +243,8 @@ export interface ForgeBundle {
   walkthrough?: (checkId: string, trace: string[]) => Walkthrough
   /** The title prefix of an Ask-a-human post, e.g. "[lab 02]". */
   discussionsLabel: string
+  /** Faded scaffold (wave-3.md §8.2): ladders stop at R2 and the packet follows. */
+  fade?: 'r2'
+  /** Prove-it v2 question templates (wave-3.md §7.2); a lab without them keeps v1. */
+  prove2?: ProveV2Spec
 }
