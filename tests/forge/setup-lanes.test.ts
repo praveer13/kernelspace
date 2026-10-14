@@ -55,8 +55,8 @@ describe('the four setup commands', () => {
     )
   })
 
-  test('tar pipes the .tar.gz into tar xz, inside a folder it makes first', () => {
-    expect(byId.tar.command).toContain('curl -fsSL https://example.test/labs/kv-block-manager.tar.gz | tar xz')
+  test('tar pipes the .tar.gz into tar -xzf -, inside a folder it makes first', () => {
+    expect(byId.tar.command).toContain('curl -fsSL https://example.test/labs/kv-block-manager.tar.gz | tar -xzf -')
     expect(byId.tar.command.startsWith('mkdir kv-block-manager && cd kv-block-manager && curl')).toBe(true)
     expect(byId.tar.command.endsWith('&& cd kv-block-manager')).toBe(true)
   })

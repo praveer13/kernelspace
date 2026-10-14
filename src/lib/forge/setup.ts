@@ -69,7 +69,7 @@ export function setupTabs(lab: ForgeLab, origin: string): SetupTab[] {
       id: 'tar',
       label: 'tar',
       platform: 'macOS, Linux, Windows 10+ in cmd.exe · requires curl and tar, which Windows 10+ ships',
-      command: `mkdir ${dir} && cd ${dir} && curl -fsSL ${tarUrl} | tar xz && cd ${crate}`,
+      command: `mkdir ${dir} && cd ${dir} && curl -fsSL ${tarUrl} | tar -xzf - && cd ${crate}`,
       note: 'The archive has no top-level folder, so this makes one first. mkdir fails if the folder exists, and nothing is unpacked.',
       extra: ['In Windows PowerShell 5, curl is an alias for Invoke-WebRequest: use the PowerShell tab there.'],
     },
