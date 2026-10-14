@@ -3,35 +3,47 @@
  * debrief is Debrief.tsx, which Play.tsx renders when the level is answered.
  *
  * Predict is the lesson-block item of the level on the session's seed, as an estimate with no verdict. Explore is the
- * steppers and the three face views, with the DOM table (Mirror.tsx, passed in by Play) beside them; Check is the same item
- * as an exact question. Every control is a button or a radio, never a drag (WCAG 2.5.7): "−" and "+" step one notch along
- * a ladder of whole numbers, Page Up and Page Down four. A button at the end of its ladder says so with `aria-disabled`
- * and ignores the press, so focus stays where the keyboard put it.
+ * steppers and the three face views, with the DOM table (Mirror.tsx, passed in by Play) beside them (Views.tsx, loaded on
+ * demand: the first screen is the prediction); Check is the same item as an exact question.
  */
 
-import { useEffect, useId, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useId, useMemo, useRef, type ReactNode } from 'react'
+import { Button } from '@/components/Button'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import ItemCard from '@/components/items/ItemCard'
 import type { ItemResult } from '@/lib/items/play'
-import { SIMPLIFICATIONS, type CubeLevel } from '@/lib/world/tiling'
-import { cn } from '@/lib/utils'
-import Mirror2D from './Mirror2D'
-import {
-  DTYPES,
-  LADDERS,
-  RASTERS,
-  controlsFor,
-  fixed,
-  genOf,
-  isChoice,
-  levelCount,
-  predictChecker,
-  predictedInstance,
-  runOf,
-  type ChoiceControl,
-  type ControlDef,
-  type CubeSession,
-  type NumberControl,
-} from './session'
+import type { CubeLevel } from '@/lib/world/tiling'
+import { genOf, levelCount, predictChecker, predictedInstance, runOf, type ChoiceControl, type CubeSession, type NumberControl } from './session'
+
+// The explore half is not on the first screen (a prediction), so it loads on demand. Play fetches it as soon as the
+// learner sends a prediction (the same import, so one fetch), so it is almost always there by the time "Open the views" is pressed.
+const Views = lazy(() => import('./Views'))
+
+/** Room for the views while they load (level 1 measures 1,164 px at 360 px wide and 959 px at 1280), so what follows them does not jump. */
+const VIEWS_ROOM = 'min-h-[70rem] sm:min-h-[58rem]'
+
+/** The Suspense fallback while the views load: a status, so a screen reader hears that more is coming. */
+export function ViewsLoading() {
+  return (
+    <div data-phase="explore-loading" className={VIEWS_ROOM}>
+      <p role="status" className="font-mono text-body-sm text-text-3">
+        Loading the views…
+      </p>
+    </div>
+  )
+}
+
+/** What replaces the views when their load failed (offline, or a deploy replaced the chunks); a reload is the retry. */
+export function ViewsFailed() {
+  return (
+    <div role="status" className="space-y-3" data-play-error="tiling-cube-views">
+      <p className="text-body-sm text-text-2">The views did not load, so you may be offline. Your prediction is saved; reload to try again.</p>
+      <Button variant="secondary" onClick={() => window.location.reload()}>
+        Reload to try again
+      </Button>
+    </div>
+  )
+}
 
 export interface LevelProps {
   session: CubeSession
@@ -49,74 +61,6 @@ export interface LevelProps {
   onToCheck: () => void
   onChecked: (r: ItemResult) => void
   onToDebrief: () => void
-}
-
-const NOTCH = 'Page Up and Page Down step four notches.'
-
-function Stepper({ def, value, onStep }: { def: ControlDef; value: number; onStep: (dir: 1 | -1, coarse: boolean) => void }) {
-  const uid = useId()
-  const ladder = LADDERS[def.id as NumberControl]
-  const atMin = value <= ladder[0]
-  const atMax = value >= ladder[ladder.length - 1]
-  const keys = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'PageUp' || e.key === 'PageDown') {
-      e.preventDefault()
-      onStep(e.key === 'PageUp' ? 1 : -1, true)
-    }
-  }
-  const button = (dir: 1 | -1, off: boolean) => (
-    <button
-      type="button"
-      data-step={dir > 0 ? 'up' : 'down'}
-      aria-label={`${dir > 0 ? 'Increase' : 'Decrease'} ${def.label}`}
-      aria-disabled={off || undefined}
-      aria-describedby={`${uid}-v`}
-      onClick={() => !off && onStep(dir, false)}
-      onKeyDown={keys}
-      className={cn(
-        'inline-flex h-11 w-11 items-center justify-center rounded-sm border border-line-bright bg-surface-1 font-mono text-[16px] text-text-1 focus-visible:outline-2 focus-visible:outline-accent',
-        off ? 'cursor-not-allowed text-text-3' : 'hover:border-accent hover:bg-accent-dim',
-      )}
-    >
-      <span aria-hidden>{dir > 0 ? '+' : '−'}</span>
-    </button>
-  )
-  return (
-    <div role="group" aria-labelledby={`${uid}-l`} data-control={def.id} className="flex min-h-11 items-center justify-between gap-2 rounded-md border border-line bg-surface-2 py-1 pl-3 pr-1">
-      <div className="min-w-0">
-        <span id={`${uid}-l`} className="block font-mono text-[13px] text-text-1">
-          {def.label}
-        </span>
-        <span className="block text-[11px] leading-tight text-text-3">{def.hint}</span>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {button(-1, atMin)}
-        <span id={`${uid}-v`} data-value className="min-w-[3.5rem] text-center font-mono text-[14px] text-accent">
-          {fixed(value)}
-        </span>
-        {button(1, atMax)}
-      </div>
-    </div>
-  )
-}
-
-function Choice({ def, value, options, onPick }: { def: ControlDef; value: string; options: readonly string[]; onPick: (v: string) => void }) {
-  const uid = useId()
-  return (
-    <fieldset data-control={def.id} className="rounded-md border border-line bg-surface-2 px-3 py-1.5">
-      <legend className="px-1 font-mono text-[13px] text-text-1">{def.label}</legend>
-      <div className="flex flex-wrap gap-2">
-        {options.map((o) => (
-          <label key={o} className="relative inline-flex min-h-11 cursor-pointer items-center">
-            <input type="radio" name={`${uid}-${def.id}`} value={o} checked={value === o} onChange={() => onPick(o)} className="peer sr-only" />
-            <span className="inline-flex min-h-11 items-center rounded-sm border border-line-bright px-3 font-mono text-[13px] text-text-2 peer-checked:border-accent peer-checked:bg-accent-dim peer-checked:text-text-1 peer-focus-visible:outline-2 peer-focus-visible:outline-accent">
-              {o === 'row' ? 'Row-major' : o === 'grouped' ? 'Grouped' : o.toUpperCase()}
-            </span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  )
 }
 
 export default function Level({ session, level, mirrorId, mirror, focus, onPredicted, onOpenViews, onNudge, onChoose, onToCheck, onChecked, onToDebrief }: LevelProps) {
@@ -169,45 +113,11 @@ export default function Level({ session, level, mirrorId, mirror, focus, onPredi
       )}
 
       {views && (
-        <div data-phase="explore" className="space-y-4">
-          <p className="text-body-sm text-text-2">
-            Step the controls and the three faces and the table follow. {NOTCH}
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {controlsFor(level, explore).map((def) =>
-              isChoice(def.id) ? (
-                <Choice
-                  key={def.id}
-                  def={def}
-                  value={def.id === 'dtype' ? explore.dtype : explore.raster}
-                  options={def.id === 'dtype' ? DTYPES : RASTERS}
-                  onPick={(v) => onChoose(def.id as ChoiceControl, v)}
-                />
-              ) : (
-                <Stepper key={def.id} def={def} value={explore[def.id as NumberControl]} onStep={(dir, coarse) => onNudge(def.id as NumberControl, dir, coarse)} />
-              ),
-            )}
-          </div>
-          <Mirror2D level={level} explore={explore} describedBy={mirrorId} />
-          {mirror}
-          <details className="rounded-md border border-line bg-surface-1 px-3 py-2">
-            <summary className="min-h-11 cursor-pointer py-2 font-mono text-[12px] text-text-2">What this model leaves out</summary>
-            <ul className="list-disc space-y-1 pl-5 pb-2 text-body-sm text-text-2">
-              {SIMPLIFICATIONS.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
-          </details>
-          {step === 'explore' && (
-            <button
-              type="button"
-              onClick={onToCheck}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:w-auto"
-            >
-              Answer it now
-            </button>
-          )}
-        </div>
+        <ErrorBoundary fallback={<ViewsFailed />}>
+          <Suspense fallback={<ViewsLoading />}>
+            <Views level={level} explore={explore} step={step} mirrorId={mirrorId} mirror={mirror} onNudge={onNudge} onChoose={onChoose} onToCheck={onToCheck} />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {step === 'check' && (
