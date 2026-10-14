@@ -420,6 +420,9 @@ describe('the debrief (§5.2)', () => {
     expect(d.summary?.skipped).toBe(true)
     expect(passedByHand(d)).toBe(false)
     expect(tallyAfter(EMPTY_TALLY, d)).toBe(EMPTY_TALLY)
+    // the ledger agrees with the screen: a layer the reference finished is not a pass, even when the learner's own copies were good
+    expect(recordOf(d)?.ok).toBe(false)
+    expect(recordOf(d)?.data.skipped).toBe(true)
     const html = renderToString(createElement(MemoryRouter, null, createElement(Debrief, { session: d, tally: EMPTY_TALLY, onAgain: () => {}, mode: 'embed' })))
     expect(html).toContain('You skipped ahead')
     expect(html).toContain('does not count')
@@ -661,6 +664,13 @@ describe('the In-production card (§5.2)', () => {
     const html = renderToString(createElement(MemoryRouter, null, createElement(ProductionCard)))
     expect(html).toContain('data-phase="production"')
     expect(html).toContain('256')
+    // the chip prints its own unit, so the copy around it must not repeat the word
+    // (the dial pill is a label beside the sentence, so it is dropped before the doubled-word check)
+    const text = html.replace(/<span class="mr-2[^>]*>[^<]*<\/span>/g, ' ').replace(/<[^>]*>/g, ' ').replace(/&#x27;|&#39;/g, "'").replace(/\s+/g, ' ')
+    expect(text).not.toMatch(/\b(\w+) \1\b/i)
+    expect(text).not.toMatch(/\bexperts routed experts\b/)
+    expect(text).toMatch(/Each MoE layer of DeepSeek-V3 has 256 experts routed by its router, plus one shared expert\./)
+    expect(text).toMatch(/The router sends each token to 8 experts chosen from those\./)
     expect(html).toContain('--enable-eplb')
     expect(html).toContain('deepseek-ai/DeepSeek-V3 e815299, deepseek-ai/EPLB d52c72d, vllm-project/vllm v0.31.0 and sgl-project/sglang v0.5.21')
   })

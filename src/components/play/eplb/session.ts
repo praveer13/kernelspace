@@ -338,10 +338,14 @@ export function predictEvent(s: EplbSession, ms?: number): ItemResponse | null {
   }
 }
 
-/** The ledger result of a debriefed play: metric `{name 'imbalance', mine, ghost, lowerIsBetter}`. */
+/**
+ * The ledger result of a debriefed play: metric `{name 'imbalance', mine, ghost, lowerIsBetter}`. A skipped layer was finished
+ * by the reference, and the debrief says it does not count, so the ledger records it as not passed too.
+ */
 export function recordOf(s: EplbSession, ms?: number): PlayResult | null {
   if (!s.summary) return null
-  return eplbPlayResult(s.summary, { provenance: s.provenance, kcs: [...EPLB.kcs], ms })
+  const result = eplbPlayResult(s.summary, { provenance: s.provenance, kcs: [...EPLB.kcs], ms })
+  return s.summary.skipped ? { ...result, ok: false } : result
 }
 
 /** The releases the card's claims pin, in row order, read from the claims; a commit sha shows its first seven characters. */

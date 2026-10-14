@@ -214,14 +214,14 @@ export const EPLB_PRODUCTION_ROWS: readonly ProductionRow[] = [
   {
     claim: 'model.deepseek-v3.routed-experts',
     dial: 'experts on a layer',
-    lead: 'DeepSeek-V3 has',
-    tail: 'in every one of its MoE layers. Your layer is a toy that you could pack by hand, and the loads you were dealt are made up: a real layer has far more experts to place, and its loads are measured while it serves.',
+    lead: 'Each MoE layer of DeepSeek-V3 has',
+    tail: 'routed by its router, plus one shared expert. Your layer is a toy that you could pack by hand, and the loads you were dealt are made up: a real layer has far more experts to place, and its loads are measured while it serves.',
   },
   {
     claim: 'model.deepseek-v3.experts-per-token',
     dial: 'why the busiest GPU is the score',
     lead: 'The router sends each token to',
-    tail: 'routed experts at once. A token is not finished until the slowest GPU it was sent to has answered at the combine barrier, so the layer is as slow as its busiest GPU, which is the number you were scored on.',
+    tail: 'chosen from those. A token is not finished until the slowest GPU it was sent to has answered at the combine barrier, so the layer is as slow as its busiest GPU, which is the number you were scored on.',
   },
   {
     claim: 'production.eplb.rebalance',
