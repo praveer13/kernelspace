@@ -282,7 +282,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
       'Smallest-first fills the batch: it walks the whole queue and admits every request that fits. The calibration run for this design does not fail `burst`.',
       'Smallest-first sends the 8,192-token whale last, not first, so the shorts run at once. That order is what `convoy` asks for, and a scheduler that sorts this way passes it.',
       'With no aging, a short request always sorts ahead of a long one, and shorts keep arriving, so the three longs are not first in line before the run ends. `starvation` needs all three to complete, and it fails.',
-      'Pure smallest-first scores 62.5 %, 91.5 % and 76.7 % on the three replay traces, over the floors of 55 %, 85 % and 70 %. It passes `goodput_score`; `starvation` stops it earlier.',
+      'Pure smallest-first scores 62.5 %, 90.6 % and 76.7 % on the three replay traces, over the floors of 55 %, 85 % and 70 %. It passes `goodput_score`; `starvation` stops it earlier.',
     ],
     explanation: 'Only `starvation` fails pure smallest-first. Aging, which moves an old request to the front, is what stage 3 adds.',
   }),

@@ -396,7 +396,17 @@ describe('items (§8.2): ids, refs, tags, whys', () => {
     if (p2?.kind !== 'choice') throw new Error('p2 is a choice')
     expect(p2.item.q.options[p2.item.q.correct[0]]).toContain('`starvation` in stage 3')
     const readme = read('labs/README.md')
-    for (const n of ['62.5%', '91.5%', '76.7%', '55.0%', '85.0%', '70.0%']) expect(readme).toContain(n)
+    // the stem's design keeps 48 tokens of headroom and has no aging: the `sjf` mutant, whose scores equal the README's
+    // reference column (62.5, 90.6, 76.7; measured with the mutant in the crate), not the no-headroom 'pure SJF' column (91.5 on BurstGPT)
+    const row = (name: string) => readme.split('\n').find((l) => l.includes(name))?.split('|').map((c) => c.trim()) ?? []
+    const cited = ['62.5 %', '90.6 %', '76.7 %']
+    const [syn, burst, lmsys] = [row('synthetic fleet overload'), row('BurstGPT v2 busiest-hour'), row('LMSYS published-aggregate')]
+    expect(burst[4]).toBe('91.5%')
+    expect([syn[5], burst[5], lmsys[5]]).toEqual(['62.5%', '90.6%', '76.7%'])
+    expect([syn[6], burst[6], lmsys[6]]).toEqual(['55.0%', '85.0%', '70.0%'])
+    const why = p2.item.q.why[3]
+    for (const n of cited) expect(why).toContain(n)
+    expect(why).not.toContain('91.5')
     const calibration = JSON.parse(read('labs/batching-scheduler/calibration.json')) as { mutants: Record<string, { caughtBy: string[] }> }
     expect(calibration.mutants.sjf.caughtBy).toEqual(['starvation'])
     // the stage of each check named in the options is the stage labs.ts gives it

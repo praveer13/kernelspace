@@ -24,8 +24,10 @@
  *                 sequence admits, however it counts that margin (per running request, or also per admitted one).
  *   preempt       Whether, and whom. The reference never preempts, and the traces never need one, so a module that
  *                 never preempts answers `none` here; the template is for the one that does, and it asks the learner
- *                 to know which they wrote. The view is over the cap by less than any one request holds, so a single
- *                 victim fixes it, and the oldest and the newest differ.
+ *                 to know which they wrote. The limit: every module that never preempts answers `none`, so for it this
+ *                 template is a constant that the learner can answer without reading code; admit-order and admit-count
+ *                 are the two that vary across such modules. The view is over the cap by less than any one request
+ *                 holds, so a single victim fixes it, and the oldest and the newest differ.
  *
  * Nothing here reads `mem_used`: the bridge ignores the header's field (`let _ = mem_used`), so a view builds its
  * pressure from `mem_cap` and the running requests' tokens. The header still carries the true sum, for modules that read it.
