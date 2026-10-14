@@ -16,6 +16,7 @@
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
+import { playChunkKey } from './bundle-plays'
 
 const BUDGET_KB = 250
 /** Entry target after the entry diet (spec §6.9, §16.1): reported, not gated. */
@@ -35,8 +36,9 @@ interface RouteBudget {
   targetKb?: number
   /**
    * A play route loads its play through the registry on demand (wave-2.md §2.3). This is the play component's source
-   * path: when the build has a chunk for it, the route's figure counts that chunk and its static imports, so the
-   * figure is what a learner downloads to play. Not yet registered (the scheduler before 2b-11): page only, and said so.
+   * path. The route's figure counts the play's chunk and its static imports, so the figure is what a learner
+   * downloads to play. Vite may file that chunk as `_Play-<hash>.js` with no `src` key (bundle-plays.ts finds it
+   * anyway); a registered play whose chunk is not found fails the gate rather than being left out of the figure.
    */
   playSrc?: string
 }
@@ -48,14 +50,16 @@ interface RouteBudget {
  * 200 KB budget (its page ships in B18; until src/pages/Today.tsx exists the route is skipped). The play is
  * reported against its 220 KB figure but not gated in Wave 1. Wave 2 (docs/specs/wave-2.md §22.1) gates /daily at
  * 200 KB and reports /play/scheduler (220 KB) and /errors (200 KB). The play pages load their component on demand
- * through the play registry, so their closure is the page and the on-demand line shows the play.
+ * through the play registry; a play's figure is the page plus that play's chunk (what a learner downloads to play),
+ * with the play's own lazy chunks (the scheduler's Compose and card) on the on-demand line. Every play in the
+ * registry has a row here (tests/plays/scheduler.test.ts).
  */
 const ROUTE_BUDGETS: RouteBudget[] = [
   { route: '/boot', src: 'src/pages/Boot.tsx', budgetKb: 200, targetKb: 165 },
   { route: '/today', src: 'src/pages/Today.tsx', budgetKb: 200 },
   { route: '/daily', src: 'src/pages/Daily.tsx', budgetKb: 200 },
   { route: '/play/block-placement', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/block-placement/Play.tsx' },
-  // The scheduler play shares the /play/:playId page; its component joins the registry in 2b-11 (it holds fleet-model.ts).
+  // The scheduler play shares the /play/:playId page; it holds fleet-model.ts, so its chunk is the larger of the two.
   { route: '/play/scheduler', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/scheduler/Play.tsx' },
   { route: '/errors', src: 'src/pages/Errors.tsx', budgetKb: null, targetKb: 200 },
 ]
@@ -149,9 +153,12 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   if (!key) throw new Error(`manifest has no chunk for ${src}; is build.manifest on and ${route} still lazy?`)
   const files: { file: string; gzip: number }[] = []
   const roots = ['index.html', key]
+  let playKey: string | undefined
   if (playSrc) {
-    if (manifest[playSrc]) roots.push(playSrc)
-    else console.log(`note ${route}: no chunk for ${playSrc} yet, so the figure below is the page without its play`)
+    playKey = playChunkKey(manifest, playSrc, key, ROUTE_BUDGETS.flatMap((r) => (r.playSrc ? [r.playSrc] : [])))
+    if (!playKey) throw new Error(`no chunk for the play ${playSrc} in the manifest, so ${route}'s figure would leave the play out; see scripts/bundle-plays.ts`)
+    roots.push(playKey)
+    console.log(`play ${route}: ${playSrc} is ${manifest[playKey].file}`)
   }
   for (const { chunk } of closure(roots)) {
     files.push({ file: chunk.file, gzip: await gzipSize(chunk.file) })
@@ -168,7 +175,7 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   const counted = new Set(unique.map((f) => f.file))
   const onDemand: string[] = []
   let onDemandKb = 0
-  for (const dyn of manifest[key].dynamicImports ?? []) {
+  for (const dyn of [...(manifest[key].dynamicImports ?? []), ...(playKey ? (manifest[playKey].dynamicImports ?? []) : [])]) {
     const chunk = manifest[dyn]
     if (chunk && !counted.has(chunk.file)) {
       const kb = (await gzipSize(chunk.file)) / KB
