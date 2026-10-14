@@ -55,7 +55,9 @@
 //!   merge_priority        merging the leftmost pair, or the highest rank,
 //!                         instead of the lowest rank
 //!   leftmost_nonoverlap   a run `aaa` merged right-to-left or overlapping,
-//!                         or the last rule of the table never applied
+//!                         a repeated pair merged only once (`aaaa`), or a
+//!                         rule loop that skips the final rule (here the
+//!                         table's only rule, so nothing merges)
 //!   roundtrip             a decode that loses a byte, or stops expanding a
 //!                         merge id after one level (a seeded table of 16-48
 //!                         merges, seeded UTF-8)
