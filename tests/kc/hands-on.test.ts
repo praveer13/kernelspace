@@ -51,7 +51,7 @@ function handsOnBlocks(l: Lesson, fleet: Readonly<Record<string, unknown>> = FLE
     if (b.type === 'item' && itemBlockValid(b)) out.push(`item ${b.family}/${b.variants.join('+')}`)
     else if (b.type === 'exercise' && 'fleet' in b) {
       if (Object.hasOwn(fleet, b.fleet)) out.push(`fleet ${b.fleet}`)
-    } else if (b.type === 'exercise') {
+    } else if (b.type === 'exercise' && 'simId' in b) {
       const ids = (b.taskIds ?? []).filter((id) => registry.byId(id)?.kind === 'outcome' && registry.byId(id)?.simId === b.simId)
       if (ids.length > 0) out.push(`exercise ${ids.join('+')}`)
     } else if (b.type === 'play' && resolvePlay(b.playId).kind === 'play') out.push(`play ${b.playId}`)

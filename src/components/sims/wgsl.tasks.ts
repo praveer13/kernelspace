@@ -1,6 +1,7 @@
 import type { SimTask } from '@/components/sims/PlaygroundShell'
+import type { TaskHome } from '@/lib/sims/registry'
 
-export const HOME = { simId: 'sim-wgsl' }
+export const HOME: TaskHome = { simId: 'sim-wgsl' }
 
 export const WGSL_TASKS: SimTask[] = [
   { id: 'wgsl-16m', text: 'Run the modeled 16M vector add and inspect its 192 MiB traffic', xp: 60 },

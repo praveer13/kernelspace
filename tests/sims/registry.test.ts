@@ -140,6 +140,41 @@ describe('legacy tasks keep their ids and pay as before', () => {
   })
 })
 
+/**
+ * The prefix each tasks file's outcome tasks carry, by file name without `.tasks.ts` (wave-3.md §4.2). The check is exact: a task whose
+ * prefix is not its file's, or an outcome file this list does not know, is a problem, so a typo'd prefix (`rof.ridge`) cannot pass as "some
+ * dotted id". A new family adds its file and one line here; the sim a prefix lives on is pinned by the tests below.
+ */
+const DECLARED_PREFIXES: Readonly<Record<string, string>> = {
+  roofline: 'roof',
+  kvCache: 'kv',
+  kvZoo: 'zoo',
+  allocator: 'alloc',
+  blockTableExplorer: 'blk',
+}
+
+/** Outcome tasks whose id prefix is not the one their file declares, and declared files that hold no outcome task (a stale line). */
+function prefixProblems(mods: Record<string, Record<string, unknown>>, declared: Readonly<Record<string, string>>): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const [path, mod] of Object.entries(mods)) {
+    const file = path.slice(path.lastIndexOf('/') + 1).replace(/\.tasks\.ts$/, '')
+    for (const list of Object.values(mod)) {
+      if (!Array.isArray(list)) continue
+      for (const t of list as { id?: unknown; kind?: unknown }[]) {
+        if (t.kind !== 'outcome' || typeof t.id !== 'string') continue
+        seen.add(file)
+        const prefix = t.id.slice(0, Math.max(0, t.id.indexOf('.')))
+        const want = declared[file]
+        if (want === undefined) out.push(`${file}: outcome task ${t.id} but the file declares no prefix`)
+        else if (prefix !== want) out.push(`${file}: ${t.id} has prefix '${prefix}', the file declares '${want}'`)
+      }
+    }
+  }
+  for (const file of Object.keys(declared)) if (!seen.has(file)) out.push(`${file}: declared prefix '${declared[file]}' but the file holds no outcome task`)
+  return out
+}
+
 describe('outcome prefixes come from the tasks files', () => {
   test('the registry declares the prefixes of the sims that have outcome tasks, and each prefix lives on one sim', () => {
     const prefixes = prefixesOf(reg)
@@ -147,7 +182,27 @@ describe('outcome prefixes come from the tasks files', () => {
     for (const [p, sims] of prefixes) expect([...sims], `prefix ${p}`).toHaveLength(1)
   })
 
-  test('a new family adds its file and prefix without touching this test', () => {
+  test('every outcome task carries exactly the prefix its file declares, and the declared list is exactly the prefixes in use', () => {
+    expect(prefixProblems(modules, DECLARED_PREFIXES)).toEqual([])
+    expect([...prefixesOf(reg).keys()].sort()).toEqual(Object.values(DECLARED_PREFIXES).sort())
+  })
+
+  test("a typo'd prefix fails, however well-formed the id is", () => {
+    const file = (id: string) => ({ '/src/components/sims/roofline.tasks.ts': { T: [outcome({ id })] } })
+    expect(prefixProblems(file('roof.ridge'), { roofline: 'roof' })).toEqual([])
+    for (const typo of ['rof.ridge', 'roofs.ridge', 'kv.ridge', 'roof-x.ridge', 'ridge']) {
+      expect(prefixProblems(file(typo), { roofline: 'roof' }), typo).toEqual([expect.stringContaining("the file declares 'roof'")])
+    }
+  })
+
+  test('an outcome file the list does not know, and a list line with no outcome task, are problems', () => {
+    const fleet = { '/src/components/sims/fleet.tasks.ts': { T: [outcome({ id: 'fleet.knee', simId: 'sim-batching', title: 'Find the knee' })] } }
+    expect(prefixProblems(fleet, {})).toEqual([expect.stringContaining('declares no prefix')])
+    expect(prefixProblems(fleet, { fleet: 'fleet', gone: 'gone' })).toEqual([expect.stringContaining("declared prefix 'gone'")])
+    expect(prefixProblems(fleet, { fleet: 'fleet' })).toEqual([])
+  })
+
+  test('a new family adds its file and prefix to the registry', () => {
     const r = buildRegistry({
       '/src/components/sims/fleet.tasks.ts': { T: [outcome({ id: 'fleet.knee', simId: 'sim-batching', title: 'Find the knee' })] },
     })
