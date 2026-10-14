@@ -221,7 +221,8 @@ export const T6_KCS: readonly Kc[] = [
     track: 't6',
     kind: 'procedure',
     lessons: ['t6.l8'],
-    requires: [KC.tokenizerBytes],
+    requires: [KC.tokenizerBytes, 'r.iterators-ownership'],
+    labs: ['xgrammar-lite'],
     since,
   },
 

@@ -162,6 +162,7 @@ export const T2_KCS: readonly Kc[] = [
     lessons: ['t2.l5'],
     requires: ['t2.process-thread', 't0.cache-lines', 'r.interior-mutability'],
     confusable: ['r.atomics-ordering'],
+    labs: ['mpmc-queue'],
     since,
   },
   {
@@ -172,6 +173,7 @@ export const T2_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t2.l5'],
     requires: ['t2.mutex-atomics', 'r.compare-exchange'],
+    labs: ['mpmc-queue'],
     since,
   },
 
