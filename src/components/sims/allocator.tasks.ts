@@ -1,12 +1,14 @@
 /**
- * SIM-02 `sim-allocator` tasks (docs/specs/wave-1.md §10.2, task C9): four outcome tasks that grade a
- * prediction, and the old state-detected tasks kept as legacy under their old ids.
+ * SIM-02 `sim-allocator` tasks (docs/specs/wave-1.md §10.2, task C9; wave-3.md §13, task 3a-19): five outcome tasks
+ * that grade a prediction. Each names the click-through task it replaced in `legacyId`, so an earlier completion
+ * still shows "you finished the old click-through". The old ids themselves (`t-frag`, `t-coalesce`, `t-paged`,
+ * `t-quiz`, `t-trace-lab`, `t-double-free`) are no longer registered or detected.
  *
- * Each outcome task names one task script (src/lib/sims/models/allocator.ts SCRIPTS): the sim loads its
- * op list, the learner plays it to the end, and the sim reports the `observe` key. The keys are spelled
- * out here, not imported, because the registry loads every tasks file eagerly and the model stays in the
- * sim's own chunk; tests/sims/allocator.test.ts pins the two together. All scenario numbers are
- * synthetic (a 1 KiB heap with 8 B headers).
+ * Four outcome tasks name one task script (src/lib/sims/models/allocator.ts SCRIPTS): the sim loads its op list,
+ * the learner plays it to the end, and the sim reports the `observe` key. The fifth, the double free, is the
+ * inspector's own run of a free list. The keys are spelled out here, not imported, because the registry loads
+ * every tasks file eagerly and the model stays in the sim's own chunk; tests/sims/allocator.test.ts pins the
+ * two together. All scenario numbers are synthetic (a 1 KiB heap with 8 B headers).
  */
 
 import { KC } from '@/data/kc/ids'
@@ -138,24 +140,36 @@ export const ALLOCATOR_OUTCOME_TASKS: SimTaskDef[] = [
     lessons: ['t1.l3'],
     legacyId: 't-trace-lab',
   },
+  {
+    id: 'alloc.double-free',
+    simId: 'sim-allocator',
+    machine: 'allocator',
+    kind: 'outcome',
+    title: 'Free a block twice and count the pointers',
+    setup:
+      'Under the unsafe inspector, press "double-free, then malloc until it fails" and count the owners it lists.',
+    kcs: [KC.allocatorContract],
+    predict: {
+      kind: 'numeric',
+      prompt:
+        'A free list of 64 B blocks holds three free blocks, and a fourth, p, is allocated. free(p) pushes p onto the list and malloc pops from it. A bug runs free(p) twice, with no check that p is already free. Then malloc(64) is called until it fails. How many pointers does malloc hand out?',
+      unit: 'pointers',
+      tolerance: { abs: 0 },
+    },
+    observe: 'alloc.double-free-pointers',
+    explain: {
+      prompt: 'In one line: why did malloc hand out more pointers than there are blocks?',
+      model:
+        'The second free(p) pushed 0x0040 onto the free list again, so the list held that address twice, five entries for four blocks. malloc pops an address without checking that the block is free, so it handed 0x0040 out twice. Two owners now write the same bytes, and nothing reports an error.',
+      ideas: [
+        'Freeing twice puts the same address on the free list twice',
+        'malloc pops the list without checking the block is free, so it hands the address out twice',
+        'Two owners share one block and overwrite each other with no error raised',
+      ],
+    },
+    note: 'Four blocks exist and five pointers came out, two of them the same address. Production allocators add checks for this; the toy does not, which is why "freed once" is part of the allocator contract, and why Rust enforces it in the compiler (T3).',
+    phone: { canonical: 'allocator.double-free' },
+    legacyId: 't-double-free',
+  },
 ]
 
-/** The pre-registry tasks, under their old ids. The sim still detects them, and they pay 0 XP (§8.4). */
-const legacy = (id: string, title: string): SimTaskDef => ({
-  id,
-  simId: 'sim-allocator',
-  machine: 'allocator',
-  kind: 'legacy',
-  title,
-  setup: title,
-  kcs: [],
-})
-
-export const ALLOCATOR_LEGACY_TASKS: SimTaskDef[] = [
-  legacy('t-frag', 'Fragment the heap below 25% (largest free / total free)'),
-  legacy('t-coalesce', 'Enable coalescing and recover above 75%'),
-  legacy('t-paged', 'Observe a fixed-block trace report 0% external fragmentation'),
-  legacy('t-quiz', 'Explain the observed internal-for-external fragmentation trade'),
-  legacy('t-trace-lab', 'Run a long trace and compare placement policies'),
-  legacy('t-double-free', 'Trigger the inspector double-free alias demonstration'),
-]

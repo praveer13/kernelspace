@@ -9,12 +9,13 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { KC } from '../../src/data/kc/ids'
-import { ALLOCATOR_LEGACY_TASKS, ALLOCATOR_OUTCOME_TASKS } from '../../src/components/sims/allocator.tasks'
+import { ALLOCATOR_OUTCOME_TASKS } from '../../src/components/sims/allocator.tasks'
 import { gradePrediction } from '../../src/lib/sims/host'
 import {
   ADVERSARIAL_TRACE,
   ALTERNATING_TRACE,
   DEFAULT_FIXED_BLOCK,
+  DOUBLE_FREE,
   HEAP_SIZE,
   OBSERVE,
   PHONE_MODELS,
@@ -34,6 +35,7 @@ import {
   malloc,
   observeScript,
   restoreConfig,
+  runDoubleFree,
   runScript,
   simulateTrace,
 } from '../../src/lib/sims/models/allocator'
@@ -362,7 +364,7 @@ const SNAPSHOT = {
 }
 
 /* ------------------------------------------------------------------ */
-/* The four outcome tasks                                               */
+/* The five outcome tasks                                               */
 /* ------------------------------------------------------------------ */
 
 const task = (id: string): SimTaskDef => {
@@ -371,6 +373,7 @@ const task = (id: string): SimTaskDef => {
   return t
 }
 
+/** The four tasks that play a script; the fifth, the double free, runs the inspector's free list. */
 const TASK_SCRIPT: Record<string, ScriptId> = {
   'alloc.frag-first-fit': 'frag-first-fit',
   'alloc.coalesce-recover': 'coalesce-recover',
@@ -379,33 +382,32 @@ const TASK_SCRIPT: Record<string, ScriptId> = {
 }
 
 describe('outcome tasks: ids, KCs and what each one observes', () => {
-  test('the four contract ids, each on its KC, replacing the old t-* ids', () => {
-    expect(ALLOCATOR_OUTCOME_TASKS.map((t) => t.id)).toEqual(Object.keys(TASK_SCRIPT))
+  test('the five contract ids, each on its KC, replacing the old t-* ids', () => {
+    expect(ALLOCATOR_OUTCOME_TASKS.map((t) => t.id)).toEqual([...Object.keys(TASK_SCRIPT), 'alloc.double-free'])
     expect(task('alloc.frag-first-fit').kcs).toEqual([KC.externalFrag])
     expect(task('alloc.coalesce-recover').kcs).toEqual(['t1.split-coalesce' as never])
     expect(task('alloc.fixed-block-waste').kcs).toEqual(['t1.fixed-blocks' as never])
     expect(task('alloc.policy-race').kcs).toEqual(['t1.placement-policy' as never])
-    expect(ALLOCATOR_OUTCOME_TASKS.map((t) => t.legacyId)).toEqual(['t-frag', 't-coalesce', 't-paged', 't-trace-lab'])
+    expect(task('alloc.double-free').kcs).toEqual([KC.allocatorContract])
+    expect(ALLOCATOR_OUTCOME_TASKS.map((t) => t.legacyId)).toEqual(['t-frag', 't-coalesce', 't-paged', 't-trace-lab', 't-double-free'])
     for (const t of ALLOCATOR_OUTCOME_TASKS) {
       expect(t.kind).toBe('outcome')
       expect(t.simId).toBe('sim-allocator')
-      expect(t.phone?.canonical).toBe(`allocator.${TASK_SCRIPT[t.id]}`)
+      expect(t.predict?.kind, 'a numeric prediction (Wave 1 rule)').toBe('numeric')
+      expect(t.explain?.ideas).toHaveLength(3)
     }
+    for (const [id, script] of Object.entries(TASK_SCRIPT)) expect(task(id).phone?.canonical).toBe(`allocator.${script}`)
+    expect(task('alloc.double-free').phone?.canonical).toBe('allocator.double-free')
   })
 
-  test('the registry accepts them, and the old t-* ids stay as legacy under sim-allocator', () => {
-    const r = buildRegistry({
-      '/src/components/sims/allocator.tasks.ts': { ALLOCATOR_OUTCOME_TASKS, ALLOCATOR_LEGACY_TASKS },
-    })
+  test('the registry accepts them, and none of the six old click-through ids is registered any more', () => {
+    const r = buildRegistry({ '/src/components/sims/allocator.tasks.ts': { ALLOCATOR_OUTCOME_TASKS } })
     expect(r.problems).toEqual([])
-    const legacy = r.tasks.filter((t) => t.kind === 'legacy').map((t) => t.id)
-    expect(legacy).toEqual(['t-frag', 't-coalesce', 't-paged', 't-quiz', 't-trace-lab', 't-double-free'])
-    for (const t of ALLOCATOR_LEGACY_TASKS) {
-      expect(t.simId).toBe('sim-allocator')
-      expect(t.kcs).toEqual([])
-      expect(t.predict).toBeUndefined()
-    }
-    expect(r.forSim('sim-allocator', 'allocator').filter((t) => t.kind === 'outcome')).toHaveLength(4)
+    expect(r.tasks.map((t) => t.kind)).toEqual(Array(5).fill('outcome'))
+    // t-quiz had no outcome task of its own: it left with the rest, and the quiz it detected left the sim
+    for (const id of ['t-frag', 't-coalesce', 't-paged', 't-quiz', 't-trace-lab', 't-double-free']) expect(r.byId(id), id).toBeUndefined()
+    expect(r.forSim('sim-allocator', 'allocator').filter((t) => t.kind === 'outcome')).toHaveLength(5)
+    expect(r.forSim('sim-allocator', 'allocator').filter((t) => t.kind === 'legacy')).toHaveLength(0)
     expect(r.forSim('sim-allocator', 'rust').filter((t) => t.kind === 'outcome')).toHaveLength(0)
   })
 
@@ -418,6 +420,7 @@ describe('outcome tasks: ids, KCs and what each one observes', () => {
     expect(task('alloc.coalesce-recover').observe).toBe(keys('coalesce-recover', 'first', true))
     expect(task('alloc.fixed-block-waste').observe).toBe(keys('fixed-block-waste', 'first', true))
     expect(task('alloc.policy-race').observe).toBe(keys('policy-race', 'first', true))
+    expect(task('alloc.double-free').observe).toBe(OBSERVE.doubleFree)
     // A run under another condition reports another key, so it never grades this prediction.
     expect(keys('coalesce-recover', 'first', false)).toBe(OBSERVE.largestFreeOff)
     expect(keys('policy-race', 'best', true)).toBe(OBSERVE.race('best'))
@@ -425,7 +428,7 @@ describe('outcome tasks: ids, KCs and what each one observes', () => {
   })
 
   test('each phone model key resolves, and its actual is what the hands-on run observes', () => {
-    for (const t of ALLOCATOR_OUTCOME_TASKS) {
+    for (const t of ALLOCATOR_OUTCOME_TASKS.filter((x) => TASK_SCRIPT[x.id] !== undefined)) {
       const name = t.phone?.canonical.split('.')[1] ?? ''
       const model = PHONE_MODELS[name]
       expect(model).toBeDefined()
@@ -437,7 +440,14 @@ describe('outcome tasks: ids, KCs and what each one observes', () => {
       expect(out.unit).toBe(seen.unit)
       expect(seen.key).toBe(t.observe)
     }
-    expect(Object.keys(PHONE_MODELS).sort()).toEqual([...SCRIPT_IDS].sort())
+    expect(Object.keys(PHONE_MODELS).sort()).toEqual([...SCRIPT_IDS, 'double-free'].sort())
+  })
+
+  test('the double free: its phone model gives what the inspector observes', () => {
+    const out = PHONE_MODELS['double-free']()
+    expect(out.actual).toBe(runDoubleFree().handed.length)
+    expect(out.unit).toBe('pointers')
+    expect(task('alloc.double-free').phone?.canonical).toBe('allocator.double-free')
   })
 
   test('a phone table always has columns and rows of the same width', () => {
@@ -516,6 +526,24 @@ describe('the scripts give the numbers the task text promises', () => {
   })
 })
 
+describe('the double free gives the numbers the task text promises', () => {
+  test('free(p) twice leaves p on the list twice: five pointers from four blocks, two of them p', () => {
+    const run = runDoubleFree()
+    expect(run.steps[0].list).toEqual([0x80, 0xc0, 0x100])
+    expect(run.steps[1].list).toEqual([0x40, 0x80, 0xc0, 0x100]) // free(p)
+    expect(run.steps[2].list).toEqual([0x40, 0x40, 0x80, 0xc0, 0x100]) // free(p) again, unchecked
+    expect(run.handed).toEqual([0x40, 0x40, 0x80, 0xc0, 0x100])
+    expect(run.distinct).toBe(4) // p and the three spare blocks
+    expect(run.handed.filter((a) => a === DOUBLE_FREE.p)).toHaveLength(2)
+    // the run ends when malloc fails, and nothing is left on the list
+    expect(run.steps.at(-1)).toEqual({ op: 'malloc(64)', list: [], returned: null })
+  })
+
+  test('the run is deterministic', () => {
+    expect(runDoubleFree()).toEqual(runDoubleFree())
+  })
+})
+
 describe('predictions are graded the way the task text promises', () => {
   const grade = (id: string, guess: number, actual: number) => {
     const t = task(id)
@@ -535,6 +563,9 @@ describe('predictions are graded the way the task text promises', () => {
     expect(grade('alloc.fixed-block-waste', 512 - 294 - 40, 218)?.ok).toBe(false)
     expect(grade('alloc.policy-race', 312, 312)?.ok).toBe(true)
     expect(grade('alloc.policy-race', 0, 312)?.ok).toBe(false) // best-fit's answer
+    expect(grade('alloc.double-free', 5, 5)?.ok).toBe(true)
+    expect(grade('alloc.double-free', 4, 5)?.ok).toBe(false) // the answer without the bug: as many pointers as blocks
+    expect(grade('alloc.double-free', 6, 5)?.ok).toBe(false)
   })
 })
 

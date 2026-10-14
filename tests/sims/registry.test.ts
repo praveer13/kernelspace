@@ -89,9 +89,17 @@ describe('legacy tasks keep their ids and pay as before', () => {
 
   test('the existing ids are all there, under a sim, as legacy', () => {
     const ids = legacy.map((t) => t.id)
-    for (const id of ['t-sched-fifo', 't-rust-move', 't-ctx-cliff', 't-lock-aba', 't-layout-aos', 't-eng-gqa', 't-blk-cow', 't-frame-trace']) {
+    for (const id of ['t-sched-fifo', 't-rust-move', 't-ctx-cliff', 't-lock-aba', 't-layout-aos', 't-eng-gqa', 't-frame-trace']) {
       expect(ids).toContain(id)
     }
+    // the click-through ids an outcome task replaced (legacyId) are no longer registered: the task panel reads
+    // an earlier completion from the progress store, not from the registry (wave-3.md §13)
+    const replaced = reg.tasks.flatMap((t) => (t.legacyId === undefined ? [] : [t.legacyId]))
+    for (const id of ['t-frag', 't-coalesce', 't-paged', 't-trace-lab', 't-double-free', 't-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep']) {
+      expect(replaced, id).toContain(id)
+      expect(ids, id).not.toContain(id)
+    }
+    expect(ids).not.toContain('t-quiz')
     // outcome tasks arrive under dotted ids, `<prefix>.<name>`, and every other task is legacy. The prefixes are the ones the
     // tasks files declare (wave-3.md §4.2), so a new family adds its file and not a line here.
     for (const t of reg.tasks) expect(t.kind === 'outcome', t.id).toBe(DOTTED.test(t.id))
@@ -133,7 +141,7 @@ describe('legacy tasks keep their ids and pay as before', () => {
 describe('outcome prefixes come from the tasks files', () => {
   test('the registry declares the prefixes of the sims that have outcome tasks, and each prefix lives on one sim', () => {
     const prefixes = prefixesOf(reg)
-    for (const p of ['roof', 'kv', 'alloc', 'zoo']) expect(prefixes.has(p), p).toBe(true)
+    for (const p of ['roof', 'kv', 'alloc', 'zoo', 'blk']) expect(prefixes.has(p), p).toBe(true)
     for (const [p, sims] of prefixes) expect([...sims], `prefix ${p}`).toHaveLength(1)
   })
 
@@ -262,6 +270,11 @@ describe('contract ids (§10.2 table), as C7–C9 add them', () => {
     'alloc.coalesce-recover': { simId: 'sim-allocator', kc: 't1.split-coalesce' },
     'alloc.fixed-block-waste': { simId: 'sim-allocator', kc: 't1.fixed-blocks' },
     'alloc.policy-race': { simId: 'sim-allocator', kc: 't1.placement-policy' },
+    'alloc.double-free': { simId: 'sim-allocator', kc: KC.allocatorContract },
+    'blk.share': { simId: 'sim-kv', kc: KC.blockRefcounts },
+    'blk.cow': { simId: 'sim-kv', kc: KC.kvCopyOnWrite },
+    'blk.preempt': { simId: 'sim-kv', kc: KC.blockRefcounts },
+    'blk.sweep': { simId: 'sim-kv', kc: KC.blockTables },
   }
 
   test('a contract id that exists is an outcome task on the right sim and KC', () => {
