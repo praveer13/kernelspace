@@ -1,21 +1,27 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { firstError, formatBank, limiter, panicOutcome } from '../../scripts/build-rust-items'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import path from 'node:path'
+import { derivedFiles, firstError, formatBank, limiter, panicOutcome } from '../../scripts/build-rust-items'
 import { checkFamily, genSeeds, lintLiterals } from '../../scripts/verify-generators'
-import { checkBanks, checkSnippets, compareSnippet, COMPILE_KCS as GRAPH_COMPILE_KCS, phoneProblems, quotaProblems, snippetHash, verdictQuota } from '../../scripts/verify-rust-items'
-import { addsClone, CLONE_MISS, ERROR_CODES, loadRustGroups, MAX_COLS, MAX_LINES, variantCode } from '../../src/data/rust-items'
+import { checkBanks, checkSnippets, compareSnippet, derivedProblems, COMPILE_KCS as GRAPH_COMPILE_KCS, phoneProblems, quotaProblems, snippetHash, verdictQuota } from '../../scripts/verify-rust-items'
+import { addsClone, bankUnits, CLONE_MISS, ERROR_CODES, loadRustGroups, MAX_COLS, MAX_LINES, variantCode } from '../../src/data/rust-items'
+import { forgetGroups, groupLoaded, loadGroups } from '../../src/data/rust-items/groups'
 import type { BankFile, BankSnippet, RustGroup, RustSnippet } from '../../src/data/rust-items/types'
 import { rs } from '../../src/data/rust-items/types'
 import { partsText } from '../../src/lib/items/core'
-import compile, { COMPILE_KCS, compileVariantId, MIN_POOL, POOLS, STALE, UNITS, unitOf } from '../../src/lib/items/families/compile'
+import compile, { COMPILE_KCS, compileVariantId, GROUP_IDS, MIN_POOL, POOLS, practiceInstance, REFS, unitAt, unitOf } from '../../src/lib/items/families/compile'
 import { correctResponse, gradeResponse } from '../../src/lib/items/grade'
+import { collect, NotReady, settle, want } from '../../src/lib/items/on-demand'
 import type { Instance, Level } from '../../src/lib/items/types'
 
 const SEEDS = genSeeds(200)
 const LEVELS: Level[] = [0, 1, 2, 3]
+const ROOT = path.resolve(import.meta.dir, '../..')
 const FILE = new URL('../../src/lib/items/families/compile.ts', import.meta.url)
 const GROUPS = await loadRustGroups()
 const SEED = GROUPS.find((g) => g.id === 'seed')!
+/** Every unit the family serves, with its group loaded (Bun loads every group at module evaluation). */
+const UNITS = REFS.map(unitAt)
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T
 const choice = (i: Instance) => {
@@ -123,9 +129,15 @@ describe('compile: the bank', () => {
   })
 
   test('every authored variant is served: none is left out as stale', () => {
-    expect(STALE).toEqual([])
+    expect(bankUnits(GROUPS).stale).toEqual([])
     const variants = GROUPS.reduce((a, g) => a + g.snippets.reduce((b, s) => b + s.variants.length, 0), 0)
     expect(UNITS).toHaveLength(variants)
+    // the manifest lists the bank's confirmed units in bank order, each with the outcome rustc recorded
+    expect(UNITS.map((u) => u.key)).toEqual(bankUnits(GROUPS).units.map((u) => u.key))
+    for (const [i, b] of bankUnits(GROUPS).units.entries()) {
+      expect(UNITS[i].result).toEqual(b.result === 'compiles' ? 'compiles' : { code: b.result.code, line: b.result.line })
+      expect(UNITS[i].fixes).toEqual(b.fixes)
+    }
   })
 
   test('the seed group covers every compile KC but r.permissions, both build modes and every kind of item', () => {
@@ -143,7 +155,7 @@ describe('compile: the bank', () => {
   test('every group serves verdict, permission and fix items', () => {
     for (const g of GROUPS) {
       const served = new Set<string>()
-      for (const [id, pool] of POOLS) if (pool.some((u) => u.key.startsWith(`${g.id}/`))) served.add(id.split('.')[0])
+      for (const [id, pool] of POOLS) if (pool.some((r) => r.group === g.id)) served.add(id.split('.')[0])
       expect([...served].sort()).toEqual(['fix', 'permission', 'verdict'])
     }
   })
@@ -353,14 +365,18 @@ describe('compile: verdict items', () => {
     }
   })
 
-  test('the code is shown with numbered lines, and the key why quotes rustc', () => {
+  test("the code is shown with numbered lines, and the key why says what rustc reports, not rustc's message", () => {
     const i = compile.make(SEEDS[0], 0, 'verdict.borrow-rules')
     const code = i.prompt.stem.find((p) => p.t === 'code')
     expect(code).toMatchObject({ t: 'code', lang: 'rust', lines: true, code: unitOf(i)!.code })
     const u = UNITS.find((x) => x.key === 'seed/block-table-first-block/borrow-first')!
     const hit = drawUnit('verdict.borrow-rules', u.key)
     const key = choice(hit).options.find((o) => o.id === 'E0502')!
-    expect(key.why).toContain('rustc reports E0502 at line 7: "cannot borrow `table.blocks` as mutable')
+    expect(key.why).toStartWith(`rustc reports E0502 at line 7. ${u.variant.why}`)
+    // rustc's message stays in bank/seed.json, which the app never loads
+    const banked = bankUnits(GROUPS).units.find((x) => x.key === u.key)!
+    expect(banked.result === 'compiles' ? '' : banked.result.message).toContain('cannot borrow `table.blocks` as mutable')
+    expect(JSON.stringify(hit)).not.toContain('cannot borrow `table.blocks` as mutable')
   })
 
   test('a run snippet offers its panic and says the program runs', () => {
@@ -388,7 +404,7 @@ describe('compile: permission items', () => {
     }
     // the pool is exactly the labelled variants of the bank (each content group adds its own), and the seeds draw only from it
     const labelled = UNITS.filter((u) => u.variant.permission).map((u) => u.key)
-    expect(new Set(POOLS.get('permission')!.map((u) => u.key))).toEqual(new Set(labelled))
+    expect(new Set(POOLS.get('permission')!.map((r) => unitAt(r).key))).toEqual(new Set(labelled))
     for (const i of all) expect(labelled).toContain(i.params.unit as string)
     // and the seeds reach every labelled variant (a content group holds more units than 200 seeds draw)
     const seen = new Set<string>()
@@ -431,5 +447,128 @@ describe('compile: fix items', () => {
     const failing = gradeResponse(i, { kind: 'choice', picks: ['mut-first'] })
     expect(failing.feedback).toContain('It still fails: rustc reports E0499 at line 7')
     expect(failing.diagnosis).toBeUndefined()
+  })
+})
+
+describe('compile: what the app loads', () => {
+  test('the manifest, the served groups and the museum are exactly what build-rust-items derives from the banks', () => {
+    const files = derivedFiles(GROUPS)
+    expect([...files.keys()].sort()).toEqual(['manifest.json', 'museum.json', ...GROUPS.map((g) => `served/${g.id}.ts`)].sort())
+    const read = (rel: string) => {
+      try {
+        return readFileSync(path.join(ROOT, 'src/data/rust-items', rel), 'utf8')
+      } catch {
+        return undefined
+      }
+    }
+    expect(derivedProblems(files, read, readdirSync(path.join(ROOT, 'src/data/rust-items/served')))).toEqual([])
+    // a hand edit, a missing file and a leftover group are each reported
+    const edited = (rel: string) => (rel === 'manifest.json' ? `${read(rel)} ` : rel === 'served/seed.ts' ? undefined : read(rel))
+    const problems = derivedProblems(files, edited, ['old.ts', ...GROUPS.map((g) => `${g.id}.ts`)])
+    expect(problems).toHaveLength(3)
+    expect(problems.join('\n')).toContain('manifest.json is not what the banks and snippets give now')
+    expect(problems.join('\n')).toContain('served/seed.ts is missing')
+    expect(problems.join('\n')).toContain('served/old.ts has no group')
+  })
+
+  test('no derived file holds a source hash, the rustc version line or a message the museum does not show', () => {
+    const files = derivedFiles(GROUPS)
+    const text = [...files.values()].join('\n')
+    for (const g of GROUPS) {
+      expect(text).not.toContain(g.bank!.rustc)
+      for (const s of Object.values(g.bank!.snippets)) expect(text).not.toContain(s.hash)
+    }
+    // the manifest and the groups carry no rustc message at all
+    const served = [...files].filter(([rel]) => rel !== 'museum.json').map(([, t]) => t).join('\n')
+    for (const u of bankUnits(GROUPS).units) if (u.result !== 'compiles' && u.result.message.length > 30) expect({ key: u.key, leak: served.includes(u.result.message) }).toEqual({ key: u.key, leak: false })
+  })
+
+  test('the app never imports a bank file or the scripts\' loader', () => {
+    // every import specifier in src/ (static, dynamic and Vite globs); only the loader itself names bank/
+    const IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|import\.meta\.glob\s*\(\s*)['"]([^'"]+)['"]/g
+    const offenders: string[] = []
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const file = path.join(dir, name)
+        if (statSync(file).isDirectory()) walk(file)
+        else if (/\.(ts|tsx)$/.test(name) && file !== path.join(ROOT, 'src/data/rust-items/index.ts')) {
+          for (const m of readFileSync(file, 'utf8').matchAll(IMPORT)) {
+            const spec = m[1]
+            const resolved = spec.startsWith('@/') ? path.join(ROOT, 'src', spec.slice(2)) : spec.startsWith('.') ? path.resolve(path.dirname(file), spec) : spec
+            const rel = path.relative(ROOT, resolved)
+            if (rel.startsWith('src/data/rust-items/bank') || rel === 'src/data/rust-items' || rel === 'src/data/rust-items/index' || rel === 'src/data/rust-items/index.ts') offenders.push(`${path.relative(ROOT, file)} imports ${spec}`)
+          }
+        }
+      }
+    }
+    walk(path.join(ROOT, 'src'))
+    expect(offenders).toEqual([])
+  })
+})
+
+describe('compile: groups load per need', () => {
+  test('make stops with NotReady until the group its unit lives in has loaded, then makes what it made with every group', async () => {
+    const made = compile.make(SEEDS[5], 1, 'verdict.borrow-rules')
+    const group = String(made.params.unit).split('/')[0]
+    forgetGroups()
+    try {
+      expect(() => compile.make(SEEDS[5], 1, 'verdict.borrow-rules')).toThrow(NotReady)
+      const first = collect(() => compile.make(SEEDS[5], 1, 'verdict.borrow-rules'))
+      expect(first.stopped).toBeInstanceOf(NotReady)
+      expect(first.ready).not.toBeNull()
+      await first.ready
+      // only the drawn unit's group loaded
+      expect(GROUP_IDS.filter(groupLoaded)).toEqual([group])
+      expect(collect(() => compile.make(SEEDS[5], 1, 'verdict.borrow-rules'))).toEqual({ value: made, ready: null })
+    } finally {
+      await loadGroups(GROUP_IDS)
+    }
+  })
+
+  test('settle reruns work that serves several items until no make misses, and gives what every group in hand gives', async () => {
+    // a session-like batch: a caller that turns a throwing make into "no item", as Today and tickets do
+    const batch = () =>
+      SEEDS.slice(0, 40).map((seed, i) => {
+        try {
+          return compile.make(seed, 0, compile.variants[i % compile.variants.length].id)
+        } catch (e) {
+          if (e instanceof NotReady) return null
+          throw e
+        }
+      })
+    const whole = batch()
+    forgetGroups()
+    try {
+      const missing = collect(batch)
+      expect(missing.value!.some((x) => x === null)).toBe(true)
+      expect(await settle(batch)).toEqual(whole)
+    } finally {
+      await loadGroups(GROUP_IDS)
+    }
+  })
+
+  test("the museum's practice item loads only the one group its unit lives in", async () => {
+    const made = practiceInstance('E0597', 3)!
+    forgetGroups()
+    try {
+      const got = await settle(() => practiceInstance('E0597', 3))
+      expect(got).toEqual(made)
+      expect(GROUP_IDS.filter(groupLoaded)).toEqual([String(made.params.unit).split('/')[0]])
+    } finally {
+      await loadGroups(GROUP_IDS)
+    }
+  })
+
+  test("a load that fails is not asked for again at once, so settle ends and the work's NotReady comes through", async () => {
+    let calls = 0
+    const failing = Promise.reject(new Error('offline'))
+    const work = () => {
+      calls++
+      // the first run asks for a load that fails; the loader remembers the failure and then stops without asking
+      if (calls === 1) return want('a group', failing)
+      throw new NotReady('a group')
+    }
+    await expect(settle(work)).rejects.toBeInstanceOf(NotReady)
+    expect(calls).toBe(2)
   })
 })

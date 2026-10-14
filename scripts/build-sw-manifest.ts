@@ -5,7 +5,8 @@
  * BUILD placeholder filled in: the build id, the schema version this bundle was built for, the shell and the
  * precache list. The list is the entry closure, the /today and /boot closures with their direct lazy chunks,
  * the ledger engine and notices the entry loads on every page, the lazy ⌘K palette, the generator family
- * chunks, the generated search index chunk and claims.json. Wave 2 adds the /daily closure and the fleet worker
+ * chunks with the chunks they load on demand (the compile bank's groups, one chunk each, which Today and
+ * tickets fetch when they serve a compile item), the generated search index chunk and claims.json. Wave 2 adds the /daily closure and the fleet worker
  * bundle (wave-2.md §9.7, §9.5): Vite's manifest lists no worker bundle, so a closure walk alone would drop the
  * code the Daily's sessions run in. The worker is found in dist/assets by name and the files it loads follow it.
  * Family and search index chunks are picked up when they exist. Re-running it is safe: it always starts from
@@ -135,6 +136,8 @@ export function collectPrecache(manifest: Record<string, ManifestChunk>, workers
   }
   for (const [key, chunk] of Object.entries(manifest)) {
     if (key.startsWith(FAMILY_PREFIX) || SEARCH_INDEX.test(key) || SEARCH_INDEX.test(chunk.file)) visit(key)
+    // a family's own lazy chunks are part of serving it offline: the compile bank's groups (wave-2.md §15.3)
+    if (key.startsWith(FAMILY_PREFIX)) for (const dyn of chunk.dynamicImports ?? []) visit(dyn)
   }
   for (const file of workers) files.add(file)
   for (const file of PUBLIC_FILES) files.add(file)

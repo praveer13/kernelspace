@@ -334,9 +334,9 @@ function sampleTarget(): Target {
  * drawn by hand in the same format (`source: 'hand'`, Q9) and kept here while its hash still matches.
  */
 async function errorsTarget(): Promise<Target> {
-  const { UNITS } = await import('../../src/lib/items/families/compile')
+  const { bankUnits, loadRustGroups } = await import('../../src/data/rust-items')
   const { museumEntries } = await import('../../src/lib/rust/museum')
-  const blocks = museumEntries(UNITS).map((e) => ({ key: e.code, code: e.source }))
+  const blocks = museumEntries(bankUnits(await loadRustGroups()).units).map((e) => ({ key: e.code, code: e.source }))
   return { file: ERRORS, label: 'errors', blocks, keepCode: true, keepHand: true }
 }
 

@@ -9,11 +9,11 @@
  * Text first, colour second: the diff marks are words for a screen reader, the missing permission is
  * named in a sentence, and the snippet scrolls inside its own focusable region at 360 px. Practising
  * plays the shared ItemCard on an item from `practiceInstance` and writes each answer to the ledger as
- * a generated-item response (`src: 'practice'`); a code the bank has no unit for shows no practice.
+ * a generated-item response (`src: 'practice'`). The item, the compile family, the one group of the
+ * bank it draws from and the item player all load on the click, so the page itself carries none of them.
  */
-import { useId, useMemo, useState } from 'react'
+import { lazy, Suspense, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import ItemCard from '@/components/items/ItemCard'
 import { PermissionTable } from '@/components/lesson/PermissionDiagram'
 import errorsFile from '@/data/aquascope/errors.json'
 import type { PermissionTrace, PermissionTraceFile } from '@/data/aquascope/types'
@@ -25,6 +25,8 @@ import { useProgress } from '@/lib/progress'
 import { freshSeed } from '@/lib/rng'
 import { LESSON_TITLES, type MuseumEntry, type MuseumFix } from '@/lib/rust/museum'
 import { cn } from '@/lib/utils'
+
+const ItemCard = lazy(() => import('@/components/items/ItemCard'))
 
 const TRACES = (errorsFile as unknown as PermissionTraceFile).traces
 
@@ -149,23 +151,49 @@ function afterClause(f: MuseumFix & { compiles: boolean }): string {
 
 /* ------------------------------ the entry ------------------------------ */
 
+/** A practice item and the family that checks it. */
+export interface PracticeItem {
+  inst: Instance
+  gen: Gen
+}
+
+type Card = { status: 'loading' } | ({ status: 'ready' } & PracticeItem) | { status: 'none' } | { status: 'failed' }
+
 export interface ErrorEntryProps {
   entry: MuseumEntry
-  /** The compile family's item for one code and seed (`practiceInstance`), and the family itself for its checker. */
-  practice?: (code: string, seed: number) => Instance | undefined
-  gen?: Gen
+  /** The compile family's item for one code and seed (`practiceInstance`), loaded on demand. No practice section without it. */
+  practice?: (code: string, seed: number) => Promise<PracticeItem | undefined>
   /** Pinned practice seed (tests); a fresh one per item otherwise. */
   seed?: number
 }
 
-export default function ErrorEntry({ entry, practice, gen, seed: seedProp }: ErrorEntryProps) {
+export default function ErrorEntry({ entry, practice, seed: seedProp }: ErrorEntryProps) {
   const uid = useId()
   const recordItems = useProgress((s) => s.recordItems)
-  const [open, setOpen] = useState(false)
+  // null until the learner asks for an item
+  const [card, setCard] = useState<Card | null>(null)
   const [seed, setSeed] = useState(() => seedProp ?? freshSeed())
+  // the latest request: an earlier one that lands after "Another item" is dropped
+  const asked = useRef(0)
   const trace = traceFor(entry.code)
-  const inst = open && practice ? practice(entry.code, seed) : undefined
-  const canPractice = useMemo(() => Boolean(practice?.(entry.code, 0)), [practice, entry.code])
+  const load = (s: number) => {
+    if (!practice) return
+    const mine = ++asked.current
+    setCard({ status: 'loading' })
+    practice(entry.code, s).then(
+      (got) => {
+        if (asked.current === mine) setCard(got ? { status: 'ready', ...got } : { status: 'none' })
+      },
+      () => {
+        if (asked.current === mine) setCard({ status: 'failed' })
+      },
+    )
+  }
+  const another = () => {
+    const s = freshSeed()
+    setSeed(s)
+    load(s)
+  }
   const head = `${uid}-h`
   const ids = { code: `${uid}-code`, diagram: `${uid}-diagram`, fix: `${uid}-fix`, wrong: `${uid}-wrong`, lessons: `${uid}-lessons`, practice: `${uid}-practice` }
   const missing = entry.permission && entry.focus
@@ -269,35 +297,54 @@ export default function ErrorEntry({ entry, practice, gen, seed: seedProp }: Err
         </ul>
       </section>
 
-      {canPractice && (
+      {practice && (
         <section aria-labelledby={ids.practice} className="mt-5">
           <h3 id={ids.practice} className="font-display text-body font-semibold text-text-1">
             Practice this error
           </h3>
-          {!open ? (
+          {card === null ? (
             <button
               type="button"
               aria-expanded={false}
               aria-controls={`${ids.practice}-card`}
-              onClick={() => setOpen(true)}
+              onClick={() => load(seed)}
               className="mt-2 min-h-11 rounded-md border border-line px-4 font-display text-[15px] font-semibold text-text-1 hover:bg-surface-2"
             >
               Try an item on {entry.code}
             </button>
           ) : (
             <div id={`${ids.practice}-card`} className="mt-2">
-              {inst ? (
-                <ItemCard
-                  key={`${inst.rev}:${seed}`}
-                  item={{ source: 'gen', inst }}
-                  gen={gen}
-                  seed={seed}
-                  autoFocus
-                  onResult={(r) => recordItems([practiceResponse(r)])}
-                  onNext={() => setSeed(freshSeed())}
-                  nextLabel="Another item"
-                  eyebrow={`practice · ${entry.code}`}
-                />
+              {card.status === 'ready' ? (
+                <Suspense
+                  fallback={
+                    <p role="status" className="text-body-sm text-text-3">
+                      Loading the item…
+                    </p>
+                  }
+                >
+                  <ItemCard
+                    key={`${card.inst.rev}:${seed}`}
+                    item={{ source: 'gen', inst: card.inst }}
+                    gen={card.gen}
+                    seed={seed}
+                    autoFocus
+                    onResult={(r) => recordItems([practiceResponse(r)])}
+                    onNext={another}
+                    nextLabel="Another item"
+                    eyebrow={`practice · ${entry.code}`}
+                  />
+                </Suspense>
+              ) : card.status === 'loading' ? (
+                <p role="status" className="text-body-sm text-text-3">
+                  Loading an item on {entry.code}…
+                </p>
+              ) : card.status === 'failed' ? (
+                <p role="alert" className="text-body-sm text-text-2">
+                  The item could not load.{' '}
+                  <button type="button" className="min-h-11 underline underline-offset-2" onClick={() => load(seed)}>
+                    Try again
+                  </button>
+                </p>
               ) : (
                 <p role="status" className="text-body-sm text-text-3">
                   No item for {entry.code} yet.

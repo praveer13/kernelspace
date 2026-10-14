@@ -10,12 +10,18 @@
  * diagram is hash-checked against that code like a lesson's (tests/rust/museum.test.ts), so a change to
  * the bank that moves a pick fails there until the trace is extracted again.
  *
+ * The page does not run this: scripts/build-rust-items.ts writes `museumEntries` over the banks into
+ * src/data/rust-items/museum.json (21 exhibits, a few KB), which /errors renders without loading a group
+ * of the bank, and verify:rust-items fails when that file is stale. This module imports only the bank's
+ * light tables, so the page can share its types and lesson titles without pulling any snippet in.
+ *
  * Pure: no DOM, no clock, no randomness.
  */
 
-import { ERROR_CODES, PANIC_CODES, PERMISSION_CODES, type CodeCluster } from '@/data/rust-items'
-import type { Permission, SnippetFocus } from '@/data/rust-items/types'
-import type { Unit } from '@/lib/items/families/compile'
+import { ERROR_CODES, PANIC_CODES, PERMISSION_CODES, type CodeCluster } from '@/data/rust-items/constants'
+import type { BankUnit, Permission, SnippetFocus } from '@/data/rust-items/types'
+
+type Unit = BankUnit
 
 /** The least snippets the final bank holds per error code (§15.2; a failure since 2c-18 froze the bank). */
 export const MIN_SNIPPETS_PER_CODE = 3
