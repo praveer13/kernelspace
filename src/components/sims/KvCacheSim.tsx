@@ -2,14 +2,21 @@
  * SIM-07 · KV-Cache Calculator (sim-kv) — playground.md §10
  * memory/token = 2 × layers × H_kv × head_dim × bytes — a form with live
  * consequences: formula-linked sliders, HBM budget bar, OOM stamp.
+ *
+ * Three machines: `calc` (the calculator), `blocks` (the block-table explorer) and `zoo` (the Attention Zoo,
+ * wave-2.md §11.4: what each attention variant stores and what one decode step reads, from 1k to 1M tokens).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ChevronDown, ChevronUp, Copy, Play, Trash2 } from 'lucide-react'
 import BlockTableExplorer from '@/components/sims/BlockTableExplorer'
 import PlaygroundShell, { useInitialCfg, useSimMachine } from '@/components/sims/PlaygroundShell'
 import { BLOCK_TABLE_EXPLORER_TASKS as BLOCK_TABLE_TASKS } from '@/components/sims/blockTableExplorer.tasks'
+import ZooChart from '@/components/sims/ZooChart'
 import { Slider } from '@/components/ui/slider'
+import { ZOO_PRESETS, zooBytes, zooPresetById } from '@/lib/kv-zoo'
+import type { ZooModel } from '@/lib/kv-zoo'
+import { useProgress } from '@/lib/progress'
 import { useSimHost } from '@/lib/sims/host'
 import {
   BATCH_STEPS,
@@ -35,6 +42,21 @@ import {
   setupMismatches,
 } from '@/lib/sims/models/kv'
 import type { Dtype, KvState, PresetId } from '@/lib/sims/models/kv'
+import {
+  CUSTOM_ID,
+  PREFIX_REUSE_TEXT,
+  SETUPS as ZOO_SETUPS,
+  ZOO_CTX_STEPS,
+  baselineRatio,
+  fmtBytes,
+  fmtInt,
+  groupRows,
+  normalizeZooConfig,
+  pasteStatus,
+  runZoo,
+  zooBaseline,
+  zooConfigToSave,
+} from '@/lib/sims/models/zoo'
 import { resolveTasks } from '@/lib/sims/registry'
 import { cn } from '@/lib/utils'
 
@@ -170,7 +192,19 @@ function useTweened(value: number, reduced: boolean, dur = 400): number {
 
 type Term = 'two' | 'L' | 'H' | 'd' | 'bytes' | 'ctx' | 'B' | null
 
-type MachineMode = 'calc' | 'blocks'
+type MachineMode = 'calc' | 'blocks' | 'zoo'
+
+const MACHINE_TITLE: Record<MachineMode, string> = {
+  calc: 'KV-Cache Calculator',
+  blocks: 'KV Block-Table Explorer',
+  zoo: 'Attention Zoo',
+}
+const MACHINE_SUBTITLE: Record<MachineMode, string> = {
+  calc: 'memory/token = 2 × L × H_kv × d × bytes — a form with live consequences',
+  blocks: 'trace logical-to-physical KV blocks, prefix sharing, copy-on-write, and preemption',
+  zoo: 'what each attention variant stores, and what one decode step reads',
+}
+const MODE_LABEL: Record<MachineMode, string> = { calc: 'KV calculator', blocks: 'block tables', zoo: 'attention zoo' }
 
 /** What the Run button last did, in words that never give the number away. */
 interface RunStatus {
@@ -182,7 +216,7 @@ interface RunStatus {
 export default function KvCacheSim() {
   const { machine: machineParam, from: fromParam, selectMachine } = useSimMachine()
   const machineMode: MachineMode =
-    machineParam === 'calc' || machineParam === 'blocks'
+    machineParam === 'calc' || machineParam === 'blocks' || machineParam === 'zoo'
       ? machineParam
       : fromParam === 't5.l5'
         ? 'blocks'
@@ -341,18 +375,20 @@ export default function KvCacheSim() {
   return (
     <PlaygroundShell
       simId="sim-kv"
-      title={machineMode === 'blocks' ? 'KV Block-Table Explorer' : 'KV-Cache Calculator'}
-      subtitle={
-        machineMode === 'blocks'
-          ? 'trace logical-to-physical KV blocks, prefix sharing, copy-on-write, and preemption'
-          : 'memory/token = 2 × L × H_kv × d × bytes — a form with live consequences'
-      }
+      title={MACHINE_TITLE[machineMode]}
+      subtitle={MACHINE_SUBTITLE[machineMode]}
       tasks={machineMode === 'blocks' ? BLOCK_TABLE_TASKS : []}
       help={
         machineMode === 'blocks' ? (
           <p>
             Explore how PagedAttention maps logical KV blocks onto physical HBM, shares
             prompt prefixes by reference count, and recovers capacity under pressure.
+          </p>
+        ) : machineMode === 'zoo' ? (
+          <p>
+            Pick a model, or paste its config.json, and read two curves against context: the bytes its
+            cache stores (capacity) and the bytes one decode step reads (bandwidth). Full attention
+            grows both; latent, window, sparse and linear layers each bend one or the other.
           </p>
         ) : (
           <p>
@@ -362,8 +398,8 @@ export default function KvCacheSim() {
         )
       }
     >
-      <div className="mb-4 grid grid-cols-2 gap-1 rounded-md border border-line bg-surface-1 p-1">
-        {(['calc', 'blocks'] as const).map((mode) => (
+      <div className="mb-4 grid grid-cols-3 gap-1 rounded-md border border-line bg-surface-1 p-1">
+        {(['calc', 'blocks', 'zoo'] as const).map((mode) => (
           <button
             key={mode}
             type="button"
@@ -376,7 +412,7 @@ export default function KvCacheSim() {
                 : 'border-transparent text-text-2 hover:border-line-bright hover:text-text-1',
             )}
           >
-            {mode === 'calc' ? 'KV calculator' : 'block tables'}
+            {MODE_LABEL[mode]}
           </button>
         ))}
       </div>
@@ -748,9 +784,260 @@ export default function KvCacheSim() {
           <LogConsole lines={lines} onClear={clear} />
         </div>
       </div>
-      ) : (
+      ) : machineMode === 'blocks' ? (
         <BlockTableExplorer />
+      ) : (
+        <ZooMachine initial={initial} />
       )}
     </PlaygroundShell>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* the zoo machine (wave-2.md §11.4)                                   */
+/* ------------------------------------------------------------------ */
+
+/** A preset's layer mix on one line: "linear (GDN) ×45 · full (GQA) ×15". */
+const mixOf = (m: ZooModel): string => m.groups.map((g) => `${g.label} ×${g.count}`).join(' · ')
+
+const SAVE_DELAY_MS = 500
+
+function ZooMachine({ initial }: { initial: unknown }) {
+  const host = useSimHost()
+  const observe = host?.observe
+  const hostTaskIds = host?.taskIds
+  const start = useMemo(() => normalizeZooConfig(initial), [initial])
+  const [presetId, setPresetId] = useState(start.presetId)
+  const [ctxIdx, setCtxIdx] = useState(ZOO_CTX_STEPS.indexOf(start.ctx))
+  const ctx = ZOO_CTX_STEPS[ctxIdx]
+  const uid = useId()
+  const [runStatus, setRunStatus] = useState<RunStatus | null>(null)
+  const runCount = useRef(0)
+
+  // The paste box keeps its text device-locally (`zoo:config`); untouched, it shows what was saved.
+  const saved = useProgress((s) => s.working['zoo:config'])
+  const setWorking = useProgress((s) => s.setWorking)
+  const [draft, setDraft] = useState<string | null>(null)
+  const text = draft ?? (typeof saved === 'string' ? saved : '')
+  const saveTimer = useRef(0)
+  const save = (value: string) => {
+    window.clearTimeout(saveTimer.current)
+    const kept = zooConfigToSave(value)
+    if (kept !== null) setWorking('zoo:config', kept)
+  }
+  const edit = (value: string) => {
+    setDraft(value)
+    window.clearTimeout(saveTimer.current)
+    saveTimer.current = window.setTimeout(() => save(value), SAVE_DELAY_MS)
+  }
+  useEffect(() => () => window.clearTimeout(saveTimer.current), [])
+
+  const custom = presetId === CUSTOM_ID
+  const status = useMemo(() => pasteStatus(text), [text])
+  const model: ZooModel | null = custom ? (status.state === 'ok' ? status.model : null) : (zooPresetById(presetId) ?? null)
+  const baseline = useMemo(() => zooBaseline(), [])
+  const z = useMemo(() => (model === null ? null : zooBytes(model, ctx)), [model, ctx])
+  const rows = useMemo(() => (model === null ? [] : groupRows(model, ctx)), [model, ctx])
+
+  const scoped = useMemo(
+    () => resolveTasks('sim-kv', 'zoo', hostTaskIds).filter((t) => t.kind === 'outcome' && t.observe !== undefined && ZOO_SETUPS[t.observe] !== undefined),
+    [hostTaskIds],
+  )
+  const run = () => {
+    if (observe === undefined) return
+    runCount.current += 1
+    setRunStatus({ n: runCount.current, text: runZoo({ tasks: scoped, model, state: { presetId, ctx }, observe }).text })
+  }
+
+  const pickBtn = (active: boolean) =>
+    cn(
+      'rounded-sm border px-2 py-1.5 text-left transition-all duration-180 active:scale-[.97]',
+      active ? 'border-accent bg-accent-dim' : 'border-line bg-surface-2 hover:border-line-bright',
+    )
+  const stepBtn =
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line bg-surface-2 text-text-1 hover:border-line-bright disabled:cursor-not-allowed disabled:text-text-3 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11'
+  const errId = `${uid}-paste-error`
+  const hintId = `${uid}-paste-hint`
+
+  return (
+    <>
+      {observe !== undefined && scoped.length > 0 && (
+        <section aria-label="Run a task reading" className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface-1 px-4 py-3">
+          <button
+            type="button"
+            onClick={run}
+            className="flex min-h-6 items-center gap-1.5 rounded-sm border border-accent bg-accent-dim px-3 py-1.5 font-mono text-[12px] text-accent transition-all duration-180 active:scale-[.97] [@media(pointer:coarse)]:min-h-11"
+          >
+            <Play size={12} aria-hidden />
+            Run
+          </button>
+          <p role="status" aria-live="polite" className="min-w-0 flex-1 font-mono text-[11px] text-text-2" data-run-status>
+            {runStatus === null ? 'Pick the model a task names (and its context), then press Run to send the reading to the task panel.' : runStatus.text}
+          </p>
+        </section>
+      )}
+      <div className="grid gap-4 xl:grid-cols-[400px_1fr]">
+        {/* ================= left: model and context ================= */}
+        <div className="flex min-w-0 flex-col gap-4 rounded-md border border-line bg-surface-1 p-4">
+          <div>
+            <div className="mb-1.5 font-mono text-label uppercase tracking-[0.10em] text-text-3">model</div>
+            <div className="grid gap-1">
+              {ZOO_PRESETS.map((p) => (
+                <button key={p.id} type="button" aria-pressed={presetId === p.id} onClick={() => setPresetId(p.id)} className={pickBtn(presetId === p.id)}>
+                  <div className={cn('font-mono text-[12px]', presetId === p.id ? 'text-accent' : 'text-text-1')}>{p.name}</div>
+                  <div className={cn('font-mono text-[10px]', presetId === p.id ? 'text-text-2' : 'text-text-3')}>{mixOf(p)}</div>
+                </button>
+              ))}
+              <button type="button" aria-pressed={custom} onClick={() => setPresetId(CUSTOM_ID)} className={pickBtn(custom)}>
+                <div className={cn('font-mono text-[12px]', custom ? 'text-accent' : 'text-text-1')}>paste config.json</div>
+                <div className={cn('font-mono text-[10px]', custom ? 'text-text-2' : 'text-text-3')}>your own model</div>
+              </button>
+            </div>
+          </div>
+
+          {custom && (
+            <div>
+              <label htmlFor={`${uid}-paste`} className="mb-1 block font-mono text-[11px] text-text-2">
+                config.json
+              </label>
+              <textarea
+                id={`${uid}-paste`}
+                value={text}
+                onChange={(e) => edit(e.target.value)}
+                onBlur={() => save(text)}
+                rows={8}
+                spellCheck={false}
+                autoComplete="off"
+                aria-invalid={status.state === 'error'}
+                aria-describedby={status.state === 'error' ? `${hintId} ${errId}` : hintId}
+                placeholder='{ "num_hidden_layers": 32, "num_key_value_heads": 8, … }'
+                className="w-full rounded-sm border border-line bg-ink px-2 py-1.5 font-mono text-[11px] text-text-1 placeholder:text-text-3"
+              />
+              <p id={hintId} className="mt-1 font-mono text-[10px] text-text-3">
+                Open the model on Hugging Face, then Files, then config.json, and paste its text. It stays on this device.
+              </p>
+              <p id={errId} role="status" className={cn('mt-1 min-h-4 font-mono text-[11px]', status.state === 'error' ? 'text-danger' : 'text-text-2')}>
+                {status.state === 'error' ? status.message : status.state === 'ok' ? `Read: ${mixOf(status.model)}.` : ''}
+              </p>
+              {text.trim() !== '' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft('')
+                    save('')
+                  }}
+                  className="mt-1 flex min-h-6 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2 py-1 font-mono text-[11px] text-text-2 hover:border-line-bright hover:text-text-1 [@media(pointer:coarse)]:min-h-11"
+                >
+                  <Trash2 size={12} aria-hidden />
+                  clear pasted config
+                </button>
+              )}
+            </div>
+          )}
+
+          <div>
+            <div className="mb-1 flex justify-between rounded-[3px] px-1 font-mono text-[11px] text-text-3">
+              <span>context length (log)</span>
+              <span className="text-text-1">{fmtCtx(ctx)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="shorter context" disabled={ctxIdx === 0} onClick={() => setCtxIdx((i) => Math.max(0, i - 1))} className={stepBtn}>
+                <ChevronDown size={14} aria-hidden />
+              </button>
+              <Slider value={[ctxIdx]} onValueChange={(v) => setCtxIdx(v[0])} min={0} max={ZOO_CTX_STEPS.length - 1} step={1} aria-label="context length" className="flex-1" />
+              <button
+                type="button"
+                aria-label="longer context"
+                disabled={ctxIdx === ZOO_CTX_STEPS.length - 1}
+                onClick={() => setCtxIdx((i) => Math.min(ZOO_CTX_STEPS.length - 1, i + 1))}
+                className={stepBtn}
+              >
+                <ChevronUp size={14} aria-hidden />
+              </button>
+            </div>
+            <div className="mt-1 flex justify-between px-10 font-mono text-[9px] text-text-3" aria-hidden>
+              <span>1k</span>
+              <span>32k</span>
+              <span>1M</span>
+            </div>
+          </div>
+          <p className="font-mono text-[10px] text-text-3">
+            Bytes are BF16 except where the model's config pins another dtype (Qwen3.5's recurrent state is float32), summed over layers, for one request. A sparse indexer's keys count as stored, because they sit in HBM. KV is an append-only log with random reads; a recurrent state is a checkpoint you can resume from, but not from the middle.
+          </p>
+        </div>
+
+        {/* ================= right: readouts, curves, layer groups ================= */}
+        <div className="flex min-w-0 flex-col gap-4">
+          {model === null || z === null ? (
+            <section aria-label="Pasted config" className="rounded-md border border-line bg-surface-1 p-5">
+              <p className="font-mono text-[12px] text-text-2">
+                {status.state === 'error' ? `This config cannot be read yet: ${status.message}.` : 'Paste a config.json to see its curves.'}
+              </p>
+            </section>
+          ) : (
+            <>
+              <section aria-label="Readout" className="rounded-md border border-line bg-surface-1 p-4">
+                <div className="font-mono text-label uppercase tracking-[0.10em] text-text-3">
+                  {model.name} @ {fmtCtx(ctx)}
+                </div>
+                <p className="mt-1 text-body-sm text-text-2">{model.note}</p>
+                <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <ZooStat label="stored (capacity)" value={fmtBytes(z.stored)} accent />
+                  <ZooStat label="read per step (bandwidth)" value={fmtBytes(z.read)} />
+                  <ZooStat label="reads as share of stored" value={`${z.stored === 0 ? 0 : Math.round((z.read / z.stored) * 100)}%`} />
+                  <ZooStat label={`${baseline.name} ÷ this model`} value={`${baselineRatio(model, ctx)}×`} />
+                </dl>
+                <p className="mt-2 font-mono text-[10px] text-text-3">average {fmtInt(Math.round(z.stored / ctx))} B stored per token at this context.</p>
+              </section>
+              <section aria-label="Curves" className="rounded-md border border-line bg-surface-1 p-4">
+                <ZooChart model={model} baseline={model.id === baseline.id ? null : baseline} ctx={ctx} />
+              </section>
+              <div role="region" aria-label="Layer groups" tabIndex={0} className="overflow-x-auto rounded-md border border-line bg-surface-1 p-3">
+                <table className="w-full min-w-[560px] border-collapse text-left font-mono text-[11px] text-text-2">
+                  <caption className="mb-2 text-left text-text-2">What each layer group stores and reads at {fmtCtx(ctx)}</caption>
+                  <thead>
+                    <tr>
+                      {['Layer group', 'Stored', 'Share', 'Read per step', 'Growth', 'Reusable for a shared prefix'].map((c) => (
+                        <th key={c} scope="col" className="border-b border-line px-2 py-1 font-medium text-text-1">
+                          {c}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.label}>
+                        <th scope="row" className="border-b border-line/60 px-2 py-1 font-normal text-text-1">
+                          {r.label} ×{r.count}
+                        </th>
+                        <td className="border-b border-line/60 px-2 py-1">{fmtBytes(r.stored)}</td>
+                        <td className="border-b border-line/60 px-2 py-1">{r.share}%</td>
+                        <td className="border-b border-line/60 px-2 py-1">{fmtBytes(r.read)}</td>
+                        <td className="border-b border-line/60 px-2 py-1">{r.growth}</td>
+                        <td className="border-b border-line/60 px-2 py-1">{PREFIX_REUSE_TEXT[r.reuse]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rows.some((r) => r.reuse === 'whole-sequence') && (
+                  <p className="mt-2 font-mono text-[10px] text-text-3">
+                    A linear layer holds one state, taken after the last token it read. A request that shares only the first half of a cached sequence finds nothing stored for that half: the state exists only at the end.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function ZooStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div>
+      <dt className="font-mono text-[10px] text-text-3">{label}</dt>
+      <dd className={cn('m-0 mt-0.5 font-display text-[22px] font-bold leading-tight', accent ? 'text-t5' : 'text-text-1')}>{value}</dd>
+    </div>
   )
 }

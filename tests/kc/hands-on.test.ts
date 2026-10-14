@@ -80,7 +80,7 @@ describe('hands-on T6/T7 lessons (spec §5.4)', () => {
     const fake: Lesson = {
       ...(T67[0] as Lesson),
       blocks: [
-        { type: 'play', playId: 'scheduler', title: 'x' },
+        { type: 'play', playId: 'no-such-play', title: 'x' },
         { type: 'exercise', simId: 'sim-roofline' as never, title: 'x', tasks: [], taskIds: ['zoo.mla-ratio', 'no.such-task'] },
         { type: 'item', title: 'x', family: 'cost', variants: ['no-such-variant'] },
       ],

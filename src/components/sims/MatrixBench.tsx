@@ -22,8 +22,7 @@
  * row and column therefore nearly vanishes at 512², while at 8192² the total
  * matrix spills to DRAM and the 64 KiB stride pays full TLB cost.
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Play, RotateCcw } from 'lucide-react'
 import {
@@ -35,6 +34,8 @@ import {
   usePrefersReducedMotion,
   useSimLog,
 } from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
+import type { MirrorTable } from '@/lib/sims/types'
 
 const SIM_ID = 'sim-memory'
 
@@ -149,7 +150,38 @@ export default function MatrixBench() {
   const [width, setWidth] = useState(720)
   const tickRef = useRef(0)
 
+  const mirrorId = `${useId()}-mirror`
+
   const lastRun = runs[runs.length - 1]
+
+  /* DOM mirror of the chart: the model's expected curves at the current prefetch setting, then every recorded
+     run. The announcement follows the last run only, so size and chip changes stay silent. */
+  const mirrorTable = useMemo<MirrorTable>(() => {
+    const row = (point: string, size: number, o: 'row' | 'col', pf: boolean, level: string, bw: number, ns: number) => [
+      point,
+      `${fmtN(size)}²`,
+      o === 'row' ? 'row-major' : 'column-major',
+      pf ? 'on' : 'off',
+      level,
+      fmtGbs(bw),
+      fmtMs(ns),
+    ]
+    const model = (['row', 'col'] as const).flatMap((o) =>
+      N_SIZES.map((s) => {
+        const m = matrixModel(s, o, prefetch)
+        return row(`model ${o} ${fmtN(s)}`, s, o, prefetch, m.level, m.bwGbs, m.ns)
+      }),
+    )
+    const measured = runs.map((r) => row(`run ${r.id}`, r.n, r.order, r.prefetch, r.level, r.bwGbs, r.ns))
+    return {
+      caption: `Bandwidth against matrix order. The model rows are the expected row-major and column-major curves with the prefetcher ${prefetch ? 'on' : 'off'}; the run rows are your ${runs.length} recorded runs.`,
+      columns: ['Point', 'Matrix', 'Order', 'Prefetcher', 'Level', 'Bandwidth', 'Time'],
+      rows: [...model, ...measured],
+      announce: lastRun
+        ? `Run ${lastRun.id}: ${fmtN(lastRun.n)} squared, ${lastRun.order === 'row' ? 'row-major' : 'column-major'}, ${fmtGbs(lastRun.bwGbs)} in ${fmtMs(lastRun.ns)}, served from ${lastRun.level}.`
+        : undefined,
+    }
+  }, [prefetch, runs, lastRun])
 
   const run = useCallback(() => {
     tickRef.current += 1
@@ -349,8 +381,10 @@ export default function MatrixBench() {
               style={{ width: '100%', height: CHART_H }}
               role="img"
               aria-label={`Bandwidth versus matrix order chart. ${runs.length} runs recorded.`}
+              aria-describedby={mirrorId}
             />
           </div>
+          <SimMirror id={mirrorId} table={mirrorTable} className="mt-3" />
 
           {/* access trace — a decorative strip of cache-line hops */}
           {probe !== null && lastRun && (

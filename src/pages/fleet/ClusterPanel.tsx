@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import EpdPanel from '@/pages/fleet/EpdPanel'
 import { slotBytes } from '@/pages/fleet/drivers'
 import MetricsDashboard from '@/pages/fleet/MetricsDashboard'
-import type { SlotState } from '@/pages/fleet/slots'
+import { useSlots, type SlotState } from '@/pages/fleet/slots'
 
 const WORKER_CFG = { numBlocks: 128, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128 }
 const INTAKE_CAP = 32
@@ -49,7 +49,11 @@ interface PanelError {
   timedOut: boolean
 }
 
-export default function ClusterPanel({ slots, onUseReference }: { slots: SlotState; onUseReference?: () => void }) {
+export default function ClusterPanel({ slots, routerOff = false, onUseReference }: { slots: SlotState; routerOff?: boolean; onUseReference?: () => void }) {
+  /* your installed radix cache (the prefix-router slot); a fleet worker gives each cluster worker its own instance.
+     `routerOff` runs the reference router for this visit after a reset, with the saved module left installed. */
+  const installedRouter = useSlots((s) => s.installed['prefix-router']?.bytes ?? null)
+  const routerBytes = routerOff ? null : installedRouter
   const [topology, setTopology] = useState<'colocated' | 'epd'>('colocated')
   const [workerCount, setWorkerCount] = useState(2)
   const [router, setRouter] = useState<RouterKind>('jsq')
@@ -82,7 +86,7 @@ export default function ClusterPanel({ slots, onUseReference }: { slots: SlotSta
     /* the worker instantiates the learner stack once per cluster worker and holds the Cluster */
     void openFleetSession({
       mode: 'cluster',
-      slots: slotBytes(slots),
+      slots: slotBytes(slots, routerBytes),
       traffic: makePrefixSharedRequestStream(REQ_COUNT, SPAN, PRACTICE_SEED),
       cfg: { worker: WORKER_CFG, workers: workerCount, router, intakeCap: INTAKE_CAP, drainPerTick: DRAIN_PER_TICK },
     })
@@ -96,7 +100,7 @@ export default function ClusterPanel({ slots, onUseReference }: { slots: SlotSta
       .catch((cause: unknown) => {
         if (buildTokenRef.current === token) fail(cause)
       })
-  }, [topology, workerCount, router, slots, fail])
+  }, [topology, workerCount, router, slots, routerBytes, fail])
 
   useEffect(() => {
     reset()
@@ -211,6 +215,7 @@ export default function ClusterPanel({ slots, onUseReference }: { slots: SlotSta
         </div>
         <span className="font-mono text-[11px] text-text-3">
           {slots.sched || slots.mgr || slots.queue ? 'your stack in every worker' : 'reference stack (upload above to change)'}
+          {routerBytes ? ' · your radix cache routes' : ''}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => setPlaying((p) => !p)} className="rounded-md border border-line bg-surface-1 p-2 text-text-2 hover:text-text-1" aria-label={playing ? 'pause' : 'play'}>
@@ -276,7 +281,7 @@ export default function ClusterPanel({ slots, onUseReference }: { slots: SlotSta
             <div className="flex items-center justify-between">
               <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">worker {i}</p>
               <p className="font-mono text-[11px] text-text-3">
-                <span className={w.util > 90 ? 'text-danger' : w.util > 70 ? 'text-amber' : 'text-accent'}>{w.util}%</span> · cache {w.cacheEntries}/6 · w {w.waiting} / r {w.running}
+                <span className={w.util > 90 ? 'text-danger' : w.util > 70 ? 'text-amber' : 'text-accent'}>{w.util}%</span> · cache {w.cacheEntries}{routerBytes ? ' (yours)' : '/6'} · w {w.waiting} / r {w.running}
               </p>
             </div>
             <div className="mt-3 grid gap-[2px]" style={{ gridTemplateColumns: 'repeat(32, minmax(0, 1fr))' }}>

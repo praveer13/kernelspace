@@ -30,6 +30,7 @@ import type { Kc, KcId } from '@/lib/kc/types'
 import type { ItemData, ItemResponse, LedgerEvent, LocalDay, TicketAttempt, TicketForm } from '@/lib/ledger/types'
 import { hash32 } from '@/lib/rng'
 import type { ItemPool } from './composer'
+import { drawOnKc } from './on-kc'
 import { TRACK_RANK } from './paths'
 import type { TicketPlan } from './types'
 
@@ -83,7 +84,11 @@ export interface PlanOptions {
   avoid?: ReadonlySet<string>
 }
 
-/** A pool over loaded families: a KC is served by the variants that list it, so a ticket never gets an off-KC item. */
+/**
+ * A pool over loaded families (tickets and the placement walk): a KC is served by the variants that list it,
+ * redrawn (on-kc.ts) until the instance carries the KC, so a ticket or a walk never gets an off-KC item. Null
+ * when no draw does: the caller falls back to the KC's authored items.
+ */
 export function makeGenPool(gens: ReadonlyMap<string, Gen>, familiesOf: (kc: KcId) => readonly string[]): TicketPool {
   return {
     families: (kc) => familiesOf(kc).filter((f) => gens.has(f)),
@@ -93,7 +98,8 @@ export function makeGenPool(gens: ReadonlyMap<string, Gen>, familiesOf: (kc: KcI
       const offered = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(level))
       if (offered.length === 0) return null
       try {
-        return { source: 'gen', inst: gen.make(seed, level, offered[seed % offered.length].id) }
+        const inst = drawOnKc(kc, seed, (s) => gen.make(s, level, offered[s % offered.length].id))
+        return inst ? { source: 'gen', inst } : null
       } catch {
         return null
       }

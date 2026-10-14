@@ -22,8 +22,10 @@ import {
 } from '@/lib/fleet-model'
 import type { PoolOpResult } from '@/workers/fleet-protocol'
 import { cn } from '@/lib/utils'
-import { validateModule } from '@/pages/fleet/drivers'
-import { SLOT_LABEL, SLOT_WANT_LAB, useSlots, type LabKind } from '@/pages/fleet/slots'
+import SlotBar from '@/pages/fleet/SlotBar'
+import { useSlots } from '@/pages/fleet/slots'
+import { createUploadStore, panelSlots, parkedCount, realUploadDeps } from '@/pages/fleet/upload'
+import EngineSchematic from '@/components/engine/EngineSchematic'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import RouteFallback from '@/components/RouteFallback'
 
@@ -31,6 +33,7 @@ import RouteFallback from '@/components/RouteFallback'
 const EnginePanel = lazy(() => import('@/pages/fleet/EnginePanel'))
 const ClusterPanel = lazy(() => import('@/pages/fleet/ClusterPanel'))
 const RealEnginePanel = lazy(() => import('@/pages/fleet/RealEnginePanel'))
+const TokenizerCompare = lazy(() => import('@/components/engine/TokenizerCompare'))
 
 /**
  * The Fleet — Phase 2's home. Three modes over one deterministic request
@@ -45,25 +48,21 @@ const RealEnginePanel = lazy(() => import('@/pages/fleet/RealEnginePanel'))
  */
 export default function Fleet() {
   const [mode, setMode] = useState<'engine' | 'cluster' | 'real' | 'pool'>('engine')
-  const slots = useSlots((s) => s.slots)
+  const saved = useSlots((s) => s.slots)
+  const installed = useSlots((s) => s.installed)
+  const ready = useSlots((s) => s.ready)
   const setSlot = useSlots((s) => s.setSlot)
-  const [slotError, setSlotError] = useState<string | null>(null)
-  /* a module that stops responding in a panel: "reset with reference drivers" clears all three slots */
-  const useReference = useCallback(() => {
-    for (const kind of ['sched', 'mgr', 'queue'] as const) setSlot(kind, null)
-  }, [setSlot])
-  const inputsRef = useRef<Record<LabKind, HTMLInputElement | null>>({ sched: null, mgr: null, queue: null })
-
-  const onSlotFile = useCallback(async (kind: LabKind, file: File) => {
-    setSlotError(null)
-    const bytes = await file.arrayBuffer()
-    const res = await validateModule(bytes, SLOT_WANT_LAB[kind])
-    if (!res.ok) {
-      setSlotError(`${SLOT_LABEL[kind]}: ${res.title} — ${res.detail}`)
-      return
-    }
-    setSlot(kind, { bytes, fileName: file.name, lab: SLOT_WANT_LAB[kind] })
-  }, [setSlot])
+  /* the upload flow (admit, grade on fresh seeds, install) and "reference drivers for this visit" live in one store */
+  const [upload] = useState(() => createUploadStore(realUploadDeps((m) => useSlots.getState().install(m))))
+  const checking = upload((s) => s.checking)
+  const slotError = upload((s) => s.error)
+  const off = upload((s) => s.off)
+  /* a module that stops responding in a panel: "reset with reference drivers" runs the panels on the reference for this
+     visit only. Saved modules stay installed (engine:slots and their bytes are untouched) and run again next session. */
+  const resetToReference = upload.getState().resetToReference
+  const slots = useMemo(() => panelSlots(saved, off), [saved, off])
+  const routerOff = off.router
+  const parked = parkedCount(saved, installed, off)
 
   return (
     <div className="mx-auto max-w-app px-6 pb-24 pt-16 lg:px-12">
@@ -78,7 +77,7 @@ export default function Fleet() {
             Your stack, live traffic, N workers
           </h1>
           <p className="mt-3 max-w-2xl text-body-lg text-text-2">
-            Upload your Forge modules once — they run everywhere.{' '}
+            Install your Forge modules once — they stay on this device and run everywhere.{' '}
             <span className="text-text-1">Engine</span>: one engine, your scheduler + block manager +
             intake queue vs the reference stack. <span className="text-text-1">Cluster</span>: your stack
             replicated across workers behind a router. <span className="text-text-1">Pool</span>: your
@@ -101,42 +100,35 @@ export default function Fleet() {
         </div>
       </div>
 
-      {/* shared upload slots */}
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        {(['sched', 'mgr', 'queue'] as const).map((kind) => (
-          <span key={kind}>
-            <button
-              onClick={() => inputsRef.current[kind]?.click()}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-md border px-3.5 py-2 font-mono text-[12px] transition-colors',
-                slots[kind] ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line bg-surface-1 text-text-2 hover:border-accent/50 hover:text-text-1',
-              )}
-            >
-              <Upload className="h-3.5 w-3.5" />
-              {SLOT_LABEL[kind]}: {slots[kind] ? 'yours ✓' : 'reference'}
-            </button>
-            <input
-              ref={(el) => {
-                inputsRef.current[kind] = el
-              }}
-              type="file"
-              accept=".wasm,application/wasm"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) void onSlotFile(kind, f)
-                e.target.value = ''
-              }}
-            />
-          </span>
-        ))}
-        {slotError && <span className="font-mono text-[11px] text-danger">{slotError}</span>}
-      </div>
+      <section aria-labelledby="fleet-engine-title" className="mt-8">
+        <h2 id="fleet-engine-title" className="font-display text-h3 text-text-1">
+          your engine
+        </h2>
+        <EngineSchematic installed={installed} className="mt-4" />
+      </section>
+
+      {/* the token-count check: your tokenizer's counts beside Qwen3's (docs/specs/wave-2.md §10.5) */}
+      <ErrorBoundary label="the tokenizer comparison">
+        <Suspense fallback={<RouteFallback label="loading the tokenizer comparison" />}>
+          <TokenizerCompare className="mt-10" />
+        </Suspense>
+      </ErrorBoundary>
+
+      {/* shared slots: installed modules (persisted) fill the three the panels drive */}
+      <SlotBar
+        slots={slots}
+        checking={checking}
+        error={slotError}
+        parked={parked}
+        onPick={(kind, file) => void upload.getState().pick(kind, file)}
+        onUseReference={(kind) => setSlot(kind, null)}
+        onUseMine={upload.getState().restoreMine}
+      />
 
       <div className="mt-6">
         <ErrorBoundary label="this panel" resetKey={mode}>
           <Suspense fallback={<RouteFallback label="loading panel" />}>
-            {mode === 'engine' ? <EnginePanel slots={slots} onUseReference={useReference} /> : mode === 'cluster' ? <ClusterPanel slots={slots} onUseReference={useReference} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
+            {!ready ? <RouteFallback label="loading your engine" /> : mode === 'engine' ? <EnginePanel slots={slots} onUseReference={resetToReference} /> : mode === 'cluster' ? <ClusterPanel slots={slots} routerOff={routerOff} onUseReference={resetToReference} /> : mode === 'real' ? <RealEnginePanel slots={slots} /> : <PoolMode />}
           </Suspense>
         </ErrorBoundary>
       </div>

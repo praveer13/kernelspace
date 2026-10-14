@@ -5,8 +5,7 @@
  * priority-inheritance, and admission control.  The timeline is drawn as a
  * Gantt-style canvas; metrics report short-job p99 latency and throughput.
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Play, RotateCcw } from 'lucide-react'
 import {
   ChipButton,
@@ -17,6 +16,8 @@ import {
   usePlaygroundContext,
   useSimLog,
 } from '@/components/sims/PlaygroundShell'
+import SimMirror from '@/components/sims/SimMirror'
+import type { MirrorTable } from '@/lib/sims/types'
 
 const SIM_ID = 'sim-batching'
 const CTX_COST = 0.5
@@ -123,6 +124,24 @@ function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b)
   const idx = Math.max(0, Math.ceil(sorted.length * p) - 1)
   return sorted[idx]
+}
+
+/** One tick count for text: whole numbers bare, otherwise one decimal. */
+function fmtTicks(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1)
+}
+
+/** A job's run slices as text ("0–5, 10–15, +3 more"); slices that touch merge. Rows of the mirror table use it. */
+function sliceText(segments: readonly Segment[], jobId: string): string {
+  const merged: { start: number; end: number }[] = []
+  for (const seg of segments) {
+    if (seg.jobId !== jobId || seg.kind !== 'run') continue
+    const last = merged[merged.length - 1]
+    if (last && seg.start - last.end < 1e-9) last.end = seg.end
+    else merged.push({ start: seg.start, end: seg.end })
+  }
+  const shown = merged.slice(0, 5).map((m) => `${fmtTicks(m.start)}–${fmtTicks(m.end)}`)
+  return merged.length > 5 ? `${shown.join(', ')}, +${merged.length - 5} more` : shown.join(', ') || 'never ran'
 }
 
 /* -------- discrete-event scheduler -------- */
@@ -330,12 +349,15 @@ export default function SchedulerLab() {
   const [admissionControl, setAdmissionControl] = useState(false)
   const [load, setLoad] = useState(1.0)
   const [results, setResults] = useState<SimResult | null>(null)
+  const [announce, setAnnounce] = useState<string | undefined>(undefined)
+  const mirrorId = `${useId()}-mirror`
 
   const maxTime = useMemo(() => (scenario === 'overload' ? 250 : 350), [scenario])
 
   /* ---- run / reset ---- */
   const reset = useCallback(() => {
     setResults(null)
+    setAnnounce(undefined)
     clear()
   }, [clear])
 
@@ -355,6 +377,12 @@ export default function SchedulerLab() {
     setResults(res)
 
     const modeTag = policy === 'rr' ? `RR q=${quantum}` : policy === 'priority' ? 'PRI' : 'FIFO'
+    setAnnounce(
+      `Run ${t}: ${modeTag}, ${scenario}. Short-job p99 ${res.p99Short.toFixed(1)} ticks, ${res.ctxSwitches} context switches` +
+        (res.highLatency !== undefined ? `, high-priority job latency ${res.highLatency.toFixed(1)} ticks` : '') +
+        (res.rejected > 0 ? `, ${res.rejected} jobs rejected` : '') +
+        '.',
+    )
     log(t, 'SCHED', `${modeTag} · ${scenario} · makespan ${res.makespan.toFixed(1)} ticks`, 'op')
     if (res.rejected > 0) log(t, 'ADMIT', `${res.rejected} jobs rejected by admission controller`, 'warn')
 
@@ -485,6 +513,41 @@ export default function SchedulerLab() {
     ctx.fillText('arrival', 8, TOP_MARGIN + 18)
   }, [results, width, maxTime])
 
+  /* DOM mirror of the Gantt chart: one row per plotted job (the admitted ones), the CPU lane's totals in the caption. */
+  const policyLabel = policy === 'fifo' ? 'FIFO' : policy === 'rr' ? `round-robin, quantum ${quantum}` : 'priority'
+  const mirrorTable = useMemo<MirrorTable>(() => {
+    if (!results) {
+      return {
+        caption: `CPU scheduling Gantt chart: ${policyLabel}, ${scenario} scenario. Press run to record a schedule.`,
+        columns: ['Job', 'Arrival', 'Service', 'Run slices', 'Finished at', 'Latency'],
+        rows: [],
+        announce,
+      }
+    }
+    const idle = results.segments.filter((s) => s.jobId === 'idle').reduce((sum, s) => sum + (s.end - s.start), 0)
+    return {
+      caption:
+        `CPU scheduling Gantt chart: ${policyLabel}, ${scenario} scenario. Makespan ${fmtTicks(results.makespan)} ticks, ` +
+        `${results.ctxSwitches} context switches (${fmtTicks(results.ctxSwitches * CTX_COST)} ticks), ${fmtTicks(idle)} idle, ` +
+        `short-job p99 ${results.p99Short.toFixed(1)} ticks, throughput ${results.throughput.toFixed(3)} jobs per tick, ` +
+        `average run queue ${results.avgQueue.toFixed(1)}` +
+        (results.rejected > 0 ? `, ${results.rejected} jobs rejected and not drawn` : '') +
+        '.',
+      columns: ['Job', 'Arrival', 'Service', 'Run slices', 'Finished at', 'Latency'],
+      rows: results.jobs
+        .filter((j) => j.admitted)
+        .map((j) => [
+          j.id,
+          fmtTicks(j.arrival),
+          fmtTicks(j.total),
+          sliceText(results.segments, j.id),
+          j.completionTime === null ? 'unfinished' : fmtTicks(j.completionTime),
+          j.completionTime === null ? 'n/a' : fmtTicks(j.completionTime - j.arrival),
+        ]),
+      announce,
+    }
+  }, [results, policyLabel, scenario, announce])
+
   const metricCard = (label: string, value: string, color?: string) => (
     <div
       className="rounded-sm border border-line bg-surface-1 px-3 py-2"
@@ -540,9 +603,11 @@ export default function SchedulerLab() {
             <canvas
               ref={canvasRef}
               role="img"
-              aria-label="CPU scheduling Gantt chart.  Press run to generate."
+              aria-label={`CPU scheduling Gantt chart: ${policyLabel}, ${scenario} scenario.${results ? '' : ' Press run to generate.'}`}
+              aria-describedby={mirrorId}
             />
           </div>
+          <SimMirror id={mirrorId} table={mirrorTable} className="mt-3" />
 
           {!embed && (
             <p className="mt-3 max-w-xl font-mono text-[10px] leading-relaxed text-text-3">

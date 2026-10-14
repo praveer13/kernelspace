@@ -216,6 +216,8 @@ export interface RequestSpec {
   cachedPrefix?: number
   /** First-admission queue delay, preserved across preemption and EPD transfer. */
   observedQueueDelay?: number
+  /** Which tenant sent it (world/faults' tenant-burst tags its requests); absent means the default tenant 0. */
+  tenant?: number
 }
 
 /**
@@ -410,6 +412,29 @@ export interface TickSample {
   queueP95: number
 }
 
+/** One completed request, as the `onFinish` hook reports it (world/faults' latency and tenant readings). */
+export interface FinishedRequest {
+  id: number
+  tenant: number
+  arrival: number
+  prompt: number
+  output: number
+  /** the tick the last token landed */
+  tick: number
+  ttft: number
+  tpot: number
+  sloMet: boolean
+}
+
+/**
+ * A scheduler override (world/faults): replaces the plugged scheduler's call for as long as it is set.
+ * `base` is the plugged driver, so an override can filter the view and delegate.
+ */
+export type SchedOverride = (view: SchedView, base: SchedulerDriver) => SchedAction
+
+/** Ballast sequences hold a shrunk pool's unusable blocks; their ids sit far above any request id. */
+const BALLAST_SEQ_BASE = 1_000_000_000
+
 interface EngineSeq {
   spec: RequestSpec
   prefillLeft: number
@@ -521,6 +546,25 @@ export class Engine {
   cacheReadyOut: RequestSpec[] = []
   violations: string[] = []
 
+  /* Fault hooks (src/lib/world/faults.ts). Every one is inactive until a fault sets it, and an
+   * inactive hook takes no branch that changes a run, so a run with no faults is the run it was. */
+
+  /** set while a scheduler override is active (admission-greedy, a tenant cap) */
+  schedOverride: SchedOverride | null = null
+  /** optional per-completion hook (latency split by tenant and prompt length) */
+  onFinish: ((r: FinishedRequest) => void) | null = null
+  /** scheduler iterations actually run (a straggler's stalled ticks do not count) */
+  iterations = 0
+  private usable: number | null = null
+  private ballast: { id: number; blocks: number }[] = []
+  private ballastBlocks = 0
+  private nextBallast = BALLAST_SEQ_BASE
+  private drainOverride: number | null = null
+  private drainCredit = 0
+  private slowEvery = 1
+  private slowFrom = 0
+  private lostIds: number[] = []
+
   constructor(
     cfg: EngineConfig,
     stream: RequestSpec[],
@@ -554,12 +598,130 @@ export class Engine {
   /** Node death: in-flight requests are LOST (their KV dies with the node). */
   kill(): number {
     const lost = this.waiting.length + this.running.length + this.inQueue
+    this.lostIds = this.running.map((s) => s.spec.id)
     this.shed += lost
     this.waiting = []
     this.running = []
     this.inQueue = 0
     this.killed = true
     return lost
+  }
+
+  /**
+   * A fresh node takes a dead one's place (world/faults' `replace-node` fix): the dead node's KV and
+   * its stranded intake are discarded, every fault hook is back at its default and the clock joins
+   * the cluster's at `tick`. Counters (completed, shed, ...) stay with the slot, so the fleet's
+   * totals still count the work the dead node lost.
+   */
+  revive(tick: number): void {
+    if (!this.killed) return
+    if (this.intake) while (this.intake.pop() !== null) { /* stranded with the dead node */ }
+    if (this.intakeShadow) while (this.intakeShadow.pop() !== null) { /* mirror of the above */ }
+    for (const id of this.lostIds) this.mgr.free(id)
+    this.lostIds = []
+    for (const b of this.ballast) this.mgr.free(b.id)
+    this.ballast = []
+    this.ballastBlocks = 0
+    this.usable = null
+    this.drainOverride = null
+    this.drainCredit = 0
+    this.slowEvery = 1
+    this.schedOverride = null
+    this.tick = tick
+    this.killed = false
+  }
+
+  /**
+   * Usable KV blocks (pool-shrink: a misconfigured memory fraction). The config, and so the
+   * scheduler's `memCap`, still claims `numBlocks`; ballast sequences hold the rest of the pool,
+   * taking blocks as they come free, so allocations fail as if the pool were `blocks` big.
+   * `null` restores the full pool.
+   */
+  setUsableBlocks(blocks: number | null): void {
+    if (blocks === this.usable) return
+    this.usable = blocks === null ? null : Math.max(0, Math.min(this.cfg.numBlocks, Math.floor(blocks)))
+    this.holdBallast()
+  }
+
+  get usableBlocks(): number {
+    return this.usable ?? this.cfg.numBlocks
+  }
+
+  /** Keep the ballast at numBlocks - usable: release it when the pool grows back, take free blocks while short. */
+  private holdBallast(): void {
+    const target = this.usable === null ? 0 : this.cfg.numBlocks - this.usable
+    while (this.ballastBlocks > target && this.ballast.length > 0) {
+      const b = this.ballast.pop() as { id: number; blocks: number }
+      this.mgr.free(b.id)
+      this.ballastBlocks -= b.blocks
+    }
+    const want = Math.min(target - this.ballastBlocks, this.mgr.freeBlocks())
+    if (want > 0) {
+      const id = this.nextBallast++
+      if (this.mgr.allocate(id, want * this.cfg.blockSize)) {
+        this.ballast.push({ id, blocks: want })
+        this.ballastBlocks += want
+      }
+    }
+  }
+
+  /** Requests drained from intake per tick (drain-stall); fractions accrue across ticks. `null` restores the configured rate. */
+  setDrain(perTick: number | null): void {
+    if (perTick === this.drainOverride) return
+    this.drainOverride = perTick === null ? null : Math.max(0, perTick)
+    this.drainCredit = 0
+  }
+
+  /** The drain this engine runs at now, requests per tick. */
+  get drainRate(): number {
+    return this.drainOverride ?? this.drainPerTick
+  }
+
+  /** Requests sitting in the intake queue. */
+  get intakeDepth(): number {
+    return this.inQueue
+  }
+
+  /** Step slowdown (straggler): from now, only every `every`-th tick runs an iteration. 1 or `null` restores full speed. */
+  setSlowdown(every: number | null): void {
+    const e = every === null ? 1 : Math.max(1, Math.floor(every))
+    if (e === this.slowEvery) return
+    this.slowEvery = e
+    this.slowFrom = this.tick
+  }
+
+  get slowdown(): number {
+    return this.slowEvery
+  }
+
+  /** The tenant that sent request `id` (0 when untagged or unknown). */
+  tenantOf(id: number): number {
+    return this.byId.get(id)?.tenant ?? 0
+  }
+
+  private drainBudget(): number {
+    if (this.drainOverride === null) return this.drainPerTick
+    this.drainCredit += this.drainOverride
+    const n = Math.floor(this.drainCredit)
+    this.drainCredit -= n
+    return n
+  }
+
+  private sample(t: number): void {
+    this.recorder?.({
+      tick: t,
+      waiting: this.waiting.length,
+      running: this.running.length,
+      completed: this.completed,
+      sloMet: this.sloMet,
+      shed: this.shed,
+      autoPreempts: this.autoPreempts,
+      capMisses: this.capacityMisses,
+      freeBlocks: this.mgr.freeBlocks(),
+      ttftP95: this.ttftP95(),
+      tpotP95: this.tpotP95(),
+      queueP95: this.queueP95(),
+    })
   }
 
   /**
@@ -618,8 +780,16 @@ export class Engine {
     for (; this.streamIdx < this.stream.length && this.stream[this.streamIdx].arrival <= t; this.streamIdx++) {
       this.inject(this.stream[this.streamIdx])
     }
+    if (this.slowEvery > 1 && (t - this.slowFrom) % this.slowEvery !== 0) {
+      // a straggler's stalled tick: arrivals land, nothing else moves
+      this.tick++
+      this.sample(t)
+      return
+    }
+    this.iterations++
     if (this.intake) {
-      for (let i = 0; i < this.drainPerTick; i++) {
+      const drain = this.drainBudget()
+      for (let i = 0; i < drain; i++) {
         const id = this.intake.pop()
         const shadowId = this.intakeShadow?.pop()
         if (this.intakeShadow && id !== shadowId) {
@@ -631,6 +801,7 @@ export class Engine {
         if (spec) this.waiting.push(spec)
       }
     }
+    if (this.usable !== null) this.holdBallast()
     const view: SchedView = {
       iter: t,
       maxRunning: this.cfg.maxRunning,
@@ -645,7 +816,7 @@ export class Engine {
         prefillLeft: s.prefillLeft,
       })),
     }
-    const action = this.sched.schedule(view)
+    const action = this.schedOverride ? this.schedOverride(view, this.sched) : this.sched.schedule(view)
 
     // legality
     const waitingIds = new Set(this.waiting.map((r) => r.id))
@@ -756,26 +927,24 @@ export class Engine {
         const ttftOk = (s.ttft ?? Infinity) <= this.cfg.sloTtft
         const itlOk = this.cfg.sloItl === undefined || (s.maxGap ?? 0) <= this.cfg.sloItl
         if (ttftOk && itlOk) this.sloMet++
+        this.onFinish?.({
+          id: s.spec.id,
+          tenant: s.spec.tenant ?? 0,
+          arrival: s.spec.arrival,
+          prompt: s.spec.prompt,
+          output: s.spec.output,
+          tick: t,
+          ttft: this.ttfts[this.ttfts.length - 1],
+          tpot: this.tpots[this.tpots.length - 1],
+          sloMet: ttftOk && itlOk,
+        })
       } else {
         still.push(s)
       }
     }
     this.running = still
     this.tick++
-    this.recorder?.({
-      tick: t,
-      waiting: this.waiting.length,
-      running: this.running.length,
-      completed: this.completed,
-      sloMet: this.sloMet,
-      shed: this.shed,
-      autoPreempts: this.autoPreempts,
-      capMisses: this.capacityMisses,
-      freeBlocks: this.mgr.freeBlocks(),
-      ttftP95: this.ttftP95(),
-      tpotP95: this.tpotP95(),
-      queueP95: this.queueP95(),
-    })
+    this.sample(t)
   }
 
   stats(): EngineStats {
@@ -823,7 +992,8 @@ export function routerLabel(router: RouterKind): string {
 }
 
 const PREFIX_CACHE_ENTRIES = 6
-const PREFIX_LOAD_GUARD = 3
+/** Prefix affinity only considers workers within this many requests of the least loaded one. */
+export const PREFIX_LOAD_GUARD = 3
 const COMPACT_SHARED_ROOT = 128
 
 function tokenPrefixLength(a: readonly number[], b: readonly number[]): number {
@@ -842,7 +1012,7 @@ interface PrefixEntry {
  * leaf per long shared root models a compressed radix branch without
  * duplicating every chat turn in this fleet-level simulator.
  */
-class WorkerPrefixCache {
+export class WorkerPrefixCache {
   private clock = 0
   private entries: PrefixEntry[] = []
   private readonly capacity: number
@@ -901,6 +1071,82 @@ class WorkerPrefixCache {
   }
 }
 
+/** A live worker the router may send a request to, with the requests it already holds. */
+export interface RouteCandidate {
+  index: number
+  load: number
+}
+
+/**
+ * The prefix-affinity choice (docs/specs/wave-2.md §10.3): among the candidates within `PREFIX_LOAD_GUARD` of the
+ * least loaded, the one whose cache holds the longest prefix of the prompt; ties go to the lighter load, then the
+ * lower index. `matchOf` is asked once per eligible worker, in candidate order. The reference router and the
+ * wasm router both choose through this, so they differ only in the cache behind `matchOf`.
+ */
+export function choosePrefixWorker(
+  candidates: readonly RouteCandidate[],
+  matchOf: (index: number) => number,
+): { index: number; hit: number } {
+  const minLoad = Math.min(...candidates.map((candidate) => candidate.load))
+  const eligible = candidates.filter((candidate) => candidate.load <= minLoad + PREFIX_LOAD_GUARD)
+  let chosen = eligible[0]
+  let chosenHit = matchOf(chosen.index)
+  for (const candidate of eligible.slice(1)) {
+    const hit = matchOf(candidate.index)
+    if (
+      hit > chosenHit ||
+      (hit === chosenHit && candidate.load < chosen.load) ||
+      (hit === chosenHit && candidate.load === chosen.load && candidate.index < chosen.index)
+    ) {
+      chosen = candidate
+      chosenHit = hit
+    }
+  }
+  return { index: chosen.index, hit: chosenHit }
+}
+
+/**
+ * The cluster's prefix-cache hook, beside `RouterKind`. It owns one cache per worker and answers where a prompt
+ * goes: with several candidates it chooses by prefix affinity, with one (round-robin and join-shortest-queue have
+ * already chosen) it only reports that worker's hit. Either way the routed worker's cache is touched.
+ * `makeRefRouter` is the reference; `makeWasmRouter` (pages/fleet/drivers.ts) drives the learner's radix cache.
+ */
+export interface RouterDriver {
+  name: string
+  /** `hit` is the tokens of `tokens` the chosen worker already holds, before this request is counted. */
+  route(tokens: readonly number[], candidates: readonly RouteCandidate[]): { index: number; hit: number }
+  /**
+   * Worker `index` finished prefilling `tokens`, so its cache holds them. Absent for a driver that already
+   * inserted the prompt when it routed it.
+   */
+  warm?(index: number, tokens: readonly number[]): void
+  /** A fresh node took worker `index`'s place: its cache is empty. */
+  reset(index: number): void
+  /** Entries worker `index`'s cache holds (the cluster panel's cache column). */
+  size(index: number): number
+}
+
+/** The reference router: the routing-side `WorkerPrefixCache` of each worker, filled as prefills finish. */
+export function makeRefRouter(workers: number, capacity = PREFIX_CACHE_ENTRIES): RouterDriver {
+  const caches = Array.from({ length: workers }, () => new WorkerPrefixCache(capacity))
+  return {
+    name: 'reference',
+    route(tokens, candidates) {
+      const chosen =
+        candidates.length === 1
+          ? { index: candidates[0].index, hit: caches[candidates[0].index].match(tokens) }
+          : choosePrefixWorker(candidates, (index) => caches[index].match(tokens))
+      caches[chosen.index].match(tokens, true)
+      return chosen
+    },
+    warm: (index, tokens) => caches[index].install(tokens),
+    reset: (index) => {
+      caches[index] = new WorkerPrefixCache(capacity)
+    },
+    size: (index) => caches[index]?.size ?? 0,
+  }
+}
+
 export interface ClusterStats {
   completed: number
   sloMet: number
@@ -932,15 +1178,16 @@ export class Cluster {
   private cacheHitTokens = 0
   private promptTokens = 0
   private stream: RequestSpec[]
-  private prefixCaches: WorkerPrefixCache[]
   public workers: Engine[]
   public router: RouterKind
+  /** The prefix caches behind the router: the reference unless a learner's radix cache is plugged in. */
+  public routerDriver: RouterDriver
 
-  constructor(stream: RequestSpec[], workers: Engine[], router: RouterKind) {
+  constructor(stream: RequestSpec[], workers: Engine[], router: RouterKind, routerDriver?: RouterDriver) {
     this.stream = stream
     this.workers = workers
     this.router = router
-    this.prefixCaches = workers.map(() => new WorkerPrefixCache(PREFIX_CACHE_ENTRIES))
+    this.routerDriver = routerDriver ?? makeRefRouter(workers.length)
   }
 
   get done(): boolean {
@@ -948,7 +1195,7 @@ export class Cluster {
   }
 
   cacheEntries(workerIndex: number): number {
-    return this.prefixCaches[workerIndex]?.size ?? 0
+    return this.routerDriver.size(workerIndex)
   }
 
   private load(index: number): number {
@@ -957,16 +1204,23 @@ export class Cluster {
   }
 
   private pick(request: RequestSpec): { index: number; hit: number } {
-    const alive = this.workers
+    let alive = this.workers
       .map((worker, index) => ({ worker, index, load: this.load(index) }))
       .filter(({ worker }) => !worker.killed)
+    if (this.cordoned.size > 0) {
+      // drain-node: route around cordoned workers while any other is up
+      const open = alive.filter(({ index }) => !this.cordoned.has(index))
+      if (open.length > 0) alive = open
+    }
+
+    const only = (index: number, load: number) => this.routerDriver.route(request.tokens ?? [], [{ index, load }])
 
     if (this.router === 'rr') {
       const chosen = alive[this.rrCursor % alive.length]
       this.rrCursor++
       return {
         index: chosen.index,
-        hit: request.tokens ? this.prefixCaches[chosen.index].match(request.tokens, true) : 0,
+        hit: request.tokens ? only(chosen.index, chosen.load).hit : 0,
       }
     }
 
@@ -976,49 +1230,62 @@ export class Cluster {
       )
       return {
         index: chosen.index,
-        hit: request.tokens ? this.prefixCaches[chosen.index].match(request.tokens, true) : 0,
+        hit: request.tokens ? only(chosen.index, chosen.load).hit : 0,
       }
     }
 
-    const minLoad = Math.min(...alive.map((candidate) => candidate.load))
-    const eligible = alive.filter((candidate) => candidate.load <= minLoad + PREFIX_LOAD_GUARD)
-    let chosen = eligible[0]
-    let chosenHit = this.prefixCaches[chosen.index].match(request.tokens)
-    for (const candidate of eligible.slice(1)) {
-      const hit = this.prefixCaches[candidate.index].match(request.tokens)
-      if (
-        hit > chosenHit ||
-        (hit === chosenHit && candidate.load < chosen.load) ||
-        (hit === chosenHit && candidate.load === chosen.load && candidate.index < chosen.index)
-      ) {
-        chosen = candidate
-        chosenHit = hit
-      }
-    }
-    this.prefixCaches[chosen.index].match(request.tokens, true)
-    return { index: chosen.index, hit: chosenHit }
+    return this.routerDriver.route(request.tokens, alive.map(({ index, load }) => ({ index, load })))
   }
 
-  /** optional per-tick disruption hook (Fleet Week): called before arrivals */
+  /** optional per-tick disruption hook (Fleet Week, world/faults): called before arrivals */
   disrupt: ((c: Cluster, tick: number) => void) | null = null
+
+  private cordoned = new Set<number>()
+
+  /**
+   * Send one arrival through the router to a live worker, as the trace's own arrivals go
+   * (world/faults' tenant-burst uses it). Returns the worker's index, or -1 when none is alive.
+   */
+  route(request: RequestSpec): number {
+    if (!this.workers.some((worker) => !worker.killed)) return -1
+    const { index, hit } = this.pick(request)
+    this.promptTokens += request.prompt
+    this.cacheHitTokens += hit
+    this.workers[index].inject({ ...request, cachedPrefix: hit })
+    return index
+  }
+
+  /** drain-node: the router stops sending new work to `index` (`on = false` lets it back); in-flight work finishes there. */
+  cordon(index: number, on = true): void {
+    if (on) this.cordoned.add(index)
+    else this.cordoned.delete(index)
+  }
+
+  isCordoned(index: number): boolean {
+    return this.cordoned.has(index)
+  }
+
+  /** replace-node: a fresh node takes dead worker `index`'s place, on the cluster's clock and with a cold prefix cache. */
+  revive(index: number): boolean {
+    const worker = this.workers[index]
+    if (!worker?.killed) return false
+    worker.revive(this.tick)
+    this.routerDriver.reset(index)
+    return true
+  }
 
   step(): void {
     const t = this.tick
     this.disrupt?.(this, t)
     for (; this.streamIdx < this.stream.length && this.stream[this.streamIdx].arrival <= t; this.streamIdx++) {
-      if (!this.workers.some((worker) => !worker.killed)) continue
-      const request = this.stream[this.streamIdx]
-      const { index, hit } = this.pick(request)
-      this.promptTokens += request.prompt
-      this.cacheHitTokens += hit
-      this.workers[index].inject({ ...request, cachedPrefix: hit })
+      this.route(this.stream[this.streamIdx])
     }
     for (let index = 0; index < this.workers.length; index++) {
       const worker = this.workers[index]
       if (worker.killed) continue
       worker.step()
       for (const warmed of worker.cacheReadyOut.splice(0)) {
-        if (warmed.tokens) this.prefixCaches[index].install(warmed.tokens)
+        if (warmed.tokens) this.routerDriver.warm?.(index, warmed.tokens)
       }
     }
     this.tick++

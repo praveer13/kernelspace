@@ -225,7 +225,8 @@
     ["t7.leading-signals","Scaling on leading signals","say why a planner scales on queue age…","t7.l5","",[]]
   ],
   "plays": [
-    ["block-placement","Block placement","t1.l4",15]
+    ["block-placement","Block placement","t1.l4",15],
+    ["scheduler","I was the scheduler","t5.l7",20]
   ],
   "claims": [
     ["hw.h100-sxm.hbm-capacity","H100 SXM HBM capacity",80,"GB"],
@@ -371,6 +372,7 @@
     ["zoo.qwen3-5-397b.linear-value-heads","Qwen3.5-397B linear-attention value heads",64,"heads"],
     ["zoo.qwen3-5-397b.linear-key-head-dim","Qwen3.5-397B linear-attention key head dimension (d_k)",128,"dims"],
     ["zoo.qwen3-5-397b.linear-value-head-dim","Qwen3.5-397B linear-attention value head dimension (d_v)",128,"dims"],
+    ["zoo.qwen3-5-397b.state-dtype","Qwen3.5-397B gated-DeltaNet state dtype (mamba_ssm_dtype)","float32",""],
     ["zoo.kimi-linear.layers","Kimi Linear transformer layers",27,"layers"],
     ["zoo.kimi-linear.mla-layers","Kimi Linear MLA (full-attention) layers",7,"layers"],
     ["zoo.kimi-linear.kda-layers","Kimi Linear KDA (linear) layers",20,"layers"],

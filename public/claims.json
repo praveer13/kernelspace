@@ -2350,6 +2350,25 @@
       "ttlDays": 365
     },
     {
+      "id": "zoo.qwen3-5-397b.state-dtype",
+      "kind": "spec",
+      "value": "float32",
+      "label": "Qwen3.5-397B gated-DeltaNet state dtype (mamba_ssm_dtype)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"mamba_ssm_dtype\": \"float32\",",
+        "row": "text_config.mamba_ssm_dtype"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-13",
+      "ttlDays": 365,
+      "boundary": "Four bytes per element: each of the 45 linear layers holds 64 * 128 * 128 * 4 B = 4 MiB, twice the 2 MiB a BF16 state would take. The same file sets dtype bfloat16 for the model, which prices the full-attention KV entries."
+    },
+    {
       "id": "zoo.kimi-linear.layers",
       "kind": "spec",
       "value": 27,
