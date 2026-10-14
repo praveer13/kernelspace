@@ -253,6 +253,42 @@ const choice = (
 /** What the reference run ends with, quoted in the Predict and Modify items. */
 const REFERENCE_RUN = runTrace(REFERENCE)
 
+/**
+ * The two limits on how fast the reference run's engine finishes requests, worked from the scene's own ranges (the
+ * means of its uniform draws, 15 in 100 heavy) for the Predict item's explanation. A request admitted at one iteration
+ * prefills a 128-token chunk an iteration, gets its first token as the last chunk lands, then decodes a token an
+ * iteration (fleet-model.ts `Engine.step`): it holds a slot for its prefill plus its output less one. For each of those
+ * iterations the reference scheduler counts it at its prompt, its 48 tokens of headroom and the tokens decoded so far
+ * (`referenceScheduler`), so `tokenIters` is the pool it takes up over its life.
+ */
+export const LOAD = loadOf()
+
+function loadOf() {
+  const range = (r: { min: number; max: number }) => Array.from({ length: r.max - r.min + 1 }, (_, i) => r.min + i)
+  const mean = (xs: readonly number[], f: (x: number) => number) => xs.reduce((a, x) => a + f(x), 0) / xs.length
+  const outputs = range(SCENE.output)
+  const heavy = SCENE.heavyPct / 100
+  const overPrompts = (f: (p: number) => number) => (1 - heavy) * mean(range(SCENE.light), f) + heavy * mean(range(SCENE.heavy), f)
+  const chunks = (p: number) => Math.ceil(p / SCENE.prefillChunk)
+  const output = mean(outputs, (o) => o)
+  const prefill = overPrompts(chunks)
+  const tokenIters = overPrompts((p) => mean(outputs, (o) => (p + REFERENCE.headroom) * (chunks(p) + o - 1) + ((o - 1) * o) / 2))
+  return { prompt: overPrompts((p) => p), prefill, output, life: prefill + output - 1, tokenIters }
+}
+
+/** The p1 explanation's arithmetic, at the precision it prints. */
+export const P1_ARITHMETIC = (() => {
+  const life = Math.round(LOAD.life)
+  const tokenIters = Math.round(LOAD.tokenIters / 1000) * 1000
+  return {
+    offered: SCENE.requests / SCENE.span,
+    life,
+    slotRate: Number((SCENE.maxRunning / life).toFixed(2)),
+    tokenIters,
+    poolRate: Number((MEM_CAP / tokenIters).toFixed(2)),
+  }
+})()
+
 /** Whale and shorts of the lab's `convoy` check (lib.rs `scn_convoy`): the numbers the first Investigate item works through. */
 const CONVOY = { memCap: 12288, whale: 8192, short: 128, shorts: 88, chunk: 128, slo: 40 } as const
 
@@ -267,7 +303,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     prompt: `${SCENE.requests} requests arrive over ${SCENE.span} iterations at an engine with ${SCENE.maxRunning} slots and room for ${commas(MEM_CAP)} tokens (${SCENE.numBlocks} blocks of ${SCENE.blockSize}). About ${SCENE.heavyPct} in 100 have a prompt of ${commas(SCENE.heavy.min)} to ${commas(SCENE.heavy.max)} tokens; the rest have ${SCENE.light.min} to ${SCENE.light.max}. Each generates ${SCENE.output.min} to ${SCENE.output.max} tokens, and a request counts only if its first token lands within ${SCENE.sloTtft} iterations of its arrival. The reference scheduler admits the shortest prompt first, keeps 48 tokens of headroom per request and never preempts. How many of the ${SCENE.requests} requests count?`,
     unit: 'requests',
     factor: 1.5,
-    explain: `Offered load is ${SCENE.requests} requests in ${SCENE.span} iterations, 0.2 requests an iteration. A request holds its slot for its prefill and about 40 decode iterations (${SCENE.output.min} to ${SCENE.output.max} tokens, mean 39.5), so ${SCENE.maxRunning} slots finish about ${SCENE.maxRunning} / 40 = 0.15 requests an iteration: the engine is overloaded, the queue grows, and late arrivals miss the bound however the queue is ordered. In this run ${REFERENCE_RUN.met} of ${SCENE.requests} count; shortest-first keeps the short prompts moving, which is why that many do.`,
+    explain: `Offered load is ${SCENE.requests} requests in ${SCENE.span} iterations, ${P1_ARITHMETIC.offered} an iteration. A request holds a slot for its prefill (a ${SCENE.prefillChunk}-token chunk an iteration, ${LOAD.prefill.toFixed(1)} iterations on average) and its decode (${LOAD.output} tokens on average), about ${P1_ARITHMETIC.life} iterations, so ${SCENE.maxRunning} slots finish at most ${SCENE.maxRunning} / ${P1_ARITHMETIC.life} = ${P1_ARITHMETIC.slotRate} requests an iteration. The pool binds harder: for each of those iterations the scheduler counts a request at its prompt (${Math.round(LOAD.prompt)} tokens on average), 48 tokens of headroom and what it has decoded, about ${commas(P1_ARITHMETIC.tokenIters)} token-iterations a request, so ${commas(MEM_CAP)} tokens packed full finish at most ${commas(MEM_CAP)} / ${commas(P1_ARITHMETIC.tokenIters)} = ${P1_ARITHMETIC.poolRate} an iteration. Both are under ${P1_ARITHMETIC.offered}, so the queue grows while requests arrive and some wait past the bound; the order decides which. Shortest-first keeps the short prompts moving and leaves the heavy ones for last, where the pool packs worst: two prompts over ${commas(MEM_CAP / 2)} tokens never fit in it together, and this run takes ${commas(REFERENCE_RUN.total)} iterations to finish all ${SCENE.requests}. In this run ${REFERENCE_RUN.met} of ${SCENE.requests} count.`,
   },
   choice('lab06.primm.p2', 'predict', [KC.schedOrder], {
     q: 'You write a scheduler that sorts the waiting requests smallest prompt first, keeps 48 tokens of headroom per running sequence and walks the whole queue each call. It has no starvation guard. Going through the stages in order (1, 2, 3, 4), which check goes red first?',

@@ -8,10 +8,10 @@
  *
  * The template rule (3a-22's Opus check, which labs 04, 06 and 07 apply):
  *   1. Answerable from your own code. The answer is what your `schedule` returns for a view; the view is built so the
- *      choices the six required checks leave free (headroom, preemption) are what separates modules, and the choices
- *      they pin (smallest prompt first, aging) agree across every eligible module.
- *   2. Never from the story alone. For one module the answer differs across seeds, and a plausible bug (`bug`) changes
- *      it, so the question exercises the code path the bug lives in.
+ *      choices the six required checks leave free (headroom, skipping a request that does not fit) are what separates
+ *      modules, and the choices they pin (smallest prompt first, aging) agree across every eligible module.
+ *   2. Never from the story alone. For the reference design the answer differs across seeds, and a plausible bug (`bug`)
+ *      changes it, so the question exercises the code path the bug lives in.
  *   3. At most 12 calls (here 2), every request told in words in `story`; `ask` names what is measured.
  * tests/forge/batching-scheduler.test.ts proves 2 on every template with a fake correct scheduler and a fake with the bug.
  *
@@ -22,12 +22,12 @@
  *   admit-count   Headroom. `scheduler.rs` says no check catches too little headroom, even none. The view's cap sits
  *                 between what a module with no margin admits and what a module that keeps about 48 tokens per
  *                 sequence admits, however it counts that margin (per running request, or also per admitted one).
- *   preempt       Whether, and whom. The reference never preempts, and the traces never need one, so a module that
- *                 never preempts answers `none` here; the template is for the one that does, and it asks the learner
- *                 to know which they wrote. The limit: every module that never preempts answers `none`, so for it this
- *                 template is a constant that the learner can answer without reading code; admit-order and admit-count
- *                 are the two that vary across such modules. The view is over the cap by less than any one request
- *                 holds, so a single victim fixes it, and the oldest and the newest differ.
+ *   walk-past     Whether the walk skips a request that does not fit, or stops there. `scheduler.rs` says "skip — don't
+ *                 stop at — requests that don't fit yet", and no check catches stopping: `starvation`'s longs always
+ *                 fit when they age. Aging, which `starvation` pins, puts an old request first; its prompt does not
+ *                 fit, so a module that skips admits what is behind it and one that stops admits nothing behind it.
+ *                 (It replaces a `preempt` template that every module that never preempts, the reference included,
+ *                 answered `none` on every seed.)
  *
  * Nothing here reads `mem_used`: the bridge ignores the header's field (`let _ = mem_used`), so a view builds its
  * pressure from `mem_cap` and the running requests' tokens. The header still carries the true sum, for modules that read it.
@@ -41,6 +41,14 @@ import type { ProveV2Spec, ProveV2Template } from '../types'
 export const ROOMY_CAP = 8192
 /** The margin per sequence the reference keeps (scheduler.rs: "about 48 tokens"). */
 export const MARGIN = 48
+/** The margin per sequence `walk-past`'s cap leaves room for: twice the reference's, so headroom is never what it asks. */
+export const WIDE_MARGIN = 2 * MARGIN
+/**
+ * How long `walk-past`'s old requests have waited, at least. `starvation`'s three longs wait from iteration 0 in a
+ * 2,500-iteration run and need about 40 to finish (8 of prefill, 32 of decode), so a module whose age limit lets them
+ * finish ages anything that has waited 2,600 iterations.
+ */
+export const OLD_WAIT = 2600
 
 const START = 'Start your scheduler fresh (`init`).'
 
@@ -218,32 +226,58 @@ export const ADMIT_COUNT: ProveV2Template = {
 }
 
 /**
- * `preempt`: whom the module preempts when the running requests hold more than the cap. Three or four requests run,
- * none waits, and the total is over the cap by 5 to 60 tokens: less than any one request holds (each holds more than
- * 120), so preempting one fixes it. Which one is the whole question: the newest has the least work to lose (the
- * engine's own forced preemption takes it), and the oldest differs from it on every seed. A module that never preempts
- * answers `none`.
+ * `walk-past`: the admit list when the request at the head of the line does not fit. One request has waited 2,600 to
+ * 3,000 iterations (`OLD_WAIT`), so aging puts it first in every module that passes `starvation`, and its prompt is 1 to
+ * 300 tokens more than the cap leaves free beside the running requests: it does not fit even with no margin, though it
+ * would fit an empty engine. On about half the seeds a second old request waits as well, with a prompt of 512 to 960
+ * tokens that fits. Three to five young requests (distinct prompts from 64 to 448 in steps of 64, waits under 41)
+ * fill the rest. The cap leaves room for every request but the blocked one at up to 96 tokens a sequence
+ * (`WIDE_MARGIN`), so headroom is not asked and the free slots cut the list. A module that skips what does not fit
+ * admits the old request that fits, then the young ones smallest first; one that stops at the first request that does
+ * not fit admits nothing behind the blocked one, and the reference always admits a young request, so the two differ on
+ * every seed.
  */
-export const PREEMPT: ProveV2Template = {
-  id: 'preempt',
+export const WALK_PAST: ProveV2Template = {
+  id: 'walk-past',
   kcs: [KC.continuousBatching],
-  bug: 'preempting the oldest running request when your module preempts the newest, or the reverse',
+  bug: 'stopping at the first request that does not fit instead of skipping it (scheduler.rs: skip, do not stop at, requests that do not fit yet), so an old request at the head of the line blocks every young one behind it',
   make(seed) {
     const d = draws(seed)
-    const nRun = d(3, 4)
-    const iter = d(60, 150)
-    const ids = pickIds(d, nRun)
-    const running = distinct(d, nRun, 0, iter - 1).map((a, i) => runOf(d, ids[i], a, 120, 420))
-    const over = d(5, 60)
-    const view: View = { iter, maxRunning: nRun + 2, memCap: resident(running) - over, waiting: [], running }
+    const nRun = d(1, 3)
+    const free = d(2, 4)
+    const nYoung = d(3, 5)
+    const withFit = d(0, 1) === 1
+    const nOld = withFit ? 2 : 1
+    const iter = d(3000, 4000)
+    const ids = pickIds(d, nRun + nOld + nYoung)
+    const running = distinct(d, nRun, iter - 400, iter - 41).map((a, i) => runOf(d, ids[i], a, 100, 400))
+    const held = resident(running)
+    // The old requests, oldest first; which of them is the blocked one is drawn.
+    const oldArrivals = distinct(d, nOld, iter - OLD_WAIT - 400, iter - OLD_WAIT)
+    const blockedAt = d(0, nOld - 1)
+    const fitPrompt = withFit ? d(512, 960) : 0
+    const young = distinct(d, nYoung, iter - 40, iter - 1)
+    const sizes = shuffled(d, [64, 128, 192, 256, 320, 384, 448]).slice(0, nYoung)
+    const room = fitPrompt + sizes.reduce((a, p) => a + p, 0) + WIDE_MARGIN * (nRun + free) + d(0, 64)
+    const memCap = held + room
+    // Over what is free by 1 to 300 tokens, and never more than the cap: it waits for room, not forever.
+    const blocked = room + d(1, Math.min(300, held))
+    const old: Req[] = oldArrivals.map((a, i) => ({ id: ids[nRun + i], arrival: a, prompt: i === blockedAt ? blocked : fitPrompt }))
+    const view: View = {
+      iter,
+      maxRunning: nRun + free,
+      memCap,
+      running,
+      waiting: [...old, ...young.map((a, i) => ({ id: ids[nRun + nOld + i], arrival: a, prompt: sizes[i] }))],
+    }
     return {
       calls: ['init', scheduleCall(view)],
-      story: [...viewStory(view), `Together the running requests hold ${resident(running)} tokens, ${over} more than the cap.`],
-      ask: 'Which running requests does your `schedule` preempt, in the order your module lists them? Type none if it preempts nobody.',
+      story: [...viewStory(view), `${free} slots are free.`],
+      ask: 'Which waiting requests does your `schedule` admit, and in what order? Type the ids in the order your module lists them, or none if it admits nobody.',
       answer: 'ids',
     }
   },
-  read: (replies) => listOf(last(replies), 'preempt'),
+  read: (replies) => listOf(last(replies), 'admit'),
 }
 
-export const PROVE2: ProveV2Spec = { templates: [ADMIT_ORDER, ADMIT_COUNT, PREEMPT] }
+export const PROVE2: ProveV2Spec = { templates: [ADMIT_ORDER, ADMIT_COUNT, WALK_PAST] }

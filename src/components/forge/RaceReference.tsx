@@ -160,7 +160,7 @@ function Bestiary({ goodput, rows, seed }: { goodput: number; rows: readonly Bes
   const sentence = placementSentence(goodput, rows)
   return (
     <div className="mt-4" data-testid="bestiary">
-      <h4 className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">where you fall · twelve policies from the Compose dials</h4>
+      <h3 className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">where you fall · twelve policies from the Compose dials</h3>
       <p className="mt-1 text-body-sm text-text-2">
         {sentence} These are twelve settings of the scheduler play&apos;s Compose dials (order, guard, headroom, preempt), run on the same seed
         ({seedLabel(seed)}). They are not production schedulers.
