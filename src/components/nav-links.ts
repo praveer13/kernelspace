@@ -21,7 +21,7 @@ export const DESTINATIONS: readonly Destination[] = [
   { id: 'today', to: '/today', label: 'Today', icon: CalendarCheck, holds: ['/today', '/freshness', '/field-notes'] },
   { id: 'path', to: '/curriculum', label: 'Path', icon: Route, holds: ['/curriculum', '/tracks', '/lesson', '/glossary', '/play', '/errors'] },
   { id: 'build', to: '/forge', label: 'Build', icon: Hammer, holds: ['/forge', '/lab', '/fleet', '/daily', '/week', '/capstone', '/leaderboard'] },
-  { id: 'me', to: '/progress', label: 'Me', icon: UserRound, holds: ['/progress'] },
+  { id: 'me', to: '/me', label: 'Me', icon: UserRound, holds: ['/me', '/progress'] },
 ]
 
 /** What the Build menu lists (a menu from lg up; below lg these live in the hamburger). */

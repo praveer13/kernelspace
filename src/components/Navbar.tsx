@@ -205,7 +205,7 @@ export default function Navbar() {
             </button>
 
             <Link
-              to="/progress"
+              to="/me"
               className="flex items-center gap-2.5"
               aria-label={`Progress ${overallPct}% — highest ring earned ${ring}`}
             >
