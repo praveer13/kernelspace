@@ -20,14 +20,33 @@ import { TILING_CUBE, freshEntropy } from '@/data/plays'
 import { useProgress } from '@/lib/progress'
 import { CUBE_PLAY_ID, checkEvent, choose, freshSession, levelOf, nextLevel, nudge, openViews, practiceSession, predictEvent, predictedOf, recordOf, runOf, toCheck, toDebrief, withChecked, withPrediction } from './session'
 import type { ChoiceControl, CubeSession, NumberControl } from './session'
-import Debrief from './Debrief'
 import Level from './Level'
-import Mirror from './Mirror'
 import type { ItemResult } from '@/lib/items/play'
 
-// The In-production card appears only after the closing debrief, so it loads then; the first paint does not carry it.
+// The first screen is the prediction, so it carries only the session, the level and its item card. The views and their
+// table (Views.tsx, Mirror.tsx), the debriefs (their chips pull in the claim popover) and the In-production card load on
+// demand; the first prediction starts fetching all of them, so they are there when the learner reaches them.
+const loadViews = () => import('./Views')
+const loadMirror = () => import('./Mirror')
+const loadDebrief = () => import('./Debrief')
 const loadCard = () => import('./ProductionCard')
+const Mirror = lazy(loadMirror)
+const Debrief = lazy(loadDebrief)
 const ProductionCard = lazy(loadCard)
+
+/** Room for a debrief while it loads (about its height at phone width), so the page below it does not jump. */
+const DEBRIEF_ROOM = 'min-h-[28rem]'
+
+/** The Suspense fallback while a debrief loads: a status, so a screen reader hears that more is coming. */
+export function DebriefLoading() {
+  return (
+    <div className={DEBRIEF_ROOM}>
+      <p role="status" className="font-mono text-body-sm text-text-3">
+        Loading the debrief…
+      </p>
+    </div>
+  )
+}
 
 /** The Suspense fallback while the card loads: a status, so a screen reader hears that more is coming. */
 export function AfterDebriefLoading() {
@@ -46,6 +65,18 @@ export function AfterDebriefFailed() {
   return (
     <div role="status" className="space-y-3" data-play-error="tiling-cube-card">
       <p className="text-body-sm text-text-2">The card did not load, so you may be offline. Your play is saved; reload to try again.</p>
+      <Button variant="secondary" onClick={() => window.location.reload()}>
+        Reload to try again
+      </Button>
+    </div>
+  )
+}
+
+/** What replaces a debrief when its load failed; the answers were recorded when they were given, and a reload is the retry. */
+export function DebriefFailed() {
+  return (
+    <div role="status" className="space-y-3" data-play-error="tiling-cube-debrief">
+      <p className="text-body-sm text-text-2">The debrief did not load, so you may be offline. Your answers are saved; reload to try again.</p>
       <Button variant="secondary" onClick={() => window.location.reload()}>
         Reload to try again
       </Button>
@@ -78,8 +109,8 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
   const onPredicted = (r: ItemResult) => {
     if (startedAt.current === null) {
       startedAt.current = Date.now()
-      // The learner is in the run: fetch the card now, so it is there when the closing debrief opens.
-      void loadCard().catch(() => undefined)
+      // The learner is in the run: fetch what comes after the prediction now, so it is there when it is wanted.
+      for (const load of [loadViews, loadMirror, loadDebrief, loadCard]) void load().catch(() => undefined)
     }
     recordItems([predictEvent(session, session.at, r)])
     act((s) => withPrediction(s, predictedOf(r, runOf(s).inst)))
@@ -117,7 +148,11 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
   if (session.step === 'closing') {
     return (
       <div className="space-y-6" data-play={TILING_CUBE.id} data-mode={mode} data-phase-now="debrief">
-        <Debrief session={session} kind="closing" onNext={onNext} onAgain={onAgain} mode={mode} />
+        <ErrorBoundary fallback={<DebriefFailed />}>
+          <Suspense fallback={<DebriefLoading />}>
+            <Debrief session={session} kind="closing" onNext={onNext} onAgain={onAgain} mode={mode} />
+          </Suspense>
+        </ErrorBoundary>
         <ErrorBoundary fallback={<AfterDebriefFailed />}>
           <Suspense fallback={<AfterDebriefLoading />}>
             <ProductionCard />
@@ -138,7 +173,11 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
         you launch tiles decides whether the GPU waits on memory. Six levels, each one starting with a guess.
       </p>
       {session.step === 'debrief' ? (
-        <Debrief session={session} kind="level" onNext={onNext} onAgain={onAgain} mode={mode} />
+        <ErrorBoundary fallback={<DebriefFailed />}>
+          <Suspense fallback={<DebriefLoading />}>
+            <Debrief session={session} kind="level" onNext={onNext} onAgain={onAgain} mode={mode} />
+          </Suspense>
+        </ErrorBoundary>
       ) : (
         <Level
           session={session}

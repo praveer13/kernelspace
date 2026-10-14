@@ -219,7 +219,9 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   }
   if (onDemand.length > 0) console.log(`  on demand, not counted: ${onDemand.join(', ')}`)
   if (budgetKb === null) {
-    console.log(`info ${route} closure is ${totalKb.toFixed(1)} KB gzip (reported, not gated${targetKb ? `; figure ${targetKb} KB` : ''})`)
+    // A reported route over its figure says `warn` (still not a failure); under it, or with no figure, `info`.
+    const over = targetKb !== undefined && totalKb > targetKb
+    console.log(`${over ? 'warn' : 'info'} ${route} closure is ${totalKb.toFixed(1)} KB gzip (reported, not gated${targetKb ? `; figure ${targetKb} KB` : ''})`)
     continue
   }
   if (totalKb > budgetKb) {

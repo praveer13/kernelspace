@@ -88,6 +88,8 @@ const times = (x: number): string => `${fixed(x, 1)}×`
 
 export type NumberControl = 'tm' | 'tn' | 'k' | 'stages' | 'm' | 'n' | 'group' | 'seq' | 'd' | 'br'
 export type ChoiceControl = 'dtype' | 'raster'
+/** The element types the cube prices: FP8 against the FP8 ridge, FP16 against the BF16 one (the same tensor rate on H100). */
+export type CubeDtype = 'fp8' | 'fp16'
 export type ControlId = NumberControl | ChoiceControl
 
 /** The scene the steppers move. Fields a level does not use sit at their defaults. */
@@ -97,7 +99,7 @@ export interface Explore {
   /** slab depth */
   k: number
   stages: number
-  dtype: Dtype
+  dtype: CubeDtype
   /** the GEMM's output rows and columns (level 4) */
   m: number
   n: number
@@ -166,12 +168,17 @@ export function stepControl(e: Explore, id: NumberControl, dir: 1 | -1, coarse =
   return normalize({ ...e, [id]: stepOn(LADDERS[id], e[id], dir, coarse ? COARSE : 1) })
 }
 
-export const DTYPES: readonly Dtype[] = ['fp8', 'fp16', 'fp32']
+/**
+ * The element types the control offers. FP32 is not one: an H100 runs FP32 inputs at the TF32 tensor rate (half of BF16
+ * dense) or on CUDA cores, and no registered claim carries that rate, so the cube could only price it against the BF16
+ * ridge, which would be wrong. The model still counts 4-byte elements (tiling.ts) for the item families that ask.
+ */
+export const DTYPES: readonly CubeDtype[] = ['fp8', 'fp16']
 export const RASTERS: readonly Raster[] = ['row', 'grouped']
 
 /** A choice control set to one of its options; anything else leaves the scene as it was. */
 export function chooseControl(e: Explore, id: ChoiceControl, value: string): Explore {
-  if (id === 'dtype') return DTYPES.includes(value as Dtype) ? normalize({ ...e, dtype: value as Dtype }) : e
+  if (id === 'dtype') return DTYPES.includes(value as CubeDtype) ? normalize({ ...e, dtype: value as CubeDtype }) : e
   return RASTERS.includes(value as Raster) ? normalize({ ...e, raster: value as Raster }) : e
 }
 
@@ -213,10 +220,10 @@ export function controlsFor(level: CubeLevel, e: Explore): ControlDef[] {
 
 export const isChoice = (id: ControlId): id is ChoiceControl => id === 'dtype' || id === 'raster'
 
-/** The dtype of the scene: FP8 and INT8 are one byte, FP32 four, everything else the 16-bit default. */
-function dtypeOf(x: unknown): Dtype {
+/** The dtype of the scene: FP8 and INT8 are one byte, everything else the 16-bit default (the cube's items never carry FP32). */
+function dtypeOf(x: unknown): CubeDtype {
   const s = String(x)
-  return s === 'fp8' || s === 'int8' ? 'fp8' : s === 'fp32' ? 'fp32' : 'fp16'
+  return s === 'fp8' || s === 'int8' ? 'fp8' : 'fp16'
 }
 
 const finite = (x: unknown, fallback: number): number => (typeof x === 'number' && Number.isFinite(x) ? x : fallback)
@@ -271,7 +278,7 @@ export function wavesOf(e: Explore): { row: Wave; grouped: Wave; chosen: Wave } 
 
 /**
  * The ridge a scene is held against: the tensor rate of its element type over HBM bandwidth. FP8 runs at the FP8 rate
- * (2 × BF16 dense) and everything else at the BF16 one, the cube's single rule. A hypothetical chip (level 5) scales
+ * (2 × BF16 dense) and FP16 at the BF16 one (the same tensor rate on H100), the cube's single rule. A hypothetical chip (level 5) scales
  * with the share a benchmark sustains.
  */
 export function ridgeOf(e: Explore): { value: number; rate: 'FP8' | 'BF16' } {

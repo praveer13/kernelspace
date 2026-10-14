@@ -13,12 +13,19 @@ import Debrief from '../../src/components/play/tiling-cube/Debrief'
 import Level from '../../src/components/play/tiling-cube/Level'
 import Mirror from '../../src/components/play/tiling-cube/Mirror'
 import Mirror2D from '../../src/components/play/tiling-cube/Mirror2D'
-import TilingCubePlay from '../../src/components/play/tiling-cube/Play'
+import Views from '../../src/components/play/tiling-cube/Views'
+import TilingCubePlay, { DebriefLoading } from '../../src/components/play/tiling-cube/Play'
 import ProductionCard from '../../src/components/play/tiling-cube/ProductionCard'
 import { PLAY_REGISTRY, resolvePlay } from '../../src/components/play/registry'
+import { FORGE_LABS } from '../../src/data/labs'
+import { ALL_LESSONS } from '../../src/data/lessons'
+import { KCS } from '../../src/data/kc'
+import { pathPlan, playStep } from '../../src/lib/learner/paths'
+import { recommend, type RecommendContent, type RecommendState } from '../../src/lib/learner/recommend'
 import {
   CUBE_KCS,
   CUBE_PLAY_ID,
+  DTYPES,
   LADDERS,
   LEVEL_COUNT,
   PREDICT_NSEC,
@@ -48,6 +55,7 @@ import {
   predictedOf,
   readout,
   recordOf,
+  ridgeOf,
   stepControl,
   stepOn,
   tableOf,
@@ -70,7 +78,7 @@ import { PRE_NSEC } from '../../src/lib/learner/prequestions'
 import { gradeItem, resultFor, type ItemResult } from '../../src/lib/items/play'
 import type { Instance, PlayableItem } from '../../src/lib/items/types'
 import { checkCubeBand } from '../../src/lib/world/bands/tiling-cube'
-import { BASE, CUBE_LEVELS, CUBE_PRACTICE_SEED, H100, ctasPerSm, type CubeLevel } from '../../src/lib/world/tiling'
+import { BASE, CUBE_LEVELS, CUBE_PRACTICE_SEED, H100, ctasPerSm, ridge, type CubeLevel } from '../../src/lib/world/tiling'
 import { checkPlay, closureOf, practiceBandOf, type PlayFacts, type PlayWorld } from '../../scripts/verify-plays'
 import { installDom, type DomKit } from '../dom/mini-dom'
 import { makeProfile, startTab } from '../ledger/env'
@@ -159,7 +167,30 @@ describe('registration (§6.3)', () => {
     expect(text).not.toMatch(/from '@\/data\/claims\/lazy|from '\.\.?\/claims\/lazy|data\/claims\/lazy/)
   })
 
-  test('the lesson and the economy see it: a play step follows t4.l6 and the play pays its price', () => {
+  test('the lesson and the economy see it: a play step follows t4.l6 (paths), rule 5 offers it there, and the play pays its price', () => {
+    const content: RecommendContent = { kcs: KCS, lessons: ALL_LESSONS, labs: FORGE_LABS, plays: [TILING_CUBE] }
+    // paths: the step right after the host lesson, on the full ramp (the one path that has t4.l6)
+    const { steps, lessons } = pathPlan('full-ramp', content)
+    const at = steps.indexOf('t4.l6')
+    expect(at).toBeGreaterThan(-1)
+    expect(steps[at + 1]).toBe(playStep('tiling-cube'))
+    expect(pathPlan('full-ramp', { ...content, plays: [] }).steps).not.toContain(playStep('tiling-cube'))
+    // rule 5: the lesson passed and the play not debriefed offers it; debriefed, or before the host, it does not
+    const state = (done: number, plays: RecommendState['plays'] = {}): RecommendState => ({
+      bootDone: true,
+      lessons: Object.fromEntries(lessons.slice(0, done).map((id) => [id, { status: 'done' as const, lastVisitedAt: '2026-10-04T12:00:00.000Z' }])),
+      labs: {},
+      path: 'full-ramp',
+      placement: null,
+      today: null,
+      plays,
+    })
+    const now = '2026-10-05T12:00:00.000Z'
+    const host = lessons.indexOf('t4.l6') + 1
+    expect(recommend(state(host), content, now, 'phone')).toMatchObject({ kind: 'play', ref: 'tiling-cube', to: '/play/tiling-cube', minutes: TILING_CUBE.minutes })
+    expect(recommend(state(host, { 'tiling-cube': { done: true } }), content, now, 'phone').kind).toBe('lesson')
+    expect(recommend(state(host - 1), content, now, 'phone').kind).toBe('lesson')
+    // the economy: its price is the registration's 25 minutes, paid once for the `play:tiling-cube` fact
     expect(PLAY_MINUTES['tiling-cube']).toBe(25)
   })
 })
@@ -423,8 +454,9 @@ describe('the controls and their limits (WCAG 2.5.7, AF3)', () => {
           }
           expect(e[id]).toBe(LADDERS[id][0])
         }
-        for (const d of ['fp8', 'fp16', 'fp32']) {
+        for (const d of DTYPES) {
           e = chooseControl(e, 'dtype', d)
+          expect(e.dtype).toBe(d)
           check()
         }
         for (const r of ['row', 'grouped']) {
@@ -444,7 +476,7 @@ describe('the controls and their limits (WCAG 2.5.7, AF3)', () => {
         const k = next() % 14
         if (k < 10) e = stepControl(e, NUMBER_CONTROLS[k], next() % 2 === 0 ? 1 : -1, next() % 5 === 0)
         else if (k === 10) e = chooseControl(e, 'raster', next() % 2 === 0 ? 'row' : 'grouped')
-        else e = chooseControl(e, 'dtype', ['fp8', 'fp16', 'fp32'][next() % 3])
+        else e = chooseControl(e, 'dtype', DTYPES[next() % DTYPES.length])
         expect(() => tableOf(level, e)).not.toThrow()
         expect(() => wavesOf(e)).not.toThrow()
       }
@@ -467,6 +499,21 @@ describe('the controls and their limits (WCAG 2.5.7, AF3)', () => {
     // a choice that is not an option leaves the scene alone
     expect(chooseControl(e, 'dtype', 'int3')).toBe(e)
     expect(chooseControl(e, 'raster', 'diagonal')).toBe(e)
+  })
+
+  test('the element type offers FP8 and FP16 only: FP32 would need a TF32 rate that no registered claim carries (F14)', () => {
+    expect([...DTYPES]).toEqual(['fp8', 'fp16'])
+    for (const level of CUBE_LEVELS) {
+      const e = exploreFor(level, practiceSession().runs[level.n - 1].inst)
+      expect(chooseControl(e, 'dtype', 'fp32')).toBe(e)
+      // each offered type is priced at a rate a claim carries: FP8 at 2 × BF16 dense, FP16 at BF16 dense
+      expect(ridgeOf({ ...e, chip: undefined, dtype: 'fp8' })).toEqual({ value: ridge('fp8'), rate: 'FP8' })
+      expect(ridgeOf({ ...e, chip: undefined, dtype: 'fp16' })).toEqual({ value: ridge('fp16'), rate: 'BF16' })
+    }
+    expect(ridge('fp8')).toBeCloseTo(2 * ridge('fp16'), 9)
+    // no scene opens on FP32, whatever the item carries
+    const inst = practiceSession().runs[0].inst
+    expect(exploreFor(CUBE_LEVELS[0], { ...inst, params: { ...inst.params, dtype: 'fp32' } }).dtype).toBe('fp16')
   })
 
   test('the group height is offered only to the grouped raster, and no level offers a control it cannot step', () => {
@@ -584,6 +631,53 @@ describe('the DOM table says what the faces draw (§6.3, §6.4)', () => {
   })
 })
 
+describe('the steppers say when a press would change nothing (3b-01 m3)', () => {
+  let dom: DomKit
+  beforeAll(async () => {
+    dom = await installDom()
+  })
+  afterAll(() => dom.uninstall())
+
+  const views = (explore: Explore, onNudge: (id: NumberControl, dir: 1 | -1, coarse: boolean) => void = () => {}) =>
+    createElement(Views, { level: CUBE_LEVELS[3], explore, step: 'explore', mirrorId: 'm', mirror: null, onNudge, onChoose: () => {}, onToCheck: () => {} })
+
+  test('aria-disabled follows stepControl: the ladder end, and the floor normalize holds under M and N', async () => {
+    const base = exploreFor(CUBE_LEVELS[3], practiceSession().runs[3].inst)
+    // The shipped tile ladder tops out at 1,024, the GEMM ladder's first rung, so a lifted floor never sits above it today.
+    // A 2,048 tile (off the ladder, but a scene the model prices) lifts M and N to 2,048: the rung below is 1,536, normalize
+    // puts the value back, and "−" changes nothing although `value <= ladder[0]` is false.
+    const lifted = normalize({ ...base, tm: 2048, tn: 2048, m: 2048, n: 2048 })
+    expect([lifted.m, lifted.n]).toEqual([2048, 2048])
+    expect(LADDERS.m[0]).toBe(1024)
+    expect(stepControl(lifted, 'm', -1).m).toBe(2048)
+    const scenes: Explore[] = [lifted, base, { ...base, m: 4096 }, { ...base, tm: 64, tn: 64, m: 1024, n: 32768 }, { ...base, m: 32768 }]
+    for (const e of scenes) {
+      const m = await dom.mount(views(e))
+      for (const id of ['m', 'n', 'tm', 'tn', 'k', 'group'] as const) {
+        for (const dir of [-1, 1] as const) {
+          const btn = m.container.querySelector(`[data-control="${id}"] [data-step="${dir > 0 ? 'up' : 'down'}"]`)
+          if (!btn) continue
+          const changes = stepControl(e, id, dir)[id] !== e[id]
+          expect([id, dir, btn.getAttribute('aria-disabled') === 'true']).toEqual([id, dir, !changes])
+        }
+      }
+      await m.unmount()
+    }
+  })
+
+  test('the dead button ignores the press and the live one steps', async () => {
+    const base = exploreFor(CUBE_LEVELS[3], practiceSession().runs[3].inst)
+    const lifted = normalize({ ...base, tm: 2048, tn: 2048, m: 2048, n: 2048 })
+    const seen: string[] = []
+    const m = await dom.mount(views(lifted, (id, dir, coarse) => seen.push(`${id}${dir > 0 ? '+' : '-'}${coarse ? 'c' : ''}`)))
+    const press = (dir: 'up' | 'down') => dom.press(m.container.querySelector(`[data-control="m"] [data-step="${dir}"]`) as never)
+    await press('down')
+    await press('up')
+    expect(seen).toEqual(['m+'])
+    await m.unmount()
+  })
+})
+
 describe('the rendered pieces', () => {
   const e = (level: CubeLevel) => exploreFor(level, practiceSession().runs[level.n - 1].inst)
 
@@ -611,30 +705,16 @@ describe('the rendered pieces', () => {
   })
 
   test('the controls are buttons and radios of at least 44 px, none of them a slider or a drag', () => {
-    let s = practiceSession()
-    s = openViews(withPrediction(s, predictedOf(answerItem(s, 0, 64, 'predict'), s.runs[0].inst)))
-    const html = renderToString(
-      createElement(Level, {
-        session: s,
-        level: levelOf(s),
-        mirrorId: 'm',
-        mirror: null,
-        focus: false,
-        onPredicted: () => {},
-        onOpenViews: () => {},
-        onNudge: () => {},
-        onChoose: () => {},
-        onToCheck: () => {},
-        onChecked: () => {},
-        onToDebrief: () => {},
-      }),
-    )
+    const s = practiceSession()
+    const html = renderToString(createElement(Views, { level: levelOf(s), explore: s.explore, step: 'explore', mirrorId: 'm', mirror: null, onNudge: () => {}, onChoose: () => {}, onToCheck: () => {} }))
     expect(html).not.toContain('type="range"')
     expect(html).not.toContain('draggable')
     expect(html).not.toMatch(/onPointer|onMouseMove|onDrag/)
     for (const label of ['Decrease Tm', 'Increase Tm', 'Decrease Tn', 'Increase Tn', 'Decrease k', 'Increase k']) expect(html).toContain(`aria-label="${label}"`)
     expect(html.match(/h-11 w-11/g)?.length).toBe(6)
     expect(html).toContain('type="radio"')
+    expect(html.match(/type="radio"[^>]*value="(\w+)"/g)).toHaveLength(2) // FP8 and FP16: no FP32 radio
+    expect(html).not.toContain('value="fp32"')
     expect(html).toContain('Page Up and Page Down')
     expect(html).toContain('What this model leaves out')
     expect(html).toContain('Answer it now')
@@ -803,6 +883,31 @@ describe('the play as the page renders it', () => {
     expect(html).toContain('href="/play/tiling-cube"')
     expect(html).toContain('data-mode="embed"')
   })
+
+  test('a level whose views have not loaded shows a status that holds their room, and a debrief the same', () => {
+    let s = practiceSession()
+    s = openViews(withPrediction(s, predictedOf(answerItem(s, 0, 64, 'predict'), s.runs[0].inst)))
+    const level = renderToString(
+      createElement(Level, {
+        session: s,
+        level: levelOf(s),
+        mirrorId: 'm',
+        mirror: null,
+        focus: false,
+        onPredicted: () => {},
+        onOpenViews: () => {},
+        onNudge: () => {},
+        onChoose: () => {},
+        onToCheck: () => {},
+        onChecked: () => {},
+        onToDebrief: () => {},
+      }),
+    )
+    expect(level).toContain('Loading the views')
+    expect(level).toContain('min-h-[32rem]')
+    expect(level).not.toContain('data-phase="explore"')
+    expect(renderToString(createElement(DebriefLoading))).toContain('min-h-[28rem]')
+  })
 })
 
 describe('the play, mounted: the steppers move the faces and the table', () => {
@@ -912,11 +1017,21 @@ describe('verify-plays: the cube’s checks (§6.3)', () => {
     expect(checkPlay({ ...f, practiceInBand: false }, world).join('\n')).toContain('practice trace is outside the band')
   })
 
-  test('the closure of /play/tiling-cube is the play, its pieces and the cube’s model, with no worker, no sim, no Fleet engine, and the card lazy', () => {
+  test('the closure of /play/tiling-cube is the first screen: the play, its level, the session and the model, with the views, the table, the debriefs and the card lazy (BF3)', () => {
     const c = closureOf(join(CUBE_DIR, 'Play.tsx'), SRC)
-    for (const f of ['Play.tsx', 'Level.tsx', 'Mirror.tsx', 'Mirror2D.tsx', 'Debrief.tsx', 'session.ts']) expect(c.files).toContain(`src/components/play/tiling-cube/${f}`)
-    for (const f of ['src/data/plays.ts', 'src/lib/world/tiling.ts', 'src/lib/items/families/tiling.ts', 'src/lib/items/families/roofline.ts']) expect(c.files).toContain(f)
-    expect(c.files).not.toContain('src/components/play/tiling-cube/ProductionCard.tsx')
+    for (const f of ['Play.tsx', 'Level.tsx', 'session.ts']) expect(c.files).toContain(`src/components/play/tiling-cube/${f}`)
+    for (const f of ['src/data/plays.ts', 'src/lib/world/tiling.ts', 'src/lib/items/families/tiling.ts', 'src/lib/items/families/roofline.ts', 'src/components/items/ItemCard.tsx']) expect(c.files).toContain(f)
+    // the first screen is a prediction: the steppers and faces, the table, the debriefs and their claim chips, and the card come on demand
+    for (const f of ['Views.tsx', 'Mirror2D.tsx', 'Mirror.tsx', 'Debrief.tsx', 'ProductionCard.tsx']) expect(c.files).not.toContain(`src/components/play/tiling-cube/${f}`)
+    expect(c.files).not.toContain('src/components/sims/SimMirror.tsx')
+    const level = read('Level.tsx')
+    expect(level).toContain("import('./Views')")
+    expect(level).toMatch(/<Suspense fallback={<ViewsLoading \/>}>/)
+    const playSrc = read('Play.tsx')
+    for (const lazyImport of ["import('./Views')", "import('./Mirror')", "import('./Debrief')"]) expect(playSrc).toContain(lazyImport)
+    expect(playSrc.match(/<Suspense fallback={<DebriefLoading \/>}>/g)).toHaveLength(2)
+    // the first prediction starts fetching all four, so they are there when the learner reaches them
+    expect(playSrc).toContain('[loadViews, loadMirror, loadDebrief, loadCard]')
     // the lesson block's module drags Today's session behind it: the play keeps its own copy of the two writes
     expect(c.files).not.toContain('src/lib/learner/item-block.ts')
     expect(c.files).not.toContain('src/lib/learner/today.ts')
