@@ -709,8 +709,8 @@ export default function QuantizerSim() {
       <div className="flex flex-col gap-4">
         {/* ---- row 1: input + tensor ---- */}
         <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
-          {/* input zone */}
-          <section className="rounded-md border border-line bg-surface-1 p-4">
+          {/* input zone (min-w-0: a grid item may shrink below its content, so 320 px never scrolls sideways) */}
+          <section className="min-w-0 rounded-md border border-line bg-surface-1 p-4">
             <div className="mb-2 font-mono text-label uppercase tracking-[0.10em] text-text-3">
               input scalar
             </div>
@@ -824,7 +824,7 @@ export default function QuantizerSim() {
           </section>
 
           {/* tensor zone */}
-          <section className="rounded-md border border-line bg-surface-1 p-4">
+          <section className="min-w-0 rounded-md border border-line bg-surface-1 p-4">
             <div className="mb-2 flex items-center justify-between">
               <span className="font-mono text-label uppercase tracking-[0.10em] text-text-3">load tensor</span>
               <span className="font-mono text-[11px] text-text-3">256 vals</span>
@@ -875,7 +875,7 @@ export default function QuantizerSim() {
                 <Zap size={12} />
                 outlier 47.3 {outlier ? 'ON' : 'off'}
               </button>
-              <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1">
                 <span className="font-mono text-[10px] text-text-3">scale</span>
                 {GROUP_SIZES.map((g) => {
                   const label = g === 256 ? 'tensor' : String(g)
