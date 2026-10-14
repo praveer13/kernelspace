@@ -2852,6 +2852,327 @@
       },
       "verifiedAt": "2026-10-05",
       "ttlDays": 365
+    },
+    {
+      "id": "model.deepseek-v3.routed-experts",
+      "kind": "spec",
+      "value": 256,
+      "unit": "experts",
+      "label": "DeepSeek-V3 routed experts per MoE layer",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"n_routed_experts\": 256,",
+        "row": "n_routed_experts"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "Routed experts only: the config also lists 1 shared expert (n_shared_experts) that every token uses."
+    },
+    {
+      "id": "model.deepseek-v3.experts-per-token",
+      "kind": "spec",
+      "value": 8,
+      "unit": "experts",
+      "label": "DeepSeek-V3 routed experts per token",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_experts_per_tok\": 8,",
+        "row": "num_experts_per_tok"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "The router picks 8 of the 256 routed experts for each token; routing is group-limited (the config lists n_group and topk_group)."
+    },
+    {
+      "id": "production.eplb.rebalance",
+      "kind": "status",
+      "value": "copy the expert with the most load per copy",
+      "label": "DeepSeek EPLB replication rule",
+      "source": {
+        "url": "https://raw.githubusercontent.com/deepseek-ai/EPLB/d52c72d5b2f2fb4c41afbf8eb21366820239913d/eplb.py",
+        "title": "DeepSeek EPLB source at a pinned commit: eplb.py (replicate_experts)",
+        "quote": "redundant_indices = (weight / logcnt).max(dim=-1).indices",
+        "row": "replicate_experts"
+      },
+      "pin": {
+        "repo": "deepseek-ai/EPLB",
+        "ref": "d52c72d5b2f2fb4c41afbf8eb21366820239913d"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "rebalance_experts adds one replica at a time to the logical expert whose load divided by its replica count is highest. It then packs the replicas onto GPUs heaviest first, each onto the lightest GPU that still has a free slot (balanced_packing), within nodes when the expert-group count divides the node count. The repository publishes no release; the pin is a commit."
+    },
+    {
+      "id": "production.vllm.eplb",
+      "kind": "status",
+      "value": "--enable-eplb, num_redundant_experts 0",
+      "label": "vLLM EPLB flag and redundant experts",
+      "source": {
+        "url": "https://docs.vllm.ai/en/v0.31.0/serving/expert_parallel_deployment/",
+        "title": "vLLM v0.31.0 docs: Expert Parallel Deployment (EPLB)",
+        "quote": "--enable-eplb \\ --eplb-config '{\"window_size\":1000,\"step_interval\":3000,\"num_redundant_experts\":2,\"log_balancedness\":true}'",
+        "row": "EPLB Parameters > example"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "Off by default. --eplb-config takes a JSON string; the docs table gives num_redundant_experts as \"Additional global experts per EP rank beyond equal distribution\", default 0, and the example sets 2. EPLB needs expert parallelism (--enable-expert-parallel)."
+    },
+    {
+      "id": "production.sglang.eplb",
+      "kind": "status",
+      "value": "--enable-eplb, --ep-num-redundant-experts 0",
+      "label": "SGLang EPLB flag and redundant experts",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/exec_.py",
+        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/exec_.py (Exec fields)",
+        "quote": "ep_num_redundant_experts: A[ int, \"Allocate this number of redundant experts in expert parallel.\" ] = 0 ep_dispatch_algorithm: A[ Optional[Literal[\"static\", \"dynamic\", \"fake\", \"lp\"]], \"The algorithm to choose ranks for redundant experts in expert parallel.\", ] = None init_expert_location: A[str, \"Initial location of EP experts.\"] = \"trivial\" enable_eplb: A[bool, \"Enable EPLB algorithm\"] = False",
+        "row": "Exec.ep_num_redundant_experts, Exec.enable_eplb"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "Both default off (0 redundant experts, EPLB disabled). The field names are the flags with underscores for hyphens."
+    },
+    {
+      "id": "production.vllm.disagg",
+      "kind": "status",
+      "value": "--kv-transfer-config, kv_role",
+      "label": "vLLM prefill/decode disaggregation setting",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/kv_transfer.py",
+        "title": "vLLM v0.31.0 source: vllm/config/kv_transfer.py (KVTransferConfig)",
+        "quote": "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.\"\"\"",
+        "row": "KVTransferConfig.kv_role"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "A prefill instance runs as kv_producer and a decode instance as kv_consumer, each with a kv_connector, through --kv-transfer-config (a JSON string); the config rejects a connector with no kv_role. There is no single \"disaggregated\" switch."
+    },
+    {
+      "id": "production.sglang.disagg",
+      "kind": "status",
+      "value": "--disaggregation-mode prefill|decode",
+      "label": "SGLang prefill/decode disaggregation flag",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/disagg.py",
+        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/disagg.py (Disagg fields)",
+        "quote": "disaggregation_mode: A[ Literal[\"null\", \"prefill\", \"decode\"], 'Only used for PD disaggregation. \"prefill\" for prefill-only server, and \"decode\" for decode-only server. If not specified, it is not PD disaggregated', ] = \"null\"",
+        "row": "Disagg.disaggregation_mode"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "Off by default (\"null\"). The transfer backend is a second flag (disaggregation_transfer_backend, default mooncake)."
+    },
+    {
+      "id": "bench.checkpoint-engine.sync",
+      "kind": "benchmark",
+      "value": 20,
+      "unit": "s",
+      "label": "checkpoint-engine: update a 1T-parameter model",
+      "source": {
+        "url": "https://raw.githubusercontent.com/MoonshotAI/checkpoint-engine/v0.4.2/README.md",
+        "title": "MoonshotAI/checkpoint-engine v0.4.2 README",
+        "quote": "(1 Trillion parameters) across thousands of GPUs takes about 20s.",
+        "row": "README, first paragraph (Kimi-K2)"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 180,
+      "boundary": "MoonshotAI's own figure for in-place weight update of Kimi-K2. The README gives no byte count, shard count or link bandwidth for it, so it is a cited comparison line and never an input to a calculation."
+    },
+    {
+      "id": "hw.h100-sxm.sm-count",
+      "kind": "spec",
+      "value": 132,
+      "unit": "SMs",
+      "label": "H100 SXM5 SM count",
+      "source": {
+        "url": "https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/",
+        "title": "NVIDIA Hopper Architecture In-Depth (NVIDIA Technical Blog)",
+        "quote": "The H100 SXM5 GPU has 132 SMs, and the PCIe version has 114 SMs.",
+        "row": "H100 SM count"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "The SXM5 module. The full GH100 die has 144 SMs; the PCIe card has 114."
+    },
+    {
+      "id": "hw.h100-sxm.l2",
+      "kind": "spec",
+      "value": 50,
+      "unit": "MB",
+      "label": "H100 L2 cache",
+      "source": {
+        "url": "https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/",
+        "title": "NVIDIA Hopper Architecture In-Depth (NVIDIA Technical Blog)",
+        "quote": "A 50 MB L2 cache in H100 is 1.25x larger than the A100 40 MB L2.",
+        "row": "L2 cache"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "One figure for the whole chip, shared by all SMs; the cube uses it as the window a grouped raster has to fit in."
+    },
+    {
+      "id": "hw.h100-sxm.smem-per-sm",
+      "kind": "spec",
+      "value": 228,
+      "unit": "KiB",
+      "label": "H100 shared memory per SM",
+      "source": {
+        "url": "https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html",
+        "title": "Hopper Tuning Guide (NVIDIA CUDA Toolkit documentation)",
+        "quote": "For devices of compute capability 9.0 (H100 GPUs), shared memory capacity per SM is 228 KB",
+        "row": "Hopper tuning guide > Shared memory"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "The largest carve-out an SM offers. The source writes KB for 1,024-byte units."
+    },
+    {
+      "id": "hw.h100-sxm.smem-per-block",
+      "kind": "spec",
+      "value": 227,
+      "unit": "KiB",
+      "label": "H100 shared memory per thread block",
+      "source": {
+        "url": "https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html",
+        "title": "Hopper Tuning Guide (NVIDIA CUDA Toolkit documentation)",
+        "quote": "For devices of compute capability 9.0 (H100 GPUs), the maximum shared memory per thread block is 227 KB.",
+        "row": "Hopper tuning guide > Shared memory"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "One KiB less than the SM total: CUDA reserves 1 KB of shared memory per thread block. A tile whose slabs exceed this cannot launch."
+    },
+    {
+      "id": "hw.h100-sxm.registers-per-sm",
+      "kind": "spec",
+      "value": 65536,
+      "unit": "32-bit registers",
+      "label": "H100 registers per SM",
+      "source": {
+        "url": "https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html",
+        "title": "Hopper Tuning Guide (NVIDIA CUDA Toolkit documentation)",
+        "quote": "The register file size is 64K 32-bit registers per SM.",
+        "row": "Hopper tuning guide > Occupancy"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "64K registers of 4 bytes is 256 KiB. The tuning guide caps one thread at 255 registers."
+    },
+    {
+      "id": "hw.h100-sxm.fp8-sparse",
+      "kind": "spec",
+      "value": 3958,
+      "unit": "TFLOPS",
+      "label": "H100 SXM FP8 Tensor Core, with sparsity",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/h100/",
+        "title": "NVIDIA H100 Tensor Core GPU",
+        "quote": "3,958 teraFLOPS",
+        "row": "H100 SXM > FP8 Tensor Core (* With sparsity)"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "The datasheet footnote says \"With sparsity\" (2:4 structured). Dense work gets half."
+    },
+    {
+      "id": "hw.h100-sxm.fp8-dense",
+      "kind": "derived",
+      "value": 1979,
+      "unit": "TFLOPS",
+      "label": "H100 SXM FP8 Tensor Core, dense",
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.h100-sxm.fp8-sparse"
+        ],
+        "formula": "floor(fp8Sparse / 2)"
+      },
+      "boundary": "Dense is half the sparse figure, as bf16-dense is. It is within 1 TFLOPS of 2 x 989, the FP8 rule (twice BF16 dense) that RooflineSim and the roofline family use, so the cube shares their FP8 ridge."
+    },
+    {
+      "id": "production.triton.group-size-m",
+      "kind": "status",
+      "value": 8,
+      "unit": "tile rows",
+      "label": "Triton matmul tutorial grouped-raster group size",
+      "source": {
+        "url": "https://raw.githubusercontent.com/triton-lang/triton/v3.8.0/python/tutorials/03-matrix-multiplication.py",
+        "title": "Triton v3.8.0 tutorial: python/tutorials/03-matrix-multiplication.py (get_cuda_autotune_config)",
+        "quote": "{'BLOCK_SIZE_M': 128, 'BLOCK_SIZE_N': 256, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 8}",
+        "row": "get_cuda_autotune_config > GROUP_SIZE_M"
+      },
+      "pin": {
+        "repo": "triton-lang/triton",
+        "ref": "v3.8.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "Every config the tutorial lists for CUDA sets GROUP_SIZE_M to 8; the HIP list sets 4 or 6. The tutorial launches blocks in groups of GROUP_SIZE_M rows before moving to the next column, which is the cube's grouped raster."
+    },
+    {
+      "id": "twin.sglang.treecore",
+      "kind": "status",
+      "value": "rust",
+      "label": "SGLang radix-tree core default",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/environ.py",
+        "title": "SGLang v0.5.21 source: srt/environ.py (SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND)",
+        "quote": "SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND = EnvStr(\"rust\")",
+        "row": "envs.SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "The Rust TreeCore became the default with sgl-project/sglang PR #39627, merged 2026-09-29. The registry falls back to the Python core when its checks fail (Linux only, a supported PyTorch, a supported device, a toolchain or the bundled extension)."
+    },
+    {
+      "id": "twin.vllm.scheduler",
+      "kind": "status",
+      "value": "no prefill or decode phase",
+      "label": "vLLM v1 scheduler: one loop for every request",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/v1/core/sched/scheduler.py",
+        "title": "vLLM v0.31.0 source: vllm/v1/core/sched/scheduler.py (Scheduler.schedule)",
+        "quote": "There's no \"decoding phase\" nor \"prefill phase\" in the scheduler.",
+        "row": "Scheduler.schedule (NOTE on the scheduling algorithm)"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "Each request has a count of computed tokens that catches up with its tokens to compute; schedule() spends one token budget per step across running and waiting requests, so chunked prefill, prefix caching and speculative decoding fall out of one rule."
     }
   ]
 }

@@ -6,3 +6,7 @@
  * A new file under `lazy/` is imported below, and the test fails when one is missing.
  */
 export * from './index'
+import './lazy/moe'
+import './lazy/serving3'
+import './lazy/tiling'
+import './lazy/twins'
