@@ -1,21 +1,30 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ChevronRight, ImagePlus, Loader2, Play, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, Loader2, Play, X } from 'lucide-react'
 import { ClaimValue } from '@/components/ClaimValue'
 import Alert from '@/components/daily/Alert'
 import Debrief from '@/components/daily/Debrief'
 import FixMenu from '@/components/daily/FixMenu'
 import Hypothesis from '@/components/daily/Hypothesis'
 import ProbeBar from '@/components/daily/ProbeBar'
+import { ReceiptEditor, type ReceiptEditorHandle } from '@/components/fleetweek/ReceiptEditor'
+import { RubricReview } from '@/components/fleetweek/RubricReview'
+import { rubricData, type ExemplarAct, type RubricDraft } from '@/data/fleetweek/exemplars'
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots, type SlotState } from '@/pages/fleet/slots'
 import {
+  ACT1_MACHINE,
+  ACT2_MACHINE,
   ACT3_COST_LABEL,
+  TRACE_NOTE,
+  actMeta,
+  citeKeyFor,
   gradeMeasurementSubmission,
   gradeAct3Doc,
   drillCreditsFrom,
   drillKey,
+  machineLine,
   recordActRun,
   recordDrill,
   replayDrill,
@@ -25,6 +34,7 @@ import {
   DRILL_FAULTS_NEEDED,
   HW_MENU,
   INCIDENTS,
+  MIN_VERIFIED_RECEIPTS,
   seedLabel,
   type Act2Choice,
   type ActResult,
@@ -33,10 +43,13 @@ import {
   type DrillGrade,
   type IncidentOption,
   type MeasurementActId,
-  type MeasurementEvidence,
+  type ReceiptEvidence,
 } from '@/lib/fleet-week'
+import { citeToken, parseReceipts, runRecord, uncitedFigures, valuesOf, verifyReceipts, withRunRecord, type ReceiptCheck, type ReceiptRunner } from '@/lib/fleet-receipts'
 import type { RouterKind } from '@/lib/fleet-model'
 import { describeFleetError, openIncidentSession, type IncidentClientSession } from '@/lib/fleet-session'
+import { sha256Hex } from '@/lib/ledger/stable'
+import type { FleetActData, FleetActMeta, Json, RunRecord } from '@/lib/ledger/types'
 import {
   HYPOTHESIS_OPTIONS,
   menuOrderFor,
@@ -52,7 +65,8 @@ import {
 } from '@/lib/world/daily'
 import { FAULT_SHORT, INCIDENT_FAULTS, type FixId, type Hypothesis as HypothesisId, type ProbeId } from '@/lib/world/incident-spec'
 import type { FleetSlotBytes, IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
-import { moduleBytes, runSim, SimTimeoutError } from '@/workers/sim-client'
+import type { SimJob, SimResults } from '@/workers/sim-protocol'
+import { moduleBytes, runSim, runSimWithEntropy, SimTimeoutError } from '@/workers/sim-client'
 import { cn } from '@/lib/utils'
 
 const ACTS = [
@@ -61,10 +75,6 @@ const ACTS = [
   { id: 'business', title: 'Act III — The Business', brief: 'price the hardware, defend the claim — we execute it', xp: XP.fleetWeekAct },
   { id: 'incident', title: 'Act IV — The Incident', brief: 'probe drills on fresh seeds: name the fault, apply the fix', xp: XP.fleetWeekAct },
 ]
-
-const EMPTY_MEASUREMENT_EVIDENCE: NonNullable<
-  ReturnType<typeof useProgress.getState>['fleetWeek']['measurementEvidence']
->[string] = {}
 
 export default function FleetWeek() {
   const actsDone = useProgress((s) => s.fleetWeek.actsDone)
@@ -81,6 +91,10 @@ export default function FleetWeek() {
           recomputed against the simulator, and your incident diagnosis is graded on real telemetry.
           Upload your Forge modules on the <Link to="/fleet" className="text-accent underline">Fleet page</Link> first
           — or run all-reference to see the shape of it.
+        </p>
+        <p className="mt-3 max-w-2xl text-body-sm text-text-2">
+          In Acts I to III every run is saved as a record, and every number in your write-up is a receipt: a cited value that
+          the page checks by re-running that record. Nothing is graded by what the text says, only by whether its numbers reproduce.
         </p>
       </div>
       <div className="mt-10 space-y-6">
@@ -116,20 +130,49 @@ function ActShell({ act, done, children }: { act: (typeof ACTS)[number]; done: b
   )
 }
 
-function ResultPanel({ result }: { result: ActResult }) {
+/** A "cite" button: inserts the receipt token for one value of the run into the analysis. */
+function CiteButton({ what, onClick }: { what: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`cite ${what}`}
+      data-cite
+      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-line bg-surface-2 px-2 font-mono text-[11px] text-info hover:border-line-bright"
+    >
+      cite
+    </button>
+  )
+}
+
+/** What a result panel needs to offer "cite" on its rows: which act's keys they restate, the run and what to do on a click. */
+interface Citing {
+  actId: MeasurementActId
+  record: RunRecord | null
+  onCite(key: string): void
+}
+
+function ResultPanel({ result, citing }: { result: ActResult; citing?: Citing }) {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-4 rounded-md border p-4', result.pass ? 'border-accent/50 bg-accent/10' : result.practice ? 'border-line bg-surface-2' : 'border-amber/50 bg-amber/5')}>
-      <p className={cn('font-mono text-sm', result.pass ? 'text-accent' : result.practice ? 'text-text-2' : 'text-amber')}>
+      <p className={cn('font-mono text-sm', result.pass ? 'font-semibold text-text-1' : result.practice ? 'text-text-2' : 'text-amber')}>
         {result.pass ? 'PASS' : result.practice ? 'PRACTICE' : 'NOT YET'} — {result.headline}
       </p>
-      <p className="mt-1 text-body-sm text-text-2">{result.detail}</p>
-      <div className="mt-3 grid gap-x-6 gap-y-1 font-mono text-[11px] text-text-2 sm:grid-cols-2">
-        {result.metrics.map(([k, v], i) => (
-          <div key={i} className="flex justify-between gap-4">
-            <span className="text-text-2">{k}</span>
-            <span className="text-right text-text-1">{v}</span>
-          </div>
-        ))}
+      <p className={cn('mt-1 text-body-sm', result.pass ? 'text-text-1' : 'text-text-2')}>{result.detail}</p>
+      <div className={cn('mt-3 grid gap-x-6 gap-y-1 font-mono text-[11px] sm:grid-cols-2', result.pass ? 'text-text-1' : 'text-text-2')}>
+        {result.metrics.map(([k, v], i) => {
+          const key = citing ? citeKeyFor(citing.actId, k, v) : null
+          const value = key && citing?.record && Object.hasOwn(citing.record.values, key) ? citing.record.values[key] : undefined
+          return (
+            <div key={i} className="flex items-center justify-between gap-4">
+              <span>{k}</span>
+              <span className="flex items-center gap-1 text-right text-text-1">
+                {v}
+                {key && value !== undefined && citing && <CiteButton what={`${k} ${value}`} onClick={() => citing.onCite(key)} />}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </motion.div>
   )
@@ -155,19 +198,16 @@ function useActRunner(actId: string) {
   const completeAct = useProgress((s) => s.completeFleetWeekAct)
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [result, setResult] = useState<ActResult | null>(null)
+  const [graded, setGraded] = useState<ActResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const busyRef = useRef(false)
-  const report = useCallback((r: ActResult) => {
-    setResult(r)
-    setRunning(false)
-  }, [])
+  /** The write-up's verdict. It passes the act (and records it, with the receipts and the rubric) or says what is missing. */
   const finish = useCallback(
-    (r: ActResult) => {
-      report(r)
-      if (r.pass) completeAct(actId, r.score)
+    (r: ActResult, meta?: FleetActMeta) => {
+      setGraded(r)
+      if (r.pass) completeAct(actId, r.score, meta)
     },
-    [actId, completeAct, report],
+    [actId, completeAct],
   )
   /**
    * Run one act job. A module that traps or spins rejects (the sim client times spinners out), so
@@ -179,6 +219,7 @@ function useActRunner(actId: string) {
     setRunning(true)
     setProgress(0)
     setError(null)
+    setGraded(null)
     try {
       await job()
     } catch (e) {
@@ -188,7 +229,7 @@ function useActRunner(actId: string) {
       setRunning(false)
     }
   }, [])
-  return { running, progress, result, error, report, finish, execute, setRunning, setProgress, setError }
+  return { running, progress, graded, error, finish, execute, setProgress }
 }
 
 /**
@@ -203,17 +244,184 @@ async function recordRun(mode: 'act1' | 'act2', result: ActResult, slots: SlotSt
   }
 }
 
+/* ------------------------------ run records and receipts ------------------------------ */
+
+/** One act run and the record that receipts cite (null when the record could not be made or stored). */
+interface Recorded<R> {
+  result: R
+  record: RunRecord | null
+}
+
+/**
+ * Run one job in the sim worker and save it as a run record in `fw:runs` (docs/specs/wave-3.md §10.2): the job with
+ * its module bytes as hashes, the entropy the worker drew the graded seeds from, and the values the run reported. A
+ * failure to build or store the record never costs the learner their result; it only leaves nothing to cite.
+ */
+async function runRecorded<K extends SimJob['kind']>(act: RunRecord['act'], job: Extract<SimJob, { kind: K }>, onProgress: (fraction: number) => void): Promise<Recorded<SimResults[K]>> {
+  const { result, entropy } = await runSimWithEntropy(job, onProgress)
+  try {
+    const record = await runRecord(act, job, entropy, valuesOf(result), new Date().toISOString())
+    const stored = useProgress.getState().working['fw:runs']
+    const records = Array.isArray(stored) ? (stored as unknown as RunRecord[]) : []
+    useProgress.getState().setWorking('fw:runs', withRunRecord(records, record) as unknown as Json)
+    return { result, record }
+  } catch {
+    return { result, record: null }
+  }
+}
+
+/** A module of this device by the sha256 of its bytes: a session upload first, then what is installed (the components store). */
+async function moduleByHash(sha256: string): Promise<ArrayBuffer | null> {
+  const slots = useSlots.getState().slots
+  for (const m of Object.values(slots)) {
+    if (m && (await sha256Hex(m.bytes)) === sha256) return m.bytes
+  }
+  try {
+    return await (await useProgress.controls.engine()).componentBytes(sha256)
+  } catch {
+    return null
+  }
+}
+
+/** How the page re-runs a record: the sim worker with the record's entropy, and the modules this device holds. */
+const RECEIPT_RUNNER: ReceiptRunner = {
+  run: (job, entropy) => runSim(job, undefined, entropy),
+  bytes: moduleByHash,
+}
+
+/** The cite buttons' side of the editor: the editor's handle, what the last click said, and the click itself. */
+function useCiting(record: RunRecord | null) {
+  const editor = useRef<ReceiptEditorHandle>(null)
+  const [said, setSaid] = useState('')
+  const cite = useCallback(
+    (key: string) => {
+      if (!record || !Object.hasOwn(record.values, key)) return
+      const value = record.values[key]
+      const inserted = editor.current?.insert(citeToken(record.id, key, value)) ?? false
+      setSaid(inserted ? `Cited ${key} ${value} in your analysis.` : 'Your analysis is full: nothing was inserted.')
+    },
+    [record],
+  )
+  return { editor, said, cite }
+}
+
+const BUTTON = 'min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground'
+const BUTTON_QUIET = 'min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright'
+
+interface WorkbenchProps {
+  act: ExemplarAct
+  label: string
+  hint: ReactNode
+  placeholder: string
+  /** The run the write-up is about, and the record its receipts must cite. */
+  record: RunRecord | null
+  text: string
+  setText(next: string): void
+  editor: RefObject<ReceiptEditorHandle | null>
+  /** What the cite buttons last did, for the live region. */
+  said: string
+  submitLabel: string
+  /** Why the write-up cannot be submitted yet, or null. */
+  blocked: string | null
+  graded: ActResult | null
+  onGrade(evidence: ReceiptEvidence, rubric: FleetActData['rubric'] | undefined): void
+}
+
+/**
+ * The write-up of one act (docs/specs/wave-3.md §10): the analysis with its cite buttons' target, "Check my receipts"
+ * (it re-runs each cited record and marks each value verified or not), the rubric self-review, and the submit. The
+ * receipts are checked when asked and again before a submit whose text has changed since: the grade reads the checks,
+ * never the words.
+ */
+function Workbench({ act, label, hint, placeholder, record, text, setText, editor, said, submitLabel, blocked, graded, onGrade }: WorkbenchProps) {
+  const [checked, setChecked] = useState<{ text: string; checks: ReceiptCheck[] } | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [note, setNote] = useState('')
+  const [rubric, setRubric] = useState<RubricDraft>({})
+  const uncited = useMemo(() => uncitedFigures(text), [text])
+  const receipts = useMemo(() => parseReceipts(text), [text])
+  const current = checked && checked.text === text ? checked.checks : null
+
+  const check = useCallback(async (): Promise<ReceiptCheck[]> => {
+    setChecking(true)
+    setNote('Re-running the cited runs…')
+    try {
+      const stored = useProgress.getState().working['fw:runs']
+      const records = Array.isArray(stored) ? (stored as unknown as RunRecord[]) : []
+      const checks = await verifyReceipts(receipts, records, RECEIPT_RUNNER)
+      setChecked({ text, checks })
+      const ok = checks.filter((c) => c.status === 'verified').length
+      setNote(checks.length === 0 ? 'No receipts in your analysis yet: cite a number first.' : `${ok} of ${checks.length} receipts verified by re-running.`)
+      return checks
+    } catch {
+      setNote('The check could not run. Try again.')
+      return []
+    } finally {
+      setChecking(false)
+    }
+  }, [receipts, text])
+
+  const submit = async () => {
+    if (!record) return
+    const checks = current ?? (await check())
+    onGrade({ runId: record.id, checks, uncited: uncitedFigures(text) }, rubricData(rubric))
+  }
+
+  return (
+    <div className="mt-4 rounded-md border border-line bg-ink p-4" data-workbench={act}>
+      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-1">write-up · every number a receipt</p>
+      {!record && <p className="mt-2 text-body-sm text-text-2">This run could not be saved as a record, so it has nothing to cite. Run it again.</p>}
+      <div className="mt-3">
+        <ReceiptEditor ref={editor} label={label} hint={hint} value={text} onChange={setText} placeholder={placeholder} runId={record?.id ?? null} checks={current} uncited={uncited} />
+      </div>
+      <div role="status" aria-live="polite" className="sr-only" data-cite-live>
+        {said}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => void check()} disabled={checking} className={BUTTON_QUIET} data-check-receipts>
+          {checking ? 'Re-running…' : 'Check my receipts'}
+        </button>
+        <p role="status" aria-live="polite" className="font-mono text-[11px] text-text-2" data-check-note>
+          {note}
+        </p>
+      </div>
+
+      <RubricReview act={act} value={rubric} onChange={setRubric} />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => void submit()} disabled={!record || checking || blocked !== null} className={cn(BUTTON, 'disabled:cursor-not-allowed disabled:opacity-50')} data-submit-writeup>
+          {submitLabel}
+        </button>
+        {blocked && (
+          <p className="max-w-xl text-body-sm text-text-2" data-blocked>
+            {blocked}
+          </p>
+        )}
+      </div>
+      {graded && <ResultPanel result={graded} />}
+    </div>
+  )
+}
+
 /* ------------------------------ ACT 1 ------------------------------ */
 
 function ActEngine() {
   const slots = useSlots((s) => s.slots)
-  const { running, progress, result, error, report, finish, execute, setProgress } = useActRunner('engine')
-  const [traceResult, setTraceResult] = useState<ActResult | null>(null)
+  const { running, progress, graded, error, finish, execute, setProgress } = useActRunner('engine')
+  const [traced, setTraced] = useState<Recorded<ActResult> | null>(null)
+  const text = useProgress((s) => s.fleetWeek.measurementEvidence?.engine?.analysis ?? '')
+  const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
+  const { editor, said, cite } = useCiting(traced?.record ?? null)
   const anyStudent = slots.sched || slots.mgr || slots.queue
+  const trace = traced?.result ?? null
   return (
     <div>
       <p className="text-body-sm text-text-2">
         240 requests, flash crowds included. Your engine ({anyStudent ? 'with your components in it' : 'all-reference for now'}) against the reference engine, full speed. Pass: goodput within 3 points of the reference, with at least one of your scheduler, block manager or intake queue in the engine. Every run draws a fresh graded seed (shown in the result) and the reference re-runs on the same one.
+      </p>
+      <p className="mt-2 max-w-3xl font-mono text-[11px] leading-relaxed text-text-3" data-machine>
+        The machine: {ACT1_MACHINE}. The trace: {TRACE_NOTE}
       </p>
       <RunButton
         running={running}
@@ -221,17 +429,15 @@ function ActEngine() {
         label="run the trace"
         onClick={() =>
           void execute(async () => {
-            const trace = await runSim({ kind: 'act1', modules: moduleBytes(slots) }, setProgress)
-            // an all-reference run is practice: there is nothing of yours to write up
-            setTraceResult(trace.practice ? null : trace)
-            report(trace)
-            await recordRun('act1', trace, slots)
+            const run = await runRecorded('engine', { kind: 'act1', modules: moduleBytes(slots) }, setProgress)
+            setTraced(run)
+            await recordRun('act1', run.result, slots)
           })
         }
       />
       <ActError message={error} />
-      {result && <ResultPanel result={result} />}
-      {result?.practice && (
+      {trace && <ResultPanel result={trace} citing={{ actId: 'engine', record: traced?.record ?? null, onCite: cite }} />}
+      {trace?.practice && (
         <p className="mt-3 text-body-sm text-text-2" data-install-hint>
           <Link to="/forge" className="inline-flex min-h-11 items-center text-info underline underline-offset-2">
             Pick a lab in the Forge
@@ -243,14 +449,38 @@ function ActEngine() {
           .
         </p>
       )}
-      {traceResult && (
-        <MeasurementSubmission
-          actId="engine"
-          traceResult={traceResult}
-          onSubmit={(evidence) => finish(gradeMeasurementSubmission('engine', traceResult, evidence))}
+      {traced && trace && (
+        <Workbench
+          act="engine"
+          label="Your analysis"
+          hint={<MeasurementHint />}
+          placeholder="Cite what the run measured, then explain it: what limited the engine, why requests missed the SLO, and which of your components you would change."
+          record={traced.record}
+          text={text}
+          setText={(next) => setEvidence('engine', { analysis: next })}
+          editor={editor}
+          said={said}
+          submitLabel="submit measurement artifact"
+          blocked={trace.pass ? null : trace.practice ? 'Act I passes only with one of your own components in the engine. You can cite and check receipts on this run now, and submit after a passing run.' : 'The trace has not passed yet, so there is nothing to submit. Receipts can still be checked.'}
+          graded={graded}
+          onGrade={(evidence, rubric) => {
+            const r = gradeMeasurementSubmission('engine', trace, evidence)
+            finish(r, actMeta(r, evidence, rubric))
+          }}
         />
       )}
     </div>
+  )
+}
+
+/** What Acts I and II ask of a write-up. */
+function MeasurementHint() {
+  return (
+    <>
+      Cite each number from the result above with its &ldquo;cite&rdquo; button (or type a token), then explain it. Passing needs the trace pass, at least {MIN_VERIFIED_RECEIPTS} values
+      of this run verified by &ldquo;Check my receipts&rdquo;, and no figure with a unit left outside a receipt. A number you worked out yourself (a ratio, a break-even) is not
+      a receipt: write the arithmetic in words.
+    </>
   )
 }
 
@@ -258,24 +488,31 @@ function ActEngine() {
 
 function ActFleet() {
   const slots = useSlots((s) => s.slots)
-  const { running, progress, result, error, report, finish, execute, setProgress } = useActRunner('fleet')
-  const [traceResult, setTraceResult] = useState<ActResult | null>(null)
+  const { running, progress, graded, error, finish, execute, setProgress } = useActRunner('fleet')
+  const [traced, setTraced] = useState<Recorded<ActResult> | null>(null)
   const [workers, setWorkers] = useState<2 | 4>(2)
   const [router, setRouter] = useState<RouterKind>('jsq')
+  const text = useProgress((s) => s.fleetWeek.measurementEvidence?.fleet?.analysis ?? '')
+  const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
+  const { editor, said, cite } = useCiting(traced?.record ?? null)
+  const trace = traced?.result ?? null
   return (
     <div>
       <p className="text-body-sm text-text-2">
-        A seeded node dies with its in-flight requests somewhere in t=300–500 (which worker and when come from the run's graded seed); at t=600 a flash crowd slams the survivors.
+        A seeded node dies with its in-flight requests somewhere in t=300–500 (which worker and when come from the run&rsquo;s graded seed); at t=600 a flash crowd slams the survivors.
         Pick the redundancy and the routing. Pass: ≥92% completed and ≥40% goodput under disruption.
+      </p>
+      <p className="mt-2 max-w-3xl font-mono text-[11px] leading-relaxed text-text-3" data-machine>
+        Each worker: {ACT2_MACHINE}. The trace: {TRACE_NOTE} The flash crowd adds requests to the 240, and the result shows the total.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3 font-mono text-[12px]">
         <span className="text-text-3">workers</span>
         {[2, 4].map((n) => (
-          <button key={n} onClick={() => setWorkers(n as 2 | 4)} className={cn('rounded border px-2.5 py-1', workers === n ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>{n}</button>
+          <button key={n} aria-pressed={workers === n} onClick={() => setWorkers(n as 2 | 4)} className={cn('min-h-11 min-w-11 rounded border px-2.5 py-1', workers === n ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>{n}</button>
         ))}
         <span className="text-text-3">router</span>
         {(['rr', 'jsq'] as const).map((r) => (
-          <button key={r} onClick={() => setRouter(r)} className={cn('rounded border px-2.5 py-1', router === r ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>{r === 'rr' ? 'round-robin' : 'jsq'}</button>
+          <button key={r} aria-pressed={router === r} onClick={() => setRouter(r)} className={cn('min-h-11 rounded border px-2.5 py-1', router === r ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>{r === 'rr' ? 'round-robin' : 'jsq'}</button>
         ))}
       </div>
       <RunButton
@@ -284,115 +521,34 @@ function ActFleet() {
         label="run with disruption"
         onClick={() =>
           void execute(async () => {
-            const trace = await runSim({ kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress)
-            setTraceResult(trace)
-            report(trace)
-            await recordRun('act2', trace, slots)
+            const run = await runRecorded('fleet', { kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress)
+            setTraced(run)
+            await recordRun('act2', run.result, slots)
           })
         }
       />
       <ActError message={error} />
-      {result && <ResultPanel result={result} />}
-      {traceResult && (
-        <MeasurementSubmission
-          actId="fleet"
-          traceResult={traceResult}
-          onSubmit={(evidence) => finish(gradeMeasurementSubmission('fleet', traceResult, evidence))}
-        />
-      )}
-    </div>
-  )
-}
-
-function MeasurementSubmission({
-  actId,
-  traceResult,
-  onSubmit,
-}: {
-  actId: MeasurementActId
-  traceResult: ActResult
-  onSubmit: (evidence: MeasurementEvidence) => void
-}) {
-  const evidence = useProgress(
-    (s) => s.fleetWeek.measurementEvidence?.[actId] ?? EMPTY_MEASUREMENT_EVIDENCE,
-  )
-  const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
-  const [fileError, setFileError] = useState<string | null>(null)
-  const analysis = evidence.analysis ?? ''
-  const words = analysis.trim() ? analysis.trim().split(/\s+/).length : 0
-
-  return (
-    <div className="mt-4 rounded-md border border-line bg-ink p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-text-1">
-            measurement artifact · required
-          </p>
-          <p className="mt-1 max-w-2xl text-body-sm text-text-2">
-            Open the <Link to="/fleet" className="text-accent underline">Fleet dashboard</Link>, run
-            its practice seed, and capture its six-metric panel (graded seeds are shown with each
-            result here; the Fleet does not replay them). Then explain the measured result and the
-            lever that caused it in 40–150 words.
-          </p>
-        </div>
-        <p className="font-mono text-[10px] text-text-3">
-          rubric · trace 50% · screenshot 15% · analysis 35%
-        </p>
-      </div>
-
-      <label className="mt-3 flex cursor-pointer items-center gap-2 rounded border border-dashed border-line px-3 py-2 font-mono text-[11px] text-text-2 transition-colors hover:border-accent/60 hover:text-text-1">
-        <ImagePlus className="h-4 w-4 text-accent" />
-        {evidence.screenshotName
-          ? `${evidence.screenshotName} · ${Math.ceil((evidence.screenshotBytes ?? 0) / 1024)} KiB`
-          : 'attach dashboard screenshot · PNG / JPEG / WebP'}
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            if (!file) return
-            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size <= 0) {
-              setFileError('Use a non-empty PNG, JPEG, or WebP screenshot.')
-              return
-            }
-            setFileError(null)
-            setEvidence(actId, { screenshotName: file.name, screenshotBytes: file.size })
-            event.target.value = ''
+      {trace && <ResultPanel result={trace} citing={{ actId: 'fleet', record: traced?.record ?? null, onCite: cite }} />}
+      {traced && trace && (
+        <Workbench
+          act="fleet"
+          label="Your analysis"
+          hint={<MeasurementHint />}
+          placeholder="Cite what the run measured, then explain it: what the node death cost, why the survivors did or did not hold, and what your topology bought."
+          record={traced.record}
+          text={text}
+          setText={(next) => setEvidence('fleet', { analysis: next })}
+          editor={editor}
+          said={said}
+          submitLabel="submit measurement artifact"
+          blocked={trace.pass ? null : 'The trace has not passed yet, so there is nothing to submit. Receipts can still be checked.'}
+          graded={graded}
+          onGrade={(evidence, rubric) => {
+            const r = gradeMeasurementSubmission('fleet', trace, evidence)
+            finish(r, actMeta(r, evidence, rubric))
           }}
         />
-      </label>
-      {fileError && <p className="mt-1 font-mono text-[10px] text-danger">{fileError}</p>}
-
-      <textarea
-        value={analysis}
-        onChange={(event) => setEvidence(actId, { analysis: event.target.value })}
-        rows={5}
-        maxLength={1400}
-        placeholder={
-          actId === 'engine'
-            ? 'Name at least two signals, quote a measured number with units, and connect the result to scheduling, admission, batching, headroom, prefill, or intake.'
-            : 'Name at least two signals, quote a measured number with units, and connect the result to routing, workers, redundancy, topology, or node failure.'
-        }
-        className="mt-3 w-full rounded-md border border-line bg-surface-1 p-3 font-mono text-[12px] text-text-1 outline-none placeholder:text-text-3 focus:border-accent/60"
-      />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className={cn('font-mono text-[10px]', words > 150 ? 'text-danger' : 'text-text-3')}>
-          {words}/150 words · ≥2 named signals · ≥1 measured number · ≥1 decision lever
-        </p>
-        <RunButton
-          running={false}
-          label="submit measurement artifact"
-          onClick={() =>
-            onSubmit({
-              analysis,
-              screenshotName: evidence.screenshotName,
-              screenshotBytes: evidence.screenshotBytes,
-            })
-          }
-          disabled={!traceResult.pass}
-        />
-      </div>
+      )}
     </div>
   )
 }
@@ -400,18 +556,19 @@ function MeasurementSubmission({
 /* ------------------------------ ACT 3 ------------------------------ */
 
 function ActBusiness() {
-  const { running, progress, result, error, finish, execute, setProgress } = useActRunner('business')
-  const [evaluation, setEvaluation] = useState<Act3Eval | null>(null)
+  const { running, progress, graded, error, finish, execute, setProgress } = useActRunner('business')
+  const [traced, setTraced] = useState<Recorded<Act3Eval> | null>(null)
   const [choice, setChoice] = useState<string>('b200')
-  const [claim, setClaim] = useState('')
   const doc = useProgress((s) => s.fleetWeek.docText ?? '')
   const setDoc = useProgress((s) => s.setFleetWeekDoc)
+  const { editor, said, cite } = useCiting(traced?.record ?? null)
+  const evaluation = traced?.result ?? null
 
   // the runner's busy ref guards double-clicks and is reset in its finally, so a failed run can be repeated
   const evaluate = useCallback(
     () =>
       execute(async () => {
-        setEvaluation(await runSim({ kind: 'act3' }, setProgress))
+        setTraced(await runRecorded('business', { kind: 'act3' }, setProgress))
       }),
     [execute, setProgress],
   )
@@ -419,31 +576,48 @@ function ActBusiness() {
   return (
     <div>
       <p className="text-body-sm text-text-2">
-        The trace is the Fleet's, drawn fresh for each execution{evaluation ? ` (graded seed ${seedLabel(evaluation.seed)})` : ''}. Three hardware offers are on the table. First execute all three, then pick
-        one, state your expected $/Mtok, and defend it in ≥60 words. We recompute your claim — ±25% tolerance,
-        and the option must meet the SLO.
+        The trace is the Fleet&rsquo;s, drawn fresh for each execution{evaluation ? ` (graded seed ${seedLabel(evaluation.seed)})` : ''}. Three hardware offers are on the table. First execute all three, then pick
+        one and defend it. Passing needs the option you pick to meet the SLO in the execution (goodput of at least 50%) and your $/Mtok for it to be a receipt:
+        cite its cost with the button, and &ldquo;Check my receipts&rdquo; re-runs it.
+      </p>
+      <p className="mt-2 max-w-3xl font-mono text-[11px] leading-relaxed text-text-3" data-machine>
+        Machines: {HW_MENU.map((h) => `${h.id} has ${machineLine(h.cfg)}`).join('; ')}. {TRACE_NOTE}
       </p>
       <RunButton running={running} progress={progress} label="execute all three options" onClick={() => void evaluate()} />
       <ActError message={error} />
-      {evaluation && (
+      {evaluation && traced && (
         <div className="mt-4 space-y-4">
           <div className="overflow-x-auto rounded-md border border-line">
             <table className="w-full font-mono text-[12px]">
               <thead>
                 <tr className="border-b border-line text-left text-text-3">
-                  <th className="p-2.5">option</th><th className="p-2.5">$/hr</th><th className="p-2.5">goodput</th><th className="p-2.5">SLO-met</th><th className="p-2.5">$/Mtok (sim)</th>
+                  <th className="p-2.5">option</th><th className="p-2.5">$/hr</th><th className="p-2.5">goodput</th><th className="p-2.5">SLO-met</th><th className="p-2.5">tokens served</th><th className="p-2.5">$/Mtok (sim)</th>
                 </tr>
               </thead>
               <tbody>
                 {evaluation.perOption.map((o) => {
                   const hw = HW_MENU.find((h) => h.id === o.id)
+                  const costKey = `costPerMtok.${o.id}`
+                  const goodputKey = `goodput.${o.id}`
+                  const record = traced.record
                   return (
                     <tr key={o.id} className={cn('border-b border-line/60', choice === o.id && 'bg-accent/5 text-accent')}>
                       <td className="p-2.5">{hw?.name ?? o.id}{o.id === evaluation.bestValue ? ' ★' : ''}</td>
                       <td className="p-2.5">{hw ? <ClaimValue id={hw.hourlyClaimId} format={(c) => `$${c.value}`} /> : null}</td>
-                      <td className="p-2.5">{o.goodput}%</td>
+                      <td className="p-2.5">
+                        <span className="flex items-center gap-1 whitespace-nowrap">
+                          {o.goodput}%
+                          {record && Object.hasOwn(record.values, goodputKey) && <CiteButton what={`${o.id} goodput ${o.goodput}`} onClick={() => cite(goodputKey)} />}
+                        </span>
+                      </td>
                       <td className="p-2.5">{o.sloMet}/240</td>
-                      <td className="p-2.5">{Number.isFinite(o.costPerMtok) ? `$${o.costPerMtok}` : '—'}</td>
+                      <td className="p-2.5">{o.tokensOut.toLocaleString('en-US')}</td>
+                      <td className="p-2.5">
+                        <span className="flex items-center gap-1 whitespace-nowrap">
+                          {Number.isFinite(o.costPerMtok) ? `$${o.costPerMtok}` : '—'}
+                          {record && Object.hasOwn(record.values, costKey) && <CiteButton what={`${o.id} cost per Mtok ${o.costPerMtok}`} onClick={() => cite(costKey)} />}
+                        </span>
+                      </td>
                     </tr>
                   )
                 })}
@@ -452,34 +626,34 @@ function ActBusiness() {
           </div>
           <p className="font-mono text-[10px] leading-relaxed text-text-3">
             $/hr: B200 is four GPUs at the dated 2026-10 median rental price; the other two are synthetic
-            stand-ins (tap a value for its source). $/Mtok (sim) {ACT3_COST_LABEL}.
+            stand-ins (tap a value for its source). $/Mtok (sim) {ACT3_COST_LABEL}. It is the run&rsquo;s hours times the hourly price, over the tokens served.
           </p>
           <div className="flex flex-wrap items-center gap-2 font-mono text-[12px]">
             <span className="text-text-3">your pick</span>
             {HW_MENU.map((h) => (
-              <button key={h.id} onClick={() => setChoice(h.id)} className={cn('rounded border px-2.5 py-1', choice === h.id ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>{h.id}</button>
+              <button key={h.id} aria-pressed={choice === h.id} onClick={() => setChoice(h.id)} className={cn('min-h-11 min-w-11 rounded border px-2.5 py-1', choice === h.id ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3 hover:text-text-1')}>{h.id}</button>
             ))}
-            <span className="text-text-3">claimed $/Mtok</span>
-            <input value={claim} onChange={(e) => setClaim(e.target.value)} placeholder="e.g. 1.20" className="w-24 rounded border border-line bg-ink px-2 py-1 text-text-1 outline-none focus:border-accent/60" />
           </div>
-          <textarea
-            value={doc}
-            onChange={(e) => setDoc(e.target.value)}
-            rows={5}
-            placeholder="Defend the choice: the operating point on the frontier, why the goodput number holds on this trace, what the cache does to the input cost, what breaks first…"
-            className="w-full rounded-md border border-line bg-ink p-3 font-mono text-[12px] text-text-1 outline-none placeholder:text-text-3 focus:border-accent/60"
-          />
-          <RunButton
-            running={false}
-            label="submit the business case"
-            onClick={() => {
-              const claimNum = Number(claim)
-              finish(gradeAct3Doc(choice, Number.isFinite(claimNum) ? claimNum : -1, doc, evaluation))
+          <Workbench
+            act="business"
+            label="Defend the choice"
+            hint="Cite your pick's $/Mtok and its goodput, then argue: the operating point on the frontier, why the goodput holds on this trace, what moves the cost, and what breaks first."
+            placeholder="I pick … Its goodput is … and its cost is … because …"
+            record={traced.record}
+            text={doc}
+            setText={setDoc}
+            editor={editor}
+            said={said}
+            submitLabel="submit the business case"
+            blocked={null}
+            graded={graded}
+            onGrade={(evidence, rubric) => {
+              const r = gradeAct3Doc(choice, evaluation, evidence)
+              finish(r, actMeta(r, evidence, rubric))
             }}
           />
         </div>
       )}
-      {result && <ResultPanel result={result} />}
     </div>
   )
 }
@@ -527,9 +701,6 @@ function WhyList({ heading, options, picked }: { heading: string; options: Incid
 /** The pick of a finished drill as an index into the fault's menu, or -1 for no pick. */
 const pickedIndex = (options: IncidentOption[], id: string | undefined): number => (id === undefined ? -1 : options.findIndex((o) => o.id === id))
 
-
-const BUTTON = 'min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground'
-const BUTTON_QUIET = 'min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright'
 
 /**
  * Act IV (docs/specs/wave-2.md §9.8): probe drills on unseen seeds. A drill is the Daily's flow on an incident
@@ -772,7 +943,7 @@ function RunButton({ running, progress, label, onClick, disabled }: { running: b
     <button
       onClick={onClick}
       disabled={running || disabled}
-      className="mt-3 inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-4 py-2 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+      className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-4 py-2 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
     >
       {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
       {running ? `executing…${progress ? ` ${Math.round(progress * 100)}%` : ''}` : label}

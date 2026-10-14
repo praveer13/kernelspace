@@ -16,6 +16,7 @@ import {
   makeRequestStream,
   makeRng,
   routerLabel,
+  SIM_TICK_SECONDS,
   type ClusterStats,
   type RouterKind,
   type SchedulerDriver,
@@ -23,7 +24,8 @@ import {
   type SchedView,
 } from '@/lib/fleet-model'
 import { KIND_SLOT } from '@/lib/engine/slots'
-import type { FleetActMeta, FleetRunData, FleetRunResult, IncidentData, IncidentResult } from '@/lib/ledger/types'
+import type { Figure, ReceiptCheck } from '@/lib/fleet-receipts'
+import type { FleetActData, FleetActMeta, FleetRunData, FleetRunResult, IncidentData, IncidentResult } from '@/lib/ledger/types'
 import { incidentScore } from '@/lib/ledger/fold'
 import { sha256Hex } from '@/lib/ledger/stable'
 import { freshSeed, splitmix32u } from '@/lib/rng'
@@ -59,10 +61,16 @@ export interface ActResult {
   values?: Record<string, number>
 }
 
-export interface MeasurementEvidence {
-  analysis: string
-  screenshotName?: string
-  screenshotBytes?: number
+/**
+ * What the page hands the grading of a write-up (docs/specs/wave-3.md §10.3-10.4): the receipts in the analysis as
+ * `verifyReceipts` checked them (each re-run by the page), the figures left outside every token, and the id of the run
+ * record the write-up is about (the trace that is being graded, or the evaluation being defended). Grading reads these
+ * and nothing else of the text: no keyword list, no length rule and no attached image.
+ */
+export interface ReceiptEvidence {
+  runId: string
+  checks: readonly ReceiptCheck[]
+  uncited: readonly Figure[]
 }
 
 export type MeasurementActId = 'engine' | 'fleet'
@@ -144,6 +152,23 @@ const CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefil
 const WORKER_CFG = { numBlocks: 128, blockSize: 16, maxRunning: 12, sloTtft: 40, prefillChunk: 128 }
 const REQ_COUNT = 240
 const SPAN = 900
+
+/**
+ * The machine as a sentence, for the capacity line each act shows (the rubric's first criterion asks for arithmetic on
+ * it, so the numbers it needs are on the page): KV blocks and tokens, running sequences, and the TTFT SLO in
+ * iterations and in time.
+ */
+export function machineLine(cfg: { numBlocks: number; blockSize: number; maxRunning: number; sloTtft: number }): string {
+  const tokens = (cfg.numBlocks * cfg.blockSize).toLocaleString('en-US')
+  const ms = Math.round(cfg.sloTtft * SIM_TICK_SECONDS * 1000)
+  return `${cfg.numBlocks} KV blocks of ${cfg.blockSize} tokens (${tokens} tokens), up to ${cfg.maxRunning} running sequences, TTFT SLO ${cfg.sloTtft} iterations (${ms} ms at ${Math.round(SIM_TICK_SECONDS * 1000)} ms per iteration)`
+}
+
+/** Act I's engine and Act II's workers, as `machineLine` words them (Act III's options print their own). */
+export const ACT1_MACHINE = machineLine(CFG)
+export const ACT2_MACHINE = machineLine(WORKER_CFG)
+/** The trace, in the words the capacity arithmetic needs: the mix of prompts, the outputs, the headroom each request holds. */
+export const TRACE_NOTE = `${REQ_COUNT} requests over ${SPAN} iterations, with three flash crowds of 45. Prompts: 88% are 64–512 tokens and 12% are 768–1,024 (mean about 360). Outputs: 16–96 tokens (mean 56). A running request holds its prompt, what it has decoded and ${HEADROOM_TOKENS} tokens of headroom. Goodput is the share of the ${REQ_COUNT} requests whose first token came inside the SLO.`
 
 /** Requests finished or shed so far, as 0..1 of `total` (cheap enough to poll every few ticks). */
 function drained(e: Engine, total: number): number {
@@ -489,83 +514,102 @@ export function recordActRun(store: ActRunStore, mode: 'act1' | 'act2', result: 
   return true
 }
 
+/* ------------------------------ receipts: the write-up's grade ------------------------------ */
+
+/** Acts I-II need this many distinct values of the graded run verified by re-running it (§10.4). */
+export const MIN_VERIFIED_RECEIPTS = 2
+
+/** Acts I-II's score: this much of it is the trace's, the rest is the receipts (§10.4). */
+const MEASUREMENT_WEIGHTS = { trace: 0.6, receipts: 0.4 }
+/** Act III's score: this much for the cost receipt, the rest for the executed SLO check (§10.4). */
+const BUSINESS_WEIGHTS = { cost: 0.55, slo: 0.45 }
+
+/** The checks that verified a value of `runId`, one per value key: citing the same value twice shows one measurement. */
+export function verifiedFor(checks: readonly ReceiptCheck[], runId: string): ReceiptCheck[] {
+  const seen = new Set<string>()
+  return checks.filter((c) => {
+    if (c.status !== 'verified' || c.receipt.id !== runId || seen.has(c.receipt.key)) return false
+    seen.add(c.receipt.key)
+    return true
+  })
+}
+
 /**
- * Acts I–II are portfolio artifacts, not just benchmark buttons. The trace
- * still supplies half the score; the rest requires visual evidence and a
- * short causal analysis grounded in named metrics and the chosen lever.
+ * The receipt value each metric row of a run restates, by the row's label (§10.1's keys), so every row can offer "cite".
+ * A row that restates no value (a topology's router, an event, the seed) has none. Act II's `lost` is in its node-death event.
  */
-export function gradeMeasurementSubmission(
-  actId: MeasurementActId,
-  traceResult: ActResult,
-  evidence: MeasurementEvidence,
-): ActResult {
-  const analysis = evidence.analysis.trim()
-  const lower = analysis.toLowerCase()
-  const words = analysis ? analysis.split(/\s+/).length : 0
-  const metricTerms = [
-    'ttft',
-    'tpot',
-    'queue',
-    'kv hit',
-    'cache hit',
-    'goodput',
-    'slo',
-    '$/mtok',
-    'cost',
-    'shed',
-    'preempt',
-  ]
-  const decisionTerms =
-    actId === 'engine'
-      ? ['scheduler', 'admission', 'headroom', 'batch', 'prefill', 'intake']
-      : ['router', 'routing', 'worker', 'redundancy', 'jsq', 'round-robin', 'prefix', 'topology', 'node']
-  const metricHits = new Set(metricTerms.filter((term) => lower.includes(term)))
-  const decisionHits = new Set(decisionTerms.filter((term) => lower.includes(term)))
-  const numericClaim = /(?:\d+(?:\.\d+)?\s*(?:%|ms|s\b|iters?\b|workers?\b|tokens?\b)|\$\s*\d)/i.test(
-    analysis,
-  )
-  const screenshotOk =
-    Boolean(evidence.screenshotName?.match(/\.(?:png|jpe?g|webp)$/i)) &&
-    (evidence.screenshotBytes ?? 0) > 0
-  const lengthOk = words >= 40 && words <= 150
-  const analysisOk = lengthOk && metricHits.size >= 2 && decisionHits.size >= 1 && numericClaim
-  const pass = traceResult.pass && screenshotOk && analysisOk
-  const analysisScore =
-    (lengthOk ? 0.35 : Math.min(words / 40, 1) * 0.15) +
-    Math.min(metricHits.size / 2, 1) * 0.25 +
-    Math.min(decisionHits.size, 1) * 0.2 +
-    (numericClaim ? 0.2 : 0)
+const CITE_KEYS: Record<'engine' | 'fleet', Readonly<Record<string, string>>> = {
+  engine: { 'your goodput': 'goodput', 'reference goodput': 'refGoodput', completed: 'completed', shed: 'shed', 'auto-preempts': 'preempts', 'ttft p95': 'ttftP95', 'tpot p95': 'tpotP95', 'queue p95': 'queueP95' },
+  fleet: { topology: 'workers', completed: 'completedPct', goodput: 'goodput', 'shed (node + intake)': 'shed', 'ttft p95': 'ttftP95' },
+}
+
+/** The value key a metric row of Act I or II cites, or null when the row restates none. */
+export function citeKeyFor(actId: MeasurementActId, label: string, text: string): string | null {
+  if (actId === 'fleet' && label === 'event') return text.includes('NODE DEATH') ? 'lost' : null
+  return Object.hasOwn(CITE_KEYS[actId], label) ? CITE_KEYS[actId][label] : null
+}
+
+/** Why a receipt did not verify, in words for the act's list. */
+export const RECEIPT_STATUS_TEXT: Record<ReceiptCheck['status'], string> = {
+  verified: 'verified by re-running',
+  mismatch: 'the re-run gives another value at the decimals written',
+  'too-precise': 'cited with more than 2 decimals, which no act shows',
+  'no-value': 'that run has no value under this name',
+  'no-record': 'no run on this device has this id',
+  tampered: 'the stored run no longer matches its id',
+  'bad-record': 'the stored run is not one an act writes',
+  'module-missing': 'a module of that run is not on this device, so it cannot be re-run here',
+  'run-failed': 'the re-run did not finish',
+}
+
+/**
+ * Acts I-II are portfolio artifacts (docs/specs/wave-3.md §10.4). The trace supplies 0.6 of the score and passes as it
+ * always did (for Act I, one of your own components within 3 points of the reference: `act1Verdict`); the rest is the
+ * write-up, whose numbers are receipts the page has re-run. It passes with the trace pass, at least two values of the
+ * graded run verified, and no figure with a unit left outside a receipt. How the analysis reads is not graded:
+ * a receipt is only as good as the number it carries, and `verifyReceipts` has already compared that.
+ */
+export function gradeMeasurementSubmission(actId: MeasurementActId, traceResult: ActResult, evidence: ReceiptEvidence): ActResult {
+  const act = actId === 'engine' ? 'Act I' : 'Act II'
+  const verified = verifiedFor(evidence.checks, evidence.runId)
+  const uncited = evidence.uncited.length
+  const receiptsOk = verified.length >= MIN_VERIFIED_RECEIPTS && uncited === 0
+  const pass = traceResult.pass && receiptsOk
   const problems = [
     !traceResult.pass ? 'the executable trace gate is not green' : null,
-    !screenshotOk ? 'attach a PNG, JPEG, or WebP dashboard screenshot' : null,
-    !lengthOk ? `analysis is ${words} words; required range is 40–150` : null,
-    metricHits.size < 2 ? `name at least two measured signals (${metricHits.size}/2)` : null,
-    decisionHits.size < 1 ? 'connect the result to the engine or fleet lever you chose' : null,
-    !numericClaim ? 'include at least one measured number with a unit' : null,
+    verified.length < MIN_VERIFIED_RECEIPTS ? `verify at least ${MIN_VERIFIED_RECEIPTS} values of this run with "Check my receipts" (${verified.length} so far)` : null,
+    uncited > 0 ? `cite it or cut it: ${uncited} figure${uncited === 1 ? '' : 's'} with a unit sit${uncited === 1 ? 's' : ''} outside a receipt` : null,
   ].filter(Boolean) as string[]
-
   return {
     pass,
-    score:
-      Math.min(1, traceResult.score) * 0.5 +
-      (screenshotOk ? 0.15 : 0) +
-      Math.min(1, analysisScore) * 0.35,
-    headline: pass
-      ? `measurement artifact accepted — ${words} words, ${metricHits.size} named signals`
-      : problems[0] ?? 'measurement artifact needs another pass',
+    score: Math.min(1, traceResult.score) * MEASUREMENT_WEIGHTS.trace + (receiptsOk ? MEASUREMENT_WEIGHTS.receipts : 0),
+    headline: pass ? `${act} measurement artifact accepted: ${verified.length} receipts verified, no uncited figure` : problems[0] ?? `${act} measurement artifact needs another pass`,
     detail: pass
-      ? 'The executable result, dashboard evidence, and causal explanation now travel together as one portfolio artifact.'
+      ? 'The executable result and the numbers that explain it now travel together: each cited value was reproduced by re-running its run.'
       : problems.join(' · '),
     metrics: [
       ['trace gate', traceResult.pass ? 'pass' : 'not yet'],
-      ['dashboard', screenshotOk ? evidence.screenshotName ?? 'attached' : 'missing'],
-      ['analysis', `${words}/150 words`],
-      ['named signals', `${metricHits.size} (need 2)`],
-      ['decision lever', `${decisionHits.size} (need 1)`],
-      ['measured number', numericClaim ? 'present' : 'missing'],
+      ['receipts verified', `${verified.length} (need ${MIN_VERIFIED_RECEIPTS})`],
+      ['uncited figures', `${uncited} (need 0)`],
     ],
+    ...(traceResult.seed !== undefined ? { seed: traceResult.seed } : {}),
     ...(traceResult.values ? { values: traceResult.values } : {}),
   }
+}
+
+/**
+ * What an act records beside its score (`completeFleetWeekAct`'s meta, §10.4): the run's seed, provenance `unseen`
+ * (the entropy was drawn when the run started), and the receipts, the ids cited and, when the learner scored
+ * themselves, the rubric. The rubric is recorded here and read nowhere in the score.
+ */
+export function actMeta(result: ActResult, evidence: ReceiptEvidence, rubric?: FleetActData['rubric']): FleetActMeta {
+  const ids = [...new Set(evidence.checks.map((c) => c.receipt.id))].slice(0, 20)
+  const data: FleetActData = {
+    receipts: { cited: evidence.checks.length, verified: evidence.checks.filter((c) => c.status === 'verified').length, uncited: evidence.uncited.length },
+    runs: ids,
+    ...(rubric ? { rubric } : {}),
+  }
+  return { ...(typeof result.seed === 'number' ? { seed: result.seed } : {}), provenance: 'unseen', data }
 }
 
 /* ------------------------------ ACT 3 ------------------------------ */
@@ -674,42 +718,42 @@ export function evalAct3(seeds: FleetWeekSeeds, onProgress?: ProgressFn): Act3Ev
   return { seed: seeds.seed, perOption, bestValue: best.id, values }
 }
 
-/** Rubric for the design doc: claims must survive arithmetic and vocabulary. */
-export function gradeAct3Doc(choiceId: string, claimCost: number, doc: string, evaluation: Act3Eval): ActResult {
+/**
+ * Act III's grade (docs/specs/wave-3.md §10.4). It passes when the option you chose meets the SLO in the executed
+ * evaluation (goodput of at least 50 %) and your $/Mtok is a receipt the page re-ran: a token naming the evaluation's
+ * `costPerMtok.<option>` that equals the re-run value at the decimals written. Score 0.55 for the cost and 0.45 for
+ * the SLO. The write-up is not read for words: the 25 % band, the length rule and the term list are gone.
+ */
+export function gradeAct3Doc(choiceId: string, evaluation: Act3Eval, evidence: ReceiptEvidence): ActResult {
   const chosen = evaluation.perOption.find((o) => o.id === choiceId)
   if (!chosen) {
     return { pass: false, score: 0, headline: 'unknown hardware option', detail: '', metrics: [] }
   }
-  const words = doc.trim().split(/\s+/).filter(Boolean).length
-  const vocab = ['goodput', 'slo', 'cache', 'batch', 'frontier', 'pareto', '$/mtok', 'cost', 'shed', 'slo', 'ttft']
-  const hits = new Set(
-    vocab.filter((v) => doc.toLowerCase().includes(v)).values(),
-  )
-  const costOk = Math.abs(claimCost - chosen.costPerMtok) / Math.max(1, chosen.costPerMtok) <= 0.25
+  const costKey = `costPerMtok.${choiceId}`
+  const costOk = verifiedFor(evidence.checks, evidence.runId).some((c) => c.receipt.key === costKey)
   const sloOk = chosen.meetsSlo
-  const docOk = words >= 60 && hits.size >= 3
-  const pass = costOk && sloOk && docOk
+  const pass = costOk && sloOk
+  const uncited = evidence.uncited.length
   const problems = [
     !sloOk ? `your option misses the SLO (goodput ${chosen.goodput}% < 50%)` : null,
-    !costOk ? `claimed $${claimCost}/Mtok vs simulated $${chosen.costPerMtok}/Mtok (>25% off)` : null,
-    !docOk ? `doc too thin: ${words} words (need ≥60) with ${hits.size} vocabulary hits (need ≥3)` : null,
+    !costOk ? `cite your ${choiceId} cost as a receipt (${costKey}) and check it: no verified receipt of it from this evaluation` : null,
   ].filter(Boolean) as string[]
   return {
     pass,
-    score: (costOk ? 0.45 : 0) + (sloOk ? 0.35 : 0) + (docOk ? 0.2 : (hits.size / 3) * 0.2),
+    score: (costOk ? BUSINESS_WEIGHTS.cost : 0) + (sloOk ? BUSINESS_WEIGHTS.slo : 0),
     headline: pass
-      ? `your ${chosen.id} choice holds: ${chosen.goodput}% goodput at $${chosen.costPerMtok}/Mtok`
+      ? `your ${chosen.id} choice holds: ${chosen.goodput}% goodput at $${chosen.costPerMtok}/Mtok, verified`
       : problems[0] ?? 'ungradeable',
     detail: pass
-      ? `best value on this trace was ${evaluation.bestValue} — ${choiceId === evaluation.bestValue ? 'you found it' : 'yours is defensible if the doc argues the constraint'}`
+      ? `best value on this trace was ${evaluation.bestValue}: ${choiceId === evaluation.bestValue ? 'you found it' : 'yours is defensible if the write-up argues the constraint'}${uncited > 0 ? `. ${uncited} figure${uncited === 1 ? '' : 's'} with a unit sit${uncited === 1 ? 's' : ''} outside a receipt: cite it or cut it.` : ''}`
       : problems.join(' · '),
     metrics: [
       ['your pick', choiceId],
       ['simulated $/Mtok', `$${chosen.costPerMtok}`],
-      ['your claim', `$${claimCost}`],
+      ['cost receipt', costOk ? 'verified' : 'not verified'],
       ['goodput', `${chosen.goodput}%`],
       ['best value', evaluation.bestValue],
-      ['doc', `${words} words · vocab ${hits.size}/3`],
+      ['uncited figures', `${uncited}`],
       ['graded seed', seedLabel(evaluation.seed)],
     ],
     seed: evaluation.seed,
