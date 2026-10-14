@@ -859,7 +859,7 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       // `proved` is for a Prove-it v2 that came out right on a named module; anything less is practice, which the codec would otherwise refuse (wave-3.md §3.2).
       const proved = r.provenance === 'proved' && r.data.v === 2 && r.ok && r.wasmSha256 !== undefined
       const data = r.data.v === 2 ? { ...r.data, kcs: r.data.kcs.slice(0, MAX_KCS) } : r.data
-      record([ev(stamp(), 'prove', `prove:${r.labId}`, { ...graded(clamp01(r.score), r.ok, proved ? 'proved' : 'practice', withDefined({ ms: r.ms, wasmSha256: r.wasmSha256 })), data })], [])
+      record([ev(stamp(), 'prove', `prove:${r.labId}`, { ...graded(clamp01(r.score), r.ok, proved ? 'proved' : 'practice', withDefined({ ms: r.ms, wasmSha256: r.wasmSha256, seed: r.seed })), data })], [])
     },
 
     completePlacement: (result: JsonObject) => {

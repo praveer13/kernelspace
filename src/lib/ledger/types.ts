@@ -1142,6 +1142,8 @@ export interface ProveResult {
   provenance?: Extract<Provenance, 'practice' | 'proved'>
   /** The learner's module (lowercase hex SHA-256), required for `proved`. */
   wasmSha256?: string
+  /** Prove-it v2: the uint32 the question was planned from (wave-3.md §7.3), so the event can be replayed. */
+  seed?: number
   data: ProveData
 }
 
