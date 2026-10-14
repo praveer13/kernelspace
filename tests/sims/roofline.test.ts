@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import RooflineSim from '../../src/components/sims/RooflineSim'
 import SimMirror from '../../src/components/sims/SimMirror'
 import { OutcomeChart } from '../../src/components/sims/PhoneOutcome'
-import { ROOFLINE_TASKS } from '../../src/components/sims/roofline.tasks'
+import { PAGED_ATTN, ROOFLINE_TASKS } from '../../src/components/sims/roofline.tasks'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import {
   SimHostContext,
@@ -291,6 +291,41 @@ describe('what the sim reports (and what it does not)', () => {
     for (const k of FLEET_KERNELS) expect(k.flopsG / k.bytesG).toBeCloseTo(k.ai, 9)
   })
 
+  test('the paged-attention row is a prefill chunk: its FLOPs and bytes follow from Llama-3-70B and the chunk, not from the batch', () => {
+    const k = FLEET_KERNELS.find((r) => r.id === 'fleet-paged-attn')!
+    const { layers, qHeads, kvHeads, headDim, gqaGroup, chunk, cached, decodeAI: oneToken, crossChunk } = PAGED_ATTN
+    expect([layers, qHeads, kvHeads, headDim]).toEqual([80, 64, 8, 128]) // the model claims
+    expect(k.label).toBe('paged attention · prefill chunk')
+    expect(gqaGroup).toBe(8)
+    expect(chunk).toBe(32)
+    // QKᵀ and PV: 4 · d FLOPs per query head, query token and cached token, in every layer
+    expect(4 * chunk * cached * headDim * qHeads * layers).toBeCloseTo(k.flopsG * 1e9, -3)
+    // K and V of every cached token, in every layer, at 2 bytes
+    expect(2 * layers * kvHeads * headDim * 2 * cached).toBeCloseTo(k.bytesG * 1e9, -3)
+    expect(Math.round(cached / 100) * 100).toBe(24_400)
+    // decode attention: one query token per read, 2 × (query heads per KV head) ÷ bytes per element
+    expect(oneToken).toBe((2 * (qHeads / kvHeads)) / 2)
+    expect(oneToken * chunk).toBe(k.ai)
+    // the ridge is crossed by more tokens per read, 36 and not 35
+    const ridge = ridgeAI(MACHINES.b200)
+    expect(crossChunk).toBe(36)
+    expect(crossChunk * oneToken).toBeGreaterThanOrEqual(ridge)
+    expect((crossChunk - 1) * oneToken).toBeLessThan(ridge)
+  })
+
+  test('the paged-attention task teaches what moves attention’s intensity, and not batch size or block layout', () => {
+    const t = task('roof.fleet-paged-attn')
+    const words = [t.title, t.predict!.prompt, t.explain!.model, ...t.explain!.ideas, t.note!].join(' ')
+    expect(t.title).toContain('prefill chunk')
+    expect(t.predict!.prompt).toContain('32 tokens of a Llama-3-70B prompt')
+    expect(words).not.toMatch(/block layout and batch size decide|a little more reuse/)
+    expect(t.note).toContain('each sequence reads its own KV')
+    expect(t.note).toContain('same FLOPs, same bytes')
+    expect(t.explain!.model).toContain('36-token chunk would cross the ridge')
+    expect(t.explain!.model).toContain('near 8 FLOP/B')
+    expect(t.explain!.ideas[2]).toContain('a bigger batch would not')
+  })
+
   test('the twelve probes are reported only under the setup their prompt names', () => {
     const none: RooflineEvent[] = [
       { type: 'map', pattern: 'coalesced', occupancyPct: 13 }, // too few warps: the register file limits the map
@@ -452,11 +487,14 @@ describe('predict → run → explain, end to end', () => {
     expect(tol('roof.flash-ai')?.log).toBe(true)
   })
 
-  test('the twelve probes: estimates are a factor, calculations are tight, and the common wrong answers miss', () => {
+  test('the twelve probes: every one is a calculation from its prompt, so the tolerance is tight, and the common wrong answers miss', () => {
     const ok = (id: string, value: number, actual: number) => gradePrediction(task(id).predict!, { value }, actual)!.ok
-    expect(ok('roof.cpu-serial', 30, 50)).toBe(true) // a factor of two is enough for an estimate
-    expect(ok('roof.cpu-serial', 5, 50)).toBe(false)
-    expect(ok('roof.gpu-map', 100, 50)).toBe(true)
+    for (const id of PROBE_IDS) expect(task(id).predict?.kind === 'numeric' && task(id).predict?.log, id).not.toBe(true)
+    expect(ok('roof.cpu-serial', 50, 50)).toBe(true) // 4 µs over 80 ns
+    expect(ok('roof.cpu-serial', 30, 50)).toBe(false) // a guess, not the per-step ratio
+    expect(ok('roof.cpu-serial', 0.02, 50)).toBe(false) // the ratio upside down
+    expect(ok('roof.gpu-map', 50, 50)).toBe(true) // 2 ns over 40 ps
+    expect(ok('roof.gpu-map', 100, 50)).toBe(false)
     expect(ok('roof.gpu-map', 4, 50)).toBe(false)
     expect(ok('roof.gpu-divergence', 6.5, 6.25)).toBe(true)
     expect(ok('roof.gpu-divergence', 8, 6.25)).toBe(false) // the throughput loss, not the lead over the CPU
@@ -477,6 +515,48 @@ describe('predict → run → explain, end to end', () => {
     expect(ok('roof.fleet-decode', 4480, 32)).toBe(false) // GFLOP, not FLOP per byte
     expect(ok('roof.fleet-prefill', 500, 512)).toBe(true)
     expect(ok('roof.fleet-paged-attn', 281, 256)).toBe(false) // the ridge, not the kernel
+    expect(ok('roof.fleet-paged-attn', 8, 256)).toBe(false) // decode attention, one token per read
+  })
+
+  /** Every number a learner needs is in the prompt: pull them out of the text and redo the arithmetic. */
+  test('every graded number of the twelve can be worked out from its prompt alone, within its tolerance', () => {
+    const nums = (id: string): number[] => (task(id).predict as { prompt: string }).prompt.match(/\d[\d,]*(?:\.\d+)?/g)!.map((n) => Number(n.replace(/,/g, '')))
+    const has = (id: string, ...want: number[]) => {
+      for (const w of want) expect(nums(id), `${id} states ${w}`).toContain(w)
+    }
+    const derived: Record<string, number> = {
+      'roof.cpu-serial': (4 * 1000) / 80, // 4 µs per GPU step over 80 ns per CPU step
+      'roof.gpu-map': (2 * 1000) / 40, // 2 ns per CPU element over 40 ps per GPU element
+      'roof.gpu-divergence': 128 / (2.56 * 8),
+      'roof.occupancy': 65_536 / (16 * 32),
+      'roof.coalesce': 100 / (1 + (256 / 128) * (3.35 / 20)),
+      'roof.bank': (1 + (256 / 128) * 32 * (3.35 / 20)) / (1 + (256 / 128) * (3.35 / 20)),
+      'roof.tiers': 20 / 3.35,
+      'roof.pcie': 3350 / 32,
+      'roof.fleet-router': 0.12 / 0.08,
+      'roof.fleet-decode': 4480 / 140,
+      'roof.fleet-paged-attn': 2048 / 8,
+      'roof.fleet-prefill': 71_680 / 140,
+    }
+    has('roof.cpu-serial', 80, 4)
+    has('roof.gpu-map', 2, 40)
+    has('roof.gpu-divergence', 2.56, 128)
+    has('roof.occupancy', 16, 32, 65_536)
+    has('roof.coalesce', 128, 256, 3.35, 20)
+    has('roof.bank', 128, 256, 3.35, 20, 32) // the shared traffic and its bandwidth, once missing (3a-18 review)
+    has('roof.tiers', 20, 3.35)
+    has('roof.pcie', 32, 3.35)
+    has('roof.fleet-router', 0.12, 0.08)
+    has('roof.fleet-decode', 4480, 140)
+    has('roof.fleet-paged-attn', 2048, 8)
+    has('roof.fleet-prefill', 71_680, 140)
+    expect(task('roof.coalesce').predict?.prompt).toContain('add')
+    expect(task('roof.bank').predict?.prompt).toContain('add')
+    expect(Object.keys(derived).sort()).toEqual([...PROBE_IDS].sort())
+    for (const id of PROBE_IDS) {
+      const o = reported(id)
+      expect(gradePrediction(task(id).predict!, { value: derived[id] }, o.value)!.ok, id).toBe(true)
+    }
   })
 
   test('a finished cycle reaches the ledger as a sim-task event with the KCs, and completes the task', async () => {
@@ -882,7 +962,7 @@ describe('RooflineSim reports what the learner does (mounted)', () => {
   test('the B200 fleet table: placing a row switches to the B200, plots the kernel and reports its intensity', async () => {
     const { m, seen } = await mountSim('roofline', { m: 'H100', dtype: 'fp8', batch: 1 })
     expect(text(m.container)).toContain('Roofline for H100 at FP8')
-    await dom.press(button(m.container, 'place paged attention on B200'))
+    await dom.press(button(m.container, 'place paged attention · prefill chunk on B200'))
     expect(seen).toEqual([{ key: 'roof.fleet-paged-attn', value: 256, unit: 'FLOP/B' }])
     expect(text(m.container)).toContain('Roofline for B200 at FP16')
     expect(text(m.container)).toContain('placed · AI 256 F/B · bandwidth-bound')
