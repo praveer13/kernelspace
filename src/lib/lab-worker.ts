@@ -10,11 +10,14 @@
  * `timeout`, its worker is terminated, and a fresh worker carries on with the next check
  * (src/lib/forge/run.ts, driveLabRun). runLabInWorker and validateLabInWorker keep their v1
  * signatures and return the v1 report shape; runLab returns the full v2 report.
+ *
+ * Prove-it v2 (docs/specs/wave-3.md §7.1): runLabCalls sends a list of ks_invoke commands to one instance and
+ * returns the replies, under one LAB_TIMEOUT_MS for the whole list.
  */
 
-import { LabAbiError, LabTrapError, type LabReport } from './wasm-lab'
+import { LabAbiError, LabTimeoutError, LabTrapError, type LabReport } from './wasm-lab'
 import { splitLabId } from './forge/abi'
-import { assembleReport, driveLabRun, fromV1Report, toLegacyReport, type DriveResult, type LabPool, type LabPort, type LabProgress } from './forge/run'
+import { assembleReport, driveLabRun, fromV1Report, toLegacyReport, type DriveResult, type LabPool, type LabPort, type LabProgress, type Timers } from './forge/run'
 import type { LabRunReport } from './forge/types'
 import type { LabRunMode, LabWorkerReply } from '../workers/lab-protocol'
 
@@ -174,4 +177,68 @@ export async function validateLabInWorker(bytes: ArrayBuffer): Promise<{ report:
  */
 export function disposeLabWorker() {
   if (handle) discard(handle)
+}
+
+/* ------------------------------ verb calls ------------------------------ */
+
+/**
+ * Send `calls` to a worker from `pool` and resolve with one reply per entry, in order. The one budget starts when the
+ * request is posted and covers the whole list: on expiry the worker is discarded and this rejects with a
+ * LabTimeoutError. A trap rejects with a LabTrapError (a failed call), a refusal with a LabAbiError.
+ * The pool and timers are parameters so tests can drive it with fake workers.
+ */
+export function driveLabCalls(
+  pool: LabPool,
+  req: { bytes: ArrayBuffer; calls: string[] },
+  opts: { budgetMs: number; nextId: () => number; timers?: Timers },
+): Promise<string[]> {
+  if (req.calls.length === 0) return Promise.reject(new LabAbiError('a calls request needs a non-empty list of commands.'))
+  const timers: Timers = opts.timers ?? { set: (fn, ms) => setTimeout(fn, ms), clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>) }
+  return pool.acquire().then(
+    (port) =>
+      new Promise<string[]>((resolve, reject) => {
+        const id = opts.nextId()
+        let unsubscribe = () => {}
+        const timer = timers.set(() => {
+          settle()
+          pool.discard(port)
+          reject(new LabTimeoutError(opts.budgetMs, 'invoke', false))
+        }, opts.budgetMs)
+        const settle = () => {
+          timers.clear(timer)
+          unsubscribe()
+        }
+        unsubscribe = port.subscribe(
+          (m) => {
+            if (m.type === 'ready' || m.id !== id) return
+            if (m.type === 'replies') {
+              settle()
+              resolve(m.replies)
+            } else if (m.type === 'failed') {
+              settle()
+              if (m.kind === 'trap') reject(new LabTrapError(undefined, m.phase))
+              else if (m.kind === 'abi') reject(new LabAbiError(m.message))
+              else reject(new Error(m.message))
+            }
+          },
+          (message) => {
+            settle()
+            pool.discard(port)
+            reject(new Error(message || 'the lab worker crashed'))
+          },
+        )
+        port.post({ id, mode: 'calls', bytes: req.bytes, calls: req.calls })
+      }),
+  )
+}
+
+/**
+ * Prove-it v2: run `calls` against the module in the lab worker and return the replies (each at most 4 KiB). Throws
+ * LabTimeoutError past LAB_TIMEOUT_MS for the whole list, LabTrapError when the module traps on a call, and
+ * LabAbiError for a `--features reference` build, a module without ks_invoke, or one built from the v1 template.
+ */
+export function runLabCalls(bytes: ArrayBuffer, calls: string[]): Promise<string[]> {
+  const result = chain.then(() => driveLabCalls(pool, { bytes, calls }, { budgetMs: LAB_TIMEOUT_MS, nextId: () => nextId++ }))
+  chain = result.catch(() => {})
+  return result
 }
