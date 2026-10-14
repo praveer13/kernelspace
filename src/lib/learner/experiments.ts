@@ -6,6 +6,9 @@
  * `exp:seed` is a working record (a uint32), created once on first use. Analysis never recomputes an arm: it reads
  * the arm recorded on the hint and packet acks (`data.arm`), so a second device that created its own seed before the
  * ledgers synced cannot corrupt the data. Pure: no clock, no randomness (the seed's source arrives as a parameter).
+ *
+ * `armOf` is the same coin for n arms: the track forms (forms.ts, wave-3.md §12.6) use it with 6 to pick which of three
+ * seed sets is form A, B or C, and `armFor` is `armOf` with 2.
  */
 
 import { hash32 } from '@/lib/rng'
@@ -29,13 +32,24 @@ function fmix32(h: number): number {
 }
 
 /**
- * The arm of `unit` in `experiment` for the learner whose `exp:seed` is `expSeed`: a bit of
- * `hash32(experiment + ':' + unit + ':' + expSeed)`, taken after `fmix32`. FNV-1a's lowest bit is only the parity of the
- * number of bytes whose low bit is 1, so `hash32(...) % 2` would give every learner the same arm for the same unit up to one global
- * flip, and the arm would be confounded with the check.
+ * The arm of `unit` in `experiment`, one of `n` (a whole number, 1 or more) for the learner whose `exp:seed` is
+ * `expSeed`: `fmix32(hash32(experiment + ':' + unit + ':' + expSeed)) % n`, so 0 to n - 1. FNV-1a's lowest bit is only
+ * the parity of the number of bytes whose low bit is 1, so `hash32(...) % 2` would give every learner the same arm for
+ * the same unit up to one global flip, and the arm would be confounded with the check; `fmix32` first makes every bit
+ * of the 32 a fair coin. The remainder by n is unbiased to within n / 2^32 (6 / 2^32 for the track forms' six orders).
+ */
+export function armOf(experiment: string, unit: string, expSeed: number, n: number): number {
+  if (!Number.isInteger(n) || n < 1) throw new RangeError(`armOf: n must be a whole number of 1 or more, not ${n}`)
+  return fmix32(hash32(`${experiment}:${unit}:${expSeed}`)) % n
+}
+
+/**
+ * The ladder-or-packet arm of `unit` in `experiment` for the learner whose `exp:seed` is `expSeed`: `armOf` with two
+ * arms, 0 the ladder and 1 the packet. Generalizing to n arms left every hint-ladder arm as it was (the pinned values in
+ * tests/mentor/experiments.test.ts).
  */
 export function armFor(experiment: string, unit: string, expSeed: number): Arm {
-  return fmix32(hash32(`${experiment}:${unit}:${expSeed}`)) % 2 === 0 ? 'ladder' : 'packet'
+  return armOf(experiment, unit, expSeed, 2) === 0 ? 'ladder' : 'packet'
 }
 
 /** The unit of the hint experiment: one check of one lab. */
