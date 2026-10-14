@@ -11,17 +11,15 @@
  * reads it: the debrief is the only reader, and it renders only after "See the debrief".
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Button, LinkButton } from '@/components/Button'
 import { BUILD_THIS_SCHEDULER, SCHEDULER, freshEntropy } from '@/data/plays'
 import { useProgress } from '@/lib/progress'
 import { groups, schedEndLine } from '@/lib/world/sched'
-import { drawSchedTrace, loadSchedSource, minuteSampleLine, practiceMinute, type SchedSource } from '@/lib/world/sched-traces'
-import Compose from './Compose'
+import { drawSchedTrace, loadSchedSource, practiceMinute, practiceSourceLine, type SchedSource } from '@/lib/world/sched-traces'
 import Debrief from './Debrief'
 import Mirror from './Mirror'
-import ProductionCard from './ProductionCard'
 import Queue, { KvBar } from './Queue'
 import {
   actionOf,
@@ -38,6 +36,14 @@ import {
   togglePreempt,
   type SchedSession,
 } from './session'
+
+// Compose and the In-production card appear only after the debrief, so they load then: the play's first paint
+// does not carry the policy compiler, the Compose table or the card's claim rows (F10: the route's closure).
+const loadCompose = () => import('./Compose')
+const loadCard = () => import('./ProductionCard')
+const Compose = lazy(loadCompose)
+const ProductionCard = lazy(loadCard)
+const afterDebrief = <p className="font-mono text-body-sm text-text-3">Loading Compose and the card…</p>
 
 export interface SchedulerPlayProps {
   /** `embed` inside the lesson, `page` on /play/scheduler. */
@@ -87,6 +93,8 @@ export function SchedulerPlayView({ source, mode }: SchedulerPlayViewProps) {
   }, [turns, stage.kind, inDebrief])
 
   const mark = useCallback(() => {
+    // The learner is in the run: start fetching what the debrief shows, so it is there by the time they get to it.
+    if (firstMoveAt.current === null) void Promise.all([loadCompose(), loadCard()])
     firstMoveAt.current ??= Date.now()
   }, [])
   const toggleAdmit = useCallback(
@@ -124,8 +132,10 @@ export function SchedulerPlayView({ source, mode }: SchedulerPlayViewProps) {
     return (
       <div className="space-y-6" data-play={SCHEDULER.id} data-mode={mode} data-phase-now="debrief">
         <Debrief session={session} onAgain={again} />
-        <Compose key={session.trace.id} trace={session.trace} source={source} />
-        <ProductionCard />
+        <Suspense fallback={afterDebrief}>
+          <Compose key={session.trace.id} trace={session.trace} source={source} />
+          <ProductionCard />
+        </Suspense>
         <div className="rounded-lg border border-accent/40 bg-accent-dim/40 p-4 sm:p-5">
           <p className="section-label">Code</p>
           <p className="mt-2 text-body-sm text-text-2">
@@ -159,7 +169,7 @@ export function SchedulerPlayView({ source, mode }: SchedulerPlayViewProps) {
   ]
     .filter(Boolean)
     .join(' ')
-  const sourceLine = trace.provenance === 'practice' ? minuteSampleLine(source.minute) : `${trace.requests.length} requests resampled from BurstGPT v2's busiest hour`
+  const sourceLine = trace.provenance === 'practice' ? practiceSourceLine(source.minute) : `${trace.requests.length} requests resampled from BurstGPT v2's busiest hour`
 
   return (
     <div className="space-y-4" data-play={SCHEDULER.id} data-mode={mode} data-phase-now="play">

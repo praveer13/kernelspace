@@ -48,9 +48,11 @@
  *     the deadline walk found no differing turn at all in 32 (FCFS without headroom matches the
  *     reference until the pool is full) and named an earlier turn in 49; it agreed in 7. Walking from
  *     the finish names the admission or the preempt that cost the recompute;
- *   - the over-headroom sentence carries two numbers, the free memory the learner saw and the room left
- *     once each running request keeps its 48 tokens: the spec's single number ("a 1,024-token prompt
- *     with 144 tokens free") reads as a request that could not have been admitted at all;
+ *   - the over-headroom sentence carries two accountings, the free memory the learner saw (whole blocks)
+ *     and the reference's own sum, pool - (tokens held + n x 48) (BF3 corrected the first version,
+ *     which subtracted from the block-granular free figure): the spec's single number ("a 1,024-token
+ *     prompt with 144 tokens free") reads as a request that could not have been admitted at all, and
+ *     when the sum is zero or below the sentence says why free tokens still do not count;
  *   - of 15,065 hand turns, 4,219 differ from the reference in tap order and 3,806 in what the Engine
  *     admits: comparing tap order would have blamed 413 turns that changed nothing;
  *   - the outcome sentence comes first: the decision's consequence ("That cost #16 its deadline")
@@ -70,13 +72,13 @@ import {
 } from '@/lib/fleet-model'
 import type { PlayData, PlayResult } from '@/lib/ledger/types'
 import { SKIP_AFTER_TURNS, TURN_CAP, type Decider, type LockstepModel } from './play'
-import { RUN_GUARD, type SchedTrace } from './sched-traces'
+import { RUN_GUARD, groups, type SchedTrace } from './sched-traces'
 import type { SchedDecisionDivergence, SchedDecisionKind, SchedDivergence, SchedFrame, SchedOutcome } from './types'
 
 export { SKIP_AFTER_TURNS, TURN_CAP }
 
 export const SCHEDULER_PLAY_ID = 'scheduler'
-/** The practice minute has no seed; its ledger rows carry 0 with provenance `practice`. */
+/** The artifact's own sampled minute has no seed; its ledger rows would carry 0. The practice minute carries its pinned seed. */
 export const SCHED_PRACTICE_SEED = 0
 
 /* ------------------------------------------------------------------ */
@@ -396,14 +398,11 @@ export const mineRun = (setup: SchedSetup, play: SchedPlay): SchedReplay => setu
 /* The debrief                                                          */
 /* ------------------------------------------------------------------ */
 
-/** 1024 → "1,024", without the platform's locale data. */
-export const groups = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+/** 1024 → "1,024"; defined with the trace lines that share it. */
+export { groups }
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const tok = (r: SchedViewReq) => `#${r.id} (${groups(r.prompt)} tokens)`
 const ids = (xs: readonly number[]) => (xs.length === 1 ? `#${xs[0]}` : `${xs.slice(0, -1).map((x) => `#${x}`).join(', ')} and #${xs[xs.length - 1]}`)
-
-/** The reference's accounting before any admission: running prompts, their decoded tokens and 48 tokens of headroom each. */
-const referenceUsed = (v: SchedView) => v.running.reduce((a, r) => a + r.prompt + r.decoded + HEADROOM_TOKENS, 0)
 
 /** "in 3 iterations", or "the iteration it arrived" for 0. */
 const within = (ttft: number) => (ttft === 0 ? 'the iteration it arrived' : `in ${plural(ttft, 'iteration')}`)
@@ -446,19 +445,29 @@ export function decisionSentence(
   const taken = effectiveAdmits(v, mine, frame.blockSize)
   const refTaken = reference.admit
   // Over headroom: in the learner's order, the first admission the reference's accounting refuses.
-  let used = referenceUsed(v)
+  // The sentence states the reference's own sum, pool - (tokens held + headroom x requests), which the free figure
+  // (whole blocks, before any headroom) is not, so a learner can check the arithmetic.
+  let held = v.running.reduce((a, r) => a + r.prompt + r.decoded, 0)
+  let kept = v.running.length
+  const before: number[] = []
   for (const id of taken) {
     const r = byId.get(id) as SchedViewReq
-    const room = v.memCap - used
+    const room = v.memCap - (held + kept * HEADROOM_TOKENS)
     if (r.prompt + HEADROOM_TOKENS > room && !refTaken.includes(id)) {
-      const keep = `keeping ${HEADROOM_TOKENS} tokens of headroom for each of your ${plural(v.running.length, 'running request')}`
-      const why = room <= 0 ? `${keep} leaves no room at all` : `${keep} leaves ${groups(room)}, and ${groups(r.prompt)} + ${HEADROOM_TOKENS} > ${groups(room)}`
+      const holders = plural(v.running.length, 'running request') + (before.length ? ` and the ${ids(before)} you admitted first` : '')
+      const sum = `${groups(v.memCap)} - (${groups(held)} tokens held by your ${holders} + ${kept} × ${HEADROOM_TOKENS} tokens of headroom) = ${groups(room)}`
+      const why =
+        room <= 0
+          ? `it counts ${sum}, so nothing is left for ${groups(r.prompt)} + ${HEADROOM_TOKENS}, even with ${groups(frame.free)} tokens free: the reference sets the headroom aside for decode growth before it spends free tokens on a new prompt`
+          : `it counts ${sum}, and ${groups(r.prompt)} + ${HEADROOM_TOKENS} > ${groups(room)}`
       const sentence =
         `${at} you admitted #${id}, a ${groups(r.prompt)}-token prompt, with ${groups(frame.free)} tokens free. The reference skips it: ${why}.` +
         (cost.length ? ` That cost ${costPhrase(cost, about)}.` : '')
       return { kind: 'over-headroom', sentence }
     }
-    used += r.prompt + HEADROOM_TOKENS
+    held += r.prompt
+    kept += 1
+    before.push(id)
   }
   const skipped = refTaken.filter((id) => !taken.includes(id)).map((id) => byId.get(id) as SchedViewReq)
   const extra = taken.filter((id) => !refTaken.includes(id)).map((id) => byId.get(id) as SchedViewReq)

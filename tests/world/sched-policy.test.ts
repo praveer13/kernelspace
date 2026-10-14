@@ -13,7 +13,7 @@ import {
   schedSpecData,
   schedSpecProblems,
 } from '../../src/lib/world/sched-policy'
-import { isInBand, makeSchedTrace, parseSchedSource, practiceMinute, runSched, GHOST_DRIVER, type SchedSource, type SchedTrace } from '../../src/lib/world/sched-traces'
+import { SCHED_PRACTICE_MINUTE_SEED, isInBand, makeSchedTrace, parseSchedSource, practiceMinute, runSched, GHOST_DRIVER, type SchedSource, type SchedTrace } from '../../src/lib/world/sched-traces'
 import { Engine, makeRefManager, makeRefQueue, referenceScheduler, type SchedAction, type SchedView } from '../../src/lib/fleet-model'
 import { policyBaselines, traceFor } from '../../src/lib/fleet-week'
 import { deriveSeeds } from '../../src/lib/graded-seed'
@@ -71,6 +71,10 @@ const BANDED_SEEDS = (() => {
   let seed = 0
   return gaps.map((g) => (seed += g))
 })()
+/** The banded seeds other than the practice minute's own: Compose's five fresh minutes are never the practice minute again. */
+const FRESH_SEEDS = BANDED_SEEDS.filter((s) => s !== SCHED_PRACTICE_MINUTE_SEED)
+/** The suite prints its equivalence and preempt-dial counts only when asked: SCHED_REPORT=1 bun test tests/world/sched-policy.test.ts */
+const REPORT = Boolean(process.env.SCHED_REPORT)
 
 /** Fleet Week's engine (fleet-week.ts `CFG` and `simulateEngine`, module-private, copied): pinned to the module below. */
 const FLEET_WEEK_CFG = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
@@ -190,6 +194,7 @@ describe('the equivalence proof: {sjf, 2000, 48, none} returns referenceSchedule
     const first: number[] = []
     for (let seed = 0; first.length < 20; seed++) if (isInBand(makeSchedTrace(source, seed))) first.push(seed)
     expect(BANDED_SEEDS.slice(0, 20)).toEqual(first)
+    expect(BANDED_SEEDS[0]).toBe(SCHED_PRACTICE_MINUTE_SEED)
     expect(BANDED_SEEDS[BANDED_SEEDS.length - 1]).toBe(75856)
   })
 
@@ -212,7 +217,7 @@ describe('the equivalence proof: {sjf, 2000, 48, none} returns referenceSchedule
       while (!e.done) e.step()
       expect(mismatches).toEqual([])
     }
-    console.log(`sched equivalence: 1,000 banded minutes, ${iterations} iterations, 0 mismatches`)
+    if (REPORT) console.log(`sched equivalence: 1,000 banded minutes, ${iterations} iterations, 0 mismatches`)
   }, 30000)
 
   test('100 Fleet Week traces (CFG, the intake queue and its drain)', () => {
@@ -223,7 +228,7 @@ describe('the equivalence proof: {sjf, 2000, 48, none} returns referenceSchedule
       expect(run.e.done).toBe(true)
       iterations += run.iterations
     }
-    console.log(`sched equivalence: 100 Fleet Week traces, ${iterations} iterations, 0 mismatches`)
+    if (REPORT) console.log(`sched equivalence: 100 Fleet Week traces, ${iterations} iterations, 0 mismatches`)
   }, 30000)
 
   test('the copied Fleet Week engine is Fleet Week’s: the reference outcome matches policyBaselines on the same seeds', () => {
@@ -235,7 +240,7 @@ describe('the equivalence proof: {sjf, 2000, 48, none} returns referenceSchedule
   })
 
   test('the proof has teeth: every one-dial change from the reference differs somewhere', () => {
-    const traces = [practiceMinute(source), ...BANDED_SEEDS.slice(0, 5).map((s) => makeSchedTrace(source, s))]
+    const traces = [practiceMinute(source), ...FRESH_SEEDS.slice(0, 5).map((s) => makeSchedTrace(source, s))]
     for (const spec of variants()) {
       expect(schedEquivalent(spec, traces)).toBe(false)
     }
@@ -245,14 +250,14 @@ describe('the equivalence proof: {sjf, 2000, 48, none} returns referenceSchedule
   })
 
   test('guard 0 and guard 2,000 cannot be told apart on a minute: 2,000 iterations never pass inside one (why the dial offers 20)', () => {
-    const traces = [practiceMinute(source), ...BANDED_SEEDS.slice(0, 20).map((s) => makeSchedTrace(source, s))]
+    const traces = [practiceMinute(source), ...FRESH_SEEDS.slice(0, 20).map((s) => makeSchedTrace(source, s))]
     expect(schedEquivalent({ ...REFERENCE_SCHED_SPEC, guard: 0 }, traces)).toBe(true)
     for (const t of traces) expect(runSched(t, GHOST_DRIVER).iterations).toBeLessThan(2000)
   })
 })
 
 describe('Compose', () => {
-  const six = (): SchedTrace[] => [practiceMinute(source), ...BANDED_SEEDS.slice(0, 5).map((s) => makeSchedTrace(source, s))]
+  const six = (): SchedTrace[] => [practiceMinute(source), ...FRESH_SEEDS.slice(0, 5).map((s) => makeSchedTrace(source, s))]
 
   test('the table runs the spec and the ghost on the same traces; the reference spec’s rows are the ghost’s', () => {
     const traces = six()
@@ -281,7 +286,7 @@ describe('Compose', () => {
       auto += runSchedSpec({ order: 'fcfs', guard: 0, headroom: 0, preempt: 'none' }, t).autoPreempts
       chosen += runSchedSpec({ order: 'fcfs', guard: 0, headroom: 0, preempt: 'newest' }, t).autoPreempts
     }
-    console.log(`preempt dial, FCFS without headroom on 5 banded minutes: ${auto} auto-preempts with none, ${chosen} with newest`)
+    if (REPORT) console.log(`preempt dial, FCFS without headroom on 5 banded minutes: ${auto} auto-preempts with none, ${chosen} with newest`)
     expect(chosen).toBeLessThan(auto)
   })
 

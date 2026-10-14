@@ -1,10 +1,11 @@
 /**
  * Traces for the scheduler play (docs/specs/wave-2.md §8.2).
  *
- * THE PRACTICE MINUTE is `public/traces/burstgpt-v2-busiest-minute.json`: 40 requests sampled
+ * THE BUSIEST-MINUTE ARTIFACT is `public/traces/burstgpt-v2-busiest-minute.json`: 40 requests sampled
  * evenly from BurstGPT v2's busiest aligned 60 s, one real second per tick. The artifact records
- * how many requests that minute holds (`sampling.sourceRowsInWindow`); `minuteSampleLine` reads it,
- * so no UI line ever types the number.
+ * how many requests that minute holds (`sampling.sourceRowsInWindow`); the source lines read it,
+ * so no UI line ever types the number. Its 40 rows are `sampledMinute`, and its arrival gaps pace
+ * every minute the play runs, the practice minute included.
  *
  * FRESH MINUTES. `makeSchedTrace(source, seed)` resamples 40 distinct (prompt, output) pairs from
  * the 480 rows of the busiest-hour artifact and takes the 39 arrival gaps, with replacement, from
@@ -25,11 +26,15 @@
  * `drawSchedTrace(entropy, source)` keeps the first in-band candidate: the entropy itself, then
  * its splitmix32 outputs on each rejection, as `drawPlacementTrace` does.
  *
- * THE PRACTICE MINUTE AND THE BAND. The spec asks the practice minute to be in band too. With
- * the pinned source it cannot be: the busiest minute holds 1,095 requests and none is longer than
- * 692 tokens, so rule 5 fails whatever sample is taken, and its responses are mostly 1 to 4
- * tokens, so a 4,096-token pool never fills (rules 2 and 3). `checkSchedBand` reports every rule,
- * so a caller can show which ones a minute meets; tests pin the practice minute's result.
+ * THE PRACTICE MINUTE AND THE BAND. The spec asks the practice minute to be in band too, and the
+ * sampled minute cannot be: the busiest minute holds 1,095 requests and none is longer than 692
+ * tokens, so rule 5 fails whatever sample is taken, and its responses are mostly 1 to 4 tokens, so
+ * a 4,096-token pool never fills (rules 2 and 3); the ghost, FCFS and the no-headroom run all serve
+ * 40 of 40 in 40 turns of one request each. The shared practice minute is therefore a pinned fresh
+ * minute, as Wave 1's `PLAY_PRACTICE_SEED` is: `SCHED_PRACTICE_MINUTE_SEED` is the first seed from 0
+ * whose `makeSchedTrace` passes all five rules, and tests/world/sched-traces.test.ts re-derives it
+ * with `firstInBandSeed`. `checkSchedBand` still reports every rule, so a caller can show which
+ * ones a minute meets.
  *
  * ACCEPTANCE (measured 2026-10-05, SCHED_CFG.sloTtft = 8): 1.5 % of seeds 0..1,999 are in band
  * (about 67 candidates per fresh minute, about 0.5 ms each with the short-circuit `isInBand`).
@@ -57,6 +62,9 @@ import {
   type TraceRequest,
 } from '@/lib/fleet-model'
 import { parseTraceArtifact } from '@/lib/traces'
+
+/** 1024 -> "1,024", without the platform's locale data; the debrief and the source lines share it. */
+export const groups = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 /** Requests per minute, practice and fresh. */
 export const SCHED_REQUESTS = 40
@@ -124,30 +132,38 @@ export function minuteSourceCount(minute: TraceArtifact): number {
   return m
 }
 
-/** The play's source line, with both numbers read from the artifact. */
+/** The artifact's own line, with both numbers read from it: "40 of 1,095 requests sampled". */
 export function minuteSampleLine(minute: TraceArtifact): string {
-  return `BurstGPT v2, busiest minute, ${minute.requestCount} of ${minuteSourceCount(minute)} requests sampled`
+  return `BurstGPT v2, busiest minute, ${minute.requestCount} of ${groups(minuteSourceCount(minute))} requests sampled`
+}
+
+/** The practice minute's source line: its rows come from the busiest hour, its pace from the busiest minute (read from the artifact). */
+export function practiceSourceLine(minute: TraceArtifact): string {
+  return `${minute.requestCount} requests from BurstGPT v2's busiest hour, arriving at the pace of its busiest minute (${groups(minuteSourceCount(minute))} requests)`
 }
 
 export interface SchedTrace {
   id: string
-  /** The seed a fresh minute was drawn from; null for the practice minute. */
+  /** The seed the minute was made from; null only for the artifact's own sampled minute. */
   seed: number | null
   provenance: 'practice' | 'unseen'
   cfg: EngineConfig
   requests: RequestSpec[]
 }
 
-/** The shared story: everyone's first run uses these 40 requests. */
-export function practiceMinute(source: SchedSource): SchedTrace {
+/** The busiest-minute artifact's 40 requests as they were sampled. Too gentle for the band (see the header), so not the practice minute. */
+export function sampledMinute(source: SchedSource): SchedTrace {
   return {
-    id: 't5.sched-practice-minute',
+    id: 't5.sched-sampled-minute',
     seed: null,
     provenance: 'practice',
     cfg: SCHED_CFG,
     requests: traceToRequestStream(source.minute),
   }
 }
+
+/** The first seed from 0 whose fresh minute is in band; `SCHED_PRACTICE_MINUTE_SEED` pins its answer. */
+export const SCHED_PRACTICE_MINUTE_SEED = 150
 
 /** Arrival gaps of the practice minute, in ticks, in arrival order. */
 export function minuteGaps(minute: TraceArtifact): number[] {
@@ -175,6 +191,11 @@ export function makeSchedTrace(source: SchedSource, seed: number): SchedTrace {
     requests.push({ id: i + 1, arrival, prompt: row.p, output: row.o })
   }
   return { id: `t5.sched-minute-${(seed >>> 0).toString(16).padStart(8, '0')}`, seed: seed >>> 0, provenance: 'unseen', cfg: SCHED_CFG, requests }
+}
+
+/** The shared story: everyone's first run uses this pinned in-band minute, so the debrief has real decisions to find. */
+export function practiceMinute(source: SchedSource): SchedTrace {
+  return { ...makeSchedTrace(source, SCHED_PRACTICE_MINUTE_SEED), id: 't5.sched-practice-minute', provenance: 'practice' }
 }
 
 /** The arrival-order admission rule, `referenceScheduler`'s loop with another order and headroom. */
@@ -314,6 +335,12 @@ export function drawSchedTrace(entropy: number, source: SchedSource): SchedDraw 
     candidate = more()
   }
   throw new Error(`no in-band minute in ${MAX_DRAWS} draws: the band no longer matches the generator`)
+}
+
+/** The first seed from 0 whose minute passes every rule: how `SCHED_PRACTICE_MINUTE_SEED` was found, re-run by the tests. */
+export function firstInBandSeed(source: SchedSource): number {
+  for (let seed = 0; seed < MAX_DRAWS * 64; seed++) if (isInBand(makeSchedTrace(source, seed))) return seed
+  throw new Error('no in-band seed: the band no longer matches the generator')
 }
 
 /** Acceptance over seeds 0..n-1: how many candidates are in band, and how many each rule rejects. */
