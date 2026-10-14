@@ -78,6 +78,10 @@
  * expectation, a gate and no longer a printed line; the pseudo-lessons above are not in the pool. Always-B must also stay inside
  * its 2-SD band: a simulated cohort that draws the real display shuffle and clicks position B matches the exact expectation.
  * The longest-key ratchet covers the own pools and the errata items too (`longestKeyByPool` in the baseline).
+ * (21) WAVE 3 (spec 4.1): two more own pools run every gate of (19) and carry a baseline entry: `iso` (every IsomorphismBlock.breakItem,
+ * ref item:<lesson>.iso.<n>.break) and `twin` (every src/data/twins/<lab>.ts that exports TWIN_ITEMS, found by readdir).
+ * `--subset <selector>` reports the margin of one task's items: the hit rate of every strategy and of the adversary over the items whose printed ref
+ * matches; it fails when none match, and at n >= 12 above chance + 10 points; below 12 it reports and the merged-level run decides.
  * REPORTS (never fails): the item-level hit rate of each surface-feature strategy against chance, longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
  * surface-feature expectations per track, the odd-one-out, adversary, composite and cue-limit tables per feature, per track and per lesson, and a blind-strategy simulation.
  *
@@ -86,6 +90,8 @@
  *
  *   bun scripts/verify-items.ts
  *   bun scripts/verify-items.ts --update-baseline [--force]
+   bun scripts/verify-items.ts --subset 'forge/kv-block-manager '      (ref prefixes, comma-separated)
+   bun scripts/verify-items.ts --subset '/^item:t[0-2]\.l[0-9]+\.iso\./'  (or one /regex/)
  */
 
 import { readdir, readFile, writeFile } from 'node:fs/promises'
@@ -122,14 +128,23 @@ import {
 import {
   alwaysBBand,
   ALIGN_POOL,
+  ISO_POOL,
+  TWIN_POOL,
   barFailures,
   barLine,
   type BarRow,
   checkPoolItems,
   collectAlignItems,
+  collectIsoItems,
+  collectTwinItems,
   discoverPrimm,
+  discoverTwins,
+  parseSubset,
   pseudoLessonFailures,
   structureErrors as optionErrors,
+  SUBSET_MARGIN,
+  SUBSET_MIN_N,
+  subsetReport,
   WAVE2_BAR,
 } from './item-pools'
 
@@ -185,12 +200,24 @@ interface Baseline {
   whyRequired?: string[]
 }
 
-const args = process.argv.slice(2)
+const USAGE = 'usage: bun scripts/verify-items.ts [--update-baseline [--force]] | [--subset <ref prefixes, comma-separated | /regex/>]'
+// `--subset <selector>` (or `--subset=<selector>`) takes the next argument whole, so a prefix with a trailing space survives.
+const args: string[] = []
+let subsetSelector: string | null = null
+{
+  const argv = process.argv.slice(2)
+  for (let k = 0; k < argv.length; k++) {
+    const a = argv[k]
+    if (a === '--subset' && k + 1 < argv.length) subsetSelector = argv[++k]
+    else if (a.startsWith('--subset=')) subsetSelector = a.slice('--subset='.length)
+    else args.push(a)
+  }
+}
 const known = new Set(['--update-baseline', '--force'])
 const unknown = args.filter((a) => !known.has(a))
 if (unknown.length) {
   console.error(`unknown argument: ${unknown.join(' ')}`)
-  console.error('usage: bun scripts/verify-items.ts [--update-baseline [--force]]')
+  console.error(USAGE)
   process.exit(1)
 }
 const updateBaseline = args.includes('--update-baseline')
@@ -199,6 +226,19 @@ if (force && !updateBaseline) {
   console.error('--force only applies together with --update-baseline')
   process.exit(1)
 }
+if (subsetSelector !== null && (updateBaseline || force)) {
+  console.error('--subset reports a margin and never writes the baseline; run --update-baseline on its own')
+  process.exit(1)
+}
+const subset = subsetSelector === null ? null : parseSubset(subsetSelector)
+if (subset && 'error' in subset) {
+  console.error(subset.error)
+  console.error(USAGE)
+  process.exit(1)
+}
+// The gates compute and print as they go; a --subset run needs the numbers (the adversary, the structure checks) but only its own report.
+const printReport = console.log
+if (subset) console.log = () => {}
 
 /* ------------------------------ collect ------------------------------ */
 
@@ -254,6 +294,8 @@ for (const incident of INCIDENTS) {
 
 const trackKeys = [...TRACK_IDS, FLEET_TRACK, FORGE_TRACK]
 const failures: string[] = []
+/** Structure failures by item ref, so a --subset run can fail on the selected items that cannot be judged. */
+const structureByRef = new Map<string, string>()
 
 /* ------------------------- (1) structure ------------------------- */
 
@@ -262,8 +304,10 @@ const structureErrors = (item: Item): string[] => optionErrors(item.q, item.need
 const validItems: Item[] = []
 for (const item of items) {
   const errs = structureErrors(item)
-  if (errs.length) failures.push(`structure: ${item.ref}: ${errs.join('; ')}`)
-  else validItems.push(item)
+  if (errs.length) {
+    failures.push(`structure: ${item.ref}: ${errs.join('; ')}`)
+    structureByRef.set(item.ref, errs.join('; '))
+  } else validItems.push(item)
 }
 
 /* ------------------------- helpers ------------------------- */
@@ -768,6 +812,7 @@ const errataFile = new Map<Item, string>()
       const errs = structureErrors(item)
       if (errs.length) {
         failures.push(`structure: src/data/errata/${file} items[${i}]: ${errs.join('; ')}`)
+        structureByRef.set(item.ref, errs.join('; '))
       } else {
         errataItems.push(item)
         errataFile.set(item, `src/data/errata/${file}`)
@@ -791,6 +836,7 @@ const errataFile = new Map<Item, string>()
         const errs = structureErrors(item)
         if (errs.length) {
           failures.push(`structure: src/data/placement/${file} ${entry.id}: ${errs.join('; ')}`)
+          structureByRef.set(item.ref, errs.join('; '))
         } else {
           errataItems.push(item)
           errataFile.set(item, `src/data/placement/${file}`)
@@ -806,17 +852,24 @@ const errataFile = new Map<Item, string>()
 const ownItems: Item[] = []
 const ownFile = new Map<Item, string>()
 const ownLesson = new Map<Item, string>()
-const ownChecked = checkPoolItems([...collectOwnPools(ALL_LESSONS), ...collectAlignItems(ALL_LESSONS)])
+// Wave 3 adds two: P3's break items (`IsomorphismBlock.breakItem`) and the production twins' tracing questions (src/data/twins/<lab>.ts `TWIN_ITEMS`, found by readdir).
+const twinFiles = await discoverTwins(new URL('../src/data/twins/', import.meta.url))
+const ownEntries = [...collectOwnPools(ALL_LESSONS), ...collectAlignItems(ALL_LESSONS), ...collectIsoItems(ALL_LESSONS), ...collectTwinItems(twinFiles)]
+const ownChecked = checkPoolItems(ownEntries)
 failures.push(...ownChecked.failures)
+const ownValidRefs = new Set(ownChecked.valid.map((e) => e.ref))
+for (const e of ownEntries) {
+  if (!ownValidRefs.has(e.ref)) structureByRef.set(e.ref, ownChecked.failures.find((f) => f.startsWith(`structure: ${e.ref} (`)) ?? 'structure')
+}
 for (const e of ownChecked.valid) {
   const item: Item = { track: e.pool, lessonId: null, qi: -1, ref: e.ref, q: e.q, needsExplanation: e.needsExplanation }
   ownItems.push(item)
   ownFile.set(item, lessonFile.get(e.lessonId) ?? e.lessonId)
   ownLesson.set(item, e.lessonId)
 }
-/** The pools of learner-facing items outside the lesson quizzes that are judged item by item on their own: Wave 1's three, the alignment items, and every lab's PRIMM items. */
+/** The pools of learner-facing items outside the lesson quizzes that are judged item by item on their own: Wave 1's three, the alignment items, P3's break items, the twin questions, and every lab's PRIMM items. */
 const PRIMM_POOL = 'primm'
-const ALL_OWN_POOLS: string[] = [...OWN_POOLS, ALIGN_POOL]
+const ALL_OWN_POOLS: string[] = [...OWN_POOLS, ALIGN_POOL, ISO_POOL, TWIN_POOL]
 const ownPool = (pool: string) => ownItems.filter((i) => i.track === pool)
 /** The items of one own pool; the PRIMM items are lesson-shaped (one pseudo-lesson per lab) and live in validItems. */
 const poolItems = (pool: string) => (pool === PRIMM_POOL ? validItems.filter((i) => i.track === FORGE_TRACK) : ownPool(pool))
@@ -1035,6 +1088,47 @@ const ownAdversary = [...ALL_OWN_POOLS, PRIMM_POOL].map((pool) => {
   return { pool, rows: rows.length, hit, chance }
 })
 
+/* ---- --subset: the content margin of one task's items (wave-3.md §4.1) ---- */
+
+// Every item the run knows, under the ref verify-items prints for it: `<lesson> q<n>`, `forge/<lab dir> <item id>`, `fleet-week <incident> <kind>`,
+// the errata refs and `item:…` for the align, iso, twin and spiral pools. The strategies and the adversary run over the selected ones only.
+// The adversary is the model of (16), held out as there: a lesson item by the model without its track, a pool item by the model on all tracks.
+// A hit rate moves 8 points or more per item below SUBSET_MIN_N, so there the rates are reported and the merged-level run decides.
+if (subset && 'matches' in subset) {
+  console.log = printReport
+  const everything = [...validItems, ...ownItems, ...errataItems]
+  const chosen = everything.filter((i) => subset.matches(i.ref))
+  const unjudged = [...structureByRef].filter(([ref]) => subset.matches(ref))
+  const report = subsetReport(
+    chosen.map((i) => ({ ref: i.ref, q: i.q, adv: advP(i), stemless: i.track === FLEET_TRACK })),
+    CUE_STRATEGIES,
+  )
+  const problems = [...report.failures, ...unjudged.map(([ref, msg]) => `structure: ${ref}: ${msg}`)]
+  if (unjudged.length && !chosen.length) problems.shift() // an unjudgeable selection is not an empty one; its structure failures say why
+  const oddChosen = chosen.filter((i) => oddOneOut(i.q).length > 0)
+  console.log(`subset ${subsetSelector}: ${chosen.length} item(s) selected, n = ${report.n} single-key (chance ${rate(report.chance)})`)
+  const byPool = new Map<string, number>()
+  for (const i of chosen) byPool.set(i.track, (byPool.get(i.track) ?? 0) + 1)
+  console.log(`  selected by pool: ${[...byPool].map(([t, c]) => `${t} ${c}`).join(', ') || 'none'}`)
+  console.log(
+    report.judged
+      ? `  n >= ${SUBSET_MIN_N}: every rate is held to chance + ${SUBSET_MARGIN * 100} points = ${rate(report.chance + SUBSET_MARGIN)}`
+      : `  n < ${SUBSET_MIN_N}: a hit rate moves 8 points or more per item, so the rates are reported and the merged-level run decides`,
+  )
+  console.log(`  ${'strategy'.padEnd(26)}${'n'.padStart(5)}${'hit'.padStart(8)}${'chance'.padStart(8)}`)
+  for (const r of [...report.rows, report.adversary]) console.log(`  ${r.name.padEnd(26)}${String(r.n).padStart(5)}${rate(r.hit).padStart(8)}${rate(r.chance).padStart(8)}${r.over ? '  FAIL' : ''}`)
+  if (oddChosen.length) console.log(`  odd-one-out (a binary feature isolates the key; the full run fails these): ${oddChosen.map((i) => i.ref).join(', ')}`)
+  if (problems.length) {
+    console.error('')
+    console.error(`verify-items --subset: ${problems.length} failure(s)`)
+    for (const f of problems) console.error(`  ${f}`)
+    process.exit(1)
+  }
+  console.log('')
+  console.log('verify-items --subset: ok')
+  process.exit(0)
+}
+
 /* ---- (17) reviewer composite rules ---- */
 
 /** Cross out the options matching each pattern in turn (a step that would cross out every option is skipped), then pick the remaining option with the highest score. */
@@ -1192,7 +1286,7 @@ const cueRows = CUE_STRATEGIES.map((s) => {
 }
 
 console.log('')
-console.log(`own pools (prequestions, diagram predictions, spiral items, alignment items, PRIMM items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
+console.log(`own pools (prequestions, diagram predictions, spiral items, alignment items, break items, twin questions, PRIMM items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
 console.log(`  ${'pool'.padEnd(12)}${'items'.padStart(6)}${'worst strategy'.padStart(24)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'adv hit'.padStart(9)}  odd`)
 for (const pool of [...ALL_OWN_POOLS, PRIMM_POOL]) {
   const rows = poolCueRows(poolItems(pool))

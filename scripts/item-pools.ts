@@ -52,12 +52,14 @@ export function structureErrors(q: QuizQuestion, needsExplanation: boolean): str
 /** One learner-facing multiple-choice item outside the lesson quizzes, with the pool it belongs to. */
 export interface PoolItem {
   pool: string
-  /** The ledger ref: `item:<lessonId>.align.<n>` for an alignment item. */
+  /** The ledger ref: `item:<lessonId>.align.<n>` for an alignment item, `item:<lessonId>.iso.<n>.break` for a break item, `item:lab<NN>.twin.<n>` for a twin question. */
   ref: string
-  /** The lesson the item is authored in. */
+  /** The lesson the item is authored in (a twin's lab file name for a twin question). */
   lessonId: string
   q: QuizQuestion
   needsExplanation: boolean
+  /** The KCs the item is read against: the block's, else the lesson's (iso); the item's own (twin). Not read by the gates. */
+  kcs?: readonly string[]
 }
 
 /** The own pool of alignment items on code blocks (`CodeBlockData.align`, spec §17.2). */
@@ -77,6 +79,28 @@ export function collectAlignItems(lessons: readonly Lesson[]): PoolItem[] {
         n++
         out.push({ pool: ALIGN_POOL, ref: `item:${lesson.id}.align.${n}`, lessonId: lesson.id, q, needsExplanation: false })
       }
+    }
+  }
+  return out
+}
+
+/** The own pool of P3 break items, `IsomorphismBlock.breakItem` (wave-3.md §11.1). */
+export const ISO_POOL = 'iso'
+
+/**
+ * Every isomorphism block's break item, in lesson and block order. The ref is `item:<lessonId>.iso.<n>.break` with n the 1-based
+ * count of the lesson's isomorphism blocks, those without a break item counted too (the lesson records the block's own align step as
+ * `item:<lessonId>.iso.<n>`, so a block keeps its number whether or not it has a break item). The KCs are the block's, else the lesson's.
+ */
+export function collectIsoItems(lessons: readonly Lesson[]): PoolItem[] {
+  const out: PoolItem[] = []
+  for (const lesson of lessons) {
+    let n = 0
+    for (const block of lesson.blocks) {
+      if (block.type !== 'isomorphism') continue
+      n++
+      if (!block.breakItem) continue
+      out.push({ pool: ISO_POOL, ref: `item:${lesson.id}.iso.${n}.break`, lessonId: lesson.id, q: block.breakItem, needsExplanation: false, kcs: block.kcs ?? lesson.kcs })
     }
   }
   return out
@@ -123,6 +147,44 @@ export async function discoverPrimm(dir: URL): Promise<PrimmLab[]> {
     if (Array.isArray(mod?.PRIMM_MC_ITEMS)) labs.push({ lab: entry.name, items: mod.PRIMM_MC_ITEMS })
   }
   return labs
+}
+
+/* ------------------------------ twin pool ------------------------------ */
+
+/** The own pool of production-twin tracing questions (`TWIN_ITEMS` of src/data/twins/<lab>.ts, wave-3.md §9). */
+export const TWIN_POOL = 'twin'
+
+/** One lab's twin questions, as the module exports them. */
+export interface TwinFile {
+  /** The file name under src/data/twins/, without `.ts`. */
+  lab: string
+  /** The module's `default.labNo` ('07'), else the file name: the ref reads `item:lab<labNo>.twin.<n>`. */
+  labNo: string
+  items: readonly { id: string; q: QuizQuestion; kcs?: readonly string[] }[]
+}
+
+/**
+ * Every `<dir>/<lab>.ts` that exports `TWIN_ITEMS`, found by readdir so a twin joins without a code change (the discoverPrimm
+ * pattern). The registry (`index.ts`) and `types.ts` are not twins; a file that fails to import or exports no list is not a pool.
+ */
+export async function discoverTwins(dir: URL): Promise<TwinFile[]> {
+  const twins: TwinFile[] = []
+  const base = dir.href.endsWith('/') ? dir : new URL(`${dir.href}/`)
+  const entries = await readdir(base, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries.filter((e) => e.isFile() && e.name.endsWith('.ts')).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name === 'index.ts' || entry.name === 'types.ts') continue
+    const mod = (await import(new URL(entry.name, base).href).catch(() => null)) as { TWIN_ITEMS?: TwinFile['items']; default?: { labNo?: unknown } } | null
+    if (!Array.isArray(mod?.TWIN_ITEMS)) continue
+    const lab = entry.name.slice(0, -'.ts'.length)
+    const labNo = typeof mod.default?.labNo === 'string' ? mod.default.labNo : lab
+    twins.push({ lab, labNo, items: mod.TWIN_ITEMS })
+  }
+  return twins
+}
+
+/** Every twin question, in lab and item order, with the ref `item:lab<NN>.twin.<n>` (n from 1 within the lab). */
+export function collectTwinItems(twins: readonly TwinFile[]): PoolItem[] {
+  return twins.flatMap((t) => t.items.map((item, i) => ({ pool: TWIN_POOL, ref: `item:lab${t.labNo}.twin.${i + 1}`, lessonId: t.lab, q: item.q, needsExplanation: false, kcs: item.kcs })))
 }
 
 /* ------------------------------ pseudo-lessons ------------------------------ */
@@ -200,4 +262,92 @@ export function alwaysBBand(lessons: readonly (readonly CueQuestion[])[], attemp
   const simulated = total / attempts
   const se = sd / Math.sqrt(attempts)
   return { expected, sd, simulated, se, attempts, inside: Math.abs(simulated - expected) <= 2 * se }
+}
+
+/* ------------------------------ --subset: the content margin (wave-3.md §4.1) ------------------------------ */
+
+/** At this many single-key items or more, a subset is judged against the margin; below it a hit rate moves 8 points or more per item. */
+export const SUBSET_MIN_N = 12
+
+/** The margin a subset of SUBSET_MIN_N items or more may sit above chance: tighter than the 15 points of the pools, so parallel subsets cannot push the merged pool past the gate. */
+export const SUBSET_MARGIN = 0.1
+
+/**
+ * A selector is a comma-separated list of ref prefixes, or one /regex/ (optionally with flags). The prefixes are matched as written,
+ * so a trailing space survives ('forge/kv-block-manager ' selects that lab and not 'forge/kv-block-manager-2'); only whitespace
+ * before a prefix is dropped. Returns an error text for an empty selector or a regex that does not compile.
+ */
+export function parseSubset(selector: string): { matches: (ref: string) => boolean } | { error: string } {
+  const asRegex = /^\/(.+)\/([a-z]*)$/s.exec(selector)
+  if (asRegex) {
+    try {
+      const re = new RegExp(asRegex[1], asRegex[2].replace(/[gy]/g, ''))
+      return { matches: (ref) => re.test(ref) }
+    } catch (e) {
+      return { error: `--subset: ${selector} is not a regular expression (${(e as Error).message})` }
+    }
+  }
+  const prefixes = selector
+    .split(',')
+    .map((p) => p.trimStart())
+    .filter((p) => p.length > 0)
+  if (!prefixes.length) return { error: '--subset needs a comma-separated list of ref prefixes or one /regex/' }
+  return { matches: (ref) => prefixes.some((p) => ref.startsWith(p)) }
+}
+
+/** One selected item, reduced to what the margin report reads: the cue strategies read `q`, the adversary's pick probability is given. */
+export interface SubsetItem {
+  ref: string
+  q: CueQuestion
+  /** The options-only adversary's probability of hitting the key (the held-out one verify-items trains). */
+  adv: number
+  /** The stem is telemetry (a Fleet Week Act IV item), so the stem-overlap strategies skip the item, as the item-level cue limit does. */
+  stemless?: boolean
+}
+
+export interface SubsetRow {
+  name: string
+  /** The single-key items this row is over, and the chance rate of those items. */
+  n: number
+  chance: number
+  hit: number
+  /** True when the row has SUBSET_MIN_N items or more and its hit rate is above chance + SUBSET_MARGIN (the comparison of the gates, never a difference). */
+  over: boolean
+}
+
+export interface SubsetReport {
+  /** Selected items, whatever their kind. */
+  selected: number
+  /** Single-key items: the denominator of every rate, since one pick cannot hit a multi-select item. */
+  n: number
+  chance: number
+  rows: SubsetRow[]
+  adversary: SubsetRow
+  /** Whether n is large enough for the margin to bind. */
+  judged: boolean
+  failures: string[]
+}
+
+/** The hit rate of every blind strategy and of the adversary over a subset, with the verdict: empty fails, n >= SUBSET_MIN_N is held to chance + SUBSET_MARGIN, fewer is only reported. */
+export function subsetReport(items: readonly SubsetItem[], strategies: readonly CueStrategy[]): SubsetReport {
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN)
+  const single = items.filter((i) => i.q.correct.length === 1)
+  const judged = single.length >= SUBSET_MIN_N
+  const row = (name: string, rows: readonly SubsetItem[], pick: (i: SubsetItem) => number): SubsetRow => {
+    const chance = mean(rows.map((i) => 1 / i.q.options.length))
+    const hit = mean(rows.map(pick))
+    return { name, n: rows.length, chance, hit, over: rows.length >= SUBSET_MIN_N && hit > chance + SUBSET_MARGIN }
+  }
+  const out = strategies.map((s) => row(s.name, s.name.startsWith('stem-overlap') ? single.filter((i) => !i.stemless) : single, (i) => s.pick(i.q)))
+  const adversary = row('adversary', single, (i) => i.adv)
+  const failures: string[] = []
+  if (!items.length) failures.push('subset: the selector matches no item; a mistyped selector never passes on zero items')
+  for (const r of [...out, adversary]) {
+    if (r.over) {
+      failures.push(
+        `subset: '${r.name}' hits ${(r.hit * 100).toFixed(1)}% of the ${r.n} items (chance ${(r.chance * 100).toFixed(1)}% + ${SUBSET_MARGIN * 100} points = ${((r.chance + SUBSET_MARGIN) * 100).toFixed(1)}%); rewrite the options so the feature does not separate the key`,
+      )
+    }
+  }
+  return { selected: items.length, n: single.length, chance: mean(single.map((i) => 1 / i.q.options.length)), rows: out, adversary, judged, failures }
 }
