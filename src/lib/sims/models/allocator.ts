@@ -9,8 +9,8 @@
  * what the hands-on run measures.
  *
  * The four task scripts at the bottom are the tasks' canonical configs: one deterministic op list each,
- * played live by the sim (one op per step) and run in one go by `PHONE_MODELS`. All scenario numbers are
- * synthetic.
+ * played live by the sim (one op per step) and run in one go by `PHONE_MODELS`. The fifth task, the double
+ * free, is a free list of its own (`runDoubleFree`). All scenario numbers are synthetic.
  */
 
 import { allocWith, alignedStart, createHeap, freeId, runFits } from '@/lib/world/heap'
@@ -423,6 +423,7 @@ export const SCRIPT_IDS = Object.keys(SCRIPTS) as ScriptId[]
 
 /** Keys the sim reports through `observe` (the tasks' `observe` fields). */
 export const OBSERVE = {
+  doubleFree: 'alloc.double-free-pointers',
   fragPct: 'alloc.frag-pct',
   largestFree: 'alloc.largest-free',
   largestFreeOff: 'alloc.largest-free-off',
@@ -491,6 +492,52 @@ export function runScript(script: TaskScript, strategy: Strategy, coalesce = tru
     steps.push({ op, ok, heap })
   }
   return { heap, steps }
+}
+
+/* ------------------------------------------------------------------ */
+/* The double-free demo (the inspector's run, `alloc.double-free`)      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A free list of 64 B blocks kept as a stack of addresses: free pushes, malloc pops, and nothing checks that
+ * an address is already on the list. One block, p, is allocated and three others are free.
+ */
+export const DOUBLE_FREE = { block: 64, p: 0x40, spare: [0x80, 0xc0, 0x100] } as const
+
+export interface DoubleFreeStep {
+  op: string
+  /** The free list after the step, head first. */
+  list: readonly number[]
+  /** What malloc returned (null: ENOMEM); absent for a free. */
+  returned?: number | null
+}
+
+export interface DoubleFreeRun {
+  steps: DoubleFreeStep[]
+  /** Every pointer malloc handed out, in order. */
+  handed: number[]
+  /** Distinct blocks among them: the blocks that exist. */
+  distinct: number
+}
+
+/** free(p) twice, then malloc(64) until it fails. */
+export function runDoubleFree(): DoubleFreeRun {
+  const { p, spare } = DOUBLE_FREE
+  let list: number[] = [...spare]
+  const steps: DoubleFreeStep[] = [{ op: 'start: p allocated, 3 blocks free', list: [...list] }]
+  for (const op of ['free(p)', 'free(p) again']) {
+    list = [p, ...list]
+    steps.push({ op, list: [...list] })
+  }
+  const handed: number[] = []
+  for (;;) {
+    const [head, ...rest] = list
+    steps.push({ op: 'malloc(64)', list: rest, returned: head ?? null })
+    if (head === undefined) break
+    handed.push(head)
+    list = rest
+  }
+  return { steps, handed, distinct: new Set(handed).size }
 }
 
 /* ------------------------------------------------------------------ */
@@ -619,10 +666,37 @@ function raceOutcome(): CanonicalOutcome {
   }
 }
 
+function doubleFreeOutcome(): CanonicalOutcome {
+  const run = runDoubleFree()
+  const { p } = DOUBLE_FREE
+  const owners = run.handed.filter((a) => a === p).length
+  const counts = [...new Set(run.handed)].map((addr) => ({ addr, n: run.handed.filter((a) => a === addr).length }))
+  const list = (l: readonly number[]) => (l.length === 0 ? '(empty)' : l.map(hx4).join(', '))
+  return {
+    actual: run.handed.length,
+    unit: 'pointers',
+    summary: `Only ${run.distinct} blocks exist, but malloc hands out ${run.handed.length} pointers: the second free(p) put ${hx4(p)} on the list twice, so ${owners} owners get the same block.`,
+    chart: {
+      kind: 'bars',
+      xLabel: 'block address',
+      yLabel: 'owners handed this address',
+      points: counts.map((c) => ({ x: hx4(c.addr), y: c.n, label: hx4(c.addr) })),
+      mark: 0,
+    },
+    table: {
+      caption: 'The free list (head first) after each step of the double free',
+      columns: ['Step', 'Operation', 'Free list', 'malloc returned'],
+      rows: run.steps.map((s, i) => [i, s.op, list(s.list), s.returned === undefined ? '' : s.returned === null ? 'ENOMEM' : hx4(s.returned)]),
+      announce: `Freeing p twice leaves ${hx4(p)} on the list twice. malloc hands out ${run.handed.length} pointers from ${run.distinct} blocks, and ${owners} owners share ${hx4(p)}.`,
+    },
+  }
+}
+
 /** `phone.canonical` is `allocator.<name>`: one entry per outcome task. */
 export const PHONE_MODELS: Readonly<Record<string, () => CanonicalOutcome>> = {
   'frag-first-fit': fragOutcome,
   'coalesce-recover': coalesceOutcome,
   'fixed-block-waste': fixedOutcome,
   'policy-race': raceOutcome,
+  'double-free': doubleFreeOutcome,
 }

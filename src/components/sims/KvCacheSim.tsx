@@ -11,7 +11,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ChevronDown, ChevronUp, Copy, Play, Trash2 } from 'lucide-react'
 import BlockTableExplorer from '@/components/sims/BlockTableExplorer'
 import PlaygroundShell, { useInitialCfg, useSimMachine } from '@/components/sims/PlaygroundShell'
-import { BLOCK_TABLE_EXPLORER_TASKS as BLOCK_TABLE_TASKS } from '@/components/sims/blockTableExplorer.tasks'
 import ZooChart from '@/components/sims/ZooChart'
 import { Slider } from '@/components/ui/slider'
 import { ZOO_PRESETS, zooBytes, zooPresetById } from '@/lib/kv-zoo'
@@ -377,7 +376,6 @@ export default function KvCacheSim() {
       simId="sim-kv"
       title={MACHINE_TITLE[machineMode]}
       subtitle={MACHINE_SUBTITLE[machineMode]}
-      tasks={machineMode === 'blocks' ? BLOCK_TABLE_TASKS : []}
       help={
         machineMode === 'blocks' ? (
           <p>

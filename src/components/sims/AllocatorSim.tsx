@@ -7,21 +7,18 @@
  * The heap is the World's engine (src/lib/world/heap) behind src/lib/sims/models/allocator.ts, which
  * the phone-mode outcomes read too. Four task scripts there are the outcome tasks' canonical runs
  * (allocator.tasks.ts): the learner loads one, plays it to the end, and the sim reports the result
- * through `observe`.
+ * through `observe`. The fifth task, `alloc.double-free`, is the inspector's own run of a free list.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Zap } from 'lucide-react'
 import RustLab from '@/components/sims/RustLab'
 import { RUST_LAB_TASKS } from '@/components/sims/rustLab.tasks'
-import { ALLOCATOR_LEGACY_TASKS } from '@/components/sims/allocator.tasks'
 import PlaygroundShell, {
   ChipButton,
   ControlGroup,
-  InlineQuiz,
   LogConsole,
   TransportBar,
-  completeSimTask,
   useInitialCfg,
   usePlaygroundContext,
   usePrefersReducedMotion,
@@ -41,10 +38,12 @@ import { useObserve } from '@/lib/sims/host'
 import {
   ADVERSARIAL_TRACE,
   ALTERNATING_TRACE,
+  DOUBLE_FREE,
   FIXED_BLOCK_SIZES,
   HEADER,
   HEAP_SIZE,
   MIN_SPLIT,
+  OBSERVE,
   SCRIPTS,
   SCRIPT_IDS,
   WORK_SIZES,
@@ -61,6 +60,7 @@ import {
   malloc,
   observeScript,
   restoreConfig,
+  runDoubleFree,
   simulateTrace,
 } from '@/lib/sims/models/allocator'
 import type { AllocHeap, Block, ScriptId, ScriptOp, Strategy, TraceResult, WorkOp } from '@/lib/sims/models/allocator'
@@ -70,9 +70,6 @@ const SIM_ID = 'sim-allocator'
 const ROW_BYTES = 256
 
 type HostMode = 'allocator' | 'rust'
-
-/** The pre-registry tasks, as the shell's checklist shows them (the registry lists them as legacy). */
-const ALLOCATOR_TASKS = ALLOCATOR_LEGACY_TASKS.map((t) => ({ id: t.id, text: t.setup, xp: 60 }))
 
 /** A live-workload op or a scripted one. */
 type QueuedOp = WorkOp | ScriptOp
@@ -152,10 +149,7 @@ export default function AllocatorSim() {
     setTicks(ticksRef.current)
     return ticksRef.current
   }, [])
-  const sawFragRef = useRef(false)
   const lastTraceRef = useRef<WorkOp[] | null>(null)
-  const quizCorrectRef = useRef(false)
-  const quizAwardedRef = useRef(false)
 
   /** A script's result is only the canonical one if nothing else touched the heap, so any hand-made change drops it. */
   const dropScript = useCallback(() => {
@@ -180,28 +174,6 @@ export default function AllocatorSim() {
       setCoalesceState(next)
     },
     [dropScript],
-  )
-
-  const awardQuizIfReady = useCallback(
-    (isFixed: boolean, result: TraceResult | null) => {
-      if (
-        quizAwardedRef.current ||
-        !quizCorrectRef.current ||
-        !isFixed ||
-        !result?.history.every((ratio) => ratio === 1)
-      ) {
-        return
-      }
-      quizAwardedRef.current = true
-      completeSimTask(SIM_ID, 't-quiz', 60)
-      log(
-        ticksRef.current,
-        'NOTE',
-        '≡ PagedAttention: fixed blocks keep external fragmentation at 0%; unused capacity remains internal waste',
-        'ok',
-      )
-    },
-    [log],
   )
 
   useWriteCfg(heapToCfg(heap, strategy, coalesceOn, fixedBlockSize))
@@ -340,13 +312,8 @@ export default function AllocatorSim() {
         `${spec.length} ops · ${result.failureSnapshots.length} failed · final usability ${Math.round(result.finalRatio * 100)}%`,
         result.failureSnapshots.length > 0 ? 'warn' : 'ok',
       )
-      if (fixedMode && result.history.every((ratio) => ratio === 1)) {
-        completeSimTask(SIM_ID, 't-paged', 60)
-      }
-      awardQuizIfReady(fixedMode, result)
     },
     [
-      awardQuizIfReady,
       bump,
       fixedBlockSize,
       fixedMode,
@@ -366,31 +333,18 @@ export default function AllocatorSim() {
     setTraceSummary(null)
     setTraceHistory(results[strategy].history)
     log(bump(), 'COMPARE', `same ${trace.length}-op trace replayed under first, next, and best fit`, 'ok')
-    if (selectedTrace) completeSimTask(SIM_ID, 't-trace-lab', 60)
   }, [bump, log, setComparison, setTraceHistory, setTraceSummary, strategy])
 
+  /** The inspector's own 64 B free list (not the heap above): free(p) twice, then malloc until it fails. */
   const runAliasDemo = useCallback(() => {
-    setAliasOwners(['owner A → 0x0040', 'owner B → 0x0040'])
-    log(
-      bump(),
-      'CORRUPT',
-      'double-free inserted 0x0040 twice; malloc A and malloc B now alias the same bytes',
-      'err',
-    )
-    completeSimTask(SIM_ID, 't-double-free', 60)
-  }, [bump, log, setAliasOwners])
-
-  /* ----------------------------- task checks ----------------------------- */
-  useEffect(() => {
-    if (!fixedMode && frag.totalFree > 0 && frag.ratio < 0.25) {
-      sawFragRef.current = true
-      completeSimTask(SIM_ID, 't-frag', 60)
-    }
-    if (!fixedMode && coalesceOn && sawFragRef.current && frag.ratio > 0.75) {
-      completeSimTask(SIM_ID, 't-coalesce', 60)
-    }
-    // Fixed-block observability is credited only after a real trace reports structural usability.
-  }, [frag.ratio, frag.totalFree, fixedMode, coalesceOn])
+    const run = runDoubleFree()
+    const t = bump()
+    setAliasOwners(run.handed.map((addr, i) => `owner ${String.fromCharCode(65 + i)} → ${hx4(addr)}`))
+    log(t, 'CORRUPT', `double-free inserted ${hx4(DOUBLE_FREE.p)} twice; malloc now hands it to two owners`, 'err')
+    log(t, 'ALLOC', `${run.handed.length} pointers from ${run.distinct} blocks, then ENOMEM`, 'warn')
+    observe({ key: OBSERVE.doubleFree, value: run.handed.length, unit: 'pointers' })
+    log(t, 'OBSERVE', `${run.handed.length} pointers handed out (${OBSERVE.doubleFree})`, 'ok')
+  }, [bump, log, observe, setAliasOwners])
 
   /** A fresh heap (fixed blocks of `fixed` B, or variable) with nothing queued and every readout cleared. */
   const freshRun = useCallback(
@@ -404,7 +358,6 @@ export default function AllocatorSim() {
       setAliasOwners([])
       ticksRef.current = 0
       setTicks(0)
-      sawFragRef.current = false
       scriptRef.current = null
       setActiveScript(null)
     },
@@ -506,7 +459,7 @@ export default function AllocatorSim() {
           ? 'ownership · borrowing · concurrency'
           : 'free lists · split & coalesce · fragmentation'
       }
-      tasks={mode === 'rust' ? RUST_LAB_TASKS : ALLOCATOR_TASKS}
+      tasks={mode === 'rust' ? RUST_LAB_TASKS : []}
       help={
         mode === 'rust' ? (
           <>
@@ -927,10 +880,14 @@ export default function AllocatorSim() {
               </p>
             </ControlGroup>
 
-            <ControlGroup label="unsafe inspector">
+            <ControlGroup label="unsafe inspector" className="border-b-0">
               <ChipButton onClick={runAliasDemo} className="w-full">
-                double-free → allocate twice
+                double-free, then malloc until it fails
               </ChipButton>
+              <p className="font-mono text-[10px] leading-relaxed text-text-3">
+                A free list of {DOUBLE_FREE.spare.length + 1} blocks of {DOUBLE_FREE.block} B, one of them
+                allocated as p. free(p) runs twice, with no check that p is already free.
+              </p>
               {aliasOwners.length > 0 && (
                 <div className="rounded-sm border border-[#FF5C6C]/50 bg-[#FF5C6C]/10 p-2 font-mono text-[10px] text-[#FF5C6C]">
                   {aliasOwners.map((owner) => (
@@ -939,31 +896,6 @@ export default function AllocatorSim() {
                   <p className="mt-1 text-text-2">writes alias: two owners, one block</p>
                 </div>
               )}
-            </ControlGroup>
-
-            <ControlGroup label="task · explain" className="border-b-0">
-              <InlineQuiz
-                question={`Why do fixed ${fixedBlockSize}B blocks trade internal for external fragmentation?`}
-                options={[
-                  `Every allocation rounds up to a whole block — waste moves inside the block (≤${fixedBlockSize - 1}B) instead of scattering unusable gaps between blocks.`,
-                  'Fixed blocks are faster to search, so the allocator just ignores gaps.',
-                  'The MMU forbids coalescing, so fragmentation is hidden rather than removed.',
-                ]}
-                correctIndex={0}
-                onSolved={() => {
-                  quizCorrectRef.current = true
-                  if (fixedMode && traceSummary?.history.every((ratio) => ratio === 1)) {
-                    awardQuizIfReady(fixedMode, traceSummary)
-                  } else {
-                    log(
-                      ticksRef.current,
-                      'OBSERVE',
-                      'Correct — now run a fixed-block trace to verify the measurement before XP is logged.',
-                      'warn',
-                    )
-                  }
-                }}
-              />
             </ControlGroup>
           </aside>
         </div>

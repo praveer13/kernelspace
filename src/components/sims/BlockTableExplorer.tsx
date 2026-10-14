@@ -4,8 +4,12 @@
  * A hands-on block manager: fixed-size physical blocks, per-sequence logical
  * block tables, refcounted prefix sharing, copy-on-write beam divergence,
  * preemption (swap-to-CPU as in V0 / the paper vs recompute as in V1), and a block-size tradeoff sweep.
+ *
+ * The pool is src/lib/sims/models/blocks.ts. Four outcome tasks (blockTableExplorer.tasks.ts) grade predictions
+ * against what this sim reports through `observe`: the free blocks after a fork, the tokens a write copies, the
+ * blocks a preempted sequence returns, and the tail waste at a block size.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   ArrowRight,
@@ -21,7 +25,6 @@ import {
   ControlGroup,
   LogConsole,
   SliderRow,
-  completeSimTask,
   usePlaygroundContext,
   usePrefersReducedMotion,
   useSimLog,
@@ -34,13 +37,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-
-const SIM_ID = 'sim-kv'
-
-const BLOCK_SIZE = 16
-const PROMPT_TOKENS = 48
-const INITIAL_POOL = 10
-const SWEEP_SIZES = [4, 8, 16, 32, 64]
+import { useObserve } from '@/lib/sims/host'
+import {
+  BLOCK_SIZE,
+  INITIAL_POOL,
+  NEW_REQUEST_BLOCKS,
+  OBSERVE,
+  SWEEP,
+  SWEEP_SIZES,
+  TTFT_MS,
+  admit,
+  divergeB as divergeModel,
+  forkBeam as forkModel,
+  freeCount,
+  initialState,
+  isStart,
+  isStartPlusFork,
+  logicalCount,
+  physicalInUse,
+  preemptVictim,
+  resizePool,
+  sweepRow,
+} from '@/lib/sims/models/blocks'
+import type { PoolState } from '@/lib/sims/models/blocks'
 
 const COLORS: Record<string, string> = {
   A: '#22D3EE',
@@ -48,26 +67,7 @@ const COLORS: Record<string, string> = {
   C: '#3EF2A4',
   D: '#FBBF24',
 }
-
-interface PhysicalBlock {
-  id: number
-  refcount: number
-  seqs: string[]
-  copiedFrom?: number
-  copiedAt?: number
-}
-
-interface Sequence {
-  id: string
-  name: string
-  color: string
-  logicalBlocks: number[]
-}
-
-interface SimState {
-  pool: PhysicalBlock[]
-  seqs: Sequence[]
-}
+const OTHER_COLOR = '#94A3B8'
 
 interface PreemptDialog {
   open: boolean
@@ -76,74 +76,33 @@ interface PreemptDialog {
   mode?: 'swap' | 'recompute'
 }
 
-function createPhysicalPool(size: number): PhysicalBlock[] {
-  return Array.from({ length: size }, (_, i) => ({
-    id: i,
-    refcount: 0,
-    seqs: [],
-  }))
-}
-
-function initialState(): SimState {
-  const pool = createPhysicalPool(INITIAL_POOL)
-  const logicalBlocks = [0, 1, 2]
-  for (const pid of logicalBlocks) {
-    pool[pid].refcount = 2
-    pool[pid].seqs = ['A', 'B']
-  }
-  return {
-    pool,
-    seqs: [
-      { id: 'A', name: 'seq A', color: COLORS.A, logicalBlocks: [...logicalBlocks] },
-      { id: 'B', name: 'seq B', color: COLORS.B, logicalBlocks: [...logicalBlocks] },
-    ],
-  }
-}
-
 export default function BlockTableExplorer() {
   const { embed } = usePlaygroundContext()
   const reducedMotion = usePrefersReducedMotion()
   const { lines, log, clear } = useSimLog()
+  const observe = useObserve()
 
-  const [state, setState] = useState<SimState>(initialState)
-  const [blockSize, setBlockSize] = useState<number>(16)
+  const [state, setState] = useState<PoolState>(() => initialState())
+  const [blockSize, setBlockSize] = useState<number>(BLOCK_SIZE)
   const [poolSize, setPoolSize] = useState<number>(INITIAL_POOL)
   const [preempt, setPreempt] = useState<PreemptDialog>({ open: false, needed: 0 })
-  const [sweepSeen, setSweepSeen] = useState<Set<number>>(new Set([16]))
   const [shareVerified, setShareVerified] = useState(false)
-  const [exhaustedSeen, setExhaustedSeen] = useState(false)
   const [preemptResults, setPreemptResults] = useState<Partial<Record<'swap' | 'recompute', number>>>({})
   const tickRef = useRef(0)
   const [renderTick, setRenderTick] = useState(0)
+  /** The control that opened the preemption dialog; the dialog has no trigger of its own, so focus is handed back to it. */
+  const openerRef = useRef<HTMLElement | null>(null)
 
-  const { pool, seqs } = state
-
-  const freeCount = useMemo(() => pool.filter((b) => b.refcount === 0).length, [pool])
-  const uniqueBlocksPaid = useMemo(() => pool.filter((b) => b.refcount > 0).length, [pool])
-  const totalLogicalBlocks = useMemo(
-    () => seqs.reduce((sum, s) => sum + s.logicalBlocks.length, 0),
-    [seqs],
+  const { pool } = state
+  // The tables as the stage draws them: a name and a colour per sequence (requests past D share a grey).
+  const seqs = useMemo(
+    () => state.seqs.map((q) => ({ ...q, name: `seq ${q.id}`, color: COLORS[q.id] ?? OTHER_COLOR })),
+    [state.seqs],
   )
 
-  /* ---------------- task detection ---------------- */
-  useEffect(() => {
-    if (shareVerified && pool.filter((b) => b.refcount === 2).length === 3 && uniqueBlocksPaid === 3) {
-      completeSimTask(SIM_ID, 't-blk-share', 60)
-    }
-  }, [pool, shareVerified, uniqueBlocksPaid])
-
-
-  useEffect(() => {
-    if (exhaustedSeen && preemptResults.swap !== undefined && preemptResults.recompute !== undefined) {
-      completeSimTask(SIM_ID, 't-blk-preempt', 60)
-    }
-  }, [exhaustedSeen, preemptResults])
-
-  useEffect(() => {
-    if (sweepSeen.has(4) && sweepSeen.has(16) && sweepSeen.has(64)) {
-      completeSimTask(SIM_ID, 't-blk-sweep', 60)
-    }
-  }, [sweepSeen])
+  const freeBlocks = useMemo(() => freeCount(state), [state])
+  const uniqueBlocksPaid = useMemo(() => physicalInUse(state), [state])
+  const totalLogicalBlocks = useMemo(() => logicalCount(state), [state])
 
   /* ---------------- helpers ---------------- */
   const bump = useCallback(() => {
@@ -153,12 +112,17 @@ export default function BlockTableExplorer() {
     return nextTick
   }, [])
 
+  /** A reading graded against a prediction comes off the starting pool; any other pool says so instead of reporting. */
+  const needsStart = useCallback(
+    (t: number, key: string) => log(t, 'TASK', `${key} reads from the starting pool: press reset first, then repeat the step`, 'warn'),
+    [log],
+  )
+
   const reset = useCallback(() => {
     setState(initialState())
-    setBlockSize(16)
+    setBlockSize(BLOCK_SIZE)
     setPoolSize(INITIAL_POOL)
     setPreempt({ open: false, needed: 0 })
-    setSweepSeen(new Set([16]))
     tickRef.current = 0
     setRenderTick(0)
     clear()
@@ -166,44 +130,19 @@ export default function BlockTableExplorer() {
     setShareVerified(false)
   }, [clear, log])
 
-  const resizePool = useCallback(
+  const resizePoolTo = useCallback(
     (newSize: number) => {
       const t = bump()
       setPoolSize(newSize)
-      setState((prev) => {
-        if (newSize > prev.pool.length) {
-          const added: PhysicalBlock[] = Array.from(
-            { length: newSize - prev.pool.length },
-            (_, i): PhysicalBlock => ({
-              id: prev.pool.length + i,
-              refcount: 0,
-              seqs: [],
-            }),
-          )
-          log(t, 'POOL', `grew physical pool to ${newSize} blocks`, 'op')
-          return { ...prev, pool: [...prev.pool, ...added] }
-        }
-        if (newSize < prev.pool.length) {
-          const kept = prev.pool.slice(0, newSize)
-          const evicted = prev.pool.slice(newSize).filter((b) => b.refcount > 0)
-          let nextSeqs = prev.seqs
-          for (const b of evicted) {
-            for (const sid of b.seqs) {
-              nextSeqs = nextSeqs.map((sq: Sequence): Sequence =>
-                sq.id === sid
-                  ? { ...sq, logicalBlocks: sq.logicalBlocks.filter((pid) => pid !== b.id) }
-                  : sq,
-              )
-            }
-            log(t, 'EVICT', `physical block ${b.id} removed from pool (refcount ${b.refcount})`, 'warn')
-          }
-          log(t, 'POOL', `shrank physical pool to ${newSize} blocks`, 'warn')
-          return { ...prev, pool: kept, seqs: nextSeqs }
-        }
-        return prev
-      })
+      const out = resizePool(state, newSize)
+      if (newSize > state.pool.length) log(t, 'POOL', `grew physical pool to ${newSize} blocks`, 'op')
+      if (newSize < state.pool.length) {
+        for (const b of out.evicted) log(t, 'EVICT', `physical block ${b.id} removed from pool (refcount ${b.refcount})`, 'warn')
+        log(t, 'POOL', `shrank physical pool to ${newSize} blocks`, 'warn')
+      }
+      setState(out.state)
     },
-    [bump, log],
+    [bump, log, state],
   )
 
   const verifySharedPrompt = useCallback(() => {
@@ -225,80 +164,48 @@ export default function BlockTableExplorer() {
   /* ---------------- fork beam (prefix sharing) ---------------- */
   const forkBeam = useCallback(() => {
     const t = bump()
-    setState((prev) => {
-      if (prev.seqs.some((s) => s.id === 'C')) {
-        log(t, 'FORK', 'beam C already exists', 'warn')
-        return prev
-      }
-      const b = prev.seqs.find((s) => s.id === 'B')
-      if (!b) return prev
-      const nextPool = prev.pool.map((blk: PhysicalBlock): PhysicalBlock =>
-        b.logicalBlocks.includes(blk.id)
-          ? { ...blk, refcount: blk.refcount + 1, seqs: [...blk.seqs, 'C'] }
-          : blk,
-      )
-      log(t, 'FORK', `beam C forked from B — prefix blocks share refcount`, 'ok')
-      return {
-        pool: nextPool,
-        seqs: [...prev.seqs, { id: 'C', name: 'seq C', color: COLORS.C, logicalBlocks: [...b.logicalBlocks] }],
-      }
-    })
-  }, [bump, log])
+    const fromStart = isStart(state)
+    const out = forkModel(state)
+    if (!out.ok) {
+      if (out.reason === 'exists') log(t, 'FORK', 'beam C already exists', 'warn')
+      return
+    }
+    setState(out.state)
+    log(t, 'FORK', `beam C forked from B — prefix blocks share refcount`, 'ok')
+    if (!fromStart) return needsStart(t, OBSERVE.shareFree)
+    observe({ key: OBSERVE.shareFree, value: freeCount(out.state), unit: 'blocks' })
+    log(t, 'OBSERVE', `${freeCount(out.state)} of ${INITIAL_POOL} blocks free after the fork (${OBSERVE.shareFree})`, 'ok')
+  }, [bump, log, needsStart, observe, state])
 
   /* ---------------- COW write on B ---------------- */
   const divergeB = useCallback(() => {
     const t = bump()
-    setState((prev) => {
-      if (!prev.seqs.some((s) => s.id === 'C')) {
-        log(t, 'COW', 'fork beam C before diverging B so the shared full block is observable', 'warn')
-        return prev
-      }
-      const b = prev.seqs.find((s) => s.id === 'B')
-      if (!b) return prev
-      const logicalIdx = 2
-      const oldPid = b.logicalBlocks[logicalIdx]
-      if (oldPid === undefined) return prev
-      const oldBlk = prev.pool[oldPid]
-      if (!oldBlk || oldBlk.refcount <= 1) {
-        log(t, 'WRITE', `seq B writes logical block ${logicalIdx} → physical ${oldPid} (already private)`, 'op')
-        return prev
-      }
-      const freeIdx = prev.pool.findIndex((blk) => blk.refcount === 0)
-      if (prev.pool.filter((blk) => blk.refcount === 0).length === 1) {
-        setExhaustedSeen(true)
-      }
-      if (freeIdx === -1) {
-        log(t, 'COW', '✗ no free block for copy-on-write — memory pressure', 'err')
-        return prev
-      }
-      const nextPool = prev.pool.map((blk) => {
-        if (blk.id === oldPid) {
-          return { ...blk, refcount: blk.refcount - 1, seqs: blk.seqs.filter((sid) => sid !== 'B') }
-        }
-        if (blk.id === freeIdx) {
-          return { ...blk, refcount: 1, seqs: ['B'], copiedFrom: oldPid, copiedAt: t }
-        }
-        return blk
-      })
-      const nextSeqs = prev.seqs.map((s: Sequence): Sequence =>
-        s.id === 'B'
-          ? { ...s, logicalBlocks: s.logicalBlocks.map((pid, i) => (i === logicalIdx ? freeIdx : pid)) }
-          : s,
-      )
-      log(
-        t,
-        'COW',
-        `seq B writes shared logical block ${logicalIdx} — copied ${BLOCK_SIZE} tokens P${oldPid} → P${freeIdx}`,
-        'ok',
-      )
-      completeSimTask(SIM_ID, 't-blk-cow', 60)
-      return { pool: nextPool, seqs: nextSeqs }
-    })
-  }, [bump, log])
+    const fromFork = isStartPlusFork(state)
+    const out = divergeModel(state, t)
+    if (out.kind === 'no-fork') {
+      log(t, 'COW', 'fork beam C before diverging B so the shared full block is observable', 'warn')
+      return
+    }
+    if (out.kind === 'private') {
+      log(t, 'WRITE', `seq B writes logical block 2 → physical ${out.physical} (already private)`, 'op')
+      return
+    }
+    if (out.kind === 'no-free') {
+      log(t, 'COW', '✗ no free block for copy-on-write — memory pressure', 'err')
+      return
+    }
+    if (out.kind !== 'copied') return
+    setState(out.state)
+    log(t, 'COW', `seq B writes shared logical block 2 — copied ${out.tokens} tokens P${out.from} → P${out.to}`, 'ok')
+    if (!fromFork) return needsStart(t, OBSERVE.cowCopied)
+    observe({ key: OBSERVE.cowCopied, value: out.tokens, unit: 'tokens' })
+    log(t, 'OBSERVE', `${out.tokens} tokens copied (${OBSERVE.cowCopied})`, 'ok')
+  }, [bump, log, needsStart, observe, state])
 
   /* ---------------- preemption ---------------- */
   const beginPreempt = useCallback(
     (needed: number) => {
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
       setPreempt({ open: true, needed })
       log(bump(), 'PREEMPT', `free queue exhausted — choose victim and policy`, 'warn')
     },
@@ -309,107 +216,56 @@ export default function BlockTableExplorer() {
     const { victimId, mode, needed } = preempt
     if (!victimId || !mode) return
     const t = bump()
-
-    setState((prev) => {
-      const victim = prev.seqs.find((s) => s.id === victimId)
-      if (!victim) return prev
-
-      // free victim's exclusive references
-      const nextPool = prev.pool.map((blk) => {
-        if (!victim.logicalBlocks.includes(blk.id)) return blk
-        const nextSeqs = blk.seqs.filter((sid) => sid !== victimId)
-        const nextRef = blk.refcount - 1
-        if (nextRef <= 0) {
-          return { id: blk.id, refcount: 0, seqs: [] }
-        }
-        return { ...blk, refcount: nextRef, seqs: nextSeqs }
-      })
-
-      const freed = nextPool.filter((blk, i) => blk.refcount === 0 && prev.pool[i].refcount > 0).length
-      log(
-        t,
-        'PREEMPT',
-        `victim ${victimId}: ${mode === 'swap' ? 'swap to CPU DRAM (V0 / paper option)' : 'recompute on demand (V1)'} — freed ${freed} block(s)`,
-        mode === 'swap' ? 'ok' : 'warn',
-      )
-
-      // admit new request D
-      const freeBlocks = nextPool.filter((b) => b.refcount === 0)
-      if (freeBlocks.length < needed) {
-        log(t, 'ALLOC', 'still not enough blocks after preemption', 'err')
-        return { pool: nextPool, seqs: prev.seqs.filter((s) => s.id !== victimId) }
-      }
-      const taken = freeBlocks.slice(0, needed).map((b) => b.id)
-      const admittedPool = nextPool.map((b: PhysicalBlock): PhysicalBlock =>
-        taken.includes(b.id) ? { ...b, refcount: 1, seqs: ['D'] } : b,
-      )
-      if (admittedPool.every((block) => block.refcount > 0)) {
-        setExhaustedSeen(true)
-      }
-      const admittedSeqs = prev.seqs
-        .filter((s) => s.id !== victimId)
-        .concat({ id: 'D', name: 'seq D', color: COLORS.D, logicalBlocks: taken })
-      log(t + 1, 'ALLOC', `new request D admitted — ${needed} block(s)`, 'ok')
-      const ttftMs = mode === 'swap' ? 42 : 118
-      setPreemptResults((previous) => ({ ...previous, [mode]: ttftMs }))
-      log(t + 2, 'TTFT', `${mode}: resumed request TTFT ${ttftMs} ms`, mode === 'swap' ? 'ok' : 'warn')
-      setPreempt({ open: false, needed: 0 })
-      return { pool: admittedPool, seqs: admittedSeqs }
-    })
-  }, [bump, log, preempt])
+    const out = preemptVictim(state, victimId, needed)
+    if (out === null) return
+    setState(out.state)
+    log(
+      t,
+      'PREEMPT',
+      `victim ${victimId}: ${mode === 'swap' ? 'swap to CPU DRAM (V0 / paper option)' : 'recompute on demand (V1)'} — freed ${out.freed} block(s)`,
+      mode === 'swap' ? 'ok' : 'warn',
+    )
+    observe({ key: OBSERVE.preemptFreed(victimId), value: out.freed, unit: 'blocks' })
+    log(t, 'OBSERVE', `${out.freed} block(s) returned to the free queue (${OBSERVE.preemptFreed(victimId)})`, 'ok')
+    if (out.admitted === null) {
+      log(t, 'ALLOC', 'still not enough blocks after preemption — pick another victim', 'err')
+      setPreempt((p) => ({ ...p, victimId: undefined }))
+      return
+    }
+    log(t + 1, 'ALLOC', `new request ${out.admitted} admitted — ${needed} block(s)`, 'ok')
+    const ttftMs = TTFT_MS[mode]
+    setPreemptResults((previous) => ({ ...previous, [mode]: ttftMs }))
+    log(t + 2, 'TTFT', `${mode}: resumed request TTFT ${ttftMs} ms`, mode === 'swap' ? 'ok' : 'warn')
+    setPreempt({ open: false, needed: 0 })
+  }, [bump, log, observe, preempt, state])
 
   const spawnPressure = useCallback(() => {
-    const needed = 4 // 64-token prompt
-    const available = pool.filter((b) => b.refcount === 0).length
-    if (available === 0) setExhaustedSeen(true)
-    if (available < needed) {
+    const needed = NEW_REQUEST_BLOCKS // 64-token prompt
+    if (freeBlocks < needed) {
       beginPreempt(needed)
       return
     }
     const t = bump()
-    const taken = pool.filter((b) => b.refcount === 0).slice(0, needed).map((b) => b.id)
-    if (available === needed) setExhaustedSeen(true)
-    setState((prev) => {
-      if (prev.seqs.some((s) => s.id === 'D')) return prev
-      const nextPool = prev.pool.map((b: PhysicalBlock): PhysicalBlock =>
-        taken.includes(b.id) ? { ...b, refcount: 1, seqs: ['D'] } : b,
-      )
-      return {
-        pool: nextPool,
-        seqs: [...prev.seqs, { id: 'D', name: 'seq D', color: COLORS.D, logicalBlocks: taken }],
-      }
-    })
-    log(t, 'ALLOC', `new request D admitted — ${needed} block(s) (free now ${available - needed})`, 'ok')
-  }, [beginPreempt, bump, log, pool])
+    const out = admit(state, needed)
+    if (out === null) return
+    setState(out.state)
+    log(t, 'ALLOC', `new request ${out.id} admitted — ${needed} block(s) (free now ${freeBlocks - needed})`, 'ok')
+  }, [beginPreempt, bump, freeBlocks, log, state])
 
   /* ---------------- block-size sweep ---------------- */
-  const sweepData = useMemo(() => {
-    return SWEEP_SIZES.map((size) => {
-      const entries = Math.ceil(PROMPT_TOKENS / size)
-      const tail = PROMPT_TOKENS % size
-      const tailWaste = tail === 0 ? 0 : size - tail
-      const wastePct = (tailWaste / PROMPT_TOKENS) * 100
-      const overheadBytes = entries * 8
-      return { size, entries, tailWaste, wastePct, overheadBytes }
-    })
-  }, [])
-
+  const sweepData = SWEEP
   const currentSweep = sweepData.find((d) => d.size === blockSize) ?? sweepData[2]
 
   const onBlockSizeChange = useCallback(
     (idx: number) => {
       const size = SWEEP_SIZES[idx]
       setBlockSize(size)
-      setSweepSeen((prev) => {
-        const next = new Set(prev)
-        next.add(size)
-        return next
-      })
-      const data = sweepData.find((d) => d.size === size) ?? sweepData[2]
+      const data = sweepRow(size)
       const t = bump()
       log(t, 'SWEEP', `block size ${size} tokens — tail waste ${data.wastePct.toFixed(1)}% · ${data.entries} table entries`, 'op')
+      observe({ key: OBSERVE.sweepTail(size), value: data.tailWaste, unit: 'tokens' })
     },
-    [bump, log, sweepData],
+    [bump, log, observe],
   )
 
   return (
@@ -423,7 +279,7 @@ export default function BlockTableExplorer() {
               block size {BLOCK_SIZE} tokens
             </span>
             <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
-              pool {poolSize} blocks · free {freeCount}
+              pool {poolSize} blocks · free {freeBlocks}
             </span>
             <span className="rounded-sm border border-line bg-surface-1 px-2 py-0.5">
               logical blocks {totalLogicalBlocks} · unique physical {uniqueBlocksPaid}
@@ -557,14 +413,23 @@ export default function BlockTableExplorer() {
               if (!open) setPreempt({ open: false, needed: 0 })
             }}
           >
-            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto bg-surface-1 p-4 sm:max-w-md sm:p-5">
+            <DialogContent
+              className="max-h-[calc(100dvh-2rem)] overflow-y-auto bg-surface-1 p-4 sm:max-w-md sm:p-5"
+              onCloseAutoFocus={(e) => {
+                const opener = openerRef.current
+                if (opener?.isConnected) {
+                  e.preventDefault()
+                  opener.focus()
+                }
+              }}
+            >
               <DialogHeader className="text-left">
                 <DialogTitle className="flex items-center gap-2 font-display text-[15px] font-semibold text-text-1">
                   <Cpu size={18} className="text-danger" />
                   free queue exhausted
                 </DialogTitle>
                 <DialogDescription className="font-mono text-[11px] leading-relaxed text-text-2">
-                  a new request needs {preempt.needed} block(s) but only {freeCount} are free. pick
+                  a new request needs {preempt.needed} block(s) but only {freeBlocks} are free. pick
                   a victim sequence and a preemption policy.
                 </DialogDescription>
               </DialogHeader>
@@ -709,7 +574,7 @@ export default function BlockTableExplorer() {
               <span className="flex items-center gap-1">
                 <Database size={12} /> free queue
               </span>
-              <span className={freeCount === 0 ? 'text-danger' : 'text-accent'}>{freeCount}</span>
+              <span className={freeBlocks === 0 ? 'text-danger' : 'text-accent'}>{freeBlocks}</span>
             </div>
             <div className="mb-3 flex flex-wrap gap-2">
               <ChipButton onClick={spawnPressure} color="#FB7185">
@@ -723,7 +588,7 @@ export default function BlockTableExplorer() {
               min={6}
               max={14}
               step={1}
-              onChange={resizePool}
+              onChange={resizePoolTo}
             />
             <p className="font-mono text-[10px] leading-relaxed text-text-3">
               spawning a 64-token request needs 4 free blocks. if the free queue hits zero mid-way,
