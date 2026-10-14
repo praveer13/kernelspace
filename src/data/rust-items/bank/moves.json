@@ -13,7 +13,7 @@
       }
     },
     "request-handoff-let": {
-      "hash": "7260b791d1aea3f687cc012e775c051f3fd975e5eae02cf2ca4387327cea07d9",
+      "hash": "fe1a6e39e8a34e110c354db5bca2c07d2ea02e4653bbcdf9f1b2632cae0c15b4",
       "variants": {
         "base": {"result":"compiles"},
         "read-moved": {"result":{"code":"E0382","line":10,"message":"borrow of moved value: `req`"},"fixes":{"read-queued":"compiles","clone-req":"compiles","borrow-req":{"code":"E0308","line":11},"into-req":{"code":"E0382","line":10}}},
@@ -93,7 +93,7 @@
       }
     },
     "seal-batch-field-order": {
-      "hash": "10d37e31f67594d4b4c0f229bc66195801ee6e7a52dd3e51edbae48ca11ae403",
+      "hash": "a3ac31bfe6893845e1ac55935ed8401774b6884b397e7570ff42700682b0f4be",
       "variants": {
         "base": {"result":"compiles"},
         "swap-fields": {"result":{"code":"E0382","line":8,"message":"borrow of moved value: `v`"},"fixes":{"size-first":"compiles","clone-ids":"compiles","capacity":{"code":"E0382","line":8},"size-zero":"compiles"}},
@@ -101,7 +101,7 @@
       }
     },
     "prompt-concat-consumes": {
-      "hash": "02b055a67c5c2d0953611a6a081b6c852199251a488897f704f1167e2573d07a",
+      "hash": "fb41abb5df5bcfb783a29ae1efadf8bb72d6366ca2d1d877980ab34a9e7f14b3",
       "variants": {
         "base": {"result":"compiles"},
         "plus-moves": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `sys`"},"fixes":{"format-join":"compiles","clone-left":"compiles","from-sys":{"code":"E0382","line":4},"push-str":{"code":"E0599","line":3}}},
@@ -162,7 +162,7 @@
       }
     },
     "longest-prompt-index": {
-      "hash": "87d308700549d1f86c6516f69396cce770dc00895f7e81826b9d6f0be8310bba",
+      "hash": "6e2a46fbcc2db8c93f2cc6a7d5d976d4d2a42d1870c89f8de7718ae18a224506",
       "variants": {
         "base": {"result":"compiles"},
         "index-move": {"result":{"code":"E0507","line":2,"message":"cannot move out of index of `Vec<String>`"},"fixes":{"borrow-first":"compiles","clone-first":"compiles","whole-list":"compiles","mut-first":{"code":"E0596","line":2}}},
@@ -199,7 +199,7 @@
       }
     },
     "plan-box-deref": {
-      "hash": "c3a555fb7c40a3a215f7a11265236fb61705885a23d6396f9d3555b78a0b5235",
+      "hash": "6a1c708d839be2823efef2e02e928476a5035a8f8b02dbc1a9c0f2a8772d25d2",
       "variants": {
         "base": {"result":"compiles"},
         "ref-box": {"result":{"code":"E0507","line":7,"message":"cannot move out of `*plan` which is behind a shared reference"},"fixes":{"reborrow":"compiles","clone-plan":"compiles","triple-deref":{"code":"E0614","line":7}}},
@@ -348,7 +348,7 @@
       }
     },
     "draft-params-update": {
-      "hash": "01ed255952be28b29c506a84c6c590b2912f435dc6c2d2f66aa594bff7615bbd",
+      "hash": "15df2c9c745a3ee056386df30ec5dee5eef9f6878d18e804d925afb692e39726",
       "variants": {
         "base": {"result":"compiles"},
         "read-stop": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `b.stop`"},"fixes":{"read-p":"compiles","clone-update":"compiles","two-reads":{"code":"E0382","line":9},"zero":"compiles"}},
@@ -382,7 +382,7 @@
       }
     },
     "head-of-queue-index": {
-      "hash": "80ad1d035a0523df653b2ece1732f1564026ffec9da1e99550ad80c091f27719",
+      "hash": "bf2493d67b45096d46638babe54359e9c9cd6ee590dd50480791d4ff90325809",
       "variants": {
         "base": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<Request>`"},"fixes":{"remove-head":"compiles","clone-head":"compiles","pop-last":"compiles","first-deref":{"code":"E0507","line":5}}},
         "shared-queue": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<Request>`"}},
@@ -400,7 +400,7 @@
       }
     },
     "params-builder-chain": {
-      "hash": "afb1db7422242eedf5d9f01575bc06ed561adde4b8abf91295cb202b97e0b69b",
+      "hash": "461489eda8c341f1de65f36bcbba75cbcb7b30234520236090c2e969e60e86a0",
       "variants": {
         "base": {"result":{"code":"E0382","line":13,"message":"borrow of moved value: `b`"},"fixes":{"rebind":"compiles","clone-recv":"compiles","ref-recv":{"code":"E0507","line":12},"discard":{"code":"E0382","line":13}}},
         "ref-receiver": {"result":{"code":"E0507","line":12,"message":"cannot move out of a shared reference"}},
@@ -408,10 +408,10 @@
       }
     },
     "rotate-reinit-binding": {
-      "hash": "4811fe7adc722e1629a8e2a6753161067d3fb78c2f5f7a814e5f3d1853c34979",
+      "hash": "967e274c9f8db892b09ceafe5bca6e704a4523a5963c8f7af4c33eb95e1e9be2",
       "variants": {
         "base": {"result":"compiles"},
-        "read-moved": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `cur`"},"fixes":{"assign-only":"compiles","clone-old":"compiles","ref-old":{"code":"E0308","line":5}}},
+        "read-moved": {"result":{"code":"E0382","line":4,"message":"borrow of moved value: `cur`"},"fixes":{"read-old":"compiles","clone-old":"compiles","ref-old":{"code":"E0308","line":5}}},
         "immutable-reinit": {"result":{"code":"E0384","line":4,"message":"cannot assign to immutable argument `cur`"},"fixes":{"mut-param":"compiles","ref-param":{"code":"E0308","line":4},"clone-from":{"code":"E0382","line":4}}},
         "move-twice": {"result":{"code":"E0382","line":4,"message":"use of moved value: `cur`"}}
       }

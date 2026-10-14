@@ -10,10 +10,10 @@
       "changes": [
         {"line":1,"path":"tokens","before":"","after":"RO"},
         {"line":2,"path":"snapshot","before":"","after":"RO"},
-        {"line":3,"path":"tokens","before":"RO","after":""},
         {"line":3,"path":"moved","before":"","after":"RO"},
-        {"line":4,"path":"snapshot","before":"RO","after":""},
-        {"line":4,"path":"moved","before":"RO","after":""}
+        {"line":3,"path":"tokens","before":"RO","after":""},
+        {"line":4,"path":"moved","before":"RO","after":""},
+        {"line":4,"path":"snapshot","before":"RO","after":""}
       ],
       "uses": [
         {"line":2,"col":21,"path":"tokens","needs":"R","has":"RO"},

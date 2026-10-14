@@ -8,7 +8,8 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -83,13 +84,46 @@ describe('at least 3 snippets per error code is a failure', () => {
     expect(problems[0]).toContain('at least 3 per error code')
   })
 
-  test('the script exits 1 on it and 0 on the frozen bank', () => {
-    const run = Bun.spawnSync(['bun', 'scripts/verify-rust-items.ts'], { cwd: ROOT })
-    expect(run.exitCode).toBe(0)
-    expect(run.stderr.toString()).not.toContain('warning')
-    const src = readFileSync(path.join(ROOT, 'scripts/verify-rust-items.ts'), 'utf8')
-    expect(src).toContain('problems.push(...codeProblems(groups))')
-    expect(src).not.toContain('warnings.push')
+  test('the script exits 0 on the frozen bank and 1 on a bank where a code has two snippets', () => {
+    const frozen = Bun.spawnSync(['bun', 'scripts/verify-rust-items.ts'], { cwd: ROOT })
+    expect(frozen.exitCode).toBe(0)
+    expect(frozen.stderr.toString()).not.toContain('warning')
+
+    // the same script, run for real, over a bank thinned the way the test above thins it: a preload
+    // swaps the loader for one that drops all but two of E0381's snippets (and their bank entries)
+    const dir = mkdtempSync(path.join(tmpdir(), 'museum-thin-'))
+    try {
+      const preload = path.join(dir, 'thin.ts')
+      writeFileSync(
+        preload,
+        [
+          `import { mock } from 'bun:test'`,
+          `const real = await import(${JSON.stringify(path.join(ROOT, 'src/data/rust-items/index.ts'))})`,
+          `const groups = await real.loadRustGroups()`,
+          `const keep = new Set()`,
+          `const thinned = groups.map((g) => {`,
+          `  const snippets = g.snippets.filter((s) => {`,
+          `    if (!s.variants.some((v) => v.expect !== 'compiles' && v.expect.code === 'E0381')) return true`,
+          `    keep.add(s.id)`,
+          `    return keep.size <= 2`,
+          `  })`,
+          `  const bank = g.bank && { ...g.bank, snippets: Object.fromEntries(Object.entries(g.bank.snippets).filter(([id]) => snippets.some((s) => s.id === id))) }`,
+          `  return { ...g, snippets, bank }`,
+          `})`,
+          `mock.module(${JSON.stringify(path.join(ROOT, 'src/data/rust-items/index.ts'))}, () => ({ ...real, loadRustGroups: async () => thinned }))`,
+          '',
+        ].join('\n'),
+      )
+      const thin = Bun.spawnSync(['bun', '--preload', preload, 'scripts/verify-rust-items.ts'], { cwd: ROOT })
+      const err = thin.stderr.toString()
+      expect(err).toContain('E0381 has 2 snippet(s)')
+      expect(err).toContain('at least 3 per error code')
+      expect(err).toContain('1 problem(s)')
+      expect(err).not.toContain('warning')
+      expect(thin.exitCode).toBe(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

@@ -1115,8 +1115,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let before = &mut *total;' },
         expect: { code: 'E0503', line: 3 },
         why: '`before` is a `&mut` reborrow of `*total` that line 4 still prints, so `*total` has lost R, and `+=` reads it before it writes.',
-        focus: { line: 3, path: 'total', needs: ['read', 'write'] },
-        permission: 'read',
       },
     ],
   },

@@ -42,7 +42,7 @@
       }
     },
     "swap-block-owners": {
-      "hash": "ddab6f49dce66e754f636298796a611459d57015b3945523b2b87cb5019758ca",
+      "hash": "ab34fb1e3ff8271bd02fba29c653e1becbe803009904c674c985aa60dbb4a631",
       "variants": {
         "base": {"result":"compiles"},
         "index-twice": {"result":{"code":"E0499","line":4,"message":"cannot borrow `*owners` as mutable more than once at a time"},"fixes":{"from-tail":"compiles","same-half":{"code":"E0499","line":4},"copy-owner":{"code":"E0308","line":5}}},

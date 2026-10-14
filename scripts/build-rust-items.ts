@@ -143,11 +143,12 @@ export async function rustcVersion(): Promise<string> {
 /* ------------------------------ the bank ------------------------------ */
 
 /** A gate that lets at most `jobs` calls run at once, across every snippet being built. */
-function limiter(jobs: number): <T>(task: () => Promise<T>) => Promise<T> {
+export function limiter(jobs: number): <T>(task: () => Promise<T>) => Promise<T> {
   let active = 0
   const waiting: (() => void)[] = []
   return async <T>(task: () => Promise<T>): Promise<T> => {
-    if (active >= jobs) await new Promise<void>((r) => waiting.push(r))
+    // a woken waiter rechecks: a task that arrived meanwhile may have taken the slot the finishing one freed
+    while (active >= jobs) await new Promise<void>((r) => waiting.push(r))
     active++
     try {
       return await task()

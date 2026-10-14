@@ -201,7 +201,7 @@
       }
     },
     "running-total-bump": {
-      "hash": "65a892e133f14da5fb23740d9871fc28a77fe7ce4dcc247de256397d91b3c893",
+      "hash": "531bc73c2d9f71ae7c05f11b6226886b955e1c59fe5b0a04918f17fc17da399e",
       "variants": {
         "base": {"result":"compiles"},
         "ref-before": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*total` because it is borrowed"},"fixes":{"copy-before":"compiles","spell-out":{"code":"E0506","line":3},"mut-before":{"code":"E0503","line":3}}},

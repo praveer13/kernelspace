@@ -22,7 +22,7 @@
       }
     },
     "first-word-vocab": {
-      "hash": "7353f91d5ade5266abdaebc5968d0bc8492a2220511a5d5e0281288562468050",
+      "hash": "2df3b0e502e54d702ea6ec13862323302856cd9d317fc339a467d6bb0a7432c1",
       "variants": {
         "base": {"result":"compiles"},
         "owned-line": {"result":{"code":"E0515","line":7,"message":"cannot return value referencing local variable `line`"},"fixes":{"borrow-vocab":"compiles","clone-line":{"code":"E0515","line":7},"static-ret":{"code":"E0515","line":7}}},
@@ -179,7 +179,7 @@
       }
     },
     "queue-via-method": {
-      "hash": "607586c1924cdb4893954edd9c1348bacb51b7af804e79298069197d7aea59fe",
+      "hash": "1a184f1f5e556de10ede1fae578ff49ea9817ca0a406af899176f14c1b855a1f",
       "variants": {
         "base": {"result":"compiles"},
         "via-method": {"result":{"code":"E0503","line":11,"message":"cannot use `s.left` because it was mutably borrowed"},"fixes":{"field-borrow":"compiles","clone-q":"compiles","whole-s":{"code":"E0599","line":12}}},
@@ -188,7 +188,7 @@
       }
     },
     "closure-field-capture-sched": {
-      "hash": "38c13b278563d929a9bb4aa5aef70027721dc9a6be85ec7a9cc145886418cbfd",
+      "hash": "41cb9a542a6aff366fd8b258555eb871a41f0570367b83231d84d72795160417",
       "variants": {
         "base": {"result":"compiles"},
         "move-closure": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `s`"},"fixes":{"drop-move":"compiles","method-call":{"code":"E0382","line":9},"deref-left":{"code":"E0614","line":8}}},
