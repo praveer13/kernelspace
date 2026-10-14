@@ -2,7 +2,7 @@
  * Fault physics (docs/specs/wave-2.md §9.1, task 2b-03).
  *
  * Three things are held here:
- *   1. No existing run changes. With no faults, Fleet, Fleet Week and the incident runs give the outputs they
+ *   1. No existing run changes. With no faults, Fleet and Fleet Week give the outputs they
  *      gave before FaultSpec v2 (a pinned hash, taken on the base commit), and an injector with an empty list
  *      is the same run as no injector at all.
  *   2. The hooks do what they say (usable blocks, drain rate, tenant tags, step slowdown, scheduler override,
@@ -72,7 +72,7 @@ const sha = (v: unknown) => new Bun.CryptoHasher('sha256').update(JSON.stringify
 const PRACTICE: week.FleetWeekSeeds = { seed: null, trace: PRACTICE_SEED, faults: 0xfa17, deathPick: 0, deathTick: 400 }
 const NO_MODULES: week.ModuleBytes = { sched: null, mgr: null, queue: null }
 
-/** Fleet, Fleet Week and incident outputs with no FaultSpec v2 kind anywhere: what 2b-03 must not move. */
+/** Fleet and Fleet Week outputs with no FaultSpec v2 kind anywhere: what 2b-03 must not move. */
 async function existingRuns() {
   const out: Record<string, unknown> = {}
   const cfg: EngineConfig = { numBlocks: 256, blockSize: 16, maxRunning: 16, sloTtft: 40, prefillChunk: 128 }
@@ -104,7 +104,6 @@ async function existingRuns() {
     out[`week/${i}/act1`] = await week.runAct1(NO_MODULES, s)
     out[`week/${i}/act2`] = await week.runAct2(NO_MODULES, { workers: 2, router: 'rr' }, s)
     out[`week/${i}/act3`] = week.evalAct3(s)
-    for (const id of Object.keys(week.INCIDENT_SCENARIOS)) out[`week/${i}/incident/${id}`] = week.loadIncident(id, s)
   }
   return out
 }
@@ -112,12 +111,14 @@ async function existingRuns() {
 /**
  * sha256 of `existingRuns()` on the base commit (wave-2b @ 34cb88b), before FaultSpec v2 existed. A change
  * here means a run with no faults no longer replays: fix the change, never the hash. (verify:seeds and the
- * leaderboard parity were also diffed before and after 2b-03; verify-leaderboard pins its own numbers.)
+ * leaderboard parity were also diffed before and after 2b-03; verify-leaderboard pins its own numbers.
+ * 2b-17 retired the static incidents (`loadIncident`) and took their outputs out of this hash; it was re-taken on the
+ * unchanged sources with only that line removed, so the rest still replays byte for byte.)
  */
-const EXISTING_RUNS_SHA256 = '9052366392069d4dea0991ad5c160ca36e67f3263b72976591e969f35e90f5ab'
+const EXISTING_RUNS_SHA256 = '9be37750c694f2c341ba01e7fd07802accf7b8c089dd3f0ab79ff7c3a8e75308'
 
 describe('no existing run changes', () => {
-  test('Fleet, Fleet Week and incident outputs are byte-identical to the base commit', async () => {
+  test('Fleet and Fleet Week outputs are byte-identical to the base commit', async () => {
     expect(sha(await existingRuns())).toBe(EXISTING_RUNS_SHA256)
   }, SLOW)
 
