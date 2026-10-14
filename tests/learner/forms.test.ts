@@ -3,7 +3,7 @@
  * counterbalanced across the six orders of the three seed sets, opt-in and measurement only. The draws run under
  * `settle`, so the test that matters most withholds one compile bank group and gets the fully loaded result back.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement } from 'react'
@@ -210,6 +210,46 @@ describe('the forms', () => {
         expect(new Set(slots.map((x) => x.inst.rev)).size, `${t} ${s}`).toBe(36)
         expect(new Set(slots.map((x) => `${x.family}/${x.variant}#${x.inst.seed}`)).size).toBe(36)
       }
+    }
+  })
+
+  test('a forced fingerprint collision bumps the same seed set whichever form the shuffle gives it to', async () => {
+    // A family whose every instance carries all three KCs and has its own fingerprint, except that seed set 0's and seed set
+    // 1's first draws are made to collide: set 1 (drawn after set 0, whatever the order) must move on to its first bump.
+    const kcOf = (n: number) => ({ id: `tx.k${n}`, track: 't1', kind: 'concept', lessons: [], requires: [], gen: ['fake'], since: '2026-01-01' }) as unknown as (typeof KCS)[number]
+    const kcs = [0, 1, 2].map(kcOf)
+    const collide = new Set<number>()
+    const fake: Gen = {
+      id: 'fake',
+      version: 1,
+      title: 'fake',
+      kcs: kcs.map((k) => k.id),
+      variants: [{ id: 'v', title: 'v', kcs: kcs.map((k) => k.id), levels: [2], nsec: 10 }],
+      ratioRules: [],
+      make: (seed, level, variant = 'v') =>
+        ({ family: 'fake', version: 1, variant, seed, level, params: {}, kcs: kcs.map((k) => k.id), prompt: [], answer: { kind: 'numeric' }, claims: [], rev: collide.has(seed) ? 'same' : `r${seed}`, nsec: 10 }) as unknown as ReturnType<Gen['make']>,
+      grade: () => ({ correct: true }) as unknown as ReturnType<Gen['grade']>,
+      solution: () => [],
+      pins: [],
+    }
+    const orders = new Map<string, number>()
+    for (let e = 1; orders.size < FORM_ORDERS.length && e < 5000; e++) {
+      const key = formOrder('t1', e).join('')
+      if (!orders.has(key)) orders.set(key, e)
+    }
+    expect(orders.size).toBe(6)
+    for (const [key, e] of orders) {
+      collide.clear()
+      collide.add(formSeed('t1', 0, 0, e))
+      collide.add(formSeed('t1', 1, 0, e))
+      const f = buildForms('t1', { gens: new Map([['fake', fake]]), kcs, expSeed: e })!
+      const bySet = (set: number) => (['A', 'B', 'C'] as const).map((id) => f.forms[id]).find((p) => p.set === set)!.slots
+      expect(f.order.join(''), key).toBe(key)
+      expect(bySet(0)[0].inst.seed, key).toBe(formSeed('t1', 0, 0, e))
+      expect(bySet(1)[0].inst.seed, key).toBe(formSeed('t1', 1, 0, e, 1))
+      // every other slot keeps its first-draw seed, and set 2 is untouched
+      for (const set of [0, 1, 2]) bySet(set).forEach((x, i) => (set === 1 && i === 0 ? null : expect(x.inst.seed, `${key} ${set}.${i}`).toBe(formSeed('t1', set as 0, i, e))))
+      expect(new Set((['A', 'B', 'C'] as const).flatMap((id) => f.forms[id].slots.map((x) => x.inst.rev))).size, key).toBe(36)
     }
   })
 
@@ -782,5 +822,65 @@ describe('the card on /me, mounted on a fixture', () => {
     await dom.until(() => page.container.querySelector('[data-forms-waiting]') !== null)
     expect(page.container.querySelector('[data-forms-tracks]')).toBeNull()
     await page.unmount()
+  })
+
+  describe('in a read-only tab', () => {
+    // the card writes through the store's recordItems, which returns early when the ledger is read-only, so a started form would lose its answers
+    let store: typeof import('../../src/lib/progress').useProgress
+    let before: ReturnType<typeof store.getState>['ledger']
+    const readOnly = () => void store.setState({ ledger: { ...before, readOnly: true, reason: 'versionchange' } })
+    beforeAll(async () => {
+      store = (await import('../../src/lib/progress')).useProgress
+    })
+    beforeEach(() => {
+      before = store.getState().ledger
+    })
+    afterEach(() => {
+      store.setState({ ledger: before })
+    })
+
+    test('with an exp:seed already made it offers no form, says why, and still lists each form’s state', async () => {
+      readOnly()
+      const page = await dom.mount(createElement(FormsCard, { load: () => Promise.resolve(fixture([])) }))
+      await openCard(page)
+      const note = page.container.querySelector('[data-forms-readonly]')!
+      expect(textOf(note)).toContain('This tab is read-only, so a form cannot start here: its answers could not be saved.')
+      expect(textOf(note)).toContain('Open the app in one tab')
+      // R's form A is open on the fixture, yet no Start or Continue button is on the card
+      expect(form(page, 'r', 'A').getAttribute('data-state')).toBe('open')
+      expect(page.container.querySelectorAll('[data-forms-track] button')).toHaveLength(0)
+      expect(page.container.querySelector('[data-form-runner]')).toBeNull()
+      await page.unmount()
+    })
+
+    test('a form that was running when the tab turned read-only is taken off the card rather than left to drop answers', async () => {
+      const page = await dom.mount(createElement(FormsCard, { load: () => Promise.resolve(fixture([])) }))
+      await openCard(page)
+      expect(page.container.querySelector('[data-forms-readonly]')).toBeNull()
+      await dom.press(form(page, 'r', 'A').querySelector('button')!)
+      await dom.until(() => page.container.querySelector('[data-form-runner="A"]') !== null)
+      await dom.act(readOnly)
+      await dom.until(() => page.container.querySelector('[data-form-runner]') === null)
+      expect(page.container.querySelector('[data-forms-readonly]')).not.toBeNull()
+      await page.unmount()
+    })
+
+    test('a test’s own record function is its own write, so the card does not treat it as unsaved', async () => {
+      readOnly()
+      const page = await mountCard(fixture([]))
+      await openCard(page)
+      expect(page.container.querySelector('[data-forms-readonly]')).toBeNull()
+      expect(form(page, 'r', 'A').querySelector('button')).not.toBeNull()
+      await page.unmount()
+    })
+
+    test('without a seed it says the same, not "waiting for the ledger"', async () => {
+      readOnly()
+      const page = await dom.mount(createElement(FormsCard, { load: () => Promise.resolve({ ...fixture([]), expSeed: undefined }) }))
+      await dom.press(page.container.querySelector('button')!)
+      await dom.until(() => page.container.querySelector('[data-forms-waiting]') !== null)
+      expect(textOf(page.container.querySelector('[data-forms-waiting]')!)).toContain('read-only')
+      await page.unmount()
+    })
   })
 })

@@ -758,19 +758,31 @@ function UpNext({ up }: { up: UpNextState }) {
 
 /* ---------------- page assembly ---------------- */
 
+/**
+ * Up Next keeps Progress's rule: with any activity (a streak day or a lesson with a mark) it is the first thing, beside the
+ * rings; a learner with none sees the rings first and Up Next at the foot of the journey, as Progress showed it. (Progress
+ * put it below data ownership; that section is now its own, after this one in Me.tsx.)
+ */
 function JourneyBody() {
+  const streakDays = useProgress((s) => s.streakDays)
+  const lessons = useProgress((s) => s.lessons)
+  const hasAny = streakDays.length > 0 || Object.keys(lessons).length > 0
   const { load, retry } = useSummary()
   const up = useUpNext()
   const nextLessonId = up.status === 'ready' && up.rec.kind === 'lesson' ? up.rec.ref : null
 
   return (
     <>
-      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-        <div>
-          <UpNext up={up} />
+      {hasAny ? (
+        <div className="grid gap-8 lg:grid-cols-[1fr_360px]" data-up-next-place="first">
+          <div>
+            <UpNext up={up} />
+          </div>
+          <RingPanel />
         </div>
+      ) : (
         <RingPanel />
-      </div>
+      )}
 
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
         <XpExplainer />
@@ -786,6 +798,11 @@ function JourneyBody() {
       <TrackBreakdown nextId={nextLessonId} />
       <Heatmap />
       <Achievements />
+      {!hasAny && (
+        <div className="mt-14" data-up-next-place="last">
+          <UpNext up={up} />
+        </div>
+      )}
     </>
   )
 }
