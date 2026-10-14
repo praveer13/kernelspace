@@ -98,6 +98,14 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
       variants: ['pd-ratio', 'transfer-ms'],
     },
     {
+      type: 'exercise',
+      fleet: 'pd-split',
+      title: 'Split the fleet',
+      note: `The best split moved with the workload because the two stages need workers in proportion to the work they do: a prompt holds a prefill slot for ⌈tokens ÷ chunk⌉ ticks, and an output holds a decode slot for one tick per token. Too few prefill workers and prompts queue before they start, so the first token misses its SLO. Too few decode workers and the decode pools fill, a finished prefill waits for blocks, its KV transfer stalls, and requests miss their SLOs there. The pipeline runs at the slower stage's rate, so goodput is highest where the two are about balanced and lower at both ends.
+
+No worker in this model both prefills and decodes, so the interference a colocated fleet pays never appears; that is what the split buys. It is also why the lesson's decision procedure starts from the traffic: the ratio of prompt work to output work sets the split, and a split sized for one workload is wrong for another. The model is a flat-tick toy (version 1), so take the shape and the method from it, not its worker counts.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {
