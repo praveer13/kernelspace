@@ -123,6 +123,34 @@ describe('competence statements (§12.4)', () => {
     expect(selectCompetence(j.events, CONTENT, D(1))).toMatchObject([{ kc: MLA, n: 6, days: 2 }])
   })
 
+  test('no form item counts (D34): forms alone that would meet the bar give no can line, and the same items as src item do', () => {
+    // six right answers on two days, each a fresh seed at full credit: the bar, met only by form items
+    const forms = new Journal()
+    for (let i = 0; i < 6; i++) item(forms, D(i % 2), true, { src: 'form' })
+    expect(selectCompetence(forms.events, CONTENT, D(1))).toEqual([])
+    expect(competenceEvidence(forms.events, CONTENT, D(1))).toEqual([])
+    // a form probe is a form item too
+    const probes = new Journal()
+    for (let i = 0; i < 6; i++) item(probes, D(i % 2), true, { src: 'form', kind: 'probe' })
+    expect(selectCompetence(probes.events, CONTENT, D(1))).toEqual([])
+    // the same items with src `item` earn the line
+    const plain = new Journal()
+    for (let i = 0; i < 6; i++) item(plain, D(i % 2), true, { src: 'item' })
+    expect(selectCompetence(plain.events, CONTENT, D(1))).toMatchObject([{ kc: MLA, n: 6, days: 2, right: 6, of: 6 }])
+  })
+
+  test('form items neither add to a KC\'s evidence nor take a miss out of its window', () => {
+    const j = ledger([true, true, true, true, true, false])
+    // five forms in a row would push the miss out of the window of six if they counted
+    for (let i = 0; i < 5; i++) item(j, D(1), true, { src: 'form' })
+    expect(competenceEvidence(j.events, CONTENT, D(1))).toEqual([{ kc: MLA, n: 6, days: 2, right: 5, of: 6, last: D(1), met: true }])
+    item(j, D(1), false, { src: 'form' })
+    expect(competenceEvidence(j.events, CONTENT, D(1))[0]).toMatchObject({ n: 6, right: 5 })
+    // one more real miss drops it below the bar, whatever the forms did
+    item(j, D(1), false)
+    expect(selectCompetence(j.events, CONTENT, D(1))).toEqual([])
+  })
+
   test('an item counts for every KC it carries, and statements come in the graph order', () => {
     const j = new Journal()
     for (let i = 0; i < 6; i++) {
