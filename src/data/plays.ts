@@ -159,10 +159,96 @@ export const SCHEDULER_PRODUCTION_ROWS: readonly ProductionRow[] = [
   },
 ]
 
+/**
+ * The Tiling Cube's card (wave-3.md §6.3). The cube prices one tile on the H100's own numbers, so each row ties a
+ * thing the levels counted to the hardware figure or the kernel setting behind it. The claims live in the lazy `tiling`
+ * group, which the cube's model registers by importing it; this file imports no lazy group, so it names the ids only.
+ * The copy holds no digits, because every number on the card is the claim chip.
+ */
+export const TILING_CUBE_PRODUCTION_ROWS: readonly ProductionRow[] = [
+  {
+    claim: 'hw.h100-sxm.smem-per-sm',
+    dial: 'stages and slab depth',
+    lead: 'An H100 SM has',
+    tail: 'of shared memory, shared by every CTA resident on it. Level 3 divided this budget by the slabs of one tile to count the CTAs an SM holds.',
+  },
+  {
+    claim: 'hw.h100-sxm.smem-per-block',
+    dial: 'the largest slabs',
+    lead: 'One thread block can address at most',
+    tail: ': CUDA reserves a kilobyte of shared memory per block for itself. A tile whose slabs are bigger cannot launch, and that is the limit level 2 counted against.',
+  },
+  {
+    claim: 'hw.h100-sxm.registers-per-sm',
+    dial: 'the tile cap',
+    lead: 'Each SM has',
+    tail: ', four bytes each: the register file your FP32 accumulators must fit. That is why the biggest tile that runs is smaller than the biggest that fits shared memory.',
+  },
+  {
+    claim: 'hw.h100-sxm.sm-count',
+    dial: 'one wave',
+    lead: 'An H100 SXM5 has',
+    tail: ': a persistent kernel puts one CTA on each, so a wave in level 4 is this many tiles.',
+  },
+  {
+    claim: 'hw.h100-sxm.l2',
+    dial: 'raster order',
+    lead: 'The L2 cache holds',
+    tail: 'for the whole chip. A grouped raster works because one wave of slabs fits inside it; a wave that did not fit would have slabs evicted before every tile had read them.',
+  },
+  {
+    claim: 'production.triton.group-size-m',
+    dial: 'group height',
+    lead: "Triton's matmul tutorial launches its tiles in groups of",
+    tail: ', the grouped raster of level 4. Every CUDA config in the tutorial sets the same group height, so it is the one dial the tutorial leaves fixed while it tunes the rest.',
+  },
+]
+
+/**
+ * The EPLB play's card (wave-3.md §5.2). The reference you met is DeepSeek EPLB, so the rows tie the two Compose dials to
+ * its rule and the engine flags that turn it on, and ground the toy layer in the model it shrinks. The claims live in the
+ * lazy `moe` group, which the card imports; this file imports no lazy group, so it names the ids only. The copy holds no
+ * digits, because every number on the card is the claim chip.
+ */
+export const EPLB_PRODUCTION_ROWS: readonly ProductionRow[] = [
+  {
+    claim: 'model.deepseek-v3.routed-experts',
+    dial: 'experts on a layer',
+    lead: 'Each MoE layer of DeepSeek-V3 has',
+    tail: 'routed by its router, plus one shared expert. Your layer is a toy that you could pack by hand, and the loads you were dealt are made up: a real layer has far more experts to place, and its loads are measured while it serves.',
+  },
+  {
+    claim: 'model.deepseek-v3.experts-per-token',
+    dial: 'why the busiest GPU is the score',
+    lead: 'The router sends each token to',
+    tail: 'chosen from those. A token is not finished until the slowest GPU it was sent to has answered at the combine barrier, so the layer is as slow as its busiest GPU, which is the number you were scored on.',
+  },
+  {
+    claim: 'production.eplb.rebalance',
+    dial: 'replicate: most load per copy',
+    lead: 'The reference you met is DeepSeek EPLB. Its replication rule is to',
+    tail: ', one replica at a time. It then deals the copies out heaviest first, each to the lightest GPU that still has a free slot. Those are your per-copy and least-loaded dials. The function takes each expert\'s load as an input, and the repository publishes no release, so the card pins a commit.',
+  },
+  {
+    claim: 'production.vllm.eplb',
+    dial: 'switching it on: vLLM',
+    lead: 'vLLM ships with EPLB off. Its settings are',
+    tail: '. Redundant experts are the extra copies your replicate turns made, and at the default there are none. The engine decides from a window of recent load and rebalances at an interval, both set in its EPLB config, and it needs expert parallelism.',
+  },
+  {
+    claim: 'production.sglang.eplb',
+    dial: 'switching it on: SGLang',
+    lead: 'SGLang ships with it off too:',
+    tail: '. With both at their defaults a stock engine places each expert once. Turning them on is the replicate step of this play.',
+  },
+]
+
 /** The rows each play's card renders, by play id: verify-plays compares them with that play's own `productionClaims`. */
 export const PLAY_PRODUCTION_ROWS: Readonly<Record<string, readonly ProductionRow[]>> = {
   'block-placement': PRODUCTION_ROWS,
   scheduler: SCHEDULER_PRODUCTION_ROWS,
+  'tiling-cube': TILING_CUBE_PRODUCTION_ROWS,
+  eplb: EPLB_PRODUCTION_ROWS,
 }
 
 /* ------------------------------------------------------------------ */
@@ -195,7 +281,38 @@ export const SCHEDULER: PlayDef = {
   productionClaims: SCHEDULER_PRODUCTION_ROWS.map((r) => r.claim),
 }
 
-export const PLAYS: Readonly<Record<string, PlayDef>> = { [BLOCK_PLACEMENT.id]: BLOCK_PLACEMENT, [SCHEDULER.id]: SCHEDULER }
+/**
+ * T4.L6's play, the Tiling Cube in 2D (wave-3.md §6.3): six prediction-opened levels on the cube's model. Its id is typed
+ * here, not imported from the model, which registers the lazy `tiling` claims; a test holds the KCs to the levels' own
+ * (`CUBE_LEVELS`), the id to the play's folder and the minutes to `PLAY_MINUTES` (economy-table.ts). Its turn cap is the
+ * six levels.
+ */
+export const TILING_CUBE: PlayDef = {
+  id: 'tiling-cube',
+  title: 'The Tiling Cube',
+  lessonId: 't4.l6',
+  minutes: 25,
+  turnCap: 6,
+  kcs: [KC.tilingIntensity, KC.sharedMemoryScratchpad, KC.occupancy, KC.rasterL2Reuse, KC.ridgePoint, KC.flashAttentionBlocking],
+  productionClaims: TILING_CUBE_PRODUCTION_ROWS.map((r) => r.claim),
+}
+
+/**
+ * T6.L2's play, "Place the experts" (wave-3.md §5.2): replicate 4 hot experts of a 16-expert layer, then place the 20 copies
+ * on 4 GPUs of 5 slots, against DeepSeek EPLB. Its id is typed here, not imported from the world (src/lib/world/eplb.ts); a
+ * test holds the id to `EPLB_PLAY_ID`, the minutes to `PLAY_MINUTES` (economy-table.ts) and the turn cap to the world's 24 turns.
+ */
+export const EPLB: PlayDef = {
+  id: 'eplb',
+  title: 'Place the experts',
+  lessonId: 't6.l2',
+  minutes: 15,
+  turnCap: 24,
+  kcs: [KC.expertLoadBalance, KC.allToAll],
+  productionClaims: EPLB_PRODUCTION_ROWS.map((r) => r.claim),
+}
+
+export const PLAYS: Readonly<Record<string, PlayDef>> = { [BLOCK_PLACEMENT.id]: BLOCK_PLACEMENT, [SCHEDULER.id]: SCHEDULER, [TILING_CUBE.id]: TILING_CUBE, [EPLB.id]: EPLB }
 export const PLAY_IDS: readonly string[] = Object.keys(PLAYS)
 
 /** The play behind a route or a block, or undefined for an id that is not a play (also `__proto__`). */

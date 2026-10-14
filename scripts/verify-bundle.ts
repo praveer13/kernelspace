@@ -69,10 +69,13 @@ const ROUTE_BUDGETS: RouteBudget[] = [
   // The scheduler play shares the /play/:playId page; it holds fleet-model.ts, so its chunk is the larger of the two.
   { route: '/play/scheduler', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/scheduler/Play.tsx' },
   { route: '/errors', src: 'src/pages/Errors.tsx', budgetKb: null, targetKb: 200 },
-  // Wave 3 (docs/specs/wave-3.md §2.2, §17.1). /me renders Progress until 3b-06, whose static closure (all lesson
-  // content, framer-motion) is far over 200 KB, so it is reported here; 3b-06 rebuilds the page and sets budgetKb: 200.
+  // Wave 3 (docs/specs/wave-3.md §2.2, §12.5, §17.1). /me is gated at 200 KB (D20): 3b-06 folded Progress, whose static
+  // closure was about 615 KB (all lesson content, framer-motion), into lazy sections (src/pages/me/*), so the closure
+  // here is Me.tsx's head; the sections print on the "on demand, not counted" line. App.tsx routes /me with plain
+  // `lazy`, because lazyMotion would load src/lib/motion.tsx (framer-motion) beside the page, where this closure
+  // does not look (tests/shell/nav.test.ts holds that, and that each motion section scopes itself).
   // The two plays are reported against a 200 KB figure with their play chunks, and skipped until each play exists.
-  { route: '/me', src: 'src/pages/Me.tsx', budgetKb: null, targetKb: 200 },
+  { route: '/me', src: 'src/pages/Me.tsx', budgetKb: 200 },
   { route: '/play/tiling-cube', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 200, playSrc: 'src/components/play/tiling-cube/Play.tsx' },
   { route: '/play/eplb', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 200, playSrc: 'src/components/play/eplb/Play.tsx' },
 ]
@@ -216,7 +219,9 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   }
   if (onDemand.length > 0) console.log(`  on demand, not counted: ${onDemand.join(', ')}`)
   if (budgetKb === null) {
-    console.log(`info ${route} closure is ${totalKb.toFixed(1)} KB gzip (reported, not gated${targetKb ? `; figure ${targetKb} KB` : ''})`)
+    // A reported route over its figure says `warn` (still not a failure); under it, or with no figure, `info`.
+    const over = targetKb !== undefined && totalKb > targetKb
+    console.log(`${over ? 'warn' : 'info'} ${route} closure is ${totalKb.toFixed(1)} KB gzip (reported, not gated${targetKb ? `; figure ${targetKb} KB` : ''})`)
     continue
   }
   if (totalKb > budgetKb) {

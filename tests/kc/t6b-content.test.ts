@@ -2,12 +2,14 @@
  * T6b content tags, tickets and hands-on blocks (docs/specs/wave-2.md §5.4, §6.1, §6.2; task 2a-27): t6.l6-t6.l10 name
  * their KCs, tag every checkpoint item, name the misconception behind every lure and carry a ticket with two constructed
  * responses; t6.l6, t6.l8 and t6.l9 hold an item block whose variants assess a KC of the lesson; t6.l8 links lab 08; and
- * t6.l10 is the track's spiral checkpoint.
+ * t6.l10 is the track's spiral checkpoint. Wave 3 (3b-21, wave-3.md §5.4) adds the eplb play in t6.l2, prefill items in
+ * t6.l3 and t6.l10 and rollout items in t6.l7, each pinned by lesson id.
  */
 import { beforeAll, describe, expect, test } from 'bun:test'
 import type { QuizQuestion } from '../../src/components/QuizBlock'
 import { KCS, kcById } from '../../src/data/kc'
 import { ALL_LESSONS } from '../../src/data/lessons'
+import { resolvePlay } from '../../src/components/play/registry'
 import type { ItemBlock, Lesson, QuizBlockData } from '../../src/data/lessons/types'
 import { loadFamily } from '../../src/lib/items/registry'
 import { SPIRAL_ITEMS, earlierKcsOf, isNonMcq, makeGenPool, planTicket, type TicketPool } from '../../src/lib/learner/ticket'
@@ -96,13 +98,15 @@ describe('T6b lessons: KCs and tickets', () => {
 describe('T6b hands-on item blocks (spec §5.4)', () => {
   const EXPECT: Record<string, { family: string; variants: string[] }> = {
     't6.l6': { family: 'spec', variants: ['expected-tokens', 'speedup', 'best-k'] },
+    't6.l7': { family: 'rollout', variants: ['rollout-share', 'long-tail'] },
     't6.l8': { family: 'cost', variants: ['cache-discount'] },
     't6.l9': { family: 'memory', variants: ['lora'] },
+    't6.l10': { family: 'prefill', variants: ['hit-gap', 'namespace-cost'] },
   }
 
   for (const l of LESSONS) {
     const want = EXPECT[l.id]
-    test(`${l.id}: ${want ? `one ${want.family} item block` : 'no item block (Wave 3 gives it a family)'}`, async () => {
+    test(`${l.id}: ${want ? `one ${want.family} item block` : 'no item block'}`, async () => {
       const blocks = itemBlocksOf(l)
       if (!want) {
         expect(blocks).toHaveLength(0)
@@ -119,6 +123,30 @@ describe('T6b hands-on item blocks (spec §5.4)', () => {
       expect(assessed.some((kc) => l.kcs?.includes(kc))).toBe(true)
     })
   }
+
+  // 3b-21 (wave-3.md §5.4) made t6.l2 and t6.l3 hands-on; pinned by lesson id so removing either block fails here,
+  // not only when hands-on.test.ts's count drops below its minimum.
+  test('t6.l2: the eplb play is registered and comes right after the EPLB section', () => {
+    const l2 = ALL_LESSONS.find((l) => l.id === 't6.l2') as Lesson
+    const plays = l2.blocks.filter((b) => b.type === 'play')
+    expect(plays).toEqual([{ type: 'play', playId: 'eplb', title: 'Replicate and place the experts, then meet the reference' }])
+    expect(resolvePlay('eplb').kind).toBe('play')
+    const at = l2.blocks.findIndex((b) => b.type === 'play')
+    const before = l2.blocks[at - 1]
+    expect(before?.type === 'prose' && before.md.startsWith('## Mechanism 2: EPLB')).toBe(true)
+  })
+
+  test('t6.l3: one prefill item block whose variants exist and assess a KC of the lesson', async () => {
+    const l3 = ALL_LESSONS.find((l) => l.id === 't6.l3') as Lesson
+    const blocks = itemBlocksOf(l3)
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].family).toBe('prefill')
+    expect(blocks[0].variants).toEqual(['pd-ratio', 'transfer-ms'])
+    const gen = await loadFamily('prefill')
+    const offered = gen.variants.filter((v) => blocks[0].variants.includes(v.id))
+    expect(offered.map((v) => v.id).sort()).toEqual(['pd-ratio', 'transfer-ms'])
+    expect(offered.flatMap((v) => v.kcs).some((kc) => l3.kcs?.includes(kc))).toBe(true)
+  })
 
   test('t6.l8 links lab 08 from a Build this line', () => {
     const l8 = LESSONS.find((l) => l.id === 't6.l8') as Lesson

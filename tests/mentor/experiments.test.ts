@@ -1,7 +1,8 @@
 /**
  * The ladder-or-packet arm (docs/specs/wave-2.md §14.4; task 2c-06): `armFor` is a deterministic, balanced coin per
  * (experiment, unit, exp:seed) with no pattern across checks; `exp:seed` is created once, after the ledger has loaded;
- * and hint and packet acks carry the arm that was shown, which is what analysis reads.
+ * and hint and packet acks carry the arm that was shown, which is what analysis reads. `armOf` (task 3b-19) is `armFor`
+ * for n arms: the track forms use it with 6, and the hint-ladder arms do not change.
  */
 import { describe, expect, test } from 'bun:test'
 import { hash32 } from '../../src/lib/rng'
@@ -9,6 +10,7 @@ import {
   HINT_EXPERIMENT,
   RANDOMIZED_LABS,
   armFor,
+  armOf,
   ensureExpSeed,
   hintArm,
   hintUnit,
@@ -19,6 +21,9 @@ import {
 import type { SeedStore } from '../../src/lib/learner/experiments'
 import { hintRef } from '../../src/lib/forge/ladder'
 import { makeProfile, startTab } from '../ledger/env'
+
+/** armOf('forms', 't5', seed, 6) for seeds 0, 1, 2, 3, 4 and 2^32 - 1, computed apart from the code under test (FNV-1a, fmix32, mod 6). */
+const PINNED_FORMS_ARMS = [3, 4, 1, 3, 1, 5]
 
 /** Deterministic uniform [0, 1) from a counter, for the tests (not the code under test). */
 const lcg = (seed: number) => {
@@ -92,6 +97,79 @@ describe('armFor', () => {
       else diff++
     }
     expect(same === 500 || diff === 500).toBe(true)
+  })
+})
+
+describe('armOf: armFor for n arms', () => {
+  test('armFor is armOf with two arms (0 the ladder, 1 the packet), so the hint-ladder arms did not change', () => {
+    for (const unit of ['rust-allocator/coalesce', 'kv-block-manager/cow', 'bpe-tokenizer/merge-order']) {
+      for (let seed = 0; seed < 300; seed++) {
+        expect(armFor(HINT_EXPERIMENT, unit, seed)).toBe(armOf(HINT_EXPERIMENT, unit, seed, 2) === 0 ? 'ladder' : 'packet')
+      }
+    }
+    // the same formula as before the generalization, written out: a bit of fmix32(hash32(...))
+    const fmix = (h: number) => {
+      h ^= h >>> 16
+      h = Math.imul(h, 0x85ebca6b)
+      h ^= h >>> 13
+      h = Math.imul(h, 0xc2b2ae35)
+      h ^= h >>> 16
+      return h >>> 0
+    }
+    for (let seed = 0; seed < 300; seed++) {
+      const before = fmix(hash32(`${HINT_EXPERIMENT}:kv-block-manager/cow:${seed}`)) % 2 === 0 ? 'ladder' : 'packet'
+      expect(armFor(HINT_EXPERIMENT, 'kv-block-manager/cow', seed)).toBe(before)
+    }
+  })
+
+  test('the arm is a whole number in [0, n), the same on every call, and one arm of one is 0', () => {
+    for (const n of [1, 2, 3, 6, 7, 100]) {
+      for (let seed = 0; seed < 100; seed++) {
+        const a = armOf('forms', 't5', seed, n)
+        expect(Number.isInteger(a)).toBe(true)
+        expect(a).toBeGreaterThanOrEqual(0)
+        expect(a).toBeLessThan(n)
+        expect(armOf('forms', 't5', seed, n)).toBe(a)
+      }
+    }
+    expect(armOf('forms', 't5', 99, 1)).toBe(0)
+  })
+
+  test('pinned values for the track forms’ six arms, so a change to the hash or the formula is a decision', () => {
+    expect([0, 1, 2, 3, 4, 4294967295].map((s) => armOf('forms', 't5', s, 6))).toEqual(PINNED_FORMS_ARMS)
+  })
+
+  test('six arms come up equally often for a track, over random seeds', () => {
+    const rand = lcg(23)
+    for (const track of ['r', 't4', 't5', 't7']) {
+      const counts = new Array<number>(6).fill(0)
+      const n = 12000
+      for (let i = 0; i < n; i++) counts[armOf('forms', track, newExpSeed(rand), 6)]++
+      for (const c of counts) expect(Math.abs(c / n - 1 / 6)).toBeLessThan(0.015)
+    }
+  })
+
+  test('the arms of two tracks of one learner are independent: they agree for about a sixth of learners', () => {
+    const rand = lcg(29)
+    const n = 6000
+    let agree = 0
+    for (let i = 0; i < n; i++) {
+      const seed = newExpSeed(rand)
+      if (armOf('forms', 't4', seed, 6) === armOf('forms', 't5', seed, 6)) agree++
+    }
+    expect(Math.abs(agree / n - 1 / 6)).toBeLessThan(0.02)
+  })
+
+  test('the experiment name and the unit change the arm, as they do the coin', () => {
+    const base = Array.from({ length: 400 }, (_, i) => armOf('forms', 't5', i, 6))
+    const differs = (f: (i: number) => number) => base.filter((a, i) => a !== f(i)).length
+    expect(differs((i) => armOf('forms-x', 't5', i, 6))).toBeGreaterThan(250)
+    expect(differs((i) => armOf('forms', 't6', i, 6))).toBeGreaterThan(250)
+    expect(differs((i) => armOf('forms', 't5', i + 1, 6))).toBeGreaterThan(250)
+  })
+
+  test('n must be a whole number of 1 or more', () => {
+    for (const bad of [0, -1, 1.5, NaN, Infinity]) expect(() => armOf('forms', 't5', 1, bad)).toThrow(RangeError)
   })
 })
 

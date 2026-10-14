@@ -5,6 +5,8 @@
  * - at least 6 credited fresh items on the KC, over at least 2 local days, with at least 5 of the last 6 right;
  * - **credited** is weight 1.0 (provenance.ts): `unseen` or `proved`, so authored items, lab greens and assisted
  *   answers never count;
+ * - a **form item** (src `form`, §12.6) counts for nothing here (D34): forms are measurement (W18), and a 'can' line
+ *   that a form moved would be the measuring moving what /me shows. VRK30 and the scheduler skip them the same way;
  * - **fresh** is a generated item (`gen:` ref, `item` or `probe`) on a seed the learner had not met, or a `proved`
  *   prove event. A generated instance met again (the same ref, level and seed; a merge can bring a second copy
  *   that its own device also stamped `unseen`) counts the first time only.
@@ -15,7 +17,7 @@
 
 import type { KcId } from '@/lib/kc/types'
 import type { LedgerEvent, LocalDay } from '@/lib/ledger/types'
-import type { CardsContent } from './cards'
+import { isFormItem, type CardsContent } from './cards'
 import { isCredited } from './provenance'
 import { asOf } from './vrk'
 
@@ -75,6 +77,7 @@ export function competenceEvidence(
   const seen = new Set<string>()
   const byKc = new Map<KcId, { oks: boolean[]; days: Set<LocalDay> }>()
   for (const e of asOf(events, now)) {
+    if (isFormItem(e)) continue
     let fresh = false
     if ((e.kind === 'item' || e.kind === 'probe') && e.ref.startsWith('gen:')) {
       const key = instanceOf(e)

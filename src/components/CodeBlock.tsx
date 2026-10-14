@@ -27,7 +27,14 @@ const TOKEN_COLORS: Record<TokenType, string> = {
   plain: 'text-text-2',
 }
 
-function tokenizeLine(line: string, lang: string): ReactNode[] {
+/**
+ * On a highlighted line the wash (accent-dim/60 over surface-2) is lighter than the block, and text-3 is only 4.1:1
+ * there; this comment colour is 5.0:1 (axe color-contrast wants 4.5:1) and still dimmer than the plain text-2 code.
+ * The app is dark-only (index.css), so there is one palette to pass in.
+ */
+const HL_COMMENT = 'text-[#8A98AD] italic'
+
+function tokenizeLine(line: string, lang: string, hl = false): ReactNode[] {
   const kws = KEYWORDS[lang] ?? KEYWORDS.c ?? []
   const kwSet = new Set(kws)
   const re =
@@ -51,7 +58,7 @@ function tokenizeLine(line: string, lang: string): ReactNode[] {
     else if (num) type = 'number'
     else if (word && kwSet.has(word)) type = 'keyword'
     out.push(
-      <span key={key++} className={TOKEN_COLORS[type]}>
+      <span key={key++} className={hl && type === 'comment' ? HL_COMMENT : TOKEN_COLORS[type]}>
         {tok}
       </span>,
     )
@@ -231,10 +238,11 @@ export default function CodeBlock({
                     hl ? 'border-accent bg-accent-dim/60' : 'border-transparent',
                   )}
                 >
-                  <span className="w-10 shrink-0 select-none pr-3 text-right text-xs leading-[1.65] text-text-3">
+                  {/* text-3 is 4.1:1 on the highlight wash; text-2 is 6.6:1 (axe color-contrast wants 4.5:1) */}
+                  <span className={cn('w-10 shrink-0 select-none pr-3 text-right text-xs leading-[1.65]', hl ? 'text-text-2' : 'text-text-3')}>
                     {n}
                   </span>
-                  <code className="pr-4">{line ? tokenizeLine(line, tab.lang) : '\u00A0'}</code>
+                  <code className="pr-4">{line ? tokenizeLine(line, tab.lang, hl) : '\u00A0'}</code>
                 </div>
               )
             })}

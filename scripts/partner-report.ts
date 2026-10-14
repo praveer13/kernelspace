@@ -3,9 +3,9 @@
  * partners donated, plus the Wave 1 exit gates G1, G2, G3 and G7 with `--wave1` (docs/specs/wave-1.md §17, C19).
  *
  * Runs locally on files. Nothing is uploaded and nothing is stored. A file is either
- *   - a redacted donation (/progress → "Donate a redacted export": `kernelspace-donation-<n>.json`), read with
- *     day offsets only, or
- *   - a full export (Settings → Export progress), validated by the ledger's own import parser and stripped of
+ *   - a redacted donation (/me → data ownership → "Donate a redacted export": `kernelspace-donation-<n>.json`),
+ *     read with day offsets only, or
+ *   - a full export (/me → data ownership → "Export progress"), validated by the ledger's own import parser and stripped of
  *     free text (`explain`, `boot:value`, constructed-response text) before anything is counted.
  * One file per partner: a partner who donated a phone and a laptop export should be merged first (Import →
  * merge, then export once). The report prints the §23 field-gate table with each gate's n, the number of

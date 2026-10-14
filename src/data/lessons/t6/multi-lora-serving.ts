@@ -86,20 +86,42 @@ Each adapted matrix stores A (r × d_in) and B (d_out × r), so it holds **r × 
           osLine: 'one immutable executable mapping, private data attached per process',
           llm: 'base weights + per-request LoRA',
           llmLine: 'one dense base matmul, a small tenant-specific low-rank delta',
+          breaks: 'Private pages sit beside the shared code and are only read by it; the adapter\'s delta is added into the shared matmul\'s result in every adapted layer (W′x = Wx + B(Ax)), so the two are combined for each token and not kept apart.',
         },
         {
           os: 'virtual-memory paging',
           osLine: 'variable objects map logical pages onto one physical pool',
           llm: 'S-LoRA Unified Paging',
           llmLine: 'adapter tensors and KV block tables compete in one HBM allocator',
+          breaks: 'A program that touches an unmapped page faults it in on demand and carries on; S-LoRA fetches the adapters a batch needs from main memory before that batch runs (S-LoRA §4.1), and prefetches the next batch\'s adapters, predicted from the waiting queue, while the current batch runs (§5.2).',
         },
         {
           os: 'scatter/gather I/O',
           osLine: 'one operation carries segments with different backing buffers',
           llm: 'Punica SGMV',
           llmLine: 'one heterogeneous delta launch carries segments for different adapters',
+          breaks: 'Scatter/gather only moves bytes between buffers in one call; SGMV does different matrix work per segment, each adapter applying its own low-rank A and B to its own requests.',
         },
       ],
+      principle:
+        'Share the large common part and give each tenant a small delta. Shared mappings, one pool and scatter lists all carry over; what changes is that the delta is arithmetic applied in every layer, not only an address.',
+      breakItem: {
+        q: 'Multi-LoRA serving is mapped onto OS memory and I/O mechanisms. Where does that mapping break?',
+        options: [
+          'One shared text segment is mapped by many processes, and one shared base matmul serves the many tenants in a batch',
+          'Paging maps objects of any size onto one physical pool, and Unified Paging maps adapter tensors and KV blocks onto a single HBM pool',
+          'Scatter/gather replaces many small calls with one call carrying several segments, and SGMV replaces many small GEMV launches with one launch',
+          'Scatter/gather moves bytes between buffers and computes nothing, and SGMV applies a different low-rank A and B to each segment of a batch',
+        ],
+        correct: [3],
+        why: [
+          'This holds on both sides: many processes map one executable, and many tenants share one base matmul. The pair claims exactly this, so it is not where the analogy stops.',
+          'This holds on both sides: paging and Unified Paging both map variable-size objects onto one physical pool and reclaim pages independently. The analogy agrees here, so it is not a break.',
+          'This holds on both sides: one call that carries several segments replaces many small calls, saving per-call overhead. The analogy agrees about the batching; it differs about what happens inside each segment.',
+          'Right: scatter/gather only moves bytes, while SGMV does different arithmetic per segment, each adapter applying its own A and B to its own requests. The segments differ in math, not only in address.',
+        ],
+      },
+      kcs: ['t6.multi-lora-batching'],
     },
     {
       type: 'code',
@@ -116,7 +138,7 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
     let kv = pool.reserve_kv(request.seq_id, request.prompt_tokens)?;
     Ok(Lease { adapter, kv })
 }`,
-      chips: ['one HBM pool', 'two object classes', 'all-or-nothing'],
+      chips: ['one HBM pool', 'two object classes', 'the lab: admit all or nothing'],
     },
     {
       type: 'callout',

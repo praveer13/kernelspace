@@ -610,8 +610,8 @@ const gen: Gen = {
   grade: (inst, response) => gradeResponse(inst, response, RATIO_RULES),
   solution: (inst) => steps(inst.variant, inst.params, inst.answer.kind === 'choice' ? 0 : inst.answer.truth),
   pins: [
-    // 4,096 tokens × 327,680 bytes = 1.34 GB over 50 GB/s is 26.8 ms; the lessons round it to "~25 ms" (t5.l9) and "about 1.3 GB"
-    pin('Llama-3-70B, a 4k prompt over a 50 GB/s link: the lessons\' "~25 ms" hand-off (t5.l9, t6.l3)', 't6.l3', 'transfer-ms', { model: 'llama3-70b', P: 4096, B: 50 }, 25, { abs: 2 }), // gen-literal-ok: pinned lesson number, with the lesson's own rounding
+    // 4,096 tokens × 327,680 bytes = 1.34 GB over 50 GB/s is 26.84 ms; t5.l9 states 1.34 GB and 26.8 ms, and t6.l3 cites that line
+    pin('Llama-3-70B, a 4k prompt over a 50 GB/s link: the lessons\' 26.8 ms hand-off (t5.l9, t6.l3)', 't6.l3', 'transfer-ms', { model: 'llama3-70b', P: 4096, B: 50 }, 26.8, { abs: 0.05 }), // gen-literal-ok: pinned lesson number, to the lesson's 0.1 ms
     pin("SGLang's DeepSeek node rates, 2,000-token prompts and 500-token outputs: (2,000 ÷ 52,300) ÷ (500 ÷ 22,300) = 1.71 (hand check)", 't6.l3', 'pd-ratio', { dep: 'sglang', lam: 10, P: 2000, O: 500 }, 1.7055, { abs: 0.001 }), // gen-literal-ok: pinned hand computation
     pin('A hypothetical fleet: 6,000-token prompts, 300-token outputs, 20,000 and 1,500 tok/s per GPU: 3 prefill GPUs per 2 decode GPUs', 't6.l3', 'pd-ratio', { dep: 'synthetic', lam: 10, P: 6000, O: 300, p: 20000, d: 1500 }, 1.5, { abs: 0.001 }), // gen-literal-ok: pinned hand computation
     pin('Llama-3-8B (128 KiB per token) recomputed at 20,000 tok/s: loading wins only above 2.62 GB/s', 't6.l3', 'load-or-recompute', { model: 'llama3-8b', n: 8000, p: 20000 }, 2.62144, { abs: 0.0001 }), // gen-literal-ok: pinned hand computation

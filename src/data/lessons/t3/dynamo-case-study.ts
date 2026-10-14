@@ -59,20 +59,42 @@ Every bullet is a memory-management and concurrency problem where a 10 ms GC pau
           osLine: 'Locality scheduling: run the job where its pages already live.',
           llm: 'prefix-cache routing',
           llmLine: 'Route requests to workers holding the most matching KV blocks — cache affinity as policy.',
+          breaks: 'Losing CPU affinity costs a few cache-line refills, so schedulers give it up readily; a misrouted request re-prefills every token of its uncached prefix, so the router weighs a hit against queueing delay explicitly.',
         },
         {
           os: 'backpressure / admission control',
           osLine: 'Bounded queues, load shedding, OOM as last resort.',
           llm: 'planner + worker queues',
           llmLine: 'Queue depth signals scale/reject decisions before TTFT/ITL degrade.',
+          breaks: 'A bounded queue answers overload only by pushing back or shedding; the planner can also add workers, but a new one takes minutes to load its weights, so it must act on queue depth well before the queue is full.',
         },
         {
           os: 'zero-copy I/O (splice/io_uring)',
           osLine: 'Move bytes without user-space copies.',
           llm: 'NIXL/UCX KV transfer',
           llmLine: 'RDMA reads of KV blocks between workers, orchestrated from Rust.',
+          breaks: 'Zero-copy I/O removes memcpy passes inside one host; a KV transfer still crosses the fabric, so even with no copy it costs link time (26.8 ms for a 4k-token prompt on a 70B model over a 50 GB/s link), and the engineering is hiding that time behind compute.',
         },
       ],
+      principle:
+        'Draw the boundary where bytes and tail latency live. Locality, bounded queues and zero-copy carry over from the OS, but each is priced differently here: a miss re-prefills, scaling takes minutes, and a transfer crosses a network.',
+      breakItem: {
+        q: 'Dynamo\'s data plane is mapped onto OS mechanisms. Where does that mapping break?',
+        options: [
+          'A bounded queue pushes back on its sender at the limit, and a decode worker\'s intake queue refuses or delays new work at its limit',
+          'Losing CPU affinity costs some cache-line refills, and a misrouted request costs a repeated prefill of its uncached prefix',
+          'Zero-copy I/O skips the intermediate buffer copy, and an RDMA read of KV blocks between workers skips the CPU-side copy',
+          'Locality scheduling sends work toward the state it will read, and KV-aware routing sends requests toward the cached KV blocks',
+        ],
+        correct: [1],
+        why: [
+          'This holds on both sides: a bounded queue pushes back on its sender whether it sits in a kernel or in front of a decode worker. The pair claims exactly that, so it is not where the analogy stops.',
+          'Right: an OS gives up affinity cheaply because a miss refills a few cache lines, while a routing miss costs a prefill of the whole uncached prefix. That price is why the router weighs hits against load.',
+          'This holds on both sides: splice and io_uring avoid user-space copies, and one-sided RDMA reads let the NIC fetch KV without the CPU copying it. The two agree, so this is a match rather than a break.',
+          'This holds on both sides: affinity scheduling and KV-aware routing both steer work toward the state it will read. The analogy agrees here; it parts company on how much a miss costs.',
+        ],
+      },
+      kcs: ['t3.data-plane-requirements', 't3.backpressure'],
     },
     {
       type: 'callout',

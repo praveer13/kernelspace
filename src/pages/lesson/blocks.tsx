@@ -397,7 +397,7 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
     case 'exercise':
       return <ExerciseView block={block} trackColor={trackColor} lessonId={lesson.id} blockIndex={lesson.blocks.indexOf(block)} />
     case 'isomorphism':
-      return <IsomorphismView block={block} />
+      return <IsomorphismView block={block} lesson={lesson} />
     case 'deepdive':
       return <DeepdiveView block={block} trackColor={trackColor} />
     case 'field-note':

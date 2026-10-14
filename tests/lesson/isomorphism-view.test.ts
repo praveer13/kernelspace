@@ -53,8 +53,11 @@ describe('IsomorphismView', () => {
   })
 
   test('the lesson dispatcher renders the same panel as the component does', async () => {
-    const direct = await dom.mount(createElement(IsomorphismView, { block: panel }))
-    const viaLesson = await dom.mount(createElement(RenderBlock, { block: panel, lesson: t2, trackColor: '#22D3EE', h2Start: 0 }))
+    // A panel with a break item runs the active flow once it has its lesson (3b-16 gave this one an item), so the
+    // comparison uses the panel as a block without one, which renders as it always has.
+    const plain: IsomorphismBlock = { ...panel, breakItem: undefined, principle: undefined }
+    const direct = await dom.mount(createElement(IsomorphismView, { block: plain }))
+    const viaLesson = await dom.mount(createElement(RenderBlock, { block: plain, lesson: t2, trackColor: '#22D3EE', h2Start: 0 }))
     expect(viaLesson.container.innerHTML).toBe(direct.container.innerHTML)
     expect(viaLesson.container.innerHTML.length).toBeGreaterThan(200)
     await direct.unmount()

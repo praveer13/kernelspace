@@ -269,10 +269,11 @@ describe('Act II with a component of yours compares with the reference fleet on 
 describe('/week records the runs', () => {
   const page = readFileSync(path.join(ROOT, 'src/pages/FleetWeek.tsx'), 'utf8')
 
-  test('Act I and Act II record fleet-run after their trace, and an all-reference Act I offers no write-up', () => {
-    expect(page).toContain("recordRun('act1', trace, slots)")
-    expect(page).toContain("recordRun('act2', trace, slots)")
-    expect(page).toContain('setTraceResult(trace.practice ? null : trace)')
+  // 3b-05: an all-reference run is still recorded for receipts (a receipt check needs no pass), but its write-up cannot be submitted
+  test('Act I and Act II record fleet-run after their trace, and an all-reference Act I cannot submit its write-up', () => {
+    expect(page).toContain("recordRun('act1', run.result, slots)")
+    expect(page).toContain("recordRun('act2', run.result, slots)")
+    expect(page).toContain('blocked={trace.pass ? null : trace.practice ?')
     expect(page).toContain('data-install-hint')
   })
 })

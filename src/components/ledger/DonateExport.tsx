@@ -1,5 +1,6 @@
 /**
- * "Donate a redacted export" on /progress (docs/specs/wave-2.md §20.2, task 2a-21). A partner previews what a
+ * "Donate a redacted export" on /me, at the foot of its data ownership section (src/pages/me/DataOwnership.tsx mounts
+ * it lazily; it lived on /progress before 3b-06; docs/specs/wave-2.md §20.2, task 2a-21). A partner previews what a
  * donation would hold, then downloads `kernelspace-donation-<n>.json` and sends it to the owner privately.
  * Nothing is uploaded: the file is built here from the learner's own export by `redactForPartner`, which keeps
  * a whitelist (kind, ref, score, correctness, confidence, provenance, time on task and a day offset per event,

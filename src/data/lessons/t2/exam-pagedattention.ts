@@ -268,6 +268,25 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
           breaks: 'Swap targets are about 100 µs and page-granular; KV blocks cross PCIe in bulk, and recompute is an option only because prefill can regenerate the dropped state.',
         },
       ],
+      principle:
+        'PagedAttention reuses the paging structure: fixed units, an indirection table, reference-counted sharing. What changed is who does the work: the kernel was rewritten to chase block pointers, and vLLM\'s block manager does the bookkeeping the OS did.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'Victims lose their memory and pay when they resume; a swapped page is faulted back in and a preempted sequence\'s KV blocks are restored or recomputed',
+          'A fork gives the child a copy of the whole address space, shared copy-on-write until a write; a beam branch shares its prompt KV blocks in software',
+          'Fixed-size units let any free unit serve any owner; a free frame can back any page and a free KV block can serve any sequence of tokens',
+          'An indirection table lets a contiguous view sit on scattered units; the page table does it for a process and the KV block table for a sequence',
+        ],
+        correct: [1],
+        why: [
+          'Holds on both sides, so it is not the break: whatever is taken from a running owner is paid for on resume, by a fault for the OS and by a restore or recompute for the engine.',
+          'Right: fork() gives the child a copy of the entire address space, which the kernel shares copy-on-write until either side writes. A beam branch shares only prompt blocks, and the sharing is software bookkeeping in vLLM\'s block manager, not an OS mechanism.',
+          'Holds on both sides, so it is not the break: with identical units there is no external fragmentation, and any free frame or block serves any owner.',
+          'Holds on both sides, so it is not the break: both give an owner a contiguous logical view over physical units that can sit anywhere.',
+        ],
+      },
+      kcs: ['t2.pagedattention-as-paging', 't2.copy-on-write', 't2.swap-vs-recompute'],
     },
     {
       type: 'prose',
@@ -402,7 +421,7 @@ You are ready for the checkpoint when you can answer, without notes: What three 
             'Misconception: hardware does the translation. The GPU\'s MMU maps virtual to physical for the whole allocation; the block table is a software indirection the attention kernel walks itself.',
           ],
           kcs: ['t2.pagedattention-as-paging', 't2.address-translation'],
-          miss: ['t2.block-table-pinned', '', 't2.lookup-fully-hidden', 't2.gpu-mmu-translates'],
+          miss: ['t2.block-table-pinned', '', 't2.lookup-fully-hidden', 'confuse.t5.block-tables'],
         },
       ],
     },

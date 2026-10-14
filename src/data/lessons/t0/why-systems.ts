@@ -104,6 +104,25 @@ Once you see the isomorphism, the papers stop being alien. They become *familiar
           breaks: 'The OS preempts a running thread when its time quantum expires; continuous batching has no quantum, so a sequence normally stays in the batch until it finishes and is preempted mainly when KV blocks run out.',
         },
       ],
+      principle:
+        'Serving systems reuse operating-system mechanisms because the constraint is the same: scarce memory shared by many clients. A mapping carries the mechanism, not the cost model, so check what each side pays before borrowing its answer.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'A page table maps a process\'s virtual pages onto scattered physical frames; a block table maps a sequence\'s token blocks onto scattered KV blocks',
+          'The OS preempts a running thread when its time quantum expires; continuous batching has no quantum and preempts a sequence when its blocks run out',
+          'When memory runs short something must give it back; the OS reclaims pages from some process and the engine preempts a sequence and frees its blocks',
+          'A scheduler decides which waiting client gets the scarce processor next; the OS assigns cores to threads and the batcher assigns each iteration to requests',
+        ],
+        correct: [1],
+        why: [
+          'Holds on both sides, so it is not the break: each is a per-owner map that lets contiguous logical positions sit on scattered physical units. The analogy is working here.',
+          'Right: an OS scheduler takes the core back when a time slice ends. Continuous batching has no slice; a sequence normally stays in the batch until it finishes, and running out of KV blocks is the usual reason it is preempted.',
+          'Holds on both sides, so it is not the break: when memory runs short, each system picks a running owner and takes its memory back.',
+          'Holds on both sides, so it is not the break: both decide who gets the scarce processor next, a core for the OS and a GPU iteration for the batcher.',
+        ],
+      },
+      kcs: ['t0.idea-reuse'],
     },
     {
       type: 'prose',

@@ -4,8 +4,8 @@ import type { ReadOnlyReason } from '@/lib/ledger/types'
 /**
  * Shown when the schema guard has latched this tab read-only (spec §8.7, §9.3): a newer bundle owns the
  * data, so actions are no-ops and nothing is written. It says which reason latched it, in the same words
- * as the /progress note, because a newer snapshot or database is not "open in another tab". Reload is the
- * only way out.
+ * as the note in /me's data ownership section (src/pages/me/DataOwnership.tsx; LedgerNotices.tsx mounts this banner on
+ * every page), because a newer snapshot or database is not "open in another tab". Reload is the only way out.
  *
  * A polite status, not an alert, and it never takes focus: the learner may be mid-quiz or mid-sentence.
  */

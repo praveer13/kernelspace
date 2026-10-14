@@ -82,6 +82,25 @@ Every scheduler has a silent partner deciding what enters the runqueue at all. T
           breaks: 'KV blocks are not a lock: the engine can reclaim them by force for a price, so there is no inheritance protocol, only a paid eviction.',
         },
       ],
+      principle:
+        'Scheduling analogies hold where a resource is a slot and fail where it is state. A lock cannot be taken from its holder; KV blocks can, at a recompute price, so inversion is answered by eviction rather than inheritance.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'A lock cannot be taken from its holder and priority is lent to it; KV blocks can be taken back by force and the engine evicts a lower-priority sequence',
+          'A short task behind a long task waits; a thread in a FIFO run queue waits behind a long thread and a request in a static batch behind a long generation',
+          'Priority matters when work contends; with a free core or free KV blocks nobody waits and the high-priority task simply starts at once',
+          'Each scheduling decision picks who gets the scarce processor next; the OS picks at each quantum edge and the engine re-picks the batch after each decode step',
+        ],
+        correct: [0],
+        why: [
+          'Right: a lock cannot be taken from its holder, so the OS lends the holder priority. KV blocks can be reclaimed by force, so the engine evicts a lower-priority sequence and pays a recompute instead of using inheritance.',
+          'Holds on both sides, so it is not the break: in a FIFO runqueue and in a static batch, short work waits for a long job ahead of it.',
+          'Holds on both sides, so it is not the break: without contention there is nothing to schedule, and a free core or free blocks lets the high-priority task start immediately.',
+          'Holds on both sides, so it is not the break: both re-decide at regular boundaries, the quantum edge for the OS and the decode step for the engine.',
+        ],
+      },
+      kcs: ['t2.sched-policies', 't2.admission-scheduling', 't2.priority-inversion'],
     },
     {
       type: 'prose',

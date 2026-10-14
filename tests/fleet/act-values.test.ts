@@ -109,10 +109,9 @@ describe('Act III values', () => {
 
   test("the act's verdict carries the evaluation's values, and its metrics are unchanged", () => {
     const e = evalAct3(SEEDS[1])
-    const chosen = e.perOption.find((o) => o.id === 'b200')!
-    const r = gradeAct3Doc('b200', chosen.costPerMtok, 'word '.repeat(60), e)
+    const r = gradeAct3Doc('b200', e, { runId: '00000000', checks: [], uncited: [] })
     expect(r.values).toEqual(e.values)
-    expect(r.metrics.map(([l]) => l)).toEqual(['your pick', 'simulated $/Mtok', 'your claim', 'goodput', 'best value', 'doc', 'graded seed'])
+    expect(r.metrics.map(([l]) => l)).toEqual(['your pick', 'simulated $/Mtok', 'cost receipt', 'goodput', 'best value', 'uncited figures', 'graded seed'])
     expect(shown(r, 'simulated $/Mtok')).toBe(e.values['costPerMtok.b200'])
   })
 })
@@ -120,7 +119,7 @@ describe('Act III values', () => {
 describe('the write-up keeps the run values', () => {
   test("Acts I-II's graded submission carries its trace's values", async () => {
     const trace = await runAct1(NO_MODULES, SEEDS[1])
-    const r = gradeMeasurementSubmission('engine', trace, { analysis: 'too short' })
+    const r = gradeMeasurementSubmission('engine', trace, { runId: '00000000', checks: [], uncited: [] })
     expect(r.values).toEqual(trace.values!)
   })
 })

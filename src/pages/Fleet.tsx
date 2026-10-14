@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle,
@@ -47,7 +47,12 @@ const TokenizerCompare = lazy(() => import('@/components/engine/TokenizerCompare
  *            against the JS reference every tick.
  */
 export default function Fleet() {
-  const [mode, setMode] = useState<'engine' | 'cluster' | 'real' | 'pool'>('engine')
+  // `?mode=real` opens the real-engine panel (lab 06's race links to it, docs/specs/wave-3.md §8.3)
+  const [params] = useSearchParams()
+  const [mode, setMode] = useState<'engine' | 'cluster' | 'real' | 'pool'>(() => {
+    const asked = params.get('mode')
+    return asked === 'cluster' || asked === 'real' || asked === 'pool' ? asked : 'engine'
+  })
   const saved = useSlots((s) => s.slots)
   const installed = useSlots((s) => s.installed)
   const ready = useSlots((s) => s.ready)

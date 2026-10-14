@@ -132,6 +132,25 @@ Systems languages (C, C++, Rust, Zig) decline the contract and hand you the bill
           breaks: 'A pooled task holds one worker slot for its whole run, so the pool\'s limit is a slot count; a sequence\'s KV footprint grows with every token it decodes, so blocks that were free at admission can run out later and force a preemption.',
         },
       ],
+      principle:
+        'A managed-runtime trick transfers when the same trade-off recurs, and stops where the cost lands differently. The JVM pays in pauses and slower code; a serving engine pays in recomputed KV and wasted draft work.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'A JIT compiles for the common case and guards that assumption; a speculative decoder drafts the likely continuation and verifies it before committing',
+          'Reclaiming memory costs latency the user can feel; a GC pause stalls the request in flight and a preemption delays the sequence\'s next token',
+          'A failed JIT guard drops that call into slower code; a rejected draft token wastes some draft work but leaves the output distribution unchanged',
+          'A bounded queue stops a server taking on more than it can hold; the scheduler stops admitting new sequences when the KV blocks run out',
+        ],
+        correct: [2],
+        why: [
+          'Holds on both sides, so it is not the break: each optimises for the likely case and keeps a check that catches the unlikely one, the guard in the JIT and the verifier in speculative decoding.',
+          'Holds on both sides, so it is not the break: when memory is reclaimed, in a managed runtime or in an engine, the cost lands as latency, a stall in one case and a delayed next token in the other.',
+          'Right: a failed guard sends that call down a slower path, but a rejected draft token costs only the draft work, and the accept/reject rule keeps the output distributed as the target model alone would produce it.',
+          'Holds on both sides, so it is not the break: a bound on the queue or on KV blocks is a hard limit that admission control enforces, and excess work waits instead of overloading the server.',
+        ],
+      },
+      kcs: ['t0.runtime-costs', 't0.idea-reuse'],
     },
     {
       type: 'prose',

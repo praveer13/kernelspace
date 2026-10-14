@@ -20,15 +20,18 @@ import Grid from '../../src/components/play/block-placement/Grid'
 import Mirror from '../../src/components/play/block-placement/Mirror'
 import BlockPlacementPlay from '../../src/components/play/block-placement/Play'
 import ProductionCard from '../../src/components/play/block-placement/ProductionCard'
+import { PLAY_REGISTRY } from '../../src/components/play/registry'
 import { CLAIMS } from '../../src/data/claims/all'
 import { KC } from '../../src/data/kc/ids'
 import {
   BLOCK_PLACEMENT,
   BUILD_THIS,
   COMPOSE_FRESH_SEEDS,
+  EPLB,
   DEFAULT_DIALS,
   PLAYS,
   PLAY_IDS,
+  PLAY_PRODUCTION_ROWS,
   PRODUCTION_ROWS,
   applyFree,
   canSkip,
@@ -106,6 +109,27 @@ describe('the registry', () => {
 
   test('the practice seed is in band', () => {
     expect(checkPlacementBand(makePlacementTrace(PLAY_PRACTICE_SEED)).inBand).toBe(true)
+  })
+
+  test('every play brings its own card: rows that are its productionClaims, at least three, with claims in the full registry (the cube’s are lazy)', () => {
+    const ids = new Set(CLAIMS.map((c) => c.id))
+    expect(Object.keys(PLAY_PRODUCTION_ROWS).sort()).toEqual([...PLAY_IDS].sort())
+    for (const id of PLAY_IDS) {
+      const rows = PLAY_PRODUCTION_ROWS[id]
+      expect([id, rows.length >= 3]).toEqual([id, true])
+      expect(PLAYS[id].productionClaims).toEqual(rows.map((r) => r.claim))
+      for (const r of rows) expect([id, r.claim, ids.has(r.claim)]).toEqual([id, r.claim, true])
+    }
+  })
+})
+
+describe('the EPLB play joins the registry (wave-3.md §5.2, 3b-02)', () => {
+  test('it is registered in plays.ts, the component registry and the card rows with lessonId t6.l2 and 15 minutes', () => {
+    expect(getPlay('eplb')).toBe(EPLB)
+    expect([EPLB.lessonId, EPLB.minutes]).toEqual(['t6.l2', 15])
+    expect(Object.keys(PLAY_REGISTRY).sort()).toEqual([...PLAY_IDS].sort())
+    expect(PLAY_PRODUCTION_ROWS.eplb.map((r) => r.claim)).toEqual(EPLB.productionClaims)
+    expect(EPLB.kcs.every((k) => Object.values(KC).includes(k))).toBe(true)
   })
 })
 

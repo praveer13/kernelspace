@@ -77,7 +77,7 @@ describe('the prefill family (§5.1)', () => {
 })
 
 describe('pins', () => {
-  test('t5.l9 and t6.l3: a 4k prompt of Llama-3-70B over 50 GB/s is 1.34 GB and 26.8 ms, the lessons\' "about 1.3 GB" and "~25 ms"', () => {
+  test('t5.l9 and t6.l3: a 4k prompt of Llama-3-70B over 50 GB/s is 1.34 GB and 26.8 ms, as the lessons state it', () => {
     const i = prefill.pins[0].make()
     expect(i.variant).toBe('transfer-ms')
     expect(truthOf(i)).toBeCloseTo((4096 * 327_680) / 50e9 * 1000, 9) // gen-literal-ok: hand check

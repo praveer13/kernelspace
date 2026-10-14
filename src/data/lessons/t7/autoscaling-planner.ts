@@ -161,7 +161,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `You've built every piece the loop controls: the admission valve (lab 06), the block manager (lab 02), the intake queue (lab 04), the disaggregated fleets (T6.L3), the economics of the operating point (T7.L3–L4). The Planner closes the loop: **observe** (queue depth, TTFT/TPOT, KV utilization, GPU load) → **decide** (scale prefill? decode? rebalance the split? reroute?) → **act** (add/drain workers, adjust routing weights, shed load).
 
-Why this is hard and not just "HPA on a custom metric": inference capacity is *discrete and slow* (a new worker takes minutes to load 100s of GB of weights — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks, so even a planner that targets TTFT and ITL SLAs, as Dynamo's does, has to act on queue and utilization signals or traffic forecasts rather than wait for the measured latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
+Why this is hard and not just "HPA on a custom metric": inference capacity is *discrete and slow* (a new worker takes minutes to load its weights, 140 GB for a 70B model in BF16 — T7.L2's cold start), the workloads are *two different physics* (prefill compute-bound, decode bandwidth-bound — T5.L3), the signals are *leading* (queue depth rises *before* TTFT breaks, so even a planner that targets TTFT and ITL SLAs, as Dynamo's does, has to act on queue and utilization signals or traffic forecasts rather than wait for the measured latency), and mistakes are *asymmetric* (under-provisioning violates SLOs now; over-provisioning violates the margin report monthly — T7.L4).`,
     },
     {
       type: 'prose',
@@ -215,20 +215,42 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
           osLine: 'Add pods when the metric crosses the line; lag kills you at spike.',
           llm: 'Planner on queue age + KV utilization + TPOT',
           llmLine: 'Leading signals chosen per phase; scale the binding fleet, not "the service".',
+          breaks: 'An HPA scales one workload on its own metrics, CPU or custom and external ones such as a queue length, taking the largest replica count any of them asks for; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so no one workload\'s replica count says what to add.',
         },
         {
           os: 'cold JVM pool',
           osLine: 'Keep-warm for the 9am spike because JIT+load is slow.',
           llm: 'keep-warm GPU pool + fast loaders',
           llmLine: 'Minutes of weight-load: capacity arrives late unless pre-warmed.',
+          breaks: 'A cold JVM serves slowly while it warms up; a new GPU worker serves nothing until its weights have loaded, 140 GB for a 70B model in BF16, which takes minutes, so the pool has to be sized for the spike before it arrives.',
         },
         {
           os: 'graceful degradation ladder',
           osLine: 'Queue → 429 → reduced feature set, by policy, in advance.',
           llm: 'queue → honest shed → degrade output classes',
           llmLine: 'A retryable busy beats a silent SLO breach. Decided before the incident, not during.',
+          breaks: 'A web ladder switches optional features off; the rungs here trade the answer itself, since a deeper queue raises everyone\'s TTFT and degrading shortens outputs, so each rung needs an explicit bound chosen in advance.',
         },
       ],
+      principle:
+        'Capacity is slow and discrete, so act on leading signals and decide the degradation ladder in advance. The autoscaler pattern carries over, but the unit scaled is a phase with its own physics, and a worker takes minutes to arrive.',
+      breakItem: {
+        q: 'The Planner is mapped onto your web autoscaler. Where does that mapping break?',
+        options: [
+          'An autoscaler should act on a signal that leads the damage, and the Planner acts on queue age before TTFT breaks',
+          'A web tier answers overload with a clear retryable error, and an inference fleet sheds with a retryable 429 instead of timing out',
+          'A cold JVM serves slowly while it warms up, and a new GPU worker serves nothing until a 70B model\'s 140 GB of weights have loaded',
+          'Keeping spare capacity warm for a predictable peak costs money all day, and a keep-warm GPU pool costs more for each idle worker',
+        ],
+        correct: [2],
+        why: [
+          'This holds on both sides: a metric that leads the failure leaves time to react, in a web tier as in the Planner. The pair claims exactly this, so it is not where the analogy stops.',
+          'This holds on both sides: a fast, retryable refusal beats a silent timeout for web and inference users alike. The analogy agrees here, so it is not a break.',
+          'Right: a cold JVM still serves, only slowly, while a new GPU worker serves nothing until its weights have loaded, 140 GB for a 70B model at two bytes per BF16 parameter, which takes minutes. Capacity has to be ordered before the spike, not at it.',
+          'This holds on both sides: warm spare capacity is paid for whether or not it is used, so headroom trades against the bill in a web tier and in a GPU pool alike.',
+        ],
+      },
+      kcs: ['t7.leading-signals', 't7.capacity-planning'],
     },
     {
       type: 'item',
@@ -292,7 +314,7 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
             'Capacity is discrete and slow. Diurnal traffic is cron-shaped, so the cheapest capacity is pre-warmed; the next cheapest is a fast loader; the fallback is honest shedding.',
           why: [
             'Bigger batches raise per-token latency and push TPOT past its SLO. They do not shorten the minutes a new worker needs before it can serve anything.',
-            'A replica is not ready when its process starts. It must load hundreds of GB of weights into GPU memory first, which takes minutes and is the root of the problem.',
+            'A replica is not ready when its process starts. It must load its weights into GPU memory first, 140 GB for a 70B model in BF16, which takes minutes and is the root of the problem.',
             'Right: capacity is discrete and slow. Diurnal traffic is cron-shaped, so pre-warmed capacity is cheapest, fast loaders are next, and honest shedding is the fallback.',
             'Idle GPUs bill the same as busy ones, so a blanket multiple wastes margin every hour. It also fails the first time a spike exceeds the chosen multiple.',
           ],

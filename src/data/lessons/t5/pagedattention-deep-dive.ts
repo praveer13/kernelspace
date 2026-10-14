@@ -301,13 +301,34 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
           ],
           correct: [1],
           kcs: ['t5.block-tables'],
+          miss: ['confuse.t2.address-translation', '', '', ''],
           explanation:
             'Indirection has a real kernel cost, 20-26% higher attention latency than FasterTransformer in the paper. It is repaid because 60-80% of KV memory had been wasted: reclaiming it grows batches and gives 2-4x higher end-to-end throughput than FasterTransformer and Orca.',
           why: [
-            'No hardware TLB exists for this lookup: the kernel reads the table and branches in software. That is the source of its measured overhead, which is not zero.',
+            'A page-table walk is done by the MMU and cached in a TLB, but the block table is a plain array that the attention kernel indexes and branches on in software. That is the source of its measured overhead, which is not zero.',
             'Right: the paper measured 20-26% higher attention-kernel latency, but attention is only part of a step and the memory saved allows larger batches, giving 2-4x higher throughput.',
             'PagedAttention reads blocks in place. Gathering them into a buffer first would add a full pass over the cache, defeating the purpose of paging.',
             'Tables are small but are read from memory per sequence, not held in registers, and the block gather still adds latency. The paper reports a measurable slowdown, not parity.',
+          ],
+        },
+        {
+          q: 'With 16-token blocks, a sequence\'s block table reads [7, 3, 12]. What does the entry 3 tell the attention kernel?',
+          options: [
+            'Physical block 3 holds the K/V of one particular run of token ids, so any request with those tokens finds it through this table',
+            'Tokens 16 to 31 have their K/V in physical block 3, so the kernel reads that block wherever it sits in the pool',
+            'Three blocks of this sequence come before this one, so the K/V that this entry points at starts at token 48',
+            'Physical blocks 3 to 11 are reserved for this sequence, since each entry marks where a contiguous run of blocks starts',
+          ],
+          correct: [1],
+          kcs: ['t5.block-tables'],
+          miss: ['confuse.t5.prefix-cache-keys', '', '', ''],
+          explanation:
+            'A block table is indexed by logical block (the entry\'s position) and holds physical block ids (the entry\'s value). Index 1 covers tokens 16 to 31, and its value says where they live. Finding blocks by their tokens is the prefix cache\'s hash lookup, a separate structure.',
+          why: [
+            'Takes the block table for the prefix cache\'s index. The table belongs to one sequence and is indexed by position; finding blocks by their tokens is the hash lookup\'s job, which then writes matching blocks into a new table.',
+            'Right: the entry sits at index 1, so it covers logical block 1, tokens 16 to 31, and its value 3 names the physical block in the pool that holds their K/V.',
+            'The value 3 is a physical block id, not a position. The entry\'s position in the table, index 1, gives the logical block: tokens 16 to 31, not 48 onwards.',
+            'Each entry names one fixed-size block, and nothing has to be contiguous: the next logical block of this sequence sits in physical block 12, unrelated to 3.',
           ],
         },
       ],

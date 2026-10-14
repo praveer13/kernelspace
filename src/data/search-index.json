@@ -42,7 +42,7 @@
     ["t4.l3","The Roofline Model","Arithmetic intensity in, bound classification out: why…",["The three numbers and one division","The two case studies that run T5","The graded pass: Fleet kernels on a B200","In the playground"]],
     ["t4.l4","Occupancy & Coalesced Memory Access","The two numbers that decide whether your kernel sings or…",["Occupancy: warps in residence","Coalescing: the warp-wide memory contract","Why serving kernels obsess over both"]],
     ["t4.l5","WebGPU Compute Shaders","Vector add → parallel reduction, editable WGSL in the…",["The programming model in one paragraph","Reduction: the kernel that teaches cooperation","In the playground"]],
-    ["t4.l6","Matmul, Tiling & FlashAttention as Cache Blocking","The interactive tiling visualization: how blocking turns a…",["Tiling: block the problem to fit the fast tier","FlashAttention: the same trick, one softmax harder","In the simulator"]],
+    ["t4.l6","Matmul, Tiling & FlashAttention as Cache Blocking","The interactive tiling visualization: how blocking turns a…",["Tiling: block the problem to fit the fast tier","Raster order: launch tiles so a wave shares L2","FlashAttention: the same trick, one softmax harder","In the simulator"]],
     ["t4.l7","Quantization: FP16/BF16/FP8/INT4","The interactive quantizer: type a float, watch its bits —…",["Floating point, compressed into one paragraph","How production quantization actually works","In the quantizer"]],
     ["t5.l1","Transformer Internals for Systems Engineers","QKV math, why the KV cache exists, FLOPs and bytes per…",["The forward pass as a cost ledger","Why the KV cache exists","The terms that will recur, locked in"]],
     ["t5.l2","Tokenization & BPE","Why tokens, not words: the BPE algorithm, the cost model it…",["The systems-relevant consequences","In the simulator"]],
@@ -155,7 +155,7 @@
     ["t4.compute-grid","Workgroups and the dispatch grid","map a global invocation id to the…","t4.l5","the-programming-model-in-one-paragraph",[]],
     ["t4.parallel-reduction","Tree reduction and barriers","write a tree reduction with workgroup…","t4.l5","reduction-the-kernel-that-teaches-cooperation",[]],
     ["t4.tiling-intensity","Tiling raises intensity","compute how a matmul tile raises…","t4.l6","tiling-block-the-problem-to-fit-the-fast-tier",[]],
-    ["t4.raster-l2-reuse","Raster order decides L2 reuse","say why the order a grid visits tiles…","t4.l6","",[]],
+    ["t4.raster-l2-reuse","Raster order decides L2 reuse","say why the order a grid visits tiles…","t4.l6","raster-order-launch-tiles-so-a-wave-shares-l2",[]],
     ["t4.flashattention-blocking","FlashAttention as cache blocking","say how FlashAttention streams tiles…","t4.l6","flashattention-the-same-trick-one-softmax-harder",[]],
     ["t4.number-formats","FP16, BF16, FP8 and INT4","say what exponent and mantissa bits buy…","t4.l7","floating-point-compressed-into-one-paragraph",[]],
     ["t4.quantized-bytes","Bytes per weight when quantized","compute weight bytes at FP16, FP8 and…","t4.l7","how-production-quantization-actually-works",[]],
@@ -227,7 +227,9 @@
   ],
   "plays": [
     ["block-placement","Block placement","t1.l4",15],
-    ["scheduler","I was the scheduler","t5.l7",20]
+    ["scheduler","I was the scheduler","t5.l7",20],
+    ["tiling-cube","The Tiling Cube","t4.l6",25],
+    ["eplb","Place the experts","t6.l2",15]
   ],
   "claims": [
     ["hw.h100-sxm.hbm-capacity","H100 SXM HBM capacity",80,"GB"],

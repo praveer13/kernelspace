@@ -5,7 +5,7 @@
  * Three outcomes, so content can be placed before the play ships:
  * - registered: a lazy component, loaded when its block or page mounts;
  * - pending (`PENDING_PLAYS`): promised by a later task. The block renders nothing, so content can place it
- *   before the play ships. 2b-11 registered 'scheduler', the one pending id, so the list is empty now;
+ *   before the play ships. 2b-11 registered 'scheduler', 3b-01 'tiling-cube' and 3b-02 'eplb', so the list is empty now;
  * - unknown: a typo or a stale id. The block and the page say so with an error card.
  *
  * An id registered is removed from PENDING_PLAYS; tests/plays/registry.test.ts fails while an id is in both, so
@@ -33,6 +33,14 @@ export const PLAY_REGISTRY: Readonly<Record<string, PlayEntry>> = {
   scheduler: {
     Component: lazy(() => import('@/components/play/scheduler/Play')),
     intro: 'Schedule a minute of real serving traffic by hand against a hidden reference scheduler, then compose a policy of your own.',
+  },
+  'tiling-cube': {
+    Component: lazy(() => import('@/components/play/tiling-cube/Play')),
+    intro: 'Predict the arithmetic intensity of a matmul tile, then step its size, depth, raster order and precision through three linked faces and a table: six levels, from counting the cube to FlashAttention.',
+  },
+  eplb: {
+    Component: lazy(() => import('@/components/play/eplb/Play')),
+    intro: 'Predict how badly round-robin placement skews a mixture-of-experts layer, then replicate the hot experts and place every copy on a GPU by hand against a hidden reference, DeepSeek EPLB.',
   },
 }
 

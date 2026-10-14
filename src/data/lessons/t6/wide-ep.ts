@@ -37,6 +37,11 @@ The **Expert Parallel Load Balancer** treats hot experts as a bin-packing proble
 Notice what EPLB really is: **consistent hashing with live rebalancing** — your cache-tier instinct again (T3.L6, T5.L9). The differences are instructive: the "keys" are expert ids, the "nodes" are GPUs, and the rebalancing signal is token counts rather than cache misses.`,
     },
     {
+      type: 'play',
+      playId: 'eplb',
+      title: 'Replicate and place the experts, then meet the reference',
+    },
+    {
       type: 'prose',
       md: `## Mechanism 3: dual-batch overlap — hide the network under compute
 
