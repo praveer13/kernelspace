@@ -1,4 +1,6 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+/* eslint-disable react-refresh/only-export-components -- the start-a-set hook and its pure parts are exported beside the page so a test
+   drives the very code the buttons run */
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { selectRings } from '@/lib/economy'
 import { collect, settle } from '@/lib/items/on-demand'
 import type { ItemResult } from '@/lib/items/play'
@@ -86,6 +88,96 @@ const placementOf = (raw: Json | undefined): Pick<PlacementResult, 'solidKcs'> |
 }
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms))
+
+/* ---------------------------------- starting "keep going" and practice ---------------------------------- */
+
+export type SetKind = 'extra' | 'practice'
+
+/** What composing a set came to: slots to play, nothing to play, or a group or family that did not load. */
+export type Prepared = { status: 'ready'; slots: readonly SessionSlot[] } | { status: 'empty' } | { status: 'failed' }
+
+/**
+ * Compose a set once any compile bank group it asked for has landed (src/lib/items/on-demand.ts). `settle` throws
+ * `NotReady` when a group or family failed to load and the work stopped; that is an answer ("failed"), not a rejection.
+ */
+export async function prepareSet(work: () => readonly SessionSlot[]): Promise<Prepared> {
+  try {
+    const slots = await settle(work)
+    return slots.length === 0 ? { status: 'empty' } : { status: 'ready', slots }
+  } catch (e) {
+    if (import.meta.env?.DEV) console.warn('[today] a set could not be composed', e)
+    return { status: 'failed' }
+  }
+}
+
+export type StartState = { phase: 'idle' } | { phase: 'loading' | 'empty' | 'failed'; kind: SetKind }
+
+const SET_NAME: Record<SetKind, string> = { extra: 'more items', practice: 'the practice set' }
+
+/** The sentence for the status line under the cards: what is happening, or what did not work. */
+export const startLine = (s: StartState): string => {
+  if (s.phase === 'idle') return ''
+  if (s.phase === 'loading') return `Loading ${SET_NAME[s.kind]}…`
+  if (s.phase === 'failed') return `Could not load ${SET_NAME[s.kind]}. Nothing was started.`
+  return 'No items are ready for that set right now.'
+}
+
+/** The status line under the cards (always mounted, so a change is announced) and, after a failure, a button to press again. */
+export function StartNote({ state, onRetry }: { state: StartState; onRetry(kind: SetKind): void }) {
+  const line = startLine(state)
+  return (
+    <div className="mt-4" data-start-note>
+      <p role="status" className={line === '' ? 'sr-only' : 'font-mono text-body-sm text-text-3'}>
+        {line}
+      </p>
+      {state.phase === 'failed' && (
+        <button
+          type="button"
+          onClick={() => onRetry(state.kind)}
+          className="mt-2 min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The press behind "Keep going" and "Practice with new numbers". It never rejects: a set that could not be composed
+ * leaves a status the learner can read and a way to press again, `begin` (which opens the set and so is the only thing
+ * that can lead to a ledger write) is not called for it, and a second press while one is loading is ignored.
+ */
+export function useStartSet(prepare: (kind: SetKind) => Promise<Prepared>, begin: (kind: SetKind, slots: readonly SessionSlot[]) => void) {
+  const [state, setState] = useState<StartState>({ phase: 'idle' })
+  const busy = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  const go = useCallback(
+    async (kind: SetKind) => {
+      if (busy.current) return
+      busy.current = true
+      setState({ phase: 'loading', kind })
+      try {
+        const got = await prepare(kind).catch((): Prepared => ({ status: 'failed' }))
+        if (!mounted.current) return
+        if (got.status === 'ready') {
+          setState({ phase: 'idle' })
+          begin(kind, got.slots)
+        } else setState({ phase: got.status, kind })
+      } finally {
+        busy.current = false
+      }
+    },
+    [prepare, begin],
+  )
+  return { state, go }
+}
 
 export default function Today() {
   const working = useProgress((s) => s.working)
@@ -273,8 +365,8 @@ export default function Today() {
     return planLine(plan.estMinutes, pickContinue(kind, upNext ? [upNext] : []))
   }, [plan, weekPlan, ready, today, width, upNext])
 
-  const start = async (kind: 'extra' | 'practice') => {
-    if (!ready || !pool) return
+  const prepare = async (kind: SetKind): Promise<Prepared> => {
+    if (!ready || !pool) return { status: 'empty' }
     const livePool = buildPool({
       kcs: ready.content.kcs,
       gens: ready.content.gens,
@@ -285,17 +377,16 @@ export default function Today() {
     })
     const seed = freshSeed()
     // composed again on the same seed once any compile bank group it asked for has landed
-    const slots = await settle(() =>
-      kind === 'extra'
-        ? composeExtra(ready.cards, { ...ready.cc, pool: livePool }, ready.day, seed)
-        : composePractice(ready.content.bootKcs, livePool, seed, 5),
-    )
-    if (slots.length === 0) return
+    return prepareSet(() => (kind === 'extra' ? composeExtra(ready.cards, { ...ready.cc, pool: livePool }, ready.day, seed) : composePractice(ready.content.bootKcs, livePool, seed, 5)))
+  }
+  const begin = (kind: SetKind, slots: readonly SessionSlot[]) => {
     runKey.current += 1
     setRun({ key: runKey.current, kind, grp: crypto.randomUUID(), slots, src: kind === 'extra' ? 'today' : 'practice' })
     setOutcomes([])
     setFinished(false)
   }
+  const starter = useStartSet(prepare, begin)
+  const start = (kind: SetKind) => void starter.go(kind)
 
   const canPractice = ready !== null && pool !== null && ready.content.bootKcs.some((kc) => pool.families(kc).length > 0)
 
@@ -346,7 +437,7 @@ export default function Today() {
           <EmptyState
             upNext={upNext}
             offerPlacement={offerPlacement}
-            {...(canPractice ? { onPractice: () => void start('practice') } : {})}
+            {...(canPractice ? { onPractice: () => start('practice') } : {})}
           />
         )}
         {ready && active && !done && (
@@ -376,9 +467,10 @@ export default function Today() {
             offerPlacement={offerPlacement}
             pendingHandoff={pending}
             extra={active.kind !== 'review'}
-            {...(canExtra ? { onKeepGoing: () => void start('extra') } : {})}
+            {...(canExtra ? { onKeepGoing: () => start('extra') } : {})}
           />
         )}
+        {ready && <StartNote state={starter.state} onRetry={start} />}
       </div>
 
       {sheet && (

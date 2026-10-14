@@ -9,6 +9,11 @@
  * turn as the click: Safari blocks `window.open` after an await. A press that beats the build still works, and if the
  * browser blocks the tab anyway the link is shown here and the status does not claim it opened (ask-flow.ts).
  *
+ * A packet built ahead is only good for the inputs it was built from: the page's `build` (which closes over the check
+ * reports, the lab or lesson and the notes it reads), the ack, the label, the arm and the ledger the notes come from.
+ * When any of them changes, the packet is built again (at once, if the learner is already at the buttons), and a press
+ * never copies one built from older inputs: it waits for the build of the current ones, inside the same click.
+ *
  * The ack never records content, and nothing here is credit: help-seeking is counted, not graded.
  */
 
@@ -50,8 +55,22 @@ export interface AskButtonsProps {
 /** A packet built ahead of the press stays good this long; the ledger notes in it are read again after that. */
 const WARM_MS = 20_000
 
+/** What a warm packet was built from. A press copies it only while every one of these is still what the page has. */
+interface Inputs {
+  build: () => Promise<Packet>
+  packetRef: PacketRef
+  label: string
+  arm: Arm | undefined
+  /** The progress aggregate, which a new ledger event replaces: the notes the packet reads come from the ledger. */
+  ledger: unknown
+}
+
+const sameInputs = (a: Inputs, b: Inputs): boolean =>
+  a.build === b.build && a.packetRef === b.packetRef && a.label === b.label && a.arm === b.arm && a.ledger === b.ledger
+
 interface Warm {
   at: number
+  inputs: Inputs
   promise: Promise<Packet>
   packet?: Packet
 }
@@ -64,13 +83,14 @@ interface Manual {
 
 export default function AskButtons({ packetRef, label, build, arm, copyPacket = false, size = 'chip', lead, about, className }: AskButtonsProps) {
   const recordHelp = useProgress((s) => s.recordHelp)
+  const ledger = useProgress((s) => s.aggregate)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [manual, setManual] = useState<Manual | null>(null)
   // The agent whose link is shown in place of a tab the browser would not open.
   const [blocked, setBlocked] = useState<Agent | null>(null)
   const warm = useRef<Warm | null>(null)
-  const buildNow = useRef(build)
+  const latest = useRef<Inputs>({ build, packetRef, label, arm, ledger })
   const dialog = useRef<HTMLDialogElement>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const timer = useRef<number | undefined>(undefined)
@@ -78,9 +98,6 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
   const iconSize = size === 'chip' ? 11 : 14
   const suffix = about === undefined ? '' : ` about ${about}`
 
-  useEffect(() => {
-    buildNow.current = build
-  }, [build])
   useEffect(() => () => window.clearTimeout(timer.current), [])
   useEffect(() => {
     if (manual === null) return
@@ -97,8 +114,9 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
   // Starts the build when the learner reaches for a button, so the press itself has nothing to wait for.
   const prepare = () => {
     const held = warm.current
-    if (held !== null && Date.now() - held.at < WARM_MS) return
-    const entry: Warm = { at: Date.now(), promise: buildNow.current() }
+    if (held !== null && Date.now() - held.at < WARM_MS && sameInputs(held.inputs, latest.current)) return
+    const inputs = latest.current
+    const entry: Warm = { at: Date.now(), inputs, promise: inputs.build() }
     warm.current = entry
     entry.promise.then(
       (p) => {
@@ -110,10 +128,21 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
     )
   }
 
+  useEffect(() => {
+    latest.current = { build, packetRef, label, arm, ledger }
+    // The learner is already at the buttons (a packet was built) and an input changed: build again now, so the press finds it ready.
+    if (warm.current !== null && !sameInputs(warm.current.inputs, latest.current)) {
+      warm.current = null
+      prepare()
+    }
+  }, [build, packetRef, label, arm, ledger])
+
   const use = (via: Via) => {
     if (busy) return
     const held = warm.current
-    const ready = held !== null && Date.now() - held.at < WARM_MS ? held.packet : undefined
+    // only a packet built from what the page has now; one built from older inputs is dropped, never copied
+    const current = held !== null && Date.now() - held.at < WARM_MS && sameInputs(held.inputs, latest.current) ? held : null
+    const ready = current?.packet
     warm.current = null
     setBusy(true)
     setBlocked(null)
@@ -122,7 +151,8 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
       via,
       url: agentUrl(via === 'copy' ? 'claude' : via, label),
       ready,
-      build: () => buildNow.current(),
+      // a build of the current inputs already under way is waited for, not started twice
+      build: () => (current !== null ? current.promise : latest.current.build()),
       writeText: (text) => navigator.clipboard.writeText(text),
       open: (url) => window.open(url, '_blank'),
     })

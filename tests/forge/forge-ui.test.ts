@@ -2,15 +2,18 @@
  * The Forge UI fixes of the 2c final review (task CF6): the walk keeps the Make step (and with it a running folder
  * watch) mounted across step switches, a check with no ladder gets its packet at once, "make it green" prints the
  * workspace target/ path, a lab with a bundle never shows the plain page first, the panel is named for the lab, /forge
- * does not fade its cards, and the Error Museum's chips move focus. There is no DOM in this suite: components are
- * rendered to markup, pure helpers are called with fakes, and the page wiring is read from source, as forgelab-page
- * does. Focus, the real fade and the real tab are checked in a browser (axe at 360 and 1280 px; Playwright).
+ * does not fade its cards, and the Error Museum's chips move focus. Components render to markup for what they print;
+ * what they do is checked on mounted pages in a small DOM (tests/dom/mini-dom.ts): the lab page, /forge and /errors
+ * are mounted, buttons are pressed, and the test reads the DOM and `document.activeElement` a learner would meet. Only
+ * a few one-line wirings are still read from source, and each says why. The real fade, the real tab and contrast are
+ * checked in a browser (axe at 360 and 1280 px; Playwright).
  */
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { AskPacketView } from '../../src/components/forge/AskPacket'
 import { MakeGreen } from '../../src/components/forge/MakeGreen'
 import { PrimmPanel } from '../../src/components/forge/PrimmPanel'
@@ -23,11 +26,23 @@ import type { CheckResult, LabRunReport } from '../../src/lib/forge/types'
 import { hintRef } from '../../src/lib/forge/ladder'
 import { HINT_EXPERIMENT, armFor, hintUnit, type Arm } from '../../src/lib/learner/experiments'
 import { isPlainClick, jumpToEntry, type EntryScope } from '../../src/lib/museum-jump'
+import Errors from '../../src/pages/Errors'
+import Forge from '../../src/pages/Forge'
+import ForgeLab from '../../src/pages/ForgeLab'
+import { effectiveOpacity, installDom, MiniElement, MiniEvent, type DomKit, type Mounted } from '../dom/mini-dom'
 
 const src = join(import.meta.dir, '../../src')
 const read = (p: string) => readFileSync(join(src, p), 'utf8')
 const lab02 = FORGE_LABS.find((l) => l.id === 'kv-block-manager')!
 const STEPS: PrimmStepId[] = ['predict', 'run', 'investigate', 'modify', 'make']
+const STEP_NAMES: Record<PrimmStepId, string> = { predict: 'Predict', run: 'Run', investigate: 'Investigate', modify: 'Modify', make: 'Make' }
+
+/** The lab page at /forge/<id>, mounted once its bundle has loaded and the walk is on screen. */
+function labPage(dom: DomKit, id = 'kv-block-manager'): Promise<Mounted> {
+  const routes = createElement(Routes, null, createElement(Route, { path: '/forge/:labId', element: createElement(ForgeLab) }))
+  return dom.mount(createElement(MemoryRouter, { initialEntries: [`/forge/${id}`] }, routes))
+}
+const stepTab = (root: MiniElement, step: PrimmStepId) => root.querySelectorAll('button').find((b) => new RegExp(`^${STEPS.indexOf(step) + 1}\\s*${STEP_NAMES[step]}`).test(b.textContent))!
 
 /* ---------------------------------- a step switch does not end a watch ---------------------------------- */
 
@@ -57,8 +72,6 @@ describe('the Make step stays mounted when another step is open', () => {
   test('the children are rendered whatever the step, so switching steps has nothing to unmount', async () => {
     const counts = await Promise.all(STEPS.map(async (s) => ((await panel(s)).match(/id="watch-here"/g) ?? []).length))
     expect(counts).toEqual([1, 1, 1, 1, 1])
-    // and the source never renders them behind a step test
-    expect(read('components/forge/PrimmPanel.tsx')).not.toMatch(/active === 'make'\s*&&/)
   })
 
   test('the Make tab says "watching" while a watch runs, and nothing otherwise', async () => {
@@ -67,12 +80,64 @@ describe('the Make step stays mounted when another step is open', () => {
     expect(await panel('predict')).not.toContain('data-watching-note')
   })
 
-  test('FolderWatch tells its page when a watch starts and ends, and the page hands it to the walk', () => {
-    const fw = read('components/forge/FolderWatch.tsx')
-    expect(fw).toContain('told.current?.(watching)')
-    const page = read('pages/ForgeLab.tsx')
-    expect(page).toContain('onWatching={setWatching}')
-    expect(page).toContain('watching={watching}')
+})
+
+describe('on the mounted lab page, switching PRIMM steps leaves a running watch alone', () => {
+  let dom: DomKit
+  beforeAll(async () => {
+    dom = await installDom()
+  })
+  afterAll(() => dom.uninstall())
+
+  /** A picked folder that has no target/ yet: a watch that is running, with nothing to run. */
+  const notFound = async () => {
+    throw Object.assign(new Error('not found'), { name: 'NotFoundError' })
+  }
+  async function watching() {
+    dom.window.showDirectoryPicker = async () => ({ name: 'unzipped', getDirectoryHandle: notFound, getFileHandle: notFound })
+    const page = await labPage(dom)
+    await dom.until(() => page.container.querySelector('[data-step-body="make"]') !== null && page.container.querySelector('[data-folder-watch]') !== null)
+    const zone = page.container.querySelector('[data-folder-watch]')!
+    const start = page.container.querySelectorAll('button').find((b) => b.textContent.includes('Watch my build folder'))!
+    await dom.press(start)
+    await dom.until(() => zone.getAttribute('data-watching') === 'on')
+    return { page, zone }
+  }
+
+  test('the watch starts from the page, and the Make tab says so from any step', async () => {
+    const { page, zone } = await watching()
+    expect(zone.getAttribute('data-watching')).toBe('on')
+    expect(zone.querySelector('[data-watch-status]')!.textContent).toContain('No target/ folder in "unzipped"')
+    // the page handed `watching` to the walk: the tab names it on the step the learner is on (Predict)
+    const note = page.container.querySelector('[data-watching-note]')
+    expect(note, 'the Make tab shows a watching note').not.toBeNull()
+    expect(stepTab(page.container, 'make').textContent).toContain('watching')
+    await page.unmount()
+  })
+
+  test('every step switch keeps the same watch element, still on, still named on the Make tab', async () => {
+    const { page, zone } = await watching()
+    for (const step of [...STEPS, 'predict' as const]) {
+      await dom.press(stepTab(page.container, step))
+      expect(page.container.querySelector('[data-folder-watch]'), `after switching to ${step}`).toBe(zone)
+      expect(zone.getAttribute('data-watching')).toBe('on')
+      expect(page.container.querySelector('[data-watching-note]')).not.toBeNull()
+      // the folder watch lives in the Make step: hidden unless it is the open one, but in the page either way
+      const make = page.container.querySelector('[data-step-body="make"]')!
+      expect(make.contains(zone)).toBe(true)
+      expect(make.hidden).toBe(step !== 'make')
+    }
+    await page.unmount()
+  })
+
+  test('stopping the watch is what ends it: the note goes and the button offers to watch again', async () => {
+    const { page, zone } = await watching()
+    await dom.press(stepTab(page.container, 'run'))
+    await dom.press(page.container.querySelectorAll('button').find((b) => b.textContent.includes('Stop watching'))!)
+    await dom.until(() => zone.getAttribute('data-watching') === 'off')
+    expect(page.container.querySelector('[data-watching-note]')).toBeNull()
+    expect(page.container.querySelectorAll('button').some((b) => b.textContent.includes('Watch my build folder'))).toBe(true)
+    await page.unmount()
   })
 })
 
@@ -90,11 +155,20 @@ describe('the walk is named from the lab, not from the discussions label', () =>
     const bundle = await loadForgeBundle('kv-block-manager')
     const html = renderToStaticMarkup(createElement(PrimmPanel, { bundle, checks: lab02.checks, passed: new Set<string>() }))
     expect(html).toContain('aria-label="The lab, in five steps"')
-    expect(read('components/forge/PrimmPanel.tsx')).not.toContain('labName')
+    expect(html).not.toMatch(/aria-label="[^"]*\[/)
   })
 
-  test('ForgeLab passes the lab’s own title', () => {
-    expect(read('pages/ForgeLab.tsx')).toContain('title={lab.title}')
+  test('the lab page names its walk with the lab’s own title', async () => {
+    const dom = await installDom()
+    try {
+      const page = await labPage(dom)
+      await dom.until(() => page.container.querySelector('[data-step-body="make"]') !== null)
+      expect(page.container.querySelector(`[aria-label="${lab02.title}, in five steps"]`)).not.toBeNull()
+      expect(page.container.querySelector('[aria-label^="Lab 02 in five steps"]')).toBeNull()
+      await page.unmount()
+    } finally {
+      await dom.uninstall()
+    }
   })
 })
 
@@ -201,10 +275,21 @@ describe('"2 · make it green" names the workspace target/ path', () => {
     expect(out).toContain('6 required + 1 advanced')
   })
 
-  test('ForgeLab mounts it rather than printing lab.artifact itself', () => {
-    const page = read('pages/ForgeLab.tsx')
-    expect(page).toContain('<MakeGreen lab={lab} />')
-    expect(page).not.toContain('the artifact to drop below')
+  test('the lab page shows both spellings, once, and not the bare artifact after "the artifact to drop below"', async () => {
+    const dom = await installDom()
+    try {
+      const page = await labPage(dom)
+      await dom.until(() => page.container.querySelector('[data-step-body="make"]') !== null)
+      const text = page.container.textContent
+      const paths = artifactPaths(lab02)
+      expect(text).toContain(paths.fromWorkspace)
+      expect(text).toContain(paths.fromCrate)
+      expect(page.container.querySelectorAll('[aria-labelledby="make-green"]')).toHaveLength(1)
+      expect(text).not.toMatch(/the artifact to drop below:\s*target\//)
+      await page.unmount()
+    } finally {
+      await dom.uninstall()
+    }
   })
 })
 
@@ -219,20 +304,30 @@ describe('a lab with a bundle never shows the plain page first', () => {
     expect(hasForgeBundle('no-such-lab')).toBe(false)
   })
 
-  test('the page starts in `loading` for a lab with a bundle, and renders the placeholder, not the plain page', () => {
-    const page = read('pages/ForgeLab.tsx')
-    expect(page).toContain("useState<BundleState>({ status: expected ? 'loading' : 'none' })")
-    // the plain page is for a lab with no bundle, or one whose chunk failed
-    expect(page).toContain("bundleState.status === 'none' || bundleState.status === 'failed' ? (")
-    expect(page).toContain('{bundle === undefined ? (')
-    expect(page).toContain('<WalkPlaceholder />')
-    expect(page).not.toMatch(/\bbundle !== undefined \? \(\s*<>\s*\{\/\* the walk/)
+  const firstRender = (id: string) =>
+    renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [`/forge/${id}`] }, createElement(Routes, null, createElement(Route, { path: '/forge/:labId', element: createElement(ForgeLab) }))))
+
+  test('the first render of a lab with a bundle is the placeholder, not the plain page', () => {
+    const html = firstRender('kv-block-manager')
+    expect(html).toContain('data-walk-placeholder')
+    // the plain page (get the lab, make it green, the drop zone) is for a lab with no bundle, or one whose chunk failed
+    expect(html).not.toContain('aria-labelledby="make-green"')
+    expect(html).not.toContain('data-folder-watch')
+    expect(html).not.toContain('data-step-body')
   })
 
-  test('the walk and the drop zone mount once: the walk’s fallback is the placeholder, not a second copy of the drop zone', () => {
-    const page = read('pages/ForgeLab.tsx')
-    expect(page).not.toContain('fallback={doing}')
-    expect((page.match(/\{doing\}/g) ?? []).length).toBe(1)
+  test('the walk and the drop zone mount once: the placeholder gives way to the walk, and neither leaves a second copy of the drop zone', async () => {
+    const dom = await installDom()
+    try {
+      const page = await labPage(dom)
+      await dom.until(() => page.container.querySelector('[data-step-body="make"]') !== null)
+      expect(page.container.querySelector('[data-walk-placeholder]')).toBeNull()
+      expect(page.container.querySelectorAll('[aria-labelledby="make-green"]')).toHaveLength(1)
+      expect(page.container.querySelectorAll('input[type="file"]')).toHaveLength(1)
+      await page.unmount()
+    } finally {
+      await dom.uninstall()
+    }
   })
 
   test('the placeholder has the walk’s shape: a status line, five step tabs, a lead-in and a card', () => {
@@ -249,10 +344,32 @@ describe('a lab with a bundle never shows the plain page first', () => {
 /* ---------------------------------- /forge does not fade its cards ---------------------------------- */
 
 describe('/forge entrances', () => {
-  test('slide, never fade: a half-faded card measured below 4.5:1 for its small labels', () => {
-    const page = read('pages/Forge.tsx')
-    expect(page).not.toMatch(/opacity:\s*[01]/)
-    expect(page).toContain('initial={{ y: 16 }}')
+  let dom: DomKit
+  beforeAll(async () => {
+    dom = await installDom()
+  })
+  afterAll(() => dom.uninstall())
+
+  test('slide, never fade: no card, label or ancestor of one is faded when the page mounts', async () => {
+    const page = await dom.mount(createElement(MemoryRouter, null, createElement(Forge)))
+    // the small mono labels are what measured below 4.5:1 inside a half-faded card (text-text-3 on surface-1)
+    const labels = page.container.querySelectorAll('.text-text-3')
+    expect(labels.length).toBeGreaterThan(10)
+    for (const el of labels) expect(effectiveOpacity(el), `"${el.textContent}" is faded`).toBe(1)
+    // and the entrances are the sliding kind: the cards start offset, so the test is not passing on a page with no motion
+    const cards = page.container.querySelectorAll('[data-lab-card], a[href^="/forge/"]')
+    expect(cards.length).toBeGreaterThan(10)
+    const sliding = page.container.querySelectorAll('div').filter((d) => /translate/.test(d.style.transform as string))
+    expect(sliding.length).toBeGreaterThan(5)
+    for (const el of sliding) expect(effectiveOpacity(el)).toBe(1)
+    await page.unmount()
+  })
+
+  test('they are still unfaded a moment into the entrance', async () => {
+    const page = await dom.mount(createElement(MemoryRouter, null, createElement(Forge)))
+    await dom.act(() => new Promise((r) => setTimeout(r, 120)))
+    for (const el of page.container.querySelectorAll('.text-text-3')) expect(effectiveOpacity(el), `"${el.textContent}" is faded`).toBe(1)
+    await page.unmount()
   })
 })
 
@@ -299,13 +416,69 @@ describe('jumping to an Error Museum entry', () => {
     for (const over of [{ button: 1 }, { metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { defaultPrevented: true }]) expect(isPlainClick({ ...base, ...over })).toBe(false)
   })
 
-  test('the page wires every chip to it, with the learner’s motion preference, and the deep link still jumps instantly', () => {
-    const page = read('pages/Errors.tsx')
-    expect(page).toContain('onClick={(ev) => goTo(ev, e.code)}')
-    expect(page).toContain('jumpToEntry(document, code, scrollBehavior())')
-    expect(page).toContain("'instant'")
-    expect(page).toContain("import { scrollBehavior } from '@/lib/lesson-scroll'")
-    // the click and the hash effect do not both scroll
-    expect(page).toContain('handled.current = `#${code}`')
+})
+
+describe('the Error Museum page: a chip click and a deep link both land on the entry', () => {
+  let dom: DomKit
+  let scrolls: Array<{ id: string; behavior: string | undefined }>
+  const proto = MiniElement.prototype as unknown as { scrollIntoView(o?: { behavior?: string }): void }
+  const original = proto.scrollIntoView
+  beforeAll(async () => {
+    dom = await installDom()
+    proto.scrollIntoView = function (this: MiniElement, o) {
+      scrolls.push({ id: this.id, behavior: o?.behavior })
+    }
+  })
+  afterAll(async () => {
+    proto.scrollIntoView = original
+    await dom.uninstall()
+  })
+
+  const museum = (at = '/errors') => dom.mount(createElement(MemoryRouter, { initialEntries: [at] }, createElement(Errors)))
+  const chip = (page: Mounted, code: string) => page.container.querySelector(`nav a[href="#${code}"]`)!
+  const heading = (page: Mounted, code: string) => page.container.querySelector(`#${code} h2`)!
+  const reduceMotion = (on: boolean) => {
+    dom.window.matchMedia = (q: string) => ({ matches: on, media: q, addEventListener() {}, removeEventListener() {} })
+  }
+
+  test('a deep link jumps at once (instant, as the browser’s own fragment scroll would) and focuses the heading', async () => {
+    scrolls = []
+    const page = await museum('/errors#E0597')
+    await dom.until(() => scrolls.length > 0)
+    expect(scrolls).toEqual([{ id: 'E0597', behavior: 'instant' }])
+    expect(dom.document.activeElement).toBe(heading(page, 'E0597'))
+    await page.unmount()
+  })
+
+  test('a plain click on a chip scrolls smoothly, focuses the heading, and scrolls once, not again for the new hash', async () => {
+    scrolls = []
+    reduceMotion(false)
+    const page = await museum()
+    await dom.press(chip(page, 'E0382'))
+    await dom.act(() => new Promise((r) => setTimeout(r, 20)))
+    expect(scrolls).toEqual([{ id: 'E0382', behavior: 'smooth' }])
+    expect(dom.document.activeElement).toBe(heading(page, 'E0382'))
+    await page.unmount()
+  })
+
+  test('under reduced motion the click does not animate', async () => {
+    scrolls = []
+    reduceMotion(true)
+    const page = await museum()
+    await dom.press(chip(page, 'E0499'))
+    expect(scrolls).toEqual([{ id: 'E0499', behavior: 'auto' }])
+    expect(dom.document.activeElement).toBe(heading(page, 'E0499'))
+    reduceMotion(false)
+    await page.unmount()
+  })
+
+  test('a modified click keeps the link’s own behaviour: no scroll, no focus move', async () => {
+    scrolls = []
+    const page = await museum()
+    const link = chip(page, 'E0505')
+    await dom.act(() => link.dispatchEvent(new MiniEvent('click', { bubbles: true, cancelable: true, button: 0, metaKey: true })))
+    expect(scrolls).toEqual([])
+    expect(dom.document.activeElement).toBe(dom.document.body)
+    await page.unmount()
   })
 })
