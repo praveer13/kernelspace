@@ -165,18 +165,18 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
       type: 'prose',
       md: `## The graded pass: Fleet kernels on a B200
 
-Architecture knowledge becomes performance engineering only when you write the numbers down **before** touching the implementation. The playground now gives you the Fleet engine's kernel table, but withholds the two columns that matter: arithmetic intensity and the binding roof.
+Architecture knowledge becomes performance engineering only when you write the numbers down **before** touching the implementation. The playground gives you the Fleet engine's kernel table, but the two columns that matter, arithmetic intensity and the binding roof, are yours to work out.
 
 The B200 worksheet uses one GPU at dense FP16: **2.25 PFLOP/s** and **8 TB/s HBM3e**, derived from NVIDIA's eight-GPU [HGX B200 compute specification](https://www.nvidia.com/en-us/data-center/hgx/) and [DGX B200 memory-bandwidth specification](https://www.nvidia.com/en-us/data-center/dgx-b200/). Your first check is therefore the machine ridge; do the division rather than trusting this paragraph.
 
-| Fleet kernel | Work | HBM traffic | You supply |
+| Fleet kernel | Work | HBM traffic | You predict |
 |---|---:|---:|---|
-| router scoring | 0.12 GFLOPs | 0.08 GB | AI + bound |
-| 70B decode, batch 32 | 4,480 GFLOPs | 140 GB | AI + bound |
-| paged attention | 2,048 GFLOPs | 8 GB | AI + bound |
-| 70B prefill, 512 tokens | 71,680 GFLOPs | 140 GB | AI + bound |
+| router scoring | 0.12 GFLOPs | 0.08 GB | AI, then the side of the ridge |
+| 70B decode, batch 32 | 4,480 GFLOPs | 140 GB | AI, then the side of the ridge |
+| paged attention | 2,048 GFLOPs | 8 GB | AI, then the side of the ridge |
+| 70B prefill, 512 tokens | 71,680 GFLOPs | 140 GB | AI, then the side of the ridge |
 
-The units are deliberately paired: \`GFLOPs / GB = FLOPs / byte\`. Enter each result and classify it. A correct row appears on the B200 roofline; a guessed label without the numeric AI does not pass. Notice the near-ridge case: being "a lot of math" is not the same as being compute-bound.`,
+The units are deliberately paired: \`GFLOPs / GB = FLOPs / byte\`. Predict each row's intensity as a number in the task panel, then press \`place … on B200\` to plot the kernel on the B200 roofline, and name the side of the ridge it lands on in the explain step. A regime label without the numeric AI is not a prediction. Notice the near-ridge case: being "a lot of math" is not the same as being compute-bound.`,
     },
     {
       type: 'callout',
@@ -187,7 +187,7 @@ The units are deliberately paired: \`GFLOPs / GB = FLOPs / byte\`. Enter each re
       type: 'prose',
       md: `## In the playground
 
-The simulator is a live roofline: complete the graded B200 table, then sweep batch size and precision and watch decode slide along the bandwidth slope while prefill pins itself to the roof. Compute each workload's AI yourself first — the point is to leave with the napkin skill, not the chart.`,
+The simulator is a live roofline: predict and place each row of the B200 table, then sweep batch size and precision and watch decode slide along the bandwidth slope while prefill pins itself to the roof. Compute each workload's AI yourself first — the point is to leave with the napkin skill, not the chart.`,
     },
     {
       type: 'exercise',
@@ -196,10 +196,10 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
       title: 'Roofline playground',
       taskIds: [
         'roof.ridge',
-        't-roof-fleet-router',
-        't-roof-fleet-decode',
-        't-roof-fleet-paged-attn',
-        't-roof-fleet-prefill',
+        'roof.fleet-router',
+        'roof.fleet-decode',
+        'roof.fleet-paged-attn',
+        'roof.fleet-prefill',
         'roof.decode-bound',
         'roof.batch-to-ridge',
         'roof.fp8-ridge',
@@ -207,7 +207,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
       config: { m: 'H100', dtype: 'fp16', batch: 1 },
       tasks: [
         'Predict the B200 FP16 ridge from its datasheet numbers (2.25 PFLOP/s, 8 TB/s), then pick B200 in the simulator and compare. Submit the number, not a regime label.',
-        'Complete all four Fleet kernel rows. Each needs a numeric AI and the correct compute/bandwidth classification before it is plotted.',
+        'Predict the arithmetic intensity of each of the four Fleet kernel rows from its GFLOP and GB, then place each on the B200 and say which side of the ridge it lands on.',
         'Predict whether decode at batch 1 on the H100 is bandwidth-bound or compute-bound, then plot decode and read the result off the chart.',
         'Predict which batch size first lifts decode to the ridge on the H100 at FP16, then sweep the batch slider and find the knee.',
         'Predict the H100 ridge at the FP8 ceiling, then switch the precision ceiling and compare; try INT4 and note the decode rate multiplies.',

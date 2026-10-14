@@ -95,7 +95,9 @@ describe('legacy tasks keep their ids and pay as before', () => {
     // the click-through ids an outcome task replaced (legacyId) are no longer registered: the task panel reads
     // an earlier completion from the progress store, not from the registry (wave-3.md §13)
     const replaced = reg.tasks.flatMap((t) => (t.legacyId === undefined ? [] : [t.legacyId]))
-    for (const id of ['t-frag', 't-coalesce', 't-paged', 't-trace-lab', 't-double-free', 't-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep']) {
+    const roofline = ['t-cpu-serial', 't-gpu-map', 't-gpu-divergence', 't-roof-occupancy', 't-roof-coalesce', 't-roof-bank', 't-roof-tiers', 't-roof-pcie']
+    const fleet = ['t-roof-fleet-router', 't-roof-fleet-decode', 't-roof-fleet-paged-attn', 't-roof-fleet-prefill']
+    for (const id of ['t-frag', 't-coalesce', 't-paged', 't-trace-lab', 't-double-free', 't-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep', ...roofline, ...fleet]) {
       expect(replaced, id).toContain(id)
       expect(ids, id).not.toContain(id)
     }
@@ -255,6 +257,18 @@ describe('contract ids (§10.2 table), as C7–C9 add them', () => {
     'roof.tile-ai': { simId: 'sim-roofline', kc: 't4.tiling-intensity' },
     'roof.flash-ai': { simId: 'sim-roofline', kc: 't4.tiling-intensity' },
     'roof.fp8-ridge': { simId: 'sim-roofline', kc: KC.ridgePoint },
+    'roof.cpu-serial': { simId: 'sim-roofline', kc: 't4.throughput-design' },
+    'roof.gpu-map': { simId: 'sim-roofline', kc: 't4.throughput-design' },
+    'roof.gpu-divergence': { simId: 'sim-roofline', kc: 't4.simt-warps' },
+    'roof.occupancy': { simId: 'sim-roofline', kc: 't4.occupancy' },
+    'roof.coalesce': { simId: 'sim-roofline', kc: 't4.coalescing' },
+    'roof.bank': { simId: 'sim-roofline', kc: 't4.coalescing' },
+    'roof.tiers': { simId: 'sim-roofline', kc: 't4.gpu-memory-ladder' },
+    'roof.pcie': { simId: 'sim-roofline', kc: 't4.gpu-memory-ladder' },
+    'roof.fleet-router': { simId: 'sim-roofline', kc: KC.boundClassification },
+    'roof.fleet-decode': { simId: 'sim-roofline', kc: KC.boundClassification },
+    'roof.fleet-paged-attn': { simId: 'sim-roofline', kc: KC.boundClassification },
+    'roof.fleet-prefill': { simId: 'sim-roofline', kc: KC.boundClassification },
     'kv.bytes-per-token': { simId: 'sim-kv', kc: 't5.kv-bytes-per-token' },
     'kv.oom-context': { simId: 'sim-kv', kc: 't5.kv-capacity' },
     'kv.fp8-rescue': { simId: 'sim-kv', kc: 't5.kv-bytes-per-token' },
