@@ -18,7 +18,7 @@ import { atlasRow } from '../../src/data/atlas'
 import { byId, claimNumber } from '../../src/data/claims'
 import { KC } from '../../src/data/kc/ids'
 import { ALL_LESSONS } from '../../src/data/lessons'
-import type { ExerciseBlock } from '../../src/data/lessons/types'
+import type { SimExerciseBlock } from '../../src/data/lessons/types'
 import { gradePrediction, splitCanonical } from '../../src/lib/sims/host'
 import {
   BLOCK_SIZE,
@@ -333,7 +333,7 @@ describe('config from a lesson block or a link', () => {
 
 describe('the lessons point at registry tasks', () => {
   const exercises = (lessonId: string) =>
-    (ALL_LESSONS.find((l) => l.id === lessonId)?.blocks ?? []).filter((b): b is ExerciseBlock => b.type === 'exercise')
+    (ALL_LESSONS.find((l) => l.id === lessonId)?.blocks ?? []).filter((b): b is SimExerciseBlock => b.type === 'exercise' && 'simId' in b)
 
   test('t5.l4 lists the five outcome tasks, all on the calculator, in an order that builds', () => {
     const [block] = exercises('t5.l4')
@@ -344,17 +344,24 @@ describe('the lessons point at registry tasks', () => {
     for (const t of KV_TASKS) expect(t.lessons).toEqual(['t5.l4'])
   })
 
-  test('t5.l5 lists the block-table tasks it always had, now with live completion', () => {
+  test('t5.l5 lists the four block-table outcome tasks, which replace the click-through ids', () => {
     const [block] = exercises('t5.l5')
     expect(block.machine).toBe('blocks')
-    expect(block.taskIds).toEqual(['t-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep'])
+    expect(block.taskIds).toEqual(['blk.share', 'blk.cow', 'blk.preempt', 'blk.sweep'])
     // the registry knows these from blockTableExplorer.tasks.ts (loaded the way the app loads it)
     const full = buildRegistry({
       '/src/components/sims/blockTableExplorer.tasks.ts': blockTasks,
       '/src/components/sims/kvCache.tasks.ts': { KV_TASKS },
     })
     expect(full.problems).toEqual([])
-    expect(resolveTasks('sim-kv', block.machine, block.taskIds, full).map((t) => t.id)).toEqual(block.taskIds as string[])
+    const found = resolveTasks('sim-kv', block.machine, block.taskIds, full)
+    expect(found.map((t) => t.id)).toEqual(block.taskIds as string[])
+    expect(found.map((t) => t.kind)).toEqual(['outcome', 'outcome', 'outcome', 'outcome'])
+    expect(found.map((t) => t.legacyId)).toEqual(['t-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep'])
+    for (const t of found) expect(t.lessons).toEqual(['t5.l5'])
+    // the calculator machine does not list them, and the old ids are gone
+    expect(full.forSim('sim-kv', 'calc').some((t) => t.id.startsWith('blk.'))).toBe(false)
+    for (const old of ['t-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep']) expect(full.byId(old)).toBeUndefined()
   })
 
   test('the exported task list still describes the five tasks (public/lessons-md is generated from it)', () => {

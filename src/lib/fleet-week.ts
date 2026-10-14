@@ -51,6 +51,12 @@ export interface ActResult {
    * your components took part in Act I or II: an all-reference run is not evidence of your work.
    */
   run?: { goodput: number; refGoodput: number; ttftP95?: number }
+  /**
+   * The run's numbers under the keys receipts cite (docs/specs/wave-3.md §10.1): Act I's `ACT1_VALUE_KEYS`, Act II's
+   * `ACT2_VALUE_KEYS`, and on Act III's verdict the evaluation's `values`. Each is the number the act displays (latencies
+   * in iterations), finite only: a key whose number is not finite is left out. Acts I-III always carry it; Act IV does not.
+   */
+  values?: Record<string, number>
 }
 
 export interface MeasurementEvidence {
@@ -101,6 +107,21 @@ export type ModuleBytes = Record<LabKind, ArrayBuffer | null>
 
 /** Reports 0..1 while a batch runs; the worker forwards it to the page. */
 export type ProgressFn = (fraction: number) => void
+
+/** Act I's receipt keys (docs/specs/wave-3.md §10.1). */
+export const ACT1_VALUE_KEYS = ['goodput', 'refGoodput', 'completed', 'shed', 'preempts', 'ttftP95', 'tpotP95', 'queueP95'] as const
+/** Act II's receipt keys (§10.1). */
+export const ACT2_VALUE_KEYS = ['goodput', 'completedPct', 'shed', 'lost', 'ttftP95', 'workers'] as const
+
+/** A run's values with every non-finite number left out (the `fw:runs` codec holds finite values only). */
+function finiteValues(entries: [string, number][]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [key, value] of entries) if (Number.isFinite(value)) out[key] = value
+  return out
+}
+
+/** A p95 TPOT as the acts display it, one decimal: the value a receipt cites is the number on the screen. */
+const tpot1 = (n: number): number => (Number.isFinite(n) ? Number(n.toFixed(1)) : n)
 
 /**
  * Faults are data (FaultSpec v2) and their interpreter lives with the incident world in
@@ -299,6 +320,16 @@ export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onPro
   const ms = mine.stats()
   const anyStudent = ownKindsOf(modules).length > 0
   const { pass, detail } = act1Verdict(myG, refG, anyStudent)
+  const values = finiteValues([
+    ['goodput', myG],
+    ['refGoodput', refG],
+    ['completed', ms.completed],
+    ['shed', ms.shed],
+    ['preempts', ms.autoPreempts],
+    ['ttftP95', mine.ttftP95()],
+    ['tpotP95', tpot1(mine.tpotP95())],
+    ['queueP95', mine.queueP95()],
+  ])
   return {
     pass,
     score: Math.min(1, myG / Math.max(1, refG)),
@@ -317,6 +348,7 @@ export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onPro
     ],
     seed: seeds.seed,
     ...(anyStudent ? { run: runNumbers(myG, refG, mine.ttftP95()) } : { practice: true }),
+    values,
   }
 }
 
@@ -355,7 +387,18 @@ export async function runAct2(
   }
   const cluster = new Cluster(traceFor(seeds), workers, choice.router)
   const faults = makeFaultInjector(act2Faults(seeds, choice.workers), faultRng(seeds))
-  cluster.disrupt = faults.disrupt
+  // The requests lost with the dead node, for the `lost` value: the shed a worker gains in the tick it dies. Only
+  // read around the death tick, so every other tick runs the injector exactly as before.
+  let lost = 0
+  cluster.disrupt = (c, t) => {
+    if (t !== seeds.deathTick) return faults.disrupt(c, t)
+    const before = c.workers.map((w) => (w.killed ? null : w.stats().shed))
+    faults.disrupt(c, t)
+    for (const [i, w] of c.workers.entries()) {
+      const was = before[i]
+      if (was !== null && was !== undefined && w.killed) lost += w.stats().shed - was
+    }
+  }
   let guard = 0
   while (!cluster.done && guard < 20000) {
     cluster.step()
@@ -391,6 +434,14 @@ export async function runAct2(
     ],
     seed: seeds.seed,
     ...(own ? { run: runNumbers(goodput, referenceFleet(seeds, choice.workers, choice.router).goodput, agg.ttftP95) } : {}),
+    values: finiteValues([
+      ['goodput', goodput],
+      ['completedPct', completedPct],
+      ['shed', agg.shed],
+      ['lost', lost],
+      ['ttftP95', agg.ttftP95],
+      ['workers', choice.workers],
+    ]),
   }
 }
 
@@ -513,6 +564,7 @@ export function gradeMeasurementSubmission(
       ['decision lever', `${decisionHits.size} (need 1)`],
       ['measured number', numericClaim ? 'present' : 'missing'],
     ],
+    ...(traceResult.values ? { values: traceResult.values } : {}),
   }
 }
 
@@ -575,6 +627,11 @@ export interface Act3Eval {
     meetsSlo: boolean
   }[]
   bestValue: string
+  /**
+   * The receipt values (docs/specs/wave-3.md §10.1): for each option o, `costPerMtok.o`, `goodput.o` and `meetsSlo.o`
+   * (1 or 0), as `perOption` holds them; a cost that is not finite (an option that completed nothing) is left out.
+   */
+  values: Record<string, number>
 }
 
 /** The Business: execute every hardware option, price it, compare to the claim. */
@@ -607,7 +664,14 @@ export function evalAct3(seeds: FleetWeekSeeds, onProgress?: ProgressFn): Act3Ev
   }
   const viable = perOption.filter((o) => o.meetsSlo)
   const best = (viable.length ? viable : perOption).reduce((a, b) => (a.costPerMtok <= b.costPerMtok ? a : b))
-  return { seed: seeds.seed, perOption, bestValue: best.id }
+  const values = finiteValues(
+    perOption.flatMap((o): [string, number][] => [
+      [`costPerMtok.${o.id}`, o.costPerMtok],
+      [`goodput.${o.id}`, o.goodput],
+      [`meetsSlo.${o.id}`, o.meetsSlo ? 1 : 0],
+    ]),
+  )
+  return { seed: seeds.seed, perOption, bestValue: best.id, values }
 }
 
 /** Rubric for the design doc: claims must survive arithmetic and vocabulary. */
@@ -649,6 +713,7 @@ export function gradeAct3Doc(choiceId: string, claimCost: number, doc: string, e
       ['graded seed', seedLabel(evaluation.seed)],
     ],
     seed: evaluation.seed,
+    values: evaluation.values,
   }
 }
 

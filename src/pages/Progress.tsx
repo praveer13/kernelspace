@@ -94,7 +94,7 @@ const TOTAL_LAB_TASKS = ALL_LESSONS.reduce(
   (total, lesson) =>
     total +
     lesson.blocks.reduce(
-      (lessonTotal, block) => lessonTotal + (block.type === 'exercise' ? block.tasks.length : 0),
+      (lessonTotal, block) => lessonTotal + (block.type === 'exercise' && 'tasks' in block ? block.tasks.length : 0),
       0,
     ),
   0,

@@ -12,7 +12,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { ExerciseView } from '../../src/pages/lesson/exercise'
-import type { ExerciseBlock } from '../../src/data/lessons/types'
+import type { SimExerciseBlock } from '../../src/data/lessons/types'
 import { PENDING_TASK_IDS, buildRegistry, planExercise, registry, resolveTasks } from '../../src/lib/sims/registry'
 import type { SimTaskDef } from '../../src/lib/sims/types'
 
@@ -43,6 +43,20 @@ const outcome = (over: Partial<SimTaskDef> = {}): SimTaskDef => ({
   explain: { prompt: 'Why?', model: 'Because.', ideas: ['a', 'b', 'c'] },
   ...over,
 })
+
+/** An outcome task's id, `<prefix>.<name>`; a legacy id has no dot. */
+const DOTTED = /^[a-z][a-z0-9-]*\./
+
+/** The prefixes a registry's outcome tasks declare, each with the sims it is used on. */
+const prefixesOf = (r: Pick<ReturnType<typeof buildRegistry>, 'tasks'>): Map<string, Set<string>> => {
+  const out = new Map<string, Set<string>>()
+  for (const t of r.tasks) {
+    if (t.kind !== 'outcome') continue
+    const prefix = t.id.slice(0, t.id.indexOf('.'))
+    out.set(prefix, (out.get(prefix) ?? new Set()).add(t.simId))
+  }
+  return out
+}
 
 /** Whether a sim's source talks to the router itself instead of going through the shell's SimHost-aware hooks. */
 const readsUrlItself = (src: string): boolean => /\b(useSearchParams|setSearchParams)\b/.test(src)
@@ -75,11 +89,22 @@ describe('legacy tasks keep their ids and pay as before', () => {
 
   test('the existing ids are all there, under a sim, as legacy', () => {
     const ids = legacy.map((t) => t.id)
-    for (const id of ['t-sched-fifo', 't-rust-move', 't-ctx-cliff', 't-lock-aba', 't-layout-aos', 't-eng-gqa', 't-blk-cow', 't-frame-trace']) {
+    for (const id of ['t-sched-fifo', 't-rust-move', 't-ctx-cliff', 't-lock-aba', 't-layout-aos', 't-eng-gqa', 't-frame-trace']) {
       expect(ids).toContain(id)
     }
-    // outcome tasks arrive per sim (C7–C9, 2b-13) under dotted ids: `roof.*`, `kv.*`, `alloc.*`, `zoo.*`; every other task is legacy
-    for (const t of reg.tasks) expect(t.kind === 'outcome').toBe(/^(roof|kv|alloc|zoo)\./.test(t.id))
+    // the click-through ids an outcome task replaced (legacyId) are no longer registered: the task panel reads
+    // an earlier completion from the progress store, not from the registry (wave-3.md §13)
+    const replaced = reg.tasks.flatMap((t) => (t.legacyId === undefined ? [] : [t.legacyId].flat()))
+    const roofline = ['t-cpu-serial', 't-gpu-map', 't-gpu-divergence', 't-roof-occupancy', 't-roof-coalesce', 't-roof-bank', 't-roof-tiers', 't-roof-pcie']
+    const fleet = ['t-roof-fleet-router', 't-roof-fleet-decode', 't-roof-fleet-paged-attn', 't-roof-fleet-prefill']
+    for (const id of ['t-frag', 't-coalesce', 't-paged', 't-quiz', 't-trace-lab', 't-double-free', 't-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep', ...roofline, ...fleet]) {
+      expect(replaced, id).toContain(id)
+      expect(ids, id).not.toContain(id)
+    }
+    // outcome tasks arrive under dotted ids, `<prefix>.<name>`, and every other task is legacy. The prefixes are the ones the
+    // tasks files declare (wave-3.md §4.2), so a new family adds its file and not a line here.
+    for (const t of reg.tasks) expect(t.kind === 'outcome', t.id).toBe(DOTTED.test(t.id))
+    for (const t of reg.tasks) if (t.kind === 'outcome') expect(t.id, 'the prefix is lower-case words').toMatch(/^[a-z][a-z0-9-]*\.[a-z0-9-]+$/)
     expect(legacy.length + reg.tasks.filter((t) => t.kind === 'outcome').length).toBe(reg.tasks.length)
     for (const t of legacy) {
       expect(t.predict).toBeUndefined()
@@ -111,6 +136,128 @@ describe('legacy tasks keep their ids and pay as before', () => {
     const r = buildRegistry({ '/src/components/sims/mystery.tasks.ts': { T: [{ id: 't-a', text: 'a', xp: 60 }] } })
     expect(r.tasks).toEqual([])
     expect(r.problems[0]).toContain('mystery')
+  })
+})
+
+/**
+ * The prefix each tasks file's outcome tasks carry, by file name without `.tasks.ts` (wave-3.md §4.2). The check is exact: a task whose
+ * prefix is not its file's, or an outcome file this list does not know, is a problem, so a typo'd prefix (`rof.ridge`) cannot pass as "some
+ * dotted id". A new family adds its file and one line here; the sim a prefix lives on is pinned by the tests below.
+ */
+const DECLARED_PREFIXES: Readonly<Record<string, string>> = {
+  roofline: 'roof',
+  kvCache: 'kv',
+  kvZoo: 'zoo',
+  allocator: 'alloc',
+  blockTableExplorer: 'blk',
+}
+
+/** Outcome tasks whose id prefix is not the one their file declares, and declared files that hold no outcome task (a stale line). */
+function prefixProblems(mods: Record<string, Record<string, unknown>>, declared: Readonly<Record<string, string>>): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const [path, mod] of Object.entries(mods)) {
+    const file = path.slice(path.lastIndexOf('/') + 1).replace(/\.tasks\.ts$/, '')
+    for (const list of Object.values(mod)) {
+      if (!Array.isArray(list)) continue
+      for (const t of list as { id?: unknown; kind?: unknown }[]) {
+        if (t.kind !== 'outcome' || typeof t.id !== 'string') continue
+        seen.add(file)
+        const prefix = t.id.slice(0, Math.max(0, t.id.indexOf('.')))
+        const want = declared[file]
+        if (want === undefined) out.push(`${file}: outcome task ${t.id} but the file declares no prefix`)
+        else if (prefix !== want) out.push(`${file}: ${t.id} has prefix '${prefix}', the file declares '${want}'`)
+      }
+    }
+  }
+  for (const file of Object.keys(declared)) if (!seen.has(file)) out.push(`${file}: declared prefix '${declared[file]}' but the file holds no outcome task`)
+  return out
+}
+
+describe('outcome prefixes come from the tasks files', () => {
+  test('the registry declares the prefixes of the sims that have outcome tasks, and each prefix lives on one sim', () => {
+    const prefixes = prefixesOf(reg)
+    for (const p of ['roof', 'kv', 'alloc', 'zoo', 'blk']) expect(prefixes.has(p), p).toBe(true)
+    for (const [p, sims] of prefixes) expect([...sims], `prefix ${p}`).toHaveLength(1)
+  })
+
+  test('every outcome task carries exactly the prefix its file declares, and the declared list is exactly the prefixes in use', () => {
+    expect(prefixProblems(modules, DECLARED_PREFIXES)).toEqual([])
+    expect([...prefixesOf(reg).keys()].sort()).toEqual(Object.values(DECLARED_PREFIXES).sort())
+  })
+
+  test("a typo'd prefix fails, however well-formed the id is", () => {
+    const file = (id: string) => ({ '/src/components/sims/roofline.tasks.ts': { T: [outcome({ id })] } })
+    expect(prefixProblems(file('roof.ridge'), { roofline: 'roof' })).toEqual([])
+    for (const typo of ['rof.ridge', 'roofs.ridge', 'kv.ridge', 'roof-x.ridge', 'ridge']) {
+      expect(prefixProblems(file(typo), { roofline: 'roof' }), typo).toEqual([expect.stringContaining("the file declares 'roof'")])
+    }
+  })
+
+  test('an outcome file the list does not know, and a list line with no outcome task, are problems', () => {
+    const fleet = { '/src/components/sims/fleet.tasks.ts': { T: [outcome({ id: 'fleet.knee', simId: 'sim-batching', title: 'Find the knee' })] } }
+    expect(prefixProblems(fleet, {})).toEqual([expect.stringContaining('declares no prefix')])
+    expect(prefixProblems(fleet, { fleet: 'fleet', gone: 'gone' })).toEqual([expect.stringContaining("declared prefix 'gone'")])
+    expect(prefixProblems(fleet, { fleet: 'fleet' })).toEqual([])
+  })
+
+  test('a new family adds its file and prefix to the registry', () => {
+    const r = buildRegistry({
+      '/src/components/sims/fleet.tasks.ts': { T: [outcome({ id: 'fleet.knee', simId: 'sim-batching', title: 'Find the knee' })] },
+    })
+    expect(r.problems).toEqual([])
+    expect([...prefixesOf(r).keys()]).toEqual(['fleet'])
+    expect(DOTTED.test('fleet.knee')).toBe(true)
+    expect(DOTTED.test('t-sched-fifo')).toBe(false)
+  })
+})
+
+describe('a tasks file may export HOME (wave-3.md §4.2)', () => {
+  const old = (id: string) => ({ id, text: `Task ${id}`, xp: 60 })
+  const file = (name: string, mod: Record<string, unknown>) => buildRegistry({ [`/src/components/sims/${name}.tasks.ts`]: mod })
+
+  test('a HOME places a file that LEGACY_HOME does not know, so a new file edits no table', () => {
+    const r = file('batching', { HOME: { simId: 'sim-batching', machine: 'batching' }, T: [old('t-batch-a')] })
+    expect(r.problems).toEqual([])
+    expect(r.byId('t-batch-a')).toMatchObject({ kind: 'legacy', simId: 'sim-batching', machine: 'batching' })
+  })
+
+  test('HOME is read before LEGACY_HOME: it moves a file that has a fallback', () => {
+    const fallback = file('rustLab', { T: [old('t-x')] })
+    expect(fallback.byId('t-x')).toMatchObject({ simId: 'sim-allocator', machine: 'rust' })
+    const moved = file('rustLab', { HOME: { simId: 'sim-vm', machine: 'paging' }, T: [old('t-x')] })
+    expect(moved.problems).toEqual([])
+    expect(moved.byId('t-x')).toMatchObject({ simId: 'sim-vm', machine: 'paging' })
+  })
+
+  test('a machine-less HOME keeps the tasks on every machine; a HOME with a machine, only on that one', () => {
+    const all = file('engineLike', { HOME: { simId: 'sim-engine' }, T: [old('t-e')] })
+    expect(all.byId('t-e')?.machine).toBeUndefined()
+    expect(all.forSim('sim-engine', 'executor').map((t) => t.id)).toEqual(['t-e'])
+    expect(all.forSim('sim-engine').map((t) => t.id)).toEqual(['t-e'])
+    const bound = file('batchLike', { HOME: { simId: 'sim-batching', machine: 'batching' }, T: [old('t-b')] })
+    expect(bound.forSim('sim-batching', 'batching').map((t) => t.id)).toEqual(['t-b'])
+    expect(bound.forSim('sim-batching', 'scheduler')).toEqual([])
+    expect(bound.forSim('sim-batching')).toEqual([])
+  })
+
+  test('HOME is not a task list: it adds no task and does not count as an entry', () => {
+    expect(file('batching', { HOME: { simId: 'sim-batching', machine: 'batching' }, T: [] }).tasks).toEqual([])
+  })
+
+  test('a SimTaskDef keeps its own sim and machine whatever HOME says', () => {
+    const r = file('mixed', { HOME: { simId: 'sim-vm' }, T: [outcome({ id: 'mixed.one', simId: 'sim-kv', machine: 'zoo', title: 'One' })] })
+    expect(r.byId('mixed.one')).toMatchObject({ simId: 'sim-kv', machine: 'zoo' })
+  })
+
+  test('a malformed HOME is a problem, and the file falls back to LEGACY_HOME when it has one', () => {
+    for (const home of [{ simId: 3 }, { simId: '' }, { simId: 'sim-vm', machine: 4 }, { simId: 'sim-vm', machine: '' }, 'sim-vm', null]) {
+      const r = file('mystery', { HOME: home, T: [old('t-a')] })
+      expect(r.problems.join('\n'), JSON.stringify(home)).toContain('HOME must be')
+    }
+    const fell = file('rustLab', { HOME: { simId: 7 }, T: [old('t-x')] })
+    expect(fell.problems).toEqual([expect.stringContaining('HOME must be')])
+    expect(fell.byId('t-x')).toMatchObject({ simId: 'sim-allocator', machine: 'rust' })
   })
 })
 
@@ -164,6 +311,18 @@ describe('contract ids (§10.2 table), as C7–C9 add them', () => {
     'roof.tile-ai': { simId: 'sim-roofline', kc: 't4.tiling-intensity' },
     'roof.flash-ai': { simId: 'sim-roofline', kc: 't4.tiling-intensity' },
     'roof.fp8-ridge': { simId: 'sim-roofline', kc: KC.ridgePoint },
+    'roof.cpu-serial': { simId: 'sim-roofline', kc: 't4.throughput-design' },
+    'roof.gpu-map': { simId: 'sim-roofline', kc: 't4.throughput-design' },
+    'roof.gpu-divergence': { simId: 'sim-roofline', kc: 't4.simt-warps' },
+    'roof.occupancy': { simId: 'sim-roofline', kc: 't4.occupancy' },
+    'roof.coalesce': { simId: 'sim-roofline', kc: 't4.coalescing' },
+    'roof.bank': { simId: 'sim-roofline', kc: 't4.coalescing' },
+    'roof.tiers': { simId: 'sim-roofline', kc: 't4.gpu-memory-ladder' },
+    'roof.pcie': { simId: 'sim-roofline', kc: 't4.gpu-memory-ladder' },
+    'roof.fleet-router': { simId: 'sim-roofline', kc: KC.boundClassification },
+    'roof.fleet-decode': { simId: 'sim-roofline', kc: KC.boundClassification },
+    'roof.fleet-paged-attn': { simId: 'sim-roofline', kc: KC.boundClassification },
+    'roof.fleet-prefill': { simId: 'sim-roofline', kc: KC.boundClassification },
     'kv.bytes-per-token': { simId: 'sim-kv', kc: 't5.kv-bytes-per-token' },
     'kv.oom-context': { simId: 'sim-kv', kc: 't5.kv-capacity' },
     'kv.fp8-rescue': { simId: 'sim-kv', kc: 't5.kv-bytes-per-token' },
@@ -179,6 +338,11 @@ describe('contract ids (§10.2 table), as C7–C9 add them', () => {
     'alloc.coalesce-recover': { simId: 'sim-allocator', kc: 't1.split-coalesce' },
     'alloc.fixed-block-waste': { simId: 'sim-allocator', kc: 't1.fixed-blocks' },
     'alloc.policy-race': { simId: 'sim-allocator', kc: 't1.placement-policy' },
+    'alloc.double-free': { simId: 'sim-allocator', kc: KC.allocatorContract },
+    'blk.share': { simId: 'sim-kv', kc: KC.blockRefcounts },
+    'blk.cow': { simId: 'sim-kv', kc: KC.kvCopyOnWrite },
+    'blk.preempt': { simId: 'sim-kv', kc: KC.blockRefcounts },
+    'blk.sweep': { simId: 'sim-kv', kc: KC.blockTables },
   }
 
   test('a contract id that exists is an outcome task on the right sim and KC', () => {
@@ -196,7 +360,7 @@ describe('lessons list registry tasks', () => {
   test('every exercise block taskId resolves on the block’s own sim, with a phone model key that parses', () => {
     for (const lesson of ALL_LESSONS) {
       for (const b of lesson.blocks) {
-        if (b.type !== 'exercise' || b.taskIds === undefined) continue
+        if (b.type !== 'exercise' || 'fleet' in b || b.taskIds === undefined) continue
         // ids a PR lists ahead of the one that registers them (PENDING_TASK_IDS, empty since the zoo registered its six) are excused; everything else must exist
         const expected = b.taskIds.filter((id) => !PENDING_TASK_IDS.includes(id))
         const found = resolveTasks(b.simId, b.machine, expected, reg)
@@ -219,7 +383,7 @@ describe('lessons list registry tasks', () => {
     const offenders: string[] = []
     for (const lesson of ALL_LESSONS) {
       for (const b of lesson.blocks) {
-        if (b.type !== 'exercise' || b.taskIds === undefined || b.taskIds.length === 0) continue
+        if (b.type !== 'exercise' || 'fleet' in b || b.taskIds === undefined || b.taskIds.length === 0) continue
         if (readsUrlItself(readFileSync(join(SIMS_DIR, `${fileOf[b.simId]}.tsx`), 'utf8'))) offenders.push(`${lesson.id}: ${b.simId}`)
       }
     }
@@ -250,11 +414,11 @@ describe('pending task ids', () => {
   /** A stand-in for the real list, which is empty. */
   const PENDING = ['zoo.mla-ratio', 'zoo.gdn-prefix']
   /** What the lesson test accepts for a block's ids. */
-  const unresolved = (b: ExerciseBlock, r = reg, pending: readonly string[] = PENDING_TASK_IDS) =>
+  const unresolved = (b: SimExerciseBlock, r = reg, pending: readonly string[] = PENDING_TASK_IDS) =>
     b.taskIds === undefined ? [] : b.taskIds.filter((id) => !pending.includes(id) && resolveTasks(b.simId, b.machine, [id], r).length === 0)
   /** The staleness rule: a pending id that some registry has registered. */
   const stale = (r = reg, pending: readonly string[] = PENDING_TASK_IDS) => pending.filter((id) => r.byId(id) !== undefined)
-  const zoo = (over: Partial<ExerciseBlock> = {}): ExerciseBlock => ({
+  const zoo = (over: Partial<SimExerciseBlock> = {}): SimExerciseBlock => ({
     type: 'exercise',
     simId: 'sim-kv',
     machine: 'zoo',
@@ -320,7 +484,7 @@ describe('pending task ids', () => {
     expect(planExercise('sim-kv', undefined, undefined, withKv)).toEqual({ show: 'card' })
   })
 
-  const html = (block: ExerciseBlock, r = withKv) =>
+  const html = (block: SimExerciseBlock, r = withKv) =>
     renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ExerciseView, { block, trackColor: '#fff', lessonId: 't5.l4', tasks: r })))
 
   test('ExerciseView mounts the zoo block inline now that its ids are registered', () => {

@@ -14,6 +14,7 @@ const staticRoutes = [
   'curriculum',
   'lab',
   'glossary',
+  'me',
   'progress',
   'capstone',
   'forge',
@@ -24,6 +25,8 @@ const staticRoutes = [
   'freshness',
   'play/block-placement',
   'play/scheduler',
+  'play/tiling-cube',
+  'play/eplb',
 ]
 
 const trackIds = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']

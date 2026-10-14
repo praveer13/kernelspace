@@ -1,7 +1,8 @@
 /**
  * The hands-on gate (docs/specs/wave-2.md §5.4, §23.1 B4; task 2a-32). A lesson is hands-on when it holds at least one
  * graded active block other than its checkpoint: an `item` block whose family and variants exist, an `exercise` block
- * with at least one registered outcome task, or a `play` block whose play is registered (a pending play does not
+ * with at least one registered outcome task, a `fleet` exercise block whose exercise is in `FLEET_EXERCISES`
+ * (wave-3.md §4.2, 3a-05b), or a `play` block whose play is registered (a pending play does not
  * count). At least 10 of the 15 T6 and T7 lessons must be; the test prints the list. Each item block's variant KCs
  * must intersect its lesson's `Lesson.kcs`.
  */
@@ -10,6 +11,7 @@ import { join } from 'node:path'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import type { ItemBlock, Lesson } from '../../src/data/lessons/types'
 import { resolvePlay } from '../../src/components/play/registry'
+import { FLEET_EXERCISES, type FleetExerciseDef } from '../../src/lib/world/fleet-ex'
 import { loadFamily } from '../../src/lib/items/registry'
 import type { Gen } from '../../src/lib/items/types'
 import { buildRegistry, type Registry } from '../../src/lib/sims/registry'
@@ -43,11 +45,13 @@ const itemBlockValid = (b: ItemBlock): boolean => {
 }
 
 /** Why a lesson is hands-on, one entry per qualifying block; empty when it is not. */
-function handsOnBlocks(l: Lesson): string[] {
+function handsOnBlocks(l: Lesson, fleet: Readonly<Record<string, unknown>> = FLEET_EXERCISES): string[] {
   const out: string[] = []
   for (const b of l.blocks) {
     if (b.type === 'item' && itemBlockValid(b)) out.push(`item ${b.family}/${b.variants.join('+')}`)
-    else if (b.type === 'exercise') {
+    else if (b.type === 'exercise' && 'fleet' in b) {
+      if (Object.hasOwn(fleet, b.fleet)) out.push(`fleet ${b.fleet}`)
+    } else if (b.type === 'exercise' && 'simId' in b) {
       const ids = (b.taskIds ?? []).filter((id) => registry.byId(id)?.kind === 'outcome' && registry.byId(id)?.simId === b.simId)
       if (ids.length > 0) out.push(`exercise ${ids.join('+')}`)
     } else if (b.type === 'play' && resolvePlay(b.playId).kind === 'play') out.push(`play ${b.playId}`)
@@ -86,6 +90,18 @@ describe('hands-on T6/T7 lessons (spec §5.4)', () => {
       ],
     }
     expect(handsOnBlocks(fake)).toEqual([])
+  })
+
+  test('a fleet block counts when its exercise is in FLEET_EXERCISES, and not when it is not', () => {
+    const lesson = (blocks: Lesson['blocks']): Lesson => ({ ...(T67[0] as Lesson), blocks })
+    const block = (fleet: string): Lesson['blocks'][number] => ({ type: 'exercise', fleet, title: 'Find the knee' })
+    const listed = { knee: {} as FleetExerciseDef }
+    expect(handsOnBlocks(lesson([block('knee')]), listed)).toEqual(['fleet knee'])
+    expect(handsOnBlocks(lesson([block('no-such-exercise')]), listed)).toEqual([])
+    // an inherited key is not a registered exercise
+    expect(handsOnBlocks(lesson([block('toString'), block('constructor')]), listed)).toEqual([])
+    // the real table, which 3b-03 fills, is the default
+    expect(handsOnBlocks(lesson([block('knee')]))).toEqual(Object.hasOwn(FLEET_EXERCISES, 'knee') ? ['fleet knee'] : [])
   })
 })
 

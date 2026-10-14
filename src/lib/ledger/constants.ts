@@ -5,14 +5,17 @@ import { FACT_UNITS } from '../economy'
  * 4 = Wave 1 (wave-1.md §3.1): new refs, data shapes and lesson states. A Wave 0b bundle goes read-only on it.
  * 5 = Wave 2 (wave-2.md §3.1): incident and fleet-run refs and data, `packet:` acks, two item sources and four
  * working keys. A Wave 1 bundle would drop those at outbox recovery and cross-tab sync, so it goes read-only.
+ * 6 = Wave 3 (wave-3.md §3.1): Prove-it v2 and provenance `proved`, the item sources `form` and `play`, form keys,
+ * play metrics and levels, Fleet Week receipts and the `fw:runs` and `profile:background` working keys. A Wave 2
+ * bundle would drop those at outbox recovery and cross-tab sync, so it goes read-only.
  */
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
 /**
- * Aggregate format version; an unknown one means "rebuild from the ledger". Versions 1 (Wave 0b) and 2 (Wave 1)
- * are upgraded in place at hydrate, so the first paint after a deploy is never empty (`upgradeAggregate`).
+ * Aggregate format version; an unknown one means "rebuild from the ledger". Versions 1 (Wave 0b), 2 (Wave 1) and
+ * 3 (Wave 2) are upgraded in place at hydrate, so the first paint after a deploy is never empty (`upgradeAggregate`).
  */
-export const AGGREGATE_VERSION = 3
+export const AGGREGATE_VERSION = 4
 
 /** Export file marker (spec §10.1). */
 export const EXPORT_FORMAT = 'kernelspace-progress'
@@ -37,5 +40,8 @@ export const FLEET_RUN_MODES = ['engine', 'cluster', 'epd', 'act1', 'act2', 'dai
 
 /** The slots of your engine that an installed component can fill (wave-2.md §10.2). */
 export const ENGINE_SLOTS = ['scheduler', 'block-manager', 'intake', 'prefix-router', 'tokenizer', 'executor', 'grammar', 'allocator'] as const
+
+/** The learner's background, an optional local pick (wave-3.md §3.2; the `profile:background` working key). */
+export const BACKGROUNDS = ['jvm', 'backend', 'sre', 'ml', 'student', 'other'] as const
 
 export type XpUnitPrefix = keyof typeof XP_UNITS

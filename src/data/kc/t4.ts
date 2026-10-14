@@ -55,6 +55,7 @@ export const T4_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t4.l2'],
     requires: ['t4.gpu-memory-ladder'],
+    gen: ['tiling'],
     since,
   },
 
@@ -68,7 +69,7 @@ export const T4_KCS: readonly Kc[] = [
     lessons: ['t4.l3'],
     requires: [KC.locality],
     confusable: [KC.decodeBandwidth],
-    gen: ['roofline'],
+    gen: ['roofline', 'tiling'],
     claims: ['hw.h100-sxm.bf16-dense', 'hw.h100-sxm.hbm-bw'],
     since,
   },
@@ -111,6 +112,7 @@ export const T4_KCS: readonly Kc[] = [
     requires: ['t4.simt-warps', 't4.shared-memory-scratchpad'],
     // the two levers of t4.l4: more warps hide latency, merged accesses cut transactions; the slip fixes one with the other
     confusable: ['t4.coalescing'],
+    gen: ['tiling'],
     since,
   },
   {
@@ -160,6 +162,17 @@ export const T4_KCS: readonly Kc[] = [
     since,
   },
   {
+    id: KC.rasterL2Reuse,
+    title: 'Raster order decides L2 reuse',
+    can: 'You can say why the order a grid visits tiles sets how many A and B slabs a wave shares through L2.',
+    track: 't4',
+    kind: 'concept',
+    lessons: ['t4.l6'],
+    requires: [KC.tilingIntensity],
+    gen: ['tiling'],
+    since,
+  },
+  {
     id: 't4.flashattention-blocking',
     title: 'FlashAttention as cache blocking',
     can: 'You can say how FlashAttention streams tiles through SRAM with an online softmax, never writing the score matrix.',
@@ -167,6 +180,7 @@ export const T4_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t4.l6'],
     requires: [KC.tilingIntensity, 't4.shared-memory-scratchpad'],
+    gen: ['tiling'],
     since,
   },
 

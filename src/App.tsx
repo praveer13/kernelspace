@@ -31,7 +31,7 @@ const Lesson = lazyMotion(() => import('@/pages/Lesson'))
 const Lab = lazyMotion(() => import('@/pages/Lab'))
 const Playground = lazyMotion(() => import('@/pages/Playground'))
 const Glossary = lazyMotion(() => import('@/pages/Glossary'))
-const Progress = lazyMotion(() => import('@/pages/Progress'))
+const Me = lazyMotion(() => import('@/pages/Me'))
 const Capstone = lazyMotion(() => import('@/pages/Capstone'))
 const Forge = lazyMotion(() => import('@/pages/Forge'))
 const ForgeLab = lazyMotion(() => import('@/pages/ForgeLab'))
@@ -71,7 +71,8 @@ export default function App() {
             <Route path="/lab" element={<Lab />} />
             <Route path="/lab/:simId" element={<Playground />} />
             <Route path="/glossary" element={<Glossary />} />
-            <Route path="/progress" element={<Progress />} />
+            <Route path="/me" element={<Me />} />
+            <Route path="/progress" element={<Navigate to="/me" replace />} />
             <Route path="/capstone" element={<Capstone />} />
             <Route path="/forge" element={<Forge />} />
             <Route path="/forge/:labId" element={<ForgeLab />} />

@@ -1,4 +1,4 @@
-import { ENGINE_SLOTS, EXPORT_FORMAT, FAULT_IDS, FLEET_RUN_MODES, IMPORT_MAX_BYTES, SCHEMA_VERSION } from './constants'
+import { BACKGROUNDS, ENGINE_SLOTS, EXPORT_FORMAT, FAULT_IDS, FLEET_RUN_MODES, IMPORT_MAX_BYTES, SCHEMA_VERSION } from './constants'
 import { derive, GRADED_KINDS } from './fold'
 import {
   mergeEvents,
@@ -50,8 +50,8 @@ export type Checked<T> = { ok: true; value: T } | { ok: false; reason: string }
 
 const PROVENANCES = new Set(['proved', 'unseen', 'lab-green', 'practice', 'assisted', 'field'])
 const CONFIDENCES = new Set(['guess', 'think', 'sure'])
-const ITEM_SRCS = new Set(['quiz', 'boot', 'card', 'cold', 'today', 'ticket', 'testout', 'placement', 'pre', 'diagram', 'practice', 'lesson', 'daily'])
-const PREDICT_SRCS = new Set(['boot', 'lesson', 'pre', 'diagram', 'placement'])
+const ITEM_SRCS = new Set(['quiz', 'boot', 'card', 'cold', 'today', 'ticket', 'testout', 'placement', 'pre', 'diagram', 'practice', 'lesson', 'daily', 'form', 'play'])
+const PREDICT_SRCS = new Set(['boot', 'lesson', 'pre', 'diagram', 'placement', 'play', 'practice'])
 const PLAY_PHASES = new Set(['play', 'compose'])
 const CHECK_STATUSES = new Set(['pass', 'fail', 'trap', 'timeout'])
 const MAX_KCS = 6
@@ -68,6 +68,22 @@ const MAX_ZOO_CONFIG = 20_000
 const MAX_NSEC = 600
 const REV_REQUIRED = new Set<EventKind>(['item', 'probe', 'predict'])
 const MAX_ID_LENGTH = 200
+const FORM_IDS = new Set(['A', 'B', 'C'])
+const MAX_FORM_SLOT = 11
+const MAX_QID_LENGTH = 40
+const MAX_PROVE_CALLS = 12
+const MAX_PLAY_LEVELS = 8
+const PLAY_VIEWS = new Set(['2d', '3d'])
+const PLAY_METRICS = new Set(['imbalance'])
+const EPLB_REPLICATE = new Set(['none', 'per-copy', 'total'])
+const EPLB_PLACE = new Set(['round-robin', 'least-loaded'])
+const RUN_ACTS = new Set(['engine', 'fleet', 'business'])
+const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
+const MAX_ACT_RUNS = 20
+const MAX_RUN_RECORDS = 50
+const MAX_RUN_VALUES = 40
+const MAX_RUN_JOB_BYTES = 4096
+const BACKGROUND_SET: ReadonlySet<unknown> = new Set(BACKGROUNDS)
 const MAX_TZ_MINUTES = 24 * 60
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -91,6 +107,96 @@ function checkItemExtras(data: Record<string, unknown>): string | null {
   if (kcs !== undefined && !(Array.isArray(kcs) && kcs.length <= MAX_KCS && kcs.every((k) => typeof k === 'string'))) return `data.kcs must be at most ${MAX_KCS} strings`
   if (nsec !== undefined && !(isFiniteNumber(nsec) && nsec >= 0 && nsec <= MAX_NSEC)) return `data.nsec must be within [0, ${MAX_NSEC}]`
   if (isFiniteNumber(lo) && isFiniteNumber(hi) && lo > hi) return 'data.lo must not exceed data.hi'
+  if (data.return !== undefined && data.return !== true) return 'data.return must be true when present'
+  if (data.src === 'form') return checkFormKeys(data)
+  return null
+}
+
+/**
+ * Form items (src `form`, wave-3.md §3.2): their own keys, and never `form` or `slot`, which the ticket and Today
+ * readers already read as the ticket form and the position.
+ */
+function checkFormKeys(data: Record<string, unknown>): string | null {
+  if (data.form !== undefined || data.slot !== undefined) return 'a form item uses formId and formSlot, never data.form or data.slot'
+  if (typeof data.formId !== 'string' || !FORM_IDS.has(data.formId)) return 'data.formId must be A, B or C'
+  if (!isNonEmptyString(data.track)) return 'data.track must be a track id'
+  if (!(Number.isInteger(data.formSlot) && (data.formSlot as number) >= 0 && (data.formSlot as number) <= MAX_FORM_SLOT)) return `data.formSlot must be a whole number within [0, ${MAX_FORM_SLOT}]`
+  if (data.formSet !== 0 && data.formSet !== 1 && data.formSet !== 2) return 'data.formSet must be 0, 1 or 2'
+  return null
+}
+
+/** A Prove-it answer: a finite number, or an ordered list of at most 12 non-negative whole numbers (ids). */
+const isProveAnswer = (v: unknown): boolean =>
+  isFiniteNumber(v) || (Array.isArray(v) && v.length <= MAX_PROVE_CALLS && v.every((n) => Number.isInteger(n) && (n as number) >= 0))
+
+/** `prove` data: v1 (self-graded) as before, now with `v` checked, or v2 (wave-3.md §3.2). */
+function checkProve(data: unknown): string | null {
+  if (!isObject(data)) return 'data must be an object'
+  if (data.v === 2) {
+    if (!isNonEmptyString(data.qid, MAX_QID_LENGTH)) return `data.qid must be 1-${MAX_QID_LENGTH} characters`
+    if (!(Array.isArray(data.kcs) && data.kcs.length <= MAX_KCS && data.kcs.every((k) => typeof k === 'string'))) return `data.kcs must be at most ${MAX_KCS} strings`
+    if (!isProveAnswer(data.answer)) return 'data.answer must be a number or a list of at most 12 ids'
+    if (data.actual !== null && !isProveAnswer(data.actual)) return 'data.actual must be a number, a list of at most 12 ids or null'
+    if (!(Number.isInteger(data.calls) && (data.calls as number) >= 1 && (data.calls as number) <= MAX_PROVE_CALLS)) return `data.calls must be a whole number within [1, ${MAX_PROVE_CALLS}]`
+    if (data.return !== undefined && data.return !== true) return 'data.return must be true when present'
+    return null
+  }
+  if (data.v !== 1 && data.v !== undefined) return 'data.v must be 1 or 2' // an absent `v` is a v1 written before the field was checked
+  if (!Array.isArray(data.qids) || !data.qids.every((q) => typeof q === 'string')) return 'data.qids must be a list of question ids'
+  if (!Array.isArray(data.self) || !data.self.every(isFiniteNumber) || data.self.length !== data.qids.length) return 'data.self must be numbers, one per question'
+  return null
+}
+
+/** `play` data: the Wave 1 fields as before, then the Wave 3 `metric`, `levels` and the EPLB dials (wave-3.md §3.2). */
+function checkPlay(data: unknown): string | null {
+  if (!isObject(data) || typeof data.phase !== 'string' || !PLAY_PHASES.has(data.phase)) return 'data.phase must be play or compose'
+  if (!isFiniteNumber(data.turns) || !isFiniteNumber(data.survived) || !isFiniteNumber(data.ghostSurvived)) return 'data needs numeric turns, survived and ghostSurvived'
+  const { metric, levels, spec } = data
+  if (metric !== undefined) {
+    if (!isObject(metric) || typeof metric.name !== 'string' || !PLAY_METRICS.has(metric.name)) return 'data.metric needs a known name'
+    if (!(isFiniteNumber(metric.mine) && metric.mine >= 0 && isFiniteNumber(metric.ghost) && metric.ghost >= 0)) return 'data.metric needs finite mine and ghost of at least 0'
+    if (metric.lowerIsBetter !== undefined && metric.lowerIsBetter !== true) return 'data.metric.lowerIsBetter must be true'
+  }
+  if (levels !== undefined) {
+    const good = (l: unknown) =>
+      isObject(l) &&
+      isNonEmptyString(l.id) &&
+      typeof l.ok === 'boolean' &&
+      (l.logErr === undefined || (isFiniteNumber(l.logErr) && l.logErr >= 0)) &&
+      (l.view === undefined || (typeof l.view === 'string' && PLAY_VIEWS.has(l.view)))
+    if (!(Array.isArray(levels) && levels.length <= MAX_PLAY_LEVELS && levels.every(good))) return `data.levels must be at most ${MAX_PLAY_LEVELS} {id, ok, logErr?, view?}`
+  }
+  if (isObject(spec) && (spec.replicate !== undefined || spec.place !== undefined)) {
+    if (typeof spec.replicate !== 'string' || !EPLB_REPLICATE.has(spec.replicate) || typeof spec.place !== 'string' || !EPLB_PLACE.has(spec.place)) return 'data.spec needs a known replicate and place'
+  }
+  return null
+}
+
+const isCount = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 0
+const isRunId = (v: unknown): boolean => typeof v === 'string' && /^[0-9a-f]{8}$/.test(v)
+
+/** `fleet-act` data: free-form as before, but the Wave 3 keys are held to their shape (wave-3.md §3.2). */
+function checkFleetAct(data: unknown): string | null {
+  if (data === undefined) return null
+  if (!isObject(data)) return 'data must be an object'
+  const { receipts, rubric, runs } = data
+  if (receipts !== undefined && !(isObject(receipts) && isCount(receipts.cited) && isCount(receipts.verified) && isCount(receipts.uncited))) return 'data.receipts needs whole numbers cited, verified and uncited'
+  if (rubric !== undefined && !(isObject(rubric) && RUBRIC_KEYS.every((k) => Number.isInteger(rubric[k]) && (rubric[k] as number) >= 0 && (rubric[k] as number) <= 3))) return 'data.rubric needs capacity, slo, cost and failure as whole numbers 0 to 3'
+  if (runs !== undefined && !(Array.isArray(runs) && runs.length <= MAX_ACT_RUNS && runs.every(isRunId))) return `data.runs must be at most ${MAX_ACT_RUNS} ids of 8 hex digits`
+  return null
+}
+
+/** One `RunRecord` of `fw:runs` (wave-3.md §3.2). */
+function checkRunRecord(r: unknown): string | null {
+  if (!isObject(r)) return 'a run record must be an object'
+  if (!isRunId(r.id)) return 'a run record id must be 8 lowercase hex digits'
+  if (typeof r.act !== 'string' || !RUN_ACTS.has(r.act)) return 'a run record act must be engine, fleet or business'
+  if (!isObject(r.job) || new TextEncoder().encode(stableStringify(r.job)).byteLength > MAX_RUN_JOB_BYTES) return `a run record job must be an object of at most ${MAX_RUN_JOB_BYTES} bytes`
+  if (!(Number.isInteger(r.entropy) && (r.entropy as number) >= 0 && (r.entropy as number) <= 0xffffffff)) return 'a run record entropy must be a uint32'
+  if (!isObject(r.values)) return 'a run record needs values'
+  const values = Object.values(r.values)
+  if (values.length > MAX_RUN_VALUES || !values.every(isFiniteNumber)) return `a run record holds at most ${MAX_RUN_VALUES} finite values`
+  if (!isIsoInstant(r.at)) return 'a run record at must be an ISO instant'
   return null
 }
 
@@ -169,13 +275,11 @@ function checkData(kind: EventKind, ref: string, data: unknown): string | null {
       return null
     }
     case 'play':
-      if (!isObject(data) || typeof data.phase !== 'string' || !PLAY_PHASES.has(data.phase)) return 'data.phase must be play or compose'
-      if (!isFiniteNumber(data.turns) || !isFiniteNumber(data.survived) || !isFiniteNumber(data.ghostSurvived)) return 'data needs numeric turns, survived and ghostSurvived'
-      return null
+      return checkPlay(data)
     case 'prove':
-      if (!isObject(data) || !Array.isArray(data.qids) || !data.qids.every((q) => typeof q === 'string')) return 'data.qids must be a list of question ids'
-      if (!Array.isArray(data.self) || !data.self.every(isFiniteNumber) || data.self.length !== data.qids.length) return 'data.self must be numbers, one per question'
-      return null
+      return checkProve(data)
+    case 'fleet-act':
+      return checkFleetAct(data)
     case 'capstone-step':
       if (data !== undefined && !(isObject(data) && (data.index === undefined || isFiniteNumber(data.index)))) return 'data.index must be a number'
       return null
@@ -219,6 +323,10 @@ export function validateEvent(x: unknown): Checked<LedgerEvent> {
     if (x.seed !== undefined && !(Number.isInteger(x.seed) && (x.seed as number) >= 0 && (x.seed as number) <= 0xffffffff)) return fail('seed must be a uint32')
     if (x.ms !== undefined && !(isFiniteNumber(x.ms) && x.ms >= 0)) return fail('ms must be a non-negative number')
     if (x.wasmSha256 !== undefined && !(typeof x.wasmSha256 === 'string' && /^[0-9a-f]{64}$/.test(x.wasmSha256))) return fail('wasmSha256 must be lowercase hex SHA-256')
+    // Provenance `proved` is the strongest credit: only a Prove-it v2 that came out right, on a named module (wave-3.md §3.2).
+    if (kind === 'prove' && x.provenance === 'proved' && !(isObject(x.data) && x.data.v === 2 && x.ok === true && isSha256(x.wasmSha256))) {
+      return fail('provenance proved needs a Prove-it v2 that is ok, with a wasmSha256')
+    }
   }
   const dataProblem = checkData(kind, x.ref, x.data)
   if (dataProblem) return fail(dataProblem)
@@ -242,6 +350,9 @@ const WORKING_EXACT = new Set([
   'exp:seed',
   'zoo:config',
   'daily:team',
+  // Wave 3 (wave-3.md §3.5)
+  'fw:runs',
+  'profile:background',
 ])
 const WORKING_PREFIXES = ['scroll:', 'sim-config:', 'fw:evidence:', 'settings:']
 
@@ -269,6 +380,16 @@ function checkWorkingValue(key: string, value: unknown): string | null {
       return typeof value === 'string' && value.length <= MAX_ZOO_CONFIG ? null : `zoo:config must be a string of at most ${MAX_ZOO_CONFIG} characters`
     case 'daily:team':
       return isNonEmptyString(value) ? null : 'daily:team must be a non-empty string'
+    case 'fw:runs': {
+      if (!(Array.isArray(value) && value.length <= MAX_RUN_RECORDS)) return `fw:runs must be a list of at most ${MAX_RUN_RECORDS} run records`
+      for (const r of value) {
+        const problem = checkRunRecord(r)
+        if (problem) return `fw:runs: ${problem}`
+      }
+      return null
+    }
+    case 'profile:background':
+      return BACKGROUND_SET.has(value) ? null : 'profile:background must be a known background'
     default:
       return null
   }

@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router'
-import { CLAIMS, formatClaimValue, staleSince } from '@/data/claims'
+import { ALL_CLAIMS, formatClaimValue, staleSince } from '@/data/claims/all'
 import { cn } from '@/lib/utils'
 
 export function ClaimsTable({ className }: { className?: string }) {
@@ -31,7 +31,7 @@ export function ClaimsTable({ className }: { className?: string }) {
           </tr>
         </thead>
         <tbody>
-          {CLAIMS.map((claim) => {
+          {ALL_CLAIMS.map((claim) => {
             const stale = staleSince(claim, now)
             return (
               <tr

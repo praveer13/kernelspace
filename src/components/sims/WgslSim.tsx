@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 import { Check, ChevronDown, ChevronUp, Copy, Cpu, Play, RotateCcw, Trash2 } from 'lucide-react'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
 import SimMirror from '@/components/sims/SimMirror'
+import { WGSL_TASKS } from '@/components/sims/wgsl.tasks'
 import { useProgress } from '@/lib/progress'
 import { editorBlur, editorKey } from '@/lib/sims/editor-keys'
 import type { MirrorTable } from '@/lib/sims/types'
@@ -649,13 +650,6 @@ interface RunResult {
   note?: string
 }
 
-const TASKS = [
-  { id: 'wgsl-16m', text: 'Run the modeled 16M vector add and inspect its 192 MiB traffic', xp: 60 },
-  { id: 'wgsl-sweep', text: 'Run vector add at workgroup sizes 64 and 1024', xp: 60 },
-  { id: 'wgsl-barrier', text: 'Remove a reduction barrier and observe a wrong sum', xp: 60 },
-  { id: 'wgsl-multipass', text: 'Run multi-pass reduction to one verified scalar', xp: 60 },
-]
-
 /* ------------------------------------------------------------------ */
 /* component                                                           */
 /* ------------------------------------------------------------------ */
@@ -1191,7 +1185,7 @@ export default function WgslSim() {
       simId="sim-wgsl"
       title="WebGPU WGSL Playground"
       subtitle="write a compute shader → dispatch it → watch workgroups execute"
-      tasks={TASKS}
+      tasks={WGSL_TASKS}
     >
       <div className="flex flex-col gap-4">
         {backend === 'cpu' && (

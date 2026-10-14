@@ -9,12 +9,15 @@
  * Template v2 (docs/specs/wave-1.md §12.3): the module is compiled once, `list` runs in a fresh
  * instance, then every check runs in its own fresh instance, announced with `check-start` so the
  * main thread can give each one its own 2 s. A v1 module takes today's path unchanged.
+ *
+ * Prove-it v2 ('calls', wave-3.md §7.1): a v2, non-reference module with a ks_invoke bridge is instantiated once
+ * and each entry of `calls` goes through ks_invoke in order, so the bridge keeps its state between entries.
  */
 
 import { instantiateLab, LabAbiError, LabTrapError, probeInvoke, runLabWasm } from '../lib/wasm-lab'
 import { compatFor, NEWER_TEMPLATE_NOTE, splitLabId } from '../lib/forge/abi'
-import { abiOf, instantiator, listChecks, runChecks } from '../lib/forge/run'
-import type { LabWorkerReply, LabWorkerRequest } from './lab-protocol'
+import { abiOf, instantiator, listChecks, runChecks, type Instantiate, type LabExports } from '../lib/forge/run'
+import { capReply, invokeCall, type LabWorkerReply, type LabWorkerRequest } from './lab-protocol'
 
 /* The app tsconfig has the DOM lib, not WebWorker — type just what we use. */
 const scope = self as unknown as {
@@ -56,6 +59,27 @@ async function runV1({ id, mode, bytes }: LabWorkerRequest) {
   scope.postMessage({ type: 'done', id, report, hasInvoke: mod.hasInvoke })
 }
 
+/**
+ * 'calls': the whole list in one fresh instance, one 2 s budget on the main thread. The reference check comes first
+ * (`list` runs no student code) so a reference build answers nothing. A trap ends the list as a failed call. Replies are
+ * read by `invokeCall`, so an empty reply is the empty string, not an ABI error.
+ */
+function runCalls({ id, calls }: LabWorkerRequest, make: Instantiate, first: LabExports, abi: number) {
+  if (!Array.isArray(calls) || calls.length === 0 || !calls.every((c) => typeof c === 'string')) {
+    throw new LabAbiError('a calls request needs a non-empty list of commands.')
+  }
+  if (abi === 1) throw new LabAbiError('this module was built from the v1 template, so it cannot say whether it is a reference build: rebuild with the latest template.')
+  if (!compatFor(abi)) throw new LabAbiError(`this module speaks forge ABI ${abi}, and this page speaks 2: ${NEWER_TEMPLATE_NOTE}.`)
+  const list = listChecks(() => first)
+  if (splitLabId(list.lab).reference) throw new LabAbiError(`this is a reference build (${list.lab}): reference modules earn no credit, so Prove-it runs learner builds only.`)
+  if (typeof first.ks_invoke !== 'function' || typeof first.ks_alloc !== 'function' || typeof first.ks_free !== 'function') {
+    throw new LabAbiError('this module has no ks_invoke bridge: rebuild with the latest template.')
+  }
+  const ex = make()
+  const replies = calls.map((cmd) => capReply(invokeCall(ex, cmd)))
+  scope.postMessage({ type: 'replies', id, replies })
+}
+
 scope.onmessage = async (ev) => {
   const req = ev.data
   const { id, mode, bytes } = req
@@ -70,6 +94,10 @@ scope.onmessage = async (ev) => {
     const make = instantiator(module)
     const first = make()
     const abi = abiOf(first)
+    if (mode === 'calls') {
+      runCalls(req, make, first, abi)
+      return
+    }
     if (abi === 1) {
       await runV1(req)
       return

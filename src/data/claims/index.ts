@@ -22,10 +22,14 @@ export const CLAIMS: Claim[] = [
 
 export const byId: Record<string, Claim> = Object.fromEntries(CLAIMS.map((c) => [c.id, c]))
 
-/** A claim by id; an unknown id is a typo, so it throws instead of rendering nothing. */
+/**
+ * A claim by id; an unknown id is a typo or a lazy group nobody imported, so it throws instead of rendering nothing.
+ * A lazy group's claims register when its module under `lazy/` is imported; `homes.ts` says which module holds an id.
+ */
 export function getClaim(id: string): Claim {
   const claim = byId[id]
-  if (!claim) throw new Error(`unknown claim id: ${id}`)
+  // An inherited name ('constructor', '__proto__') finds a value that is no claim, and its id is not the one asked for.
+  if (claim?.id !== id) throw new Error(`unknown claim id: ${id}; lazy? see claims/homes.ts`)
   return claim
 }
 

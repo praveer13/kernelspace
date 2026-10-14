@@ -11,6 +11,10 @@
  *   3. the one dynamic entry with the play's file name that the page's closure imports lazily, once the plays
  *      found by 1 and 2 are set aside.
  * Anything else is an error, never a quiet skip.
+ *
+ * A play that has no source file yet (a route budgeted before its task lands) is the one deliberate skip:
+ * `playSkip` says so before any chunk lookup, because find 3 would otherwise hand a missing play the
+ * scheduler's hoisted `_Play-*` chunk and report the scheduler's figure under the new route.
  */
 
 export interface PlayManifestChunk {
@@ -34,6 +38,27 @@ function staticClosure(manifest: PlayManifest, root: string): string[] {
   }
   visit(root)
   return [...seen]
+}
+
+/** The line verify-bundle prints for a play row whose source file does not exist yet, or undefined when the play exists. Checked before any chunk lookup. */
+export function playSkip(route: string, playSrc: string, exists: (src: string) => boolean): string | undefined {
+  return exists(playSrc) ? undefined : `skip ${route}: ${playSrc} does not exist yet`
+}
+
+/**
+ * A play row's chunk, or the skip line when its source file does not exist yet. The existence check comes first, so a
+ * missing play never reaches `playChunkKey`'s by-name fallback. `key` is undefined when an existing play has no chunk.
+ */
+export function resolvePlay(
+  manifest: PlayManifest,
+  route: string,
+  playSrc: string,
+  pageKey: string,
+  allPlaySrcs: readonly string[],
+  exists: (src: string) => boolean,
+): { skip: string } | { key: string | undefined } {
+  const skip = playSkip(route, playSrc, exists)
+  return skip ? { skip } : { key: playChunkKey(manifest, playSrc, pageKey, allPlaySrcs) }
 }
 
 /** The manifest key of the chunk holding `playSrc`, or undefined when the manifest has none. `pageKey` is the page that mounts the plays. */

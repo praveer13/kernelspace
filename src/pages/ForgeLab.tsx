@@ -58,6 +58,8 @@ import { cn } from '@/lib/utils'
  *
  * The three slots below take their final props now, so the tasks that fill them never edit this page:
  * `SetupLanes {lab}` (2c-07), `FolderWatch {lab, onModule}` (2c-08) and `AskPacket {lab, reports}` (2c-06).
+ * Wave 3 adds three more: `TwinPanel {lab, done}`, `RaceReference {lab, bytes, report, credit}` and
+ * `ProveFromModule {lab, bundle, bytes, report, credit}`, the last two given what InstallButton gets.
  */
 const PrimmPanel = lazy(() => import('@/components/forge/PrimmPanel').then((m) => ({ default: m.PrimmPanel })))
 const HintLadder = lazy(() => import('@/components/forge/HintLadder'))
@@ -66,6 +68,10 @@ const FolderWatch = lazy(() => import('@/components/forge/FolderWatch'))
 const AskPacket = lazy(() => import('@/components/forge/AskPacket'))
 // "Install in your engine" (wave-2.md §10.2): a stub until 2b-12, mounted here so that task never edits this page.
 const InstallButton = lazy(() => import('@/components/engine/InstallButton'))
+// Wave 3 mounts (wave-3.md §2.3): stubs until 3b-08 (twin), 3b-09 (race) and 3b-04 (Prove-it v2), so those tasks never edit this page.
+const TwinPanel = lazy(() => import('@/components/forge/TwinPanel'))
+const RaceReference = lazy(() => import('@/components/forge/RaceReference'))
+const ProveFromModule = lazy(() => import('@/components/forge/ProveFromModule'))
 
 /** The lab's bundle: `loading` until its chunk arrives, `failed` if it never does, `none` for a lab that has no bundle. */
 type BundleState = { status: 'none' } | { status: 'loading' } | { status: 'failed' } | { status: 'ready'; bundle: ForgeBundle }
@@ -389,9 +395,15 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
               </ol>
 
               {run.kind === 'report' && (
-                <Suspense fallback={null}>
-                  <InstallButton lab={lab} report={run.report} credit={run.credit} bytes={run.bytes} />
-                </Suspense>
+                // One boundary per lazy mount: the first mount of a chunk that has not loaded suspends only itself, so what is already shown stays.
+                <>
+                  <Suspense fallback={null}>
+                    <InstallButton lab={lab} report={run.report} credit={run.credit} bytes={run.bytes} />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <RaceReference lab={lab} bytes={run.bytes} report={run.report} credit={run.credit} />
+                  </Suspense>
+                </>
               )}
 
               {run.kind === 'report' && requiredReportPassed && run.credit !== null && (
@@ -691,10 +703,20 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
                 <AskPacket lab={lab} reports={reports} ladderIds={bundle.ladder.map((l) => l.checkId)} />
                 <ProveIt bundle={bundle} unlocked={done || requiredReportPassed} />
               </Suspense>
+              {run.kind === 'report' && (
+                <Suspense fallback={null}>
+                  <ProveFromModule lab={lab} bundle={bundle} bytes={run.bytes} report={run.report} credit={run.credit} />
+                </Suspense>
+              )}
             </div>
           )}
         </>
       )}
+
+      {/* the production twin shows once the lab is done, for any lab whose twin module exists (3b-08) */}
+      <Suspense fallback={null}>
+        <TwinPanel lab={lab} done={done} />
+      </Suspense>
 
       <Discussion kind="lab" id={lab.id} />
 

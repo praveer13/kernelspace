@@ -1,24 +1,32 @@
 /**
  * The generic forge panels (docs/specs/wave-2.md §13.1; task 2c-02): every panel takes a `ForgeBundle` and holds no
  * lab's data, ForgeLab mounts them for any lab whose bundle exists, and the three slots (SetupLanes, FolderWatch,
- * AskPacket) take their final props now. The panels are rendered here against a bundle of an invented lab, so
- * anything that still came from lab 01 would show; lab 01 through the same panels is checked to be what Wave 1 shipped.
- * There is no DOM in this suite, so interaction (focus, the run strip playing) is checked in a browser.
+ * AskPacket) take their final props now. So do the Wave 3 stubs (TwinPanel, RaceReference, ProveFromModule and
+ * Today's ProveReturnCard, task 3a-06): they render nothing, and are mounted where 3b will fill them.
+ *
+ * The panels are rendered here against a bundle of an invented lab, so anything that still came from lab 01 would
+ * show; lab 01 through the same panels is checked to be what Wave 1 shipped. Most of the suite renders to static
+ * markup, which has no DOM; the last block mounts Today's cards in the small DOM (tests/dom/mini-dom.ts). Interaction
+ * (focus, the run strip playing) is checked in a browser.
  */
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup, renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
+import ProveReturnCard, { type ProveReturnCardProps } from '../../src/components/learner/ProveReturnCard'
 import { AskPacket, type AskPacketProps } from '../../src/components/forge/AskPacket'
 import { FolderWatch, type FolderWatchProps } from '../../src/components/forge/FolderWatch'
 import { HintLadderView } from '../../src/components/forge/HintLadder'
 import { PrimmPanel } from '../../src/components/forge/PrimmPanel'
+import ProveFromModule, { type ProveFromModuleProps } from '../../src/components/forge/ProveFromModule'
 import ProveIt from '../../src/components/forge/ProveIt'
+import RaceReference, { type RaceReferenceProps } from '../../src/components/forge/RaceReference'
 import { ReferenceRun } from '../../src/components/forge/ReferenceRun'
 import { SetupLanes, type SetupLanesProps } from '../../src/components/forge/SetupLanes'
 import { StagePanel } from '../../src/components/forge/StagePanel'
+import TwinPanel, { type TwinPanelProps } from '../../src/components/forge/TwinPanel'
 import { findForgeBundle } from '../../src/data/forge'
 import lab01 from '../../src/data/forge/rust-allocator'
 import { REFERENCE, RUN_SPEC, runChurn, runResponse } from '../../src/data/forge/rust-allocator/primm'
@@ -28,6 +36,9 @@ import { FORGE_LABS, type ForgeLabCheck } from '../../src/data/labs'
 import { hintRef } from '../../src/lib/forge/ladder'
 import { gradeNumber, observationResponse, sameConfig, stageRows } from '../../src/lib/forge/primm'
 import type { CheckResult, LabRunReport } from '../../src/lib/forge/types'
+import DoneCard from '../../src/pages/today/DoneCard'
+import EmptyState from '../../src/pages/today/EmptyState'
+import { installDom, type DomKit } from '../dom/mini-dom'
 
 const src = join(import.meta.dir, '../../src')
 const read = (p: string) => readFileSync(join(src, p), 'utf8')
@@ -463,5 +474,77 @@ describe('ForgeLab mounts by bundle, and keeps the plain page for every other la
   test('a bundle that fails to load leaves the plain page rather than an error', () => {
     expect(page).toMatch(/findForgeBundle\(labId\)[\s\S]*\.catch\(\(\) => \{\s*if \(live\) setState\(\{ status: 'failed' \}\)/)
     expect(page).toContain("bundleState.status === 'none' || bundleState.status === 'failed'")
+  })
+})
+
+/* ------------------------------ the Wave 3 stubs (3a-06) ------------------------------ */
+
+describe('TwinPanel, RaceReference, ProveFromModule and ProveReturnCard take their final props and render nothing', () => {
+  const lab = FORGE_LABS.find((l) => l.id === 'kv-block-manager')!
+  const rep = report(lab.id, [row('frob', 'pass')])
+  const bytes = new ArrayBuffer(4)
+
+  test('each takes the props the spec names, and its markup is empty', () => {
+    const twin: TwinPanelProps = { lab, done: true }
+    const race: RaceReferenceProps = { lab, bytes, report: rep, credit: 'unseen' }
+    const prove: ProveFromModuleProps = { lab, bundle: FAKE, bytes, report: rep, credit: null }
+    expect(renderToStaticMarkup(createElement(TwinPanel, twin))).toBe('')
+    expect(renderToStaticMarkup(createElement(RaceReference, race))).toBe('')
+    expect(renderToStaticMarkup(createElement(ProveFromModule, prove))).toBe('')
+    for (const variant of ['done', 'empty'] as const) {
+      const props: ProveReturnCardProps = { variant }
+      expect(renderToStaticMarkup(createElement(ProveReturnCard, props))).toBe('')
+    }
+  })
+
+  test('the credit is the same type InstallButton takes: all three provenances and a reference build’s null', () => {
+    for (const credit of ['unseen', 'lab-green', 'assisted', null] as const) {
+      const race: RaceReferenceProps = { lab, bytes, report: rep, credit }
+      expect(renderToStaticMarkup(createElement(RaceReference, race))).toBe('')
+    }
+  })
+})
+
+describe('Today’s done card and empty state mount ProveReturnCard beside DailyCard', () => {
+  const path = join(import.meta.dir, '../../src/components/learner/ProveReturnCard.tsx')
+  const seen: ProveReturnCardProps[] = []
+  let real: object
+  let dom: DomKit
+  // React's lazy keeps the component it first loaded, so after the restore the probe renders nothing, as the stub does.
+  let probing = true
+
+  beforeAll(async () => {
+    real = { ...(await import(path)) }
+    mock.module(path, () => ({
+      default: (props: ProveReturnCardProps) => {
+        if (!probing) return null
+        seen.push(props)
+        return createElement('i', { 'data-probe': `prove-return-${props.variant}` })
+      },
+    }))
+    dom = await installDom()
+  })
+  afterAll(async () => {
+    await dom.uninstall()
+    probing = false
+    mock.module(path, () => real)
+  })
+
+  const within = (el: unknown) => createElement(MemoryRouter, null, el as never)
+
+  test('the done card mounts it with variant "done", in the card’s own section', async () => {
+    const page = await dom.mount(within(createElement(DoneCard, { tally: null, calibration: null, upNext: null, pendingHandoff: 0 })))
+    await dom.until(() => page.container.querySelector('[data-probe="prove-return-done"]') !== null)
+    expect(page.container.querySelector('[data-today-done] [data-probe="prove-return-done"]')).not.toBeNull()
+    expect(seen.at(-1)).toEqual({ variant: 'done' })
+    await page.unmount()
+  })
+
+  test('the empty state mounts it with variant "empty", in the state’s own section', async () => {
+    const page = await dom.mount(within(createElement(EmptyState, { upNext: null })))
+    await dom.until(() => page.container.querySelector('[data-probe="prove-return-empty"]') !== null)
+    expect(page.container.querySelector('[data-today-empty] [data-probe="prove-return-empty"]')).not.toBeNull()
+    expect(seen.at(-1)).toEqual({ variant: 'empty' })
+    await page.unmount()
   })
 })

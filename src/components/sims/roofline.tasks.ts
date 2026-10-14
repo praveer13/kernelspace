@@ -1,20 +1,48 @@
 /**
- * sim-roofline tasks in the registry (P2, docs/specs/wave-1.md §10.2).
+ * sim-roofline tasks in the registry (P2, docs/specs/wave-1.md §10.2; wave-3.md §13, task 3a-18).
  *
- * `ROOFLINE_TASKS`: the six outcome tasks, predict → run → explain. Each is graded on the first value
+ * `ROOFLINE_TASKS`: the eighteen outcome tasks, predict → run → explain. Each is graded on the first value
  * the sim reports for its `observe` key after the prediction is locked (`observationsFor` in
  * src/lib/sims/models/roofline.ts), and shown in phone mode from the same model's canonical outcome.
- * They replace the click-through tasks named in each `legacyId`.
- *
- * `ROOFLINE_LEGACY_TASKS`: the tasks that still complete on a state change and pay 0 XP until Wave 3. They
- * are registered so a lesson's exercise block can list them with their real completion state.
+ * They replace the click-through tasks named in each `legacyId`: the six that read the chart came first, and
+ * the twelve that followed them (the CPU/GPU demo, the occupancy, access-pattern and tier probes, and the
+ * B200 Fleet worksheet) are the last of Wave 1's legacy roofline tasks. The old ids (`t-cpu-serial` …
+ * `t-roof-fleet-prefill`) are no longer registered or detected; an earlier completion still shows through
+ * `legacyId`.
  *
  * Hardware numbers in the prompts are formatted from the atlas, never typed. The scenario numbers (batch 1,
- * a 128 × 128 tile, a 32k context, head dimension 128) are synthetic and declared so.
+ * a 128 × 128 tile, a 32k context, head dimension 128, the CPU and GPU timings, the tier bandwidths and the
+ * Fleet worksheet's FLOPs and bytes) are synthetic and declared so. Every graded number can be worked out from
+ * its prompt alone (phone mode shows no sim), to within the task's tolerance.
  */
 
+import { claimNumber } from '@/data/claims'
 import { KC } from '@/data/kc/ids'
-import { ATTENTION, MACHINES, SETUP, batchToRidge, fmtAI, fmtPeak, fmtTBs, ridgeAI } from '@/lib/sims/models/roofline'
+import {
+  ATTENTION,
+  CPU_GPU,
+  FLEET_KERNELS,
+  MACHINES,
+  PCIE_BW_GBS,
+  REG_FILE_REGS,
+  SETUP,
+  SHARED_BW_GBS,
+  WARP_THREADS,
+  batchToRidge,
+  fmtAI,
+  fmtPeak,
+  fmtTBs,
+  gpuMapMs,
+  hbmOverPcie,
+  mapSpeedup,
+  maxRegistersFor,
+  paddingGain,
+  ridgeAI,
+  serialSpeedup,
+  sharedOverHbm,
+  stagedPercent,
+} from '@/lib/sims/models/roofline'
+import type { FleetKernel } from '@/lib/sims/models/roofline'
 import type { SimTaskDef } from '@/lib/sims/types'
 
 const { h100, b200 } = MACHINES
@@ -23,7 +51,46 @@ const b200Ridge = ridgeAI(b200)
 const h100Fp8Ridge = ridgeAI(h100, SETUP.fp8.dtype)
 const batchFirst = batchToRidge(h100, SETUP.decode.dtype)
 
-export const ROOFLINE_TASKS: SimTaskDef[] = [
+/** The CPU/GPU demo's totals as per-step and per-element costs: a chain of 1,000 steps and a map over 64 million elements. */
+const SERIAL_STEPS = 1000
+const MAP_ELEMENTS = 64e6
+const cpuStepNs = (CPU_GPU.cpuSerialMs * 1e6) / SERIAL_STEPS
+const gpuStepUs = (CPU_GPU.gpuSerialMs * 1e3) / SERIAL_STEPS
+const cpuElementNs = (CPU_GPU.cpuMapMs * 1e6) / MAP_ELEMENTS
+const gpuElementPs = (CPU_GPU.gpuMapMs * 1e9) / MAP_ELEMENTS
+
+/**
+ * What the paged-attention row of the Fleet worksheet is: one prefill chunk of Llama-3-70B (model claims) at FP16.
+ * Per layer, each query row does 4·d FLOPs per cached token (QKᵀ and PV) against 2·d two-byte values of K and V,
+ * one FLOP per byte; every query head of a GQA group and every token of the chunk is a row that shares the read.
+ * So intensity = query heads per KV head × chunk tokens, and the row's 2,048 GFLOP over 8 GB is a 32-token chunk
+ * over the KV of about 24,400 cached tokens (Q and O add about 1% to the bytes and are left out).
+ */
+const LLAMA70 = {
+  layers: claimNumber('model.llama3-70b.layers'),
+  qHeads: claimNumber('model.llama3-70b.attn-heads'),
+  kvHeads: claimNumber('model.llama3-70b.kv-heads'),
+  headDim: claimNumber('model.llama3-70b.head-dim'),
+}
+const FP16_BYTES = 2
+const gqaGroup = LLAMA70.qHeads / LLAMA70.kvHeads
+const flopPerByteRow = 4 / (2 * FP16_BYTES)
+const pagedAttn = FLEET_KERNELS.find((k) => k.id === 'fleet-paged-attn')!
+export const PAGED_ATTN = {
+  ...LLAMA70,
+  gqaGroup,
+  /** query tokens in the chunk */
+  chunk: pagedAttn.ai / (gqaGroup * flopPerByteRow),
+  /** cached tokens whose K and V the chunk reads, in every layer */
+  cached: (pagedAttn.bytesG * 1e9) / (2 * LLAMA70.layers * LLAMA70.kvHeads * LLAMA70.headDim * FP16_BYTES),
+  /** decode's intensity: one query token per read */
+  decodeAI: gqaGroup * flopPerByteRow,
+  /** the shortest chunk that reaches the B200's ridge */
+  crossChunk: Math.ceil(b200Ridge / (gqaGroup * flopPerByteRow)),
+}
+const cachedAbout = (Math.round(PAGED_ATTN.cached / 100) * 100).toLocaleString('en-US')
+
+const CHART_TASKS: SimTaskDef[] = [
   {
     id: 'roof.ridge',
     simId: 'sim-roofline',
@@ -173,29 +240,261 @@ export const ROOFLINE_TASKS: SimTaskDef[] = [
   },
 ]
 
-/** The tasks that still complete when the sim detects a state (0 XP, kept until Wave 3's remaining P2 work). */
-const legacy = (id: string, title: string, machine: 'cpu-gpu' | 'roofline', lessons: string[]): SimTaskDef => ({
-  id,
-  simId: 'sim-roofline',
-  machine,
-  kind: 'legacy',
-  title,
-  setup: title,
-  kcs: [],
-  lessons,
-})
+/** The four rows of the B200 Fleet worksheet: place the kernel, and the sim reports its intensity. */
+function fleetTask(k: FleetKernel): SimTaskDef {
+  const copy = FLEET_COPY[k.id]
+  const ridge = fmtAI(b200Ridge)
+  const bound = k.ai < b200Ridge ? 'bandwidth' : 'compute'
+  return {
+    id: `roof.${k.id}`,
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: `Predict the intensity of ${k.label} on the B200`,
+    setup: `In the B200 fleet table, press "place on B200" for ${k.label}. The sim reports its intensity.`,
+    kcs: [KC.boundClassification],
+    predict: {
+      kind: 'numeric',
+      prompt: `The Fleet serving loop's ${k.label}${copy.scenario === undefined ? '' : ` (${copy.scenario})`} does ${k.flopsG.toLocaleString('en-US')} GFLOP of arithmetic over ${k.bytesG.toLocaleString('en-US')} GB of memory traffic. What arithmetic intensity does it have?`,
+      unit: 'FLOP/B',
+      tolerance: { rel: 0.05 },
+    },
+    observe: `roof.${k.id}`,
+    explain: {
+      prompt: `In one line: which side of the B200's ridge (${ridge} FLOP/B) does it land on, and what limits it?`,
+      model: `${fmtAI(k.ai)} FLOP/B is ${k.ai < b200Ridge ? 'left' : 'right'} of the B200's ridge at ${ridge} FLOP/B, so it is ${bound}-bound: ${copy.limit}`,
+      ideas: copy.ideas(ridge),
+    },
+    note: copy.note,
+    phone: { canonical: `roofline.${k.id}` },
+    lessons: ['t4.l3'],
+    legacyId: `t-roof-${k.id}`,
+  }
+}
 
-export const ROOFLINE_LEGACY_TASKS: SimTaskDef[] = [
-  legacy('t-cpu-serial', 'Compare the serial dependency chain on CPU and GPU', 'cpu-gpu', ['t4.l1']),
-  legacy('t-gpu-map', 'Compare a 64M elementwise map on CPU and GPU', 'cpu-gpu', ['t4.l1']),
-  legacy('t-gpu-divergence', 'Compare the 64M map with divergent warp branches', 'cpu-gpu', ['t4.l1']),
-  legacy('t-roof-occupancy', 'Raise registers until occupancy drops below 25%', 'roofline', ['t4.l1', 't4.l4']),
-  legacy('t-roof-coalesce', 'Recover scattered global loads with coalesced shared-memory staging', 'roofline', ['t4.l4']),
-  legacy('t-roof-bank', 'Fix a 32-way shared-memory bank conflict with padding', 'roofline', ['t4.l4']),
-  legacy('t-roof-tiers', 'Sweep working set across shared / L2 / HBM cliffs', 'roofline', ['t4.l2']),
-  legacy('t-roof-pcie', 'Measure the CPU→GPU PCIe transfer cliff', 'roofline', ['t4.l2']),
-  legacy('t-roof-fleet-router', 'Classify and place Fleet router scoring', 'roofline', ['t4.l3']),
-  legacy('t-roof-fleet-decode', 'Classify and place 70B batch-32 decode', 'roofline', ['t4.l3']),
-  legacy('t-roof-fleet-paged-attn', 'Classify and place paged attention', 'roofline', ['t4.l3']),
-  legacy('t-roof-fleet-prefill', 'Classify and place 512-token prefill', 'roofline', ['t4.l3']),
+const FLEET_COPY: Record<FleetKernel['id'], { scenario?: string; limit: string; note: string; ideas: (ridge: string) => [string, string, string] }> = {
+  'fleet-router': {
+    limit: 'it does a little arithmetic per byte it reads, so extra FLOP/s would not speed it up.',
+    note: 'Router scoring is **bandwidth-bound by a wide margin**: it touches a lot of state for very little math. It matters for latency, not for FLOP/s.',
+    ideas: (ridge) => ['Intensity is FLOPs divided by bytes moved', `About one and a half FLOP per byte is far left of the ridge at ${ridge}`, 'So it is bandwidth-bound: more FLOP/s would not speed it up'],
+  },
+  'fleet-decode': {
+    scenario: 'its weight matmuls',
+    limit: 'batching 32 requests shares one read of the weights, but that is still far too little reuse to reach the ridge.',
+    note: 'Batching moves decode **right** along the slope, and a batch of 32 is still on the bandwidth side. Only a very large batch, or fewer bytes per weight, reaches the ridge. The row counts the weights alone: each sequence also reads its own KV, which a batch does not share (the paged-attention row).',
+    ideas: (ridge) => ['A batch of 32 shares one read of the weights, so intensity is 32 FLOP/B', `That is still well left of the ridge at ${ridge}`, 'So decode stays bandwidth-bound even at batch 32'],
+  },
+  'fleet-paged-attn': {
+    scenario: `${PAGED_ATTN.chunk} tokens of a Llama-3-70B prompt attending to about ${cachedAbout} cached tokens in all ${PAGED_ATTN.layers} layers`,
+    limit: `each read of K and V serves ${PAGED_ATTN.gqaGroup} query heads × ${PAGED_ATTN.chunk} tokens = ${pagedAttn.ai} query rows, one FLOP per byte each at FP16. A ${PAGED_ATTN.crossChunk}-token chunk would cross the ridge; decode, with one token, sits near ${PAGED_ATTN.decodeAI} FLOP/B.`,
+    note: `Attention's intensity is the number of **query rows that share each read of K and V**: ${PAGED_ATTN.gqaGroup} query heads per KV head × ${PAGED_ATTN.chunk} tokens in this prefill chunk = ${pagedAttn.ai}, just left of the ridge. Decode has one token per read, so it sits near ${PAGED_ATTN.decodeAI} FLOP/B. A bigger batch does not move it (each sequence reads its own KV), nor does the block layout (same FLOPs, same bytes); more query tokens per read do: a longer chunk, drafted tokens verified together, a larger GQA group.`,
+    ideas: (ridge) => [
+      `Intensity is FLOPs divided by bytes moved: ${pagedAttn.flopsG.toLocaleString('en-US')} / ${pagedAttn.bytesG} = ${pagedAttn.ai} FLOP/B`,
+      `That is just left of the ridge at ${ridge}, so it is bandwidth-bound, narrowly`,
+      `It is ${PAGED_ATTN.gqaGroup} query heads × ${PAGED_ATTN.chunk} tokens per KV read: a longer chunk would cross the ridge, a bigger batch would not`,
+    ],
+  },
+  'fleet-prefill': {
+    limit: 'the 512 tokens of the prompt reuse every weight they read, so the compute ceiling is what limits it.',
+    note: 'Prefill is the **opposite of decode**: a long prompt amortises the weight reads, so it lives on the flat roof and is limited by FLOP/s.',
+    ideas: (ridge) => ['512 tokens share one read of the weights, so intensity is 512 FLOP/B', `That is right of the ridge at ${ridge}`, 'So prefill is compute-bound: the compute ceiling limits it'],
+  },
+}
+
+/** The twelve tasks that replace the click-throughs of the CPU/GPU demo, the probes and the B200 worksheet. */
+const PROBE_TASKS: SimTaskDef[] = [
+  {
+    id: 'roof.cpu-serial',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict how much faster the CPU is on a serial chain',
+    setup: 'Under "CPU vs GPU", press "run serial comparison". The sim reports how many times faster the CPU is.',
+    kcs: ['t4.throughput-design'],
+    predict: {
+      kind: 'numeric',
+      prompt: `A chain of ${SERIAL_STEPS.toLocaleString('en-US')} dependent operations runs on one CPU core and on the GPU. Each step needs the previous result, so the GPU's thousands of lanes have nothing to share. One CPU core finishes a step in about ${cpuStepNs} ns; on the GPU every step is its own kernel launch and synchronisation, about ${gpuStepUs} µs (both synthetic figures). By what factor is the CPU faster?`,
+      unit: '×',
+      tolerance: { rel: 0.1 },
+    },
+    observe: 'roof.cpu-serial',
+    explain: {
+      prompt: 'In one line: why does the CPU win this one?',
+      model: `Every step waits on the one before it, so the GPU's lanes cannot work in parallel. A CPU core is built for single-thread latency (${CPU_GPU.cpuSerialMs} ms here), and the GPU also pays launch and synchronisation cost on each step (${CPU_GPU.gpuSerialMs} ms), so the CPU is ${fmtAI(serialSpeedup())}× faster.`,
+      ideas: ['Each step depends on the previous result, so nothing runs in parallel', 'A CPU core is built for single-thread latency', 'The GPU adds launch and synchronisation overhead to each step'],
+    },
+    note: 'A serial chain is a **latency** problem, and the CPU is the latency machine. The GPU\'s advantage is throughput over many independent elements, which the next task measures. The timings are synthetic but have the right shape.',
+    phone: { canonical: 'roofline.cpu-serial' },
+    lessons: ['t4.l1'],
+    legacyId: 't-cpu-serial',
+  },
+  {
+    id: 'roof.gpu-map',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict the GPU\'s speedup on a 64M-element map',
+    setup: 'Under "CPU vs GPU", keep the access pattern on coalesced and the occupancy at its default, then press "run map comparison".',
+    kcs: ['t4.throughput-design'],
+    predict: {
+      kind: 'numeric',
+      prompt: `Now an elementwise map over ${MAP_ELEMENTS / 1e6} million independent floats, with coalesced loads and enough resident warps to hide memory latency. One CPU core spends about ${cpuElementNs} ns on each element; the GPU, with thousands of lanes busy at once, finishes an element every ${gpuElementPs} ps on average (both synthetic figures). By what factor is the GPU faster?`,
+      unit: '×',
+      tolerance: { rel: 0.1 },
+    },
+    observe: 'roof.gpu-map',
+    explain: {
+      prompt: 'In one line: why does the GPU win this one?',
+      model: `The elements are independent, so thousands of lanes work at once, and neighbouring lanes read neighbouring addresses, so the loads coalesce. The GPU needs ${CPU_GPU.gpuMapMs} ms against the CPU's ${CPU_GPU.cpuMapMs} ms: ${fmtAI(mapSpeedup(1, 1))}× faster.`,
+      ideas: ['The elements are independent, so thousands of lanes work at once', 'Neighbouring lanes read neighbouring addresses, so the loads coalesce', 'Throughput over many elements, not single-thread latency, sets the time'],
+    },
+    note: 'Two wins, one rule: match the machine to the problem shape. A map over independent elements fills the warps; a dependent chain cannot. The next task shows what happens when the lanes of a warp stop agreeing.',
+    phone: { canonical: 'roofline.gpu-map' },
+    lessons: ['t4.l1'],
+    legacyId: 't-gpu-map',
+  },
+  {
+    id: 'roof.gpu-divergence',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict the GPU\'s lead when its warps diverge',
+    setup: 'Under "memory access pattern" choose "divergent", then under "CPU vs GPU" press "run map comparison".',
+    kcs: ['t4.simt-warps'],
+    predict: {
+      kind: 'numeric',
+      prompt: `The same map, but the lanes of each warp now take different branches, so a warp runs its paths one after the other and keeps one eighth of its throughput (a synthetic figure). The clean GPU run took ${CPU_GPU.gpuMapMs} ms against the CPU's ${CPU_GPU.cpuMapMs} ms. By what factor does the GPU still beat the CPU?`,
+      unit: '×',
+      tolerance: { rel: 0.1 },
+    },
+    observe: 'roof.gpu-divergence',
+    explain: {
+      prompt: 'In one line: what does a divergent branch cost a warp?',
+      model: `A warp issues one instruction for all 32 lanes, so lanes that disagree cannot run together. The hardware runs each path in turn with the others masked off, which here leaves an eighth of the throughput: ${fmtAI(gpuMapMs(1 / 8, 1))} ms, so the GPU's lead falls from ${fmtAI(mapSpeedup(1, 1))}× to ${fmtAI(mapSpeedup(1 / 8, 1))}×.`,
+      ideas: ['A warp shares one instruction stream across its 32 lanes', 'Lanes that disagree run their paths one after another, with the rest masked off', 'Throughput falls with the number of paths, so the lead shrinks'],
+    },
+    note: 'The GPU still wins, but by a fraction of what uniform work earns. **Divergence** is the price of one instruction stream per warp, and it is why branchy code belongs on the CPU or must be restructured.',
+    phone: { canonical: 'roofline.gpu-divergence' },
+    lessons: ['t4.l1'],
+    legacyId: 't-gpu-divergence',
+  },
+  {
+    id: 'roof.occupancy',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict the register limit of 16 warps per SM',
+    setup: 'Keep warps per SM at 16 and raise registers per thread until occupancy falls below 25%. The sim reports the limit it crossed.',
+    kcs: ['t4.occupancy'],
+    predict: {
+      kind: 'numeric',
+      prompt: `A kernel keeps ${SETUP.occupancy.warps} warps of ${WARP_THREADS} threads resident on each SM, and the SM's register file holds ${REG_FILE_REGS.toLocaleString('en-US')} 32-bit registers. What is the largest register count per thread at which all ${SETUP.occupancy.warps} warps still fit?`,
+      unit: 'registers',
+      tolerance: { rel: 0.05 },
+    },
+    observe: 'roof.occupancy',
+    explain: {
+      prompt: 'In one line: why does occupancy fall when a kernel uses more registers?',
+      model: `Every resident thread keeps its registers for its whole life, so warps × ${WARP_THREADS} × registers per thread must fit the register file. At ${SETUP.occupancy.warps} warps that is ${maxRegistersFor(SETUP.occupancy.warps)} registers per thread. Past it fewer warps fit, and with fewer warps a stalled load leaves nothing else to run.`,
+      ideas: ['Resident threads hold their registers for their whole life', 'Warps × 32 × registers per thread must fit in the register file', 'Fewer resident warps leave a memory stall with nothing to hide behind'],
+    },
+    note: 'Registers are one of the three budgets that cap occupancy, beside shared memory and warp slots. A kernel that uses many registers per thread buys fast arithmetic and pays for it in fewer warps to hide latency.',
+    phone: { canonical: 'roofline.occupancy' },
+    lessons: ['t4.l1', 't4.l4'],
+    legacyId: 't-roof-occupancy',
+  },
+  {
+    id: 'roof.coalesce',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict what shared-memory staging recovers',
+    setup: 'On the H100, switch the access pattern to "shared transpose" with the bank-conflict switch off. The sim reports the end-to-end bandwidth.',
+    kcs: ['t4.coalescing'],
+    predict: {
+      kind: 'numeric',
+      prompt: `Strided loads deliver a thirty-second of the H100's ${fmtTBs(h100.bw)}. Staging the tile through shared memory instead makes the global load coalesced, at full HBM speed, and every 128 useful bytes also costs 256 bytes of conflict-free shared traffic (a write and a transposed read) at ${fmtTBs(SHARED_BW_GBS)} (a synthetic figure). The HBM time and the shared-memory time add. What percent of the HBM bandwidth does the kernel deliver end to end?`,
+      unit: '%',
+      tolerance: { abs: 5 },
+    },
+    observe: 'roof.coalesce',
+    explain: {
+      prompt: 'In one line: what does staging fix, and what does it cost?',
+      model: `Staging coalesces the global load, so HBM moves only useful bytes again. The price is shared-memory traffic: each 128 B costs one HBM pass and two shared passes, and the times add, so the kernel reaches about ${fmtAI(stagedPercent(h100.bw))}% of HBM speed, far above the strided 3%.`,
+      ideas: ['Staging makes the global load coalesced, so no HBM bytes are wasted', 'The cost is extra shared-memory traffic, a write and a transposed read', 'The times add, so it lands below full HBM speed but far above the strided case'],
+    },
+    note: 'Shared memory turns a bad **global** access pattern into a good one by letting the kernel reorder inside the SM. It is not free, which is why the result sits below a plain coalesced read.',
+    phone: { canonical: 'roofline.coalesce' },
+    lessons: ['t4.l4'],
+    legacyId: 't-roof-coalesce',
+  },
+  {
+    id: 'roof.bank',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict what padding gives back from a bank conflict',
+    setup: 'On the H100, with "shared transpose" selected, turn on the 32-way bank conflict, then the +1 padding fix. The sim reports the gain.',
+    kcs: ['t4.coalescing'],
+    predict: {
+      kind: 'numeric',
+      prompt: `The shared-memory transpose on the H100: every 128 useful bytes cost one coalesced HBM pass at ${fmtTBs(h100.bw)} plus 256 bytes of shared traffic at ${fmtTBs(SHARED_BW_GBS)} (a synthetic figure), and the two times add. A 32-way bank conflict serves the shared traffic one lane at a time, so that half runs 32 times slower. Padding each row by one element removes the conflict. By what factor does the padding raise the kernel's end-to-end bandwidth?`,
+      unit: '×',
+      tolerance: { rel: 0.1 },
+    },
+    observe: 'roof.bank',
+    explain: {
+      prompt: 'In one line: why is the gain not 32×?',
+      model: `Thirty-two lanes hit one bank and are served one at a time, so the shared half runs 32× slower. The global half is untouched and the two times add, so the whole kernel is ${fmtAI(paddingGain(h100.bw))}× slower, not 32×. One element of padding moves each row to a new bank and gives that back.`,
+      ideas: ['Lanes that hit one bank are served one at a time', 'Only the shared-memory half slows 32×, because the global load is unchanged', 'Padding by one element spreads a column across the banks'],
+    },
+    note: 'A bank conflict is a **shared-memory** slowdown, so it is diluted by whatever the kernel spends elsewhere. The fix is cheap: pad the row stride so that consecutive rows start in different banks.',
+    phone: { canonical: 'roofline.bank' },
+    lessons: ['t4.l4'],
+    legacyId: 't-roof-bank',
+  },
+  {
+    id: 'roof.tiers',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict how much faster shared memory is than HBM',
+    setup: 'On the H100, drag the working set from 4 KiB up past 50 MiB so the tier label reads shared, then L2, then HBM.',
+    kcs: ['t4.gpu-memory-ladder'],
+    predict: {
+      kind: 'numeric',
+      prompt: `Sweep a working set from a few KiB to many GiB on an H100. Shared memory serves the smallest sets at ${fmtTBs(SHARED_BW_GBS)} (a synthetic figure) and HBM the largest at ${fmtTBs(h100.bw)}, with L2 between them. How many times faster is the shared-memory tier than HBM?`,
+      unit: '×',
+      tolerance: { rel: 0.05 },
+    },
+    observe: 'roof.tiers',
+    explain: {
+      prompt: 'In one line: why does each step of the sweep slow the reads down?',
+      model: `Which tier holds the data depends on the working-set size. The smaller tiers sit nearer the SM and are faster: shared memory is on-chip, L2 is shared by the whole GPU, and HBM is off the die. Crossing a capacity is a cliff, and shared memory to HBM is about ${fmtAI(sharedOverHbm(h100.bw))}×.`,
+      ideas: ['The working-set size decides which tier holds the data', 'Smaller tiers sit nearer the SM and are faster', 'Crossing a capacity is a cliff in bandwidth, not a slope'],
+    },
+    note: 'The cliffs are the design constraint behind every kernel: fast tiers are small and local, the big tier is shared and far. Tiling exists to keep the working set in the upper tiers.',
+    phone: { canonical: 'roofline.tiers' },
+    lessons: ['t4.l2'],
+    legacyId: 't-roof-tiers',
+  },
+  {
+    id: 'roof.pcie',
+    simId: 'sim-roofline',
+    kind: 'outcome',
+    title: 'Predict the PCIe offload cliff against HBM',
+    setup: 'On the H100, switch "CPU→GPU over PCIe" on in the memory tier probe. The sim reports the ratio to HBM.',
+    kcs: ['t4.gpu-memory-ladder'],
+    predict: {
+      kind: 'numeric',
+      prompt: `The sim's CPU→GPU path is a PCIe 4.0 x16 link at ${PCIE_BW_GBS} GB/s (the H100 SXM's own PCIe 5.0 link is twice as fast). Against streaming HBM at ${fmtTBs(h100.bw)}, how many times slower is a transfer over PCIe?`,
+      unit: '×',
+      tolerance: { rel: 0.05 },
+    },
+    observe: 'roof.pcie',
+    explain: {
+      prompt: 'In one line: what does that ratio mean for offloading to host memory?',
+      model: `PCIe is a narrow link between the host and the GPU, while HBM sits beside the die on a very wide bus. A byte over PCIe costs about ${fmtAI(hbmOverPcie(h100.bw))} HBM reads here (about half that on a Gen5 link), so offload is a last resort and not a free extra tier.`,
+      ideas: ['PCIe is a narrow link between the host and the GPU', 'HBM sits beside the die on a far wider bus', 'A byte over PCIe costs tens to a hundred HBM reads, so offload is a last resort'],
+    },
+    note: 'Below HBM is the PCIe abyss. KV offload and weight streaming live there, and only when the bytes cannot stay on the GPU. A Gen5 link halves the gap, which is still tens of times.',
+    phone: { canonical: 'roofline.pcie' },
+    lessons: ['t4.l2'],
+    legacyId: 't-roof-pcie',
+  },
+  ...FLEET_KERNELS.map(fleetTask),
 ]
+
+export const ROOFLINE_TASKS: SimTaskDef[] = [...CHART_TASKS, ...PROBE_TASKS]

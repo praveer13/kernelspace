@@ -94,6 +94,7 @@ export const T3_KCS: readonly Kc[] = [
     requires: ['t2.async-tasks'],
     // who makes progress: poll runs the future, the waker only reschedules it (the usual slip runs them together)
     confusable: ['t3.wakers-executor'],
+    labs: ['toy-executor'],
     since,
   },
   {
@@ -105,6 +106,7 @@ export const T3_KCS: readonly Kc[] = [
     lessons: ['t3.l4'],
     requires: ['t3.futures-state-machines', 't3.send-sync'],
     confusable: ['t3.futures-state-machines'],
+    labs: ['toy-executor'],
     since,
   },
 

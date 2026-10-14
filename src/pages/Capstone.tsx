@@ -1121,7 +1121,7 @@ function Certificate() {
         {[
           { label: 'read the vLLM source', to: '/lesson/t5.l5' },
           { label: 'revisit the lab in free play', to: '/lab/sim-engine' },
-          { label: 'export your progress', to: '/progress' },
+          { label: 'export your progress', to: '/me' },
         ].map((c) => (
           <Link
             key={c.label}

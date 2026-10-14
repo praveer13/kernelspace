@@ -29,7 +29,7 @@ const DEFAULT_ROUTES = [
   '/',
   '/boot',
   '/today',
-  '/progress',
+  '/me',
   '/curriculum',
   '/tracks/t5',
   '/lesson/t5.l4',

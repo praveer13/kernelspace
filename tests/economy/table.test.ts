@@ -17,6 +17,7 @@ import {
   LABS,
   PLAY_MINUTES,
   RING0_LABS,
+  RING0_RACE_LABS,
   RING0_LESSONS,
   RING1_LABS,
   RING1_LESSONS,
@@ -68,12 +69,15 @@ describe('capstone, acts, plays', () => {
     expect(FLEET_ACT_MINUTES).toEqual({ engine: 30, fleet: 30, business: 30, incident: 20 })
   })
 
-  test('every registered play is priced with its PlayDef.minutes; the scheduler is priced before 2b registers it', () => {
+  test('every registered play is priced with its PlayDef.minutes; the scheduler, tiling cube and EPLB are priced before their plays register', () => {
     for (const [id, def] of Object.entries(PLAYS)) expect(PLAY_MINUTES[id]).toBe(def.minutes)
     expect(PLAY_MINUTES['block-placement']).toBe(15)
-    // a price may run ahead of its play (2b registers the scheduler), but only the scheduler's
-    expect(Object.keys(PLAY_MINUTES).filter((id) => !PLAY_IDS.includes(id) && id !== 'scheduler')).toEqual([])
+    // a price may run ahead of its play (2b registers the scheduler; Wave 3 the tiling cube and EPLB), but only theirs
+    const ahead = ['scheduler', 'tiling-cube', 'eplb']
+    expect(Object.keys(PLAY_MINUTES).filter((id) => !PLAY_IDS.includes(id) && !ahead.includes(id))).toEqual([])
     expect(PLAY_MINUTES.scheduler).toBe(20)
+    expect(PLAY_MINUTES['tiling-cube']).toBe(25)
+    expect(PLAY_MINUTES.eplb).toBe(15)
   })
 
   test('incidents and fleet runs are priced: daily 10, drill 5, a run 10 (wave-2.md §3.4)', () => {
@@ -128,6 +132,13 @@ describe('RING 1, RING 0 and ROOT ids (wave-2.md §6.4)', () => {
     expect([...RING0_LABS].map(index)).toEqual([2, 3, 6, 7])
     expect(index(ROOT_LAB)).toBe(8)
     for (const id of [...RING1_R_LABS, ...RING1_LABS, ...RING0_LABS, ROOT_LAB]) expect(LABS[id]).toBeDefined()
+  })
+
+  test('the labs whose race RING 0 needs are RING 0 labs (the list is empty until 3b-09 ships the race, D25)', () => {
+    for (const id of RING0_RACE_LABS) {
+      expect(RING0_LABS).toContain(id)
+      expect(LABS[id]).toBeDefined()
+    }
   })
 
   test('ROOT_ACTS are Fleet Week acts, and no ring list repeats an id or another ring', () => {

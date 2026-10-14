@@ -12,9 +12,12 @@
  *   3. Memory tier probe: working-set slider that steps across shared memory,
  *      L2, and HBM bandwidths, plus a PCIe transfer mode.
  *   4. Matmul tiling + attention: tile-size sweep with AI = T/2 (FP16), and a naive
- *      vs FlashAttention toggle.
+ *      vs FlashAttention toggle. The tile's residency (CTAs per SM) is the Tiling Cube's
+ *      (src/lib/world/tiling.ts: shared memory for the slabs at k = 64 and 2 stages, and the
+ *      accumulators' registers, in FP16), so the sim, the cube and the generated items agree.
  *
- * Documented constants (synthetic but dimensionally faithful):
+ * Documented constants (synthetic but dimensionally faithful; the pure ones live in
+ * src/lib/sims/models/roofline.ts):
  *   - register file: 256 KiB/SM  = 65,536 32-bit registers
  *   - max warp slots: 64/SM
  *   - shared memory: 228 KiB/SM
@@ -23,8 +26,9 @@
  *   - shared memory bandwidth: ~20 TB/s
  *   - PCIe x16 Gen4: ~32 GB/s
  *
- * Under a SimHost the six outcome tasks of roofline.tasks.ts are graded on what this sim reports through
+ * Under a SimHost the eighteen outcome tasks of roofline.tasks.ts are graded on what this sim reports through
  * `useObserve` (the rules live in src/lib/sims/models/roofline.ts); the chart has a DOM mirror (SimMirror).
+ * No task is detected from a state any more: each handler below reports what the learner just did.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Eraser, TrendingUp } from 'lucide-react'
@@ -35,7 +39,6 @@ import PlaygroundShell, {
   LogConsole,
   SliderRow,
   TransportBar,
-  completeSimTask,
   useInitialCfg,
   usePlaygroundContext,
   usePrefersReducedMotion,
@@ -52,13 +55,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
 import { useObserve } from '@/lib/sims/host'
 import {
   BATCH_STEPS,
+  CPU_GPU,
+  FLEET_KERNELS,
   MACHINES,
+  MAX_WARP_SLOTS,
   PRESETS,
   TILE_CHOICES,
+  accessResult,
   announceAttention,
   announceDecode,
   announceKernel,
@@ -72,12 +78,18 @@ import {
   dtypeMultiplier,
   fmtAI,
   fmtRate,
+  gpuMapMs,
   matmulAI,
   mirrorTable,
   observationsFor,
+  occupancyModel,
   ridgeAI as ridgeAIOf,
+  tierBandwidth,
+  tierName,
+  tileOccupancyFactor,
 } from '@/lib/sims/models/roofline'
-import type { AttentionMode, Dtype, RooflineEvent } from '@/lib/sims/models/roofline'
+import type { AccessPattern, AttentionMode, Dtype, FleetKernel, MemoryPath, RooflineEvent } from '@/lib/sims/models/roofline'
+import { BASE, ctasPerSm, smemBytes } from '@/lib/world/tiling'
 
 const SIM_ID = 'sim-roofline'
 
@@ -97,57 +109,17 @@ const KERNELS: KernelDef[] = [
   { id: 'matmul', label: 'matmul-tiled', ai: 512, frac: 0.88, color: '#3EF2A4' },
 ]
 
-interface FleetKernelDef extends KernelDef {
-  flopsG: number
-  bytesG: number
+/** How each row of the B200 Fleet worksheet (FLEET_KERNELS in the model) is drawn once it is placed. */
+const FLEET_STYLE: Record<FleetKernel['id'], { frac: number; color: string }> = {
+  'fleet-router': { frac: 0.72, color: '#FBBF24' },
+  'fleet-decode': { frac: 0.82, color: '#FB7185' },
+  'fleet-paged-attn': { frac: 0.78, color: '#22D3EE' },
+  'fleet-prefill': { frac: 0.88, color: '#A78BFA' },
 }
 
-/**
- * A dimensionally consistent worksheet derived from the Fleet serving loop.
- * GFLOPs / GB reduces directly to FLOPs / byte, so no hidden unit conversion
- * can rescue a guessed answer.
- */
-const FLEET_KERNELS: FleetKernelDef[] = [
-  {
-    id: 'fleet-router',
-    label: 'router scoring',
-    flopsG: 0.12,
-    bytesG: 0.08,
-    ai: 1.5,
-    frac: 0.72,
-    color: '#FBBF24',
-  },
-  {
-    id: 'fleet-decode',
-    label: '70B decode · b32',
-    flopsG: 4480,
-    bytesG: 140,
-    ai: 32,
-    frac: 0.82,
-    color: '#FB7185',
-  },
-  {
-    id: 'fleet-paged-attn',
-    label: 'paged attention',
-    flopsG: 2048,
-    bytesG: 8,
-    ai: 256,
-    frac: 0.78,
-    color: '#22D3EE',
-  },
-  {
-    id: 'fleet-prefill',
-    label: '70B prefill · 512',
-    flopsG: 71_680,
-    bytesG: 140,
-    ai: 512,
-    frac: 0.88,
-    color: '#A78BFA',
-  },
-]
+const FLEET_DEFS: KernelDef[] = FLEET_KERNELS.map((k) => ({ id: k.id, label: k.label, ai: k.ai, ...FLEET_STYLE[k.id] }))
 
-const ALL_KERNELS: KernelDef[] = [...KERNELS, ...FLEET_KERNELS]
-const B200_RIDGE_AI = ridgeAIOf(MACHINES.b200)
+const ALL_KERNELS: KernelDef[] = [...KERNELS, ...FLEET_DEFS]
 
 const X_MIN = -7 // log2 FLOPs/byte
 const X_MAX = 10
@@ -169,15 +141,6 @@ const fmtXT = (p: number): string => {
   return v >= 1 ? String(v) : v.toPrecision(1)
 }
 
-/* ----------------------------- model constants ---------------------------- */
-const WARP_THREADS = 32
-const MAX_WARP_SLOTS = 64
-const REG_FILE_REGS = (256 * 1024) / 4 // 65,536 32-bit registers per SM
-const SMEM_KB_PER_SM = 228
-const SHARED_BW_GBS = 20_000 // ~20 TB/s
-const L2_BW_GBS = 12_000 // ~12 TB/s
-const PCIE_BW_GBS = 32 // ~32 GB/s
-
 const fmtBytes = (b: number): string => {
   if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GiB`
   if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MiB`
@@ -185,113 +148,8 @@ const fmtBytes = (b: number): string => {
   return `${b} B`
 }
 
-/** Synthetic occupancy: register file is the binding budget. */
-const occupancyModel = (
-  warps: number,
-  regPerThread: number,
-): { resident: number; pct: number; spill: boolean; maxByReg: number } => {
-  const regsPerWarp = regPerThread * WARP_THREADS
-  const maxByReg = Math.max(1, Math.floor(REG_FILE_REGS / regsPerWarp))
-  const resident = Math.min(warps, maxByReg, MAX_WARP_SLOTS)
-  const pct = Math.round((resident / MAX_WARP_SLOTS) * 100)
-  const spill = warps * regsPerWarp > REG_FILE_REGS
-  return { resident, pct, spill, maxByReg }
-}
-
-/** Effective HBM bandwidth multiplier for the access-pattern demo. */
-const coalesceFactor = (pattern: 'coalesced' | 'strided' | 'divergent'): number => {
-  if (pattern === 'coalesced') return 1
-  if (pattern === 'strided') return 1 / 32
-  return 1 / 8 // divergent: serialized warp paths
-}
-type AccessPattern = 'coalesced' | 'strided' | 'divergent' | 'staged'
-
-interface AccessResult {
-  globalEfficiency: number
-  globalTrafficBytes: number
-  sharedEfficiency: number | null
-  sharedTrafficBytes: number
-  effectiveBandwidth: number
-}
-
-/**
- * Models one warp producing 128 useful bytes. Staging first coalesces the
- * global load, then pays a shared-memory write and transposed read.
- */
-const accessResult = (
-  pattern: AccessPattern,
-  hbmBw: number,
-  bankConflict: boolean,
-  bankPadding: boolean,
-): AccessResult => {
-  const globalEfficiency = pattern === 'staged' ? 1 : coalesceFactor(pattern)
-  const globalTrafficBytes = 128 / globalEfficiency
-  if (pattern !== 'staged') {
-    return {
-      globalEfficiency,
-      globalTrafficBytes,
-      sharedEfficiency: null,
-      sharedTrafficBytes: 0,
-      effectiveBandwidth: hbmBw * globalEfficiency,
-    }
-  }
-
-  const sharedEfficiency = bankConflict && !bankPadding ? 1 / 32 : 1
-  const sharedTrafficBytes = 256
-  const secondsPerGb =
-    globalTrafficBytes / 128 / hbmBw +
-    sharedTrafficBytes / 128 / (SHARED_BW_GBS * sharedEfficiency)
-  return {
-    globalEfficiency,
-    globalTrafficBytes,
-    sharedEfficiency,
-    sharedTrafficBytes,
-    effectiveBandwidth: 1 / secondsPerGb,
-  }
-}
-
-type MemoryPath = 'auto' | 'shared' | 'hbm'
-
-/** Effective bandwidth tier for the working-set probe. Explicit paths support the 4 KiB comparison. */
-const tierBandwidth = (
-  wsKb: number,
-  pcie: boolean,
-  path: MemoryPath,
-  spilling: boolean,
-  hbmBw: number,
-): number => {
-  if (pcie) return PCIE_BW_GBS
-  if (spilling || path === 'hbm') return hbmBw
-  if (path === 'shared') return SHARED_BW_GBS
-  if (wsKb <= SMEM_KB_PER_SM) return SHARED_BW_GBS
-  if (wsKb <= 50 * 1024) return L2_BW_GBS
-  return hbmBw
-}
-
-const tierName = (
-  wsKb: number,
-  pcie: boolean,
-  path: MemoryPath,
-  spilling: boolean,
-): string => {
-  if (pcie) return 'PCIe'
-  if (spilling) return 'HBM spill'
-  if (path === 'shared') return 'shared'
-  if (path === 'hbm') return 'HBM'
-  if (wsKb <= SMEM_KB_PER_SM) return 'shared'
-  if (wsKb <= 50 * 1024) return 'L2'
-  return 'HBM'
-}
-
-/** Synthetic shared-memory pressure curve: useful reuse wins through T=64, then residency falls. */
-const tileOccupancyFactor = (T: number): number => {
-  const smemPerBlock = 2 * T * T * 4
-  if (smemPerBlock > SMEM_KB_PER_SM * 1024) return 0.08
-  const blocksPerSM = Math.max(1, Math.floor((SMEM_KB_PER_SM * 1024) / smemPerBlock))
-  const residency = Math.min(1, blocksPerSM / 2)
-  const registerPressure = Math.min(1, 64 / T)
-  return Math.max(0.08, residency * registerPressure)
-}
+/** The cube's scene (k = 64, 2 stages, FP16) for a square tile of side T: the tiling panel reads its residency from it. */
+const tileScene = (T: number) => ({ ...BASE, tm: T, tn: T })
 
 interface RoofCfg {
   m: string // preset name
@@ -333,19 +191,6 @@ interface PlottedPoint {
   kernelId: string
   at: number // ms timestamp for pop animation
 }
-
-type Bound = 'bandwidth' | 'compute'
-
-interface FleetAnswer {
-  ai: string
-  bound: Bound | ''
-}
-
-const blankFleetAnswers = (): Record<string, FleetAnswer> =>
-  Object.fromEntries(FLEET_KERNELS.map((kernel) => [kernel.id, { ai: '', bound: '' }]))
-
-const numericClose = (actual: number, expected: number): boolean =>
-  Number.isFinite(actual) && Math.abs(actual - expected) <= Math.max(0.05, expected * 0.02)
 
 
 type HostMode = 'roofline' | 'cpu-gpu'
@@ -416,14 +261,6 @@ export default function RooflineSim() {
   const [attentionMode, setAttentionMode] = useState<AttentionMode>(
     oneOfOr(initialCfg?.attentionMode, ['naive', 'flash'] as const, 'naive'),
   )
-  const [ridgeAnswer, setRidgeAnswer] = useState('')
-  const [fleetAnswers, setFleetAnswers] = useState<Record<string, FleetAnswer>>(
-    blankFleetAnswers,
-  )
-  const [ridgeFeedback, setRidgeFeedback] = useState<boolean | null>(null)
-  const [fleetFeedback, setFleetFeedback] = useState<
-    Record<string, { ai: boolean; bound: boolean }> | null
-  >(null)
 
   const ticksRef = useRef(0)
   const [ticks, setTicks] = useState(0)
@@ -480,73 +317,39 @@ export default function RooflineSim() {
   const effectiveHbmBw = access.effectiveBandwidth
   const accessThroughputFactor = effectiveHbmBw / bw
   const occupancyThroughput = Math.min(1, occupancyPct / 25)
-  const cpuSerialMs = 0.08
-  const gpuSerialMs = 4
-  const cpuMapMs = 128
-  const gpuMapMs = 2.56 / Math.max(0.02, accessThroughputFactor * occupancyThroughput)
+  const { cpuSerialMs, gpuSerialMs, cpuMapMs } = CPU_GPU
+  const gpuMapTime = gpuMapMs(accessThroughputFactor, occupancyThroughput)
 
   const tierBw = tierBandwidth(workingSetKb, pcieMode, memoryPath, regSpill, bw)
   const tier = tierName(workingSetKb, pcieMode, memoryPath, regSpill)
 
+  // the tiling panel: the throughput factor is the cube's residency (CTAs per SM) at this tile
   const tileAI = matmulAI(tileT)
-  const tileOccFactor = tileOccupancyFactor(tileT)
+  const tileCtas = ctasPerSm(tileScene(tileT))
+  const tileSmemBytes = smemBytes(tileScene(tileT))
+  const tileOccFactor = tileOccupancyFactor(tileCtas)
 
   const attentionAI = attentionAIOf(attentionMode)
   const attentionBytes = attentionBytesOf(attentionMode)
 
-  /* ------------------------------ task detection ---------------------------- */
-  const sawStridedRef = useRef(false)
-  const sawDivergentRef = useRef(false)
-  const sawBankConflictRef = useRef(false)
-  const sawStagedRef = useRef(false)
-  const sawSharedRef = useRef(false)
-  const sawL2Ref = useRef(false)
-  const sawHbmRef = useRef(false)
-
-  useEffect(() => {
-    if (occupancyLow) completeSimTask(SIM_ID, 't-roof-occupancy', 60)
-  }, [occupancyLow])
-
-  useEffect(() => {
-    if (accessPattern === 'strided') sawStridedRef.current = true
-    if (accessPattern === 'divergent') sawDivergentRef.current = true
-    if (accessPattern === 'staged') sawStagedRef.current = true
-    if (
-      accessPattern === 'staged' &&
-      sawStagedRef.current &&
-      (sawStridedRef.current || sawDivergentRef.current)
-    ) {
-      completeSimTask(SIM_ID, 't-roof-coalesce', 60)
-    }
-  }, [accessPattern])
-
-  useEffect(() => {
-    if (bankConflict) sawBankConflictRef.current = true
-    if (bankPadding && sawBankConflictRef.current) {
-      completeSimTask(SIM_ID, 't-roof-bank', 60)
-    }
-  }, [bankConflict, bankPadding])
-
-  useEffect(() => {
-    if (tier === 'shared') sawSharedRef.current = true
-    if (tier === 'L2') sawL2Ref.current = true
-    if (tier === 'HBM' || tier === 'HBM spill') sawHbmRef.current = true
-    if (sawSharedRef.current && sawL2Ref.current && sawHbmRef.current) {
-      completeSimTask(SIM_ID, 't-roof-tiers', 60)
-    }
-  }, [tier])
-
-  useEffect(() => {
-    if (pcieMode) completeSimTask(SIM_ID, 't-roof-pcie', 60)
-  }, [pcieMode])
-
-  /* The six outcome tasks (roofline.tasks.ts) are graded on what a learner's action reports, not on a state
+  /* The eighteen outcome tasks (roofline.tasks.ts) are graded on what a learner's action reports, not on a state
      the sim detects: each handler below calls `report` with what the learner just did. */
   const report = useCallback(
     (event: RooflineEvent) => {
       for (const o of observationsFor(event)) observe(o)
     },
     [observe],
+  )
+
+  // the tiers the working-set sweep has been through (HBM and a register spill count as one), starting from where it opened
+  const sawTiersRef = useRef(new Set([tier === 'HBM spill' ? 'HBM' : tier]))
+  const touchTier = useCallback(
+    (name: string) => {
+      const saw = sawTiersRef.current
+      saw.add(name === 'HBM spill' ? 'HBM' : name)
+      if (saw.has('shared') && saw.has('L2') && saw.has('HBM')) report({ type: 'tiers', preset, bw })
+    },
+    [bw, preset, report],
   )
 
   /* ------------------------------ plotting ------------------------------ */
@@ -631,42 +434,117 @@ export default function RooflineSim() {
     [report],
   )
 
-  const gradeFleetPractice = useCallback(() => {
-    const ridgeOk = numericClose(Number(ridgeAnswer), B200_RIDGE_AI)
-    const feedback: Record<string, { ai: boolean; bound: boolean }> = {}
-    const newlyPlotted: PlottedPoint[] = []
+  /* The CPU/GPU demo: each press reports its timings, and the map is graded under the pattern and occupancy it ran with. */
+  const runSerial = useCallback(() => {
+    setSerialRan(true)
+    log(ticksRef.current, 'COMPARE', 'serial chain — CPU wins latency by 50×', 'ok')
+    report({ type: 'serial' })
+  }, [log, report])
 
-    for (const kernel of FLEET_KERNELS) {
-      const answer = fleetAnswers[kernel.id]
-      const expectedBound: Bound = kernel.ai < B200_RIDGE_AI ? 'bandwidth' : 'compute'
-      const aiOk = numericClose(Number(answer.ai), kernel.ai)
-      const boundOk = answer.bound === expectedBound
-      feedback[kernel.id] = { ai: aiOk, bound: boundOk }
-      if (aiOk && boundOk) {
-        completeSimTask(SIM_ID, `t-roof-${kernel.id}`, 60)
-        newlyPlotted.push({ kernelId: kernel.id, at: performance.now() })
-      }
-    }
+  const runMap = useCallback(
+    (pattern: AccessPattern, occupancyPct: number, summary: string) => {
+      setMapRan(true)
+      log(ticksRef.current, 'COMPARE', summary, pattern === 'coalesced' || pattern === 'staged' ? 'ok' : 'warn')
+      report({ type: 'map', pattern, occupancyPct })
+    },
+    [log, report],
+  )
 
-    setRidgeFeedback(ridgeOk)
-    setFleetFeedback(feedback)
-    setPreset(MACHINES.b200.name)
-    setBw(MACHINES.b200.bw)
-    setPeak(MACHINES.b200.peak)
-    setDtype('fp16')
-    setPoints((previous) => {
-      const ids = new Set(previous.map((point) => point.kernelId))
-      return [...previous, ...newlyPlotted.filter((point) => !ids.has(point.kernelId))]
-    })
+  /* Occupancy and registers: the sliders report the limit once occupancy shows below 25%. */
+  const chooseWarps = useCallback(
+    (next: number) => {
+      setWarpsPerSM(next)
+      touchTier(tierName(workingSetKb, pcieMode, memoryPath, occupancyModel(next, regPerThread).spill))
+      report({ type: 'occupancy', warps: next, registers: regPerThread })
+    },
+    [memoryPath, pcieMode, regPerThread, report, touchTier, workingSetKb],
+  )
 
-    const correctRows = Object.values(feedback).filter((row) => row.ai && row.bound).length
-    log(
-      ticksRef.current,
-      'GRADE',
-      `B200 worksheet — ridge ${ridgeOk ? 'correct' : 'retry'} · ${correctRows}/${FLEET_KERNELS.length} kernels placed`,
-      ridgeOk && correctRows === FLEET_KERNELS.length ? 'ok' : 'warn',
-    )
-  }, [fleetAnswers, log, ridgeAnswer])
+  const chooseRegisters = useCallback(
+    (next: number) => {
+      setRegPerThread(next)
+      touchTier(tierName(workingSetKb, pcieMode, memoryPath, occupancyModel(warpsPerSM, next).spill))
+      report({ type: 'occupancy', warps: warpsPerSM, registers: next })
+    },
+    [memoryPath, pcieMode, report, touchTier, warpsPerSM, workingSetKb],
+  )
+
+  /* Access pattern and bank conflicts: the staged transpose is graded without a conflict, and again once padding fixes one. */
+  const reportAccess = useCallback(
+    (pattern: AccessPattern, conflict: boolean, padding: boolean) =>
+      report({ type: 'access', preset, bw, pattern, bankConflict: conflict, bankPadding: padding }),
+    [bw, preset, report],
+  )
+
+  const choosePattern = useCallback(
+    (next: AccessPattern) => {
+      setAccessPattern(next)
+      reportAccess(next, bankConflict, bankPadding)
+    },
+    [bankConflict, bankPadding, reportAccess],
+  )
+
+  const chooseConflict = useCallback(
+    (on: boolean) => {
+      setBankConflict(on)
+      if (!on) setBankPadding(false)
+      reportAccess(accessPattern, on, on && bankPadding)
+    },
+    [accessPattern, bankPadding, reportAccess],
+  )
+
+  const choosePadding = useCallback(
+    (on: boolean) => {
+      setBankPadding(on)
+      reportAccess(accessPattern, bankConflict, on)
+    },
+    [accessPattern, bankConflict, reportAccess],
+  )
+
+  /* The memory tier probe: the sweep is reported once it has been through shared memory, L2 and HBM. */
+  const chooseWorkingSet = useCallback(
+    (log2Kb: number) => {
+      const next = 2 ** log2Kb
+      setWorkingSetKb(next)
+      touchTier(tierName(next, pcieMode, memoryPath, occupancyModel(warpsPerSM, regPerThread).spill))
+    },
+    [memoryPath, pcieMode, regPerThread, touchTier, warpsPerSM],
+  )
+
+  const chooseMemoryPath = useCallback(
+    (next: MemoryPath) => {
+      setMemoryPath(next)
+      touchTier(tierName(workingSetKb, pcieMode, next, occupancyModel(warpsPerSM, regPerThread).spill))
+    },
+    [pcieMode, regPerThread, touchTier, warpsPerSM, workingSetKb],
+  )
+
+  const choosePcie = useCallback(
+    (on: boolean) => {
+      setPcieMode(on)
+      touchTier(tierName(workingSetKb, on, memoryPath, occupancyModel(warpsPerSM, regPerThread).spill))
+      if (on) report({ type: 'pcie', preset, bw })
+    },
+    [bw, memoryPath, preset, regPerThread, report, touchTier, warpsPerSM, workingSetKb],
+  )
+
+  /* The B200 Fleet table: placing a row switches to the B200 at FP16, plots the kernel and reports its intensity. */
+  const placeFleet = useCallback(
+    (k: FleetKernel) => {
+      bump()
+      const b200 = MACHINES.b200
+      setPreset(b200.name)
+      setBw(b200.bw)
+      setPeak(b200.peak)
+      setDtype('fp16')
+      setPoints((prev) => (prev.some((p) => p.kernelId === k.id) ? prev : [...prev, { kernelId: k.id, at: performance.now() }]))
+      const ridge = ridgeAIOf(b200)
+      log(ticksRef.current, 'PLOT', `${k.label} — AI ${fmtAI(k.ai)} on the ${b200.name}, ridge ${fmtAI(ridge)} (${k.ai < ridge ? 'bandwidth' : 'compute'}-bound)`, 'ok')
+      setAnnounce(announceKernel(k.label, k.ai, ridge))
+      report({ type: 'fleet', kernel: k.id, preset: b200.name, dtype: 'fp16' })
+    },
+    [bump, log, report],
+  )
 
   const reset = useCallback(() => {
     setPoints([])
@@ -685,20 +563,10 @@ export default function RooflineSim() {
     setPcieMode(false)
     setTileT(16)
     setAttentionMode('naive')
-    setRidgeAnswer('')
-    setFleetAnswers(blankFleetAnswers())
-    setRidgeFeedback(null)
-    setFleetFeedback(null)
     setPlaying(false)
     ticksRef.current = 0
     setTicks(0)
-    sawStridedRef.current = false
-    sawDivergentRef.current = false
-    sawStagedRef.current = false
-    sawBankConflictRef.current = false
-    sawSharedRef.current = false
-    sawL2Ref.current = false
-    sawHbmRef.current = false
+    sawTiersRef.current = new Set(['shared'])
     log(0, 'RESET', 'chart cleared — kernels unplotted')
   }, [log])
 
@@ -1161,20 +1029,6 @@ export default function RooflineSim() {
       simId={SIM_ID}
       title="Roofline Model"
       subtitle="bandwidth roof · compute ceiling · the ridge point"
-      tasks={[
-        { id: 't-cpu-serial', text: 'Compare the serial dependency chain on CPU and GPU', xp: 60 },
-        { id: 't-gpu-map', text: 'Compare a 64M elementwise map on CPU and GPU', xp: 60 },
-        { id: 't-gpu-divergence', text: 'Compare the 64M map with divergent warp branches', xp: 60 },
-        { id: 't-roof-occupancy', text: 'Raise registers until occupancy drops below 25%', xp: 60 },
-        { id: 't-roof-coalesce', text: 'Recover scattered global loads with coalesced shared-memory staging', xp: 60 },
-        { id: 't-roof-bank', text: 'Fix a 32-way shared-memory bank conflict with padding', xp: 60 },
-        { id: 't-roof-tiers', text: 'Sweep working set across shared / L2 / HBM cliffs', xp: 60 },
-        { id: 't-roof-pcie', text: 'Measure the CPU→GPU PCIe transfer cliff', xp: 60 },
-        { id: 't-roof-fleet-router', text: 'Classify and place Fleet router scoring', xp: 60 },
-        { id: 't-roof-fleet-decode', text: 'Classify and place 70B batch-32 decode', xp: 60 },
-        { id: 't-roof-fleet-paged-attn', text: 'Classify and place paged attention', xp: 60 },
-        { id: 't-roof-fleet-prefill', text: 'Classify and place 512-token prefill', xp: 60 },
-      ]}
       help={
         <>
           <p>
@@ -1235,11 +1089,7 @@ export default function RooflineSim() {
                       className="mt-3"
                       active={serialRan}
                       color="#5CA8FF"
-                      onClick={() => {
-                        setSerialRan(true)
-                        completeSimTask(SIM_ID, 't-cpu-serial', 60)
-                        log(ticksRef.current, 'COMPARE', 'serial chain — CPU wins latency by 50×', 'ok')
-                      }}
+                      onClick={runSerial}
                     >
                       run serial comparison
                     </ChipButton>
@@ -1252,25 +1102,19 @@ export default function RooflineSim() {
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-xs">
                       <div className="rounded-sm border border-[#5CA8FF44] p-2">CPU · {cpuMapMs} ms</div>
-                      <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuMapMs.toFixed(2)} ms</div>
+                      <div className="rounded-sm border border-[#A78BFA44] p-2">GPU · {gpuMapTime.toFixed(2)} ms</div>
                     </div>
                     <ChipButton
                       className="mt-3"
                       active={mapRan}
                       color="#A78BFA"
-                      onClick={() => {
-                        setMapRan(true)
-                        completeSimTask(SIM_ID, 't-gpu-map', 60)
-                        if (accessPattern === 'divergent') {
-                          completeSimTask(SIM_ID, 't-gpu-divergence', 60)
-                        }
-                        log(
-                          ticksRef.current,
-                          'COMPARE',
+                      onClick={() =>
+                        runMap(
+                          accessPattern,
+                          occupancyPct,
                           `64M map — GPU ${accessPattern === 'coalesced' ? 'wins throughput by 50×' : accessPattern === 'staged' ? 'recovers coalesced global traffic through shared staging' : 'loses efficiency to warp divergence / scattered access'}`,
-                          accessPattern === 'coalesced' || accessPattern === 'staged' ? 'ok' : 'warn',
                         )
-                      }}
+                      }
                     >
                       run map comparison
                     </ChipButton>
@@ -1382,106 +1226,37 @@ export default function RooflineSim() {
               </div>
             </ControlGroup>
 
-            <ControlGroup label="graded · B200 fleet table">
+            <ControlGroup label="B200 fleet table">
               <p className="font-mono text-[10px] leading-relaxed text-text-3">
-                B200 FP16 dense · 2,250,000 GFLOP/s · 8,000 GB/s. Compute the ridge and
-                each row&apos;s AI; a fully correct row is placed on the chart.
+                Four kernels from the Fleet serving loop, as GFLOP and GB. Predict a row&apos;s intensity in
+                the task panel, then place it: the chart switches to the B200 at FP16 and plots the kernel.
               </p>
-              <label className="block font-mono text-[10px] text-text-2">
-                ridge = peak / bandwidth (FLOP/B)
-                <input
-                  aria-label="B200 ridge point in FLOPs per byte"
-                  inputMode="decimal"
-                  value={ridgeAnswer}
-                  onChange={(event) => setRidgeAnswer(event.target.value)}
-                  placeholder="?"
-                  className={cn(
-                    'mt-1 w-full rounded border bg-ink px-2 py-1.5 text-[12px] text-text-1 outline-none',
-                    ridgeFeedback === null
-                      ? 'border-line focus:border-accent/60'
-                      : ridgeFeedback
-                        ? 'border-accent/60'
-                        : 'border-danger/60',
-                  )}
-                />
-              </label>
               <div className="space-y-2">
                 {FLEET_KERNELS.map((kernel) => {
-                  const answer = fleetAnswers[kernel.id]
-                  const feedback = fleetFeedback?.[kernel.id]
+                  const placed = points.some((p) => p.kernelId === kernel.id)
+                  const color = FLEET_STYLE[kernel.id].color
                   return (
                     <div key={kernel.id} className="rounded border border-line bg-ink p-2">
                       <div className="flex items-start justify-between gap-2 font-mono text-[10px]">
-                        <span style={{ color: kernel.color }}>{kernel.label}</span>
+                        <span style={{ color }}>{kernel.label}</span>
                         <span className="text-right text-text-3">
                           {kernel.flopsG.toLocaleString()} GF / {kernel.bytesG.toLocaleString()} GB
                         </span>
                       </div>
-                      <div className="mt-2 flex items-center gap-1.5">
-                        <input
-                          aria-label={`${kernel.label} arithmetic intensity`}
-                          inputMode="decimal"
-                          value={answer.ai}
-                          onChange={(event) =>
-                            setFleetAnswers((previous) => ({
-                              ...previous,
-                              [kernel.id]: { ...previous[kernel.id], ai: event.target.value },
-                            }))
-                          }
-                          placeholder="AI F/B"
-                          className={cn(
-                            'min-w-0 flex-1 rounded border bg-surface-1 px-2 py-1 font-mono text-[11px] text-text-1 outline-none',
-                            feedback === undefined
-                              ? 'border-line focus:border-accent/60'
-                              : feedback.ai
-                                ? 'border-accent/60'
-                                : 'border-danger/60',
-                          )}
-                        />
-                        {(['bandwidth', 'compute'] as const).map((bound) => (
-                          <ChipButton
-                            key={bound}
-                            active={answer.bound === bound}
-                            color={bound === 'bandwidth' ? '#FBBF24' : '#3EF2A4'}
-                            onClick={() =>
-                              setFleetAnswers((previous) => ({
-                                ...previous,
-                                [kernel.id]: { ...previous[kernel.id], bound },
-                              }))
-                            }
-                          >
-                            {bound === 'bandwidth' ? 'BW' : 'compute'}
-                          </ChipButton>
-                        ))}
+                      <div className="mt-2 flex items-center gap-2">
+                        <ChipButton active={placed} color={color} onClick={() => placeFleet(kernel)}>
+                          place {kernel.label} on B200
+                        </ChipButton>
                       </div>
-                      {feedback && (
-                        <p
-                          className={cn(
-                            'mt-1.5 font-mono text-[9px]',
-                            feedback.ai && feedback.bound ? 'text-accent' : 'text-danger',
-                          )}
-                        >
-                          {feedback.ai && feedback.bound
-                            ? `placed · AI ${fmtAI(kernel.ai)} · ${kernel.ai < B200_RIDGE_AI ? 'bandwidth' : 'compute'}-bound`
-                            : `${feedback.ai ? 'AI ✓' : 'AI retry'} · ${feedback.bound ? 'bound ✓' : 'bound retry'}`}
+                      {placed && (
+                        <p className="mt-1.5 font-mono text-[10px] text-accent">
+                          placed · AI {fmtAI(kernel.ai)} F/B · {kernel.ai < ridgeAIOf(MACHINES.b200) ? 'bandwidth' : 'compute'}-bound
                         </p>
                       )}
                     </div>
                   )
                 })}
               </div>
-              <button
-                type="button"
-                onClick={gradeFleetPractice}
-                className="w-full rounded border border-accent/60 bg-accent/10 px-3 py-2 font-mono text-[11px] text-accent transition-colors hover:bg-accent/20"
-              >
-                grade + place on B200
-              </button>
-              {ridgeFeedback !== null && (
-                <p className={cn('font-mono text-[10px]', ridgeFeedback ? 'text-accent' : 'text-danger')}>
-                  ridge {ridgeFeedback ? `✓ ${fmtAI(B200_RIDGE_AI)} F/B` : 'retry: divide the two hardware numbers'}
-                </p>
-              )}
             </ControlGroup>
 
             <ControlGroup label="occupancy & registers">
@@ -1492,7 +1267,7 @@ export default function RooflineSim() {
                 min={1}
                 max={64}
                 step={1}
-                onChange={setWarpsPerSM}
+                onChange={chooseWarps}
               />
               <SliderRow
                 label="registers per thread"
@@ -1501,7 +1276,7 @@ export default function RooflineSim() {
                 min={16}
                 max={255}
                 step={1}
-                onChange={setRegPerThread}
+                onChange={chooseRegisters}
               />
               <div
                 className="rounded-sm border px-2 py-1.5 font-mono text-[10px]"
@@ -1527,7 +1302,7 @@ export default function RooflineSim() {
                       key={p}
                       active={accessPattern === p}
                       color="#FBBF24"
-                      onClick={() => setAccessPattern(p)}
+                      onClick={() => choosePattern(p)}
                     >
                       {p === 'staged' ? 'shared transpose' : p}
                     </ChipButton>
@@ -1550,10 +1325,7 @@ export default function RooflineSim() {
                 <Switch
                   aria-label="Toggle 32-way bank conflict"
                   checked={bankConflict}
-                  onCheckedChange={(v) => {
-                    setBankConflict(v)
-                    if (!v) setBankPadding(false)
-                  }}
+                  onCheckedChange={chooseConflict}
                 />
               </div>
               <div className="flex items-center justify-between gap-2 font-mono text-[11px] text-text-2">
@@ -1561,7 +1333,7 @@ export default function RooflineSim() {
                 <Switch
                   aria-label="Toggle bank-conflict padding fix"
                   checked={bankPadding}
-                  onCheckedChange={setBankPadding}
+                  onCheckedChange={choosePadding}
                   disabled={!bankConflict}
                 />
               </div>
@@ -1589,7 +1361,7 @@ export default function RooflineSim() {
                 min={2}
                 max={27}
                 step={0.1}
-                onChange={(v) => setWorkingSetKb(2 ** v)}
+                onChange={chooseWorkingSet}
               />
               <div>
                 <p className="mb-1.5 font-mono text-[11px] text-text-2">4 KiB data path</p>
@@ -1599,7 +1371,7 @@ export default function RooflineSim() {
                       key={path}
                       active={memoryPath === path}
                       color="#22D3EE"
-                      onClick={() => setMemoryPath(path)}
+                      onClick={() => chooseMemoryPath(path)}
                     >
                       {path}
                     </ChipButton>
@@ -1623,7 +1395,7 @@ export default function RooflineSim() {
               </div>
               <label className="flex items-center justify-between gap-2 font-mono text-[11px] text-text-2">
                 CPU→GPU over PCIe (~32 GB/s)
-                <Switch checked={pcieMode} onCheckedChange={setPcieMode} />
+                <Switch checked={pcieMode} onCheckedChange={choosePcie} />
               </label>
             </ControlGroup>
 
@@ -1640,6 +1412,10 @@ export default function RooflineSim() {
               <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] text-text-2">
                 <span>AI ≈ {fmtAI(tileAI)} F/B</span>
                 <span>occupancy {(tileOccFactor * 100).toFixed(0)}%</span>
+                <span>
+                  {tileCtas} {tileCtas === 1 ? 'CTA' : 'CTAs'} per SM
+                </span>
+                <span>slabs {fmtBytes(tileSmemBytes)} SMEM</span>
               </div>
               <div className="font-mono text-[10px] text-text-2">
                 HBM traffic {fmtBytes((2 * 4096 ** 3) / tileAI)}

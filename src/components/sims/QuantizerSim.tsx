@@ -7,6 +7,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Copy, Info, Trash2, Zap } from 'lucide-react'
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
 import SimMirror from '@/components/sims/SimMirror'
+import { QUANTIZER_TASKS } from '@/components/sims/quantizer.tasks'
 import { Slider } from '@/components/ui/slider'
 import { useProgress } from '@/lib/progress'
 import type { MirrorTable } from '@/lib/sims/types'
@@ -336,13 +337,6 @@ interface RowData {
   err: number
   rel: number
 }
-
-const TASKS = [
-  { id: 'q-fp16', text: 'Quantize π (3.14159…) to FP16 and read the reconstruction error', xp: 60 },
-  { id: 'q-int4-max', text: 'Find the largest exactly-representable INT4 value (zero error at q = ±7)', xp: 60 },
-  { id: 'q-group-compare', text: 'Calibrate per-tensor INT4, then group-128; compare max error and distribution drift', xp: 60 },
-  { id: 'q-outlier', text: 'Run the AWQ-style challenge: inject the 47.3 salient outlier, then rescue its group', xp: 60 },
-]
 
 const GROUP_SIZES = [256, 128, 64, 32, 16]
 
@@ -704,7 +698,7 @@ export default function QuantizerSim() {
       simId="sim-quant"
       title="The Quantizer"
       subtitle="FP32 → FP16 · BF16 · FP8 · INT4 — watch what your weights lose"
-      tasks={TASKS}
+      tasks={QUANTIZER_TASKS}
     >
       <div className="flex flex-col gap-4">
         {/* ---- row 1: input + tensor ---- */}

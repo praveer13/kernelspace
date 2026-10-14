@@ -14,11 +14,14 @@ import {
   deriveCardsDetailed,
   isConfirmPending,
   isDue,
+  isFormItem,
   isReviewEvent,
   learnOffset,
   ratingOf,
   recentReviewRefs,
+  OFFSET_MIN_N,
   selectFirstReviewCalibration,
+  selectOptimismOffset,
   targetOf,
 } from '../../src/lib/learner/cards'
 import { wilson } from '../../src/lib/learner/calibration'
@@ -521,6 +524,100 @@ describe('properties over generated ledgers', () => {
     const j = new Journal()
     for (const l of LESSONS.slice(0, 3)) for (const kc of l.kcs) j.answer(D(0), kc, true)
     expect(Object.keys(deriveCards(j.events, CONTENT, D(5)).cards)).toEqual([])
+  })
+})
+
+describe('forms never reschedule a card (W18, wave-3.md §12.6)', () => {
+  /** A track form item on `kc`, as the forms card writes it. */
+  const form = (j: Journal, day: string, kc: string, ok: boolean, o: { conf?: 'guess' | 'think' | 'sure'; kind?: 'item' | 'probe' } = {}) =>
+    j.add(o.kind ?? 'item', 'gen:frag/v', day, {
+      score: ok ? 1 : 0,
+      ok,
+      rev: 'r',
+      provenance: 'unseen',
+      seed: 9,
+      ...(o.conf ? { conf: o.conf } : {}),
+      data: { src: 'form', kcs: [kc], formId: 'B', track: 'x', formSlot: 0, formSet: 1, level: 2, nsec: 40 },
+    })
+  const withoutForms = (events: readonly LedgerEvent[]) => events.filter((e) => !isFormItem(e))
+
+  test('a form item is graded but is not a review', () => {
+    const j = new Journal()
+    const f = form(j, D(0), 'x.k0', true)
+    expect(isFormItem(f)).toBe(true)
+    expect(isReviewEvent(f)).toBe(false)
+    expect(isFormItem(form(j, D(0), 'x.k0', true, { kind: 'probe' }))).toBe(true)
+    // the ticket form (`data.form`) is not a track form, and stays a review
+    const ticket = j.answer(D(0), 'x.k0', true, { extra: { src: 'ticket', form: 'ticket' } })
+    expect(isFormItem(ticket)).toBe(false)
+    expect(isReviewEvent(ticket)).toBe(true)
+    expect(isFormItem(j.add('quiz', 'lesson:x.l1', D(0), { data: { src: 'form' } }))).toBe(false)
+  })
+
+  test('right, wrong or sure and wrong, a form item leaves the card as it was', () => {
+    const { content } = fake(2)
+    const j = new Journal()
+    j.passLesson(D(0), 'x.l1', ['x.k0', 'x.k1'])
+    j.answer(D(2), 'x.k0', true)
+    const before = deriveCardsDetailed(j.events, content, D(9))
+    form(j, D(3), 'x.k0', false, { conf: 'sure' })
+    form(j, D(4), 'x.k0', true)
+    form(j, D(5), 'x.k1', false)
+    const after = deriveCardsDetailed(j.events, content, D(9))
+    expect(after).toEqual(before)
+    expect(after.set.cards['x.k0']).toMatchObject({ reps: 1, lapses: 0, priority: false, lastReviewDay: D(2) })
+    expect(after.set.cards['x.k1']).toMatchObject({ reps: 0, memory: null })
+  })
+
+  test('a form item after a gap is no return: re-entry still waits for real study', () => {
+    const { content } = fake(1)
+    const j = new Journal()
+    j.passLesson(D(0), 'x.l1', ['x.k0'])
+    j.answer(D(1), 'x.k0', true)
+    form(j, D(12), 'x.k0', true)
+    const set = deriveCards(j.events, content, D(12))
+    expect(set.reentry).toBe(true)
+    expect(set).toEqual(deriveCards(withoutForms(j.events), content, D(12)))
+    // the same day with a Today answer instead closes the gap
+    const k = Journal.from(withoutForms(j.events))
+    k.answer(D(12), 'x.k0', true)
+    expect(deriveCards(k.events, content, D(12)).reentry).toBe(false)
+  })
+
+  test('form items feed neither the optimism offset, first-review calibration nor the recent-refs list', () => {
+    const { content } = fake(1)
+    const j = new Journal()
+    j.passLesson(D(0), 'x.l1', ['x.k0'])
+    form(j, D(3), 'x.k0', false)
+    expect(deriveCardsDetailed(j.events, content, D(3)).firstReviews).toEqual([])
+    expect(selectFirstReviewCalibration(j.events, content, D(3)).n).toBe(0)
+    expect(recentReviewRefs(j.events, { resolve: resolveTag }).get('x.k0')).toEqual(['quiz:x.l1#0'])
+  })
+
+  test('over generated ledgers, form items sprinkled anywhere change no card', () => {
+    for (const seed of [201, 202, 203, 204]) {
+      const r = simulate(seed, { days: 80 })
+      const j = Journal.from(r.events)
+      const kcs = [...new Set(r.events.flatMap((e) => resolveTag(e)))]
+      for (let i = 0; i < 40; i++) form(j, D((i * 7 + seed) % 80), kcs[(i * 13) % kcs.length], i % 3 !== 0, { conf: i % 2 ? 'sure' : 'guess' })
+      expect(deriveCardsDetailed(j.events, CONTENT, r.end)).toEqual(deriveCardsDetailed(r.events, CONTENT, r.end))
+    }
+  })
+})
+
+describe('the optimism offset as /me shows it (wave-3.md §12.3)', () => {
+  test('is the default with its n until 20 first reviews, then the learned value', () => {
+    const { content } = fake(1)
+    const j = new Journal()
+    j.passLesson(D(0), 'x.l1', ['x.k0'])
+    expect(selectOptimismOffset(j.events, content, D(0))).toEqual({ offset: OFFSET_DEFAULT, n: 0, learned: false })
+    j.answer(D(2), 'x.k0', false)
+    expect(selectOptimismOffset(j.events, content, D(2))).toEqual({ offset: OFFSET_DEFAULT, n: 1, learned: false })
+    const r = simulate(301, { days: 120, pLesson: 1, accuracy: 0.6 })
+    const o = selectOptimismOffset(r.events, CONTENT, r.end)
+    const d = deriveCardsDetailed(r.events, CONTENT, r.end)
+    expect(o).toEqual({ offset: d.set.offset, n: d.firstReviews.length, learned: d.firstReviews.length >= OFFSET_MIN_N })
+    expect(o.learned).toBe(true)
   })
 })
 

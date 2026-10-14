@@ -81,6 +81,7 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t6.l3'],
     requires: ['t5.pd-disaggregation'],
+    gen: ['prefill'],
     since,
   },
   {
@@ -91,6 +92,7 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t6.l3'],
     requires: ['t5.pd-disaggregation', 't2.swap-vs-recompute'],
+    gen: ['prefill'],
     since,
   },
 
@@ -185,6 +187,7 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t6.l7'],
     requires: [KC.continuousBatching],
+    gen: ['rollout'],
     since,
   },
   {
@@ -195,6 +198,7 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t6.l7'],
     requires: ['t6.rollout-bound-rl'],
+    gen: ['rollout'],
     since,
   },
 
@@ -217,7 +221,8 @@ export const T6_KCS: readonly Kc[] = [
     track: 't6',
     kind: 'procedure',
     lessons: ['t6.l8'],
-    requires: [KC.tokenizerBytes],
+    requires: [KC.tokenizerBytes, 'r.iterators-ownership'],
+    labs: ['xgrammar-lite'],
     since,
   },
 
@@ -263,6 +268,7 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t6.l10'],
     requires: ['t5.prefix-cache-keys'],
+    gen: ['prefill'],
     since,
   },
   {

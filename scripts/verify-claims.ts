@@ -2,13 +2,14 @@
  * Claims registry gate (PLAN-100X §5.2 S2): structure, sources, dates and derived formulas.
  * A pinned claim's source url must contain pin.ref, and a status claim about engine settings must be pinned.
  * The Attention Zoo's config claims (`zoo.*` from Hugging Face, spec §11.2) pin a full revision sha, point their
- * url at that revision's config.json and quote a JSON line that parses to the claim's value.
+ * url at that revision's config.json and quote a JSON line that parses to the claim's value; so does any later claim
+ * that pins a Hugging Face config.json (the DeepSeek-V3 expert counts, spec wave-3 §4.4).
  * Expiry never fails: stale claims are only listed. `--write` regenerates public/claims.json,
- * and a plain run fails if that file has drifted from the registry. `--online` also re-reads each zoo
+ * and a plain run fails if that file has drifted from the registry. `--online` also re-reads each such
  * config.json at its pinned revision and finds the quote in it exactly once (the one network step; bare runs stay offline).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims'
+import { ALL_CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims/all'
 
 const OUT = 'public/claims.json'
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -45,6 +46,7 @@ function mixtralParams(n: Reader, routed: number): number {
 }
 const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'hw.h100-sxm.bf16-dense': (n) => Math.floor(n('hw.h100-sxm.bf16-sparse') / 2),
+  'hw.h100-sxm.fp8-dense': (n) => Math.floor(n('hw.h100-sxm.fp8-sparse') / 2),
   'hw.b200.hbm-capacity': (n) => n('hw.dgx-b200.hbm-total') / 8,
   'hw.b200.hbm-bw': (n) => n('hw.dgx-b200.hbm-bw') / 8,
   'hw.b200.bf16-dense': (n) => (n('hw.hgx-b200.bf16-sparse-system') * 1000) / 8 / 2,
@@ -82,9 +84,14 @@ const HF_CONFIG = /^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/raw\/([^/]+)\/con
 /** `key`, `parent.key`, or either followed by how an array's contents give the value: (length), (member) or (count of <json literal>). */
 const ZOO_ROW = /^([A-Za-z0-9_.]+)(?: \((length|member|count of (.+))\))?$/
 
-/** A zoo claim read from a Hugging Face config: pinned to a sha, sourced at that sha, and its quote parses to its value. */
+/** Whether a claim is read from a Hugging Face config.json: every zoo claim, and any other claim that pins one by its url (Wave 3's DeepSeek-V3 expert counts; Wave 1's unpinned `model.*` configs stay as they are). */
+function readsHfConfig(c: Claim): boolean {
+  return c.id.startsWith('zoo.') || (c.pin !== undefined && c.source !== undefined && HF_CONFIG.test(c.source.url))
+}
+
+/** A claim read from a Hugging Face config: pinned to a sha, sourced at that sha, and its quote parses to its value. */
 function zooProblems(c: Claim): string[] {
-  if (!c.id.startsWith('zoo.') || !c.source || !validUrl(c.source.url) || new URL(c.source.url).hostname !== 'huggingface.co') return []
+  if (!readsHfConfig(c) || !c.source || !validUrl(c.source.url) || new URL(c.source.url).hostname !== 'huggingface.co') return []
   const out: string[] = []
   const hf = HF_CONFIG.exec(c.source.url)
   if (!c.pin) out.push('a zoo claim read from Hugging Face needs pin {repo, ref = revision sha}')
@@ -124,12 +131,12 @@ function zooProblems(c: Claim): string[] {
 }
 
 const byId = new Map<string, Claim>()
-for (const c of CLAIMS) {
+for (const c of ALL_CLAIMS) {
   if (byId.has(c.id)) fail(c.id, 'duplicate id')
   byId.set(c.id, c)
 }
 
-for (const c of CLAIMS) {
+for (const c of ALL_CLAIMS) {
   if (!ID.test(c.id)) fail(c.id, 'id must be dotted lowercase, e.g. hw.h100-sxm.hbm-bw')
   if (!c.label.trim()) fail(c.id, 'missing label')
   if (typeof c.value === 'number' ? !Number.isFinite(c.value) : !c.value.trim()) fail(c.id, 'bad value')
@@ -162,7 +169,7 @@ for (const c of CLAIMS) {
 
 // Derived formulas must reproduce, and must read exactly the inputs they declare.
 const unreproduced: string[] = []
-for (const c of CLAIMS) {
+for (const c of ALL_CLAIMS) {
   if (c.kind !== 'derived' || !c.derived) continue
   const derive = DERIVATIONS[c.id]
   if (!derive) {
@@ -191,11 +198,11 @@ for (const c of CLAIMS) {
 }
 for (const id of Object.keys(DERIVATIONS)) if (!byId.has(id)) fail(id, 'DERIVATIONS entry has no claim')
 
-// --online: each zoo config.json, read again at its pinned revision, contains the quote exactly once.
+// --online: each Hugging Face config.json (the zoo's and the DeepSeek-V3 expert counts'), read again at its pinned revision, contains the quote exactly once.
 if (process.argv.includes('--online') && errors.length === 0) {
   const files = new Map<string, string>()
-  for (const c of CLAIMS) {
-    if (!c.id.startsWith('zoo.') || !c.source || !HF_CONFIG.test(c.source.url)) continue
+  for (const c of ALL_CLAIMS) {
+    if (!readsHfConfig(c) || !c.source || !HF_CONFIG.test(c.source.url)) continue
     let text = files.get(c.source.url)
     if (text === undefined) {
       const res = await fetch(c.source.url)
@@ -209,22 +216,22 @@ if (process.argv.includes('--online') && errors.length === 0) {
     const times = text.split((c.source.quote ?? '').replace(/\s+/g, ' ')).length - 1
     if (times !== 1) fail(c.id, `the quote appears ${times} times in ${c.source.url} (want exactly 1)`)
   }
-  console.log(`online: read ${files.size} zoo config.json files at their pinned revisions`)
+  console.log(`online: read ${files.size} config.json files at their pinned revisions`)
 }
 
-// public/claims.json mirrors the registry so non-bundled consumers (llms.txt, the freshness issue) can read it.
-const json = `${JSON.stringify({ claims: CLAIMS }, null, 2)}\n`
+// public/claims.json mirrors the registry, in ALL_CLAIMS's fixed order, so non-bundled consumers (llms.txt, the freshness issue) can read it.
+const json = `${JSON.stringify({ claims: ALL_CLAIMS }, null, 2)}\n`
 if (process.argv.includes('--write')) {
   if (errors.length === 0) {
     writeFileSync(OUT, json)
-    console.log(`wrote ${OUT} (${CLAIMS.length} claims)`)
+    console.log(`wrote ${OUT} (${ALL_CLAIMS.length} claims)`)
   }
 } else if (!existsSync(OUT) || readFileSync(OUT, 'utf8') !== json) {
   fail(OUT, 'out of date; run: bun scripts/verify-claims.ts --write')
 }
 
 if (unreproduced.length > 0) console.log(`note: no reproducer for derived claim(s): ${unreproduced.join(', ')}`)
-const stale = CLAIMS.filter((c) => staleSince(c) !== null)
+const stale = ALL_CLAIMS.filter((c) => staleSince(c) !== null)
 if (stale.length > 0) console.log(`stale (informational): ${stale.map((c) => `${c.id} since ${staleSince(c)}`).join('; ')}`)
 
 if (errors.length > 0) {
@@ -233,5 +240,5 @@ if (errors.length > 0) {
   process.exit(1)
 }
 const kinds = new Map<string, number>()
-for (const c of CLAIMS) kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1)
-console.log(`verify-claims: ok, ${CLAIMS.length} claims (${[...kinds].map(([k, v]) => `${v} ${k}`).join(', ')})`)
+for (const c of ALL_CLAIMS) kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1)
+console.log(`verify-claims: ok, ${ALL_CLAIMS.length} claims (${[...kinds].map(([k, v]) => `${v} ${k}`).join(', ')})`)

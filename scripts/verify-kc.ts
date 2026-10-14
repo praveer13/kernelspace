@@ -45,7 +45,7 @@ export const NOTIONAL_TRACKS = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', '
  * Families the specs commit to (wave-1 §5.5; wave-2 §4.2 and §5) that land in parallel with this graph. Naming one before
  * its module exists is a warning; once the module exists, its Gen.kcs must agree with the graph.
  */
-export const PENDING_FAMILIES = ['frag', 'kv', 'roofline', 'goodput', 'cost', 'memory', 'spec', 'sig', 'compile']
+export const PENDING_FAMILIES = ['frag', 'kv', 'roofline', 'goodput', 'cost', 'memory', 'spec', 'sig', 'compile', 'tiling', 'prefill', 'rollout']
 
 export interface KcFamily {
   id: string
@@ -415,7 +415,7 @@ async function main() {
     import('../src/data/kc'),
     import('../src/data/lessons'),
     import('../src/data/labs'),
-    import('../src/data/claims'),
+    import('../src/data/claims/all'),
   ])
   const result = verifyKc({
     graph: KC_GRAPH,

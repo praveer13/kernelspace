@@ -3,13 +3,16 @@
  *
  * Three consumers share it, so they cannot disagree:
  *   - RooflineSim draws and reports from it;
- *   - the six outcome tasks (src/components/sims/roofline.tasks.ts) are graded against what it reports,
+ *   - the eighteen outcome tasks (src/components/sims/roofline.tasks.ts) are graded against what it reports,
  *     through `observationsFor`;
  *   - phone mode (PhoneOutcome) shows `PHONE_MODELS[...]`, the canonical outcome of each task's setup.
  *
  * Every hardware number comes from the atlas (sourced claims). The scenario numbers below are synthetic
  * and declared so (invariant W4): the 32k-context attention shape, decode's one-FLOP-per-byte intensity at
- * batch 1, FlashAttention's round intensity of 60, and the precision multipliers. No DOM, no clock.
+ * batch 1, FlashAttention's round intensity of 60, the precision multipliers, the CPU and GPU timings of the
+ * latency-versus-throughput demo, the memory-tier bandwidths and the Fleet worksheet's FLOPs and bytes.
+ * The FP8 ceiling is 2 × BF16 dense, the rule the Tiling Cube shares (FP8_OVER_BF16 in
+ * src/lib/world/tiling.ts), so the app shows one H100 FP8 ridge, 590.4 FLOP/B. No DOM, no clock.
  */
 
 import { atlasRow } from '@/data/atlas'
@@ -113,6 +116,146 @@ export const attentionAI = (mode: AttentionMode): number => (mode === 'naive' ? 
 export const attentionBytes = (mode: AttentionMode): number =>
   mode === 'naive' ? 2 * ATTENTION.context ** 2 : 2 * ATTENTION.context * ATTENTION.headDim * 3
 
+/**
+ * What a tile's residency does to its throughput. A CTA's loads hide behind another CTA's math only when two
+ * are resident on the SM, so one CTA per SM gets half the roof and none (the slabs exceed the per-block
+ * limit) the floor. `ctas` is the cube's CTAs per SM (`ctasPerSm` in src/lib/world/tiling.ts, which counts
+ * shared memory and the accumulators' registers at the cube's k = 64, 2 stages and FP16), passed in so this
+ * model stays out of the eager registry's graph.
+ */
+export const CTAS_TO_OVERLAP = 2
+export const TILE_FLOOR = 0.08
+export const tileOccupancyFactor = (ctas: number): number => (ctas < 1 ? TILE_FLOOR : Math.min(1, ctas / CTAS_TO_OVERLAP))
+
+/* ------------------------------------------------------------------ */
+/* CPU versus GPU, occupancy, access patterns and the memory tiers     */
+/* ------------------------------------------------------------------ */
+
+/** The latency-versus-throughput demo (synthetic): a dependent chain and a 64M-element map, on a CPU core and on the GPU. */
+export const CPU_GPU = { cpuSerialMs: 0.08, gpuSerialMs: 4, cpuMapMs: 128, gpuMapMs: 2.56 } as const
+
+/** How many times faster the CPU is on the serial chain. */
+export const serialSpeedup = (): number => CPU_GPU.gpuSerialMs / CPU_GPU.cpuSerialMs
+
+/** The GPU's time for the map at a throughput factor (access pattern and occupancy), with the factor floored at 2%. */
+export const gpuMapMs = (accessFactor: number, occupancyThroughput: number): number =>
+  CPU_GPU.gpuMapMs / Math.max(0.02, accessFactor * occupancyThroughput)
+
+/** The map's CPU time over the GPU's: how many times faster the GPU is. */
+export const mapSpeedup = (accessFactor: number, occupancyThroughput: number): number => CPU_GPU.cpuMapMs / gpuMapMs(accessFactor, occupancyThroughput)
+
+export const WARP_THREADS = 32
+export const MAX_WARP_SLOTS = 64
+/** 256 KiB of 32-bit registers per SM. */
+export const REG_FILE_REGS = (256 * 1024) / 4
+export const SMEM_KB_PER_SM = 228
+export const SHARED_BW_GBS = 20_000 // ~20 TB/s
+export const L2_BW_GBS = 12_000 // ~12 TB/s
+export const PCIE_BW_GBS = 32 // PCIe x16 Gen4, ~32 GB/s
+
+/** Synthetic occupancy: the register file is the binding budget. */
+export function occupancyModel(warps: number, regPerThread: number): { resident: number; pct: number; spill: boolean; maxByReg: number } {
+  const regsPerWarp = regPerThread * WARP_THREADS
+  const maxByReg = Math.max(1, Math.floor(REG_FILE_REGS / regsPerWarp))
+  const resident = Math.min(warps, maxByReg, MAX_WARP_SLOTS)
+  const pct = Math.round((resident / MAX_WARP_SLOTS) * 100)
+  const spill = warps * regsPerWarp > REG_FILE_REGS
+  return { resident, pct, spill, maxByReg }
+}
+
+/** The most registers per thread at which `warps` warps still fit the register file. */
+export const maxRegistersFor = (warps: number): number => Math.floor(REG_FILE_REGS / (warps * WARP_THREADS))
+
+export type AccessPattern = 'coalesced' | 'strided' | 'divergent' | 'staged'
+
+/** Effective HBM bandwidth multiplier for the access-pattern demo. */
+export const coalesceFactor = (pattern: 'coalesced' | 'strided' | 'divergent'): number => {
+  if (pattern === 'coalesced') return 1
+  if (pattern === 'strided') return 1 / 32
+  return 1 / 8 // divergent: serialized warp paths
+}
+
+export interface AccessResult {
+  globalEfficiency: number
+  globalTrafficBytes: number
+  sharedEfficiency: number | null
+  sharedTrafficBytes: number
+  effectiveBandwidth: number
+}
+
+/**
+ * Models one warp producing 128 useful bytes. Staging first coalesces the global load, then pays a
+ * shared-memory write and a transposed read (256 B of shared traffic).
+ */
+export function accessResult(pattern: AccessPattern, hbmBw: number, bankConflict: boolean, bankPadding: boolean): AccessResult {
+  const globalEfficiency = pattern === 'staged' ? 1 : coalesceFactor(pattern)
+  const globalTrafficBytes = 128 / globalEfficiency
+  if (pattern !== 'staged') {
+    return { globalEfficiency, globalTrafficBytes, sharedEfficiency: null, sharedTrafficBytes: 0, effectiveBandwidth: hbmBw * globalEfficiency }
+  }
+  const sharedEfficiency = bankConflict && !bankPadding ? 1 / 32 : 1
+  const sharedTrafficBytes = 256
+  const secondsPerGb = globalTrafficBytes / 128 / hbmBw + sharedTrafficBytes / 128 / (SHARED_BW_GBS * sharedEfficiency)
+  return { globalEfficiency, globalTrafficBytes, sharedEfficiency, sharedTrafficBytes, effectiveBandwidth: 1 / secondsPerGb }
+}
+
+/** Percent of the HBM bandwidth the staged transpose delivers end to end (no bank conflict). */
+export const stagedPercent = (hbmBw: number): number => (100 * accessResult('staged', hbmBw, false, false).effectiveBandwidth) / hbmBw
+
+/** How many times more bandwidth the +1 padding fix gives a staged transpose with a 32-way bank conflict. */
+export const paddingGain = (hbmBw: number): number =>
+  accessResult('staged', hbmBw, true, true).effectiveBandwidth / accessResult('staged', hbmBw, true, false).effectiveBandwidth
+
+export type MemoryPath = 'auto' | 'shared' | 'hbm'
+
+/** Effective bandwidth tier for the working-set probe. Explicit paths support the 4 KiB comparison. */
+export function tierBandwidth(wsKb: number, pcie: boolean, path: MemoryPath, spilling: boolean, hbmBw: number): number {
+  if (pcie) return PCIE_BW_GBS
+  if (spilling || path === 'hbm') return hbmBw
+  if (path === 'shared') return SHARED_BW_GBS
+  if (wsKb <= SMEM_KB_PER_SM) return SHARED_BW_GBS
+  if (wsKb <= 50 * 1024) return L2_BW_GBS
+  return hbmBw
+}
+
+export function tierName(wsKb: number, pcie: boolean, path: MemoryPath, spilling: boolean): string {
+  if (pcie) return 'PCIe'
+  if (spilling) return 'HBM spill'
+  if (path === 'shared') return 'shared'
+  if (path === 'hbm') return 'HBM'
+  if (wsKb <= SMEM_KB_PER_SM) return 'shared'
+  if (wsKb <= 50 * 1024) return 'L2'
+  return 'HBM'
+}
+
+/** How many times faster the shared-memory tier is than HBM at a bandwidth (GB/s). */
+export const sharedOverHbm = (hbmBw: number): number => SHARED_BW_GBS / hbmBw
+
+/** How many times slower a PCIe transfer is than streaming HBM at a bandwidth (GB/s). */
+export const hbmOverPcie = (hbmBw: number): number => hbmBw / PCIE_BW_GBS
+
+/**
+ * The Fleet serving loop as a worksheet: GFLOPs / GB reduces directly to FLOPs per byte, so no hidden unit
+ * conversion can rescue a guessed answer. Synthetic, derived from the Fleet engine's loop.
+ */
+export interface FleetKernel {
+  id: 'fleet-router' | 'fleet-decode' | 'fleet-paged-attn' | 'fleet-prefill'
+  label: string
+  flopsG: number
+  bytesG: number
+  /** FLOPs per byte: `flopsG / bytesG`, written as the round figure the worksheet shows */
+  ai: number
+}
+
+export const FLEET_KERNELS: readonly FleetKernel[] = [
+  { id: 'fleet-router', label: 'router scoring', flopsG: 0.12, bytesG: 0.08, ai: 1.5 },
+  { id: 'fleet-decode', label: '70B decode · b32', flopsG: 4480, bytesG: 140, ai: 32 },
+  { id: 'fleet-paged-attn', label: 'paged attention · prefill chunk', flopsG: 2048, bytesG: 8, ai: 256 },
+  { id: 'fleet-prefill', label: '70B prefill · 512', flopsG: 71_680, bytesG: 140, ai: 512 },
+]
+
+export const fleetKernel = (id: string): FleetKernel | undefined => FLEET_KERNELS.find((k) => k.id === id)
+
 /* ------------------------------------------------------------------ */
 /* Formatting                                                          */
 /* ------------------------------------------------------------------ */
@@ -145,6 +288,10 @@ export const SETUP = {
   fp8: { preset: 'H100', dtype: 'fp8' },
   /** `roof.tile-ai`: the tile that is reported. */
   tile: 128,
+  /** `roof.occupancy`: the warps per SM whose register limit is reported. */
+  occupancy: { warps: 16 },
+  /** `roof.coalesce`, `roof.bank`, `roof.tiers` and `roof.pcie`: the bandwidths are the H100's. */
+  access: { preset: 'H100' },
 } as const
 
 const machineOf = (preset: string): Machine | undefined => PRESETS.find((p) => p.name === preset)
@@ -160,6 +307,20 @@ export type RooflineEvent =
   | { type: 'tile'; tile: number }
   /** The attention view changed. */
   | { type: 'attention'; mode: AttentionMode }
+  /** "run serial comparison" was pressed. */
+  | { type: 'serial' }
+  /** "run map comparison" was pressed under an access pattern and an occupancy. */
+  | { type: 'map'; pattern: AccessPattern; occupancyPct: number }
+  /** A warp or register slider moved. */
+  | { type: 'occupancy'; warps: number; registers: number }
+  /** The access pattern or a bank-conflict switch changed, on a machine with this HBM bandwidth (GB/s). */
+  | { type: 'access'; preset: string; bw: number; pattern: AccessPattern; bankConflict: boolean; bankPadding: boolean }
+  /** The working-set sweep has been through the shared, L2 and HBM tiers. */
+  | { type: 'tiers'; preset: string; bw: number }
+  /** The CPU→GPU PCIe transfer was switched on. */
+  | { type: 'pcie'; preset: string; bw: number }
+  /** A row of the Fleet worksheet was placed on the chart. */
+  | { type: 'fleet'; kernel: string; preset: string; dtype: Dtype }
 
 const obs = (key: string, value: number | string, unit?: string): Observation => (unit === undefined ? { key, value } : { key, value, unit })
 
@@ -199,6 +360,33 @@ export function observationsFor(e: RooflineEvent): Observation[] {
       return e.tile === SETUP.tile ? [obs('roof.tile-ai', matmulAI(e.tile), 'FLOP/B')] : []
     case 'attention':
       return e.mode === 'flash' ? [obs('roof.flash-ai', attentionAI('flash'), 'FLOP/B')] : []
+    case 'serial':
+      return [obs('roof.cpu-serial', serialSpeedup(), '×')]
+    case 'map': {
+      // the clean map is graded with the register file not limiting the warps, the divergent one on the same terms
+      const throughput = Math.min(1, e.occupancyPct / 25)
+      if (throughput < 1) return []
+      if (e.pattern === 'coalesced') return [obs('roof.gpu-map', mapSpeedup(coalesceFactor('coalesced'), throughput), '×')]
+      if (e.pattern === 'divergent') return [obs('roof.gpu-divergence', mapSpeedup(coalesceFactor('divergent'), throughput), '×')]
+      return []
+    }
+    case 'occupancy':
+      return e.warps === SETUP.occupancy.warps && occupancyModel(e.warps, e.registers).pct < 25
+        ? [obs('roof.occupancy', maxRegistersFor(e.warps), 'registers')]
+        : []
+    case 'access': {
+      if (e.preset !== SETUP.access.preset || e.pattern !== 'staged') return []
+      if (!e.bankConflict) return [obs('roof.coalesce', stagedPercent(e.bw), '%')]
+      return e.bankPadding ? [obs('roof.bank', paddingGain(e.bw), '×')] : []
+    }
+    case 'tiers':
+      return e.preset === SETUP.access.preset ? [obs('roof.tiers', sharedOverHbm(e.bw), '×')] : []
+    case 'pcie':
+      return e.preset === SETUP.access.preset ? [obs('roof.pcie', hbmOverPcie(e.bw), '×')] : []
+    case 'fleet': {
+      const k = fleetKernel(e.kernel)
+      return k !== undefined && e.preset === SETUP.ridge.preset && e.dtype === SETUP.ridge.dtype ? [obs(`roof.${k.id}`, k.ai, 'FLOP/B')] : []
+    }
   }
 }
 
@@ -432,6 +620,233 @@ function fp8Ridge(): CanonicalOutcome {
   }
 }
 
+const ms = (v: number): string => `${Number(v.toPrecision(3))} ms`
+const gbs = (v: number): string => (v >= 1000 ? fmtTBs(v) : `${Number(v.toPrecision(3))} GB/s`)
+
+/** The CPU against the GPU on a dependent chain. */
+function cpuSerial(): CanonicalOutcome {
+  const { cpuSerialMs: cpu, gpuSerialMs: gpu } = CPU_GPU
+  const ratio = serialSpeedup()
+  return {
+    actual: ratio,
+    unit: '×',
+    summary: `On a chain of dependent operations the CPU needs ${ms(cpu)} and the GPU ${ms(gpu)}: the CPU is ${fmtAI(ratio)}× faster.`,
+    chart: {
+      kind: 'bars',
+      xLabel: 'machine',
+      yLabel: 'time (ms)',
+      points: [
+        { x: 'CPU', y: cpu, label: 'CPU' },
+        { x: 'GPU', y: gpu, label: 'GPU' },
+      ],
+      mark: 0,
+      logY: true,
+    },
+    table: {
+      caption: 'A serial dependency chain on one CPU core and on the GPU (synthetic timings)',
+      columns: ['machine', 'time'],
+      rows: [
+        ['CPU', ms(cpu)],
+        ['GPU', ms(gpu)],
+        ['CPU speedup', `${fmtAI(ratio)}×`],
+      ],
+    },
+  }
+}
+
+/** The GPU against the CPU on the 64M-element map, for the access patterns that are graded. */
+function mapOutcome(pattern: 'coalesced' | 'divergent'): () => CanonicalOutcome {
+  return () => {
+    const clean = gpuMapMs(coalesceFactor('coalesced'), 1)
+    const rows: { x: string; y: number }[] = [
+      { x: 'CPU', y: CPU_GPU.cpuMapMs },
+      { x: 'GPU coalesced', y: clean },
+    ]
+    if (pattern === 'divergent') rows.push({ x: 'GPU divergent', y: gpuMapMs(coalesceFactor('divergent'), 1) })
+    const speed = mapSpeedup(coalesceFactor(pattern), 1)
+    const last = rows.length - 1
+    return {
+      actual: speed,
+      unit: '×',
+      summary:
+        pattern === 'coalesced'
+          ? `On a map over 64M independent elements the GPU needs ${ms(clean)} against the CPU's ${ms(CPU_GPU.cpuMapMs)}: ${fmtAI(speed)}× faster.`
+          : `When the lanes of a warp take different branches the GPU keeps an eighth of its throughput: ${ms(rows[last].y)} against the CPU's ${ms(CPU_GPU.cpuMapMs)}, still ${fmtAI(speed)}× faster.`,
+      chart: { kind: 'bars', xLabel: 'machine', yLabel: 'time (ms)', points: rows.map((r) => ({ x: r.x, y: r.y, label: r.x })), mark: last, logY: true },
+      table: {
+        caption: 'A 64M-element map on the CPU and on the GPU (synthetic timings)',
+        columns: ['machine', 'time', 'speedup over CPU'],
+        rows: rows.map((r) => [r.x, ms(r.y), `${fmtAI(CPU_GPU.cpuMapMs / r.y)}×`]),
+      },
+    }
+  }
+}
+
+const OCC_REGISTERS = [32, 64, 96, 128, 160, 192, 255]
+
+/** Occupancy of 16 warps per SM as the registers per thread grow. */
+function occupancyOutcome(): CanonicalOutcome {
+  const warps = SETUP.occupancy.warps
+  const limit = maxRegistersFor(warps)
+  const occ = (r: number) => occupancyModel(warps, r)
+  return {
+    actual: limit,
+    unit: 'registers',
+    summary: `${REG_FILE_REGS.toLocaleString('en-US')} registers hold ${warps} warps of ${WARP_THREADS} threads up to ${limit} registers per thread; past that occupancy drops below ${Math.round((warps / MAX_WARP_SLOTS) * 100)}%.`,
+    chart: {
+      kind: 'bars',
+      xLabel: 'registers per thread',
+      yLabel: 'occupancy (%)',
+      points: OCC_REGISTERS.map((r) => ({ x: r, y: occ(r).pct, label: `${r} regs` })),
+      mark: OCC_REGISTERS.indexOf(limit),
+    },
+    table: {
+      caption: `Occupancy of ${warps} requested warps per SM by registers per thread`,
+      columns: ['registers per thread', 'resident warps', 'occupancy'],
+      rows: OCC_REGISTERS.map((r) => [r, occ(r).resident, `${occ(r).pct}%`]),
+    },
+  }
+}
+
+const PATTERNS: AccessPattern[] = ['coalesced', 'strided', 'divergent', 'staged']
+
+/** What each access pattern delivers on the H100. */
+function coalesceOutcome(): CanonicalOutcome {
+  const bw = MACHINES.h100.bw
+  const pct = stagedPercent(bw)
+  const got = (p: AccessPattern) => accessResult(p, bw, false, false).effectiveBandwidth
+  return {
+    actual: pct,
+    unit: '%',
+    summary: `Staging the strided load through shared memory restores a coalesced global read, and the extra shared-memory traffic leaves ${fmtAI(pct)}% of the H100's ${fmtTBs(bw)}.`,
+    chart: {
+      kind: 'bars',
+      xLabel: 'access pattern',
+      yLabel: 'delivered GB/s',
+      points: PATTERNS.map((p) => ({ x: p === 'staged' ? 'shared transpose' : p, y: got(p), label: p })),
+      mark: PATTERNS.indexOf('staged'),
+      logY: true,
+    },
+    table: {
+      caption: `Delivered bandwidth by access pattern on the H100 (HBM ${fmtTBs(bw)})`,
+      columns: ['access pattern', 'delivered', 'share of HBM'],
+      rows: PATTERNS.map((p) => [p === 'staged' ? 'shared transpose' : p, gbs(got(p)), `${fmtAI((100 * got(p)) / bw)}%`]),
+    },
+  }
+}
+
+/** The shared-memory transpose clean, with a 32-way bank conflict, and padded. */
+function bankOutcome(): CanonicalOutcome {
+  const bw = MACHINES.h100.bw
+  const gain = paddingGain(bw)
+  const steps = [
+    { x: 'no conflict', r: accessResult('staged', bw, false, false) },
+    { x: '32-way conflict', r: accessResult('staged', bw, true, false) },
+    { x: 'padded', r: accessResult('staged', bw, true, true) },
+  ]
+  return {
+    actual: gain,
+    unit: '×',
+    summary: `A 32-way bank conflict serialises the shared-memory half of the transpose; one column of padding gives ${fmtAI(gain)}× the bandwidth back, not 32×, because the global load was never slowed.`,
+    chart: { kind: 'bars', xLabel: 'shared-memory layout', yLabel: 'delivered GB/s', points: steps.map((s) => ({ x: s.x, y: s.r.effectiveBandwidth, label: s.x })), mark: 2, logY: true },
+    table: {
+      caption: `A staged transpose on the H100 by shared-memory layout (HBM ${fmtTBs(bw)})`,
+      columns: ['layout', 'shared banks', 'delivered'],
+      rows: steps.map((s) => [s.x, `${Math.round((s.r.sharedEfficiency ?? 1) * 100)}% efficient`, gbs(s.r.effectiveBandwidth)]),
+    },
+  }
+}
+
+/** The bandwidth of each tier the working-set sweep passes through. */
+function tiersOutcome(): CanonicalOutcome {
+  const bw = MACHINES.h100.bw
+  const ratio = sharedOverHbm(bw)
+  const tiers = [
+    { x: 'shared', y: SHARED_BW_GBS },
+    { x: 'L2', y: L2_BW_GBS },
+    { x: 'HBM', y: bw },
+  ]
+  return {
+    actual: ratio,
+    unit: '×',
+    summary: `Sweeping the working set from a few KiB to many GiB steps down from shared memory (${fmtTBs(SHARED_BW_GBS)}) through L2 to HBM (${fmtTBs(bw)}): shared memory is ${fmtAI(ratio)}× faster.`,
+    chart: { kind: 'bars', xLabel: 'tier', yLabel: 'bandwidth (GB/s)', points: tiers.map((t) => ({ x: t.x, y: t.y, label: t.x })), mark: 0, logY: true },
+    table: {
+      caption: 'Memory-tier bandwidth on the H100 (synthetic shared and L2 figures)',
+      columns: ['tier', 'bandwidth', 'versus HBM'],
+      rows: tiers.map((t) => [t.x, gbs(t.y), `${fmtAI(t.y / bw)}×`]),
+    },
+  }
+}
+
+/** HBM streaming against a PCIe transfer. */
+function pcieOutcome(): CanonicalOutcome {
+  const bw = MACHINES.h100.bw
+  const ratio = hbmOverPcie(bw)
+  return {
+    actual: ratio,
+    unit: '×',
+    summary: `A PCIe x16 Gen4 transfer moves ${gbs(PCIE_BW_GBS)} against HBM's ${fmtTBs(bw)}: ${fmtAI(ratio)}× slower, the offload cliff.`,
+    chart: {
+      kind: 'bars',
+      xLabel: 'path',
+      yLabel: 'bandwidth (GB/s)',
+      points: [
+        { x: 'HBM', y: bw, label: 'HBM' },
+        { x: 'PCIe', y: PCIE_BW_GBS, label: 'PCIe' },
+      ],
+      mark: 1,
+      logY: true,
+    },
+    table: {
+      caption: 'HBM streaming against a CPU→GPU PCIe transfer, H100',
+      columns: ['path', 'bandwidth'],
+      rows: [
+        ['HBM', gbs(bw)],
+        ['PCIe x16 Gen4', gbs(PCIE_BW_GBS)],
+        ['HBM ÷ PCIe', `${fmtAI(ratio)}×`],
+      ],
+    },
+  }
+}
+
+/** One Fleet worksheet row against the B200's ridge. */
+function fleetOutcome(id: FleetKernel['id']): () => CanonicalOutcome {
+  return () => {
+    const k = fleetKernel(id)!
+    const m = MACHINES.b200
+    const ridge = ridgeAI(m, SETUP.ridge.dtype)
+    const bound = boundOf(k.ai, ridge)
+    return {
+      actual: k.ai,
+      unit: 'FLOP/B',
+      summary: `${k.label} does ${k.flopsG.toLocaleString('en-US')} GFLOP over ${k.bytesG.toLocaleString('en-US')} GB: ${fmtAI(k.ai)} FLOP/B against the B200's ridge of ${fmtAI(ridge)}, so it is ${bound}-bound.`,
+      chart: {
+        kind: 'bars',
+        xLabel: 'kernel',
+        yLabel: 'FLOP/B',
+        points: [
+          { x: k.label, y: k.ai, label: k.label },
+          { x: 'B200 ridge', y: ridge, label: 'B200 ridge' },
+        ],
+        mark: 0,
+        logY: true,
+      },
+      table: {
+        caption: `${k.label} against the B200 ridge, FP16`,
+        columns: ['quantity', 'value'],
+        rows: [
+          ['GFLOP', k.flopsG.toLocaleString('en-US')],
+          ['GB moved', k.bytesG.toLocaleString('en-US')],
+          ['FLOP/B', fmtAI(k.ai)],
+          ['B200 ridge', fmtAI(ridge)],
+          ['bound by', bound],
+        ],
+      },
+    }
+  }
+}
+
 /** `phone.canonical` of a task is `roofline.<name>`. */
 export const PHONE_MODELS: Readonly<Record<string, () => CanonicalOutcome>> = {
   'b200-ridge': b200Ridge,
@@ -440,4 +855,16 @@ export const PHONE_MODELS: Readonly<Record<string, () => CanonicalOutcome>> = {
   'tile-ai': tileOutcome,
   'flash-ai': flashOutcome,
   'fp8-ridge': fp8Ridge,
+  'cpu-serial': cpuSerial,
+  'gpu-map': mapOutcome('coalesced'),
+  'gpu-divergence': mapOutcome('divergent'),
+  occupancy: occupancyOutcome,
+  coalesce: coalesceOutcome,
+  bank: bankOutcome,
+  tiers: tiersOutcome,
+  pcie: pcieOutcome,
+  'fleet-router': fleetOutcome('fleet-router'),
+  'fleet-decode': fleetOutcome('fleet-decode'),
+  'fleet-paged-attn': fleetOutcome('fleet-paged-attn'),
+  'fleet-prefill': fleetOutcome('fleet-prefill'),
 }

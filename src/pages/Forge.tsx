@@ -194,8 +194,8 @@ export default function Forge() {
           portfolio artifact is the repo with your commit history (README has the two-line
           `git init` ritual — do it on day one). Your site progress stays in this browser on
           this device (IndexedDB) and is never sent anywhere; export it anytime from{' '}
-          <Link to="/progress" className="text-accent underline">
-            Progress → data ownership
+          <Link to="/me" className="text-accent underline">
+            Me → data ownership
           </Link>
           .
         </p>

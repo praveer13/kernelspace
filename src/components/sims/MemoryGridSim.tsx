@@ -15,7 +15,9 @@ import LayoutLab from '@/components/sims/LayoutLab'
 import MatrixBench from '@/components/sims/MatrixBench'
 import PointerLab from '@/components/sims/PointerLab'
 import { FRAME_TASKS } from '@/components/sims/frameSim.tasks'
+import { LATENCY_TASKS } from '@/components/sims/latencyWalk.tasks'
 import { LAYOUT_TASKS } from '@/components/sims/layoutLab.tasks'
+import { GRID_TASKS } from '@/components/sims/memoryGrid.tasks'
 import { MATRIX_BENCH_TASKS } from '@/components/sims/matrixBench.tasks'
 import { POINTER_LAB_TASKS } from '@/components/sims/pointerLab.tasks'
 import type { SimTask } from '@/components/sims/PlaygroundShell'
@@ -47,36 +49,6 @@ const SIM_ID = 'sim-memory'
  * for pointers, latency, traversal order, data layout, and stack frames.
  */
 type SimMode = 'grid' | 'pointer' | 'latency' | 'matrix' | 'layout' | 'frames'
-
-const GRID_TASKS: SimTask[] = [
-  { id: 't-byte', text: 'Store 0x2A at address 0x80', xp: 60 },
-  { id: 't-deref', text: 'Point 0x90 at 0x80 and dereference it', xp: 60 },
-  { id: 't-null', text: 'Dereference null and survive (run null deref)', xp: 60 },
-  { id: 't-smash', text: 'Overflow the stack into the heap', xp: 60 },
-]
-
-const LATENCY_TASKS: SimTask[] = [
-  {
-    id: 't-lat-l1',
-    text: 'Pointer-chase a ≤32 KiB working set — find which cache level answers',
-    xp: 60,
-  },
-  {
-    id: 't-lat-dram',
-    text: 'Grow the working set to 64 MiB — watch latency step L1 → L2 → L3 → DRAM',
-    xp: 60,
-  },
-  {
-    id: 't-lat-stride',
-    text: 'Same ≥1 MiB buffer, stride ≤64 B vs stride 4096 B — explain the gap',
-    xp: 60,
-  },
-  {
-    id: 't-lat-hbm',
-    text: 'Reveal HBM on the ladder — note its bandwidth vs DRAM',
-    xp: 60,
-  },
-]
 
 const MODE_COPY: Record<
   SimMode,

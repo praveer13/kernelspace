@@ -5,9 +5,10 @@
  * A tasks module exports arrays; every element is one of:
  * - a `SimTaskDef` (has `kind` and `simId`): taken as written. New outcome tasks (`roofline.tasks.ts`,
  *   `kvCache.tasks.ts`, `allocator.tasks.ts`) are written this way;
- * - a pre-registry `{id, text, xp}` (the files that exist today): becomes `kind: 'legacy'` under the sim
- *   and machine in LEGACY_HOME, keeping its old id. A legacy completion still marks `sims[s].tasks[t]`
- *   and pays 0 XP (§8.4).
+ * - a pre-registry `{id, text, xp}`: becomes `kind: 'legacy'` under the sim and machine the file names in
+ *   its `HOME` export (`{simId, machine?}`, wave-3.md §4.2), else under its LEGACY_HOME entry, keeping its old
+ *   id. A new file adds its own HOME, so moving an inline list into a tasks file never edits this table. A
+ *   legacy completion still marks `sims[s].tasks[t]` and pays 0 XP (§8.4).
  *
  * Ids are unique across the registry. `buildRegistry` collects what is wrong instead of throwing, so one bad
  * file cannot take a lesson down; tests/sims/registry.test.ts requires `problems` to be empty.
@@ -25,8 +26,14 @@ export interface Registry {
   forSim(simId: string, machine?: string | null): readonly SimTaskDef[]
 }
 
-/** Where each existing `{id, text, xp}` file belongs. The key is the file name without `.tasks.ts`. */
-const LEGACY_HOME: Readonly<Record<string, { simId: SimId; machine?: string }>> = {
+/** Where a `{id, text, xp}` file's tasks belong: the sim, and the machine whose list renders them (none: every machine). */
+export interface TaskHome {
+  simId: SimId
+  machine?: string
+}
+
+/** The fallback for the files that predate `HOME`. The key is the file name without `.tasks.ts`. */
+const LEGACY_HOME: Readonly<Record<string, TaskHome>> = {
   blockTableExplorer: { simId: 'sim-kv', machine: 'blocks' },
   contentionLab: { simId: 'sim-vm', machine: 'contention' },
   contextSwitchLab: { simId: 'sim-batching', machine: 'context-switch' },
@@ -46,7 +53,16 @@ const isRec = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 /** `/src/components/sims/rustLab.tasks.ts` → `rustLab`. */
 const moduleName = (path: string): string => path.slice(path.lastIndexOf('/') + 1).replace(/\.tasks\.ts$/, '')
 
-function legacyDef(raw: Record<string, unknown>, home: { simId: SimId; machine?: string }): SimTaskDef | null {
+/** A module's `HOME` export; `null` when it has none, `'bad'` when it is not `{simId: string, machine?: string}`. */
+function homeOf(mod: Record<string, unknown>): TaskHome | null | 'bad' {
+  if (!('HOME' in mod) || mod.HOME === undefined) return null
+  const h = mod.HOME
+  if (!isRec(h) || typeof h.simId !== 'string' || h.simId === '') return 'bad'
+  if (h.machine === undefined) return { simId: h.simId as SimId }
+  return typeof h.machine === 'string' && h.machine !== '' ? { simId: h.simId as SimId, machine: h.machine } : 'bad'
+}
+
+function legacyDef(raw: Record<string, unknown>, home: TaskHome): SimTaskDef | null {
   if (typeof raw.id !== 'string' || typeof raw.text !== 'string') return null
   const text = raw.text
   const def: SimTaskDef = {
@@ -103,6 +119,9 @@ export function buildRegistry(modules: Readonly<Record<string, unknown>>): Regis
     const mod = modules[path]
     if (!isRec(mod)) continue
     const name = moduleName(path)
+    const declared = homeOf(mod)
+    if (declared === 'bad') problems.push(`${name}: HOME must be {simId, machine?} with non-empty strings`)
+    const home = declared === null || declared === 'bad' ? LEGACY_HOME[name] : declared
     for (const value of Object.values(mod)) {
       if (!Array.isArray(value)) continue
       for (const raw of value as unknown[]) {
@@ -111,9 +130,8 @@ export function buildRegistry(modules: Readonly<Record<string, unknown>>): Regis
           add(raw as unknown as SimTaskDef, name)
           continue
         }
-        const home = LEGACY_HOME[name]
         const def = home === undefined ? null : legacyDef(raw, home)
-        if (def === null) problems.push(`${name}: an entry is neither a SimTaskDef nor a legacy task with a home in LEGACY_HOME`)
+        if (def === null) problems.push(`${name}: an entry is neither a SimTaskDef nor a legacy task with a home (export HOME from the file)`)
         else add(def, name)
       }
     }

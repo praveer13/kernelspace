@@ -178,7 +178,7 @@ export const T5_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t5.l5'],
     requires: [KC.blockTables, 'r.smart-pointers'],
-    labs: ['kv-block-manager'],
+    labs: ['kv-block-manager', 'radix-cache'],
     since,
   },
   {
@@ -202,6 +202,7 @@ export const T5_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t5.l6'],
     requires: [KC.blockRefcounts, 't5.token-economics'],
+    labs: ['radix-cache'],
     since,
   },
   {
@@ -213,6 +214,7 @@ export const T5_KCS: readonly Kc[] = [
     // t5.l10 compares SGLang's RadixAttention with vLLM's hashed blocks
     lessons: ['t5.l6', 't5.l10'],
     requires: ['t5.prefix-cache-keys', 't2.eviction-policies'],
+    labs: ['radix-cache'],
     since,
   },
   {
@@ -237,6 +239,7 @@ export const T5_KCS: readonly Kc[] = [
     requires: [KC.decodeBandwidth, KC.kvCapacity, KC.admissionScheduling],
     // raw tokens per second is not goodput: the "10,000 tok/s with no latency numbers" slip (t7.l1)
     confusable: [KC.goodput],
+    labs: ['batching-scheduler'],
     since,
   },
   {
@@ -247,6 +250,7 @@ export const T5_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t5.l7'],
     requires: [KC.batchingThroughput, KC.admissionScheduling],
+    labs: ['batching-scheduler'],
     since,
   },
   {
@@ -256,7 +260,8 @@ export const T5_KCS: readonly Kc[] = [
     track: 't5',
     kind: 'procedure',
     lessons: ['t5.l7'],
-    requires: [KC.continuousBatching, KC.kvCapacity],
+    requires: [KC.continuousBatching, KC.kvCapacity, KC.enumsOptionResult],
+    labs: ['batching-scheduler'],
     since,
   },
   {
@@ -267,6 +272,7 @@ export const T5_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t5.l7'],
     requires: [KC.continuousBatching],
+    labs: ['batching-scheduler'],
     since,
   },
 

@@ -443,3 +443,36 @@ describe('prototype-unsafe ids (fold and view cope even if validation is bypasse
     })
   }
 })
+
+describe('aggregate v4: proved and labFleetOk (contract-v33.test.ts has the full rules)', () => {
+  const proveEvt = (lab: string, at: string, extra: Record<string, unknown> = {}) =>
+    evt('prove', `prove:${lab}`, at, { provenance: 'proved', wasmSha256: 'ab'.repeat(32), data: { v: 2, qid: 'q', kcs: [], answer: 1, actual: 1, calls: 1 }, ...extra })
+
+  test('the empty aggregate has both maps, and a single-event fold adds to them without touching its input', () => {
+    const empty = emptyAggregate()
+    expect(empty.proved).toEqual({})
+    expect(empty.labFleetOk).toEqual({})
+    const next = fold(empty, proveEvt('lab-a', T2))
+    expect(next.proved).toEqual({ 'lab-a': T2 })
+    expect(empty.proved).toEqual({})
+  })
+
+  test('proved is the min instant, whatever order the events arrive in; derive and fold agree (I7)', () => {
+    const events = [proveEvt('lab-a', T3), proveEvt('lab-a', T1), proveEvt('lab-a', T2)]
+    const folded = events.reduce(fold, emptyAggregate())
+    expect(folded.proved).toEqual({ 'lab-a': T1 })
+    expect(derive(events).proved).toEqual(folded.proved)
+    expect(derive([...events].reverse()).proved).toEqual(folded.proved)
+  })
+
+  test('labFleetOk credits the lab of a lone component on an ok unseen engine run, and nothing else', () => {
+    const run = (components: unknown[], extra: Record<string, unknown> = {}, ref = 'fleet:engine') =>
+      evt('fleet-run', ref, T1, { provenance: 'unseen', data: { v: 1, mode: ref.slice(6), components, seeds: 'fresh', goodput: 40, refGoodput: 41 }, ...extra })
+    const part = (labId: string) => ({ slot: 'scheduler', labId, sha256: 'cd'.repeat(32) })
+    expect(derive([run([part('batching-scheduler')])]).labFleetOk).toEqual({ 'batching-scheduler': true })
+    expect(derive([run([part('a'), part('b')])]).labFleetOk).toEqual({})
+    expect(derive([run([part('a')], { ok: false })]).labFleetOk).toEqual({})
+    expect(derive([run([part('a')], { provenance: 'practice' })]).labFleetOk).toEqual({})
+    expect(derive([run([part('a')], {}, 'fleet:act1')]).labFleetOk).toEqual({})
+  })
+})

@@ -11,6 +11,8 @@ import HandoffButton from './HandoffButton'
 const ChangeCards = lazy(() => import('@/components/changes/ChangeCards'))
 // The Fleet Daily card (wave-2.md §9.7) is its own chunk, so /today stays within its closure budget.
 const DailyCard = lazy(() => import('@/components/daily/DailyCard'))
+// The 30-day return (wave-3.md §7.5) is a stub until 3b-04; its own chunk, so /today's static closure does not grow.
+const ProveReturnCard = lazy(() => import('@/components/learner/ProveReturnCard'))
 
 /** "N things you learned have changed", with the cards behind a disclosure. Nothing at all when nothing has changed. */
 function Changes() {
@@ -87,6 +89,7 @@ export default function DoneCard({ tally, calibration, onKeepGoing, upNext, offe
       {upNext && <UpNextCard rec={upNext} offerPlacement={offerPlacement} as="h3" />}
       <Suspense fallback={null}>
         <DailyCard variant="done" />
+        <ProveReturnCard variant="done" />
       </Suspense>
       <Changes />
       <HandoffButton pending={pendingHandoff} />
