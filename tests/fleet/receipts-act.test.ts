@@ -341,6 +341,24 @@ describe('the keyword lists, word counts and screenshot are gone', () => {
     expect(src).toContain("setEvidence('engine', { analysis: next })")
     expect(src).toContain("setEvidence('fleet', { analysis: next })")
   })
+
+  test('the evidence setter takes no screenshot any more; evidence stored before keeps its fields', () => {
+    const src = read('../../src/lib/progress.ts')
+    const setter = src.slice(src.indexOf('  setFleetWeekEvidence: ('), src.indexOf(') => void', src.indexOf('  setFleetWeekEvidence: (')))
+    expect(setter).toContain('analysis?: string')
+    expect(setter).not.toContain('screenshot')
+    // the stored shape (FleetWeekProgress) still reads what older events hold
+    expect(src.slice(src.indexOf('export interface FleetWeekProgress'), src.indexOf('export type CodeLang'))).toContain('screenshotName?: string')
+  })
+})
+
+describe('Act III says which number is modelled', () => {
+  test('the tokens-served column is a modelled estimate (completed × 56 + completed × 288 × 0.6), and its header and its name say so', () => {
+    const page = readFileSync(new URL('../../src/pages/FleetWeek.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('<th className="p-2.5" aria-label="tokens served (modelled), an estimate, not a measured count">tokens served (modelled)</th>')
+    expect(page).not.toContain('<th className="p-2.5">tokens served</th>')
+    expect(readFileSync(new URL('../../src/lib/fleet-week.ts', import.meta.url), 'utf8')).toContain('const tokensOut = stats.completed * 56 + stats.completed * 288 * 0.6')
+  })
 })
 
 /* ------------------------------------------------------------------ */

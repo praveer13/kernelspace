@@ -591,7 +591,7 @@ function ActBusiness() {
             <table className="w-full font-mono text-[12px]">
               <thead>
                 <tr className="border-b border-line text-left text-text-3">
-                  <th className="p-2.5">option</th><th className="p-2.5">$/hr</th><th className="p-2.5">goodput</th><th className="p-2.5">SLO-met</th><th className="p-2.5">tokens served</th><th className="p-2.5">$/Mtok (sim)</th>
+                  <th className="p-2.5">option</th><th className="p-2.5">$/hr</th><th className="p-2.5">goodput</th><th className="p-2.5">SLO-met</th><th className="p-2.5" aria-label="tokens served (modelled), an estimate, not a measured count">tokens served (modelled)</th><th className="p-2.5">$/Mtok (sim)</th>
                 </tr>
               </thead>
               <tbody>

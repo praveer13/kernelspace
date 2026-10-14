@@ -151,10 +151,8 @@ export interface ProgressState extends LedgerFacadeState, LedgerFacadeActions {
   ) => void
   completeFleetWeekAct: (actId: string, score: number, meta?: FleetActMeta) => void
   setFleetWeekDoc: (text: string) => void
-  setFleetWeekEvidence: (
-    actId: string,
-    patch: { analysis?: string; screenshotName?: string; screenshotBytes?: number; attempted?: string[]; credited?: string[] },
-  ) => void
+  /** Nothing writes a screenshot since 3b-05 (D14); evidence stored before then keeps its fields and still reads. */
+  setFleetWeekEvidence: (actId: string, patch: { analysis?: string; attempted?: string[]; credited?: string[] }) => void
   completeCapstoneStep: (stepId: string, stepIndex: number) => void
   setCapstoneMetrics: (metrics: CapstoneMetrics) => void
   unlockAchievement: (id: string) => void
