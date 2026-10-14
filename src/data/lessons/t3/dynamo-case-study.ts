@@ -116,6 +116,8 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
             'The argument is where properties matter, not that one language is faster everywhere. Python stays for low-rate planning; the boundary follows the hot path, not a rewrite backlog.',
             'Kernel launches go through the CUDA runtime, a C API reachable from any language. An async executor schedules host-side tasks; it does not run or drive GPU work itself.',
           ],
+          kcs: ['t3.data-plane-requirements'],
+          miss: ['t3.python-cannot-drive-accelerators', '', 't3.rust-is-faster-everywhere', 't3.executor-drives-gpu-kernels'],
         },
         {
           q: 'The strongest argument against C++ for Dynamo\'s data plane was…',
@@ -134,6 +136,8 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
             'Asio and C++20 coroutines give C++ capable async I/O. The case against C++ here is memory safety, not missing event-loop machinery.',
             'CUDA and the RDMA libraries are C or C++ themselves, so C++ links to them with no wrapper. Interop favours C++, which makes safety the deciding factor.',
           ],
+          kcs: ['t3.data-plane-requirements'],
+          miss: ['t3.cpp-is-slower-than-rust', '', 't3.cpp-lacks-async-io', 't3.cpp-cannot-link-accelerator-libraries'],
         },
         {
           q: 'KV-aware routing in Dynamo is best mapped to which course concept?',
@@ -152,6 +156,8 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
             'Least-connections optimises load only and is blind to cache contents, so a request can land on a worker with none of its prefix and redo the prefill.',
             'Work stealing moves queued work toward idle workers, trading locality for balance. KV-aware routing picks a worker up front because it holds the blocks, not because it is idle.',
           ],
+          kcs: ['t3.data-plane-requirements'],
+          miss: ['t3.kv-routing-is-prefix-hashing', '', 't3.kv-routing-is-least-connections', 't3.kv-routing-is-work-stealing'],
         },
         {
           q: 'Which Rust features map most directly onto Dynamo\'s data-plane requirements?',
@@ -170,10 +176,62 @@ You've now finished T3. T4 goes underneath all of this, to the machine the model
             'The borrow checker covers memory safety only. Handling 100k connections, avoiding copies and calling CUDA or RDMA libraries still depend on tokio, Bytes and the C ABI.',
             'There is no pure-Rust CUDA or RDMA stack to swap in. The data plane calls the existing C and C++ libraries through FFI; the registry helps only with ordinary dependencies.',
           ],
+          kcs: ['t3.data-plane-requirements'],
+          miss: ['t3.rust-needs-macros-and-reflection', '', 't3.borrow-checker-alone-suffices', 't3.cargo-replaces-cuda-libraries'],
+        },
+        {
+          q: 'A decode worker\'s intake queue is full while requests keep arriving. Which response is backpressure?',
+          options: [
+            'Grow the queue without limit, so every request is accepted and each one waits longer as the backlog builds up',
+            'Drop the oldest queued requests silently, so the queue stays short and clients learn of it by timing out',
+            'Make the push fail or wait so the caller has to retry, shed or reroute while the delay is still small',
+            'Add a retry loop inside the worker, so it polls the full queue until a slot frees up for the next one',
+          ],
+          correct: [2],
+          explanation:
+            'Backpressure is a bounded queue that says no: the push fails or waits, so overload is felt by the producer, which can retry, shed or reroute. It is admission control with the limit built into the queue\'s type.',
+          why: [
+            'An unbounded queue hides overload: memory and latency grow until something else fails. Backpressure means the limit is visible to the producer, not absorbed by a growing backlog.',
+            'Silent drops discard work without telling the producer, so nothing upstream slows down or reroutes. Backpressure is a signal the sender can act on, such as an Err or a wait.',
+            'Right: a bounded queue whose push returns an error or blocks tells the producer to retry, shed or reroute while the delay is still small. Overload waits upstream instead of exhausting memory.',
+            'Spinning on the consumer side burns a core and tells no sender anything. The signal has to travel back to the producer, which is what a bounded push does.',
+          ],
+          kcs: ['t3.backpressure', 't2.admission-scheduling'],
+          miss: ['t3.unbounded-queue-is-backpressure', 't3.silent-drop-is-backpressure', '', 't3.worker-spin-is-backpressure'],
         },
       ],
     },
   ],
+  kcs: ['t3.data-plane-requirements', 't3.backpressure'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'A decode worker saturates while the router keeps sending. Explain how a bounded queue turns that overload into backpressure.',
+        model:
+          'With an unbounded queue the backlog grows until memory or latency fails. With a bounded queue, push returns an error or waits when it is full, so the router learns at once that the worker is saturated. It can retry, shed load or reroute to another worker, so overload is handled upstream before tail latency explodes.',
+        ideas: [
+          'An unbounded queue hides overload until memory or latency fails',
+          'A bounded push returns an error or waits when full, so the sender learns immediately',
+          'The sender can then retry, shed or reroute before tail latency explodes',
+        ],
+        kcs: ['t3.backpressure', 't2.admission-scheduling'],
+      },
+      {
+        prompt:
+          'Split a serving system into a data plane and a control plane, and say what each one needs from its language.',
+        model:
+          'The data plane moves bulk bytes at millions of decisions a second under tight tail budgets, so it needs no GC pauses, control over layout and memory safety: Rust. The control plane, the planner and orchestration, decides hundreds of times a second, so Python\'s ergonomics win. The boundary follows the measured hot path.',
+        ideas: [
+          'The data plane moves bulk bytes at high rates under tight tail budgets, so it needs no pauses and memory safety',
+          'The control plane decides at low rates, so ergonomics matter more than raw speed',
+          'Draw the boundary at the measured hot path',
+        ],
+        kcs: ['t3.data-plane-requirements'],
+      },
+    ],
+  },
 }
 
 export default lesson

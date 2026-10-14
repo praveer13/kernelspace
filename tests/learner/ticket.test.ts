@@ -427,6 +427,130 @@ describe('planTicket: spiral', () => {
   })
 })
 
+/* ------------------------------ track-end spirals (spec §6.2, task 2a-17) ------------------------------ */
+
+describe('earlierKcsOf and the spirals of T3-T7', () => {
+  // fixture lessons shaped like the five track-end spirals; the real ones are checked in 2a-32, after content lands
+  const SPIRALS = [
+    { id: 't3.l7', track: 't3' },
+    { id: 't4.l7', track: 't4' },
+    { id: 't5.l10', track: 't5' },
+    { id: 't6.l10', track: 't6' },
+    { id: 't7.l5', track: 't7' },
+  ] as const
+  const TRACKS = ['t0', 't1', 't2', 't3', 't4', 't5', 't6', 't7'] as const
+  const rankOf = (track: string) => TRACKS.indexOf(track as (typeof TRACKS)[number])
+  const firstPos = (kc: { lessons: string[] }) => {
+    const m = /^t(\d)\.l(\d+)$/.exec(kc.lessons[0] ?? '')
+    return m ? Number(m[1]) * 100 + Number(m[2]) : null
+  }
+  const kcsOfItem = (it: PlayableItem): string[] =>
+    it.source === 'gen' ? it.inst.kcs : it.source === 'quiz' ? it.kcs : it.source === 'cr' ? it.cr.kcs : it.item.kcs
+
+  let multiPool: TicketPool
+  beforeAll(async () => {
+    const fams = new Map<string, Gen>()
+    for (const f of ['frag', 'roofline', 'kv']) fams.set(f, await loadFamily(f))
+    multiPool = makeGenPool(fams, (kc) => kcById(kc)?.gen ?? [])
+  })
+
+  /** The spiral's lesson: the last three KCs of its track as its own, and two authored items per earlier track. */
+  const fixture = (id: string, track: string) => {
+    const own = KCS.filter((k) => k.track === track && k.lessons[0]?.startsWith(`${track}.`))
+      .slice(-3)
+      .map((k) => k.id)
+    const earlier = earlierKcsOf(id, KCS).filter((kc) => !own.includes(kc))
+    const spiral = TRACKS.slice(0, rankOf(track) + 1).flatMap((tr) =>
+      earlier
+        .filter((kc) => kcById(kc)?.track === tr)
+        .slice(0, 2)
+        .map((kc) => authored(`${tr}.sp.${kc.split('.')[1]}`, [kc])),
+    )
+    return { own, earlier, spiral, lesson: lessonOf(id, own, 6, 2, { form: 'spiral', spiral }) }
+  }
+
+  test('t2.l7 draws exactly the T0-T2 KCs taught before it, as before the generalization', () => {
+    const was = KCS.filter((k) => {
+      const first = firstPos(k)
+      return first !== null && first < 207 && ['t0', 't1', 't2'].includes(k.track)
+    }).map((k) => k.id)
+    expect(earlierKcsOf('t2.l7', KCS)).toEqual(was)
+  })
+
+  for (const { id, track } of SPIRALS) {
+    describe(id, () => {
+      const { own, earlier, spiral, lesson } = fixture(id, track)
+
+      test('earlierKcsOf covers its own track and every track before it, and nothing later or in R', () => {
+        const tracks = new Set(earlier.map((kc) => kcById(kc)?.track))
+        for (const tr of TRACKS.slice(0, rankOf(track))) expect(tracks.has(tr)).toBe(true)
+        for (const kc of earlierKcsOf(id, KCS)) {
+          const k = kcById(kc)
+          expect(k).toBeDefined()
+          expect(rankOf(k?.track ?? '')).toBeGreaterThanOrEqual(0)
+          expect(rankOf(k?.track ?? '')).toBeLessThanOrEqual(rankOf(track))
+          expect(firstPos(k as { lessons: string[] }) ?? Infinity).toBeLessThan(Number(/^t(\d)/.exec(id)?.[1]) * 100 + Number(/l(\d+)$/.exec(id)?.[1]))
+        }
+        // the previous track is the one T2 never reached
+        if (rankOf(track) >= 3) expect(earlierKcsOf(id, KCS).some((kc) => kcById(kc)?.track === 't3')).toBe(true)
+      })
+
+      test('plans 8 items: 4 on its own KCs, 4 on earlier ones, 2 or more non-MCQ last, 6 of 8 to pass', () => {
+        expect(own.length).toBeGreaterThan(0)
+        for (const seed of [1, 7, 21, 99, 4242]) {
+          const plan = mustPlan(planTicket(lesson, content(multiPool, { earlier }), [], seed))
+          expect(plan.form).toBe('spiral')
+          expect(plan.passRule).toEqual(SPIRAL_RULE)
+          expect(plan.items).toHaveLength(8)
+          const flags = plan.items.map(isNonMcq)
+          expect(flags.filter(Boolean).length).toBeGreaterThanOrEqual(2)
+          const firstNon = flags.indexOf(true)
+          expect(flags.slice(firstNon).every(Boolean)).toBe(true)
+          expect(plan.nonMcqIndex).toBe(firstNon)
+          expect(new Set(refs(plan)).size).toBe(8)
+          expect(plan.items.filter((it) => kcsOfItem(it).every((kc) => own.includes(kc)))).toHaveLength(4)
+          expect(plan.items.filter((it) => kcsOfItem(it).every((kc) => earlier.includes(kc)))).toHaveLength(4)
+          // deterministic per seed
+          expect(refs(mustPlan(planTicket(lesson, content(multiPool, { earlier }), [], seed)))).toEqual(refs(plan))
+        }
+      })
+
+      test('the lowest-recall KC of the previous track leads the earlier items', () => {
+        const prev = earlier.filter((kc) => spiral.some((s) => s.kcs[0] === kc)).filter((kc) => kcById(kc)?.track === TRACKS[rankOf(track) - 1])
+        expect(prev.length).toBeGreaterThan(0)
+        const recall = (kc: string) => (kc === prev[0] ? 0.1 : null)
+        const plan = mustPlan(planTicket(lesson, content(multiPool, { earlier, recall }), [], 5))
+        const have = plan.items.flatMap((it) => (it.source === 'item' ? [it.item.kcs[0]] : it.source === 'gen' ? it.inst.kcs : []))
+        expect(have).toContain(prev[0])
+      })
+    })
+  }
+
+  test('a roofline KC of T4 is a non-MCQ for t6.l10 and t7.l5, and never reaches t3.l7', () => {
+    const ridge = 't4.ridge-point'
+    const recall = (kc: string) => (kc === ridge ? 0.1 : null)
+    for (const { id, track } of SPIRALS.filter((s) => rankOf(s.track) >= 4)) {
+      const { earlier, lesson } = fixture(id, track)
+      expect(earlier).toContain(ridge)
+      for (const seed of [3, 8, 13]) {
+        const plan = mustPlan(planTicket(lesson, content(multiPool, { earlier, recall }), [], seed))
+        expect(plan.items.some((it) => it.source === 'gen' && it.inst.family === 'roofline' && isNonMcq(it))).toBe(true)
+      }
+    }
+    const t3 = fixture('t3.l7', 't3')
+    expect(t3.earlier).not.toContain(ridge)
+    for (let seed = 1; seed <= 20; seed++) {
+      const plan = mustPlan(planTicket(t3.lesson, content(multiPool, { earlier: t3.earlier, recall }), [], seed))
+      expect(plan.items.some((it) => it.source === 'gen' && ['roofline', 'kv'].includes(it.inst.family))).toBe(false)
+    }
+  })
+
+  test('a spiral whose earlier pool cannot be filled still plans null, so the lesson keeps its checkpoint', () => {
+    const { earlier, lesson } = fixture('t5.l10', 't5')
+    expect(planTicket({ ...lesson, ticket: { form: 'spiral', cr: lesson.ticket?.cr, spiral: [] } }, content(NO_POOL, { earlier }), [], 1)).toBeNull()
+  })
+})
+
 /* ------------------------------ the ledger write ------------------------------ */
 
 describe('ticketAttempt', () => {

@@ -38,6 +38,12 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
       ],
     },
     {
+      type: 'item',
+      title: 'Will it fit? Weights and GPUs at NVFP4',
+      family: 'memory',
+      variants: ['fp4-fit', 'weight-bytes'],
+    },
+    {
       type: 'callout',
       variant: 'analogy',
       md: `Blackwell is your **DDR4→DDR5 + L3-doubling upgrade**, but the business effect is bigger: when bytes-per-token fall ~1.8× and bandwidth rises ~2.4×, the *same SLO* is met with a fraction of the fleet — or the same fleet meets a SLO that was previously fantasy. This is the T7 theme arriving early: hardware generations are no longer 20% events; they change which architectures are affordable (Blackwell's NVL72 does not invent wide-EP decode, which DeepSeek ran over RDMA on Hopper; it makes it cheaper to run).`,
@@ -62,6 +68,7 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
             'Microscaling narrows the accuracy gap but 4 bits still carry less precision than FP8. FP4 trades a small accuracy risk for bytes, and recipes keep outlier-sensitive tensors wider to protect quality.',
             'FP4 adds block scales and extra handling in the kernels, so they get more intricate, not simpler. The payoff is fewer bytes moved, not less code.',
           ],
+          kcs: ['t6.fp4-capacity', 't4.decode-bandwidth'],
         },
         {
           q: 'GB200 NVL72 changes architecture (not just speed) because…',
@@ -80,6 +87,7 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
             'Cooling affects sustained clocks, a modest per-GPU effect. The topology change comes from the NVLink domain, which turns cross-node RDMA hops into in-domain hops.',
             'Host memory extends capacity but at far lower bandwidth than HBM, so it is a tier, not a fix for per-layer collectives. The change that matters is the 72-GPU NVLink domain.',
           ],
+          kcs: ['t6.nvlink-domain'],
         },
         {
           q: 'Production quantization recipes on Blackwell are…',
@@ -98,6 +106,7 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
             'One per-tensor scale lets outliers wreck 4-bit accuracy; the per-block scale is what makes 4 bits survivable. Blackwell\'s native path is NVFP4, not INT4 everywhere.',
             'Weight-only W4A16 is one recipe, but NVIDIA\'s DeepSeek-R1-FP4 card also quantizes the activations of the linear operators to FP4. Activations are a risk to manage, not a ban.',
           ],
+          kcs: ['t6.fp4-capacity'],
         },
         {
           q: 'Re-deriving T4\'s roofline for B200: the decode rate roughly…',
@@ -116,6 +125,26 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
             'The scales add about 0.5 bit per weight, so FP4 saves ~1.8× rather than 2×, still a net gain. Bandwidth also rose, so the rate cannot fall.',
             'Decode has low arithmetic intensity, so extra FLOPs sit idle waiting for bytes. Peak TFLOPS help prefill and large batches, not the bandwidth-bound decode path.',
           ],
+          kcs: ['t4.decode-bandwidth', 't6.fp4-capacity'],
+        },
+        {
+          q: 'A layout needs TP=16. On 8-GPU Hopper nodes versus one GB200 NVL72 rack, what changes?',
+          options: [
+            'On Hopper the 16 GPUs span two nodes, so TP\'s per-layer all-reduce leaves NVLink for RDMA, while in the rack all 16 GPUs stay on NVLink',
+            'The rack raises TP\'s per-layer traffic about nine times, since 72 GPUs exchange more data, so TP=16 needs a larger batch there to pay off',
+            'Nothing changes for TP, since NVL72 only enlarges the HBM on each GPU, and the layout and its collectives run just as they did',
+            'The rack lets TP skip its all-reduce, since 72 GPUs share one address space, and each layer\'s reduction becomes plain loads and stores',
+          ],
+          correct: [0],
+          explanation:
+            'TP\'s all-reduce sits on every layer\'s critical path, so it needs the NVLink tier, which used to end at about 8 GPUs. TP=16 on Hopper crosses RDMA between two nodes; inside an NVL72 rack all 16 GPUs share NVLink. The rack makes wide groups cheaper; the traffic and the all-reduce are unchanged.',
+          why: [
+            'Right: TP=16 does not fit one 8-GPU node, so its per-layer all-reduce drops to RDMA on Hopper. In a 72-GPU NVLink domain the whole group stays on the fast tier.',
+            'TP\'s traffic depends on the group size and the activations, not on how many other GPUs sit in the domain. The change is where the traffic travels, not how much of it there is.',
+            'The change is the NVLink domain size (72 GPUs against about 8), not HBM capacity. That domain decides whether a TP group\'s all-reduce stays on the fast tier.',
+            'TP still reduces partial results every layer; a larger NVLink domain makes that reduction faster but does not remove it. A shared address space is not what lets the group skip a collective.',
+          ],
+          kcs: ['t6.nvlink-domain', 't6.parallelism-composition'],
         },
       ],
     },
@@ -125,6 +154,36 @@ Where it bites: **activations and outliers**, same as T4.L7 but with less mantis
       md: `The roofline is vendor-neutral, and so is this lesson's question: "bandwidth and capacity per dollar?" MI300X/MI355X compete exactly there — 192–288 GB HBM3e, and AMD's inference path of choice is SGLang with aiter kernels (their published claim: MI355X slightly cheaper per token than B200 TRT-LLM on specific MoE configs, 2026). The framework from T6.L4 and this lesson — bytes, bandwidth, interconnect — is what lets you evaluate that claim in a meeting instead of believing it. InferenceX (formerly InferenceMAX), covered in T7.L2, publishes the measured versions nightly.`,
     },
   ],
+  kcs: ['t6.fp4-capacity', 't6.nvlink-domain'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'NVFP4 is called a 4-bit format, yet its weights are about 1.8x smaller than FP8, not 2x. Explain, and say what that does to a 671B model.',
+        model:
+          'Each block of 16 weights carries an FP8 scale, about half a bit more per weight, so NVFP4 costs about 4.5 bits and 8 ÷ 4.5 is about 1.8. A 671B model then holds about 377 GB of weights, roughly a quarter of an 8×B200 node\'s 1,440 GB, leaving the rest for KV cache.',
+        ideas: [
+          'Each 16-weight block carries an FP8 scale, so NVFP4 costs about 4.5 bits per weight, not 4',
+          'That makes the weights about 1.8x smaller than FP8 (8 ÷ 4.5), not 2x',
+          '671B at 4.5 bits is about 377 GB, a quarter of an 8×B200 node, so the rest of HBM goes to KV cache',
+        ],
+        kcs: ['t6.fp4-capacity'],
+      },
+      {
+        prompt:
+          'What does a 72-GPU NVLink domain change about a layout, and what did it not make possible?',
+        model:
+          'Groups whose traffic sits on every layer, such as TP, EP and CP, can span a rack at NVLink speed instead of dropping to RDMA beyond about 8 GPUs. That makes wide groups cheaper. It did not make them possible: wide EP already ran over RDMA on Hopper, with communication overlapped with compute.',
+        ideas: [
+          'TP, EP and CP groups can span a rack on NVLink instead of dropping to RDMA beyond about 8 GPUs',
+          'That makes wide groups cheaper to run',
+          'It did not make them possible: wide EP and CP already ran over RDMA with overlap',
+        ],
+        kcs: ['t6.nvlink-domain'],
+      },
+    ],
+  },
 }
 
 export default lesson

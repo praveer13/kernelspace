@@ -68,6 +68,12 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
 4. **Route long context to CP groups** — CP is per-request, so route by prompt length: short requests to dense/DP workers, long ones to CP-capable groups. Your length-based routing instinct from sharding by tenant size — same move.`,
     },
     {
+      type: 'item',
+      title: 'Weights per GPU, new layouts',
+      family: 'memory',
+      variants: ['shard'],
+    },
+    {
       type: 'callout',
       variant: 'analogy',
       md: `The zoo is your **database topology decision tree** wearing different names. TP ≈ partitioning a single index (needs the fat local bus), PP ≈ staging an ETL pipeline (tolerates slow links, pays in bubbles/latency), DP ≈ read replicas (free until you run out of memory), EP ≈ sharding by key range with a router (hot-key problems included), CP ≈ partitioning one giant tenant's data across the cluster because no single node holds it. The scarcity you are out of picks the axis; the interconnect prices it.`,
@@ -92,6 +98,7 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
             'That describes context parallelism. TP shards each matmul and its heads, and its traffic is activation all-reduce; the issue is how often it fires, not ring attention.',
             'TP shards the weights, it does not replicate them. Replicas are DP, and inference replicas need no per-token synchronization.',
           ],
+          kcs: ['t6.parallelism-composition'],
         },
         {
           q: 'Context parallelism exists because…',
@@ -110,6 +117,7 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
             'CP splits the sequence for attention; EP splits experts for the FFN. MoE models can use both, and EP still needs its all-to-all.',
             'Ring attention is exact, not sparse: every query attends to every key, with online-softmax accumulators merged. It divides the work across GPUs rather than approximating attention.',
           ],
+          kcs: ['t6.context-parallelism'],
         },
         {
           q: 'EP144 × DP144 (DeepSeek decode) means…',
@@ -128,6 +136,7 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
             'A 61-layer model cannot form a 144-stage pipeline, and EP and DP name expert and batch axes, not stages.',
             'Then there would be no expert parallelism: 671B parameters do not fit on one GPU, and the all-to-all exists because experts are split across devices.',
           ],
+          kcs: ['t6.parallelism-composition', 't6.parallel-memory'],
         },
         {
           q: 'In the composition discipline, DP is filled in last because…',
@@ -146,6 +155,26 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
             'Serving batches form dynamically per replica, so no global batch size has to be fixed in advance. The ordering follows capacity first, then hot-path cost.',
             'Inference replicas share no per-token state. Synchronization is a training concern (gradient all-reduce); DP is last because it is the free filler axis.',
           ],
+          kcs: ['t6.parallelism-composition'],
+        },
+        {
+          q: 'In ring attention, what circulates around a context-parallel group?',
+          options: [
+            'Slices of the weight matrices, passed neighbor to neighbor, letting each GPU multiply against every layer without holding the model',
+            'Key and value chunks, passed neighbor to neighbor, letting every query meet every key without one GPU holding it all',
+            'Expert outputs, returned along the ring to their token homes, letting each GPU combine its experts\' results without an all-to-all',
+            'Finished attention outputs, summed around the ring after every layer, letting each GPU agree on one answer before it moves on',
+          ],
+          correct: [1],
+          explanation:
+            'CP shards one request\'s sequence. Each GPU keeps a slice of K/V and ring attention rotates the K/V chunks around the group, so every query meets every key; softmax accumulators are merged at the end, which keeps the result exact, and each pass overlaps attention compute.',
+          why: [
+            'Weights are sharded by TP, PP and EP, not by CP. CP splits one request\'s sequence, so what travels is that sequence\'s K/V and the weights stay put.',
+            'Right: each GPU holds a slice of the sequence\'s K and V, and the chunks rotate so every query block sees every key block. Softmax accumulators merge at the end, so the result is exact.',
+            'Expert outputs return in EP\'s combine all-to-all, a different axis. CP splits the sequence for attention, and an MoE model can use both axes at once.',
+            'A per-layer sum of partial results is TP\'s all-reduce. Ring attention passes K/V chunks and merges softmax accumulators once; it runs no agreement step after every layer.',
+          ],
+          kcs: ['t6.context-parallelism'],
         },
       ],
     },
@@ -155,6 +184,36 @@ Production configs read like (DP × EP × CP × TP per phase), and the design pr
       md: `Three production configs to recite: **DeepSeek decode** — EP144×DP144, dual-batch overlap, FP8 dispatch (DeepSeek open-infra, Feb 2025). **Meta long context** — CP over 16–32 H100 hosts, 1M prefill <1 min, moving to N-D parallelism + P/D disaggregation (engineering.fb.com, Oct 2025). **Kimi K2** — 128×H200, P/D disaggregation + large-scale EP, 224k/288k tok/s prefill/decode (lmsys.org, Jul 2025). Each is a point in the five-axis space chosen by a different scarcity: expert balance, sequence length, and fleet-scale goodput respectively.`,
     },
   ],
+  kcs: ['t6.parallel-memory', 't6.parallelism-composition', 't6.context-parallelism'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Lay out TP, EP and DP for a large MoE in the order you would choose them, and say what each axis trades.',
+        model:
+          'Fit the model first: TP and EP widths come from capacity, with TP inside one NVLink domain because its all-reduce sits on every layer\'s critical path. Price EP\'s all-to-all next; it can cross RDMA when overlapped with compute. Fill with DP last: replicas cost nothing per token, so leftover capacity multiplies the unit.',
+        ideas: [
+          'Fit the model first: TP and EP widths come from capacity, and TP stays inside an NVLink domain',
+          'Price the per-layer traffic next: EP\'s all-to-all can cross RDMA when overlapped with compute',
+          'Fill with DP last, since replicas cost nothing per token',
+        ],
+        kcs: ['t6.parallelism-composition'],
+      },
+      {
+        prompt:
+          'Why does a one-million-token request need context parallelism, and what moves around the ring?',
+        model:
+          'Its KV cache and prefill FLOPs exceed one GPU, so the sequence is split across a group. Each GPU holds a slice of K and V, and ring attention passes the K/V chunks around the group so every query sees every key. Softmax accumulators are merged at the end, and each pass overlaps with attention compute.',
+        ideas: [
+          'One request\'s KV cache and prefill FLOPs exceed a single GPU, so its sequence is split across a group',
+          'Ring attention passes K/V chunks around the ring so every query sees every key',
+          'Softmax accumulators are merged at the end, and each pass overlaps with attention compute',
+        ],
+        kcs: ['t6.context-parallelism'],
+      },
+    ],
+  },
 }
 
 export default lesson

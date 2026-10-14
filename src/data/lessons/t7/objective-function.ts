@@ -44,6 +44,20 @@ The engine's control loop, one line: **batching puts throughput and latency on a
       md: `You've run this objective function before: it's **"QPS at p99 < 200 ms" from every capacity review you've sat in** — with one twist. Your web service degraded gracefully (everyone gets slightly slower); an inference engine has a *cliff* — admission denied is a 429, and memory pressure triggers preemption, so the tail doesn't stretch, it snaps. The metric discipline is identical; the failure geometry is sharper.`,
     },
     {
+      type: 'prose',
+      md: `## Counting goodput, and the error budget it spends
+
+Counting goodput is mechanical: for every request in a window, check **both** bounds, count the requests that pass both, and divide by the window's length. Take a hypothetical 10 s window with 40 requests, where 31 meet TTFT < 2 s, 34 meet TPOT < 100 ms and 29 meet both. Goodput is 29 ÷ 10 = **2.9 req/s**. Counting only the TTFT bound claims 3.1 req/s, and counting every request claims 4.0.
+
+An SLO is also a budget. A **99% SLO** lets 1 request in 100 miss, and that 1% is the **error budget**: over a hypothetical 1,000,000 requests in a month it is 10,000 misses, spent on deploys, spikes and incidents. What matters day to day is the **burn rate**, the observed miss fraction divided by the budgeted one. If 4% of requests miss against a 1% budget, the burn rate is 4 and a 30-day budget is gone in 30 ÷ 4 = 7.5 days. A burn rate of 1 spends it exactly on schedule. Alert on the burn rate over a window, not on one bad minute.`,
+    },
+    {
+      type: 'item',
+      title: 'Count what met the SLO',
+      family: 'goodput',
+      variants: ['slo-count', 'goodput-rate'],
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -63,6 +77,8 @@ The engine's control loop, one line: **batching puts throughput and latency on a
             'Utilization measures busy hardware, not outcomes. A GPU kept saturated by a deep queue is fully utilized while delivering almost no requests inside the SLO.',
             'Success status says nothing about timing. A 200 that arrives after the TTFT or TPOT budget has been blown is a failure from the user\'s side and is not goodput.',
           ],
+          kcs: ['t7.goodput'],
+          miss: ['t7.goodput-is-throughput', '', 't7.goodput-is-utilization', 't7.goodput-is-success-rate'],
         },
         {
           q: 'A vendor page shows "10,000 tok/s" with no latency numbers. The right reaction is…',
@@ -81,6 +97,8 @@ The engine's control loop, one line: **batching puts throughput and latency on a
             'Dividing by GPU count changes the unit, not the missing context. Per-GPU throughput is still undefined without the latency it was reached at, so vendors remain incomparable.',
             'Naming the model fixes one variable only. The same model gives very different tok/s at batch 1 and batch 256, so the operating point still decides the number.',
           ],
+          kcs: ['t7.goodput', 't7.tail-percentiles'],
+          miss: ['t7.peak-toks-is-capacity', '', 't7.per-gpu-fixes-missing-latency', 't7.model-name-fixes-toks'],
         },
         {
           q: 'Throughput and latency sit on a seesaw: tokens per second per GPU rise with load while TTFT and TPOT rise too. The coupling comes from…',
@@ -99,6 +117,8 @@ The engine's control loop, one line: **batching puts throughput and latency on a
             'Right: batch size is the dial. Larger batches amortize weight reads and raise throughput, but they queue requests longer and stretch each step, so TTFT and TPOT rise as cost per token falls.',
             'Quantization trades accuracy, not throughput against latency. Fewer weight bytes speed decode and low-precision math (FP8, FP4) speeds prefill, so it moves the frontier outward instead of along it.',
           ],
+          kcs: ['t7.goodput', 't5.batching-throughput'],
+          miss: ['t7.seesaw-is-tokenizer', 't7.seesaw-is-collectives', '', 't7.seesaw-is-quantization'],
         },
         {
           q: 'Why design at p50 but contract at p95?',
@@ -117,6 +137,28 @@ The engine's control loop, one line: **batching puts throughput and latency on a
             'In LLM serving the tail is mostly the engine\'s own doing: queueing, preemption and long prompts. The convoy effects of T2 and lab 06 live exactly in that slowest slice.',
             'They diverge sharply near the knee: the median can look healthy while the tail snaps. A system that passes at p50 can still miss p95 by a wide margin.',
           ],
+          kcs: ['t7.tail-percentiles'],
+          miss: ['t7.tail-too-noisy', '', 't7.tail-is-client-network', 't7.median-tracks-tail'],
+        },
+        {
+          q: 'A service has a 99% SLO over 30 days, and 4% of its requests have missed the SLO since the window opened. The budget lasts about…',
+          options: [
+            'Seven and a half days: 4% missing against a 1% budget is a burn rate of 4, so the 30 days shrink to a quarter',
+            'Ten days: only the 3% above the allowed 1% counts against the budget, so it is used up at three times the pace',
+            'Thirty days: the SLO is judged once when the window closes, and a bad stretch can still be paid back by then',
+            'A hundred and twenty days: a miss rate four times the budget stretches the window by that same factor of four',
+          ],
+          correct: [0],
+          explanation:
+            'Burn rate is the observed miss fraction divided by the budgeted one: 4% ÷ 1% = 4. Time to exhaustion is the window divided by the burn rate: 30 ÷ 4 = 7.5 days. A burn rate above 1 shortens the budget; it never stretches it.',
+          why: [
+            'Right: the burn rate is 4% ÷ 1% = 4, and a budget spent four times too fast lasts 30 ÷ 4 = 7.5 days. A burn rate of 1 would last exactly the 30 days.',
+            'Subtracting the allowance undercounts the burn. The allowed 1% of misses is the budget itself, so all of the 4% spends it, at four times the budgeted rate rather than three.',
+            'Budgets are spent as the misses happen, and a rolling window keeps counting them. Nothing is repaid at the end, so a burn rate of 4 is an alarm from the first day.',
+            'The factor runs the other way. A miss rate above the budgeted one uses the budget up faster, so dividing the window by the burn rate shortens it, never stretches it.',
+          ],
+          kcs: ['t7.slo-error-budget'],
+          miss: ['', 't7.burn-is-excess-over-budget', 't7.budget-judged-at-window-end', 't7.burn-rate-inverted'],
         },
       ],
     },
@@ -126,6 +168,34 @@ The engine's control loop, one line: **batching puts throughput and latency on a
       md: `Open /fleet. The scoreboard you have been racing is this lesson: goodput at SLO 40, with TTFT p95 beside it. Your scheduler's 62.5% (or better) vs FCFS's 10% is not a game score — it is the objective function evaluated on two policies. T7.L2 is about doing this measurement rigorously on real engines; T7.L3 is about where on the seesaw to sit; T7.L4 is about what the seat costs.`,
     },
   ],
+  kcs: ['t7.goodput', 't7.slo-error-budget', 't7.tail-percentiles'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'A vendor page says "10,000 tok/s". Name what you would ask before believing it, and why goodput is the better headline.',
+        model:
+          'Ask at what concurrency and lengths it was measured, because throughput flattens while latency climbs past the knee. Ask which TTFT and TPOT percentile it met. Goodput counts only requests inside the SLO, so divided by GPU-hours it compares fleets; raw tok/s does not.',
+        ideas: [
+          'At what concurrency and lengths: throughput flattens while latency climbs past the knee',
+          'Which TTFT and TPOT percentile it met: a contract binds at p95, and goodput counts only requests inside the SLO',
+          'Goodput per GPU-hour compares fleets; raw tokens per second does not',
+        ],
+        kcs: ['t7.goodput', 't7.tail-percentiles'],
+      },
+      {
+        prompt: 'A 99% SLO covers 1,000,000 requests this month. Give the error budget, and say how long a 30-day budget lasts at a 3% miss rate.',
+        model:
+          'The budget is the 1% allowed to miss: 10,000 requests. A 3% miss rate against 1% is a burn rate of 3, so a 30-day budget lasts 30 ÷ 3 = 10 days. A burn rate of 1 spends it exactly on schedule, so alert on burn rate over a window, not on one bad minute.',
+        ideas: [
+          'The budget is the share allowed to miss: 1% of 1,000,000 is 10,000 requests',
+          'Burn rate is the observed miss fraction divided by the budgeted one: 3% ÷ 1% = 3',
+          'Time to exhaustion is the window divided by the burn rate: 30 ÷ 3 = 10 days',
+        ],
+        kcs: ['t7.slo-error-budget'],
+      },
+    ],
+  },
 }
 
 export default lesson

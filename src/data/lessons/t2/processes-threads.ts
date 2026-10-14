@@ -167,7 +167,7 @@ The batching simulator doubles as a scheduler visualization here: crank the numb
             'About 64, with more runnable threads keeping each CPU core busy during cache misses and throughput rising with thread count',
             'About 8, with extra compute-bound threads beyond the CPU core count time slicing and adding more switch cost',
             'About 1, with a single thread seeing no contention or switching and leaving throughput unaffected by CPU core count',
-            'It depends on RAM alone, with each thread\'s 1 MB stack and heap making memory the first resource a pool exhausts',
+            'It depends on RAM alone, with each thread\'s 1 MiB stack and heap making memory the first resource a pool exhausts',
           ],
           correct: [1],
           explanation:

@@ -6,10 +6,12 @@ import path from 'node:path'
 import { KCS } from '../../src/data/kc'
 import { SYSTEMS_FORGE_LABS } from '../../src/data/labs'
 import { wilson } from '../../src/lib/learner/calibration'
-import { selectFirstReviewCalibration } from '../../src/lib/learner/cards'
+import { deriveCards, selectFirstReviewCalibration } from '../../src/lib/learner/cards'
 import {
+  buildFieldReport,
   buildOutcomeReport,
   firstReviewsOf,
+  formatFieldReport,
   formatOutcomeReport,
   G1_MIN_PARTNERS,
   G2_MAX_GAP,
@@ -19,18 +21,28 @@ import {
   isTodayProbe,
   loopSpec,
   LOOP_STEPS,
+  selectBootToFirstT,
+  selectDailyStats,
   selectFirstReviewGate,
   selectLoopCompletion,
+  selectPlacementConfirm7,
+  selectPlacementLanding,
   selectProbeAccuracy,
+  selectProveRate,
+  selectRetention30,
+  selectTicketStats,
   selectTodayDuration,
   selectTodaySessions,
+  selectTodayStats,
   stripFreeText,
   tallyLoopCompletion,
 } from '../../src/lib/learner/outcomes'
+import { ledgerOfDonation, redactForPartner } from '../../src/lib/learner/redact'
+import { addDays } from '../../src/lib/learner/reentry'
 import { sessionSpanMs } from '../../src/lib/learner/today'
 import { buildExportV3, parseImport, serializeExport } from '../../src/lib/ledger/codec'
-import type { LedgerEvent, WorkingRecord } from '../../src/lib/ledger/types'
-import { CONTENT, shuffled, simulate } from './ledger-gen'
+import type { LedgerEvent, LocalDay, WorkingRecord } from '../../src/lib/ledger/types'
+import { CONTENT, Journal, LESSONS, shuffled, simulate, START } from './ledger-gen'
 
 /* ------------------------------------------------------------------ */
 /* Fixture events                                                      */
@@ -370,7 +382,7 @@ describe('G2: the pooled first-review gate', () => {
     expect(steady.n).toBeGreaterThanOrEqual(G2_MIN_N)
     expect(steady.gap as number).toBeLessThanOrEqual(G2_MAX_GAP)
     expect(steady.status).toBe('pass')
-  })
+  }, 30_000) // three 12-learner simulations: about 4 s on a quiet machine, over bun's 5 s default on a busy one
 })
 
 /* ------------------------------------------------------------------ */
@@ -659,7 +671,7 @@ describe('the report', () => {
   })
 })
 
-describe('scripts/partner-report.ts on exported ledger files', () => {
+describe('scripts/partner-report.ts --wave1 on exported ledger files', () => {
   const script = path.resolve(import.meta.dir, '../../scripts/partner-report.ts')
   const run = (...args: string[]) => spawnSync('bun', [script, ...args], { encoding: 'utf8' })
 
@@ -680,7 +692,7 @@ describe('scripts/partner-report.ts on exported ledger files', () => {
       const pb = exportFile(dir, 'b.json', b.events, b.working, 'dev-b')
       expect(parseImport(serializeExport(buildExportV3({ events: a.events, working: a.working, device: 'x', exportedAt: '2026-10-07T12:00:00.000Z' }))).ok).toBe(true)
 
-      const r = run(pa, pb)
+      const r = run('--wave1', pa, pb)
       expect(r.status).toBe(0)
       expect(r.stdout).toContain('Wave 1 exit report over 2 exports')
       expect(r.stdout).toContain('G1  loop completion   1 of 5 needed')
@@ -688,7 +700,7 @@ describe('scripts/partner-report.ts on exported ledger files', () => {
       expect(r.stdout).toContain('week of 2026-10-05')
       for (const secret of [SECRET_EXPLAIN, SECRET_BOOT, SECRET_CR, 'a.json', 'b.json']) expect(r.stdout + r.stderr).not.toContain(secret)
 
-      const j = run('--json', pa, pb)
+      const j = run('--wave1', '--json', pa, pb)
       expect(j.status).toBe(0)
       const parsed = JSON.parse(j.stdout)
       expect(parsed.g1).toMatchObject({ partners: 2, complete: 1, funnel: [2, 2, 1, 1, 1] })
@@ -722,6 +734,613 @@ describe('scripts/partner-report.ts on exported ledger files', () => {
       expect(run(path.join(dir, 'missing.json')).status).toBe(2)
       expect(run().status).toBe(2)
       expect(run('--bogus', bad).status).toBe(2)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+/* ================================================================== */
+/* Wave 2 field gates (task 2a-21)                                     */
+/* ================================================================== */
+
+/** A day in the Journal's calendar: START plus `n` days. */
+const d = (n: number) => addDays(START, n)
+
+/** One valid graded event on a local day, through the ledger-gen Journal. */
+const graded = (j: Journal, kind: string, ref: string, day: LocalDay, extra: Record<string, unknown> = {}) =>
+  j.add(kind, ref, day, { score: 1, ok: true, provenance: 'practice', rev: 'r', ...extra })
+
+describe('selectRetention30', () => {
+  const lesson = LESSONS[0]
+  const kc = lesson.kcs[0]
+
+  /** A ledger whose card for `kc` is created on day 0: the lesson's ticket passes, then answers follow. */
+  const ledger = () => {
+    const j = new Journal()
+    j.passLesson(d(0), lesson.id, lesson.kcs)
+    return j
+  }
+  const today = (j: Journal, day: LocalDay, ok: boolean, o: { ref?: string; seed?: number; level?: number; reason?: string; src?: string; provenance?: string; kcs?: string[] } = {}) =>
+    graded(j, 'item', o.ref ?? 'gen:frag/v', day, {
+      ok,
+      score: ok ? 1 : 0,
+      provenance: o.provenance ?? 'unseen',
+      ...(o.seed === undefined ? {} : { seed: o.seed }),
+      data: { src: o.src ?? 'today', grp: `g${day}`, kcs: o.kcs ?? [kc], reason: o.reason ?? 'due', ...(o.level === undefined ? {} : { level: o.level }) },
+    })
+  const content = CONTENT
+  const run = (j: Journal, plan: { slo: 0.85 | 0.9 } | null = null, opts = {}) => selectRetention30([{ events: j.events, plan }], content, opts)
+
+  test('the card of the fixture is created on day 0', () => {
+    const j = ledger()
+    expect(deriveCards(j.events, CONTENT, d(1)).cards[kc]?.createdDay).toBe(d(0))
+  })
+
+  test('counts Today answers 30 or more local days after the card was created, with a Wilson interval and the SLO of the plan', () => {
+    const j = ledger()
+    today(j, d(29), true) // too early
+    today(j, d(30), true)
+    today(j, d(45), false)
+    today(j, d(60), true)
+    const r = run(j, { slo: 0.85 })
+    expect([r.n, r.correct]).toEqual([3, 2])
+    expect(r.rate).toBeCloseTo(2 / 3, 10)
+    const w = wilson(2, 3)
+    expect(r.ci95).toEqual([w.lo, w.hi])
+    expect(r.meanSlo).toBe(0.85)
+    expect(r.partners).toBe(1)
+  })
+
+  test('the SLO defaults to 0.9 and the pooled mean weights each plan by its learner\'s checks', () => {
+    const a = ledger()
+    today(a, d(31), true)
+    const b = ledger()
+    for (const day of [31, 32, 33]) today(b, d(day), true)
+    expect(run(a).meanSlo).toBe(0.9)
+    const pooled = selectRetention30(
+      [
+        { events: a.events, plan: { slo: 0.85 } },
+        { events: b.events, plan: { slo: 0.9 } },
+      ],
+      content,
+    )
+    expect(pooled.n).toBe(4)
+    expect(pooled.meanSlo).toBeCloseTo((0.85 * 1 + 0.9 * 3) / 4, 10)
+    expect(pooled.perLearner.map((p) => p.n)).toEqual([1, 3])
+    expect(pooled.spread).toEqual({ min: 1, median: 1, max: 1 })
+  })
+
+  test('leaves out assisted answers, keep-going items, other sources, other KCs and answers with no card', () => {
+    const j = ledger()
+    today(j, d(31), true, { provenance: 'assisted' })
+    today(j, d(31), true, { reason: 'extra' })
+    today(j, d(31), true, { src: 'practice' })
+    today(j, d(31), true, { src: 'ticket' })
+    today(j, d(31), true, { kcs: ['no-such-kc'] })
+    graded(j, 'quiz', `lesson:${lesson.id}`, d(31), { data: { form: 'ticket', kcs: [kc] } })
+    expect(run(j).n).toBe(0)
+    today(j, d(31), true)
+    expect(run(j).n).toBe(1)
+  })
+
+  test('a probe counts like an item', () => {
+    const j = ledger()
+    graded(j, 'probe', 'gen:frag/v', d(40), { data: { src: 'today', kcs: [kc], reason: 'probe', sinceDays: 40 } })
+    expect(run(j).n).toBe(1)
+  })
+
+  test('a generated item counts on a fresh seed only: a seed met before is not a clean check', () => {
+    const j = ledger()
+    today(j, d(5), true, { seed: 11, level: 1 }) // met in week one (any source)
+    today(j, d(31), true, { seed: 11, level: 1 }) // same instance again
+    today(j, d(32), true, { seed: 12, level: 1 }) // fresh
+    today(j, d(33), true, { seed: 11, level: 2 }) // another level is another instance
+    today(j, d(34), true, { ref: 'item:authored-1' }) // authored: no seed to compare
+    const r = run(j)
+    expect(r.n).toBe(3)
+  })
+
+  test('a donation (no seeds) counts every generated answer', () => {
+    const j = ledger()
+    today(j, d(31), true, { seed: 11 })
+    today(j, d(32), true, { seed: 11 })
+    const stripped = j.events.map((e) => ({ ...e, seed: undefined }) as unknown as LedgerEvent)
+    expect(selectRetention30([{ events: stripped }], content).n).toBe(2)
+    expect(run(j).n).toBe(1) // the full ledger knows the second is the same instance again
+  })
+
+  test('minSpanDays leaves out short ledgers and says how many', () => {
+    const j = ledger()
+    today(j, d(31), true)
+    const r = selectRetention30([{ events: j.events }], content, { minSpanDays: 35 })
+    expect([r.n, r.excluded, r.perLearner.length, r.partners]).toEqual([0, 1, 0, 0])
+    today(j, d(36), true)
+    expect(selectRetention30([{ events: j.events }], content, { minSpanDays: 35 }).n).toBe(2)
+  })
+
+  test('pools ledgers each on its own cards; no ledger is no data', () => {
+    const empty = selectRetention30([], content)
+    expect(empty).toMatchObject({ n: 0, rate: null, ci95: null, meanSlo: null, spread: null })
+    expect(selectRetention30([{ events: [] }], content).n).toBe(0)
+  })
+
+  test('the day-count of "30" is configurable and exact', () => {
+    const j = ledger()
+    today(j, d(7), true)
+    expect(run(j, null, { minDays: 7 }).n).toBe(1)
+    expect(run(j, null, { minDays: 8 }).n).toBe(0)
+  })
+})
+
+describe('selectBootToFirstT', () => {
+  const boot = (j: Journal, day: number) => j.add('complete', 'boot', d(day))
+  const visit = (j: Journal, ref: string, day: number) => j.add('visit', ref, d(day))
+
+  test('whole local days from complete boot to the first t* lesson visit, with the distribution', () => {
+    const a = new Journal()
+    boot(a, 0)
+    visit(a, 'lesson:t0.l1', 2)
+    visit(a, 'lesson:t1.l1', 3)
+    const b = new Journal()
+    boot(b, 5)
+    visit(b, 'lesson:r.l1', 5) // R is not T
+    visit(b, 'sim:alloc', 6)
+    visit(b, 'lesson:t2.l3', 5)
+    const c = new Journal()
+    visit(c, 'lesson:t1.l1', 0) // before Boot: not after it
+    boot(c, 1)
+    visit(c, 'lesson:t1.l2', 7)
+    const waiting = new Journal()
+    boot(waiting, 0)
+    visit(waiting, 'lesson:r.l2', 1)
+    const r = selectBootToFirstT([a.events, b.events, c.events, waiting.events, new Journal().events])
+    expect(r.booted).toBe(4)
+    expect(r.n).toBe(3)
+    expect(r.days).toEqual([0, 2, 6])
+    expect(r.median).toBe(2)
+    expect(r.distribution).toEqual([
+      { days: 0, count: 1 },
+      { days: 2, count: 1 },
+      { days: 6, count: 1 },
+    ])
+  })
+
+  test('no ledger, no median', () => {
+    expect(selectBootToFirstT([])).toEqual({ booted: 0, n: 0, days: [], median: null, distribution: [] })
+  })
+})
+
+describe('selectPlacementLanding', () => {
+  test('the first lesson visited after each placement, and how many landed on R.L1', () => {
+    const a = new Journal()
+    a.add('complete', 'placement', d(0))
+    a.add('visit', 'sim:alloc', d(0))
+    a.add('visit', 'lesson:t2.l3', d(0))
+    a.add('visit', 'lesson:r.l1', d(1)) // later visits do not count
+    const b = new Journal()
+    b.add('complete', 'placement', d(0))
+    b.add('visit', 'lesson:r.l1', d(0))
+    b.add('complete', 'placement', d(3))
+    b.add('visit', 'lesson:t1.l1', d(3))
+    const c = new Journal()
+    c.add('complete', 'placement', d(0)) // no visit yet
+    const none = new Journal()
+    none.add('visit', 'lesson:r.l1', d(0)) // no placement
+    const r = selectPlacementLanding([a.events, b.events, c.events, none.events])
+    expect(r).toEqual({ placements: 4, n: 3, onR1: 1, partners: 2, partnersOnR1: 1, lessons: ['t2.l3', 'r.l1', 't1.l1'] })
+  })
+
+  test('a landing on R.L1 is found when the learner had already touched R.L1 that day and wrote no new visit', () => {
+    const j = new Journal()
+    j.add('visit', 'lesson:r.l1', d(0))
+    j.add('complete', 'placement', d(0))
+    j.add('complete', 'lesson:r.l1', d(0)) // the first event after the placement, on a lesson ref
+    const k = new Journal()
+    k.add('complete', 'placement', d(0))
+    k.add('visit', 'sim:alloc', d(0))
+    k.add('complete', 'lesson:t2.l3', d(0))
+    k.add('visit', 'lesson:r.l1', d(0))
+    const r = selectPlacementLanding([j.events, k.events])
+    expect(r).toMatchObject({ placements: 2, n: 2, onR1: 1, partners: 2, partnersOnR1: 1, lessons: ['r.l1', 't2.l3'] })
+  })
+
+  test('a visit before the placement is not its landing', () => {
+    const j = new Journal()
+    j.add('visit', 'lesson:r.l1', d(0))
+    j.add('complete', 'placement', d(1))
+    expect(selectPlacementLanding([j.events]).n).toBe(0)
+  })
+})
+
+describe('selectPlacementConfirm7', () => {
+  const confirm = (j: Journal, kc: string, ok: boolean, o: { reason?: string; src?: string; kind?: 'item' | 'probe' } = {}) =>
+    graded(j, o.kind ?? 'item', 'gen:frag/v', d(8), { ok, score: ok ? 1 : 0, data: { src: o.src ?? 'today', reason: o.reason ?? 'confirm', kcs: [kc], grp: 'g' } })
+
+  test('the share of solid placement KCs right at their first day-7 confirmation', () => {
+    const j = new Journal()
+    j.add('complete', 'placement', d(0))
+    confirm(j, 'a', true)
+    confirm(j, 'a', false) // a second confirmation of a KC is not the first
+    confirm(j, 'b', false)
+    confirm(j, 'c', true, { kind: 'probe' })
+    confirm(j, 'x', true) // not a solid placement KC
+    confirm(j, 'd', true, { reason: 'due' }) // not a confirmation
+    confirm(j, 'd', true, { src: 'practice' })
+    const r = selectPlacementConfirm7([{ events: j.events, placement: { solidKcs: ['a', 'b', 'c', 'd', 'e'] } }])
+    expect([r.n, r.correct, r.solid, r.partners]).toEqual([3, 2, 5, 1])
+    expect(r.rate).toBeCloseTo(2 / 3, 10)
+    const w = wilson(2, 3)
+    expect(r.ci95).toEqual([w.lo, w.hi])
+  })
+
+  test('a ledger with no placement confirms nothing', () => {
+    const j = new Journal()
+    confirm(j, 'a', true)
+    expect(selectPlacementConfirm7([{ events: j.events }])).toMatchObject({ n: 0, solid: 0, partners: 0, rate: null })
+  })
+})
+
+describe('selectTicketStats', () => {
+  const attempt = (j: Journal, lesson: string, day: number, ok: boolean, ms?: number, grp = `${lesson}@${day}@${ok}`) =>
+    graded(j, 'quiz', `lesson:${lesson}`, d(day), { ok, score: ok ? 1 : 0, ...(ms === undefined ? {} : { ms }), data: { form: 'ticket', grp, n: 3, kcs: [] } })
+
+  test('median minutes per attempt, and the share of settled tickets passed within two tries', () => {
+    const j = new Journal()
+    attempt(j, 'A', 0, false, 120_000)
+    attempt(j, 'A', 1, true, 180_000) // passed on the second try
+    attempt(j, 'B', 0, false, 240_000)
+    attempt(j, 'B', 1, false, 300_000) // two tries, not passed: settled and failed
+    attempt(j, 'C', 0, false, 60_000) // one failure: still open
+    attempt(j, 'D', 0, true, 150_000) // first try
+    attempt(j, 'E', 0, false)
+    attempt(j, 'E', 1, false)
+    attempt(j, 'E', 2, true) // third try: not within two
+    graded(j, 'quiz', 'lesson:F', d(0), { data: { form: 'spiral', n: 8 } }) // not a ticket
+    const r = selectTicketStats([j.events])
+    expect([r.attempts, r.tickets, r.settled, r.correct, r.partners]).toEqual([9, 5, 4, 2, 1])
+    expect(r.rate).toBe(0.5)
+    expect(r.ci95).toEqual([wilson(2, 4).lo, wilson(2, 4).hi])
+    // 2, 3, 4, 5, 1 and 2.5 minutes (E's three attempts carry no time): the median of six is 2.75
+    expect(r.medianMinutes).toBe(2.75)
+  })
+
+  test('without the summary\'s own time, the answer times of the attempt\'s items stand in', () => {
+    const j = new Journal()
+    for (const [i, ms] of [30_000, 40_000, 50_000].entries()) {
+      graded(j, 'item', `quiz:A#${i}`, d(0), { ms, data: { src: 'ticket', form: 'ticket', grp: 'g1', slot: i, of: 3, kcs: [] } })
+    }
+    attempt(j, 'A', 0, true, undefined, 'g1')
+    expect(selectTicketStats([j.events]).medianMinutes).toBe(2)
+  })
+
+  test('no ticket, no numbers', () => {
+    expect(selectTicketStats([])).toMatchObject({ attempts: 0, medianMinutes: null, tickets: 0, settled: 0, rate: null, ci95: null, partners: 0 })
+  })
+})
+
+describe('selectTodayStats', () => {
+  const session = (j: Journal, day: number, grp: string, ms: number[], of = ms.length) => {
+    ms.forEach((m, i) => graded(j, 'item', 'gen:frag/v', d(day), { ms: m, data: { src: 'today', grp, slot: i, of, kcs: ['k'], reason: 'due' } }))
+  }
+
+  test('the median session minutes by C19\'s span rule, over every partner, and how many partners had one', () => {
+    const a = new Journal()
+    session(a, 0, 's1', [60_000, 60_000]) // 20 s apart (Journal) + 60 s = 80 s
+    session(a, 1, 's2', [60_000], 2) // unfinished
+    const b = new Journal()
+    session(b, 0, 's1', [600_000])
+    const none = new Journal()
+    const r = selectTodayStats([a.events, b.events, none.events])
+    expect(r.sessions).toBe(3)
+    expect(r.completed).toBe(2)
+    expect(r.partners).toBe(2)
+    const spans = selectTodaySessions(a.events).concat(selectTodaySessions(b.events)).map((s) => s.spanMs / 60_000)
+    expect(r.medianMinutes).toBe([...spans].sort((x, y) => x - y)[1])
+    expect(r.medianCompletedMinutes).toBe((80_000 / 60_000 + 10) / 2)
+  })
+
+  test('no session, no median', () => {
+    expect(selectTodayStats([])).toEqual({ sessions: 0, completed: 0, medianMinutes: null, medianCompletedMinutes: null, partners: 0 })
+  })
+})
+
+describe('selectProveRate', () => {
+  test('lab greens followed by a Prove-it attempt', () => {
+    const a = new Journal()
+    graded(a, 'lab-check', 'lab:one', d(0), { ok: false, score: 0 })
+    graded(a, 'lab-check', 'lab:one', d(1))
+    graded(a, 'lab-check', 'lab:one', d(2)) // a second green run is the same green
+    graded(a, 'prove', 'prove:one', d(3))
+    graded(a, 'lab-check', 'lab:two', d(4))
+    graded(a, 'prove', 'prove:three', d(5)) // no green for it
+    const b = new Journal()
+    graded(b, 'prove', 'prove:one', d(0)) // an attempt before the green does not follow it
+    graded(b, 'lab-check', 'lab:one', d(1))
+    const r = selectProveRate([a.events, b.events, new Journal().events])
+    expect([r.n, r.correct, r.partners]).toEqual([3, 1, 2])
+    expect(r.rate).toBeCloseTo(1 / 3, 10)
+    expect(r.ci95).toEqual([wilson(1, 3).lo, wilson(1, 3).hi])
+  })
+
+  test('no green, no rate', () => {
+    expect(selectProveRate([])).toMatchObject({ n: 0, rate: null, ci95: null })
+  })
+})
+
+describe('selectDailyStats', () => {
+  const daily = (j: Journal, day: number, o: { fixed: boolean; burn: number; expert: number; probes: number | string[]; light: number; ref?: string }) =>
+    graded(j, 'incident', o.ref ?? `inc:daily/${d(day)}`, d(day), {
+      ok: o.fixed,
+      data: { v: 1, src: 'daily', fault: 'pool-shrink', severity: 1, probes: o.probes, diagnosed: o.fixed, fixed: o.fixed, burn: o.burn, expertBurn: o.expert, streetlight: o.light, components: [] },
+    })
+
+  test('completed Dailies, the median of burn ÷ expert burn and the Streetlight rate', () => {
+    const j = new Journal()
+    daily(j, 0, { fixed: true, burn: 12, expert: 6, probes: ['a', 'b', 'c', 'd'], light: 1 })
+    daily(j, 1, { fixed: true, burn: 5, expert: 5, probes: 4, light: 0 }) // a donation holds the count
+    daily(j, 2, { fixed: false, burn: 30, expert: 6, probes: 4, light: 3 })
+    daily(j, 2, { fixed: true, burn: 6, expert: 6, probes: 4, light: 0 }) // a rerun on the same date: not another Daily
+    daily(j, 3, { fixed: true, burn: 0, expert: 0, probes: 0, light: 0 }) // no expert burn: no ratio
+    j.add('incident', 'inc:drill/drain-stall', d(4), { score: 1, ok: true, provenance: 'unseen', data: { v: 1, src: 'drill', fault: 'drain-stall', severity: 1, probes: [], diagnosed: true, fixed: true, burn: 1, expertBurn: 1, streetlight: 0, components: [] } })
+    const r = selectDailyStats([j.events, new Journal().events])
+    expect([r.played, r.completed, r.partners]).toEqual([4, 3, 1])
+    expect(r.medianBurnRatio).toBe(1.5) // ratios 2 and 1
+    expect([r.streetlight.n, r.streetlight.correct]).toEqual([12, 4])
+    expect(r.streetlight.rate).toBeCloseTo(1 / 3, 10)
+    expect(r.streetlight.ci95).toEqual([wilson(4, 12).lo, wilson(4, 12).hi])
+  })
+
+  test('no Daily, no numbers', () => {
+    expect(selectDailyStats([])).toMatchObject({ played: 0, completed: 0, medianBurnRatio: null, partners: 0 })
+  })
+})
+
+describe('buildFieldReport and formatFieldReport', () => {
+  const IDS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9']
+
+  /** A partner who boots, lands on `landing` after `bootDays`, and does a little of everything else. */
+  const partner = (o: { bootDays: number; landing?: string }) => {
+    const j = new Journal()
+    j.add('complete', 'boot', d(0))
+    j.add('complete', 'placement', d(0))
+    j.add('visit', `lesson:${o.landing ?? 'r.l2'}`, d(0))
+    j.add('visit', 'lesson:t1.l1', d(o.bootDays))
+    graded(j, 'lab-check', 'lab:one', d(1))
+    graded(j, 'prove', 'prove:one', d(2))
+    graded(j, 'quiz', 'lesson:t1.l1', d(2), { ms: 90_000, data: { form: 'ticket', grp: 'g', n: 3 } })
+    return j.events
+  }
+
+  test('with nothing, every measured gate says there is not enough data and none passes', () => {
+    const r = buildFieldReport([], CONTENT)
+    expect(r.gates.map((g) => g.id)).toEqual(IDS)
+    for (const g of r.gates) expect(['insufficient', 'owner']).toContain(g.status)
+    expect(r.gates.filter((g) => g.status === 'insufficient').map((g) => g.id)).toEqual(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7'])
+    expect(r.keepOrKill.map((k) => k.verdict)).toEqual(['underpowered', 'underpowered', 'underpowered'])
+    const text = formatFieldReport(r)
+    expect(text).toContain('not enough data (n = 0')
+    expect(text).not.toContain('PASS')
+    expect(text).toContain('UNDERPOWERED, default: fewer new cards, SLO 0.85')
+    expect(text).toContain('Fleet Daily: not enough data (n = 0 Dailies)')
+  })
+
+  test('under five partners no gate passes however good the numbers are', () => {
+    const r = buildFieldReport([1, 2, 3, 4].map(() => ({ events: partner({ bootDays: 1 }) })), CONTENT)
+    for (const id of ['F2', 'F3', 'F5', 'F6']) expect(r.gates.find((g) => g.id === id)?.status).toBe('insufficient')
+    expect(formatFieldReport(r)).toContain('n = 4 partners with a first T lesson')
+  })
+
+  test('five partners pass F2, F3, F5 and F6, with n and Wilson intervals in the table', () => {
+    const r = buildFieldReport([1, 1, 2, 3, 1].map((bootDays) => ({ events: partner({ bootDays }) })), CONTENT)
+    const status = (id: string) => r.gates.find((g) => g.id === id)?.status
+    expect([status('F2'), status('F3'), status('F5'), status('F6')]).toEqual(['pass', 'pass', 'pass', 'pass'])
+    expect(r.boot.median).toBe(1)
+    const text = formatFieldReport(r)
+    expect(text).toContain('F2  Boot to first T lesson in at most 3 days → PASS')
+    expect(text).toContain('median 1 days (bar 3); distribution 1d × 3, 2d × 1, 3d × 1')
+    expect(text).toContain('0 of 5 placements landed on r.l1')
+    expect(text).toContain('95 % interval')
+    expect(text).toContain('5 of 5 lab greens followed by a Prove-it attempt = 100.0 %')
+    expect(text).toContain('Today: UNDERPOWERED')
+  })
+
+  test('one landing on R.L1 fails F3 at any n; a slow Boot fails F2', () => {
+    const r = buildFieldReport([{ events: partner({ bootDays: 1, landing: 'r.l1' }) }], CONTENT)
+    expect(r.gates.find((g) => g.id === 'F3')?.status).toBe('fail')
+    expect(formatFieldReport(r)).toContain('1 of 1 placements landed on r.l1')
+    const slow = buildFieldReport([9, 9, 9, 9, 9].map((bootDays) => ({ events: partner({ bootDays }) })), CONTENT)
+    expect(slow.gates.find((g) => g.id === 'F2')?.status).toBe('fail')
+  })
+
+  test('F1 needs 140 checks from five partners, each at least 35 days long, and the interval must hold the mean SLO', () => {
+    const lesson = LESSONS[0]
+    const kc = lesson.kcs[0]
+    /** One partner: card on day 0, `n` Today answers from day 30 on, `right` of them right, a last event on day 40. */
+    const learner = (n: number, right: number) => {
+      const j = new Journal()
+      j.passLesson(d(0), lesson.id, lesson.kcs)
+      for (let i = 0; i < n; i++) {
+        const ok = i < right
+        graded(j, 'item', `gen:frag/v${i}`, d(30 + (i % 10)), { ok, score: ok ? 1 : 0, provenance: 'unseen', seed: i, data: { src: 'today', grp: `g${i}`, kcs: [kc], reason: 'due' } })
+      }
+      return { events: j.events, plan: { slo: 0.9 as const } }
+    }
+    const status = (ledgers: ReturnType<typeof learner>[]) => buildFieldReport(ledgers, CONTENT).gates[0]
+    // 5 learners x 30 checks = 150, 135 right = 90 %: the interval holds 0.90
+    const good = status([1, 2, 3, 4, 5].map(() => learner(30, 27)))
+    expect(good.status).toBe('pass')
+    expect(good.n).toBe(150)
+    expect(good.partners).toBe(5)
+    expect(good.detail).toContain('recall 90.0 %')
+    expect(good.detail).toContain('mean SLO 90.0 %')
+    // too few checks, too few partners
+    expect(status([1, 2, 3, 4, 5].map(() => learner(20, 18))).status).toBe('insufficient')
+    expect(status([1, 2, 3, 4].map(() => learner(40, 36))).status).toBe('insufficient')
+    expect(status([1, 2, 3, 4].map(() => learner(40, 36))).detail).toContain('4 of 5 partners')
+    // recall far below the SLO
+    const bad = status([1, 2, 3, 4, 5].map(() => learner(30, 15)))
+    expect(bad.status).toBe('fail')
+    expect(bad.detail).toContain('interval below the SLO')
+    // recall far above it
+    expect(status([1, 2, 3, 4, 5].map(() => learner(30, 30))).detail).toContain('interval above the SLO')
+  })
+
+  test('the owner gates are listed and never decided', () => {
+    const r = buildFieldReport([], CONTENT)
+    for (const id of ['F8', 'F9']) expect(r.gates.find((g) => g.id === id)?.status).toBe('owner')
+    expect(formatFieldReport(r)).toContain('F8  queue gating')
+  })
+})
+
+describe('a donation reads like its export', () => {
+  /**
+   * A simulated learner with a ticket, a placement, a Daily and a Prove-it added, as a full ledger and as the
+   * donation of it. Generated items get distinct top-level seeds (a donation has none, so the freshness test
+   * could only tell them apart in the full ledger). `easy: false` rates "sure" answers "think", because a
+   * donation has no `nsec` and so never replays an Easy rating (see the last test).
+   */
+  const fixture = (easy: boolean) => {
+    const { events } = simulate(11, { days: 120, plan: { slo: 0.9 } })
+    const seeded = events.map((e, i) => {
+      const r = e as unknown as Record<string, unknown>
+      const conf = !easy && r.conf === 'sure' ? 'think' : r.conf
+      return { ...r, ...(conf === undefined ? {} : { conf }), ...(String(r.ref).startsWith('gen:') ? { seed: i } : {}) } as unknown as LedgerEvent
+    })
+    const j = Journal.from(seeded)
+    j.add('complete', 'boot', d(130))
+    j.add('visit', 'lesson:t1.l1', d(132))
+    j.add('complete', 'placement', d(133))
+    j.add('visit', 'lesson:t2.l1', d(133))
+    graded(j, 'quiz', 'lesson:t2.l1', d(134), { ms: 120_000, data: { form: 'ticket', grp: 'tk', n: 3, kcs: [] } })
+    graded(j, 'lab-check', 'lab:one', d(135))
+    graded(j, 'prove', 'prove:one', d(136))
+    graded(j, 'incident', `inc:daily/${d(137)}`, d(137), { data: { v: 1, src: 'daily', fault: 'pool-shrink', severity: 1, probes: ['a', 'b'], diagnosed: true, fixed: true, burn: 9, expertBurn: 6, streetlight: 1, components: [] } })
+    const solid = [LESSONS[0].kcs[0]]
+    const working: WorkingRecord[] = [
+      { key: 'placement:result', value: { v: 1, solidKcs: solid }, at: '2026-12-01T00:00:00.000Z', dev: 'dev-1' },
+      { key: 'boot:week', value: { slo: 0.9 }, at: '2026-12-01T00:00:00.000Z', dev: 'dev-1' },
+    ]
+    return {
+      full: { events: j.events, plan: { slo: 0.9 as const }, placement: { solidKcs: solid } },
+      donated: ledgerOfDonation(redactForPartner({ events: j.events, working })),
+    }
+  }
+
+  test('every field selector gives the same answer', () => {
+    const { full, donated } = fixture(false)
+    const a = selectRetention30([full], CONTENT)
+    const b = selectRetention30([donated], CONTENT)
+    expect(a.n).toBeGreaterThan(20)
+    expect([b.n, b.correct, b.meanSlo, b.spread]).toEqual([a.n, a.correct, a.meanSlo, a.spread])
+    expect(selectBootToFirstT([donated.events])).toEqual(selectBootToFirstT([full.events]))
+    expect(selectPlacementLanding([donated.events])).toEqual(selectPlacementLanding([full.events]))
+    expect(selectPlacementConfirm7([donated])).toEqual(selectPlacementConfirm7([full]))
+    expect(selectTicketStats([donated.events])).toEqual(selectTicketStats([full.events]))
+    expect(selectProveRate([donated.events])).toEqual(selectProveRate([full.events]))
+    expect(selectDailyStats([donated.events])).toEqual(selectDailyStats([full.events]))
+  })
+
+  test('Today sessions: the same sessions, timed by answer time alone', () => {
+    const j = new Journal()
+    // two sessions; the Journal puts 20 s between events, the learner paused longer than that in the second
+    const slot = (grp: string, i: number, day: number, ms: number, of = 3) =>
+      graded(j, 'item', 'gen:frag/v', d(day), { ms, data: { src: 'today', grp, slot: i, of, kcs: ['k'], reason: 'due' } })
+    for (let i = 0; i < 3; i++) slot('s1', i, 0, 30_000)
+    for (let i = 0; i < 3; i++) slot('s2', i, 1, 30_000)
+    const full = selectTodaySessions(j.events)
+    const donated = selectTodaySessions(ledgerOfDonation(redactForPartner({ events: j.events, working: [] })).events)
+    expect(donated.map((s) => [s.items, s.of, s.completed])).toEqual(full.map((s) => [s.items, s.of, s.completed]))
+    // full: 20 s + 20 s between first and last + 30 s = 70 s; donated: 30 + 30 + 30 s = 90 s of answer time
+    expect(full.map((s) => s.spanMs)).toEqual([70_000, 70_000])
+    expect(donated.map((s) => s.spanMs)).toEqual([90_000, 90_000])
+  })
+
+  test('card replay without nsec never rates Easy, so retention from a donation differs only a little', () => {
+    const { full, donated } = fixture(true)
+    const a = selectRetention30([full], CONTENT).n
+    const b = selectRetention30([donated], CONTENT).n
+    expect(a).toBeGreaterThan(100)
+    expect(Math.abs(a - b) / a).toBeLessThan(0.05)
+  })
+})
+
+describe('scripts/partner-report.ts: the Wave 2 field gates', () => {
+  const script = path.resolve(import.meta.dir, '../../scripts/partner-report.ts')
+  const run = (...args: string[]) => spawnSync('bun', [script, ...args], { encoding: 'utf8' })
+
+  const partnerEvents = (bootDays: number): LedgerEvent[] => {
+    const j = new Journal()
+    j.add('complete', 'boot', d(0))
+    j.add('visit', 'lesson:t1.l1', d(bootDays))
+    graded(j, 'lab-check', 'lab:one', d(1), { data: { passed: [] } })
+    graded(j, 'prove', 'prove:one', d(2), { data: { v: 1, qids: [], self: [] } })
+    j.add('complete', 'placement', d(3))
+    j.add('visit', 'lesson:t2.l1', d(3))
+    return j.events
+  }
+  const fullFile = (dir: string, name: string, events: LedgerEvent[], device: string): string => {
+    const p = path.join(dir, name)
+    writeFileSync(p, serializeExport(buildExportV3({ events, working: [], device, exportedAt: '2026-10-07T12:00:00.000Z' })))
+    return p
+  }
+  const donationFile = (dir: string, name: string, events: LedgerEvent[]): string => {
+    const p = path.join(dir, name)
+    writeFileSync(p, JSON.stringify(redactForPartner({ events, working: [] })))
+    return p
+  }
+
+  test('prints the field-gate table from redacted donations, and the same table from full exports', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-'))
+    try {
+      const days = [1, 1, 2, 3, 1]
+      const donations = days.map((n, i) => donationFile(dir, `donation-${i}.json`, partnerEvents(n)))
+      const fulls = days.map((n, i) => fullFile(dir, `export-${i}.json`, partnerEvents(n), `dev-${i}`))
+      const a = run(...donations)
+      const b = run(...fulls)
+      expect(a.status).toBe(0)
+      expect(b.status).toBe(0)
+      expect(a.stdout).toContain('Wave 2 field gates over 5 exports')
+      for (const id of ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9']) expect(a.stdout).toContain(`${id}  `)
+      expect(a.stdout).toContain('F2  Boot to first T lesson in at most 3 days → PASS')
+      expect(a.stdout).toContain('F1  30-day recall within the SLO interval → NOT ENOUGH DATA')
+      expect(a.stdout).toContain('95 % interval')
+      // the gates the two readings can both compute agree
+      const line = (out: string, id: string) => out.split('\n').find((l) => l.startsWith(`${id}  `))
+      for (const id of ['F1', 'F2', 'F3', 'F6']) expect(line(a.stdout, id)).toBe(line(b.stdout, id))
+      expect(a.stdout + b.stdout).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+      const j = run('--json', ...donations)
+      expect(j.status).toBe(0)
+      expect(JSON.parse(j.stdout).gates).toHaveLength(9)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('mixes a donation and a full export, and never prints a file name', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-'))
+    try {
+      const r = run(donationFile(dir, 'secret-name-a.json', partnerEvents(1)), fullFile(dir, 'secret-name-b.json', partnerEvents(2), 'dev-b'))
+      expect(r.status).toBe(0)
+      expect(r.stdout).toContain('over 2 exports')
+      expect(r.stdout + r.stderr).not.toContain('secret-name')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('refuses a damaged donation, and --wave1 on a donation, with exit code 2', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-'))
+    try {
+      const bad = path.join(dir, 'bad.json')
+      writeFileSync(bad, JSON.stringify({ format: 'kernelspace-donation', version: 1, events: [{ kind: 'item' }] }))
+      const r = run(bad)
+      expect(r.status).toBe(2)
+      expect(r.stderr).toContain('damaged')
+      const ok = donationFile(dir, 'ok.json', partnerEvents(1))
+      const w = run('--wave1', ok)
+      expect(w.status).toBe(2)
+      expect(w.stderr).toContain('full export')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

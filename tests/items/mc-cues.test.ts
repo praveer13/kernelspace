@@ -36,6 +36,8 @@ import demo from './fixture-family'
  */
 
 const LEVELS = [0, 1, 2, 3] as const
+/** The tests that walk every family (each new family adds choice variants): Bun's 5 s default is too tight on a loaded machine. */
+const SLOW = 30000
 const PLANE: VariantSpec = { id: 'which-plane', title: 'Which plane', kcs: ['t5.kv-bytes-per-token'], levels: LEVELS, nsec: 20 }
 
 /** A family whose one choice variant draws its options from `options(seed)`; the key is the option with `key: true`. */
@@ -57,18 +59,25 @@ describe('the blind-strategy gate on the shipped families', () => {
       const r = checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS })
       expect(r.problems).toEqual([])
     }
-  })
+  }, SLOW)
 
-  test('the gate really samples: every choice variant (frag fit-choice, roofline bound, the three sig variants) is judged at every level, and pooled', async () => {
+  test('the gate really samples: every choice variant, frag fit-choice and roofline bound among them, is judged at every level, and pooled', async () => {
     const wheres = new Set<string>()
-    for (const gen of await loadAllFamilies()) for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
-    for (const v of ['frag/fit-choice', 'roofline/bound', 'sig/name-fault', 'sig/first-probe', 'sig/fix-for']) {
+    // a variant is a choice variant when its instances are choices, so a new family's choice variants are judged without editing this list
+    const choice = new Set<string>()
+    for (const gen of await loadAllFamilies()) {
+      for (const row of checkChoiceCues(gen, { seeds: MIN_CUE_SEEDS }).rows) wheres.add(row.where)
+      for (const v of gen.variants) if (gen.make(1, v.levels[0], v.id).answer.kind === 'choice') choice.add(`${gen.id}/${v.id}`)
+    }
+    for (const v of ['frag/fit-choice', 'roofline/bound']) {
+      expect(choice.has(v)).toBe(true)
       expect(wheres.has(v)).toBe(true)
       for (const l of LEVELS) expect(wheres.has(`${v}@L${l}`)).toBe(true)
     }
     // numeric and estimate variants have no options, so nothing else is judged
-    expect([...wheres].every((w) => /^(frag\/fit-choice|roofline\/bound|sig\/(name-fault|first-probe|fix-for))(@L\d)?$/.test(w))).toBe(true)
-  })
+    expect([...wheres].every((w) => choice.has(w.split('@')[0]))).toBe(true)
+    expect([...choice].every((v) => wheres.has(v))).toBe(true)
+  }, SLOW)
 
   test('checkFamily runs it by default, from at least 200 seeds even when asked for fewer', () => {
     const r = checkFamily(roofline, { seeds: 20, speed: false })
@@ -86,7 +95,7 @@ describe('the blind-strategy gate on the shipped families', () => {
         if (gen.id === 'roofline') expect(row.worst.hit - row.chance).toBeLessThan(0.1)
       }
     }
-  })
+  }, SLOW)
 })
 
 describe('the gate catches what it is for', () => {
@@ -480,7 +489,7 @@ describe('the own pools: prequestions, diagram predictions and spiral items are 
 
   test('refs are the ledger refs: pre:<lesson>#<i>, dia:<lesson>#<block index>, item:<id>', () => {
     for (const e of collectOwnPools(ALL_LESSONS)) {
-      expect(e.ref).toMatch(e.pool === 'prequestion' ? /^pre:t\d\.l\d+#\d+$/ : e.pool === 'predictAt' ? /^dia:t\d\.l\d+#\d+$/ : /^item:t2\.spiral\./)
+      expect(e.ref).toMatch(e.pool === 'prequestion' ? /^pre:t\d\.l\d+#\d+$/ : e.pool === 'predictAt' ? /^dia:t\d\.l\d+#\d+$/ : /^item:t\d\.spiral\./)
     }
     const dia = collectOwnPools(ALL_LESSONS).find((e) => e.pool === 'predictAt')
     const lesson = ALL_LESSONS.find((l) => l.id === dia?.lessonId)

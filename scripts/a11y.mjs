@@ -1,9 +1,13 @@
-// npm run a11y -- [--routes /,/today] [--widths 360,1280] [--fixture file.html] [--skip-build] [--fail-on serious]
+// npm run a11y -- [--routes /,/today] [--widths 360,320,1280] [--fixture file.html] [--skip-build] [--fail-on serious]
 //
 // The accessibility harness (docs/specs/wave-2.md §22.2): builds the app, serves it with `vite preview`, runs axe
 // (WCAG 2.0 to 2.2, A and AA) through @axe-core/playwright at each width, and prints the violations by route, width
 // and impact. Exit 1 when any violation is at or above --fail-on (default serious, so serious and critical);
 // exit 0 when there is none; exit 2 when the harness itself could not run (build, server, browser, navigation).
+//
+// Reflow (WCAG 1.4.10, which axe does not test): at each width the harness also measures the document's
+// scrollWidth - clientWidth after the fonts load, and fails a route that scrolls sideways, naming the pixels and the
+// widest elements past the viewport. Widths default to 360, 320 and 1280; --widths replaces them.
 //
 // --fixture <file.html> checks a local page instead of the app (no build, no server): the harness's own proof that
 // it fails on a real violation (e2e/fixtures/bad-contrast.html). It repeats and combines with --routes.
@@ -37,7 +41,7 @@ const DEFAULT_ROUTES = [
   '/week',
   '/lab/kv-calc',
 ]
-const DEFAULT_WIDTHS = [360, 1280]
+const DEFAULT_WIDTHS = [360, 320, 1280]
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 const IMPACTS = ['critical', 'serious', 'moderate', 'minor']
 
@@ -127,7 +131,7 @@ async function checkPage(browser, label, url, width) {
     // axe measures contrast with the fonts that will be used, so wait for them first
     await page.evaluate(() => document.fonts.ready)
     const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze()
-    return violations.map((v) => ({
+    const rows = violations.map((v) => ({
       route: label,
       width,
       impact: v.impact ?? 'minor',
@@ -136,12 +140,37 @@ async function checkPage(browser, label, url, width) {
       nodes: v.nodes.length,
       target: v.nodes[0] ? v.nodes[0].target.join(' ') : '',
     }))
+    const overflow = await page.evaluate(() => {
+      const root = document.documentElement
+      const px = root.scrollWidth - root.clientWidth
+      if (px <= 0) return { px, culprits: [] }
+      // the elements that stick out past the viewport edge, widest overhang first; one inside its own scroll
+      // container (overflow auto, scroll, hidden or clip on an ancestor) does not widen the document
+      const edge = root.clientWidth
+      const clipped = (el) => {
+        for (let p = el.parentElement; p && p !== root; p = p.parentElement) {
+          if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(p).overflowX)) return true
+        }
+        return false
+      }
+      const culprits = []
+      for (const el of document.body.querySelectorAll('*')) {
+        const r = el.getBoundingClientRect()
+        if (r.width === 0 || r.right <= edge + 0.5 || clipped(el)) continue
+        const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/).slice(0, 3).join('.') : ''
+        culprits.push({ over: Math.round(r.right - edge), w: Math.round(r.width), desc: el.tagName.toLowerCase() + (cls ? `.${cls}` : '') })
+      }
+      culprits.sort((a, b) => b.over - a.over)
+      return { px, culprits: culprits.slice(0, 3) }
+    })
+    const scroll = overflow.px > 0 ? { route: label, width, px: overflow.px, culprits: overflow.culprits } : null
+    return { rows, scroll }
   } finally {
     await context.close()
   }
 }
 
-function report(rows, checked, failOn) {
+function report(rows, scrolls, checked, failOn) {
   const rank = (impact) => IMPACTS.indexOf(impact)
   rows.sort((a, b) => rank(a.impact) - rank(b.impact) || a.route.localeCompare(b.route) || a.width - b.width)
   for (const impact of IMPACTS) {
@@ -155,9 +184,18 @@ function report(rows, checked, failOn) {
   }
   const counts = IMPACTS.map((i) => `${rows.filter((r) => r.impact === i).length} ${i}`).join(', ')
   const blocking = rows.filter((r) => rank(r.impact) <= rank(failOn))
-  console.log(`\na11y: ${checked} page${checked === 1 ? '' : 's'} checked; ${counts}`)
-  console.log(blocking.length > 0 ? `a11y: FAIL (${blocking.length} at ${failOn} or worse)` : `a11y: ok (none at ${failOn} or worse)`)
-  return blocking.length === 0
+  if (scrolls.length > 0) {
+    console.log(`\nSIDEWAYS SCROLL (${scrolls.length}), WCAG 1.4.10 Reflow`)
+    for (const s of scrolls) {
+      console.log(`  ${s.route}  ${s.width}px  scrolls sideways by ${s.px}px`)
+      for (const c of s.culprits) console.log(`    ${c.desc}  ${c.w}px wide, ${c.over}px past the viewport`)
+    }
+  }
+  console.log(`\na11y: ${checked} page${checked === 1 ? '' : 's'} checked; ${counts}; ${scrolls.length} sideways scroll`)
+  const ok = blocking.length === 0 && scrolls.length === 0
+  if (ok) console.log(`a11y: ok (none at ${failOn} or worse, no sideways scroll)`)
+  else console.log(`a11y: FAIL (${blocking.length} at ${failOn} or worse, ${scrolls.length} sideways scroll)`)
+  return ok
 }
 
 async function main() {
@@ -165,6 +203,7 @@ async function main() {
   let preview = null
   let browser = null
   const rows = []
+  const scrolls = []
   let checked = 0
   try {
     if (opts.routes.length > 0) {
@@ -181,7 +220,9 @@ async function main() {
     for (const t of targets) {
       for (const width of opts.widths) {
         try {
-          rows.push(...(await checkPage(browser, t.label, t.url, width)))
+          const result = await checkPage(browser, t.label, t.url, width)
+          rows.push(...result.rows)
+          if (result.scroll) scrolls.push(result.scroll)
           checked++
         } catch (err) {
           fail(`${t.label} at ${width}px: ${err instanceof Error ? err.message : err}`)
@@ -192,7 +233,7 @@ async function main() {
     if (browser) await browser.close()
     if (preview) preview.stop()
   }
-  return report(rows, checked, opts.failOn) ? 0 : 1
+  return report(rows, scrolls, checked, opts.failOn) ? 0 : 1
 }
 
 main().then(

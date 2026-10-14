@@ -10,7 +10,68 @@ const lesson: Lesson = {
   hook: 'Why tokens, not words: the BPE algorithm, the cost model it creates, and the edge cases that bite production systems.',
   exercise: 'sim',
   simId: 'sim-engine',
+  kcs: ['t5.tokenizer-bytes', 't5.bpe-merges', 't5.token-economics'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Describe how byte-level BPE encodes a string at inference time, and say why any UTF-8 text can be encoded.',
+        model:
+          'Start with the string as bytes, each its own id from 0 to 255. Repeatedly apply the merge with the lowest rank that occurs, joining adjacent pairs left to right without overlap, until no merge applies. Because every byte has an id, any UTF-8 text encodes, and decoding the ids returns the exact bytes.',
+        ideas: [
+          'Start from byte ids 0 to 255',
+          'Apply the lowest-rank merge first, left to right without overlap',
+          'Every byte has an id, so any UTF-8 text encodes and decodes exactly',
+        ],
+        kcs: ['t5.bpe-merges', 't5.tokenizer-bytes'],
+      },
+      {
+        prompt: 'Your prefix-cache hit rate collapses after a template change that adds one leading space to every prompt. Explain the cause and what you would do about it.',
+        model:
+          'The cache matches token ids in blocks, and each block hash covers the blocks before it. A leading space changes the first tokens, so every block hash changes and every block misses. TTFT rises with no visible error. Normalize prompts before tokenizing and caching, and pin the tokenizer version.',
+        ideas: [
+          'The cache matches token ids, not text',
+          'Each block hash chains the earlier blocks, so one early change misses every later block',
+          'Normalize prompts before caching and pin the tokenizer version',
+        ],
+        kcs: ['t5.token-economics'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A byte-level BPE tokenizer meets a string in a script that was rare in its training text. What does it do?',
+          options: [
+            'It emits one unknown token for the whole string, since no vocabulary entry matches that script',
+            'It raises an error to the caller, since text outside the training data cannot be encoded safely',
+            'It splits the string into smaller pieces down to single bytes, since each byte has its own id',
+            'It swaps in the nearest common words, since the vocabulary maps unseen strings to similar entries',
+          ],
+          correct: [2],
+          why: [
+            'That is how word-level vocabularies fail. A byte-level tokenizer has an id for every one of the 256 byte values, so nothing is ever out of vocabulary.',
+            'Encoding never fails for byte-level BPE. Any UTF-8 string is a sequence of bytes, and every byte has an id.',
+            'Right: an unseen string breaks into whatever merged pieces apply and then single bytes. It costs more tokens, but it always encodes and decodes exactly.',
+            'The tokenizer does no matching by meaning. It applies a ranked merge table to bytes, so unfamiliar text stays as small pieces instead of turning into similar words.',
+          ],
+          revealAt: 'The systems-relevant consequences',
+          kcs: ['t5.tokenizer-bytes'],
+        },
+        {
+          kind: 'numeric',
+          q: 'A model advertises a 128,000-token context window. About how many words of ordinary English prose fit in it?',
+          unit: 'words',
+          truth: 90000,
+          okWithinFactor: 1.3,
+          revealAt: 'The systems-relevant consequences',
+          kcs: ['t5.token-economics'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `Models don't read text — they read sequences of integer **token ids**, each indexing a row of the embedding table. The **tokenizer** is the deterministic, model-specific compiler that turns bytes into those ids, and it shapes everything downstream: how much text fits the context window, what generation costs, which languages are cheap, and why "Strawberry has 3 r's" stumps models that can prove theorems. For a systems engineer, the tokenizer is the *unit of billing*: every capacity, latency, and cost number in T5 is priced in these little integers.
@@ -95,6 +156,10 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
       note: `Tokens are the currency of the whole stack: capacity (KV per token), latency (one step per token), cost (bytes per token). Engineers who estimate in words get surprised; engineers who tokenize samples do not.`,
     },
     {
+      type: 'prose',
+      md: `**Build this:** [lab 03, stage 1 is a 2-minute win](/forge/bpe-tokenizer). You write the application side of byte-level BPE in Rust, the part serving engines run: lowest rank first, left to right without overlap, byte-perfect on UTF-8, with an exact-id check on unseen text. Stage 1 (\`bytes_are_ids\`) maps each byte to its own id.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -106,6 +171,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
             'Applying a hand-written list of English prefixes and suffixes and splitting other languages into many small pieces',
           ],
           correct: [1],
+          kcs: ['t5.bpe-merges', 't5.tokenizer-bytes'],
           explanation:
             'Bottom-up merging from the byte floor: frequent strings compress into single ids, rare ones decompose to bytes. Lossless, deterministic, and shaped by the training corpus.',
           why: [
@@ -124,6 +190,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
             'The context window is measured in bytes, so byte length is the right estimate while word counts under-report non-Latin scripts',
           ],
           correct: [1],
+          kcs: ['t5.token-economics'],
           explanation:
             'The billed and scheduled unit is the token. Content-type swings of 2-5x in tokens per word are normal, so a words-based capacity plan is a guess with extra steps.',
           why: [
@@ -142,6 +209,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
             'Whitespace changes the embedding of the first token, and the cache stores embeddings that are lost for that one entry',
           ],
           correct: [1],
+          kcs: ['t5.token-economics'],
           explanation:
             'Cache hits require token-id equality, not text similarity. Because each block hash chains the blocks before it, one changed id at the start misses every later block. Normalize prompts before caching; this is a common silent TTFT regression.',
           why: [
@@ -160,6 +228,7 @@ Type anything and watch it tokenize live: merge highlights, token ids, the byte 
             'Counting needing a sequential loop, so one forward pass cannot express it even for single characters',
           ],
           correct: [1],
+          kcs: ['t5.bpe-merges'],
           explanation:
             'Tokens are opaque ids for multi-character chunks; the characters inside them never reach the model. Letter-level tasks fight the tokenizer, not the model, a system-level explanation for a famous failure.',
           why: [

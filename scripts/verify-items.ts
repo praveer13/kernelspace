@@ -68,6 +68,16 @@
  * chance + MAX_HIT_OVER_CHANCE; they have no lessons, so the lesson-level bars of (9b) do not apply), to the odd-one-out of (15)
  * per item and to the adversary of (16) scored on the pool, with a why for every option; the pooled rate of (18) would hide a leaking pool.
  * The surfaces that shuffle them (diagram.tsx, Prequestions.tsx) must draw a per-attempt freshSeed.
+ * (20) VERIFY-ITEMS V2 (Wave 2, spec 6.5; the pure parts live in scripts/item-pools.ts): the alignment items on code blocks
+ * (`CodeBlockData.align`, spec 17.2) are one more own pool, held like (19) with a why for every option; every
+ * src/data/forge/<lab>/primm.ts that exports PRIMM_MC_ITEMS is found by readdir, is one pseudo-lesson per lab (gated like a
+ * lesson at PASS_BAR) and, pooled, an item-level pool of its own; every spiral (`ticket.spiral`) is one pseudo-lesson, and every
+ * Act IV / Daily fault (`INCIDENTS`) one pseudo-lesson of its cause and mitigation: each passed by no strategy at p >= MAX_RANK_LESSON.
+ * THE WAVE 2 BAR: every blind strategy (length ranks and rank sets, lexical cues, surface features, the reviewer composites,
+ * the cross-validated adversary, always-longest, always-shortest, always-B) passes at most WAVE2_BAR (2) of the lesson pool in
+ * expectation, a gate and no longer a printed line; the pseudo-lessons above are not in the pool. Always-B must also stay inside
+ * its 2-SD band: a simulated cohort that draws the real display shuffle and clicks position B matches the exact expectation.
+ * The longest-key ratchet covers the own pools and the errata items too (`longestKeyByPool` in the baseline).
  * REPORTS (never fails): the item-level hit rate of each surface-feature strategy against chance, longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
  * surface-feature expectations per track, the odd-one-out, adversary, composite and cue-limit tables per feature, per track and per lesson, and a blind-strategy simulation.
  *
@@ -80,7 +90,6 @@
 
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import type { QuizQuestion } from '../src/components/QuizBlock'
-import { PRIMM_MC_ITEMS } from '../src/data/forge/rust-allocator/primm'
 import { ALL_LESSONS, TRACK_IDS } from '../src/data/lessons'
 import { INCIDENTS } from '../src/lib/fleet-week'
 import { exportOrder, shuffledOrder } from '../src/lib/rng'
@@ -97,7 +106,6 @@ import {
   MAX_RANK_AGGREGATE,
   MAX_RANK_LESSON,
   MAX_RANK_SET_AGGREGATE,
-  MAX_RANK_SUBSET_OPTIONS,
   oddOneOut,
   OWN_POOLS,
   PASS_BAR,
@@ -111,10 +119,23 @@ import {
   SINGLE_RANK_STRATEGIES,
   SURFACE_STRATEGIES,
 } from './item-cues'
+import {
+  alwaysBBand,
+  ALIGN_POOL,
+  barFailures,
+  barLine,
+  type BarRow,
+  checkPoolItems,
+  collectAlignItems,
+  discoverPrimm,
+  pseudoLessonFailures,
+  structureErrors as optionErrors,
+  WAVE2_BAR,
+} from './item-pools'
 
 const BASELINE_URL = new URL('./baselines/verify-items.json', import.meta.url)
 const FLEET_TRACK = 'fleet-week'
-/** Lab 01's PRIMM multiple-choice items (src/data/forge/rust-allocator/primm.ts): one pseudo-lesson, gated like a lesson track. */
+/** Every lab's PRIMM multiple-choice items (src/data/forge/<lab>/primm.ts, found by readdir): one pseudo-lesson per lab, gated like a lesson track. */
 const FORGE_TRACK = 'forge'
 /** The baseline file must not be able to switch a gate off: these tracks are gated whatever it says. It may add tracks, never drop one. */
 const MIN_GATED = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7', FLEET_TRACK, FORGE_TRACK]
@@ -158,6 +179,8 @@ interface Item {
 
 interface Baseline {
   longestKeyByTrack: Record<string, number>
+  /** Items whose key is strictly the longest option in each pool that is not a lesson track (own pools, errata); ratcheted like the tracks. */
+  longestKeyByPool?: Record<string, number>
   /** Track ids in which every item must carry a per-option `why`. */
   whyRequired?: string[]
 }
@@ -198,10 +221,13 @@ for (const lesson of ALL_LESSONS) {
   }
 }
 
-// Lab 01 PRIMM items: not a lesson quiz, so they are graded here as one pseudo-lesson at PASS_BAR.
-PRIMM_MC_ITEMS.forEach((item, i) => {
-  items.push({ track: FORGE_TRACK, lessonId: 'lab01.primm', qi: i, ref: `lab01 ${item.id}`, q: item.q, needsExplanation: false })
-})
+// PRIMM items: not a lesson quiz, so each lab's are graded here as one pseudo-lesson at PASS_BAR. Found by readdir, so labs 02-03 join with Wave 2c.
+const primmLabs = await discoverPrimm(new URL('../src/data/forge/', import.meta.url))
+for (const { lab, items: primm } of primmLabs) {
+  primm.forEach((item, i) => {
+    items.push({ track: FORGE_TRACK, lessonId: `forge.${lab}.primm`, qi: i, ref: `forge/${lab} ${item.id}`, q: item.q, needsExplanation: false })
+  })
+}
 
 // Fleet Week Act IV: each incident asks a cause question and a mitigation question.
 for (const incident of INCIDENTS) {
@@ -231,33 +257,7 @@ const failures: string[] = []
 
 /* ------------------------- (1) structure ------------------------- */
 
-function structureErrors(item: Item): string[] {
-  const { options, correct, multi, explanation, why } = item.q
-  const errs: string[] = []
-  if (!Array.isArray(options) || options.length < 2) errs.push('fewer than 2 options')
-  if (Array.isArray(options) && options.length > MAX_RANK_SUBSET_OPTIONS) {
-    errs.push(`${options.length} options; the rank-subset strategies of item-cues.ts cover at most ${MAX_RANK_SUBSET_OPTIONS}, raise MAX_RANK_SUBSET_OPTIONS`)
-  }
-  const texts = (options ?? []).map((o) => o.trim())
-  if (new Set(texts).size !== texts.length) errs.push('duplicate option text')
-  if (!Array.isArray(correct) || correct.length === 0) {
-    errs.push('empty correct')
-  } else {
-    const n = options?.length ?? 0
-    if (correct.some((c) => !Number.isInteger(c) || c < 0 || c >= n)) errs.push('correct index out of range')
-    if (new Set(correct).size !== correct.length) errs.push('duplicate correct index')
-    if (correct.length > 1 && !multi) errs.push('more than one correct index without multi: true')
-  }
-  if (item.needsExplanation && !explanation?.trim()) errs.push('missing or empty explanation')
-  if (why !== undefined) {
-    if (!Array.isArray(why) || why.length !== (options?.length ?? 0)) {
-      errs.push(`why has ${Array.isArray(why) ? why.length : 'no'} entries for ${options?.length ?? 0} options`)
-    } else if (why.some((w) => typeof w !== 'string' || !w.trim())) {
-      errs.push('why has an empty entry')
-    }
-  }
-  return errs
-}
+const structureErrors = (item: Item): string[] => optionErrors(item.q, item.needsExplanation)
 
 const validItems: Item[] = []
 for (const item of items) {
@@ -303,20 +303,7 @@ for (const t of trackKeys) {
   else if (longestByTrack[t] < was) improvements.push(`${t}: ${was} -> ${longestByTrack[t]}`)
 }
 
-let baselineWritten = false
-if (updateBaseline) {
-  if (baseline && increases.length && !force) {
-    failures.push(`ratchet: refusing to update baseline, longest-key count increased (${increases.join(', ')}); pass --force to override`)
-  } else {
-    const next: Baseline = { longestKeyByTrack: longestByTrack, whyRequired: baseline?.whyRequired ?? MIN_GATED }
-    await writeFile(BASELINE_URL, `${JSON.stringify(next, null, 2)}\n`)
-    baselineWritten = true
-  }
-} else if (!baseline) {
-  failures.push('ratchet: scripts/baselines/verify-items.json is missing or unreadable; run with --update-baseline')
-} else if (increases.length) {
-  failures.push(`ratchet: key-is-longest count increased (${increases.join(', ')}); rewrite distractors, do not raise the baseline`)
-}
+let baselineWritten = false // set once the own pools are collected (the ratchet over them runs after (19))
 
 /* ------------------------- (2b) why coverage ------------------------- */
 
@@ -706,7 +693,7 @@ console.log(
   console.log(`  lessons passed with p >= ${WATCH_P} by some surface-feature strategy (watch list, ${watch.size}):`)
   for (const [id, hits] of watch) console.log(`    ${id.padEnd(8)}${hits.join(', ')}`)
   const top = totals.reduce((a, b) => (b.expected > a.expected ? b : a))
-  console.log(`  highest overall: ${top.name} ${top.expected.toFixed(2)} of ${lessonIds.length} (PLAN Wave 1 bar: <= 5)`)
+  console.log(`  highest over the gated tracks: ${top.name} ${top.expected.toFixed(2)} (limit ${MAX_SURFACE_AGGREGATE}; the Wave 2 bar of ${WAVE2_BAR} over the lesson pool is gated below)`)
 }
 
 // Fleet Week Act IV is not a lesson quiz, so the loops above skip it. Its six incident items
@@ -730,8 +717,9 @@ console.log(
   for (const strat of [...RANK_STRATEGIES, ...LEXICAL_STRATEGIES, ...SURFACE_STRATEGIES.filter((x) => !x.name.startsWith('stem-overlap'))]) {
     const ps = fleetQs.map(strat.pick)
     const lessonP = passProbability(ps)
-    // The unit the game grades: both the cause and the mitigation of one incident right.
-    const incidentPs = INCIDENTS.map((inc, k) => ps[2 * k] * ps[2 * k + 1])
+    // The unit the game grades, and (spec 6.5) one pseudo-lesson per fault shared by Act IV and the Daily menus: the cause and the
+    // mitigation of one incident both right, which is what passing two items at PASS_BAR takes.
+    const incidentPs = INCIDENTS.map((_, k) => passProbability(ps.slice(2 * k, 2 * k + 2)))
     const worstIncident = Math.max(...incidentPs)
     const worstId = INCIDENTS[incidentPs.indexOf(worstIncident)].id
     console.log(
@@ -811,24 +799,63 @@ const errataFile = new Map<Item, string>()
   }
 }
 
-// (19) The own pools: every choice prequestion, every DiagramBlock.predictAt option set and every t2.l7 spiral item.
-// They have no lesson, so the lesson-pass metrics do not apply; each pool is held to the item-level bar on its own
-// (the pooled rate would let a leaking pool hide behind the quizzes), and every item needs a why for each option.
+// (19) The own pools: every choice prequestion, every DiagramBlock.predictAt option set, every spiral item and (v2, rule 20)
+// every alignment item on a code block. They have no lesson, so the lesson-pass metrics do not apply; each pool is held to the
+// item-level bar on its own (the pooled rate would let a leaking pool hide behind the quizzes), and every item needs a why for each option.
 const ownItems: Item[] = []
 const ownFile = new Map<Item, string>()
-for (const e of collectOwnPools(ALL_LESSONS)) {
+const ownLesson = new Map<Item, string>()
+const ownChecked = checkPoolItems([...collectOwnPools(ALL_LESSONS), ...collectAlignItems(ALL_LESSONS)])
+failures.push(...ownChecked.failures)
+for (const e of ownChecked.valid) {
   const item: Item = { track: e.pool, lessonId: null, qi: -1, ref: e.ref, q: e.q, needsExplanation: e.needsExplanation }
-  const errs = structureErrors(item)
-  if (e.q.why === undefined) errs.push('missing per-option why')
-  if (errs.length) {
-    failures.push(`structure: ${e.ref} (${e.pool}): ${errs.join('; ')}`)
-  } else {
-    ownItems.push(item)
-    ownFile.set(item, lessonFile.get(e.lessonId) ?? e.lessonId)
-  }
+  ownItems.push(item)
+  ownFile.set(item, lessonFile.get(e.lessonId) ?? e.lessonId)
+  ownLesson.set(item, e.lessonId)
 }
+/** The pools of learner-facing items outside the lesson quizzes that are judged item by item on their own: Wave 1's three, the alignment items, and every lab's PRIMM items. */
+const PRIMM_POOL = 'primm'
+const ALL_OWN_POOLS: string[] = [...OWN_POOLS, ALIGN_POOL]
 const ownPool = (pool: string) => ownItems.filter((i) => i.track === pool)
-for (const pool of OWN_POOLS) failures.push(...poolCueFailures(pool, ownPool(pool)))
+/** The items of one own pool; the PRIMM items are lesson-shaped (one pseudo-lesson per lab) and live in validItems. */
+const poolItems = (pool: string) => (pool === PRIMM_POOL ? validItems.filter((i) => i.track === FORGE_TRACK) : ownPool(pool))
+for (const pool of ALL_OWN_POOLS) failures.push(...poolCueFailures(pool, ownPool(pool)))
+failures.push(...poolCueFailures(PRIMM_POOL, poolItems(PRIMM_POOL)))
+
+// One pseudo-lesson per spiral (a lesson's `ticket.spiral`): graded at PASS_BAR as the ticket grades it, and held to the per-lesson bar
+// by every strategy. The spirals are not in the lesson pool of the Wave 2 bar.
+const spiralLessons = new Map<string, QuizQuestion[]>()
+for (const i of ownPool('spiral')) {
+  const id = ownLesson.get(i) as string
+  spiralLessons.set(id, [...(spiralLessons.get(id) ?? []), i.q])
+}
+for (const [id, qs] of spiralLessons) failures.push(...pseudoLessonFailures(`${id} spiral`, qs, CUE_STRATEGIES))
+
+// The longest-key ratchet over the pools that are not lesson tracks, against the baseline's `longestKeyByPool` (a missing entry counts 0).
+const longestByPool: Record<string, number> = {}
+for (const pool of [...ALL_OWN_POOLS, ERRATA_TRACK]) {
+  const rows = pool === ERRATA_TRACK ? errataItems : ownPool(pool)
+  longestByPool[pool] = rows.filter((i) => keyIsLongest(i.q)).length
+}
+for (const pool of Object.keys(longestByPool)) {
+  const was = baseline?.longestKeyByPool?.[pool] ?? 0
+  if (longestByPool[pool] > was) increases.push(`${pool}: ${was} -> ${longestByPool[pool]}`)
+  else if (longestByPool[pool] < was) improvements.push(`${pool}: ${was} -> ${longestByPool[pool]}`)
+}
+if (updateBaseline) {
+  if (baseline && increases.length && !force) {
+    failures.push(`ratchet: refusing to update baseline, longest-key count increased (${increases.join(', ')}); pass --force to override`)
+  } else {
+    const next: Baseline = { longestKeyByTrack: longestByTrack, longestKeyByPool: longestByPool, whyRequired: baseline?.whyRequired ?? MIN_GATED }
+    await writeFile(BASELINE_URL, `${JSON.stringify(next, null, 2)}\n`)
+    baselineWritten = true
+  }
+} else if (!baseline) {
+  failures.push('ratchet: scripts/baselines/verify-items.json is missing or unreadable; run with --update-baseline')
+} else if (increases.length) {
+  failures.push(`ratchet: key-is-longest count increased (${increases.join(', ')}); rewrite distractors, do not raise the baseline`)
+}
+
 
 const gatedLessonItems = validItems.filter((i) => i.lessonId !== null && whyRequired.includes(i.track))
 const gatedFleetItems = validItems.filter((i) => i.track === FLEET_TRACK && whyRequired.includes(FLEET_TRACK))
@@ -844,8 +871,11 @@ const stemOf = (i: Item): string => {
   const text = i.q.q.replace(/\s+/g, ' ').trim()
   return text.length > 100 ? `${text.slice(0, 97)}...` : text
 }
-const poolOf = (i: Item): 'lessons' | 'fleet-week' | 'errata' => (i.track === ERRATA_TRACK ? 'errata' : i.track === FLEET_TRACK ? 'fleet-week' : 'lessons')
+const poolOf = (i: Item): 'lessons' | 'fleet-week' | 'errata' | 'primm' =>
+  i.track === ERRATA_TRACK ? 'errata' : i.track === FLEET_TRACK ? 'fleet-week' : i.track === FORGE_TRACK ? PRIMM_POOL : 'lessons'
 const singleKey = (i: Item) => i.q.correct.length === 1
+/** The comparison every item-level gate makes: a hit rate above chance plus the limit. The printed tables use it too, so a passing pool never prints FAIL. */
+const overChance = (hit: number, chance: number): boolean => hit > chance + MAX_HIT_OVER_CHANCE
 const chanceOf = (rows: Item[]) => (rows.length ? rows.reduce((a, i) => a + 1 / i.q.options.length, 0) / rows.length : NaN)
 const hitRateOf = (rows: Item[], p: (i: Item) => number) => (rows.length ? rows.reduce((a, i) => a + p(i), 0) / rows.length : NaN)
 const rate = (x: number) => (Number.isFinite(x) ? pct(x) : 'n/a')
@@ -992,8 +1022,8 @@ if (errataRows.length && advHitErrata > chanceErrata + MAX_HIT_OVER_CHANCE) {
 
 // (19) The same model scores each own pool on its own: the pool is held out of training, so a rewrite that only moved
 // the cue from length to another feature still fails here.
-const ownAdversary = OWN_POOLS.map((pool) => {
-  const rows = ownPool(pool).filter(singleKey)
+const ownAdversary = [...ALL_OWN_POOLS, PRIMM_POOL].map((pool) => {
+  const rows = poolItems(pool).filter(singleKey)
   const hit = hitRateOf(rows, advP)
   const chance = chanceOf(rows)
   if (rows.length && hit > chance + MAX_HIT_OVER_CHANCE) {
@@ -1130,7 +1160,7 @@ const cueRows = CUE_STRATEGIES.map((s) => {
   console.log(`  ${'strategy'.padEnd(26)}${'items'.padStart(6)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'lessons'.padStart(9)}${'fleet'.padStart(8)}${'errata'.padStart(8)}`)
   for (const r of cueRows) {
     console.log(
-      `  ${r.name.padEnd(26)}${String(r.rows).padStart(6)}${rate(r.hit).padStart(8)}${rate(r.chance).padStart(8)}${rate(r.lessons).padStart(9)}${rate(r.fleet).padStart(8)}${rate(r.errata).padStart(8)}${[r.hit - r.chance, r.lessons - chanceOf(lessonRows), r.errata - chanceOf(errataRows), ...(rankNames.has(r.name) ? [r.fleet - chanceOf(fleetRows)] : [])].some((d) => d > MAX_HIT_OVER_CHANCE) ? '  FAIL' : ''}`,
+      `  ${r.name.padEnd(26)}${String(r.rows).padStart(6)}${rate(r.hit).padStart(8)}${rate(r.chance).padStart(8)}${rate(r.lessons).padStart(9)}${rate(r.fleet).padStart(8)}${rate(r.errata).padStart(8)}${[overChance(r.hit, r.chance), overChance(r.lessons, chanceOf(lessonRows)), overChance(r.errata, chanceOf(errataRows)), ...(rankNames.has(r.name) ? [overChance(r.fleet, chanceOf(fleetRows))] : [])].some(Boolean) ? '  FAIL' : ''}`,
     )
   }
 
@@ -1161,18 +1191,60 @@ const cueRows = CUE_STRATEGIES.map((s) => {
 }
 
 console.log('')
-console.log(`own pools (prequestions, diagram predictions, spiral items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
+console.log(`own pools (prequestions, diagram predictions, spiral items, alignment items, PRIMM items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
 console.log(`  ${'pool'.padEnd(12)}${'items'.padStart(6)}${'worst strategy'.padStart(24)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'adv hit'.padStart(9)}  odd`)
-for (const pool of OWN_POOLS) {
-  const rows = poolCueRows(ownPool(pool))
+for (const pool of [...ALL_OWN_POOLS, PRIMM_POOL]) {
+  const rows = poolCueRows(poolItems(pool))
   const worst = rows.reduce((a, b) => (b.hit - b.chance > a.hit - a.chance ? b : a), rows[0])
   const adv = ownAdversary.find((a) => a.pool === pool)
-  const odd = ownPool(pool).filter((i) => oddOneOut(i.q).length > 0).length
+  const odd = poolItems(pool).filter((i) => oddOneOut(i.q).length > 0).length
+  // FAIL uses the comparison of the gates above (`hit > chance + limit`, per strategy), not a difference: the two differ by rounding at the limit
+  const leaks = rows.some((r) => r.items > 0 && overChance(r.hit, r.chance))
   console.log(
-    `  ${pool.padEnd(12)}${String(worst.items).padStart(6)}${worst.name.padStart(24)}${rate(worst.hit).padStart(8)}${rate(worst.chance).padStart(8)}${rate(adv?.hit ?? NaN).padStart(9)}  ${odd}${worst.hit - worst.chance > MAX_HIT_OVER_CHANCE || (adv && adv.rows > 0 && adv.hit > adv.chance + MAX_HIT_OVER_CHANCE) || odd > 0 ? '  FAIL' : ''}`,
+    `  ${pool.padEnd(12)}${String(worst.items).padStart(6)}${worst.name.padStart(24)}${rate(worst.hit).padStart(8)}${rate(worst.chance).padStart(8)}${rate(adv?.hit ?? NaN).padStart(9)}  ${odd}${leaks || (adv && adv.rows > 0 && overChance(adv.hit, adv.chance)) || odd > 0 ? '  FAIL' : ''}`,
   )
 }
 console.log(`  files: ${[...new Set([...ownFile.values()])].length} lesson files author ${ownItems.length} own-pool items`)
+
+/* ---- (20) the Wave 2 bar: every blind strategy passes at most WAVE2_BAR lessons of the lesson pool in expectation ---- */
+
+// The lesson pool is the lessons with a quiz; the pseudo-lessons (PRIMM labs, spirals, Act IV faults) are held to the per-lesson bar above.
+const barIds = lessonIds.filter((id) => trackOfLesson.get(id) !== FORGE_TRACK)
+const barIndex = barIds.map((id) => lessonIds.indexOf(id))
+const barOf = (pass: number[]) => barIndex.reduce((a, i) => a + pass[i], 0)
+const barMapOf = (m: Map<string, number>) => barIds.reduce((a, id) => a + (m.get(id) ?? 0), 0)
+const barRows: BarRow[] = [
+  ...RANK_STRATEGIES.map((x) => ({ family: 'length-rank', name: x.name, expected: barOf(lessonPass(x.pick)) })),
+  ...LEXICAL_STRATEGIES.map((x) => ({ family: 'lexical', name: x.name, expected: barOf(lessonPass(x.pick)) })),
+  ...SURFACE_STRATEGIES.map((x) => ({ family: 'surface', name: x.name, expected: barOf(lessonPass(x.pick)) })),
+  ...compositeResults.map((c) => ({ family: 'composite', name: c.name, expected: barMapOf(c.per) })),
+  { family: 'adversary', name: 'cross-validated options-only logit', expected: barMapOf(advLessons) },
+  { family: 'blind', name: 'always-longest', expected: barOf(longestPass) },
+  { family: 'blind', name: 'always-shortest', expected: barOf(shortestPass) },
+  { family: 'blind', name: 'always-B', expected: barOf(bPass) },
+]
+failures.push(...barFailures(barRows, barIds.length))
+const alwaysB = alwaysBBand(barIds.map((id) => byLesson.get(id) as QuizQuestion[]))
+if (!alwaysB.inside) {
+  failures.push(
+    `bar: always-B is outside its 2-SD band: ${alwaysB.attempts} simulated attempts through the quiz shuffle pass ${alwaysB.simulated.toFixed(2)} lessons, the exact expectation is ${alwaysB.expected.toFixed(2)} (2 standard errors ${(2 * alwaysB.se).toFixed(3)}); a display position leaks the key`,
+  )
+}
+{
+  console.log('')
+  console.log(barLine(barIds.length))
+  const worstOf = (family: string) => barRows.filter((r) => r.family === family).reduce((a, b) => (b.expected > a.expected ? b : a))
+  for (const family of ['length-rank', 'lexical', 'surface', 'composite', 'adversary', 'blind']) {
+    const w = worstOf(family)
+    console.log(`  ${family.padEnd(12)}${barRows.filter((r) => r.family === family).length.toString().padStart(3)} strategies, highest ${w.expected.toFixed(2)} (${w.name.slice(0, 60)})${w.expected > WAVE2_BAR ? '  FAIL' : ''}`)
+  }
+  const top = barRows.reduce((a, b) => (b.expected > a.expected ? b : a))
+  console.log(`  ${barRows.length} strategies over ${barIds.length} lessons; highest overall ${top.expected.toFixed(2)} (${top.family} ${top.name.slice(0, 60)}), limit ${WAVE2_BAR}`)
+  console.log(
+    `  always-B 2-SD band: exact ${alwaysB.expected.toFixed(2)} (band 0.00 to ${(alwaysB.expected + 2 * alwaysB.sd).toFixed(2)}), ${alwaysB.attempts} simulated attempts through the quiz shuffle ${alwaysB.simulated.toFixed(2)} +/- ${(2 * alwaysB.se).toFixed(3)}${alwaysB.inside ? '' : '  FAIL'}`,
+  )
+  console.log(`  pseudo-lessons held to p < ${MAX_RANK_LESSON} per strategy: ${primmLabs.length} PRIMM labs, ${spiralLessons.size} spirals, ${INCIDENTS.length} Act IV faults (not in the pool)`)
+}
 
 console.log('')
 console.log(`blind-strategy simulation: ${byLesson.size} lessons with a quiz, per-attempt shuffling, pass at >= ${PASS_BAR * 100}%`)

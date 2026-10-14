@@ -41,6 +41,18 @@ This is not “group all same-adapter requests and wait until each group is larg
 Current [vLLM LoRA serving](https://docs.vllm.ai/en/stable/features/lora/) exposes the same operational controls: adapters are selected per request, requests for several adapters can run in parallel, and \`max_loras\` bounds how many adapters may be active in one batch. \`max_cpu_loras\` controls the host-side resident catalog; \`max_lora_rank\` must match reality because over-provisioning wastes memory.`,
     },
     {
+      type: 'prose',
+      md: `## What one adapter costs in bytes
+
+Each adapted matrix stores A (r × d_in) and B (d_out × r), so it holds **r × (d_in + d_out)** weights. Multiply by the matrices you adapt per layer, by the layers, and by bytes per weight. A hypothetical adapter of rank 16 on the four 4,096 × 4,096 attention projections of a 32-layer model, stored in BF16: 16 × 8,192 = 131,072 weights per matrix, × 4 matrices × 32 layers = 16,777,216 weights, × 2 bytes = **32 MiB**. That is tiny beside a base model, so 8 GiB of spare HBM could hold 256 of them; but KV blocks and hot adapters compete for the same pages, which is why S-LoRA pages adapters and KV together.`,
+    },
+    {
+      type: 'item',
+      title: 'Size the adapters with new numbers',
+      family: 'memory',
+      variants: ['lora'],
+    },
+    {
       type: 'statline',
       stats: [
         {
@@ -141,6 +153,8 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
             'LoRA adapters are low-rank updates to linear layers inside the model, not just the embedding table. Layers differ per tenant through the delta, which is why a kernel must apply it.',
             'Averaging adapters would give every tenant the wrong model. Each request must receive its own B(Ax) term; only the shared Wx part is common.',
           ],
+          kcs: ['t6.multi-lora-batching'],
+          miss: ['t6.merge-adapter-per-request', '', 't6.lora-embedding-only', 't6.average-adapters'],
         },
         {
           q: 'S-LoRA Unified Paging puts adapter weights and KV in one pool because…',
@@ -159,6 +173,8 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
             'Adapters adjust weight matrices and do not update the KV cache; their location is not tied to it. The reason to share a pool is competing for the same HBM.',
             'S-LoRA keeps the full adapter catalog in CPU memory and brings active adapters in with overlapped transfers. Pooling is about managing HBM, not working around a hardware limit.',
           ],
+          kcs: ['t6.multi-lora-batching'],
+          miss: ['t6.adapters-same-values-as-kv', '', 't6.adapters-in-attention', 't6.adapters-cannot-cross-host-bus'],
         },
         {
           q: 'What problem does Punica\'s SGMV kernel solve?',
@@ -177,6 +193,8 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
             'SGMV deliberately accepts a heterogeneous live batch. Holding requests until groups grow trades queueing latency for density, the compromise it was built to avoid.',
             'Wx is identical across tenants and runs once for the whole batch. Recomputing it per adapter would throw away the shared-base saving that multi-LoRA serving is built on.',
           ],
+          kcs: ['t6.multi-lora-batching'],
+          miss: ['t6.sgmv-is-adapter-paging', '', 't6.sgmv-waits-for-groups', 't6.sgmv-recomputes-base'],
         },
         {
           q: 'A safe multi-LoRA control plane must treat runtime adapter loading as…',
@@ -195,6 +213,8 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
             'A tenant-chosen path lets one tenant load another\'s adapter or an arbitrary file. Which adapter loads is a server-side authorization decision, not a client preference.',
             'A microVM contains the worker process but not the model\'s behavior. A malicious adapter still shapes outputs and can poison shared caches; weights are behavior, not inert data.',
           ],
+          kcs: ['t6.multi-lora-batching'],
+          miss: ['t6.adapter-load-is-cache-fill', '', 't6.tenant-picks-adapter-path', 't6.microvm-makes-weights-safe'],
         },
       ],
     },
@@ -204,6 +224,36 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
       md: `Return to **Forge lab 02** after the original six checks are green. The optional \`adapter_unified_paging\` check asks your manager to place adapter pages and sequence KV in the same finite pool, fail atomically under pressure, and reclaim each lifetime independently. Then read S-LoRA §5 beside Punica §3: paging fixes *where adapter state lives*; SGMV fixes *how different resident adapters execute in one batch*. Continue to T6.L10 for the trust boundaries around adapter loading, tool execution, confidential inference, and shared prefix caches.`,
     },
   ],
+  kcs: ['t6.lora-adapter-bytes', 't6.multi-lora-batching'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'A hypothetical adapter has rank 16 on four 4,096 × 4,096 projections in each of 32 layers, stored in BF16. How many bytes is it, and how many fit in 8 GiB?',
+        model:
+          'Per matrix: 16 × (4,096 + 4,096) = 131,072 weights. Four matrices over 32 layers is 131,072 × 4 × 32 = 16,777,216 weights, and at 2 bytes each that is 32 MiB. An 8 GiB budget holds 8,192 ÷ 32 = 256 such adapters, before any KV or base weights.',
+        ideas: [
+          'Weights per matrix are r × (d_in + d_out), here 131,072',
+          'Multiply by 4 matrices and 32 layers, then by 2 bytes, to get 32 MiB',
+          'Divide the budget by 32 MiB: 256 adapters in 8 GiB, before KV and the base model',
+        ],
+        kcs: ['t6.lora-adapter-bytes'],
+      },
+      {
+        prompt:
+          'How can one batch serve requests that use different LoRA adapters, and what does S-LoRA\'s Unified Paging put in one pool?',
+        model:
+          'The base product Wx is the same for every tenant, so it runs once for the whole batch; each request then adds its own low-rank delta B(Ax), which a segmented kernel such as SGMV applies in one launch. Unified Paging puts adapter weights and KV blocks in one paged pool, since both are variable-size objects competing for scarce HBM.',
+        ideas: [
+          'The shared base matmul Wx runs once for the whole batch',
+          'Each request adds its own delta B(Ax), applied per segment by a kernel such as SGMV',
+          'Unified Paging pools adapter pages and KV blocks, both variable-size objects in one HBM budget',
+        ],
+        kcs: ['t6.multi-lora-batching'],
+      },
+    ],
+  },
 }
 
 export default lesson

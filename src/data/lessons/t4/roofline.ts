@@ -10,7 +10,67 @@ const lesson: Lesson = {
   hook: 'Arithmetic intensity in, bound classification out: why decode is bandwidth-bound, prefill is compute-bound, and how to prove it in 4 lines of math.',
   exercise: 'sim',
   simId: 'sim-roofline',
+  kcs: ['t4.bound-classification', 't4.ridge-point', 't4.decode-bandwidth'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Compute a chip\'s ridge point from its datasheet, and say what it tells you about a kernel.',
+        model:
+          'The ridge point is peak FLOP/s divided by memory bandwidth. An H100 at FP16 gives about 990 TFLOP/s over 3.35 TB/s, near 295 FLOP per byte. A kernel whose arithmetic intensity is below that is bandwidth-bound, and one above it is compute-bound.',
+        ideas: [
+          'Ridge point = peak FLOP/s divided by memory bandwidth',
+          'For an H100 at FP16, about 990 TFLOP/s over 3.35 TB/s is near 295 FLOP per byte',
+          'Intensity below the ridge means bandwidth-bound; above it, compute-bound',
+        ],
+        kcs: ['t4.ridge-point', 't4.bound-classification'],
+      },
+      {
+        prompt: 'Explain why batch-1 decode sits far below the ridge, and what batching does about it.',
+        model:
+          'Each token re-reads every weight for about two FLOPs per parameter, so intensity is near one FLOP per byte, hundreds of times below the ridge, and speed is bandwidth divided by weight bytes. A batch of N sequences shares one weight read, so intensity rises about N-fold toward the ridge.',
+        ideas: [
+          'Each token re-reads all the weights for about two FLOPs per parameter, so intensity is near one',
+          'Speed is memory bandwidth divided by weight bytes, with compute idle',
+          'A batch of N shares one weight read, so intensity rises about N-fold toward the ridge',
+        ],
+        kcs: ['t4.decode-bandwidth'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'numeric',
+          q: 'An H100 peaks near 990 TFLOP/s at FP16 and moves 3.35 TB/s from HBM. Divide one by the other: what arithmetic intensity is its ridge point?',
+          unit: 'FLOP/byte',
+          truth: 295,
+          okWithinFactor: 1.15,
+          revealAt: 'The three numbers and one division',
+          kcs: ['t4.ridge-point', 't4.bound-classification'],
+          claims: ['hw.h100-sxm.bf16-dense', 'hw.h100-sxm.hbm-bw'],
+        },
+        {
+          kind: 'choice',
+          q: 'An H100 decodes a batch of 16 sequences and the step is bandwidth-bound. The batch grows to 32. What happens to the tokens per second each user gets?',
+          options: [
+            'It roughly doubles, with twice as many sequences meaning twice the work done per user each step',
+            'It stays roughly the same, with each step still reading the weights once for the whole batch',
+            'It roughly halves, with the users now sharing one memory bandwidth in equal parts',
+          ],
+          correct: [1],
+          why: [
+            'Batching serves more users per step; it does not make a step shorter. The step is set by reading the weights, which costs the same for 16 or 32 sequences, so each user\'s rate stays put.',
+            'Right: the weights are read once per step whatever the batch, so a bandwidth-bound step takes about the same time and each user still gets a token per step. Total throughput doubles.',
+            'The weights are shared, not divided: one read feeds every sequence. Only the KV cache grows with the batch, and at ordinary context lengths it is the smaller read, so each user loses little.',
+          ],
+          revealAt: 'The two case studies that run T5',
+          kcs: ['t4.decode-bandwidth'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `"Is this kernel compute-bound or memory-bound?" is the most useful question in performance engineering, and most engineers answer it by vibes. The **roofline model** answers it with arithmetic: two hardware numbers, one workload number, one division. It's the single most-used analysis in GPU work, the reason T0.L1 could claim "decode is bandwidth-bound" with a straight face — and after this lesson you will be able to classify any workload on any chip in about a minute, on a napkin.
@@ -55,6 +115,24 @@ That's the whole model. The craft is computing AI honestly — the bytes are *mo
         { caption: 'DECODE lives far left: generating a token re-reads all weights (~16 GB for 8B FP16) for only ~2 FLOPs/param/token at batch 1 → AI ≈ 0.5–4. Hard against the bandwidth wall: ~5 ms/token is physics, not engineering.', active: ['decode'] },
         { caption: 'PREFILL and big-batch matmul live at the roof: each weight participates in hundreds of MACs (batch × seq), AI ≈ 100–1000+. This is why prefill and decode have different economics, metrics (TTFT vs ITL), and optimizations.', active: ['prefill'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'Batch-1 decode of an 8B FP16 model re-reads about 16 GB of weights for each token, doing about 16 GFLOP of math. Where does it land on the roofline?',
+        options: [
+          'Far left on the bandwidth slope, hundreds of times below the ridge, with compute units mostly idle',
+          'Just left of the ridge, nearly balanced, with a little more batching enough to make it compute-bound',
+          'At the compute roof, with the dense matrix math of each layer keeping the tensor cores busy',
+          'Far right of the ridge, with each weight read once and then reused for the tokens that follow',
+        ],
+        correct: [0],
+        why: [
+          'Right: 16 GFLOP over 16 GB is about 1 FLOP per byte, against a ridge near 295, so decode sits about 300 times to the left. The memory system, not the ALUs, sets the speed.',
+          'Near-balanced would need around 300 FLOP per byte. Decode does about 1, two orders of magnitude from the ridge, and a little batching cannot close that gap.',
+          'Dense matrix math reaches the roof only when each weight serves many tokens, as in prefill. At batch 1 each weight serves one token, so the roof is out of reach.',
+          'Weights are re-read from HBM for every token generated, and 16 GB does not stay in any cache. Reuse across tokens exists only when tokens are batched together.',
+        ],
+        kcs: ['t4.decode-bandwidth', 't4.bound-classification'],
+      },
     },
     {
       type: 'statline',
@@ -166,6 +244,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
             'Logical loads overstate traffic. AI counts bytes that reach DRAM, so cache hits change the denominator, which is why tiling raises AI.',
             'That is an issue rate or utilization, which has time in it. AI divides work by data moved and has no clock term.',
           ],
+          kcs: ['t4.bound-classification'],
         },
         {
           q: 'On an H100 (~990 FP16 TFLOPS, 3.35 TB/s), a kernel with AI = 1 FLOP/byte is…',
@@ -184,6 +263,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
             'The roofline classifies by AI against the ridge, and 1 is far left: bandwidth. Latency effects such as too few warps sit under both roofs and are separate.',
             'The ridge is peak FLOPs over peak bandwidth, about 295 FLOP/byte at FP16 on this H100. One FLOP per byte is about 300 times to the left.',
           ],
+          kcs: ['t4.bound-classification', 't4.ridge-point'],
         },
         {
           q: 'Why does batching multiply decode throughput (up to a point)?',
@@ -202,6 +282,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
             'Launch overhead is a small fixed cost next to weight reads. The large effect is amortizing the weight read across sequences, which raises AI.',
             'Peak bandwidth is a hardware limit near 3.35 TB/s. Batching does not raise it; it extracts more FLOPs from each byte that moves.',
           ],
+          kcs: ['t4.decode-bandwidth'],
         },
         {
           q: 'A B200 has 2.25 PFLOP/s dense FP16 compute and 8 TB/s HBM bandwidth. A kernel with AI = 256 FLOP/byte is…',
@@ -220,6 +301,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
             'The model is a strict comparison. Below the ridge, AI × bandwidth is the smaller term, so the modeled ceiling is bandwidth even when close.',
             'The roofline is a prediction from FLOPs and DRAM bytes made before any run. Measurement then tests it; it is not needed to classify.',
           ],
+          kcs: ['t4.ridge-point', 't4.bound-classification'],
         },
         {
           q: 'Prefill is compute-bound while decode is bandwidth-bound because…',
@@ -238,6 +320,7 @@ The simulator is a live roofline: complete the graded B200 table, then sweep bat
             'Disaggregation can split phases across GPUs, but the regimes come from reuse, not hardware. One chip is compute-bound in prefill and bandwidth-bound in decode.',
             'Prefill does write the KV cache for the whole prompt. KV traffic is minor; the dominant effect is weight reuse across positions.',
           ],
+          kcs: ['t4.bound-classification', 't4.decode-bandwidth'],
         },
       ],
     },

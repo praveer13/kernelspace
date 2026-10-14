@@ -9,9 +9,10 @@
  * - Ticket and test-out: 3 items. The non-MCQ is a generated numeric or estimate item at level 2 when a
  *   family covers a lesson KC, else a self-checked constructed response (rotating on retries). The other
  *   two are checkpoint questions. Pass: at least 2 of 3 and the non-MCQ right.
- * - Spiral (t2.l7): 8 items, 4 on the lesson's own KCs and 4 on earlier T0-T2 KCs (lowest predicted recall
- *   first among carded KCs, else curriculum order), at least 2 non-MCQ. Pass: at least 6 of 8 and at least
- *   one non-MCQ right.
+ * - Spiral (the last lesson of a track: t2.l7, and from Wave 2 t3.l7, t4.l7, t5.l10, t6.l10, t7.l5; spec
+ *   §6.2): 8 items, 4 on the lesson's own KCs and 4 on earlier KCs of its track and every track before it
+ *   (lowest predicted recall first among carded KCs, else curriculum order), at least 2 non-MCQ. Pass: at
+ *   least 6 of 8 and at least one non-MCQ right.
  * - Display order puts the multiple-choice items first, so they warm up recall for the answer that has to
  *   be produced.
  * - Nothing here locks anything (W8): a miss is evidence, and the caller always offers new numbers and
@@ -20,7 +21,7 @@
 
 import type { QuizQuestion } from '@/components/QuizBlock'
 import { kcById } from '@/data/kc'
-import type { Lesson, QuizBlockData } from '@/data/lessons/types'
+import type { Lesson, QuizBlockData, TrackId } from '@/data/lessons/types'
 import { seedFor } from '@/lib/items/core'
 import type { ItemResult } from '@/lib/items/play'
 import { MEASURE_LEVEL } from '@/lib/items/staircase'
@@ -29,6 +30,7 @@ import type { Kc, KcId } from '@/lib/kc/types'
 import type { ItemData, ItemResponse, LedgerEvent, LocalDay, TicketAttempt, TicketForm } from '@/lib/ledger/types'
 import { hash32 } from '@/lib/rng'
 import type { ItemPool } from './composer'
+import { TRACK_RANK } from './paths'
 import type { TicketPlan } from './types'
 
 /* ------------------------------------------------------------------ */
@@ -108,16 +110,19 @@ function lessonPos(id: string): number | null {
 }
 
 /**
- * The KCs a spiral draws its earlier items from: T0-T2 KCs first taught in a lesson before `lessonId`,
- * in the graph's order (each track in lesson order). R is left out: the spiral is a T0-T2 checkpoint.
+ * The KCs a spiral draws its earlier items from (spec §6.2): KCs first taught in a lesson before `lessonId`
+ * whose home track is the lesson's own or any track before it in `TRACK_RANK`, in the graph's order (each
+ * track in lesson order). t2.l7's spiral still sees T0-T2 only, t4.l7's T0-T4, t7.l5's all eight. R is left
+ * out: its lessons sit on their own sequence and cannot be placed before or after a T lesson (`taughtBy`).
  */
 export function earlierKcsOf(lessonId: string, kcs: readonly Kc[]): KcId[] {
   const at = lessonPos(lessonId)
   if (at === null) return []
+  const rank = TRACK_RANK[`t${Math.floor(at / 100)}` as TrackId]
   return kcs
     .filter((k) => {
       const first = k.lessons[0] === undefined ? null : lessonPos(k.lessons[0])
-      return first !== null && first < at && (k.track === 't0' || k.track === 't1' || k.track === 't2')
+      return first !== null && first < at && k.track !== 'r' && TRACK_RANK[k.track] <= rank
     })
     .map((k) => k.id)
 }

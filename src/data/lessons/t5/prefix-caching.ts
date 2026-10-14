@@ -10,7 +10,68 @@ const lesson: Lesson = {
   hook: 'Stop recomputing the system prompt: APC, radix trees, tiered KV, and the router that turns cache locality into TTFT.',
   exercise: 'read+quiz',
   verifiedAt: '2026-08',
+  kcs: ['t5.prefix-cache-keys', 't5.radix-eviction', 't5.prefix-routing'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Say what a prefix-cache key has to cover, and why the prompt text alone is not enough.',
+        model:
+          'The key names deterministic K/V, so it covers the exact token ids of the prefix and everything else that changes the tensors: the model, any adapter or multimodal input, and a tenant salt for isolation. Equal text can tokenize differently, and another adapter or model gives different K/V for the same ids.',
+        ideas: [
+          'The exact token ids, block by block, chained through the parent hash',
+          'Model, adapter and multimodal inputs, because each one changes the K/V',
+          'A tenant salt, so timing cannot reveal what another tenant cached',
+        ],
+        kcs: ['t5.prefix-cache-keys'],
+      },
+      {
+        prompt: 'Explain why a prefix-affinity router needs a load guard, and what it does when the guard trips.',
+        model:
+          'Routing only by longest cached prefix herds every request that shares a popular system prompt onto the one worker that holds it, until queueing costs more than the prefill it saves. The guard allows only a bounded imbalance over the least-loaded worker. If no cache owner passes it, the router picks the least-loaded worker and accepts the miss.',
+        ideas: [
+          'Longest-prefix routing herds traffic onto one warm worker',
+          'The guard allows only a bounded imbalance over the least-loaded worker',
+          'When every cache owner is over the guard, route to the least-loaded and take the miss',
+        ],
+        kcs: ['t5.prefix-routing'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A cache holds the K/V tensors for a 2,048-token system prompt. Which change to the next request makes that cached K/V unusable, even though its prompt text is identical?',
+          options: [
+            'A different sampling temperature, since sampling reshapes the distribution that every cached tensor came from',
+            'A different LoRA adapter, since the adapter changes the weights that produced every cached key and value',
+            'A longer limit on output length, since the cached entry was sized for the shorter reply of the first request',
+            'A different client connection, since each cache entry is tied to the socket that first created it',
+          ],
+          correct: [1],
+          why: [
+            'Sampling happens after the forward pass, so prefill K/V is the same at any temperature. A temperature in the key would only split the cache.',
+            'Right: an adapter changes the weights, so the same token ids give different keys and values. The adapter belongs in the cache key beside the model.',
+            'An output limit only decides when decode stops. The prompt\'s K/V does not depend on how many tokens will be generated, so the entry still applies.',
+            'Cache entries belong to the engine\'s block pool, not to a connection. A request that arrives on another socket with the same prefix hits as normal.',
+          ],
+          revealAt: 'Automatic Prefix Caching: the block-hash design',
+          kcs: ['t5.prefix-cache-keys'],
+        },
+        {
+          kind: 'numeric',
+          q: 'Two prompts share their first 150 token ids. The engine caches only full 16-token blocks. How many tokens of the second prompt can come from cached blocks?',
+          unit: 'tokens',
+          truth: 144,
+          okWithinFactor: 1.01,
+          revealAt: 'Automatic Prefix Caching: the block-hash design',
+          kcs: ['t5.prefix-cache-keys'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `PagedAttention gave every sequence a block table. Prefix caching asks the obvious production question: **if two requests begin with the same token ids, why prefill those tokens twice?** The K/V tensors are deterministic for a fixed model, adapter, and token prefix. Keep the finished prefix's blocks after one prefill, map them read-only into the next request, and begin compute at the first uncached token.
@@ -58,6 +119,24 @@ The block boundary matters. With 16-token blocks, 130 identical leading tokens p
         { caption: 'The new query follows system → RAG document, then misses at its new user tail. match_prefix returns 640 tokens and those block ids — the LONGEST ancestor, not merely any hit.', active: ['sys', 'docs', 'query'], edges: ['root->sys', 'sys->docs', 'docs->query'] },
         { caption: 'After prefill computes the new tail, insertion adds a leaf. If the pool is full, evict the least-recently-used eligible LEAF; shared ancestors stay because descendants still depend on them.', active: ['tools', 'chat'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'A new request starts with the system prompt, then the RAG document, then a question nobody has asked before. What does the lookup return?',
+        options: [
+          '384 tokens, the system prompt alone, since a lookup stops at the node where the tree first branches',
+          '640 tokens, the system prompt plus the document, since a lookup returns the longest cached ancestor',
+          'Every token of the request, since the lookup inserts the unmatched tail while it walks the tree',
+          '160 tokens from the tools branch, since that leaf is the newest one below the system prompt',
+        ],
+        correct: [1],
+        why: [
+          'A lookup does not stop at a branch. It follows the request\'s own tokens down whichever child matches, so it passes the system prompt and continues into the document.',
+          'Right: the walk follows the request through the system prompt and the document (384 + 256 tokens) and stops at the first token with no cached child. That is the longest cached ancestor.',
+          'The lookup only reads. Insertion happens after prefill has computed K/V for the new tail, so the unmatched tokens still have to be prefilled.',
+          'Recency does not pick the branch. The request\'s own tokens do, and its second segment is the document, so the tools leaf is not on its path at all.',
+        ],
+        kcs: ['t5.radix-eviction'],
+      },
     },
     {
       type: 'prose',
@@ -66,6 +145,12 @@ The block boundary matters. With 16-token blocks, 130 identical leading tokens p
 SGLang's **RadixAttention** stores token sequences in a radix tree (a compressed trie). Each edge is a run of token ids; each node owns the corresponding KV blocks. Lookup follows tokens and returns the longest cached ancestor. Insertion splits an edge when two sequences share only part of it. A shared path is immutable: a writer that diverges receives new tail blocks, exactly the copy-on-write rule from T5.L5.
 
 Eviction operates from the leaves. Removing an internal node would invalidate every descendant, so LRU chooses the coldest eligible leaf, releases its block references, then prunes newly empty ancestors. That one constraint connects tries, refcounts, and memory pressure. The [radix-cache Forge lab](/forge/radix-cache) makes the full loop executable: longest-prefix match, insertion, CoW divergence, leaf LRU, and block conservation under churn.`,
+    },
+    {
+      type: 'callout',
+      variant: 'info',
+      title: 'Build this: lab 07',
+      md: `[Lab 07, The Prefix Is the Product](/forge/radix-cache) is this section in Rust. Start with the first check, \`exact_match\`: an exact-match hit returns the full cached block table. Then \`longest_prefix\`, leaf LRU and the 2,000-op churn that must conserve every block. It builds on lab 02's refcounted block manager, so finish that one first.`,
     },
     {
       type: 'code',
@@ -156,6 +241,8 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
             'Confuses what is cached. The cache holds K/V tensors, not token ids, and the engine still tokenizes to compute block hashes. The saving is prefill FLOPs.',
             'Assumes all-or-nothing matching. Block-hash lookup walks the prompt until the first miss, so a shared prefix is reused even when the tail differs.',
           ],
+          kcs: ['t5.prefix-cache-keys'],
+          miss: ['t5.apc-replays-responses', '', 't5.apc-caches-token-ids', 't5.apc-needs-whole-prompt'],
         },
         {
           q: 'Why does radix-cache eviction choose leaves?',
@@ -173,6 +260,8 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
             'Each node owns the KV blocks for its edge\'s tokens, so interior nodes hold real memory. Descendants depend on that memory, so it cannot be freed first.',
             'Interior nodes are touched whenever a lookup walks through them, so they do have recency metadata. The leaf-only rule comes from dependency, not missing timestamps.',
           ],
+          kcs: ['t5.radix-eviction'],
+          miss: ['t5.leaf-is-largest', '', 't5.interior-holds-no-blocks', 't5.leaf-has-recency-only'],
         },
         {
           q: 'Why is pure longest-prefix routing insufficient?',
@@ -190,6 +279,8 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
             'Cached K/V is immutable and refcounted, so any later request with the same prefix can map it read-only. Cross-request reuse is exactly what APC provides.',
             'Affinity routing sends the request to the worker that already holds the prefix, so no K/V moves. Preferring longer matches is the point; the risk is overload.',
           ],
+          kcs: ['t5.prefix-routing'],
+          miss: ['t5.hit-skips-attention-only', '', 't5.kv-bound-to-request', 't5.prefer-short-matches'],
         },
         {
           q: 'Which value must be part of a safe prefix-cache identity?',
@@ -207,6 +298,8 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
             'Sampling happens after the forward pass over the prompt. Prefill K/V is identical for any temperature or top-p, so including them would only fragment the cache.',
             'A per-session key never lets two users share a system prompt, which removes most of the cache\'s value. Isolation needs a trust-domain salt, not one entry per session.',
           ],
+          kcs: ['t5.prefix-cache-keys'],
+          miss: ['t5.key-is-text', '', 't5.key-includes-sampling', 't5.key-is-per-session'],
         },
       ],
     },

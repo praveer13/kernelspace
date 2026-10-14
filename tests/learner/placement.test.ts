@@ -22,6 +22,7 @@ import { deriveCards } from '../../src/lib/learner/cards'
 import { cachedPathPlan, PATHS, type PathGraph } from '../../src/lib/learner/paths'
 import {
   BLIND_MIN_CHOICES,
+  FRONTIER_PROBES,
   MAX_ITEMS,
   MAX_ITEMS_PER_KC,
   PROBES,
@@ -32,6 +33,7 @@ import {
   canSkipAnchor,
   currentLesson,
   finishWalk,
+  isFrontier,
   levelOfItem,
   placementJson,
   readPlacement,
@@ -66,6 +68,10 @@ beforeAll(async () => {
     authored: authoredIndex(ALL_LESSONS, R_ANCHORS),
   }
 })
+
+/** An expert's walk, in order: the six core KCs, the frontier (asked when the core is all solid), then the Rust anchor. */
+const FRONTIER = FRONTIER_PROBES.map((f) => f.kc)
+const EXPERT_PROBES: KcId[] = [...THRESHOLD_KCS, ...FRONTIER, RUST_ANCHOR_KC]
 
 const trackOf = (kc: KcId) => kcById(kc)?.track ?? 't0'
 const NOW = '2026-10-05T09:00:00.000Z'
@@ -216,20 +222,21 @@ describe('solid and missed', () => {
 /* ------------------------------ the walk on the real content ------------------------------ */
 
 describe('the walk', () => {
-  test('probes the six threshold KCs in curriculum order, then the Rust anchor', () => {
+  test('probes the six threshold KCs in curriculum order, then the frontier (when the core is solid), then the Rust anchor', () => {
     expect([...PROBES]).toEqual([...THRESHOLD_KCS, RUST_ANCHOR_KC])
+    expect(FRONTIER).toEqual(['t6.fp4-capacity', 't7.goodput'])
     const order = drive(real, expert, 3).steps.map((s) => s.kc)
     const firsts = [...new Set(order)]
-    expect(firsts).toEqual([...PROBES])
+    expect(firsts).toEqual(EXPERT_PROBES)
     // each KC's items are asked together
-    expect(order.join(' ')).toBe([...order].sort((x, y) => PROBES.indexOf(x) - PROBES.indexOf(y)).join(' '))
+    expect(order.join(' ')).toBe([...order].sort((x, y) => EXPERT_PROBES.indexOf(x) - EXPERT_PROBES.indexOf(y)).join(' '))
   })
 
   test('an expert is solid everywhere in two items a KC, and is placed at T5 with R as test-outs', () => {
     const { outcome, state } = drive(real, expert, 3)
-    expect(state.asked).toBe(2 * PROBES.length)
-    expect(outcome.result).toMatchObject({ v: 1, at: NOW, entryTrack: 't5', missedKcs: [], rustAnchor: 'solid', items: 14 })
-    expect(outcome.result.solidKcs).toEqual([...PROBES])
+    expect(state.asked).toBe(2 * EXPERT_PROBES.length)
+    expect(outcome.result).toMatchObject({ v: 1, at: NOW, entryTrack: 't5', missedKcs: [], rustAnchor: 'solid', items: 18 })
+    expect(outcome.result.solidKcs).toEqual(EXPERT_PROBES)
     expect(outcome.pattern).toBeNull()
   })
 
@@ -308,8 +315,8 @@ describe('the walk', () => {
   test('the Rust anchor is optional on serving-first only: skipping it reads as skipped, and R lessons become test-outs', () => {
     const w = drive(real, expert, 3, 'serving-first', { skipAnchor: true })
     expect(w.outcome.result.rustAnchor).toBe('skipped')
-    expect(w.state.asked).toBe(2 * THRESHOLD_KCS.length)
-    expect(w.outcome.result.solidKcs).toEqual([...THRESHOLD_KCS])
+    expect(w.state.asked).toBe(2 * (THRESHOLD_KCS.length + FRONTIER.length))
+    expect(w.outcome.result.solidKcs).toEqual([...THRESHOLD_KCS, ...FRONTIER])
     // not optional elsewhere: skipAnchor leaves the state alone
     const full = startWalk('full-ramp', 3)
     expect(skipAnchor(full)).toBe(full)
@@ -323,7 +330,133 @@ describe('the walk', () => {
     expect(start.minutes).toBeGreaterThan(0)
     expect(start.minutes).toBeLessThanOrEqual(15)
     const done = drive(real, expert, 1).state
-    expect(walkProgress(done)).toMatchObject({ topic: 7, asked: 14, expected: 0, minutes: 0 })
+    // the frontier topics join once the core is solid, so an expert's walk ends on topic 9 of 9
+    expect(walkProgress(done)).toMatchObject({ topic: 9, topics: 9, asked: 18, expected: 0, minutes: 0 })
+  })
+})
+
+/* ------------------------------ the frontier probes (§7.1) ------------------------------ */
+
+describe('the frontier probes', () => {
+  /** An expert who is wrong on exactly the KCs in `miss`. */
+  const missing =
+    (miss: readonly KcId[]): Learner =>
+    (v, step) =>
+      miss.includes(step.kc) ? { response: wrongResponse(v), conf: 'sure' } : expert(v, step)
+  const variantOf = (s: Step) => (s.item.source === 'gen' ? s.item.inst.variant : null)
+  const familyOf = (s: Step) => (s.item.source === 'gen' ? s.item.inst.family : null)
+
+  test('two generated probes follow the six core KCs: memory/fp4-fit on t6.fp4-capacity, goodput/slo-count on t7.goodput', () => {
+    expect(FRONTIER_PROBES).toEqual([
+      { kc: 't6.fp4-capacity', variant: 'fp4-fit' },
+      { kc: 't7.goodput', variant: 'slo-count' },
+    ])
+    for (const seed of SEEDS.slice(0, 40)) {
+      const { steps } = drive(real, expert, seed)
+      for (const [kc, family, variant] of [
+        ['t6.fp4-capacity', 'memory', 'fp4-fit'],
+        ['t7.goodput', 'goodput', 'slo-count'],
+      ]) {
+        const mine = steps.filter((s) => s.kc === kc)
+        expect(mine.map((s) => s.n)).toEqual([0, 1])
+        expect(mine.map(familyOf)).toEqual([family, family])
+        // the first item is the named variant; the confirmation is a changed surface (the expert is sure)
+        expect(variantOf(mine[0])).toBe(variant)
+        expect(mine.map((s) => s.level)).toEqual([2, 3])
+      }
+      // after the sixth core KC and before the anchor
+      const order = steps.map((s) => s.kc)
+      expect(order.lastIndexOf('t5.kv-bytes-per-token')).toBeLessThan(order.indexOf('t6.fp4-capacity'))
+      expect(order.lastIndexOf('t7.goodput')).toBeLessThan(order.indexOf(RUST_ANCHOR_KC))
+    }
+  })
+
+  test('a confirmation on a frontier KC is another variant when the family has one (the first item is always the named one)', () => {
+    let other = 0
+    const seeds = SEEDS.slice(0, 40)
+    for (const seed of seeds) {
+      const mine = drive(real, expert, seed).steps.filter((s) => s.kc === 't7.goodput')
+      expect(variantOf(mine[0])).toBe('slo-count')
+      if (variantOf(mine[1]) === 'goodput-rate') other += 1
+    }
+    // the walk tries 12 seeds for an unseen variant; all 12 landing on the same one is possible, and rare
+    expect(other).toBeGreaterThanOrEqual(seeds.length - 2)
+  })
+
+  test('they are asked only when all six core KCs are solid: a miss anywhere in the core goes straight to the anchor', () => {
+    for (const miss of THRESHOLD_KCS) {
+      const w = drive(real, missing([miss]), 8)
+      expect(w.steps.some((s) => isFrontier(s.kc))).toBe(false)
+      expect(w.state.probes).toEqual([...PROBES])
+      expect(w.outcome.result.solidKcs.some(isFrontier)).toBe(false)
+      expect(w.outcome.result.missedKcs.some(isFrontier)).toBe(false)
+    }
+    // a skipped item is a miss too
+    const skipFirst = drive(real, (v, step) => (step.kc === 't0.locality' ? 'skip' : expert(v, step)), 8)
+    expect(skipFirst.steps.some((s) => isFrontier(s.kc))).toBe(false)
+  })
+
+  test('a solid frontier KC is a solid KC, and entryTrack stays T5: the walk cannot vouch for T6 or T7 as a whole', () => {
+    const { outcome } = drive(real, expert, 3)
+    expect(outcome.result.solidKcs).toEqual(expect.arrayContaining(FRONTIER))
+    expect(outcome.result.entryTrack).toBe('t5')
+    // one frontier miss changes neither the entry track nor the other KCs
+    const one = drive(real, missing(['t7.goodput']), 3).outcome.result
+    expect(one).toMatchObject({ entryTrack: 't5', rustAnchor: 'solid', missedKcs: ['t7.goodput'] })
+    expect(one.solidKcs).toEqual(expect.arrayContaining(['t6.fp4-capacity', ...THRESHOLD_KCS, RUST_ANCHOR_KC]))
+    expect(drive(real, missing(FRONTIER), 3).outcome.result).toMatchObject({ entryTrack: 't5', missedKcs: FRONTIER })
+  })
+
+  test('the frontier fits the budget or is left out: tie-breaks that used it up still end at 20 items at most', () => {
+    const q = (n: number): QuizQuestion => ({ q: `Item ${n}?`, options: ['key', 'a', 'b', 'c'], correct: [0], why: ['k', 'a', 'b', 'c'] })
+    const rich: WalkContent = {
+      pool: { families: () => [], make: () => null },
+      authored: (kc) => Array.from({ length: 6 }, (_, i) => ({ source: 'quiz', lessonId: `x.${kc}.${i}`, qi: 0, q: q(i), kcs: [kc] }) as PlayableItem),
+    }
+    /** Confident right, wrong, right (a tie-break, three items) on the first `n` core KCs; an expert elsewhere. */
+    const conflicts =
+      (n: number): Learner =>
+      (v, step) => {
+        if (PROBES.indexOf(step.kc) >= n || step.n !== 1 || v.kind !== 'choice') return expert(v, step)
+        return { response: { kind: 'choice', picks: [v.options.find((o) => !v.correct.includes(o.id))?.id ?? ''] }, conf: 'sure' }
+      }
+    const frontierAsked = (w: Walked) => w.steps.filter((s) => isFrontier(s.kc)).length
+    // three tie-breaks: 15 items, then 2 + 2 for the frontier and 1 for the anchor, which may take a second: exactly 20
+    const three = drive(rich, conflicts(3), 21)
+    expect(frontierAsked(three)).toBe(4)
+    expect(three.state.asked).toBe(MAX_ITEMS)
+    // four: 16 items, the frontier no longer fits, and the walk goes on without it
+    const four = drive(rich, conflicts(4), 21)
+    expect(frontierAsked(four)).toBe(0)
+    expect(four.state.probes).toEqual([...PROBES])
+    expect(four.outcome.result.solidKcs).toEqual([...THRESHOLD_KCS, RUST_ANCHOR_KC])
+    for (const n of [0, 1, 2, 3, 4, 5, 6]) expect(drive(rich, conflicts(n), 9).state.asked).toBeLessThanOrEqual(MAX_ITEMS)
+  })
+
+  test('a frontier KC with no item at all is missed, and the walk still ends', () => {
+    const bare: WalkContent = {
+      ...real,
+      pool: { families: (kc) => (isFrontier(kc) ? [] : real.pool.families(kc)), make: real.pool.make },
+      authored: (kc) => (isFrontier(kc) ? [] : real.authored(kc)),
+    }
+    const w = drive(bare, expert, 4)
+    expect(w.outcome.result.missedKcs).toEqual(FRONTIER)
+    expect(w.outcome.result.entryTrack).toBe('t5')
+  })
+
+  test('skipAnchor still works with the frontier in: the anchor goes and the frontier stays', () => {
+    const w = drive(real, expert, 3, 'serving-first', { skipAnchor: true })
+    expect(w.state.probes).toEqual([...THRESHOLD_KCS, ...FRONTIER])
+    expect(w.state.at).toBe(w.state.probes.length)
+  })
+
+  test('the same seed gives the same frontier items, item for item', () => {
+    for (const seed of SEEDS.slice(0, 20)) {
+      const one = drive(real, expert, seed).steps.filter((s) => isFrontier(s.kc)).map(shown)
+      const two = drive(real, expert, seed).steps.filter((s) => isFrontier(s.kc)).map(shown)
+      expect(one).toHaveLength(4)
+      expect(two).toEqual(one)
+    }
   })
 })
 
@@ -494,6 +627,25 @@ describe('misconceptions', () => {
     expect(outcome.result.missedKcs).toEqual([...PROBES])
   })
 
+  test('lures in T3-T7 checkpoint and spiral items are recorded too, with the sentence they carry', () => {
+    // the real items of T3-T7 lessons that carry a miss id, by probed KC (t3.l6, t5.l8 and t7.l1 among them)
+    const missOf = (it: PlayableItem) => ((it.source === 'quiz' ? it.q.miss : it.source === 'item' ? it.item.miss : undefined) ?? []).filter(Boolean)
+    const trackOfItem = (it: PlayableItem) => Number(/^t(\d)\./.exec(it.source === 'quiz' ? it.lessonId : it.source === 'item' ? it.item.id : '')?.[1])
+    const late = (kc: KcId) => real.authored(kc).filter((it) => trackOfItem(it) >= 3 && missOf(it).length > 0)
+    const kcsWith = [...PROBES, ...FRONTIER].filter((kc) => late(kc).length > 0)
+    expect(kcsWith).toEqual(expect.arrayContaining(['t2.admission-scheduling', 't4.bound-classification', 't7.goodput']))
+    const lateIds = new Set(kcsWith.flatMap((kc) => late(kc).flatMap(missOf)))
+    // a learner who falls for a lure whenever the item has one: every id the walk records is a T3-T7 lure's
+    const lureLearner: Learner = (v, step) =>
+      v.kind === 'choice' ? { response: { kind: 'choice', picks: [v.options.find((o) => o.miss)?.id ?? v.options[0].id] }, conf: 'sure' } : expert(v, step)
+    const content: WalkContent = { pool: { families: () => [], make: () => null }, authored: late }
+    const { outcome } = drive(content, lureLearner, 3)
+    expect(outcome.result.misconceptions.length).toBeGreaterThan(0)
+    for (const id of outcome.result.misconceptions) expect(lateIds.has(id)).toBe(true)
+    for (const s of outcome.slips) expect(s.message.length).toBeGreaterThan(0)
+    expect(outcome.slips.map((s) => s.id)).toEqual(outcome.result.misconceptions)
+  })
+
   test('a right answer names nothing, and a wrong pick on an option with no id names nothing', () => {
     expect(drive(fixture, expert, 6).outcome.result.misconceptions).toEqual([])
     const noId = drive(fixture, (v) => ({ response: { kind: 'choice', picks: [v.kind === 'choice' ? (v.options.find((o) => o.text === 'FIFO only')?.id ?? '') : ''] } }), 6)
@@ -561,6 +713,23 @@ describe('the stored result', () => {
     }
     const fortnight = deriveCards(events, CONTENT, addDays(day, 14), null, { placement })
     expect(Object.keys(fortnight.cards).sort()).toEqual([...solid].sort())
+  })
+
+  test('solid frontier KCs earn placement cards too, each confirmed 7 days after it is created', async () => {
+    const tab = startTab(makeProfile())
+    const { getState } = tab.progress
+    const { outcome } = drive(real, expert, 3)
+    expect(outcome.result.solidKcs).toEqual(expect.arrayContaining(FRONTIER))
+    getState().completePlacement(placementJson(outcome.result))
+    await tab.progress.controls.flush()
+    const events = await (await tab.engine()).events()
+    const placement = readPlacement(getState().working['placement:result'])
+    const set = deriveCards(events, CONTENT, addDays(events[0].day, 14), null, { placement })
+    for (const kc of FRONTIER) {
+      expect(set.cards[kc]).toBeDefined()
+      expect(set.cards[kc].origin).toBe('placement')
+      expect(set.cards[kc].confirmDay).toBe(addDays(set.cards[kc].createdDay, 7))
+    }
   })
 
   test('a miss earns no card, and a second walk replaces the first result', async () => {
@@ -677,7 +846,7 @@ describe('the Curriculum page', () => {
     expect(plan.lessons[0]).toBe('t5.l1')
     expect(plan.testOut).toContain('r.l1')
     expect(html).toContain('Your placement started you at T5')
-    expect(html).toContain('7 solid')
+    expect(html).toContain('9 solid')
     expect(html).toContain('retake the placement walk')
     expect(html.match(/aria-current="true"/g)).toHaveLength(1)
     expect(currentRow(html)).toContain('href="/lesson/t5.l1"')
