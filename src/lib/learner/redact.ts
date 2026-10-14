@@ -7,10 +7,17 @@
  * first event. From `data` it keeps the structural fields in `DATA_KEYS`. Of the working records it keeps the
  * week plan's SLO and nothing else.
  *
+ * Wave 3 (docs/specs/wave-3.md §15.2, task 3c-03) adds what its selectors read: `sinceDays`; the form identity
+ * (`formId`, `formSet`, `formSlot`); a play's per-level results and metric; a Prove-it v2 attempt's template,
+ * return flag and call count (never its `answer` or `actual`); a Fleet Week act's receipt counts and rubric; a
+ * `miss` only when it is a `confuse.<kcId>` id (every other misconception id still goes); and the `value` and
+ * `truth` of numeric items, numbers only and never on an event of provenance `field`, so a learner's own GPU or
+ * device measurements stay on the device.
+ *
  * What goes: free text (explanations, constructed responses, `boot:value`, `fw:doc`, pasted configs), seeds,
  * wasm and component hashes, device ids, event ids, calendar dates and times of day, components, capstone
- * drafts. Refs that name a date (`inc:daily/<date>`, `inc:team/<code>/<date>`) are rewritten to a day offset,
- * and a string that looks like a date or a hash is dropped wherever it sits (`safeToken`).
+ * drafts, `profile:background`, `fw:runs`. Refs that name a date (`inc:daily/<date>`, `inc:team/<code>/<date>`) are
+ * rewritten to a day offset, and a string that looks like a date or a hash is dropped wherever it sits (`safeToken`).
  *
  * One addition rides on the whitelist: the last `complete placement` event carries the placement's solid KC ids
  * as `data.kcs`. Cards replay from that working record (`placement:result`, which is not kept), and a KC id is
@@ -39,7 +46,13 @@ export const DONATION_VERSION = 1
 /** The event fields a donation keeps, besides `data`. */
 export const EVENT_KEYS = ['kind', 'ref', 'score', 'ok', 'conf', 'provenance', 'ms', 'dayOffset'] as const
 
-/** The `data` fields a donation keeps (§20.2). `grp` is re-numbered, and `probes` becomes the probe count. */
+/**
+ * The Wave 3 fields (§15.2). Each has its own shape check (`redactStructure`), because a value of the wrong shape under a
+ * whitelisted name is as dangerous as a field nobody listed.
+ */
+const STRUCTURE_KEYS = ['sinceDays', 'formId', 'formSet', 'formSlot', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth'] as const
+
+/** The `data` fields a donation keeps (§20.2, §15.2). `grp` is re-numbered, and `probes` becomes the probe count. */
 export const DATA_KEYS = [
   'src',
   'kcs',
@@ -61,6 +74,7 @@ export const DATA_KEYS = [
   'probes',
   'arm',
   'via',
+  ...STRUCTURE_KEYS,
 ] as const
 
 export type DonationDataKey = (typeof DATA_KEYS)[number]
@@ -120,10 +134,68 @@ function scrubRef(ref: string, first: LocalDay): string {
   return scrubbed.replace(/[0-9a-fA-F]{32,}/g, 'x')
 }
 
-/** One `data` object through the whitelist. `grpId` numbers attempt groups across the whole donation. */
-function redactData(raw: unknown, grpId: (grp: string) => number): DonatedEvent['data'] | undefined {
-  const d = asRec(raw)
+/** A `miss` id that names a confusion between KCs (wave-3.md §11.2): `confuse.` and a KC id, `<track>.<slug>`. Every other misconception id stays out of a donation. */
+const CONFUSE_RE = /^confuse\.[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/
+
+const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
+const RECEIPT_KEYS = ['cited', 'verified', 'uncited'] as const
+const MAX_LEVELS = 8
+const MAX_RECEIPT_COUNT = 10_000
+const MAX_CALLS = 12
+const MAX_FORM_SLOT = 11
+
+const nonNegInt = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max
+
+/**
+ * The Wave 3 fields of `d` (§15.2), each held to its own shape or left out. `provenance` is the event's: a numeric
+ * answer (`value`) and the truth it was graded against (`truth`) are kept on any event but a `field` one, so a learner's
+ * own GPU or device measurements never leave the device.
+ */
+function redactStructure(d: Rec, provenance: unknown): Partial<Record<DonationDataKey, Json>> {
   const out: Partial<Record<DonationDataKey, Json>> = {}
+  if (finite(d.sinceDays) && d.sinceDays >= 0) out.sinceDays = Math.round(d.sinceDays)
+  if (d.formId === 'A' || d.formId === 'B' || d.formId === 'C') out.formId = d.formId
+  if (d.formSet === 0 || d.formSet === 1 || d.formSet === 2) out.formSet = d.formSet
+  if (nonNegInt(d.formSlot, MAX_FORM_SLOT)) out.formSlot = d.formSlot
+  if (Array.isArray(d.levels)) {
+    const levels: Json[] = []
+    for (const raw of d.levels.slice(0, MAX_LEVELS)) {
+      const l = asRec(raw)
+      const id = safeToken(l.id)
+      if (id === null || typeof l.ok !== 'boolean') continue
+      levels.push({ id, ok: l.ok, ...(l.view === '2d' || l.view === '3d' ? { view: l.view } : {}) })
+    }
+    if (levels.length > 0) out.levels = levels
+  }
+  const metric = asRec(d.metric)
+  const metricName = safeToken(metric.name)
+  if (metricName !== null && finite(metric.mine) && metric.mine >= 0 && finite(metric.ghost) && metric.ghost >= 0) {
+    out.metric = { name: metricName, mine: metric.mine, ghost: metric.ghost }
+  }
+  const qid = safeToken(d.qid)
+  if (qid !== null) out.qid = qid
+  if (d.return === true) out.return = true
+  if (nonNegInt(d.calls, MAX_CALLS) && d.calls >= 1) out.calls = d.calls
+  const receipts = asRec(d.receipts)
+  if (RECEIPT_KEYS.every((k) => nonNegInt(receipts[k], MAX_RECEIPT_COUNT))) {
+    out.receipts = { cited: receipts.cited as number, verified: receipts.verified as number, uncited: receipts.uncited as number }
+  }
+  const rubric = asRec(d.rubric)
+  if (RUBRIC_KEYS.every((k) => nonNegInt(rubric[k], 3))) {
+    out.rubric = { capacity: rubric.capacity as number, slo: rubric.slo as number, cost: rubric.cost as number, failure: rubric.failure as number }
+  }
+  if (typeof d.miss === 'string' && CONFUSE_RE.test(d.miss) && safeToken(d.miss) !== null) out.miss = d.miss
+  if (provenance !== 'field') {
+    if (finite(d.value)) out.value = d.value
+    if (finite(d.truth)) out.truth = d.truth
+  }
+  return out
+}
+
+/** One `data` object through the whitelist. `grpId` numbers attempt groups across the whole donation. */
+function redactData(raw: unknown, provenance: unknown, grpId: (grp: string) => number): DonatedEvent['data'] | undefined {
+  const d = asRec(raw)
+  const out: Partial<Record<DonationDataKey, Json>> = { ...redactStructure(d, provenance) }
   for (const key of ['src', 'form', 'variant', 'phase', 'reason', 'fault', 'arm', 'via'] as const) {
     const t = safeToken(d[key])
     if (t !== null) out[key] = t
@@ -191,7 +263,7 @@ export function redactForPartner(input: Pick<ExportV3, 'events' | 'working'>): D
     const provenance = safeToken(r.provenance)
     if (provenance !== null) kept.provenance = provenance
     if (finite(r.ms) && r.ms >= 0) kept.ms = Math.round(r.ms / 1000) * 1000
-    const data = redactData(r.data, grpId) ?? {}
+    const data = redactData(r.data, r.provenance, grpId) ?? {}
     if (i === lastPlacement && solid.length > 0) data.kcs = solid.slice(0, 200)
     if (Object.keys(data).length > 0) kept.data = data
     return kept
@@ -264,7 +336,9 @@ export function parseDonation(text: string): ParsedDonation {
     if (finite(e.ms)) kept.ms = e.ms
     const d = asRec(e.data)
     const data: Partial<Record<DonationDataKey, Json>> = {}
-    for (const key of DATA_KEYS) if (d[key] !== undefined) data[key] = d[key] as Json
+    for (const key of DATA_KEYS) if (d[key] !== undefined && !(STRUCTURE_KEYS as readonly string[]).includes(key)) data[key] = d[key] as Json
+    // the Wave 3 fields meet their shape checks again, so a hand-edited file cannot put a miss id or a number where it does not belong
+    Object.assign(data, redactStructure(d, kept.provenance))
     if (Object.keys(data).length > 0) kept.data = data
     events.push(kept)
   }
