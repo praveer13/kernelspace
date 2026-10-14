@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import ErrorEntry from '@/components/rust/ErrorEntry'
 import { museumEntries } from '@/lib/rust/museum'
 import type { Gen, Instance } from '@/lib/items/types'
 import type { Unit } from '@/lib/items/families/compile'
+import { scrollBehavior } from '@/lib/lesson-scroll'
+import { isPlainClick, jumpToEntry } from '@/lib/museum-jump'
 
 /**
  * /errors (docs/specs/wave-2.md §15.6): the Error Museum, a view of the compile bank. One entry per error
@@ -28,6 +30,9 @@ export default function Errors() {
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const { hash } = useLocation()
+  const navigate = useNavigate()
+  // The last hash already scrolled to and focused (by a chip click or a deep link), so the effect below does not repeat it.
+  const handled = useRef('')
 
   useEffect(() => {
     let live = true
@@ -49,15 +54,24 @@ export default function Errors() {
 
   const entries = useMemo(() => (museum ? museumEntries(museum.units) : []), [museum])
 
-  // The entries mount after the bank loads, so a deep link scrolls to its entry then.
+  // The entries mount after the bank loads, so a deep link scrolls to its entry then and focuses its heading.
   const ready = entries.length > 0
   useEffect(() => {
-    if (!ready || !hash) return
-    const el = document.getElementById(decodeURIComponent(hash.slice(1)))
-    if (!el) return
-    el.scrollIntoView({ behavior: 'instant' }) // a fragment link jumps, as the browser's own would
-    el.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true })
+    if (!hash) handled.current = ''
+    if (!ready || !hash || handled.current === hash) return
+    handled.current = hash
+    jumpToEntry(document, decodeURIComponent(hash.slice(1)), 'instant') // a fragment link jumps, as the browser's own would
   }, [ready, hash])
+
+  // A chip is a plain #anchor, which scrolls and leaves focus on body. A click does what a deep link does: it moves focus
+  // to the entry's heading, and scrolls smoothly only if the learner has not asked for reduced motion.
+  const goTo = (e: MouseEvent<HTMLAnchorElement>, code: string) => {
+    if (!isPlainClick(e.nativeEvent)) return
+    e.preventDefault()
+    handled.current = `#${code}`
+    if (hash !== `#${code}`) navigate({ hash: `#${code}` })
+    jumpToEntry(document, code, scrollBehavior())
+  }
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-16" data-page="errors">
@@ -89,7 +103,7 @@ export default function Errors() {
             <ul className="flex flex-wrap gap-2">
               {entries.map((e) => (
                 <li key={e.code}>
-                  <a href={`#${e.code}`} className="inline-flex min-h-11 items-center rounded-md border border-line px-3 font-mono text-[13px] text-text-1 hover:bg-surface-2">
+                  <a href={`#${e.code}`} onClick={(ev) => goTo(ev, e.code)} className="inline-flex min-h-11 items-center rounded-md border border-line px-3 font-mono text-[13px] text-text-1 hover:bg-surface-2">
                     {e.code}
                   </a>
                 </li>

@@ -1,9 +1,13 @@
 /**
  * "Ask claude", "ask chatgpt" and "copy packet" (H2, docs/specs/wave-2.md §14.2): the one place a context packet
- * leaves the page. A press builds the packet, copies it to the clipboard, records `ack packet:…` (how it left, how long
- * it was, which arm of the help experiment showed it) and opens the agent with a short instruction to paste it. If the
+ * leaves the page. A press copies the packet to the clipboard, records `ack packet:…` (how it left, how long it was,
+ * which arm of the help experiment showed it) and opens the agent with a short instruction to paste it. If the
  * clipboard refuses, the packet appears in a dialog to copy by hand. The mounts differ only in what they put in the
  * packet: AgentActions (lessons), AskPacket (a lab's failing checks) and the sim page (its `?cfg=`).
+ *
+ * The packet is built when the pointer or focus reaches the buttons, so a press can copy and open the tab in the same
+ * turn as the click: Safari blocks `window.open` after an await. A press that beats the build still works, and if the
+ * browser blocks the tab anyway the link is shown here and the status does not claim it opened (ask-flow.ts).
  *
  * The ack never records content, and nothing here is credit: help-seeking is counted, not graded.
  */
@@ -17,6 +21,7 @@ import type { PacketRef } from '@/lib/ledger/types'
 import type { Arm } from '@/lib/learner/experiments'
 import { agentUrl } from '@/lib/mentor/packet'
 import type { Agent, Packet } from '@/lib/mentor/packet'
+import { ackVia, askFlow, askLine, type Via } from './ask-flow'
 
 const CHIP =
   'inline-flex min-h-6 items-center gap-1 rounded border border-line px-2 py-0.5 font-mono text-[10px] text-text-3 transition-colors hover:border-accent/50 hover:text-accent aria-disabled:cursor-wait aria-disabled:opacity-60 [@media(pointer:coarse)]:min-h-11'
@@ -42,7 +47,14 @@ export interface AskButtonsProps {
   className?: string
 }
 
-type Via = 'claude' | 'chatgpt' | 'copy'
+/** A packet built ahead of the press stays good this long; the ledger notes in it are read again after that. */
+const WARM_MS = 20_000
+
+interface Warm {
+  at: number
+  promise: Promise<Packet>
+  packet?: Packet
+}
 
 /** What the dialog shows when the clipboard write failed. */
 interface Manual {
@@ -55,6 +67,10 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [manual, setManual] = useState<Manual | null>(null)
+  // The agent whose link is shown in place of a tab the browser would not open.
+  const [blocked, setBlocked] = useState<Agent | null>(null)
+  const warm = useRef<Warm | null>(null)
+  const buildNow = useRef(build)
   const dialog = useRef<HTMLDialogElement>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const timer = useRef<number | undefined>(undefined)
@@ -62,6 +78,9 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
   const iconSize = size === 'chip' ? 11 : 14
   const suffix = about === undefined ? '' : ` about ${about}`
 
+  useEffect(() => {
+    buildNow.current = build
+  }, [build])
   useEffect(() => () => window.clearTimeout(timer.current), [])
   useEffect(() => {
     if (manual === null) return
@@ -75,44 +94,65 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
     timer.current = window.setTimeout(() => setStatus(''), 8000)
   }
 
-  const use = async (via: Via) => {
+  // Starts the build when the learner reaches for a button, so the press itself has nothing to wait for.
+  const prepare = () => {
+    const held = warm.current
+    if (held !== null && Date.now() - held.at < WARM_MS) return
+    const entry: Warm = { at: Date.now(), promise: buildNow.current() }
+    warm.current = entry
+    entry.promise.then(
+      (p) => {
+        entry.packet = p
+      },
+      () => {
+        if (warm.current === entry) warm.current = null
+      },
+    )
+  }
+
+  const use = (via: Via) => {
     if (busy) return
+    const held = warm.current
+    const ready = held !== null && Date.now() - held.at < WARM_MS ? held.packet : undefined
+    warm.current = null
     setBusy(true)
-    try {
-      const packet = await build()
-      const ack = () => recordHelp(packetRef, { via, chars: packet.chars, ...(arm === undefined ? {} : { arm }) })
-      let copied = false
-      try {
-        await navigator.clipboard.writeText(packet.text)
-        copied = true
-      } catch {
-        copied = false
-      }
-      ack()
-      if (copied) {
-        say(via === 'copy' ? `Packet copied, ${packet.chars.toLocaleString('en-US')} characters.` : `Packet copied, ${packet.chars.toLocaleString('en-US')} characters. Paste it into the new tab.`)
-        if (via !== 'copy') window.open(agentUrl(via, label), '_blank', 'noopener')
-      } else {
-        say('The clipboard was not available. The packet is in a box to copy by hand.')
-        setManual({ packet, via })
-      }
-    } finally {
-      setBusy(false)
-    }
+    setBlocked(null)
+    // Everything up to the first await in askFlow runs inside this click: the copy starts and, with a ready packet, so does the tab.
+    askFlow({
+      via,
+      url: agentUrl(via === 'copy' ? 'claude' : via, label),
+      ready,
+      build: () => buildNow.current(),
+      writeText: (text) => navigator.clipboard.writeText(text),
+      open: (url) => window.open(url, '_blank'),
+    })
+      .then((result) => {
+        if (result.status !== 'failed') recordHelp(packetRef, { via: ackVia(result, via), chars: result.packet.chars, ...(arm === undefined ? {} : { arm }) })
+        say(askLine(result))
+        if (result.status === 'manual') setManual({ packet: result.packet, via })
+        if (result.status === 'blocked' && via !== 'copy') setBlocked(via)
+      })
+      .finally(() => setBusy(false))
   }
 
   const agentLink = (a: Agent) => agentUrl(a, label)
 
   return (
-    <div className={cn('inline-flex flex-wrap items-center gap-1.5', className)} data-ask-buttons={packetRef}>
+    <div
+      className={cn('inline-flex flex-wrap items-center gap-1.5', className)}
+      data-ask-buttons={packetRef}
+      onPointerEnter={prepare}
+      onPointerDown={prepare}
+      onFocusCapture={prepare}
+    >
       {lead}
       {copyPacket && (
-        <button type="button" className={style} aria-disabled={busy} onClick={() => void use('copy')}>
+        <button type="button" className={style} aria-disabled={busy} onClick={() => use('copy')}>
           <ClipboardCopy size={iconSize} aria-hidden /> copy packet<span className="sr-only">{suffix}</span>
         </button>
       )}
       {(['claude', 'chatgpt'] as const).map((a) => (
-        <button key={a} type="button" className={style} aria-disabled={busy} onClick={() => void use(a)}>
+        <button key={a} type="button" className={style} aria-disabled={busy} onClick={() => use(a)}>
           <ExternalLink size={iconSize} aria-hidden /> ask {a}
           <span className="sr-only">{suffix} (copies a packet, then opens a new tab)</span>
         </button>
@@ -120,6 +160,13 @@ export default function AskButtons({ packetRef, label, build, arm, copyPacket = 
       <span role="status" aria-live="polite" className={cn(status === '' ? 'sr-only' : 'font-mono text-[11px] text-text-3')}>
         {status}
       </span>
+      {blocked !== null && (
+        <a className={cn(style, 'no-underline')} href={agentLink(blocked)} target="_blank" rel="noopener noreferrer" data-ask-blocked={blocked}>
+          Open {blocked}
+          <ExternalLink size={iconSize} aria-hidden />
+          <span className="sr-only"> (opens in a new tab; the packet is already copied)</span>
+        </a>
+      )}
       {manual !== null && (
         <dialog
           ref={dialog}

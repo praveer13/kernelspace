@@ -190,11 +190,11 @@ describe('StagePanel and ReferenceRun draw from the bundle', () => {
 
 describe('PrimmPanel walks the bundle’s steps, items and dials', () => {
   const panel = (initial: 'predict' | 'run' | 'investigate' | 'modify' | 'make', children?: string) =>
-    renderToStaticMarkup(createElement(PrimmPanel, { bundle: FAKE, checks: FAKE_CHECKS, passed: new Set<string>(), initial, children }))
+    renderToStaticMarkup(createElement(PrimmPanel, { bundle: FAKE, checks: FAKE_CHECKS, passed: new Set<string>(), initial, title: 'Gizmo Pools', children }))
 
   test('it is named for the lab and its blurbs and tabs are the bundle’s', () => {
     const html = panel('predict')
-    expect(html).toContain('aria-label="Lab 09 in five steps"')
+    expect(html).toContain('aria-label="Gizmo Pools, in five steps"')
     expect(html).toContain('Guess how many gizmos fit.')
     expect(html).toContain('data-step-tab="modify"')
     expect(html).toContain('How many gizmos fit in the fake pool?')
@@ -332,8 +332,8 @@ describe('lab 01 through the same panels is what Wave 1 shipped', () => {
 
   test('the bundle exists in the registry and the panels render it', async () => {
     expect(await findForgeBundle('rust-allocator')).toBe(lab01)
-    const panel = renderToStaticMarkup(createElement(PrimmPanel, { bundle: lab01, checks: lab.checks, passed: new Set<string>(), initial: 'predict' }))
-    expect(panel).toContain('aria-label="Lab 01 in five steps"')
+    const panel = renderToStaticMarkup(createElement(PrimmPanel, { bundle: lab01, checks: lab.checks, passed: new Set<string>(), initial: 'predict', title: lab.title }))
+    expect(panel).toContain(`aria-label="${lab.title}, in five steps"`)
     expect(panel).toContain('data-item="lab01.primm.p1"')
     const stages = renderToStaticMarkup(createElement(StagePanel, { bundle: lab01, checks: lab.checks, passed: new Set<string>() }))
     expect(stages).toContain('Build in four stages')
@@ -415,7 +415,7 @@ describe('SetupLanes, FolderWatch and AskPacket take their final props', () => {
     expect(html).toContain('Creates a fresh folder and enters the exercise crate. It stops if that folder already exists.')
   })
 
-  test('FolderWatch {lab, onModule} and AskPacket {lab, reports} are stubs that show nothing but their marker', () => {
+  test('FolderWatch {lab, onModule} and AskPacket {lab, reports} show nothing but their marker until there is something to show', () => {
     const fw: FolderWatchProps = { lab, onModule: () => {} }
     const ap: AskPacketProps = { lab, reports: [] }
     expect(renderToStaticMarkup(createElement(FolderWatch, fw))).toBe(`<div hidden="" data-folder-watch="${lab.id}"></div>`)
@@ -424,8 +424,8 @@ describe('SetupLanes, FolderWatch and AskPacket take their final props', () => {
 
   test('ForgeLab mounts all three with those props, so 2c-06, 2c-07 and 2c-08 never edit it', () => {
     expect(files).toContain('<SetupLanes lab={lab} />')
-    expect(files).toContain('<FolderWatch lab={lab} onModule={onFile} />')
-    expect(files).toContain('<AskPacket lab={lab} reports={reports} />')
+    expect(files).toContain('<FolderWatch lab={lab} onModule={onFile} onWatching={setWatching} />')
+    expect(files).toContain('<AskPacket lab={lab} reports={reports} ladderIds={bundle.ladder.map((l) => l.checkId)} />')
     expect(files).toContain("import('@/components/forge/FolderWatch')")
     expect(files).toContain("import('@/components/forge/AskPacket')")
   })
@@ -442,7 +442,7 @@ describe('ForgeLab mounts by bundle, and keeps the plain page for every other la
     expect(page).not.toContain('rust-allocator')
     expect(page).not.toMatch(/LAB01|isLab01/)
     expect(page).toContain('findForgeBundle(labId)')
-    expect(page).toContain('bundle !== undefined ? (')
+    expect(page).toContain('hasForgeBundle(labId)')
   })
 
   test('every panel it mounts is given the bundle', () => {
@@ -452,7 +452,7 @@ describe('ForgeLab mounts by bundle, and keeps the plain page for every other la
   })
 
   test('the plain page is still get-the-lab, make-it-green, the drop zone and the results', () => {
-    expect(page).toMatch(/\) : \(\s*<>\s*\{getTheLab\}\s*\{makeGreen\}\s*\{dropZone\}\s*\{results\}\s*<\/>\s*\)\}/)
+    expect(page).toMatch(/\? \(\s*<>\s*\{getTheLab\}\s*\{makeGreen\}\s*\{dropZone\}\s*\{results\}\s*<\/>\s*\) : \(/)
   })
 
   test('the InstallButton mount from 2a-02 stays, given the run’s bytes', () => {
@@ -461,6 +461,7 @@ describe('ForgeLab mounts by bundle, and keeps the plain page for every other la
   })
 
   test('a bundle that fails to load leaves the plain page rather than an error', () => {
-    expect(page).toMatch(/findForgeBundle\(labId\)[\s\S]*\.catch\(\(\) => undefined\)/)
+    expect(page).toMatch(/findForgeBundle\(labId\)[\s\S]*\.catch\(\(\) => \{\s*if \(live\) setState\(\{ status: 'failed' \}\)/)
+    expect(page).toContain("bundleState.status === 'none' || bundleState.status === 'failed'")
   })
 })

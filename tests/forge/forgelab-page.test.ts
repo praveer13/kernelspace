@@ -57,8 +57,9 @@ describe('what ForgeLab mounts', () => {
     expect(page).toMatch(/<PrimmPanel\s+bundle=\{bundle\}[\s\S]*\{doing\}[\s\S]*<\/PrimmPanel>/)
   })
 
-  test('the walk is a lazy chunk whose fallback is the same drop-zone content', () => {
-    expect(page).toContain('<Suspense fallback={doing}>')
+  test('the walk is a lazy chunk whose fallback is the walk-shaped placeholder, never the drop-zone content', () => {
+    expect(page).toContain('<Suspense fallback={<WalkPlaceholder />}>')
+    expect(page).not.toContain('<Suspense fallback={doing}>')
   })
 
   test('every lab mounts the discussion as a lab thread', () => {
