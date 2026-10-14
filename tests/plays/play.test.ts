@@ -29,6 +29,7 @@ import {
   DEFAULT_DIALS,
   PLAYS,
   PLAY_IDS,
+  PLAY_PRODUCTION_ROWS,
   PRODUCTION_ROWS,
   applyFree,
   canSkip,
@@ -106,6 +107,17 @@ describe('the registry', () => {
 
   test('the practice seed is in band', () => {
     expect(checkPlacementBand(makePlacementTrace(PLAY_PRACTICE_SEED)).inBand).toBe(true)
+  })
+
+  test('every play brings its own card: rows that are its productionClaims, at least three, with claims in the full registry (the cube’s are lazy)', () => {
+    const ids = new Set(CLAIMS.map((c) => c.id))
+    expect(Object.keys(PLAY_PRODUCTION_ROWS).sort()).toEqual([...PLAY_IDS].sort())
+    for (const id of PLAY_IDS) {
+      const rows = PLAY_PRODUCTION_ROWS[id]
+      expect([id, rows.length >= 3]).toEqual([id, true])
+      expect(PLAYS[id].productionClaims).toEqual(rows.map((r) => r.claim))
+      for (const r of rows) expect([id, r.claim, ids.has(r.claim)]).toEqual([id, r.claim, true])
+    }
   })
 })
 

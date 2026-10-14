@@ -9,7 +9,7 @@
  * Wave 2 adds the 31 ids that the other PRs tag (docs/specs/wave-2.md §4.2, task 2a-06): the families
  * goodput, cost, memory, spec, sig and compile, the labs 02-03 checks, the scheduler play, the attention
  * zoo and the fault catalogue. 2a-11 may add KCs but never renames these.
- * Wave 3 adds `rasterL2Reuse` (docs/specs/wave-3.md §4.3, task 3a-09).
+ * Wave 3 adds `rasterL2Reuse` (docs/specs/wave-3.md §4.3, task 3a-09), then the cube's three other level KCs (3b-01).
  */
 
 export const KC = {
@@ -39,6 +39,10 @@ export const KC = {
 
   /* ---- Wave 3 (§4.3): the tiling cube's raster level ---- */
   rasterL2Reuse: 't4.raster-l2-reuse',
+  /* ---- Wave 3 (3b-01): the cube's other levels, named here so the play's KCs are all in the contract (verify-plays reads it) ---- */
+  sharedMemoryScratchpad: 't4.shared-memory-scratchpad',
+  occupancy: 't4.occupancy',
+  flashAttentionBlocking: 't4.flashattention-blocking',
 
   /* ---- kv family, KvCacheSim tasks, Boot ---- */
   kvCapacity: 't5.kv-capacity',
