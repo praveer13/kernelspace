@@ -274,14 +274,14 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
         q: 'Which statement marks where this analogy breaks?',
         options: [
           'Victims lose their memory and pay when they resume; a swapped page is faulted back in and a preempted sequence\'s KV blocks are restored or recomputed',
-          'A fork shares a whole address space and the kernel tracks it; a beam branch shares prompt KV blocks and vLLM\'s block manager tracks these in software',
+          'A fork gives the child a copy of the whole address space, shared copy-on-write until a write; a beam branch shares its prompt KV blocks in software',
           'Fixed-size units let any free unit serve any owner; a free frame can back any page and a free KV block can serve any sequence of tokens',
           'An indirection table lets a contiguous view sit on scattered units; the page table does it for a process and the KV block table for a sequence',
         ],
         correct: [1],
         why: [
           'Holds on both sides, so it is not the break: whatever is taken from a running owner is paid for on resume, by a fault for the OS and by a restore or recompute for the engine.',
-          'Right: fork shares an entire address space under the kernel\'s control. A beam branch shares only prompt blocks, and the sharing is software bookkeeping in vLLM\'s block manager, not an OS mechanism.',
+          'Right: fork() gives the child a copy of the entire address space, which the kernel shares copy-on-write until either side writes. A beam branch shares only prompt blocks, and the sharing is software bookkeeping in vLLM\'s block manager, not an OS mechanism.',
           'Holds on both sides, so it is not the break: with identical units there is no external fragmentation, and any free frame or block serves any owner.',
           'Holds on both sides, so it is not the break: both give an owner a contiguous logical view over physical units that can sit anywhere.',
         ],

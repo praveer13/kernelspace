@@ -240,18 +240,17 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
             'Copying the cached prompt\'s key and value tensors into freshly allocated blocks on a hit, giving each request a private copy',
             'Hashing token blocks chained to the blocks before them, and mapping matching cached physical blocks into the new sequence\'s table',
             'Keeping finished blocks in a host-side key-value store in host memory, and fetching them back over the bus when a matching request arrives',
-            'Looking the new prompt up in the request\'s own block table, which is indexed by token content and so finds blocks filled earlier',
+            'Merging requests that share a system prompt into one long shared sequence, and splitting the outputs afterwards',
           ],
           correct: [1],
           kcs: ['t5.block-refcounts', 't5.block-tables'],
-          miss: ['', '', '', 'confuse.t5.prefix-cache-keys'],
           explanation:
             'Refcounted block sharing makes prefix caching nearly free: no copy, no special path, the same machinery as beam forks. This is why "the block table" is the whole design.',
           why: [
             'Copying would cost bandwidth and give every request its own memory, which is the duplication prefix caching removes. Matching blocks are mapped in place and shared.',
             'Right: a hit maps the existing physical blocks into the new block table and bumps refcounts, so the prefix is stored once and shared by every request.',
             'The default V1 prefix cache lives in GPU memory: freed blocks stay hashed in HBM until reallocated. A CPU tier is an optional add-on, not the mechanism.',
-            'A block table is one sequence\'s array from logical block index to physical block id, and a new request\'s table starts empty. Finding a cached prefix takes a separate lookup, a hash of each token block, and only then are the matching blocks added to the table.',
+            'Requests stay separate sequences with their own outputs and block tables. Sharing happens at the block level, not by concatenating different requests.',
           ],
         },
         {
@@ -310,6 +309,26 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
             'Right: the paper measured 20-26% higher attention-kernel latency, but attention is only part of a step and the memory saved allows larger batches, giving 2-4x higher throughput.',
             'PagedAttention reads blocks in place. Gathering them into a buffer first would add a full pass over the cache, defeating the purpose of paging.',
             'Tables are small but are read from memory per sequence, not held in registers, and the block gather still adds latency. The paper reports a measurable slowdown, not parity.',
+          ],
+        },
+        {
+          q: 'With 16-token blocks, a sequence\'s block table reads [7, 3, 12]. What does the entry 3 tell the attention kernel?',
+          options: [
+            'Physical block 3 holds the K/V of one particular run of token ids, so any request with those tokens finds it through this table',
+            'Tokens 16 to 31 have their K/V in physical block 3, so the kernel reads that block wherever it sits in the pool',
+            'Three blocks of this sequence come before this one, so the K/V that this entry points at starts at token 48',
+            'Physical blocks 3 to 11 are reserved for this sequence, since each entry marks where a contiguous run of blocks starts',
+          ],
+          correct: [1],
+          kcs: ['t5.block-tables'],
+          miss: ['confuse.t5.prefix-cache-keys', '', '', ''],
+          explanation:
+            'A block table is indexed by logical block (the entry\'s position) and holds physical block ids (the entry\'s value). Index 1 covers tokens 16 to 31, and its value says where they live. Finding blocks by their tokens is the prefix cache\'s hash lookup, a separate structure.',
+          why: [
+            'Takes the block table for the prefix cache\'s index. The table belongs to one sequence and is indexed by position; finding blocks by their tokens is the hash lookup\'s job, which then writes matching blocks into a new table.',
+            'Right: the entry sits at index 1, so it covers logical block 1, tokens 16 to 31, and its value 3 names the physical block in the pool that holds their K/V.',
+            'The value 3 is a physical block id, not a position. The entry\'s position in the table, index 1, gives the logical block: tokens 16 to 31, not 48 onwards.',
+            'Each entry names one fixed-size block, and nothing has to be contiguous: the next logical block of this sequence sits in physical block 12, unrelated to 3.',
           ],
         },
       ],

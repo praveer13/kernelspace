@@ -93,7 +93,7 @@ Each adapted matrix stores A (r × d_in) and B (d_out × r), so it holds **r × 
           osLine: 'variable objects map logical pages onto one physical pool',
           llm: 'S-LoRA Unified Paging',
           llmLine: 'adapter tensors and KV block tables compete in one HBM allocator',
-          breaks: 'A program that touches an unmapped page just faults it in and carries on; the pager must reserve a request\'s adapter pages and KV blocks together before it joins a batch, all or nothing, because the batch cannot run without its adapter resident.',
+          breaks: 'A program that touches an unmapped page faults it in on demand and carries on; S-LoRA fetches the adapters a batch needs from main memory before that batch runs, and prefetches the next batch\'s adapters, predicted from the waiting queue, while the current batch runs (S-LoRA §5.2).',
         },
         {
           os: 'scatter/gather I/O',

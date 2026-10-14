@@ -215,14 +215,14 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
           osLine: 'Add pods when the metric crosses the line; lag kills you at spike.',
           llm: 'Planner on queue age + KV utilization + TPOT',
           llmLine: 'Leading signals chosen per phase; scale the binding fleet, not "the service".',
-          breaks: 'HPA scales one homogeneous deployment on a pod-level metric; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so no single number tells it what to add.',
+          breaks: 'An HPA scales one workload on its own metrics, CPU or custom and external ones such as a queue length, taking the largest replica count any of them asks for; the Planner chooses between two fleets with different physics (compute-bound prefill, bandwidth-bound decode) and the ratio between them, so no one workload\'s replica count says what to add.',
         },
         {
           os: 'cold JVM pool',
           osLine: 'Keep-warm for the 9am spike because JIT+load is slow.',
           llm: 'keep-warm GPU pool + fast loaders',
           llmLine: 'Minutes of weight-load: capacity arrives late unless pre-warmed.',
-          breaks: 'A cold JVM serves slowly while it warms up; a new GPU worker serves nothing until its weights, hundreds of GB, have loaded, which takes minutes, so the pool has to be sized for the spike before it arrives.',
+          breaks: 'A cold JVM serves slowly while it warms up; a new GPU worker serves nothing until its weights have loaded, 140 GB for a 70B model in BF16, which takes minutes, so the pool has to be sized for the spike before it arrives.',
         },
         {
           os: 'graceful degradation ladder',
@@ -239,14 +239,14 @@ A long waiting list with free KV blocks and a normal TPOT points at the front of
         options: [
           'An autoscaler should act on a signal that leads the damage, and the Planner acts on queue age before TTFT breaks',
           'A web tier answers overload with a clear retryable error, and an inference fleet sheds with a retryable 429 instead of timing out',
-          'A cold JVM serves slowly while it warms up, and a new GPU worker serves nothing until its hundreds of GB of weights have loaded',
+          'A cold JVM serves slowly while it warms up, and a new GPU worker serves nothing until a 70B model\'s 140 GB of weights have loaded',
           'Keeping spare capacity warm for a predictable peak costs money all day, and a keep-warm GPU pool costs more for each idle worker',
         ],
         correct: [2],
         why: [
           'This holds on both sides: a metric that leads the failure leaves time to react, in a web tier as in the Planner. The pair claims exactly this, so it is not where the analogy stops.',
           'This holds on both sides: a fast, retryable refusal beats a silent timeout for web and inference users alike. The analogy agrees here, so it is not a break.',
-          'Right: a cold JVM still serves, only slowly, while a new GPU worker serves nothing until its weights, hundreds of GB, have loaded, which takes minutes. Capacity has to be ordered before the spike, not at it.',
+          'Right: a cold JVM still serves, only slowly, while a new GPU worker serves nothing until its weights have loaded, 140 GB for a 70B model at two bytes per BF16 parameter, which takes minutes. Capacity has to be ordered before the spike, not at it.',
           'This holds on both sides: warm spare capacity is paid for whether or not it is used, so headroom trades against the bill in a web tier and in a GPU pool alike.',
         ],
       },

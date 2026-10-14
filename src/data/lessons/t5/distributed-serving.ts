@@ -63,9 +63,9 @@ const lesson: Lesson = {
         },
         {
           kind: 'numeric',
-          q: 'A prefill GPU hands a 1.3 GB KV cache to a decode GPU over a 50 GB/s link. How long does the transfer take?',
+          q: 'A prefill GPU hands a 1.34 GB KV cache to a decode GPU over a 50 GB/s link. How long does the transfer take?',
           unit: 'ms',
-          truth: 26,
+          truth: 26.8,
           okWithinFactor: 1.15,
           revealAt: 'Disaggregation: prefill and decode break up',
           kcs: ['t5.pd-disaggregation', 't5.interconnect-ladder'],
@@ -101,7 +101,7 @@ Production serving mixes all three: TP within the node, PP across a few nodes fo
 
 The clean idea from Splitwise/DistServe/Mooncake (2024): prefill and decode have *opposite* roofline regimes (T4.L3) and *opposite* hardware and batching preferences — so why force them onto the same GPUs? **Disaggregate**: dedicated **prefill workers** (big batches of prompts, compute-saturated) and dedicated **decode workers** (huge KV-resident batches, bandwidth-saturated). When prefill finishes a prompt, its KV cache is **transferred** to a decode worker over RDMA (NVLink within a node), and the decode worker admits it into its continuous batch.
 
-The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SKUs), its own batching policy, and its own scaling curve — and ITL is finally isolated from prompt-length spikes (no more 100k-token prefill convoying everyone's decode, even with chunking). The cost: the **KV transfer** — a 4k-context KV for our 70B (T5.L4: ~1.3 GB) moved over a 50 GB/s RDMA link adds ~25 ms to TTFT. The entire engineering game of Dynamo/Mooncake is hiding that transfer: schedule it early, overlap it with prefill of later chunks, route around it with prefix-cache-aware placement.`,
+The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SKUs), its own batching policy, and its own scaling curve — and ITL is finally isolated from prompt-length spikes (no more 100k-token prefill convoying everyone's decode, even with chunking). The cost: the **KV transfer** — a 4k-context KV for our 70B (T5.L4's 320 KiB per token × 4,096 tokens = 1.34 GB) moved over a 50 GB/s RDMA link adds 26.8 ms to TTFT. The entire engineering game of Dynamo/Mooncake is hiding that transfer: schedule it early, overlap it with prefill of later chunks, route around it with prefix-cache-aware placement.`,
     },
     {
       type: 'isomorphism',
@@ -119,7 +119,7 @@ The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SK
           osLine: 'Split by workload profile; scale independently; pay a network hop between stages.',
           llm: 'disaggregated serving',
           llmLine: 'Prefill fleet + decode fleet + KV transfer fabric; TTFT pays the hop, ITL gains the isolation.',
-          breaks: 'A service hop carries a small message; this hop carries the KV cache (1.3 GB for a 4k-token prompt on a 70B model, about 26 ms over a 50 GB/s link), so the split only pays when contexts are long and the fleet is big.',
+          breaks: 'A service hop carries a small message; this hop carries the KV cache (1.34 GB for a 4,096-token prompt on a 70B model, 26.8 ms over a 50 GB/s link), so the split only pays when contexts are long and the fleet is big.',
         },
       ],
       principle:
@@ -134,7 +134,7 @@ The wins: each phase gets its own hardware mix (compute-heavy vs memory-heavy SK
         ],
         correct: [0],
         why: [
-          'Right: a microservice call carries a request-sized message, while disaggregation moves the KV cache, about 1.3 GB for a 4k-token prompt on a 70B model. The hop is a bandwidth bill, so contexts must be long enough to amortize it.',
+          'Right: a microservice call carries a request-sized message, while disaggregation moves the KV cache, 1.34 GB for a 4,096-token prompt on a 70B model. The hop is a bandwidth bill, so contexts must be long enough to amortize it.',
           'This holds on both sides: a monolith compromises between its phases, and a colocated engine compromises between prefill and decode. The pair claims exactly this, so it is not where the analogy stops.',
           'This holds on both sides: separate services and separate prefill and decode fleets can each be scaled to their own load. The analogy agrees here, so it is not a break.',
           'This holds on both sides: any split puts a network hop between stages, with its latency and its failures. The pair already says TTFT pays the hop, so this is a match.',
