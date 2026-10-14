@@ -142,7 +142,6 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
   const [load, setLoad] = useState<Load>('loading')
   const [attempt, setAttempt] = useState(0)
   const [events, setEvents] = useState<ExerciseEvent[]>([])
-  const state = useMemo(() => readExercise(events, at), [events, at])
 
   const [round, dispatch] = useReducer((r: Round, a: Parameters<typeof reduceRound>[2]) => reduceRound(def, r, a), undefined, () => freshRound(env.now()))
   const [draft, setDraft] = useState('')
@@ -152,11 +151,16 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
   const [failure, setFailure] = useState<Failure | null>(null)
   const [runs, setRuns] = useState(0)
 
+  // the round still open in this tab is not yet a round left unsaved; one found in the ledger at mount is
+  const state = useMemo(() => readExercise(events, at, round.phase === 'explain' ? round.seed : undefined), [events, at, round.phase, round.seed])
+
   const local = useRef(0)
   const predictedRef = useRef(false)
+  const lockedRef = useRef<number | undefined>(undefined)
   const usedRef = useRef<ReadonlySet<number>>(new Set())
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const drawRef = useRef<HTMLButtonElement>(null)
   const drawingRef = useRef<HTMLParagraphElement>(null)
   const explainRef = useRef<HTMLTextAreaElement>(null)
   const ideaRef = useRef<HTMLInputElement>(null)
@@ -213,11 +217,14 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
     usedRef.current = state.seeds
   }, [state.seeds])
 
-  // The block's one prediction event, as soon as the first lock is graded.
+  // A round's prediction event, as soon as its lock is graded and before anything is explained: a round that is locked
+  // and never saved is then still on the record, and counts as a miss when the panel next restores (D39, D48).
   useEffect(() => {
-    if (round.phase !== 'explain' || predictedRef.current) return
+    if (round.phase !== 'explain' || round.seed === undefined || lockedRef.current === round.seed) return
+    lockedRef.current = round.seed
+    const first = !predictedRef.current
     predictedRef.current = true
-    write(predictEvent(def, ctx, round))
+    write(predictEvent(def, ctx, round, first))
   }, [round, def, ctx, write])
 
   // Focus follows the step: the control that was pressed unmounts, so hand focus to what comes next.
@@ -232,6 +239,10 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
   useEffect(() => {
     if (revealed) ideaRef.current?.focus()
   }, [revealed])
+  // "Run it on a fresh seed here instead" unmounts the phone outcome that held focus: the draw button is what comes next
+  useEffect(() => {
+    if (forceEmbed && load === 'ready') drawRef.current?.focus({ preventScroll: true })
+  }, [forceEmbed, load])
 
   const commit = () => {
     const prediction = parsePrediction(def, draft)
@@ -322,9 +333,9 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                   <div className="mt-4">
                     <p className="text-body-sm text-text-2">
                       Each round draws a fresh seed and shows what it gives the engine. You predict from that; the sweep&apos;s outcome stays hidden until you lock in.
-                      Three right in a row, on at least {ANSWERS_NEEDED} different answers, finishes the exercise.
+                      Three right in a row, on at least {ANSWERS_NEEDED} different answers, finishes the exercise. A round you lock in and leave before saving counts as a miss.
                     </p>
-                    <button type="button" data-fleet-draw onClick={() => dispatch({ type: 'draw' })} className={cn(primaryBtn, 'mt-3', hitArea(false))}>
+                    <button type="button" ref={drawRef} data-fleet-draw onClick={() => dispatch({ type: 'draw' })} className={cn(primaryBtn, 'mt-3', hitArea(false))}>
                       Draw a fresh seed
                     </button>
                   </div>
@@ -550,7 +561,7 @@ function Played({ played, copy }: { played: ReturnType<typeof readExercise>['pla
         {played.map((p, i) => (
           <li key={`${p.seed}:${i}`} className="font-mono text-[11px] text-text-2">
             {i + 1}. you said {copy.pointLabel(p.value)}, the peak was {copy.pointLabel(p.truth)}:{' '}
-            <span className={p.ok ? 'text-accent' : 'text-text-3'}>{p.ok ? 'right' : 'off'}</span>
+            <span className={p.ok ? 'text-accent' : 'text-text-3'}>{p.ok ? 'right' : p.unsaved ? 'left before saving, counts as off' : 'off'}</span>
           </li>
         ))}
       </ol>
