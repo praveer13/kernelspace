@@ -200,6 +200,7 @@ test('/daily: a replay is practice, writes nothing, and the recorded burn stays 
   await page.keyboard.press('Enter')
   await expect(page.locator('[data-flow="debrief"][data-debrief="done"]')).toBeVisible({ timeout: 90_000 })
   await expect(page.locator('[data-record-note]')).toHaveText('Practice replay: nothing was written to your record.')
-  // the replay finished too, yet the stored attempt is still the first one, untouched
-  expect(await storedBurns(page)).toEqual([firstBurn])
+  // the replay finished too, yet the stored attempt is still the first one, untouched; the ledger writes in the
+  // background, so poll for the read as the pre-replay side does and never take it from the instant the note appears
+  await expect.poll(() => storedBurns(page)).toEqual([firstBurn])
 })

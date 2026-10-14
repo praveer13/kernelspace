@@ -50,7 +50,7 @@ import {
   type FlowRun,
   type FlowState,
 } from '@/lib/world/daily'
-import { FAULT_LABELS, INCIDENT_FAULTS, type FixId, type Hypothesis as HypothesisId, type ProbeId } from '@/lib/world/incident-spec'
+import { FAULT_SHORT, INCIDENT_FAULTS, type FixId, type Hypothesis as HypothesisId, type ProbeId } from '@/lib/world/incident-spec'
 import type { FleetSlotBytes, IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
 import { moduleBytes, runSim, SimTimeoutError } from '@/workers/sim-client'
 import { cn } from '@/lib/utils'
@@ -659,7 +659,7 @@ function ActIncident() {
       <p className="max-w-3xl text-body-sm text-text-2">
         Probe drills. Each drill is a new incident on a seed drawn the moment you start it: read the alert, log a hypothesis, probe the pipeline on the incident
         clock, then apply a fix. A drill passes when you held the right fault, applied its fix, and burned no more than twice the expert&rsquo;s budget plus{' '}
-        {DRILL_BURN_SLACK} burn-minutes. Pass one drill on each of {DRILL_FAULTS_NEEDED} different faults to finish the act. A drill you do not pass costs nothing:
+        {DRILL_BURN_SLACK} burn-minutes. The fault that is scored is the one you hold when your first fix goes in, right or wrong. Pass one drill on each of {DRILL_FAULTS_NEEDED} different faults to finish the act. A drill you do not pass costs nothing:
         the next one is a different incident, so there is nothing to memorise. Drills run on the reference components.
       </p>
       <ul className="mt-3 flex flex-wrap gap-2 font-mono text-[12px]" aria-label="Faults passed so far" data-faults>
@@ -668,7 +668,7 @@ function ActIncident() {
           return (
             <li key={f} data-passed={passed ? 'yes' : 'no'} className={cn('rounded border px-3 py-1.5', passed ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line text-text-3')}>
               {passed ? '✓ ' : '○ '}
-              {FAULT_LABELS[f]}
+              {FAULT_SHORT[f]}
               <span className="sr-only">{passed ? ', passed' : ', not passed yet'}</span>
             </li>
           )

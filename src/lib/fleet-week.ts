@@ -28,7 +28,7 @@ import { incidentScore } from '@/lib/ledger/fold'
 import { sha256Hex } from '@/lib/ledger/stable'
 import { freshSeed, splitmix32u } from '@/lib/rng'
 import { kcsFor, type FinishedIncident, type IncidentSource } from '@/lib/world/daily'
-import { FAULT_LABELS, FIXES, INCIDENT_FAULTS, fixFor, generateIncident, type FixId, type IncidentFault, type IncidentSpec } from '@/lib/world/incident-spec'
+import { FAULT_LABELS, FAULT_SHORT, FIXES, INCIDENT_FAULTS, fixFor, generateIncident, type FixId, type IncidentFault, type IncidentSpec } from '@/lib/world/incident-spec'
 import { makeFaultInjector, type FaultSpec } from '@/lib/world/faults'
 import { instantiateLab } from '@/lib/wasm-lab'
 import { atlasRow } from '@/data/atlas'
@@ -718,11 +718,11 @@ const CAUSE_WHYS: Record<IncidentFault, Record<IncidentFault, string>> = {
   },
   'node-death': {
     'pool-shrink':
-      "A shrunken pool shows free blocks near zero on every worker that is up. The KV of the workers still up is in a normal range and the liveness probe shows one worker down, which a pool story cannot explain.",
+      "A shrunken pool shows free blocks near zero on every worker that is up. The KV of every worker still up is in a normal range and the liveness probe shows one worker down, which a pool story cannot explain.",
     'drain-stall':
       'A stalled drain fills the intake queue and leaves the scheduler waiting list near empty, and it never loses a request already running. Here the waiting list is long, the intake queue is normal and requests were lost in flight.',
     'node-death':
-      'Right: one worker is down in the liveness probe and the requests running on it were lost at the onset, so the workers still up carry all the traffic. That gives a long waiting list and late first tokens, with the KV pool and the intake queue otherwise normal.',
+      'Right: one worker is down in the liveness probe and the requests running on it were lost at the onset, so each worker still up carries more of the traffic. That gives a long waiting list and late first tokens, with the KV pool and the intake queue otherwise normal.',
     'tenant-burst':
       'A flooding tenant raises TPOT while every worker stays up. Here a worker is down and requests were lost, so capacity left the fleet; no tenant shifted it by sending long prompts.',
   },
@@ -762,13 +762,13 @@ const FIX_WHYS: Record<IncidentFault, Record<FixId, string>> = {
   },
   'node-death': {
     'restore-pool':
-      "The KV pools of the workers still up are in a normal range, so there are no blocks to give back. The shortfall is a worker that is no longer serving, which no memory setting restores.",
+      "The KV pool of every worker still up is in a normal range, so there are no blocks to give back. The shortfall is a worker that is no longer serving, which no memory setting restores.",
     'restore-drain':
-      'The intake queue is normal and the workers still up already drain it every tick, so a faster drain moves nothing. The overload shows in the waiting list, because there is one engine fewer to admit from it.',
+      'The intake queue is normal and each worker still up already drains it every tick, so a faster drain moves nothing. The overload shows in the waiting list, because there is one engine fewer to admit from it.',
     'replace-node':
       'Right: the liveness probe shows one worker down, so capacity is what is missing. A replacement node joins the router and takes its share of the traffic back, and it takes one minute to roll out.',
     'limit-tenant':
-      'No tenant dominates the latency split; the load is ordinary traffic on a fleet one worker short. Capping a tenant sheds requests the workers still up could not have served anyway, and the dead worker stays dead.',
+      'No tenant dominates the latency split; the load is ordinary traffic on a fleet one worker short. Capping a tenant sheds requests any worker still up could not have served anyway, and the dead worker stays dead.',
   },
   'tenant-burst': {
     'restore-pool':
@@ -796,7 +796,7 @@ const BRIEFINGS: Record<IncidentFault, { title: string; briefing: string }> = {
   'node-death': {
     title: 'incident 03 — the minute a worker stopped answering',
     briefing:
-      'TTFT p95 is up fleet-wide and some requests failed in flight at one moment. One worker is no longer stepping, and the workers still up have long waiting lists. KV and the intake queue look normal.',
+      'TTFT p95 is up fleet-wide and some requests failed in flight at one moment. One worker is no longer stepping, and each worker still up has a long waiting list. KV and the intake queue look normal.',
   },
   'tenant-burst': {
     title: 'incident 04 — everyone slowed down at once',
@@ -931,7 +931,7 @@ export interface DrillAttempt extends DrillFacts {
   seed: number | null
 }
 
-const faultName = (f: IncidentFault) => FAULT_LABELS[f]
+const faultName = (f: IncidentFault) => FAULT_SHORT[f]
 
 /**
  * Grade one drill against the credits so far. Pure: `recordDrill` writes what it decides. A drill counts only if it

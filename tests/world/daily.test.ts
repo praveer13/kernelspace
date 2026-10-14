@@ -14,6 +14,7 @@ import { IncidentSession, runExpert } from '../../src/lib/world/incident-sim'
 import { readSlots } from '../../src/lib/engine/slots'
 import type { EngineSlot } from '../../src/lib/ledger/types'
 import {
+  DAILY_BOXES,
   DAILY_EPOCH,
   HYPOTHESIS_OPTIONS,
   type InstalledBoxes,
@@ -546,5 +547,22 @@ describe('the boxes the Daily claims are the boxes that ran (F6, 2b-21)', () => 
     expect(dailyResult(date, dailyIncident(date), finished(), boxHashes(boxes)).data.components).toEqual([sha('a')])
     // a run on the reference engine (the fallback, or a choice) names no router either
     expect(dailyBoxes(inst, true).map((b) => b.slot)).toEqual(['scheduler', 'block-manager', 'intake'])
+  })
+})
+
+describe('the Daily says three boxes and quotes short labels (D37, BF9)', () => {
+  const src = (f: string) => readFileSync(path.join(ROOT, f), 'utf8')
+
+  test('no text on the Daily page or the debrief still counts four boxes or lists the router as a loaded slot', () => {
+    for (const f of ['src/pages/Daily.tsx', 'src/components/daily/Debrief.tsx']) {
+      expect(src(f)).not.toMatch(/\bfour boxes\b|intake and\s+\*? ?prefix-router slots/i)
+    }
+    expect(DAILY_BOXES).toHaveLength(3)
+  })
+
+  test('the debrief quotes the short fault and fix labels, never the menu sentences', () => {
+    const debrief = src('src/components/daily/Debrief.tsx')
+    expect(debrief).not.toMatch(/FAULT_LABELS|FIXES\[[^\]]+\]\.label/)
+    expect(debrief).toMatch(/FAULT_SHORT/)
   })
 })

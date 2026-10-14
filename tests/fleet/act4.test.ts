@@ -33,7 +33,7 @@ import {
 import { createFleetHost } from '../../src/lib/fleet-host'
 import { openIncidentSession, type FleetWorkerLike } from '../../src/lib/fleet-session'
 import { hash32 } from '../../src/lib/rng'
-import { FAULT_LABELS, FIXES, FIX_IDS, INCIDENT_FAULTS, fixFor, type FixId, type IncidentAction, type IncidentFault } from '../../src/lib/world/incident-spec'
+import { FAULT_LABELS, FAULT_SHORT, FIXES, FIX_IDS, INCIDENT_FAULTS, fixFor, type FixId, type IncidentAction, type IncidentFault } from '../../src/lib/world/incident-spec'
 import { replayIncident, runExpert, scoreIncident } from '../../src/lib/world/incident-sim'
 import { HYPOTHESIS_OPTIONS, kcsFor, menuOrderFor, type FinishedIncident } from '../../src/lib/world/daily'
 import type { FleetReply, FleetRequest } from '../../src/workers/fleet-protocol'
@@ -564,6 +564,33 @@ describe('Act IV\'s option lists are drawn fresh per drill, so position carries 
     for (const o of HYPOTHESIS_OPTIONS.filter((h) => h.id !== 'unsure')) expect(o.label).toBe(FAULT_LABELS[o.id as IncidentFault])
     const src = read('src/lib/fleet-week.ts')
     expect(src).not.toMatch(/CAUSE_LABELS|FIX_LABELS/)
+  })
+
+  test('every fault and fix has a short form for chips and quotes, and the menus keep the full sentence', () => {
+    const shorts = [...INCIDENT_FAULTS.map((f) => FAULT_SHORT[f]), ...FIX_IDS.map((f) => FIXES[f].short)]
+    expect(new Set(shorts).size).toBe(shorts.length)
+    for (const f of INCIDENT_FAULTS) {
+      expect(FAULT_SHORT[f].length).toBeLessThanOrEqual(20)
+      expect(FAULT_SHORT[f].length).toBeLessThan(FAULT_LABELS[f].length)
+    }
+    for (const f of FIX_IDS) {
+      expect(FIXES[f].short.length).toBeLessThanOrEqual(20)
+      expect(FIXES[f].short.length).toBeLessThan(FIXES[f].label.length)
+    }
+    for (const inc of INCIDENTS) {
+      const shown = [...inc.causes, ...inc.mitigations].map((o) => o.label)
+      for (const t of shorts) expect(shown).not.toContain(t)
+    }
+    // the drill verdict names the fault by its short form
+    expect(gradeDrill([], { ...finished('node-death'), seed: 1 }).result.headline).toBe(`drill passed: ${FAULT_SHORT['node-death']}`)
+  })
+
+  test('the node-death briefing and whys do not count the workers still up: they read right on a fleet of two or four', () => {
+    const nd = INCIDENTS.find((i) => i.id === 'node-death')!
+    for (const t of [nd.briefing, ...nd.causes.map((o) => o.why ?? ''), ...nd.mitigations.map((o) => o.why ?? '')]) {
+      expect(t).not.toMatch(/\bthe workers still up\b/i)
+    }
+    expect(nd.briefing).toMatch(/each worker still up has a long waiting list/)
   })
 
   test('each drill shows the four faults and the four fixes in an order drawn from its own seed, with "Unsure" last', () => {

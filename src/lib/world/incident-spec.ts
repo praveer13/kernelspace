@@ -76,6 +76,18 @@ export const FAULT_LABELS: Record<IncidentFault, string> = {
   'tenant-burst': 'One tenant flooded the fleet with very long prompts',
 }
 
+/**
+ * The short form of each hypothesis label, for the places a full sentence does not fit: Act IV's "faults passed"
+ * chips, its verdict lines and the debrief's quotes. The menus show `FAULT_LABELS`; this is a name for the same
+ * fault, not a second menu, so it carries no gated text.
+ */
+export const FAULT_SHORT: Record<IncidentFault, string> = {
+  'pool-shrink': 'Pool shrank',
+  'drain-stall': 'Drain stalled',
+  'node-death': 'Node died',
+  'tenant-burst': 'Tenant flood',
+}
+
 /** The probes, in USE order down the pipeline (intake → admission → kv → workers → latency → errors). */
 export const PROBE_IDS = ['intake', 'admission', 'kv', 'workers', 'latency', 'errors'] as const
 export type ProbeId = (typeof PROBE_IDS)[number]
@@ -102,7 +114,10 @@ export type FixId = 'restore-pool' | 'restore-drain' | 'replace-node' | 'limit-t
 
 export interface FixDef {
   id: FixId
+  /** the menu's full sentence, the one `verify-items` gates */
   label: string
+  /** the short form for quotes in the debrief (see `FAULT_SHORT`) */
+  short: string
   /** the fault it reverts */
   fault: IncidentFault
 }
@@ -112,10 +127,10 @@ export interface FixDef {
  * `verify-items` gates (Act IV's `INCIDENTS`), written to the same rule as `FAULT_LABELS`.
  */
 export const FIXES: Record<FixId, FixDef> = {
-  'restore-pool': { id: 'restore-pool', label: 'Put the cache memory fraction back where it was', fault: 'pool-shrink' },
-  'restore-drain': { id: 'restore-drain', label: 'Put the intake drain rate back where it belongs', fault: 'drain-stall' },
-  'replace-node': { id: 'replace-node', label: 'Replace the dead worker node with a healthy one', fault: 'node-death' },
-  'limit-tenant': { id: 'limit-tenant', label: "Cap the noisy tenant's admissions at a low rate", fault: 'tenant-burst' },
+  'restore-pool': { id: 'restore-pool', label: 'Put the cache memory fraction back where it was', short: 'Restore the pool', fault: 'pool-shrink' },
+  'restore-drain': { id: 'restore-drain', label: 'Put the intake drain rate back where it belongs', short: 'Restore the drain', fault: 'drain-stall' },
+  'replace-node': { id: 'replace-node', label: 'Replace the dead worker node with a healthy one', short: 'Replace the node', fault: 'node-death' },
+  'limit-tenant': { id: 'limit-tenant', label: "Cap the noisy tenant's admissions at a low rate", short: 'Cap the tenant', fault: 'tenant-burst' },
 }
 export const FIX_IDS = Object.keys(FIXES) as FixId[]
 
