@@ -15,9 +15,11 @@ import {
   X,
 } from 'lucide-react'
 import Discussion from '@/components/community/Discussion'
+import { MakeGreen } from '@/components/forge/MakeGreen'
 import { SetupLanes } from '@/components/forge/SetupLanes'
+import { WalkPlaceholder } from '@/components/forge/WalkPlaceholder'
 import { FORGE_LABS, type ForgeLab as ForgeLabDef } from '@/data/labs'
-import { findForgeBundle } from '@/data/forge'
+import { findForgeBundle, hasForgeBundle } from '@/data/forge'
 import type { ForgeBundle } from '@/data/forge/types'
 import { lessonById } from '@/data/lessons'
 import { getTrack } from '@/lib/tracks'
@@ -49,8 +51,10 @@ import { cn } from '@/lib/utils'
  *
  * A lab with a Forge bundle (`src/data/forge/<labId>/`, wave-2.md §13.1) has the PRIMM walk, the hint ladder and
  * Prove it, all drawn from that bundle by the generic panels. They load on demand, so a lab without a bundle does
- * not carry them, and the walk's fallback is the same get-the-lab and drop-zone content, so a slow or failed chunk
- * never takes the drop zone away. A lab without a bundle keeps the plain page.
+ * not carry them. Whether a lab has a bundle is known at once (`hasForgeBundle` reads the registry's glob keys), so a
+ * lab that has one shows a placeholder with the walk's shape while the chunk loads and never the plain page first:
+ * the layout does not swap and the drop zone mounts once, inside the walk. Only a chunk that failed to load falls back
+ * to the plain page, which is complete without it. A lab without a bundle keeps the plain page.
  *
  * The three slots below take their final props now, so the tasks that fill them never edit this page:
  * `SetupLanes {lab}` (2c-07), `FolderWatch {lab, onModule}` (2c-08) and `AskPacket {lab, reports}` (2c-06).
@@ -63,22 +67,28 @@ const AskPacket = lazy(() => import('@/components/forge/AskPacket'))
 // "Install in your engine" (wave-2.md §10.2): a stub until 2b-12, mounted here so that task never edits this page.
 const InstallButton = lazy(() => import('@/components/engine/InstallButton'))
 
-/** The lab's bundle once loaded: `undefined` while loading, and for ever for a lab that has none. */
-function useForgeBundle(labId: string): ForgeBundle | undefined {
-  const [bundle, setBundle] = useState<ForgeBundle | undefined>()
+/** The lab's bundle: `loading` until its chunk arrives, `failed` if it never does, `none` for a lab that has no bundle. */
+type BundleState = { status: 'none' } | { status: 'loading' } | { status: 'failed' } | { status: 'ready'; bundle: ForgeBundle }
+
+function useForgeBundle(labId: string): BundleState {
+  const expected = hasForgeBundle(labId)
+  const [state, setState] = useState<BundleState>({ status: expected ? 'loading' : 'none' })
   useEffect(() => {
+    if (!expected) return
     let live = true
     findForgeBundle(labId)
-      .then((b) => {
-        if (live) setBundle(b)
+      .then((bundle) => {
+        if (live) setState(bundle === undefined ? { status: 'failed' } : { status: 'ready', bundle })
       })
       // a chunk that failed to load leaves the plain page, which is complete without it
-      .catch(() => undefined)
+      .catch(() => {
+        if (live) setState({ status: 'failed' })
+      })
     return () => {
       live = false
     }
-  }, [labId])
-  return bundle
+  }, [labId, expected])
+  return state
 }
 
 type RunState =
@@ -125,7 +135,10 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
   const [reports, setReports] = useState<LabRunReport[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
-  const bundle = useForgeBundle(lab.id)
+  const bundleState = useForgeBundle(lab.id)
+  const bundle = bundleState.status === 'ready' ? bundleState.bundle : undefined
+  // The folder watch (in the drop zone) is running: the walk's Make tab says so while another step is open.
+  const [watching, setWatching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const resultsRef = useRef<HTMLHeadingElement>(null)
   const busy = useRef(false)
@@ -234,28 +247,7 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
   // The setup copy lives in SetupLanes (2c-07 fills it); the page only places it.
   const getTheLab = <SetupLanes lab={lab} />
 
-  const makeGreen = (
-    <section className="mt-12" aria-labelledby="make-green">
-      <h2 id="make-green" className={sectionLabel}>
-        2 · make it green
-      </h2>
-      <div className="mt-4 rounded-lg border border-line bg-surface-1 p-5">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-text-3">
-          <Terminal className="h-3.5 w-3.5" /> in the crate
-        </div>
-        <pre tabIndex={0} className="mt-3 overflow-x-auto rounded border border-line bg-ink p-4 font-mono text-[12px] leading-relaxed text-text-1">
-{`cd ${lab.crateDir ?? lab.id}
-$EDITOR ${lab.editFile}${' '.repeat(Math.max(1, 20 - lab.editFile.length))}# the only file with TODO(you)
-cargo test                    # ${requiredChecks.length} required${optionalChecks.length > 0 ? ` + ${optionalChecks.length} advanced` : ''}
-cargo build --release --target wasm32-unknown-unknown`}
-        </pre>
-        <p className="mt-3 text-body-sm text-text-2">
-          the artifact to drop below:{' '}
-          <span className="font-mono text-[12px] text-text-1">{lab.artifact}</span>
-        </p>
-      </div>
-    </section>
-  )
+  const makeGreen = <MakeGreen lab={lab} />
 
   const dropZone = (
     <section className="mt-12" aria-labelledby="drop-wasm">
@@ -320,7 +312,7 @@ cargo build --release --target wasm32-unknown-unknown`}
       </div>
       {/* a rebuilt module goes through onFile, the handler a drop calls (wave-2.md §16.3) */}
       <Suspense fallback={null}>
-        <FolderWatch lab={lab} onModule={onFile} />
+        <FolderWatch lab={lab} onModule={onFile} onWatching={setWatching} />
       </Suspense>
     </section>
   )
@@ -443,7 +435,7 @@ cargo build --release --target wasm32-unknown-unknown`}
     </>
   )
 
-  // The walk's Make step holds everything the learner does with the file; the walk's loading fallback is the same content.
+  // The walk's Make step holds everything the learner does with the file. The walk keeps it mounted (hidden) across steps.
   const doing = (
     <>
       {getTheLab}
@@ -657,7 +649,14 @@ cargo build --release --target wasm32-unknown-unknown`}
         )}
       </section>
 
-      {bundle !== undefined ? (
+      {bundleState.status === 'none' || bundleState.status === 'failed' ? (
+        <>
+          {getTheLab}
+          {makeGreen}
+          {dropZone}
+          {results}
+        </>
+      ) : (
         <>
           {/* the walk: predict, run, investigate, modify, make. Make holds the stage list and the drop zone */}
           <section className="mt-12" aria-labelledby="the-walk">
@@ -665,34 +664,35 @@ cargo build --release --target wasm32-unknown-unknown`}
               the walk · predict, run, investigate, modify, make
             </h2>
             <div className="mt-4">
-              <Suspense fallback={doing}>
-                <PrimmPanel
-                  bundle={bundle}
-                  checks={lab.checks}
-                  passed={passedNow}
-                  runs={runsPassed}
-                  initial={(labState?.checksDone.length ?? 0) > 0 ? 'make' : 'predict'}
-                >
-                  {doing}
-                </PrimmPanel>
-              </Suspense>
+              {bundle === undefined ? (
+                <WalkPlaceholder />
+              ) : (
+                <Suspense fallback={<WalkPlaceholder />}>
+                  <PrimmPanel
+                    bundle={bundle}
+                    checks={lab.checks}
+                    passed={passedNow}
+                    runs={runsPassed}
+                    initial={(labState?.checksDone.length ?? 0) > 0 ? 'make' : 'predict'}
+                    title={lab.title}
+                    watching={watching}
+                  >
+                    {doing}
+                  </PrimmPanel>
+                </Suspense>
+              )}
             </div>
           </section>
           {results}
-          <div className="mt-10 max-w-3xl space-y-8">
-            <Suspense fallback={null}>
-              <HintLadder bundle={bundle} reports={reports} />
-              <AskPacket lab={lab} reports={reports} />
-              <ProveIt bundle={bundle} unlocked={done || requiredReportPassed} />
-            </Suspense>
-          </div>
-        </>
-      ) : (
-        <>
-          {getTheLab}
-          {makeGreen}
-          {dropZone}
-          {results}
+          {bundle !== undefined && (
+            <div className="mt-10 max-w-3xl space-y-8">
+              <Suspense fallback={null}>
+                <HintLadder bundle={bundle} reports={reports} />
+                <AskPacket lab={lab} reports={reports} ladderIds={bundle.ladder.map((l) => l.checkId)} />
+                <ProveIt bundle={bundle} unlocked={done || requiredReportPassed} />
+              </Suspense>
+            </div>
+          )}
         </>
       )}
 

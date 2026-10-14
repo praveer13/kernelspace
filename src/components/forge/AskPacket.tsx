@@ -5,7 +5,8 @@
  * Like `HintLadder`, it reads the rung reached from the ledger's `hint:` acks and the failing checks from `reports`, the
  * graded runs of this visit, oldest first. Which red checks may ask is the experiment (§14.4): in the packet arm the
  * button shows at once (R1 to R4 stay closed in the ladder), in the ladder arm and in labs that are not randomized it
- * shows after R2. The packet carries the checks' messages (code-stripped) and a keyless lesson excerpt, never the
+ * shows after R2. A check with no ladder (an optional check, or a lab whose ladder is not written yet) has no rungs to
+ * climb, so its packet is there straight away and the check is outside the experiment. The packet carries the checks' messages (code-stripped) and a keyless lesson excerpt, never the
  * learner's code.
  */
 
@@ -21,7 +22,16 @@ import AskButtons from '@/components/mentor/AskButtons'
 export interface AskPacketProps {
   lab: ForgeLab
   reports: readonly LabRunReport[]
+  /**
+   * The checks that have a hint ladder (`bundle.ladder`'s ids). A red check outside this list has no R2 to wait for.
+   * Leave it out where every check has one.
+   */
+  ladderIds?: readonly string[]
 }
+
+/** A red check the ladder does not cover: its packet shows at once and it is not a subject of the help experiment. */
+const withoutLadder = (row: HelpRow, ladderIds: readonly string[] | undefined): HelpRow =>
+  ladderIds === undefined || ladderIds.includes(row.check.id) ? row : { ...row, arm: undefined, show: true }
 
 const engine = () => useProgress.controls.engine()
 
@@ -29,8 +39,8 @@ const engine = () => useProgress.controls.engine()
 const itemPrefix = (lab: ForgeLab): string => `lab${String(lab.index).padStart(2, '0')}.`
 
 /** The packet buttons under the ladder. Presentational: `AskPacket` wires it to the ledger. */
-export function AskPacketView({ lab, reports, acks, expSeed }: AskPacketProps & { acks: Readonly<Record<string, string>>; expSeed: number | undefined }) {
-  const rows = helpRows({ labId: lab.id, reports, acks, expSeed })
+export function AskPacketView({ lab, reports, ladderIds, acks, expSeed }: AskPacketProps & { acks: Readonly<Record<string, string>>; expSeed: number | undefined }) {
+  const rows = helpRows({ labId: lab.id, reports, acks, expSeed }).map((r) => withoutLadder(r, ladderIds))
   if (rows.length === 0) return <div hidden data-ask-packet={lab.id} />
 
   const build = (row: HelpRow): (() => Promise<Packet>) => async () => {
@@ -85,7 +95,7 @@ export function AskPacketView({ lab, reports, acks, expSeed }: AskPacketProps & 
   )
 }
 
-export function AskPacket({ lab, reports }: AskPacketProps) {
+export function AskPacket({ lab, reports, ladderIds }: AskPacketProps) {
   const acks = useProgress((s) => s.acks)
   const ready = useProgress((s) => s.ledger.ready)
   const expSeed = useProgress((s) => readExpSeed(s.working['exp:seed']))
@@ -93,7 +103,7 @@ export function AskPacket({ lab, reports }: AskPacketProps) {
   useEffect(() => {
     if (ready && expSeed === undefined && isRandomizedLab(lab.id)) ensureExpSeed(useProgress.getState(), Math.random)
   }, [ready, expSeed, lab.id])
-  return <AskPacketView lab={lab} reports={reports} acks={acks} expSeed={expSeed} />
+  return <AskPacketView lab={lab} reports={reports} ladderIds={ladderIds} acks={acks} expSeed={expSeed} />
 }
 
 export default AskPacket

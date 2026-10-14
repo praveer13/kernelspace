@@ -527,11 +527,11 @@ describe('grading and ledger responses', () => {
 
 describe('the generic panels render lab 03', () => {
   const panel = (initial: 'predict' | 'run' | 'investigate' | 'modify' | 'make') =>
-    renderToStaticMarkup(createElement(PrimmPanel, { bundle, checks: lab.checks, passed: new Set<string>(), initial }))
+    renderToStaticMarkup(createElement(PrimmPanel, { bundle, checks: lab.checks, passed: new Set<string>(), initial, title: lab.title }))
 
   test('Predict names the lab and shows the estimate and the choice', () => {
     const html = panel('predict')
-    expect(html).toContain('aria-label="Lab 03 in five steps"')
+    expect(html).toContain(`aria-label="${lab.title}, in five steps"`)
     expect(html).toContain('data-item="lab03.primm.p1"')
     expect(html).toContain('data-item="lab03.primm.p2"')
     expect(html).toContain(RUN_TEXT)

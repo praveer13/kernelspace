@@ -8,7 +8,9 @@
  * Predict questions stay open to read but take no answer and write nothing: a prediction made after seeing the run is
  * not evidence. Focus follows the learner (spec §15.3): a result, a run button or the step's lead-in takes it when
  * the control that was pressed unmounts.
- * The Make step is the stage list plus whatever the page puts below it (the drop zone), passed as `children`.
+ * The Make step is the stage list plus whatever the page puts below it (the drop zone), passed as `children`. It is
+ * mounted from the first render and hidden while another step is open, never unmounted: the folder watch lives in those
+ * children, and a step switch must not end a watch the learner started (nor remount the drop zone).
  */
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -376,14 +378,15 @@ export interface PrimmPanelProps {
   runs?: readonly (readonly string[])[]
   /** The step to open first. Default `predict`. */
   initial?: PrimmStepId
+  /** The lab's name, e.g. "Ownership & Moves": names the panel for assistive technology ("<name>, in five steps"). */
+  title?: string
+  /** A folder watch is running in the Make step: its tab says so while another step is open. */
+  watching?: boolean
   /** Below the stage list in the Make step: the drop zone. */
   children?: ReactNode
 }
 
-/** "[lab 02]" is "Lab 02". */
-const labName = (label: string) => label.replace(/^\[|\]$/g, '').replace(/^./, (c) => c.toUpperCase())
-
-export function PrimmPanel({ bundle, checks, passed, runs, initial = 'predict', children }: PrimmPanelProps) {
+export function PrimmPanel({ bundle, checks, passed, runs, initial = 'predict', title, watching = false, children }: PrimmPanelProps) {
   const recordItems = useProgress((s) => s.recordItems)
   const { items, steps, run: spec } = bundle.primm
   const [active, setActive] = useState<PrimmStepId>(initial)
@@ -472,7 +475,7 @@ export function PrimmPanel({ bundle, checks, passed, runs, initial = 'predict', 
   }
 
   return (
-    <section aria-label={`${labName(bundle.discussionsLabel)} in five steps`} data-primm-panel data-step={active} className="space-y-3">
+    <section aria-label={`${title ?? 'The lab'}, in ${COUNT_WORD[steps.length] ?? steps.length} steps`} data-primm-panel data-step={active} className="space-y-3">
       <ol className="flex flex-wrap gap-1.5" aria-label="Steps">
         {steps.map((s, i) => (
           <li key={s.id}>
@@ -489,6 +492,11 @@ export function PrimmPanel({ bundle, checks, passed, runs, initial = 'predict', 
               {done[s.id] ? <Check size={10} strokeWidth={3} aria-hidden /> : null}
               {i + 1} {s.title}
               <span className="sr-only">{done[s.id] ? ' (done)' : ''}</span>
+              {s.id === 'make' && watching && (
+                <span data-watching-note className="normal-case tracking-normal">
+                  <span aria-hidden>·</span> watching<span className="sr-only"> your build folder</span>
+                </span>
+              )}
             </button>
           </li>
         ))}
@@ -555,12 +563,10 @@ export function PrimmPanel({ bundle, checks, passed, runs, initial = 'predict', 
           <ModifyStep bundle={bundle} item={modifyItem} answered={answers[modifyItem.id]} onAnswer={answer} takeFocus={takeFocus} />
         ))}
 
-      {active === 'make' && (
-        <div className="space-y-3" data-step-body="make">
-          <StagePanel bundle={bundle} checks={checks} passed={passed} runs={runs} />
-          {children}
-        </div>
-      )}
+      <div className="space-y-3" data-step-body="make" hidden={active !== 'make'}>
+        <StagePanel bundle={bundle} checks={checks} passed={passed} runs={runs} />
+        {children}
+      </div>
 
       {next !== undefined && (
         <button

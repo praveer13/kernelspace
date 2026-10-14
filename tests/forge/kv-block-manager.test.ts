@@ -547,8 +547,8 @@ describe('the bundle', () => {
   })
 
   test('the generic panels render it: PRIMM steps, the reference strip, the stage list', () => {
-    const predict = renderToStaticMarkup(createElement(PrimmPanel, { bundle, checks, passed: new Set<string>(), initial: 'predict' }))
-    expect(predict).toContain('aria-label="Lab 02 in five steps"')
+    const predict = renderToStaticMarkup(createElement(PrimmPanel, { bundle, checks, passed: new Set<string>(), initial: 'predict', title: lab.title }))
+    expect(predict).toContain(`aria-label="${lab.title}, in five steps"`)
     expect(predict).toContain('data-item="lab02.primm.p1"')
     expect(predict).toContain('data-item="lab02.primm.p2"')
     const modify = renderToStaticMarkup(createElement(PrimmPanel, { bundle, checks, passed: new Set<string>(), initial: 'modify' }))

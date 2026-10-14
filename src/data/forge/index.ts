@@ -62,6 +62,46 @@ function loaders(): Promise<Map<string, Loader>> {
   return discovered
 }
 
+/** Lab ids from the glob's keys (`./<labId>/index.ts`). The keys are known at build time; no chunk is fetched for them. */
+function idsOf(keys: Iterable<string>): string[] {
+  const ids: string[] = []
+  for (const key of keys) {
+    const m = /^\.\/([a-z][a-z0-9-]*)\/index\.ts$/.exec(key)
+    if (m) ids.push(m[1])
+  }
+  return ids.sort()
+}
+
+/**
+ * Every lab id that has a bundle, known at once: Vite's glob keys in the app, a directory listing in Bun (through
+ * `process.getBuiltinModule`, the one synchronous door to `node:fs` that a browser build never reaches). Empty where
+ * neither exists. Loads no bundle.
+ */
+function syncIds(): string[] {
+  const glob = viteLoaders()
+  if (glob) return idsOf(Object.keys(glob))
+  const fs = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process?.getBuiltinModule?.(NODE_FS.replace('/promises', '')) as
+    | { readdirSync(u: URL): string[] }
+    | undefined
+  if (!fs) return []
+  try {
+    return fs.readdirSync(new URL(/* @vite-ignore */ './', import.meta.url)).filter((n) => LAB_DIR.test(n)).sort()
+  } catch {
+    return []
+  }
+}
+
+let known: ReadonlySet<string> | undefined
+
+/**
+ * Whether a lab has a Forge bundle, answered without loading it, so a page can lay out the walk before its chunk
+ * arrives instead of drawing the plain page first and swapping.
+ */
+export function hasForgeBundle(labId: string): boolean {
+  known ??= new Set(syncIds())
+  return known.has(labId)
+}
+
 /** Every lab id that has a bundle, sorted. Loads nothing. */
 export async function forgeBundleIds(): Promise<string[]> {
   return [...(await loaders()).keys()]

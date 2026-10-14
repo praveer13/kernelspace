@@ -4,9 +4,11 @@
  * watcher actually touched, and it has no listing methods at all, so a watcher that tried to list would throw.
  */
 import { afterEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { FolderWatch } from '../../src/components/forge/FolderWatch'
+import { FolderWatch, FolderWatchView } from '../../src/components/forge/FolderWatch'
 import { FORGE_LABS } from '../../src/data/labs'
 import {
   artifactSegments,
@@ -20,7 +22,8 @@ import {
   type WatchStatus,
 } from '../../src/lib/forge/watch'
 
-const ARTIFACT = 'target/wasm32-unknown-unknown/release/rust_alloc.wasm'
+// the path labs.ts gives lab 01, not a spelling of ours: the file is rust_allocator.wasm
+const ARTIFACT = FORGE_LABS.find((l) => l.id === 'rust-allocator')!.artifact
 
 class DomError extends Error {
   constructor(name: string) {
@@ -170,7 +173,7 @@ describe('a watcher', () => {
     expect(t.w.status.kind).toBe('settling')
     await t.w.tick()
     expect(t.ran).toHaveLength(1)
-    expect(t.ran[0].name).toBe('rust_alloc.wasm')
+    expect(t.ran[0].name).toBe('rust_allocator.wasm')
     expect(t.ran[0].lastModified).toBe(1000)
     expect([...new Uint8Array(await t.ran[0].arrayBuffer())]).toEqual([0, 97, 115, 109])
     expect(t.w.status).toEqual({ kind: 'ran', folder: 'labs', modified: 1000, runs: 1 })
@@ -385,12 +388,84 @@ describe('FolderWatch', () => {
   })
 
   test('says each state in words', () => {
-    const f = 'rust_alloc.wasm'
+    const f = ARTIFACT.split('/').pop()!
     expect(watchLine(null, f)).toBe('')
     expect(watchLine({ kind: 'no-target', folder: 'labs' }, f)).toContain('No target/ folder in "labs"')
     expect(watchLine({ kind: 'waiting', folder: 'labs' }, f)).toContain('cargo build --release --target wasm32-unknown-unknown')
     expect(watchLine({ kind: 'settling', folder: 'labs', modified: 1 }, f)).toContain('changed')
     expect(watchLine({ kind: 'ran', folder: 'labs', modified: 1, runs: 2 }, f)).toContain('run 2')
     expect(watchLine({ kind: 'denied', folder: 'labs' }, f)).toContain('Pick it again')
+  })
+
+  test('the artifact the tests watch is the one labs.ts names', () => {
+    expect(ARTIFACT).toBe('target/wasm32-unknown-unknown/release/rust_allocator.wasm')
+  })
+})
+
+describe('FolderWatch’s visible state', () => {
+  const lab = FORGE_LABS.find((l) => l.id === 'rust-allocator')!
+  const view = (status: WatchStatus | null) => renderToStaticMarkup(createElement(FolderWatchView, { lab, status, onPick: () => {}, onStop: () => {} }))
+
+  test('before a folder is picked: the pick button, no Stop, nothing said', () => {
+    const out = view(null)
+    expect(out).toContain('Watch my build folder')
+    expect(out).not.toContain('Stop watching')
+    expect(out).toContain('data-watching="off"')
+    expect(out).toMatch(/<p role="status" data-watch-status="true"[^>]*><\/p>/)
+  })
+
+  test('it says what it reads and that nothing is uploaded, with the lab’s own artifact', () => {
+    const out = view(null)
+    expect(out).toContain(`reads only ${lab.artifact}`)
+    expect(out).toContain('nothing is uploaded')
+    expect(out).toContain('Chromium only')
+  })
+
+  test('every watching state swaps the pick button for Stop, and says its state in the live region', () => {
+    const states: [WatchStatus, string][] = [
+      [{ kind: 'no-target', folder: 'labs' }, 'No target/ folder in &quot;labs&quot;'],
+      [{ kind: 'waiting', folder: 'labs' }, 'is not built yet'],
+      [{ kind: 'settling', folder: 'labs', modified: 5 }, 'changed. Running it once'],
+      [{ kind: 'ran', folder: 'labs', modified: 5, runs: 3 }, '(run 3)'],
+    ]
+    for (const [status, said] of states) {
+      const out = view(status)
+      expect(out).toContain('Stop watching')
+      expect(out).not.toContain('Watch my build folder')
+      expect(out).toContain('data-watching="on"')
+      expect(out).toContain(said)
+    }
+  })
+
+  test('denied ends the watch: the pick button is back, the reset sentence is shown, and Stop is gone', () => {
+    const out = view({ kind: 'denied', folder: 'labs' })
+    expect(out).toContain('Watch my build folder')
+    expect(out).not.toContain('Stop watching')
+    expect(out).toContain('data-watching="off"')
+    expect(out).toContain('Pick it again to keep watching.')
+  })
+
+  test('where the browser has a directory picker, FolderWatch starts on the pick button', () => {
+    const g = globalThis as { window?: unknown }
+    const had = 'window' in g
+    const before = g.window
+    g.window = { showDirectoryPicker: async () => ({}) }
+    try {
+      const out = renderToStaticMarkup(createElement(FolderWatch, { lab, onModule: () => {}, onWatching: () => {} }))
+      expect(out).toContain('Watch my build folder')
+      expect(out).not.toContain('Stop watching')
+      expect(out).not.toContain('hidden=""')
+    } finally {
+      if (had) g.window = before
+      else delete g.window
+    }
+  })
+
+  test('the pick button and Stop are real buttons that start and stop through the props', () => {
+    const src = readFileSync(join(import.meta.dir, '../../src/components/forge/FolderWatch.tsx'), 'utf8')
+    expect(src).toContain('onClick={onStop}')
+    expect(src).toContain('onClick={onPick}')
+    // a step switch in the walk does not stop it: the walk keeps this component mounted (forge-ui.test.ts)
+    expect(src).toContain('PrimmPanel keeps the Make step mounted')
   })
 })
