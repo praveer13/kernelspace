@@ -12,7 +12,7 @@
  */
 import { writeFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
-import { CLAIMS } from '../src/data/claims'
+import { CLAIMS } from '../src/data/claims/all'
 import { PAIRS } from '../src/data/glossary'
 import { KCS } from '../src/data/kc'
 import { PLAYS } from '../src/data/plays'

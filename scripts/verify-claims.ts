@@ -8,7 +8,7 @@
  * config.json at its pinned revision and finds the quote in it exactly once (the one network step; bare runs stay offline).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims'
+import { CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims/all'
 
 const OUT = 'public/claims.json'
 const DATE = /^\d{4}-\d{2}-\d{2}$/
