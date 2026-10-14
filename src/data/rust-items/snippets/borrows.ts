@@ -158,7 +158,7 @@ export const SNIPPETS: RustSnippet[] = [
       },
       {
         id: 'entry-inside',
-        edit: { line: 5, text: '        *pool.entry(*id).or_default() += 1;' },
+        edit: { line: 5, text: '        pool.entry(*id).or_default();' },
         expect: { code: 'E0502', line: 5 },
         why: '`entry` borrows `pool` `&mut` and needs W, which the `&` borrow of the loop took away.',
         focus: { line: 5, path: 'pool', needs: ['read', 'write'] },
@@ -527,7 +527,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 6, text: '    let b = m.get(&2).unwrap();' },
         expect: { code: 'E0594', line: 7 },
         why: '`get` hands out a `&u32`, so `*b` has R but never W, and `+=` on line 7 needs W.',
-        focus: { line: 7, path: '*b', needs: ['write'] },
+        focus: { line: 7, path: '*b', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           { id: 'get-mut', edit: { line: 6, text: '    let b = m.get_mut(&2).unwrap();' }, ok: true, why: '`get_mut` hands out a `&mut u32`, which carries the W that `+=` needs, and `a` is already finished with.' },
@@ -569,16 +569,12 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 12, text: '    *seed += s.temp as u64;' },
         expect: { code: 'E0503', line: 12 },
         why: '`seed_mut` borrows the whole `Sampler` `&mut`, not just `seed`, and `seed` is still used on this line, so `s.temp` has lost R.',
-        focus: { line: 12, path: 's.temp', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'read-seed',
         edit: { line: 12, text: '    *seed += s.seed;' },
         expect: { code: 'E0503', line: 12 },
         why: '`seed` is a `&mut` into `s.seed` and is used after the read, so reading `s.seed` through `s` lacks R.',
-        focus: { line: 12, path: 's.seed', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'second-call',
@@ -1102,7 +1098,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let before = &*total;' },
         expect: { code: 'E0506', line: 3 },
         why: '`before` borrows `*total` with `&` until the print on line 4, which removes W, and `+=` on line 3 needs it.',
-        focus: { line: 3, path: 'total', needs: ['read', 'write'] },
+        focus: { line: 3, path: '*total', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           { id: 'copy-before', edit: { line: 2, text: '    let before = *total;' }, ok: true, why: 'A `u64` is Copy, so `before` holds a copy and the borrow ends on line 2.' },
@@ -1114,7 +1110,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'mut-before',
         edit: { line: 2, text: '    let before = &mut *total;' },
         expect: { code: 'E0503', line: 3 },
-        why: '`before` is a `&mut` reborrow of `*total` that line 4 still prints, so `*total` has lost R, and `+=` reads it before it writes.',
+        why: '`before` is a `&mut` reborrow of `*total` that line 4 still prints, so `*total` has lost R and W, and `+=` needs both: it reads the old value, then writes.',
       },
     ],
   },
@@ -1304,7 +1300,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-first',
         edit: { line: 4, text: '    let first = &t.rows[0];' },
         expect: { code: 'E0505', line: 6 },
-        why: '`first` borrows into `t` and is used on line 7, so `t` has lost W and O until then, and `drop(t)` moves it, which needs O.',
+        why: '`first` borrows into `t` and is used on line 7, so `t` has lost O until then (a parameter not declared `mut` never had W), and `drop(t)` moves it, which needs O.',
         focus: { line: 6, path: 't', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -1777,8 +1773,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 3, text: '        c[0] = b[0];' },
         expect: { code: 'E0503', line: 3 },
         why: 'The `&mut` borrow of the loop has taken R and W from `b`, so reading `b[0]` lacks R.',
-        focus: { line: 3, path: 'b[0]', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'len-parent',
@@ -1923,7 +1917,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let (a, b) = buf.split_at(2);' },
         expect: { code: 'E0594', line: 3 },
         why: '`split_at` returns `&` slices, so `a[0]` has R but never W, and `+=` needs W.',
-        focus: { line: 3, path: 'a[0]', needs: ['write'] },
+        focus: { line: 3, path: 'a[0]', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           { id: 'split-mut', edit: { line: 2, text: '    let (a, b) = buf.split_at_mut(2);' }, ok: true, why: '`split_at_mut` returns `&mut` slices, so `a[0]` holds the W that `+=` needs.' },
@@ -1936,8 +1930,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 3, text: '    a[0] += buf[0];' },
         expect: { code: 'E0503', line: 3 },
         why: '`a` borrows `buf` `&mut` and is written by this `+=`, so reading `buf[0]` through the parent lacks R.',
-        focus: { line: 3, path: 'buf[0]', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'len-parent',
@@ -2046,8 +2038,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 5, text: '        *a += v[1];' },
         expect: { code: 'E0503', line: 5 },
         why: '`a` borrows `v` `&mut` and is written by this `+=`, so reading `v[1]` through `v` lacks R.',
-        focus: { line: 5, path: 'v[1]', needs: ['read'] },
-        permission: 'read',
       },
       {
         id: 'len-again',
@@ -2184,9 +2174,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'bind-ref',
         edit: { line: 4, text: '    if let Slot::Used(n) = s {' },
         expect: { code: 'E0506', line: 5 },
-        why: 'Matching on `s` binds `n` as a `&mut u32` into the slot, and the print on line 6 keeps it alive, so assigning `*s` lacks W.',
-        focus: { line: 5, path: '*s', needs: ['write'] },
-        permission: 'write',
+        why: 'Matching on `s` binds `n` as a `&mut u32` into the slot, and the print on line 6 keeps it alive, so `*s` has lost R and W, and assigning it needs both.',
         fixes: [
           { id: 'copy-n', edit: { line: 4, text: '    if let Slot::Used(n) = *s {' }, ok: true, why: 'Matching the place `*s` copies the `u32`, so `n` borrows nothing.' },
           { id: 'match-shared', edit: { line: 4, text: '    if let Slot::Used(n) = &*s {' }, ok: false, miss: 'r.assign-ends-borrow', why: '`&*s` is a `&` borrow of the slot, so `n` is still a reference alive until line 6 and `*s` has no W.' },
@@ -2250,7 +2238,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let w = &*t;' },
         expect: { code: 'E0594', line: 3 },
         why: '`w` is a `&f32`, so `*w` has R but never W, and `*=` needs W.',
-        focus: { line: 3, path: '*w', needs: ['write'] },
+        focus: { line: 3, path: '*w', needs: ['read', 'write'] },
         permission: 'write',
       },
     ],
@@ -2443,7 +2431,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-first',
         edit: { line: 2, text: '    let n = &b[0];' },
         expect: { code: 'E0505', line: 3 },
-        why: '`n` borrows into `b` and is printed on line 4, so `b` has lost W and O until then, and `push` moves it, which needs O.',
+        why: '`n` borrows into `b` and is printed on line 4, so `b` has lost O until then (a parameter not declared `mut` never had W), and `push` moves it, which needs O.',
         focus: { line: 3, path: 'b', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -2501,7 +2489,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-id',
         edit: { line: 4, text: '    let id = &r.id;' },
         expect: { code: 'E0505', line: 5 },
-        why: '`id` borrows into `r` and is printed on line 6, so `r` has lost W and O until then, and `drop(r)` moves it, which needs O.',
+        why: '`id` borrows into `r` and is printed on line 6, so `r` has lost O until then (a parameter not declared `mut` never had W), and `drop(r)` moves it, which needs O.',
         focus: { line: 5, path: 'r', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [

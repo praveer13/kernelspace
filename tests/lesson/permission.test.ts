@@ -291,12 +291,12 @@ describe('extract.ts conversion', () => {
     expect(t.source).toBe('aquascope')
     expect(t.tool?.toolchain).toBe('nightly-2026-05-01')
     expect(t.lines).toBe(codeLines(snippet))
-    // ties on a line are broken on the path, so Aquascope's run order never shows
-    expect(t.paths).toEqual(['v', '*r', 'r'])
+    // ties on a line are broken on the path (base name, then dereference depth), so Aquascope's run order never shows and `r` reads before `*r`
+    expect(t.paths).toEqual(['v', 'r', '*r'])
     expect(t.changes).toEqual([
       { line: 1, path: 'v', before: '', after: 'RWO' },
-      { line: 2, path: '*r', before: '', after: 'R' },
       { line: 2, path: 'r', before: '', after: 'RO' },
+      { line: 2, path: '*r', before: '', after: 'R' },
       { line: 2, path: 'v', before: 'RWO', after: 'R' },
       { line: 4, path: 'r', before: 'RO', after: '' },
     ])

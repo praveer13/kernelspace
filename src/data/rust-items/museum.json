@@ -10,7 +10,7 @@
     "source": "fn take(b: Box<Vec<u32>>) -> usize {\n    let v = *b;\n    let n = b.len() + v.len();\n    n\n}",
     "line": 3,
     "message": "borrow of moved value: `*b`",
-    "why": "`let v = *b` moved the vector out of the box, so `b` lost R, W and O, and `b.len()` needs R.",
+    "why": "`let v = *b` moved the vector out of the box, so `b` lost R and O (a parameter not declared `mut` never had W), and `b.len()` needs R.",
     "focus": {
       "line": 3,
       "path": "b",
@@ -133,7 +133,7 @@
     "source": "fn send(o: &mut Vec<Vec<u8>>, b: Vec<u8>) {\n    let n = &b[0];\n    o.push(b);\n    println!(\"{n:?}\");\n}",
     "line": 3,
     "message": "cannot move out of `b` because it is borrowed",
-    "why": "`n` borrows into `b` and is printed on line 4, so `b` has lost W and O until then, and `push` moves it, which needs O.",
+    "why": "`n` borrows into `b` and is printed on line 4, so `b` has lost O until then (a parameter not declared `mut` never had W), and `push` moves it, which needs O.",
     "focus": {
       "line": 3,
       "path": "b",
@@ -549,16 +549,7 @@
     "source": "fn pair(ns: [String; 2]) -> usize {\n    let a = ns[0];\n    let b = &ns[1];\n    a.len() + b.len()\n}",
     "line": 2,
     "message": "cannot move out of type `[String; 2]`, a non-copy array",
-    "why": "An element of an array has R and W but never O, because rustc cannot track which elements left; `let a = ns[0]` moves the string out.",
-    "focus": {
-      "line": 2,
-      "path": "ns[0]",
-      "needs": [
-        "read",
-        "own"
-      ]
-    },
-    "permission": "own",
+    "why": "An element of an array never has O, because rustc cannot track which elements left (and `ns` is not declared `mut`, so its elements hold R only); `let a = ns[0]` moves the string out.",
     "fix": {
       "id": "borrow-first",
       "line": 2,
@@ -708,6 +699,7 @@
       "line": 8,
       "path": "self.epoch",
       "needs": [
+        "read",
         "write"
       ]
     },

@@ -187,7 +187,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'read-after-move',
         edit: { line: 9, text: '    println!("queued {}", r.id);' },
         expect: { code: 'E0382', line: 9 },
-        why: '`push` on line 8 moved `r` into the queue, so `r` lost R, W and O; reading `r.id` on line 9 needs R.',
+        why: '`push` on line 8 moved `r` into the queue, so `r` lost R and O (a parameter not declared `mut` never had W); reading `r.id` on line 9 needs R.',
         focus: { line: 9, path: 'r.id', needs: ['read'] },
         permission: 'read',
         fixes: [
@@ -245,7 +245,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'late-first',
         edit: { line: 10, text: '    println!("done {first}");' },
         expect: { code: 'E0505', line: 9 },
-        why: '`first` borrows into `b` with `&` and is used on line 10, so `b` has lost W and O until then; moving `b` on line 9 needs O.',
+        why: '`first` borrows into `b` with `&` and is used on line 10, so `b` has lost O until then (a parameter not declared `mut` never had W); moving `b` on line 9 needs O.',
         focus: { line: 9, path: 'b', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [

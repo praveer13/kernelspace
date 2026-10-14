@@ -6,11 +6,11 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 5,
-      "paths": ["v","*a","a"],
+      "paths": ["v","a","*a"],
       "changes": [
         {"line":1,"path":"v","before":"","after":"RWO"},
-        {"line":2,"path":"*a","before":"","after":"RW"},
         {"line":2,"path":"a","before":"","after":"RO"},
+        {"line":2,"path":"*a","before":"","after":"RW"},
         {"line":2,"path":"v","before":"RWO","after":""}
       ],
       "uses": [
@@ -23,11 +23,11 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 4,
-      "paths": ["scores","*s","s"],
+      "paths": ["scores","s","*s"],
       "changes": [
         {"line":1,"path":"scores","before":"","after":"RWO"},
-        {"line":2,"path":"*s","before":"","after":"R"},
         {"line":2,"path":"s","before":"","after":"RO"},
+        {"line":2,"path":"*s","before":"","after":"R"},
         {"line":2,"path":"scores","before":"RWO","after":"R"}
       ],
       "uses": [
@@ -41,20 +41,20 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 7,
-      "paths": ["scores","*first","first","*all","all"],
+      "paths": ["scores","first","*first","all","*all"],
       "changes": [
         {"line":1,"path":"scores","before":"","after":"RWO"},
-        {"line":2,"path":"*first","before":"","after":"R"},
         {"line":2,"path":"first","before":"","after":"RO"},
+        {"line":2,"path":"*first","before":"","after":"R"},
         {"line":2,"path":"scores","before":"RWO","after":"R"},
-        {"line":3,"path":"*first","before":"R","after":""},
         {"line":3,"path":"first","before":"RO","after":""},
+        {"line":3,"path":"*first","before":"R","after":""},
         {"line":3,"path":"scores","before":"R","after":"RWO"},
-        {"line":5,"path":"*all","before":"","after":"RW"},
         {"line":5,"path":"all","before":"","after":"RO"},
+        {"line":5,"path":"*all","before":"","after":"RW"},
         {"line":5,"path":"scores","before":"RWO","after":""},
-        {"line":6,"path":"*all","before":"RW","after":""},
         {"line":6,"path":"all","before":"RO","after":""},
+        {"line":6,"path":"*all","before":"RW","after":""},
         {"line":6,"path":"scores","before":"","after":"RWO"},
         {"line":7,"path":"scores","before":"RWO","after":""}
       ],

@@ -412,6 +412,23 @@ describe('compile: permission items', () => {
     expect(seen).toEqual(new Set(labelled))
   })
 
+  test('a compound assignment reads the old value and writes a new one: a focus on its left-hand side is the whole place and lists Read and Write', () => {
+    const compound = /(?:[-+*/%^|&]|<<|>>)=(?!=)/
+    const lineOf = (u: (typeof UNITS)[number]) => u.code.split('\n')[u.variant.focus!.line - 1].replace(/=>/g, '')
+    const found = UNITS.filter((u) => u.variant.focus && compound.test(lineOf(u)))
+    expect(found.length).toBeGreaterThan(0)
+    for (const u of found) {
+      const f = u.variant.focus!
+      // `x += buf.len()` also reads on its right-hand side: a focus there is a read of that path, not of the target
+      const lhs = lineOf(u).split(compound)[0].trim()
+      if (lhs.includes(f.path)) {
+        expect({ key: u.key, needs: f.needs }).toEqual({ key: u.key, needs: ['read', 'write'] })
+        // Aquascope reports `*total`, not `total`, for `*total += n`: the binding itself still holds what the reference lends
+        expect({ key: u.key, path: f.path }).toEqual({ key: u.key, path: lhs })
+      }
+    }
+  })
+
   test('a wrong pick says what the path still holds, or that the line does not need it', () => {
     const i = drawUnit('permission', 'seed/block-table-first-block/borrow-first')
     const a = choice(i)

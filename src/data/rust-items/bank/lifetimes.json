@@ -58,7 +58,7 @@
       }
     },
     "worker-name-thread": {
-      "hash": "505f64a527fcd1ff0a36bfab45e152c63657e7b4a5d3579a3fd05f8bbe8e1ee7",
+      "hash": "f04e5a41820893a1a86ef4bb18877c1e149ecce1e0f3047512f3b69c96c768ef",
       "variants": {
         "base": {"result":"compiles"},
         "no-move": {"result":{"code":"E0373","line":3,"message":"closure may outlive the current function, but it borrows `name`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-name":{"code":"E0373","line":3},"closure-arg":{"code":"E0593","line":3}}},
@@ -94,7 +94,7 @@
       }
     },
     "rc-block-table": {
-      "hash": "09a3e383144ddfc2dd0e74299a82112210023750029b68a4c0a7e53839d52d15",
+      "hash": "b17ce7c78f67663055006babad453e0e4e88868968bbe4b24002f9ebe1b61c60",
       "variants": {
         "base": {"result":"compiles"},
         "push-through-rc": {"result":{"code":"E0596","line":6,"message":"cannot borrow data in an `Rc` as mutable"},"fixes":{"make-mut":"compiles","get-mut":"compiles","clone-rc":{"code":"E0596","line":6}}},
@@ -114,7 +114,7 @@
       }
     },
     "arc-mutex-counter": {
-      "hash": "7b836b59c60be3c4f394558e90ad50e30dd5351a84df3814ffe55acbb5bc8b51",
+      "hash": "4a8c880fef6552558fe565cc62daa9d9fbaa24531153a9782f887049d5dd6bbf",
       "variants": {
         "base": {"result":"compiles"},
         "no-move": {"result":{"code":"E0373","line":7,"message":"closure may outlive the current function, but it borrows `c2`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-c2":{"code":"E0373","line":7},"closure-arg":{"code":"E0593","line":7}}},
@@ -123,7 +123,7 @@
       }
     },
     "box-block-list": {
-      "hash": "aabd14592508821d9dbc5dd94882213490b5e9878ef13a57645ccdbc0403ea4a",
+      "hash": "95e7f232be2984400a6ba1e6887779d8c83579e90aa45409723c26d0c818ce50",
       "variants": {
         "base": {"result":"compiles"},
         "ref-box": {"result":{"code":"E0507","line":2,"message":"cannot move out of `*b` which is behind a shared reference"},"fixes":{"borrow-inner":"compiles","clone-inner":"compiles","deref-twice":{"code":"E0507","line":2}}},
@@ -141,7 +141,7 @@
       }
     },
     "slot-take-request": {
-      "hash": "83d3a574a48d9a439c823c60f7783beb4f9108678dc217511178eb3c0e77ac6a",
+      "hash": "f1304163ba7639e4c0b2bea2bc093f91c805934dbabea88e3d7f6e3240f6c46d",
       "variants": {
         "base": {"result":"compiles"},
         "move-field": {"result":{"code":"E0507","line":8,"message":"cannot move out of `s.req` which is behind a mutable reference"},"fixes":{"take":"compiles","clone-req":"compiles","iter-req":{"code":"E0308","line":8}}},
@@ -151,7 +151,7 @@
       }
     },
     "tap-reentry": {
-      "hash": "465b30f5779c22b64cd706d85bbb9d8dfc4b728d9a8701cd15334e6152389534",
+      "hash": "21cdad60c9643c89d6bad7f51702c3c0f1a0e64eb56015bad6c31eaad31eb820",
       "variants": {
         "base": {"result":"compiles"},
         "recurse-held": {"result":{"code":"BorrowMutError","line":6,"message":"RefCell already borrowed"},"fixes":{"drop-g":"compiles","bind-g":{"code":"BorrowMutError","line":6},"drop-ref":{"code":"BorrowMutError","line":6}}},
@@ -170,7 +170,7 @@
       }
     },
     "slot-or-insert": {
-      "hash": "5af36c470dc0e1b35f2f80fd8115d88525c93fab692eed6406b9aadc09b2d089",
+      "hash": "ae62bbecebee0a1e178ccf91eece5e24fecba065827af2be9db7890751e69344",
       "variants": {
         "base": {"result":"compiles"},
         "cond-get": {"result":{"code":"E0502","line":6,"message":"cannot borrow `*m` as mutable because it is also borrowed as immutable"},"fixes":{"contains-key":"compiles","entry-first":"compiles","peek-only":"compiles"}},
@@ -188,7 +188,7 @@
       }
     },
     "closure-field-capture-sched": {
-      "hash": "41cb9a542a6aff366fd8b258555eb871a41f0570367b83231d84d72795160417",
+      "hash": "b99907f8017f669db457bcd31df435afcb303d9bf54025c6d4d7817f51ef4289",
       "variants": {
         "base": {"result":"compiles"},
         "move-closure": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `s`"},"fixes":{"drop-move":"compiles","method-call":{"code":"E0382","line":9},"deref-left":{"code":"E0614","line":8}}},
@@ -197,7 +197,7 @@
       }
     },
     "split-first-two-blocks": {
-      "hash": "7019b04185b109c2e811dbbcc7bb559085c6bd33e12a1e0a6ed9fb48870a5eb4",
+      "hash": "2c560ba000a4a2b2f309b4c93011aa160ed4dc302ebd4bf66bf2e1691641a5ef",
       "variants": {
         "base": {"result":"compiles"},
         "index-twice": {"result":{"code":"E0499","line":3,"message":"cannot borrow `v[_]` as mutable more than once at a time"},"fixes":{"from-rest":"compiles","clone-b":{"code":"E0503","line":3},"range-b":{"code":"E0499","line":3}}},
@@ -269,7 +269,7 @@
       }
     },
     "boxed-scorer": {
-      "hash": "67a5e8865da461397552cbf983f8e00471d382baa0eefbc89388253e31488a1c",
+      "hash": "30d479b0b53cee00e1ba2fa0139f4a376fbc634553f290f2b3468b7403048f8a",
       "variants": {
         "base": {"result":"compiles"},
         "no-move": {"result":{"code":"E0373","line":5,"message":"closure may outlive the current function, but it borrows `bias`, which is owned by the current function"},"fixes":{"add-move":"compiles","clone-bias":{"code":"E0373","line":5},"ref-bias":{"code":"E0515","line":5}}},
@@ -339,7 +339,7 @@
       }
     },
     "rc-handles-queue": {
-      "hash": "70a342aafd1b98c0f3c625a5f3aa9f700567d9122eec4585037d803ef2c716c3",
+      "hash": "a4cdb7f0c4885e61f4bcb1b9eb92fe155a4594702fcd41d22bb7fa4b562a49d1",
       "variants": {
         "base": {"result":"compiles"},
         "inline": {"result":{"code":"BorrowMutError","line":7,"message":"RefCell already borrowed"}},
@@ -419,7 +419,7 @@
       }
     },
     "lease-returns-block": {
-      "hash": "ae94baca6bbb427551fec517d3779596dd5fdc3f6a9a2b439bfbd05c2b486c60",
+      "hash": "8a9fb2b9e65b874a0c42c61e518bdce6b3c1b7d90a0506dfc236500235741a2f",
       "variants": {
         "base": {"result":"compiles"},
         "use-pool": {"result":{"code":"E0502","line":14,"message":"cannot borrow `*pool` as immutable because it is also borrowed as mutable"},"fixes":{"drop-first":"compiles","clone-pool":{"code":"E0502","line":14},"drop-lease-ref":{"code":"E0502","line":14}}},
