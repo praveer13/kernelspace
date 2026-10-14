@@ -494,7 +494,7 @@ describe('the item cap', () => {
         }
       }
     }
-  }, 60000) // 5,250 walks; sig's cold incident simulations, about 4 per item now that the pool redraws until the fault is the KC's, put it at about 17 s
+  }, 120_000) // 5,250 walks; sig's cold incident simulations, about 4 per item now that the pool redraws until the fault is the KC's, put it at about 17 s here and 28 s on a GitHub runner
 
   test('the worst case, confident right then wrong then right on every KC with items to spare, stops at exactly 20', () => {
     const q = (n: number): QuizQuestion => ({ q: `Item ${n}?`, options: ['key', 'a', 'b', 'c'], correct: [0], why: ['k', 'a', 'b', 'c'] })
