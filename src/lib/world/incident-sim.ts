@@ -195,6 +195,8 @@ export const referenceStack: StackFactory = (_w, cfg, intakeCap) => ({
 
 export interface IncidentOptions {
   stack?: StackFactory
+  /** Called with each cluster tick before any driver runs in it, so a host can say which tick a stalled module was inside. */
+  onTick?: (tick: number) => void
   /** tuning and tests only */
   scenario?: IncidentScenario
 }
@@ -384,6 +386,7 @@ export class IncidentRun {
     this.fault = { ...incidentFault(spec, sc) }
     const injector = makeFaultInjector([this.fault], splitmix32u(spec.seed))
     this.cluster.disrupt = (c, t) => {
+      opts.onTick?.(t)
       const before = c.workers.map((w) => (w.killed ? -1 : w.stats().shed))
       injector.disrupt(c, t)
       c.workers.forEach((w, i) => {

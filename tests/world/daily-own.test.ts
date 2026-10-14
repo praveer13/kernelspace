@@ -28,7 +28,6 @@ import {
   dailySlotBytes,
   engineLine,
   engineNote,
-  installedBoxCount,
   ownBoxes,
   recordDaily,
   shareString,
@@ -147,12 +146,12 @@ const installed = (over: InstalledBoxes = {}): InstalledBoxes => ({
 })
 
 /* ------------------------------------------------------------------ */
-/* The four boxes                                                       */
+/* The boxes that drive the Daily                                      */
 /* ------------------------------------------------------------------ */
 
 describe('which boxes are yours', () => {
-  test('the Daily runs on the scheduler, block manager, intake queue and prefix router, in that order', () => {
-    expect(DAILY_BOXES).toEqual(['scheduler', 'block-manager', 'intake', 'prefix-router'])
+  test('the Daily runs on the scheduler, block manager and intake queue, in that order: the prefix router drives nothing in an incident (F6)', () => {
+    expect(DAILY_BOXES).toEqual(['scheduler', 'block-manager', 'intake'])
     for (const slot of DAILY_BOXES) expect(ENGINE_SLOT_ORDER).toContain(slot)
     expect(dailyBoxes({}).map((b) => b.slot)).toEqual([...DAILY_BOXES])
   })
@@ -161,7 +160,7 @@ describe('which boxes are yours', () => {
     const boxes = dailyBoxes({})
     expect(ownBoxes(boxes)).toEqual([])
     expect(boxHashes(boxes)).toEqual([])
-    expect(boxLines(boxes)).toEqual(['scheduler: reference', 'block manager: reference', 'intake queue: reference', 'prefix router: reference'])
+    expect(boxLines(boxes)).toEqual(['scheduler: reference', 'block manager: reference', 'intake queue: reference'])
     expect(dailySlotBytes({})).toEqual({ sched: null, mgr: null, queue: null, router: null })
   })
 
@@ -175,18 +174,14 @@ describe('which boxes are yours', () => {
       `scheduler: yours (batching-scheduler, ${SCHED_SHA.slice(0, 8)})`,
       `block manager: yours (kv-block-manager, ${OTHER_SHA.slice(0, 8)})`,
       'intake queue: reference',
-      'prefix router: reference',
     ])
     expect(dailySlotBytes(inst)).toEqual({ sched: SCHED, mgr, queue: null, router: null })
-    const router = new Uint8Array([7]).buffer
-    expect(dailySlotBytes(installed({ 'prefix-router': { sha256: OTHER_SHA, labId: 'radix-cache', bytes: router } })).router).toBe(router)
   })
 
   test('slots that are not part of the Daily (tokenizer, executor, grammar, allocator) are ignored', () => {
     const extra: InstalledBoxes = { tokenizer: { sha256: OTHER_SHA, labId: 'bpe-tokenizer', bytes: SCHED }, allocator: { sha256: OTHER_SHA, labId: 'rust-allocator', bytes: SCHED } }
     expect(ownBoxes(dailyBoxes(extra))).toEqual([])
     expect(dailySlotBytes(extra)).toEqual({ sched: null, mgr: null, queue: null, router: null })
-    expect(installedBoxCount({ tokenizer: 1, executor: 1, scheduler: 1 })).toBe(1)
   })
 
   test('a module whose bytes are not on this device is not run, and the debrief says so', () => {
@@ -204,17 +199,15 @@ describe('which boxes are yours', () => {
     expect(dailySlotBytes(inst, true)).toEqual({ sched: null, mgr: null, queue: null, router: null })
   })
 
-  test('the Today card counts installed boxes of the four', () => {
-    expect(installedBoxCount({})).toBe(0)
-    expect(installedBoxCount({ scheduler: 1, 'block-manager': 1 })).toBe(2)
-    expect(engineLine(2)).toBe('your engine: 2 of 4 boxes')
-    expect(engineLine(0)).toBe('your engine: 0 of 4 boxes')
+  test('the Today card counts boxes of the three that drive the Daily', () => {
+    expect(engineLine(2)).toBe('your engine: 2 of 3 boxes')
+    expect(engineLine(0)).toBe('your engine: 0 of 3 boxes')
   })
 })
 
 describe('what the debrief says about the engine', () => {
   test('a reference run says how to run on yours', () => {
-    expect(engineNote(dailyBoxes({}))).toMatch(/^This Daily ran on the reference engine\. Install a scheduler, block manager, intake queue or prefix router/)
+    expect(engineNote(dailyBoxes({}))).toMatch(/^This Daily ran on the reference engine\. Install a scheduler, block manager or intake queue from the Forge/)
   })
 
   test('a run with boxes of yours names them and says the expert played the same boxes', () => {
@@ -228,11 +221,14 @@ describe('what the debrief says about the engine', () => {
     expect(three).toContain('Your scheduler, block manager and intake queue ran this incident.')
   })
 
-  test('a prefix router of yours is said to be loaded and checked, not to have routed (incident clusters route by shortest queue)', () => {
-    const note = engineNote(dailyBoxes(installed({ 'prefix-router': { sha256: OTHER_SHA, labId: 'radix-cache', bytes: SCHED } })))
-    expect(note).toContain('Your scheduler and prefix router ran this incident.')
-    expect(note).toContain('loaded and checked on every worker')
+  test('a prefix router of yours is said to have taken no part (incident clusters route by shortest queue)', () => {
+    const router = { 'prefix-router': { sha256: OTHER_SHA, labId: 'radix-cache', bytes: SCHED } } as const
+    const note = engineNote(dailyBoxes(installed(router)))
+    expect(note).toContain('Your scheduler ran this incident.')
+    expect(note).toContain('Your prefix router took no part')
     expect(note).toContain('route by shortest queue')
+    // alone, it does not turn a reference run into one on your engine
+    expect(engineNote(dailyBoxes(router))).toMatch(/^This Daily ran on the reference engine\. .*Your prefix router took no part/)
   })
 })
 
@@ -378,10 +374,11 @@ describe('/daily wires your engine', () => {
     expect(page).toContain('Replay on your engine')
   })
 
-  test('the Today card says "your engine: N of 4 boxes" from the working record, not the engine store', () => {
+  test('the Today card says "your engine: N of 3 boxes" from the working record and the bytes, not the Fleet slots store', () => {
     const card = read('src/components/daily/DailyCard.tsx')
     expect(card).toContain("readSlots(s.working['engine:slots'])")
     expect(card).toContain('engineLine(boxes)')
+    expect(card).toContain('engine.componentBytes(sha256)')
     expect(card).not.toMatch(/pages\/fleet\/slots/)
   })
 
