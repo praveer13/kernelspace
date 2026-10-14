@@ -127,9 +127,7 @@ export default function Debrief({ session, onAgain }: DebriefProps) {
       ) : (
         <p className="mt-3 text-body-sm text-text-2">
           Nothing in your run put you behind the reference: every request it served within the SLO, you served too.{' '}
-          {session.provenance === 'practice'
-            ? 'The shared practice minute is gentle, with short prompts and a pool that never fills, so most orders get through it. A new minute is drawn to be harder. Compose below, or play one.'
-            : 'Compose a policy below and see what else holds up.'}
+          Compose a policy below and see what else holds up.
         </p>
       )}
 

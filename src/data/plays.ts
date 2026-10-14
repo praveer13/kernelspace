@@ -136,7 +136,7 @@ export const SCHEDULER_PRODUCTION_ROWS: readonly ProductionRow[] = [
   {
     claim: 'production.vllm.max-num-seqs',
     dial: 'concurrency: fixed in the play',
-    lead: "The play fixes how many requests run at once, small enough that a minute fills the pool. vLLM's max_num_seqs defaults to",
+    lead: "The play fixes how many requests run at once. On the practice minute that cap and the pool both bind: the pool fills nearly to the brim and requests also wait for a free slot. vLLM's max_num_seqs defaults to",
     tail: 'on a large GPU serving the API, and a smaller GPU gets a smaller default.',
   },
   {

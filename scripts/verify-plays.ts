@@ -22,10 +22,9 @@
  * and claims) is printed; `verify:bundle` prints the same route's gzip closure.
  *
  * Practice trace. Each play has its own check (`practiceBandOf`): block placement's seed must be in its band. The
- * scheduler's practice minute must be playable (rules 1 and 4 of wave-2.md §8.2: the reference serves 70 % of it
- * within the SLO in at most 50 turns). It cannot meet rules 2, 3 and 5 on the pinned BurstGPT source (the busiest
- * minute has no prompt over 692 tokens and 1 to 4 token responses; 2b-01 pinned this in
- * tests/world/sched-traces.test.ts), so those are printed, not failed.
+ * scheduler's practice minute must be in band on all five rules of wave-2.md §8.2. It is a pinned fresh minute
+ * (`SCHED_PRACTICE_MINUTE_SEED`, the first in-band seed from 0), because the busiest-minute artifact itself cannot
+ * be (no prompt over 692 tokens, 1 to 4 token responses: 2b-01 pinned this in tests/world/sched-traces.test.ts).
  *
  *   bun run verify:plays
  */
@@ -235,19 +234,19 @@ export async function practiceBandOf(id: string, root: string): Promise<Practice
     return { inBand: band.inBand, note: `practice seed ${PLAY_PRACTICE_SEED} ${band.inBand ? 'is in band' : 'is outside the band'}` }
   }
   if (id === 'scheduler') {
-    const { checkSchedBand, parseSchedSource, practiceMinute } = await import('../src/lib/world/sched-traces')
+    const { SCHED_PRACTICE_MINUTE_SEED, checkSchedBand, parseSchedSource, practiceMinute } = await import('../src/lib/world/sched-traces')
     const dir = join(root, 'public', 'traces')
     const source = await parseSchedSource(
       JSON.parse(readFileSync(join(dir, 'burstgpt-v2-busiest-minute.json'), 'utf8')),
       JSON.parse(readFileSync(join(dir, 'burstgpt-v2-busiest-hour.json'), 'utf8')),
     )
     const band = checkSchedBand(practiceMinute(source))
-    const playable = band.rules[0] && band.rules[3]
     const missed = band.rules.flatMap((ok, i) => (ok ? [] : [i + 1]))
     const note =
-      `practice minute: the reference serves ${band.ghost.met} of ${band.ghost.total} within the SLO in ${band.ghost.turns} turns (rules 1 and 4 ${playable ? 'hold' : 'FAIL'}); ` +
+      `practice minute (seed ${SCHED_PRACTICE_MINUTE_SEED}): the reference serves ${band.ghost.met} of ${band.ghost.total} within the SLO in ${band.ghost.turns} turns, FCFS ${band.fcfs.met}, ` +
+      `${band.greedy.autoPreempts} auto-preempt${band.greedy.autoPreempts === 1 ? '' : 's'} without headroom, longest prompt ${band.longestPrompt}; ` +
       (missed.length === 0 ? 'in band on all five rules' : `outside the §8.2 band on rule${missed.length === 1 ? '' : 's'} ${missed.join(', ')} (${band.violations.join('; ')})`)
-    return { inBand: playable, note }
+    return { inBand: band.inBand, note }
   }
   return null
 }

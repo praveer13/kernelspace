@@ -28,13 +28,15 @@ import {
   type SchedPlay,
   type SchedSetup,
 } from '../../src/lib/world/sched'
-import { FCFS_DRIVER, GHOST_DRIVER, GREEDY_DRIVER, drawSchedTrace, parseSchedSource, practiceMinute, runSched, type SchedSource, type SchedTrace } from '../../src/lib/world/sched-traces'
+import { FCFS_DRIVER, GHOST_DRIVER, GREEDY_DRIVER, SCHED_PRACTICE_MINUTE_SEED, drawSchedTrace, parseSchedSource, practiceMinute, runSched, type SchedSource, type SchedTrace } from '../../src/lib/world/sched-traces'
 import { HEADROOM_TOKENS, referenceScheduler, type SchedAction, type SchedView } from '../../src/lib/fleet-model'
 import { splitmix32u } from '../../src/lib/rng'
 import type { Decider } from '../../src/lib/world/play'
 import type { SchedDecisionKind, SchedFrame } from '../../src/lib/world/types'
 
 const dir = new URL('../../public/traces/', import.meta.url)
+/** The Opus check prints its tables and sample debriefs only when asked: SCHED_REPORT=1 bun test tests/world/sched.test.ts */
+const REPORT = Boolean(process.env.SCHED_REPORT)
 let source: SchedSource
 /** 50 banded minutes drawn the way the play draws them. */
 let banded: SchedTrace[]
@@ -274,11 +276,14 @@ describe('the play', () => {
     expect(summarizeSched(setup, skipped).skipped).toBe(true)
   })
 
-  test('the practice minute plays to its end: 40 turns, as sched-traces counts them', () => {
-    const setup = schedSetup(practiceMinute(source))
+  test('the practice minute plays to its end in the turns sched-traces counts, and its ledger seed is the pinned one', () => {
+    const trace = practiceMinute(source)
+    const setup = schedSetup(trace)
     const play = playSchedAll(setup, reference)
-    expect(play).toMatchObject({ turns: 40, ended: 'trace-end', skipped: false })
-    expect(summarizeSched(setup, play).seed).toBe(0)
+    const turns = runSched(trace, GHOST_DRIVER).turns
+    expect(turns).toBeLessThan(40)
+    expect(play).toMatchObject({ turns, ended: 'trace-end', skipped: false })
+    expect(summarizeSched(setup, play).seed).toBe(SCHED_PRACTICE_MINUTE_SEED)
   })
 
   test('deterministic: the same minute and the same taps give the same summary', () => {
@@ -401,7 +406,7 @@ describe('the debrief', () => {
     expect(say({ admit: [9], preempt: [] })).toEqual({
       kind: 'over-headroom',
       sentence:
-        'At iteration 37 you admitted #9, a 1,024-token prompt, with 1,104 tokens free. The reference skips it: keeping 48 tokens of headroom for each of your 2 running requests leaves 1,040, and 1,024 + 48 > 1,040. That cost #11, #12 and #13 their deadline.',
+        'At iteration 37 you admitted #9, a 1,024-token prompt, with 1,104 tokens free. The reference skips it: it counts 4,096 - (2,960 tokens held by your 2 running requests + 2 × 48 tokens of headroom) = 1,040, and 1,024 + 48 > 1,040. That cost #11, #12 and #13 their deadline.',
     })
     expect(say({ admit: [9], preempt: [] }, [11, 12, 13, 14, 15]).sentence).toEndWith('That cost 5 requests their deadline, #11 among them.')
     expect(say({ admit: [], preempt: [7] }, [11, 12])).toEqual({ kind: 'preempted', sentence: 'At iteration 37 you preempted #7 after 30 decode steps; recomputing it cost #11 and #12 their deadline.' })
@@ -416,6 +421,82 @@ describe('the debrief', () => {
       kind: 'order',
       sentence: 'At iteration 37 you admitted #9 (1,024 tokens) before #11 (60 tokens). The reference takes the shortest first.',
     })
+  })
+})
+
+/** Reads the reference's sum out of an over-headroom sentence: pool - (held + n x 48) = room. */
+function readSum(sentence: string) {
+  const m = /it counts ([\d,]+) - \(([\d,]+) tokens held by your (\d+) running requests?(?: and the [^+]*? you admitted first)? \+ (\d+) × 48 tokens of headroom\) = (-?[\d,]+)/.exec(sentence)
+  if (!m) throw new Error(`no sum in: ${sentence}`)
+  const [pool, held, running, kept, room] = [m[1], m[2], m[3], m[4], m[5]].map((x) => Number(x.replace(/,/g, '')))
+  return { pool, held, running, kept, room }
+}
+
+describe('the over-headroom sentence states the reference’s own accounting (BF3, F5)', () => {
+  const base: SchedView = {
+    iter: 55,
+    maxRunning: 8,
+    memCap: 4096,
+    memUsed: 3104 - 3104 + 992,
+    waiting: [{ id: 23, arrival: 50, prompt: 3077 }, { id: 39, arrival: 53, prompt: 90 }],
+    running: [
+      { id: 1, arrival: 40, prompt: 200, decoded: 20, prefillLeft: 0 },
+      { id: 2, arrival: 41, prompt: 200, decoded: 20, prefillLeft: 0 },
+      { id: 3, arrival: 42, prompt: 200, decoded: 20, prefillLeft: 0 },
+      { id: 4, arrival: 43, prompt: 200, decoded: 3, prefillLeft: 0 },
+      { id: 5, arrival: 44, prompt: 100, decoded: 2, prefillLeft: 0 },
+    ],
+  }
+
+  test('with room to spare in the pool, the sum a learner computes is the sentence’s: 4,096 - (held + 5 x 48)', () => {
+    // 5 running requests hold 965 tokens (prompt + decoded); 5 x 48 = 240 of headroom; the sentence's free figure is block-granular.
+    const v: SchedView = { ...base, memUsed: 4096 - 3104 }
+    const frame = setupFrame(v)
+    expect(frame.free).toBe(3104)
+    const { sentence } = decisionSentence(frame, { admit: [23], preempt: [] }, referenceScheduler(v), [39], 39)
+    expect(sentence).toBe(
+      'At iteration 55 you admitted #23, a 3,077-token prompt, with 3,104 tokens free. The reference skips it: it counts 4,096 - (965 tokens held by your 5 running requests + 5 × 48 tokens of headroom) = 2,891, and 3,077 + 48 > 2,891. That cost #39 its deadline.',
+    )
+    const sum = readSum(sentence)
+    expect(sum).toEqual({ pool: 4096, held: 965, running: 5, kept: 5, room: 2891 })
+    // The arithmetic checks, and it is not the block-granular free figure minus the headroom (3,104 - 5 x 48 = 2,864).
+    expect(sum.pool - (sum.held + sum.kept * HEADROOM_TOKENS)).toBe(sum.room)
+    expect(sum.room).not.toBe(3104 - 5 * HEADROOM_TOKENS)
+  })
+
+  test('when memory is tight the sentence does not contradict itself: free tokens, then a sum at or below zero that says why', () => {
+    // 5 running requests hold 3,985 tokens; the pool has 80 tokens free in whole blocks, so a 67-token prompt does fit the pool.
+    const running = [
+      { id: 1, arrival: 10, prompt: 900, decoded: 17, prefillLeft: 0 },
+      { id: 2, arrival: 11, prompt: 900, decoded: 17, prefillLeft: 0 },
+      { id: 3, arrival: 12, prompt: 900, decoded: 17, prefillLeft: 0 },
+      { id: 4, arrival: 13, prompt: 900, decoded: 17, prefillLeft: 0 },
+      { id: 5, arrival: 14, prompt: 300, decoded: 17, prefillLeft: 0 },
+    ]
+    const v: SchedView = { ...base, iter: 43, memUsed: 4016, running, waiting: [{ id: 26, arrival: 40, prompt: 67 }, { id: 27, arrival: 41, prompt: 70 }] }
+    const frame = setupFrame(v)
+    expect(frame.free).toBe(80)
+    const ref = referenceScheduler(v)
+    expect(ref.admit).toEqual([])
+    const { kind, sentence } = decisionSentence(frame, { admit: [26], preempt: [] }, ref, [], 26)
+    expect(kind).toBe('over-headroom')
+    expect(sentence).toStartWith('At iteration 43 you admitted #26, a 67-token prompt, with 80 tokens free. The reference skips it: it counts 4,096 - (3,985 tokens held by your 5 running requests + 5 × 48 tokens of headroom) = -129, so nothing is left for 67 + 48, even with 80 tokens free:')
+    expect(sentence).not.toContain('no room at all')
+    const sum = readSum(sentence)
+    expect(sum.pool - (sum.held + sum.kept * HEADROOM_TOKENS)).toBe(sum.room)
+    expect(sum.room).toBeLessThan(0)
+  })
+
+  test('requests admitted earlier in the same turn count as held, with their own headroom', () => {
+    const v: SchedView = { ...base, memUsed: 448, running: base.running.slice(0, 2), waiting: [{ id: 30, arrival: 50, prompt: 1000 }, { id: 31, arrival: 51, prompt: 2600 }, { id: 32, arrival: 52, prompt: 60 }] }
+    const frame = setupFrame(v)
+    const ref = referenceScheduler(v)
+    expect(ref.admit).toEqual([32, 30])
+    const { sentence } = decisionSentence(frame, { admit: [30, 31], preempt: [] }, ref, [], 31)
+    const sum = readSum(sentence)
+    expect(sentence).toContain('your 2 running requests and the #30 you admitted first + 3 × 48 tokens of headroom')
+    // 2 running hold 440 + 1,000 for #30; 3 x 48 headroom; the pool less that is the room #31 faces.
+    expect(sum).toEqual({ pool: 4096, held: 440 + 1000, running: 2, kept: 3, room: 4096 - (440 + 1000 + 144) })
   })
 })
 
@@ -471,18 +552,29 @@ describe('Opus check: the turn rule and the debrief on 50 banded seeds, six simu
         expect(d.explanation).not.toMatch(/undefined|NaN|Infinity|null/)
         expect(dec.sentence).toStartWith(`At iteration ${dec.iter} you `)
         expect(d.outcome).toStartWith(`#${d.request.id} (${groups(d.request.prompt)} tokens) arrived at iteration ${d.request.arrival} and `)
-        if (dec.kind === 'over-headroom') expect(dec.sentence).toContain(`with ${groups(dec.mineFrame.free)} tokens free`)
+        if (dec.kind === 'over-headroom') {
+          expect(dec.sentence).toContain(`with ${groups(dec.mineFrame.free)} tokens free`)
+          // The sum is the reference's own, and it adds up for the learner who checks it.
+          const sum = readSum(dec.sentence)
+          expect(sum.pool - (sum.held + sum.kept * HEADROOM_TOKENS)).toBe(sum.room)
+          expect(sum.pool).toBe(dec.mineFrame.view.memCap)
+          expect(sum.running).toBe(dec.mineFrame.view.running.length)
+          expect(sum.held).toBeGreaterThanOrEqual(dec.mineFrame.view.running.reduce((a, r) => a + r.prompt + r.decoded, 0))
+          expect(dec.sentence).not.toContain('no room at all')
+        }
         if (dec.kind === 'preempted') expect(dec.sentence).toContain(`you preempted #${dec.mine.preempt[0]} `)
         if (samples.length < 12 && i % 9 === 0) samples.push(`  [${l.name}, minute ${t.seed}] ${d.explanation}`)
       }
     }
-    console.log(`scheduler debrief review: ${plays} plays, ${debriefs} debriefs`)
-    console.log('  learner         preempted over-headroom order held-back other | no loss fallback')
-    for (const [name, k] of Object.entries(kinds)) {
-      console.log(`  ${name.padEnd(15)} ${[k.preempted, k['over-headroom'], k.order, k['held-back'], k.other].map((n) => String(n).padStart(9)).join('')} | ${String(k.none).padStart(7)} ${String(k.fallback).padStart(8)}`)
+    if (REPORT) {
+      console.log(`scheduler debrief review: ${plays} plays, ${debriefs} debriefs`)
+      console.log('  learner         preempted over-headroom order held-back other | no loss fallback')
+      for (const [name, k] of Object.entries(kinds)) {
+        console.log(`  ${name.padEnd(15)} ${[k.preempted, k['over-headroom'], k.order, k['held-back'], k.other].map((n) => String(n).padStart(9)).join('')} | ${String(k.none).padStart(7)} ${String(k.fallback).padStart(8)}`)
+      }
+      console.log(`  hand turns ${mismatch.turns}: ${mismatch.tapOrder} differ in tap order, ${mismatch.effective} in what the Engine admits`)
+      for (const s of samples) console.log(s)
     }
-    console.log(`  hand turns ${mismatch.turns}: ${mismatch.tapOrder} differ in tap order, ${mismatch.effective} in what the Engine admits`)
-    for (const s of samples) console.log(s)
     // Each mistake is named by its own template.
     expect(kinds['greedy']['over-headroom']).toBeGreaterThanOrEqual(45)
     expect(kinds['fcfs'].order).toBeGreaterThanOrEqual(45)

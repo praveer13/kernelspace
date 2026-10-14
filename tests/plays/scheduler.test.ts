@@ -47,7 +47,7 @@ import { PLAY_REGISTRY, resolvePlay } from '../../src/components/play/registry'
 import { CLAIMS, byId } from '../../src/data/claims'
 import { KC } from '../../src/data/kc/ids'
 import { BUILD_THIS_SCHEDULER, PLAYS, PLAY_IDS, PLAY_PRODUCTION_ROWS, SCHEDULER, SCHEDULER_PRODUCTION_ROWS, getPlay } from '../../src/data/plays'
-import { HEADROOM_TOKENS, referenceScheduler, type SchedView } from '../../src/lib/fleet-model'
+import { Engine, HEADROOM_TOKENS, makeRefManager, referenceScheduler, type SchedView } from '../../src/lib/fleet-model'
 import { PLAY_MINUTES } from '../../src/lib/economy-table'
 import { SCHEDULER_PLAY_ID, SKIP_AFTER_TURNS, TURN_CAP, playSchedAll, schedSetup, summarizeSched, driverDecider } from '../../src/lib/world/sched'
 import { REFERENCE_SCHED_SPEC } from '../../src/lib/world/sched-policy'
@@ -55,11 +55,12 @@ import {
   FCFS_DRIVER,
   GREEDY_DRIVER,
   SCHED_CFG,
+  SCHED_PRACTICE_MINUTE_SEED,
   checkSchedBand,
   drawSchedTrace,
-  minuteSampleLine,
   parseSchedSource,
   practiceMinute,
+  practiceSourceLine,
   type SchedSource,
   type SchedTrace,
 } from '../../src/lib/world/sched-traces'
@@ -381,10 +382,13 @@ describe('the ghost stays hidden until the debrief', () => {
   })
 
   test('the screen says where the minute comes from, with both counts read from the artifact', () => {
-    expect(html()).toContain(minuteSampleLine(source.minute))
+    expect(html()).toContain(practiceSourceLine(source.minute).replace(/'/g, '&#x27;'))
+    // F13: the count carries its thousands separator.
+    expect(html()).toContain('(1,095 requests)')
+    expect(html()).not.toContain('1095')
     const other = structuredClone(source)
     other.minute.sampling.sourceRowsInWindow = 777
-    expect(renderToString(createElement(SchedulerPlayView, { source: other, mode: 'page' }))).toContain('40 of 777 requests sampled')
+    expect(renderToString(createElement(SchedulerPlayView, { source: other, mode: 'page' }))).toContain('busiest minute (777 requests)')
   })
 
   test('the debrief shows both runs at the first divergence with the sentences', () => {
@@ -403,24 +407,49 @@ describe('the ghost stays hidden until the debrief', () => {
     expect(out).toContain('Play again with a new minute')
   })
 
-  test('a run with no divergence says so and shows no side by side; the practice minute adds why it is gentle', () => {
+  test('a run with no divergence says so and shows no side by side; the practice minute is not called gentle', () => {
     const s = debrief(playOut(practice(), refPick))
     const out = renderToString(createElement(Debrief, { session: s, onAgain: () => {} }))
     expect(out).toContain('You kept pace with the reference')
     expect(out).not.toContain('data-debrief-side')
-    expect(out).toContain('practice minute is gentle')
-    const fresh = debrief(playOut(newSchedSession(banded[0]), refPick))
-    expect(renderToString(createElement(Debrief, { session: fresh, onAgain: () => {} }))).not.toContain('practice minute is gentle')
+    expect(out).toContain('Compose a policy below')
+    expect(out).not.toContain('gentle')
+    expect(out).not.toContain('never fills')
   })
 
-  test('the practice minute is playable and its band misses are the known ones', async () => {
+  test('the practice minute is in band on every §8.2 rule, and verify-plays enforces all five', async () => {
     const band = checkSchedBand(practiceMinute(source))
-    expect(band.rules[0]).toBe(true)
-    expect(band.rules[3]).toBe(true)
+    expect(band.rules).toEqual([true, true, true, true, true])
     const result = await practiceBandOf('scheduler', ROOT)
     expect(result?.inBand).toBe(true)
-    expect(result?.note).toContain('rules 2, 3, 5')
+    expect(result?.note).toContain(`seed ${SCHED_PRACTICE_MINUTE_SEED}`)
+    expect(result?.note).toContain('in band on all five rules')
     expect(await practiceBandOf('not-a-play', ROOT)).toBeNull()
+  })
+
+  test('the In-production card’s claim about the practice minute is true of it: the pool nearly fills and requests also wait for a slot', () => {
+    const row = SCHEDULER_PRODUCTION_ROWS.find((r) => r.claim === 'production.vllm.max-num-seqs')
+    expect(row?.lead).toContain('that cap and the pool both bind')
+    expect(row?.lead).not.toContain('a minute fills the pool')
+    const t = practiceMinute(source)
+    let peak = 0
+    let waitedForSlot = 0
+    const e = new Engine(
+      t.cfg,
+      t.requests.map((r) => ({ ...r })),
+      {
+        name: 'watch',
+        schedule(v) {
+          peak = Math.max(peak, v.memUsed)
+          if (v.waiting.length > 0 && v.running.length >= v.maxRunning) waitedForSlot++
+          return referenceScheduler(v)
+        },
+      },
+      makeRefManager(t.cfg.numBlocks, t.cfg.blockSize),
+    )
+    while (!e.done && e.tick < 2000) e.step()
+    expect(peak).toBeGreaterThanOrEqual(0.9 * t.cfg.numBlocks * t.cfg.blockSize)
+    expect(waitedForSlot).toBeGreaterThan(0)
   })
 })
 
@@ -494,7 +523,7 @@ describe('Compose (§8.4)', () => {
 
   test('the play’s minute plus five fresh in-band minutes, deterministic in the entropy', () => {
     expect(traces).toHaveLength(1 + SCHED_COMPOSE_FRESH)
-    expect(traces[0].seed).toBeNull()
+    expect(traces[0].seed).toBe(SCHED_PRACTICE_MINUTE_SEED)
     for (const t of traces.slice(1)) expect(checkSchedBand(t).inBand).toBe(true)
     expect(schedComposeTraces(practiceMinute(source), source, 42).map((t) => t.seed)).toEqual(traces.map((t) => t.seed))
     expect(schedComposeTraces(practiceMinute(source), source, 43).map((t) => t.seed)).not.toEqual(traces.map((t) => t.seed))
@@ -605,13 +634,13 @@ describe('the ledger sees play and compose (recordPlay)', () => {
     expect(tab.progress.getState().aggregate.plays.scheduler).toMatchObject({ done: true })
   })
 
-  test('the practice minute is provenance practice with seed 0', async () => {
+  test('the practice minute is provenance practice with its pinned seed', async () => {
     const tab = startTab(makeProfile())
     const s = debrief(playOut(practice(), refPick))
     tab.progress.getState().recordPlay(recordOf(s) as NonNullable<ReturnType<typeof recordOf>>)
     await tab.progress.controls.flush()
     const [e] = (await (await tab.engine()).events()).filter((x) => x.kind === 'play')
-    expect(e).toMatchObject({ ref: 'play:scheduler', provenance: 'practice', ok: true, seed: 0, score: 1 })
+    expect(e).toMatchObject({ ref: 'play:scheduler', provenance: 'practice', ok: true, seed: SCHED_PRACTICE_MINUTE_SEED, score: 1 })
     expect(e.data).not.toHaveProperty('divergenceOp')
   })
 
@@ -637,7 +666,7 @@ describe('the ledger sees play and compose (recordPlay)', () => {
     await tab.progress.controls.flush()
     const events = (await (await tab.engine()).events()).filter((e) => e.kind === 'play')
     expect(events).toHaveLength(2)
-    expect(events[0]).toMatchObject({ ref: 'play:scheduler', ok: false, seed: 0, provenance: 'practice', data: { phase: 'compose', equivalent: false, turns: 1, spec: { order: 'fcfs', guard: 0, headroom: 0, preempt: 'none' } } })
+    expect(events[0]).toMatchObject({ ref: 'play:scheduler', ok: false, seed: SCHED_PRACTICE_MINUTE_SEED, provenance: 'practice', data: { phase: 'compose', equivalent: false, turns: 1, spec: { order: 'fcfs', guard: 0, headroom: 0, preempt: 'none' } } })
     expect(events[1]).toMatchObject({ ok: true, score: 1, data: { phase: 'compose', equivalent: true, turns: 2, spec: { order: 'sjf', guard: 2000, headroom: 48, preempt: 'none' } } })
     expect(tab.progress.getState().aggregate.plays.scheduler).toMatchObject({ composed: true })
   })
@@ -662,6 +691,10 @@ describe('verify-plays: the scheduler’s checks (§8.5)', () => {
     practiceInBand: true,
   })
 
+  test('a practice trace outside the band fails the play', () => {
+    expect(checkPlay({ ...facts(), practiceInBand: false }, world).some((p) => p.includes('practice trace is outside the band'))).toBe(true)
+  })
+
   test('the registered scheduler passes with the real files', () => {
     expect(checkPlay(facts(), world)).toEqual([])
   })
@@ -671,12 +704,20 @@ describe('verify-plays: the scheduler’s checks (§8.5)', () => {
     expect(checkPlay(wrong, { ...world, claimIds: new Set(CLAIMS.map((c) => c.id)) }).some((p) => p.includes('productionClaims does not list'))).toBe(true)
   })
 
-  test('the play the registry loads reaches its queue, mirror, debrief, Compose and card, and the Fleet engine, but no worker or sim', () => {
+  test('the play the registry loads reaches its queue, mirror and debrief, and the Fleet engine, but no worker or sim; Compose and the card are lazy chunks', () => {
     const c = closureOf(join(SRC, 'components', 'play', 'scheduler', 'Play.tsx'), SRC)
-    for (const f of ['Play.tsx', 'Queue.tsx', 'Mirror.tsx', 'Debrief.tsx', 'Compose.tsx', 'ProductionCard.tsx', 'session.ts']) {
+    for (const f of ['Play.tsx', 'Queue.tsx', 'Mirror.tsx', 'Debrief.tsx', 'session.ts']) {
       expect(c.files).toContain(`src/components/play/scheduler/${f}`)
     }
     for (const f of ['src/data/plays.ts', 'src/lib/world/sched.ts', 'src/lib/world/sched-policy.ts', 'src/lib/fleet-model.ts']) expect(c.files).toContain(f)
+    // F10: they appear only after the debrief, so they load then (the route's gzip closure was 221.5 KB against its 220 KB figure).
+    expect(c.files).not.toContain('src/components/play/scheduler/Compose.tsx')
+    expect(c.files).not.toContain('src/components/play/scheduler/ProductionCard.tsx')
+    const play = readFileSync(join(SRC, 'components', 'play', 'scheduler', 'Play.tsx'), 'utf8')
+    expect(play).toMatch(/lazy\(loadCompose\)/)
+    expect(play).toMatch(/lazy\(loadCard\)/)
+    expect(play).toContain("import('./Compose')")
+    expect(play).toContain("import('./ProductionCard')")
     expect(c.files.some((f) => f.includes('workers/') || (f.includes('components/sims/') && !f.endsWith('SimMirror.tsx')))).toBe(false)
     expect(c.packages).toContain('react')
   })

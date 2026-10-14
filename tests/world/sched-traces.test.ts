@@ -4,10 +4,14 @@ import {
   FCFS_DRIVER,
   GHOST_DRIVER,
   MAX_DRAWS,
+  RUN_GUARD,
   SCHED_CFG,
+  SCHED_PRACTICE_MINUTE_SEED,
   SCHED_REQUESTS,
   checkSchedBand,
   drawSchedTrace,
+  firstInBandSeed,
+  groups,
   isInBand,
   makeSchedTrace,
   measureAcceptance,
@@ -16,7 +20,9 @@ import {
   minuteSourceCount,
   parseSchedSource,
   practiceMinute,
+  practiceSourceLine,
   runSched,
+  sampledMinute,
   type SchedSource,
 } from '../../src/lib/world/sched-traces'
 import { Engine, makeRefManager, referenceScheduler } from '../../src/lib/fleet-model'
@@ -52,12 +58,22 @@ describe('the busiest-minute artifact', () => {
   test('the source minute holds more requests than the 40 sampled, and the line reads that from the artifact', () => {
     expect(minuteSourceCount(source.minute)).toBeGreaterThan(SCHED_REQUESTS)
     expect(minuteSampleLine(source.minute)).toBe(
-      `BurstGPT v2, busiest minute, 40 of ${source.minute.sampling.sourceRowsInWindow} requests sampled`,
+      `BurstGPT v2, busiest minute, 40 of ${groups(source.minute.sampling.sourceRowsInWindow as number)} requests sampled`,
+    )
+    // F13: a thousands separator, as the README writes it.
+    expect(minuteSampleLine(source.minute)).toMatch(/of 1,095 requests sampled$/)
+    expect(practiceSourceLine(source.minute)).toBe(
+      "40 requests from BurstGPT v2's busiest hour, arriving at the pace of its busiest minute (1,095 requests)",
     )
     // Changing only the recorded count changes the line: nothing in it is typed.
     const other = structuredClone(minuteRaw)
     other.sampling.sourceRowsInWindow = 777
     return parseSchedSource(other, hourRaw).then((s) => expect(minuteSampleLine(s.minute)).toBe('BurstGPT v2, busiest minute, 40 of 777 requests sampled'))
+      .then(() => {
+        other.sampling.sourceRowsInWindow = 12345
+        return parseSchedSource(other, hourRaw)
+      })
+      .then((s) => expect(practiceSourceLine(s.minute)).toContain('(12,345 requests)'))
   })
 
   test('an artifact without the count, or with fewer than the rows sampled, is refused', async () => {
@@ -75,9 +91,9 @@ describe('the busiest-minute artifact', () => {
   })
 })
 
-describe('the practice minute', () => {
+describe('the sampled minute', () => {
   test('is the artifact, one request per row, ids in arrival order', () => {
-    const t = practiceMinute(source)
+    const t = sampledMinute(source)
     expect(t.provenance).toBe('practice')
     expect(t.seed).toBeNull()
     expect(t.requests).toHaveLength(SCHED_REQUESTS)
@@ -86,16 +102,77 @@ describe('the practice minute', () => {
     })
   })
 
-  // The spec asks for the practice minute to be in band. The pinned source cannot: its busiest
-  // minute has no prompt over 692 tokens and responses of 1 to 4 tokens. This test pins what is
-  // true so that a rebuilt artifact, or a band that changes, is reviewed rather than missed.
+  // Why the practice minute is not this one: the pinned source's busiest minute has no prompt over 692
+  // tokens and responses of 1 to 4 tokens, so rules 2, 3 and 5 fail and nothing is left to decide.
+  // This pins what is true so that a rebuilt artifact, or a band that changes, is reviewed rather than missed.
   test('meets rules 1 and 4 and misses rules 2, 3 and 5, for reasons in the data', () => {
-    const band = checkSchedBand(practiceMinute(source))
+    const band = checkSchedBand(sampledMinute(source))
     expect(band.rules).toEqual([true, false, false, true, false])
     expect(band.ghost).toMatchObject({ met: 40, total: 40, turns: 40, finished: true })
     expect(band.longestPrompt).toBeLessThan(BAND.longPrompt)
     expect(band.greedy.autoPreempts).toBe(0)
     expect(band.fcfs.met).toBe(band.ghost.met)
+  })
+})
+
+describe('the practice minute (§8.2: in band, and shared)', () => {
+  test('is the pinned fresh minute, labelled practice, with its seed', () => {
+    const t = practiceMinute(source)
+    expect(t.provenance).toBe('practice')
+    expect(t.id).toBe('t5.sched-practice-minute')
+    expect(t.seed).toBe(SCHED_PRACTICE_MINUTE_SEED)
+    expect(t.requests).toEqual(makeSchedTrace(source, SCHED_PRACTICE_MINUTE_SEED).requests)
+    expect(t.requests).toHaveLength(SCHED_REQUESTS)
+    expect(practiceMinute(source)).toEqual(t)
+  })
+
+  test('passes all five band rules', () => {
+    const band = checkSchedBand(practiceMinute(source))
+    expect(band.rules).toEqual([true, true, true, true, true])
+    expect(band.violations).toEqual([])
+    expect(band.inBand).toBe(true)
+    expect(band.ghost.met * 100).toBeGreaterThanOrEqual(BAND.ghostMetPct * SCHED_REQUESTS)
+    expect(band.fcfs.met).toBeLessThanOrEqual(band.ghost.met - BAND.fcfsBehind)
+    expect(band.greedy.autoPreempts).toBeGreaterThanOrEqual(BAND.autoPreempts)
+    expect(band.ghost.turns).toBeLessThanOrEqual(BAND.maxTurns)
+    expect(band.longestPrompt).toBeGreaterThanOrEqual(BAND.longPrompt)
+  })
+
+  test('has real decisions: the policies differ in how many they serve, and it is not the gentle minute', () => {
+    const t = practiceMinute(source)
+    const ghost = runSched(t, GHOST_DRIVER)
+    expect(runSched(t, FCFS_DRIVER).met).toBeLessThan(ghost.met)
+    expect(ghost.turns).toBeLessThan(SCHED_REQUESTS)
+    expect(ghost.met).toBeLessThan(SCHED_REQUESTS)
+  })
+
+  // The pin is the first seed from 0 that passes: if the band or the generator moves, this fails and the pin is re-derived.
+  test('the pinned seed is the first in-band seed from 0', () => {
+    expect(firstInBandSeed(source)).toBe(SCHED_PRACTICE_MINUTE_SEED)
+    for (let seed = 0; seed < SCHED_PRACTICE_MINUTE_SEED; seed++) expect(isInBand(makeSchedTrace(source, seed))).toBe(false)
+  })
+
+  // The In-production card says the cap and the pool both bind on this minute.
+  test('the reference fills the pool nearly to the brim and also queues requests for a free slot', () => {
+    const t = practiceMinute(source)
+    const cap = t.cfg.numBlocks * t.cfg.blockSize
+    let peak = 0
+    let slotBound = 0
+    let memBound = 0
+    const watch = {
+      name: 'watch',
+      schedule(v: Parameters<typeof referenceScheduler>[0]) {
+        peak = Math.max(peak, v.memUsed)
+        if (v.waiting.length > 0 && v.running.length >= v.maxRunning) slotBound++
+        else if (v.waiting.length > 0 && !v.waiting.some((r) => r.prompt <= v.memCap - v.memUsed)) memBound++
+        return referenceScheduler(v)
+      },
+    }
+    const e = new Engine(t.cfg, t.requests.map((r) => ({ ...r })), watch, makeRefManager(t.cfg.numBlocks, t.cfg.blockSize))
+    while (!e.done && e.tick < RUN_GUARD) e.step()
+    expect(peak).toBeGreaterThanOrEqual(0.9 * cap)
+    expect(slotBound).toBeGreaterThan(0)
+    expect(memBound).toBeGreaterThan(0)
   })
 })
 
@@ -156,8 +233,8 @@ describe('runSched', () => {
   })
 
   test('a turn is an iteration where a request waits and one fits', () => {
-    const run = runSched(practiceMinute(source), GHOST_DRIVER)
-    // The practice minute: every arrival is admitted the iteration it appears or the next, and the
+    const run = runSched(sampledMinute(source), GHOST_DRIVER)
+    // The sampled minute: every arrival is admitted the iteration it appears or the next, and the
     // 40 requests need 40 admission turns in 63 iterations.
     expect(run.turns).toBe(40)
     expect(run.iterations).toBe(63)
@@ -174,7 +251,7 @@ describe('the band', () => {
   }, TIMEOUT_MS)
 
   test('violations name the rules that fail, in order', () => {
-    const band = checkSchedBand(practiceMinute(source))
+    const band = checkSchedBand(sampledMinute(source))
     expect(band.violations).toHaveLength(band.rules.filter((ok) => !ok).length)
     expect(band.violations[band.violations.length - 1]).toContain('longest prompt')
   })
@@ -182,7 +259,7 @@ describe('the band', () => {
   test('acceptance on 2,000 seeds, reported', () => {
     const n = 2000
     const m = measureAcceptance(source, n)
-    console.log(
+    if (process.env.SCHED_REPORT) console.log(
       `sched band acceptance: ${(m.rate * 100).toFixed(2)} % of ${n} seeds ` +
         `(≈ ${(1 / m.rate).toFixed(0)} candidates per fresh minute; rejected by rule 1-5: ${m.rejectedBy.join(', ')})`,
     )

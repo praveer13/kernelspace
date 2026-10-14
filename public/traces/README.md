@@ -25,13 +25,16 @@ file in Mooncake at commit `b82b9f86ceb67bb809339b9088085f34329683bb`,
 licensed Apache-2.0. That source file's SHA-256 is
 `b8cbb061a85206d729d91cdc2981f43c9e0d99209dce588d3af5f7934408b9df`.
 
-The busiest minute is a sample of a minute, not the whole minute: it is the
-practice minute of the scheduler play, which shows "40 of 1,095 requests
-sampled" with the second number read from `sampling.sourceRowsInWindow`. It is
+The busiest minute is a sample of a minute, not the whole minute: 40 of 1,095
+requests, the second number read from `sampling.sourceRowsInWindow`. It is
 not inside the busiest hour above: the busiest 60 seconds and the busiest 3,600
 seconds fall in different parts of the source (the hour averages 555 requests a
-minute). Fresh minutes for the play are drawn in `src/lib/world/sched-traces.ts`
-by resampling the hour's 480 rows, with arrival gaps taken from the minute.
+minute). Its 40 requests are too gentle to play (no prompt over 692 tokens, one
+to four tokens of output), so the scheduler play uses the minute only for its
+arrival gaps. Every minute the play runs, the shared practice minute included,
+is drawn in `src/lib/world/sched-traces.ts` by resampling the hour's 480 rows
+with arrival gaps taken from this minute; the practice minute is the first
+seed that is in the play's band.
 
 ## Why LMSYS is a profile, not a redistributed slice
 
