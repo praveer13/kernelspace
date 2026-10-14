@@ -161,10 +161,59 @@ describe('the shell reads only the snapshot', () => {
 describe('reduced motion on the pages B26 lists', () => {
   // wave-1.md §6.9 asks for a MotionScope on these pages. App.tsx already loads each page that reaches
   // framer-motion through `lazyMotion`, which wraps it in MotionScope; a second wrapper would only nest.
-  test('Home, Me, Glossary, Lab, Changes and FleetWeek are routed through lazyMotion', () => {
+  // Me is the exception (wave-3.md §12.5, 3b-06): see the next describe.
+  test('Home, Glossary, Lab, Changes and FleetWeek are routed through lazyMotion', () => {
     const app = readFileSync(join(src, 'App.tsx'), 'utf8')
-    for (const page of ['Home', 'Me', 'Glossary', 'Lab', 'Changes', 'FleetWeek']) {
+    for (const page of ['Home', 'Glossary', 'Lab', 'Changes', 'FleetWeek']) {
       expect(app).toMatch(new RegExp(`const ${page} = lazyMotion\\(`))
     }
+  })
+})
+
+describe('/me is plain lazy, and its motion sections scope themselves (wave-3.md §12.5, 3b-06)', () => {
+  const meDir = join(src, 'pages/me')
+  const sections = readdirSync(meDir).filter((f) => f.endsWith('.tsx'))
+
+  test('App.tsx routes /me with plain lazy, never lazyMotion', () => {
+    // lazyMotion loads src/lib/motion.tsx, and so framer-motion, beside the page, where verify-bundle's closure does not look
+    const app = readFileSync(join(src, 'App.tsx'), 'utf8')
+    expect(app).toMatch(/const Me = lazy\(\(\) => import\('@\/pages\/Me'\)\)/)
+    expect(app).not.toMatch(/const Me = lazyMotion\(/)
+  })
+
+  test('Progress.tsx is gone and nothing imports it', () => {
+    expect(existsSync(join(src, 'pages/Progress.tsx'))).toBe(false)
+    const importers = (readdirSync(src, { recursive: true }) as string[])
+      .filter((f) => /\.(ts|tsx)$/.test(f))
+      .filter((f) => /from '(@\/pages\/Progress|(\.\.?\/)+(pages\/)?Progress)'/.test(readFileSync(join(src, f), 'utf8')))
+    expect(importers).toEqual([])
+    expect(sections).toEqual(expect.arrayContaining(['DataOwnership.tsx', 'Journey.tsx']))
+  })
+
+  test("Me.tsx's static closure reaches neither framer-motion, src/lib/motion nor lesson content, and lazy-loads its sections", () => {
+    const graph = staticGraph('src/pages/Me.tsx')
+    expect(graph.packages).not.toContain('framer-motion')
+    expect(graph.files).not.toContain('src/lib/motion.tsx')
+    expect(graph.files.filter((f) => f.startsWith('src/data/lessons'))).toEqual([])
+    const me = readFileSync(join(src, 'pages/Me.tsx'), 'utf8')
+    for (const name of ['Journey', 'DataOwnership']) expect(me).toContain(`const ${name} = lazy(() => import('@/pages/me/${name}'))`)
+  })
+
+  test('no /me module reaches src/data/lessons, the 394 KB gzip chunk Progress pulled for one count', () => {
+    for (const entry of ['src/pages/Me.tsx', ...sections.map((f) => `src/pages/me/${f}`)]) {
+      expect(staticGraph(entry).files.filter((f) => f.startsWith('src/data/lessons'))).toEqual([])
+    }
+  })
+
+  test('every /me section that imports framer-motion renders inside MotionScope', () => {
+    for (const f of sections) {
+      const text = readFileSync(join(meDir, f), 'utf8')
+      if (!/from 'framer-motion'/.test(text)) continue
+      expect(text, f).toContain("import { MotionScope } from '@/lib/motion'")
+      expect(text, f).toMatch(/<MotionScope>[\s\S]*<\/MotionScope>/)
+    }
+    // the sections that exist today use framer-motion, so the check above is not vacuous
+    expect(readFileSync(join(meDir, 'Journey.tsx'), 'utf8')).toContain("from 'framer-motion'")
+    expect(readFileSync(join(meDir, 'DataOwnership.tsx'), 'utf8')).toContain("from 'framer-motion'")
   })
 })

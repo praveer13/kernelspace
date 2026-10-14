@@ -652,7 +652,7 @@ describe('selectColdChecks', () => {
   })
 })
 
-describe('the checklists Progress shows', () => {
+describe('the checklists /me shows', () => {
   const sections = (events: LedgerEvent[], known = true, raceLabs?: readonly string[]) => ringSections(rootRings(events, raceLabs), known)
   const row = (events: LedgerEvent[], ring: string, key: string, known = true, raceLabs?: readonly string[]) => {
     const found = sections(events, known, raceLabs).find((s) => s.ring === ring)?.rows.find((r) => r.key === key)
@@ -723,7 +723,7 @@ describe('the ring chip stays snapshot-only', () => {
   })
 
   test("only the ring panel passes the ledger's cold checks, and economy.ts reaches no engine or review model", () => {
-    expect(src('src/pages/Progress.tsx')).toMatch(/selectRings\(aggregate, cold\)/)
+    expect(src('src/pages/me/Journey.tsx')).toMatch(/selectRings\(aggregate, cold\)/)
     const imports = [...src('src/lib/economy.ts').matchAll(/^import (?:type )?[^]*? from '([^']+)'/gm)].map((m) => m[1])
     expect(imports.sort()).toEqual(['./economy-table', './ledger/types'])
   })
