@@ -103,6 +103,62 @@ describe('collectPrecache', () => {
   })
 })
 
+describe("a family's own lazy chunks: the compile bank's groups (wave-2.md §15.3)", () => {
+  // shaped like the real manifest: compile.ts dynamically imports one chunk per group, and each group imports shared chunks
+  const GROUPS = ['borrows', 'lifetimes', 'moves', 'seed']
+  const bank = (): Record<string, ManifestChunk> => ({
+    'src/lib/items/families/compile.ts': chunk('compile-M0.js', {
+      isDynamicEntry: true,
+      imports: ['index.html', '_ids-M8.js'],
+      dynamicImports: GROUPS.map((g) => `src/data/rust-items/served/${g}.ts`),
+    }),
+    '_ids-M8.js': chunk('ids-M8.js'),
+    '_types-M9.js': chunk('types-M9.js'),
+    ...Object.fromEntries(GROUPS.map((g, i) => [`src/data/rust-items/served/${g}.ts`, chunk(`${g}-N${i}.js`, { isDynamicEntry: true, imports: ['_ids-M8.js', '_types-M9.js'], css: [`assets/${g}-N${i}.css`] })])),
+  })
+
+  test('every group is precached with the family, so practice on a compile item works offline', () => {
+    const list = collectPrecache(fixture(bank()))
+    expect(list).toContain('assets/compile-M0.js')
+    for (const [i, g] of GROUPS.entries()) expect(list).toContain(`assets/${g}-N${i}.js`)
+  })
+
+  test("a group's own imports and styles come with it", () => {
+    const list = collectPrecache(fixture(bank()))
+    expect(list).toContain('assets/types-M9.js')
+    expect(list).toContain('assets/ids-M8.js')
+    expect(list).toContain('assets/moves-N2.css')
+  })
+
+  test('a group added to the family later is picked up with no change to the builder', () => {
+    const m = bank()
+    m['src/lib/items/families/compile.ts'].dynamicImports!.push('src/data/rust-items/served/traits.ts')
+    m['src/data/rust-items/served/traits.ts'] = chunk('traits-N9.js', { isDynamicEntry: true })
+    expect(collectPrecache(fixture(m))).toContain('assets/traits-N9.js')
+  })
+
+  test('the list changes with the groups, so a new bank is a new service worker build', () => {
+    const before = buildSw(fixture(), '<html>shell</html>')
+    const after = buildSw(fixture(bank()), '<html>shell</html>')
+    expect(after.precache).toContain('assets/moves-N2.js')
+    expect(before.precache).not.toContain('assets/moves-N2.js')
+    expect(after.id).not.toBe(before.id)
+  })
+
+  test('only a family gets this: the lazy children of other chunks stay out', () => {
+    const m = fixture({ ...bank(), 'src/pages/Home.tsx': chunk('Home-JJJ.js', { isDynamicEntry: true, imports: ['index.html'], dynamicImports: ['src/pages/home/Hero.tsx'] }), 'src/pages/home/Hero.tsx': chunk('Hero-JJ2.js', { isDynamicEntry: true }) })
+    const list = collectPrecache(m)
+    expect(list).not.toContain('assets/Hero-JJ2.js')
+    expect(list).not.toContain('assets/Home-JJJ.js')
+  })
+
+  test('a family with no lazy chunks (every other family) costs the list nothing extra', () => {
+    const list = collectPrecache(fixture({ 'src/lib/items/families/frag.ts': chunk('frag-K1.js', { isDynamicEntry: true }) }))
+    expect(list).toContain('assets/frag-K1.js')
+    expect(list.filter((f) => /-N\d/.test(f))).toEqual([])
+  })
+})
+
 describe('the /daily closure', () => {
   test('holds the Daily page, its static imports, its CSS and its own lazy chunks, and nothing of other pages', () => {
     const list = collectPrecache(fixture())
