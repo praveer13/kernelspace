@@ -27,6 +27,7 @@ import {
   freeCount,
   freedBy,
   initialState,
+  isPressured,
   isStart,
   isStartPlusFork,
   logicalCount,
@@ -200,6 +201,24 @@ describe('the pool model', () => {
     expect(preemptVictim(s, 'Z')).toBeNull()
   })
 
+  test('only the stated pool is graded: A first reads 0, but B first and then A would read 3, from a pool the task does not state', () => {
+    const s = pressured()
+    expect(isPressured(s)).toBe(true)
+    expect(isPressured(initialState())).toBe(false)
+    // A first, from the stated pool: 0 blocks, graded
+    const a = preemptVictim(s, 'A')
+    expect(a?.freed).toBe(0)
+    // B first: also 0 and nothing admitted, but the pool it leaves is not the stated one, so A's 3 is not graded
+    const b = preemptVictim(s, 'B')
+    expect(b?.freed).toBe(0)
+    expect(b?.admitted).toBeNull()
+    expect(isPressured((b as NonNullable<typeof b>).state)).toBe(false)
+    const aAfterB = preemptVictim((b as NonNullable<typeof b>).state, 'A')
+    expect(aAfterB?.freed).toBe(3)
+    // and the grader would have scored that 3 against the stated prediction of 0 as a miss
+    expect(grade('blk.preempt', 0, 3)?.ok).toBe(false)
+  })
+
   test('preempting A and then D admits the waiting request once the second victim lets go', () => {
     const afterA = preemptVictim(pressured(), 'A')?.state
     expect(afterA).toBeDefined()
@@ -351,6 +370,8 @@ describe('the explorer reports what each task asks about', () => {
     const { page, seen } = await mountExplorer()
     const thumb = page.container.querySelector('[role="slider"][aria-label="block size"]')
     expect(thumb, 'the block-size slider').not.toBeNull()
+    // aria-valuenow is the step index (0 to 4), so a screen reader needs the size in tokens as well
+    expect(thumb?.getAttribute('aria-valuetext')).toBe('16 tokens')
     expect(page.container.textContent).toContain('block size16 tokens')
     await dom.act(() => {
       thumb?.focus()
@@ -358,6 +379,8 @@ describe('the explorer reports what each task asks about', () => {
     })
     expect(seen).toEqual([{ key: 'blk.sweep-tail-64', value: 16, unit: 'tokens' }])
     expect(page.container.textContent).toContain('64 tokens')
+    expect(thumb?.getAttribute('aria-valuenow')).toBe('4')
+    expect(thumb?.getAttribute('aria-valuetext')).toBe('64 tokens')
     await dom.act(() => thumb?.dispatchEvent(new MiniEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' })))
     expect(seen.at(-1)).toEqual({ key: 'blk.sweep-tail-4', value: 0, unit: 'tokens' })
     await page.unmount()
@@ -404,9 +427,25 @@ describe('an earlier click-through completion still shows (the nine tasks of sim
   test('each task names the id it replaced, and the panel says so when that id is in the progress store', async () => {
     for (const task of NINE) {
       expect(task.legacyId, task.id).toBeDefined()
-      await withDone(task.simId, [task.legacyId as string], async () => {
-        const page = await panel(task)
-        expect(page.container.textContent, task.id).toContain(OLD)
+      for (const old of [task.legacyId].flat() as string[]) {
+        await withDone(task.simId, [old], async () => {
+          const page = await panel(task)
+          expect(page.container.textContent, `${task.id} / ${old}`).toContain(OLD)
+          await page.unmount()
+        })
+      }
+    }
+  })
+
+  test('t-quiz, which had no task of its own, shows on alloc.fixed-block-waste, and on no other allocator task', async () => {
+    const waste = ALLOCATOR_OUTCOME_TASKS.find((t) => t.id === 'alloc.fixed-block-waste') as SimTaskDef
+    expect(waste.legacyId).toContain('t-quiz')
+    expect(waste.legacyId).toContain('t-paged')
+    for (const t of ALLOCATOR_OUTCOME_TASKS) {
+      await withDone('sim-allocator', ['t-quiz'], async () => {
+        const page = await panel(t)
+        if (t.id === waste.id) expect(page.container.textContent).toContain(OLD)
+        else expect(page.container.textContent, t.id).not.toContain(OLD)
         await page.unmount()
       })
     }
@@ -428,6 +467,6 @@ describe('an earlier click-through completion still shows (the nine tasks of sim
       '/src/components/sims/allocator.tasks.ts': { ALLOCATOR_OUTCOME_TASKS },
       '/src/components/sims/blockTableExplorer.tasks.ts': { BLOCK_TABLE_EXPLORER_TASKS },
     })
-    for (const task of NINE) expect(r.byId(task.legacyId as string), task.legacyId).toBeUndefined()
+    for (const task of NINE) for (const old of [task.legacyId].flat() as string[]) expect(r.byId(old), old).toBeUndefined()
   })
 })

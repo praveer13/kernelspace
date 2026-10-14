@@ -82,7 +82,7 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
     kind: 'outcome',
     title: 'Preempt a sequence that shares its blocks',
     setup:
-      'Press "reset shared A+B prompt", then "spawn 64-token request" twice. The second press finds 3 free blocks for a request that needs 4 and opens the preemption dialog. Choose seq A and either policy, then press "preempt & admit".',
+      'Press "reset shared A+B prompt", then "spawn 64-token request" twice. The second press finds 3 free blocks for a request that needs 4 and opens the preemption dialog. Choose seq A first and either policy, then press "preempt & admit". (The reading comes from this pool: preempting seq B first changes what A frees.)',
     kcs: [KC.blockRefcounts],
     predict: {
       kind: 'numeric',

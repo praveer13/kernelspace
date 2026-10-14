@@ -87,6 +87,14 @@ export function isStartPlusFork(s: PoolState): boolean {
   return s.pool.length === INITIAL_POOL && s.seqs.map((q) => q.id).join('') === 'ABC' && freeCount(s) === INITIAL_POOL - PROMPT_BLOCKS && s.pool.every((b) => b.copiedFrom === undefined)
 }
 
+/**
+ * The pool the preemption task states: reset, then one 64-token request admitted, so A and B share three blocks, D holds
+ * four and three are free. Any other pool (B already preempted, say) gives A a different count, so it is not graded.
+ */
+export function isPressured(s: PoolState): boolean {
+  return JSON.stringify(s) === JSON.stringify(pressured())
+}
+
 /* ------------------------------------------------------------------ */
 /* Fork and copy-on-write                                               */
 /* ------------------------------------------------------------------ */
