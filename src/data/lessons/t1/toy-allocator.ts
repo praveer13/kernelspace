@@ -257,6 +257,12 @@ Add the real world's finishing touches and you have glibc malloc: per-thread are
           llm: 'fixed 16-token blocks',
           llmLine: 'Waste capped at <4% — one partly-filled tail block per sequence.',
           breaks: 'Size classes still mean several sizes, so each class can strand its own free blocks; KV paging has exactly one size, so the only waste left is the unfilled tail block.',
+          work: {
+            backgrounds: ['jvm'],
+            os: 'G1 regions',
+            osLine: 'The Java heap is cut into equal-size regions; allocation fills one region at a time and the collector reclaims whole regions.',
+            breaks: 'G1 evacuates: it copies the live objects out of a region to compact them, so objects move; a KV block never moves, and a sequence\'s block table keeps pointing at the same physical block until the sequence frees it.',
+          },
         },
       ],
       principle:

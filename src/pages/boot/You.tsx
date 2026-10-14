@@ -1,9 +1,11 @@
 import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Button } from '@/components/Button'
-import type { LearningPath, WeekPlan } from '@/lib/ledger/types'
+import type { Background, LearningPath, WeekPlan } from '@/lib/ledger/types'
+import { backgroundOf } from '@/lib/learner/iso'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
+import { BackgroundChoice } from '@/pages/me/Background'
 import { StepBtn, StepTitle } from './ui'
 
 /** The line under the path choice: where the chosen path begins (wave-2.md §7.3). */
@@ -55,9 +57,12 @@ export default function You({ onFinish }: YouProps) {
   const setWorking = useProgress((s) => s.setWorking)
   const installDismissed = useProgress((s) => s.working['boot:install-dismissed'] === true)
   const placementRaw = useProgress((s) => s.working['placement:result'])
+  const savedBackground = backgroundOf(useProgress((s) => s.working['profile:background']))
   const uid = useId()
   const [job, setJob] = useState<boolean | null>(null)
   const [valueText, setValueText] = useState('')
+  // the optional work pick (wave-3.md §11.3): held here and written with the rest at Go to Today
+  const [background, setBackground] = useState<Background | null>(savedBackground)
   const [path, setPath] = useState<LearningPath | null>(null)
   const [week, setWeek] = useState<WeekPlan>(DEFAULT_WEEK)
   const [weekTouched, setWeekTouched] = useState(false)
@@ -86,6 +91,7 @@ export default function You({ onFinish }: YouProps) {
 
   const finish = () => {
     if (valueText.trim() !== '') setWorking('boot:value', { variant: job === false ? 'no-job' : 'job', text: valueText.trim() })
+    if (background && background !== savedBackground) setWorking('profile:background', background)
     if (path) setWorking('boot:path', path)
     if (weekTouched) setWorking('boot:week', { ...week })
     onFinish()
@@ -145,6 +151,11 @@ export default function You({ onFinish }: YouProps) {
               className="mt-2 w-full rounded-md border border-line bg-surface-2 p-3 text-body text-text-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
           </div>
+        </fieldset>
+
+        <fieldset className="space-y-3">
+          <legend className="text-body text-text-1">What do you work on? <span className="text-text-3">Optional. Some lesson examples follow it. It stays in this browser.</span></legend>
+          <BackgroundChoice value={background} onChange={setBackground} />
         </fieldset>
 
         <fieldset className="space-y-2">

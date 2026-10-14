@@ -188,6 +188,12 @@ That creates the metric pair a production scoreboard needs: **KV hit rate** (cac
           llm: 'token-prefix key',
           llmLine: 'Model configuration + exact token ids name deterministic K/V.',
           breaks: 'A page-cache key names a place whose bytes can change, so the kernel tracks dirty pages and invalidates; a prefix key names content, so its K/V never changes and an entry is only ever kept or evicted.',
+          work: {
+            backgrounds: ['sre', 'backend'],
+            os: 'CDN entry with a TTL',
+            osLine: 'A CDN names a response by its URL and keeps it for a time to live; after that it revalidates, because the origin may have changed the bytes behind the URL.',
+            breaks: 'A CDN entry can go stale, because the origin changed under it; a KV prefix keyed by its tokens, model and adapter revision can never be wrong, so a TTL or space eviction only costs a re-prefill.',
+          },
         },
         {
           os: 'copy-on-write page',

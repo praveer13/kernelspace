@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import BackgroundPick from '@/pages/me/Background'
 
 /**
  * /me, the Mirror's route (wave-3.md §2.2, §12.5). 3b-06 folded Progress into two lazy sections, so this file holds
@@ -7,7 +8,8 @@ import { Link } from 'react-router'
  * at 200 KB. App.tsx routes it with plain `lazy`. Each section that uses framer-motion renders inside its own
  * `MotionScope` (src/pages/me/*), so reduced motion is honoured. 3b-06b added the Mirror above the journey, in the order
  * of §12.5: VRK30, cold checks, calibration with the optimism offset, competence statements (all one lazy section,
- * MirrorSummary, which uses no framer-motion), then the forms' mount, then what 3b-06 moved.
+ * MirrorSummary, which uses no framer-motion), then the forms' mount, then the optional background pick (3c-05, §11.3:
+ * a small static card, shared with Boot), then what 3b-06 moved.
  *
  * The Mirror is as tall as the ledger makes it, so no placeholder height fits an empty ledger and a full one. Instead of
  * reserving one (a fixed min-h-[24rem] was too tall for one and too short for the other, and the content below moved when
@@ -56,6 +58,8 @@ export default function Me() {
             <Suspense fallback={null}>
               <FormsCard />
             </Suspense>
+
+            <BackgroundPick />
 
             <div className="mt-14">
               <Suspense fallback={<SectionFallback tall="min-h-[24rem]" />}>

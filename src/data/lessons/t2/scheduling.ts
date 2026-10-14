@@ -66,6 +66,12 @@ Every scheduler has a silent partner deciding what enters the runqueue at all. T
           llm: 'waiting → running queue',
           llmLine: 'Requests wait for KV blocks + a batch slot; admission is capacity-checked.',
           breaks: 'A thread needs only a core, but a request needs GPU memory sized by its unknown output length, so admission is a memory forecast, not a slot count.',
+          work: {
+            backgrounds: ['sre', 'backend'],
+            os: 'backpressure',
+            osLine: 'When a consumer falls behind, the signal travels upstream and the producer slows down or blocks, so the queue stays bounded.',
+            breaks: 'Backpressure slows the producer; admission control leaves the request waiting in its queue while decode keeps running for the sequences already admitted.',
+          },
         },
         {
           os: 'head-of-line blocking',
