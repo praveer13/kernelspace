@@ -343,7 +343,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
 
   /* ---- Investigate: the checks ---- */
   choice('lab08.primm.i1', 'investigate', {
-    q: 'The schema gives `id` as an integer from 0 to 100, and a model writes `{"id":101,"tag":"alpha","ok":true}`. The prefix `{"id":` is six bytes, so the digits of 101 sit at offsets 6, 7 and 8, counted from the start of the document. Where must a correct matcher report `Rejected { byte }`?',
+    q: 'The schema gives `id` as an integer from 0 to 100, and a model writes `{"id":101,` and goes on. The prefix `{"id":` is six bytes, so the digits of 101 sit at offsets 6, 7 and 8, counted from the start of the document. Where must a correct matcher report `Rejected { byte }`?',
     options: [
       'At offset 6, since the 1 that starts the number is out of range',
       'At offset 7, since the 0 makes 10, which is no longer a value',
