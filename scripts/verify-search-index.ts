@@ -9,7 +9,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
-import { byId } from '../src/data/claims'
+import { byId } from '../src/data/claims/all'
 import { lessonById } from '../src/data/lessons'
 import { PLAYS } from '../src/data/plays'
 import { extractHeadings } from '../src/pages/lesson/markdown'

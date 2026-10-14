@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router'
-import { CLAIMS, formatClaimValue, staleSince } from '@/data/claims'
+import { CLAIMS, formatClaimValue, staleSince } from '@/data/claims/all'
 import { cn } from '@/lib/utils'
 
 export function ClaimsTable({ className }: { className?: string }) {
