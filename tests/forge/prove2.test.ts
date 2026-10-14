@@ -9,6 +9,8 @@ import type { ProveV2Template } from '../../src/data/forge/types'
 import { RETRY_AFTER_MS } from '../../src/lib/forge/prove'
 import {
   PROVE2_MAX_CALLS,
+  PROVE2_MAX_IDS,
+  PROVE2_MAX_QID,
   RETURN_AFTER_DAYS,
   attemptsOf,
   buildProve2Result,
@@ -19,6 +21,7 @@ import {
   pickTemplate,
   planQuestion,
   proveFromModule,
+  readAnswer,
   retryWindow,
   returnDay,
   returnDue,
@@ -130,6 +133,12 @@ describe('planning a question from (template, seed)', () => {
     expect(() => planQuestion(q(['init'], ['s'], ' '), 1)).toThrow('story')
   })
 
+  test('a template id is 1 to 40 characters, the most the ledger keeps as qid, or the template is refused', () => {
+    expect(planQuestion({ ...FREE_AFTER, id: 'x'.repeat(PROVE2_MAX_QID) }, 1).templateId).toHaveLength(40)
+    expect(() => planQuestion({ ...FREE_AFTER, id: 'x'.repeat(PROVE2_MAX_QID + 1) }, 1)).toThrow('1 to 40 characters')
+    expect(() => planQuestion({ ...FREE_AFTER, id: '' }, 1)).toThrow('1 to 40 characters')
+  })
+
   test('the seed is a uint32', () => {
     expect(planQuestion(FREE_AFTER, 2 ** 32 + 5).seed).toBe(5)
   })
@@ -159,6 +168,39 @@ describe('planning a question from (template, seed)', () => {
     expect(parseAnswer('3, x', 'ids')).toBeNull()
     expect(parseAnswer('1.5', 'ids')).toBeNull()
     expect(parseAnswer(Array(17).fill('1').join(','), 'ids')).toBeNull()
+  })
+
+  test('an ids answer is at most 12 whole ids of 0 or more, the most the ledger stores', () => {
+    expect(PROVE2_MAX_IDS).toBe(12)
+    expect(parseAnswer(Array.from({ length: 12 }, (_, i) => i).join(', '), 'ids')).toHaveLength(12)
+    expect(parseAnswer(Array.from({ length: 13 }, (_, i) => i).join(', '), 'ids')).toBeNull()
+    expect(parseAnswer('3, -1', 'ids')).toBeNull()
+    expect(parseAnswer('+3', 'ids')).toBeNull()
+    expect(parseAnswer('1'.repeat(400), 'ids')).toBeNull() // not a whole number once read: Infinity
+    expect(parseAnswer('1'.repeat(400), 'number')).toBeNull()
+    expect(parseAnswer('0, 0', 'ids')).toEqual([0, 0])
+  })
+
+  test('none is the empty id list, since a module may reply one (nothing preempted, say); blank or bare commas are not an answer', () => {
+    expect(parseAnswer('none', 'ids')).toEqual([])
+    expect(parseAnswer(' None ', 'ids')).toEqual([])
+    expect(parseAnswer(', ,', 'ids')).toBeNull()
+    expect(parseAnswer('none', 'number')).toBeNull()
+  })
+
+  test('an input that is not an answer says what to type instead', () => {
+    const say = (text: string, kind: 'number' | 'ids') => {
+      const r = readAnswer(text, kind)
+      if (r.ok) throw new Error(`${text} read as ${JSON.stringify(r.answer)}`)
+      return r.message
+    }
+    expect(say('twelve', 'number')).toBe('Type one number, such as 12 or 2.5.')
+    expect(say('', 'ids')).toContain('separated by commas')
+    expect(say('', 'ids')).toContain('none')
+    expect(say('3, -1', 'ids')).toContain('whole number of 0 or more')
+    expect(say('1.5', 'ids')).toContain('no signs, decimals or letters')
+    expect(say(Array(13).fill('1').join(','), 'ids')).toBe('An answer holds at most 12 ids, and this one has 13. Type the 12 or fewer your module replies.')
+    expect(readAnswer('3, 7, 1', 'ids')).toEqual({ ok: true, answer: [3, 7, 1] })
   })
 })
 
@@ -212,6 +254,19 @@ describe('running the calls and grading the answer', () => {
     expect(gradeAnswer(FREE_AFTER, 0, out)).toMatchObject({ right: false, actual: null, failed: 'error' })
     const throwing = { ...FREE_AFTER, read: () => { throw new Error('no free_blocks reply') } }
     expect(gradeAnswer(throwing, 0, { kind: 'replied', replies: [] })).toMatchObject({ right: false, actual: null, failed: 'error', message: 'no free_blocks reply' })
+  })
+
+  test('a reading the ledger could not store is an unreadable reply: actual null, failed error', () => {
+    const replied = { kind: 'replied' as const, replies: ['x'] }
+    const reading = (value: unknown): ProveV2Template => ({ ...DUMP_IDS, read: () => value as number[] })
+    const hostile: unknown[] = [Array.from({ length: 13 }, (_, i) => i), [3, -1], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY], Number.NaN, Number.POSITIVE_INFINITY, ['3'], null, undefined, '7', { 0: 1 }]
+    for (const value of hostile) {
+      expect(gradeAnswer(reading(value), [3], replied)).toMatchObject({ right: false, actual: null, failed: 'error', message: expect.stringContaining('at most 12 whole ids') })
+    }
+    // the edges the ledger does store are read as they are
+    expect(gradeAnswer(reading(Array.from({ length: 12 }, () => 0)), [0], replied)).toMatchObject({ right: false, failed: null })
+    expect(gradeAnswer(reading([]), [], replied)).toEqual({ right: true, actual: [], failed: null })
+    expect(gradeAnswer(reading(-2.5), -2.5, replied)).toEqual({ right: true, actual: -2.5, failed: null })
   })
 
   test('the wrong number of replies is a failure, not a grade', async () => {
@@ -325,9 +380,10 @@ describe('proveFromModule: the result and its provenance', () => {
     expect(r.opensAt).toBeNull()
   })
 
-  test('wrong: practice with score 0, the module\'s actual reply kept, and the next credited attempt 24 h on', async () => {
+  test('wrong: not ok, practice with score 0, the module\'s actual reply kept, and the next credited attempt 24 h on', async () => {
     const r = await attempt({ answer: 7 })
-    expect(r.result).toMatchObject({ score: 0, ok: true, provenance: 'practice', wasmSha256: r.sha, data: { answer: 7, actual: truth } })
+    // §3.2: a v2 event's ok means right (answer equals actual) and its score is ok ? 1 : 0
+    expect(r.result).toMatchObject({ score: 0, ok: false, provenance: 'practice', wasmSha256: r.sha, data: { answer: 7, actual: truth } })
     expect(r.grade).toMatchObject({ right: false, actual: truth })
     expect(r.opensAt).toBe(T0 + RETRY_AFTER_MS)
   })
@@ -335,7 +391,7 @@ describe('proveFromModule: the result and its provenance', () => {
   test('a failed module is a wrong, credited answer with actual null', async () => {
     const r = await attempt({ module: () => () => trap('boom') })
     expect(r.grade).toMatchObject({ right: false, actual: null, failed: 'trap' })
-    expect(r.result).toMatchObject({ provenance: 'practice', score: 0, data: { actual: null } })
+    expect(r.result).toMatchObject({ provenance: 'practice', score: 0, ok: false, data: { actual: null } })
     expect(r.opensAt).toBe(T0 + RETRY_AFTER_MS)
   })
 
@@ -377,6 +433,27 @@ describe('proveFromModule: the result and its provenance', () => {
     const r = await attempt({ hash: async () => { throw new Error('no crypto.subtle') } })
     expect(r.result.provenance).toBe('practice')
     expect(r.result.wasmSha256).toBeUndefined()
+  })
+
+  test('a hash that is not 64 lowercase hex digits is no hash: practice, and nothing malformed is sent', async () => {
+    for (const bad of ['AB'.repeat(32), 'ab'.repeat(31), 'zz'.repeat(32), '']) {
+      const r = await attempt({ hash: async () => bad })
+      expect(r.eligibility).toEqual({ credited: false, reason: 'module' })
+      expect(r.result.provenance).toBe('practice')
+      expect(r.result.wasmSha256).toBeUndefined()
+    }
+  })
+
+  test('an answer readAnswer never gives is a caller\'s bug: it throws before the module runs', async () => {
+    let ran = 0
+    const run = async (_b: ArrayBuffer, calls: string[]) => {
+      ran++
+      return calls.map(() => '6')
+    }
+    for (const answer of [Array.from({ length: 13 }, () => 1), [-1], [0.5], Number.NaN]) {
+      await expect(proveFromModule({ labId: 'kv-block-manager', template: FREE_AFTER, plan, answer, bytes, graded: null, history: [], now: T0, run })).rejects.toThrow(RangeError)
+    }
+    expect(ran).toBe(0)
   })
 
   test('the hash is of the bytes asked, so the module graded and the module asked must be the same file', async () => {
@@ -422,6 +499,25 @@ describe('proveFromModule: the result and its provenance', () => {
     const r = buildProve2Result({ labId: 'x', plan, answer: 1, grade: { right: true, actual: 1, failed: null }, eligibility: { credited: true }, moduleSha: null })
     expect(r.provenance).toBe('practice')
   })
+
+  test('ok and score are read from the stored answer and actual, so the event says what attemptsOf reads back', () => {
+    const build = (answer: number | number[], grade: { right: boolean; actual: number | number[] | null; failed: null | 'trap' }) =>
+      buildProve2Result({ labId: 'x', plan, answer, grade, eligibility: { credited: true }, moduleSha: 'ab'.repeat(32) })
+    expect(build([1, 2], { right: true, actual: [1, 2], failed: null })).toMatchObject({ ok: true, score: 1, provenance: 'proved' })
+    expect(build([1, 2], { right: false, actual: [2, 1], failed: null })).toMatchObject({ ok: false, score: 0, provenance: 'practice' })
+    // a grade that claims right against a different actual is not believed
+    expect(build(3, { right: true, actual: 4, failed: null })).toMatchObject({ ok: false, score: 0, provenance: 'practice' })
+    expect(build(3, { right: false, actual: null, failed: 'trap' })).toMatchObject({ ok: false, score: 0, data: { actual: null } })
+    // an actual the ledger could not store is no actual
+    expect(build([1], { right: true, actual: [1, -1], failed: null })).toMatchObject({ ok: false, data: { actual: null } })
+  })
+
+  test('a timing that is not a number is left out, never sent as NaN', () => {
+    for (const ms of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      const r = buildProve2Result({ labId: 'x', plan, answer: 1, grade: { right: true, actual: 1, failed: null }, eligibility: { credited: true }, moduleSha: 'ab'.repeat(32), ms })
+      expect(r).not.toHaveProperty('ms')
+    }
+  })
 })
 
 /* ------------------------------ through the ledger ------------------------------ */
@@ -464,6 +560,58 @@ describe('the ledger takes what prove2 builds', () => {
     events = await stored(tab)
     expect(events.map((e) => e.provenance).sort()).toEqual(['practice', 'proved'])
     expect(tab.progress.getState().aggregate.proved['kv-block-manager']).toEqual(expect.any(String))
+  })
+})
+
+describe('the fold reads a v2 attempt\'s ok as right (wave-3.md §3.2, §3.4)', () => {
+  const bytes = new Uint8Array([1, 2, 3]).buffer
+
+  test('a missed attempt, even credited, never sets proves[lab], never pays prove:<lab> and never earns proved; a right one does all three', async () => {
+    const tab = startTab(makeProfile())
+    const plan = planQuestion(FREE_AFTER, 3)
+    const graded: GradedRun = { sha256: await sha256Hex(bytes), credit: 'unseen' }
+    const go = async (answer: number, module = fakeBlockManager()) => {
+      const r = await proveFromModule({ labId: 'kv-block-manager', template: FREE_AFTER, plan, answer, bytes, graded, history: [], now: Date.now(), run: fakeBridge(module).run })
+      if (r.kind === 'refused') throw new Error(r.message)
+      tab.progress.getState().recordProve({ ...r.result, data: r.result.data as ProveData })
+      return r
+    }
+    const before = tab.progress.getState().xp
+    const miss = await go(0)
+    expect(miss.eligibility).toEqual({ credited: true })
+    expect(miss.result).toMatchObject({ ok: false, score: 0, provenance: 'practice' })
+    const failed = await go(6, () => () => trap('boom'))
+    expect(failed.result).toMatchObject({ ok: false, score: 0, data: { actual: null } })
+    let agg = tab.progress.getState().aggregate
+    expect(agg.proves).toEqual({})
+    expect(agg.facts['prove:kv-block-manager']).toBeUndefined()
+    expect(agg.proved).toEqual({})
+    expect(tab.progress.getState().xp).toBe(before)
+
+    const hit = await go(6)
+    expect(hit.result).toMatchObject({ ok: true, score: 1, provenance: 'proved' })
+    agg = tab.progress.getState().aggregate
+    expect(agg.proves['kv-block-manager']).toEqual(expect.any(String))
+    expect(agg.facts['prove:kv-block-manager']).toBe(true)
+    expect(agg.proved['kv-block-manager']).toEqual(expect.any(String))
+    expect(tab.progress.getState().xp).toBeGreaterThan(before)
+
+    await tab.progress.controls.flush()
+    const events = (await (await tab.engine()).events()) as unknown as Array<{ ok: boolean; score: number }>
+    expect(events.map((e) => [e.ok, e.score])).toEqual([[false, 0], [false, 0], [true, 1]])
+  })
+
+  test('a right answer that is not credited still counts as a prove (ok), but practice: proves[lab] and the fact, no proved', async () => {
+    const tab = startTab(makeProfile())
+    const plan = planQuestion(FREE_AFTER, 3)
+    const r = await proveFromModule({ labId: 'kv-block-manager', template: FREE_AFTER, plan, answer: 6, bytes, graded: null, history: [], now: Date.now(), run: fakeBridge(fakeBlockManager()).run })
+    if (r.kind === 'refused') throw new Error(r.message)
+    tab.progress.getState().recordProve({ ...r.result, data: r.result.data as ProveData })
+    const agg = tab.progress.getState().aggregate
+    expect(r.result).toMatchObject({ ok: true, provenance: 'practice' })
+    expect(agg.proves['kv-block-manager']).toEqual(expect.any(String))
+    expect(agg.facts['prove:kv-block-manager']).toBe(true)
+    expect(agg.proved).toEqual({})
   })
 })
 

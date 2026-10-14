@@ -372,8 +372,9 @@ describe('graded by the core against your module', () => {
       const hit = await go(right)
       const miss = await go(wrong)
       if (hit.kind !== 'graded' || miss.kind !== 'graded') throw new Error('refused')
-      expect(hit.result).toMatchObject({ provenance: 'proved', score: 1, seed, data: { v: 2, qid: t.id, answer: right, actual: right, calls: plan.calls.length } })
-      expect(miss.result).toMatchObject({ provenance: 'practice', score: 0, data: { answer: wrong, actual: right } })
+      expect(hit.result).toMatchObject({ provenance: 'proved', score: 1, ok: true, seed, data: { v: 2, qid: t.id, answer: right, actual: right, calls: plan.calls.length } })
+      // a miss is not ok (wave-3.md §3.2), so the fold gives it no proves[lab] and no prove:<lab> fact
+      expect(miss.result).toMatchObject({ provenance: 'practice', score: 0, ok: false, data: { answer: wrong, actual: right } })
     }
   })
 

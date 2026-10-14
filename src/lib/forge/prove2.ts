@@ -22,8 +22,10 @@ import type { Credit } from './run'
 
 /** A trace is at most this many calls (§7.2; ProveDataV2.calls is 1 to 12). */
 export const PROVE2_MAX_CALLS = 12
-/** An ids answer is at most this many ids. */
-export const PROVE2_MAX_IDS = 16
+/** An ids answer, or a reply read as ids, is at most this many ids: the most the ledger stores (codec.ts, isProveAnswer). */
+export const PROVE2_MAX_IDS = 12
+/** A template id is the event's `qid`, which the ledger holds to 1 to this many characters (codec.ts, MAX_QID_LENGTH). */
+export const PROVE2_MAX_QID = 40
 /** The 30-day return is due this many local days after a lab's first prove event (§7.5). */
 export const RETURN_AFTER_DAYS = 30
 
@@ -61,6 +63,23 @@ export interface ProveEventLike {
 }
 
 const isNumberOrIds = (x: unknown): x is number | number[] => typeof x === 'number' || (Array.isArray(x) && x.every((v) => typeof v === 'number'))
+
+/**
+ * What the ledger stores as a v2 `answer` or `actual`: a finite number, or an ordered list of at most 12 whole ids of
+ * 0 or more (codec.ts, isProveAnswer). An answer or a reply outside this shape would build an event the codec refuses,
+ * and the attempt would be lost on reload, so neither ever reaches `buildProve2Result`'s output.
+ */
+export const isProve2Answer = (x: unknown): x is number | number[] =>
+  (typeof x === 'number' && Number.isFinite(x)) || (Array.isArray(x) && x.length <= PROVE2_MAX_IDS && x.every((v) => Number.isInteger(v) && v >= 0))
+
+const SHA256_HEX = /^[0-9a-f]{64}$/
+
+/** A copy as the ledger gives it back: JSON has no -0, so a -0 is stored as the 0 a reload reads. */
+const stored = (a: number | number[]): number | number[] => (typeof a === 'number' ? a + 0 : a.map((v) => v + 0))
+
+/** A caller handed over an answer `readAnswer` never gives: a bug, so it throws instead of building an attempt the ledger drops. */
+const notAnAnswer = (answer: unknown): RangeError =>
+  new RangeError(`an answer is a number or at most ${PROVE2_MAX_IDS} whole ids of 0 or more (readAnswer), not ${JSON.stringify(answer)}`)
 
 function sameAnswer(a: number | number[] | null, b: number | number[] | null): boolean {
   if (a === null || b === null) return false
@@ -169,8 +188,9 @@ export interface Prove2Plan {
   answer: 'number' | 'ids'
 }
 
-/** The question for (template, seed). Throws when the template breaks its own contract (1 to 12 calls, a story, an ask). */
+/** The question for (template, seed). Throws when the template breaks its own contract (an id of 1 to 40 characters, 1 to 12 calls, a story, an ask). */
 export function planQuestion(template: ProveV2Template, seed: number): Prove2Plan {
+  if (template.id.length === 0 || template.id.length > PROVE2_MAX_QID) throw new Error(`template id '${template.id.slice(0, 50)}' must be 1 to ${PROVE2_MAX_QID} characters`)
   const q = template.make(seed >>> 0)
   if (q.calls.length < 1 || q.calls.length > PROVE2_MAX_CALLS) {
     throw new Error(`template ${template.id} made ${q.calls.length} calls; a trace is 1 to ${PROVE2_MAX_CALLS}`)
@@ -180,17 +200,36 @@ export function planQuestion(template: ProveV2Template, seed: number): Prove2Pla
   return { templateId: template.id, seed: seed >>> 0, kcs: [...template.kcs], calls: [...q.calls], story: [...q.story], ask: q.ask, answer: q.answer }
 }
 
+/** The learner's input read as an answer, or what to change so it reads as one. */
+export type AnswerRead = { ok: true; answer: number | number[] } | { ok: false; message: string }
+
 /**
- * The learner's input as an answer: a number, or ids separated by commas or spaces. Null when it is not one of those
- * (the panel keeps the input and says what it expects), never a guess.
+ * The learner's input as an answer: a number, or ids in order separated by commas or spaces, or `none` for no ids
+ * (a module may answer an empty list: no request preempted, say). Anything else is not an answer, never a guess, and
+ * the message says what to type instead; the panel keeps the input. Every answer read here is one the ledger stores
+ * (`isProve2Answer`): at most 12 ids, each a whole number of 0 or more.
  */
-export function parseAnswer(text: string, kind: 'number' | 'ids'): number | number[] | null {
+export function readAnswer(text: string, kind: 'number' | 'ids'): AnswerRead {
   const t = text.trim()
-  if (kind === 'number') return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null
-  if (t === '') return null
+  if (kind === 'number') {
+    if (!/^-?\d+(\.\d+)?$/.test(t)) return { ok: false, message: 'Type one number, such as 12 or 2.5.' }
+    const n = Number(t)
+    return Number.isFinite(n) ? { ok: true, answer: n } : { ok: false, message: 'That number is too long to be a reply. Type the number your module replies.' }
+  }
+  if (/^none$/i.test(t)) return { ok: true, answer: [] }
   const parts = t.split(/[\s,]+/).filter((p) => p !== '')
-  if (parts.length > PROVE2_MAX_IDS || !parts.every((p) => /^-?\d+$/.test(p))) return null
-  return parts.map(Number)
+  if (parts.length === 0) return { ok: false, message: 'Type the ids in order, separated by commas, such as 3, 7, 1, or none if the list is empty.' }
+  if (!parts.every((p) => /^\d+$/.test(p) && Number.isSafeInteger(Number(p)))) {
+    return { ok: false, message: 'Each id is a whole number of 0 or more, such as 3, 7, 1, with no signs, decimals or letters.' }
+  }
+  if (parts.length > PROVE2_MAX_IDS) return { ok: false, message: `An answer holds at most ${PROVE2_MAX_IDS} ids, and this one has ${parts.length}. Type the ${PROVE2_MAX_IDS} or fewer your module replies.` }
+  return { ok: true, answer: parts.map(Number) }
+}
+
+/** `readAnswer`'s answer, or null when the input is not one (then `readAnswer` says why). */
+export function parseAnswer(text: string, kind: 'number' | 'ids'): number | number[] | null {
+  const r = readAnswer(text, kind)
+  return r.ok ? r.answer : null
 }
 
 /* ------------------------------------------------------------------ */
@@ -242,8 +281,9 @@ export function gradeAnswer(template: ProveV2Template, answer: number | number[]
   } catch (e) {
     return { right: false, actual: null, failed: 'error', message: e instanceof Error ? e.message : String(e) }
   }
-  if (!isNumberOrIds(actual) || (typeof actual === 'number' && !Number.isFinite(actual))) {
-    return { right: false, actual: null, failed: 'error', message: 'the replies could not be read as an answer' }
+  // A reading the ledger cannot store (more than 12 ids, a negative or fractional id, NaN) is an unreadable reply, not an actual.
+  if (!isProve2Answer(actual)) {
+    return { right: false, actual: null, failed: 'error', message: `the replies could not be read as an answer (a number, or at most ${PROVE2_MAX_IDS} whole ids of 0 or more)` }
   }
   return { right: sameAnswer(answer, actual), actual, failed: null }
 }
@@ -267,29 +307,42 @@ export interface BuildInput {
 }
 
 /**
- * The `recordProve` argument. Provenance is `proved` only when the answer is right and the attempt is credited
- * (module graded `unseen`, no retry waiting); otherwise `practice`. `ok` is true: the question was answered (a
- * failed module is a wrong answer, not an unanswered one). A miss scores 0.
+ * The `recordProve` argument (wave-3.md §3.2): `ok` means right, the stored answer equals the stored actual, and
+ * `score` is `ok ? 1 : 0`. So a miss, or a module that failed (actual null), is `ok: false`: the fold gives it no
+ * `proves[lab]`, no `prove:<lab>` fact and never `proved`. Provenance is `proved` only when the answer is right and
+ * the attempt is credited (module graded `unseen`, no retry waiting) on a hashed module; otherwise `practice`.
+ *
+ * Every result passes the ledger codec (tests/forge/prove2-codec.test.ts): an actual it could not store is null (an
+ * unreadable reply), a malformed hash or `ms` is left out, and an answer, plan or template id it could not store is
+ * a caller's bug that throws here rather than build an attempt the ledger would drop on reload.
  */
 export function buildProve2Result(i: BuildInput): ProveResult {
-  const proved = i.grade.right && i.eligibility.credited && i.moduleSha !== null
+  if (!isProve2Answer(i.answer)) throw notAnAnswer(i.answer)
+  const qid = i.plan.templateId
+  if (qid.length === 0 || qid.length > PROVE2_MAX_QID) throw new RangeError(`template id '${qid.slice(0, 50)}' must be 1 to ${PROVE2_MAX_QID} characters`)
+  const calls = i.plan.calls.length
+  if (calls < 1 || calls > PROVE2_MAX_CALLS) throw new RangeError(`a plan of ${calls} calls; a trace is 1 to ${PROVE2_MAX_CALLS} (planQuestion)`)
+  const actual = isProve2Answer(i.grade.actual) ? i.grade.actual : null
+  const right = actual !== null && sameAnswer(i.answer, actual)
+  const sha = i.moduleSha !== null && SHA256_HEX.test(i.moduleSha) ? i.moduleSha : null
+  const proved = right && i.eligibility.credited && sha !== null
   const data: ProveDataV2 = {
     v: 2,
-    qid: i.plan.templateId,
+    qid,
     kcs: i.plan.kcs.slice(0, 6),
-    answer: i.answer,
-    actual: i.grade.actual,
-    calls: i.plan.calls.length,
+    answer: stored(i.answer),
+    actual: actual === null ? null : stored(actual),
+    calls,
     ...(i.ret ? { return: true as const } : {}),
   }
   return {
     labId: i.labId,
-    score: i.grade.right ? 1 : 0,
-    ok: true,
-    ...(i.ms === undefined ? {} : { ms: Math.max(0, Math.round(i.ms)) }),
+    score: right ? 1 : 0,
+    ok: right,
+    ...(i.ms === undefined || !Number.isFinite(i.ms) ? {} : { ms: Math.max(0, Math.round(i.ms)) }),
     provenance: proved ? 'proved' : 'practice',
-    ...(i.moduleSha === null ? {} : { wasmSha256: i.moduleSha }),
-    seed: i.plan.seed,
+    ...(sha === null ? {} : { wasmSha256: sha }),
+    seed: i.plan.seed >>> 0,
     data,
   }
 }
@@ -327,13 +380,16 @@ export type ProveAttemptResult =
 /**
  * One attempt end to end: run the plan's calls on the module, grade the answer, decide the provenance. A refused module
  * (reference build, no bridge, v1 template) is reported and nothing is graded. The attempt is credited only when the
- * hash of `bytes` is the one the graded run named, so a different module than ForgeLab graded earns practice.
+ * hash of `bytes` is the one the graded run named, so a different module than ForgeLab graded earns practice. An answer
+ * `readAnswer` would not give throws before the module runs.
  */
 export async function proveFromModule(i: ProveAttemptInput): Promise<ProveAttemptResult> {
+  if (!isProve2Answer(i.answer)) throw notAnAnswer(i.answer)
   const outcome = await runPlan(i.bytes, i.plan, i.run)
   if (outcome.kind === 'refused') return { kind: 'refused', message: outcome.message }
   const grade = gradeAnswer(i.template, i.answer, outcome)
-  const moduleSha = await (i.hash ?? sha256Hex)(i.bytes).catch(() => null)
+  const hashed = await (i.hash ?? sha256Hex)(i.bytes).catch(() => null)
+  const moduleSha = typeof hashed === 'string' && SHA256_HEX.test(hashed) ? hashed : null
   const elig = eligibility(i.graded, moduleSha, i.history, i.now)
   const result = buildProve2Result({
     labId: i.labId,
@@ -345,7 +401,7 @@ export async function proveFromModule(i: ProveAttemptInput): Promise<ProveAttemp
     ...(i.ms === undefined ? {} : { ms: i.ms }),
     ...(i.ret ? { ret: true } : {}),
   })
-  const opensAt = elig.credited ? (grade.right || i.ret ? null : i.now + RETRY_AFTER_MS) : elig.reason === 'retry' ? (elig.opensAt ?? null) : null
+  const opensAt = elig.credited ? (result.ok || i.ret ? null : i.now + RETRY_AFTER_MS) : elig.reason === 'retry' ? (elig.opensAt ?? null) : null
   return { kind: 'graded', grade, eligibility: elig, result, opensAt }
 }
 
