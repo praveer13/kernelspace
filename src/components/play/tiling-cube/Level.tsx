@@ -19,8 +19,8 @@ import { genOf, levelCount, predictChecker, predictedInstance, runOf, type Choic
 // learner sends a prediction (the same import, so one fetch), so it is almost always there by the time "Open the views" is pressed.
 const Views = lazy(() => import('./Views'))
 
-/** Room for the views while they load, so the page below does not jump. */
-const VIEWS_ROOM = 'min-h-[32rem]'
+/** Room for the views while they load (level 1 measures 1,164 px at 360 px wide and 959 px at 1280), so what follows them does not jump. */
+const VIEWS_ROOM = 'min-h-[70rem] sm:min-h-[58rem]'
 
 /** The Suspense fallback while the views load: a status, so a screen reader hears that more is coming. */
 export function ViewsLoading() {

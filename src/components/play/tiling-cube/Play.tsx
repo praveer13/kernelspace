@@ -34,8 +34,8 @@ const Mirror = lazy(loadMirror)
 const Debrief = lazy(loadDebrief)
 const ProductionCard = lazy(loadCard)
 
-/** Room for a debrief while it loads (about its height at phone width), so the page below it does not jump. */
-const DEBRIEF_ROOM = 'min-h-[28rem]'
+/** Room for a debrief while it loads (level 1 measures 603 px at 360 px wide and 441 px at 1280), so what follows it does not jump. */
+const DEBRIEF_ROOM = 'min-h-[37rem] sm:min-h-[27rem]'
 
 /** The Suspense fallback while a debrief loads: a status, so a screen reader hears that more is coming. */
 export function DebriefLoading() {

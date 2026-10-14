@@ -904,9 +904,9 @@ describe('the play as the page renders it', () => {
       }),
     )
     expect(level).toContain('Loading the views')
-    expect(level).toContain('min-h-[32rem]')
+    expect(level).toContain('min-h-[70rem]')
     expect(level).not.toContain('data-phase="explore"')
-    expect(renderToString(createElement(DebriefLoading))).toContain('min-h-[28rem]')
+    expect(renderToString(createElement(DebriefLoading))).toContain('min-h-[37rem]')
   })
 })
 
