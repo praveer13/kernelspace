@@ -1,10 +1,13 @@
 /**
  * The generic forge panels (docs/specs/wave-2.md §13.1; task 2c-02): every panel takes a `ForgeBundle` and holds no
  * lab's data, ForgeLab mounts them for any lab whose bundle exists, and the three slots (SetupLanes, FolderWatch,
- * AskPacket) take their final props now. So do the Wave 3 stubs (TwinPanel, RaceReference, ProveFromModule and Today's
- * ProveReturnCard, task 3a-06): they render nothing, and are mounted where 3b will fill them. The panels are rendered here against a bundle of an invented lab, so
- * anything that still came from lab 01 would show; lab 01 through the same panels is checked to be what Wave 1 shipped.
- * There is no DOM in this suite, so interaction (focus, the run strip playing) is checked in a browser.
+ * AskPacket) take their final props now. So do the Wave 3 stubs (TwinPanel, RaceReference, ProveFromModule and
+ * Today's ProveReturnCard, task 3a-06): they render nothing, and are mounted where 3b will fill them.
+ *
+ * The panels are rendered here against a bundle of an invented lab, so anything that still came from lab 01 would
+ * show; lab 01 through the same panels is checked to be what Wave 1 shipped. Most of the suite renders to static
+ * markup, which has no DOM; the last block mounts Today's cards in the small DOM (tests/dom/mini-dom.ts). Interaction
+ * (focus, the run strip playing) is checked in a browser.
  */
 import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import { readFileSync } from 'node:fs'

@@ -222,7 +222,7 @@ export interface Ring0Status {
   earned: boolean
   /** Labs 02, 03, 06 and 07 likewise. */
   labs: Part
-  /** Lab 06 within 3 points of the reference on an unseen engine run (`labFleetOk`); `missing` holds `batching-scheduler`. */
+  /** Lab 06 within 3 points of the reference on an unseen engine run (`labFleetOk`); `missing` holds `batching-scheduler`. Total 0 while `RING0_RACE_LABS` is empty (D25). */
   race: Part
   /** T5 lessons *done*. */
   tickets: Part
@@ -332,7 +332,8 @@ export function selectColdChecks(events: Iterable<LedgerEvent>): ColdChecks {
  *
  * - RING 2: R1–R5 and lab 01 on unseen seeds, all 19 T0–T2 lessons *done*.
  * - RING 1: R6–R10, labs 04 and 05 on unseen seeds, all T3 and T4 lessons *done*.
- * - RING 0: labs 02, 03, 06 and 07 on unseen seeds, lab 06's race within 3 points of the reference, all T5 lessons *done*.
+ * - RING 0: labs 02, 03, 06 and 07 on unseen seeds, lab 06's race within 3 points of the reference (once `RING0_RACE_LABS`
+ *   names it, D25), all T5 lessons *done*.
  * - ROOT: lab 08; Fleet Week acts I and II on unseen seeds with own modules; the three Fleet Week acts
  *   passed; 5 Daily incidents; all T6 and T7 lessons *done*; and the cold-check bar.
  *
@@ -342,6 +343,7 @@ export function selectColdChecks(events: Iterable<LedgerEvent>): ColdChecks {
 export function selectRings(
   agg: Pick<Aggregate, 'labs' | 'lessons' | 'fleetWeek' | 'fleetRuns' | 'dailyDays' | 'labFleetOk'>,
   cold?: ColdChecks,
+  raceLabs: readonly string[] = RING0_RACE_LABS,
 ): Rings {
   const rMissing = RING2_R_LABS.filter((id) => unseenGaps(agg, id).missing > 0)
   const gaps = unseenGaps(agg, RING2_LAB)
@@ -360,7 +362,7 @@ export function selectRings(
 
   const r0 = {
     labs: labsPart(agg, RING0_LABS),
-    race: partOf(RING0_RACE_LABS, (id) => Object.hasOwn(agg.labFleetOk, id)),
+    race: partOf(raceLabs, (id) => Object.hasOwn(agg.labFleetOk, id)),
     tickets: lessonsPart(agg, RING0_LESSONS),
   }
   const ring0: Ring0Status = { earned: complete(r0.labs) && complete(r0.race) && complete(r0.tickets), ...r0 }

@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 import {
   LABS,
   RING0_LABS,
+  RING0_RACE_LABS,
   RING0_LESSONS,
   RING1_LABS,
   RING1_LESSONS,
@@ -64,7 +65,11 @@ const allUnseen = () => [...RING2_R_LABS, RING2_LAB].map((lab) => unseenRun(lab,
 const allTickets = () => RING2_LESSONS.map((id) => passLesson(id, id === 't2.l7' ? 'spiral' : 'ticket'))
 const ring2Ledger = () => [...allUnseen(), ...allTickets()]
 
-const rings = (events: LedgerEvent[]) => selectRings(derive(events))
+// The shipped RING0_RACE_LABS decides whether the race is required (empty until 3b-09, D25); tests pass the list in
+// instead of editing the constant, so both cases run whatever it holds.
+const NO_RACE: readonly string[] = []
+const RACE: readonly string[] = ['batching-scheduler']
+const rings = (events: LedgerEvent[], raceLabs?: readonly string[]) => selectRings(derive(events), undefined, raceLabs)
 
 describe('the RING 2 fixtures', () => {
   test('R1–R5 and lab 01 unseen, and 19 T0–T2 lessons done: RING 2', () => {
@@ -320,7 +325,7 @@ const rootExtras = () => [
   ...passAll(ROOT_LESSONS),
 ]
 const rootLedger = () => [...rootExtras(), ...coldChecks(40, 32)]
-const rootRings = (events: LedgerEvent[]) => selectRings(derive(events), selectColdChecks(events))
+const rootRings = (events: LedgerEvent[], raceLabs?: readonly string[]) => selectRings(derive(events), selectColdChecks(events), raceLabs)
 
 describe('the ids the rings read', () => {
   test('RING 1 is R6–R10, labs 04–05 and the 14 T3–T4 lessons; RING 0 is labs 02, 03, 06, 07 and the 10 T5 lessons', () => {
@@ -383,8 +388,8 @@ describe('the RING 1 fixtures', () => {
 })
 
 describe('the RING 0 fixtures', () => {
-  test('labs 02, 03, 06, 07 unseen and all T5 lessons done: RING 0', () => {
-    const r = rings(ring0Ledger())
+  test('labs 02, 03, 06, 07 unseen and all T5 lessons done: RING 0, with the race required', () => {
+    const r = rings(ring0Ledger(), RACE)
     expect(r.ring0).toEqual({
       earned: true,
       labs: { done: 4, total: 4, missing: [] },
@@ -396,12 +401,16 @@ describe('the RING 0 fixtures', () => {
 
   test('each of the four labs and the T5 lessons is needed', () => {
     for (const lab of RING0_LABS) {
-      const r = rings([...unseenAll(RING0_LABS.filter((l) => l !== lab)), labRace(), ...passAll(RING0_LESSONS)])
-      expect(r.ring0.earned).toBe(false)
-      expect(r.ring0.labs.missing).toEqual([lab])
+      for (const raceLabs of [NO_RACE, RACE]) {
+        const r = rings([...unseenAll(RING0_LABS.filter((l) => l !== lab)), labRace(), ...passAll(RING0_LESSONS)], raceLabs)
+        expect(r.ring0.earned).toBe(false)
+        expect(r.ring0.labs.missing).toEqual([lab])
+      }
     }
-    expect(rings([...unseenAll(RING0_LABS), labRace()]).ring0.earned).toBe(false)
-    expect(rings([...passAll(RING0_LESSONS.slice(0, 9)), ...unseenAll(RING0_LABS), labRace()]).ring0.tickets.missing).toEqual(['t5.l10'])
+    for (const raceLabs of [NO_RACE, RACE]) {
+      expect(rings([...unseenAll(RING0_LABS), labRace()], raceLabs).ring0.earned).toBe(false)
+      expect(rings([...passAll(RING0_LESSONS.slice(0, 9)), ...unseenAll(RING0_LABS), labRace()], raceLabs).ring0.tickets.missing).toEqual(['t5.l10'])
+    }
   })
 
   test('lab 06 counts on its unseen checks; the race against the reference is its own line', () => {
@@ -416,17 +425,39 @@ describe('the RING 0 fixtures', () => {
     expect(rings([lower]).ring0.labs.done).toBe(1)
   })
 
-  test('RING 0 needs lab 06 within 3 points of the reference: with labFleetOk it is earned, without it it is not', () => {
+  test('RING 0 is earned with no race at all while the race list is empty (D25): the part is empty and the labs and tickets decide', () => {
     const without = [...unseenAll(RING0_LABS), ...passAll(RING0_LESSONS)]
-    const r = rings(without)
+    const r = rings(without, NO_RACE)
+    expect(r.ring0).toEqual({
+      earned: true,
+      labs: { done: 4, total: 4, missing: [] },
+      race: { done: 0, total: 0, missing: [] },
+      tickets: { done: 10, total: 10, missing: [] },
+    })
+    expect(r.rank).toBe('RING 0')
+    // a race that was run changes nothing, and the labs and tickets are still needed
+    expect(rings([...without, labRace()], NO_RACE).ring0.earned).toBe(true)
+    expect(rings(unseenAll(RING0_LABS), NO_RACE).ring0.earned).toBe(false)
+    expect(rings(passAll(RING0_LESSONS), NO_RACE).ring0.earned).toBe(false)
+  })
+
+  test('the shipped race list is what decides: selectRings with no list given reads RING0_RACE_LABS', () => {
+    const events = [...unseenAll(RING0_LABS), ...passAll(RING0_LESSONS)]
+    expect(rings(events).ring0.race.total).toBe(RING0_RACE_LABS.length)
+    expect(rings(events).ring0.earned).toBe(RING0_RACE_LABS.length === 0)
+  })
+
+  test('once the race list holds lab 06, RING 0 needs lab 06 within 3 points of the reference: with labFleetOk it is earned, without it it is not', () => {
+    const without = [...unseenAll(RING0_LABS), ...passAll(RING0_LESSONS)]
+    const r = rings(without, RACE)
     expect(r.ring0).toMatchObject({ earned: false, race: { done: 0, total: 1, missing: ['batching-scheduler'] } })
     expect(r.ring0.labs.missing).toEqual([])
     expect(r.rank).toBe('RING 3')
-    const withRace = rings([...without, labRace()])
+    const withRace = rings([...without, labRace()], RACE)
     expect(withRace.ring0).toMatchObject({ earned: true, race: { done: 1, total: 1, missing: [] } })
     expect(withRace.rank).toBe('RING 0')
     // the race alone earns nothing else
-    expect(rings([labRace()]).ring0).toMatchObject({ earned: false, race: { done: 1 }, labs: { done: 0 }, tickets: { done: 0 } })
+    expect(rings([labRace()], RACE).ring0).toMatchObject({ earned: false, race: { done: 1 }, labs: { done: 0 }, tickets: { done: 0 } })
   })
 
   test('only an ok, unseen engine race from lab 06 turns the line green', () => {
@@ -436,7 +467,7 @@ describe('the RING 0 fixtures', () => {
       ['a race more than 3 points behind', labRace('batching-scheduler', 'unseen', false)],
       ['a race of another lab', labRace('rust-allocator')],
     ] as const) {
-      const r = rings([...base, race])
+      const r = rings([...base, race], RACE)
       expect(`${name}: ${r.ring0.earned}`).toBe(`${name}: false`)
       expect(r.ring0.race.missing).toEqual(['batching-scheduler'])
     }
@@ -444,7 +475,7 @@ describe('the RING 0 fixtures', () => {
 
   test('a later miss does not take the race back (the fold is a set union)', () => {
     const events = [...ring0Ledger(), labRace('batching-scheduler', 'unseen', false, 9)]
-    expect(rings(events).ring0.earned).toBe(true)
+    expect(rings(events, RACE).ring0.earned).toBe(true)
   })
 })
 
@@ -622,15 +653,15 @@ describe('selectColdChecks', () => {
 })
 
 describe('the checklists Progress shows', () => {
-  const sections = (events: LedgerEvent[], known = true) => ringSections(rootRings(events), known)
-  const row = (events: LedgerEvent[], ring: string, key: string, known = true) => {
-    const found = sections(events, known).find((s) => s.ring === ring)?.rows.find((r) => r.key === key)
+  const sections = (events: LedgerEvent[], known = true, raceLabs?: readonly string[]) => ringSections(rootRings(events, raceLabs), known)
+  const row = (events: LedgerEvent[], ring: string, key: string, known = true, raceLabs?: readonly string[]) => {
+    const found = sections(events, known, raceLabs).find((s) => s.ring === ring)?.rows.find((r) => r.key === key)
     if (!found) throw new Error(`no row ${ring}/${key}`)
     return found
   }
 
   test('four rings, each with its lines, and RING 2 keeps its Wave 1 lines', () => {
-    const s = sections([])
+    const s = sections([], true, RACE)
     expect(s.map((x) => x.ring)).toEqual(['RING 2', 'RING 1', 'RING 0', 'ROOT'])
     expect(s.map((x) => x.rows.length)).toEqual([3, 3, 3, 6])
     expect(s[0].rows.map((r) => r.label)).toEqual(['R drills', 'Lab 01', 'Tickets'])
@@ -642,7 +673,7 @@ describe('the checklists Progress shows', () => {
     expect(row([], 'RING 1', 'labs')).toMatchObject({ count: '0/2', to: '/forge/mpmc-queue' })
     expect(row([], 'RING 1', 'tickets')).toMatchObject({ count: '0/14', to: '/lesson/t3.l1' })
     expect(row([], 'RING 0', 'labs')).toMatchObject({ count: '0/4', to: '/forge/kv-block-manager' })
-    expect(row([], 'RING 0', 'race')).toMatchObject({ count: '0/1', done: false, to: '/forge/batching-scheduler', action: 'race the reference' })
+    expect(row([], 'RING 0', 'race', true, RACE)).toMatchObject({ count: '0/1', done: false, to: '/forge/batching-scheduler', action: 'race the reference' })
     expect(row([], 'RING 0', 'tickets')).toMatchObject({ count: '0/10', to: '/lesson/t5.l1' })
     expect(row([], 'ROOT', 'lab08')).toMatchObject({ to: '/forge/xgrammar-lite' })
     expect(row([], 'ROOT', 'fleet-runs')).toMatchObject({ to: '/week' })
@@ -656,6 +687,19 @@ describe('the checklists Progress shows', () => {
     // a finished line still opens something
     expect(row(ring1Ledger(), 'RING 1', 'tickets')).toMatchObject({ done: true, to: '/curriculum', action: 'open' })
     expect(row(ring1Ledger(), 'RING 1', 'labs')).toMatchObject({ done: true, to: '/forge/mpmc-queue' })
+  })
+
+  test('RING 0 lists a race row only while the race list is non-empty (D25)', () => {
+    const keys = (raceLabs: readonly string[]) => sections([], true, raceLabs).find((s) => s.ring === 'RING 0')?.rows.map((r) => r.key)
+    expect(keys(NO_RACE)).toEqual(['labs', 'tickets'])
+    expect(keys(RACE)).toEqual(['labs', 'race', 'tickets'])
+    expect(sections([], true, NO_RACE).map((x) => x.rows.length)).toEqual([3, 3, 2, 6])
+    // the shipped list decides when none is passed
+    expect(sections([]).find((s) => s.ring === 'RING 0')?.rows.map((r) => r.key)).toEqual(keys(RING0_RACE_LABS))
+    // an earned RING 0 with no race says so on its two lines
+    const earned = sections(ring0Ledger(), true, NO_RACE).find((s) => s.ring === 'RING 0')
+    expect(earned).toMatchObject({ earned: true })
+    expect(earned?.rows.every((r) => r.done)).toBe(true)
   })
 
   test('an earned ring says so, and the cold line says counting until the ledger is read', () => {

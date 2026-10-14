@@ -82,7 +82,8 @@ export function ringSections(rings: Rings, coldKnown: boolean): RingSection[] {
       earned: ring0.earned,
       rows: [
         partRow('labs', 'Labs 02, 03, 06, 07', ring0.labs, forge(ring0.labs, ['kv-block-manager']), 'next lab'),
-        partRow('race', 'Lab 06 race vs the reference', ring0.race, '/forge/batching-scheduler', 'race the reference'),
+        // Shown only while the race is a requirement (`RING0_RACE_LABS` non-empty, D25): before 3b-09 nothing can meet it.
+        ...(ring0.race.total > 0 ? [partRow('race', 'Lab 06 race vs the reference', ring0.race, '/forge/batching-scheduler', 'race the reference')] : []),
         partRow('tickets', 'Tickets T5', ring0.tickets, lessonTo(ring0.tickets), 'next ticket'),
       ],
     },

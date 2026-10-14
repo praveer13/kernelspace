@@ -207,7 +207,7 @@ export default function Navbar() {
             <Link
               to="/me"
               className="flex items-center gap-2.5"
-              aria-label={`Progress ${overallPct}% — highest ring earned ${ring}`}
+              aria-label={`Me: ${overallPct}% progress, highest ring earned ${ring}`}
             >
               <ProgressRing value={overallPct} size={28} showLabel={false} strokeWidth={3} />
               <span className="hidden whitespace-nowrap rounded-full border border-line bg-surface-2 px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide text-accent md:inline-block">

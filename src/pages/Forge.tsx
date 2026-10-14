@@ -195,7 +195,7 @@ export default function Forge() {
           `git init` ritual — do it on day one). Your site progress stays in this browser on
           this device (IndexedDB) and is never sent anywhere; export it anytime from{' '}
           <Link to="/me" className="text-accent underline">
-            Progress → data ownership
+            Me → data ownership
           </Link>
           .
         </p>

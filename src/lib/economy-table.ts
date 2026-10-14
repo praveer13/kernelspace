@@ -102,11 +102,16 @@ export const RING1_LESSONS: readonly string[] = [
   't4.l1', 't4.l2', 't4.l3', 't4.l4', 't4.l5', 't4.l6', 't4.l7',
 ]
 
-/** RING 0: labs 02, 03, 06 and 07 on unseen seeds (lab 06's "within 3 points of the reference" waits for Wave 3, D14). */
+/** RING 0: labs 02, 03, 06 and 07 on unseen seeds. Lab 06's "within 3 points of the reference" is the separate race line below (D14, D25). */
 export const RING0_LABS: readonly string[] = ['kv-block-manager', 'bpe-tokenizer', 'batching-scheduler', 'radix-cache']
 
-/** The labs whose race against the reference RING 0 needs: lab 06, within 3 points on an unseen engine run (`labFleetOk`, wave-3.md §3.4). */
-export const RING0_RACE_LABS: readonly string[] = ['batching-scheduler']
+/**
+ * The labs whose race against the reference RING 0 needs: lab 06, within 3 points on an unseen engine run (`labFleetOk`,
+ * wave-3.md §3.4). Empty in 3a (D25): the race does not exist yet, and rings are derived, so a live requirement nothing can
+ * meet would un-earn RING 0 for every learner who holds it. 3b-09, which ships "Race the reference", adds 'batching-scheduler'
+ * here; until then RING 0 needs no race and the ring's checklist shows no race row.
+ */
+export const RING0_RACE_LABS: readonly string[] = []
 
 /** RING 0: every T5 lesson *done*. */
 export const RING0_LESSONS: readonly string[] = [
