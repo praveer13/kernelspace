@@ -388,6 +388,54 @@ describe('uncitedFigures', () => {
     // a malformed token is not a citation: its figure is flagged
     expect(uncitedFigures('[[r:7f3a9c21 goodput=41.2%]]').map((f) => f.text)).toEqual(['41.2%'])
   })
+
+  // 3a-12's minors: 3b-05's pass rule ('no uncited figure remains') is only as good as this scanner
+  const flagged: [string, string, string[]][] = [
+    ['%', 'down 41.2% on retries', ['41.2%']],
+    ['$ before', 'at $7.45 per Mtok', ['$7.45']],
+    ['$ after', 'at 7.45 $ per Mtok', ['7.45 $']],
+    ['ms', 'a step of 120ms and 3 ms', ['120ms', '3 ms']],
+    ['millisecond(s)', '1 millisecond, 20 milliseconds', ['1 millisecond', '20 milliseconds']],
+    ['s', 'took 43.6 s and 2s', ['43.6 s', '2s']],
+    ['sec(s)', '1 sec, 5 secs', ['1 sec', '5 secs']],
+    ['second(s)', '1 second, 5 seconds', ['1 second', '5 seconds']],
+    ['iter(s)', '1 iter, 873 iters', ['1 iter', '873 iters']],
+    ['iteration(s)', '1 iteration, 12 iterations', ['1 iteration', '12 iterations']],
+    ['tok/s', '1,200 tok/s', ['1,200 tok/s']],
+    ['tokens/s', '900 tokens/s', ['900 tokens/s']],
+    ['req/s', '3 req/s', ['3 req/s']],
+    ['requests/s', '3 requests/s', ['3 requests/s']],
+    ['a slash after ms', '12 ms/token', ['12 ms']],
+    ['a slash after s', '5 s/req', ['5 s']],
+    ['a slash after iters', '7 iters/step', ['7 iters']],
+    ['a slash after tok/s', '40 tok/s/GPU', ['40 tok/s']],
+    ['a leading-dot decimal', 'about .5 s and (.25 ms)', ['.5 s', '.25 ms']],
+    ['a k suffix', '1.5k tok/s and 2k req/s', ['1.5k tok/s', '2k req/s']],
+    ['upper-case units', '3 MS, 10 TOK/S, 4 Req/S, 5 ITERS, 6 S', ['3 MS', '10 TOK/S', '4 Req/S', '5 ITERS', '6 S']],
+    ['an exponent', '1e3 ms and 2.5E-3 s', ['1e3 ms', '2.5E-3 s']],
+    ['a minus sign', '−3% and -2 ms', ['−3%', '-2 ms']],
+  ]
+  test.each(flagged)('flags %s', (_name, text, expected) => {
+    const found = uncitedFigures(text)
+    expect(found.map((f) => f.text)).toEqual(expected)
+    for (const f of found) expect(text.slice(f.index, f.index + f.text.length)).toBe(f.text)
+  })
+
+  const notFigures: [string, string][] = [
+    ['version strings', 'built on v0.31.0 and 1.2.3, Rust 1.85.0, Node 22.4.1'],
+    ['dates', 'on 2026-10-14, 14 Oct 2026 or 10/14/2026 at 09:30'],
+    ['model and GPU names', 'Llama-3-70B and Qwen2.5-72B on H100, A100-80GB and 8xH100 SXM nodes, GPT-4'],
+    ['percentile labels', 'the p95 and p99.9 of TTFT, a p50 line'],
+    ['counts and ids without a unit', '4 workers, 240 requests, seed 0x3a12, 3 acts, set 2 and step 12'],
+    ['words that merely start with a unit', '5 secure runs, 2 sets, 9 mss, 4 tokens, 3 seasons'],
+  ]
+  test.each(notFigures)('does not flag %s', (_name, text) => {
+    expect(uncitedFigures(text)).toEqual([])
+  })
+
+  test('a cited figure is not flagged, in either unit form', () => {
+    expect(uncitedFigures('TTFT was [[r:7f3a9c21 ttft=43.6]] s, and [[r:7f3a9c21 goodput=1200]] tok/s')).toEqual([])
+  })
 })
 
 /* ------------------------------------------------------------------ */
@@ -397,6 +445,8 @@ describe('uncitedFigures', () => {
 describe('the sim client', () => {
   type Listener = (event: { data: unknown }) => void
   const posted: { entropy: number }[] = []
+  // where Worker is absent (under bun it is), afterAll deletes the stand-in rather than leaving an own `undefined`
+  const hadWorker = Object.hasOwn(globalThis, 'Worker')
   const realWorker = (globalThis as { Worker?: unknown }).Worker
 
   /** A stand-in for sim.worker: says ready, then answers each job with a result naming the entropy it was sent. */
@@ -426,11 +476,14 @@ describe('the sim client', () => {
     ;(globalThis as { Worker?: unknown }).Worker = FakeWorker
   })
   afterAll(() => {
-    ;(globalThis as { Worker?: unknown }).Worker = realWorker
+    if (hadWorker) (globalThis as { Worker?: unknown }).Worker = realWorker
+    else delete (globalThis as { Worker?: unknown }).Worker
   })
 
   test('runSimWithEntropy resolves the result and the entropy it ran on; runSim resolves the result alone', async () => {
-    const { runSim, runSimWithEntropy } = await import('../../src/workers/sim-client')
+    // a private instance of the module (the query makes a new module key): its module-level worker is the fake, and
+    // the shared instance, which any later test or import gets, never holds it
+    const { runSim, runSimWithEntropy } = (await import('../../src/workers/sim-client?fake-worker')) as typeof import('../../src/workers/sim-client')
     const given = await runSimWithEntropy({ kind: 'act3' }, undefined, 0xdeadbeef)
     expect(given.entropy).toBe(0xdeadbeef)
     expect(given.result.values).toEqual({ ran: 0xdeadbeef })
@@ -446,5 +499,9 @@ describe('the sim client', () => {
 
     await expect(runSimWithEntropy({ kind: 'act3' }, undefined, -1)).rejects.toThrow('uint32')
     await expect(runSim({ kind: 'act3' }, undefined, 1.5)).rejects.toThrow('uint32')
+
+    // the shared module is a different instance: it never saw the fake
+    const shared = await import('../../src/workers/sim-client')
+    expect(shared.runSim).not.toBe(runSim)
   })
 })

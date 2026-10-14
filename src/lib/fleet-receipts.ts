@@ -309,11 +309,15 @@ export interface Figure {
   index: number
 }
 
-const NUM = String.raw`[-−]?\d[\d,]*(?:\.\d+)?`
-/** A number then a unit (%, ms, s, iters, tok/s, req/s or $, with their spelled-out forms), or $ then a number. */
+/** A number as written: digits with commas and decimals, or a leading-dot decimal (`.5`), then an exponent (`1e3`) and a `k` (thousands, `1.5k`). */
+const NUM = String.raw`[-−]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)(?:e[-+−]?\d+)?k?`
+/**
+ * A number then a unit (%, ms, s, iters, tok/s, req/s or $, with their spelled-out forms, in any case), or $ then a
+ * number. A unit ends where a word does, so a following slash is fine (`12 ms/token`, `5 s/req`).
+ */
 const FIGURE = new RegExp(
-  String.raw`(?<![\w.$])(?:\$\s?${NUM}|${NUM}\s?(?:%|\$|(?:tok(?:ens)?|req(?:uests)?)\/s(?![\w/])|(?:ms|milliseconds?|s|secs?|seconds?|iters?|iterations?)(?![\w/])))`,
-  'g',
+  String.raw`(?<![\w.$])(?:\$\s?${NUM}|${NUM}\s?(?:%|\$|(?:tok(?:ens)?|req(?:uests)?)\/s(?!\w)|(?:ms|milliseconds?|s|secs?|seconds?|iters?|iterations?)(?!\w)))`,
+  'gi',
 )
 
 /** Every %, ms, s, iters, tok/s, req/s or $ figure in `text` that sits outside a receipt token, in order (§10.3). */
