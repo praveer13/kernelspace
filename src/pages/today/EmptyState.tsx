@@ -4,6 +4,8 @@ import UpNextCard from '@/components/learner/UpNextCard'
 
 // The Fleet Daily card (wave-2.md §9.7) is its own chunk, so /today stays within its closure budget.
 const DailyCard = lazy(() => import('@/components/daily/DailyCard'))
+// The 30-day return (wave-3.md §7.5) is a stub until 3b-04; its own chunk, so /today's static closure does not grow.
+const ProveReturnCard = lazy(() => import('@/components/learner/ProveReturnCard'))
 
 export interface EmptyStateProps {
   upNext: Recommendation | null
@@ -39,6 +41,7 @@ export default function EmptyState({ upNext, offerPlacement = false, onPractice 
       {upNext && <UpNextCard rec={upNext} offerPlacement={offerPlacement} as="h3" />}
       <Suspense fallback={null}>
         <DailyCard variant="empty" />
+        <ProveReturnCard variant="empty" />
       </Suspense>
     </section>
   )
