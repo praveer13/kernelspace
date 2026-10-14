@@ -39,6 +39,7 @@ import type { RouterKind } from '@/lib/fleet-model'
 import { describeFleetError, openIncidentSession, type IncidentClientSession } from '@/lib/fleet-session'
 import {
   HYPOTHESIS_OPTIONS,
+  menuOrderFor,
   readingHeadline,
   sinceAlert,
   startFlow,
@@ -49,7 +50,7 @@ import {
   type FlowRun,
   type FlowState,
 } from '@/lib/world/daily'
-import { FAULT_LABELS, FIXES, INCIDENT_FAULTS, type FixId, type Hypothesis as HypothesisId, type IncidentFault, type ProbeId } from '@/lib/world/incident-spec'
+import { FAULT_LABELS, INCIDENT_FAULTS, type FixId, type Hypothesis as HypothesisId, type ProbeId } from '@/lib/world/incident-spec'
 import type { FleetSlotBytes, IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
 import { moduleBytes, runSim, SimTimeoutError } from '@/workers/sim-client'
 import { cn } from '@/lib/utils'
@@ -494,7 +495,7 @@ type DrillPhase = 'idle' | 'opening' | 'play' | 'debrief' | 'failed'
  * Why the learner's pick and the key are what they are, in the same shape as QuizBlock's why list. `picked` is the
  * authored index of the pick, or -1 when there was none ("unsure", or no fix applied): then only the key shows.
  */
-function WhyList({ heading, options, picked, labelOf }: { heading: string; options: IncidentOption[]; picked: number; labelOf: (o: IncidentOption) => string }) {
+function WhyList({ heading, options, picked }: { heading: string; options: IncidentOption[]; picked: number }) {
   // the pick first when it is wrong (its misconception), then the key
   const shown = [...(picked < 0 || options[picked]?.correct ? [] : [picked]), ...options.flatMap((o, i) => (o.correct ? [i] : []))]
   return (
@@ -512,7 +513,7 @@ function WhyList({ heading, options, picked, labelOf }: { heading: string; optio
                 <span className={cn('mr-1.5 font-mono text-[10px] uppercase', right ? 'text-accent' : 'text-danger')}>
                   {right ? (isPick ? 'your pick, correct' : 'correct answer') : 'your pick, wrong'}
                 </span>
-                <span className="mb-1 block font-mono text-[11px] text-text-3">{labelOf(o)}</span>
+                <span className="mb-1 block font-mono text-[11px] text-text-3">{o.label}</span>
                 {o.why}
               </span>
             </li>
@@ -526,8 +527,6 @@ function WhyList({ heading, options, picked, labelOf }: { heading: string; optio
 /** The pick of a finished drill as an index into the fault's menu, or -1 for no pick. */
 const pickedIndex = (options: IncidentOption[], id: string | undefined): number => (id === undefined ? -1 : options.findIndex((o) => o.id === id))
 
-const faultLabel = (o: IncidentOption): string => FAULT_LABELS[o.id as IncidentFault] ?? o.label
-const fixLabel = (o: IncidentOption): string => FIXES[o.id as FixId]?.label ?? o.label
 
 const BUTTON = 'min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground'
 const BUTTON_QUIET = 'min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright'
@@ -652,6 +651,8 @@ function ActIncident() {
   )
 
   const open = phase === 'play' && flow !== null && !flow.ended
+  // both menus are drawn from the drill's own seed, so each fresh drill shows them in a new order
+  const menus = useMemo(() => menuOrderFor(drill?.spec ?? { seed: 0 }), [drill])
   const passedFaults = credits.length
   return (
     <div>
@@ -713,7 +714,7 @@ function ActIncident() {
               <Alert source={drill.source} session={session} clock={flow.clock} />
               {phase === 'play' && (
                 <>
-                  <Hypothesis session={session} logged={flow.hypothesis} busy={busy} run={run} onLogged={onLogged} />
+                  <Hypothesis session={session} logged={flow.hypothesis} lockedAt={flow.hypothesisAtFix} options={menus.hypotheses} busy={busy} run={run} onLogged={onLogged} />
                   <ProbeBar
                     session={session}
                     alert={flow.alert}
@@ -724,7 +725,7 @@ function ActIncident() {
                     run={run}
                     onReading={onReading}
                   />
-                  <FixMenu session={session} enabled={open && flow.hypothesis !== null} busy={busy} run={run} onFix={onFix} onWait={onWait} onGiveUp={() => setPhase('debrief')} />
+                  <FixMenu session={session} enabled={open && flow.hypothesis !== null} fixes={menus.fixes} busy={busy} run={run} onFix={onFix} onWait={onWait} onGiveUp={() => setPhase('debrief')} />
                 </>
               )}
               {phase === 'debrief' && (
@@ -737,8 +738,8 @@ function ActIncident() {
                         <ResultPanel result={graded.grade.result} />
                         {menu && (
                           <section aria-label="Why your hypothesis and fix were right or wrong" className="grid gap-4 sm:grid-cols-2">
-                            <WhyList heading="hypothesis" options={menu.causes} picked={pickedIndex(menu.causes, result.hypothesis)} labelOf={faultLabel} />
-                            <WhyList heading="fix" options={menu.mitigations} picked={pickedIndex(menu.mitigations, result.fix)} labelOf={fixLabel} />
+                            <WhyList heading="hypothesis" options={menu.causes} picked={pickedIndex(menu.causes, result.hypothesis)} />
+                            <WhyList heading="fix" options={menu.mitigations} picked={pickedIndex(menu.mitigations, result.fix)} />
                           </section>
                         )}
                         <div className="flex flex-wrap items-center gap-3">

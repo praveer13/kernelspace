@@ -60,6 +60,8 @@ import {
   type FaultKind,
   type FaultSpec,
 } from '../../src/lib/world/faults'
+import { ALERT_LATEST, generateIncident, type IncidentSpec } from '../../src/lib/world/incident-spec'
+import { IncidentRun, incidentFault, runExpert } from '../../src/lib/world/incident-sim'
 
 const SLOW = 600_000
 
@@ -750,5 +752,54 @@ describe('the injector', () => {
     const alone = draws([crowd])
     expect(alone).toBeGreaterThan(0)
     expect(draws([crowd, FAULT['tenant-burst'](), FAULT['pool-shrink'](), FAULT['admission-greedy'](), FAULT['drain-stall'](), FAULT.straggler()])).toBe(alone)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* 8. A node death is an incident at every fleet size (BF2, F8)         */
+/* ------------------------------------------------------------------ */
+
+describe('a node death is a valid, alerting, diagnosable incident on two and on four workers', () => {
+  const specs = (workers: 2 | 4, n: number): IncidentSpec[] => {
+    const out: IncidentSpec[] = []
+    for (let i = 0; out.length < n; i++) {
+      const s = generateIncident('drill', `bf2-death-${i}`)
+      if (s.fault === 'node-death' && s.workers === workers) out.push(s)
+    }
+    return out
+  }
+
+  for (const workers of [2, 4] as const) {
+    test(`${workers} workers: the FaultSpec names a worker of the fleet, the alert fires, the expert names it and replace-node recovers`, () => {
+      for (const spec of specs(workers, 24)) {
+        const f = incidentFault(spec)
+        expect(f.kind).toBe('node-death')
+        expect(faultSpecProblems(f, workers)).toEqual([])
+        const e = runExpert(spec)
+        expect(e.named).toBe('node-death')
+        expect(e.outcome.fixed).toBe(true)
+        expect(e.outcome.recovered).toBe(true)
+        // the alert comes from the miss fraction soon after the death, not from the fallback
+        expect(e.outcome.alert - spec.onsetMinute).toBeLessThan(ALERT_LATEST)
+      }
+    }, SLOW)
+
+    test(`${workers} workers: before the death the fleet meets its SLO, and the alert comes after the onset`, () => {
+      for (const spec of specs(workers, 12)) {
+        const run = new IncidentRun(spec)
+        run.advanceTo(spec.onsetMinute)
+        // a healthy fleet at this load stays under the alert threshold until the onset
+        expect(Math.max(...run.missFractions)).toBeLessThan(0.2)
+        expect(run.alert()).toBeGreaterThan(spec.onsetMinute)
+      }
+    }, SLOW)
+  }
+
+  test('the briefing, causes and fix whys never count the survivors or halve the fleet: they hold for two and four workers', () => {
+    for (const inc of week.INCIDENTS) {
+      for (const t of [inc.briefing, ...inc.causes.map((o) => o.why ?? ''), ...inc.mitigations.map((o) => o.why ?? '')]) {
+        expect(t).not.toMatch(/\bsurvivors?\b|half the engines|one engine less|the other worker|both workers|the second worker/i)
+      }
+    }
   })
 })

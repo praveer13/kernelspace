@@ -8,6 +8,8 @@ export interface FixMenuProps {
   session: Pick<IncidentClientSession, 'fix' | 'wait'>
   /** fixes open with the probes (a hypothesis is logged) and close when the incident has ended */
   enabled: boolean
+  /** the fixes in the order this incident shows them (`menuOrderFor`); `FIX_IDS` order when omitted */
+  fixes?: readonly FixId[]
   busy: boolean
   run: FlowRun
   onFix: (fix: FixId, reply: IncidentFixReply) => void
@@ -21,7 +23,7 @@ export interface FixMenuProps {
  * one takes a minute to roll out; any other wastes five and changes nothing. "Wait a minute" lets the clock run
  * while you think. A wrong fix says so in a status line that takes focus, so the keyboard learner hears what it cost.
  */
-export default function FixMenu({ session, enabled, busy, run, onFix, onWait, onGiveUp }: FixMenuProps) {
+export default function FixMenu({ session, enabled, fixes = FIX_IDS, busy, run, onFix, onWait, onGiveUp }: FixMenuProps) {
   const [message, setMessage] = useState('')
   const status = useRef<HTMLParagraphElement>(null)
   async function apply(fix: FixId) {
@@ -45,10 +47,10 @@ export default function FixMenu({ session, enabled, busy, run, onFix, onWait, on
     <section className="rounded-lg border border-line bg-surface-1 p-4 sm:p-5" data-flow="fix">
       <h2 className="font-display text-h3 text-text-1">Fix</h2>
       <p className="mt-1 text-body-sm text-text-2">
-        The right fix takes {FIX_MINUTES} minute to roll out. A wrong one wastes {WRONG_FIX_MINUTES} and changes nothing. You can revise your hypothesis before you pick.
+        The right fix takes {FIX_MINUTES} minute to roll out. A wrong one wastes {WRONG_FIX_MINUTES} and changes nothing. Your first fix locks your hypothesis: the one you hold then is the one scored, right fix or wrong.
       </p>
       <ul className="mt-3 space-y-2">
-        {FIX_IDS.map((id) => (
+        {fixes.map((id) => (
           <li key={id}>
             <button
               type="button"

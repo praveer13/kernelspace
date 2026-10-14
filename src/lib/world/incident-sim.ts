@@ -102,19 +102,23 @@ export type IncidentScenario = typeof INCIDENT_SCENARIO
  * Each fault's parameter by severity (1, 2, 3). `drainShare` is the stalled drain as a share of a
  * worker's arrival rate; `burstEvery` is the fleet-wide gap between a burst tenant's requests on a
  * one-worker fleet (it divides by the worker count); node death has no parameter, so its severity
- * raises the load the survivor inherits.
+ * raises the load the survivors inherit. `deathLoad` is the offered load added to `INCIDENT_SCENARIO.load`, per
+ * fleet size, because a death must overload the survivors at either size. Two workers sit at 63-67 % beforehand and
+ * the one survivor takes double. Four sit at 80-82 % and the three survivors take a third more, about 8 % over
+ * capacity: lower and the alert came 8-11 minutes late with the lost requests out of the probe window, higher
+ * and the healthy fleet missed its SLO before the onset and the fixed one did not recover.
  */
 export const FAULT_PARAMS = {
   poolBlocks: [96, 72, 48],
   drainShare: [0.4, 0.25, 0.1],
   burstPrompt: [1024, 1536, 1536],
   burstEvery: [4, 4, 3],
-  deathLoad: [0.08, 0.1, 0.12],
+  deathLoad: { 2: [0.08, 0.1, 0.12], 4: [0.25, 0.26, 0.27] } as Record<IncidentSpec['workers'], number[]>,
 }
 
 /** Requests per tick the whole fleet is offered. */
 function arrivalRate(spec: IncidentSpec, sc: IncidentScenario): number {
-  const extra = spec.fault === 'node-death' ? FAULT_PARAMS.deathLoad[spec.severity - 1] : 0
+  const extra = spec.fault === 'node-death' ? FAULT_PARAMS.deathLoad[spec.workers][spec.severity - 1] : 0
   return (sc.load + extra) * sc.capacity * spec.workers
 }
 
@@ -616,7 +620,9 @@ export class IncidentSession {
   readonly actions: IncidentAction[] = []
   private firstHypothesis: Hypothesis | undefined
   private currentHypothesis: Hypothesis | undefined
+  /** the hypothesis held when the first fix (any fix) went in: recorded then, and never changed */
   private hypothesisAtFix: Hypothesis | undefined
+  private fixTaken = false
   private lastFix: FixId | undefined
   private readonly observed: Observation[] = []
 
@@ -632,7 +638,10 @@ export class IncidentSession {
     return this.alertMinute + LIMIT_MINUTES
   }
 
-  /** Log or revise a hypothesis; it costs no time. The first one counts as `firstHypothesis` only before any probe. */
+  /**
+   * Log or revise a hypothesis; it costs no time. The first one counts as `firstHypothesis` only before any probe, and the
+   * one held when the first fix goes in is the one scored (`diagnosed`); a revision after that changes nothing.
+   */
   hypothesis(h: Hypothesis): void {
     this.actions.push({ kind: 'hypothesis', fault: h })
     if (this.firstHypothesis === undefined && this.observed.length === 0) this.firstHypothesis = h
@@ -659,8 +668,12 @@ export class IncidentSession {
     if (this.ended) return { minute: this.clock, effective: false }
     const right = this.run.fixedAt === null && FIXES[fix].fault === this.spec.fault
     this.lastFix = fix
-    // the hypothesis that counts is the one held when the right fix went in (or at the latest fix, until one does)
-    if (this.run.fixedAt === null) this.hypothesisAtFix = this.currentHypothesis
+    // the hypothesis that counts is the one held when the FIRST fix went in, right or wrong, and revising it after a
+    // wrong fix changes nothing: otherwise a learner could walk the fix menu and name each fix's fault just before it
+    if (!this.fixTaken) {
+      this.fixTaken = true
+      this.hypothesisAtFix = this.currentHypothesis
+    }
     this.tick(actionMinutes({ kind: 'fix', fix }, right), right ? () => this.run.landFix() : undefined)
     return { minute: this.clock, effective: right && this.run.fixedAt !== null }
   }
@@ -704,7 +717,7 @@ export class IncidentSession {
 
   outcome(): IncidentOutcome {
     const flags = streetlightFlags(this.observed)
-    const hypothesis = this.hypothesisAtFix ?? this.currentHypothesis
+    const hypothesis = this.fixTaken ? this.hypothesisAtFix : this.currentHypothesis
     const probes = this.observed.map((o) => o.probe)
     return {
       fault: this.spec.fault,

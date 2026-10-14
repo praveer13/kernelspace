@@ -27,11 +27,13 @@
 import { KC } from '@/data/kc/ids'
 import { ENGINE_SLOTS } from '@/lib/engine/catalog'
 import type { EngineSlot, IncidentData, IncidentRef, IncidentResult } from '@/lib/ledger/types'
+import { hash32, shuffledOrder } from '@/lib/rng'
 import type { MirrorTable } from '@/lib/sims/types'
 import type { FleetSlotBytes } from '@/workers/fleet-protocol'
 import {
   CATEGORY_LABELS,
   FAULT_LABELS,
+  FIX_IDS,
   INCIDENT_FAULTS,
   PROBES,
   burnPercent,
@@ -151,15 +153,18 @@ export interface FlowState {
   clock: number
   /** the hypothesis held now; `null` until the first is logged, and no probe opens before that */
   hypothesis: Hypothesis | null
+  /** the hypothesis held when the first fix (right or wrong) went in: the one scored, set once and then locked; `null` before any fix */
+  hypothesisAtFix: Hypothesis | null
   log: FlowEntry[]
   ended: boolean
   /** the right fix has gone in */
   fixed: boolean
 }
 
-export const startFlow = (alert: number, limit: number): FlowState => ({ alert, limit, clock: alert, hypothesis: null, log: [], ended: false, fixed: false })
+export const startFlow = (alert: number, limit: number): FlowState => ({ alert, limit, clock: alert, hypothesis: null, hypothesisAtFix: null, log: [], ended: false, fixed: false })
 
-export const withHypothesis = (s: FlowState, hypothesis: Hypothesis): FlowState => ({ ...s, hypothesis })
+/** A revision is refused once a fix has gone in: the hypothesis held at the first fix is the one scored. */
+export const withHypothesis = (s: FlowState, hypothesis: Hypothesis): FlowState => (s.hypothesisAtFix === null ? { ...s, hypothesis } : s)
 
 export function withProbe(s: FlowState, probe: ProbeId, reply: { minute: number; category: Category; readings: ProbeReadings; ended: boolean }): FlowState {
   const entry: FlowEntry = { kind: 'probe', probe, minute: reply.minute, category: reply.category, readings: reply.readings }
@@ -168,7 +173,8 @@ export function withProbe(s: FlowState, probe: ProbeId, reply: { minute: number;
 
 export function withFix(s: FlowState, fix: FixId, reply: { minute: number; effective: boolean; ended: boolean }): FlowState {
   const entry: FlowEntry = { kind: 'fix', fix, minute: reply.minute, effective: reply.effective }
-  return { ...s, clock: reply.minute, log: [...s.log, entry], ended: reply.ended, fixed: s.fixed || reply.effective }
+  const first = s.log.every((e) => e.kind !== 'fix')
+  return { ...s, clock: reply.minute, log: [...s.log, entry], ended: reply.ended, fixed: s.fixed || reply.effective, hypothesisAtFix: first ? s.hypothesis : s.hypothesisAtFix }
 }
 
 export function withWait(s: FlowState, reply: { minute: number; ended: boolean }): FlowState {
@@ -524,3 +530,20 @@ export const HYPOTHESIS_OPTIONS: readonly { id: Hypothesis; label: string }[] = 
   ...INCIDENT_FAULTS.map((id) => ({ id, label: FAULT_LABELS[id] })),
   { id: 'unsure', label: 'Unsure' },
 ]
+
+/**
+ * The order the two menus show for one incident: the four faults and the four fixes, each shuffled from the incident's
+ * own seed and a stream of its own, so position says nothing about the fault (a drill's seed is fresh, so a
+ * position learned on one drill is worth nothing on the next). "Unsure" stays last. The same incident always
+ * shows the same order, so a replay and a reload do not move the buttons.
+ */
+export interface MenuOrder {
+  hypotheses: readonly { id: Hypothesis; label: string }[]
+  fixes: readonly FixId[]
+}
+
+export function menuOrderFor(spec: Pick<IncidentSpec, 'seed'>): MenuOrder {
+  const faults = shuffledOrder(INCIDENT_FAULTS.length, hash32(`menu:hypothesis:${spec.seed}`)).map((i) => HYPOTHESIS_OPTIONS[i])
+  const fixes = shuffledOrder(FIX_IDS.length, hash32(`menu:fix:${spec.seed}`)).map((i) => FIX_IDS[i])
+  return { hypotheses: [...faults, HYPOTHESIS_OPTIONS[HYPOTHESIS_OPTIONS.length - 1]], fixes }
+}

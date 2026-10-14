@@ -32,9 +32,10 @@ import {
 } from '../../src/lib/fleet-week'
 import { createFleetHost } from '../../src/lib/fleet-host'
 import { openIncidentSession, type FleetWorkerLike } from '../../src/lib/fleet-session'
-import { FIXES, INCIDENT_FAULTS, fixFor, type IncidentFault } from '../../src/lib/world/incident-spec'
-import { runExpert, scoreIncident } from '../../src/lib/world/incident-sim'
-import { kcsFor, type FinishedIncident } from '../../src/lib/world/daily'
+import { hash32 } from '../../src/lib/rng'
+import { FAULT_LABELS, FIXES, FIX_IDS, INCIDENT_FAULTS, fixFor, type FixId, type IncidentAction, type IncidentFault } from '../../src/lib/world/incident-spec'
+import { replayIncident, runExpert, scoreIncident } from '../../src/lib/world/incident-sim'
+import { HYPOTHESIS_OPTIONS, kcsFor, menuOrderFor, type FinishedIncident } from '../../src/lib/world/daily'
 import type { FleetReply, FleetRequest } from '../../src/workers/fleet-protocol'
 import { makeProfile, startTab } from '../ledger/env'
 
@@ -436,6 +437,196 @@ describe('drills played in a fleet worker session on reference components', () =
     const right = scoreIncident(drillFor(next).spec, runExpert(drillFor(next).spec).actions)
     expect(recordDrill(store, drillFor(next), right).verdict).toBe('credited')
   }, 60_000)
+})
+
+/* ------------------------------------------------------------------ */
+/* The act certifies diagnosis (the 2b final review's F1)               */
+/* ------------------------------------------------------------------ */
+
+describe('Act IV certifies probing: diagnosed is the hypothesis held at the first fix', () => {
+  const SEEDS = 300
+  const seedOf = (i: number) => hash32(`bf2-act4:${i}`)
+
+  /** The learner who takes no probes and works down the fix menu as shown, naming each fix's fault just before applying it. */
+  const walker = (spec: ReturnType<typeof drillFor>['spec']): IncidentAction[] =>
+    menuOrderFor(spec).fixes.flatMap((fix): IncidentAction[] => [
+      { kind: 'hypothesis', fault: FIXES[fix].fault },
+      { kind: 'fix', fix },
+    ])
+
+  /** One blind guess: name a fault by a hash of the seed, apply its fix, and stop. */
+  const blind = (spec: ReturnType<typeof drillFor>['spec']): IncidentAction[] => {
+    const fault = INCIDENT_FAULTS[hash32(`blind:${spec.seed}`) % INCIDENT_FAULTS.length]
+    return [
+      { kind: 'hypothesis', fault },
+      { kind: 'fix', fix: fixFor(fault) },
+    ]
+  }
+
+  /** The old rule: the hypothesis held when the right fix landed, whatever came before it. */
+  const legacyDiagnosed = (spec: ReturnType<typeof drillFor>['spec'], log: readonly IncidentAction[]): boolean => {
+    let held: string | undefined
+    for (const a of log) {
+      if (a.kind === 'hypothesis') held = a.fault
+      else if (a.kind === 'fix' && FIXES[a.fix].fault === spec.fault) return held === spec.fault
+    }
+    return false
+  }
+
+  function measure() {
+    const out = { expert: 0, walker: 0, walkerLegacy: 0, blind: 0, blindFixed: 0 }
+    for (let i = 0; i < SEEDS; i++) {
+      const { spec } = drillFor(seedOf(i))
+      const e = runExpert(spec)
+      const verdict = (log: readonly IncidentAction[]) => {
+        const o = replayIncident(spec, log)
+        return { passed: drillPassed({ ...o, expertBurn: e.outcome.burn }), fixed: o.fixed, o }
+      }
+      if (drillPassed({ ...e.outcome, expertBurn: e.outcome.burn })) out.expert++
+      const w = walker(spec)
+      const wv = verdict(w)
+      if (wv.passed) out.walker++
+      // the same walk under the old rule: diagnosed read the hypothesis held at the right fix
+      if (legacyDiagnosed(spec, w) && wv.o.fixed && wv.o.burn <= 2 * e.outcome.burn + 5) out.walkerLegacy++
+      const b = verdict(blind(spec))
+      if (b.passed) out.blind++
+      if (b.fixed) out.blindFixed++
+    }
+    return out
+  }
+
+  test(`over ${SEEDS} fresh drill seeds the expert passes every one, and a fix-menu walker or one blind guess passes about one in four`, () => {
+    const m = measure()
+    console.log(
+      `Act IV drills on ${SEEDS} seeds: expert ${m.expert}/${SEEDS}; fix-menu walker ${m.walker}/${SEEDS} (the old rule passed it ${m.walkerLegacy}/${SEEDS}); one blind guess ${m.blind}/${SEEDS}`,
+    )
+    expect(m.expert).toBe(SEEDS)
+    // the walk used to pass about nine drills in ten; now only the walk whose first fix is right can
+    expect(m.walkerLegacy / SEEDS).toBeGreaterThan(0.8)
+    expect(m.walker / SEEDS).toBeLessThan(0.35)
+    expect(m.walker / SEEDS).toBeGreaterThan(0.15)
+    expect(m.blind / SEEDS).toBeLessThan(0.35)
+    expect(m.blind / SEEDS).toBeGreaterThan(0.15)
+    // a blind guess that lands the right fix is, by construction, a diagnosed one
+    expect(m.blind).toBe(m.blindFixed)
+  }, 300_000)
+
+  test('the act is out of reach for the walker: drills until three distinct faults pass, against the expert\'s', () => {
+    // retries are free, so the walker eventually gets there on luck; count the drills it needs on a run of fresh seeds
+    const needed = (play: (spec: ReturnType<typeof drillFor>['spec']) => IncidentAction[] | 'expert'): number => {
+      const passed = new Set<IncidentFault>()
+      let n = 0
+      for (let i = 0; passed.size < DRILL_FAULTS_NEEDED && n < 400; i++, n++) {
+        const { spec } = drillFor(hash32(`bf2-act:${i}`))
+        const e = runExpert(spec)
+        const log = play(spec)
+        const o = log === 'expert' ? e.outcome : replayIncident(spec, log)
+        if (drillPassed({ ...o, expertBurn: e.outcome.burn })) passed.add(spec.fault)
+      }
+      return n
+    }
+    const expertDrills = needed(() => 'expert')
+    const walkerDrills = needed(walker)
+    console.log(`Act IV act: three distinct faults passed after ${expertDrills} drills for the expert, ${walkerDrills} for the fix-menu walker`)
+    expect(expertDrills).toBeLessThanOrEqual(DRILL_FAULTS_NEEDED + 3)
+    // one in four per drill, over four faults: well over twice the drills
+    expect(walkerDrills).toBeGreaterThan(expertDrills * 2)
+  }, 300_000)
+
+  test('the walk fails at the second fix however it is named: the first fix\'s hypothesis is the one scored', () => {
+    const { spec } = drillFor(seedsFor('pool-shrink')[0])
+    const first = menuOrderFor(spec).fixes.find((f) => FIXES[f].fault !== 'pool-shrink') as FixId
+    const log: IncidentAction[] = [
+      { kind: 'hypothesis', fault: FIXES[first].fault },
+      { kind: 'fix', fix: first },
+      { kind: 'hypothesis', fault: 'pool-shrink' },
+      { kind: 'fix', fix: fixFor('pool-shrink') },
+    ]
+    const o = replayIncident(spec, log)
+    expect(o.fixed).toBe(true)
+    expect(o.diagnosed).toBe(false)
+    expect(drillPassed({ ...o, expertBurn: runExpert(spec).outcome.burn })).toBe(false)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* The menus a drill shows                                              */
+/* ------------------------------------------------------------------ */
+
+describe('Act IV\'s option lists are drawn fresh per drill, so position carries no cue (F8 and the label source)', () => {
+  const DRAWS = 1200
+
+  test('the shown labels are the gated labels: INCIDENTS reads the flow\'s own FAULT_LABELS and FIXES, and no second copy exists', () => {
+    for (const inc of INCIDENTS) {
+      expect(inc.causes.map((o) => [o.id, o.label])).toEqual(INCIDENT_FAULTS.map((f) => [f, FAULT_LABELS[f]]))
+      for (const o of inc.mitigations) expect(o.label).toBe(FIXES[o.id as keyof typeof FIXES].label)
+    }
+    for (const o of HYPOTHESIS_OPTIONS.filter((h) => h.id !== 'unsure')) expect(o.label).toBe(FAULT_LABELS[o.id as IncidentFault])
+    const src = read('src/lib/fleet-week.ts')
+    expect(src).not.toMatch(/CAUSE_LABELS|FIX_LABELS/)
+  })
+
+  test('each drill shows the four faults and the four fixes in an order drawn from its own seed, with "Unsure" last', () => {
+    const seen = new Set<string>()
+    for (let i = 0; i < 200; i++) {
+      const { spec } = drillFor(hash32(`bf2-menu:${i}`))
+      const m = menuOrderFor(spec)
+      expect(m.hypotheses.map((o) => o.id).slice(0, -1).sort()).toEqual([...INCIDENT_FAULTS].sort())
+      expect(m.hypotheses[m.hypotheses.length - 1].id).toBe('unsure')
+      expect([...m.fixes].sort()).toEqual([...FIX_IDS].sort())
+      expect(menuOrderFor(spec)).toEqual(m) // the same drill shows the same order (a replay, a re-render)
+      seen.add(m.hypotheses.map((o) => o.id).join() + '|' + m.fixes.join())
+    }
+    // 24 orders of each menu: 200 drills see most of the combinations, so the order is not a fixed list
+    expect(seen.size).toBeGreaterThan(100)
+  })
+
+  test('the key sits at each position about equally often, whichever fault is running (no position cue)', () => {
+    const hypo = Array.from({ length: INCIDENT_FAULTS.length }, () => Array<number>(INCIDENT_FAULTS.length).fill(0))
+    const fix = Array.from({ length: INCIDENT_FAULTS.length }, () => Array<number>(FIX_IDS.length).fill(0))
+    const perFault = Array<number>(INCIDENT_FAULTS.length).fill(0)
+    for (let i = 0; i < DRAWS; i++) {
+      const { spec } = drillFor(hash32(`bf2-pos:${i}`))
+      const f = INCIDENT_FAULTS.indexOf(spec.fault)
+      const m = menuOrderFor(spec)
+      perFault[f]++
+      hypo[f][m.hypotheses.findIndex((o) => o.id === spec.fault)]++
+      fix[f][m.fixes.indexOf(fixFor(spec.fault))]++
+    }
+    for (let f = 0; f < INCIDENT_FAULTS.length; f++) {
+      for (let pos = 0; pos < 4; pos++) {
+        // ~300 per fault: 25 % +- 8 points is about 3 SD of a binomial
+        expect(Math.abs(hypo[f][pos] / perFault[f] - 0.25)).toBeLessThan(0.08)
+        expect(Math.abs(fix[f][pos] / perFault[f] - 0.25)).toBeLessThan(0.08)
+      }
+    }
+  })
+
+  test('the hypothesis and fix orders are drawn independently of each other and of the incident\'s own draws', () => {
+    // the fault is the first draw of splitmix32(seed); the menus hash the seed on their own streams, so neither tracks the other
+    let same = 0
+    const n = 800
+    for (let i = 0; i < n; i++) {
+      const { spec } = drillFor(hash32(`bf2-ind:${i}`))
+      const m = menuOrderFor(spec)
+      const hi = INCIDENT_FAULTS.indexOf(m.hypotheses[0].id as IncidentFault)
+      const fi = FIX_IDS.indexOf(m.fixes[0])
+      if (INCIDENT_FAULTS[hi] === FIXES[FIX_IDS[fi]].fault) same++
+    }
+    expect(Math.abs(same / n - 0.25)).toBeLessThan(0.06)
+  })
+
+  test('both pages hand the drawn orders to the flow components, and the components render what they are given', () => {
+    for (const page of ['src/pages/FleetWeek.tsx', 'src/pages/Daily.tsx']) {
+      const src = read(page)
+      expect(src).toContain('menuOrderFor(')
+      expect(src).toContain('options={menus.hypotheses}')
+      expect(src).toContain('fixes={menus.fixes}')
+      expect(src).toContain('lockedAt={flow.hypothesisAtFix}')
+    }
+    expect(read('src/components/daily/Hypothesis.tsx')).toContain('options.map(')
+    expect(read('src/components/daily/FixMenu.tsx')).toContain('fixes.map(')
+  })
 })
 
 /* ------------------------------------------------------------------ */

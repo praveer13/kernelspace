@@ -64,11 +64,16 @@ export type IncidentFault = (typeof INCIDENT_FAULTS)[number]
 /** What a learner can name: a catalog fault, or "unsure". */
 export type Hypothesis = IncidentFault | 'unsure'
 
+/**
+ * The hypothesis menu's wording: the one copy, shown by the flow (Hypothesis, Debrief) and gated by `verify-items`
+ * through Act IV's `INCIDENTS`. One sentence per catalog fault with the same character and word count, and no
+ * comma, colon, figure, acronym or hedge word, so no length or wording rule can tell the key from the rest.
+ */
 export const FAULT_LABELS: Record<IncidentFault, string> = {
-  'pool-shrink': 'KV pool shrank (memory misconfigured)',
-  'drain-stall': 'Intake drain stalled',
-  'node-death': 'A worker died',
-  'tenant-burst': 'One tenant is flooding long prompts',
+  'pool-shrink': 'The cache memory pool shrank after a faulty setting',
+  'drain-stall': 'The intake drain stalled far below the arrival rate',
+  'node-death': 'A worker node died and dropped its running requests',
+  'tenant-burst': 'One tenant flooded the fleet with very long prompts',
 }
 
 /** The probes, in USE order down the pipeline (intake → admission → kv → workers → latency → errors). */
@@ -102,12 +107,15 @@ export interface FixDef {
   fault: IncidentFault
 }
 
-/** The fix menu: one per catalog fault, from world/faults' revert column. */
+/**
+ * The fix menu: one per catalog fault, from world/faults' revert column. The labels are the one copy the flow shows and
+ * `verify-items` gates (Act IV's `INCIDENTS`), written to the same rule as `FAULT_LABELS`.
+ */
 export const FIXES: Record<FixId, FixDef> = {
-  'restore-pool': { id: 'restore-pool', label: 'Restore the KV memory fraction', fault: 'pool-shrink' },
-  'restore-drain': { id: 'restore-drain', label: 'Restore the intake drain rate', fault: 'drain-stall' },
-  'replace-node': { id: 'replace-node', label: 'Replace the dead node', fault: 'node-death' },
-  'limit-tenant': { id: 'limit-tenant', label: "Cap the noisy tenant's admissions", fault: 'tenant-burst' },
+  'restore-pool': { id: 'restore-pool', label: 'Put the cache memory fraction back where it was', fault: 'pool-shrink' },
+  'restore-drain': { id: 'restore-drain', label: 'Put the intake drain rate back where it belongs', fault: 'drain-stall' },
+  'replace-node': { id: 'replace-node', label: 'Replace the dead worker node with a healthy one', fault: 'node-death' },
+  'limit-tenant': { id: 'limit-tenant', label: "Cap the noisy tenant's admissions at a low rate", fault: 'tenant-burst' },
 }
 export const FIX_IDS = Object.keys(FIXES) as FixId[]
 
@@ -185,18 +193,19 @@ export function generateIncident(ns: IncidentNs, key: string): IncidentSpec {
   const fault = INCIDENT_FAULTS[next() % INCIDENT_FAULTS.length]
   const severity = (1 + (next() % 3)) as 1 | 2 | 3
   const onsetMinute = ONSET_RANGE[0] + (next() % (ONSET_RANGE[1] - ONSET_RANGE[0] + 1))
-  const workers = workersFor(fault, next())
+  const workers = workersFor(next())
   const traceSeed = next()
   return { seed, ns, key, fault, severity, onsetMinute, workers, slo: { ...INCIDENT_SLO }, traceSeed }
 }
 
 /**
- * Fleet size: two or four workers, except that a node death always hits a two-worker fleet. Four workers
- * at a load they recover from in time absorb one death without missing the SLO (the Opus check, below),
- * which would be an incident with no alert.
+ * Fleet size: two or four workers, drawn from the seed and never from the fault. The size is on the screen before
+ * the first probe (every per-worker reading has a row per worker), so a size that depended on the fault would
+ * name it: node death once always ran on two workers, which ruled it out on any four-worker fleet. A death on
+ * four workers is made an incident by `FAULT_PARAMS.deathLoad`, which offers the fleet more load so the three
+ * survivors are overloaded as the one survivor of two is.
  */
-function workersFor(fault: IncidentFault, draw: number): 2 | 4 {
-  if (fault === 'node-death') return 2
+function workersFor(draw: number): 2 | 4 {
   return draw % 2 === 0 ? 2 : 4
 }
 
@@ -450,7 +459,7 @@ export type CategoryVector = { [P in ProbeId]: CategoryByProbe[P] }
  * The category each fault produces on each probe (§9.2's table).
  *
  * OPUS CHECK (2b-10; tests/world/separability.test.ts holds it on 1,000 seeds per fault and prints the
- * record). One cell differs from §9.2: node death's intake is "normal", not "elevated". Its survivor's
+ * record). One cell differs from §9.2: node death's intake is "normal", not "elevated". The surviving workers'
  * drain (6 per tick) empties the intake every tick however overloaded the scheduler is, so the overload
  * shows in the waiting list (admission "long"), never in the queue; 2b-03's fault test measured the same
  * and asked 2b-10 to read it relative to the healthy fleet or call it normal. Calling it normal keeps the
