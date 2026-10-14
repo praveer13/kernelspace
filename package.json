@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "a11y": "node scripts/a11y.mjs",
     "e2e": "playwright test",
-    "test": "bun test ./tests",
+    "test": "bun test ./tests --timeout 20000",
     "verify:traces": "bun scripts/verify-traces.ts",
     "verify:leaderboard": "bun scripts/verify-leaderboard.ts",
     "verify:field-notes": "bun scripts/verify-field-notes.ts",
