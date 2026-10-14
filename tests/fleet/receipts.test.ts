@@ -404,6 +404,10 @@ describe('uncitedFigures', () => {
     ['tok/s', '1,200 tok/s', ['1,200 tok/s']],
     ['tokens/s', '900 tokens/s', ['900 tokens/s']],
     ['req/s', '3 req/s', ['3 req/s']],
+    ['tok/sec and tokens/second (3a carry-over)', '900 tok/sec, 1.5k tokens/second and 40 tok/secs', ['900 tok/sec', '1.5k tokens/second', '40 tok/secs']],
+    ['req/sec and requests/second (3a carry-over)', '3 req/sec, 12 requests/second and 5 REQ/SEC', ['3 req/sec', '12 requests/second', '5 REQ/SEC']],
+    ['a slash after tok/sec', '40 tok/sec/GPU', ['40 tok/sec']],
+    ['an attached s that is not the plural of ten', '10s of stall and 2s of ms', ['10s', '2s']],
     ['requests/s', '3 requests/s', ['3 requests/s']],
     ['a slash after ms', '12 ms/token', ['12 ms']],
     ['a slash after s', '5 s/req', ['5 s']],
@@ -427,7 +431,8 @@ describe('uncitedFigures', () => {
     ['model and GPU names', 'Llama-3-70B and Qwen2.5-72B on H100, A100-80GB and 8xH100 SXM nodes, GPT-4'],
     ['percentile labels', 'the p95 and p99.9 of TTFT, a p50 line'],
     ['counts and ids without a unit', '4 workers, 240 requests, seed 0x3a12, 3 acts, set 2 and step 12'],
-    ['words that merely start with a unit', '5 secure runs, 2 sets, 9 mss, 4 tokens, 3 seasons'],
+    ['"10s of ms" read as tens of ms (3a carry-over)', 'We saw 10s of ms of queueing, even 100s of milliseconds and 10s of iterations'],
+    ['words that merely start with a unit', '5 secure runs, 2 sets, 9 mss, 4 tokens, 3 seasons, 7 tok/secondary'],
   ]
   test.each(notFigures)('does not flag %s', (_name, text) => {
     expect(uncitedFigures(text)).toEqual([])
