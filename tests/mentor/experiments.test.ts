@@ -81,7 +81,7 @@ describe('armFor', () => {
     expect(Math.abs(packetBgivenA / packetA - 0.5)).toBeLessThan(0.05)
   })
 
-  test('why not hash32 % 2: its low bit is the parity of the odd bytes, so the unit alone would fix the arm', () => {
+  test('why not hash32 % 2: its low bit is the parity of the number of bytes whose low bit is 1, so the unit alone would fix the arm', () => {
     // for one unit, the raw low bit takes both values only through the digits of the seed, and across two units
     // the raw bit is the same function of the seed shifted by a constant: perfectly correlated
     const raw = (unit: string, seed: number) => hash32(`${HINT_EXPERIMENT}:${unit}:${seed}`) % 2

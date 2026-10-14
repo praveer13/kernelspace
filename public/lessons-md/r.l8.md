@@ -42,7 +42,7 @@ batch.append(64)
 print(first)
 ```
 
-**Align 1. In Java and Python the same four steps (take the first element, add 64 to the list, print the element) compile and print 8. In the Rust version, which line does the compiler reject, and which permission is missing?**
+**Align 1. In Java and Python the same four steps (build the list, take the first element, add 64 to the list, print the element) compile and print 8. In the Rust version, which line does the compiler reject, and which permission is missing?**
 
 - (o1) Line 3, where push needs R on batch, and the borrow on line 2 took R, W and O away
 - (o2) Line 2, where borrowing &batch[0] needs W on batch, and the let mut has not granted it yet
@@ -110,11 +110,11 @@ for (String entry : log) {
 }
 ```
 
-**Align 1. In Java, adding to a list while iterating over it throws ConcurrentModificationException when the loop runs. In this Rust version, where a Ref guard is alive when borrow_mut asks for the Vec, what happens and when?**
+**Align 1. In Java, adding to a list while iterating over it throws ConcurrentModificationException when the loop runs. In this Rust version, which keeps the Vec inside a RefCell, what happens and when?**
 
 - (o1) The compiler rejects line 5 with E0502, because seen still holds a Ref guard on the log cell
 - (o2) It compiles, then panics on line 5 with BorrowMutError because a Ref guard is still alive
-- (o3) It compiles and runs, and the push on line 5 lands in the Vec while `seen` is still alive now
+- (o3) It compiles and runs, and the push on line 5 lands in the Vec while `seen` is still in use
 - (o4) It compiles, then panics on line 4 because borrow() needs the cell to be empty first
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

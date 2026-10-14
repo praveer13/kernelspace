@@ -31,7 +31,7 @@ function fmix32(h: number): number {
 /**
  * The arm of `unit` in `experiment` for the learner whose `exp:seed` is `expSeed`: a bit of
  * `hash32(experiment + ':' + unit + ':' + expSeed)`, taken after `fmix32`. FNV-1a's lowest bit is only the parity of the
- * odd bytes in the string, so `hash32(...) % 2` would give every learner the same arm for the same unit up to one global
+ * number of bytes whose low bit is 1, so `hash32(...) % 2` would give every learner the same arm for the same unit up to one global
  * flip, and the arm would be confounded with the check.
  */
 export function armFor(experiment: string, unit: string, expSeed: number): Arm {
