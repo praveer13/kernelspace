@@ -1,16 +1,16 @@
-import { registerClaims } from '../index'
+import { registerClaims } from '../registry'
 import { SGLANG_PIN, VLLM_PIN } from '../engines'
+import { DEEPSEEK_V3_PIN } from '../zoo'
 import type { Claim } from '../schema'
 
 /**
  * DeepSeek-V3's expert counts and the EPLB In-production card (spec wave-3 §4.4, 3a-08). The two expert counts are
  * read from the same `config.json` revision as the Attention Zoo's `zoo.deepseek-v3.*` claims (zoo.ts), so the
- * course reads one DeepSeek-V3; tests/claims/wave3.test.ts holds the two pins equal. The EPLB claims are pinned:
+ * course reads one DeepSeek-V3: the pin is the one zoo.ts declares, imported here, and tests/claims/wave3.test.ts holds the claims' pins and urls equal to the zoo's. The EPLB claims are pinned:
  * DeepSeek's repository has no release, so its pin is the commit that was current on 2026-10-14, and the engines
  * use the releases the other In-production claims use (engines.ts). Quotes were copied from the files at those refs
  * on 2026-10-14, with runs of whitespace collapsed to one space.
  */
-const DEEPSEEK_V3_PIN = { repo: 'deepseek-ai/DeepSeek-V3', ref: 'e815299b0bcbac849fa540c768ef21845365c9eb' } as const
 const DEEPSEEK_EPLB_PIN = { repo: 'deepseek-ai/EPLB', ref: 'd52c72d5b2f2fb4c41afbf8eb21366820239913d' } as const
 
 const DEEPSEEK_V3_CONFIG = {

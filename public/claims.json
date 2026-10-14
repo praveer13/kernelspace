@@ -2967,7 +2967,7 @@
       },
       "verifiedAt": "2026-10-14",
       "ttlDays": 60,
-      "boundary": "A prefill instance runs as kv_producer and a decode instance as kv_consumer, each with a kv_connector, through --kv-transfer-config (a JSON string); the config rejects a connector with no kv_role. There is no single \"disaggregated\" switch."
+      "boundary": "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes."
     },
     {
       "id": "production.sglang.disagg",
@@ -3061,12 +3061,12 @@
       "source": {
         "url": "https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html",
         "title": "Hopper Tuning Guide (NVIDIA CUDA Toolkit documentation)",
-        "quote": "For devices of compute capability 9.0 (H100 GPUs), the maximum shared memory per thread block is 227 KB.",
-        "row": "Hopper tuning guide > Shared memory"
+        "quote": "CUDA reserves 1 KB of shared memory per thread block. Hence, the H100 GPU enables a single thread block to address up to 227 KB of shared memory.",
+        "row": "Hopper tuning guide > Unified Shared Memory/L1/Texture Cache"
       },
       "verifiedAt": "2026-10-14",
       "ttlDays": 365,
-      "boundary": "One KiB less than the SM total: CUDA reserves 1 KB of shared memory per thread block. A tile whose slabs exceed this cannot launch."
+      "boundary": "One KiB less than the SM total: CUDA reserves 1 KB of shared memory per thread block, and the source writes KB for 1,024-byte units. A tile whose slabs exceed this cannot launch."
     },
     {
       "id": "hw.h100-sxm.registers-per-sm",

@@ -1,4 +1,4 @@
-import { registerClaims } from '../index'
+import { registerClaims } from '../registry'
 import type { Claim } from '../schema'
 
 /**
@@ -66,12 +66,12 @@ export const TILING_CLAIMS: Claim[] = [
     label: 'H100 shared memory per thread block',
     source: {
       ...HOPPER_TUNING,
-      quote: 'For devices of compute capability 9.0 (H100 GPUs), the maximum shared memory per thread block is 227 KB.',
-      row: 'Hopper tuning guide > Shared memory',
+      quote: 'CUDA reserves 1 KB of shared memory per thread block. Hence, the H100 GPU enables a single thread block to address up to 227 KB of shared memory.',
+      row: 'Hopper tuning guide > Unified Shared Memory/L1/Texture Cache',
     },
     verifiedAt: '2026-10-14',
     ttlDays: 365,
-    boundary: 'One KiB less than the SM total: CUDA reserves 1 KB of shared memory per thread block. A tile whose slabs exceed this cannot launch.',
+    boundary: 'One KiB less than the SM total: CUDA reserves 1 KB of shared memory per thread block, and the source writes KB for 1,024-byte units. A tile whose slabs exceed this cannot launch.',
   },
   {
     id: 'hw.h100-sxm.registers-per-sm',
