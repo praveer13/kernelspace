@@ -107,7 +107,8 @@ describe('every PRIMM_MC_ITEMS list under src/data/forge is found by readdir', (
   const forge = new URL('../../src/data/forge/', import.meta.url)
 
   test('lab 01 is found today, with its multiple-choice items', async () => {
-    const labs = await discoverPrimm(forge)
+    const { found: labs, problems } = await discoverPrimm(forge)
+    expect(problems).toEqual([])
     const lab = labs.find((l) => l.lab === 'rust-allocator')
     expect(lab?.items.length).toBeGreaterThanOrEqual(5)
     for (const i of lab?.items ?? []) expect(i.q.why?.length).toBe(i.q.options.length)
@@ -127,7 +128,8 @@ describe('every PRIMM_MC_ITEMS list under src/data/forge is found by readdir', (
       }
       mkdirSync(join(root, 'lab-empty'))
       writeFileSync(join(root, 'lab-empty', 'ladder.ts'), 'export const X = 1\n')
-      const labs = await discoverPrimm(pathToFileURL(root))
+      const { found: labs, problems } = await discoverPrimm(pathToFileURL(root))
+      expect(problems).toEqual([])
       expect(labs.map((l) => l.lab)).toEqual(['lab-a', 'lab-b'])
       expect(labs.map((l) => l.items[0].id)).toEqual(['a.1', 'b.1'])
     } finally {
@@ -136,7 +138,30 @@ describe('every PRIMM_MC_ITEMS list under src/data/forge is found by readdir', (
   })
 
   test('a missing directory is no pool, not a crash', async () => {
-    expect(await discoverPrimm(pathToFileURL(join(tmpdir(), 'no-such-forge-dir')))).toEqual([])
+    expect(await discoverPrimm(pathToFileURL(join(tmpdir(), 'no-such-forge-dir')))).toEqual({ found: [], problems: [] })
+  })
+
+  test('a primm.ts that throws on import, or exports a list that is not an array, is a reported problem, and the other labs still load', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'forge-'))
+    try {
+      for (const [dir, src] of [
+        ['lab-ok', "export const PRIMM_MC_ITEMS = [{ id: 'ok.1', q: { q: 's', options: ['a', 'b'], correct: [0], why: ['x', 'y'] } }]\n"],
+        ['lab-throws', 'throw new Error("primm boom")\n'],
+        ['lab-syntax', 'export const PRIMM_MC_ITEMS = [\n'],
+        ['lab-notlist', 'export const PRIMM_MC_ITEMS = 7\n'],
+      ] as const) {
+        mkdirSync(join(root, dir))
+        writeFileSync(join(root, dir, 'primm.ts'), src)
+      }
+      const { found, problems } = await discoverPrimm(pathToFileURL(root))
+      expect(found.map((l) => l.lab)).toEqual(['lab-ok'])
+      expect(problems).toHaveLength(3)
+      expect(problems.find((p) => p.includes('lab-throws/primm.ts'))).toContain('primm boom')
+      expect(problems.find((p) => p.includes('lab-syntax/primm.ts'))).toContain('failed to import')
+      expect(problems.find((p) => p.includes('lab-notlist/primm.ts'))).toContain('not an array')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 
@@ -198,7 +223,10 @@ describe('production twins (src/data/twins/<lab>.ts TWIN_ITEMS) are the twin poo
       writeFileSync(join(root, 'types.ts'), twinBody('98', ['types']))
       mkdirSync(join(root, 'sub'))
       writeFileSync(join(root, 'sub', 'nested.ts'), twinBody('97', ['nested']))
-      const twins = await discoverTwins(pathToFileURL(root))
+      const { found: twins, problems } = await discoverTwins(pathToFileURL(root))
+      // broken.ts throws on import: it is a problem, not a silent skip
+      expect(problems).toEqual([expect.stringContaining('twins/broken.ts failed to import')])
+      expect(problems[0]).toContain('does not load')
       expect(twins.map((t) => [t.lab, t.labNo, t.items.length])).toEqual([
         ['batching-scheduler', '06', 1],
         ['radix-cache', '07', 3],
@@ -215,9 +243,29 @@ describe('production twins (src/data/twins/<lab>.ts TWIN_ITEMS) are the twin poo
   })
 
   test('a missing directory is no pool, not a crash; a twin question without a why per option fails', async () => {
-    expect(await discoverTwins(pathToFileURL(join(tmpdir(), 'no-such-twins-dir')))).toEqual([])
+    expect(await discoverTwins(pathToFileURL(join(tmpdir(), 'no-such-twins-dir')))).toEqual({ found: [], problems: [] })
     const bare = collectTwinItems([{ lab: 'radix-cache', labNo: '07', items: [{ id: 'a', q: item([40, 50, 60, 70], 1, null) }] }])
     expect(checkPoolItems(bare).failures).toEqual(['structure: item:lab07.twin.1 (twin): missing per-option why'])
+  })
+
+  test('a twin module that throws on import, or exports a TWIN_ITEMS that is not an array, is a problem and never leaves the pool unseen', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'twins-'))
+    try {
+      writeFileSync(join(root, 'good.ts'), twinBody('01', ['a']))
+      writeFileSync(join(root, 'throws.ts'), `${twinBody('02', ['b'])}throw new Error('twin boom')\n`)
+      writeFileSync(join(root, 'not-list.ts'), 'export const TWIN_ITEMS = { id: "a" }\n')
+      const { found, problems } = await discoverTwins(pathToFileURL(root))
+      expect(found.map((t) => t.lab)).toEqual(['good'])
+      expect(problems).toHaveLength(2)
+      expect(problems.find((p) => p.includes('twins/throws.ts'))).toContain('twin boom')
+      expect(problems.find((p) => p.includes('twins/not-list.ts'))).toContain('not an array')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test('the shipped twins load without a problem', async () => {
+    expect((await discoverTwins(new URL('../../src/data/twins/', import.meta.url))).problems).toEqual([])
   })
 
   test('the cue limits apply to the pool', () => {
@@ -353,14 +401,65 @@ describe('verify-items --subset, end to end', () => {
     expect(run('--subset', 'r.l', '--update-baseline').code).toBe(1)
   }, 60_000)
 
-  test('a subset of n >= 12 over the margin exits 1', () => {
-    // every lesson of the R track: 35 items, where four strategies sit between 37 and 39 % against 25 % chance (inside the pool bar of 15 points, over the margin of 10)
-    const r = run('--subset', 'r.l')
-    expect(r.code).toBe(1)
-    expect(r.out).toMatch(/n = 35 single-key/)
-    expect(r.out).toContain('FAIL')
-    expect(r.err).toContain('= 35.0%)')
+  /** Run a callback with a temporary twins directory holding `files`; the script reads it in place of src/data/twins (VERIFY_ITEMS_TWINS_DIR). */
+  const withTwins = (files: Record<string, string>, fn: (dir: string) => void) => {
+    const dir = mkdtempSync(join(tmpdir(), 'twins-e2e-'))
+    try {
+      for (const [name, src] of Object.entries(files)) writeFileSync(join(dir, name), src)
+      fn(dir)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  const runIn = (dir: string, ...args: string[]) => {
+    const r = Bun.spawnSync(['bun', 'scripts/verify-items.ts', ...args], { cwd: root, env: { ...process.env, VERIFY_ITEMS_TWINS_DIR: dir } })
+    return { code: r.exitCode, out: r.stdout.toString(), err: r.stderr.toString() }
+  }
+  /** Lab 99's module: `n` twin questions over four options. `lengths(i)` gives the option lengths, the key is at `keyAt(i)`. */
+  const twinFixture = (n: number, lengths: (i: number) => number[], keyAt: (i: number) => number) =>
+    `export default { labNo: '99' }\nexport const TWIN_ITEMS = ${JSON.stringify(
+      Array.from({ length: n }, (_, i) => ({
+        id: `fix.${i}`,
+        kcs: ['k'],
+        q: {
+          q: `Fixture question ${i}`,
+          options: lengths(i).map((len, o) => `${'abcd'[o]}${'x'.repeat(len - 1)}`),
+          correct: [keyAt(i)],
+          why: ['the key', 'a lure', 'another lure', 'a third lure'],
+        },
+      })),
+    )}\n`
+
+  test('a subset of n >= 12 over the margin exits 1 (fixture: 14 twin items whose key is always the longest option)', () => {
+    withTwins({ 'lab99.ts': twinFixture(14, () => [30, 22, 20, 18], () => 0) }, (dir) => {
+      const r = runIn(dir, '--subset', 'item:lab99.twin.')
+      expect(r.code).toBe(1)
+      expect(r.out).toMatch(/n = 14 single-key/)
+      expect(r.out).toContain('FAIL')
+      // the longest-option strategy hits 14 of 14 against 25 % chance: over the 35 % line, which the failure names
+      expect(r.err).toContain("subset: '1st-longest' hits 100.0% of the 14 items (chance 25.0% + 10 points = 35.0%)")
+    })
   }, 60_000)
+
+  test('a subset of n >= 12 at chance passes (fixture: equal lengths, the key rotating over the four positions)', () => {
+    withTwins({ 'lab99.ts': twinFixture(12, () => [20, 20, 20, 20], (i) => i % 4) }, (dir) => {
+      const r = runIn(dir, '--subset', 'item:lab99.twin.')
+      expect(r.out).toMatch(/n = 12 single-key/)
+      expect(r.err).not.toContain('subset: ')
+      expect(r.code).toBe(0)
+    })
+  }, 60_000)
+
+  test('a twin module that throws on import fails the run and a --subset run, naming the file and the error', () => {
+    withTwins({ 'lab99.ts': twinFixture(12, () => [20, 20, 20, 20], (i) => i % 4), 'broken.ts': 'throw new Error("twin boom")\n' }, (dir) => {
+      for (const args of [[], ['--subset', 'item:lab99.twin.']]) {
+        const r = runIn(dir, ...args)
+        expect(r.code, args.join(' ') || 'full run').toBe(1)
+        expect(r.err).toContain('twins/broken.ts failed to import')
+        expect(r.err).toContain('twin boom')
+      }
+    })
+  }, 120_000)
 })
 
 describe('pseudo-lessons (a spiral, a lab, an Act IV fault) are held to the per-lesson bar by every strategy', () => {

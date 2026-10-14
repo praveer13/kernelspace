@@ -1,7 +1,8 @@
 import type { SimTask } from '@/components/sims/PlaygroundShell'
+import type { TaskHome } from '@/lib/sims/registry'
 
 /** Machine-less, like engineExt.tasks.ts, which ToyEngineSim spreads after this list. */
-export const HOME = { simId: 'sim-engine' }
+export const HOME: TaskHome = { simId: 'sim-engine' }
 
 export const TOY_ENGINE_TASKS: SimTask[] = [
   { id: 'tokenize', text: 'Tokenize a prompt and watch every merge round', xp: 60 },

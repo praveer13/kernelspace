@@ -1,6 +1,7 @@
 import type { SimTask } from '@/components/sims/PlaygroundShell'
+import type { TaskHome } from '@/lib/sims/registry'
 
-export const HOME = { simId: 'sim-quant' }
+export const HOME: TaskHome = { simId: 'sim-quant' }
 
 export const QUANTIZER_TASKS: SimTask[] = [
   { id: 'q-fp16', text: 'Quantize π (3.14159…) to FP16 and read the reconstruction error', xp: 60 },

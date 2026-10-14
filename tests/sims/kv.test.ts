@@ -18,7 +18,7 @@ import { atlasRow } from '../../src/data/atlas'
 import { byId, claimNumber } from '../../src/data/claims'
 import { KC } from '../../src/data/kc/ids'
 import { ALL_LESSONS } from '../../src/data/lessons'
-import type { ExerciseBlock } from '../../src/data/lessons/types'
+import type { SimExerciseBlock } from '../../src/data/lessons/types'
 import { gradePrediction, splitCanonical } from '../../src/lib/sims/host'
 import {
   BLOCK_SIZE,
@@ -333,7 +333,7 @@ describe('config from a lesson block or a link', () => {
 
 describe('the lessons point at registry tasks', () => {
   const exercises = (lessonId: string) =>
-    (ALL_LESSONS.find((l) => l.id === lessonId)?.blocks ?? []).filter((b): b is ExerciseBlock => b.type === 'exercise')
+    (ALL_LESSONS.find((l) => l.id === lessonId)?.blocks ?? []).filter((b): b is SimExerciseBlock => b.type === 'exercise' && 'simId' in b)
 
   test('t5.l4 lists the five outcome tasks, all on the calculator, in an order that builds', () => {
     const [block] = exercises('t5.l4')

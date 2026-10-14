@@ -4,7 +4,8 @@
  * anything a test must import lives here, next to item-cues.ts, which holds the strategies. No side effects.
  */
 
-import { readdir } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import type { QuizQuestion } from '../src/components/QuizBlock'
 import type { Lesson } from '../src/data/lessons/types'
 import { shuffledOrder } from '../src/lib/rng'
@@ -133,20 +134,56 @@ export interface PrimmLab {
   items: readonly { id: string; q: QuizQuestion }[]
 }
 
+/** What a readdir discovery found, and what it could not load: a problem is a failure of verify:items, never a silent skip. */
+export interface Discovery<T> {
+  found: T[]
+  /** One line per module that threw on import or exports its list as something that is not an array. */
+  problems: string[]
+}
+
+/** The text of a thrown value, for a problem line. */
+const errorText = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e))
+
+/**
+ * Import one module and return its exports. A module that throws on import is a problem naming the file and the error, never a
+ * skip: a throwing module would otherwise leave its pool and escape every gate.
+ */
+async function importModule(file: URL, label: string, problems: string[]): Promise<Record<string, unknown> | null> {
+  try {
+    return (await import(file.href)) as Record<string, unknown>
+  } catch (e) {
+    problems.push(`import: ${label} failed to import (${errorText(e)}); a pool module that does not load leaves its pool and escapes the gates`)
+    return null
+  }
+}
+
+/** Whether a file exists: a lab without a primm.ts is not a pool, a primm.ts that exists but does not load is a problem. */
+const exists = (file: URL) =>
+  stat(fileURLToPath(file)).then(
+    (st) => st.isFile(),
+    () => false,
+  )
+
 /**
  * Every `<dir>/<lab>/primm.ts` that exports `PRIMM_MC_ITEMS`, found by readdir so a new lab joins without a code change
- * (labs 02-03 when Wave 2c lands). A lab without a primm.ts, or whose primm.ts exports no list, is not a pool.
+ * (labs 02-03 when Wave 2c lands). A lab without a primm.ts, or whose primm.ts exports no list, is not a pool; a primm.ts that
+ * throws on import, or exports a `PRIMM_MC_ITEMS` that is not an array, is a reported problem (`problems`).
  */
-export async function discoverPrimm(dir: URL): Promise<PrimmLab[]> {
-  const labs: PrimmLab[] = []
+export async function discoverPrimm(dir: URL): Promise<Discovery<PrimmLab>> {
+  const found: PrimmLab[] = []
+  const problems: string[] = []
   const base = dir.href.endsWith('/') ? dir : new URL(`${dir.href}/`)
   const entries = await readdir(base, { withFileTypes: true }).catch(() => [])
   for (const entry of entries.filter((e) => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
     const file = new URL(`${entry.name}/primm.ts`, base)
-    const mod = (await import(file.href).catch(() => null)) as { PRIMM_MC_ITEMS?: PrimmLab['items'] } | null
-    if (Array.isArray(mod?.PRIMM_MC_ITEMS)) labs.push({ lab: entry.name, items: mod.PRIMM_MC_ITEMS })
+    if (!(await exists(file))) continue
+    const label = `${entry.name}/primm.ts`
+    const mod = await importModule(file, label, problems)
+    if (!mod || !('PRIMM_MC_ITEMS' in mod)) continue
+    if (Array.isArray(mod.PRIMM_MC_ITEMS)) found.push({ lab: entry.name, items: mod.PRIMM_MC_ITEMS as PrimmLab['items'] })
+    else problems.push(`import: ${label} exports PRIMM_MC_ITEMS that is not an array`)
   }
-  return labs
+  return { found, problems }
 }
 
 /* ------------------------------ twin pool ------------------------------ */
@@ -165,21 +202,28 @@ export interface TwinFile {
 
 /**
  * Every `<dir>/<lab>.ts` that exports `TWIN_ITEMS`, found by readdir so a twin joins without a code change (the discoverPrimm
- * pattern). The registry (`index.ts`) and `types.ts` are not twins; a file that fails to import or exports no list is not a pool.
+ * pattern). The registry (`index.ts`) and `types.ts` are not twins; a file that exports no list is not a pool. A file that throws on
+ * import, or exports a `TWIN_ITEMS` that is not an array, is a reported problem (`problems`), so hand-written twin content cannot leave the pool unseen.
  */
-export async function discoverTwins(dir: URL): Promise<TwinFile[]> {
-  const twins: TwinFile[] = []
+export async function discoverTwins(dir: URL): Promise<Discovery<TwinFile>> {
+  const found: TwinFile[] = []
+  const problems: string[] = []
   const base = dir.href.endsWith('/') ? dir : new URL(`${dir.href}/`)
   const entries = await readdir(base, { withFileTypes: true }).catch(() => [])
   for (const entry of entries.filter((e) => e.isFile() && e.name.endsWith('.ts')).sort((a, b) => a.name.localeCompare(b.name))) {
     if (entry.name === 'index.ts' || entry.name === 'types.ts') continue
-    const mod = (await import(new URL(entry.name, base).href).catch(() => null)) as { TWIN_ITEMS?: TwinFile['items']; default?: { labNo?: unknown } } | null
-    if (!Array.isArray(mod?.TWIN_ITEMS)) continue
+    const mod = await importModule(new URL(entry.name, base), `twins/${entry.name}`, problems)
+    if (!mod || !('TWIN_ITEMS' in mod)) continue
+    if (!Array.isArray(mod.TWIN_ITEMS)) {
+      problems.push(`import: twins/${entry.name} exports TWIN_ITEMS that is not an array`)
+      continue
+    }
     const lab = entry.name.slice(0, -'.ts'.length)
-    const labNo = typeof mod.default?.labNo === 'string' ? mod.default.labNo : lab
-    twins.push({ lab, labNo, items: mod.TWIN_ITEMS })
+    const dflt = mod.default as { labNo?: unknown } | undefined
+    const labNo = typeof dflt?.labNo === 'string' ? dflt.labNo : lab
+    found.push({ lab, labNo, items: mod.TWIN_ITEMS as TwinFile['items'] })
   }
-  return twins
+  return { found, problems }
 }
 
 /** Every twin question, in lab and item order, with the ref `item:lab<NN>.twin.<n>` (n from 1 within the lab). */

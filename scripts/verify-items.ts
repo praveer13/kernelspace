@@ -78,6 +78,9 @@
  * expectation, a gate and no longer a printed line; the pseudo-lessons above are not in the pool. Always-B must also stay inside
  * its 2-SD band: a simulated cohort that draws the real display shuffle and clicks position B matches the exact expectation.
  * The longest-key ratchet covers the own pools and the errata items too (`longestKeyByPool` in the baseline).
+ * IMPORT FAILURES: a src/data/forge/<lab>/primm.ts or src/data/twins/<lab>.ts that throws on import, or exports its list as a non-array, FAILS the run
+ * (and a --subset run) with a line naming the file and the error; a module that does not load never leaves its pool quietly. The env var
+ * VERIFY_ITEMS_TWINS_DIR replaces the twins directory, for the tests' fixtures.
  * (21) WAVE 3 (spec 4.1): two more own pools run every gate of (19) and carry a baseline entry: `iso` (every IsomorphismBlock.breakItem,
  * ref item:<lesson>.iso.<n>.break) and `twin` (every src/data/twins/<lab>.ts that exports TWIN_ITEMS, found by readdir).
  * `--subset <selector>` reports the margin of one task's items: the hit rate of every strategy and of the adversary over the items whose printed ref
@@ -90,11 +93,12 @@
  *
  *   bun scripts/verify-items.ts
  *   bun scripts/verify-items.ts --update-baseline [--force]
-   bun scripts/verify-items.ts --subset 'forge/kv-block-manager '      (ref prefixes, comma-separated)
-   bun scripts/verify-items.ts --subset '/^item:t[0-2]\.l[0-9]+\.iso\./'  (or one /regex/)
+ *   bun scripts/verify-items.ts --subset 'forge/kv-block-manager '      (ref prefixes, comma-separated)
+ *   bun scripts/verify-items.ts --subset '/^item:t[0-2]\.l[0-9]+\.iso\./'  (or one /regex/)
  */
 
 import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
 import type { QuizQuestion } from '../src/components/QuizBlock'
 import { ALL_LESSONS, TRACK_IDS } from '../src/data/lessons'
 import { INCIDENTS } from '../src/lib/fleet-week'
@@ -262,8 +266,11 @@ for (const lesson of ALL_LESSONS) {
 }
 
 // PRIMM items: not a lesson quiz, so each lab's are graded here as one pseudo-lesson at PASS_BAR. Found by readdir, so labs 02-03 join with Wave 2c.
-const primmLabs = await discoverPrimm(new URL('../src/data/forge/', import.meta.url))
-for (const { lab, items: primm } of primmLabs) {
+// A primm.ts that throws on import is a failure (`discoveryProblems`), not a lab that quietly leaves the pool.
+const discoveryProblems: string[] = []
+const primmDiscovery = await discoverPrimm(new URL('../src/data/forge/', import.meta.url))
+discoveryProblems.push(...primmDiscovery.problems)
+for (const { lab, items: primm } of primmDiscovery.found) {
   primm.forEach((item, i) => {
     items.push({ track: FORGE_TRACK, lessonId: `forge.${lab}.primm`, qi: i, ref: `forge/${lab} ${item.id}`, q: item.q, needsExplanation: false })
   })
@@ -293,7 +300,7 @@ for (const incident of INCIDENTS) {
 }
 
 const trackKeys = [...TRACK_IDS, FLEET_TRACK, FORGE_TRACK]
-const failures: string[] = []
+const failures: string[] = [...discoveryProblems]
 /** Structure failures by item ref, so a --subset run can fail on the selected items that cannot be judged. */
 const structureByRef = new Map<string, string>()
 
@@ -853,7 +860,12 @@ const ownItems: Item[] = []
 const ownFile = new Map<Item, string>()
 const ownLesson = new Map<Item, string>()
 // Wave 3 adds two: P3's break items (`IsomorphismBlock.breakItem`) and the production twins' tracing questions (src/data/twins/<lab>.ts `TWIN_ITEMS`, found by readdir).
-const twinFiles = await discoverTwins(new URL('../src/data/twins/', import.meta.url))
+// VERIFY_ITEMS_TWINS_DIR points the twin pool at a fixture directory: the tests drive the import-failure and margin paths from fixtures, not from shipped content.
+const twinsDir = process.env.VERIFY_ITEMS_TWINS_DIR ? pathToFileURL(process.env.VERIFY_ITEMS_TWINS_DIR) : new URL('../src/data/twins/', import.meta.url)
+const twinDiscovery = await discoverTwins(twinsDir)
+discoveryProblems.push(...twinDiscovery.problems)
+failures.push(...twinDiscovery.problems) // `failures` was seeded before the twins were read
+const twinFiles = twinDiscovery.found
 const ownEntries = [...collectOwnPools(ALL_LESSONS), ...collectAlignItems(ALL_LESSONS), ...collectIsoItems(ALL_LESSONS), ...collectTwinItems(twinFiles)]
 const ownChecked = checkPoolItems(ownEntries)
 failures.push(...ownChecked.failures)
@@ -1103,7 +1115,7 @@ if (subset && 'matches' in subset) {
     chosen.map((i) => ({ ref: i.ref, q: i.q, adv: advP(i), stemless: i.track === FLEET_TRACK })),
     CUE_STRATEGIES,
   )
-  const problems = [...report.failures, ...unjudged.map(([ref, msg]) => `structure: ${ref}: ${msg}`)]
+  const problems = [...report.failures, ...unjudged.map(([ref, msg]) => `structure: ${ref}: ${msg}`), ...discoveryProblems]
   if (unjudged.length && !chosen.length) problems.shift() // an unjudgeable selection is not an empty one; its structure failures say why
   const oddChosen = chosen.filter((i) => oddOneOut(i.q).length > 0)
   console.log(`subset ${subsetSelector}: ${chosen.length} item(s) selected, n = ${report.n} single-key (chance ${rate(report.chance)})`)
@@ -1338,7 +1350,7 @@ if (!alwaysB.inside) {
   console.log(
     `  always-B 2-SD band: exact ${alwaysB.expected.toFixed(2)} (band 0.00 to ${(alwaysB.expected + 2 * alwaysB.sd).toFixed(2)}), ${alwaysB.attempts} simulated attempts through the quiz shuffle ${alwaysB.simulated.toFixed(2)} +/- ${(2 * alwaysB.se).toFixed(3)}${alwaysB.inside ? '' : '  FAIL'}`,
   )
-  console.log(`  pseudo-lessons held to p < ${MAX_RANK_LESSON} per strategy: ${primmLabs.length} PRIMM labs, ${spiralLessons.size} spirals, ${INCIDENTS.length} Act IV faults (not in the pool)`)
+  console.log(`  pseudo-lessons held to p < ${MAX_RANK_LESSON} per strategy: ${primmDiscovery.found.length} PRIMM labs, ${spiralLessons.size} spirals, ${INCIDENTS.length} Act IV faults (not in the pool)`)
 }
 
 console.log('')
