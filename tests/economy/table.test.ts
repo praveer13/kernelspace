@@ -68,12 +68,15 @@ describe('capstone, acts, plays', () => {
     expect(FLEET_ACT_MINUTES).toEqual({ engine: 30, fleet: 30, business: 30, incident: 20 })
   })
 
-  test('every registered play is priced with its PlayDef.minutes; the scheduler is priced before 2b registers it', () => {
+  test('every registered play is priced with its PlayDef.minutes; the scheduler, tiling cube and EPLB are priced before their plays register', () => {
     for (const [id, def] of Object.entries(PLAYS)) expect(PLAY_MINUTES[id]).toBe(def.minutes)
     expect(PLAY_MINUTES['block-placement']).toBe(15)
-    // a price may run ahead of its play (2b registers the scheduler), but only the scheduler's
-    expect(Object.keys(PLAY_MINUTES).filter((id) => !PLAY_IDS.includes(id) && id !== 'scheduler')).toEqual([])
+    // a price may run ahead of its play (2b registers the scheduler; Wave 3 the tiling cube and EPLB), but only theirs
+    const ahead = ['scheduler', 'tiling-cube', 'eplb']
+    expect(Object.keys(PLAY_MINUTES).filter((id) => !PLAY_IDS.includes(id) && !ahead.includes(id))).toEqual([])
     expect(PLAY_MINUTES.scheduler).toBe(20)
+    expect(PLAY_MINUTES['tiling-cube']).toBe(25)
+    expect(PLAY_MINUTES.eplb).toBe(15)
   })
 
   test('incidents and fleet runs are priced: daily 10, drill 5, a run 10 (wave-2.md §3.4)', () => {

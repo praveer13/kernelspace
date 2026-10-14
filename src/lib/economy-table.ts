@@ -55,10 +55,12 @@ export const FLEET_ACT_MINUTES: Readonly<Record<string, number>> = {
   incident: 20,
 }
 
-/** `play:<id>`: `PlayDef.minutes` (W1 declares the same number on the play def). The scheduler's price lands before 2b registers the play. */
+/** `play:<id>`: `PlayDef.minutes` (W1 declares the same number on the play def). A price lands before its play registers: the scheduler's before 2b, the tiling cube's and EPLB's before Wave 3. */
 export const PLAY_MINUTES: Readonly<Record<string, number>> = {
   'block-placement': 15,
   scheduler: 20,
+  'tiling-cube': 25,
+  eplb: 15,
 }
 
 /** `inc:daily/<date>` and `inc:drill/<fault>` (wave-2.md §3.4): nominal [estimated]; a team run pays nothing. */
@@ -102,6 +104,9 @@ export const RING1_LESSONS: readonly string[] = [
 
 /** RING 0: labs 02, 03, 06 and 07 on unseen seeds (lab 06's "within 3 points of the reference" waits for Wave 3, D14). */
 export const RING0_LABS: readonly string[] = ['kv-block-manager', 'bpe-tokenizer', 'batching-scheduler', 'radix-cache']
+
+/** The labs whose race against the reference RING 0 needs: lab 06, within 3 points on an unseen engine run (`labFleetOk`, wave-3.md §3.4). */
+export const RING0_RACE_LABS: readonly string[] = ['batching-scheduler']
 
 /** RING 0: every T5 lesson *done*. */
 export const RING0_LESSONS: readonly string[] = [
