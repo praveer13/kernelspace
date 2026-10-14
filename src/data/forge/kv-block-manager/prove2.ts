@@ -93,8 +93,9 @@ export const TRANSLATE: ProveV2Template = {
     const first = d(17, 64)
     const kept = d(1, 48)
     const more = d(1, 32)
-    // The first block of sequence 3 taken after the free: its copied tail when the tail is partial, else its first new block.
-    const fresh = kept % BLOCK === 0 ? kept / BLOCK : Math.floor(kept / BLOCK)
+    // Sequence 3's block floor(kept / BLOCK) is the first it takes after the free, and one formula covers both tails: it is
+    // the copy-on-write copy of a partial tail, or, when the tail is full, the first new block the append adds.
+    const fresh = Math.floor(kept / BLOCK)
     const token = d(fresh * BLOCK, kept + more - 1)
     return {
       calls: [INIT, `allocate 1 ${first}`, `allocate 2 ${kept}`, 'free 1', 'fork 2 3', `append 3 ${more}`, `translate 3 ${token}`],
