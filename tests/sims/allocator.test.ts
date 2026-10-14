@@ -389,7 +389,7 @@ describe('outcome tasks: ids, KCs and what each one observes', () => {
     expect(task('alloc.fixed-block-waste').kcs).toEqual(['t1.fixed-blocks' as never])
     expect(task('alloc.policy-race').kcs).toEqual(['t1.placement-policy' as never])
     expect(task('alloc.double-free').kcs).toEqual([KC.allocatorContract])
-    expect(ALLOCATOR_OUTCOME_TASKS.map((t) => t.legacyId)).toEqual(['t-frag', 't-coalesce', 't-paged', 't-trace-lab', 't-double-free'])
+    expect(ALLOCATOR_OUTCOME_TASKS.map((t) => t.legacyId)).toEqual(['t-frag', 't-coalesce', ['t-paged', 't-quiz'], 't-trace-lab', 't-double-free'])
     for (const t of ALLOCATOR_OUTCOME_TASKS) {
       expect(t.kind).toBe('outcome')
       expect(t.simId).toBe('sim-allocator')
@@ -404,7 +404,7 @@ describe('outcome tasks: ids, KCs and what each one observes', () => {
     const r = buildRegistry({ '/src/components/sims/allocator.tasks.ts': { ALLOCATOR_OUTCOME_TASKS } })
     expect(r.problems).toEqual([])
     expect(r.tasks.map((t) => t.kind)).toEqual(Array(5).fill('outcome'))
-    // t-quiz had no outcome task of its own: it left with the rest, and the quiz it detected left the sim
+    // t-quiz left with the rest, and the quiz it detected left the sim; its old completion is read through alloc.fixed-block-waste
     for (const id of ['t-frag', 't-coalesce', 't-paged', 't-quiz', 't-trace-lab', 't-double-free']) expect(r.byId(id), id).toBeUndefined()
     expect(r.forSim('sim-allocator', 'allocator').filter((t) => t.kind === 'outcome')).toHaveLength(5)
     expect(r.forSim('sim-allocator', 'allocator').filter((t) => t.kind === 'legacy')).toHaveLength(0)

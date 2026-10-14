@@ -1,8 +1,10 @@
 /**
  * SIM-02 `sim-allocator` tasks (docs/specs/wave-1.md §10.2, task C9; wave-3.md §13, task 3a-19): five outcome tasks
  * that grade a prediction. Each names the click-through task it replaced in `legacyId`, so an earlier completion
- * still shows "you finished the old click-through". The old ids themselves (`t-frag`, `t-coalesce`, `t-paged`,
- * `t-quiz`, `t-trace-lab`, `t-double-free`) are no longer registered or detected.
+ * still shows "you finished the old click-through". `legacyId` is a list on alloc.fixed-block-waste: `t-paged`
+ * (observe a fixed-block trace) and `t-quiz` (explain the internal-for-external fragmentation trade) both ran on
+ * the fixed-block trace, and this task's explain asks the quiz's question. The old ids themselves (`t-frag`,
+ * `t-coalesce`, `t-paged`, `t-quiz`, `t-trace-lab`, `t-double-free`) are no longer registered or detected.
  *
  * Four outcome tasks name one task script (src/lib/sims/models/allocator.ts SCRIPTS): the sim loads its op list,
  * the learner plays it to the end, and the sim reports the `observe` key. The fifth, the double free, is the
@@ -106,7 +108,7 @@ export const ALLOCATOR_OUTCOME_TASKS: SimTaskDef[] = [
     note: 'The eight requests held 294 B but used 512 B: 218 B of internal waste. That is the PagedAttention trade, a small bounded waste inside every block in return for no external fragmentation. Try block sizes from 16 B to 256 B and watch the waste and the number of blocks move in opposite directions.',
     phone: { canonical: 'allocator.fixed-block-waste' },
     lessons: ['t1.l4'],
-    legacyId: 't-paged',
+    legacyId: ['t-paged', 't-quiz'],
   },
   {
     id: 'alloc.policy-race',

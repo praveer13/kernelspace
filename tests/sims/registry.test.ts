@@ -94,14 +94,13 @@ describe('legacy tasks keep their ids and pay as before', () => {
     }
     // the click-through ids an outcome task replaced (legacyId) are no longer registered: the task panel reads
     // an earlier completion from the progress store, not from the registry (wave-3.md §13)
-    const replaced = reg.tasks.flatMap((t) => (t.legacyId === undefined ? [] : [t.legacyId]))
+    const replaced = reg.tasks.flatMap((t) => (t.legacyId === undefined ? [] : [t.legacyId].flat()))
     const roofline = ['t-cpu-serial', 't-gpu-map', 't-gpu-divergence', 't-roof-occupancy', 't-roof-coalesce', 't-roof-bank', 't-roof-tiers', 't-roof-pcie']
     const fleet = ['t-roof-fleet-router', 't-roof-fleet-decode', 't-roof-fleet-paged-attn', 't-roof-fleet-prefill']
-    for (const id of ['t-frag', 't-coalesce', 't-paged', 't-trace-lab', 't-double-free', 't-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep', ...roofline, ...fleet]) {
+    for (const id of ['t-frag', 't-coalesce', 't-paged', 't-quiz', 't-trace-lab', 't-double-free', 't-blk-share', 't-blk-cow', 't-blk-preempt', 't-blk-sweep', ...roofline, ...fleet]) {
       expect(replaced, id).toContain(id)
       expect(ids, id).not.toContain(id)
     }
-    expect(ids).not.toContain('t-quiz')
     // outcome tasks arrive under dotted ids, `<prefix>.<name>`, and every other task is legacy. The prefixes are the ones the
     // tasks files declare (wave-3.md §4.2), so a new family adds its file and not a line here.
     for (const t of reg.tasks) expect(t.kind === 'outcome', t.id).toBe(DOTTED.test(t.id))

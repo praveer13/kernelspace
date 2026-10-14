@@ -785,6 +785,7 @@ export function SliderRow({
   label,
   value,
   display,
+  valueText,
   min,
   max,
   step,
@@ -794,6 +795,8 @@ export function SliderRow({
   label: string
   value: number
   display: string
+  /** What a screen reader says for the value, when the slider's number is an index rather than the quantity. */
+  valueText?: string
   min: number
   max: number
   step: number
@@ -814,6 +817,7 @@ export function SliderRow({
         disabled={disabled}
         onValueChange={([v]) => onChange(v)}
         aria-label={label}
+        aria-valuetext={valueText}
       />
     </div>
   )

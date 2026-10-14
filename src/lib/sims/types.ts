@@ -93,8 +93,8 @@ export interface SimTaskDef {
   phone?: { canonical: string }
   /** Lessons whose exercise blocks list this task. */
   lessons?: readonly string[]
-  /** The pre-registry task id this replaces, so an earlier completion still shows. */
-  legacyId?: string
+  /** The pre-registry task id this replaces, so an earlier completion still shows; a list when it replaces several. */
+  legacyId?: string | readonly string[]
 }
 
 /** A DOM mirror of a canvas or play (verify-plays checks one exists per canvas it lists). */

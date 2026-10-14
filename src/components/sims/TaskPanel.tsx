@@ -257,7 +257,9 @@ export function TaskPanel({ task, host }: { task: SimTaskDef; host: SimHostInter
   const recordOutcome = useProgress((s) => s.recordSimOutcome)
   const ledgerDone = useProgress((s) => s.aggregate.sims[task.simId]?.outcomes[task.id] === true)
   const earlierDone = useProgress((s) =>
-    task.legacyId === undefined ? false : s.sims[task.simId]?.tasksDone.includes(task.legacyId) === true,
+    task.legacyId === undefined
+      ? false
+      : [task.legacyId].flat().some((id) => s.sims[task.simId]?.tasksDone.includes(id) === true),
   )
   const [run, dispatch] = useReducer((s: TaskRun, a: RunAction) => reduceRun(task, s, a), undefined, freshRun)
   const [draft, setDraft] = useState<PredictDraft>({ text: '' })

@@ -51,6 +51,7 @@ import {
   forkBeam as forkModel,
   freeCount,
   initialState,
+  isPressured,
   isStart,
   isStartPlusFork,
   logicalCount,
@@ -112,9 +113,10 @@ export default function BlockTableExplorer() {
     return nextTick
   }, [])
 
-  /** A reading graded against a prediction comes off the starting pool; any other pool says so instead of reporting. */
+  /** A reading graded against a prediction comes off the pool its task states; any other pool says so instead of reporting. */
   const needsStart = useCallback(
-    (t: number, key: string) => log(t, 'TASK', `${key} reads from the starting pool: press reset first, then repeat the step`, 'warn'),
+    (t: number, key: string, from = 'the starting pool: press reset first, then repeat the step') =>
+      log(t, 'TASK', `${key} reads from ${from}`, 'warn'),
     [log],
   )
 
@@ -216,6 +218,7 @@ export default function BlockTableExplorer() {
     const { victimId, mode, needed } = preempt
     if (!victimId || !mode) return
     const t = bump()
+    const fromScenario = isPressured(state)
     const out = preemptVictim(state, victimId, needed)
     if (out === null) return
     setState(out.state)
@@ -225,8 +228,13 @@ export default function BlockTableExplorer() {
       `victim ${victimId}: ${mode === 'swap' ? 'swap to CPU DRAM (V0 / paper option)' : 'recompute on demand (V1)'} — freed ${out.freed} block(s)`,
       mode === 'swap' ? 'ok' : 'warn',
     )
-    observe({ key: OBSERVE.preemptFreed(victimId), value: out.freed, unit: 'blocks' })
-    log(t, 'OBSERVE', `${out.freed} block(s) returned to the free queue (${OBSERVE.preemptFreed(victimId)})`, 'ok')
+    // Preempting B first frees 0 and admits nothing; A's blocks are then private, so A would free 3. Only the stated pool reports.
+    if (fromScenario) {
+      observe({ key: OBSERVE.preemptFreed(victimId), value: out.freed, unit: 'blocks' })
+      log(t, 'OBSERVE', `${out.freed} block(s) returned to the free queue (${OBSERVE.preemptFreed(victimId)})`, 'ok')
+    } else {
+      needsStart(t, OBSERVE.preemptFreed(victimId), 'the pool after reset and one spawn: press reset, spawn twice, then pick this victim first')
+    }
     if (out.admitted === null) {
       log(t, 'ALLOC', 'still not enough blocks after preemption — pick another victim', 'err')
       setPreempt((p) => ({ ...p, victimId: undefined }))
@@ -237,7 +245,7 @@ export default function BlockTableExplorer() {
     setPreemptResults((previous) => ({ ...previous, [mode]: ttftMs }))
     log(t + 2, 'TTFT', `${mode}: resumed request TTFT ${ttftMs} ms`, mode === 'swap' ? 'ok' : 'warn')
     setPreempt({ open: false, needed: 0 })
-  }, [bump, log, observe, preempt, state])
+  }, [bump, log, needsStart, observe, preempt, state])
 
   const spawnPressure = useCallback(() => {
     const needed = NEW_REQUEST_BLOCKS // 64-token prompt
@@ -614,6 +622,7 @@ export default function BlockTableExplorer() {
               label="block size"
               value={SWEEP_SIZES.indexOf(blockSize)}
               display={`${blockSize} tokens`}
+              valueText={`${blockSize} tokens`}
               min={0}
               max={SWEEP_SIZES.length - 1}
               step={1}
