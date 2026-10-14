@@ -17,6 +17,8 @@
     "predictAt": 1,
     "spiral": 2,
     "align": 0,
+    "iso": 0,
+    "twin": 0,
     "errata": 1
   },
   "whyRequired": [
