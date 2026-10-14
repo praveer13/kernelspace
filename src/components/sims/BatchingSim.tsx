@@ -12,6 +12,7 @@ import ContextSwitchLab from '@/components/sims/ContextSwitchLab'
 import PlaygroundShell, { completeSimTask } from '@/components/sims/PlaygroundShell'
 import SchedulerLab from '@/components/sims/SchedulerLab'
 import SimMirror from '@/components/sims/SimMirror'
+import { BATCHING_TASKS } from '@/components/sims/batching.tasks'
 import { CONTEXT_SWITCH_LAB_TASKS } from '@/components/sims/contextSwitchLab.tasks'
 import { SCHEDULER_LAB_TASKS as SCHEDULER_TASKS } from '@/components/sims/schedulerLab.tasks'
 import { Slider } from '@/components/ui/slider'
@@ -618,13 +619,6 @@ function recordOf(e: Engine): RunRecord {
   }
 }
 
-const TASKS = [
-  { id: 'batch-trace-static', text: 'Run the deterministic 8/12/20/40 trace on static batching and measure idle slots and wait.', xp: 60 },
-  { id: 'batch-trace-continuous', text: 'Run the same 8/12/20/40 trace continuously and watch freed slots recycle.', xp: 60 },
-  { id: 'batch-overload', text: 'Sweep arrival rate to 2× capacity and trigger preemption under memory pressure.', xp: 60 },
-  { id: 'batch-policy', text: 'Compare youngest-first and oldest-first preemption policy.', xp: 60 },
-]
-
 const SPEED_STEPS = [0.25, 0.5, 1, 2, 4]
 
 /* ------------------------------------------------------------------ */
@@ -1057,7 +1051,7 @@ export default function BatchingSim() {
             ? 'measure the throughput tax of oversubscription, short quanta, and cold caches'
             : 'the GPU is a CPU; the batcher is a scheduler — watch it context-switch'
       }
-      tasks={machineMode === 'scheduler' ? SCHEDULER_TASKS : machineMode === 'context-switch' ? CONTEXT_SWITCH_LAB_TASKS : TASKS}
+      tasks={machineMode === 'scheduler' ? SCHEDULER_TASKS : machineMode === 'context-switch' ? CONTEXT_SWITCH_LAB_TASKS : BATCHING_TASKS}
       help={
         machineMode === 'scheduler' ? (
           <p>
