@@ -288,10 +288,18 @@ const unseenAll = (ids: readonly string[]) => ids.map((lab) => unseenRun(lab, LA
 const passAll = (ids: readonly string[]) => ids.map((id) => passLesson(id, SPIRALS.includes(id) ? 'spiral' : 'ticket'))
 
 const ring1Ledger = () => [...unseenAll([...RING1_R_LABS, ...RING1_LABS]), ...passAll(RING1_LESSONS)]
-const ring0Ledger = () => [...unseenAll(RING0_LABS), ...passAll(RING0_LESSONS)]
 
 const fleetRun = (mode: string, provenance: 'unseen' | 'practice' = 'unseen', ok = true, day = 0) =>
   evt('fleet-run', `fleet:${mode}`, at(day), { score: ok ? 1 : 0.2, ok, provenance, data: { v: 1, mode, seeds: provenance === 'unseen' ? 'fresh' : 'practice' } })
+/** Lab 06's race (wave-3.md §8.3): an engine run with one component, from `labId`; ok means within 3 points of the reference. */
+const labRace = (labId = 'batching-scheduler', provenance: 'unseen' | 'practice' = 'unseen', ok = true, day = 0) =>
+  evt('fleet-run', 'fleet:engine', at(day), {
+    score: ok ? 1 : 0.2,
+    ok,
+    provenance,
+    data: { v: 1, mode: 'engine', components: [{ slot: 'scheduler', labId, sha256: 'ab'.repeat(32) }], seeds: provenance === 'unseen' ? 'fresh' : 'practice', goodput: 40, refGoodput: 41 },
+  })
+const ring0Ledger = () => [...unseenAll(RING0_LABS), labRace(), ...passAll(RING0_LESSONS)]
 const fleetAct = (act: string, ok = true) => evt('fleet-act', `fw:${act}`, at(0), { score: ok ? 1 : 0.1, ok })
 const daily = (date: string, ok = true) =>
   evt('incident', `inc:daily/${date}`, at(0), { score: ok ? 1 : 0, ok, provenance: 'practice', data: { v: 1, src: 'daily', date } })
@@ -380,6 +388,7 @@ describe('the RING 0 fixtures', () => {
     expect(r.ring0).toEqual({
       earned: true,
       labs: { done: 4, total: 4, missing: [] },
+      race: { done: 1, total: 1, missing: [] },
       tickets: { done: 10, total: 10, missing: [] },
     })
     expect(r.rank).toBe('RING 0')
@@ -387,15 +396,15 @@ describe('the RING 0 fixtures', () => {
 
   test('each of the four labs and the T5 lessons is needed', () => {
     for (const lab of RING0_LABS) {
-      const r = rings([...unseenAll(RING0_LABS.filter((l) => l !== lab)), ...passAll(RING0_LESSONS)])
+      const r = rings([...unseenAll(RING0_LABS.filter((l) => l !== lab)), labRace(), ...passAll(RING0_LESSONS)])
       expect(r.ring0.earned).toBe(false)
       expect(r.ring0.labs.missing).toEqual([lab])
     }
-    expect(rings(unseenAll(RING0_LABS)).ring0.earned).toBe(false)
-    expect(rings([...passAll(RING0_LESSONS.slice(0, 9)), ...unseenAll(RING0_LABS)]).ring0.tickets.missing).toEqual(['t5.l10'])
+    expect(rings([...unseenAll(RING0_LABS), labRace()]).ring0.earned).toBe(false)
+    expect(rings([...passAll(RING0_LESSONS.slice(0, 9)), ...unseenAll(RING0_LABS), labRace()]).ring0.tickets.missing).toEqual(['t5.l10'])
   })
 
-  test('lab 06 counts on its unseen checks; "within 3 points of the reference" waits for Wave 3 (D14)', () => {
+  test('lab 06 counts on its unseen checks; the race against the reference is its own line', () => {
     expect(rings([unseenRun('batching-scheduler', LABS['batching-scheduler'].checks)]).ring0.labs.done).toBe(1)
     // the check ids are the whole criterion today: a lower goodput score on the same checks changes nothing
     const lower = evt('lab-check', 'lab:batching-scheduler', at(0), {
@@ -405,6 +414,37 @@ describe('the RING 0 fixtures', () => {
       data: { passed: [...LABS['batching-scheduler'].checks], total: 6, abi: 2, seeds: 'fresh', checks: LABS['batching-scheduler'].checks.map((id) => ({ id, status: 'pass' })) },
     })
     expect(rings([lower]).ring0.labs.done).toBe(1)
+  })
+
+  test('RING 0 needs lab 06 within 3 points of the reference: with labFleetOk it is earned, without it it is not', () => {
+    const without = [...unseenAll(RING0_LABS), ...passAll(RING0_LESSONS)]
+    const r = rings(without)
+    expect(r.ring0).toMatchObject({ earned: false, race: { done: 0, total: 1, missing: ['batching-scheduler'] } })
+    expect(r.ring0.labs.missing).toEqual([])
+    expect(r.rank).toBe('RING 3')
+    const withRace = rings([...without, labRace()])
+    expect(withRace.ring0).toMatchObject({ earned: true, race: { done: 1, total: 1, missing: [] } })
+    expect(withRace.rank).toBe('RING 0')
+    // the race alone earns nothing else
+    expect(rings([labRace()]).ring0).toMatchObject({ earned: false, race: { done: 1 }, labs: { done: 0 }, tickets: { done: 0 } })
+  })
+
+  test('only an ok, unseen engine race from lab 06 turns the line green', () => {
+    const base = [...unseenAll(RING0_LABS), ...passAll(RING0_LESSONS)]
+    for (const [name, race] of [
+      ['a practice race', labRace('batching-scheduler', 'practice')],
+      ['a race more than 3 points behind', labRace('batching-scheduler', 'unseen', false)],
+      ['a race of another lab', labRace('rust-allocator')],
+    ] as const) {
+      const r = rings([...base, race])
+      expect(`${name}: ${r.ring0.earned}`).toBe(`${name}: false`)
+      expect(r.ring0.race.missing).toEqual(['batching-scheduler'])
+    }
+  })
+
+  test('a later miss does not take the race back (the fold is a set union)', () => {
+    const events = [...ring0Ledger(), labRace('batching-scheduler', 'unseen', false, 9)]
+    expect(rings(events).ring0.earned).toBe(true)
   })
 })
 
@@ -592,7 +632,7 @@ describe('the checklists Progress shows', () => {
   test('four rings, each with its lines, and RING 2 keeps its Wave 1 lines', () => {
     const s = sections([])
     expect(s.map((x) => x.ring)).toEqual(['RING 2', 'RING 1', 'RING 0', 'ROOT'])
-    expect(s.map((x) => x.rows.length)).toEqual([3, 3, 2, 6])
+    expect(s.map((x) => x.rows.length)).toEqual([3, 3, 3, 6])
     expect(s[0].rows.map((r) => r.label)).toEqual(['R drills', 'Lab 01', 'Tickets'])
     expect(s[0].rows[0]).toMatchObject({ count: '0/5', to: '/forge/rust-zero-r1', action: 'next drill', done: false })
   })
@@ -602,6 +642,7 @@ describe('the checklists Progress shows', () => {
     expect(row([], 'RING 1', 'labs')).toMatchObject({ count: '0/2', to: '/forge/mpmc-queue' })
     expect(row([], 'RING 1', 'tickets')).toMatchObject({ count: '0/14', to: '/lesson/t3.l1' })
     expect(row([], 'RING 0', 'labs')).toMatchObject({ count: '0/4', to: '/forge/kv-block-manager' })
+    expect(row([], 'RING 0', 'race')).toMatchObject({ count: '0/1', done: false, to: '/forge/batching-scheduler', action: 'race the reference' })
     expect(row([], 'RING 0', 'tickets')).toMatchObject({ count: '0/10', to: '/lesson/t5.l1' })
     expect(row([], 'ROOT', 'lab08')).toMatchObject({ to: '/forge/xgrammar-lite' })
     expect(row([], 'ROOT', 'fleet-runs')).toMatchObject({ to: '/week' })
