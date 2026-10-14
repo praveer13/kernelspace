@@ -129,7 +129,7 @@ export default function ProveReturnBody({ variant, env }: ProveReturnBodyProps) 
       </h2>
       <p className="mt-1 text-body-sm text-text-2">
         {plan.kind === 'v2'
-          ? 'You first proved this lab a month ago. Close your agent: your installed module answers a fresh list of calls, and you predict what it replies.'
+          ? 'You first took Prove it on this lab a month ago. Close your agent: your installed module answers a fresh list of calls, and you predict what it replies.'
           : 'You first answered questions on this lab a month ago. Close your agent: write your own answer to one of them, then check it against the model answer.'}
       </p>
       <div className="mt-3">

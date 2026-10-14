@@ -239,7 +239,7 @@ export function verdictFor(out: GradedAttempt, answer: number | number[], opts: 
   } else if (grade.right) {
     lines.push('Saved as practice: the module could not be fingerprinted, so it cannot be named as the one that was graded.')
   } else {
-    lines.push('Saved as a credited miss.')
+    lines.push(opts.ret ? 'Saved as a miss.' : 'Saved as a credited miss.')
   }
   if (grade.failed === null && !grade.right) lines.push('Open the code that handles these calls and follow what it does with them, then try a fresh question.')
   if (opts.ret) {

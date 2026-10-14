@@ -319,6 +319,8 @@ describe('ProveReturnCard on Today', () => {
     const text = q(page, '[data-prove-verdict]').textContent
     expect(text).toContain(`your module replied ${truth}`)
     expect(text).toContain('starts no wait')
+    expect(text).toContain('Saved as a miss.')
+    expect(text).not.toContain('credited')
     expect(text).not.toContain('opens in')
     expect(r.proves[0]).toMatchObject({ ok: false, provenance: 'practice', data: { return: true, answer: truth + 2, actual: truth } })
     await page.unmount()
