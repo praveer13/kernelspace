@@ -11,6 +11,7 @@ import { Check, ChevronDown, ChevronUp, Copy, Cpu, Play, RotateCcw, Trash2 } fro
 import PlaygroundShell from '@/components/sims/PlaygroundShell'
 import SimMirror from '@/components/sims/SimMirror'
 import { useProgress } from '@/lib/progress'
+import { editorBlur, editorKey } from '@/lib/sims/editor-keys'
 import type { MirrorTable } from '@/lib/sims/types'
 import { cn } from '@/lib/utils'
 
@@ -750,20 +751,12 @@ export default function WgslSim() {
 
   // Tab indents, which would trap a keyboard user in the editor (WCAG 2.1.2): Escape releases the next Tab
   // and Shift+Tab always moves focus, so the data tables below the editor stay reachable
+  // (src/lib/sims/editor-keys.ts); the release also ends when the editor loses focus, and a visible hint says so
   const tabReleased = useRef(false)
   const onEditorKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape') {
-      tabReleased.current = true
-      return
-    }
-    if (e.key !== 'Tab') {
-      tabReleased.current = false
-      return
-    }
-    if (e.shiftKey || tabReleased.current) {
-      tabReleased.current = false
-      return
-    }
+    const step = editorKey(tabReleased.current, e.key, e.shiftKey)
+    tabReleased.current = step.released
+    if (step.action !== 'indent') return
     e.preventDefault()
     const ta = e.currentTarget
     const { selectionStart: s, selectionEnd: en, value } = ta
@@ -1270,6 +1263,10 @@ export default function WgslSim() {
               </div>
             </div>
 
+            <p id="wgsl-editor-hint" className="border-b border-line bg-surface-1 px-3 py-1 font-mono text-[11px] text-text-2">
+              Tab indents. To leave the editor with the keyboard, press Esc, then Tab (Shift+Tab always works).
+            </p>
+
             {/* editor body */}
             <div className="relative flex h-[440px]">
               <div
@@ -1310,6 +1307,10 @@ export default function WgslSim() {
                   onChange={(e) => setCode(e.target.value)}
                   onScroll={syncScroll}
                   onKeyDown={onEditorKey}
+                  onBlur={() => {
+                    tabReleased.current = editorBlur()
+                  }}
+                  aria-describedby="wgsl-editor-hint"
                   spellCheck={false}
                   autoCapitalize="off"
                   autoComplete="off"
