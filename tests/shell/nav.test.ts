@@ -46,9 +46,9 @@ describe('the four destinations', () => {
     expect(DESTINATIONS.map((d) => d.to)).toEqual(['/today', '/curriculum', '/forge', '/progress'])
   })
 
-  test('Build lists Forge, Sims, Fleet, Fleet Week, Capstone and Leaderboard', () => {
-    expect(BUILD_LINKS.map((l) => l.label)).toEqual(['Forge', 'Sims', 'Fleet', 'Fleet Week', 'Capstone', 'Leaderboard'])
-    expect(BUILD_LINKS.map((l) => l.to)).toEqual(['/forge', '/lab', '/fleet', '/week', '/capstone', '/leaderboard'])
+  test('Build lists Forge, Sims, Fleet, Fleet Daily, Fleet Week, Capstone and Leaderboard', () => {
+    expect(BUILD_LINKS.map((l) => l.label)).toEqual(['Forge', 'Sims', 'Fleet', 'Fleet Daily', 'Fleet Week', 'Capstone', 'Leaderboard'])
+    expect(BUILD_LINKS.map((l) => l.to)).toEqual(['/forge', '/lab', '/fleet', '/daily', '/week', '/capstone', '/leaderboard'])
   })
 
   test('the hamburger keeps what the tabs do not reach, and no primary destination twice', () => {
@@ -58,6 +58,8 @@ describe('the four destinations', () => {
     for (const l of BUILD_LINKS) expect(l.to === '/forge' || SECONDARY_LINKS.some((s) => s.to === l.to)).toBe(true)
     expect(SECONDARY_LINKS.map((l) => l.to)).toContain('/freshness')
     expect(SECONDARY_LINKS.map((l) => l.to)).toContain('/glossary')
+    // Path gains Errors (wave-2.md §2.2): the Path tab opens the curriculum, so the Error Museum is a hamburger link
+    expect(SECONDARY_LINKS.map((l) => l.to)).toContain('/errors')
   })
 
   test('a page lights the destination that holds it', () => {
@@ -69,11 +71,14 @@ describe('the four destinations', () => {
       ['/lesson/t1.l4', 'path'],
       ['/glossary', 'path'],
       ['/play/block-placement', 'path'],
+      ['/play/scheduler', 'path'],
+      ['/errors', 'path'],
       ['/forge', 'build'],
       ['/forge/rust-allocator', 'build'],
       ['/lab', 'build'],
       ['/lab/memory-grid', 'build'],
       ['/fleet', 'build'],
+      ['/daily', 'build'],
       ['/week', 'build'],
       ['/capstone', 'build'],
       ['/leaderboard', 'build'],
@@ -88,6 +93,24 @@ describe('the four destinations', () => {
   test('a prefix is a path segment, not a string prefix', () => {
     expect(destinationOf('/labyrinth')).toBeNull()
     expect(destinationOf('/fleeting')).toBeNull()
+  })
+})
+
+describe('the command palette page list', () => {
+  // STATIC_ITEMS is not exported (a component file exports components only), so the test reads the source.
+  const palette = readFileSync(join(src, 'components/CommandPalette.tsx'), 'utf8')
+  const block = palette.slice(palette.indexOf('const STATIC_ITEMS'), palette.indexOf('...TRACKS.map'))
+  const pages = [...block.matchAll(/group: 'Pages'[^}]*?to: '([^']+)'/g)].map((m) => m[1])
+
+  test('lists Today, Boot, Fleet Daily and the Error Museum, with Wave 1\'s pages', () => {
+    for (const to of ['/today', '/boot', '/daily', '/errors', '/', '/curriculum', '/forge', '/fleet', '/week', '/progress']) {
+      expect(pages).toContain(to)
+    }
+  })
+
+  test('every Build link and the Errors link has a palette row, and no row is listed twice', () => {
+    for (const l of [...BUILD_LINKS, { to: '/errors' }]) expect(pages).toContain(l.to)
+    expect(new Set(pages).size).toBe(pages.length)
   })
 })
 

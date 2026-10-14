@@ -2,21 +2,30 @@ import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { AGGREGATE_VERSION, EXPORT_FORMAT, QUIZ_PASS_SCORE, SCHEMA_VERSION } from './ledger/constants'
 import { browserEnv, loadDeviceId, onLedgerClientRequest } from './ledger/client'
-import { emptyAggregate, foldInto, upgradeAggregate } from './ledger/fold'
+import { emptyAggregate, fleetRunOk, fleetRunScore, foldInto, incidentOk, incidentScore, upgradeAggregate } from './ledger/fold'
 import { checkSnapshot } from './ledger/guard'
 import { lwwWorking } from './ledger/merge'
 import { SNAPSHOT_KEY } from './ledger/names'
 import { appendToOutbox, outboxKey } from './ledger/outbox'
-import { getOwn, setOwn, stableStringify } from './ledger/stable'
+import { getOwn, setOwn, sha256Hex, stableStringify } from './ledger/stable'
 import { dayOf } from './ledger/time'
 import { toProgressData, workingMap } from './ledger/view'
 import type {
   Aggregate,
   AggregateV1,
+  AggregateV2,
   AckRef,
   BootRef,
+  ComponentInstall,
+  EngineSlot,
+  EngineSlotEntry,
+  EngineSlots,
   EventKind,
   FacadeEnv,
+  FleetActMeta,
+  FleetRunResult,
+  HelpAckData,
+  IncidentResult,
   ItemResponse,
   Json,
   JsonObject,
@@ -28,6 +37,7 @@ import type {
   LedgerFacadeState,
   LedgerStatus,
   LessonRef,
+  PacketRef,
   PlayResult,
   Provenance,
   ProveResult,
@@ -135,7 +145,7 @@ export interface ProgressState extends LedgerFacadeState, LedgerFacadeActions {
     totalChecks: number,
     meta?: LabRunMeta,
   ) => void
-  completeFleetWeekAct: (actId: string, score: number) => void
+  completeFleetWeekAct: (actId: string, score: number, meta?: FleetActMeta) => void
   setFleetWeekDoc: (text: string) => void
   setFleetWeekEvidence: (
     actId: string,
@@ -178,6 +188,11 @@ export type ProgressStore = UseBoundStore<StoreApi<ProgressState>> & { controls:
 const SNAPSHOT_DELAY_MS = 250
 /** The codec rejects an item with more KCs than this (wave-1.md §3.2), and a rejected event is lost at flush. */
 const MAX_KCS = 6
+/** The codec rejects an incident or a run with more of these (wave-2.md §3.2), and a rejected event is lost at flush. */
+const MAX_PROBES = 12
+const MAX_RUN_COMPONENTS = 8
+/** The most characters a context packet may report (H2); the codec refuses more. */
+const MAX_PACKET_CHARS = 6000
 /** Scroll position is device-local and changes constantly: commit it at most this often (§5). */
 const SCROLL_DELAY_MS = 2000
 /** Free-text fields (Fleet Week notes) commit after typing pauses. */
@@ -240,17 +255,19 @@ const clamp01 = (n: number): number => Math.min(1, Math.max(0, n))
 const withDefined = <T extends object>(o: T): Partial<T> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
 
-/** The aggregate of the Wave 0b snapshot, which `upgradeAggregate` carries forward (spec §3.1). */
+/** The aggregates of the Wave 0b and Wave 1 snapshots, which `upgradeAggregate` carries forward (wave-2.md §3.1). */
 const V1_AGGREGATE = 1
+const V2_AGGREGATE = 2
 
-function isAggregate(a: unknown): a is Aggregate | AggregateV1 {
-  if (!isRec(a) || (a.v !== AGGREGATE_VERSION && a.v !== V1_AGGREGATE) || typeof a.events !== 'number') return false
+function isAggregate(a: unknown): a is Aggregate | AggregateV2 | AggregateV1 {
+  if (!isRec(a) || (a.v !== AGGREGATE_VERSION && a.v !== V2_AGGREGATE && a.v !== V1_AGGREGATE) || typeof a.events !== 'number') return false
   const maps = ['lessons', 'sims', 'labs', 'facts', 'days', 'achievements', 'acks', 'completions']
-  if (a.v === AGGREGATE_VERSION) maps.push('plays', 'proves', 'itemSec')
+  if (a.v !== V1_AGGREGATE) maps.push('plays', 'proves', 'itemSec')
+  if (a.v === AGGREGATE_VERSION) maps.push('incidents', 'dailyDays', 'fleetRuns')
   for (const key of maps) {
     if (!isRec(a[key])) return false
   }
-  if (a.v === AGGREGATE_VERSION) {
+  if (a.v !== V1_AGGREGATE) {
     if (!Object.values(a.sims as object).every((x) => isRec(x) && isRec(x.outcomes))) return false
     if (!Object.values(a.labs as object).every((x) => isRec(x) && isRec(x.unseen))) return false
   }
@@ -264,8 +281,8 @@ const isWorkingShape = (w: unknown): w is WorkingRecord =>
 
 /**
  * §8.2 steps 1 and 3: the snapshot, or an empty ledger. A corrupt or foreign-format snapshot is ignored (§9.8).
- * A version-1 aggregate (Wave 0b) is upgraded in place rather than discarded, so the first paint after the
- * Wave 1 deploy shows the old numbers; `upgraded` tells the store to boot the engine now (wave-1.md §3.1).
+ * A version-1 or version-2 aggregate (Wave 0b, Wave 1) is upgraded in place rather than discarded, so the first paint
+ * after a deploy shows the old numbers; `upgraded` tells the store to boot the engine now (wave-2.md §3.1).
  */
 function hydrate(storage: FacadeEnv['storage']): {
   aggregate: Aggregate
@@ -289,8 +306,8 @@ function hydrate(storage: FacadeEnv['storage']): {
       return readOnly ? { ...empty, readOnly } : empty
     }
     const working = snap.working.filter(isWorkingShape)
-    const upgraded = stored.v === V1_AGGREGATE
-    const aggregate = stored.v === V1_AGGREGATE ? upgradeAggregate(stored) : stored
+    const upgraded = stored.v !== AGGREGATE_VERSION
+    const aggregate = stored.v === AGGREGATE_VERSION ? stored : upgradeAggregate(stored)
     toProgressData(aggregate, workingMap(working)) // throws on a malformed aggregate: fall through to empty
     return { aggregate, working, readOnly, upgraded }
   } catch {
@@ -565,15 +582,27 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
     record([], now)
   }
 
-  /** One visit per lesson per local day (§8.3). */
+  /**
+   * One visit per lesson per local day (§8.3), except that the first visit after `complete placement` is always
+   * written: F3 reads the landing from the first visit after the placement, and a lesson the learner had already
+   * touched that day (R.L1, say) would otherwise leave none.
+   */
   function visitLesson(lessonId: string): void {
     const s = stamp()
     const lastAt = getOwn(agg.lessons, lessonId)?.lastAt
-    if (lastAt !== undefined && dayOf(lastAt, clock.tzOffsetMinutes(lastAt)) === s.day) return
+    const placedAt = workingRecs.get('placement:result')?.at
+    const sinceThen = placedAt === undefined || (lastAt !== undefined && lastAt >= placedAt)
+    if (lastAt !== undefined && sinceThen && dayOf(lastAt, clock.tzOffsetMinutes(lastAt)) === s.day) return
     record([ev(s, 'visit', `lesson:${lessonId}`)], [])
   }
 
   const currentWorking = (key: WorkingKey): Json | undefined => workingRecs.get(key)?.value
+
+  /** The slot map as the working record holds it (a malformed value reads as empty). */
+  const currentSlots = (): EngineSlots => {
+    const v = currentWorking('engine:slots')
+    return isRec(v) ? ({ ...v } as EngineSlots) : {}
+  }
 
   /** One `lab-check` event: `ok` is cumulative, so a lab stays done once every check has passed in some run. */
   function writeLabRun(labId: string, passed: string[], total: number, provenance: Provenance, extra: object, data: object): void {
@@ -632,10 +661,11 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       writeLabRun(labId, passedCheckIds, totalChecks, meta?.provenance ?? 'lab-green', extra, { passed: [...passedCheckIds], total: totalChecks })
     },
 
-    completeFleetWeekAct: (actId, score) => {
+    completeFleetWeekAct: (actId, score, meta) => {
       if (!Number.isFinite(score)) return
       const s = stamp()
-      const evs = [ev(s, 'fleet-act', `fw:${actId}`, graded(clamp01(score), true, 'practice'))]
+      const extra = withDefined({ seed: meta?.seed, data: meta?.data })
+      const evs = [ev(s, 'fleet-act', `fw:${actId}`, graded(clamp01(score), true, meta?.provenance ?? 'practice', extra))]
       const acts = new Set([...Object.keys(agg.fleetWeek.acts), actId])
       if (acts.size >= 4 && getOwn(agg.achievements, 'fleet-week') === undefined) {
         evs.push(ev(s, 'achievement', 'ach:fleet-week'))
@@ -745,7 +775,7 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       )
     },
 
-    acknowledge: (ref: AckRef, data?: { via?: string }) => {
+    acknowledge: (ref: AckRef, data?: JsonObject) => {
       if (getOwn(agg.acks, ref) !== undefined) return
       record([ev(stamp(), 'ack', ref, data ? { data } : {})], [])
     },
@@ -824,6 +854,66 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       const s = stamp()
       const value = toJson(result)
       record([ev(s, 'complete', 'placement')], value === undefined ? [] : [{ key: 'placement:result', value, at: s.at, dev: device }])
+    },
+
+    /* Wave 2 actions (wave-2.md §3.3) */
+
+    recordIncident: (r: IncidentResult) => {
+      const nonNeg = (n: number): number => (Number.isFinite(n) ? Math.max(0, n) : 0)
+      // Clamped to what the codec accepts, so a play is never lost at the outbox flush.
+      const data = {
+        ...r.data,
+        probes: r.data.probes.slice(0, MAX_PROBES),
+        components: r.data.components.slice(0, MAX_RUN_COMPONENTS),
+        burn: nonNeg(r.data.burn),
+        expertBurn: nonNeg(r.data.expertBurn),
+        streetlight: nonNeg(r.data.streetlight),
+        ...(r.data.kcs ? { kcs: r.data.kcs.slice(0, MAX_KCS) } : {}),
+      }
+      // A drill's seed is drawn when it starts; the Daily's and a team's are public, so those count as practice.
+      const provenance = r.data.src === 'drill' ? 'unseen' : 'practice'
+      record([ev(stamp(), 'incident', r.ref, { ...graded(incidentScore(data), incidentOk(data), provenance, withDefined({ seed: r.seed >>> 0, ms: r.ms })), data })], [])
+    },
+
+    recordFleetRun: (r: FleetRunResult) => {
+      if (r.data.components.length === 0) return // only a run with an own component is evidence of the learner's work
+      const data = { ...r.data, components: r.data.components.slice(0, MAX_RUN_COMPONENTS) }
+      const provenance = data.seeds === 'fresh' ? 'unseen' : 'practice'
+      const seed = r.seed === undefined ? undefined : r.seed >>> 0
+      record([ev(stamp(), 'fleet-run', `fleet:${data.mode}`, { ...graded(fleetRunScore(data), fleetRunOk(data), provenance, withDefined({ seed, ms: r.ms })), data })], [])
+    },
+
+    installComponent: (c: ComponentInstall) => {
+      const install = async (): Promise<{ sha256: string }> => {
+        if (readOnlyReason) throw new Error('the ledger is read-only')
+        const bytes = c.bytes instanceof Uint8Array ? c.bytes.slice().buffer : c.bytes
+        const sha256 = await sha256Hex(bytes)
+        if (currentSlots()[c.slot]?.sha256 === sha256) return { sha256 }
+        await bootEngine()
+        if (!engine) throw new Error('the ledger engine could not load')
+        const at = clock.nowIso()
+        await engine.putComponent({ sha256, labId: c.labId, size: bytes.byteLength, addedAt: at, bytes, ...withDefined({ name: c.name, abi: c.abi }) })
+        const entry: EngineSlotEntry = { sha256, labId: c.labId, version: Math.max(1, Math.round(c.version)), at }
+        const value = toJson({ ...currentSlots(), [c.slot]: entry })
+        if (value !== undefined) writeWorking([['engine:slots', value]])
+        return { sha256 }
+      }
+      const done = install()
+      track(done) // `flush` waits for the bytes and the slot record
+      return done
+    },
+
+    removeComponent: (slot: EngineSlot) => {
+      const slots = currentSlots()
+      if (slots[slot] === undefined) return
+      delete slots[slot]
+      const value = toJson(slots)
+      if (value !== undefined) writeWorking([['engine:slots', value]])
+    },
+
+    recordHelp: (ref: PacketRef, data: HelpAckData) => {
+      const chars = Number.isFinite(data.chars) ? Math.min(MAX_PACKET_CHARS, Math.max(0, Math.round(data.chars))) : 0
+      record([ev(stamp(), 'ack', ref, { data: { ...data, chars } })], [])
     },
   }
 

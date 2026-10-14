@@ -3,7 +3,7 @@
  * Renders every ContentBlock type: prose (markdown-lite), code compare tabs,
  * five callout variants, step-through SVG diagrams, statlines, quizzes,
  * exercise embed cards, isomorphism panels, collapsible deep-dives, and the
- * Wave 1 prequestion, play and exit-ticket blocks (lazy). ProseView, DiagramView
+ * Wave 1 prequestion, play and exit-ticket blocks and the Wave 2 item block (lazy). ProseView, DiagramView
  * and ExerciseView live in their own modules beside this one.
  */
 
@@ -41,6 +41,8 @@ import { ProseView } from './prose'
 const Prequestions = lazy(() => import('@/components/blocks/Prequestions'))
 const PlayBlock = lazy(() => import('@/components/blocks/PlayBlock'))
 const ExitTicketBlock = lazy(() => import('@/components/learner/ExitTicketBlock'))
+// Wave 2: generated items inside a lesson (a stub until 2a-12).
+const ItemBlock = lazy(() => import('@/components/blocks/ItemBlock'))
 
 /* ------------------------------------------------------------------ */
 /* callout (lesson.md §2.3, design.md §9.9)                            */
@@ -117,13 +119,13 @@ function IsomorphismView({ block }: { block: IsomorphismBlock }) {
       <div className="space-y-3">
         {block.pairs.map((p, i) => (
           <div key={i}>
-            <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-              <div className="rounded-md border border-[#22D3EE]/30 bg-[#22D3EE]/5 p-3.5">
+            <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+              <div className="min-w-0 break-words rounded-md border border-[#22D3EE]/30 bg-[#22D3EE]/5 p-3.5">
                 <div className="font-mono text-body-sm font-medium text-[#22D3EE]">{p.os}</div>
                 <div className="mt-1 text-body-sm text-text-2">{p.osLine}</div>
               </div>
-              <div className="flex items-center font-mono text-h4 text-text-3">≡</div>
-              <div className="rounded-md border border-[#FB7185]/30 bg-[#FB7185]/5 p-3.5">
+              <div className="flex items-center justify-center font-mono text-h4 text-text-3">≡</div>
+              <div className="min-w-0 break-words rounded-md border border-[#FB7185]/30 bg-[#FB7185]/5 p-3.5">
                 <div className="font-mono text-body-sm font-medium text-[#FB7185]">{p.llm}</div>
                 <div className="mt-1 text-body-sm text-text-2">{p.llmLine}</div>
               </div>
@@ -319,6 +321,12 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
       return (
         <Suspense fallback={<BlockFallback />}>
           <PlayBlock lessonId={lesson.id} playId={block.playId} title={block.title} trackColor={trackColor} />
+        </Suspense>
+      )
+    case 'item':
+      return (
+        <Suspense fallback={<BlockFallback />}>
+          <ItemBlock lessonId={lesson.id} blockIndex={lesson.blocks.indexOf(block)} block={block} trackColor={trackColor} />
         </Suspense>
       )
     default:

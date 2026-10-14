@@ -32,6 +32,7 @@ import LessonRow from '@/pages/lesson/LessonRow'
 import { cn } from '@/lib/utils'
 import { cachedPathPlan, lessonCode, pathOf, PATH_LABEL, type PathGraph } from '@/lib/learner/paths'
 import { currentLesson, readPlacement } from '@/lib/learner/placement'
+import { useCurrentLesson } from '@/lib/learner/up-next'
 
 // the walk loads on demand: it pulls the item player and the generator families, which a map visit never needs
 const PlacementWalk = lazy(() => import('@/components/learner/PlacementWalk'))
@@ -194,13 +195,17 @@ export default function CurriculumPage() {
   // the highest ring earned from the ledger, never an XP threshold (spec 8.5)
   const rank = useProgress((s) => selectRings(s.aggregate).rank)
 
-  // the path plan (paths.ts) with the placement applied: its first lesson that is neither done nor read is "current"
+  // "current" is the lesson recommend() stands on (the lesson being read, else the plan's next one, prerequisite first),
+  // the same one the lesson footer and Today offer (wave-2.md §7.2). The recommender loads on demand; until it lands,
+  // or if it cannot, the path plan (paths.ts) with the placement applied gives its first lesson that is neither done nor read.
   const path = pathOf(useProgress((s) => s.working['boot:path']))
   const placementRaw = useProgress((s) => s.working['placement:result'])
   const placement = useMemo(() => readPlacement(placementRaw), [placementRaw])
   const plan = cachedPathPlan(path, PLAN_GRAPH, placement)
   const started = ORDERED_LESSON_IDS.some((id) => (lessonStates[id]?.status ?? 'unstarted') !== 'unstarted')
-  const currentId = started || placement ? currentLesson(plan, (id) => lessonStates[id]?.status) : null
+  const recommended = useCurrentLesson()
+  const planCurrent = started || placement ? currentLesson(plan, (id) => lessonStates[id]?.status) : null
+  const currentId = recommended.status === 'ready' ? (started || placement ? recommended.id : null) : planCurrent
   const firstId = currentId ?? plan.lessons[0] ?? ORDERED_LESSON_IDS[0]
   const placedAt = placement ? getTrack(placement.entryTrack) : undefined
 

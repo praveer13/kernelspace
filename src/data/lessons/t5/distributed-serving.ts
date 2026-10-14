@@ -10,7 +10,68 @@ const lesson: Lesson = {
   hook: 'TP/PP/DP parallelism, NVLink vs RDMA, prefill/decode disaggregation, KV transfer, and Mooncake\'s distributed cache — serving beyond one GPU.',
   exercise: 'read+quiz',
   verifiedAt: '2026-08',
+  kcs: ['t5.interconnect-ladder', 't5.parallelism-axes', 't5.pd-disaggregation'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Name what tensor, pipeline and data parallelism each split, and say which one must stay on NVLink and why.',
+        model:
+          'Tensor parallelism splits each layer\'s matrices across GPUs, pipeline parallelism splits the layers into stages, and data parallelism copies the whole model and splits the requests. Tensor parallelism needs collectives in every layer on every step, so it must stay on NVLink. Pipeline sends one activation per stage boundary and tolerates slower links.',
+        ideas: [
+          'Tensor splits matrices, pipeline splits layers, data splits requests across replicas',
+          'Tensor parallelism runs collectives in every layer on every step',
+          'So it stays on NVLink, while pipeline needs only one activation per boundary',
+        ],
+        kcs: ['t5.parallelism-axes', 't5.interconnect-ladder'],
+      },
+      {
+        prompt: 'When does prefill-decode disaggregation pay for its KV transfer, and when should you stay colocated?',
+        model:
+          'It pays when contexts are long, so the transfer amortizes, when prefill and decode load is skewed, and when the fleet is big enough to bin-pack the two phases. Each phase then gets its own hardware, batching and scaling. Small fleets and short contexts do better colocated with chunked prefill, because the network hop dominates.',
+        ideas: [
+          'Long contexts amortize the transfer, and skewed load lets each phase scale on its own',
+          'It needs a fleet big enough to bin-pack prefill and decode workers',
+          'At small scale or short context, colocate with chunked prefill, since the hop dominates',
+        ],
+        kcs: ['t5.pd-disaggregation'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A 70B model is split across 8 GPUs inside one node. Which split puts the most traffic on the GPU-to-GPU links on every decode step?',
+          options: [
+            'Pipeline parallelism, since each layer passes its whole activation tensor on to the next device',
+            'Data parallelism, since the replicas have to exchange their cache entries after every generated token',
+            'Tensor parallelism, since each layer ends its matrix products with a collective over the shards',
+            'None of them, since the bytes for one token are tiny next to the weights that each GPU reads',
+          ],
+          correct: [2],
+          why: [
+            'Pipeline stages pass one activation tensor at each stage boundary, not at every layer. That is small traffic, which is why pipeline parallelism tolerates slower links.',
+            'Data-parallel replicas serve different requests and do not talk to each other during a request. There is no per-token exchange of cache entries between them.',
+            'Right: tensor parallelism shards every matrix, so each layer needs a collective to combine partial results, on every step. That per-layer traffic is why it stays on NVLink.',
+            'Each collective is small, but there are two per layer on every step and they sit on the critical path. Link bandwidth and latency decide whether the GPUs wait on them.',
+          ],
+          revealAt: 'The three axes of parallelism',
+          kcs: ['t5.parallelism-axes'],
+        },
+        {
+          kind: 'numeric',
+          q: 'A prefill GPU hands a 1.3 GB KV cache to a decode GPU over a 50 GB/s link. How long does the transfer take?',
+          unit: 'ms',
+          truth: 26,
+          okWithinFactor: 1.15,
+          revealAt: 'Disaggregation: prefill and decode break up',
+          kcs: ['t5.pd-disaggregation', 't5.interconnect-ladder'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `One GPU is never enough — for capacity (T5.L4's 70B arithmetic), for throughput, or for latency isolation. The moment serving spans devices, you inherit a full distributed-systems problem: how to split the model, how to move the bytes, and how to keep tail latency alive across a network. This lesson is the map: the three parallelism axes, the interconnect hierarchy that prices them, **disaggregation** (the idea that became the default architecture of 2025–26), and Mooncake-style distributed KV caches. T3.L6's Dynamo case study slots in as the production implementation. (The 2026 state of the art on this exact topic — EPD, NIXL, llm-d, and the deprecation of Dynamo's KVBM — is T6.L3.)`,
@@ -104,6 +165,8 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
             'That describes pipeline parallelism: one activation tensor handed across a stage boundary. TP instead combines partial results with collectives inside every layer, which is why it is link-hungry.',
             'Inference has no gradients. TP exchanges partial activations through all-reduce in each layer; the limit is bandwidth and latency, not training-style synchronization semantics.',
           ],
+          kcs: ['t5.parallelism-axes', 't5.interconnect-ladder'],
+          miss: ['t5.tp-needs-kv-coherence', '', 't5.tp-is-activation-handoff', 't5.tp-syncs-gradients'],
         },
         {
           q: 'Pipeline parallelism\'s main weakness is…',
@@ -122,6 +185,8 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
             'That is tensor parallelism. PP has no per-layer collectives; it passes one activation per boundary and is the option that tolerates slower interconnects and node boundaries.',
             'Each stage holds only its own slice of the layers, so total weight memory stays about one model\'s worth. Copying everything to every stage would be data parallelism.',
           ],
+          kcs: ['t5.parallelism-axes'],
+          miss: ['t5.pp-ships-kv', '', 't5.pp-has-collectives', 't5.pp-copies-weights'],
         },
         {
           q: 'Prefill/decode disaggregation pays off primarily because…',
@@ -140,6 +205,8 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
             'Decode needs the whole prompt\'s K/V for every attention step. The KV transfer is the central cost, so the engineering game is hiding it, not eliminating it.',
             'HBM runs at multiple TB/s while RDMA links run at tens of GB/s. Remote K/V is always slower than local, which is why the transfer adds to TTFT and must be hidden.',
           ],
+          kcs: ['t5.pd-disaggregation'],
+          miss: ['t5.disagg-shards-weights', '', 't5.disagg-sends-only-logits', 't5.disagg-link-beats-hbm'],
         },
         {
           q: 'Mooncake\'s architecture is best described as…',
@@ -158,6 +225,8 @@ You should now be able to whiteboard a full deployment: model size → TP/PP spl
             'Quantization is orthogonal and does not define Mooncake. Its idea is a shared cluster-wide cache with routing for reuse, not a smaller encoding of each block.',
             'That is the opposite design. Mooncake pools KV across the cluster and routes toward the most reusable prefix; local-only caches with utilization-only balancing lose cross-worker reuse.',
           ],
+          kcs: ['t5.pd-disaggregation', 't5.prefix-routing'],
+          miss: ['t5.mooncake-is-tp-library', '', 't5.mooncake-is-quantizer', 't5.mooncake-is-local-balancer'],
         },
       ],
     },

@@ -89,6 +89,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
             'Eviction and tiering belong to whoever owns the KV cache, such as a block manager. They are not a worker phase; the E in EPD is encode.',
             'Splitting decode into attention and expert stages is a separate design (attention-FFN disaggregation). EPD adds a stage before prefill for non-text inputs.',
           ],
+          kcs: ['t6.epd-phases'],
         },
         {
           q: 'NIXL is best described as…',
@@ -107,6 +108,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
             'NVFP4-style formats are quantization schemes, and even they save less than half: 4.5 bits per value, about 1.8× fewer bytes than FP8. NIXL moves the bytes the engine gives it and does not choose precision.',
             'Autoscaling and placement are done by orchestration such as Dynamo\'s planner or llm-d. NIXL is a library the workers call and it never schedules pods.',
           ],
+          kcs: ['t6.kv-tiering'],
         },
         {
           q: 'Dynamo\'s KVBM (deprecated in v1.5.0 in favor of engine-native offload) added what to the lab-02 block manager design?',
@@ -125,6 +127,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
             'Copy-on-write sharing already exists in the base paged design through refcounts. KVBM added memory tiers beneath it.',
             'KV blocks are per token and per layer, not per expert. Tiering follows recency and reuse, not which MoE expert happened to be hot.',
           ],
+          kcs: ['t6.kv-tiering'],
         },
         {
           q: 'llm-d vs Dynamo is closest to…',
@@ -143,6 +146,7 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
             'vLLM and SGLang are engines that run inside such stacks. llm-d and Dynamo sit above the engine and handle routing, disaggregation and autoscaling.',
             'Both decide placement at runtime, with KV-aware routers and autoscalers. Neither compiles a topology ahead of time; they differ in packaging and ecosystem.',
           ],
+          kcs: ['t6.epd-phases'],
         },
       ],
     },
@@ -152,6 +156,36 @@ That makes routing observable in two dimensions: KV-hit rate tells you how much 
       md: `The 2025-26 evidence didn't repeal T5.L9's rule — it sharpened it. Disaggregation wins when: contexts are long (KV transfer amortizes), prefill/decode ratios are skewed, and the fleet is big enough to bin-pack phases (DeepSeek's 200+ nodes, Kimi's 128). It loses when: deployment is small, contexts are short, or traffic is uniform. The honest decision procedure: compute the KV-transfer budget per request (T5.L9's ~25 ms for 70B 4k over 50 GB/s), compare to the ITL isolation win, and remember that an idle prefill GPU is still a cost. Every "always disaggregate" claim is marketing; every "never disaggregate" claim is a small fleet talking.`,
     },
   ],
+  kcs: ['t6.epd-phases', 't6.kv-tiering'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'What worker class does EPD add to prefill and decode, and why does it get its own fleet?',
+        model:
+          'Encode: vision or audio encoders that turn pixels or waveforms into embeddings. They are massively parallel and hold no KV cache, so their scaling curve and best hardware differ from prefill\'s. They hand the embeddings to prefill, and each of the three fleets is sized and scaled on its own.',
+        ideas: [
+          'Encode workers turn pixels or audio into embeddings with massively parallel, stateless compute',
+          'They hold no KV cache, so their scaling curve and hardware differ from prefill\'s',
+          'Three fleets (encode, prefill, decode) are each sized to their own bottleneck, joined by one transfer fabric',
+        ],
+        kcs: ['t6.epd-phases'],
+      },
+      {
+        prompt:
+          'Dynamo deprecated KVBM in favor of engine-native offload. What does that say about where KV tiering belongs?',
+        model:
+          'Tiering across HBM, host memory, SSD and remote storage (placement, eviction, migration) is a feature of whoever owns the cache, so it moves into the engine. Transport, such as NIXL or Mooncake\'s transfer engine, and routing, such as the endpoint picker, stay separate layers.',
+        ideas: [
+          'Tiering (placement, eviction and migration across HBM, DRAM, SSD and remote storage) belongs to whoever owns the cache',
+          'So it moves into the engine as native offloading',
+          'Transport (NIXL, Mooncake) and routing stay separate layers',
+        ],
+        kcs: ['t6.kv-tiering'],
+      },
+    ],
+  },
 }
 
 export default lesson

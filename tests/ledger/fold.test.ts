@@ -8,6 +8,7 @@ import { factXp, summary, toProgressData, workingMap, xpOf } from '../../src/lib
 import type { LedgerEvent, WorkingRecord } from '../../src/lib/ledger/types'
 import * as economy from '../../src/lib/economy'
 import { XP } from '../../src/lib/economy'
+import { makeProfile, startTab } from './env'
 import { evt, forSeeds, runOps, shuffle, PROPERTY_TIMEOUT_MS } from './gen'
 
 setDefaultTimeout(PROPERTY_TIMEOUT_MS)
@@ -56,6 +57,16 @@ describe('refs', () => {
     expect(refMatchesKind('visit', 'sim:sim-kv/a')).toBe(false)
     expect(refMatchesKind('lab-check', 'lab:lab-a')).toBe(true)
     expect(refMatchesKind('ack', 'screen:welcome')).toBe(true)
+  })
+
+  test('Wave 2 grammar per kind (contract-v32.test.ts has the full lists)', () => {
+    expect(refMatchesKind('incident', 'inc:daily/2027-05-03')).toBe(true)
+    expect(refMatchesKind('incident', 'inc:drill/node-death')).toBe(true)
+    expect(refMatchesKind('incident', 'x')).toBe(false)
+    expect(refMatchesKind('fleet-run', 'fleet:act1')).toBe(true)
+    expect(refMatchesKind('fleet-run', 'fleet:nope')).toBe(false)
+    expect(refMatchesKind('ack', 'packet:lesson/t5.l4')).toBe(true)
+    expect(refMatchesKind('ack', 'packet:lesson/')).toBe(false)
   })
 })
 
@@ -152,6 +163,20 @@ describe('fold rules (spec §6.1)', () => {
     ])
     expect(agg.fleetWeek).toEqual({ acts: { engine: true }, scores: { engine: 0.9 } })
     expect(xpOf(agg)).toBe(XP.fleetWeekAct)
+  })
+
+  test('incidents and fleet runs: counted per ref and mode, facts only when ok, streak day always (aggregate v3)', () => {
+    const data = { v: 1, src: 'daily', fault: 'drain-stall', severity: 1, probes: [], diagnosed: true, fixed: true, burn: 0, expertBurn: 0, streetlight: 0, components: [], date: '2027-05-03' }
+    const run = { v: 1, mode: 'act2', components: [{ slot: 'scheduler', labId: 'l', sha256: 'ab'.repeat(32) }], seeds: 'fresh', goodput: 10, refGoodput: 10 }
+    const agg = derive([
+      evt('incident', 'inc:daily/2027-05-03', T1, { data }),
+      evt('incident', 'inc:daily/2027-05-03', T2, { data, score: 0, ok: false }),
+      evt('fleet-run', 'fleet:act2', T3, { data: run, score: 0.5, ok: false }),
+    ])
+    expect(agg.incidents['inc:daily/2027-05-03']).toEqual({ n: 2, best: 1, okAt: T1 })
+    expect(agg.fleetRuns.act2).toEqual({ best: 0.5, own: true })
+    expect(agg.facts).toEqual({ 'inc:daily/2027-05-03': true })
+    expect(Object.keys(agg.days)).toHaveLength(3)
   })
 
   test('capstone: step is the highest index + 1, steps pay once', () => {
@@ -274,6 +299,14 @@ describe('view (spec §6.2)', () => {
     expect(map['fw:doc']).toBe('new')
   })
 
+  test('the root-cold record keeps its earliest time across a merge and pays nothing', () => {
+    const early = evt('achievement', `ach:${economy.ROOT_COLD_ACHIEVEMENT}`, T1)
+    const late = evt('achievement', `ach:${economy.ROOT_COLD_ACHIEVEMENT}`, T3)
+    expect(derive([late, early]).achievements).toEqual({ [economy.ROOT_COLD_ACHIEVEMENT]: T1 })
+    expect(derive([early, late])).toEqual(derive([late, early]))
+    expect(xpOf(derive([early, late]))).toBe(0)
+  })
+
   test('summary', () => {
     const agg = derive([
       evt('complete', 'lesson:t0.l1', T1),
@@ -289,6 +322,27 @@ describe('view (spec §6.2)', () => {
     // with no RING 2 evidence the rank is RING 3, and XP has no threshold table to say otherwise
     expect(economy.selectRings(derive([])).rank).toBe('RING 3')
     for (const gone of ['RANKS', 'rankForXp', 'nextRank']) expect(gone in economy).toBe(false)
+  })
+})
+
+describe('the first visit after a placement (F3 landing)', () => {
+  test('is written even when the lesson was already touched that day; later visits that day still collapse', async () => {
+    const p = makeProfile()
+    const tab = startTab(p)
+    const { getState } = tab.progress
+    getState().markLessonStatus('r.l1', 'reading') // opened R.L1 before placing
+    p.clock.advance(5)
+    getState().completePlacement({ v: 1, at: p.clock.nowIso(), entryTrack: 't0' })
+    p.clock.advance(5)
+    getState().markLessonStatus('r.l1', 'reading') // lands on R.L1 again, the same day
+    p.clock.advance(5)
+    getState().markLessonStatus('r.l1', 'reading') // one visit per day again
+    await tab.progress.controls.flush()
+    const events = await (await tab.engine()).events()
+    expect(events.filter((e) => e.kind === 'visit')).toHaveLength(2)
+    const list = [...events].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+    const placed = list.findIndex((e) => e.kind === 'complete' && e.ref === 'placement')
+    expect(list[placed + 1]).toMatchObject({ kind: 'visit', ref: 'lesson:r.l1' })
   })
 })
 

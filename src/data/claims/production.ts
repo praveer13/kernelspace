@@ -1,12 +1,14 @@
 import type { Claim } from './schema'
+import { VLLM_PIN } from './engines'
 
+/** Pinned to the release the other engine claims use (engines.ts, Q10), so the whole In-production card reads one vLLM. */
 const VLLM_CACHE_CONFIG = {
-  url: 'https://raw.githubusercontent.com/vllm-project/vllm/main/vllm/config/cache.py',
-  title: 'vLLM source: vllm/config/cache.py (CacheConfig)',
+  url: `https://raw.githubusercontent.com/${VLLM_PIN.repo}/${VLLM_PIN.ref}/vllm/config/cache.py`,
+  title: 'vLLM v0.31.0 source: vllm/config/cache.py (CacheConfig)',
 }
 const VLLM_OPTIMIZATION = {
-  url: 'https://docs.vllm.ai/en/latest/configuration/optimization/',
-  title: 'vLLM docs: Optimization and Tuning (Preemption)',
+  url: `https://docs.vllm.ai/en/${VLLM_PIN.ref}/configuration/optimization/`,
+  title: 'vLLM v0.31.0 docs: Optimization and Tuning (Preemption)',
 }
 const GLIBC_MALLOPT = {
   url: 'https://man7.org/linux/man-pages/man3/mallopt.3.html',
@@ -24,7 +26,7 @@ const JEMALLOC_MAN = {
 /**
  * What the In-production card shows (PLAN-100X §11.4): the dials the block-placement play turns, as real
  * allocators set them. Each quote was copied from the page opened on 2026-10-05. The vLLM claims are
- * `status` (60 days) because its defaults move between releases; glibc and jemalloc are `spec`.
+ * `status` (60 days) because its defaults move between releases, so they carry a `pin` (W13); glibc and jemalloc are `spec`.
  */
 export const PRODUCTION_CLAIMS: Claim[] = [
   {
@@ -34,6 +36,7 @@ export const PRODUCTION_CLAIMS: Claim[] = [
     unit: 'tokens/block',
     label: 'vLLM default KV cache block size',
     source: { ...VLLM_CACHE_CONFIG, quote: 'DEFAULT_BLOCK_SIZE: ClassVar[int] = 16', row: 'CacheConfig.DEFAULT_BLOCK_SIZE' },
+    pin: VLLM_PIN,
     verifiedAt: '2026-10-05',
     ttlDays: 60,
     boundary: 'When --block-size is not given. Hybrid and Mamba models track their own block sizes (mamba_block_size).',
@@ -48,6 +51,7 @@ export const PRODUCTION_CLAIMS: Claim[] = [
       quote: 'In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture.',
       row: 'Preemption',
     },
+    pin: VLLM_PIN,
     verifiedAt: '2026-10-05',
     ttlDays: 60,
     boundary: 'V1 engine: a preempted request is recomputed, not swapped to CPU.',

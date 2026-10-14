@@ -5,7 +5,7 @@
  * stack-sized, Clone duplicates a heap buffer), `t1.pointers` requires `r.slices` (r.l4: a slice is a
  * checked pointer plus a length), `t1.allocator-contract` requires `r.enums-option-result` (r.l5: lab
  * 01's allocator answers Option), and `t1.ownership-answer` requires `r.ownership-moves` and
- * `r.borrow-rules`. Lab 01's check KCs (§4.5) name `rust-allocator` in `labs`; together their
+ * `r.borrow-rules` (Wave 2 adds `r.permissions`, §4.2). Lab 01's check KCs (§4.5) name `rust-allocator` in `labs`; together their
  * prerequisites reach every readiness lesson r.l1-r.l5 (verify-kc checks this).
  */
 
@@ -180,7 +180,7 @@ export const T1_KCS: readonly Kc[] = [
     track: 't1',
     kind: 'concept',
     lessons: ['t1.l6'],
-    requires: ['t1.memory-errors', KC.allocatorContract, KC.ownershipMoves, KC.borrowRules],
+    requires: ['t1.memory-errors', KC.allocatorContract, KC.ownershipMoves, KC.borrowRules, KC.permissions],
     since,
   },
 ]

@@ -31,6 +31,8 @@ One line per direction:
 
 Worked example, SGLang's DeepSeek reproduction (T6.L2): 96×H100, 22.3k output tok/s/node → per node-day: 22.3e3 × 86400 = 1.93G output tokens. At $2/GPU/hr × 8 GPUs × 24 = $384/node-day → **$0.20/M output tokens** (their published estimate matches). At R1's $2.19/M price, the margin is the whole story of 2025 inference economics — and why API prices then fell ~80% in a year: competition found the same arithmetic.
 
+As a formula: **$/Mtok = ($/GPU-hour × GPUs) ÷ (tok/s × 3,600) × 10⁶**, with tok/s counted within SLO. A hypothetical 8-GPU node at $2 per GPU-hour that delivers 20,000 tok/s costs 16 ÷ 72,000,000 × 10⁶ = **$0.22/Mtok**. Run it backwards for a price target: the node needs ($/hour ÷ target $/Mtok) × 10⁶ ÷ 3,600 tok/s, so $0.10/Mtok asks for 16 ÷ 0.10 × 10⁶ ÷ 3,600 ≈ **44,400 tok/s**. Tokens per megawatt divides the same throughput by power instead of price: a hypothetical rack drawing 0.12 MW that delivers 600,000 tok/s makes **5,000,000 tok/s per MW**.
+
 ## The levers, priced
 
 Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek's 56.3% hit → nearly-free input half), **batching** (amortize weights), **quantization** (fewer bytes per token → more tokens per GPU-hour; NVFP4 is ~1.8× fewer bytes than FP8, not 2×, T6.L5), **wide EP** (5× output throughput, T6.L2), **disaggregation** (right-sized phase fleets, T6.L3), **MTP** (2–3× interactivity at the same fleet, T6.L6). Hardware generations enter through tok/s/$ and tok/MW — vendor multipliers like the 35× above are claims at one operating point, and T7.L3's regional caveat applies.`,
@@ -48,6 +50,12 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
       type: 'callout',
       variant: 'analogy',
       md: `This is your **cloud cost review, one layer down**: reserved vs on-demand is GPU-own vs rent; "right-size the fleet" is T6.L3's disaggregation; "the cache hit rate is a cost line" is your CDN bill's logic — DeepSeek's 56.3% hit rate paid for more than half the input margin. And tok/MW is your datacenter PUE conversation: at fleet scale, the power bill is the capacity plan.`,
+    },
+    {
+      type: 'item',
+      title: 'Price it with new numbers',
+      family: 'cost',
+      variants: ['per-mtok', 'required-tps'],
     },
     {
       type: 'quiz',
@@ -69,6 +77,8 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
             'R1 is a large sparse MoE model, not a small one. Its economy came from serving that sparsity at scale with wide EP and caching, not from model size.',
             'The day\'s cost was GPU-hours only. Power and cooling are a smaller add-on to GPU-hours in the cost stack, so electricity could not carry the margin.',
           ],
+          kcs: ['t7.cost-per-mtok', 't6.ep-economics'],
+          miss: ['t7.margin-is-cheap-gpus', '', 't7.margin-is-small-model', 't7.margin-is-free-power'],
         },
         {
           q: 'Why are output tokens priced 3–5× input tokens?',
@@ -87,6 +97,8 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
             'Right: prefill is parallel, batched and frequently cached, so input is cheap. Decode is one serial, bandwidth-bound pass per token, so outputs are where cost and margin live.',
             'Prefill is billed directly on input tokens, at a low rate precisely because it batches efficiently. Output pricing is not a vehicle for recovering it.',
           ],
+          kcs: ['t7.output-token-premium'],
+          miss: ['t7.output-price-is-value', 't7.output-price-is-overhead', '', 't7.output-price-recovers-prefill'],
         },
         {
           q: 'tok/MW matters because…',
@@ -105,6 +117,8 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
             'GPU-hours dominate the cost stack and power plus cooling sits on top as a smaller share. Power matters as a hard capacity limit, not as the largest invoice.',
             'Price and power are set separately, and a more power-efficient chip can cost more. tok/s/$ and tok/MW can rank the same hardware differently, which is why both are tracked.',
           ],
+          kcs: ['t7.tokens-per-megawatt'],
+          miss: ['t7.tokmw-is-reputation', '', 't7.power-is-largest-cost', 't7.tokmw-equals-tokens-per-dollar'],
         },
         {
           q: 'At a fixed hourly rate, an engine\'s cost per token is driven most directly by…',
@@ -123,6 +137,8 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
             'You pay for every billed hour, not the best minute. A fleet that peaks briefly and idles the rest of the day still has a high cost per token.',
             'The stem holds the rate fixed, so it cannot be what moves cost per token. Two fleets billed at the same rate can still differ many-fold through goodput, which is the lever engineering controls.',
           ],
+          kcs: ['t7.cost-per-mtok'],
+          miss: ['t7.cost-is-chip-count', '', 't7.cost-is-peak-utilization', 't7.cost-is-hourly-rate'],
         },
       ],
     },
@@ -132,6 +148,34 @@ Every T5/T6 technique restated as a unit-economics lever: **caching** (DeepSeek'
       md: `The skill being certified: given a model's per-token KV bytes (T5.L4/T6.L1), a hardware point (T6.L5), and an operating point on the frontier (T7.L3), produce $/Mtok and required goodput for a target margin — in a meeting, on a napkin. DeepSeek's open-infra page, SGLang's $0.20/M estimate, and the TCO dashboards on InferenceX (formerly InferenceMAX) are your answer keys. If you can reproduce all three from first principles, you have the job already.`,
     },
   ],
+  kcs: ['t7.cost-per-mtok', 't7.output-token-premium', 't7.tokens-per-megawatt'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Reproduce a $/Mtok figure for one node: which inputs do you need, and which one do people forget?',
+        model:
+          'You need the node\'s dollars per hour (price per GPU-hour times GPUs) and its tokens per second. Multiply tokens per second by 3,600 for tokens per hour, divide, and scale to millions. The forgotten input is the SLO: count only tokens delivered within it, because idle or SLO-missing GPU-hours bill the same.',
+        ideas: [
+          'Dollars per hour of the node: price per GPU-hour times the GPUs in it',
+          'Tokens per second times 3,600 gives tokens per hour; divide and scale to millions',
+          'Count only tokens delivered within the SLO, since idle or missed GPU-hours still bill',
+        ],
+        kcs: ['t7.cost-per-mtok'],
+      },
+      {
+        prompt: 'Why are output tokens priced several times input tokens, and why does tokens per megawatt matter to a datacenter?',
+        model:
+          'Prefill is parallel, batched and often cached, so input is cheap. Decode is one serial, bandwidth-bound pass per token, so output carries the cost and the margin. A site\'s megawatts are fixed and cannot simply be bought, so tokens per megawatt turns each hardware generation into sellable output.',
+        ideas: [
+          'Prefill is parallel, batched and often cached, so input tokens are cheap',
+          'Decode is one serial, bandwidth-bound pass per token, so output carries the cost',
+          'A site\'s megawatts are fixed, so tokens per megawatt turns hardware into sellable output',
+        ],
+        kcs: ['t7.output-token-premium', 't7.tokens-per-megawatt'],
+      },
+    ],
+  },
 }
 
 export default lesson

@@ -8,10 +8,10 @@
 
 import Fuse from 'fuse.js'
 
-export type SearchGroup = 'Lessons' | 'Concepts' | 'Numbers' | 'Glossary' | 'Pages' | 'Tracks' | 'Simulators'
+export type SearchGroup = 'Lessons' | 'Concepts' | 'Plays' | 'Numbers' | 'Glossary' | 'Pages' | 'Tracks' | 'Simulators'
 
 /** Result order in the palette. */
-export const GROUP_ORDER: readonly SearchGroup[] = ['Lessons', 'Concepts', 'Numbers', 'Glossary', 'Pages', 'Tracks', 'Simulators']
+export const GROUP_ORDER: readonly SearchGroup[] = ['Lessons', 'Concepts', 'Plays', 'Numbers', 'Glossary', 'Pages', 'Tracks', 'Simulators']
 
 /** The groups with a row for every page, track and sim; shown before the learner types. */
 export const STATIC_GROUPS: readonly SearchGroup[] = ['Pages', 'Tracks', 'Simulators']
@@ -19,10 +19,13 @@ export const STATIC_GROUPS: readonly SearchGroup[] = ['Pages', 'Tracks', 'Simula
 /** Rows are positional tuples: the JSON ships once, so it drops the key names. */
 export type LessonRow = [id: string, title: string, hook: string, h2s: string[]]
 /**
- * `can` is the competence statement without "You can ". `anchor` is the id of the H2 the KC is introduced
- * under, or '' to open the lesson at the top. `claimIds` are the claims its numbers rest on.
+ * `can` is the competence statement without "You can ", clipped to fit the budget, or '' when the build drops
+ * it (the crumb then names the lesson). `anchor` is the id of the H2 the KC is introduced under, or '' to open
+ * the lesson at the top. `claimIds` are the claims its numbers rest on.
  */
 export type KcRow = [id: string, title: string, can: string, lessonId: string, anchor: string, claimIds: string[]]
+/** A play of `PLAYS` (src/data/plays.ts): its route is `/play/<id>`; `minutes` is its nominal time. */
+export type PlayRow = [id: string, title: string, lessonId: string, minutes: number]
 export type ClaimRow = [id: string, label: string, value: number | string, unit: string]
 export type GlossaryRow = [slug: string, os: string, llm: string, lessonId: string, synonyms: string]
 
@@ -30,6 +33,7 @@ export interface SearchIndex {
   version: 1
   lessons: LessonRow[]
   kcs: KcRow[]
+  plays: PlayRow[]
   claims: ClaimRow[]
   glossary: GlossaryRow[]
 }
@@ -60,6 +64,7 @@ export const claimPath = (id: string) => `/freshness?tab=claims#${id}`
  * the vLLM block size).
  */
 export function indexItems(index: SearchIndex): SearchItem[] {
+  const lessonTitles = new Map(index.lessons.map(([id, title]) => [id, title]))
   const kcTitlesByLesson = new Map<string, string[]>()
   const kcTitlesByClaim = new Map<string, string[]>()
   for (const [, title, , lessonId, , claimIds] of index.kcs) {
@@ -79,9 +84,17 @@ export function indexItems(index: SearchIndex): SearchItem[] {
       id: `kc-${id}`,
       group: 'Concepts',
       title,
-      crumb: `concept · ${label(lessonId)} · you can ${can}`,
+      crumb: `concept · ${label(lessonId)} · ${can ? `you can ${can}` : (lessonTitles.get(lessonId) ?? '')}`,
       to: `/lesson/${lessonId}${anchor ? `#${anchor}` : ''}`,
-      keywords: [can, id],
+      keywords: can ? [can, id] : [id],
+    })),
+    ...index.plays.map<SearchItem>(([id, title, lessonId, minutes]) => ({
+      id: `play-${id}`,
+      group: 'Plays',
+      title: `Play: ${title}`,
+      crumb: `play · ${label(lessonId)} · ${minutes} min`,
+      to: `/play/${id}`,
+      keywords: [id, title, 'play', 'by hand', lessonTitles.get(lessonId) ?? ''],
     })),
     ...index.claims.map<SearchItem>(([id, name, value, unit]) => ({
       id: `claim-${id}`,

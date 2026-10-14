@@ -10,7 +10,69 @@ const lesson: Lesson = {
   hook: '2 × layers × hidden × bytes: the interactive calculator — why a 70B model\'s cache dominates everything, and how to size it yourself.',
   exercise: 'sim',
   simId: 'sim-kv',
+  kcs: ['t5.kv-bytes-per-token', 't5.kv-capacity', 't5.gqa-kv-heads'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Size the KV cache of one 128k-token request on Llama-3-70B in FP16 (80 layers, 8 KV heads, head dimension 128), and say which inputs the number depends on.',
+        model:
+          'Per token it stores K and V at every layer: 2 × 80 × (8 × 128) × 2 bytes = 320 KiB. Times 131,072 tokens that is about 40 GiB. The number depends on layers, KV heads, head dimension, bytes per value and context length; query heads and parameter count do not enter it.',
+        ideas: [
+          '2 × layers × KV heads × head dimension × bytes gives 320 KiB per token',
+          'Multiplying by the context length gives about 40 GiB for the request',
+          'Query heads and parameter count do not enter the formula',
+        ],
+        kcs: ['t5.kv-bytes-per-token', 't5.kv-capacity'],
+      },
+      {
+        prompt: 'A service is slow between tokens and also turns requests away when it is busy. Name the two memory walls behind those symptoms and one fix for each.',
+        model:
+          'Capacity wall: concurrent requests times context times bytes per token exceeds the HBM left after the weights, so requests are not admitted; fix it with paging, KV quantization or GQA. Bandwidth wall: the weight and cache bytes read per step set the step time, so ITL rises; fix it with batching, quantization or sharding.',
+        ideas: [
+          'Capacity wall: cache bytes exceed the HBM left after weights, so admission stops',
+          'Bandwidth wall: the bytes read per step set ITL',
+          'Each wall has its own fix, and more replicas do not speed up one request',
+        ],
+        kcs: ['t5.kv-capacity', 't5.kv-reads-vs-capacity'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'numeric',
+          q: 'Llama-3-8B has 32 layers, 8 key-value heads and a head dimension of 128. In 16-bit precision, how much KV cache does one token need?',
+          unit: 'KiB',
+          truth: 128,
+          okWithinFactor: 1.3,
+          revealAt: 'Worked example one: the 8B on one GPU',
+          kcs: ['t5.kv-bytes-per-token'],
+          claims: ['model.llama3-8b.kv-bytes-per-token'],
+        },
+        {
+          kind: 'choice',
+          q: 'Llama-3-70B has 64 query heads and 8 key-value heads. Compared with a version that kept one key-value head per query head, how big is its KV cache per token?',
+          options: [
+            'The same size, since GQA changes how much arithmetic attention does and not what is stored',
+            'Sixty-four times smaller, since all the query heads now read one shared key-value pair',
+            'Eight times smaller, since each key-value head is shared by a group of eight query heads',
+            'Two times smaller, since keys are shared across heads while values stay separate for each head',
+          ],
+          correct: [2],
+          why: [
+            'GQA shrinks what is stored. Fewer key-value heads means fewer K and V vectors per token per layer, and the arithmetic is nearly unchanged.',
+            'That would be multi-query attention, with a single key-value head. Llama-3-70B keeps eight, so the cache is eight times smaller, not sixty-four.',
+            'Right: 64 query heads over 8 key-value heads makes groups of eight, so d_kv is one eighth of the full-attention size and the cache shrinks by the same factor.',
+            'GQA shares both keys and values across a group, not only one of them, so the saving is the full group factor.',
+          ],
+          revealAt: 'The levers, priced in tokens',
+          kcs: ['t5.gqa-kv-heads'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `This is the lesson everyone quotes, because it turns "the KV cache is big" into arithmetic you can do in a meeting. One formula, five inputs, and you can answer: how many tokens fit on this GPU? Why does a 70B model need 8 GPUs for long-context chat? What does FP8 KV buy? When does the cache outweigh the weights? In the calculator below you'll derive every number live — but the napkin version fits in one line:
@@ -104,6 +166,22 @@ Plug in any model shape and watch the numbers move: independently choose weight 
       note: `Six symbols — 2, L, d_kv, b — explain why long context is expensive, why GQA and FP8 KV ship in every engine, and why "how many GPUs" is a cache question as much as a weights question. Capacity and bandwidth are separate limits: size both before choosing a fix. T5.L5 shows how vLLM manages this memory; T5.L6 how cached prefixes reuse it; T5.L7 how it is scheduled.`,
     },
     {
+      type: 'exercise',
+      simId: 'sim-kv',
+      machine: 'zoo',
+      title: 'The attention zoo',
+      taskIds: ['zoo.mla-ratio', 'zoo.swa-flat', 'zoo.dsa-reads', 'zoo.linear-state', 'zoo.hybrid-share', 'zoo.gdn-prefix'],
+      tasks: [
+        'Predict how many times larger Llama-3-70B\'s KV cache per token is than DeepSeek-V3\'s, run it, and explain what MLA stores in place of per-head keys and values.',
+        'Predict the context length at which the sliding-window layers of gpt-oss stop growing, run it, and explain what keeps growing after that.',
+        'Predict how the bytes DeepSeek-V3.2 reads per decode step at 128k tokens compare with the bytes it stores, run it, and explain what its indexer changes and what it leaves alone.',
+        'Predict how much larger a linear-attention layer\'s state is at 1M tokens than at 1k, run it, and explain why.',
+        'Predict the share of Kimi Linear\'s KV bytes at 128k tokens that its MLA layers hold, run it, and explain what the other layers hold.',
+        'Predict whether a gated-DeltaNet layer can serve a request that shares only the first half of a cached sequence without recomputing that half, run it, and explain where its state exists.',
+      ],
+      note: `Every variant answers two questions with different numbers: what does a token cost to store, and what does a decode step read? MLA stores one small latent per token instead of per-head keys and values. A sliding window stops growing at the window. A sparse indexer (DSA) reads only its top-k tokens but keeps every latent stored, so reads and capacity part ways. Linear and gated-DeltaNet layers keep a fixed-size state that stands for the whole past only at its end. A variant can win on capacity and lose on reads, or the reverse, so name which one you are pricing.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -115,6 +193,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
             'Vocabulary size times hidden size times bytes per float, one embedding row stored per cached token',
           ],
           correct: [1],
+          kcs: ['t5.kv-bytes-per-token'],
           explanation:
             'Per token, every layer stores one K and one V vector of d_kv = kv_heads x head_dim elements. 2 x L x d_kv x b is the most useful formula in serving; multiply by context length to size a sequence.',
           why: [
@@ -133,6 +212,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
             'About 130 GiB, equal to the weights at 2 bytes per parameter on the premise that cache and model match',
           ],
           correct: [2],
+          kcs: ['t5.kv-bytes-per-token', 't5.kv-capacity'],
           explanation:
             '2 x 80 x 1024 x 2 B = 320 KiB per token; x 131,072 is 40 GiB (about 43 GB). One long document is half an H100 of cache. Long context is a capacity product, not a quality feature.',
           why: [
@@ -151,6 +231,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
             'Skipping a fixed fraction of layers when writing the cache, which leaves some layers without keys or values for a token',
           ],
           correct: [1],
+          kcs: ['t5.gqa-kv-heads', 't5.attention-variants'],
           explanation:
             'd_kv = kv_heads x head_dim; fewer KV heads divides the per-token bytes (and the per-step cache reads) by the same factor. It is a training-time trade that serving inherits gratefully.',
           why: [
@@ -169,6 +250,7 @@ Plug in any model shape and watch the numbers move: independently choose weight 
             'Fleet throughput, meaning the tokens generated per second across the replicas running in parallel',
           ],
           correct: [1],
+          kcs: ['t5.kv-capacity', 't5.kv-reads-vs-capacity'],
           explanation:
             'Replicas add capacity and aggregate throughput, but one request still runs on one replica at that replica\'s bandwidth, so at the same per-replica batch size its ITL is unchanged. Sharding one model across GPUs (tensor parallelism) is different: it cuts bytes read per GPU per step, at the cost of communication.',
           why: [

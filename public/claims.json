@@ -1060,6 +1060,257 @@
       "boundary": "No source: a stand-in size for a shape the learner types in, so the custom preset has weights to fit beside its KV. It is not derived from the layers, KV heads or head dim entered."
     },
     {
+      "id": "model.deepseek-v3.total-params",
+      "kind": "spec",
+      "value": 671,
+      "unit": "B params",
+      "label": "DeepSeek-V3 total parameters",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/README.md",
+        "title": "DeepSeek-V3 model card (README.md at a pinned revision, DeepSeek, Hugging Face)",
+        "quote": "a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token",
+        "row": "Abstract"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The main model, all experts resident. The Hugging Face total of 685B adds 14B of Multi-Token Prediction module weights."
+    },
+    {
+      "id": "model.deepseek-v3.active-params",
+      "kind": "spec",
+      "value": 37,
+      "unit": "B params",
+      "label": "DeepSeek-V3 activated parameters per token",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/README.md",
+        "title": "DeepSeek-V3 model card (README.md at a pinned revision, DeepSeek, Hugging Face)",
+        "quote": "a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token",
+        "row": "Abstract"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Parameters a token passes through (shared and routed experts it selects); a decode step reads these bytes, while all 671B must be resident."
+    },
+    {
+      "id": "model.deepseek-r1.total-params",
+      "kind": "spec",
+      "value": 671,
+      "unit": "B params",
+      "label": "DeepSeek-R1 total parameters",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-R1/raw/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/README.md",
+        "title": "DeepSeek-R1 model card (README.md at a pinned revision, DeepSeek, Hugging Face)",
+        "quote": "DeepSeek-R1 | 671B | 37B | 128K",
+        "row": "Model Downloads: #Total Params"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-R1",
+        "ref": "56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The card says R1 is trained based on DeepSeek-V3-Base and points to the V3 repository for the architecture."
+    },
+    {
+      "id": "model.deepseek-r1.active-params",
+      "kind": "spec",
+      "value": 37,
+      "unit": "B params",
+      "label": "DeepSeek-R1 activated parameters per token",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-R1/raw/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/README.md",
+        "title": "DeepSeek-R1 model card (README.md at a pinned revision, DeepSeek, Hugging Face)",
+        "quote": "DeepSeek-R1 | 671B | 37B | 128K",
+        "row": "Model Downloads: #Activated Params"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-R1",
+        "ref": "56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "model.qwen3-tokenizer.vocab-size",
+      "kind": "benchmark",
+      "value": 151669,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer vocabulary size, added tokens included",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.get_vocab_size(with_added_tokens=True)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The ids the tokenizer can emit: the byte-level BPE vocabulary plus the added special tokens. \"About 151k entries\" in the tokenizer comparison.",
+      "discrepancy": "config.json says \"vocab_size\": 151936 for Qwen3-0.6B: the embedding matrix is padded past the 151,669 ids the tokenizer defines."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-prose",
+      "kind": "benchmark",
+      "value": 24,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the English prose text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 118-character corpus text \"prose\" (sha256 d7415fa906f6...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-python",
+      "kind": "benchmark",
+      "value": 54,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the Python text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 152-character corpus text \"python\" (sha256 2e75630451f7...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-json",
+      "kind": "benchmark",
+      "value": 46,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the JSON text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 114-character corpus text \"json\" (sha256 73c06e2f16b3...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-numbers",
+      "kind": "benchmark",
+      "value": 59,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the Numbers text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 62-character corpus text \"numbers\" (sha256 2f574b1ac32f...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-url",
+      "kind": "benchmark",
+      "value": 20,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the A URL text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 67-character corpus text \"url\" (sha256 11d0cf6fba6b...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-chinese",
+      "kind": "benchmark",
+      "value": 17,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the Chinese text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 26-character corpus text \"chinese\" (sha256 563910742446...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-emoji",
+      "kind": "benchmark",
+      "value": 16,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the Emoji text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 35-character corpus text \"emoji\" (sha256 c3e143fcb530...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
+      "id": "model.qwen3-tokenizer.tokens-rust",
+      "kind": "benchmark",
+      "value": 37,
+      "unit": "tokens",
+      "label": "Qwen3 tokenizer: tokens in the Rust text",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer.json",
+        "title": "Qwen3-0.6B tokenizer.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "row": "scripts/engine/qwen3-counts.py: Tokenizer.encode(text, add_special_tokens=False)"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3-0.6B",
+        "ref": "c1899de289a04d12100db370d81485cdf75e47ca"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The 100-character corpus text \"rust\" (sha256 8696f604503d...), raw BPE ids with no chat template, BOS or end-of-text."
+    },
+    {
       "id": "price.h100.median",
       "kind": "price",
       "value": 3.49,
@@ -1195,16 +1446,47 @@
       "boundary": "No source: it only makes the Fleet cost card produce a plausible $/Mtok."
     },
     {
+      "id": "synthetic.cost.gpu-hourly",
+      "kind": "synthetic",
+      "value": 2,
+      "unit": "USD/GPU-hr",
+      "label": "The lessons' GPU-hour price in the unit-economics worked examples (course stand-in)",
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "No source: the round \"$2 per GPU-hour\" t6.l2 and t7.l4 assume when they price SGLang's DeepSeek node-day (22.3k output tok/s × 86,400 s against $2 × 8 GPUs × 24 h = $384 gives $0.20 per million) and DeepSeek's own day. The dated H100 median is price.h100.median."
+    },
+    {
+      "id": "price.codespaces.free-core-hours",
+      "kind": "price",
+      "value": 120,
+      "unit": "core-hours/month",
+      "label": "GitHub Codespaces free compute per month, GitHub Free personal account",
+      "source": {
+        "url": "https://docs.github.com/en/billing/concepts/product-billing/github-codespaces",
+        "title": "GitHub Docs: GitHub Codespaces billing",
+        "quote": "GitHub Free for personal accounts 15 GB-month 120 hrs",
+        "row": "Free and billed use by personal accounts > Free quota"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 90,
+      "boundary": "GitHub Free personal accounts only (GitHub Pro: 180). The page's unit is \"hrs\" of compute time; its pricing table gives a 2-core machine an included-usage multiplier of 2, so the 120 are core-hours: 60 hours on a 2-core machine. Organization and enterprise plans include no free quota. The learner's own account pays; the course pays nothing.",
+      "discrepancy": "The page says \"120 hrs\", not \"120 core-hours\"; core-hours is our reading of its multiplier column (forge-friction.md says the same). The spec's billing note says \"120 core-hours a month free\"."
+    },
+    {
       "id": "production.vllm.block-size",
       "kind": "status",
       "value": 16,
       "unit": "tokens/block",
       "label": "vLLM default KV cache block size",
       "source": {
-        "url": "https://raw.githubusercontent.com/vllm-project/vllm/main/vllm/config/cache.py",
-        "title": "vLLM source: vllm/config/cache.py (CacheConfig)",
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/cache.py",
+        "title": "vLLM v0.31.0 source: vllm/config/cache.py (CacheConfig)",
         "quote": "DEFAULT_BLOCK_SIZE: ClassVar[int] = 16",
         "row": "CacheConfig.DEFAULT_BLOCK_SIZE"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
       },
       "verifiedAt": "2026-10-05",
       "ttlDays": 60,
@@ -1216,10 +1498,14 @@
       "value": "recompute",
       "label": "vLLM V1 default preemption mode",
       "source": {
-        "url": "https://docs.vllm.ai/en/latest/configuration/optimization/",
-        "title": "vLLM docs: Optimization and Tuning (Preemption)",
+        "url": "https://docs.vllm.ai/en/v0.31.0/configuration/optimization/",
+        "title": "vLLM v0.31.0 docs: Optimization and Tuning (Preemption)",
         "quote": "In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture.",
         "row": "Preemption"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
       },
       "verifiedAt": "2026-10-05",
       "ttlDays": 60,
@@ -1303,6 +1589,1250 @@
       "verifiedAt": "2026-10-05",
       "ttlDays": 365,
       "boundary": "64-bit, 16-byte quantum, 4 KiB pages; the table continues to 14 KiB."
+    },
+    {
+      "id": "production.vllm.scheduling-policy",
+      "kind": "status",
+      "value": "fcfs",
+      "label": "vLLM default scheduling policy",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/scheduler.py",
+        "title": "vLLM v0.31.0 source: vllm/config/scheduler.py (SchedulerConfig)",
+        "quote": "policy: SchedulerPolicy = \"fcfs\"",
+        "row": "SchedulerConfig.policy"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "SchedulerPolicy is Literal[\"fcfs\", \"priority\"] at this release: first come first served, or the priority a caller gives each request. Neither orders by prompt length, so shortest-prompt-first is a choice you make."
+    },
+    {
+      "id": "production.sglang.schedule-policy",
+      "kind": "status",
+      "value": "fcfs",
+      "label": "SGLang default schedule policy",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/schedule.py",
+        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/schedule.py (Schedule fields)",
+        "quote": "schedule_policy: A[ str, Arg( help=\"The scheduling policy of the requests.\", choices=[ \"lpm\", \"random\", \"fcfs\", \"dfs-weight\", \"lof\", \"priority\", \"routing-key\", \"hrrn\", \"shortest-prefill-first\", ], ), ] = \"fcfs\"",
+        "row": "Schedule.schedule_policy"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "The default orders by arrival. At this release --schedule-policy also accepts \"shortest-prefill-first\" (plus lpm, random, priority and others), so SJF by prompt length is one flag away in SGLang and has no flag in vLLM."
+    },
+    {
+      "id": "production.sglang.schedule-conservativeness",
+      "kind": "status",
+      "value": 1,
+      "label": "SGLang default schedule conservativeness",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/fields/schedule.py",
+        "title": "SGLang v0.5.21 source: srt/arg_groups/fields/schedule.py (Schedule fields)",
+        "quote": "schedule_conservativeness: A[ float, \"How conservative the schedule policy is. A larger value means more conservative scheduling. Use a larger value if you see requests being retracted frequently.\", ] = 1.0",
+        "row": "Schedule.schedule_conservativeness"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "The setting the course ties to decode headroom. The source says a larger value means more conservative scheduling and advises raising it if requests are retracted often; it gives the direction, not a token count."
+    },
+    {
+      "id": "production.vllm.watermark",
+      "kind": "status",
+      "value": 0,
+      "unit": "fraction of KV blocks",
+      "label": "vLLM default admission watermark (KV blocks kept free)",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/config/scheduler.py",
+        "title": "vLLM v0.31.0 source: vllm/config/scheduler.py (SchedulerConfig)",
+        "quote": "watermark: float = Field(default=0.0, ge=0.0, lt=1.0) \"\"\"Fraction of total KV cache blocks to keep free (the watermark) when admitting waiting or preempted requests into the running queue.",
+        "row": "SchedulerConfig.watermark"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "vLLM at this release has an admission headroom setting, and its default of 0.0 disables it: out of the box, headroom is off. This is the vLLM side of the headroom dial."
+    },
+    {
+      "id": "production.sglang.retract",
+      "kind": "status",
+      "value": "retract",
+      "label": "SGLang preemption mode when decode runs out of KV memory",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/managers/scheduler.py",
+        "title": "SGLang v0.5.21 source: srt/managers/scheduler.py (Scheduler)",
+        "quote": "# Check if decode out of memory if (kv_full_retract_flag := not batch.check_decode_mem()) or (",
+        "row": "Scheduler.update_running_batch"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "When a decode step cannot get KV memory the scheduler calls batch.retract_decode() and puts the retracted requests back on the waiting queue (_add_request_to_queue(req, is_retracted=True)). --retraction-policy chooses the victims (\"length\" by default)."
+    },
+    {
+      "id": "production.vllm.max-num-seqs",
+      "kind": "status",
+      "value": 1024,
+      "unit": "sequences",
+      "label": "vLLM default max_num_seqs on an H100 or H200 serving the OpenAI API",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/engine/arg_utils.py",
+        "title": "vLLM v0.31.0 source: vllm/engine/arg_utils.py (EngineArgs.get_batch_defaults)",
+        "quote": "# For GPUs like H100 and H200, use larger offline defaults. default_max_num_batched_tokens = { UsageContext.LLM_CLASS: 16384, UsageContext.OPENAI_API_SERVER: 8192, } default_max_num_seqs = { UsageContext.LLM_CLASS: 1024, UsageContext.OPENAI_API_SERVER: 1024, }",
+        "row": "EngineArgs.get_batch_defaults, the 70 GiB and larger branch that is not an A100"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "Applies when --max-num-seqs is not given. The default depends on the GPU: 256 below 70 GiB and on A100s, 1024 from 70 GiB, and --performance-mode throughput doubles it. SchedulerConfig.DEFAULT_MAX_NUM_SEQS = 128 is only a fallback for tests."
+    },
+    {
+      "id": "production.sglang.max-running-requests",
+      "kind": "status",
+      "value": "2,048 to 4,096, sized from KV capacity",
+      "label": "SGLang max running requests when --max-running-requests is not given",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/mem_cache/kv_cache_configurator.py",
+        "title": "SGLang v0.5.21 source: srt/mem_cache/kv_cache_configurator.py (resolve_max_num_reqs)",
+        "quote": "estimated = int(token_capacity / self.model_config.context_len * 512) estimated = max(min(estimated, 4096), 2048)",
+        "row": "KVCacheConfigurator.resolve_max_num_reqs"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "The flag defaults to None; the server then takes the KV pool's token capacity ÷ context length × 512, clamped to 2,048–4,096 and to at most half the token capacity. Hybrid (Mamba) models can cap it lower."
+    },
+    {
+      "id": "production.vllm.max-num-batched-tokens",
+      "kind": "status",
+      "value": 8192,
+      "unit": "tokens/iteration",
+      "label": "vLLM default max_num_batched_tokens on an H100 or H200 serving the OpenAI API",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/engine/arg_utils.py",
+        "title": "vLLM v0.31.0 source: vllm/engine/arg_utils.py (EngineArgs.get_batch_defaults)",
+        "quote": "# For GPUs like H100 and H200, use larger offline defaults. default_max_num_batched_tokens = { UsageContext.LLM_CLASS: 16384, UsageContext.OPENAI_API_SERVER: 8192, }",
+        "row": "EngineArgs.get_batch_defaults, the 70 GiB and larger branch that is not an A100"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "Applies when --max-num-batched-tokens is not given. It is the per-iteration token budget that chunked prefill (on by default for models that support it) fills: 2,048 on smaller GPUs, 8,192 here, 16,384 from 160 GiB. --performance-mode throughput doubles it."
+    },
+    {
+      "id": "production.sglang.chunked-prefill-size",
+      "kind": "status",
+      "value": 8192,
+      "unit": "tokens/chunk",
+      "label": "SGLang default chunked prefill size on an H100",
+      "source": {
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/arg_groups/memory_hook.py",
+        "title": "SGLang v0.5.21 source: srt/arg_groups/memory_hook.py (handle_gpu_memory_settings)",
+        "quote": "# H100, A100 # (chunked_prefill_size 8k, max_bs 256 if tp < 4 else 512)",
+        "row": "handle_gpu_memory_settings, 60 to 90 GiB of GPU memory"
+      },
+      "pin": {
+        "repo": "sgl-project/sglang",
+        "ref": "v0.5.21"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 60,
+      "boundary": "Applies when --chunked-prefill-size is not given (the field is None until the GPU is known). 2,048 below 20 GiB, 4,096 for 20 to 60 GiB, 8,192 for 60 to 160 GiB (H100, A100, H20, H200) and 16,384 above that."
+    },
+    {
+      "id": "serving.cache.anthropic-read-multiplier",
+      "kind": "price",
+      "value": 0.1,
+      "unit": "× base input price",
+      "label": "Anthropic prompt-cache read price, standard multiplier",
+      "source": {
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+        "title": "Anthropic docs: Prompt caching (pricing)",
+        "quote": "Cache read tokens are 0.1 times the base input tokens price (see the table footnote for per-model exceptions)",
+        "row": "Pricing"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 90,
+      "boundary": "Claude models without a footnote exception; a cache hit costs a tenth of an uncached input token. Writes cost 1.25 times (5-minute) or 2 times (1-hour) the base input price."
+    },
+    {
+      "id": "serving.cache.anthropic-opus-5-5-read-multiplier",
+      "kind": "price",
+      "value": 0.05,
+      "unit": "× base input price",
+      "label": "Anthropic prompt-cache read price on Claude Opus 5.5",
+      "source": {
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+        "title": "Anthropic docs: Prompt caching (pricing)",
+        "quote": "Cache hits and refreshes on Claude Opus 5.5 are priced at 0.05x the base input price.",
+        "row": "Pricing, table footnote 2"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 90,
+      "boundary": "One model: the footnote lists the exceptions to the standard 0.1x multiplier."
+    },
+    {
+      "id": "serving.cache.anthropic-fable-5-1-read-multiplier",
+      "kind": "price",
+      "value": 0.025,
+      "unit": "× base input price",
+      "label": "Anthropic prompt-cache read price on Claude Fable 5.1 and Claude Mythos 5.1",
+      "source": {
+        "url": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+        "title": "Anthropic docs: Prompt caching (pricing)",
+        "quote": "Cache hits and refreshes on Claude Fable 5.1 and Claude Mythos 5.1 are priced at 0.025x the base input price.",
+        "row": "Pricing, table footnote 1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 90,
+      "boundary": "Two models: the footnote lists the exceptions to the standard 0.1x multiplier."
+    },
+    {
+      "id": "serving.sglang-deepseek.output-tps-per-node",
+      "kind": "benchmark",
+      "value": 22300,
+      "unit": "output tok/s per node",
+      "label": "SGLang DeepSeek on 12 nodes of 8 H100: output throughput per node",
+      "source": {
+        "url": "https://lmsys.org/blog/2025-05-05-large-scale-ep/",
+        "title": "LMSYS: Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs (SGLang Team, 2025-05-05)",
+        "quote": "achieving a speed of 52.3k input tokens per second and 22.3k output tokens per second per node for 2000-token input sequences",
+        "row": "Introduction"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "SGLang with prefill-decode disaggregation and large-scale expert parallelism, 12 nodes of 8 H100 (96 GPUs) on Atlas Cloud, 2,000-token inputs, May 2025. One operating point, not a general rate."
+    },
+    {
+      "id": "serving.sglang-deepseek.input-tps-per-node",
+      "kind": "benchmark",
+      "value": 52300,
+      "unit": "input tok/s per node",
+      "label": "SGLang DeepSeek on 12 nodes of 8 H100: input (prefill) throughput per node",
+      "source": {
+        "url": "https://lmsys.org/blog/2025-05-05-large-scale-ep/",
+        "title": "LMSYS: Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs (SGLang Team, 2025-05-05)",
+        "quote": "achieving a speed of 52.3k input tokens per second and 22.3k output tokens per second per node for 2000-token input sequences",
+        "row": "Introduction"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "Same run as the output figure: 2,000-token inputs, 12 nodes of 8 H100, May 2025."
+    },
+    {
+      "id": "serving.sglang-deepseek.gpus-per-node",
+      "kind": "benchmark",
+      "value": 8,
+      "unit": "H100 per node",
+      "label": "SGLang DeepSeek reproduction: GPUs per node",
+      "source": {
+        "url": "https://lmsys.org/blog/2025-05-05-large-scale-ep/",
+        "title": "LMSYS: Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs (SGLang Team, 2025-05-05)",
+        "quote": "replicated DeepSeek's inference system using 12 nodes, each with 8 H100 GPUs",
+        "row": "Introduction"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The node the per-node throughput is measured on; the run used 12 of them."
+    },
+    {
+      "id": "serving.sglang-deepseek.cost-per-mtok",
+      "kind": "benchmark",
+      "value": 0.2,
+      "unit": "USD/Mtok output",
+      "label": "SGLang DeepSeek reproduction: its own estimate of cost per million output tokens",
+      "source": {
+        "url": "https://lmsys.org/blog/2025-05-05-large-scale-ep/",
+        "title": "LMSYS: Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs (SGLang Team, 2025-05-05)",
+        "quote": "it translates to a cost of $0.20/1M output tokens, which is about one-fifth the cost of the official DeepSeek Chat API",
+        "row": "Introduction"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 180,
+      "boundary": "The blog's estimate for deploying the implementation locally; it does not state the GPU-hour price behind it. The course recomputes it from synthetic.cost.gpu-hourly (a node-day instance), so the two agree only at that assumed price."
+    },
+    {
+      "id": "serving.nvfp4.bits-per-weight",
+      "kind": "spec",
+      "value": 4.5,
+      "unit": "bits per weight",
+      "label": "NVFP4 effective bits per value, block scales included",
+      "source": {
+        "url": "https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference/",
+        "title": "NVIDIA Technical Blog: Introducing NVFP4 for Efficient and Accurate Low-Precision Inference",
+        "quote": "NVFP4 stores one 4-bit value plus minor overhead of one FP8 scale per 16 values (4.5 bits per value) and one FP32 per tensor second-level scaling factor.",
+        "row": "Introduction"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Per value, ignoring the one FP32 per-tensor scale. The same page gives about 3.5x less memory than FP16 and about 1.8x less than FP8."
+    },
+    {
+      "id": "zoo.llama3-70b.layers",
+      "kind": "spec",
+      "value": 80,
+      "unit": "layers",
+      "label": "Llama-3-70B transformer layers",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_hidden_layers\": 80,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "unit": "KV heads",
+      "label": "Llama-3-70B key/value heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_key_value_heads\": 8,",
+        "row": "num_key_value_heads"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.attn-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "Llama-3-70B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"num_attention_heads\": 64,",
+        "row": "num_attention_heads"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.hidden-size",
+      "kind": "spec",
+      "value": 8192,
+      "unit": "dims",
+      "label": "Llama-3-70B hidden size",
+      "source": {
+        "url": "https://huggingface.co/NousResearch/Meta-Llama-3-70B/raw/fdbf133d993d2b8157e518bfc8bc4570b2d31c45/config.json",
+        "title": "Meta-Llama-3-70B config.json at a pinned revision (NousResearch mirror of the gated meta-llama file)",
+        "quote": "\"hidden_size\": 8192,",
+        "row": "hidden_size"
+      },
+      "pin": {
+        "repo": "NousResearch/Meta-Llama-3-70B",
+        "ref": "fdbf133d993d2b8157e518bfc8bc4570b2d31c45"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.llama3-70b.head-dim",
+      "kind": "derived",
+      "value": 128,
+      "unit": "dims",
+      "label": "Llama-3-70B head dimension",
+      "derived": {
+        "from": [
+          "zoo.llama3-70b.hidden-size",
+          "zoo.llama3-70b.attn-heads"
+        ],
+        "formula": "hidden_size / num_attention_heads"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The config has no head_dim field; Llama attention splits the hidden size evenly across its heads."
+    },
+    {
+      "id": "zoo.llama3-70b.kv-bytes-per-token",
+      "kind": "derived",
+      "value": 327680,
+      "unit": "bytes/token",
+      "label": "Llama-3-70B KV cache per token (BF16)",
+      "derived": {
+        "from": [
+          "zoo.llama3-70b.layers",
+          "zoo.llama3-70b.kv-heads",
+          "zoo.llama3-70b.head-dim"
+        ],
+        "formula": "2 (K and V) * layers * kv_heads * head_dim * 2 bytes (BF16)"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "BF16 KV, no paging overhead: 320 KiB/token, the baseline the zoo and t5.l4 compare every other kind against."
+    },
+    {
+      "id": "zoo.deepseek-v3.layers",
+      "kind": "spec",
+      "value": 61,
+      "unit": "layers",
+      "label": "DeepSeek-V3 transformer layers",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 61,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "MLA caches one latent per token per layer: kv_lora_rank + qk_rope_head_dim elements, shared by every attention head (the per-head num_key_value_heads in this file does not enter the cache size). The config counts the 61 transformer layers; the extra multi-token-prediction layer (num_nextn_predict_layers) is not one of them."
+    },
+    {
+      "id": "zoo.deepseek-v3.kv-lora-rank",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "DeepSeek-V3 MLA latent width (d_c)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"kv_lora_rank\": 512,",
+        "row": "kv_lora_rank"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "DeepSeek-V3 MLA decoupled RoPE key width (d_rope)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/raw/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+        "title": "DeepSeek-V3 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3",
+        "ref": "e815299b0bcbac849fa540c768ef21845365c9eb"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.layers",
+      "kind": "spec",
+      "value": 36,
+      "unit": "layers",
+      "label": "gpt-oss-120b transformer layers",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 36,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.swa-layers",
+      "kind": "spec",
+      "value": 18,
+      "unit": "layers",
+      "label": "gpt-oss-120b sliding-window layers",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"layer_types\": [ \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\" ],",
+        "row": "layer_types (count of \"sliding_attention\")"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The list alternates, sliding first, so layers 0, 2, 4 ... slide and 1, 3, 5 ... attend to everything."
+    },
+    {
+      "id": "zoo.gpt-oss-120b.full-layers",
+      "kind": "spec",
+      "value": 18,
+      "unit": "layers",
+      "label": "gpt-oss-120b full-attention layers",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"layer_types\": [ \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\", \"sliding_attention\", \"full_attention\" ],",
+        "row": "layer_types (count of \"full_attention\")"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.window",
+      "kind": "spec",
+      "value": 128,
+      "unit": "tokens",
+      "label": "gpt-oss-120b sliding window W",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"sliding_window\": 128,",
+        "row": "sliding_window"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "A sliding layer keeps the last 128 tokens, so its KV stops growing at context 128 (plus sinks, which store nothing here)."
+    },
+    {
+      "id": "zoo.gpt-oss-120b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "unit": "KV heads",
+      "label": "gpt-oss-120b key/value heads (GQA), both layer kinds",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 8,",
+        "row": "num_key_value_heads"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "gpt-oss-120b head dimension",
+      "source": {
+        "url": "https://huggingface.co/openai/gpt-oss-120b/raw/b5c939de8f754692c1647ca79fbf85e8c1e70f8a/config.json",
+        "title": "gpt-oss-120b config.json at a pinned revision (OpenAI, Hugging Face)",
+        "quote": "\"head_dim\": 64,",
+        "row": "head_dim"
+      },
+      "pin": {
+        "repo": "openai/gpt-oss-120b",
+        "ref": "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.gpt-oss-120b.sink-kv-tokens",
+      "kind": "spec",
+      "value": 0,
+      "unit": "tokens",
+      "label": "gpt-oss-120b KV tokens stored for attention sinks",
+      "source": {
+        "url": "https://arxiv.org/pdf/2508.10925",
+        "title": "gpt-oss-120b and gpt-oss-20b Model Card (OpenAI, arXiv 2508.10925)",
+        "quote": "Each attention head has a learned bias in the denominator of the softmax, similar to off-by-one attention and attention sinks",
+        "row": "section 2.2, Architecture"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "config.json has no sink field. gpt-oss's sinks are one learned logit per head, added to the softmax denominator, not cached tokens, so a sliding layer stores min(t, W) tokens and nothing more. A StreamingLLM-style model that does keep sink tokens would set this from its own config."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.layers",
+      "kind": "spec",
+      "value": 60,
+      "unit": "layers",
+      "label": "Qwen3.5-397B transformer layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 60,",
+        "row": "text_config.num_hidden_layers"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The text model is nested under text_config; the vision tower beside it is not part of the KV cache."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-layers",
+      "kind": "spec",
+      "value": 45,
+      "unit": "layers",
+      "label": "Qwen3.5-397B gated-DeltaNet (linear) layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"layer_types\": [ \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\" ],",
+        "row": "text_config.layer_types (count of \"linear_attention\")"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Three linear layers then one full-attention layer, repeating (full_attention_interval is 4 in the same file): 45 linear to 15 full, the 3:1 hybrid."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.full-layers",
+      "kind": "spec",
+      "value": 15,
+      "unit": "layers",
+      "label": "Qwen3.5-397B full-attention layers",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"layer_types\": [ \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\", \"linear_attention\", \"linear_attention\", \"linear_attention\", \"full_attention\" ],",
+        "row": "text_config.layer_types (count of \"full_attention\")"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.kv-heads",
+      "kind": "spec",
+      "value": 2,
+      "unit": "KV heads",
+      "label": "Qwen3.5-397B key/value heads in a full-attention layer (GQA)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 2,",
+        "row": "text_config.num_key_value_heads"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.head-dim",
+      "kind": "spec",
+      "value": 256,
+      "unit": "dims",
+      "label": "Qwen3.5-397B full-attention head dimension",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"head_dim\": 256,",
+        "row": "text_config.head_dim"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-value-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "Qwen3.5-397B linear-attention value heads",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"linear_num_value_heads\": 64,",
+        "row": "text_config.linear_num_value_heads"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "A gated-DeltaNet layer keeps one d_k x d_v state per value head: heads * d_k * d_v elements per layer, constant in context. The short convolution state (linear_conv_kernel_dim) is a few elements per channel and not counted."
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-key-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "Qwen3.5-397B linear-attention key head dimension (d_k)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"linear_key_head_dim\": 128,",
+        "row": "text_config.linear_key_head_dim"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.qwen3-5-397b.linear-value-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "Qwen3.5-397B linear-attention value head dimension (d_v)",
+      "source": {
+        "url": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B/raw/8472618112abcbd45acbcdc58436aff4233c23f7/config.json",
+        "title": "Qwen3.5-397B-A17B config.json at a pinned revision (Qwen organisation, Hugging Face)",
+        "quote": "\"linear_value_head_dim\": 128,",
+        "row": "text_config.linear_value_head_dim"
+      },
+      "pin": {
+        "repo": "Qwen/Qwen3.5-397B-A17B",
+        "ref": "8472618112abcbd45acbcdc58436aff4233c23f7"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.layers",
+      "kind": "spec",
+      "value": 27,
+      "unit": "layers",
+      "label": "Kimi Linear transformer layers",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 27,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.mla-layers",
+      "kind": "spec",
+      "value": 7,
+      "unit": "layers",
+      "label": "Kimi Linear MLA (full-attention) layers",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"full_attn_layers\": [ 4, 8, 12, 16, 20, 24, 27 ],",
+        "row": "linear_attn_config.full_attn_layers (length)"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Layer numbers are 1-based (27 is the last layer). Seven MLA layers beside 20 KDA layers is 2.9:1, close to but not exactly the 3:1 the dossier rounds to."
+    },
+    {
+      "id": "zoo.kimi-linear.kda-layers",
+      "kind": "spec",
+      "value": 20,
+      "unit": "layers",
+      "label": "Kimi Linear KDA (linear) layers",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"kda_layers\": [ 1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 21, 22, 23, 25, 26 ],",
+        "row": "linear_attn_config.kda_layers (length)"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.kv-lora-rank",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "Kimi Linear MLA latent width (d_c)",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"kv_lora_rank\": 512,",
+        "row": "kv_lora_rank"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The MLA layers cache kv_lora_rank + qk_rope_head_dim elements per token (modeling_kimi.py at this revision projects to exactly that width); in the reference code the rope-width slice is carried unrotated (mla_use_nope), not dropped from the cache."
+    },
+    {
+      "id": "zoo.kimi-linear.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "Kimi Linear MLA decoupled key width (d_rope)",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.kimi-linear.kda-heads",
+      "kind": "spec",
+      "value": 32,
+      "unit": "heads",
+      "label": "Kimi Linear KDA heads",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"num_heads\": 32,",
+        "row": "linear_attn_config.num_heads"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "A KDA layer keeps one d_k x d_v state per head: heads * head_dim * head_dim elements, constant in context. The short convolution (short_conv_kernel_size) is not counted."
+    },
+    {
+      "id": "zoo.kimi-linear.kda-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "Kimi Linear KDA head dimension (d_k = d_v)",
+      "source": {
+        "url": "https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/raw/e1df551a447157d4658b573f9a695d57658590e9/config.json",
+        "title": "Kimi-Linear-48B-A3B-Instruct config.json at a pinned revision (Moonshot AI, Hugging Face)",
+        "quote": "\"head_dim\": 128,",
+        "row": "linear_attn_config.head_dim"
+      },
+      "pin": {
+        "repo": "moonshotai/Kimi-Linear-48B-A3B-Instruct",
+        "ref": "e1df551a447157d4658b573f9a695d57658590e9"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The top-level head_dim (72) belongs to the MLA layers; the KDA layers use this one."
+    },
+    {
+      "id": "zoo.deepseek-v3-2.layers",
+      "kind": "spec",
+      "value": 61,
+      "unit": "layers",
+      "label": "DeepSeek-V3.2 transformer layers",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 61,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "MLA caches one latent per token per layer: kv_lora_rank + qk_rope_head_dim elements, shared by every attention head (the per-head num_key_value_heads in this file does not enter the cache size). The config counts the 61 transformer layers; the extra multi-token-prediction layer (num_nextn_predict_layers) is not one of them."
+    },
+    {
+      "id": "zoo.deepseek-v3-2.kv-lora-rank",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "DeepSeek-V3.2 MLA latent width (d_c)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"kv_lora_rank\": 512,",
+        "row": "kv_lora_rank"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3-2.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "DeepSeek-V3.2 MLA decoupled RoPE key width (d_rope)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3-2.index-topk",
+      "kind": "spec",
+      "value": 2048,
+      "unit": "tokens",
+      "label": "DeepSeek-V3.2 DSA top-k: tokens each query reads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_topk\": 2048,",
+        "row": "index_topk"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "The lightning indexer scores every cached token, then the main attention reads only this many of them. All latents stay stored, so capacity is unchanged and reads per step stop growing past top-k."
+    },
+    {
+      "id": "zoo.deepseek-v3-2.index-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "DeepSeek-V3.2 DSA indexer key width",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_head_dim\": 128,",
+        "row": "index_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v3-2.index-n-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "DeepSeek-V3.2 DSA indexer heads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/a7e62ac04ecb2c0a54d736dc46601c5606cf10a6/config.json",
+        "title": "DeepSeek-V3.2 config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_n_heads\": 64,",
+        "row": "index_n_heads"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V3.2",
+        "ref": "a7e62ac04ecb2c0a54d736dc46601c5606cf10a6"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.layers",
+      "kind": "spec",
+      "value": 61,
+      "unit": "layers",
+      "label": "DeepSeek-V4-Pro transformer layers",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 61,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.csa-layers",
+      "kind": "spec",
+      "value": 30,
+      "unit": "layers",
+      "label": "DeepSeek-V4-Pro CSA layers (compress ratio 4)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (count of 4)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "compress_ratios has 62 entries: one per layer (the first two are 128, then 4 and 128 alternate) and a final 0 for the multi-token-prediction layer. The config does not name the kinds; the technical report (arXiv 2606.19348, section 2.3) does: ratio 4 is Compressed Sparse Attention (every 4 tokens become one entry, then the indexer selects top-k of them) and ratio 128 is Heavily Compressed Attention (every 128 become one, no selection). Both add a sliding window of uncompressed recent entries."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.hca-layers",
+      "kind": "spec",
+      "value": 31,
+      "unit": "layers",
+      "label": "DeepSeek-V4-Pro HCA layers (compress ratio 128)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (count of 128)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.csa-ratio",
+      "kind": "spec",
+      "value": 4,
+      "unit": "tokens/entry",
+      "label": "DeepSeek-V4-Pro CSA compression ratio m",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (member)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.hca-ratio",
+      "kind": "spec",
+      "value": 128,
+      "unit": "tokens/entry",
+      "label": "DeepSeek-V4-Pro HCA compression ratio m'",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"compress_ratios\": [128, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 128, 4, 0]",
+        "row": "compress_ratios (member)"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.window",
+      "kind": "spec",
+      "value": 128,
+      "unit": "tokens",
+      "label": "DeepSeek-V4-Pro sliding window of uncompressed entries",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"sliding_window\": 128,",
+        "row": "sliding_window"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Every CSA and HCA layer also keeps this many recent uncompressed entries, so a layer stores ceil(t / m) + window entries."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.kv-heads",
+      "kind": "spec",
+      "value": 1,
+      "unit": "KV heads",
+      "label": "DeepSeek-V4-Pro key/value heads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 1,",
+        "row": "num_key_value_heads"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "One shared key-value entry per token (multi-query), head_dim wide."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.head-dim",
+      "kind": "spec",
+      "value": 512,
+      "unit": "dims",
+      "label": "DeepSeek-V4-Pro KV entry width (head_dim)",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"head_dim\": 512,",
+        "row": "head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.rope-head-dim",
+      "kind": "spec",
+      "value": 64,
+      "unit": "dims",
+      "label": "DeepSeek-V4-Pro rotary part of the KV entry",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"qk_rope_head_dim\": 64,",
+        "row": "qk_rope_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365,
+      "boundary": "Part of head_dim, not an addition to it, per the technical report (partial rotary)."
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.index-topk",
+      "kind": "spec",
+      "value": 1024,
+      "unit": "entries",
+      "label": "DeepSeek-V4-Pro CSA top-k: compressed entries each query reads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_topk\": 1024,",
+        "row": "index_topk"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.index-head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "DeepSeek-V4-Pro CSA indexer key width",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_head_dim\": 128,",
+        "row": "index_head_dim"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
+    },
+    {
+      "id": "zoo.deepseek-v4-pro.index-n-heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "DeepSeek-V4-Pro CSA indexer heads",
+      "source": {
+        "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/b5968e9190ef611bbf34a7229255be88a0e937c1/config.json",
+        "title": "DeepSeek-V4-Pro config.json at a pinned revision (DeepSeek, Hugging Face)",
+        "quote": "\"index_n_heads\": 64,",
+        "row": "index_n_heads"
+      },
+      "pin": {
+        "repo": "deepseek-ai/DeepSeek-V4-Pro",
+        "ref": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+      },
+      "verifiedAt": "2026-10-05",
+      "ttlDays": 365
     }
   ]
 }

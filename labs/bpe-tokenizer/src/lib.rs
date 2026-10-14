@@ -71,7 +71,7 @@ pub static CHECKS: [CheckDef; 6] = [
     CheckDef { id: "contract", label: CONTRACT, stage: 4, seeded: true, default_seed: 0xC0DE, run: check_contract },
 ];
 
-pub static LAB: Lab = Lab { id: LAB_ID, version: 2, checks: &CHECKS };
+pub static LAB: Lab = Lab { id: LAB_ID, version: 3, checks: &CHECKS };
 
 const BYTES_ARE_IDS: &str = "base vocab: byte b ↔ id b";
 const MERGE_PRIORITY: &str = "lowest-rank pair merges first (not leftmost)";
@@ -334,17 +334,66 @@ pub extern "C" fn ks_run(in_ptr: u32, in_len: u32) -> u64 {
     kslab::run(unsafe { kslab::input(in_ptr, in_len) }, &LAB)
 }
 
-/// The runtime bridge: `probe <seed>` (see `probe`).
+/* ------------------------- the count bridge -------------------------- */
+/* The Fleet's token-count check drives YOUR tokenizer through `ks_invoke`.
+   The bridge builds your `Tokenizer` over the same 48-merge table `probe`
+   uses and calls `encode`, so a template build traps on `count` like any
+   unfinished check; it holds no tokenizer logic of its own.
+
+     count <hex>        -> <n>   (the number of ids `encode` returns for the
+                                  UTF-8 text given as hex; no hex is "")
+     probe <seed>       -> one summary line of a seeded text (see `probe`)
+
+   Errors start with `err`. */
+
+use std::cell::RefCell;
+
+thread_local! {
+    static COUNTER: RefCell<Option<Tokenizer>> = const { RefCell::new(None) };
+}
+
+/// Two hex digits per byte, either case. `None` for an odd length or a non-hex digit.
+fn unhex(hex: &str) -> Option<Vec<u8>> {
+    if hex.len() % 2 != 0 || !hex.is_ascii() {
+        return None;
+    }
+    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok()).collect()
+}
+
+/// One bridge command, as `ks_invoke` runs it. Public so `cargo test` can drive it natively.
+pub fn invoke(cmd: &str) -> String {
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    match parts[..] {
+        ["probe", seed, ..] => match seed.parse::<u32>() {
+            Ok(seed) => probe(seed),
+            Err(_) => format!("err bad seed {:?}", kslab::clip(seed, 20)),
+        },
+        ["count"] => count(""),
+        ["count", hex] => count(hex),
+        _ => format!("err unknown command {:?} (try: count <hex>, probe <seed>)", kslab::clip(cmd.trim(), 40)),
+    }
+}
+
+fn count(hex: &str) -> String {
+    let Some(bytes) = unhex(hex) else {
+        return "err count takes the text as hex: two digits per byte".to_string();
+    };
+    let Ok(text) = String::from_utf8(bytes) else {
+        return "err the hex is not valid UTF-8".to_string();
+    };
+    COUNTER.with(|c| {
+        let mut c = c.borrow_mut();
+        let tk = c.get_or_insert_with(|| Tokenizer::new(train_bpe(CORPUS, 48)));
+        tk.encode(&text).len().to_string()
+    })
+}
+
+/// The runtime bridge (see above).
 #[no_mangle]
 pub extern "C" fn ks_invoke(in_ptr: u32, in_len: u32) -> u64 {
     kslab::install_panic_hook();
     let cmd = std::str::from_utf8(unsafe { kslab::input(in_ptr, in_len) }).unwrap_or("");
-    let mut it = cmd.split_whitespace();
-    let reply = match (it.next(), it.next().map(str::parse::<u32>)) {
-        (Some("probe"), Some(Ok(seed))) => probe(seed),
-        _ => format!("err unknown command {:?} (try: probe <seed>)", kslab::clip(cmd.trim(), 40)),
-    };
-    kslab::emit_str(&reply)
+    kslab::emit_str(&invoke(cmd))
 }
 
 /// Reference ids for check_contract — computed from the reference

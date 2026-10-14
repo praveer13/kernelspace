@@ -12,6 +12,13 @@
     "fleet-week": 0,
     "forge": 0
   },
+  "longestKeyByPool": {
+    "prequestion": 5,
+    "predictAt": 1,
+    "spiral": 2,
+    "align": 0,
+    "errata": 1
+  },
   "whyRequired": [
     "r",
     "t0",

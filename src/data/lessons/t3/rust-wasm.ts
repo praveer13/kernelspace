@@ -101,6 +101,8 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
             'The SecurityManager filtered an ambient authority by policy. Wasm has none to filter: a capability that was not imported is simply unreachable, and no policy file is needed.',
             'Signatures establish who published code, not what it can do. Wasm bounds authority by construction whether or not the code is signed, so a signed module gets no extra access.',
           ],
+          kcs: ['t3.wasm-sandbox'],
+          miss: ['t3.wasm-uses-process-isolation', '', 't3.wasm-uses-a-policy-file', 't3.wasm-trusts-signatures'],
         },
         {
           q: 'Rust is an unusually good Wasm source language because…',
@@ -119,6 +121,8 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
             'The borrow checker runs at compile time and leaves no trace in the binary. Inside linear memory, unsafe code or a buggy C module can still corrupt the module\'s own data.',
             'wasm32-unknown-unknown has no operating system. std::fs returns unsupported-operation errors, and threads need extra host and build support, so system-facing std code does not carry over.',
           ],
+          kcs: ['t3.wasm-boundary-cost'],
+          miss: ['t3.rust-wasm-has-a-faster-backend', '', 't3.borrow-checker-runs-in-the-module', 't3.wasm-ships-the-rust-std'],
         },
         {
           q: 'The main performance trap in JS↔Wasm apps is…',
@@ -137,6 +141,8 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
             'Reads and writes to linear memory are ordinary loads and stores, as fast as typed-array access. DOM work is slow because it goes through JS shims, not because of memory speed.',
             'A module is compiled once at instantiation and the compiled code is reused. Per-call overhead is marshalling at the boundary, not recompilation.',
           ],
+          kcs: ['t3.wasm-boundary-cost'],
+          miss: ['t3.wasm-compute-is-slow', '', 't3.linear-memory-is-slow', 't3.wasm-recompiles-per-call'],
         },
         {
           q: 'Server-side Wasm (wasmtime/WASI/Workers) sells which property over containers?',
@@ -155,10 +161,42 @@ The browser story completes with **WebGPU**: a modern graphics/compute API (the 
             'WASI is a deliberately small, capability-based interface, not full POSIX. Programs must be recompiled for a Wasm target, and some facilities, such as fork, are absent.',
             'The runtime is an ordinary host process using the host kernel, so security rests on the runtime being correct. A VM adds a hardware boundary; Wasm trades that for lighter isolation.',
           ],
+          kcs: ['t3.wasm-sandbox'],
+          miss: ['t3.wasm-has-higher-memory-ceilings', '', 't3.wasm-runs-linux-binaries', 't3.wasm-isolates-like-a-vm'],
         },
       ],
     },
   ],
+  kcs: ['t3.wasm-sandbox', 't3.wasm-boundary-cost'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt:
+          'Say what a WebAssembly module can touch, and why that makes it safe to run untrusted code.',
+        model:
+          'A module can touch only its own linear memory and the host functions it was handed as imports. It has no syscalls, files or network unless the host provides a function for them, and every memory access is bounds-checked against that buffer. Authority is structural, not a policy to configure, so untrusted code cannot reach anything it was not given.',
+        ideas: [
+          'It reaches only its own linear memory and the imports the host gave it',
+          'No syscalls, files or network exist unless the host imports a function for them',
+          'The limit is structural: a capability that was not imported is unreachable',
+        ],
+        kcs: ['t3.wasm-sandbox'],
+      },
+      {
+        prompt:
+          'Say when Wasm beats JavaScript, and when copying data across the boundary eats the gain.',
+        model:
+          'Wasm wins on compute-bound work such as numeric loops, where it runs within a small factor of native speed. It loses its edge when every call passes strings or objects, because each crossing of the JS boundary allocates and copies. So keep the hot loop and its data inside the module, and cross rarely with large payloads.',
+        ideas: [
+          'Wasm wins on compute-bound loops, within a small factor of native speed',
+          'Each call that passes strings or objects pays to marshal them across the boundary',
+          'Cross rarely with big payloads and keep the hot loop and its data inside the module',
+        ],
+        kcs: ['t3.wasm-boundary-cost'],
+      },
+    ],
+  },
 }
 
 export default lesson

@@ -2,6 +2,10 @@ import type { Claim } from './schema'
 
 const H100_PRICES = { url: 'https://getdeploying.com/reference/cloud-gpu/nvidia-h100', title: 'GetDeploying: NVIDIA H100 cloud GPU pricing' }
 const B200_PRICES = { url: 'https://getdeploying.com/reference/cloud-gpu/nvidia-b200', title: 'GetDeploying: NVIDIA B200 cloud GPU pricing' }
+const CODESPACES_BILLING = {
+  url: 'https://docs.github.com/en/billing/concepts/product-billing/github-codespaces',
+  title: 'GitHub Docs: GitHub Codespaces billing',
+}
 
 /**
  * Rental prices (2026-10) and the three constants the course made up. Every GetDeploying
@@ -125,5 +129,34 @@ export const PRICE_CLAIMS: Claim[] = [
     verifiedAt: '2026-10-04',
     ttlDays: 365,
     boundary: 'No source: it only makes the Fleet cost card produce a plausible $/Mtok.',
+  },
+  {
+    id: 'synthetic.cost.gpu-hourly',
+    kind: 'synthetic',
+    value: 2,
+    unit: 'USD/GPU-hr',
+    label: 'The lessons\' GPU-hour price in the unit-economics worked examples (course stand-in)',
+    verifiedAt: '2026-10-05',
+    ttlDays: 365,
+    boundary:
+      'No source: the round "$2 per GPU-hour" t6.l2 and t7.l4 assume when they price SGLang\'s DeepSeek node-day (22.3k output tok/s × 86,400 s against $2 × 8 GPUs × 24 h = $384 gives $0.20 per million) and DeepSeek\'s own day. The dated H100 median is price.h100.median.',
+  },
+  {
+    id: 'price.codespaces.free-core-hours',
+    kind: 'price',
+    value: 120,
+    unit: 'core-hours/month',
+    label: 'GitHub Codespaces free compute per month, GitHub Free personal account',
+    source: {
+      ...CODESPACES_BILLING,
+      quote: 'GitHub Free for personal accounts 15 GB-month 120 hrs',
+      row: 'Free and billed use by personal accounts > Free quota',
+    },
+    verifiedAt: '2026-10-05',
+    ttlDays: 90,
+    boundary:
+      'GitHub Free personal accounts only (GitHub Pro: 180). The page\'s unit is "hrs" of compute time; its pricing table gives a 2-core machine an included-usage multiplier of 2, so the 120 are core-hours: 60 hours on a 2-core machine. Organization and enterprise plans include no free quota. The learner\'s own account pays; the course pays nothing.',
+    discrepancy:
+      'The page says "120 hrs", not "120 core-hours"; core-hours is our reading of its multiplier column (forge-friction.md says the same). The spec\'s billing note says "120 core-hours a month free".',
   },
 ]

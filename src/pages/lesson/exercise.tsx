@@ -4,7 +4,8 @@
  *
  * A block without `taskIds` keeps the link card. A block with them mounts the sim inline through SimHost
  * (embed mode, or phone mode on a phone), lists those registry tasks with live state, and keeps "what just
- * happened" shut until every task is finished.
+ * happened" shut until every task is finished. Ids no task registers are dropped; a block whose ids are all
+ * still pending (PENDING_TASK_IDS) renders nothing, and one with no id left falls back to the link card.
  */
 
 import { Suspense, lazy, useState } from 'react'
@@ -15,6 +16,7 @@ import { SIM_INFO } from '@/data/lessons'
 import type { ExerciseBlock } from '@/data/lessons/types'
 import { useProgress } from '@/lib/progress'
 import { resolveInlineMode, usePhoneViewport } from '@/lib/sims/host'
+import { planExercise, registry, type Registry } from '@/lib/sims/registry'
 import { ProseView } from './prose'
 import { renderInline } from './markdown'
 
@@ -90,7 +92,7 @@ function WhatJustHappened({ md, trackColor, locked }: { md: string; trackColor: 
 }
 
 /** An exercise block with `taskIds`: the sim inline, or the phone-mode tasks on a phone. */
-function InlineExercise({ block, trackColor, lessonId }: { block: ExerciseBlock; trackColor: string; lessonId: string }) {
+function InlineExercise({ block, taskIds, trackColor, lessonId }: { block: ExerciseBlock; taskIds: string[]; trackColor: string; lessonId: string }) {
   const phoneViewport = usePhoneViewport()
   const prefs = useProgress((s) => s.working['today:prefs'])
   const [forceEmbed, setForceEmbed] = useState(false)
@@ -107,7 +109,7 @@ function InlineExercise({ block, trackColor, lessonId }: { block: ExerciseBlock;
           machine={block.machine}
           mode={mode}
           config={block.config}
-          taskIds={block.taskIds}
+          taskIds={taskIds}
           lessonId={lessonId}
           renderNote={(unlocked) =>
             block.note ? (
@@ -137,14 +139,18 @@ export function ExerciseView({
   block,
   trackColor,
   lessonId,
+  tasks = registry,
 }: {
   block: ExerciseBlock
   trackColor: string
   lessonId: string
+  /** The registry that says which ids exist; tests pass their own, since `bun test` has no Vite glob. */
+  tasks?: Registry
 }) {
-  if (block.taskIds && block.taskIds.length > 0) {
-    return <InlineExercise block={block} trackColor={trackColor} lessonId={lessonId} />
-  }
+  // Wave 2 (spec §2.3): ids that no task registers yet (the zoo's, until 2b-13) hide the block; other unknown ids are dropped.
+  const plan = planExercise(block.simId, block.machine, block.taskIds, tasks)
+  if (plan.show === 'hidden') return null
+  if (plan.show === 'inline') return <InlineExercise block={block} taskIds={plan.taskIds} trackColor={trackColor} lessonId={lessonId} />
   return <ExerciseCard block={block} trackColor={trackColor} lessonId={lessonId} />
 }
 

@@ -5,6 +5,10 @@
  * sim-task registry, the block-placement play and the lab 01 check tags all name these ids, while
  * task B2 authors the full graph in src/data/kc/*. B2 must define every id below (verify-kc fails
  * otherwise) and may add others freely. Renaming one later needs a KcMigration row.
+ *
+ * Wave 2 adds the 31 ids that the other PRs tag (docs/specs/wave-2.md §4.2, task 2a-06): the families
+ * goodput, cost, memory, spec, sig and compile, the labs 02-03 checks, the scheduler play, the attention
+ * zoo and the fault catalogue. 2a-11 may add KCs but never renames these.
  */
 
 export const KC = {
@@ -40,6 +44,49 @@ export const KC = {
   /* ---- R KCs that lab 01's readiness (R1-R5) and the braid rely on ---- */
   ownershipMoves: 'r.ownership-moves',
   enumsOptionResult: 'r.enums-option-result',
+
+  /* ---- Wave 2 (§4.2): R pairing edges, compile bank and F4 ---- */
+  permissions: 'r.permissions',
+  analyzerLimits: 'r.analyzer-limits',
+  unsafeBoundaries: 't3.unsafe-boundaries',
+
+  /* ---- Wave 2: memory family (T4, T6) ---- */
+  quantizedBytes: 't4.quantized-bytes',
+  moeActiveParams: 't6.moe-active-params',
+  parallelMemory: 't6.parallel-memory',
+  fp4Capacity: 't6.fp4-capacity',
+  loraAdapterBytes: 't6.lora-adapter-bytes',
+
+  /* ---- Wave 2: labs 02 (kv-block-manager) and 03 (bpe-tokenizer) checks ---- */
+  tokenizerBytes: 't5.tokenizer-bytes',
+  bpeMerges: 't5.bpe-merges',
+  blockTables: 't5.block-tables',
+  blockRefcounts: 't5.block-refcounts',
+  kvCopyOnWrite: 't5.kv-copy-on-write',
+
+  /* ---- Wave 2: attention zoo, prefix router, scheduler play, faults, spec family ---- */
+  attentionVariants: 't5.attention-variants',
+  kvReadsVsCapacity: 't5.kv-reads-vs-capacity',
+  prefixRouting: 't5.prefix-routing',
+  continuousBatching: 't5.continuous-batching',
+  admissionHeadroom: 't5.admission-headroom',
+  schedOrder: 't5.sched-order',
+  prefillDecodeInterference: 't5.prefill-decode-interference',
+  speculativeDecoding: 't5.speculative-decoding',
+  specAcceptance: 't6.spec-acceptance',
+
+  /* ---- Wave 2: cost family ---- */
+  epEconomics: 't6.ep-economics',
+  agentPrefixLocality: 't6.agent-prefix-locality',
+  costPerMtok: 't7.cost-per-mtok',
+
+  /* ---- Wave 2: goodput family, Daily burn, signature items ---- */
+  sloErrorBudget: 't7.slo-error-budget',
+  goodput: 't7.goodput',
+  goodputCurve: 't7.goodput-curve',
+  paretoFrontier: 't7.pareto-frontier',
+  capacityPlanning: 't7.capacity-planning',
+  incidentDiagnosis: 't7.incident-diagnosis',
 } as const
 
 export type ContractKcId = (typeof KC)[keyof typeof KC]

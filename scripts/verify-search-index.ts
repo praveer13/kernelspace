@@ -3,7 +3,7 @@
  *
  * Regenerates src/data/search-index.json in memory and fails when the committed file differs, the way CI
  * does for public/lessons-md. It also checks that every row points somewhere real (lesson, H2 anchor, claim),
- * that the index gzips to the 15 KB budget, and that the acceptance queries find a lesson, a concept and a claim.
+ * that the index gzips to the 20 KB budget, and that the acceptance queries find a lesson, a concept and a claim.
  *
  *   bun run verify:search-index
  */
@@ -11,12 +11,13 @@ import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { byId } from '../src/data/claims'
 import { lessonById } from '../src/data/lessons'
+import { PLAYS } from '../src/data/plays'
 import { extractHeadings } from '../src/pages/lesson/markdown'
 import { claimPath, indexItems, makeSearcher, type SearchIndex } from '../src/lib/search'
 import { buildSearchIndex, INDEX_PATH, serializeSearchIndex } from './build-search-index'
 
 /** Spec §16.1: the index chunk's gzip budget. The JSON is the chunk's payload, so it is gated here, ahead of verify:bundle's report of the built chunk. */
-export const BUDGET_BYTES = 15 * 1024
+export const BUDGET_BYTES = 20 * 1024 // owner decision 2026-10-13 (wave-2 D24): raised from 15 KB
 
 /** Queries that must each reach a lesson, a concept (KC) and a claim. */
 export const ACCEPTANCE_QUERIES = ['PagedAttention', 'KV cache', 'ridge']
@@ -53,6 +54,7 @@ function rowErrors(index: SearchIndex): string[] {
   }
   dupes('lesson', index.lessons.map((r) => r[0]))
   dupes('kc', index.kcs.map((r) => r[0]))
+  dupes('play', index.plays.map((r) => r[0]))
   dupes('claim', index.claims.map((r) => r[0]))
   dupes('glossary', index.glossary.map((r) => r[0]))
 
@@ -65,6 +67,12 @@ function rowErrors(index: SearchIndex): string[] {
     }
     for (const claimId of claimIds) if (!byId[claimId]) errors.push(`kc ${id} cites claim ${claimId}, which is not in the registry`)
   }
+  for (const [id, , lessonId] of index.plays) {
+    if (!Object.hasOwn(PLAYS, id)) errors.push(`play row ${id} is not in PLAYS`)
+    if (!lessonById(lessonId)) errors.push(`play ${id} lives in ${lessonId}, which is not a lesson`)
+  }
+  // every play of PLAYS is findable: a play added to the registry reaches the palette on the next regeneration
+  for (const id of Object.keys(PLAYS)) if (!index.plays.some((r) => r[0] === id)) errors.push(`play ${id} is in PLAYS but not in the index`)
   for (const [id] of index.claims) {
     if (!byId[id]) errors.push(`claim row ${id} is not in the registry`)
     if (!claimPath(id).endsWith(`#${id}`)) errors.push(`claim ${id} has no anchor`)
@@ -82,6 +90,6 @@ if (import.meta.main) {
   const index = buildSearchIndex()
   const gz = gzipSync(serializeSearchIndex(index)).length
   console.log(
-    `verify-search-index: ok (${index.lessons.length} lessons, ${index.kcs.length} concepts, ${index.claims.length} claims, ${index.glossary.length} glossary rows; ${(gz / 1024).toFixed(1)} KB gzip of ${BUDGET_BYTES / 1024})`,
+    `verify-search-index: ok (${index.lessons.length} lessons, ${index.kcs.length} concepts, ${index.plays.length} plays, ${index.claims.length} claims, ${index.glossary.length} glossary rows; ${(gz / 1024).toFixed(1)} KB gzip of ${BUDGET_BYTES / 1024})`,
   )
 }

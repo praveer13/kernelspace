@@ -12,7 +12,7 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `The naive network server is one thread per connection: simple to write, dead on arrival at scale. 10,000 connections means 10,000 threads — 10,000 stacks (~80 GB of address space), constant context switches, and a scheduler drowning in runnable threads that are 99% blocked. The realization that broke this open (the "C10k problem," named in 1999): **threads are the wrong unit for I/O-bound concurrency.** The right unit is the *event*: "socket 42 is readable now."
+      md: `The naive network server is one thread per connection: simple to write, dead on arrival at scale. 10,000 connections means 10,000 threads — 10,000 stacks (~80 GiB of address space), constant context switches, and a scheduler drowning in runnable threads that are 99% blocked. The realization that broke this open (the "C10k problem," named in 1999): **threads are the wrong unit for I/O-bound concurrency.** The right unit is the *event*: "socket 42 is readable now."
 
 Async I/O is the machinery for handling many connections with few threads by never blocking on the slow thing. Three generations of it matter to you: \`select/poll\` (the ancestors), \`epoll\`/kqueue/IOCP (the scalable event notifiers), and \`io_uring\` (the modern Linux design that changed the game again). Node.js, nginx, Netty, and Rust's tokio are all — underneath — these syscalls plus a scheduler.`,
     },
@@ -52,14 +52,14 @@ Async I/O is the machinery for handling many connections with few threads by nev
       type: 'prose',
       md: `## The event loop you already know — and its Rust descendant
 
-An **event loop** is epoll plus a scheduler with a friendly API: \`on_readable(socket, callback)\`. JavaScript's entire concurrency model is one (that's why Node exists — and why blocking it is fatal, T2.L4). Java's Netty wraps it for the JVM. And Rust's **tokio** is the same architecture with a zero-cost twist: an \`async fn\` compiles to a **state machine** (a struct with an enum of suspension points), and the runtime polls these state machines across a small pool of OS threads, work-stealing between them. No garbage collector, no per-connection stack — a suspended task is a few hundred bytes in a slab, not 1 MB of thread stack.
+An **event loop** is epoll plus a scheduler with a friendly API: \`on_readable(socket, callback)\`. JavaScript's entire concurrency model is one (that's why Node exists — and why blocking it is fatal, T2.L4). Java's Netty wraps it for the JVM. And Rust's **tokio** is the same architecture with a zero-cost twist: an \`async fn\` compiles to a **state machine** (a struct with an enum of suspension points), and the runtime polls these state machines across a small pool of OS threads, work-stealing between them. No garbage collector, no per-connection stack — a suspended task is a few hundred bytes in a slab, not 1 MiB of thread stack.
 
 That last comparison is worth a table, because it decides architectures:`,    },
     {
       type: 'prose',
       md: `| Model | Unit of concurrency | Cost per idle connection | Switches via |
 |---|---|---|---|
-| Thread-per-conn | OS thread | ~1 MB stack + scheduler entry | kernel context switch |
+| Thread-per-conn | OS thread | ~1 MiB stack + scheduler entry | kernel context switch |
 | Event loop (Node/nginx) | callback/closure | ~KBs of JS/C state | userspace, same thread |
 | tokio task | state-machine struct | ~hundreds of bytes | userspace poll, work-stealing |
 
@@ -78,7 +78,7 @@ async fn main() -> std::io::Result<()> {
     loop {
         let (mut sock, _peer) = listener.accept().await?;
         tokio::spawn(async move {           // a task: ~hundreds of bytes,
-            let mut buf = [0u8; 1024];      // not a 1 MB thread stack
+            let mut buf = [0u8; 1024];      // not a 1 MiB thread stack
             loop {
                 match sock.read(&mut buf).await {
                     Ok(0) | Err(_) => return,      // peer closed
@@ -145,7 +145,7 @@ You should now be able to trace a request through a modern async server: NIC int
           miss: ['', 't2.epoll-for-files', 't2.uring-needs-no-async', 't2.uring-hardware-bound'],
         },
         {
-          q: 'A suspended tokio task costs ~hundreds of bytes instead of ~1 MB because…',
+          q: 'A suspended tokio task costs ~hundreds of bytes instead of ~1 MiB because…',
           options: [
             'Rust stacks start tiny and grow on demand, with an idle task keeping a few hundred bytes of OS stack committed',
             'An async fn compiles to a state machine holding only the locals live across each await, with no stack or OS thread',
@@ -207,9 +207,9 @@ You should now be able to trace a request through a modern async server: NIC int
         prompt:
           'Why can one thread serve 10,000 connections as tokio tasks, and what single mistake stalls all of them?',
         model:
-          'An async fn compiles to a state machine that keeps only the values live across each await, so a suspended task costs hundreds of bytes, not a megabyte of stack. The runtime polls ready tasks on a few OS threads. A blocking call holds the thread itself, so every task scheduled on that thread waits behind it.',
+          'An async fn compiles to a state machine that keeps only the values live across each await, so a suspended task costs hundreds of bytes, not 1 MiB of stack. The runtime polls ready tasks on a few OS threads. A blocking call holds the thread itself, so every task scheduled on that thread waits behind it.',
         ideas: [
-          'A task is a small state machine of hundreds of bytes, not a roughly 1 MB thread stack',
+          'A task is a small state machine of hundreds of bytes, not a roughly 1 MiB thread stack',
           'The runtime polls ready tasks across a few OS threads, switching in userspace at awaits',
           'A blocking call occupies the thread, so every task on it stalls; use spawn_blocking instead',
         ],

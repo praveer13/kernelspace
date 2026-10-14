@@ -13,6 +13,7 @@ import {
   topoOrder,
 } from '../../src/lib/kc/graph'
 import type { Kc } from '../../src/lib/kc/types'
+import { MAX_KCS, NOTIONAL_TRACKS } from '../../scripts/verify-kc'
 
 const kc = (id: string, requires: string[] = [], extra: Partial<Kc> = {}): Kc => ({
   id,
@@ -26,14 +27,14 @@ const kc = (id: string, requires: string[] = [], extra: Partial<Kc> = {}): Kc =>
   ...extra,
 })
 
-describe('the v1 graph', () => {
+describe('the graph', () => {
   test('defines every contract id from ids.ts', () => {
     for (const id of Object.values(KC)) expect(kcById(id)?.id).toBe(id)
   })
 
-  test('is about 70 KCs, under the cap, with unique well-formed ids', () => {
-    expect(KCS.length).toBeGreaterThanOrEqual(60)
-    expect(KCS.length).toBeLessThanOrEqual(80)
+  test('is about 155 KCs and under the 200 cap (wave-2 §4.1), with unique well-formed ids', () => {
+    expect(KCS.length).toBeGreaterThanOrEqual(145)
+    expect(KCS.length).toBeLessThanOrEqual(MAX_KCS)
     expect(new Set(KCS.map((k) => k.id)).size).toBe(KCS.length)
     for (const k of KCS) expect(k.id).toMatch(/^(r|t[0-7])\.[a-z0-9]+(-[a-z0-9]+)*$/)
   })
@@ -63,6 +64,20 @@ describe('the v1 graph', () => {
     for (const [a, b] of pairs) expect(kcById(a)?.confusable).toContain(b)
   })
 
+  test('the eight T3-T7 confusable pairs of 2a-11 are present', () => {
+    const pairs: [string, string][] = [
+      [KC.goodputCurve, KC.paretoFrontier],
+      ['t3.futures-state-machines', 't3.wakers-executor'],
+      ['t4.occupancy', 't4.coalescing'],
+      [KC.batchingThroughput, KC.goodput],
+      [KC.prefillDecodeInterference, 't5.pd-disaggregation'],
+      [KC.speculativeDecoding, KC.specAcceptance],
+      [KC.kvReadsVsCapacity, KC.moeActiveParams],
+      [KC.epEconomics, KC.costPerMtok],
+    ]
+    for (const [a, b] of pairs) expect(kcById(a)?.confusable).toContain(b)
+  })
+
   test('six core thresholds in THRESHOLD_KCS order of their lessons, plus the Rust anchor', () => {
     const core = KCS.filter((k) => k.threshold === 'core').map((k) => k.id)
     expect(new Set(core)).toEqual(new Set(THRESHOLD_KCS))
@@ -78,10 +93,45 @@ describe('the v1 graph', () => {
     expect(KCS.filter((k) => k.lessons.length === 0).map((k) => k.id)).toEqual([KC.alignment])
   })
 
-  test('every R and T0-T2 lesson is taught by at least two KCs, so Lesson.kcs can hold 2-3', () => {
-    for (const l of ALL_LESSONS.filter((x) => ['r', 't0', 't1', 't2'].includes(x.trackId))) {
+  test('every lesson is taught by at least two KCs, so Lesson.kcs can hold 2-3', () => {
+    for (const l of ALL_LESSONS) {
       expect({ lesson: l.id, n: KCS.filter((k) => k.lessons.includes(l.id)).length >= 2 }).toEqual({ lesson: l.id, n: true })
     }
+  })
+
+  test('every T3-T7 lesson has 2+ KCs its Lesson.kcs may name, i.e. introduced there or earlier (wave-2 §4.1, §4.4)', () => {
+    const order = new Map(ALL_LESSONS.map((l, i) => [l.id, i]))
+    const t37 = ALL_LESSONS.filter((x) => ['t3', 't4', 't5', 't6', 't7'].includes(x.trackId))
+    expect(t37).toHaveLength(39)
+    for (const l of t37) {
+      const at = order.get(l.id) as number
+      const nameable = KCS.filter((k) => k.lessons.includes(l.id) && (order.get(k.lessons[0]) as number) <= at)
+      expect({ lesson: l.id, ok: nameable.length >= 2 }).toEqual({ lesson: l.id, ok: true })
+    }
+  })
+
+  test('no T3-T7 lesson introduces more than 3 KCs beyond the contract ids (merge siblings, wave-2 §4.1)', () => {
+    const contract = new Set<string>(Object.values(KC))
+    const over = ALL_LESSONS.filter((l) => ['t3', 't4', 't5', 't6', 't7'].includes(l.trackId))
+      .map((l) => ({ lesson: l.id, n: KCS.filter((k) => k.lessons[0] === l.id && !contract.has(k.id)).length }))
+      .filter((x) => x.n > 3)
+    expect(over).toEqual([])
+  })
+
+  test('t6.l5 revisits t4.decode-bandwidth instead of a Blackwell-only copy of it (2a-11 review)', () => {
+    expect(kcById(KC.decodeBandwidth)?.lessons).toContain('t6.l5')
+    expect(KCS.filter((k) => k.lessons[0] === 't6.l5').map((k) => k.id).sort()).toEqual([KC.fp4Capacity, 't6.nvlink-domain'])
+  })
+
+  test('no requires edge points at a KC introduced later in curriculum order', () => {
+    const order = new Map(ALL_LESSONS.map((l, i) => [l.id, i]))
+    const index = indexKcs(KCS)
+    const late = KCS.flatMap((k) =>
+      k.lessons.length === 0
+        ? []
+        : k.requires.filter((r) => (order.get(index.get(r)?.lessons[0] ?? '') ?? -1) > (order.get(k.lessons[0]) as number)).map((r) => `${k.id} → ${r}`),
+    )
+    expect(late).toEqual([])
   })
 
   test('each R lesson has a T-side dependant (§4.3), and the pairing runs in R order', () => {
@@ -122,8 +172,9 @@ describe('the v1 graph', () => {
     }
   })
 
-  test('four notional machines, one per Wave 1 track, 3-6 rules and 2-4 ignores', () => {
-    expect(KC_GRAPH.notional.map((n) => n.track).sort()).toEqual(['r', 't0', 't1', 't2'])
+  test('nine notional machines, one per track (wave-2 §4.3), 3-6 rules and 2-4 ignores', () => {
+    expect(NOTIONAL_TRACKS).toHaveLength(9)
+    expect(KC_GRAPH.notional.map((n) => n.track).sort()).toEqual([...NOTIONAL_TRACKS].sort())
     for (const n of KC_GRAPH.notional) {
       expect(n.rules.length).toBeGreaterThanOrEqual(3)
       expect(n.rules.length).toBeLessThanOrEqual(6)
@@ -136,6 +187,99 @@ describe('the v1 graph', () => {
     for (const step of GRADED_STEPS) expect(REF_KCS[`boot:${step}`]?.length).toBeGreaterThan(0)
     expect(new Set(Object.values(REF_KCS).flat())).toEqual(new Set(BOOT_KCS))
     expect(BOOT_KCS).toHaveLength(4)
+  })
+})
+
+describe('the Wave 2 contract ids (§4.2)', () => {
+  /** id → [introducing lesson, requires, labs] exactly as the §4.2 table lists them. */
+  const TABLE: Record<string, [string, string[], string[]]> = {
+    'r.permissions': ['r.l3', ['r.ownership-moves'], []],
+    'r.analyzer-limits': ['r.l4', ['r.borrow-rules'], []],
+    't3.unsafe-boundaries': ['t3.l2', ['r.analyzer-limits', 'r.slices'], []],
+    't4.quantized-bytes': ['t4.l7', ['t4.decode-bandwidth'], []],
+    't5.tokenizer-bytes': ['t5.l2', ['r.enums-option-result'], ['bpe-tokenizer']],
+    't5.bpe-merges': ['t5.l2', ['t5.tokenizer-bytes', 'r.closures-collections'], ['bpe-tokenizer']],
+    't5.block-tables': ['t5.l5', ['t2.address-translation', 'r.enums-option-result', 'r.iterators-ownership'], ['kv-block-manager']],
+    't5.block-refcounts': ['t5.l5', ['t5.block-tables', 'r.smart-pointers'], ['kv-block-manager']],
+    't5.kv-copy-on-write': ['t5.l5', ['t5.block-refcounts', 't2.copy-on-write'], ['kv-block-manager']],
+    't5.attention-variants': ['t5.l4', ['t5.kv-bytes-per-token'], []],
+    't5.kv-reads-vs-capacity': ['t5.l4', ['t5.attention-variants', 't4.decode-bandwidth'], []],
+    't5.prefix-routing': ['t5.l6', ['t5.block-refcounts'], []],
+    't5.continuous-batching': ['t5.l7', ['t5.batching-throughput', 't2.admission-scheduling'], []],
+    't5.admission-headroom': ['t5.l7', ['t5.continuous-batching', 't5.kv-capacity'], []],
+    't5.sched-order': ['t5.l7', ['t5.continuous-batching'], []],
+    't5.prefill-decode-interference': ['t5.l8', ['t5.continuous-batching'], []],
+    't5.speculative-decoding': ['t5.l8', ['t4.decode-bandwidth'], []],
+    't6.moe-active-params': ['t6.l1', ['t4.quantized-bytes'], []],
+    't6.ep-economics': ['t6.l2', ['t6.moe-active-params'], []],
+    't6.parallel-memory': ['t6.l4', ['t4.quantized-bytes'], []],
+    't6.fp4-capacity': ['t6.l5', ['t4.quantized-bytes'], []],
+    't6.spec-acceptance': ['t6.l6', ['t5.speculative-decoding'], []],
+    't6.agent-prefix-locality': ['t6.l8', ['t5.prefix-routing'], []],
+    't6.lora-adapter-bytes': ['t6.l9', ['t4.quantized-bytes'], []],
+    't7.slo-error-budget': ['t7.l1', [], []],
+    't7.goodput': ['t7.l1', ['t7.slo-error-budget'], []],
+    't7.goodput-curve': ['t7.l2', ['t7.goodput'], []],
+    't7.pareto-frontier': ['t7.l3', ['t7.goodput-curve'], []],
+    't7.cost-per-mtok': ['t7.l4', ['t7.goodput'], []],
+    't7.capacity-planning': ['t7.l5', ['t7.goodput'], []],
+    't7.incident-diagnosis': ['t7.l5', ['t7.slo-error-budget'], []],
+  }
+
+  test('all 31 are exported from ids.ts and defined', () => {
+    expect(Object.keys(TABLE)).toHaveLength(31)
+    const exported = new Set<string>(Object.values(KC))
+    for (const id of Object.keys(TABLE)) {
+      expect({ id, exported: exported.has(id) }).toEqual({ id, exported: true })
+      expect(kcById(id)?.id).toBe(id)
+    }
+  })
+
+  test('each has the introducing lesson, requires and labs the table lists', () => {
+    for (const [id, [lesson, requires, labs]] of Object.entries(TABLE)) {
+      const k = kcById(id)
+      expect({ id, lesson: k?.lessons[0] }).toEqual({ id, lesson })
+      expect({ id, requires: [...(k?.requires ?? [])].sort() }).toEqual({ id, requires: [...requires].sort() })
+      expect({ id, labs: k?.labs ?? [] }).toEqual({ id, labs })
+    }
+  })
+
+  test('every gen link of the family table is set, so a family lands without editing a KC file', () => {
+    const families: Record<string, string[]> = {
+      goodput: ['t7.goodput', 't7.goodput-curve', 't7.pareto-frontier', 't7.capacity-planning'],
+      cost: ['t7.cost-per-mtok', 't6.ep-economics', 't6.agent-prefix-locality'],
+      memory: ['t4.quantized-bytes', 't6.moe-active-params', 't6.parallel-memory', 't6.fp4-capacity', 't6.lora-adapter-bytes'],
+      spec: ['t6.spec-acceptance', 't5.speculative-decoding'],
+      sig: ['t7.incident-diagnosis', 't5.kv-capacity', 't2.admission-scheduling', 't7.capacity-planning', 't5.prefill-decode-interference'],
+      compile: [
+        'r.ownership-moves',
+        'r.clone-copy-drop',
+        'r.borrow-rules',
+        'r.slices',
+        'r.lifetimes',
+        'r.interior-mutability',
+        'r.permissions',
+        'r.analyzer-limits',
+      ],
+    }
+    for (const [family, ids] of Object.entries(families)) {
+      expect({ family, kcs: KCS.filter((k) => k.gen?.includes(family)).map((k) => k.id).sort() }).toEqual({ family, kcs: [...ids].sort() })
+    }
+  })
+
+  test('the R pairing edges: t1.ownership-answer requires r.permissions, t3.unsafe-boundaries requires r.analyzer-limits', () => {
+    expect(kcById('t1.ownership-answer')?.requires).toContain(KC.permissions)
+    expect(kcById(KC.unsafeBoundaries)?.requires).toContain(KC.analyzerLimits)
+    const index = indexKcs(KCS)
+    for (const lab of ['kv-block-manager', 'bpe-tokenizer']) {
+      expect(KCS.filter((k) => k.labs?.includes(lab)).length).toBeGreaterThan(0)
+    }
+    // the readiness lessons each introduce a prerequisite of the lab's check KCs (§4.2, last note)
+    const labReady: Record<string, string[]> = { 'kv-block-manager': ['r.l5', 'r.l6', 'r.l7'], 'bpe-tokenizer': ['r.l5', 'r.l6'] }
+    for (const [lab, lessons] of Object.entries(labReady)) {
+      const reach = new Set(KCS.filter((k) => k.labs?.includes(lab)).flatMap((k) => [k.id, ...prerequisitesOf(index, k.id)]))
+      for (const l of lessons) expect({ lab, l, ok: kcsIntroducedIn(KCS, l).some((k) => reach.has(k.id)) }).toEqual({ lab, l, ok: true })
+    }
   })
 })
 

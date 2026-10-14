@@ -32,6 +32,23 @@ const bad = (e: unknown) => {
   return r.ok ? null : r.reason
 }
 
+describe('Wave 2 shapes at the import boundary (contract-v32.test.ts has the full lists)', () => {
+  const incident = evt('incident', 'inc:drill/drain-stall', T1, {
+    data: { v: 1, src: 'drill', fault: 'drain-stall', severity: 2, probes: ['p'], diagnosed: true, fixed: true, burn: 1, expertBurn: 1, streetlight: 0, components: [] },
+  })
+
+  test('an incident, a packet ack and the slot map import; a malformed one refuses the file', () => {
+    const slots = { key: 'engine:slots', value: { scheduler: { sha256: 'ab'.repeat(32), labId: 'l', version: 1, at: T1 } }, at: T1, dev: 'd' }
+    const packet = evt('ack', 'packet:lesson/t5.l4', T1, { data: { via: 'copy', chars: 10 } })
+    const file = exportOf({ events: [incident, packet], working: [slots as never] })
+    const ok = parseImport(serializeExport(file))
+    expect(ok.ok && ok.file.events).toHaveLength(2)
+    expect(bad({ ...incident, data: { ...(incident as { data: object }).data, fault: 'nope' } })).toContain('data.fault')
+    const refused = parseImport(JSON.stringify({ ...file, events: [{ ...packet, data: { via: 'copy', chars: 6001 } }] }))
+    expect(refused).toMatchObject({ ok: false, error: 'invalid' })
+  })
+})
+
 describe('prototype-unsafe ids at the import boundary', () => {
   const good = () => evt('quiz', 'lesson:t0.l1', T1, { score: 0.5, ok: false })
 

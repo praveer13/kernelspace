@@ -46,16 +46,22 @@ import type { ImportFile } from '@/components/ledger/ImportPreview'
 import { TRACKS, CAPSTONE, ORDERED_LESSON_IDS, SIMS } from '@/lib/tracks'
 import { ALL_LESSONS } from '@/data/lessons'
 import ProgressRing from '@/components/ProgressRing'
-import { RINGS_PENDING, selectRings } from '@/lib/economy'
-import type { RingRecall } from '@/lib/learner/summary'
+import { selectRings } from '@/lib/economy'
+import type { AmberRing } from '@/lib/learner/ring-recall'
 import XpExplainer from '@/pages/progress/XpExplainer'
+import RingChecklists from '@/pages/progress/RingChecklists'
+import { ringSections } from '@/pages/progress/ring-rows'
+import { useRingEvidence } from '@/pages/progress/useRingEvidence'
 import { useSummary } from '@/pages/progress/useSummary'
 import { useUpNext, type UpNextState } from '@/lib/learner/up-next'
-import { PLACEMENT_ROUTE } from '@/lib/learner/recommend'
+import UpNextCard from '@/components/learner/UpNextCard'
 import { cn } from '@/lib/utils'
 
 // The review model (calibration, week, hand-off) loads on demand, after the rings have painted.
 const ReviewPanel = lazy(() => import('@/pages/progress/ReviewPanel'))
+// Mount points that 2b-12 and 2a-21 fill (wave-2.md §2.3); each renders nothing until then.
+const EngineCard = lazy(() => import('@/components/engine/EngineCard'))
+const DonateExport = lazy(() => import('@/components/ledger/DonateExport'))
 
 /* ---------------- shared bits ---------------- */
 
@@ -245,44 +251,20 @@ const ACHIEVEMENTS: AchievementDef[] = [
 
 /* ---------------- section 1: ring panel ---------------- */
 
-/** One line of the RING 2 checklist: what is done of what, and where to go to do more. */
-function CheckRow({ done, label, count, to, action }: { done: boolean; label: string; count: string; to: string; action: string }) {
-  return (
-    <li className="flex items-center gap-3">
-      <span
-        aria-hidden
-        className={cn(
-          'flex size-4 shrink-0 items-center justify-center rounded-full border',
-          done ? 'border-accent bg-accent text-accent-foreground' : 'border-line-bright',
-        )}
-      >
-        {done && <Check size={11} strokeWidth={3} />}
-      </span>
-      <span className="min-w-0 flex-1 text-body-sm text-text-1">
-        {label} <span className="font-mono text-[12px] text-text-2">{count}</span>
-        <span className="sr-only">{done ? ', done' : ', not done'}</span>
-      </span>
-      <Link
-        to={to}
-        className="inline-flex min-h-11 shrink-0 items-center font-mono text-[12px] text-text-2 underline underline-offset-2 hover:text-accent"
-      >
-        {action}
-        <span className="sr-only"> {label}</span>
-      </Link>
-    </li>
-  )
-}
-
 /**
- * The highest ring earned and what RING 2 still needs (§8.5). Rings are derived from the ledger, never revoked
- * and never a gate; amber (mean predicted recall under 0.8 over the ring's ideas) is only a nudge to refresh.
+ * The highest ring earned and what each ring still needs (§8.5; wave-2.md §6.4). Rings are derived from the
+ * ledger, never revoked and never a gate; amber (mean predicted recall under 0.8 over the ring's ideas) is only a
+ * nudge to refresh. The headline reads the ledger's cold checks once they have loaded, which only ROOT needs.
  */
-function RingPanel({ recall }: { recall: RingRecall | null }) {
+function RingPanel() {
   const xp = useProgress((s) => s.xp)
   const aggregate = useProgress((s) => s.aggregate)
   const lessons = useProgress((s) => s.lessons)
   const sims = useProgress((s) => s.sims)
-  const { rank, ring2 } = useMemo(() => selectRings(aggregate), [aggregate])
+  const { cold, recall } = useRingEvidence()
+  const rings = useMemo(() => selectRings(aggregate, cold), [aggregate, cold])
+  const sections = useMemo(() => ringSections(rings, cold !== undefined), [rings, cold])
+  const { rank } = rings
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true })
   const shownXp = useCountUp(xp, inView)
@@ -292,7 +274,7 @@ function RingPanel({ recall }: { recall: RingRecall | null }) {
     ? Math.round((scored.reduce((a, l) => a + (l.quizScore ?? 0), 0) / scored.length) * 100)
     : 0
   const labTasks = Object.values(sims).reduce((a, s) => a + s.tasksDone.length, 0)
-  const amber = ring2.earned && recall?.amber === true
+  const amber = rings.earned.filter((r): r is AmberRing => r !== 'RING 3' && recall[r]?.amber === true)
 
   return (
     <motion.div
@@ -307,43 +289,23 @@ function RingPanel({ recall }: { recall: RingRecall | null }) {
       <p className="font-mono text-[11px] uppercase tracking-[0.10em] text-text-3">highest ring earned</p>
       <p className="mt-2 font-display text-[40px] font-bold leading-none text-text-1">{rank}</p>
       <p className="mt-2 font-mono text-[11px] text-text-3">{RANK_FLAVOR[rank]}</p>
-      {amber && recall?.mean != null && (
-        <p data-ring-amber className="mt-3 rounded-md border border-amber/50 bg-amber/10 px-3 py-2 text-body-sm text-text-1">
-          Amber: predicted recall of RING 2's ideas is {Math.round(recall.mean * 100)} %. Your ring stays; a short review on Today brings it up.
-        </p>
-      )}
+      {amber.map((r) => {
+        const mean = recall[r]?.mean
+        return (
+          mean != null && (
+            <p key={r} data-ring-amber={r} className="mt-3 rounded-md border border-amber/50 bg-amber/10 px-3 py-2 text-body-sm text-text-1">
+              Amber: predicted recall of {r}'s ideas is {Math.round(mean * 100)} %. Your ring stays; a short review on Today brings it up.
+            </p>
+          )
+        )
+      })}
 
-      <h2 className="mt-5 font-mono text-[11px] uppercase tracking-[0.10em] text-text-3">
-        RING 2 {ring2.earned ? 'earned' : 'checklist'}
-      </h2>
-      <ul className="mt-2 space-y-0.5" data-ring2-checklist>
-        <CheckRow
-          done={ring2.rDrills.done === ring2.rDrills.total}
-          label="R drills"
-          count={`${ring2.rDrills.done}/${ring2.rDrills.total}`}
-          to={ring2.rDrills.missing[0] ? `/forge/${ring2.rDrills.missing[0]}` : '/forge'}
-          action={ring2.rDrills.done === ring2.rDrills.total ? 'open' : 'next drill'}
-        />
-        <CheckRow
-          done={ring2.lab01.done}
-          label="Lab 01"
-          count={`${ring2.lab01.checks.done}/${ring2.lab01.checks.total} checks`}
-          to="/forge/rust-allocator"
-          action={ring2.lab01.done ? 'open' : 'continue'}
-        />
-        <CheckRow
-          done={ring2.tickets.done === ring2.tickets.total}
-          label="Tickets"
-          count={`${ring2.tickets.done}/${ring2.tickets.total}`}
-          to={ring2.tickets.missing[0] ? `/lesson/${ring2.tickets.missing[0]}` : '/curriculum'}
-          action={ring2.tickets.done === ring2.tickets.total ? 'open' : 'next ticket'}
-        />
-      </ul>
+      <h2 className="mt-5 font-mono text-[11px] uppercase tracking-[0.10em] text-text-3">What each ring needs</h2>
+      <RingChecklists sections={sections} />
       <p className="mt-2 text-[13px] text-text-3">
-        Drills and the lab count when their checks pass on numbers you have not seen. A ticket counts when you pass it, not when you read the
-        lesson.
+        Drills and labs count when their checks pass on numbers you have not seen. A ticket counts when you pass it, not when you read the
+        lesson. Rings are earned on their own and nothing locks behind them.
       </p>
-      <p className="mt-3 text-[13px] text-text-3">{RINGS_PENDING.join(', ')}: criteria arrive in Wave 2–3.</p>
 
       <p className="mt-4 border-t border-line pt-3 font-mono text-[11px] text-text-3">
         {Math.round(shownXp)} XP · lessons {done}/{TOTAL_LESSONS} · quizzes {quizAvg}% · lab tasks {labTasks}/{TOTAL_LAB_TASKS}
@@ -686,7 +648,12 @@ function Heatmap() {
           longest streak {longest}d · total active days {totalActive}
         </p>
       </div>
-      <div className="relative mt-5 overflow-x-auto rounded-md border border-line bg-surface-1 p-4 scrollbar-slim">
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label="Activity heatmap, scrolls sideways on a narrow screen"
+        className="relative mt-5 overflow-x-auto rounded-md border border-line bg-surface-1 p-4 scrollbar-slim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
         <div className="flex min-w-[640px] gap-[3px]" role="img" aria-label={`Activity heatmap — ${totalActive} active days in the last 20 weeks`}>
           {weeks.map((col, w) => (
             <div key={w} className="flex flex-col gap-[3px]">
@@ -1223,7 +1190,6 @@ function DataOwnership() {
 /* ---------------- section 7: up next ---------------- */
 
 function UpNext({ up }: { up: UpNextState }) {
-  const reduced = useReducedMotion()
   if (up.status === 'loading') {
     return <div data-up-next-slot aria-busy="true" className="min-h-[7rem] rounded-lg border border-line bg-surface-1" />
   }
@@ -1235,57 +1201,7 @@ function UpNext({ up }: { up: UpNextState }) {
       </Link>
     )
   }
-  const { rec, offerPlacement } = up
-  const track = rec.kind === 'lesson' ? TRACKS.find((t) => t.id === rec.ref.split('.')[0]) : undefined
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      data-up-next={rec.kind}
-      className="relative overflow-hidden rounded-lg border border-line bg-surface-1 p-5"
-    >
-      <div className="absolute inset-x-0 top-0 h-px overflow-hidden" aria-hidden>
-        {!reduced && (
-          <motion.div
-            className="h-full w-1/3 bg-grad-brand"
-            animate={{ x: ['-100%', '300%'] }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-          />
-        )}
-        {reduced && <div className="h-full bg-grad-brand" />}
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="font-mono text-[10px] uppercase tracking-[0.10em] text-text-3">
-            {rec.kind === 'today' ? 'review' : 'recommended next instruction'}
-          </p>
-          <p className="mt-1.5 flex flex-wrap items-center gap-2">
-            {track && (
-              <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px]" style={{ color: track.color }}>
-                {track.code}
-              </span>
-            )}
-            <span className="font-mono text-body-sm text-text-1 [overflow-wrap:anywhere]">{rec.title}</span>
-            <span className="font-mono text-[11px] text-text-3">· ~{rec.minutes}min</span>
-          </p>
-          <p className="mt-1.5 text-body-sm text-text-2">{rec.why}</p>
-          {offerPlacement && (
-            <Link to={PLACEMENT_ROUTE} className="mt-2 inline-flex min-h-11 items-center text-body-sm text-text-2 underline decoration-line-bright underline-offset-4 hover:text-text-1">
-              Already know some of this? Place yourself, about 15 min
-            </Link>
-          )}
-        </div>
-        <Link
-          to={rec.to}
-          className="flex items-center gap-2 rounded-md bg-accent px-5 py-3 font-display text-[15px] font-semibold text-accent-foreground transition-all duration-150 ease-snap hover:-translate-y-px active:scale-[.97]"
-        >
-          <Play size={14} /> execute →
-        </Link>
-      </div>
-    </motion.div>
-  )
+  return <UpNextCard rec={up.rec} offerPlacement={up.offerPlacement} />
 }
 
 /* ---------------- page assembly ---------------- */
@@ -1319,7 +1235,7 @@ export default function Progress() {
               </div>
             )}
           </motion.div>
-          <RingPanel recall={load.status === 'ready' ? load.summary.recall : null} />
+          <RingPanel />
         </div>
 
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
@@ -1330,10 +1246,16 @@ export default function Progress() {
         </div>
 
         <KpiBand />
+        <Suspense fallback={null}>
+          <EngineCard />
+        </Suspense>
         <TrackBreakdown nextId={nextLessonId} />
         <Heatmap />
         <Achievements />
         <DataOwnership />
+        <Suspense fallback={null}>
+          <DonateExport />
+        </Suspense>
         {!hasAny && (
           <div className="mt-14">
             <UpNext up={up} />

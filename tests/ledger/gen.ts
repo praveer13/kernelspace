@@ -5,15 +5,21 @@
  * - splitmix32 drives every choice, so a seed replays exactly (`LEDGER_SEED=<n>`).
  * - Pools are fixed, so tests stay independent of content edits.
  * - Devices have their own tz and a deterministic id stream; the clock starts 2026-09-01T08:00Z.
- * - Ops mirror the façade actions (spec §8.3-8.4, and the Wave 1 actions of wave-1.md §3.3), including
- *   their skip rules. Every shape is one the codec must accept, so the import properties exercise it.
+ * - Ops mirror the façade actions (spec §8.3-8.4, the Wave 1 actions of wave-1.md §3.3 and the Wave 2 actions of
+ *   wave-2.md §3.3), including their skip rules. Every shape is one the codec must accept, so the import
+ *   properties exercise it.
  */
-import { derive } from '../../src/lib/ledger/fold'
+import { ENGINE_SLOTS, FAULT_IDS, FLEET_RUN_MODES } from '../../src/lib/ledger/constants'
+import { derive, fleetRunOk, fleetRunScore, incidentOk, incidentScore } from '../../src/lib/ledger/fold'
 import { compareEvents, compareWorking, type Ledger } from '../../src/lib/ledger/merge'
 import { stableStringify } from '../../src/lib/ledger/stable'
 import { dayOf } from '../../src/lib/ledger/time'
 import type {
   Confidence,
+  EngineSlots,
+  FaultId,
+  FleetRunData,
+  IncidentData,
   LedgerEvent,
   Provenance,
   WorkingKey,
@@ -44,6 +50,12 @@ export const PLAY = 'block-placement'
 export const FORMS = ['ticket', 'spiral', 'testout'] as const
 /** Wave 1 item refs, one of each grammar (wave-1.md §3.2). */
 export const WAVE1_ITEM_REFS = ['gen:frag/first-fit', 'gen:kv/bytes-per-token', 'pre:t1.l4#0', 'dia:t1.l3#5', 'cr:t0.l4#0', 'item:r.anchor.e0502-1']
+/** Wave 2 pools (wave-2.md §3.2): faults, slots, run modes, module hashes and packet refs, one of each grammar. */
+export const FAULTS: readonly FaultId[] = FAULT_IDS
+export const SLOTS = ENGINE_SLOTS
+export const FLEET_MODES = FLEET_RUN_MODES
+export const SHAS = ['a1', 'b2', 'c3', 'd4'].map((p) => p.repeat(32))
+export const PACKET_REFS = ['packet:lab/kv-block-manager/cow', 'packet:lesson/t5.l4', 'packet:sim/sim-kv']
 const KCS = ['kc.frag.external', 'kc.kv.size', 'kc.roofline.bound']
 export const TZS = [-420, 0, 330, 540]
 export const START_MS = Date.parse('2026-09-01T08:00:00.000Z')
@@ -67,7 +79,7 @@ let handBuilt = 0
 
 /** A hand-made event for unit tests: graded kinds get `score: 1, ok: true, provenance: 'practice'` unless `extra` says otherwise. */
 export function evt(kind: LedgerEvent['kind'], ref: string, at: string, extra: Record<string, unknown> = {}, tz = 0): LedgerEvent {
-  const graded = ['item', 'probe', 'quiz', 'predict', 'sim-task', 'lab-check', 'fleet-act', 'capstone-step', 'play', 'prove'].includes(kind)
+  const graded = ['item', 'probe', 'quiz', 'predict', 'sim-task', 'lab-check', 'fleet-act', 'capstone-step', 'play', 'prove', 'incident', 'fleet-run'].includes(kind)
   return {
     id: `h${handBuilt++}`,
     v: 1,
@@ -252,7 +264,11 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
     name: 'fleet-act',
     run: (d) => {
       const act = pick(d.rand, ACTS)
-      d.graded('fleet-act', `fw:${act}`, Math.round(d.rand() * 100) / 100, true)
+      // wave-2.md §3.3: `meta` adds the seed, the provenance and `data`
+      const meta = chance(d.rand, 0.4)
+        ? { seed: int(d.rand, 0, 0xffffffff), provenance: pick(d.rand, ['practice', 'unseen'] as const), data: { goodput: int(d.rand, 1, 99), refGoodput: 50 } }
+        : {}
+      d.graded('fleet-act', `fw:${act}`, Math.round(d.rand() * 100) / 100, true, meta)
       if (d.skips) {
         const agg = d.agg
         if (Object.keys(agg.fleetWeek.acts).length >= 4 && agg.achievements['fleet-week'] === undefined) {
@@ -418,7 +434,11 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
     run: (d) => {
       const phase = pick(d.rand, ['play', 'compose'] as const)
       const ok = chance(d.rand, 0.6)
-      d.graded('play', `play:${PLAY}`, Math.round(d.rand() * 100) / 100, ok, {
+      const scheduler = chance(d.rand, 0.35)
+      const spec = scheduler
+        ? { order: pick(d.rand, ['fcfs', 'sjf'] as const), guard: 2000, headroom: 48, preempt: pick(d.rand, ['none', 'newest'] as const) }
+        : { fit: 'best', coalesce: 'eager', minSplit: 16, classes: 'pow2' }
+      d.graded('play', `play:${scheduler ? 'scheduler' : PLAY}`, Math.round(d.rand() * 100) / 100, ok, {
         provenance: pick(d.rand, ['practice', 'unseen'] as const),
         seed: int(d.rand, 0, 0xffffffff),
         data: {
@@ -426,10 +446,10 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
           turns: int(d.rand, 1, 20),
           survived: int(d.rand, 0, 20),
           ghostSurvived: int(d.rand, 0, 20),
-          ...(phase === 'compose' ? { spec: { fit: 'best', coalesce: 'eager', minSplit: 16, classes: 'pow2' }, equivalent: ok } : {}),
+          ...(phase === 'compose' ? { spec, equivalent: ok } : {}),
         },
       })
-      return `${phase} ${ok ? 'ok' : 'miss'}`
+      return `${scheduler ? 'scheduler ' : ''}${phase} ${ok ? 'ok' : 'miss'}`
     },
   },
   {
@@ -476,7 +496,7 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
         provenance: chance(d.rand, 0.5) ? 'unseen' : 'practice',
         ...maybeConf(d.rand),
         data: {
-          src: pick(d.rand, ['today', 'placement', 'practice', 'pre', 'diagram'] as const),
+          src: pick(d.rand, ['today', 'placement', 'practice', 'pre', 'diagram', 'lesson', 'daily'] as const),
           kcs: shuffle(d.rand, KCS).slice(0, 2),
           nsec: int(d.rand, 0, 600),
           slot: int(d.rand, 0, 7),
@@ -501,12 +521,111 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
       return null
     },
   },
+  /* ---- Wave 2 (wave-2.md §3.3): every new action, with its skip rule ---- */
+  {
+    weight: 4,
+    name: 'incident',
+    run: (d) => {
+      const r = d.rand
+      const src = pick(r, ['daily', 'drill', 'team'] as const)
+      const fault = pick(r, FAULTS)
+      const date = dayOf(d.iso, d.tz)
+      const ref = src === 'daily' ? `inc:daily/${date}` : src === 'drill' ? `inc:drill/${fault}` : `inc:team/${pick(r, ['blue', 'red'])}/${date}`
+      const diagnosed = chance(r, 0.7)
+      const data: IncidentData = {
+        v: 1,
+        src,
+        fault,
+        severity: pick(r, [1, 2, 3] as const),
+        ...(chance(r, 0.6) ? { firstHypothesis: pick(r, [...FAULTS, 'unsure'] as const) } : {}),
+        hypothesis: diagnosed ? fault : 'unsure',
+        probes: shuffle(r, ['queue-depth', 'kv-pool', 'node-health', 'tenant-mix', 'ttft-split']).slice(0, int(r, 0, 5)),
+        ...(chance(r, 0.8) ? { fix: pick(r, ['grow-pool', 'restart-node', 'rate-limit']) } : {}),
+        diagnosed,
+        fixed: chance(r, 0.7),
+        burn: int(r, 0, 300) / 10,
+        expertBurn: int(r, 0, 100) / 10,
+        streetlight: int(r, 0, 4),
+        components: shuffle(r, SHAS).slice(0, int(r, 0, 3)),
+        ...(src === 'drill' ? (chance(r, 0.3) ? { act4: true } : {}) : { date }),
+        ...(chance(r, 0.3) ? { kcs: [KCS[0]] } : {}),
+      }
+      d.graded('incident', ref, incidentScore(data), incidentOk(data), {
+        provenance: src === 'drill' ? 'unseen' : 'practice',
+        seed: int(r, 0, 0xffffffff),
+        ms: int(r, 1000, 600_000),
+        data,
+      })
+      return `${ref} ${incidentOk(data) ? 'ok' : 'miss'}`
+    },
+  },
+  {
+    weight: 3,
+    name: 'fleet-run',
+    run: (d) => {
+      const r = d.rand
+      const parts = shuffle(r, SLOTS).slice(0, int(r, 0, 3))
+      if (parts.length === 0) return null // recordFleetRun skips a run with no own component
+      const mode = pick(r, FLEET_MODES)
+      const refGoodput = int(r, 20, 80)
+      const data: FleetRunData = {
+        v: 1,
+        mode,
+        components: parts.map((slot) => ({ slot, labId: pick(r, Object.keys(LABS)), sha256: pick(r, SHAS) })),
+        seeds: pick(r, ['fresh', 'practice'] as const),
+        goodput: int(r, 10, 90),
+        refGoodput,
+        ...(chance(r, 0.5) ? { ttftP95: int(r, 100, 3000) } : {}),
+      }
+      d.graded('fleet-run', `fleet:${mode}`, fleetRunScore(data), fleetRunOk(data), {
+        provenance: data.seeds === 'fresh' ? 'unseen' : 'practice',
+        seed: int(r, 0, 0xffffffff),
+        data,
+      })
+      return `${mode} ${fleetRunOk(data) ? 'ok' : 'miss'}`
+    },
+  },
+  {
+    weight: 2,
+    name: 'install-component',
+    run: (d) => {
+      const slot = pick(d.rand, SLOTS)
+      const sha256 = pick(d.rand, SHAS)
+      const slots = { ...((d.working.get('engine:slots')?.value ?? {}) as EngineSlots) }
+      if (d.skips && slots[slot]?.sha256 === sha256) return null
+      slots[slot] = { sha256, labId: pick(d.rand, Object.keys(LABS)), version: int(d.rand, 1, 3), at: d.iso }
+      d.setWorking('engine:slots', slots as WorkingRecord['value'])
+      return `${slot} ${sha256.slice(0, 4)}`
+    },
+  },
+  {
+    weight: 1,
+    name: 'remove-component',
+    run: (d) => {
+      const slot = pick(d.rand, SLOTS)
+      const slots = { ...((d.working.get('engine:slots')?.value ?? {}) as EngineSlots) }
+      if (d.skips && slots[slot] === undefined) return null
+      delete slots[slot]
+      d.setWorking('engine:slots', slots as WorkingRecord['value'])
+      return slot
+    },
+  },
+  {
+    weight: 3,
+    name: 'help',
+    run: (d) => {
+      // never skipped: help-seeking is counted
+      const ref = pick(d.rand, PACKET_REFS)
+      d.emit('ack', ref, { data: { via: pick(d.rand, ['claude', 'chatgpt', 'copy'] as const), chars: int(d.rand, 0, 6000), ...(chance(d.rand, 0.5) ? { arm: pick(d.rand, ['ladder', 'packet'] as const) } : {}) } })
+      return ref
+    },
+  },
   {
     weight: 4,
     name: 'working',
     run: (d) => {
       const r = d.rand
-      switch (int(r, 0, 9)) {
+      switch (int(r, 0, 12)) {
         case 0: {
           const id = pick(r, LESSONS)
           if (d.skips && !d.agg.lessons[id]) return null
@@ -537,6 +656,16 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
         case 8:
           d.setWorking('today:prefs', { phoneMode: chance(r, 0.5), sessionMinutes: int(r, 5, 12) })
           return 'today:prefs'
+        case 10:
+          if (d.skips && d.working.has('exp:seed')) return null // created once
+          d.setWorking('exp:seed', int(r, 0, 0xffffffff))
+          return 'exp:seed'
+        case 11:
+          d.setWorking('zoo:config', `{"num_hidden_layers": ${int(r, 1, 80)}}`)
+          return 'zoo:config'
+        case 12:
+          d.setWorking('daily:team', pick(r, ['blue', 'red']))
+          return 'daily:team'
         default:
           d.setWorking('boot:week', { minutesPerWeek: 180, sessionMinutes: 12, phoneDays: [1, 3], laptopDays: [6], slo: 0.9 })
           return 'boot:week'

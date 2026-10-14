@@ -55,10 +55,20 @@ export const FLEET_ACT_MINUTES: Readonly<Record<string, number>> = {
   incident: 20,
 }
 
-/** `play:<id>`: `PlayDef.minutes` (W1 declares the same number on the play def). */
+/** `play:<id>`: `PlayDef.minutes` (W1 declares the same number on the play def). The scheduler's price lands before 2b registers the play. */
 export const PLAY_MINUTES: Readonly<Record<string, number>> = {
   'block-placement': 15,
+  scheduler: 20,
 }
+
+/** `inc:daily/<date>` and `inc:drill/<fault>` (wave-2.md §3.4): nominal [estimated]; a team run pays nothing. */
+export const INCIDENT_MINUTES: Readonly<Record<string, number>> = {
+  daily: 10,
+  drill: 5,
+}
+
+/** `fleet:<mode>`: a run with an own component, nominal [estimated]. */
+export const FLEET_RUN_MINUTES = 10
 
 /** The 19 lessons whose exit tickets RING 2 needs (T0 · T1 · T2). */
 export const RING2_LESSONS: readonly string[] = [
@@ -73,5 +83,48 @@ export const RING2_R_LABS: readonly string[] = ['rust-zero-r1', 'rust-zero-r2', 
 /** Lab 01, the allocator, on unseen seeds. */
 export const RING2_LAB: string = 'rust-allocator'
 
-/** Lessons whose `ticket.form` is `spiral` (§8.6): their `quiz-pass:` fact pays the spiral price. */
-export const SPIRAL_LESSONS: readonly string[] = ['t2.l7']
+/** Lessons whose `ticket.form` is `spiral` (§8.6; wave-2.md §6.2): their `quiz-pass:` fact pays the spiral price. T2's plus the five track-end spirals of T3–T7. */
+export const SPIRAL_LESSONS: readonly string[] = ['t2.l7', 't3.l7', 't4.l7', 't5.l10', 't6.l10', 't7.l5']
+
+/* RING 1, RING 0 and ROOT (wave-2.md §6.4; PLAN-100X §5.1 V5). Each ring reads only these ids and the aggregate. */
+
+/** RING 1: R6–R10 on unseen seeds. */
+export const RING1_R_LABS: readonly string[] = ['rust-zero-r6', 'rust-zero-r7', 'rust-zero-r8', 'rust-zero-r9', 'rust-zero-r10']
+
+/** RING 1: labs 04 (the intake ring) and 05 (the toy executor) on unseen seeds. */
+export const RING1_LABS: readonly string[] = ['mpmc-queue', 'toy-executor']
+
+/** RING 1: every T3 and T4 lesson *done*. */
+export const RING1_LESSONS: readonly string[] = [
+  't3.l1', 't3.l2', 't3.l3', 't3.l4', 't3.l5', 't3.l6', 't3.l7',
+  't4.l1', 't4.l2', 't4.l3', 't4.l4', 't4.l5', 't4.l6', 't4.l7',
+]
+
+/** RING 0: labs 02, 03, 06 and 07 on unseen seeds (lab 06's "within 3 points of the reference" waits for Wave 3, D14). */
+export const RING0_LABS: readonly string[] = ['kv-block-manager', 'bpe-tokenizer', 'batching-scheduler', 'radix-cache']
+
+/** RING 0: every T5 lesson *done*. */
+export const RING0_LESSONS: readonly string[] = [
+  't5.l1', 't5.l2', 't5.l3', 't5.l4', 't5.l5', 't5.l6', 't5.l7', 't5.l8', 't5.l9', 't5.l10',
+]
+
+/** ROOT: lab 08 on unseen seeds. */
+export const ROOT_LAB: string = 'xgrammar-lite'
+
+/** ROOT: Fleet Week acts I and II, run with own modules on unseen seeds (`fleetRuns[mode].unseenOk`). */
+export const ROOT_FLEET_RUNS: readonly string[] = ['act1', 'act2']
+
+/** ROOT: the Fleet Week acts that must be passed (`fleetWeek.acts`); the incident act is Act IV and not in the criteria. */
+export const ROOT_ACTS: readonly string[] = ['engine', 'fleet', 'business']
+
+/** ROOT: Daily incidents solved, on distinct local dates. */
+export const ROOT_DAILIES = 5
+
+/** ROOT: every T6 and T7 lesson *done*. */
+export const ROOT_LESSONS: readonly string[] = [
+  't6.l1', 't6.l2', 't6.l3', 't6.l4', 't6.l5', 't6.l6', 't6.l7', 't6.l8', 't6.l9', 't6.l10',
+  't7.l1', 't7.l2', 't7.l3', 't7.l4', 't7.l5',
+]
+
+/** ROOT's cold checks: Today `probe`s on a KC last exposed at least `days` earlier, at least `n` of them, at least `rate` right. */
+export const ROOT_COLD = { days: 30, n: 40, rate: 0.8 } as const

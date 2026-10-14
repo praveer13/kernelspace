@@ -53,6 +53,8 @@ import { cn } from '@/lib/utils'
 const PrimmPanel = lazy(() => import('@/components/forge/PrimmPanel').then((m) => ({ default: m.PrimmPanel })))
 const HintLadder = lazy(() => import('@/components/forge/HintLadder'))
 const ProveIt = lazy(() => import('@/components/forge/ProveIt'))
+// "Install in your engine" (wave-2.md §10.2): a stub until 2b-12, mounted here so that task never edits this page.
+const InstallButton = lazy(() => import('@/components/engine/InstallButton'))
 
 /** The one lab with the walk, the ladder and Prove it so far (§13). */
 const LAB01 = 'rust-allocator'
@@ -60,7 +62,8 @@ const LAB01 = 'rust-allocator'
 type RunState =
   | { kind: 'idle' }
   | { kind: 'running' }
-  | { kind: 'report'; report: LabRunReport; credit: Credit; note: CreditNote }
+  // `bytes` is the module that produced the report, kept for InstallButton (wave-2.md §2.3).
+  | { kind: 'report'; report: LabRunReport; credit: Credit; note: CreditNote; bytes: ArrayBuffer }
   | { kind: 'error'; title: string; detail: string }
 
 /** Checks as they finish while a run is in flight (v2 modules post each one). */
@@ -163,7 +166,7 @@ function LabPage({ lab }: { lab: ForgeLabDef }) {
         })
         focusResults.current = true
         setReports((prev) => [...prev, report])
-        setRun({ kind: 'report', report, credit, note })
+        setRun({ kind: 'report', report, credit, note, bytes })
         // A reference build is shown and never written (§12.3). Anything else is one `lab-check` event whose
         // provenance is what creditFor said; the ledger records which module earned it. crypto.subtle is absent on insecure origins.
         if (credit !== null) {
@@ -458,6 +461,12 @@ cargo build --release --target wasm32-unknown-unknown`}
                   <CheckRow key={row.id} row={row} index={i} />
                 ))}
               </ol>
+
+              {run.kind === 'report' && (
+                <Suspense fallback={null}>
+                  <InstallButton lab={lab} report={run.report} credit={run.credit} bytes={run.bytes} />
+                </Suspense>
+              )}
 
               {run.kind === 'report' && requiredReportPassed && run.credit !== null && (
                 <motion.div

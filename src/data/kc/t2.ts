@@ -137,6 +137,8 @@ export const T2_KCS: readonly Kc[] = [
     lessons: ['t2.l4', 't2.l3', 't2.l7'],
     requires: ['t2.sched-policies', 't2.thrashing'],
     threshold: 'core',
+    // `sig` (§4.2): signature items give queue telemetry and ask whether the engine should shed load
+    gen: ['sig'],
     since,
   },
   {

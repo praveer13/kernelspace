@@ -10,7 +10,78 @@ const lesson: Lesson = {
   hook: 'Block tables, copy-on-write prefix sharing, near-zero waste — inside the memory manager that made vLLM famous.',
   exercise: 'sim',
   simId: 'sim-kv',
+  kcs: ['t5.block-tables', 't5.block-refcounts', 't5.kv-copy-on-write'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'A sequence has 100 tokens and the block size is 16. How many blocks does it hold, how much of the last block is empty, and how is token 37 found?',
+        model:
+          '100 tokens need ceil(100 / 16) = 7 blocks. The last holds 4 tokens, so 12 slots are empty. Token 37 is logical block 2 (37 / 16) at offset 5 (37 mod 16). The block table maps logical block 2 to a physical block id, and the kernel reads that block at offset 5.',
+        ideas: [
+          'Seven blocks, with 12 empty slots in the last one',
+          'Token 37 is logical block 2, offset 5',
+          'The block table maps the logical block to a physical block id',
+        ],
+        kcs: ['t5.block-tables'],
+      },
+      {
+        prompt: 'Two sequences share a block. Explain what copy-on-write does when one of them appends a token to it, and why it must not write in place.',
+        model:
+          'A shared block has refcount 2 and is read-only. Writing in place would change tokens the other sequence still reads. So the writer allocates a new block, copies the existing KV into it, appends to the copy, updates its own table and drops one reference on the original. Fork itself copies nothing.',
+        ideas: [
+          'A block with refcount above 1 is read-only',
+          'The writer allocates a new block, copies the KV and appends to the copy',
+          'Fork copies nothing; the copy happens on the first write',
+        ],
+        kcs: ['t5.kv-copy-on-write', 't5.block-refcounts'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'Two requests start with the same 48-token system prompt, and the block size is 16 tokens. How does a paged KV manager store that shared prefix?',
+          options: [
+            'Twice, once per request, since each sequence needs memory of its own to append into safely',
+            'Once, in three blocks that both block tables point at, since the keys and values are identical',
+            'Once, in one contiguous region, since the manager places both requests next to the shared prompt',
+            'Once, in a single block of 48 tokens, since a block grows to fit whatever prefix is shared',
+          ],
+          correct: [1],
+          why: [
+            'Appending goes into each sequence\'s own tail blocks. The prefix blocks are identical and read-only, so there is nothing to protect by copying them.',
+            'Right: 48 tokens fill three 16-token blocks, and both block tables map to the same physical blocks with refcount 2. The prefix is paid for once.',
+            'Paging exists so that sequences need no contiguous placement. A block table can point anywhere in the pool, so nothing has to sit next to anything.',
+            'Blocks have a fixed size, 16 tokens by default. A longer prefix takes more blocks; it never makes a block bigger.',
+          ],
+          revealAt: 'The data structures, concretely',
+          kcs: ['t5.block-tables'],
+        },
+        {
+          kind: 'choice',
+          q: 'A block shared by two sequences has refcount 2. One of the sequences finishes and releases its blocks. What happens to that shared block?',
+          options: [
+            'It returns to the free queue at once, since the finished sequence listed it in its table',
+            'It stays out of the free queue, since one owner still holds it and the count has dropped by one',
+            'It stays reserved for good, since a block that was ever shared is kept for the prefix cache',
+            'It returns to the free queue after a timer, since shared blocks are reclaimed at fixed intervals',
+          ],
+          correct: [1],
+          why: [
+            'A block returns only when nobody points at it. The other sequence still reads it, so freeing it would corrupt that sequence.',
+            'Right: releasing drops the count from 2 to 1, and the block returns to the free queue only when its last owner drops it and the count reaches zero.',
+            'Sharing does not reserve a block. Once its refcount reaches zero it joins the free queue, still hashed and evictable, and is reused when the pool needs it.',
+            'The manager does no timed reclaiming. Refcounts reach zero exactly when the last owner releases, and that moment is the only trigger.',
+          ],
+          revealAt: 'The allocation lifecycle, end to end',
+          kcs: ['t5.block-refcounts'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `You passed the T2 exam, so you already *recognize* PagedAttention. This lesson is the owner's manual: the actual data structures, the allocation lifecycle of a sequence, how prefix caching falls out of refcounted blocks, what the CUDA kernel pays for indirection, and where the design's limits are. T2.L7 taught you *that* it's paging; T5.L5 teaches you *how* — enough to read vLLM's V1 KV-cache manager (\`vllm/v1/core\`) without a guide.`,
@@ -53,6 +124,24 @@ Blocks also carry a **refcount** for sharing. When refcount hits zero, the block
         { caption: '…e.g. beam search forks INSIDE a full block: the writer triggers copy-on-write — allocate a new block, copy 16 tokens of KV, update the table, decrement the source refcount. The fork() trick from T2.L2, per block.', active: ['b12'] },
         { caption: 'Sequence A finishes: decrement all its blocks\' refcounts; ref=0 blocks join the free queue in O(1) but stay cached, evictable and reusable on a prefix hit until reallocated. No compaction, no fragmentation — the T1.L4 fixed-block maneuver, live in production.', active: ['free'], edges: ['b9->free'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'A beam forks inside a shared block, and one beam now needs to write a new token into it. What does the manager do with that block?',
+        options: [
+          'It writes in place, since both beams hold the same tokens up to the fork and the write looks harmless',
+          'It gives the writing beam a private copy, since a shared block must not change under its other owner',
+          'It pauses the other beam, since a shared block allows one writer at a time and the other waits its turn',
+          'It frees the block for both beams, since a block that has to change can no longer be shared by anyone at all',
+        ],
+        correct: [1],
+        why: [
+          'The write would also change what the other beam reads, because both tables point at the same physical block. A block with refcount above 1 is read-only.',
+          'Right: copy-on-write allocates one block, copies the existing KV, updates the writer\'s table and drops a reference on the original. The other beam never notices.',
+          'Nothing is paused. Beams run in the same step, and the copy gives the writer a private block so no ownership has to be taken from the other.',
+          'Freeing a block that another beam still reads would corrupt that beam. The original stays in place for its remaining owner.',
+        ],
+        kcs: ['t5.kv-copy-on-write', 't5.block-refcounts'],
+      },
     },
     {
       type: 'prose',
@@ -139,6 +228,10 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
       note: `You have now operated the exact machinery from the SOSP paper: free list (T1), paging (T2.L2), COW sharing (T2.L2), eviction/preemption (T2.L3), admission control (T2.L4) — one Python class's worth of logic that doubled the industry's effective GPU capacity.`,
     },
     {
+      type: 'prose',
+      md: `**Build this:** [lab 02, stage 1 is a 2-minute win](/forge/kv-block-manager). You write this block manager in Rust: block tables, fork with refcounts, copy-on-write, and a 2,000-operation churn that checks block conservation after every step. Stage 1 (\`paging\`) is the block-table arithmetic from this lesson, translating a token position to a block and an offset.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -150,6 +243,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
             'Merging requests that share a system prompt into one long shared sequence, and splitting the outputs afterwards',
           ],
           correct: [1],
+          kcs: ['t5.block-refcounts', 't5.block-tables'],
           explanation:
             'Refcounted block sharing makes prefix caching nearly free: no copy, no special path, the same machinery as beam forks. This is why "the block table" is the whole design.',
           why: [
@@ -168,6 +262,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
             'Transfer cost between devices, against how many blocks the pool can hold and thereby concurrency',
           ],
           correct: [1],
+          kcs: ['t5.block-tables'],
           explanation:
             'The classic fixed-block pricing from T1.L4: waste lives in the tail, metadata lives in the table. 16 is the default because it is large enough to use the GPU efficiently and small enough to avoid much internal fragmentation.',
           why: [
@@ -186,6 +281,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
             'Raises an out-of-memory error for the whole engine, and aborts the in-flight requests with no scheduler recovery',
           ],
           correct: [1],
+          kcs: ['t5.block-tables', 't5.kv-capacity'],
           explanation:
             'Admission control plus eviction, T2.L3 verbatim. The block table makes preemption a metadata operation; V1 always recomputes (V0 could also swap), like dropping file-backed pages rather than writing them out.',
           why: [
@@ -204,6 +300,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
             'The table is small enough to live in registers, and lookups stay out of memory while the kernel matches a contiguous-cache kernel',
           ],
           correct: [1],
+          kcs: ['t5.block-tables'],
           explanation:
             'Indirection has a real kernel cost, 20-26% higher attention latency than FasterTransformer in the paper. It is repaid because 60-80% of KV memory had been wasted: reclaiming it grows batches and gives 2-4x higher end-to-end throughput than FasterTransformer and Orca.',
           why: [

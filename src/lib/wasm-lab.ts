@@ -249,10 +249,13 @@ export async function instantiateLab(bytes: ArrayBuffer | WebAssembly.Module): P
  * them in the lab worker so a ks_invoke that spins or traps is caught there, not on the main thread.
  * A lab with no entry (not a Fleet slot) is not probed.
  */
-const INVOKE_PROBES: Record<string, { init: string; then: string[] }> = {
+const INVOKE_PROBES: Record<string, { init: string; then: string[]; /** what the first reply must match, "ok" when absent */ reply?: RegExp }> = {
   'mpmc-queue': { init: 'init 4', then: ['push 1', 'pop'] },
   'kv-block-manager': { init: 'init 16 4', then: ['allocate 1 6', 'free_blocks', 'dump', 'free 1'] },
   'batching-scheduler': { init: 'init', then: ['schedule 0 4 256 0\nW 1 0 16\n'] },
+  // lab version 3 verbs (wave 2 §10.3): a module built from an older zip answers "err unknown command"
+  'radix-cache': { init: 'reset', then: ['insert 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18', 'match 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,99'] },
+  'bpe-tokenizer': { init: 'count 746865207363686564756c6572', reply: /^\d+$/, then: ['count f09fa680', 'count'] },
 }
 
 /** Run the canned ks_invoke exchange for `lab`. Throws LabTrapError (phase 'checks' — the caller relabels it) or LabAbiError; a spin is the caller's timeout. */
@@ -260,6 +263,8 @@ export function probeInvoke(mod: LabModule, lab: string): void {
   const probe = INVOKE_PROBES[lab]
   if (!probe) return
   const init = mod.invoke(probe.init).trim()
-  if (init !== 'ok') throw new LabAbiError(`ks_invoke('${probe.init}') answered "${init.slice(0, 60)}", not "ok" — the fleet cannot drive this module.`)
+  if (probe.reply ? !probe.reply.test(init) : init !== 'ok') {
+    throw new LabAbiError(`ks_invoke('${probe.init}') answered "${init.slice(0, 60)}", not ${probe.reply ? 'a count' : '"ok"'} — the fleet cannot drive this module.`)
+  }
   for (const cmd of probe.then) mod.invoke(cmd)
 }

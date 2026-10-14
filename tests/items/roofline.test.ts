@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { checkFamily, checkHashes, genSeeds, lintLiterals, type HashRows } from '../../scripts/verify-generators'
+import { checkFamily, checkHashes, genSeeds, lintLiterals, readHashRows } from '../../scripts/verify-generators'
 import { atlasRow } from '../../src/data/atlas'
 import { BOOT } from '../../src/lib/boot/model'
 import { partsText } from '../../src/lib/items/core'
@@ -9,7 +9,7 @@ import roofline from '../../src/lib/items/families/roofline'
 import type { Instance, Level, Response } from '../../src/lib/items/types'
 
 const FILE = new URL('../../src/lib/items/families/roofline.ts', import.meta.url)
-const hashes = JSON.parse(readFileSync(new URL('../fixtures/items/hashes.json', import.meta.url), 'utf8')) as HashRows
+const hashes = readHashRows('roofline') // tests/fixtures/items/hashes/roofline.json
 const LEVELS = [0, 1, 2, 3] as const
 const seeds = genSeeds(100)
 const HW = ['h100', 'b200', 'a100-80', 'rtx4090', 't4', 'tpu7x']

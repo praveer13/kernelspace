@@ -9,6 +9,8 @@ const indexHtml = await readFile(path.join(distRoot, 'index.html'), 'utf8')
 const staticRoutes = [
   'boot',
   'today',
+  'daily',
+  'errors',
   'curriculum',
   'lab',
   'glossary',
@@ -21,6 +23,7 @@ const staticRoutes = [
   'field-notes',
   'freshness',
   'play/block-placement',
+  'play/scheduler',
 ]
 
 const trackIds = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']

@@ -10,7 +10,78 @@ const lesson: Lesson = {
   hook: 'The two numbers that decide whether your kernel sings or crawls: enough warps to hide latency, and warp accesses the hardware can merge.',
   exercise: 'sim',
   simId: 'sim-roofline',
+  kcs: ['t4.occupancy', 't4.coalescing'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Name the three budgets that limit occupancy, and say what happens when a kernel exhausts one of them.',
+        model:
+          'Registers per multiprocessor, shared memory per multiprocessor, and the block and warp slots. Whichever runs out first caps the resident warps. With few warps, a stall on HBM leaves nothing else to run, so the multiprocessor idles and throughput falls even though the code is correct.',
+        ideas: [
+          'The budgets are registers, shared memory and block or warp slots',
+          'Whichever budget runs out first caps the number of resident warps',
+          'Too few warps leave a stall on HBM uncovered, so the multiprocessor idles',
+        ],
+        kcs: ['t4.occupancy'],
+      },
+      {
+        prompt: 'Count the memory transactions of one warp load when lane i reads base plus 4i bytes, and when it reads base plus 1024i bytes, and say what the second costs.',
+        model:
+          'The first touches 128 consecutive bytes, so it takes one transaction at full bandwidth. In the second every lane lands in its own 128-byte segment, so the load takes 32 transactions and delivers about a thirty-second of peak bandwidth. Staging through shared memory fixes it by coalescing the global loads.',
+        ideas: [
+          'Consecutive 4-byte reads fill one 128-byte segment, so one transaction',
+          'A kilobyte stride puts each lane in its own segment, so 32 transactions',
+          'Delivered bandwidth falls to about a thirty-second, and staging through shared memory restores it',
+        ],
+        kcs: ['t4.coalescing'],
+      },
+    ],
+  },
   blocks: [
+    {
+      type: 'predict',
+      items: [
+        {
+          kind: 'choice',
+          q: 'A kernel uses so many registers per thread that only four warps fit on each multiprocessor, and all four wait on HBM loads. What does the multiprocessor do?',
+          options: [
+            'It idles until a load returns, with no other warp resident to take over',
+            'It speculates past the loads, with the hardware running ahead until the data arrives',
+            'It pulls warps from a neighbouring multiprocessor, with the idle slots filled from its queue',
+            'It serves the loads from L2 instead, with the shorter latency leaving no time to idle',
+          ],
+          correct: [0],
+          why: [
+            'Right: latency hiding needs other warps to switch to, and four warps that all wait leave nothing ready. The multiprocessor sits idle for most of each load.',
+            'GPU cores are in-order and do not speculate. The only cover for a stall is another resident warp, and here there is none.',
+            'A multiprocessor cannot borrow warps from another one. A block stays on the multiprocessor it was assigned to until it finishes.',
+            'Loads that miss in L1 may hit in L2, but that is a property of the data, not a response to a stall, and an L2 hit still takes far longer than a cycle or two.',
+          ],
+          revealAt: 'Occupancy: warps in residence',
+          kcs: ['t4.occupancy'],
+        },
+        {
+          kind: 'choice',
+          q: 'The 32 lanes of a warp read 32 different addresses that fall in the same bank of shared memory. Next to 32 lanes on 32 different banks, how long does the access take?',
+          options: [
+            'About the same time, with shared memory serving the lanes together whichever banks they hit',
+            'Many times longer, with the accesses to the one bank served one after another',
+            'About twice as long, with the hardware splitting the warp into two halves of lanes',
+            'It faults, with the hardware rejecting a warp whose lanes collide on one bank',
+          ],
+          correct: [1],
+          why: [
+            'Shared memory is striped across banks and each bank serves one address per cycle. Lanes on different banks go together; lanes on the same bank do not.',
+            'Right: each bank handles one address at a time, so 32 different addresses in one bank take 32 passes. Padding the tile row by one element spreads the lanes across banks.',
+            'The warp is not split in halves for this. The hardware replays the access once for each extra address in the busiest bank, which can be as many as 32.',
+            'A bank conflict is legal and silent. It costs time, not an error, which is why it shows up only in a profiler.',
+          ],
+          revealAt: 'Coalescing: the warp-wide memory contract',
+          kcs: ['t4.coalescing'],
+        },
+      ],
+    },
     {
       type: 'prose',
       md: `T4.L1 gave you the two big GPU ideas — warps and latency-hiding. This lesson turns them into the two **measurable** quantities that dominate kernel performance in practice: **occupancy** (do you have enough warps resident to hide HBM latency?) and **coalescing** (does each warp memory instruction touch memory efficiently?). Most "my kernel is 10× slow" mysteries reduce to one of these two.
@@ -55,6 +126,24 @@ The classic violation is the "column walk" reincarnate: a kernel where \`threadI
         { caption: 'Coalesced: lane i reads base+4i — the warp consumes 128 consecutive bytes in ONE transaction. Full bandwidth; this is why GPU layouts are SoA-shaped (T0.L4).', active: ['coal', 't1'], edges: ['warp->coal', 'coal->t1'] },
         { caption: 'Scattered: lanes stride a kilobyte apart — 32 separate transactions, each wasting most of its segment. Same instruction count, ~1/32 the delivered bytes per cycle.', active: ['scat', 't32'], edges: ['warp->scat', 'scat->t32'] },
       ],
+      predictAt: {
+        step: 2,
+        prompt: 'Now the lanes read addresses a kilobyte apart. Next to the coalesced load, how many memory transactions does this one instruction need?',
+        options: [
+          'One, with the hardware merging whichever addresses a warp gives it into one wide transaction',
+          'Two, with one transaction for each half of the lanes in the warp',
+          'Eight, with one transaction for each group of four neighbouring lanes',
+          'Thirty-two, with one transaction for each lane and most of each segment wasted',
+        ],
+        correct: [3],
+        why: [
+          'The coalescer can only merge addresses that fall in the same 128-byte segment. A kilobyte apart, no two lanes share one.',
+          'There is no half-warp rule here. Transactions are counted by distinct segments touched, and each lane touches its own.',
+          'Groups of four lanes would share a segment only if their addresses were within 128 bytes of each other, and a kilobyte stride puts them far apart.',
+          'Right: each lane lands in a different 128-byte segment, so the one instruction becomes 32 transactions, each fetching a segment to use 4 bytes. Delivered bandwidth falls to about a thirty-second.',
+        ],
+        kcs: ['t4.coalescing'],
+      },
     },
     {
       type: 'callout',
@@ -107,6 +196,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
             'L2 is shared across SMs and is not partitioned per warp. Residency is set by per-SM resources: registers, shared memory and slots.',
             'HBM speed changes how long a stalled warp waits, not how many warps fit. The count is fixed by per-SM resources.',
           ],
+          kcs: ['t4.occupancy'],
         },
         {
           q: 'A warp load where lane i reads address base + 4×i results in…',
@@ -125,6 +215,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
             'Consecutive words map to different banks, which is the conflict-free pattern in shared memory. Conflicts need many lanes on one bank.',
             'Divergence is about branching. Lanes may use different addresses in one instruction; all lanes still execute the same load.',
           ],
+          kcs: ['t4.coalescing'],
         },
         {
           q: 'Staging a strided access through shared memory helps because…',
@@ -143,6 +234,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
             'Shared memory is on-chip SRAM inside the SM and is not backed by L2. Its benefit is explicit staging, not caching.',
             'Banks are SRAM internals and do not change HBM efficiency. HBM traffic is efficient only when the loads are coalesced.',
           ],
+          kcs: ['t4.coalescing', 't4.shared-memory-scratchpad'],
         },
         {
           q: 'A 32-way shared-memory bank conflict occurs when…',
@@ -161,6 +253,7 @@ Attention and GEMM kernels are coalescing masterclasses: FlashAttention's tiles 
             'A block is capped at 1024 threads and a launch above that fails; it is not serialized into waves. Conflicts depend on addresses within one warp.',
             'That is contention on global memory, a different problem. A bank conflict is among lanes of one warp in shared memory.',
           ],
+          kcs: ['t4.coalescing'],
         },
       ],
     },

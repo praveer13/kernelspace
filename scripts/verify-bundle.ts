@@ -22,7 +22,7 @@ const BUDGET_KB = 250
 const ENTRY_TARGET_KB = 125
 /** Each generator family chunk, the search index chunk, and FSRS + cards + composer (spec §16.1): reported, not gated. */
 const FAMILY_REPORT_KB = 8
-const INDEX_REPORT_KB = 15
+const INDEX_REPORT_KB = 20
 const LEARNER_REPORT_KB = 6
 const KB = 1000
 
@@ -33,6 +33,12 @@ interface RouteBudget {
   budgetKb: number | null
   /** Reported, not gated. */
   targetKb?: number
+  /**
+   * A play route loads its play through the registry on demand (wave-2.md §2.3). This is the play component's source
+   * path: when the build has a chunk for it, the route's figure counts that chunk and its static imports, so the
+   * figure is what a learner downloads to play. Not yet registered (the scheduler before 2b-11): page only, and said so.
+   */
+  playSrc?: string
 }
 
 /**
@@ -40,12 +46,18 @@ interface RouteBudget {
  * /boot sits at about 165 KB after the entry diet, with steps 3 to 6 split into an on-demand chunk (about 8 KB,
  * printed but not counted). Any growth in the entry chunk or the shared CSS shows here. /today shares the
  * 200 KB budget (its page ships in B18; until src/pages/Today.tsx exists the route is skipped). The play is
- * reported against its 220 KB figure but not gated in Wave 1.
+ * reported against its 220 KB figure but not gated in Wave 1. Wave 2 (docs/specs/wave-2.md §22.1) gates /daily at
+ * 200 KB and reports /play/scheduler (220 KB) and /errors (200 KB). The play pages load their component on demand
+ * through the play registry, so their closure is the page and the on-demand line shows the play.
  */
 const ROUTE_BUDGETS: RouteBudget[] = [
   { route: '/boot', src: 'src/pages/Boot.tsx', budgetKb: 200, targetKb: 165 },
   { route: '/today', src: 'src/pages/Today.tsx', budgetKb: 200 },
-  { route: '/play/block-placement', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220 },
+  { route: '/daily', src: 'src/pages/Daily.tsx', budgetKb: 200 },
+  { route: '/play/block-placement', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/block-placement/Play.tsx' },
+  // The scheduler play shares the /play/:playId page; its component joins the registry in 2b-11 (it holds fleet-model.ts).
+  { route: '/play/scheduler', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/scheduler/Play.tsx' },
+  { route: '/errors', src: 'src/pages/Errors.tsx', budgetKb: null, targetKb: 200 },
 ]
 
 const dist = new URL('../dist/', import.meta.url)
@@ -128,7 +140,7 @@ function routeKey(src: string): string | undefined {
   return Object.keys(manifest).find((k) => manifest[k].isDynamicEntry && manifest[k].name === name)
 }
 
-for (const { route, src, budgetKb, targetKb } of ROUTE_BUDGETS) {
+for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   const key = routeKey(src)
   if (!key && !existsSync(new URL(`../${src}`, import.meta.url))) {
     console.log(`skip ${route}: ${src} does not exist yet`)
@@ -136,7 +148,12 @@ for (const { route, src, budgetKb, targetKb } of ROUTE_BUDGETS) {
   }
   if (!key) throw new Error(`manifest has no chunk for ${src}; is build.manifest on and ${route} still lazy?`)
   const files: { file: string; gzip: number }[] = []
-  for (const { chunk } of closure(['index.html', key])) {
+  const roots = ['index.html', key]
+  if (playSrc) {
+    if (manifest[playSrc]) roots.push(playSrc)
+    else console.log(`note ${route}: no chunk for ${playSrc} yet, so the figure below is the page without its play`)
+  }
+  for (const { chunk } of closure(roots)) {
     files.push({ file: chunk.file, gzip: await gzipSize(chunk.file) })
     for (const css of chunk.css ?? []) files.push({ file: css, gzip: await gzipSize(css) })
   }

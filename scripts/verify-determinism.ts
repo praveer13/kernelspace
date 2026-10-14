@@ -13,11 +13,12 @@
  * Grading and statistics files (grade.ts, staircase.ts, fsrs.ts, calibration.ts) are exempt by name.
  *
  * Scope: src/lib/items/families/**, src/lib/items/core.ts, src/lib/world/**, src/lib/fleet-*.ts and
- * src/lib/learner/{composer,placement,ticket,paths,recommend}.ts. Scope files that do not exist yet
- * are fine: each owning task lands its file under the lint already running.
+ * src/lib/learner/{composer,placement,ticket,paths,recommend,item-block}.ts, plus src/lib/kv-zoo.ts
+ * (wave-2.md §22.3; the zoo model is numeric, products and sums only). Scope files that do not exist
+ * yet are fine: each owning task lands its file under the lint already running.
  *
- * The spec's hash fixture (generator outputs for 100 seeds per family, tests/fixtures/items/hashes.json)
- * needs the generators and joins this script with B5.
+ * The hash fixtures (generator outputs for 100 seeds per family, tests/fixtures/items/hashes/<family>.json)
+ * are checked by verify-generators.
  *
  *   bun scripts/verify-determinism.ts [--root <dir>]
  */
@@ -153,8 +154,9 @@ function scopeOf(rel: string): { numeric: boolean } | null {
   if (EXEMPT_FILES.has(path.posix.basename(rel))) return null
   if (rel.startsWith('src/lib/items/families/') || rel.startsWith('src/lib/world/')) return { numeric: true }
   if (rel === 'src/lib/items/core.ts') return { numeric: false }
+  if (rel === 'src/lib/kv-zoo.ts') return { numeric: true }
   if (/^src\/lib\/fleet-[^/]*\.tsx?$/.test(rel)) return { numeric: false }
-  if (/^src\/lib\/learner\/(composer|placement|ticket|paths|recommend)\.tsx?$/.test(rel)) return { numeric: false }
+  if (/^src\/lib\/learner\/(composer|placement|ticket|paths|recommend|item-block)\.tsx?$/.test(rel)) return { numeric: false }
   return null
 }
 

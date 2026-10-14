@@ -19,6 +19,12 @@ This is why contradictory benchmark claims can both be true: they are *different
     },
     {
       type: 'prose',
+      md: `## Reading a frontier: dominated points and the floor
+
+A point is **dominated** if some other point has more of both axes, so it can never be the right choice. Take five hypothetical configurations, written as (tok/s/GPU, tok/s/user): A (2,400, 20), B (1,900, 35), C (1,500, 30), D (900, 60) and E (400, 110). C is dominated by B, which beats it on both axes, and the other four form the frontier. Now apply the product's floor, say **at least 50 tok/s/user**: only D and E qualify, and the choice is the one with the most tok/s/GPU, which is D. Drop the floor to 30 and the answer becomes B. The SLO picks the region, and margin picks the point inside it.`,
+    },
+    {
+      type: 'prose',
       md: `## The dial that moves you along the curve (and the ones that move the curve)
 
 **Along the frontier** (efficiency unchanged, tradeoff chosen):
@@ -62,6 +68,12 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
       md: `This is your **thread-pool sizing chart drawn honestly for once**: throughput vs latency, one curve, pick a point. The difference from your web service: the curve's *shape* is physics (bandwidth vs compute, T4.L3), so it shifts only when bytes or bandwidth change — which is why the "move the frontier" list is exactly four items long and every T6 lesson is on it.`,
     },
     {
+      type: 'item',
+      title: 'Pick the point under a new floor',
+      family: 'goodput',
+      variants: ['frontier'],
+    },
+    {
       type: 'quiz',
       questions: [
         {
@@ -81,6 +93,8 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
             'Both claims are about the same model, DeepSeek-R1. The split is by operating point on one frontier, not by model, so a different model cannot explain it.',
             'InferenceX publishes public runs with Apache-2.0 code and data, so the points can be checked, not just asserted. Each claim is true for its own region.',
           ],
+          kcs: ['t7.pareto-frontier'],
+          miss: ['t7.frontier-claims-conflict', '', 't7.frontier-split-is-model', 't7.frontier-claims-marketing'],
         },
         {
           q: 'Which of these moves the FRONTIER, rather than sliding along it?',
@@ -99,6 +113,8 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
             'A looser SLO changes which region is sellable, not what is achievable. The operable zone widens while the curve is exactly where it was.',
             'Replicas scale the fleet total but each GPU stays on the same per-GPU curve. Tokens per second per GPU and per-user speed are unchanged, so the frontier does not move.',
           ],
+          kcs: ['t7.frontier-shifts'],
+          miss: ['t7.batch-moves-frontier', '', 't7.slo-moves-frontier', 't7.replicas-move-frontier'],
         },
         {
           q: 'MTP speculative decoding shifts…',
@@ -117,6 +133,8 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
             'Right: at small batch, decode leaves compute idle, and MTP converts it into speed. At large batch the compute is already used, so the throughput end barely moves.',
             'Reversed. Large batches already saturate compute, so verifying rejected draft tokens wastes real FLOPs there. The benefit is largest where batches are small.',
           ],
+          kcs: ['t7.frontier-shifts'],
+          miss: ['t7.mtp-shifts-whole-frontier', 't7.mtp-cuts-ttft-only', '', 't7.mtp-lifts-throughput-end'],
         },
         {
           q: 'Your product\'s SLO determines…',
@@ -135,6 +153,8 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
             'Contracts do not change physics. The frontier moves only when bytes, bandwidth or overlap change; the SLO decides where on it you must operate.',
             'Replicas multiply throughput at one operating point but cannot raise per-user token rate. A tight interactivity SLO can require different hardware or techniques, not more copies.',
           ],
+          kcs: ['t7.pareto-frontier'],
+          miss: ['t7.slo-is-client-timeout', '', 't7.slo-moves-the-curve', 't7.slo-ignores-hardware'],
         },
       ],
     },
@@ -144,6 +164,34 @@ When a vendor shows you a point, ask: which dial did they turn? If the answer is
       md: `The InferenceMAX launch article (SemiAnalysis, 2025-10-09; the project is now InferenceX), DeepSeek-R1 FP4: above **90 tok/s/user** a B200 on TRT-LLM beats the GB200 NVL72, and a single-node B200 server can give better TCO per performance for high-interactivity use; at **30 tok/s/user** a GB200 NVL72 FP4 (no MTP) delivers ~**8×** the tokens per all-in provisioned MW of a single-node H200 FP8; MTP is worth **2–3×** interactivity at a given cost. Keep these as your sanity anchors for any vendor claim: if a number beats these regions decisively, ask which dial was turned and on which traffic.`,
     },
   ],
+  kcs: ['t7.pareto-frontier', 't7.frontier-shifts'],
+  ticket: {
+    form: 'ticket',
+    cr: [
+      {
+        prompt: 'Explain how one benchmark can favour a GB200 NVL72 rack and another a single B200 node, and both be right.',
+        model:
+          'Tokens per second per GPU and per user trade off along one concave frontier. The rack\'s fabric spreads MoE weights over giant batches, which wins the throughput end. A single node with MTP at small batch wins the interactive end. Each claim is true at its own operating point, so ask which end a number came from.',
+        ideas: [
+          'Per-GPU throughput and per-user speed trade off along one concave frontier',
+          'The rack\'s fabric amortizes weights over giant batches, which wins the throughput end',
+          'A single node with MTP at small batch wins the interactive end, so each claim holds at its own point',
+        ],
+        kcs: ['t7.pareto-frontier'],
+      },
+      {
+        prompt: 'A vendor shows a better point than yours. How do you tell whether the frontier moved or they chose a different point?',
+        model:
+          'Ask which dial changed. Batch size and the SLO only slide you along the curve. Quantization, speculative decoding, disaggregation and better kernels move the curve itself. Then check the region, because MTP lifts the interactive end and barely touches the throughput end.',
+        ideas: [
+          'Ask which dial changed: batch size and the SLO only slide along the curve',
+          'Quantization, speculative decoding, disaggregation and better kernels move the frontier',
+          'Check the region: MTP lifts the interactive end and barely touches the throughput end',
+        ],
+        kcs: ['t7.frontier-shifts'],
+      },
+    ],
+  },
 }
 
 export default lesson

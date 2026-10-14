@@ -54,7 +54,7 @@ describe('verify-kc on the committed graph', () => {
   test('passes, with only the pending-family warnings', () => {
     const r = verifyKc(input())
     expect(r.errors).toEqual([])
-    expect(r.warnings.every((w) => /^family (frag|kv|roofline):/.test(w))).toBe(true)
+    expect(r.warnings.every((w) => /^family (frag|kv|roofline|goodput|cost|memory|spec|sig|compile):/.test(w))).toBe(true)
     expect(r.stats.pairing.every((p) => p.edges.length > 0)).toBe(true)
   })
 
@@ -66,7 +66,69 @@ describe('verify-kc on the committed graph', () => {
     ]
     const r = verifyKc(input({ families }))
     expect(r.errors).toEqual([])
+    // only the Wave 2 families are still pending
+    expect(r.warnings.every((w) => /^family (goodput|cost|memory|spec|sig|compile):/.test(w))).toBe(true)
+  })
+
+  test('passes with no warnings once every family lands with its §4.2 row', () => {
+    const families = [
+      { id: 'frag', kcs: [KC.internalFrag, KC.externalFrag, KC.fixedBlocks, KC.placementPolicy] },
+      { id: 'kv', kcs: [KC.kvBytesPerToken, KC.kvCapacity, KC.gqaKvHeads] },
+      { id: 'roofline', kcs: [KC.ridgePoint, KC.boundClassification, KC.decodeBandwidth, KC.tilingIntensity] },
+      { id: 'goodput', kcs: [KC.goodput, KC.goodputCurve, KC.paretoFrontier, KC.capacityPlanning] },
+      { id: 'cost', kcs: [KC.costPerMtok, KC.epEconomics, KC.agentPrefixLocality] },
+      { id: 'memory', kcs: [KC.quantizedBytes, KC.moeActiveParams, KC.parallelMemory, KC.fp4Capacity, KC.loraAdapterBytes] },
+      { id: 'spec', kcs: [KC.specAcceptance, KC.speculativeDecoding] },
+      { id: 'sig', kcs: [KC.incidentDiagnosis, KC.kvCapacity, KC.admissionScheduling, KC.capacityPlanning, KC.prefillDecodeInterference] },
+      {
+        id: 'compile',
+        kcs: [KC.ownershipMoves, 'r.clone-copy-drop', KC.borrowRules, 'r.slices', 'r.lifetimes', 'r.interior-mutability', KC.permissions, KC.analyzerLimits],
+      },
+    ]
+    const r = verifyKc(input({ families }))
+    expect(r.errors).toEqual([])
     expect(r.warnings).toEqual([])
+    // a family that lands with a different set is an error, not a KC-file edit waiting to happen
+    const short = families.map((f) => (f.id === 'memory' ? { ...f, kcs: f.kcs.slice(1) } : f))
+    expect(has(errorsOf(input({ families: short })), /t4\.quantized-bytes: gen lists memory/)).toBe(true)
+  })
+
+  test('passes once labs 02 and 03 tag their checks with the §4.2 KCs', () => {
+    const tags: Record<string, Record<string, string[]>> = {
+      'kv-block-manager': {
+        paging: [KC.blockTables],
+        capacity: [KC.blockTables],
+        fork_shares: [KC.blockRefcounts],
+        cow: [KC.kvCopyOnWrite],
+        free_refcount: [KC.blockRefcounts],
+        gauntlet: [KC.blockRefcounts],
+      },
+      'bpe-tokenizer': {
+        bytes_are_ids: [KC.tokenizerBytes],
+        merge_priority: [KC.bpeMerges],
+        leftmost_nonoverlap: [KC.bpeMerges],
+        roundtrip: [KC.tokenizerBytes],
+        robust_decode: [KC.tokenizerBytes],
+        contract: [KC.bpeMerges],
+      },
+    }
+    const labs: ForgeLab[] = FORGE_LABS.map((lab) => {
+      const t = tags[lab.id]
+      return t ? { ...lab, checks: lab.checks.map((c) => (t[c.id] ? { ...c, kcs: t[c.id] } : c)) } : lab
+    })
+    expect(errorsOf(input({ labs }))).toEqual([])
+    // an untagged lab-02 check KC is an error once the lab is tagged (2c-03 must tag all three)
+    const missing: ForgeLab[] = labs.map((lab) =>
+      lab.id === 'kv-block-manager' ? { ...lab, checks: lab.checks.map((c) => (c.id === 'cow' ? { ...c, kcs: [KC.blockTables] } : c)) } : lab,
+    )
+    expect(has(errorsOf(input({ labs: missing })), /t5\.kv-copy-on-write: names lab kv-block-manager/)).toBe(true)
+  })
+
+  test('the R pairing rule holds for r.permissions and r.analyzer-limits', () => {
+    const r = verifyKc(input())
+    const edges = r.stats.pairing.flatMap((p) => p.edges)
+    expect(edges).toContain(`t1.ownership-answer → ${KC.permissions}`)
+    expect(edges).toContain(`t3.unsafe-boundaries → ${KC.analyzerLimits}`)
   })
 
   test('passes once lab 01\'s checks carry the §4.5 tags', () => {
@@ -213,8 +275,8 @@ describe('coverage, for lessons that set Lesson.kcs', () => {
       tagQuiz(l, [['t2.process-thread'], ['t2.context-switch']])
     })
     const errors = errorsOf(input({ lessons }))
-    expect(errors).toContain('quiz:t2.l1#2: untagged checkpoint item in a lesson that sets Lesson.kcs')
-    expect(errors).toContain('quiz:t2.l1#3: untagged checkpoint item in a lesson that sets Lesson.kcs')
+    expect(errors).toContain('quiz:t2.l1#2: untagged checkpoint item: every checkpoint item needs kcs')
+    expect(errors).toContain('quiz:t2.l1#3: untagged checkpoint item: every checkpoint item needs kcs')
   })
 
   test('a KC in Lesson.kcs needs 2 tagged items or a generator', () => {

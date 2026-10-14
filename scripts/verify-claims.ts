@@ -1,10 +1,14 @@
 /**
  * Claims registry gate (PLAN-100X §5.2 S2): structure, sources, dates and derived formulas.
+ * A pinned claim's source url must contain pin.ref, and a status claim about engine settings must be pinned.
+ * The Attention Zoo's config claims (`zoo.*` from Hugging Face, spec §11.2) pin a full revision sha, point their
+ * url at that revision's config.json and quote a JSON line that parses to the claim's value.
  * Expiry never fails: stale claims are only listed. `--write` regenerates public/claims.json,
- * and a plain run fails if that file has drifted from the registry.
+ * and a plain run fails if that file has drifted from the registry. `--online` also re-reads each zoo
+ * config.json at its pinned revision and finds the quote in it exactly once (the one network step; bare runs stay offline).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { CLAIMS, staleSince, type Claim } from '../src/data/claims'
+import { CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims'
 
 const OUT = 'public/claims.json'
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -68,6 +72,55 @@ const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'model.llama3-8b.kv-bytes-per-token': (n) =>
     2 * n('model.llama3-8b.layers') * n('model.llama3-8b.kv-heads') * n('model.llama3-8b.head-dim') * 2,
   'price.act3.b200-node-hourly': (n) => 4 * n('price.b200.median'),
+  'zoo.llama3-70b.head-dim': (n) => n('zoo.llama3-70b.hidden-size') / n('zoo.llama3-70b.attn-heads'),
+  'zoo.llama3-70b.kv-bytes-per-token': (n) =>
+    2 * n('zoo.llama3-70b.layers') * n('zoo.llama3-70b.kv-heads') * n('zoo.llama3-70b.head-dim') * 2,
+}
+
+const SHA = /^[0-9a-f]{40}$/
+const HF_CONFIG = /^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/raw\/([^/]+)\/config\.json$/
+/** `key`, `parent.key`, or either followed by how an array's contents give the value: (length), (member) or (count of <json literal>). */
+const ZOO_ROW = /^([A-Za-z0-9_.]+)(?: \((length|member|count of (.+))\))?$/
+
+/** A zoo claim read from a Hugging Face config: pinned to a sha, sourced at that sha, and its quote parses to its value. */
+function zooProblems(c: Claim): string[] {
+  if (!c.id.startsWith('zoo.') || !c.source || !validUrl(c.source.url) || new URL(c.source.url).hostname !== 'huggingface.co') return []
+  const out: string[] = []
+  const hf = HF_CONFIG.exec(c.source.url)
+  if (!c.pin) out.push('a zoo claim read from Hugging Face needs pin {repo, ref = revision sha}')
+  else if (!SHA.test(c.pin.ref)) out.push(`pin.ref "${c.pin.ref}" must be a full 40-character revision sha`)
+  if (!hf) out.push(`source.url must be https://huggingface.co/<repo>/raw/<sha>/config.json: ${c.source.url}`)
+  else if (c.pin && (hf[1] !== c.pin.repo || hf[2] !== c.pin.ref)) out.push(`source.url names ${hf[1]}@${hf[2]}, not the pin ${c.pin.repo}@${c.pin.ref}`)
+  const { quote, row } = c.source
+  const spec = ZOO_ROW.exec(row ?? '')
+  if (!quote?.trim() || !spec) return [...out, `needs a quote and a row like "parent.key" or "key (count of 1)", got row ${JSON.stringify(row)}`]
+  let members: Record<string, unknown>
+  try {
+    members = JSON.parse(`{${quote.trim().replace(/,$/, '')}}`)
+  } catch {
+    return [...out, 'source.quote is not one or more JSON members ("key": value) copied from the file']
+  }
+  const key = spec[1].split('.').pop() as string
+  const found = members[key]
+  if (found === undefined) return [...out, `source.quote has no "${key}" member`]
+  if (Array.isArray(found)) {
+    let got: number | undefined
+    if (spec[2] === 'length') got = found.length
+    else if (spec[3] !== undefined) {
+      try {
+        const literal: unknown = JSON.parse(spec[3])
+        got = found.filter((x) => x === literal).length
+      } catch {
+        return [...out, `row names a count of ${spec[3]}, which is not a JSON literal`]
+      }
+    } else if (spec[2] === 'member') {
+      if (!found.includes(c.value)) out.push(`${JSON.stringify(c.value)} is not a member of the quoted ${key} list`)
+      return out
+    } else return [...out, `"${key}" is a list: say (length), (member) or (count of x) in row`]
+    if (got !== c.value) out.push(`the quoted ${key} list gives ${got} (${spec[2]}), the claim says ${JSON.stringify(c.value)}`)
+  } else if (spec[2]) out.push(`row says (${spec[2]}) but the quoted "${key}" is not a list`)
+  else if (found !== c.value) out.push(`the quote says "${key}": ${JSON.stringify(found)}, the claim says ${JSON.stringify(c.value)}`)
+  return out
 }
 
 const byId = new Map<string, Claim>()
@@ -94,6 +147,9 @@ for (const c of CLAIMS) {
       if ((c.kind === 'spec' || c.kind === 'price') && !c.source.quote?.trim()) fail(c.id, `kind ${c.kind} needs source.quote (the source's own words)`)
     }
   }
+  // a fact tied to one release carries its ref, and its source url must point at it (W13)
+  for (const p of pinProblems(c)) fail(c.id, p)
+  for (const p of zooProblems(c)) fail(c.id, p)
   if (c.kind === 'synthetic' && c.source) fail(c.id, 'synthetic claims must not carry a source')
   if (c.kind === 'derived') {
     if (!c.derived) fail(c.id, 'derived claim needs derived.from and derived.formula')
@@ -134,6 +190,27 @@ for (const c of CLAIMS) {
   if ([...read].sort().join(',') !== declared) fail(c.id, `derived.from (${declared}) differs from the inputs the formula reads (${[...read].sort().join(',')})`)
 }
 for (const id of Object.keys(DERIVATIONS)) if (!byId.has(id)) fail(id, 'DERIVATIONS entry has no claim')
+
+// --online: each zoo config.json, read again at its pinned revision, contains the quote exactly once.
+if (process.argv.includes('--online') && errors.length === 0) {
+  const files = new Map<string, string>()
+  for (const c of CLAIMS) {
+    if (!c.id.startsWith('zoo.') || !c.source || !HF_CONFIG.test(c.source.url)) continue
+    let text = files.get(c.source.url)
+    if (text === undefined) {
+      const res = await fetch(c.source.url)
+      if (!res.ok) {
+        fail(c.id, `HTTP ${res.status} reading ${c.source.url}`)
+        continue
+      }
+      text = (await res.text()).replace(/\s+/g, ' ')
+      files.set(c.source.url, text)
+    }
+    const times = text.split((c.source.quote ?? '').replace(/\s+/g, ' ')).length - 1
+    if (times !== 1) fail(c.id, `the quote appears ${times} times in ${c.source.url} (want exactly 1)`)
+  }
+  console.log(`online: read ${files.size} zoo config.json files at their pinned revisions`)
+}
 
 // public/claims.json mirrors the registry so non-bundled consumers (llms.txt, the freshness issue) can read it.
 const json = `${JSON.stringify({ claims: CLAIMS }, null, 2)}\n`
