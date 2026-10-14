@@ -12,9 +12,11 @@
  *
  * Hardware numbers in the prompts are formatted from the atlas, never typed. The scenario numbers (batch 1,
  * a 128 × 128 tile, a 32k context, head dimension 128, the CPU and GPU timings, the tier bandwidths and the
- * Fleet worksheet's FLOPs and bytes) are synthetic and declared so.
+ * Fleet worksheet's FLOPs and bytes) are synthetic and declared so. Every graded number can be worked out from
+ * its prompt alone (phone mode shows no sim), to within the task's tolerance.
  */
 
+import { claimNumber } from '@/data/claims'
 import { KC } from '@/data/kc/ids'
 import {
   ATTENTION,
@@ -48,6 +50,45 @@ const h100Ridge = ridgeAI(h100)
 const b200Ridge = ridgeAI(b200)
 const h100Fp8Ridge = ridgeAI(h100, SETUP.fp8.dtype)
 const batchFirst = batchToRidge(h100, SETUP.decode.dtype)
+
+/** The CPU/GPU demo's totals as per-step and per-element costs: a chain of 1,000 steps and a map over 64 million elements. */
+const SERIAL_STEPS = 1000
+const MAP_ELEMENTS = 64e6
+const cpuStepNs = (CPU_GPU.cpuSerialMs * 1e6) / SERIAL_STEPS
+const gpuStepUs = (CPU_GPU.gpuSerialMs * 1e3) / SERIAL_STEPS
+const cpuElementNs = (CPU_GPU.cpuMapMs * 1e6) / MAP_ELEMENTS
+const gpuElementPs = (CPU_GPU.gpuMapMs * 1e9) / MAP_ELEMENTS
+
+/**
+ * What the paged-attention row of the Fleet worksheet is: one prefill chunk of Llama-3-70B (model claims) at FP16.
+ * Per layer, each query row does 4·d FLOPs per cached token (QKᵀ and PV) against 2·d two-byte values of K and V,
+ * one FLOP per byte; every query head of a GQA group and every token of the chunk is a row that shares the read.
+ * So intensity = query heads per KV head × chunk tokens, and the row's 2,048 GFLOP over 8 GB is a 32-token chunk
+ * over the KV of about 24,400 cached tokens (Q and O add about 1% to the bytes and are left out).
+ */
+const LLAMA70 = {
+  layers: claimNumber('model.llama3-70b.layers'),
+  qHeads: claimNumber('model.llama3-70b.attn-heads'),
+  kvHeads: claimNumber('model.llama3-70b.kv-heads'),
+  headDim: claimNumber('model.llama3-70b.head-dim'),
+}
+const FP16_BYTES = 2
+const gqaGroup = LLAMA70.qHeads / LLAMA70.kvHeads
+const flopPerByteRow = 4 / (2 * FP16_BYTES)
+const pagedAttn = FLEET_KERNELS.find((k) => k.id === 'fleet-paged-attn')!
+export const PAGED_ATTN = {
+  ...LLAMA70,
+  gqaGroup,
+  /** query tokens in the chunk */
+  chunk: pagedAttn.ai / (gqaGroup * flopPerByteRow),
+  /** cached tokens whose K and V the chunk reads, in every layer */
+  cached: (pagedAttn.bytesG * 1e9) / (2 * LLAMA70.layers * LLAMA70.kvHeads * LLAMA70.headDim * FP16_BYTES),
+  /** decode's intensity: one query token per read */
+  decodeAI: gqaGroup * flopPerByteRow,
+  /** the shortest chunk that reaches the B200's ridge */
+  crossChunk: Math.ceil(b200Ridge / (gqaGroup * flopPerByteRow)),
+}
+const cachedAbout = (Math.round(PAGED_ATTN.cached / 100) * 100).toLocaleString('en-US')
 
 const CHART_TASKS: SimTaskDef[] = [
   {
@@ -208,12 +249,12 @@ function fleetTask(k: FleetKernel): SimTaskDef {
     id: `roof.${k.id}`,
     simId: 'sim-roofline',
     kind: 'outcome',
-    title: `Predict the intensity of ${k.label} and place it on the B200`,
+    title: `Predict the intensity of ${k.label} on the B200`,
     setup: `In the B200 fleet table, press "place on B200" for ${k.label}. The sim reports its intensity.`,
     kcs: [KC.boundClassification],
     predict: {
       kind: 'numeric',
-      prompt: `The Fleet serving loop's ${k.label} does ${k.flopsG.toLocaleString('en-US')} GFLOP of arithmetic over ${k.bytesG.toLocaleString('en-US')} GB of memory traffic. What arithmetic intensity does it have?`,
+      prompt: `The Fleet serving loop's ${k.label}${copy.scenario === undefined ? '' : ` (${copy.scenario})`} does ${k.flopsG.toLocaleString('en-US')} GFLOP of arithmetic over ${k.bytesG.toLocaleString('en-US')} GB of memory traffic. What arithmetic intensity does it have?`,
       unit: 'FLOP/B',
       tolerance: { rel: 0.05 },
     },
@@ -230,21 +271,27 @@ function fleetTask(k: FleetKernel): SimTaskDef {
   }
 }
 
-const FLEET_COPY: Record<FleetKernel['id'], { limit: string; note: string; ideas: (ridge: string) => [string, string, string] }> = {
+const FLEET_COPY: Record<FleetKernel['id'], { scenario?: string; limit: string; note: string; ideas: (ridge: string) => [string, string, string] }> = {
   'fleet-router': {
     limit: 'it does a little arithmetic per byte it reads, so extra FLOP/s would not speed it up.',
     note: 'Router scoring is **bandwidth-bound by a wide margin**: it touches a lot of state for very little math. It matters for latency, not for FLOP/s.',
     ideas: (ridge) => ['Intensity is FLOPs divided by bytes moved', `About one and a half FLOP per byte is far left of the ridge at ${ridge}`, 'So it is bandwidth-bound: more FLOP/s would not speed it up'],
   },
   'fleet-decode': {
+    scenario: 'its weight matmuls',
     limit: 'batching 32 requests shares one read of the weights, but that is still far too little reuse to reach the ridge.',
-    note: 'Batching moves decode **right** along the slope, and a batch of 32 is still on the bandwidth side. Only a very large batch, or fewer bytes per weight, reaches the ridge.',
+    note: 'Batching moves decode **right** along the slope, and a batch of 32 is still on the bandwidth side. Only a very large batch, or fewer bytes per weight, reaches the ridge. The row counts the weights alone: each sequence also reads its own KV, which a batch does not share (the paged-attention row).',
     ideas: (ridge) => ['A batch of 32 shares one read of the weights, so intensity is 32 FLOP/B', `That is still well left of the ridge at ${ridge}`, 'So decode stays bandwidth-bound even at batch 32'],
   },
   'fleet-paged-attn': {
-    limit: 'it sits just under the ridge, so a little more reuse per byte would tip it over.',
-    note: 'Paged attention lands **just left of the ridge**: close enough that block layout and batch size decide which side it is on in practice.',
-    ideas: (ridge) => ['Intensity is FLOPs divided by bytes moved: 256 FLOP/B', `That is just left of the ridge at ${ridge}`, 'So it is bandwidth-bound, narrowly: a little more reuse would make it compute-bound'],
+    scenario: `${PAGED_ATTN.chunk} tokens of a Llama-3-70B prompt attending to about ${cachedAbout} cached tokens in all ${PAGED_ATTN.layers} layers`,
+    limit: `each read of K and V serves ${PAGED_ATTN.gqaGroup} query heads × ${PAGED_ATTN.chunk} tokens = ${pagedAttn.ai} query rows, one FLOP per byte each at FP16. A ${PAGED_ATTN.crossChunk}-token chunk would cross the ridge; decode, with one token, sits near ${PAGED_ATTN.decodeAI} FLOP/B.`,
+    note: `Attention's intensity is the number of **query rows that share each read of K and V**: ${PAGED_ATTN.gqaGroup} query heads per KV head × ${PAGED_ATTN.chunk} tokens in this prefill chunk = ${pagedAttn.ai}, just left of the ridge. Decode has one token per read, so it sits near ${PAGED_ATTN.decodeAI} FLOP/B. A bigger batch does not move it (each sequence reads its own KV), nor does the block layout (same FLOPs, same bytes); more query tokens per read do: a longer chunk, drafted tokens verified together, a larger GQA group.`,
+    ideas: (ridge) => [
+      `Intensity is FLOPs divided by bytes moved: ${pagedAttn.flopsG.toLocaleString('en-US')} / ${pagedAttn.bytesG} = ${pagedAttn.ai} FLOP/B`,
+      `That is just left of the ridge at ${ridge}, so it is bandwidth-bound, narrowly`,
+      `It is ${PAGED_ATTN.gqaGroup} query heads × ${PAGED_ATTN.chunk} tokens per KV read: a longer chunk would cross the ridge, a bigger batch would not`,
+    ],
   },
   'fleet-prefill': {
     limit: 'the 512 tokens of the prompt reuse every weight they read, so the compute ceiling is what limits it.',
@@ -264,11 +311,9 @@ const PROBE_TASKS: SimTaskDef[] = [
     kcs: ['t4.throughput-design'],
     predict: {
       kind: 'numeric',
-      prompt:
-        'A chain of dependent operations runs on one CPU core and on the GPU. Each step needs the previous result, so the GPU\'s thousands of lanes have nothing to share, and every step also pays launch and synchronisation overhead. By what factor is the CPU faster?',
+      prompt: `A chain of ${SERIAL_STEPS.toLocaleString('en-US')} dependent operations runs on one CPU core and on the GPU. Each step needs the previous result, so the GPU's thousands of lanes have nothing to share. One CPU core finishes a step in about ${cpuStepNs} ns; on the GPU every step is its own kernel launch and synchronisation, about ${gpuStepUs} µs (both synthetic figures). By what factor is the CPU faster?`,
       unit: '×',
-      tolerance: { rel: 1 },
-      log: true,
+      tolerance: { rel: 0.1 },
     },
     observe: 'roof.cpu-serial',
     explain: {
@@ -290,11 +335,9 @@ const PROBE_TASKS: SimTaskDef[] = [
     kcs: ['t4.throughput-design'],
     predict: {
       kind: 'numeric',
-      prompt:
-        'Now an elementwise map over 64 million independent floats, with coalesced loads and enough resident warps to hide memory latency. The same work runs on one CPU core and on the GPU. By what factor is the GPU faster?',
+      prompt: `Now an elementwise map over ${MAP_ELEMENTS / 1e6} million independent floats, with coalesced loads and enough resident warps to hide memory latency. One CPU core spends about ${cpuElementNs} ns on each element; the GPU, with thousands of lanes busy at once, finishes an element every ${gpuElementPs} ps on average (both synthetic figures). By what factor is the GPU faster?`,
       unit: '×',
-      tolerance: { rel: 1 },
-      log: true,
+      tolerance: { rel: 0.1 },
     },
     observe: 'roof.gpu-map',
     explain: {
@@ -364,7 +407,7 @@ const PROBE_TASKS: SimTaskDef[] = [
     kcs: ['t4.coalescing'],
     predict: {
       kind: 'numeric',
-      prompt: `Strided loads deliver a thirty-second of the H100's ${fmtTBs(h100.bw)}. Staging the tile through shared memory instead makes the global load coalesced, at full HBM speed, and every 128 useful bytes also costs 256 bytes of conflict-free shared traffic (a write and a transposed read) at ${fmtTBs(SHARED_BW_GBS)}. What percent of the HBM bandwidth does the kernel deliver end to end?`,
+      prompt: `Strided loads deliver a thirty-second of the H100's ${fmtTBs(h100.bw)}. Staging the tile through shared memory instead makes the global load coalesced, at full HBM speed, and every 128 useful bytes also costs 256 bytes of conflict-free shared traffic (a write and a transposed read) at ${fmtTBs(SHARED_BW_GBS)} (a synthetic figure). The HBM time and the shared-memory time add. What percent of the HBM bandwidth does the kernel deliver end to end?`,
       unit: '%',
       tolerance: { abs: 5 },
     },
@@ -388,8 +431,7 @@ const PROBE_TASKS: SimTaskDef[] = [
     kcs: ['t4.coalescing'],
     predict: {
       kind: 'numeric',
-      prompt:
-        'The shared-memory transpose now hits a 32-way bank conflict: its shared-memory half runs 32 times slower. Padding each row by one element removes the conflict. By what factor does the padding raise the kernel\'s end-to-end bandwidth on the H100?',
+      prompt: `The shared-memory transpose on the H100: every 128 useful bytes cost one coalesced HBM pass at ${fmtTBs(h100.bw)} plus 256 bytes of shared traffic at ${fmtTBs(SHARED_BW_GBS)} (a synthetic figure), and the two times add. A 32-way bank conflict serves the shared traffic one lane at a time, so that half runs 32 times slower. Padding each row by one element removes the conflict. By what factor does the padding raise the kernel's end-to-end bandwidth?`,
       unit: '×',
       tolerance: { rel: 0.1 },
     },

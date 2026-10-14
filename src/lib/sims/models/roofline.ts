@@ -250,7 +250,7 @@ export interface FleetKernel {
 export const FLEET_KERNELS: readonly FleetKernel[] = [
   { id: 'fleet-router', label: 'router scoring', flopsG: 0.12, bytesG: 0.08, ai: 1.5 },
   { id: 'fleet-decode', label: '70B decode · b32', flopsG: 4480, bytesG: 140, ai: 32 },
-  { id: 'fleet-paged-attn', label: 'paged attention', flopsG: 2048, bytesG: 8, ai: 256 },
+  { id: 'fleet-paged-attn', label: 'paged attention · prefill chunk', flopsG: 2048, bytesG: 8, ai: 256 },
   { id: 'fleet-prefill', label: '70B prefill · 512', flopsG: 71_680, bytesG: 140, ai: 512 },
 ]
 
