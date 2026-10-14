@@ -14,6 +14,7 @@ const staticRoutes = [
   'curriculum',
   'lab',
   'glossary',
+  'me',
   'progress',
   'capstone',
   'forge',

@@ -20,7 +20,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
-import { playChunkKey } from './bundle-plays'
+import { resolvePlay } from './bundle-plays'
+import { CLAIMS } from '../src/data/claims'
 
 const BUDGET_KB = 250
 /** Entry target after the entry diet (spec §6.9, §16.1): reported, not gated. */
@@ -68,6 +69,12 @@ const ROUTE_BUDGETS: RouteBudget[] = [
   // The scheduler play shares the /play/:playId page; it holds fleet-model.ts, so its chunk is the larger of the two.
   { route: '/play/scheduler', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/scheduler/Play.tsx' },
   { route: '/errors', src: 'src/pages/Errors.tsx', budgetKb: null, targetKb: 200 },
+  // Wave 3 (docs/specs/wave-3.md §2.2, §17.1). /me renders Progress until 3b-06, whose static closure (all lesson
+  // content, framer-motion) is far over 200 KB, so it is reported here; 3b-06 rebuilds the page and sets budgetKb: 200.
+  // The two plays are reported against a 200 KB figure with their play chunks, and skipped until each play exists.
+  { route: '/me', src: 'src/pages/Me.tsx', budgetKb: null, targetKb: 200 },
+  { route: '/play/tiling-cube', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 200, playSrc: 'src/components/play/tiling-cube/Play.tsx' },
+  { route: '/play/eplb', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 200, playSrc: 'src/components/play/eplb/Play.tsx' },
 ]
 
 const dist = new URL('../dist/', import.meta.url)
@@ -150,6 +157,9 @@ function routeKey(src: string): string | undefined {
   return Object.keys(manifest).find((k) => manifest[k].isDynamicEntry && manifest[k].name === name)
 }
 
+/** Each route's closure files, for the shared-chunk report after the loop. */
+const closureFiles = new Map<string, Set<string>>()
+
 for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   const key = routeKey(src)
   if (!key && !existsSync(new URL(`../${src}`, import.meta.url))) {
@@ -161,7 +171,21 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   const roots = ['index.html', key]
   let playKey: string | undefined
   if (playSrc) {
-    playKey = playChunkKey(manifest, playSrc, key, ROUTE_BUDGETS.flatMap((r) => (r.playSrc ? [r.playSrc] : [])))
+    // A play whose file does not exist yet is skipped before any chunk lookup (bundle-plays.ts): the by-name fallback
+    // would hand it the scheduler's hoisted `_Play-*` chunk and report that figure under this route.
+    const found = resolvePlay(
+      manifest,
+      route,
+      playSrc,
+      key,
+      ROUTE_BUDGETS.flatMap((r) => (r.playSrc ? [r.playSrc] : [])),
+      (p) => existsSync(new URL(`../${p}`, import.meta.url)),
+    )
+    if ('skip' in found) {
+      console.log(found.skip)
+      continue
+    }
+    playKey = found.key
     if (!playKey) throw new Error(`no chunk for the play ${playSrc} in the manifest, so ${route}'s figure would leave the play out; see scripts/bundle-plays.ts`)
     roots.push(playKey)
     console.log(`play ${route}: ${playSrc} is ${manifest[playKey].file}`)
@@ -173,6 +197,7 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   // A chunk and its CSS can be listed from two importers; count each file once.
   const unique = [...new Map(files.map((f) => [f.file, f])).values()]
   const totalKb = unique.reduce((sum, f) => sum + f.gzip, 0) / KB
+  closureFiles.set(route, new Set(unique.map((f) => f.file)))
 
   console.log(`${route} closure (JS + CSS, gzip):`)
   for (const f of unique) console.log(`  ${(f.gzip / KB).toFixed(1).padStart(7)} KB  ${f.file}`)
@@ -207,6 +232,21 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   if (targetKb !== undefined) {
     console.log(`${totalKb <= targetKb ? 'ok  ' : 'warn'} ${route} target ${targetKb} KB (not gated): ${totalKb.toFixed(1)} KB`)
   }
+}
+
+// Reported only: the claims registry's chunk (wave-3.md D19, §4.4), which /boot and /today share. The manifest files it
+// under no source path, so it is the JS chunk in both closures that holds the most of the registry's claim ids (at least half of them). Wave 3 adds
+// no claim to it (its claims are lazy groups), so the figure should stay at its Wave 2 size, 17.1 to 17.4 KB.
+{
+  const both = [...(closureFiles.get('/boot') ?? [])].filter((f) => f.endsWith('.js') && closureFiles.get('/today')?.has(f))
+  const held: { file: string; ids: number }[] = []
+  for (const file of both) {
+    const text = await readFile(new URL(file, dist), 'utf8')
+    held.push({ file, ids: CLAIMS.filter((c) => text.includes(c.id)).length })
+  }
+  const claims = held.sort((a, b) => b.ids - a.ids)[0]
+  if (!claims || claims.ids < CLAIMS.length / 2) console.log('skip claims chunk: /boot and /today share no chunk holding the claims registry')
+  else console.log(`info claims chunk ${claims.file.split('/').pop()} is ${((await gzipSize(claims.file)) / KB).toFixed(1)} KB gzip, shared by /boot and /today (reported, not gated)`)
 }
 
 // Reported only: each generator family chunk (spec §5.1 keeps them outside /today's closure) and the search index.

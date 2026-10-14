@@ -35,7 +35,7 @@ export const STATIC_ITEMS: SearchItem[] = [
   { id: 'capstone', group: 'Pages', title: 'Capstone', crumb: '~/capstone', to: '/capstone', keywords: ['project', 'engine', 'build'] },
   { id: 'glossary', group: 'Pages', title: 'Glossary', crumb: '~/glossary', to: '/glossary', keywords: ['terms', 'isomorphism', 'concepts'] },
   { id: 'errors', group: 'Pages', title: 'Error Museum', crumb: '~/errors', to: '/errors', keywords: ['errors', 'rust', 'compiler', 'borrow checker', 'museum'] },
-  { id: 'progress', group: 'Pages', title: 'Progress', crumb: '~/progress', to: '/progress', keywords: ['dashboard', 'xp', 'rank', 'streak'] },
+  { id: 'me', group: 'Pages', title: 'Me', crumb: '~/me', to: '/me', keywords: ['progress', 'dashboard', 'xp', 'rank', 'streak'] },
   ...TRACKS.map<SearchItem>((t) => ({
     id: `track-${t.id}`,
     group: 'Tracks',

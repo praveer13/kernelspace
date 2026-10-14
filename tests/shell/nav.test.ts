@@ -43,7 +43,7 @@ function staticGraph(entry: string): { files: string[]; packages: string[] } {
 describe('the four destinations', () => {
   test('Today is first, then Path, Build and Me, each with a route', () => {
     expect(DESTINATIONS.map((d) => d.label)).toEqual(['Today', 'Path', 'Build', 'Me'])
-    expect(DESTINATIONS.map((d) => d.to)).toEqual(['/today', '/curriculum', '/forge', '/progress'])
+    expect(DESTINATIONS.map((d) => d.to)).toEqual(['/today', '/curriculum', '/forge', '/me'])
   })
 
   test('Build lists Forge, Sims, Fleet, Fleet Daily, Fleet Week, Capstone and Leaderboard', () => {
@@ -82,6 +82,7 @@ describe('the four destinations', () => {
       ['/week', 'build'],
       ['/capstone', 'build'],
       ['/leaderboard', 'build'],
+      ['/me', 'me'],
       ['/progress', 'me'],
       ['/', null],
       ['/boot', null],
@@ -103,7 +104,7 @@ describe('the command palette page list', () => {
   const pages = [...block.matchAll(/group: 'Pages'[^}]*?to: '([^']+)'/g)].map((m) => m[1])
 
   test('lists Today, Boot, Fleet Daily and the Error Museum, with Wave 1\'s pages', () => {
-    for (const to of ['/today', '/boot', '/daily', '/errors', '/', '/curriculum', '/forge', '/fleet', '/week', '/progress']) {
+    for (const to of ['/today', '/boot', '/daily', '/errors', '/', '/curriculum', '/forge', '/fleet', '/week', '/me']) {
       expect(pages).toContain(to)
     }
   })
@@ -160,9 +161,9 @@ describe('the shell reads only the snapshot', () => {
 describe('reduced motion on the pages B26 lists', () => {
   // wave-1.md §6.9 asks for a MotionScope on these pages. App.tsx already loads each page that reaches
   // framer-motion through `lazyMotion`, which wraps it in MotionScope; a second wrapper would only nest.
-  test('Home, Progress, Glossary, Lab, Changes and FleetWeek are routed through lazyMotion', () => {
+  test('Home, Me, Glossary, Lab, Changes and FleetWeek are routed through lazyMotion', () => {
     const app = readFileSync(join(src, 'App.tsx'), 'utf8')
-    for (const page of ['Home', 'Progress', 'Glossary', 'Lab', 'Changes', 'FleetWeek']) {
+    for (const page of ['Home', 'Me', 'Glossary', 'Lab', 'Changes', 'FleetWeek']) {
       expect(app).toMatch(new RegExp(`const ${page} = lazyMotion\\(`))
     }
   })
