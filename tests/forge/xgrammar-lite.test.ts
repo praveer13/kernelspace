@@ -278,14 +278,29 @@ describe('the reference run is the committed probe, one frame per grammar step',
   test('each frame names its legal tokens for a screen reader, and the last one is Complete', () => {
     const p = probe(PROBE_SEED)
     run.frames.forEach((f, i) => {
-      for (const idx of p.steps[i].legal.slice(0, 8)) expect(f.alt).toContain(`#${idx} ${p.vocab[idx]}`)
+      for (const idx of p.steps[i].legal.slice(0, 8)) expect(f.alt).toContain(`#${idx} “${p.vocab[idx]}”`)
       expect(f.alt).toContain(`Step ${i + 1} of 11`)
     })
-    expect(run.frames[0].alt).toContain('#0 {')
-    expect(run.frames[0].alt).toContain('#35 {"kind":')
-    expect(run.frames[0].alt).toContain('#48 {"kind":"')
+    expect(run.frames[0].alt).toContain('#0 “{”')
+    expect(run.frames[0].alt).toContain('#35 “{"kind":”')
+    expect(run.frames[0].alt).toContain('#48 “{"kind":"”')
     expect(run.frames.at(-1)?.stats.find((s) => s.label === 'status')?.value).toBe('Complete')
     expect(run.frames.slice(0, -1).every((f) => f.stats.find((s) => s.label === 'status')?.value === 'Prefix')).toBe(true)
+  })
+
+  test('a frame’s alt quotes the text so far and each token, so a screen reader hears where the document ends', () => {
+    expect(run.frames[0].alt).toBe(
+      'Step 1 of 11, one cell per vocabulary token (64), darker for an allowed one. Nothing is written yet. The mask allows 3: #0 “{”, #35 “{"kind":”, #48 “{"kind":"”. Picked #48 “{"kind":"”; the status is Prefix.',
+    )
+    expect(run.frames[4].alt).toBe(
+      'Step 5 of 11, one cell per vocabulary token (64), darker for an allowed one. The text so far is “{"kind":"ans”. The mask allows 2: #21 “w”, #38 “wer",”. Picked #38 “wer",”; the status is Prefix.',
+    )
+    // the curly quotes are delimiters only: no document or token of the probe holds one
+    const p = probe(PROBE_SEED)
+    expect([...TOOL_DOCS, ...p.vocab].some((t) => /[“”]/.test(t))).toBe(false)
+    run.frames.forEach((f, i) => {
+      if (i > 0) expect(f.alt).toContain(`The text so far is “${p.steps[i].before}”. The mask allows`)
+    })
   })
 
   test('step 3 has three legal tokens, the example of the spec’s table, and its names are the two n tokens and "nswer"', () => {
@@ -446,6 +461,19 @@ describe('the answers are true of the harness', () => {
     expect(breaks).toEqual(['0', '7', '', 'c'])
   })
 
+  test('p2: the valid ending is six pieces of JSON, the count its why states (no state count: the harness fixes none, only 5 to 128)', () => {
+    const p2 = choiceOf('lab08.primm.p2')
+    const valid = spans(p2.item.q.options[p2.item.q.correct[0]])[0]
+    // JSON's lexical pieces: a string, a number, or one of the six structural characters
+    const pieces = [...valid.matchAll(/"[^"]*"|-?\d+|[{}[\]:,]/g)].map((m) => m[0])
+    expect(pieces.join('')).toBe(valid)
+    expect(pieces).toEqual(['"answer"', ',', '"count"', ':', '7', '}'])
+    const why = p2.item.q.why?.[p2.item.q.correct[0]] ?? ''
+    expect(why).toContain(`${['zero', 'one', 'two', 'three', 'four', 'five', 'six'][pieces.length]} pieces of JSON in one token`)
+    expect(why).not.toMatch(/\bstates?\b/)
+    expect(flat(GRAMMAR_RS)).toContain('should come to between 5 and 128 states')
+  })
+
   test('i1: no integer from 0 to 100 begins with 101, and the first byte that cannot continue is at offset 8', () => {
     const docs = Array.from({ length: 101 }, (_, n) => `{"id":${n},"tag":"alpha","ok":true}`)
     const text = '{"id":101,"tag":"alpha","ok":true}'
@@ -555,6 +583,27 @@ describe('the answers are true of the harness', () => {
     expect(gradeNumber(m1, 11, first).ok).toBe(false)
     expect(gradeNumber(m1, 28, chars).ok).toBe(true)
     expect(gradeNumber(m1, 11, chars).ok).toBe(false)
+  })
+
+  test('m1: the explanation says what each dial shows, in the numbers of its run', () => {
+    const m1 = numberOf('lab08.primm.m1')
+    // the first-byte dial: rejected on step 5, the quote of `","` opening a key and its comma at byte 16 refused
+    const fb = probe(PROBE_SEED, { mask: 'first-byte', vocab: 'mixed' })
+    const last = fb.steps[fb.steps.length - 1]
+    expect([fb.end, fb.steps.length, last.before, fb.vocab[last.pick]]).toEqual(['rejected', 5, '{"kind":"tool",', '","'])
+    expect(last.wrong).toContain(last.pick)
+    expect(fb.text.slice(0, 17)).toBe('{"kind":"tool",",')
+    expect(TOOL_DOCS.some((d) => d.startsWith(fb.text.slice(0, 16)))).toBe(true)
+    expect(TOOL_DOCS.some((d) => d.startsWith(fb.text.slice(0, 17)))).toBe(false)
+    expect(m1.explain).toContain('after `{"kind":"tool",` it allows `","`, because a quote can open the next key, but the matcher rejects the `,` at byte 16, so the run ends on step 5')
+    // the character dial: Complete, one byte a step, against the reference's 28 bytes in 11 steps
+    const ch = probe(PROBE_SEED, { mask: 'whole', vocab: 'chars' })
+    expect([ch.end, ch.steps.length, ch.text.length, ch.vocab.length]).toEqual(['complete', 26, 26, 30])
+    expect(probe(PROBE_SEED).text).toHaveLength(28)
+    expect(m1.explain).toContain('The 30 single characters reach Complete, but at one byte a step: 26 steps for the 26 bytes of `{"kind":"tool","count":29}`')
+    expect(m1.explain).toContain('28 bytes in 11 steps')
+    expect(m1.explain).not.toContain('fewer mask computations')
+    expect(RUN_SPEC.modify?.dials.map((d) => RUN_SPEC.run(d.config).value)).toEqual([5, 26])
   })
 })
 
