@@ -7,7 +7,7 @@ import tiling from '../../src/lib/items/families/tiling'
 import { correctResponse } from '../../src/lib/items/grade'
 import type { Instance, Level, Response } from '../../src/lib/items/types'
 import { KIB } from '../../src/lib/items/units'
-import { BASE, H100, maxTile, occupancy, QBLOCK, qBlockAI, ridge, waveAI, WAVE_GEMM, WAVE_GROUP } from '../../src/lib/world/tiling'
+import { BASE, H100, maxTile, occupancy, QBLOCK, qBlockAI, ridge, tileToReach, waveAI, WAVE_GEMM, WAVE_GROUP } from '../../src/lib/world/tiling'
 
 /** The `tiling` family (docs/specs/wave-3.md §6.2, task 3a-13): levels 2-6 of the Tiling Cube as numeric items. */
 const SEEDS = genSeeds(300)
@@ -87,7 +87,7 @@ describe('tiling: the pins are the cube’s', () => {
     return truthOf(p.make())
   }
 
-  test('448, 3 CTAs, 130.0 and 734.6, 590.4, 127.5 and 2 GiB, each equal to the model', () => {
+  test('448, 3 CTAs, 130.0 and 734.6, 590.4 and the whole tile 591, 127.5 and 2 GiB, each equal to the model', () => {
     expect(pinTruth('fit 227 KiB')).toBe(448)
     expect(pinTruth('fit 227 KiB')).toBe(maxTile(64, 2, 'fp16'))
     expect(pinTruth('CTAs per SM')).toBe(3)
@@ -95,6 +95,8 @@ describe('tiling: the pins are the cube’s', () => {
     expect(pinTruth('grouped 11 x 12').toFixed(1)).toBe('734.6')
     expect(pinTruth('grouped 11 x 12')).toBe(waveAI({ ...BASE, m: WAVE_GEMM, n: WAVE_GEMM, raster: 'grouped', group: WAVE_GROUP }).ai)
     expect(pinTruth('FP8 ridge')).toBe(ridge('fp8'))
+    expect(pinTruth('reaches the H100 ridge')).toBe(591)
+    expect(pinTruth('reaches the H100 ridge')).toBe(tileToReach(ridge('fp8'), 'fp8'))
     expect(pinTruth('query block')).toBe(qBlockAI(QBLOCK))
     expect(pinTruth('score matrix')).toBe(2)
   })
@@ -174,6 +176,47 @@ describe('tiling: claim-backed and hypothetical scenes', () => {
   })
 })
 
+describe('tiling: the FP8 tile is a whole side (3a-13 minor 1)', () => {
+  test('every tile ask is the ridge rounded up to a whole side, graded exactly, and the stem says to round up', () => {
+    let asked = 0
+    for (const level of LEVELS) {
+      for (const seed of SEEDS) {
+        const i = tiling.make(seed, level, 'fp8-ridge')
+        if (i.params.ask !== 'tile') continue
+        asked++
+        const t = truthOf(i)
+        expect(Number.isInteger(t)).toBe(true)
+        expect(i.answer).toMatchObject({ unit: 'elements', tolerance: { abs: 0.01 } })
+        expect(partsText(i.prompt.stem)).toContain('smallest whole square tile side')
+        expect(partsText(i.prompt.stem)).toContain('round up')
+        // the side before it falls short of the ridge, the side itself reaches it
+        expect(tiling.grade(i, answer(i, t - 1)).ok).toBe(false)
+        expect(tiling.grade(i, answer(i, t)).ok).toBe(true)
+      }
+    }
+    expect(asked).toBeGreaterThan(0)
+  })
+
+  test("the H100 tile is 591: the raw ridge 590.4 and the side below it are wrong, and the solution's last step says why", () => {
+    const i = tiling.pins.find((p) => p.name.includes('reaches the H100 ridge'))!.make()
+    expect(truthOf(i)).toBe(591)
+    expect(tiling.grade(i, answer(i, ridge('fp8'))).ok).toBe(false)
+    expect(tiling.grade(i, answer(i, 590)).ok).toBe(false)
+    expect(tiling.grade(i, answer(i, 591)).ok).toBe(true)
+    const last = tiling.solution(i).at(-1)!
+    expect(last.result).toEqual({ value: 591, unit: 'elements' })
+    expect(partsText(last.text)).toContain('rounded up')
+  })
+
+  test('a ridge that float noise puts a hair above a whole number still needs that whole side', () => {
+    // 2 × 550 TFLOP/s ÷ 1.1 TB/s is 1,000 FLOP/B, which floats as 999.9999999999999 or 1,000.0000000000001
+    expect(tileToReach(1000.0000000000001, 'fp8')).toBe(1000)
+    expect(tileToReach(999.9999999999999, 'fp8')).toBe(1000)
+    expect(tileToReach(590.4, 'fp8')).toBe(591)
+    expect(tileToReach((2 * 550) / 1.1, 'fp8')).toBe(1000)
+  })
+})
+
 describe('tiling: each diagnosis, computed by running the model with the slip', () => {
   test('tiling.single-buffer: one stage of slabs in smem-fit and ctas-per-sm', () => {
     const i = tiling.pins[0].make()
@@ -190,6 +233,9 @@ describe('tiling: each diagnosis, computed by running the model with the slip', 
     expect(diagnosisOf(w, truthOf(w) / 2)).toBe('tiling.fp32-bytes')
     const t = find('fp8-ridge', 2, (x) => x.params.ask === 'tile')
     expect(diagnosisOf(t, truthOf(t) * 4)).toBe('tiling.fp32-bytes')
+    // the whole side that reaches the ridge with 4-byte elements: ⌈4 × 590.4⌉ = 2,362
+    const h = tiling.pins.find((p) => p.name.includes('reaches the H100 ridge'))!.make()
+    expect(diagnosisOf(h, 2362)).toBe('tiling.fp32-bytes')
   })
 
   test('tiling.smem-only: counting shared memory alone where the registers bind', () => {
@@ -210,11 +256,17 @@ describe('tiling: each diagnosis, computed by running the model with the slip', 
   test('tiling.fp8-same-ridge: keeping 295.2 for the FP8 ridge', () => {
     const r = tiling.pins.find((p) => p.name.includes('FP8 ridge'))!.make()
     expect(diagnosisOf(r, ridge('bf16'))).toBe('tiling.fp8-same-ridge')
+    // and for the tile: the BF16 ridge's whole side, ⌈295.2⌉ = 296
+    const t = tiling.pins.find((p) => p.name.includes('reaches the H100 ridge'))!.make()
+    expect(diagnosisOf(t, 296)).toBe('tiling.fp8-same-ridge')
   })
 
   test('tiling.counted-c: counting C’s face makes the FP8 tile 3/2 as big', () => {
     const t = find('fp8-ridge', 2, (x) => x.params.ask === 'tile')
     expect(diagnosisOf(t, truthOf(t) * 1.5)).toBe('tiling.counted-c')
+    // ⌈1.5 × 590.4⌉ = 886 for the H100 tile
+    const h = tiling.pins.find((p) => p.name.includes('reaches the H100 ridge'))!.make()
+    expect(diagnosisOf(h, 886)).toBe('tiling.counted-c')
   })
 
   test('tiling.materialized: the block’s slice of S counted as traffic', () => {

@@ -173,10 +173,14 @@ const kvBytes = (p: Params): number => (claimModel(p) ? claimNumber(KV_CLAIMS[St
 /** Tokens per second one prefill GPU processes (or one node, in SGLang's run, which the node ratio shares). */
 const prefillRate = (p: Params): number => (sglang(p) ? claimNumber(SGLANG_IN) : num(p, 'p') / (p.gp === undefined ? 1 : num(p, 'gp')))
 const decodeRate = (p: Params): number => (sglang(p) ? claimNumber(SGLANG_OUT) : num(p, 'd') / (p.gd === undefined ? 1 : num(p, 'gd')))
-/** The prefill rate of one GPU for a namespace or a hit: the node's rate over its GPUs in SGLang's run. */
+/**
+ * The prefill rate of one GPU, for a namespace's GPU-seconds and for a hit's milliseconds alike: the node's rate over
+ * its GPUs in SGLang's run. That run measured the node with every GPU busy (16,384 tokens per device) and data-parallel
+ * attention, so each GPU prefills its own requests and only the MoE layers spread over all of them. One request's
+ * tokens therefore go through one GPU's share of the node rate, and a hit takes them out of that GPU's batch: timing
+ * it at the whole node's rate would make the gap 8 times too small.
+ */
 const gpuRate = (p: Params): number => (sglang(p) ? claimNumber(SGLANG_IN) / claimNumber(SGLANG_GPUS) : num(p, 'p'))
-/** The prefill rate a hit saves at: one GPU's, or one node's in SGLang's run. */
-const hitRate = (p: Params): number => (sglang(p) ? claimNumber(SGLANG_IN) : num(p, 'p'))
 
 /** The link in GB/s (10⁹ bytes per second), whatever unit it was quoted in. */
 function linkGBps(p: Params): number {
@@ -195,7 +199,7 @@ const pdRatio = (p: Params, flipped = false): number => {
 }
 const handoffMs = (p: Params): number => ((num(p, 'P') * kvBytes(p)) / (linkGBps(p) * GB)) * THOUSAND
 const breakEvenGBps = (p: Params): number => (kvBytes(p) * num(p, 'p')) / GB
-const gapMs = (p: Params): number => (cachedTokens(p) / hitRate(p)) * THOUSAND
+const gapMs = (p: Params): number => (cachedTokens(p) / gpuRate(p)) * THOUSAND
 const namespaceS = (p: Params): number => (((num(p, 'N') - 1) * num(p, 'S')) / gpuRate(p)) * (p.refills === undefined ? 1 : num(p, 'refills'))
 
 function truthOf(variant: string, p: Params): number {
@@ -248,10 +252,27 @@ function linkParts(p: Params): PromptPart[] {
   return [t('A hypothetical link between the two workers sustains '), v(num(p, 'B'), unit), t(`${word}. `)]
 }
 
-/** A prefill rate sentence for the hit and namespace variants: SGLang's node, or a hypothetical GPU. */
-function rateParts(p: Params): PromptPart[] {
-  if (sglang(p)) return [t("In SGLang's DeepSeek run a prefill node ingests "), chip(SGLANG_IN), t(', measured on '), chip(SGLANG_GPUS), t('. ')]
-  return [t('A hypothetical prefill GPU processes '), v(num(p, 'p'), 'tok/s'), t(' of prompt. ')]
+/**
+ * A prefill rate sentence for the hit and namespace variants: SGLang's node, or a hypothetical GPU. Both use one GPU's
+ * rate, and each says why: a request is prefilled on one GPU, and a GPU-second is one GPU's.
+ */
+function rateParts(variant: string, p: Params): PromptPart[] {
+  const hit = variant === 'hit-gap'
+  if (sglang(p)) {
+    return [
+      t("In SGLang's DeepSeek run a prefill node ingests "),
+      chip(SGLANG_IN),
+      t(' on '),
+      chip(SGLANG_GPUS),
+      t(', every GPU busy. Attention there is data-parallel: each GPU prefills its own requests, and only the MoE layers spread over every GPU. '),
+      t(
+        hit
+          ? "So one request's prompt is prefilled at one GPU's share of the node rate, and a hit takes its tokens out of that GPU's work: use that rate. "
+          : "A GPU-second is one GPU's work, so it prefills one GPU's share of the node rate: use that rate. ",
+      ),
+    ]
+  }
+  return [t('A hypothetical prefill GPU processes '), v(num(p, 'p'), 'tok/s'), t(hit ? " of prompt, and the probe's prompt is prefilled on one such GPU. " : ' of prompt. ')]
 }
 
 function stemFor(variant: string, p: Params): PromptPart[] {
@@ -309,11 +330,11 @@ function stemFor(variant: string, p: Params): PromptPart[] {
           t(' only. An attacker probes with a prompt whose first '),
           v(num(p, 'c'), 'tokens'),
           t(' match a cached prompt. '),
-          ...rateParts(p),
+          ...rateParts(variant, p),
           t('By how many milliseconds is the hit faster to first token than a miss, if prefill is the only difference?'),
         ]
       }
-      return [t('An attacker probes a shared prefix cache with a prompt whose first '), v(num(p, 'c'), 'tokens'), t(' match a cached prompt (a hypothetical hit). '), ...rateParts(p), t('By how many milliseconds is the hit faster to first token than a miss, if prefill is the only difference?')]
+      return [t('An attacker probes a shared prefix cache with a prompt whose first '), v(num(p, 'c'), 'tokens'), t(' match a cached prompt (a hypothetical hit). '), ...rateParts(variant, p), t('By how many milliseconds is the hit faster to first token than a miss, if prefill is the only difference?')]
     }
     default: {
       const day = p.refills === undefined ? [] : [t('The shared prompt is evicted and rebuilt '), v(num(p, 'refills'), 'times a day'), t('. ')]
@@ -323,7 +344,7 @@ function stemFor(variant: string, p: Params): PromptPart[] {
         t(' sharing one '),
         v(num(p, 'S')),
         t('-token system prompt. With the tenant in the cache key, each tenant prefills it once instead of one prefill serving all. '),
-        ...rateParts(p),
+        ...rateParts(variant, p),
         ...day,
         t(p.refills === undefined ? 'How many extra prefill GPU-seconds does the namespace cost?' : 'How many extra prefill GPU-seconds per day does the namespace cost?'),
       ]
@@ -377,8 +398,10 @@ function steps(variant: string, p: Params, truth: number): SolutionStep[] {
       const cached = cachedTokens(p)
       const out: SolutionStep[] = []
       const skipped = p.block === undefined ? 'Tokens the hit skips = the matched prefix' : 'Tokens the hit skips = whole blocks of the matched prefix = ⌊matched ÷ block⌋ × block'
+      const rate = gpuRate(p)
+      if (sglang(p)) out.push(step([t('Prefill rate one request gets = node rate ÷ GPUs per node = '), v(claimNumber(SGLANG_IN), 'tok/s'), t(' ÷ '), v(claimNumber(SGLANG_GPUS), 'GPUs')], rate, 'tok/s per GPU'))
       out.push(step([t(skipped)], cached, 'tokens'))
-      out.push(step([t('Prefill time saved = tokens ÷ prefill rate = '), v(cached, 'tokens'), t(' ÷ '), v(hitRate(p), 'tok/s')], cached / hitRate(p), 's'))
+      out.push(step([t('Prefill time saved = tokens ÷ prefill rate per GPU = '), v(cached, 'tokens'), t(' ÷ '), v(rate, 'tok/s')], cached / rate, 's'))
       out.push(step([t('In milliseconds = seconds × 1,000')], truth, unit))
       return out
     }
@@ -577,7 +600,8 @@ const pin = (name: string, source: string, variant: string, p: Params, truthValu
 
 const gen: Gen = {
   id: 'prefill',
-  version: 1,
+  // v2: hit-gap times one request at one GPU's share of SGLang's node rate, as namespace-cost does
+  version: 2,
   title: 'Prefill: P:D ratio, KV hand-off, load or recompute, the timing oracle and the namespace cost',
   kcs: [EPD_PHASES, KV_TIERING, CACHE_TIMING_ORACLE],
   variants: VARIANTS,
@@ -593,6 +617,8 @@ const gen: Gen = {
     pin('Llama-3-8B (128 KiB per token) recomputed at 20,000 tok/s: loading wins only above 2.62 GB/s', 't6.l3', 'load-or-recompute', { model: 'llama3-8b', n: 8000, p: 20000 }, 2.62144, { abs: 0.0001 }), // gen-literal-ok: pinned hand computation
     pin('A hit on 3,000 cached tokens at 30,000 tok/s of prefill: 100 ms faster', 't6.l10', 'hit-gap', { dep: 'synthetic', c: 3000, p: 30000 }, 100, { abs: 0.001 }), // gen-literal-ok: pinned hand computation
     pin('10 tenants on a 2,000-token system prompt at 20,000 tok/s: 9 extra prefills of 0.1 s = 0.9 GPU-s', 't6.l10', 'namespace-cost', { dep: 'synthetic', N: 10, S: 2000, p: 20000 }, 0.9, { abs: 0.001 }), // gen-literal-ok: pinned hand computation
+    // one request is prefilled on one of the node's 8 GPUs (data-parallel attention), not by the whole node: 2,000 tokens take 305.9 ms, not 38.2
+    pin("A hit on 2,000 cached tokens in SGLang's DeepSeek run, at one GPU's share of the node rate: 2,000 ÷ (52,300 ÷ 8) = 305.9 ms (hand check)", 't6.l10', 'hit-gap', { dep: 'sglang', c: 2000 }, 305.927, { abs: 0.001 }), // gen-literal-ok: pinned hand computation
   ],
 }
 

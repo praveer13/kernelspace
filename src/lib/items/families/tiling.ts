@@ -35,6 +35,7 @@ import {
   maxTile,
   TILE_STEP,
   TILING_CLAIM_IDS as CL,
+  tileToReach,
   waveAI,
   WAVE_GEMM,
   WAVE_GROUP,
@@ -142,8 +143,8 @@ function truthOf(variant: string, p: Params): number {
     case 'raster-ai':
       return waveOf(p).ai
     case 'fp8-ridge':
-      // a square FP8 tile's intensity is T ÷ 1 B, so the side that reaches the ridge is the ridge itself
-      return p.ask === 'tile' ? ridgeOf(p) * bytesOf('fp8') : ridgeOf(p)
+      // a square FP8 tile's intensity is T ÷ 1 B, so it reaches the ridge at T ≥ the ridge: the smallest whole side is its ceiling
+      return p.ask === 'tile' ? tileToReach(ridgeOf(p), 'fp8') : ridgeOf(p)
     default:
       return p.ask === 'score' ? scoresOf(p) : qBlockAI(qOf(p))
   }
@@ -205,7 +206,7 @@ function steps(variant: string, p: Params, truth: number): SolutionStep[] {
       return [
         ...out,
         step(
-          [t('A square FP8 tile does 2T² FLOPs per step of K and reads 2T bytes, so its intensity is T, and T = the ridge = '), v(truth, 'elements', 1), t('. Arithmetic only: its FP32 accumulators, T × T × 4 B = '), v(truth * truth * REG_BYTES / KIB, 'KiB', 0), t(', are past the '), v(H100.regBytesPerSm / KIB, 'KiB'), t(' register file of an H100 SM, so no lone CTA reaches the ridge; reuse across CTAs through L2 does.')],
+          [t('A square FP8 tile does 2T² FLOPs per step of K and reads 2T bytes, so its intensity is T and it needs T ≥ the ridge, '), v(ridgeOf(p), undefined, 1), t('. A side is whole, so the smallest is that rounded up: T = '), v(truth, 'elements'), t('. Arithmetic only: its FP32 accumulators, T × T × 4 B = '), v(truth * truth * REG_BYTES / KIB, 'KiB', 0), t(', are past the '), v(H100.regBytesPerSm / KIB, 'KiB'), t(' register file of an H100 SM, so no lone CTA reaches the ridge; reuse across CTAs through L2 does.')],
           { value: truth, unit: 'elements' },
         ),
       ]
@@ -275,7 +276,10 @@ function stemOf(variant: string, p: Params): { stem: PromptPart[]; givens?: { la
     case 'fp8-ridge': {
       const chip = real(p) ? H100_NAME : `a hypothetical GPU with ${f(num(p, 'peak'))} TFLOP/s of dense BF16 and ${f(num(p, 'bw'))} TB/s of HBM`
       const bench = sustained(p) ? ` In a hypothetical benchmark it sustains ${f(num(p, 'fc'))} % of the FP8 peak and ${f(num(p, 'fb'))} % of the bandwidth; use the sustained figures.` : ''
-      const ask = p.ask === 'tile' ? ' What square tile side T would give an FP8 tile (C in registers, written once) an intensity equal to that ridge? Answer the arithmetic, even if no CTA could hold the tile.' : ' Where is its FP8 ridge, in FLOP per byte?'
+      const ask =
+        p.ask === 'tile'
+          ? ' What is the smallest whole square tile side T that gives an FP8 tile (C in registers, written once) an intensity of at least that ridge? A side is a whole number of elements, so round up: only that whole number is right. Answer the arithmetic, even if no CTA could hold the tile.'
+          : ' Where is its FP8 ridge, in FLOP per byte?'
       return {
         stem: [t(`FP8 tensor cores run at 2 × the dense BF16 rate. Take ${chip}.${bench}${ask}`)],
         ...(real(p)
@@ -317,8 +321,12 @@ function build(vs: VariantSpec, level: Level, seed: number, p: Params): Instance
           ? { kind: 'numeric', truth, unit: String(p.unit), tolerance: { rel: SYNTHETIC.relTol }, units: byteUnitChoices(String(p.unit), ['MB', 'GB', 'TB', 'MiB', 'GiB']) }
           : { kind: 'numeric', truth, unit: 'FLOP/B', tolerance: { rel: SYNTHETIC.relTol } }
       break
+    case 'fp8-ridge':
+      // a tile side is whole, as smem-fit's is: the stem says to round up, and only that side passes
+      answer = p.ask === 'tile' ? { kind: 'numeric', truth, unit: 'elements', tolerance: { abs: SYNTHETIC.countTol } } : { kind: 'numeric', truth, unit: 'FLOP/B', tolerance: { rel: SYNTHETIC.relTol } }
+      break
     default:
-      answer = { kind: 'numeric', truth, unit: vs.id === 'fp8-ridge' && p.ask === 'tile' ? 'elements' : 'FLOP/B', tolerance: { rel: SYNTHETIC.relTol } }
+      answer = { kind: 'numeric', truth, unit: 'FLOP/B', tolerance: { rel: SYNTHETIC.relTol } }
   }
   // level 0 shows every step with the last blanked; level 1 blanks one in the middle
   const full = steps(vs.id, p, truth)
@@ -450,7 +458,8 @@ const RATIO_RULES: RatioRule[] = [
     id: 'tiling.fp32-bytes',
     ratio: (i) => {
       if (i.params.dtype === 'fp32' || (is(i, 'fp8-ridge') && i.params.ask !== 'tile')) return null
-      if (is(i, 'fp8-ridge')) return slip(i, i.answer.kind === 'choice' ? 0 : i.answer.truth * bytesOf('fp32'))
+      // the tile that reaches the ridge with 4-byte elements: intensity T ÷ 4, so ⌈4 × ridge⌉
+      if (is(i, 'fp8-ridge')) return slip(i, tileToReach(ridgeOf(i.params), 'fp32'))
       return slip(i, truthOf(i.variant, { ...i.params, dtype: 'fp32' }))
     },
     message: (i) => `You used 4-byte elements. This tile is ${i.variant === 'fp8-ridge' ? 'FP8' : dtName(i.params)}: ${f(bytesOf(i.variant === 'fp8-ridge' ? 'fp8' : dt(i.params)))} B per value. Only the accumulators are FP32, and they stay in registers.`,
@@ -471,13 +480,17 @@ const RATIO_RULES: RatioRule[] = [
   },
   {
     id: 'tiling.fp8-same-ridge',
-    ratio: (i) => (is(i, 'fp8-ridge') ? 1 / FP8_OVER_BF16 : null),
+    // the BF16 ridge, or the whole tile that reaches it
+    ratio: (i) => {
+      if (!is(i, 'fp8-ridge')) return null
+      return i.params.ask === 'tile' ? slip(i, tileToReach(ridgeOf(i.params) / FP8_OVER_BF16, 'fp8')) : 1 / FP8_OVER_BF16
+    },
     message: 'You kept the BF16 ridge. FP8 tensor cores run twice as fast against the same bandwidth, so the ridge doubles.',
   },
   {
     id: 'tiling.counted-c',
-    // C counted as a third face: a square tile's intensity becomes 2T ÷ 3b instead of 2T ÷ 2b, so T must be 3/2 as big
-    ratio: (i) => (is(i, 'fp8-ridge') && i.params.ask === 'tile' ? (2 + 1) / 2 : null),
+    // C counted as a third face: a square tile's intensity becomes 2T ÷ 3b instead of 2T ÷ 2b, so T must be 3/2 as big, rounded up
+    ratio: (i) => (is(i, 'fp8-ridge') && i.params.ask === 'tile' ? slip(i, tileToReach((ridgeOf(i.params) * (2 + 1)) / 2, 'fp8')) : null),
     message: 'You counted C’s face as traffic. C stays in registers across the K loop and is written once, so each step reads only the A and B slabs.',
   },
   {
@@ -502,7 +515,8 @@ const pin = (name: string, source: string, variant: string, p: Params, truth: nu
 
 const gen: Gen = {
   id: 'tiling',
-  version: 1,
+  // v2: fp8-ridge's tile ask is the whole side that reaches the ridge (591 on H100), graded exactly
+  version: 2,
   title: 'Tiling: shared memory, occupancy, raster order, FP8 and FlashAttention',
   kcs: ['t4.shared-memory-scratchpad', 't4.occupancy', KC.rasterL2Reuse, KC.ridgePoint, 't4.flashattention-blocking'],
   variants: VARIANTS,
@@ -521,6 +535,8 @@ const gen: Gen = {
     pin('The same wave grouped 11 x 12 (cube level 4)', 'tiling-cube', 'raster-ai', { hw: 'h100', tm: BASE.tm, tn: BASE.tn, m: WAVE_GEMM, n: WAVE_GEMM, dtype: 'fp16', raster: 'grouped', group: WAVE_GROUP }, 734.6, { abs: 0.05 }),
     // gen-literal-ok: the cube's level-5 pin, the H100 FP8 ridge 590.4
     pin('The H100 FP8 ridge, 2 x BF16 dense over HBM (cube level 5)', 'tiling-cube', 'fp8-ridge', { hw: 'h100', ask: 'ridge' }, 590.4, { abs: 0.05 }),
+    // gen-literal-ok: the cube's level-5 tile pin, the whole side 591 that reaches 590.4
+    pin('The smallest whole square FP8 tile side that reaches the H100 ridge (cube level 5)', 'tiling-cube', 'fp8-ridge', { hw: 'h100', ask: 'tile' }, 591, { abs: 0 }),
     // gen-literal-ok: the cube's level-6 pin, 127.5
     pin('A 128-row FlashAttention query block at N = 32,768, d = 128, FP16 (cube level 6)', 'tiling-cube', 'qblock-ai', { seq: QBLOCK.n, d: QBLOCK.d, br: QBLOCK.br, dtype: 'fp16', ask: 'ai' }, 127.5, { abs: 0.05 }),
     pin('The N x N FP16 score matrix of one head at N = 32,768, in GiB (cube level 6)', 'tiling-cube', 'qblock-ai', { seq: QBLOCK.n, d: QBLOCK.d, heads: 1, batch: 1, dtype: 'fp16', ask: 'score', unit: 'GiB' }, 2, { abs: 0 }),
