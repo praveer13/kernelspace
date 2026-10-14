@@ -34,19 +34,13 @@ import {
 } from './engine-core'
 import type { Model } from './engine-core'
 import { ENGINE_EXT_TASKS } from './engineExt.tasks'
+import { TOY_ENGINE_TASKS } from './toyEngine.tasks'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 
 const SIM_ID = 'sim-engine'
 
-const TASKS = [
-  { id: 'tokenize', text: 'Tokenize a prompt and watch every merge round', xp: 60 },
-  { id: 'forward', text: 'Run a full forward pass (reach the first decoded token)', xp: 60 },
-  { id: 'decode', text: 'Naive-decode 8 tokens and watch the waste counter spin', xp: 60 },
-  { id: 'kv', text: 'Enable the KV cache and cut mean ITL by 5× or more', xp: 60 },
-  { id: 'batch', text: 'Run 4 concurrent sequences with continuous batching', xp: 60 },
-  ...ENGINE_EXT_TASKS,
-]
+const TASKS = [...TOY_ENGINE_TASKS, ...ENGINE_EXT_TASKS]
 
 type StageId = 'tokenize' | 'embed' | 'forward' | 'decode' | 'kv' | 'batch' | 'context' | 'gqa' | 'executor'
 
