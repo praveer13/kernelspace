@@ -16,8 +16,8 @@
 
 import { instantiateLab, LabAbiError, LabTrapError, probeInvoke, runLabWasm } from '../lib/wasm-lab'
 import { compatFor, NEWER_TEMPLATE_NOTE, splitLabId } from '../lib/forge/abi'
-import { abiOf, instantiator, listChecks, runChecks, type LabExports } from '../lib/forge/run'
-import { capReply, type LabWorkerReply, type LabWorkerRequest } from './lab-protocol'
+import { abiOf, instantiator, listChecks, runChecks, type Instantiate, type LabExports } from '../lib/forge/run'
+import { capReply, invokeCall, type LabWorkerReply, type LabWorkerRequest } from './lab-protocol'
 
 /* The app tsconfig has the DOM lib, not WebWorker — type just what we use. */
 const scope = self as unknown as {
@@ -61,9 +61,10 @@ async function runV1({ id, mode, bytes }: LabWorkerRequest) {
 
 /**
  * 'calls': the whole list in one fresh instance, one 2 s budget on the main thread. The reference check comes first
- * (`list` runs no student code) so a reference build answers nothing. A trap ends the list as a failed call.
+ * (`list` runs no student code) so a reference build answers nothing. A trap ends the list as a failed call. Replies are
+ * read by `invokeCall`, so an empty reply is the empty string, not an ABI error.
  */
-async function runCalls({ id, calls }: LabWorkerRequest, module: WebAssembly.Module, first: LabExports, abi: number) {
+function runCalls({ id, calls }: LabWorkerRequest, make: Instantiate, first: LabExports, abi: number) {
   if (!Array.isArray(calls) || calls.length === 0 || !calls.every((c) => typeof c === 'string')) {
     throw new LabAbiError('a calls request needs a non-empty list of commands.')
   }
@@ -74,8 +75,8 @@ async function runCalls({ id, calls }: LabWorkerRequest, module: WebAssembly.Mod
   if (typeof first.ks_invoke !== 'function' || typeof first.ks_alloc !== 'function' || typeof first.ks_free !== 'function') {
     throw new LabAbiError('this module has no ks_invoke bridge: rebuild with the latest template.')
   }
-  const mod = await instantiateLab(module)
-  const replies = calls.map((cmd) => capReply(mod.invoke(cmd)))
+  const ex = make()
+  const replies = calls.map((cmd) => capReply(invokeCall(ex, cmd)))
   scope.postMessage({ type: 'replies', id, replies })
 }
 
@@ -94,7 +95,7 @@ scope.onmessage = async (ev) => {
     const first = make()
     const abi = abiOf(first)
     if (mode === 'calls') {
-      await runCalls(req, module, first, abi)
+      runCalls(req, make, first, abi)
       return
     }
     if (abi === 1) {
