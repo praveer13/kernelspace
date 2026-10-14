@@ -599,7 +599,24 @@ export interface DomKit {
   uninstall(): Promise<void>
 }
 
+/**
+ * React's streaming server renderer leaves the context values of the last task it ran in place when it
+ * finishes asynchronously (ReactFizzServer's performWork switches back to the root only inside a
+ * synchronous renderToString). In a browser the server and client renderers never share a module, but bun
+ * runs every test file in one process: a test that streams a lazy page inside a MemoryRouter leaves
+ * react-router's LocationContext set, and the next client mount throws "You cannot render a <Router>
+ * inside another <Router>". One trivial streamed render switches the streaming renderer back to the root.
+ * (renderToString is a separate build under bun with its own context state, so it cannot do this.)
+ */
+async function resetStreamingContext(): Promise<void> {
+  const [{ createElement }, { renderToReadableStream }] = await Promise.all([import('react'), import('react-dom/server')])
+  const stream = await renderToReadableStream(createElement('i'))
+  await stream.allReady
+  await new Response(stream).text()
+}
+
 export async function installDom(): Promise<DomKit> {
+  await resetStreamingContext()
   const doc = new MiniDocument()
   const store = new Map<string, string>()
   const storage = {
