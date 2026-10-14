@@ -11,6 +11,9 @@
  * - Scheduling: `target = slo + offset`, where the offset is learned from the learner's first spaced
  *   reviews, predicted recall against what happened (0.02 before 20 of them, then clamp(pred − obs, 0, 0.08)).
  * - Re-entry: after a 7-day gap the overdue cards are spread over 14 days (reentry.ts).
+ * - Forms: a track form item (src `form`, wave-3.md §12.6) is measurement, and measurement never reschedules a card
+ *   (W18). The replay skips it outright, so it reviews no card, opens or closes no gap and moves no clock: the card set
+ *   is the one the ledger without its form items gives.
  *
  * The event → KC resolver is injected (`CardsContent.resolve`), so this module imports no lesson data.
  * A card that has not been reviewed yet has `memory: null` and is scheduled and predicted as if its
@@ -118,13 +121,16 @@ const dataOf = (e: LedgerEvent): Record<string, unknown> => {
   return typeof d === 'object' && d !== null ? (d as Record<string, unknown>) : {}
 }
 
+/** A track form item (src `form`, wave-3.md §12.6): graded like any item, but never a card review (W18). */
+export const isFormItem = (e: LedgerEvent): boolean => (e.kind === 'item' || e.kind === 'probe') && dataOf(e).src === 'form'
+
 /**
  * A review of a card: a graded event except the `quiz` summary (its items are already events, and the
- * summary is what creates a card, not what reviews it) and an assisted one (a hint-ladder bottom-out is
- * not retrieval).
+ * summary is what creates a card, not what reviews it), an assisted one (a hint-ladder bottom-out is
+ * not retrieval) and a form item (measurement never reschedules a card, W18).
  */
 export function isReviewEvent(e: LedgerEvent): boolean {
-  if (!GRADED_KINDS.has(e.kind) || e.kind === 'quiz') return false
+  if (!GRADED_KINDS.has(e.kind) || e.kind === 'quiz' || isFormItem(e)) return false
   return (e as { provenance?: string }).provenance !== 'assisted'
 }
 
@@ -358,6 +364,8 @@ export function deriveCardsDetailed(
   }
 
   for (const e of events) {
+    // W18: a form item leaves no trace on the cards, not even on the clock or the gap that re-entry reads.
+    if (isFormItem(e)) continue
     const graded = GRADED_KINDS.has(e.kind)
     const gapReturn = graded && isGapReturn(lastGraded, e.day)
     advance(e.day, gapReturn)
@@ -435,6 +443,27 @@ export function selectFirstReviewCalibration(
     observed: right / n,
     ci95: [w.lo, w.hi],
   }
+}
+
+/** The learned optimism offset with the first spaced reviews it rests on (wave-3.md §12.3). */
+export interface OptimismOffset {
+  offset: number
+  /** First spaced reviews seen. */
+  n: number
+  /** False while n is below `OFFSET_MIN_N`: the offset is then the default 0.02. */
+  learned: boolean
+}
+
+/** The optimism offset as scheduling uses it on `now`, for /me to show with its n (§12.3). */
+export function selectOptimismOffset(
+  events: Iterable<LedgerEvent>,
+  content: CardsContent,
+  now: LocalDay,
+  plan?: CardsPlan | null,
+  extra?: CardsExtra,
+): OptimismOffset {
+  const { set, firstReviews } = deriveCardsDetailed(events, content, now, plan, extra)
+  return { offset: set.offset, n: firstReviews.length, learned: firstReviews.length >= OFFSET_MIN_N }
 }
 
 /**
