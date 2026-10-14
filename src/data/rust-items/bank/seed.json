@@ -33,7 +33,7 @@
       }
     },
     "batch-flush-while-borrowed": {
-      "hash": "1fac2c26e2af5b839774331b194d820c5403cb66c4ae0006595e6dd5ccbcac97",
+      "hash": "d8ec50998af84f08e5a31130df1269a41d33caf982d7142b895189e5256022b6",
       "variants": {
         "base": {"result":"compiles"},
         "late-first": {"result":{"code":"E0505","line":9,"message":"cannot move out of `b` because it is borrowed"},"fixes":{"copy-first":"compiles","clone-batch":"compiles","mut-first":{"code":"E0596","line":7}}},

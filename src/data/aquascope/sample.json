@@ -6,14 +6,14 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 6,
-      "paths": ["v","*first","first"],
+      "paths": ["v","first","*first"],
       "changes": [
         {"line":2,"path":"v","before":"","after":"RWO"},
-        {"line":3,"path":"*first","before":"","after":"R"},
         {"line":3,"path":"first","before":"","after":"RO"},
+        {"line":3,"path":"*first","before":"","after":"R"},
         {"line":3,"path":"v","before":"RWO","after":"R"},
-        {"line":4,"path":"*first","before":"R","after":""},
         {"line":4,"path":"first","before":"RO","after":""},
+        {"line":4,"path":"*first","before":"R","after":""},
         {"line":4,"path":"v","before":"R","after":"RWO"},
         {"line":5,"path":"v","before":"RWO","after":""}
       ],
@@ -29,11 +29,11 @@
       "source": "aquascope",
       "tool": {"aquascope":"f2d0a06034b86765a91f10b7c8e40ec31ecb87a6","toolchain":"nightly-2026-05-01"},
       "lines": 6,
-      "paths": ["v","*first","first"],
+      "paths": ["v","first","*first"],
       "changes": [
         {"line":2,"path":"v","before":"","after":"RWO"},
-        {"line":3,"path":"*first","before":"","after":"R"},
         {"line":3,"path":"first","before":"","after":"RO"},
+        {"line":3,"path":"*first","before":"","after":"R"},
         {"line":3,"path":"v","before":"RWO","after":"R"}
       ],
       "uses": [

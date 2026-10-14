@@ -129,6 +129,24 @@ export function pathAt(line: string, col: number): string {
 /** Plain code-unit order, the same on every machine (not `localeCompare`). */
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
+/**
+ * A path split for reading order: its base name, how many `*` dereference it, and the field or index
+ * path after the base (`(*self).x` is `self`, depth 1, `.x`; `*r` is `r`, depth 1, ``). A path with no
+ * name in it (`@12`) is its own base.
+ */
+export function pathParts(p: string): { base: string; depth: number; rest: string } {
+  const m = /^([*(&\s]*)([A-Za-z_]\w*)(.*)$/.exec(p)
+  if (!m) return { base: p, depth: 0, rest: '' }
+  return { base: m[2], depth: (m[1].match(/\*/g) ?? []).length, rest: m[3].replace(/^\)/, '') }
+}
+
+/** Natural row order: by base name, then dereference depth, then field, so `r` comes before `*r` and `self` before `(*self).x`. */
+export function pathOrder(a: string, b: string): number {
+  const x = pathParts(a)
+  const y = pathParts(b)
+  return cmp(x.base, y.base) || x.depth - y.depth || cmp(x.rest, y.rest) || cmp(a, b)
+}
+
 /** Prepares a snippet for cargo: wrapped in `fn main` when it has none. `offset` lines precede the snippet. */
 export function prepare(code: string): { source: string; offset: number } {
   if (/^\s*(pub\s+)?fn\s+main\s*\(/m.test(code)) return { source: `${code.replace(/\n$/, '')}\n`, offset: 0 }
@@ -168,9 +186,9 @@ export function toTrace(results: BodyResult[], code: string, offset: number): Pe
       uses.push({ line, col: b.location.column, path: pathAt(src[line - 1] ?? '', b.location.column), needs: rawPerms(b.expected), has: rawPerms(b.actual) })
     }
   }
-  // Aquascope lists the paths of one line in a run-dependent order, so ties are broken on every field
-  const changes = [...byKey.values()].filter((c) => c.before !== c.after).sort((a, b) => a.line - b.line || cmp(a.path, b.path) || cmp(a.before, b.before) || cmp(a.after, b.after))
-  uses.sort((a, b) => a.line - b.line || a.col - b.col || cmp(a.path, b.path) || cmp(a.needs, b.needs) || cmp(a.has, b.has))
+  // Aquascope lists the paths of one line in a run-dependent order, so ties are broken on every field, paths in reading order (pathOrder)
+  const changes = [...byKey.values()].filter((c) => c.before !== c.after).sort((a, b) => a.line - b.line || pathOrder(a.path, b.path) || cmp(a.before, b.before) || cmp(a.after, b.after))
+  uses.sort((a, b) => a.line - b.line || a.col - b.col || pathOrder(a.path, b.path) || cmp(a.needs, b.needs) || cmp(a.has, b.has))
   const order: string[] = []
   for (const x of [...changes, ...uses].sort((a, b) => a.line - b.line)) if (!order.includes(x.path)) order.push(x.path)
   return {

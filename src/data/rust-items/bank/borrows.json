@@ -22,7 +22,7 @@
       }
     },
     "block-pool-iter-inserts": {
-      "hash": "65c5d12f80232fea8854999893ad1add670359ddaa5cab8011e826d08f95e6b0",
+      "hash": "edf74a4aff52347daa453b615f5db600bd30428f980d40084bf4ff32d06e94a3",
       "variants": {
         "base": {"result":"compiles"},
         "insert-inside": {"result":{"code":"E0502","line":5,"message":"cannot borrow `*pool` as mutable because it is also borrowed as immutable"}},
@@ -93,7 +93,7 @@
       }
     },
     "router-load-shift": {
-      "hash": "246262a50a181db9ee493539fc91cca35006a2f8f1fb3b1371d91585ab2bba6e",
+      "hash": "794c4c60f38987e90049a7b680c9082764c0d928a8c6d8270f134a8f280ca214",
       "variants": {
         "base": {"result":"compiles"},
         "use-both": {"result":{"code":"E0499","line":6,"message":"cannot borrow `*m` as mutable more than once at a time"}},
@@ -201,7 +201,7 @@
       }
     },
     "running-total-bump": {
-      "hash": "531bc73c2d9f71ae7c05f11b6226886b955e1c59fe5b0a04918f17fc17da399e",
+      "hash": "a039cac9ff281fbd76632de613d90926cd2c83db8ded1a95b2e6865125cd1cd4",
       "variants": {
         "base": {"result":"compiles"},
         "ref-before": {"result":{"code":"E0506","line":3,"message":"cannot assign to `*total` because it is borrowed"},"fixes":{"copy-before":"compiles","spell-out":{"code":"E0506","line":3},"mut-before":{"code":"E0503","line":3}}},
@@ -239,7 +239,7 @@
       }
     },
     "table-retire-first": {
-      "hash": "587318121174508993ea2a9ed7e0f51afcb349eb29846959e4dd280b01c4b8bc",
+      "hash": "819e45cd1d84083447a2052ff095faba43d53bdde86234607f1eb8f802c0fab1",
       "variants": {
         "base": {"result":"compiles"},
         "ref-first": {"result":{"code":"E0505","line":6,"message":"cannot move out of `t` because it is borrowed"},"fixes":{"copy-first":"compiles","get-first":{"code":"E0505","line":6},"keep-table":"compiles"}},
@@ -353,7 +353,7 @@
       }
     },
     "half-mix-blocks": {
-      "hash": "1d407ed9d2b93202dc5a3ea58c3175f523e35ea8098d3641c537e4866180ca8f",
+      "hash": "447773ccf9a9f2768dd1b2f62a44c39f087b51ed2a6adaea550a3d046e412762",
       "variants": {
         "base": {"result":"compiles"},
         "shared-split": {"result":{"code":"E0594","line":3,"message":"cannot assign to `a[_]`, which is behind a `&` reference"},"fixes":{"split-mut":"compiles","swap-names":"compiles","sum-local":"compiles"}},
@@ -410,7 +410,7 @@
       }
     },
     "gain-reborrows": {
-      "hash": "74d3c78ec93d532a645c6ff977a866ca6559a4c7cc5b1b772393ac5822911fa7",
+      "hash": "4356bf2c8c640e24a22928aec2efd3ca74bb8dcbaf1b03f379a442b807ec1d7d",
       "variants": {
         "base": {"result":"compiles"},
         "both-live": {"result":{"code":"E0502","line":4,"message":"cannot borrow `*t` as immutable because it is also borrowed as mutable"}},
@@ -449,7 +449,7 @@
       }
     },
     "batch-send-peeked": {
-      "hash": "5382f2ff5439d790f42e2508e152f1f467259a6ec4c57780f05c669e5ffe2a64",
+      "hash": "c164035765df73808ca8ae71d572306ca679dba5640342ba1acd31ac36986985",
       "variants": {
         "base": {"result":"compiles"},
         "ref-first": {"result":{"code":"E0505","line":3,"message":"cannot move out of `b` because it is borrowed"},"fixes":{"copy-first":"compiles","head-slice":{"code":"E0505","line":3},"clone-batch":"compiles"}},
@@ -459,7 +459,7 @@
       }
     },
     "request-done-borrowed": {
-      "hash": "c237c65cf0e444966dd00b6b0ec26efac840733807b5ad4bf7096d8ec852a969",
+      "hash": "7584f65ae5c9461ba6dc8a3812a5b0659c7ad6fb547afdb44e7dac19ee306a7b",
       "variants": {
         "base": {"result":"compiles"},
         "ref-id": {"result":{"code":"E0505","line":5,"message":"cannot move out of `r` because it is borrowed"},"fixes":{"copy-id":"compiles","drop-text":"compiles","borrow-it":"compiles"}},

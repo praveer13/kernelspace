@@ -48,7 +48,7 @@
       }
     },
     "closure-borrows-batch": {
-      "hash": "1046e59123ea48a28119230eb363f79a1fdab49bd576a64342411d66196c9364",
+      "hash": "6c718e12a75b744ff726cff4b7dca3f4cab661f3e383673147d5d6995f35c070",
       "variants": {
         "base": {"result":"compiles"},
         "move-batch": {"result":{"code":"E0505","line":8,"message":"cannot move out of `batch` because it is borrowed"},"fixes":{"borrow-batch":"compiles","clone-batch":"compiles","mut-batch":{"code":"E0502","line":8},"move-closure":{"code":"E0382","line":8}}},
@@ -74,7 +74,7 @@
       }
     },
     "evict-block-while-viewed": {
-      "hash": "a9fbd12a3ec6118f71b527a877a91b919d7996800feebe6354b8845ca6c7ac76",
+      "hash": "cb524312a6ffc5e5d6eb2708da0a4fc41bd369d7afa5f0d98f224f245c7de72a",
       "variants": {
         "base": {"result":"compiles"},
         "use-after-drop": {"result":{"code":"E0505","line":9,"message":"cannot move out of `block` because it is borrowed"},"fixes":{"reuse-len":"compiles","clone-data":"compiles","drop-view":"compiles","first-term":"compiles"}},
@@ -83,7 +83,7 @@
       }
     },
     "recycle-lease-slot": {
-      "hash": "3c2f74cf11206a66154a4af24d050f75bff3bfc6ce0d65b0d99b633a16960401",
+      "hash": "147ce8e8e5d2dc947391b78219584c34938fb07e1a00b48330818a2cb4a7b25f",
       "variants": {
         "base": {"result":"compiles"},
         "use-after-push": {"result":{"code":"E0505","line":13,"message":"cannot move out of `lease` because it is borrowed"},"fixes":{"copy-slot":"compiles","clone-lease":"compiles","mut-slot":{"code":"E0596","line":11},"deref-lease":{"code":"E0614","line":13}}},
@@ -145,7 +145,7 @@
       }
     },
     "slice-head-then-own": {
-      "hash": "27a55250168e5c53cdddc1072d7429ecf1e005e65ca52bbc62bde27c38668b04",
+      "hash": "c43c1bff7977202c8b074fa80ef8fb52d9c8149eb28d8521a71c7aa3ae9b641b",
       "variants": {
         "base": {"result":"compiles"},
         "late-head": {"result":{"code":"E0505","line":4,"message":"cannot move out of `tokens` because it is borrowed"},"fixes":{"borrow-owned":"compiles","clone-owned":"compiles","mut-owned":{"code":"E0502","line":4}}},
@@ -153,7 +153,7 @@
       }
     },
     "flush-table-blocks": {
-      "hash": "6b4c42ad857d8698aec4c8f2c44aa88efb6ac8b8b15fb2e1318d5f5bc410e089",
+      "hash": "22e5bae16d0760c9d6e6cbb0bc54e93a03178065d7b5506b5e07518d4c11f2c7",
       "variants": {
         "base": {"result":"compiles"},
         "move-field": {"result":{"code":"E0507","line":9,"message":"cannot move out of `self.blocks` which is behind a mutable reference"},"fixes":{"take-blocks":"compiles","clone-blocks":"compiles","ref-blocks":{"code":"E0308","line":9},"replace-one-arg":{"code":"E0061","line":9}}},
@@ -172,7 +172,7 @@
       }
     },
     "weights-behind-rc": {
-      "hash": "0a5a781f98aa8cdd187bf617c58565e9898c14d7af033b2d7d2a9274c6bea40a",
+      "hash": "cd989f5035d3a60e913473b5d763bb9d28909247dda12024b75395752f837c61",
       "variants": {
         "base": {"result":"compiles"},
         "move-name": {"result":{"code":"E0507","line":9,"message":"cannot move out of an `Rc`"},"fixes":{"borrow-name":"compiles","clone-name":"compiles","mut-name":{"code":"E0596","line":9}}},
@@ -208,7 +208,7 @@
       }
     },
     "first-owner-array": {
-      "hash": "5d2ae91418f3e382968a62e336083fb9446936fab9622741496a2422bc6c2459",
+      "hash": "1f8cb47293663a058c6dcb7731a9f8540b3e668e90c45141368d461260152fc9",
       "variants": {
         "base": {"result":"compiles"},
         "index-field": {"result":{"code":"E0508","line":4,"message":"cannot move out of type `[Slot; 4]`, a non-copy array"},"fixes":{"borrow-owner":"compiles","clone-owner":"compiles","deref-owner":{"code":"E0277","line":4},"into-bytes":{"code":"E0508","line":4}}},
@@ -216,7 +216,7 @@
       }
     },
     "guard-name-move": {
-      "hash": "aec4dd4c7f910320fdd7196ca703e9f4e2525bab0dfc1d2068ab782ed4c4a9ca",
+      "hash": "74c43bd9535e86158c63e4b295c395ef39de3f3bad82741fe952deea7a882bf5",
       "variants": {
         "base": {"result":"compiles"},
         "move-name": {"result":{"code":"E0509","line":12,"message":"cannot move out of type `Guard`, which implements the `Drop` trait"},"fixes":{"borrow-name":"compiles","clone-name":"compiles","mut-name":{"code":"E0596","line":12},"into-bytes":{"code":"E0509","line":12}}},
@@ -261,7 +261,7 @@
       }
     },
     "count-assign-twice": {
-      "hash": "3de4cf66c63d9ee100ede1938463fd0440c39bd5106b883ac209906a58ac41da",
+      "hash": "1d002ff052c111c2c7ff879f03aed082180fdeb33c2636a062ec3c7b45fa1ec7",
       "variants": {
         "base": {"result":"compiles"},
         "immutable-total": {"result":{"code":"E0384","line":4,"message":"cannot assign twice to immutable variable `total`"},"fixes":{"mut-total":"compiles","plain-assign":{"code":"E0384","line":4},"shadow-total":"compiles"}},
@@ -304,7 +304,7 @@
       }
     },
     "oldest-ring-slot": {
-      "hash": "908f1c836fc2089ba61dcda6cf4572396f3b589ba834f7b7891bcd1bc54363c4",
+      "hash": "baef1791fb8836e3c7496c1b1db06601c824855bb9bb382b4b1466092da6abce",
       "variants": {
         "base": {"result":{"code":"E0508","line":5,"message":"cannot move out of type `[Req; 3]`, a non-copy array"},"fixes":{"into-iter":"compiles","clone-slot":"compiles","ref-slot":{"code":"E0308","line":5},"unwrap-default":{"code":"E0277","line":5}}},
         "vec-version": {"result":{"code":"E0507","line":5,"message":"cannot move out of index of `Vec<Req>`"},"fixes":{"into-iter":"compiles","clone-slot":"compiles","ref-slot":{"code":"E0308","line":5},"unwrap-default":{"code":"E0277","line":5}}},
@@ -313,7 +313,7 @@
       }
     },
     "name-pair-array": {
-      "hash": "ec8027fa1a5bdc2e2a94cfaa740dc0d1894e0a8b8b9845a31b137335d0c7e0e2",
+      "hash": "06628c202f108420cffd9509c30a81d0eaff5e5db37c82246c2bd8e36b01908b",
       "variants": {
         "base": {"result":"compiles"},
         "move-first": {"result":{"code":"E0508","line":2,"message":"cannot move out of type `[String; 2]`, a non-copy array"},"fixes":{"borrow-first":"compiles","clone-first":"compiles","into-bytes":{"code":"E0508","line":2},"deref-first":{"code":"E0277","line":2}}},
@@ -357,7 +357,7 @@
       }
     },
     "retry-send-loop": {
-      "hash": "b48a29bd819c0b0367fbbb6de3872ff993b41e23a0fdd016155ff4e4dcf3af6e",
+      "hash": "00f0313094eb5221d031a4d71376181b8098e92ef2b405747547650be2150a55",
       "variants": {
         "base": {"result":{"code":"E0382","line":12,"message":"use of moved value: `req`"},"fixes":{"peek":"compiles","clone-send":"compiles","ref-send":{"code":"E0507","line":12},"mut-param":{"code":"E0382","line":12}}},
         "ref-receiver": {"result":{"code":"E0507","line":12,"message":"cannot move out of a shared reference"}},
@@ -400,7 +400,7 @@
       }
     },
     "params-builder-chain": {
-      "hash": "461489eda8c341f1de65f36bcbba75cbcb7b30234520236090c2e969e60e86a0",
+      "hash": "57449f6b448f0ff88cf533c257d8dc7f083d03b75d24a7314480ed89d9aa56c2",
       "variants": {
         "base": {"result":{"code":"E0382","line":13,"message":"borrow of moved value: `b`"},"fixes":{"rebind":"compiles","clone-recv":"compiles","ref-recv":{"code":"E0507","line":12},"discard":{"code":"E0382","line":13}}},
         "ref-receiver": {"result":{"code":"E0507","line":12,"message":"cannot move out of a shared reference"}},
@@ -426,7 +426,7 @@
       }
     },
     "tail-byte-then-own": {
-      "hash": "4459fbdfd0bb388801bf46a71f468214f9c977e71c2242d5dac716dd2be3e7c4",
+      "hash": "96a200faefbfc66a09a42230dfae4aca00bb839a4a5b730045f89c1a0bdd312b",
       "variants": {
         "base": {"result":{"code":"E0505","line":3,"message":"cannot move out of `buf` because it is borrowed"},"fixes":{"copy-tail":"compiles","clone-buf":"compiles","last-mut":{"code":"E0596","line":2},"first-byte":"compiles"}},
         "copy-tail": {"result":"compiles"},

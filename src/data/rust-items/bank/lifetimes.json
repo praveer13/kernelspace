@@ -94,7 +94,7 @@
       }
     },
     "rc-block-table": {
-      "hash": "09a3e383144ddfc2dd0e74299a82112210023750029b68a4c0a7e53839d52d15",
+      "hash": "22833be261ca08dbb43a970df5f55167f34d803fc4c924141e8ef3dce922a09c",
       "variants": {
         "base": {"result":"compiles"},
         "push-through-rc": {"result":{"code":"E0596","line":6,"message":"cannot borrow data in an `Rc` as mutable"},"fixes":{"make-mut":"compiles","get-mut":"compiles","clone-rc":{"code":"E0596","line":6}}},
@@ -123,7 +123,7 @@
       }
     },
     "box-block-list": {
-      "hash": "aabd14592508821d9dbc5dd94882213490b5e9878ef13a57645ccdbc0403ea4a",
+      "hash": "53bfbbeaef5c8ed80a4eaaba98365c8dec04a407ec1a488e32919596867770e0",
       "variants": {
         "base": {"result":"compiles"},
         "ref-box": {"result":{"code":"E0507","line":2,"message":"cannot move out of `*b` which is behind a shared reference"},"fixes":{"borrow-inner":"compiles","clone-inner":"compiles","deref-twice":{"code":"E0507","line":2}}},
@@ -141,7 +141,7 @@
       }
     },
     "slot-take-request": {
-      "hash": "83d3a574a48d9a439c823c60f7783beb4f9108678dc217511178eb3c0e77ac6a",
+      "hash": "f1304163ba7639e4c0b2bea2bc093f91c805934dbabea88e3d7f6e3240f6c46d",
       "variants": {
         "base": {"result":"compiles"},
         "move-field": {"result":{"code":"E0507","line":8,"message":"cannot move out of `s.req` which is behind a mutable reference"},"fixes":{"take":"compiles","clone-req":"compiles","iter-req":{"code":"E0308","line":8}}},
@@ -151,7 +151,7 @@
       }
     },
     "tap-reentry": {
-      "hash": "465b30f5779c22b64cd706d85bbb9d8dfc4b728d9a8701cd15334e6152389534",
+      "hash": "21cdad60c9643c89d6bad7f51702c3c0f1a0e64eb56015bad6c31eaad31eb820",
       "variants": {
         "base": {"result":"compiles"},
         "recurse-held": {"result":{"code":"BorrowMutError","line":6,"message":"RefCell already borrowed"},"fixes":{"drop-g":"compiles","bind-g":{"code":"BorrowMutError","line":6},"drop-ref":{"code":"BorrowMutError","line":6}}},
@@ -170,7 +170,7 @@
       }
     },
     "slot-or-insert": {
-      "hash": "5af36c470dc0e1b35f2f80fd8115d88525c93fab692eed6406b9aadc09b2d089",
+      "hash": "ae62bbecebee0a1e178ccf91eece5e24fecba065827af2be9db7890751e69344",
       "variants": {
         "base": {"result":"compiles"},
         "cond-get": {"result":{"code":"E0502","line":6,"message":"cannot borrow `*m` as mutable because it is also borrowed as immutable"},"fixes":{"contains-key":"compiles","entry-first":"compiles","peek-only":"compiles"}},
@@ -188,7 +188,7 @@
       }
     },
     "closure-field-capture-sched": {
-      "hash": "41cb9a542a6aff366fd8b258555eb871a41f0570367b83231d84d72795160417",
+      "hash": "fe2d428187a44c7c33b25eaa4a9c8171e215a7a6c04748c521ae8e7e510fc98c",
       "variants": {
         "base": {"result":"compiles"},
         "move-closure": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `s`"},"fixes":{"drop-move":"compiles","method-call":{"code":"E0382","line":9},"deref-left":{"code":"E0614","line":8}}},
@@ -419,7 +419,7 @@
       }
     },
     "lease-returns-block": {
-      "hash": "ae94baca6bbb427551fec517d3779596dd5fdc3f6a9a2b439bfbd05c2b486c60",
+      "hash": "118e282fe34f2544ffc2963f5437d7b14c6fffda17e88c1b21a3ce3e06c2b043",
       "variants": {
         "base": {"result":"compiles"},
         "use-pool": {"result":{"code":"E0502","line":14,"message":"cannot borrow `*pool` as immutable because it is also borrowed as mutable"},"fixes":{"drop-first":"compiles","clone-pool":{"code":"E0502","line":14},"drop-lease-ref":{"code":"E0502","line":14}}},

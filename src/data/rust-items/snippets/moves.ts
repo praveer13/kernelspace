@@ -382,7 +382,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'move-batch',
         edit: { line: 8, text: '    let moved = batch;' },
         expect: { code: 'E0505', line: 8 },
-        why: 'The closure `count` borrows `batch` and is used on line 9, so `batch` lost W and O until then; `let moved = batch` moves it, which needs O.',
+        why: 'The closure `count` borrows `batch` and is used on line 9, so `batch` lost O until then (a parameter not declared `mut` never had W); `let moved = batch` moves it, which needs O.',
         focus: { line: 8, path: 'batch', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -555,7 +555,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'use-after-drop',
         edit: { line: 10, text: '    n + view.len()' },
         expect: { code: 'E0505', line: 9 },
-        why: '`view` borrows `block.data` and is used again on line 10, so `block` has lost W and O until then; `drop(block)` moves it, which needs O.',
+        why: '`view` borrows `block.data` and is used again on line 10, so `block` has lost O until then (a parameter not declared `mut` never had W); `drop(block)` moves it, which needs O.',
         focus: { line: 9, path: 'block', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -616,7 +616,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'use-after-push',
         edit: { line: 14, text: '    println!("freed {slot}");' },
         expect: { code: 'E0505', line: 13 },
-        why: '`slot` borrows `lease.slot` and is used again on line 14, so `lease` has lost W and O until then; `push(lease)` moves it, which needs O.',
+        why: '`slot` borrows `lease.slot` and is used again on line 14, so `lease` has lost O until then (a parameter not declared `mut` never had W); `push(lease)` moves it, which needs O.',
         focus: { line: 13, path: 'lease', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -1015,7 +1015,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'late-head',
         edit: { line: 5, text: '    head.len() + owned.len()' },
         expect: { code: 'E0505', line: 4 },
-        why: '`head` borrows `tokens` and is used again on line 5, so `tokens` has lost W and O until then; `let owned = tokens` moves it, which needs O.',
+        why: '`head` borrows `tokens` and is used again on line 5, so `tokens` has lost O until then (a parameter not declared `mut` never had W); `let owned = tokens` moves it, which needs O.',
         focus: { line: 4, path: 'tokens', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -1083,7 +1083,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 7, text: '    fn flush(&self) -> Vec<u32> {' },
         expect: { code: 'E0594', line: 8 },
         why: 'Through a `&Table`, `self.epoch` has R but no W, and `+=` writes it.',
-        focus: { line: 8, path: 'self.epoch', needs: ['write'] },
+        focus: { line: 8, path: 'self.epoch', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           good('mut-self', 7, '    fn flush(&mut self) -> Vec<u32> {', 'A `&mut self` carries W for every field, so the epoch can change and the blocks can be taken.'),
@@ -1196,8 +1196,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 9, text: '    let view = w.name;' },
         expect: { code: 'E0507', line: 9 },
         why: 'Several `Rc` handles may point at the same weights, so a handle gives R and never O of a field; `let view = w.name` moves the string out.',
-        focus: { line: 9, path: 'w.name', needs: ['read', 'own'] },
-        permission: 'own',
         fixes: [
           good('borrow-name', 9, '    let view = &w.name;', 'A `&String` needs only R, which every handle has.'),
           cloned('clone-name', 9, '    let view = w.name.clone();', 'It copies the name out of weights that every other handle still shares.'),
@@ -1209,8 +1207,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 10, text: '    let all = *w; all.bytes.len()' },
         expect: { code: 'E0507', line: 10 },
         why: '`*w` would move the whole `Weights` out of the `Rc`, but the other handles still point at it, so no handle holds O.',
-        focus: { line: 10, path: 'w', needs: ['read', 'own'] },
-        permission: 'own',
       },
       {
         id: 'push-through-rc',
@@ -1426,8 +1422,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 4, text: '    let first = slots[0].owner;' },
         expect: { code: 'E0508', line: 4 },
         why: 'rustc cannot track which array elements were moved out, so an element of an array has R and W but never O; moving `owner` out of `slots[0]` needs O.',
-        focus: { line: 4, path: 'slots[0].owner', needs: ['read', 'own'] },
-        permission: 'own',
         fixes: [
           good('borrow-owner', 4, '    let first = &slots[0].owner;', 'A `&String` needs only R, which every element of the array has.'),
           cloned('clone-owner', 4, '    let first = slots[0].owner.clone();', 'It copies the owner string just to read its length.'),
@@ -1477,7 +1471,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'move-name',
         edit: { line: 12, text: '    let n = g.name;' },
         expect: { code: 'E0509', line: 12 },
-        why: 'A type with a `Drop` impl must reach `drop` whole, so its fields have R and W but never O; `let n = g.name` moves the string out.',
+        why: 'A type with a `Drop` impl must reach `drop` whole, so its fields never have O (and `g` is not declared `mut`, so `g.name` has R only); `let n = g.name` moves the string out.',
         focus: { line: 12, path: 'g.name', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -1759,7 +1753,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let total = 0;' },
         expect: { code: 'E0384', line: 4 },
         why: '`total` is not declared `mut`, so it has no W after its first value, and `total += *r` assigns it again.',
-        focus: { line: 4, path: 'total', needs: ['write'] },
+        focus: { line: 4, path: 'total', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           good('mut-total', 2, '    let mut total = 0;', 'Declaring the binding `mut` gives it the W that `+=` needs on each pass.'),
@@ -1772,7 +1766,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 4, text: '        *r += 1;' },
         expect: { code: 'E0594', line: 4 },
         why: '`r` is a `&u64` taken from a shared slice, so `*r` has R but no W, and `+=` writes it.',
-        focus: { line: 4, path: 'r', needs: ['write'] },
+        focus: { line: 4, path: '*r', needs: ['read', 'write'] },
         permission: 'write',
       },
     ],
@@ -2007,8 +2001,6 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'base',
         expect: { code: 'E0508', line: 5 },
         why: 'rustc cannot tell which array elements were moved out, so an element has R and W but never O; returning `r[i]` by value needs O.',
-        focus: { line: 5, path: 'r[i]', needs: ['read', 'own'] },
-        permission: 'own',
         fixes: [
           good('into-iter', 5, '    r.into_iter().nth(i).unwrap()', 'An array by value can be consumed by `into_iter`, which hands each element out with its O.'),
           cloned('clone-slot', 5, '    r[i].clone()', 'It returns a copy of the prompt string and leaves the original in an array that is dropped at the end of the call.'),
@@ -2035,16 +2027,12 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 4, text: 'fn oldest(r: &[Req; 3], i: usize) -> Req {' },
         expect: { code: 'E0508', line: 5 },
         why: 'Through a reference the array has R only, and an element of an array never has O in any case; `r[i]` by value needs it.',
-        focus: { line: 5, path: 'r[i]', needs: ['read', 'own'] },
-        permission: 'own',
       },
       {
         id: 'field-of-slot',
         edit: { line: 5, text: '    Req { prompt: r[i].prompt }' },
         expect: { code: 'E0508', line: 5 },
         why: 'Moving the `prompt` field out of `r[i]` needs O of that element, and array elements never have it.',
-        focus: { line: 5, path: 'r[i].prompt', needs: ['read', 'own'] },
-        permission: 'own',
       },
     ],
   },
@@ -2072,8 +2060,6 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let a = ns[0];' },
         expect: { code: 'E0508', line: 2 },
         why: 'An element of an array has R and W but never O, because rustc cannot track which elements left; `let a = ns[0]` moves the string out.',
-        focus: { line: 2, path: 'ns[0]', needs: ['read', 'own'] },
-        permission: 'own',
         fixes: [
           good('borrow-first', 2, '    let a = &ns[0];', 'A `&String` needs only R, which every element has.'),
           cloned('clone-first', 2, '    let a = ns[0].clone();', 'It copies the first name to read its length.'),
@@ -2342,7 +2328,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 12, text: '        last = (&req).send();' },
         expect: { code: 'E0507', line: 12 },
         why: 'A `&Request` gives R and never O, and `send(self)` takes the request by value, which needs O.',
-        focus: { line: 12, path: 'req', needs: ['read', 'own'] },
+        focus: { line: 12, path: '(&req)', needs: ['read', 'own'] },
         permission: 'own',
       },
       {
@@ -2597,7 +2583,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 12, text: '    (&b).n(8);' },
         expect: { code: 'E0507', line: 12 },
         why: 'A `&Params` gives R and never O, and `n(self, ..)` takes the params by value, which needs O.',
-        focus: { line: 12, path: 'b', needs: ['read', 'own'] },
+        focus: { line: 12, path: '(&b)', needs: ['read', 'own'] },
         permission: 'own',
       },
       {
@@ -2740,7 +2726,7 @@ export const SNIPPETS: RustSnippet[] = [
       {
         id: 'base',
         expect: { code: 'E0505', line: 3 },
-        why: '`tail` borrows an element of `buf` and is used on line 4, so `buf` has lost W and O until then; `let owned = buf` moves it.',
+        why: '`tail` borrows an element of `buf` and is used on line 4, so `buf` has lost O until then (a parameter not declared `mut` never had W); `let owned = buf` moves it.',
         focus: { line: 3, path: 'buf', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [

@@ -272,8 +272,8 @@ describe("each entry's permission diagram is in errors.json and hash-checked", (
       expect({ code: e.code, note: out.includes('Aquascope does not mark line') }).toEqual({ code: e.code, note: !rejects })
       if (!rejects) unmarked.push(e.code)
     }
-    // Aquascope reports no boundary for an assignment to a binding without W or a move out of an array element
-    expect(unmarked).toEqual(['E0384', 'E0508'])
+    // Aquascope reports no boundary for an assignment to a binding without W; the bank labels no move out of an array element (E0508) since the audit, where Aquascope sees the whole array move
+    expect(unmarked).toEqual(['E0384'])
   })
 
   test('only a code rustc rejects before borrow checking has an empty trace, and the page says why', () => {

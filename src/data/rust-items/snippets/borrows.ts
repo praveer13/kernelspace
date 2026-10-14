@@ -158,7 +158,7 @@ export const SNIPPETS: RustSnippet[] = [
       },
       {
         id: 'entry-inside',
-        edit: { line: 5, text: '        *pool.entry(*id).or_default() += 1;' },
+        edit: { line: 5, text: '        pool.entry(*id).or_default();' },
         expect: { code: 'E0502', line: 5 },
         why: '`entry` borrows `pool` `&mut` and needs W, which the `&` borrow of the loop took away.',
         focus: { line: 5, path: 'pool', needs: ['read', 'write'] },
@@ -527,7 +527,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 6, text: '    let b = m.get(&2).unwrap();' },
         expect: { code: 'E0594', line: 7 },
         why: '`get` hands out a `&u32`, so `*b` has R but never W, and `+=` on line 7 needs W.',
-        focus: { line: 7, path: '*b', needs: ['write'] },
+        focus: { line: 7, path: '*b', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           { id: 'get-mut', edit: { line: 6, text: '    let b = m.get_mut(&2).unwrap();' }, ok: true, why: '`get_mut` hands out a `&mut u32`, which carries the W that `+=` needs, and `a` is already finished with.' },
@@ -1114,7 +1114,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'mut-before',
         edit: { line: 2, text: '    let before = &mut *total;' },
         expect: { code: 'E0503', line: 3 },
-        why: '`before` is a `&mut` reborrow of `*total` that line 4 still prints, so `*total` has lost R, and `+=` reads it before it writes.',
+        why: '`before` is a `&mut` reborrow of `*total` that line 4 still prints, so `*total` has lost R and W, and `+=` needs both: it reads the old value, then writes.',
       },
     ],
   },
@@ -1304,7 +1304,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-first',
         edit: { line: 4, text: '    let first = &t.rows[0];' },
         expect: { code: 'E0505', line: 6 },
-        why: '`first` borrows into `t` and is used on line 7, so `t` has lost W and O until then, and `drop(t)` moves it, which needs O.',
+        why: '`first` borrows into `t` and is used on line 7, so `t` has lost O until then (a parameter not declared `mut` never had W), and `drop(t)` moves it, which needs O.',
         focus: { line: 6, path: 't', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -1923,7 +1923,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let (a, b) = buf.split_at(2);' },
         expect: { code: 'E0594', line: 3 },
         why: '`split_at` returns `&` slices, so `a[0]` has R but never W, and `+=` needs W.',
-        focus: { line: 3, path: 'a[0]', needs: ['write'] },
+        focus: { line: 3, path: 'a[0]', needs: ['read', 'write'] },
         permission: 'write',
         fixes: [
           { id: 'split-mut', edit: { line: 2, text: '    let (a, b) = buf.split_at_mut(2);' }, ok: true, why: '`split_at_mut` returns `&mut` slices, so `a[0]` holds the W that `+=` needs.' },
@@ -2250,7 +2250,7 @@ export const SNIPPETS: RustSnippet[] = [
         edit: { line: 2, text: '    let w = &*t;' },
         expect: { code: 'E0594', line: 3 },
         why: '`w` is a `&f32`, so `*w` has R but never W, and `*=` needs W.',
-        focus: { line: 3, path: '*w', needs: ['write'] },
+        focus: { line: 3, path: '*w', needs: ['read', 'write'] },
         permission: 'write',
       },
     ],
@@ -2443,7 +2443,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-first',
         edit: { line: 2, text: '    let n = &b[0];' },
         expect: { code: 'E0505', line: 3 },
-        why: '`n` borrows into `b` and is printed on line 4, so `b` has lost W and O until then, and `push` moves it, which needs O.',
+        why: '`n` borrows into `b` and is printed on line 4, so `b` has lost O until then (a parameter not declared `mut` never had W), and `push` moves it, which needs O.',
         focus: { line: 3, path: 'b', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
@@ -2501,7 +2501,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'ref-id',
         edit: { line: 4, text: '    let id = &r.id;' },
         expect: { code: 'E0505', line: 5 },
-        why: '`id` borrows into `r` and is printed on line 6, so `r` has lost W and O until then, and `drop(r)` moves it, which needs O.',
+        why: '`id` borrows into `r` and is printed on line 6, so `r` has lost O until then (a parameter not declared `mut` never had W), and `drop(r)` moves it, which needs O.',
         focus: { line: 5, path: 'r', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [

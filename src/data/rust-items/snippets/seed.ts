@@ -245,7 +245,7 @@ export const SNIPPETS: RustSnippet[] = [
         id: 'late-first',
         edit: { line: 10, text: '    println!("done {first}");' },
         expect: { code: 'E0505', line: 9 },
-        why: '`first` borrows into `b` with `&` and is used on line 10, so `b` has lost W and O until then; moving `b` on line 9 needs O.',
+        why: '`first` borrows into `b` with `&` and is used on line 10, so `b` has lost O until then (a parameter not declared `mut` never had W); moving `b` on line 9 needs O.',
         focus: { line: 9, path: 'b', needs: ['read', 'own'] },
         permission: 'own',
         fixes: [
