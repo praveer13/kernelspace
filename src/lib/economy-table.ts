@@ -107,11 +107,11 @@ export const RING0_LABS: readonly string[] = ['kv-block-manager', 'bpe-tokenizer
 
 /**
  * The labs whose race against the reference RING 0 needs: lab 06, within 3 points on an unseen engine run (`labFleetOk`,
- * wave-3.md §3.4). Empty in 3a (D25): the race does not exist yet, and rings are derived, so a live requirement nothing can
- * meet would un-earn RING 0 for every learner who holds it. 3b-09, which ships "Race the reference", adds 'batching-scheduler'
- * here; until then RING 0 needs no race and the ring's checklist shows no race row.
+ * wave-3.md §3.4). Empty in 3a (D25): the race did not exist yet, and rings are derived, so a live requirement nothing
+ * could meet would have un-earned RING 0 for every learner who held it. 3b-09 ships "Race the reference" (ForgeLab,
+ * `RaceReference`), so lab 06 is listed here and the ring's checklist shows the race row.
  */
-export const RING0_RACE_LABS: readonly string[] = []
+export const RING0_RACE_LABS: readonly string[] = ['batching-scheduler']
 
 /** RING 0: every T5 lesson *done*. */
 export const RING0_LESSONS: readonly string[] = [

@@ -1,20 +1,21 @@
 /**
- * sim.worker — runs Fleet Week's batch acts (I–III) off the main thread (PLAN-100X §7.3).
+ * sim.worker — runs Fleet Week's batch acts (I–III) and lab 06's bestiary off the main thread (PLAN-100X §7.3).
  * Learner wasm modules arrive as bytes and are instantiated here, so a slow or
  * trapping module can only stall this worker, never the page.
  */
 
 import { evalAct3, runAct1, runAct2 } from '@/lib/fleet-week'
 import { drawGradedSeeds } from '@/lib/graded-seed'
-import type { SimJob, SimRequest, SimResponse, SimResults } from '@/workers/sim-protocol'
+import { runBestiary } from '@/lib/world/bestiary'
+import type { SimRequest, SimRequestJob, SimResponse, SimResults } from '@/workers/sim-protocol'
 
 const ctx = self as unknown as { postMessage(message: SimResponse): void }
 
 async function run(
-  job: SimJob,
+  job: SimRequestJob,
   entropy: number,
   onProgress: (fraction: number) => void,
-): Promise<SimResults[SimJob['kind']]> {
+): Promise<SimResults[SimRequestJob['kind']]> {
   // every job is graded: it gets its own in-band seed, drawn here (rejection sampling simulates baselines)
   const { seeds } = drawGradedSeeds(entropy)
   switch (job.kind) {
@@ -24,6 +25,8 @@ async function run(
       return runAct2(job.modules, job.choice, seeds, onProgress)
     case 'act3':
       return evalAct3(seeds, onProgress)
+    case 'bestiary':
+      return runBestiary(seeds, onProgress)
   }
 }
 
