@@ -165,6 +165,25 @@ The payoff profile is why systems teams keep choosing it: C-level control of lay
           breaks: 'Ownership is checked at compile time inside one process; it does not cover bytes in flight on the network or in device memory, where unsafe and FFI code still carry the invariants.',
         },
       ],
+      principle:
+        'Ownership, garbage collection and manual care are three answers to who frees memory and when. Ownership proves its answer at compile time within one process; bytes on a wire or in device memory need unsafe code and discipline again.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'Each value in safe code has one owner that frees it once; the parts of the Dynamo orchestration written that way get the guarantee too',
+          'A garbage collector costs CPU time and pauses at runtime; a serving data plane that needs predictable latency avoids one on the hot path',
+          'The borrow checker proves ownership in one process; bytes on the wire or in device memory fall outside it and need unsafe or FFI code',
+          'Ownership checks run at compile time and add nothing at runtime; a Rust data plane has no GC pause to budget for in its latency',
+        ],
+        correct: [2],
+        why: [
+          'Holds on both sides, so it is not the break: inside safe Rust, a value has one owner and is freed once, and the orchestration code written that way inherits it.',
+          'Holds on both sides, so it is not the break: a collector costs CPU and pause time, and latency-sensitive paths in serving stacks are kept clear of it.',
+          'Right: the compiler proves ownership for values inside one process. The bytes NIXL moves between nodes or holds in device memory are beyond it, and unsafe code and FFI must carry those invariants by hand.',
+          'Holds on both sides, so it is not the break: the borrow checker runs at build time, and with no collector there is no pause to budget for.',
+        ],
+      },
+      kcs: ['t1.ownership-answer', 't1.memory-errors'],
     },
     {
       type: 'prose',

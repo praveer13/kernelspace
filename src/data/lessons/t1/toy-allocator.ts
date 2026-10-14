@@ -259,6 +259,25 @@ Add the real world's finishing touches and you have glibc malloc: per-thread are
           breaks: 'Size classes still mean several sizes, so each class can strand its own free blocks; KV paging has exactly one size, so the only waste left is the unfilled tail block.',
         },
       ],
+      principle:
+        'An allocator\'s machinery follows from what it must serve. Variable sizes force splitting, coalescing and size classes; one fixed block size removes the holes they manage, leaving allocate, free and a partly used tail.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'A request is served from free memory the allocator already holds; a sequence\'s next block comes from the pool of free KV blocks it manages',
+          'Both keep a record of free space for later requests; malloc walks a free list of ranges and the block manager pops one from a queue of free KV blocks',
+          'Memory returns to the allocator when its owner is done; a free call hands back a block and a finished sequence hands back its KV blocks',
+          'Malloc splits a big free range and merges neighbours on free; identical KV blocks leave no holes and a freed block rejoins the pool whole',
+        ],
+        correct: [3],
+        why: [
+          'Holds on both sides, so it is not the break: allocation takes from a stock of free memory the allocator already owns instead of asking the system each time.',
+          'Holds on both sides, so it is not the break: each keeps its free space on a list or queue to hand out again. The structures differ, but both track it.',
+          'Holds on both sides, so it is not the break: freeing is how memory comes back to the allocator, whether the owner is a caller of malloc or a finished sequence.',
+          'Right: splitting and coalescing exist because blocks differ in size. With identical KV blocks nothing fragments into holes to merge, so the mapping holds for allocate and reclaim and stops at coalescing.',
+        ],
+      },
+      kcs: ['t1.allocator-contract', 't1.split-coalesce', 't1.placement-policy'],
     },
     {
       type: 'callout',

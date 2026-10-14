@@ -163,6 +163,25 @@ The same mechanism, mapped to different outcomes, also powers: guard pages that 
           breaks: 'NULL is deterministically unmapped, but a stale or off-by-one block id can still land inside the preallocated KV pool and silently read another sequence\'s data instead of faulting.',
         },
       ],
+      principle:
+        'An address is as safe as its guard. The OS leaves address zero unmapped and the MMU enforces it; a block id indexes a preallocated pool, so a wrong id in range reads another sequence\'s data unless software checks.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'A dereference of address zero faults on the unmapped page; a bad block id in the KV pool has no guard and can quietly read another sequence\'s data',
+          'An element\'s address is a base plus an index scaled by the element size; a token\'s KV location is a block\'s base plus the slot times the stride',
+          'Following either one costs a dependent load; the pointer must be read before its target and the table entry must be read before the KV block',
+          'A stale value is a lifetime bug on both sides; a dangling pointer names memory that was freed and a stale KV block id names a block that was freed',
+        ],
+        correct: [0],
+        why: [
+          'Right: the OS leaves page zero unmapped and the MMU enforces it, so a NULL dereference is a deterministic fault. The KV pool is one preallocated region, so an id that is wrong but in range reads silently from someone else\'s block.',
+          'Holds on both sides, so it is not the break: both locate data by a base plus a scaled offset, and the arithmetic carries over.',
+          'Holds on both sides, so it is not the break: indirection means two dependent reads in sequence, the pointer and then its target, the table entry and then the block.',
+          'Holds on both sides, so it is not the break: a freed object or block can be handed out again while a stale name for it survives, so both have lifetime bugs.',
+        ],
+      },
+      kcs: ['t1.pointers', 't1.memory-errors'],
     },
     {
       type: 'prose',

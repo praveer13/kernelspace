@@ -98,6 +98,25 @@ When switches get expensive, engineers stop switching. Three great escapes, all 
           breaks: 'A core runs one thread per slice; a GPU iteration serves the whole batch at once, so the slice is shared by many sequences rather than owned by one.',
         },
       ],
+      principle:
+        'Preemption has one shape everywhere: pause, keep or rebuild the state, resume. The price differs. Registers are bytes to save; a sequence\'s KV is megabytes to gigabytes, so a serving engine treats preemption as a last resort.',
+      breakItem: {
+        q: 'Which statement marks where this analogy breaks?',
+        options: [
+          'A thread switch saves a small set of registers; preempting a sequence moves or regenerates megabytes to gigabytes of its KV cache',
+          'Pausing a task means its state must be kept or rebuilt; a thread\'s registers are saved and a preempted sequence\'s KV is offloaded or recomputed',
+          'Waiting work queues until a resource frees; a runnable thread waits for a core and a waiting request waits for a batch slot and KV blocks',
+          'Switching too often wastes the work it is meant to share; excess thread switches lose cache and TLB warmth and a preemption storm repeats prefill work',
+        ],
+        correct: [0],
+        why: [
+          'Right: a thread switch saves a few registers, while preempting a sequence offloads or regenerates its whole KV cache. That is why preemption is rarer and far costlier.',
+          'Holds on both sides, so it is not the break: either way the paused task has state that must survive until it runs again, kept in one case and rebuilt in the other.',
+          'Holds on both sides, so it is not the break: in both systems work waits in a queue until the resource it needs is free.',
+          'Holds on both sides, so it is not the break: too much switching burns the budget on overhead, cold caches for threads and repeated prefill for sequences.',
+        ],
+      },
+      kcs: ['t2.process-thread', 't2.context-switch'],
     },
     {
       type: 'prose',
