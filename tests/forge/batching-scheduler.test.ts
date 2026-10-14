@@ -6,7 +6,9 @@
  * The v2 templates are held to the rule 3a-22 set (an answer read from your own code, never from the story alone, and
  * a plausible bug changes it) with a fake correct scheduler and a fake with each template's named bug. The fakes are
  * this file's own: line-protocol schedulers over the bridge's `schedule` verb (labs/batching-scheduler/src/lib.rs
- * `bridge`), checked against the app's reference scheduler (src/lib/fleet-model.ts `referenceScheduler`).
+ * `bridge`), checked against the app's reference scheduler (src/lib/fleet-model.ts `referenceScheduler`). The private
+ * reference (labs/_solutions, gitignored) is not in the repo, so no test here can run it; it was run through the real
+ * bridge by hand when `walk-past` landed, and answered every view as the fakes do.
  *
  * The multiple-choice items are held to the item-level blind-strategy gates of `verify:items` here (scripts/item-cues.ts,
  * the same code). Three items are fewer than the pool-level hit-rate bound can judge, so that bound is not asserted on
@@ -27,7 +29,9 @@ import { findForgeBundle, forgeBundleIds, loadForgeBundle } from '../../src/data
 import bundle from '../../src/data/forge/batching-scheduler'
 import { DISCUSSIONS_LABEL, LAB_ID, LADDER, LADDER_CHECK_IDS, hintRef, restoreState } from '../../src/data/forge/batching-scheduler/ladder'
 import {
+  LOAD,
   MEM_CAP,
+  P1_ARITHMETIC,
   PRACTICE_SEED,
   PRIMM_ITEMS,
   PRIMM_MC_ITEMS,
@@ -52,21 +56,24 @@ import {
   type NumberPrimm,
 } from '../../src/data/forge/batching-scheduler/primm'
 import { PROVE_LAB_ID, PROVE_QUESTIONS, buildProveResult, followUpRef, pickQuestions } from '../../src/data/forge/batching-scheduler/prove'
-import { ADMIT_COUNT, ADMIT_ORDER, MARGIN, PREEMPT, PROVE2, ROOMY_CAP } from '../../src/data/forge/batching-scheduler/prove2'
+import { ADMIT_COUNT, ADMIT_ORDER, MARGIN, OLD_WAIT, PROVE2, ROOMY_CAP, WALK_PAST, WIDE_MARGIN } from '../../src/data/forge/batching-scheduler/prove2'
 import type { ForgeBundle, ProveV2Template } from '../../src/data/forge/types'
 import { KC } from '../../src/data/kc/ids'
 import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import { Engine, makeRefManager, referenceScheduler, type SchedView } from '../../src/lib/fleet-model'
 import { hintRef as hintRefOf } from '../../src/lib/forge/ladder'
-import { gradeAnswer, PROVE2_MAX_CALLS, planQuestion, proveFromModule, readAnswer } from '../../src/lib/forge/prove2'
+import { gradeAnswer, isProve2Answer, PROVE2_MAX_CALLS, planQuestion, proveFromModule, readAnswer } from '../../src/lib/forge/prove2'
 import type { CheckResult, LabRunReport } from '../../src/lib/forge/types'
 import { refMatchesKind } from '../../src/lib/ledger/refs'
 import { compileSchedPolicy } from '../../src/lib/world/sched-policy'
 import { extractHeadings } from '../../src/pages/lesson/markdown'
 import { lintBundle } from '../../scripts/lint-mentor'
 import { CUE_STRATEGIES, MAX_RANK_LESSON, PASS_BAR, oddOneOut, passProbability } from '../../scripts/item-cues'
-import { fakeBridge } from './fixtures'
+import { validateEvent } from '../../src/lib/ledger/codec'
+import { dayOf } from '../../src/lib/ledger/time'
+import { splitmix32 } from '../../src/lib/rng'
+import { fakeBridge, trap } from './fixtures'
 
 const lab = FORGE_LABS.find((l) => l.id === 'batching-scheduler')
 if (lab === undefined) throw new Error('lab 06 is missing from labs.ts')
@@ -389,6 +396,42 @@ describe('items (§8.2): ids, refs, tags, whys', () => {
     expect(p1.prompt).toContain(`${SCENE.requests} requests`)
     expect(p1.prompt).toContain('2,560 tokens')
     expect(p1.explain).toContain(`${truth} of ${SCENE.requests}`)
+  })
+
+  test('the Predict explanation says what binds, with arithmetic that holds: the pool before the slots, both under the offered load', () => {
+    const p1 = numeric('lab06.primm.p1')
+    // the scene's means, worked by hand: 85 % light (64 to 383) and 15 % heavy (768 to 1,791) prompts, 16 to 63 tokens out
+    expect(LOAD.prompt).toBeCloseTo(0.85 * 223.5 + 0.15 * 1279.5, 6)
+    expect(LOAD.output).toBe(39.5)
+    // prefill chunks: light 64-128 take 1 (65 prompts), 129-256 take 2 (128), 257-383 take 3 (127); heavy 768 takes 6,
+    // then 128 each of 7 to 13 and 127 of 14 (1,665 to 1,791)
+    const light = (65 * 1 + 128 * 2 + 127 * 3) / 320
+    const heavy = (6 + 128 * (7 + 8 + 9 + 10 + 11 + 12 + 13) + 127 * 14) / 1024
+    expect(LOAD.prefill).toBeCloseTo(0.85 * light + 0.15 * heavy, 9)
+    expect(LOAD.life).toBeCloseTo(LOAD.prefill + 39.5 - 1, 9)
+    // the token-iterations, summed by brute force over every prompt and output the scene draws
+    let sum = 0
+    for (let p = 64; p <= 383; p++) for (let o = 16; o <= 63; o++) sum += (0.85 / 320 / 48) * ((p + 48) * (Math.ceil(p / 128) + o - 1) + ((o - 1) * o) / 2)
+    for (let p = 768; p <= 1791; p++) for (let o = 16; o <= 63; o++) sum += (0.15 / 1024 / 48) * ((p + 48) * (Math.ceil(p / 128) + o - 1) + ((o - 1) * o) / 2)
+    expect(LOAD.tokenIters).toBeCloseTo(sum, 6)
+    expect(P1_ARITHMETIC).toEqual({ offered: 0.2, life: 42, slotRate: 0.14, tokenIters: 20_000, poolRate: 0.13 })
+    // the printed arithmetic holds at the precision printed, and the unrounded limits are in the same order
+    expect((6 / 42).toFixed(2)).toBe('0.14')
+    expect((2560 / 20_000).toFixed(2)).toBe('0.13')
+    expect(MEM_CAP / LOAD.tokenIters).toBeLessThan(SCENE.maxRunning / LOAD.life)
+    expect(SCENE.maxRunning / LOAD.life).toBeLessThan(SCENE.requests / SCENE.span)
+    expect(p1.explain).toContain('6 / 42 = 0.14 requests an iteration')
+    expect(p1.explain).toContain('2,560 / 20,000 = 0.13 an iteration')
+    expect(p1.explain).toContain('3.4 iterations on average')
+    expect(p1.explain).toContain('382 tokens on average')
+    expect(p1.explain).not.toContain('0.15')
+    // two prompts over half the pool never fit together; the run takes 806 iterations
+    expect(2 * (MEM_CAP / 2 + 1)).toBeGreaterThan(MEM_CAP)
+    const ref = runTrace(REFERENCE)
+    expect(ref.total).toBe(806)
+    expect(p1.explain).toContain(`two prompts over 1,280 tokens never fit in it together, and this run takes 806 iterations to finish all 60`)
+    // and some wait past the bound whatever the order: first come first served, at every headroom the dials offer, misses too
+    for (const order of ['sjf', 'fcfs'] as const) for (const headroom of [0, 16, 48] as const) expect(runTrace({ ...REFERENCE, order, headroom }).met).toBeLessThan(SCENE.requests)
   })
 
   test('the Predict choice: pure smallest-first fails starvation first, and the table it cites is the README’s', () => {
@@ -789,7 +832,7 @@ describe('the bundle', () => {
     expect(bundle.discussionsLabel).toBe('[lab 06]')
     expect(bundle.prove).toHaveLength(6)
     expect(bundle.prove2).toBe(PROVE2)
-    expect(bundle.prove2?.templates.map((t) => t.id)).toEqual(['admit-order', 'admit-count', 'preempt'])
+    expect(bundle.prove2?.templates.map((t) => t.id)).toEqual(['admit-order', 'admit-count', 'walk-past'])
   })
 
   test('the generic panels render it: PRIMM steps, the reference strip, the stage list', () => {
@@ -870,25 +913,13 @@ interface Opts {
   h?: number
   /** The uncaught design: stop at the first request that does not fit. */
   stopAtFirst?: boolean
-  /** Preempt when the running requests hold more than the cap: the newest or the oldest, until they fit. */
-  preempt?: 'none' | 'newest' | 'oldest'
 }
 
 function decide(p: Parsed, o: Opts): { admit: number[]; preempt: number[] } {
   const h = o.h ?? MARGIN
   const margin = o.margin ?? 'js'
   const order = o.order ?? 'sjf'
-  let held = p.running.reduce((a, r) => a + r.prompt + r.decoded, 0)
-  const preempt: number[] = []
-  if (o.preempt === 'newest' || o.preempt === 'oldest') {
-    const byArrival = [...p.running].sort((a, b) => (o.preempt === 'newest' ? b.arrival - a.arrival : a.arrival - b.arrival))
-    for (const r of byArrival) {
-      if (held <= p.memCap) break
-      preempt.push(r.id)
-      held -= r.prompt + r.decoded
-    }
-    if (preempt.length > 0) return { admit: [], preempt }
-  }
+  const held = p.running.reduce((a, r) => a + r.prompt + r.decoded, 0)
   const age = o.age ?? 1600
   const aged = (r: Req) => p.iter - r.arrival > age
   const key = (r: Req) => (o.tie === 'id' ? r.id : r.arrival)
@@ -980,7 +1011,7 @@ describe('the fakes stand for real schedulers', () => {
   })
 
   test('the default fake is the app’s referenceScheduler: the same admit list, in the same order, on every view', () => {
-    for (const t of [ADMIT_ORDER, ADMIT_COUNT]) {
+    for (const t of PROVE2.templates) {
       for (const seed of SEEDS) {
         const p = parseSchedule(planQuestion(t, seed).calls[1])
         expect(decide(p, { age: 2000 }).admit).toEqual(referenceScheduler(asView(p)).admit)
@@ -1040,8 +1071,8 @@ describe('every trace is two calls of the bridge’s verbs, told in words', () =
     }
     expect(planQuestion(ADMIT_ORDER, 1).ask).toContain('admit')
     expect(planQuestion(ADMIT_COUNT, 1).ask).toContain('How many')
-    expect(planQuestion(PREEMPT, 1).ask).toContain('preempt')
-    expect(planQuestion(PREEMPT, 1).ask).toContain('none')
+    expect(planQuestion(WALK_PAST, 1).ask).toContain('admit')
+    expect(planQuestion(WALK_PAST, 1).ask).toContain('none')
   })
 
   test('ids are distinct in a view, the waiting list is in arrival order, and no id is in order with arrival', () => {
@@ -1066,15 +1097,15 @@ describe('every trace is two calls of the bridge’s verbs, told in words', () =
     for (const t of PROVE2.templates) {
       const plan = planQuestion(t, 9)
       expect(gradeAnswer(t, [], { kind: 'replied', replies: ['ok', 'err not initialized'] })).toMatchObject({ right: false, actual: null, failed: 'error' })
-      // the line the template reads must hold ids: `admit` for the first two, `preempt` for the third
-      const garbled = t === PREEMPT ? 'admit 1\npreempt 1,x' : 'admit 1,x\npreempt '
+      // the line every template reads, `admit`, must hold ids
+      const garbled = 'admit 1,x\npreempt '
       expect(gradeAnswer(t, [], { kind: 'replied', replies: ['ok', garbled] })).toMatchObject({ right: false, actual: null, failed: 'error' })
       expect(gradeAnswer(t, [], { kind: 'replied', replies: ['ok', 'ok'] })).toMatchObject({ right: false, actual: null, failed: 'error' })
       expect(plan.calls).toHaveLength(2)
     }
     // a reply with an empty list reads as an empty list
     expect(ADMIT_ORDER.read(['ok', 'admit \npreempt '])).toEqual([])
-    expect(PREEMPT.read(['ok', 'admit 3,1\npreempt 4'])).toEqual([4])
+    expect(WALK_PAST.read(['ok', 'admit 3,1\npreempt 4'])).toEqual([3, 1])
     expect(ADMIT_COUNT.read(['ok', 'admit 3,1,7\npreempt '])).toBe(3)
   })
 })
@@ -1151,36 +1182,62 @@ describe('the templates avoid the choices the checks pin, and read the ones they
     }
   })
 
-  test('preempt: a module that never preempts answers none on every view, which is the reference’s own answer', async () => {
+  /** The view of `walk-past`: the old requests (waited OLD_WAIT or more), the one of them that cannot fit, and the young. */
+  const walkView = (seed: number) => {
+    const p = parseSchedule(planQuestion(WALK_PAST, seed).calls[1])
+    const old = p.waiting.filter((r) => p.iter - r.arrival >= OLD_WAIT)
+    const young = p.waiting.filter((r) => p.iter - r.arrival < OLD_WAIT)
+    const freeMem = p.memCap - p.memUsed
+    const blocked = old.filter((r) => r.prompt > freeMem)
+    const fits = old.filter((r) => r.prompt <= freeMem)
+    return { p, old, young, blocked, fits, freeMem, slots: p.maxRunning - p.running.length }
+  }
+
+  /** The modules the checks can pass, for `walk-past`: every one but the stopping design and the one with no aging. */
+  const WALKERS = Object.entries(CORRECT_MODULES).filter(([, o]) => o.stopAtFirst !== true && o.age !== Infinity)
+
+  test('walk-past: every module the checks can pass and that skips agrees, whatever its ties, age limit or margin', async () => {
+    expect(WALKERS).toHaveLength(5)
     for (const seed of SEEDS) {
-      expect(await answerOn(PREEMPT, seed, fakeScheduler())).toEqual([])
-      const p = parseSchedule(planQuestion(PREEMPT, seed).calls[1])
-      expect(referenceScheduler(asViewOf(p)).preempt).toEqual([])
-    }
-    function asViewOf(p: Parsed): SchedView {
-      return { iter: p.iter, maxRunning: p.maxRunning, memCap: p.memCap, memUsed: p.memUsed, waiting: p.waiting, running: p.running }
+      const right = await answerOn(WALK_PAST, seed, fakeScheduler())
+      for (const [name, o] of WALKERS) expect(await answerOn(WALK_PAST, seed, fakeScheduler(o)), `${name}, seed ${seed}`).toEqual(right)
+      for (const margin of ['js', 'rust', 'running', 'none'] as const) expect(await answerOn(WALK_PAST, seed, fakeScheduler({ margin })), `${margin}, seed ${seed}`).toEqual(right)
+      // headroom up to 96 tokens a sequence, counted any way, does not change it
+      for (const margin of ['js', 'rust', 'running'] as const) expect(await answerOn(WALK_PAST, seed, fakeScheduler({ margin, h: WIDE_MARGIN })), `${margin} 96, seed ${seed}`).toEqual(right)
     }
   })
 
-  test('preempt: the view is over the cap by less than any request holds, so one victim fixes it', async () => {
+  test('walk-past: one old request cannot fit even with no margin, though an empty engine would take it; the young wait under 41', () => {
+    let withFit = 0
     for (const seed of SEEDS) {
-      const p = parseSchedule(planQuestion(PREEMPT, seed).calls[1])
-      expect(p.waiting).toEqual([])
-      expect(p.running.length).toBeGreaterThanOrEqual(3)
-      const over = p.memUsed - p.memCap
-      expect(over).toBeGreaterThanOrEqual(5)
-      expect(over).toBeLessThanOrEqual(60)
-      for (const r of p.running) expect(r.prompt + r.decoded).toBeGreaterThan(over)
-      expect(await answerOn(PREEMPT, seed, fakeScheduler({ preempt: 'newest' }))).toHaveLength(1)
-      expect(await answerOn(PREEMPT, seed, fakeScheduler({ preempt: 'oldest' }))).toHaveLength(1)
+      const { p, old, young, blocked, fits, freeMem } = walkView(seed)
+      expect(blocked).toHaveLength(1)
+      expect(old.length).toBeLessThanOrEqual(2)
+      expect(fits).toHaveLength(old.length - 1)
+      if (fits.length > 0) withFit++
+      const over = blocked[0].prompt - freeMem
+      expect(over).toBeGreaterThanOrEqual(1)
+      expect(over).toBeLessThanOrEqual(300)
+      expect(blocked[0].prompt).toBeLessThanOrEqual(p.memCap)
+      // past any age limit that lets starvation's longs (waiting from 0 in a 2,500-iteration run, about 40 to finish) finish
+      for (const r of old) expect(p.iter - r.arrival).toBeGreaterThanOrEqual(2500 + 40)
+      expect(young.length).toBeGreaterThanOrEqual(3)
+      for (const r of young) expect(p.iter - r.arrival).toBeLessThanOrEqual(40)
+      // room for every request but the blocked one at 96 tokens a sequence, over every slot
+      const rest = [...fits, ...young].reduce((a, r) => a + r.prompt, 0)
+      expect(p.memUsed + rest + WIDE_MARGIN * p.maxRunning).toBeLessThanOrEqual(p.memCap)
     }
+    expect(withFit).toBeGreaterThan(SEEDS.length / 3)
+    expect(withFit).toBeLessThan((2 * SEEDS.length) / 3)
   })
 
-  test('preempt: a module that preempts the newest names the last arrival, and one that preempts the oldest the first', async () => {
+  test('walk-past: the reference admits the old request that fits, then the young smallest first, cut at the free slots', async () => {
     for (const seed of SEEDS) {
-      const p = parseSchedule(planQuestion(PREEMPT, seed).calls[1])
-      expect(await answerOn(PREEMPT, seed, fakeScheduler({ preempt: 'newest' }))).toEqual([p.running[p.running.length - 1].id])
-      expect(await answerOn(PREEMPT, seed, fakeScheduler({ preempt: 'oldest' }))).toEqual([p.running[0].id])
+      const { fits, young, slots } = walkView(seed)
+      const expected = [...fits, ...[...young].sort((a, b) => a.prompt - b.prompt)].slice(0, slots).map((r) => r.id)
+      expect(await answerOn(WALK_PAST, seed, fakeScheduler())).toEqual(expected)
+      // it always admits a young request, which is what a module that stops can never do
+      expect(expected.some((id) => young.some((r) => r.id === id))).toBe(true)
     }
   })
 })
@@ -1196,7 +1253,7 @@ describe('a plausible bug changes the answer, and the answer differs across seed
     for (const t of PROVE2.templates) expect(t.bug.length).toBeGreaterThan(40)
     expect(ADMIT_ORDER.kcs).toEqual([KC.schedOrder])
     expect(ADMIT_COUNT.kcs).toEqual([KC.admissionHeadroom])
-    expect(PREEMPT.kcs).toEqual([KC.continuousBatching])
+    expect(WALK_PAST.kcs).toEqual([KC.continuousBatching])
     const labKcs = new Set(checks.flatMap((c) => c.kcs ?? []))
     for (const t of PROVE2.templates) for (const k of t.kcs) expect(labKcs.has(k)).toBe(true)
   })
@@ -1218,13 +1275,35 @@ describe('a plausible bug changes the answer, and the answer differs across seed
     expect((await across(ADMIT_COUNT, fakeScheduler())).size).toBe(3)
   })
 
-  test('preempt: the oldest and the newest answer differently on every seed, and the answer differs across seeds', async () => {
+  test('walk-past: a module that stops at the request that does not fit answers differently on every seed, and the answer differs across seeds', async () => {
+    let empty = 0
     for (const seed of SEEDS) {
-      expect(same(await answerOn(PREEMPT, seed, fakeScheduler({ preempt: 'newest' })), await answerOn(PREEMPT, seed, fakeScheduler({ preempt: 'oldest' })))).toBe(false)
-      expect(same(await answerOn(PREEMPT, seed, fakeScheduler({ preempt: 'newest' })), [])).toBe(false)
+      const right = await answerOn(WALK_PAST, seed, fakeScheduler())
+      const stopped = await answerOn(WALK_PAST, seed, fakeScheduler({ stopAtFirst: true }))
+      expect(same(stopped, right), `seed ${seed}`).toBe(false)
+      // it admits at most the old request ahead of the blocked one
+      expect((stopped as number[]).length).toBeLessThanOrEqual(1)
+      if ((stopped as number[]).length === 0) empty++
+      // the private reference's own margin and age limit, stopping: still a different answer
+      expect(same(await answerOn(WALK_PAST, seed, fakeScheduler({ margin: 'rust', age: 1600, stopAtFirst: true })), right)).toBe(false)
     }
-    expect((await across(PREEMPT, fakeScheduler({ preempt: 'newest' }))).size).toBeGreaterThanOrEqual(10)
-    expect((await across(PREEMPT, fakeScheduler({ preempt: 'oldest' }))).size).toBeGreaterThanOrEqual(10)
+    expect(empty).toBeGreaterThan(SEEDS.length / 2)
+    expect((await across(WALK_PAST, fakeScheduler())).size).toBeGreaterThan(SEEDS.length / 2)
+    expect((await across(WALK_PAST, fakeScheduler({ margin: 'rust', age: 1600 }))).size).toBeGreaterThan(SEEDS.length / 2)
+  })
+
+  test('walk-past: a module with no aging answers differently whenever an old request fits, so aging is read too', async () => {
+    let fitting = 0
+    for (const seed of SEEDS) {
+      const p = parseSchedule(planQuestion(WALK_PAST, seed).calls[1])
+      const freeMem = p.memCap - p.memUsed
+      const fits = p.waiting.some((r) => p.iter - r.arrival >= OLD_WAIT && r.prompt <= freeMem)
+      const right = await answerOn(WALK_PAST, seed, fakeScheduler())
+      const unaged = await answerOn(WALK_PAST, seed, fakeScheduler({ age: Infinity }))
+      expect(same(unaged, right), `seed ${seed}`).toBe(!fits)
+      if (fits) fitting++
+    }
+    expect(fitting).toBeGreaterThan(SEEDS.length / 3)
   })
 
   test('worked by hand: seed 1 of each template, its story and the answers', async () => {
@@ -1246,13 +1325,32 @@ describe('a plausible bug changes the answer, and the answer differs across seed
     expect(await answerOn(ADMIT_COUNT, 1, fakeScheduler())).toBe(2)
     expect(await answerOn(ADMIT_COUNT, 1, fakeScheduler({ margin: 'rust' }))).toBe(2)
     expect(await answerOn(ADMIT_COUNT, 1, fakeScheduler({ margin: 'none' }))).toBe(3)
-    // preempt, seed 1: 418 + 15 + 375 + 33 + 347 + 38 = 1226 tokens run in a cap of 1212: 14 over. The newest (arrived at 89)
-    // is request 6 and holds 385 tokens, more than 14; the oldest is request 16.
-    const pre = planQuestion(PREEMPT, 1)
-    expect(pre.story[pre.story.length - 1]).toBe('Together the running requests hold 1226 tokens, 14 more than the cap.')
-    expect(418 + 15 + 375 + 33 + 347 + 38).toBe(1226)
-    expect(await answerOn(PREEMPT, 1, fakeScheduler({ preempt: 'newest' }))).toEqual([6])
-    expect(await answerOn(PREEMPT, 1, fakeScheduler({ preempt: 'oldest' }))).toEqual([16])
+    // walk-past, seed 1: request 3 runs and holds 193 + 41 = 234 of 2,876 tokens, so 2,642 are free and 3 slots. Requests 6
+    // (865 tokens) and 2 (2,817) have waited 3,635 - 756 = 2,879 and 3,635 - 860 = 2,775 iterations, so aging puts 6, then 2,
+    // first. 6 fits (234 + 48 + 865 + 48 = 1,195 with the fleet reference's margin); 2 does not, even with no margin
+    // (2,817 > 2,642), though it would fit an empty engine (2,817 <= 2,876). Skip it, and the two smallest young prompts
+    // take the last slots: 13 (128 tokens) and 17 (192). A module that stops at 2 admits only 6; one with no aging sorts 6
+    // behind the young and admits 13, 17 and 7 (256).
+    const walk = planQuestion(WALK_PAST, 1)
+    expect(walk.story.filter((l) => l.startsWith('Waiting:') || l.startsWith('Running:'))).toEqual([
+      'Running: request 3 arrived at iteration 3586, has a prompt of 193 tokens and has decoded 41 tokens.',
+      'Waiting: request 6 arrived at iteration 756 with a prompt of 865 tokens.',
+      'Waiting: request 2 arrived at iteration 860 with a prompt of 2817 tokens.',
+      'Waiting: request 7 arrived at iteration 3597 with a prompt of 256 tokens.',
+      'Waiting: request 11 arrived at iteration 3602 with a prompt of 448 tokens.',
+      'Waiting: request 17 arrived at iteration 3608 with a prompt of 192 tokens.',
+      'Waiting: request 13 arrived at iteration 3614 with a prompt of 128 tokens.',
+      'Waiting: request 1 arrived at iteration 3619 with a prompt of 320 tokens.',
+    ])
+    expect(walk.story[1]).toContain('At iteration 3635 the engine allows 4 running requests at once and holds at most 2876 tokens')
+    expect(walk.story[walk.story.length - 1]).toBe('3 slots are free.')
+    expect(2876 - (193 + 41)).toBe(2642)
+    expect(234 + 48 + 865 + 48).toBeLessThanOrEqual(2876)
+    expect(2817).toBeGreaterThan(2642)
+    expect(await answerOn(WALK_PAST, 1, fakeScheduler())).toEqual([6, 13, 17])
+    expect(await answerOn(WALK_PAST, 1, fakeScheduler({ margin: 'rust', age: 1600 }))).toEqual([6, 13, 17])
+    expect(await answerOn(WALK_PAST, 1, fakeScheduler({ stopAtFirst: true }))).toEqual([6])
+    expect(await answerOn(WALK_PAST, 1, fakeScheduler({ age: Infinity }))).toEqual([13, 17, 7])
   })
 })
 
@@ -1266,7 +1364,7 @@ describe('graded by the core against your module', () => {
     const bugs: [ProveV2Template, Opts, Opts][] = [
       [ADMIT_ORDER, {}, { order: 'fcfs' }],
       [ADMIT_COUNT, {}, { margin: 'none' }],
-      [PREEMPT, { preempt: 'newest' }, { preempt: 'oldest' }],
+      [WALK_PAST, {}, { stopAtFirst: true }],
     ]
     for (const [t, good, bad] of bugs) {
       const seed = 31
@@ -1285,14 +1383,18 @@ describe('graded by the core against your module', () => {
     }
   })
 
-  test('a module that never preempts is proved by typing none, and typing an id is a miss', async () => {
-    const plan = planQuestion(PREEMPT, 5)
+  test('a module that admits nobody is proved by typing none, and typing an id is a miss', async () => {
+    // a seed where the blocked request is first in line, so a module that stops there admits nobody
+    const module = fakeScheduler({ stopAtFirst: true })
+    let seed = 0
+    while (((await answerOn(WALK_PAST, seed, module)) as number[]).length > 0) seed++
+    const plan = planQuestion(WALK_PAST, seed)
     const typed = readAnswer('none', 'ids')
     if (!typed.ok) throw new Error('none is an answer')
-    const run = fakeBridge(fakeScheduler()).run
-    const base = { labId: 'batching-scheduler', template: PREEMPT, plan, bytes, graded: { sha256: 'ab'.repeat(32), credit: 'unseen' as const }, history: [], now: 0, run, hash }
+    const run = fakeBridge(module).run
+    const base = { labId: 'batching-scheduler', template: WALK_PAST, plan, bytes, graded: { sha256: 'ab'.repeat(32), credit: 'unseen' as const }, history: [], now: 0, run, hash }
     const hit = await proveFromModule({ ...base, answer: typed.answer })
-    const miss = await proveFromModule({ ...base, answer: [3] })
+    const miss = await proveFromModule({ ...base, answer: await answerOn(WALK_PAST, seed, fakeScheduler()) })
     if (hit.kind !== 'graded' || miss.kind !== 'graded') throw new Error('refused')
     expect(hit.result).toMatchObject({ provenance: 'proved', ok: true, data: { answer: [], actual: [] } })
     expect(miss.result).toMatchObject({ provenance: 'practice', ok: false })
@@ -1309,5 +1411,70 @@ describe('graded by the core against your module', () => {
       expect(gradeAnswer(t, 1, { kind: 'replied', replies: ['ok', 'err not initialized'] })).toMatchObject({ right: false, actual: null, failed: 'error' })
       expect(gradeAnswer(t, 1, { kind: 'replied', replies: ['ok', 'ok'] })).toMatchObject({ right: false, actual: null, failed: 'error' })
     }
+  })
+})
+
+/* ------------------------------ every attempt is one the ledger keeps ------------------------------ */
+
+describe('every attempt on lab 06 passes the codec (as tests/forge/prove2-codec.test.ts holds lab 02)', () => {
+  const bytes = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 2]).buffer
+  const SHA = 'ab'.repeat(32)
+  const AT = '2026-10-14T09:30:00.000Z'
+  /** Replies a module could send to `schedule`, most of them not the protocol's. */
+  const ODD_REPLIES = ['', 'ok', 'admit', 'admit \npreempt ', 'admit 3,x\npreempt ', 'admit 1,2,3\npreempt 9', 'preempt 4', 'err unknown command', 'admit 99999999999999999999', 'admit -1', 'admit 2.5', '\u0000']
+  /** What a learner might type. */
+  const TYPED = ['', 'none', '6, 13, 17', '3', '2.5', '-1', 'x', '1'.repeat(400), Array.from({ length: 14 }, (_, i) => i).join(', ')]
+  type Rand = () => number
+  const int = (r: Rand, lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1))
+  const pick = <T,>(r: Rand, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)]
+  const BUGGY: Opts[] = [{ order: 'fcfs' }, { margin: 'none' }, { stopAtFirst: true }, { order: 'largest' }]
+
+  test('its three templates, 400 seeds each, correct, buggy and hostile modules, typed answers and their truths', async () => {
+    let built = 0
+    let proved = 0
+    for (const t of PROVE2.templates) {
+      for (let seed = 0; seed < 400; seed++) {
+        const r = splitmix32(seed * 7919 + t.id.length)
+        const plan = planQuestion(t, seed * 2654435761)
+        const kind = int(r, 0, 2)
+        const module =
+          kind === 0
+            ? fakeScheduler(pick(r, Object.values(CORRECT_MODULES)))
+            : kind === 1
+              ? fakeScheduler(pick(r, BUGGY))
+              : () => (cmd: string) => (r() < 0.05 && cmd !== plan.calls[0] ? trap('boom') : pick(r, ODD_REPLIES))
+        const run = fakeBridge(module).run
+        // the module's own answer, when it has one, half the time; otherwise whatever the learner typed
+        const truth = await run(bytes, plan.calls).then(
+          (replies) => {
+            try {
+              return t.read(replies)
+            } catch {
+              return null
+            }
+          },
+          () => null,
+        )
+        const typed = readAnswer(pick(r, TYPED), plan.answer)
+        const answer = truth !== null && isProve2Answer(truth) && r() < 0.5 ? truth : typed.ok ? typed.answer : null
+        if (answer === null) continue
+        const graded = pick(r, [{ sha256: SHA, credit: 'unseen' }, { sha256: SHA, credit: 'lab-green' }, null] as const)
+        const result = await proveFromModule({ labId: 'batching-scheduler', template: t, plan, answer, bytes, graded, history: [], now: 0, run, hash: async () => SHA })
+        if (result.kind === 'refused') throw new Error(result.message)
+        // the event `recordProve` writes, envelope and all
+        const { labId, provenance, ...rest } = result.result
+        const event = { id: 't:1', v: 1, kind: 'prove', ref: `prove:${labId}`, at: AT, tz: 0, day: dayOf(AT, 0), dev: 'dev-1', provenance: provenance ?? 'practice', ...rest }
+        const checked = validateEvent(event)
+        if (!checked.ok) throw new Error(`${t.id} seed ${seed}: the codec refuses ${JSON.stringify(result.result)}: ${checked.reason}`)
+        const d = result.result.data as { answer: number | number[]; actual: number | number[] | null }
+        const right = d.actual !== null && same(d.answer, d.actual)
+        expect(result.result.ok).toBe(right)
+        expect(result.result.score).toBe(right ? 1 : 0)
+        built++
+        if (provenance === 'proved') proved++
+      }
+    }
+    expect(built).toBeGreaterThan(600)
+    expect(proved).toBeGreaterThan(20)
   })
 })
