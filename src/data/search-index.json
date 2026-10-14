@@ -155,6 +155,7 @@
     ["t4.compute-grid","Workgroups and the dispatch grid","map a global invocation id to the…","t4.l5","the-programming-model-in-one-paragraph",[]],
     ["t4.parallel-reduction","Tree reduction and barriers","write a tree reduction with workgroup…","t4.l5","reduction-the-kernel-that-teaches-cooperation",[]],
     ["t4.tiling-intensity","Tiling raises intensity","compute how a matmul tile raises…","t4.l6","tiling-block-the-problem-to-fit-the-fast-tier",[]],
+    ["t4.raster-l2-reuse","Raster order decides L2 reuse","say why the order a grid visits tiles…","t4.l6","",[]],
     ["t4.flashattention-blocking","FlashAttention as cache blocking","say how FlashAttention streams tiles…","t4.l6","flashattention-the-same-trick-one-softmax-harder",[]],
     ["t4.number-formats","FP16, BF16, FP8 and INT4","say what exponent and mantissa bits buy…","t4.l7","floating-point-compressed-into-one-paragraph",[]],
     ["t4.quantized-bytes","Bytes per weight when quantized","compute weight bytes at FP16, FP8 and…","t4.l7","how-production-quantization-actually-works",[]],

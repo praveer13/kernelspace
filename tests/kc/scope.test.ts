@@ -6,7 +6,7 @@
  * least two non-MCQ. `verify-kc` requires the tags too (the last test here proves it on a lesson with them removed).
  */
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { CLAIMS } from '../../src/data/claims'
+import { CLAIMS } from '../../src/data/claims/all'
 import { KC, KCS, KC_GRAPH, REF_KCS, RUST_ANCHOR_KC, THRESHOLD_KCS, kcById } from '../../src/data/kc'
 import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'

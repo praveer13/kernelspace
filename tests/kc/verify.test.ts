@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { CLAIMS } from '../../src/data/claims'
+import { CLAIMS } from '../../src/data/claims/all'
 import { KC, KC_GRAPH, REF_KCS, RUST_ANCHOR_KC, THRESHOLD_KCS } from '../../src/data/kc'
 import { FORGE_LABS, type ForgeLab } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
@@ -54,7 +54,7 @@ describe('verify-kc on the committed graph', () => {
   test('passes, with only the pending-family warnings', () => {
     const r = verifyKc(input())
     expect(r.errors).toEqual([])
-    expect(r.warnings.every((w) => /^family (frag|kv|roofline|goodput|cost|memory|spec|sig|compile):/.test(w))).toBe(true)
+    expect(r.warnings.every((w) => /^family (frag|kv|roofline|goodput|cost|memory|spec|sig|compile|tiling|prefill|rollout):/.test(w))).toBe(true)
     expect(r.stats.pairing.every((p) => p.edges.length > 0)).toBe(true)
   })
 
@@ -66,8 +66,8 @@ describe('verify-kc on the committed graph', () => {
     ]
     const r = verifyKc(input({ families }))
     expect(r.errors).toEqual([])
-    // only the Wave 2 families are still pending
-    expect(r.warnings.every((w) => /^family (goodput|cost|memory|spec|sig|compile):/.test(w))).toBe(true)
+    // only the Wave 2 and Wave 3 families are still pending
+    expect(r.warnings.every((w) => /^family (goodput|cost|memory|spec|sig|compile|tiling|prefill|rollout):/.test(w))).toBe(true)
   })
 
   test('passes with no warnings once every family lands with its §4.2 row', () => {
@@ -84,6 +84,13 @@ describe('verify-kc on the committed graph', () => {
         id: 'compile',
         kcs: [KC.ownershipMoves, 'r.clone-copy-drop', KC.borrowRules, 'r.slices', 'r.lifetimes', 'r.interior-mutability', KC.permissions, KC.analyzerLimits],
       },
+      // Wave 3 (§4.3)
+      {
+        id: 'tiling',
+        kcs: ['t4.shared-memory-scratchpad', 't4.occupancy', KC.rasterL2Reuse, KC.ridgePoint, 't4.flashattention-blocking'],
+      },
+      { id: 'prefill', kcs: ['t6.epd-phases', 't6.kv-tiering', 't6.cache-timing-oracle'] },
+      { id: 'rollout', kcs: ['t6.rollout-bound-rl', 't6.weight-sync'] },
     ]
     const r = verifyKc(input({ families }))
     expect(r.errors).toEqual([])
