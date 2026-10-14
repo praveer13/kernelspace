@@ -204,11 +204,51 @@ export const TILING_CUBE_PRODUCTION_ROWS: readonly ProductionRow[] = [
   },
 ]
 
+/**
+ * The EPLB play's card (wave-3.md §5.2). The reference you met is DeepSeek EPLB, so the rows tie the two Compose dials to
+ * its rule and the engine flags that turn it on, and ground the toy layer in the model it shrinks. The claims live in the
+ * lazy `moe` group, which the card imports; this file imports no lazy group, so it names the ids only. The copy holds no
+ * digits, because every number on the card is the claim chip.
+ */
+export const EPLB_PRODUCTION_ROWS: readonly ProductionRow[] = [
+  {
+    claim: 'model.deepseek-v3.routed-experts',
+    dial: 'experts on a layer',
+    lead: 'Each MoE layer of DeepSeek-V3 has',
+    tail: 'routed by its router, plus one shared expert. Your layer is a toy that you could pack by hand, and the loads you were dealt are made up: a real layer has far more experts to place, and its loads are measured while it serves.',
+  },
+  {
+    claim: 'model.deepseek-v3.experts-per-token',
+    dial: 'why the busiest GPU is the score',
+    lead: 'The router sends each token to',
+    tail: 'chosen from those. A token is not finished until the slowest GPU it was sent to has answered at the combine barrier, so the layer is as slow as its busiest GPU, which is the number you were scored on.',
+  },
+  {
+    claim: 'production.eplb.rebalance',
+    dial: 'replicate: most load per copy',
+    lead: 'The reference you met is DeepSeek EPLB. Its replication rule is to',
+    tail: ', one replica at a time. It then deals the copies out heaviest first, each to the lightest GPU that still has a free slot. Those are your per-copy and least-loaded dials. The function takes each expert\'s load as an input, and the repository publishes no release, so the card pins a commit.',
+  },
+  {
+    claim: 'production.vllm.eplb',
+    dial: 'switching it on: vLLM',
+    lead: 'vLLM ships with EPLB off. Its settings are',
+    tail: '. Redundant experts are the extra copies your replicate turns made, and at the default there are none. The engine decides from a window of recent load and rebalances at an interval, both set in its EPLB config, and it needs expert parallelism.',
+  },
+  {
+    claim: 'production.sglang.eplb',
+    dial: 'switching it on: SGLang',
+    lead: 'SGLang ships with it off too:',
+    tail: '. With both at their defaults a stock engine places each expert once. Turning them on is the replicate step of this play.',
+  },
+]
+
 /** The rows each play's card renders, by play id: verify-plays compares them with that play's own `productionClaims`. */
 export const PLAY_PRODUCTION_ROWS: Readonly<Record<string, readonly ProductionRow[]>> = {
   'block-placement': PRODUCTION_ROWS,
   scheduler: SCHEDULER_PRODUCTION_ROWS,
   'tiling-cube': TILING_CUBE_PRODUCTION_ROWS,
+  eplb: EPLB_PRODUCTION_ROWS,
 }
 
 /* ------------------------------------------------------------------ */
@@ -257,7 +297,22 @@ export const TILING_CUBE: PlayDef = {
   productionClaims: TILING_CUBE_PRODUCTION_ROWS.map((r) => r.claim),
 }
 
-export const PLAYS: Readonly<Record<string, PlayDef>> = { [BLOCK_PLACEMENT.id]: BLOCK_PLACEMENT, [SCHEDULER.id]: SCHEDULER, [TILING_CUBE.id]: TILING_CUBE }
+/**
+ * T6.L2's play, "Place the experts" (wave-3.md §5.2): replicate 4 hot experts of a 16-expert layer, then place the 20 copies
+ * on 4 GPUs of 5 slots, against DeepSeek EPLB. Its id is typed here, not imported from the world (src/lib/world/eplb.ts); a
+ * test holds the id to `EPLB_PLAY_ID`, the minutes to `PLAY_MINUTES` (economy-table.ts) and the turn cap to the world's 24 turns.
+ */
+export const EPLB: PlayDef = {
+  id: 'eplb',
+  title: 'Place the experts',
+  lessonId: 't6.l2',
+  minutes: 15,
+  turnCap: 24,
+  kcs: [KC.expertLoadBalance, KC.allToAll],
+  productionClaims: EPLB_PRODUCTION_ROWS.map((r) => r.claim),
+}
+
+export const PLAYS: Readonly<Record<string, PlayDef>> = { [BLOCK_PLACEMENT.id]: BLOCK_PLACEMENT, [SCHEDULER.id]: SCHEDULER, [TILING_CUBE.id]: TILING_CUBE, [EPLB.id]: EPLB }
 export const PLAY_IDS: readonly string[] = Object.keys(PLAYS)
 
 /** The play behind a route or a block, or undefined for an id that is not a play (also `__proto__`). */
