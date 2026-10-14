@@ -11,7 +11,20 @@ import {
   fixFor,
   type Hypothesis,
 } from '@/lib/world/incident-spec'
-import { KC_NAMES, burnMinutes, kcsFor, sinceAlert, sourceTitle, streetlightOf, type FlowRun, type FlowState, type IncidentSource } from '@/lib/world/daily'
+import {
+  KC_NAMES,
+  boxLines,
+  burnMinutes,
+  engineNote,
+  kcsFor,
+  sinceAlert,
+  sourceTitle,
+  streetlightOf,
+  type DailyBox,
+  type FlowRun,
+  type FlowState,
+  type IncidentSource,
+} from '@/lib/world/daily'
 import type { IncidentFinish } from '@/workers/fleet-protocol'
 
 export interface DebriefProps {
@@ -21,6 +34,11 @@ export interface DebriefProps {
   flow: Pick<FlowState, 'log' | 'alert'>
   busy: boolean
   run: FlowRun
+  /**
+   * The four boxes the incident ran on, whose they were (docs/specs/wave-2.md §9.7, 2b-21). Left out (Act IV's
+   * drills, which run on reference components) the debrief says nothing about the engine.
+   */
+  boxes?: readonly DailyBox[]
   /** Called once with the scored incident, so the page can record it. Keep it stable (useCallback). */
   onResult: (result: IncidentFinish) => void
   /** Rendered under the debrief once the result is in (the share string, replay and back links). */
@@ -35,7 +53,7 @@ const hypothesisLabel = (h: Hypothesis | undefined): string => (h === undefined 
  * module costs both sides the same (W11). Then it shows your burn against the expert's, each Streetlight probe
  * you took, the expert's probe order with one line per step, and the KCs the incident trains.
  */
-export default function Debrief({ session, source, flow, busy, run, onResult, children }: DebriefProps) {
+export default function Debrief({ session, source, flow, busy, run, boxes, onResult, children }: DebriefProps) {
   const [result, setResult] = useState<IncidentFinish | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
@@ -134,6 +152,22 @@ export default function Debrief({ session, source, flow, busy, run, onResult, ch
         </ol>
         <p className="mt-2 text-[12px] text-text-3">The expert probes in USE order down the pipeline and skips any probe that cannot split the suspects.</p>
       </div>
+
+      {boxes && (
+        <div className="rounded-lg border border-line bg-surface-1 p-4 sm:p-5" data-engine={boxes.some((b) => b.own) ? 'yours' : 'reference'}>
+          <h3 className="font-display text-[16px] text-text-1">Your engine</h3>
+          <p className="mt-2 text-body-sm text-text-2" data-engine-note>
+            {engineNote(boxes)}
+          </p>
+          <ul className="mt-2 space-y-1 text-body-sm text-text-2" aria-label="Which boxes were yours" data-boxes>
+            {boxes.map((b, i) => (
+              <li key={b.slot} data-box={b.slot} data-own={b.own ? 'yes' : 'no'}>
+                {boxLines(boxes)[i]}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <p className="text-body-sm text-text-2" data-kcs>
         This incident trains: {kcsFor(result.fault).map((k) => KC_NAMES[k] ?? k).join(' · ')}.

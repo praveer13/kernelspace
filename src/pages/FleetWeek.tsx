@@ -9,15 +9,17 @@ import FixMenu from '@/components/daily/FixMenu'
 import Hypothesis from '@/components/daily/Hypothesis'
 import ProbeBar from '@/components/daily/ProbeBar'
 import { useProgress, XP } from '@/lib/progress'
-import { useSlots } from '@/pages/fleet/slots'
+import { useSlots, type SlotState } from '@/pages/fleet/slots'
 import {
   ACT3_COST_LABEL,
   gradeMeasurementSubmission,
   gradeAct3Doc,
   drillCreditsFrom,
   drillKey,
+  recordActRun,
   recordDrill,
   replayDrill,
+  runComponents,
   startDrill,
   DRILL_BURN_SLACK,
   DRILL_FAULTS_NEEDED,
@@ -188,6 +190,18 @@ function useActRunner(actId: string) {
   return { running, progress, result, error, report, finish, execute, setRunning, setProgress, setError }
 }
 
+/**
+ * Write the run's `fleet-run` event (`fleet:act1`, `fleet:act2`) when a component of yours took part (docs/specs/wave-2.md
+ * §10.6). A failure to hash or record never costs the learner their result.
+ */
+async function recordRun(mode: 'act1' | 'act2', result: ActResult, slots: SlotState): Promise<void> {
+  try {
+    recordActRun(useProgress, mode, result, await runComponents(slots))
+  } catch {
+    // the result on screen stands; only the ledger event is lost
+  }
+}
+
 /* ------------------------------ ACT 1 ------------------------------ */
 
 function ActEngine() {
@@ -198,7 +212,7 @@ function ActEngine() {
   return (
     <div>
       <p className="text-body-sm text-text-2">
-        240 requests, flash crowds included. Your uploaded stack ({anyStudent ? 'yours' : 'all-reference for now'}) against the reference engine, full speed. Pass: goodput within 3 points of the reference. Every run draws a fresh graded seed (shown in the result) and the reference re-runs on the same one.
+        240 requests, flash crowds included. Your engine ({anyStudent ? 'with your components in it' : 'all-reference for now'}) against the reference engine, full speed. Pass: goodput within 3 points of the reference, with at least one of your scheduler, block manager or intake queue in the engine. Every run draws a fresh graded seed (shown in the result) and the reference re-runs on the same one.
       </p>
       <RunButton
         running={running}
@@ -207,13 +221,27 @@ function ActEngine() {
         onClick={() =>
           void execute(async () => {
             const trace = await runSim({ kind: 'act1', modules: moduleBytes(slots) }, setProgress)
-            setTraceResult(trace)
+            // an all-reference run is practice: there is nothing of yours to write up
+            setTraceResult(trace.practice ? null : trace)
             report(trace)
+            await recordRun('act1', trace, slots)
           })
         }
       />
       <ActError message={error} />
       {result && <ResultPanel result={result} />}
+      {result?.practice && (
+        <p className="mt-3 text-body-sm text-text-2" data-install-hint>
+          <Link to="/forge" className="inline-flex min-h-11 items-center text-info underline underline-offset-2">
+            Pick a lab in the Forge
+          </Link>{' '}
+          and press &ldquo;Install in your engine&rdquo; after a fresh-seed pass, or{' '}
+          <Link to="/fleet" className="inline-flex min-h-11 items-center text-info underline underline-offset-2">
+            drop a module on the Fleet page
+          </Link>
+          .
+        </p>
+      )}
       {traceResult && (
         <MeasurementSubmission
           actId="engine"
@@ -258,6 +286,7 @@ function ActFleet() {
             const trace = await runSim({ kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress)
             setTraceResult(trace)
             report(trace)
+            await recordRun('act2', trace, slots)
           })
         }
       />

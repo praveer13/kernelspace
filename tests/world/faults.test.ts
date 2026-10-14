@@ -113,9 +113,13 @@ async function existingRuns() {
  * here means a run with no faults no longer replays: fix the change, never the hash. (verify:seeds and the
  * leaderboard parity were also diffed before and after 2b-03; verify-leaderboard pins its own numbers.
  * 2b-17 retired the static incidents (`loadIncident`) and took their outputs out of this hash; it was re-taken on the
- * unchanged sources with only that line removed, so the rest still replays byte for byte.)
+ * unchanged sources with only that line removed, so the rest still replays byte for byte.
+ * 2b-21 made Act I pass only with a component of yours in the engine (§10.6): the three all-reference `runAct1`
+ * results now read `pass: false`, `practice: true` and the install hint. Every number, the metrics, the Act II
+ * results and `referenceFleet` were diffed against the previous sources and are unchanged; the hash was re-taken on
+ * exactly that difference.)
  */
-const EXISTING_RUNS_SHA256 = '9be37750c694f2c341ba01e7fd07802accf7b8c089dd3f0ab79ff7c3a8e75308'
+const EXISTING_RUNS_SHA256 = '6a0c134adea8d7cbea5a4a120c4b110858119e2309dc62a7da8a360ef6f8241a'
 
 describe('no existing run changes', () => {
   test('Fleet and Fleet Week outputs are byte-identical to the base commit', async () => {
