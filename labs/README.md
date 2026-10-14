@@ -19,7 +19,7 @@ overwriting the directory if you already started that exercise. The page has a
 tab for each shell:
 
 - **POSIX** (macOS, Linux): `curl` and `unzip`.
-- **tar** (macOS, Linux, Windows 10+ in `cmd.exe`): `curl -fsSL <origin>/labs/<lab>.tar.gz | tar xz`
+- **tar** (macOS, Linux, Windows 10+ in `cmd.exe`): `curl -fsSL <origin>/labs/<lab>.tar.gz | tar -xzf -`
   inside a new folder. Every `.zip` has a `.tar.gz` beside it with the same files.
 - **PowerShell** (Windows): `iwr <origin>/labs/<lab>.zip -OutFile <lab>.zip; Expand-Archive <lab>.zip <lab>; cd <lab>/<crate>`.
 - **WSL**: the POSIX command inside the Linux shell, with the lab under your Linux

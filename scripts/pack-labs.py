@@ -5,7 +5,7 @@ The archive is the student-facing workspace: kit + lab crate(s) + devcontainer +
 README + the H1 guardrail kit. Reference solutions (_solutions/) and build
 artifacts (target/) are never shipped. Every <lab>.zip gets a <lab>.tar.gz
 beside it (docs/specs/wave-2.md §16.1): the same members, in the same order,
-with the same bytes and modes, for `curl … | tar xz` on macOS, Linux and
+with the same bytes and modes, for `curl … | tar -xzf -` on macOS, Linux and
 Windows 10+. Both are deterministic. Re-run after any change under labs/:
 
     python3 scripts/pack-labs.py [--out DIR]

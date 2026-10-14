@@ -37,6 +37,8 @@ Section numbers below are cited by the task DAG (§24) and by `wave2-dag.json`.
 | D23 | **Shared files have one owner.** Files every PR needs (ledger, economy, claims, lesson and item types, `verify-generators.ts`, `package.json`) are edited only in 2a level 0. No content task changes a lesson's title or hook, so `public/llms.txt` never changes in Wave 2. The DAG was checked mechanically for this rule (§24.1). | §24 |
 | D24 | **The ⌘K index budget is 20 KB gzip** (owner decision, 2026-10-13), up from Wave 1's 15 KB. The index loads only on the palette's first open, never at page load, and holding 15 KB had cost the concept crumbs and most of each lesson hook as the KC graph grew. `verify:search-index` still fails above the budget; build-search-index's clip lengths are restored after 2a-30 lands. | §7.4, §22 |
 | D25 | **Erratum to §5.3: a pipeline stage holds only its own layers' experts, so the `shard` key divides experts by EP × PP.** The spec's formula, dense ÷ (TP·PP) + experts ÷ EP, ignored PP for the experts. Each MoE layer's experts sit in that layer and a stage holds only its layers, so with PP > 1 a GPU holds at most experts ÷ (EP·PP). Seed 11 at level 3 (TP 4, PP 6, EP 2, 40 B dense and 340 B routed parameters in INT4): the spec's key gave 79.9 GiB per GPU, the physical figure is 0.83 + 85/6 ≈ 15 GB (13.97 GiB). The 2a final review found it: about 64 % of level-2 and level-3 shard items marked correct pipeline reasoning wrong. The stem now says each stage keeps only its own layers' experts, and the old key is the named slip `memory.experts-ignore-pp`. | §5.3, 2a final review |
+| D26 | **Erratum to §16.1: the tar lane needs `-f -`.** The spec prescribed `curl … | tar xz` with no `-f`. Before libarchive changed its default (PR #1632, merged to master 2021-12-04), bsdtar with no `-f` read the compile-time default tape device, and on Windows that is `\\.\tape0`; the command then fails with "Failed to open" after `mkdir` and `cd` have already run (libarchive issue #1459 is the same "Failed to open" on `\\.\Tape0`). The 2c final review reports that Windows 10 ships bsdtar 3.3.2, which predates the fix. Confirmed from the libarchive sources: PR #1632 makes tar fall back to `-` (standard input) only when `TAPE` is unset and no default tape device exists, and issue #1459 is the Windows tape-device "Failed to open" error. Not confirmed from them: the release that first carries the fix (the review says 3.6.0) and the version Windows 10 ships (the review's report). The fix holds either way: `tar -xzf -` is portable to GNU tar and bsdtar on every platform. `SetupLanes`, `labs/README.md`, the `setup-lanes` test and the `pack-labs.py` comment now say `tar -xzf -`. | §16.1, 2c final review |
+| D27 | **Erratum to §14.4: the arm is the lowest bit of `fmix32(hash32(...))`, not `hash32(...) % 2`.** FNV-1a's lowest bit is the parity of the number of bytes whose own low bit is 1 (each step xors a byte into the low bit and multiplies by an odd prime, which keeps that bit's parity), so `hash32(...) % 2` depends on the check string only through that parity. Every learner would get the same arm for the same check up to one global flip, which confounds the arm with the check. `src/lib/learner/experiments.ts` applies `fmix32` (MurmurHash3's finalizer) first, and `docs/prereg/hint-ladders.md` documents it. | §14.4, 2c-06 review |
 
 ## Owner questions
 
@@ -1118,7 +1120,7 @@ export interface ForgeBundle {
 ### 14.4 The ladder-or-packet arm (Q4)
 
 H3's keep-or-kill rule compares 30-day accuracy under ladder-first help with packet-only help on randomized checks, decided at the Wave 3 exit (PLAN §9). The data must start accruing when packets ship.
-- **Assignment.** `armFor(experiment, unit, expSeed)` (`src/lib/learner/experiments.ts`) is `hash32(experiment + ':' + unit + ':' + expSeed) % 2`. `expSeed` is the working record `exp:seed`, created once.
+- **Assignment.** `armFor(experiment, unit, expSeed)` (`src/lib/learner/experiments.ts`) is the lowest bit of `fmix32(hash32(experiment + ':' + unit + ':' + expSeed))` (see D27): 0 is the ladder arm, 1 the packet arm. `expSeed` is the working record `exp:seed`, created once.
 - **Packet arm:** R0's teach-back stays (the explanation gate), R1–R4 stay closed, and the packet button shows.
 - **Ladder arm:** the full ladder, with the packet after R2.
 - **Recording.** Hint acks and packet acks carry `data.arm`. Analysis uses the recorded arm, so a second device that created its own `exp:seed` before syncing cannot corrupt the data.
@@ -1220,7 +1222,7 @@ Each task owns `snippets/<group>.ts` and `bank/<group>.json`; the family loads e
 - **`pack-labs.py`** writes a deterministic `.tar.gz` beside every `.zip` (the same members and the fixed `ZIP_DATE` mtime). `verify-labs` and `verify-guardrails` check both formats.
 - **`SetupLanes`** shows four tabs:
   - **POSIX:** today's command;
-  - **tar:** `curl -fsSL <origin>/labs/<id>.tar.gz | tar xz`, which works on macOS, Linux and Windows 10+ `tar`;
+  - **tar:** `curl -fsSL <origin>/labs/<id>.tar.gz | tar -xzf -`, which works on macOS, Linux and Windows 10+ `tar` (the `-f -` is required, see D26);
   - **PowerShell:** `iwr <origin>/labs/<id>.zip -OutFile <id>.zip; Expand-Archive <id>.zip <id>; cd <id>/<crate>`;
   - **WSL** notes.
   The rustup step names the MSVC Build Tools download on Windows.
@@ -1233,7 +1235,7 @@ Each task owns `snippets/<group>.ts` and `bank/<group>.json`; the family loads e
 
 ### 16.3 Folder watch (2c-08)
 
-- **The flow.** On Chromium browsers, "Watch my build folder" calls `showDirectoryPicker()` once. While the tab is visible, `src/lib/forge/watch.ts` polls the artifact's `lastModified` every second under `target/wasm32-unknown-unknown/release/`. A changed file runs the checks exactly as a drop would.
+- **The flow.** On Chromium browsers, "Watch my build folder" calls `showDirectoryPicker()` once. While the tab is visible, `src/lib/forge/watch.ts` polls the artifact's `lastModified` every second under `target/wasm32-unknown-unknown/release/`. A changed file runs the checks exactly as a drop would. A new or changed artifact runs only after it holds still for two polls in a row (`cargo build` rewrites the file in place), and an artifact already present when the folder is picked also runs.
 - **Limits.** It never reads outside `target/` and never uploads. It is hidden where the API is missing (Firefox and Safari keep drag and drop), and the handle is not persisted across sessions.
 
 ---
