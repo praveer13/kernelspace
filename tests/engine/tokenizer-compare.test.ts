@@ -8,10 +8,8 @@
  * `count <hex>` the way the lab's bridge does (the fakeLab pattern of tests/forge/fixtures.ts).
  */
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { createElement } from 'react'
-import { renderToString } from 'react-dom/server'
+import { renderToReadableStream, renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import TokenizerCompare, {
   compareRows,
@@ -31,6 +29,7 @@ import { createFleetHost } from '../../src/lib/fleet-host'
 import { openTokenSession, type FleetWorkerLike } from '../../src/lib/fleet-session'
 import { revFor } from '../../src/lib/items/play'
 import { LabAbiError, LabTrapError } from '../../src/lib/wasm-lab'
+import Fleet from '../../src/pages/Fleet'
 import { makeWasmTokenCounter, REBUILD_MESSAGE, type Mod } from '../../src/pages/fleet/drivers'
 import type { FleetReply, FleetRequest } from '../../src/workers/fleet-protocol'
 import { makeProfile, startTab, tick } from '../ledger/env'
@@ -256,10 +255,18 @@ describe('TokenizerCompare renders', () => {
 })
 
 describe('where the comparison is mounted', () => {
-  test('/fleet mounts TokenizerCompare under the schematic, lazily, inside an error boundary', () => {
-    const fleet = readFileSync(join(import.meta.dir, '../../src/pages/Fleet.tsx'), 'utf8')
-    expect(fleet).toContain("lazy(() => import('@/components/engine/TokenizerCompare'))")
-    expect(fleet).toMatch(/<EngineSchematic[\s\S]*<ErrorBoundary label="the tokenizer comparison">[\s\S]*<TokenizerCompare/)
+  test('/fleet renders TokenizerCompare once, below the engine schematic', async () => {
+    // renderToReadableStream waits for the lazy chunks; the markup then holds the resolved comparison after the schematic's figure
+    const stream = await renderToReadableStream(createElement(MemoryRouter, null, createElement(Fleet)))
+    await stream.allReady
+    const out = await new Response(stream).text()
+    const heading = out.indexOf('your tokenizer vs Qwen3')
+    expect(heading).toBeGreaterThan(-1)
+    expect(out.lastIndexOf('your tokenizer vs Qwen3')).toBe(heading)
+    expect(out.indexOf('<figure')).toBeGreaterThan(-1)
+    expect(out.indexOf('<figure')).toBeLessThan(heading)
+    // with no tokenizer installed the mounted comparison is Qwen3's side and the pointer to lab 03
+    expect(out).toContain('href="/forge/bpe-tokenizer"')
   })
 })
 
