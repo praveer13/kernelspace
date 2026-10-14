@@ -1,4 +1,4 @@
-import { registerClaims } from '../index'
+import { registerClaims } from '../registry'
 import { SGLANG_PIN, VLLM_PIN } from '../engines'
 import type { Claim } from '../schema'
 

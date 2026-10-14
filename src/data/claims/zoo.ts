@@ -47,7 +47,7 @@ function configClaims(pin: ConfigPin, title: string, fields: ReadonlyArray<Field
 
 /** Meta's file is gated (HTTP 401), so the quotes come from a verbatim mirror of config.json, as for the 8B and 70B claims in models.ts. */
 const LLAMA3_70B_PIN: ConfigPin = { repo: 'NousResearch/Meta-Llama-3-70B', ref: 'fdbf133d993d2b8157e518bfc8bc4570b2d31c45' }
-const DEEPSEEK_V3_PIN: ConfigPin = { repo: 'deepseek-ai/DeepSeek-V3', ref: 'e815299b0bcbac849fa540c768ef21845365c9eb' }
+export const DEEPSEEK_V3_PIN: ConfigPin = { repo: 'deepseek-ai/DeepSeek-V3', ref: 'e815299b0bcbac849fa540c768ef21845365c9eb' }
 const DEEPSEEK_V32_PIN: ConfigPin = { repo: 'deepseek-ai/DeepSeek-V3.2', ref: 'a7e62ac04ecb2c0a54d736dc46601c5606cf10a6' }
 const DEEPSEEK_V4_PIN: ConfigPin = { repo: 'deepseek-ai/DeepSeek-V4-Pro', ref: 'b5968e9190ef611bbf34a7229255be88a0e937c1' }
 const GPT_OSS_PIN: ConfigPin = { repo: 'openai/gpt-oss-120b', ref: 'b5c939de8f754692c1647ca79fbf85e8c1e70f8a' }

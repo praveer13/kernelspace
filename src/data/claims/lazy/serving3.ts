@@ -1,4 +1,4 @@
-import { registerClaims } from '../index'
+import { registerClaims } from '../registry'
 import { SGLANG_PIN, VLLM_PIN } from '../engines'
 import type { Claim } from '../schema'
 
@@ -38,7 +38,7 @@ export const SERVING3_CLAIMS: Claim[] = [
     verifiedAt: '2026-10-14',
     ttlDays: 60,
     boundary:
-      'A prefill instance runs as kv_producer and a decode instance as kv_consumer, each with a kv_connector, through --kv-transfer-config (a JSON string); the config rejects a connector with no kv_role. There is no single "disaggregated" switch.',
+      "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes.",
   },
   {
     id: 'production.sglang.disagg',

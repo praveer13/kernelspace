@@ -202,3 +202,18 @@ describe('the search index', () => {
     for (const id of TABLE) expect(ids.has(id)).toBe(true)
   })
 })
+
+describe('a boundary says only what its quote states (3a-08 minors)', () => {
+  test("vllm disagg gives no role pairing: the release's own NIXL example sets kv_both on both instances", () => {
+    const c = byId['production.vllm.disagg']
+    expect(c.source?.quote).toContain("'kv_producer', 'kv_consumer', and 'kv_both'")
+    expect(c.boundary).not.toMatch(/prefill instance runs as|decode instance as/)
+  })
+
+  test("the smem-per-block boundary's 1 KB reserve is in the quote it cites", () => {
+    const c = byId['hw.h100-sxm.smem-per-block']
+    expect(c.boundary).toContain('reserves 1 KB')
+    expect(c.source?.quote).toContain('CUDA reserves 1 KB of shared memory per thread block')
+    expect(c.source?.quote).toContain('up to 227 KB')
+  })
+})

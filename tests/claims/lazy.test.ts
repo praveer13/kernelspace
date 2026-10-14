@@ -2,13 +2,15 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
-import { byId, CLAIMS, getClaim, LAZY_GROUP_HOMES, lazyGroupFor, registerClaims, type Claim } from '@/data/claims'
+import { byId, CLAIMS, getClaim, type Claim } from '@/data/claims'
 import * as everything from '@/data/claims/all'
 import { ENGINE_CLAIMS } from '@/data/claims/engines'
 import { HARDWARE_CLAIMS } from '@/data/claims/hardware'
+import { LAZY_GROUP_HOMES, lazyGroupFor } from '@/data/claims/homes'
 import { MODEL_CLAIMS } from '@/data/claims/models'
 import { PRICE_CLAIMS } from '@/data/claims/prices'
 import { PRODUCTION_CLAIMS } from '@/data/claims/production'
+import { registerClaims } from '@/data/claims/registry'
 import { SERVING_CLAIMS } from '@/data/claims/serving'
 import { ZOO_CLAIMS } from '@/data/claims/zoo'
 
@@ -129,10 +131,11 @@ describe('getClaim on an unknown id', () => {
     expect(() => getClaim('fixture.nothing.here')).toThrow('unknown claim id: fixture.nothing.here')
   })
 
-  test('names the lazy group to import when the id belongs to one', () => {
+  test('points at the homes table, and the table names the group to import', () => {
+    expect(() => getClaim('fixture.unregistered')).toThrow(/fixture\.unregistered.*claims\/homes\.ts/)
     LAZY_GROUP_HOMES['fixture.tiling.'] = 'lazy/tiling'
     LAZY_GROUP_HOMES['fixture.tiling.fp8.'] = 'lazy/fp8'
-    expect(() => getClaim('fixture.tiling.tile-m')).toThrow(/fixture\.tiling\.tile-m.*lazy\/tiling/)
+    expect(lazyGroupFor('fixture.tiling.tile-m')).toBe('lazy/tiling')
     expect(lazyGroupFor('fixture.tiling.fp8.scale')).toBe('lazy/fp8')
     expect(lazyGroupFor('fixture.other.x')).toBeUndefined()
   })
@@ -152,6 +155,8 @@ describe('the full registry (all.ts)', () => {
     expect(everything.CLAIMS).toBe(CLAIMS)
     expect(everything.byId).toBe(byId)
     expect(everything.getClaim).toBe(getClaim)
+    expect(everything.registerClaims).toBe(registerClaims)
+    expect(everything.lazyGroupFor).toBe(lazyGroupFor)
     register([fixture('fixture.lazy.live')])
     expect(everything.CLAIMS.some((c) => c.id === 'fixture.lazy.live')).toBe(true)
   })
@@ -192,6 +197,14 @@ describe('the lazy boundary', () => {
       expect([...files].map((f) => relative(root, f))).not.toContain('src/data/claims/all.ts')
     })
   }
+
+  test('the registration and homes modules are outside the eager closure too, so the claims chunk does not grow', () => {
+    for (const entry of ['src/pages/Boot.tsx', 'src/pages/Today.tsx']) {
+      const reached = [...staticFiles([entry])].map((f) => relative(root, f))
+      expect(reached).not.toContain('src/data/claims/registry.ts')
+      expect(reached).not.toContain('src/data/claims/homes.ts')
+    }
+  })
 
   test('the routes load the eager registry, so the walk is looking at the right graph', () => {
     for (const entry of ['src/pages/Boot.tsx', 'src/pages/Today.tsx']) {
