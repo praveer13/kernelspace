@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { byId } from '../../src/data/claims'
+import { byId, CLAIMS } from '../../src/data/claims'
 import { buildSearchIndex, clip, INDEX_PATH, serializeSearchIndex } from '../../scripts/build-search-index'
 import { ACCEPTANCE_QUERIES, checkSearchIndex } from '../../scripts/verify-search-index'
 import { GROUP_ORDER, claimPath, indexItems, makeSearcher, type SearchIndex } from '../../src/lib/search'
@@ -19,6 +19,19 @@ describe('search index freshness', () => {
   test('the committed file is what the build script writes', () => {
     expect(committed).toBe(serializeSearchIndex(buildSearchIndex()))
     expect(checkSearchIndex(committed)).toEqual([])
+  })
+
+  test('the claim rows do not depend on the order the lazy groups registered in', () => {
+    // A page, test file or script that imports a lazy group first moves it up the live registry; CI ran the test
+    // files in another order than the dev host and the rows moved. Scrambling the live order changes nothing.
+    const live = [...CLAIMS]
+    CLAIMS.reverse()
+    try {
+      expect(serializeSearchIndex(buildSearchIndex())).toBe(committed)
+    } finally {
+      CLAIMS.splice(0, CLAIMS.length, ...live)
+    }
+    expect(CLAIMS).toEqual(live)
   })
 
   test('a stale file fails the check', () => {

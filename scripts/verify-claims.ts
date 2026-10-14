@@ -9,7 +9,7 @@
  * config.json at its pinned revision and finds the quote in it exactly once (the one network step; bare runs stay offline).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims/all'
+import { ALL_CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims/all'
 
 const OUT = 'public/claims.json'
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -131,12 +131,12 @@ function zooProblems(c: Claim): string[] {
 }
 
 const byId = new Map<string, Claim>()
-for (const c of CLAIMS) {
+for (const c of ALL_CLAIMS) {
   if (byId.has(c.id)) fail(c.id, 'duplicate id')
   byId.set(c.id, c)
 }
 
-for (const c of CLAIMS) {
+for (const c of ALL_CLAIMS) {
   if (!ID.test(c.id)) fail(c.id, 'id must be dotted lowercase, e.g. hw.h100-sxm.hbm-bw')
   if (!c.label.trim()) fail(c.id, 'missing label')
   if (typeof c.value === 'number' ? !Number.isFinite(c.value) : !c.value.trim()) fail(c.id, 'bad value')
@@ -169,7 +169,7 @@ for (const c of CLAIMS) {
 
 // Derived formulas must reproduce, and must read exactly the inputs they declare.
 const unreproduced: string[] = []
-for (const c of CLAIMS) {
+for (const c of ALL_CLAIMS) {
   if (c.kind !== 'derived' || !c.derived) continue
   const derive = DERIVATIONS[c.id]
   if (!derive) {
@@ -201,7 +201,7 @@ for (const id of Object.keys(DERIVATIONS)) if (!byId.has(id)) fail(id, 'DERIVATI
 // --online: each Hugging Face config.json (the zoo's and the DeepSeek-V3 expert counts'), read again at its pinned revision, contains the quote exactly once.
 if (process.argv.includes('--online') && errors.length === 0) {
   const files = new Map<string, string>()
-  for (const c of CLAIMS) {
+  for (const c of ALL_CLAIMS) {
     if (!readsHfConfig(c) || !c.source || !HF_CONFIG.test(c.source.url)) continue
     let text = files.get(c.source.url)
     if (text === undefined) {
@@ -219,19 +219,19 @@ if (process.argv.includes('--online') && errors.length === 0) {
   console.log(`online: read ${files.size} config.json files at their pinned revisions`)
 }
 
-// public/claims.json mirrors the registry so non-bundled consumers (llms.txt, the freshness issue) can read it.
-const json = `${JSON.stringify({ claims: CLAIMS }, null, 2)}\n`
+// public/claims.json mirrors the registry, in ALL_CLAIMS's fixed order, so non-bundled consumers (llms.txt, the freshness issue) can read it.
+const json = `${JSON.stringify({ claims: ALL_CLAIMS }, null, 2)}\n`
 if (process.argv.includes('--write')) {
   if (errors.length === 0) {
     writeFileSync(OUT, json)
-    console.log(`wrote ${OUT} (${CLAIMS.length} claims)`)
+    console.log(`wrote ${OUT} (${ALL_CLAIMS.length} claims)`)
   }
 } else if (!existsSync(OUT) || readFileSync(OUT, 'utf8') !== json) {
   fail(OUT, 'out of date; run: bun scripts/verify-claims.ts --write')
 }
 
 if (unreproduced.length > 0) console.log(`note: no reproducer for derived claim(s): ${unreproduced.join(', ')}`)
-const stale = CLAIMS.filter((c) => staleSince(c) !== null)
+const stale = ALL_CLAIMS.filter((c) => staleSince(c) !== null)
 if (stale.length > 0) console.log(`stale (informational): ${stale.map((c) => `${c.id} since ${staleSince(c)}`).join('; ')}`)
 
 if (errors.length > 0) {
@@ -240,5 +240,5 @@ if (errors.length > 0) {
   process.exit(1)
 }
 const kinds = new Map<string, number>()
-for (const c of CLAIMS) kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1)
-console.log(`verify-claims: ok, ${CLAIMS.length} claims (${[...kinds].map(([k, v]) => `${v} ${k}`).join(', ')})`)
+for (const c of ALL_CLAIMS) kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1)
+console.log(`verify-claims: ok, ${ALL_CLAIMS.length} claims (${[...kinds].map(([k, v]) => `${v} ${k}`).join(', ')})`)
