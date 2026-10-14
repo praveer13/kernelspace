@@ -1,6 +1,6 @@
 # Wave 3, depth, proof and the last mile: spec (PRs 3a, 3b, 3c, 3s)
 
-**Status:** draft for owner review. **Date:** 2026-10-13. **Base:** written on `w3/spec` @ 474ea3e (`wave-2c` before its fix round, with `wave-2a` merged). `wave-2b` (f5521f1) was read with `git show`; it is not an ancestor of this branch.
+**Status:** draft for owner review, revised after a verified critique (findings A1–A12, B1–B11, C1–C10, D1–D15). **Date:** 2026-10-13. **Base:** written on `w3/spec` @ 474ea3e (`wave-2c` before its fix round, with `wave-2a` merged). `wave-2b` (f5521f1, then d6ffe18 and 4a36711) and `wave-2c` (8afa2b5, then 2ecd0df) were read with `git show`; neither tip is an ancestor of this branch.
 **Implements:** PLAN-100X §8 Wave 3: W5 Fleet exercises, EPLB play and two families; receipts; H4 v2; labs 04–08; P3; K5; remaining P2; W7 Tiling Cube; twins for labs 07 and 06; the S4 watcher if justified; partners. Stretch, in the plan's order: W7 3D evaluation, t6.l12, more W5 exercises, Interview mode, two field labs, the On-Call pilot, Season 0, the bring-your-own-service capstone, P4, the T0/T4 measured-versus-predicted real-engine run.
 **Nothing but this file is committed with the spec.** PR 3a's level 0 commits the contracts (ledger v3.3, types, gates, claims, KCs) before any other task starts.
 
@@ -13,29 +13,29 @@ Section numbers below are cited by the task DAG (§19) and by `wave3-dag.json`.
 | # | Decision | Where |
 |---|---|---|
 | D1 | **A linear stack: 3a → 3b → 3c, then stretch (3s).** 3a holds contracts, gates and engines; 3b play, proof and the Mirror; 3c the exit gates, measurement and the watcher decision. Each PR branches from the previous one's merged tip, so no two PRs are open in parallel and nothing needs a two-way sync. Inside a PR, the tasks of a level run in parallel and never share a file. Wave 2's 2b and 2c ran in parallel, never merged each other, and still conflicted on `mc-cues.test.ts` and `wave-2.md`. | §19 |
-| D2 | **Wave 3 starts from the Wave 2 integration commit:** 2b complete, 2c after its fix round, both merged (or `master`, if the owner has merged Wave 2 by then). 2b-17 (Act IV drills) and 2b-21 (the Daily on your engine) have not merged into `wave-2b` yet. This branch fails its own fast gate today: `verify:items` exits 1 with four failures in the align and PRIMM pools, which the 2c fix round fixes. Wave 3 relies on that round's direction for the compile bank (per-group lazy chunks, a generated manifest, no bank hashes or rustc messages in the client) and touches neither the bank nor the Error Museum. | §1 |
+| D2 | **Wave 3 starts from the Wave 2 integration commit:** 2b complete, 2c after its fix round, both merged (or `master`, if the owner has merged Wave 2 by then). **What is not yet true of the base.** This branch (474ea3e) fails its own fast gate: `verify:items` exits 1 with four failures in the align and PRIMM pools. The 2c fix round's first level repairs them: `wave-2c` 8afa2b5 passes `verify:items` again. 2b-17 (Act IV drills) is merged into `wave-2b` (d6ffe18). 2b-21 (the Daily on your engine) and 2c's CF1 (the compile bank as per-group lazy chunks) were still landing when this spec was written; both have since merged into their branches (`wave-2b` 4a36711, `wave-2c` 2ecd0df), and the Wave 2 integration commit (2b and 2c merged and green) does not exist yet. Wave 3 relies on CF1's direction for the compile bank (per-group lazy chunks, a generated manifest, no bank hashes or rustc messages in the client) and touches neither the bank nor the Error Museum. On a trial 2b + 2c merge, one test fails (`tests/kc/hands-on.test.ts:88`, a fixture that uses the now-registered `scheduler` play); the integrator or 3a-05b fixes it (§4.2). | §1 |
 | D3 | **Gates and engines land first, in 3a level 0, before any content they gate.** Every change to a verify script, an item pool, the ledger, the lesson or bundle types, the claims registry or the lab worker protocol is a 3a-L0 task; later tasks fill files. Two gate flips are declared and placed after everything they gate: 3b-06 makes /me's budget a gate when it rebuilds the page, and 3c-01 makes 15/15 hands-on and "no credit without a prediction" gates. Content tasks keep a margin: their own items stay within chance + 10 points (`verify:items -- --subset`), so the merged pool keeps the 15-point gate. In Wave 2 a gate upgraded in 2a failed 2c's items only on the merged tree. | §4, §19.1 |
 | D4 | **Ledger contract v3.3: `SCHEMA_VERSION` 5 → 6, `AGGREGATE_VERSION` 3 → 4, `IDB_VERSION` unchanged, no new event kind and no new ref grammar.** `prove` events gain a v2 shape and the first writer of provenance `proved`; items and predictions gain the sources `form` and `play`; plays gain a numeric metric and per-level results; Fleet Week acts gain receipts and a rubric; there are two new working keys, `fw:runs` and `profile:background`. | §3 |
-| D5 | **`proved` means: after an unseen-seed green, you predicted what your own module replies to a seeded list of calls, and it replied that.** The plan's "prediction of your own module on a seeded trace (`probe`)" uses verbs the bridges already answer: kv-block-manager, mpmc-queue, batching-scheduler and radix-cache (`drivers.ts:33–131` on 2b, `wasm-scheduler.ts`). So there is no crate, ABI or calibration change. `proved` goes live on four labs (02, 04, 06, 07); the exit asks for three. Labs 01, 05 and 08 answer only `probe`, and predicting lab 03's token counts by hand is not reasonable, so those four keep v1. The ledger already has a `probe` event kind (cold checks), so this spec says "verb calls", never "probe", for this mechanism. | §7 |
+| D5 | **`proved` means: after an unseen-seed green, you predicted what your own module replies to a seeded list of calls, and it replied that.** The plan's "prediction of your own module on a seeded trace (`probe`)" uses verbs the bridges already answer: kv-block-manager, mpmc-queue, batching-scheduler and radix-cache (`drivers.ts:33–131` on 2b, `wasm-scheduler.ts`). So there is no crate, ABI or calibration change. Where a lab's required checks pin a correct module's behaviour exactly (labs 04 and 07), an eligible module can only be correct, so its templates are tracing items about a correct module, answerable from your code and never from the story alone; where your design is free (lab 02's free-list order, lab 04's capacity rounding), the answer reads your own choice. `proved` goes live on four labs (02, 04, 06, 07); the exit asks for three. Labs 01, 05 and 08 answer only `probe`, and predicting lab 03's token counts by hand is not reasonable, so those four keep v1. The ledger already has a `probe` event kind (cold checks), so this spec says "verb calls", never "probe", for this mechanism. | §7 |
 | D6 | **W5's "two families" are `prefill` and `rollout`.** W5 names six generator kinds. Wave 2 built five of them in four families (`memory` merged FP4 capacity and parallelism memory, wave-2 D11), leaving the P:D ratio. `prefill` covers it, plus KV transfer, tiering and the prefix-cache timing oracle, which makes t6.l3 and t6.l10 hands-on; `rollout` makes t6.l7 hands-on. So 15/15 rests on families and the EPLB play, never on the Fleet exercises, which are the first cut after stretch (PLAN §8.1). | §5 |
 | D7 | **The base Fleet exercises are the load knee (t7.l2) and the P:D split (t6.l3).** The broken-benchmark detective and speculation push-your-luck move to stretch ("more W5 exercises", 12 h), beside two new ones for t6.l7 and t6.l10. The Fleet engine models neither speculation nor experts (flat tick, `fleet-model.ts` on 2b), and the plan's three exercises otherwise land on lessons that are already hands-on. Exercises record ordinary `item` events (`item:fleet.<id>`), as item blocks do. | §5.3, §16.3 |
 | D8 | **The EPLB play is 2D, turn-based and synthetic.** A seeded skewed load on a 16-expert layer and 4 GPUs of 5 slots: replicate 4 experts, then place 20 copies. The hidden ghost is DeepSeek EPLB's balanced packing. The score is the busiest GPU's load over the mean, because a step waits at the combine barrier for the busiest GPU (t6.l1, `moe-anatomy.ts:27`). There is no step-time physics; S5 is Wave 4. | §5.2 |
 | D9 | **W7 ships the 2D cube; Cube3D and the 3D evaluation are stretch item 1.** The plan makes 3D opt-in and puts its evaluation in stretch; shipping the 3D view without its evaluation would ship an untested seductive detail. three 0.185.1 and R3F 9.6.1 are already runtime dependencies (Home's ParticleField, a 242.4 KB gzip lazy chunk), so the stretch adds none. | §6, §16.1 |
-| D10 | **The cube's numbers come from one stated model, and two of the plan's figures change.** Nothing in the repo or the evidence derives "≈127 vs ≈950". 127.0 is one row's bound (T·N/(T+N) at N = 16,384), and ≈950 needs 128 × 256 tiles. With one tile shape (128 × 128, FP16) and one 132-CTA wave on a 16,384³ GEMM, raster order alone takes the wave's intensity from 130.0 (row-major) to 734.6 FLOP/B (grouped 11 × 12): 5.7×, still "several-fold". The FP8 ridge (≈590) rests today on a synthetic ×2 multiplier (`models/roofline.ts:55–60`); 3a-08 adds H100 FP8 as a claim, which gives 590.7. The cube also needs SM-count, L2, SMEM and register claims; today those are lesson literals (`gpu-memory.ts:85–87, 110`). | §6.1, §4.4 |
+| D10 | **The cube's numbers come from one stated model, and two of the plan's figures change.** Nothing in the repo or the evidence derives "≈127 vs ≈950". 127.0 is one row's bound (T·N/(T+N) at N = 16,384), and with one CTA per SM, ≈950 comes from 128 × 256 tiles (965.5). With one tile shape (128 × 128, FP16) and one 132-CTA wave on a 16,384³ GEMM (one CTA per SM, a persistent kernel), raster order alone takes the wave's intensity from 130.0 (row-major) to 734.6 FLOP/B (grouped 11 × 12): 5.7×, still "several-fold". The FP8 ridge (≈590) rests today on a ×2 multiplier over BF16 dense (`models/roofline.ts:55–60`, and the roofline family). The cube keeps that one rule, so the cube, the family and RooflineSim share one H100 FP8 ridge, 590.4; 3a-08 adds H100 FP8 (1,979 dense) as a claim, which confirms the ×2 within rounding. The cube also needs SM-count, L2, SMEM and register claims; today those are lesson literals (`gpu-memory.ts:85–87, 110`). | §6.1, §4.4 |
 | D11 | **W7 adds a third family, `tiling`, inside its own line.** W7's metric is "30-day fresh-item prediction error", which needs generated items. Levels 2–6 of the cube are that family's variants (level 1 reuses `roofline/tile-ai`), so the play and Today use one instrument. | §6.2 |
 | D12 | **W1's Code stage (deferred by wave-2 D6) lands as lab 06's race and bestiary.** After an unseen-seed green, lab 06 races the reference on a graded seed; this is RING 0's "within 3 points", deferred by wave-2 D14. It then shows where your goodput falls among 12 policies from the Compose dials. The real-engine finale is the existing /fleet panel, linked. The leaderboard's physics floors are cut: the leaderboard has 0 entries, and floors need calibrated physics. | §8.3 |
 | D13 | **Labs 04–08 get faded scaffolds:** six PRIMM items, hint ladders R0–R2 and then the packet, Prove-it v1, and v2 where the bridge allows. This is the plan's "scaffolds fade from lab 04". It fits 10 review hours for five labs, and it matches the hint-ladder pre-registration's default if underpowered (R0–R2). The ladder-or-packet experiment stays on labs 01–03. | §8.2 |
 | D14 | **A receipt is verified by re-running it and comparing at the precision written.** A receipt names a run record (act, job, entropy, module hashes, values; its id is 8 hex characters of the record's sha256). The page re-runs it, and the cited value must equal the re-run value rounded to the decimals cited. The engine is deterministic, so no tolerance is needed. The keyword lists, word counts and the screenshot go; the screenshot check only ever read the file's name and size. The rubric is self-review against three scored exemplars, recorded but never scored. | §10 |
 | D15 | **P3 is align → name the break → principle, on all 18 panels; the 23 T3–T7 pairs without a `breaks` line get one.** Work analogues need a learner background that nothing records today (Boot keeps only a free-text value prompt, `You.tsx:88`), so an optional background pick lands with them; they are third in the cut order. | §11 |
 | D16 | **K5's VRK₃₀ is made computable.** A KC counts when its latest credited, unassisted check at least 30 days after its card was created is right. "First learning" is the card's creation; "credited" is provenance `unseen` or `proved` (V6), so authored items (`practice`) never count. VRK₃₀ therefore covers generator KCs and lab KCs with `proved`, and /me says so. | §12.2 |
-| D17 | **Remaining P2 is Wave 1's 13 deferred tasks, t5.l5's 4 block-table tasks, and one registry.** 36 task ids live in inline arrays outside the registry; they move into tasks files. Every lesson exercise block then lists outcome tasks only, and the 79 legacy tasks left are exploration steps that earn nothing. Converting all of them is not a 4-hour line. | §13 |
+| D17 | **Remaining P2 is Wave 1's 13 deferred tasks, t5.l5's 4 block-table tasks, and one registry.** 36 task ids live in inline arrays outside the registry; they move into tasks files. Every `taskIds` entry of a lesson exercise block then resolves to an outcome task; link-card blocks (no `taskIds`, free-text `tasks`; 18 of the 28 lesson files with an exercise block on 2c, e.g. `t0/memory-hierarchy.ts`, `t2/scheduling.ts`; `exercise.tsx:5`) stay link cards that earn nothing, deferred like the 79 legacy tasks, which are exploration steps that earn nothing. Converting all of them is not a 4-hour line. | §13 |
 | D18 | **The watcher is built only on a signed `keep`.** `docs/prereg/watcher.md` is unsigned and no rating exists. The default is the plan's: the manual scan stays and the 10 hours return to the queue. arXiv feeds were never backtested, so they stay out. | §14 |
 | D19 | **Wave 3 adds no claim to the eager registry.** Its claims live in lazy groups that their consumers (families, plays, panels) import, so the 17 KB claims chunk on /boot and /today does not grow. Splitting the existing 168 claims by page stays deferred. | §4.4 |
 | D20 | **/me is gated at 200 KB once rebuilt.** /progress's static closure is about 615 KB gzip, because Progress.tsx imports all lesson content for one count (`Progress.tsx:47, 93`; that chunk is 394 KB). The Mirror imports no lesson content. | §2.2, §12.5 |
 | D21 | **Twins are data files, not a `labs.ts` field.** `labs.ts` is shared metadata; a twin carries items and a pinned claim, so it lives in `src/data/twins/<lab>.ts`, found by readdir. The plan's `labs.ts:21` pointer is stale (ForgeLab is at `labs.ts:26`). | §9 |
 | D22 | **The journey re-cut is a field gate.** The plan re-cuts §4.D's cadence table at every wave exit, which needs partners' minutes per surface. Wave 3 ships the selector and the report table; the owner re-cuts the table. | §15, §18.2 |
 | D23 | **Stretch keeps Wave 4's gates.** The On-Call *shift* is gated in Wave 4; the stretch "On-Call pilot" is a three-incident shift mode plus a think-aloud protocol that produces that gate's evidence. Season 0 is seven dated Daily seeds with a local record and no board, since Seasons stay gated. t6.l12 changes the 68-lesson count that four tests pin. | §16 |
-| D24 | **Carry-overs from the Wave 2 reviews go to the tasks that own the files.** ROOT's cold-check part can flip back after a merge (3a-01 reads the achievement instead). Alignment refs count from 0 in the app and from 1 in item-pools (3a-04). The PRIMM row prints a different comparison from its gate (3a-04). `selectPlacementLanding` misses same-day visits (3c-03). RooflineSim's SMEM curve assumes 4-byte elements (3a-18). | §3.4, §4.1, §13, §15 |
+| D24 | **One carry-over from the Wave 2 reviews remains, and goes to the task that owns the file:** RooflineSim's SMEM curve assumes 4-byte elements (3a-18). The others are already fixed in the base and only need their tests kept green: ROOT's cold-check part reads `ach:root-cold` (25e4b8a, `economy.ts:290–322` on 2c); the PRIMM row uses the gate's own comparison (25e4b8a, `overChance`, `verify-items.ts:877`); `selectPlacementLanding` reads the first lesson-ref event after the placement (25e4b8a, `outcomes.ts:725–748`); alignment refs are 1-based in both `AlignItem` and item-pools (2c fix 9111d08; `tests/lesson/align.test.ts` holds them equal). | §3.4, §4.1, §13, §15 |
 
 ## Owner questions
 
@@ -49,11 +49,11 @@ The owner has asked us to proceed on these defaults and record them; nothing wai
 | Q4 | W5's two families are `prefill` and `rollout`, and no exit gate depends on the Fleet exercises (D6, D7)? | Yes. |
 | Q5 | Does the EPLB play use synthetic seeded loads on a 16-expert toy layer, scored by max/mean imbalance, with no step-time physics (D8)? | Yes. |
 | Q6 | Do W7's level-4 figures become 130.0 vs 734.6 FLOP/B, one tile shape with raster order alone, instead of the plan's ≈127 vs ≈950 (D10)? | Yes. |
-| Q7 | Build the 3D cube (stretch) on the three and R3F already in `package.json` (D9)? | Yes, only after the 2D cube ships and the owner signs the 3D pre-registration. |
+| Q7 | Build the 3D cube (stretch) on the three and R3F already in `package.json` (D9)? | Yes, after the 2D cube ships. 3s-01 builds the scene dark; learners see it only through 3s-02's counterbalanced arms, and 3s-02 merges only after the owner signs the 3D pre-registration. The two are cut or kept together. |
 | Q8 | /me replaces /progress (a redirect) and is gated at 200 KB once rebuilt (D20)? | Yes. |
 | Q9 | K5 forms: opt-in; A before a track's first lesson, B after its spiral, C at least 30 days after B; measurement only (no card is rescheduled); only tracks with 12 generated items over at least 3 KCs (§12.6)? | Yes. |
 | Q10 | Receipts verify by equality at the cited precision with a re-run; the rubric is self-review only; the screenshot goes (D14)? | Yes. |
-| Q11 | Make {t2.address-translation, t5.block-tables, t5.prefix-cache-keys} a confusable set, so Today interleaves the paging, PagedAttention and radix discrimination that P3's metric measures? It would replace the t2.address-translation ↔ t2.pagedattention-as-paging pair that Wave 1 pins (§4.3). | No: the pair stays, and the metric reads the three KCs directly (§15.1). |
+| Q11 | Make {t2.address-translation, t5.block-tables, t5.prefix-cache-keys} a confusable set, so Today interleaves the paging, PagedAttention and radix discrimination that P3's metric measures? It would not replace Wave 1's t2.address-translation ↔ t2.pagedattention-as-paging pair (a KC may sit in several sets, and `graph.test.ts:54–65` checks only `toContain`), but t2.address-translation would reach the 3-entry cap, the four KCs would form one interleaving component on Today (`composer.ts:153–170`), and verify-kc's confusable-set count would change (§4.3). | No: no extra interleaving; the metric reads the three KCs directly (§15.1). |
 | Q12 | Build the watcher only if the pre-registration is signed, the backtest is independently rated and the report says `keep` (D18)? | The manual scan stays until all three hold. |
 | Q13 | Add an optional, local background pick (never donated) in Boot's last step and on /me, for P3's work analogues (D15)? | Yes. |
 | Q14 | Ship the lab 06 twin only if the pinned vLLM scheduler file supports three tracing questions (§9)? | Yes; lab 07's twin alone still meets the line. |
@@ -196,8 +196,9 @@ export interface IsomorphismBlock { type: 'isomorphism'; title?: string; pairs: 
 
 **Seams:**
 - **Renderers.** `ExerciseView` (`exercise.tsx`) narrows on `fleet` and renders a lazy `FleetExercise({block, lessonId, index})` stub. `IsomorphismView` (`blocks.tsx:117–148`) moves unchanged into `src/components/lesson/Isomorphism.tsx`, and the dispatcher (`blocks.tsx:432`) imports it from there; 3b-07 then fills it without touching `blocks.tsx`.
-- **The exporter** prints fleet blocks, pairs with their breaks (it omits breaks today, `export-lessons-md.ts:58–61`) and the principle, and break items without their keys, as it prints quizzes.
-- **`FLEET_EXERCISES`** is exported empty from `src/lib/world/fleet-ex/index.ts`. The hands-on test (3a-05) counts a fleet block whose exercise is listed there, so 3b-03 adds exercises without touching the test.
+- **The exporter** prints fleet blocks, pairs with their breaks (it omits breaks today, `export-lessons-md.ts:58–61`) and the principle, and break items without their keys, as it prints quizzes. Lessons without breaks export byte-identically; the ten T0–T2 lessons whose 29 pairs carry `breaks` gain their "where it breaks" lines, which is the only change in their markdown.
+- **Readers of exercise-only fields** narrow on the union: `Progress.tsx:97` reads `block.tasks` and narrows with `'tasks' in block` (3a-03), as does any other reader `tsc -b` flags.
+- **`FLEET_EXERCISES`** is exported empty from `src/lib/world/fleet-ex/index.ts`, with the `FleetExerciseDef`, `SweepPoint` and `SweepResult` types (§5.3). The hands-on test (3a-05b) counts a fleet block whose exercise is listed there, so 3b-03 adds exercises without touching the test.
 
 **Mounts:**
 - **ForgeLab** (3a-06): `TwinPanel({lab, done})`, `RaceReference({lab, bytes, report, credit})` and `ProveFromModule({lab, bundle, bytes, report, credit})` are lazy stubs that render nothing and export their final props types. ForgeLab already keeps the last run's bytes, report and credit for `InstallButton` (`ForgeLab.tsx:401`); it passes the same values. 3b-04, 3b-08 and 3b-09 then never edit `ForgeLab.tsx`.
@@ -208,7 +209,7 @@ export interface IsomorphismBlock { type: 'isomorphism'; title?: string; pairs: 
 
 ---
 
-## 3. Ledger contract v3.3 (task 3a-01)
+## 3. Ledger contract v3.3 (tasks 3a-01, 3a-01b)
 
 ### 3.1 Versions and the upgrade path
 
@@ -227,15 +228,21 @@ export interface IsomorphismBlock { type: 'isomorphism'; title?: string; pairs: 
 | `play:tiling-cube`, `play:eplb` | `play` | — | the plays (§5.2, §6.3) |
 | `gen:<family>/<variant>` | `item`, `predict` | `gen:tiling/raster-ai` | cube levels (src `play`), forms (src `form`), item blocks |
 | `item:fleet.<exerciseId>` | `item`, `predict` | `item:fleet.knee` | Fleet exercises (src `lesson`, §5.3) |
-| `item:<lessonId>.iso.<n>`, `item:<lessonId>.iso.<n>.break` | `item` | `item:t2.l2.iso.0.break` | P3 (§11.1) |
+| `item:<lessonId>.iso.<n>`, `item:<lessonId>.iso.<n>.break` | `item` | `item:t2.l2.iso.1.break` (n from 1, as align refs) | P3 (§11.1) |
 | `item:lab<NN>.twin.<n>` | `item` | `item:lab07.twin.1` | twins (§9) |
 | `fleet:engine` | `fleet-run` | — | lab 06's race (§8.3) |
 | `fw:engine`, `fw:fleet`, `fw:business` | `fleet-act` | — | Fleet Week with receipts (§10) |
+| `item:field.<lab>.<metric>`, `item:engine.measured-tps` | `item`, `predict` | `item:field.decode-kv.tps` | stretch: field labs and the real-engine run (§16.5, §16.10), src `practice`, provenance `field` |
+| `item:<lessonId>.protege.<n>.<step>` (step `find`, `tag` or `fix`), `item:cube.spatial.<n>` | `item` | `item:t4.l3.protege.1.find` | stretch: protégé blocks (src `lesson`, §16.9) and the spatial proxy (src `practice`, §16.1) |
 
 **Types** (`types.ts`):
 
 ```ts
-export type ItemSrc = /* today's 13 (types.ts:176–189) */ | 'form' | 'play'   // PREDICT_SRCS gains 'play'
+export type ItemSrc = /* today's 13 (types.ts:176–189) */ | 'form' | 'play'   // PREDICT_SRCS gains 'play' and 'practice'
+// ItemData (types.ts:193–237) gains, all optional:
+//   formId?: 'A' | 'B' | 'C'; formSlot?: number /* 0–11 */; formSet?: 0 | 1 | 2; track?: string   // form items (§12.6)
+//   return?: true                                                                                    // the 30-day return's v1 follow-up item (§7.5)
+// data.form stays TicketForm ('ticket' | 'spiral' | 'testout') and data.slot stays the Today or ticket position.
 export type Background = 'jvm' | 'backend' | 'sre' | 'ml' | 'student' | 'other'   // BACKGROUNDS in constants.ts
 
 export interface ProveDataV1 { v: 1; qids: string[]; self: number[]; kcs?: KcId[] }   // today's (types.ts:368–375)
@@ -256,7 +263,7 @@ export interface PlayLevel { id: string; ok: boolean; logErr?: number; view?: '2
 // its spec widens to PlacementSpecData | SchedSpecData | EplbSpecData
 export interface EplbSpecData { replicate: 'none' | 'per-copy' | 'total'; place: 'round-robin' | 'least-loaded' }
 
-export interface RunRecord {           // one Fleet Week run that receipts cite (§10.2)
+export interface RunRecord {           // one Fleet Week run that receipts cite (§10.2); Opus approves this shape before 3a-01 starts, and 3a-12 imports it
   id: string                           // 8 lowercase hex: sha256(stableStringify(record without id and at)), first 8
   act: 'engine' | 'fleet' | 'business'
   job: JsonObject                      // the SimJob, module bytes replaced by {slot, sha256}
@@ -272,8 +279,10 @@ export interface FleetActData {        // FleetActMeta.data for Acts I–III (ty
 ```
 
 **Codec** (`codec.ts`):
-- **Sources.** `ITEM_SRCS` (:53) gains `form` and `play`; `PREDICT_SRCS` (:54) gains `play`.
-- **Form items** (src `form`): `data.form` ∈ {A, B, C}, `data.track` a track id, `data.slot` an integer 0–11, `data.set` ∈ {0, 1, 2}.
+- **Sources.** `ITEM_SRCS` (:53) gains `form` and `play`; `PREDICT_SRCS` (:54) gains `play` and `practice` (the 3s-13 prediction).
+- **Form items** (src `form`): `data.formId` ∈ {A, B, C}, `data.track` a track id, `data.formSlot` an integer 0–11, `data.formSet` ∈ {0, 1, 2}. They never use `data.form` or `data.slot`, which ticket and Today readers already read (`cards.ts:375`, `fold.ts:165`, `outcomes.ts:396, 829`, `progress.ts:805`).
+- **The return flag.** `data.return` is absent or `true` on an item (the v1 follow-up of §7.5) as on ProveData v2.
+- **Stretch shapes, defined now so no stretch task edits the ledger:** field-lab and real-engine items and predictions (src `practice`, provenance `field`), protégé items (src `lesson`) and the spatial proxy (src `practice`), with the refs of the table above. All pass `REF_RULES` as `item:` refs today.
 - **`checkData('prove')`** (:175–178):
   - v1 is checked as today, and `v` is now checked too.
   - v2: `qid` is non-empty and ≤ 40 characters; `kcs` ≤ 6; `answer` and `actual` are finite numbers or arrays of ≤ 12 non-negative integers (`actual` may be null); `calls` is an integer 1–12; `return` is absent or `true`.
@@ -307,9 +316,9 @@ export interface FleetActData {        // FleetActMeta.data for Acts I–III (ty
 | `proved[labId]` | min `at` of an ok `prove` event with provenance `proved` |
 | `labFleetOk[labId]` | `true` when an ok `fleet-run` with provenance `unseen` and mode `engine` has exactly one component, from `labId` (ok = within 3 points of the reference, `fold.ts:77–78`) |
 
-- **RING 0** (`economy.ts:358–359`) adds `labFleetOk['batching-scheduler']`: the plan's "lab 06 within 3 points of the reference", deferred by wave-2 D14. Lab 06's race (§8.3) is its only writer. 3b-09 adds the checklist row (`ring-rows.ts:80–87`).
-- **ROOT's cold-check part** reads `achievements['ach:root-cold']` as well as the live count. `useRingEvidence` unlocks that achievement the first time the bar is met (`useRingEvidence.ts:38`), so a merge from another device that inserts earlier misses can no longer revoke ROOT (W8). The Wave 2a review found this.
-- **Prices** (`economy-table.ts:59–62`): `PLAY_MINUTES['tiling-cube'] = 25`, `PLAY_MINUTES.eplb = 15`. As in Wave 2, prices land before the plays register; the economy test requires every registered play to be priced with its `PlayDef.minutes`.
+- **RING 0** (`economy.ts:358–359`) adds `labFleetOk['batching-scheduler']`: the plan's "lab 06 within 3 points of the reference", deferred by wave-2 D14. Lab 06's race (§8.3) is its only writer. 3a-01b adds it and its checklist row (`ring-rows.ts:80–87`), which takes RING 0 from 2 rows to 3; the row-count pin (`tests/economy/rings.test.ts:595` on 2c) becomes `[3, 3, 3, 6]`.
+- **ROOT's cold-check part** is already safe: `selectColdChecks` reads the `ach:root-cold` achievement that `useRingEvidence` unlocks the first time the bar is met, so a merge that inserts earlier misses cannot revoke ROOT (25e4b8a; `economy.ts:290–322`, `useRingEvidence.ts:38–40` on 2c). Wave 3 keeps its tests green and builds no second mechanism.
+- **Prices** (3a-01b; `economy-table.ts:59–62`): `PLAY_MINUTES['tiling-cube'] = 25`, `PLAY_MINUTES.eplb = 15`. As in Wave 2, prices land before the plays register; the economy test requires every registered play to be priced with its `PlayDef.minutes`.
 
 ### 3.5 Working keys
 
@@ -320,14 +329,14 @@ export interface FleetActData {        // FleetActMeta.data for Acts I–III (ty
 
 Neither is ever donated: the redaction keeps no working record except the week plan's SLO (`redact.ts:155`).
 
-### 3.6 Tests (3a-01)
+### 3.6 Tests (3a-01; the RING 0 and ROOT lines are 3a-01b's)
 
-`tests/ledger/contract-v33.test.ts`, plus `OPS_TABLE` entries (`tests/ledger/gen.ts:173–676`). The entries are: prove v2 (weighted to include `proved`), a form item, a play-source item and prediction, a play with `metric` and `levels`, a fleet act with receipts and rubric, and the two working keys. The tests cover:
+`tests/ledger/contract-v33.test.ts`, plus `OPS_TABLE` entries (`tests/ledger/gen.ts:173–676`). The entries are: prove v2 (weighted to include `proved`), a form item, a v1 return item, a play-source item and prediction, a field item, a play with `metric` and `levels`, a fleet act with receipts and rubric, and the two working keys. The tests cover:
 - P6/P7 (order-insensitivity, optimistic agreement) and the export round trip, at 100 seeds × 40 ops.
 - Codec round trip of every new shape, and rejection of each malformed case:
   - `proved` on a v1 event, on a not-ok event, or without `wasmSha256`;
   - `calls` of 0 or 13;
-  - a form `slot` of 12;
+  - a form `formSlot` of 12, and a form item that sets `data.form` to `'A'`;
   - a level whose `ok` is not boolean;
   - a rubric score of 4;
   - a 9-hex receipt id;
@@ -338,8 +347,8 @@ Neither is ever donated: the redaction keeps no working record except the week p
 - The schema guard at 6 vs 5 goes read-only.
 - A Wave 2 fixture ledger derives identically on every v3 field.
 - `contract-v32.test.ts` relaxes its exact pins to "at least" (`:98–101, 134, 138, 144, 146`), as contract-v31 did for v3.2.
-- RING 0 with and without `labFleetOk`.
-- ROOT stays earned after an earlier miss merges in.
+- RING 0 with and without `labFleetOk`, and the RING 0 row count (3a-01b).
+- ROOT's existing "stays earned after an earlier miss merges in" tests stay green (3a-01b).
 
 ---
 
@@ -347,30 +356,33 @@ Neither is ever donated: the redaction keeps no working record except the week p
 
 ### 4.1 Item gates (3a-04)
 
-**Today** (HEAD) `verify-items` gates 290 lesson items (278 quiz plus 12 PRIMM), 6 Act IV items and 67 errata items, plus five own pools: prequestion 49, predictAt 16, spiral 42, align 7, primm 12. It exits 1 on the align and PRIMM pools; the 2c fix round repairs those items (D2). On `wave-2a` alone, lab 01's PRIMM items sit exactly at the 40 % adversary limit.
+**Today** (HEAD) `verify-items` gates 290 lesson items (278 quiz plus 12 PRIMM), 6 Act IV items and 67 errata items, plus five own pools: prequestion 49, predictAt 16, spiral 42, align 7, primm 12. It exits 1 on the align and PRIMM pools at HEAD; the 2c fix round's first level repairs those items, and `wave-2c` 8afa2b5 passes (D2). On `wave-2a` alone, lab 01's PRIMM items sit exactly at the 40 % adversary limit.
 
 Wave 3:
-- **The `iso` pool.** Every `IsomorphismBlock.breakItem`, with ref `item:<lessonId>.iso.<n>.break` (`n` counts the lesson's isomorphism blocks from 0) and the block's KCs (else the lesson's).
+- **The `iso` pool.** Every `IsomorphismBlock.breakItem`, with ref `item:<lessonId>.iso.<n>.break` (`n` counts the lesson's isomorphism blocks from 1, as align refs count) and the block's KCs (else the lesson's).
 - **The `twin` pool.** Every `src/data/twins/<lab>.ts` that exports `TWIN_ITEMS`, found by readdir (the `discoverPrimm` pattern, `item-pools.ts:116–126`).
 - **Both run every gate.** They join `checkPoolItems` (`verify-items.ts:807`) and `ALL_OWN_POOLS` (:817): structure, a why per option, the cue limits per pool (≤ chance + 15 points), odd-one-out, the longest-key ratchet (baseline entry 0) and the adversary (:1024).
 - **Labs 04–08's PRIMM items** join the existing `primm` pool through `discoverPrimm`; no gate change.
-- **The content margin: `bun run verify:items -- --subset <ref-prefix>`.** It runs every strategy and the adversary over the items whose ref starts with the prefix, prints their hit rates, and exits 1 above chance + 10 points.
-  - Each content task runs it on its own refs.
+- **The content margin: `bun run verify:items -- --subset <selector>`.** The selector is a comma-separated list of ref prefixes, or one `/regex/`. It matches the ref verify-items prints for each item: `<lessonId> q<n>` for lesson quizzes (`verify-items.ts:215`), `forge/<lab dir> <item id>` for PRIMM items (`:228`, e.g. `forge/kv-block-manager lab02.primm.p1`), and `item:…` for the align, iso and twin pools. It runs every strategy and the adversary over the selected items and prints n and their hit rates.
+  - It exits 1 when the selection is empty, so a mistyped selector never passes on zero items.
+  - At n ≥ 12 it exits 1 above chance + 10 points. Below 12 a hit rate moves 8 points or more per item, so it reports the rates without failing, and the merged-level run decides.
+  - Each content task runs it on its own refs: a lab's PRIMM items with `'forge/<lab dir> '`, a twin's with `item:lab07.twin.`, P3's T0–T2 break items with `'/^item:t[0-2]\.l[0-9]+\.iso\./'`.
   - For any single strategy, a pooled hit rate is a weighted mean of the parts' rates. Parallel content tasks that each keep within 10 points therefore cannot push the merged pool past the 15-point gate.
   - The adversary learns over the pool, so the integrator still runs `verify:items` on every merged level (§19.1).
-- **Alignment refs count from 0** in `item-pools.ts`, as `AlignItem` records them (`blocks.tsx:374–382`; `item-pools.ts:70–83` counts from 1). The fixture at `verify-items.test.ts:48` moves.
-- **The PRIMM row** prints with the gate's own comparison. Today it prints FAIL while the gate passes, because of rounding between two different comparisons (Wave 2a review).
+- **Alignment refs are 1-based in both `AlignItem` and item-pools** (2c fix 9111d08; `tests/lesson/align.test.ts` holds the lesson's ref equal to the pool's). 3a-04 keeps that test and `verify-items.test.ts:48` green.
+- **The PRIMM row** already prints with the gate's own comparison (`overChance`, 25e4b8a); nothing to do.
 - **Not touched:** `OWN_POOLS` (`item-cues.ts:242`; pinned by `mc-cues.test.ts:477`); the 68-lesson pins (`verify-items.test.ts:186`).
 
-### 4.2 Play, sim, determinism and mentor gates (3a-05)
+### 4.2 Play, sim, determinism and mentor gates (3a-05, 3a-05b)
 
-- **Practice bands by module.** On 2b, `practiceBandOf` (`verify-plays.ts:231–253`) knows only block placement and the scheduler; a new play fails with "add it to practiceBandOf". Bands move to `src/lib/world/bands/<playId>.ts`, each exporting `band(): {ok: boolean; detail: string}`, and are discovered by readdir. The two existing bands move unchanged. 3a-13 and 3a-14 then add the cube's and EPLB's bands without editing `verify-plays.ts`.
+- **Practice bands by module (3a-05).** On 2b, `practiceBandOf(id, root)` (`verify-plays.ts:231–253`) is async and knows only block placement and the scheduler; a new play fails with "add it to practiceBandOf". Bands move to `src/lib/world/bands/<playId>.ts`, each exporting `band(read: (repoPath: string) => Promise<string>): Promise<{ok: boolean; detail: string}>`, and are discovered by readdir. A band that needs trace files (the scheduler's two `public/traces/burstgpt-v2-busiest-*.json`) reads them through the injected loader; nothing under `src/lib/world/bands` imports `node:fs`. The two existing bands move unchanged: the scheduler's `ok` stays rules 1 and 4, with the five-rule result in `detail`. `practiceBandOf(id, root)` stays exported with its signature, delegates to the module and returns null for an unknown play (`tests/plays/scheduler.test.ts:420–423`). 3a-13 and 3a-14 then add the cube's and EPLB's bands without editing `verify-plays.ts`.
+- **Claim ids from the full registry (3a-05).** `verify-plays` builds `claimIds` from `src/data/claims/all.ts` (§4.4; today the eager `CLAIMS`, `verify-plays.ts:260, 268`), and the card-claim checks in `tests/plays/play.test.ts` and `tests/plays/scheduler.test.ts` do the same, so the cube's and EPLB's lazy card claims pass. The exact `PLAY_IDS` pins (`play.test.ts:84`, `scheduler.test.ts:114`) become "starts with `block-placement`, `scheduler`", so 3b-01 and 3b-02 register plays without editing them; the ties of `PLAYS`, `PLAY_REGISTRY` and `PLAY_PRODUCTION_ROWS` to `PLAY_IDS` stay.
 - **Mirrors.** `src/components/fleet-ex` joins the mirror scope; its charts are SVG with a `SimMirror` table, or a canvas with `aria-describedby` to one.
 - **Unchanged:** `GATE_3D = ['tiling-cube', 'device-mesh']` (`verify-plays.ts:107` on 2b) and the ≥ 3 production rows per play (:162).
-- **Hands-on.** `tests/kc/hands-on.test.ts` (definition at :46–56) counts a fleet block whose `fleet` id is in `FLEET_EXERCISES`. The gate stays at ≥ 10 (12 today); 3c-01 makes it all 15 by id.
-- **Sim registry.** `tests/sims/registry.test.ts:82` hard-codes the outcome prefixes `/^(roof|kv|alloc)\./` (2b adds `zoo`). It now accepts the prefixes the tasks files declare. A tasks file may also export `HOME: {simId, machine?}`, which the registry reads before `LEGACY_HOME` (`registry.ts:29–40`), so moving inline lists into files (§13) adds files without editing that table.
-- **Determinism.** `src/lib/world/**` and `src/lib/items/families/**` are already in scope (`verify-determinism.ts:152–161`); that covers tiling, EPLB, the Fleet exercises, the bestiary, radix, prefill and rollout. Added: `src/lib/learner/{provenance,vrk,competence,cold-checks,forms,iso}.ts` and `src/lib/forge/prove2.ts`.
-- **Mentor.** `lint-mentor` requires R0–R4 for every required check (`lint-mentor.ts:50`). A bundle with `fade: 'r2'` needs R0–R2, and may omit R3 and R4. Every other rule stands.
+- **Hands-on (3a-05b).** `tests/kc/hands-on.test.ts` (definition at :46–56) counts a fleet block whose `fleet` id is in `FLEET_EXERCISES`. The gate stays at ≥ 10 (12 today); 3c-01 makes it all 15 by id. Its "a pending play and an unregistered task do not count" fixture uses `scheduler`, which 2b registers, so it fails at :88 on a 2b + 2c merge; it switches to an unregistered id (`no-such-play`).
+- **Sim registry (3a-05b).** `tests/sims/registry.test.ts:82` hard-codes the outcome prefixes `/^(roof|kv|alloc)\./` (2b adds `zoo`). It now accepts the prefixes the tasks files declare. A tasks file may also export `HOME: {simId, machine?}`, which the registry reads before `LEGACY_HOME` (`registry.ts:29–40`), so moving inline lists into files (§13) adds files without editing that table.
+- **Determinism (3a-05b).** `src/lib/world/**` and `src/lib/items/families/**` are already in scope (`verify-determinism.ts:152–161`); that covers tiling, EPLB, the Fleet exercises, the bestiary, radix, prefill and rollout. Added: `src/lib/learner/{provenance,vrk,competence,cold-checks,forms,iso}.ts` and `src/lib/forge/prove2.ts`.
+- **Mentor (3a-05b).** `lint-mentor` requires R0–R4 for every required check (`lint-mentor.ts:50`). A bundle with `fade: 'r2'` needs R0–R2, and may omit R3 and R4. Every other rule stands.
 
 ### 4.3 The KC contract (3a-09)
 
@@ -385,8 +397,9 @@ Wave 3:
 | `rollout` | `t6.rollout-bound-rl`, `t6.weight-sync` |
 
 - `PENDING_FAMILIES` (`verify-kc.ts:48`) gains `tiling`, `prefill` and `rollout`.
-- **No confusable change (Q11).** P3's metric is discrimination between paging, PagedAttention's block tables and the radix cache. Its selector reads `t2.address-translation`, `t5.block-tables` and `t5.prefix-cache-keys` directly (§15.1). Making them a confusable set would make Today interleave them (`composer.ts` interleaves only inside confusable sets). But it would also replace the `t2.address-translation` ↔ `t2.pagedattention-as-paging` pair that Wave 1's contract pins (wave-1 §4.9; `graph.test.ts:54–65`), so it waits for the owner.
-- **Labs 04–08's check KCs** (§8.1) are tagged by 3a-10, which follows 3a-09 in level 0 and edits the same KC files.
+- **No confusable change (Q11).** P3's metric is discrimination between paging, PagedAttention's block tables and the radix cache. Its selector reads `t2.address-translation`, `t5.block-tables` and `t5.prefix-cache-keys` directly (§15.1). Making them a confusable set would make Today interleave them (`composer.ts` interleaves only inside confusable components, :153–170). It would not replace the `t2.address-translation` ↔ `t2.pagedattention-as-paging` pair that Wave 1 pins (a KC may sit in several sets; `graph.test.ts:54–65` checks only `toContain`), but t2.address-translation would reach the 3-entry cap (`verify-kc.ts:180–185`), the four KCs would become one interleaving component, and verify-kc's set count would change. The owner keeps "no" unless extra interleaving is wanted.
+- **verify-kc reads the full claims registry** (`src/data/claims/all.ts`, §4.4) for its known-claims set (3a-09, after 3a-07).
+- **Labs 04–08's check KCs** (§8.1) are tagged by 3a-10, which follows 3a-09 in level 0 and edits the same KC files and `tests/kc/graph.test.ts`, whose `labs` and `requires` pins of the newly tagged KCs (:195–212 on 2c) move with the tags.
 
 ### 4.4 Claims (3a-07, 3a-08)
 
@@ -395,6 +408,7 @@ Wave 3:
 - `getClaim` on an unknown id throws with the name of the lazy group that holds it, which `all.ts` knows.
 - New groups live under `src/data/claims/lazy/`. Each consumer (a family, a play, a panel) imports its group, which registers on import.
 - `src/data/claims/all.ts` imports the registry and every lazy group. `verify-claims`, `public/claims.json`, the /freshness claims table (`ClaimsTable.tsx`) and the search index read it.
+- **Every gate that checks claim ids reads `all.ts`:** `verify-claims` and `verify-search-index` (3a-07; `verify-search-index.ts:12` imports the eager `byId` today, and would reject a lazy claim's index row), `verify-plays` and the plays tests (3a-05), and `verify-kc` (3a-09). 3a-05 and 3a-09 follow 3a-07 inside level 0. `src/data/plays.ts` never imports a lazy group: Up Next loads it on /today (`up-next.ts:42`), and a lazy group there would load on /today at runtime.
 - A static-import walk proves `Boot.tsx` and `Today.tsx` never reach `src/data/claims/lazy/` (the `tests/boot/imports.test.ts` pattern).
 - The split of the existing 168 claims stays deferred.
 
@@ -413,7 +427,7 @@ Wave 3:
 | | `production.eplb.rebalance` | status, pinned | DeepSeek EPLB's `rebalance_experts` and its replication rule (`deepseek-ai/EPLB` at a sha) | EPLB card |
 | | `production.vllm.eplb`, `production.sglang.eplb` | status, pinned | the EPLB flag and the redundant-expert setting at the current releases | EPLB card |
 | `lazy/serving3.ts` | `production.vllm.disagg`, `production.sglang.disagg` | status, pinned | the prefill/decode disaggregation flags | P:D split rows (§5.3) |
-| | `bench.checkpoint-engine.sync` | benchmark | "1T in about 20 s" (serving-landscape.md:148), only if quotable | a `rollout` pin |
+| | `bench.checkpoint-engine.sync` | benchmark | "1T in about 20 s" (serving-landscape.md:149), only if quotable | a cited comparison line in `sync-seconds`' solution, never a pin (the evidence gives no bytes, shard count or link bandwidth) |
 | `lazy/twins.ts` | `twin.sglang.treecore` | status, pinned, ttlDays 60 | Rust TreeCore, SGLang's default since 2026-09-29 (PR #39627; serving-landscape.md:116) | lab 07's twin |
 | | `twin.vllm.scheduler` | status, pinned, ttlDays 60 | vLLM v1's scheduler at the current release | lab 06's twin |
 
@@ -455,14 +469,14 @@ Both families are numeric only: no choice variant, so no cue gate applies (D6). 
 | `rollout-share` | rollout takes a share f of an RL step; rollout throughput rises s×: the step's speedup 1 ÷ ((1 − f) + f/s) | numeric (×) | `t6.rollout-bound-rl` |
 | `long-tail` | a synchronous group of k samples whose output lengths are listed (a `table` prompt part), decoded at one rate: the share of sequence slots idle while the longest finishes, 1 − mean ÷ max | numeric (%) | `t6.rollout-bound-rl` |
 | `group-tokens` | prompts × samples per prompt × mean output tokens: tokens one step generates | numeric | `t6.rollout-bound-rl` |
-| `sync-seconds` | each rollout worker pulls only its TP × EP slice of the new weights (`sharded_rdt`, serving-landscape.md:148): params × bytes ÷ (TP·EP) ÷ link bandwidth | numeric (s) | `t6.weight-sync` |
+| `sync-seconds` | each rollout worker pulls only its slice of the new weights (`sharded_rdt`, serving-landscape.md:149). The weights are split over S ranks (one seeded shard count, labelled synthetic): params × bytes ÷ S ÷ link bandwidth. A harder variant splits dense and expert parameters: a rank holds dense ÷ TP + experts ÷ EP, with EP stated as reusing the TP × DP ranks (as in vLLM and SGLang), never TP·EP as a product | numeric (s) | `t6.weight-sync` |
 
 - **Diagnoses:**
   - `rollout.linear` (speedup s, ignoring the training share);
   - `rollout.mean-not-max`;
-  - `rollout.unsliced` (×TP·EP);
+  - `rollout.unsliced` (×S: forgot to slice);
   - `rollout.bits-bytes`.
-- **Scenario numbers.** The lesson's "70–90 % of wall-clock" (t6.l7) is a `SYNTHETIC` range. A `sync-seconds` pin uses `bench.checkpoint-engine.sync` if 3a-08 can quote it.
+- **Scenario numbers.** The lesson's "70–90 % of wall-clock" (t6.l7) is a `SYNTHETIC` range. `bench.checkpoint-engine.sync` ("1T in about 20 s") appears only as a cited comparison line in `sync-seconds`' solution, never as a pin: the evidence states no bytes, shard count or link bandwidth.
 
 ### 5.2 The EPLB play (3a-14 world, 3b-02 UI)
 
@@ -479,14 +493,14 @@ Both families are numeric only: no choice variant, so no cue gate applies (D6). 
   - 4 replicate turns: pick an expert to copy. Its load splits evenly over its copies.
   - Then 20 place turns: copies are offered heaviest first, by load per copy, and you choose a GPU with a free slot.
   - After 5 turns, "skip to debrief" lets the ghost finish (`SKIP_AFTER_TURNS`).
-- **The outcome.** A GPU's load is the sum of its copies' loads. Imbalance = max load ÷ mean load (the mean is 250 ‰). Lower is better: every step waits for the busiest GPU at the combine barrier.
+- **The outcome.** A GPU's load is the sum of its copies' loads. Imbalance = max load ÷ mean load (the mean is 250 ‰). Lower is better: the layer's expert phase waits for the busiest GPU at the combine barrier.
 - **The ghost** is DeepSeek EPLB's balanced packing, played up front and hidden until the debrief (`production.eplb.rebalance`). Replicate: add a copy to the expert with the highest load per copy, repeatedly. Place: put each copy, heaviest first, on the least-loaded GPU that has a free slot (ties go to the lower index).
 - **The debrief** (`eplbDivergence`) walks back to the first divergence from which handing the rest to the ghost would have met its imbalance, with one sentence per kind:
   - replicate: "At turn 2 you copied expert #9 (60 ‰ per copy). The reference copies #3: 140 ‰ per copy is the heaviest."
-  - place: "At turn 7 you put #3's copy (70 ‰) on GPU 2, already at 260 ‰. The reference puts it on GPU 4, the least loaded with a free slot (190 ‰)."
-  - outcome: "Your busiest GPU carries 1.38× the mean, so every step of this layer waits 38 % longer than a balanced one."
+  - place: "At turn 15 you put #3's copy (70 ‰) on GPU 2, already at 260 ‰. The reference puts it on GPU 4, the least loaded with a free slot (190 ‰)." (Turns 1–4 replicate, so a place sentence that names four loaded GPUs comes from a late place turn.)
+  - outcome: "Your busiest GPU carries 1.38× the mean, so this layer's expert phase waits 38 % longer than a balanced one."
 
-  The Opus check (3a-14) approves the sentences on 50 banded seeds.
+  These are templates. 3a-14's tests generate each sentence from the world on banded seeds, never copying these examples: the "least loaded with a free slot" GPU is the one the ghost picks in that state. The Opus check (3a-14) approves the sentences on 50 banded seeds.
 - **Compose** (`eplb-policy.ts`): `{replicate: 'none' | 'per-copy' | 'total', place: 'round-robin' | 'least-loaded'}`. `compileEplbPolicy({per-copy, least-loaded})` equals the ghost at every turn on the practice load and on 1,000 banded loads (test). The Compose table runs a spec on the practice load and 5 fresh loads.
 
 **The loop** (3b-02):
@@ -526,22 +540,31 @@ export interface FleetExerciseDef {
   kcs: KcId[]
   unit: string                      // what the learner predicts
   points: readonly number[]         // the sweep, e.g. load multipliers or prefill-worker counts
+  sweep(seed: number): SweepResult  // pure and deterministic: runs the Fleet engine classes (fleet-model.ts) at each point,
+                                    // or a stated model for an exercise the engine cannot express (labelled so)
   truth(results: SweepResult): number     // the right answer for this seed's run
   band(results: SweepResult): boolean     // the seed is a fair question
   productionClaims: string[]        // rows of the In-production card
   phone: { canonical: SweepResult } // phone mode's outcome
 }
-export interface SweepResult { points: { x: number; goodput: number; ttftP95: number; tpotP95?: number }[] }
+export interface SweepPoint {
+  x: number
+  goodputRps: number                // SLO-met requests ÷ the trace's arrival window in seconds (50 ms per tick); never Engine.goodput()'s percentage
+  ttftP95: number
+  tpotP95?: number
+  metrics?: Record<string, number>  // anything else an exercise reads (e.g. speedup, idle share, hit rate)
+}
+export interface SweepResult { points: SweepPoint[] }
 export const FLEET_EXERCISES: Readonly<Record<string, FleetExerciseDef>>
 ```
 
 | Exercise | Lesson | KCs | The sweep (fleet worker, flat tick, labelled v1) | You predict |
 |---|---|---|---|---|
-| `knee` | t7.l2 | `t7.goodput-curve`, `t7.benchmark-hygiene` | a seeded BurstGPT-shaped trace at load × {0.5, 0.75, 1, 1.25, 1.5, 2} on one `Engine`: goodput (requests within the SLO per second) and TTFT p95 per point | the load multiplier where goodput peaks (in band: an interior peak, ≥ 10 % above both ends) |
-| `pd-split` | t6.l3 | `t6.epd-phases` | 8 workers split p : 8 − p for p = 1 … 7 on one `EpdCluster`, long prompts, interference on: goodput, TTFT p95, TPOT p95 | the number of prefill workers with the highest goodput (in band: an interior optimum) |
+| `knee` | t7.l2 | `t7.goodput-curve`, `t7.benchmark-hygiene` | a seeded BurstGPT-shaped trace at load × {0.5, 0.75, 1, 1.25, 1.5, 2} on one `Engine`: `goodputRps` (requests within the SLO per second of the trace's arrival window) and TTFT p95 per point | the load multiplier where goodput peaks (in band: an interior peak, ≥ 10 % above both ends) |
+| `pd-split` | t6.l3 | `t6.epd-phases` | 8 workers split p : 8 − p for p = 1 … 7 on one `EpdCluster`, long prompts, interference on: `goodputRps` (the same rate), TTFT p95, TPOT p95 | the number of prefill workers with the highest goodput (in band: an interior optimum) |
 
 - **Engine (3b-03).**
-  - A fleet-worker job `{kind: 'exercise', id, seed}` returns the sweep within the 10 s job budget (`fleet-protocol.ts:27`).
+  - A fleet-worker job `{kind: 'exercise', id, seed}` calls `FLEET_EXERCISES[id].sweep(seed)` and returns the result within the 10 s job budget (`fleet-protocol.ts:27`). It dispatches by id only, so a later exercise (§16.3) adds a fleet-ex module and never edits `fleet-protocol.ts`, `fleet-host.ts` or `fleet-session.ts`.
   - `EpdOpen` and `openEpd` take `{prefill, decode}` worker counts. 1 + 1 stays the default, so existing EPD runs are byte-identical (test).
   - `EpdCluster`'s aggregate gains TPOT p95, which only the exercise job reports. The EPD session's result keeps its shape (`tests/fleet/session.test.ts` on 2b pins it).
 - **Panel (3b-20).**
@@ -577,19 +600,19 @@ export const FLEET_EXERCISES: Readonly<Record<string, FleetExerciseDef>>
 
 ### 6.1 The model and its numbers (3a-13; `src/lib/world/tiling.ts`)
 
-Pure, products and sums only. Inputs come from the §4.4 claims: H100 SXM HBM 3.35 TB/s and BF16 dense 989 TFLOPS (exist), plus SMEM, SM count, L2, registers and FP8 (new). b is bytes per element.
+Pure, products and sums only. Inputs come from the §4.4 claims: H100 SXM HBM 3.35 TB/s and BF16 dense 989 TFLOPS (exist), plus SMEM, SM count, L2, registers and FP8 (new). b is bytes per element. The FP8 rate is 2 × BF16 dense, the rule RooflineSim and the roofline family already use, so the app has one FP8 ridge; the FP8 claim (1,979 dense) is shown beside it and a test holds it within 1 TFLOPS of 2 × 989.
 
 | Level | The question | Formula | Pin (H100 SXM) | KC |
 |---|---|---|---|---|
 | 1 Count the cube | a Tm × Tn output tile streams K in slabs of k: FLOP per byte from HBM | AI = 2·Tm·Tn ÷ ((Tm + Tn)·b); C stays in registers and is written once (`roofline.ts:13–17`) | 128 × 128 FP16: **64** (T/2) | `t4.tiling-intensity` (`roofline/tile-ai`) |
-| 2 SMEM budget | the largest square tile (a multiple of 32) whose A and B slabs fit SMEM per block | smem = stages·(Tm + Tn)·k·b ≤ 227 KiB | k = 64, 2 stages, FP16: **448** (AI 224, still below the ridge, 295.2) | `t4.shared-memory-scratchpad` |
+| 2 SMEM budget | the largest square tile (a multiple of 32) whose A and B slabs fit SMEM per block, counting SMEM only | smem = stages·(Tm + Tn)·k·b ≤ 227 KiB | k = 64, 2 stages, FP16: **448** (AI 224, still below the ridge, 295.2). SMEM allows it, but its FP32 accumulators need 448²·4 B = 784 KiB of registers against 256 KiB, so it cannot run: level 3 shows the real cap (256 for one CTA, 128 for three) | `t4.shared-memory-scratchpad` |
 | 3 Occupancy | CTAs resident per SM | min(⌊228 KiB ÷ smem⌋, ⌊256 KiB ÷ (Tm·Tn·4)⌋): SMEM, and FP32 accumulators in registers | T = 128: **3** (SMEM-bound; registers allow 4); T = 64: 7; T = 256: 1 | `t4.occupancy` |
-| 4 Raster order and L2 | the FLOP per HBM byte of one wave of 132 CTAs, one per SM, on a 16,384³ GEMM, when tiles in a wave share A and B slabs through L2 | AI_wave = 132·2·Tm·Tn ÷ ((rows·Tm + cols·Tn)·b), with rows × cols the distinct tile rows and columns the wave touches; valid when stages × (rows + cols) slabs fit L2; nothing survives between waves (A and B are 512 MiB each, ≫ 50 MB) | 128 × 128 FP16: row-major (2 rows × 128 columns) **130.0**; grouped 11 × 12 **734.6**; 5.7× from raster order alone | `t4.raster-l2-reuse` |
-| 5 FP8 | the ridge at FP8, and the tile that reaches it | ridge = FP8 dense ÷ HBM bandwidth; at b = 1 a square tile's AI is T | **590.7** FLOP/B; the same T = 590 reaches it at FP8 as at FP16, because FP8 doubles the roof and halves the bytes | `t4.ridge-point` |
+| 4 Raster order and L2 | the FLOP per HBM byte of one wave of 132 CTAs, one per SM (a persistent kernel, as deep-pipelined Hopper GEMMs run; level 3's 3 CTAs per SM would make a 396-CTA wave), on a 16,384³ GEMM, when tiles in a wave share A and B slabs through L2 | AI_wave = 132·2·Tm·Tn ÷ ((rows·Tm + cols·Tn)·b), with rows × cols the distinct tile rows and columns the wave touches; valid when stages × (rows + cols) slabs fit L2; nothing survives between waves (A and B are 512 MiB each, ≫ 50 MB) | 128 × 128 FP16: row-major (2 rows × 128 columns) **130.0**; grouped 11 × 12 **734.6**; 5.7× from raster order alone | `t4.raster-l2-reuse` |
+| 5 FP8 | the ridge at FP8, and the tile size that would reach it | ridge = FP8 rate (2 × BF16 dense) ÷ HBM bandwidth; at b = 1 a square tile's AI is T | **590.4** FLOP/B (1,978 ÷ 3.35). A lone tile would need T ≥ 591 at FP8 as at FP16 (FP8 doubles the roof and halves the bytes), far past the register cap of level 3, so no single CTA tile reaches either ridge on H100; reaching it needs reuse across CTAs through L2 (level 4). The `fp8-ridge` variant's "tile that reaches it" answer is arithmetic only and says so | `t4.ridge-point` |
 | 6 FlashAttention | one query block of Br rows streams K and V once: FLOP per HBM byte, and the score matrix it never writes | AI = 4·Br·N·d ÷ (b·2·d·(N + Br)); S = N²·b bytes | N = 32,768, d = 128, Br = 128, FP16: **127.5** FLOP/B; S = **2 GiB** per head | `t4.flashattention-blocking` |
 
-- **Simplifications** are stated in the play: no bank conflicts, the 1 KiB per-CTA SMEM reserve ignored, no register-allocation granularity, waves aligned to grid rows. The evidence asks for this (games-3d.md:277: "label the simplifications in a callout").
-- **The Opus check (3a-13)** approves each formula and pin before 3b-01 builds the UI. It may fix level 6's accounting (whether softmax passes count) and record the resulting pins. The single-row bound 127.0 (T·N/(T+N)) and the 128 × 256 grouped figure (965.5) are printed beside the level-4 pins, so the plan's two figures can be traced to this model.
+- **Simplifications** are stated in the play: no bank conflicts, the 1 KiB per-CTA SMEM reserve ignored, no register-allocation granularity, waves aligned to grid rows, and level 4's one CTA per SM (a persistent kernel). The evidence asks for this (games-3d.md:277: "label the simplifications in a callout").
+- **The Opus check (3a-13)** approves each formula and pin before 3b-01 builds the UI. It may fix level 6's accounting (whether softmax passes count) and record the resulting pins. The single-row bound 127.0 (T·N/(T+N)) and the 128 × 256 grouped figure (965.5, one CTA per SM) are printed beside the level-4 pins, so the plan's two figures can be traced to this model. A test holds that every tile a debrief names as a reference choice has `ctasPerSm ≥ 1`, or that the debrief names the register cap.
 
 ### 6.2 The `tiling` family (3a-13)
 
@@ -598,7 +621,7 @@ Pure, products and sums only. Inputs come from the §4.4 claims: H100 SXM HBM 3.
 | `smem-fit` | the largest square tile that fits a seeded SMEM budget, slab depth, stage count and dtype | numeric | `t4.shared-memory-scratchpad` |
 | `ctas-per-sm` | resident CTAs per SM for a seeded tile, slab depth and stage count | numeric | `t4.occupancy` |
 | `raster-ai` | a wave's FLOP per HBM byte under row-major or grouped raster (group height, tile shape and GEMM size seeded) | numeric | `t4.raster-l2-reuse` |
-| `fp8-ridge` | the FP8 ridge, or the tile size that reaches it | numeric | `t4.ridge-point` |
+| `fp8-ridge` | the FP8 ridge, or the square-tile size whose AI reaches it (arithmetic only: such a tile exceeds the register file, and the solution says so) | numeric | `t4.ridge-point` |
 | `qblock-ai` | a FlashAttention query block's FLOP per HBM byte, or the bytes of the score matrix it never writes | numeric | `t4.flashattention-blocking` |
 
 - **Diagnoses:**
@@ -621,7 +644,7 @@ Pure, products and sums only. Inputs come from the §4.4 claims: H100 SXM HBM 3.
    - **Three linked face views** (`Mirror2D.tsx`): A's Tm × k slab, B's k × Tn slab, and C's Tm × Tn tile, as SVG grids with the current tile lit. Level 4 adds a wave map: the output grid with one wave's 132 tiles lit, and the distinct A rows and B columns counted.
    - **A DOM table** (`Mirror.tsx`) shows FLOPs, bytes, AI, SMEM, CTAs per SM and the ridge, and announces changes at most once a second.
 3. **Check.** The item is graded, and its error is shown.
-4. **Debrief.** The level's reference choice from the model (the largest tile that fits, the occupancy trade-off, grouped raster, FP8's unchanged tile, the query block) and one line of principle, with claim chips.
+4. **Debrief.** The level's reference choice from the model (the largest tile SMEM allows and why the register file forbids it, the occupancy trade-off, grouped raster, why no lone tile reaches the FP8 ridge, the query block) and one line of principle, with claim chips.
 
 **The closing debrief** lists the six errors and the six principles: "intensity is volume ÷ lit surface; raster order alone moved this wave 5.7×".
 
@@ -638,7 +661,7 @@ Pure, products and sums only. Inputs come from the §4.4 claims: H100 SXM HBM 3.
 |---|---|
 | intrinsic | choosing a tile, a raster and a precision *is* blocking for intensity |
 | ≥ 3 axes | Tm, Tn and k (and raster, stages, dtype) |
-| model-backed | §6.1's model on spec claims, the same numbers as the `tiling` family and RooflineSim (3a-18) |
+| model-backed | §6.1's model on spec claims, the same numbers as the `tiling` family and RooflineSim (3a-18), with one FP8 ridge (590.4) |
 | recurs in ≥ 3 sessions | the family's items on its five KCs in Today; forms (§12.6) |
 | schematic | slabs and tiles, not hardware |
 | low load | one level at a time, steppers, a DOM table first, reduced motion, no timer |
@@ -662,7 +685,7 @@ The plan: "v2 grades your prediction of your own module on a seeded trace and ea
 ### 7.1 Verb calls in the lab worker (3a-11)
 
 - **The request.** `LabRunMode` (`lab-protocol.ts:6–10`) gains `'calls'`: `{id, mode: 'calls', bytes, calls: string[]}` → `{type: 'replies', id, replies: string[]}`, or `failed`.
-- **The run.** The worker instantiates the module once and sends each line through `ks_invoke` in order. That is the existing `invoke(cmd)` path (`wasm-lab.ts:226–242`); the bridge keeps its state between lines, as the Fleet drivers rely on.
+- **The run.** The worker instantiates the module once and sends each entry of `calls` through `ks_invoke` in order. An entry may contain newlines: a batching-scheduler `schedule` call is one multi-line entry (a header, then W and R lines; `lib.rs:1011`), never split. That is the existing `invoke(cmd)` path (`wasm-lab.ts:226–242`); the bridge keeps its state between lines, as the Fleet drivers rely on.
 - **Limits.**
   - One 2 s budget covers the whole list (`LAB_TIMEOUT_MS`, `lab-worker.ts:21`); expiry raises `LabTimeoutError` and the worker is discarded.
   - A trap ends the list as a failed call.
@@ -690,20 +713,22 @@ A seeded trace is at most 12 calls. `story` tells it in words ("Allocate sequenc
 | 02 kv-block-manager | `free-after` | `init 32 16`, then ≤ 10 of `allocate`, `append`, `fork`, `free` | `free_blocks` | freeing a shared block at the first owner's free |
 | | `translate` | `init`, `allocate s 40`, `fork`, `append` | the physical block of token t (`translate`) | the free-list order your code chose (FIFO or LIFO) |
 | | `shared-after-append` | `init`, `allocate`, `fork`, `append` to the child | shared blocks (from `dump`) | copying on fork instead of on append |
-| 04 mpmc-queue | `last-pop` | `init c`, then ≤ 11 `push`/`pop` | the last `pop`'s reply | LIFO order |
-| | `full-count` | `init c`, `push` × n with pops between | how many pushes replied `full` | capacity off by one |
-| | `after-wrap` | `init 4`, six push/pop pairs | the value popped after the index wraps | the wraparound index |
+| 04 mpmc-queue | `last-pop` | `init c`, then ≤ 11 `push`/`pop` | the last `pop`'s reply | tracing a correct module (the checks pin FIFO) |
+| | `full-count` | `init c` with c not a power of two, `push` × n with pops between | how many pushes replied `full` | your capacity rounding (`queue.rs:38–39` lets `new()` round up or not; the checks use only powers of two) |
+| | `after-wrap` | `init 4`, six push/pop pairs | the value popped after the index wraps | tracing a correct module (the checks pin wraparound) |
 | 06 batching-scheduler | `admit-order` | `init`, one `schedule` view (≤ 6 waiting, ≤ 4 running) | the admit list, in order | arrival order vs shortest first |
-| | `admit-count` | `init`, a view with little free memory | how many are admitted | no headroom |
-| | `preempt` | `init`, a view under memory pressure | the preempt list | preempting the oldest vs the newest |
-| 07 radix-cache | `match-len` | `reset`, `insert` × 3, `match` | the match length | exact match only |
-| | `match-after-split` | `reset`, `insert`, a diverging `insert`, `match` | the match length | not splitting a node |
-| | `match-cold` | `reset`, `insert`, `match` with no shared first token | the match length | returning a partial edge |
+| | `admit-count` | `init`, a view whose running requests' tokens leave little of `mem_cap` free | how many are admitted | no headroom |
+| | `preempt` | `init`, a view whose running requests' tokens put `mem_cap` under pressure | the preempt list | preempting the oldest vs the newest |
+| 07 radix-cache | `match-len` | `reset`, `insert` × 3, `match` | the match length | tracing a correct module (the checks pin exact and longest-prefix matching) |
+| | `match-after-split` | `reset`, `insert`, a diverging `insert`, `match` | the match length | tracing a correct module (a node split) |
 
 - **Verbs.** They come from the bridges: kv-block-manager (`lib.rs:624, 639`), mpmc-queue (`lib.rs:327, 341–370`), batching-scheduler (`schedule`, `lib.rs:1002, 1035`; its view format is `wasm-scheduler.ts`), radix-cache (`lib.rs:599–614`).
+- **The scheduler bridge ignores the header's `mem_used`** (`lib.rs:1047`, "reserved") and works free memory out from `mem_cap` minus the running requests' tokens, so `admit-count` and `preempt` build pressure from `mem_cap` and the running views' tokens, never from `mem_used`.
+- **Lab 07 has two templates.** `match-cold` (no shared first token) is dropped: every eligible module replies 0, so the story alone answers it. Eviction cannot be reached in 12 calls (the bridge's cache holds 256 entries, `lib.rs:582`).
+- **What a template measures.** Credit `unseen` (§7.3, condition 2) means every required check passed, and labs 04 and 07's checks pin the behaviour exactly (FIFO, backpressure at capacity 4, 1,000 wraps and a 3,000-op model gauntlet; exact and longest-prefix matching). An eligible module there can only be correct, so those templates are tracing items about a correct module, except where the checks leave a choice free (lab 04's capacity rounding). Lab 02's `translate` reads a free design choice (FIFO or LIFO free list).
 - **Labs without v2.** Lab 03's `count` verb exists, but predicting your tokenizer's count needs its merge table, so lab 03 keeps v1. Labs 01, 05 and 08 answer `probe` only.
 - **Answers** are numbers or ordered id lists ("3, 7, 1"), never options.
-- **The Opus check (3a-22)** approves, on lab 02, that each template can be answered by reading your own code, and that a plausible bug changes the answer. Each lab's test proves it with a fake correct module and a fake module with the template's bug. The fakes live in that lab's own test file; `tests/forge/fixtures.ts` changes only in 3a-11.
+- **The Opus check (3a-22)** approves, on lab 02, that each template can be answered by reading your own code and never from the story alone, and that a plausible bug changes the answer. Labs 04, 06 and 07 apply the same rule, and the integrator (Opus) checks their templates against it before 3b's level 1 merges. Lab 02's and lab 06's tests prove it with a fake correct module and a fake module with the template's bug; labs 04 and 07's tests prove that a fake correct module answers each template and that the answer is not given by the story (it differs across seeds). The fakes live in that lab's own test file; `tests/forge/fixtures.ts` changes only in 3a-11.
 
 ### 7.3 Grading, provenance and timing (`src/lib/forge/prove2.ts`, 3a-11)
 
@@ -729,7 +754,7 @@ A seeded trace is at most 12 calls. `story` tells it in words ("Allocate sequenc
 
 - **When.** One question per lab returns 30 local days after that lab's first `prove` event, v1 or v2, and appears on Today's done card or empty state.
 - **What.** If that lab's component is installed (`engine:slots`, its bytes on this device) and the bundle has `prove2`, it is a v2 question on a fresh seed, run against the installed bytes in the lab worker. Otherwise it is v1's follow-up item (`followUpRef`, `item:lab0N.prove.<qid>`, `kv-block-manager/prove.ts:94`) as a self-checked constructed response.
-- **Recording.** It records with `data.return: true` and never blocks Today. The card is lazy, so /today's static closure does not grow.
+- **Recording.** It records with `data.return: true` (on ProveData v2, or on the v1 follow-up `item`, whose ItemData gains `return` in 3a-01) and never blocks Today. The card is lazy, so /today's static closure does not grow.
 
 ---
 
@@ -775,13 +800,14 @@ Each bundle follows the `ForgeBundle` contract (`forge/types.ts:204–222`), wit
 | Lab | The reference run (in the browser) | Predict (examples) | Modify |
 |---|---|---|---|
 | 04 | the Fleet's reference queue (`makeRefQueue`, `fleet-model.ts:1488` on 2b) on a seeded burst of 40 pushes and pops: occupancy and `full` replies per step | how many pushes reply `full` at capacity 8 | capacity 8 → 16 |
-| 05 | the committed calibration reply of the crate's `probe` at seed 7 (`calibration.json`: tasks, yields, polls), shown as one frame and labelled "the reference on seed 7" | polls per task in the ping-pong pair | a choice item: what changes if wakers re-queue at the back (no run) |
+| 05 | the committed calibration reply of the crate's `probe` at seed 7 (`calibration.json`: tasks, yields, polls), shown as one frame per poll round and labelled "the reference on seed 7" | polls per task in the ping-pong pair | a choice item: what changes if wakers re-queue at the back (no run) |
 | 06 | the Fleet `Engine` with `referenceScheduler` on a seeded 60-request trace: goodput, TTFT p95, preemptions | the reference's goodput on a fresh trace | headroom 48 → 0 |
 | 07 | `src/lib/world/radix.ts`, a pure JS radix tree with LRU leaf eviction, on a seeded chat trace: hit rate, entries | the hit rate after 48 requests | capacity halved |
-| 08 | the committed calibration reply of `probe` at seed 7 (steps, legal tokens per step), one frame | legal tokens at step 3 | a choice item: what an extra enum value does to the mask (no run) |
+| 08 | the committed calibration reply of `probe` at seed 7, one frame per grammar step with the legal tokens at that step | legal tokens at step 3 | a choice item: what an extra enum value does to the mask (no run) |
 
+- **Frames.** Every bundle's reference run has more than one frame (`tests/forge/registry.test.ts:89` asserts it over `loadAllForgeBundles()`), which is why labs 05 and 08 replay their committed reply step by step.
 - **In-browser references** follow Wave 2's precedent: lab 02 runs the Fleet's `RefBlockManager`, lab 03 `world/bpe.ts`. The Rust reference solutions stay private.
-- **Margins.** Each lab's items must stay within the content margin (`verify:items -- --subset item:lab0N.`), because lab 01's PRIMM items already sit at the pool's limit (§4.1).
+- **Margins.** Each lab runs `verify:items -- --subset 'forge/<lab dir> '`, which selects its PRIMM items (§4.1). A lab adds about four choice items, below the 12-item minimum, so the run reports its hit rates and the integrator's merged-level `verify:items` decides; lab 01's PRIMM items already sit at the pool's limit, so a lab whose items push the merged `primm` pool over is fixed in that lab's PR before the level merges.
 - **Stopwatch.** The implementer records the time to stage 1 in the PR, a field measure of "stage 1 is a 2-minute win", as 2c-09 and 2c-10 were asked to.
 
 ### 8.3 Lab 06's race and the bestiary: W1's Code stage (3b-09)
@@ -792,21 +818,22 @@ Each bundle follows the `ForgeBundle` contract (`forge/types.ts:204–222`), wit
   - It records `fleet-run fleet:engine` with `{components: [{slot: 'scheduler', labId: 'batching-scheduler', sha256}], seeds: 'fresh', goodput, refGoodput}`.
   - Within 3 points (`fold.ts:77–78`), the fold sets `labFleetOk['batching-scheduler']`, and RING 0's lab 06 row turns green (§3.4).
 - **The bestiary** (`src/lib/world/bestiary.ts`): twelve named policies from the Compose dials (`SchedPolicySpec`, wave-2 §8.4), run on the race's entropy through `compileSchedPolicy`. A sim-worker job `bestiary` returns their goodputs. The panel shows where yours falls, as an SVG histogram with a `SimMirror` table. The bestiary is labelled "twelve policies from the Compose dials", not "production schedulers".
+- **Twelve distinct policies.** On Act I's runs (CFG 256 × 16, 16 running, a 32-entry intake draining 8 per tick) the guard dial's 2000 never fires: guard 2000 and guard 0 gave identical goodput on all 30 graded entropies measured on 2b (as `sched-policy.ts:18` says, "2,000 never fires inside a minute"), and so did the reference's own guard. Under FCFS the guard is a no-op by construction (aged requests are a prefix of arrival order), and preempting the newest never changed an outcome at headroom 48 or 128. Of the 48 dial settings, 19 behave differently. The table keeps twelve of them, each labelled only by effects that occur on these runs; the mean goodput is over those 30 entropies. `tests/world/bestiary.test.ts` holds the twelve goodputs pairwise distinct on ≥ 80 % of banded Act I entropies (86.7 % measured).
 
-  | # | Policy | {order, guard, headroom, preempt} |
-  |---|---|---|
-  | 1 | the reference | {sjf, 2000, 48, none} |
-  | 2 | FCFS | {fcfs, 0, 48, none} |
-  | 3 | FCFS, greedy | {fcfs, 0, 0, none} |
-  | 4 | SJF, greedy | {sjf, 0, 0, none} |
-  | 5 | SJF, starving | {sjf, 0, 48, none} |
-  | 6 | SJF, short guard | {sjf, 20, 48, none} |
-  | 7 | SJF, tight headroom | {sjf, 2000, 16, none} |
-  | 8 | SJF, wide headroom | {sjf, 2000, 128, none} |
-  | 9 | FCFS, wide headroom | {fcfs, 0, 128, none} |
-  | 10 | FCFS, preempting | {fcfs, 0, 16, newest} |
-  | 11 | SJF, preempting | {sjf, 2000, 16, newest} |
-  | 12 | FCFS, short guard, preempting | {fcfs, 20, 48, newest} |
+  | # | Policy | {order, guard, headroom, preempt} | Mean goodput (%, 30 entropies, 2b) |
+  |---|---|---|---|
+  | 1 | the reference | {sjf, 2000, 48, none} | 44.6 |
+  | 2 | FCFS | {fcfs, 0, 48, none} | 18.8 |
+  | 3 | FCFS, greedy | {fcfs, 0, 0, none} | 12.0 |
+  | 4 | FCFS, greedy, preempting | {fcfs, 0, 0, newest} | 14.1 |
+  | 5 | FCFS, tight headroom | {fcfs, 0, 16, none} | 21.2 |
+  | 6 | FCFS, tight headroom, preempting | {fcfs, 0, 16, newest} | 20.1 |
+  | 7 | FCFS, wide headroom | {fcfs, 0, 128, none} | 13.9 |
+  | 8 | SJF, greedy | {sjf, 0, 0, none} | 41.8 |
+  | 9 | SJF, greedy, preempting | {sjf, 0, 0, newest} | 44.8 |
+  | 10 | SJF, tight headroom | {sjf, 0, 16, none} | 46.9 |
+  | 11 | SJF, wide headroom | {sjf, 0, 128, none} | 37.5 |
+  | 12 | SJF, short guard, greedy | {sjf, 20, 0, none} | 13.5 |
 
 - **The real-engine finale.** It already exists: lab 06's scheduler arbitrates a one-slot Qwen3-0.6B in the tab (`real-engine.ts`, `RealEnginePanel.tsx`). The panel links to it.
 - **Cut.** The leaderboard's physics floors (D12).
@@ -898,7 +925,7 @@ Latencies stay in iterations, as the acts display them. The runs themselves do n
 ### 11.1 The interaction (3b-07; `src/components/lesson/Isomorphism.tsx`, `src/lib/learner/iso.ts`)
 
 A block with `breakItem` runs three steps; a block without one renders as today.
-1. **Align.** One row per pair's `os` element; the pairs' `llm` labels, shuffled per attempt, are buttons on each row. You give every row a label, by keyboard (Tab to a row, arrows across labels, Space to choose) or by tap; nothing needs a drag. Each row's feedback is the pair's own two lines. Recorded as `item:<lesson>.iso.<n>`, `score` = rows right ÷ rows, `ok` = all right. This step is matching, not a multiple-choice item: the options are the pairs themselves.
+1. **Align.** One row per pair's `os` element; the pairs' `llm` labels, shuffled per attempt, are buttons on each row. You give every row a label, by keyboard (Tab to a row, arrows across labels, Space to choose) or by tap; nothing needs a drag. Each row's feedback is the pair's own two lines. Recorded as `item:<lesson>.iso.<n>` (n from 1), `score` = base rows right ÷ base rows, `ok` = all base rows right. A work row (§11.3) gets its feedback but is never graded, so the score, which a donation keeps, never reveals the background. This step is matching, not a multiple-choice item: the options are the pairs themselves.
 2. **Name the break.** The `breakItem`: "Where does this analogy break?" One option is a true break from the pairs; three are statements that hold on both sides; each has a why. Recorded as `item:<lesson>.iso.<n>.break`. Pool `iso`, gated (§4.1).
 3. **The principle** (≤ 40 words), then all pairs with their breaks, as today's view.
 
@@ -915,8 +942,8 @@ A block with `breakItem` runs three steps; a block without one renders as today.
 | 3b-17 | t3.l6: 3, t5.l6: 3, t5.l9: 2, t6.l1: 3, t6.l3: 3, t6.l9: 3, t6.l10: 3, t7.l5: 3 | a `breaks` line on each of the 23 pairs, plus a principle, `kcs` and a break item on each panel |
 
 - **Unchanged:** existing pairs, titles and hooks.
-- **Margins.** Every new item keeps `verify:items -- --subset` over its refs within the margin.
-- **The discrimination** P3's metric measures (paging, PagedAttention, the radix cache) is taught in t2.l2, t2.l7 and t5.l6, and read from three KCs (§4.3, §15.1).
+- **Margins.** Each task runs `verify:items -- --subset` with a regex over its iso refs (`'/^item:t[0-2]\.l[0-9]+\.iso\./'` for 3b-16, `t[3-7]` for 3b-17); n is printed, and the merged-level run decides (§4.1).
+- **The discrimination** P3's metric measures (paging, PagedAttention, the radix cache) is taught in t2.l2, t2.l7, t5.l5 and t5.l6, and read from three KCs (§4.3, §15.1). Its confusion share needs lures that name the confusion: on these lessons' quiz items for the three KCs, a lure whose misconception is taking one KC for another of the three carries the miss id `confuse.<that KC>` (3b-16 on t2.l2 and t2.l7; 3b-17 on t5.l5 and t5.l6; retagged where such a lure exists, added otherwise). 3c-03's test requires ≥ 2 such lures per KC.
 
 ### 11.3 Work analogues by background (3c-05; cut 3rd)
 
@@ -928,9 +955,9 @@ A block with `breakItem` runs three steps; a block without one renders as today.
 | connection pool ↔ KV block pool | t2.l7 | `backend`, `jvm` | a connection returns to the pool whole; KV blocks are freed per sequence and shared by refcount |
 | G1 regions ↔ fixed KV blocks | t1.l3 | `jvm` | G1 evacuates live objects to compact; KV blocks never move |
 | backpressure ↔ admission control | t2.l4 | `sre`, `backend` | backpressure slows the producer; admission control leaves the request waiting while decode runs on |
-| CDN TTL ↔ KV TTL | t5.l6 | `sre`, `backend` | a CDN entry goes stale after its TTL; a cached KV prefix is never stale, only evicted for space |
+| CDN TTL ↔ KV TTL | t5.l6 | `sre`, `backend` | a CDN entry can go stale (the origin changed under it); a KV prefix keyed by its tokens, model and adapter revision can never be wrong, so TTL or space eviction only costs a re-prefill |
 
-- **What changes.** The `work` field sits on the pair whose LLM side it shares (`IsomorphismPair.work`, §2.3). A matching background adds one align row: the work concept, whose right label is that pair's LLM label. Its break shows with the others. Nothing else changes.
+- **What changes.** The `work` field sits on the pair whose LLM side it shares (`IsomorphismPair.work`, §2.3). A matching background adds one align row: the work concept, whose right label is that pair's LLM label. That row gets its feedback but is never graded (§11.1): a score of k/4 for a `jvm` learner beside k/3 for everyone else would let a donation reveal the background. Its break shows with the others. Nothing else changes. 3c-05's test proves two ledgers that differ only in `profile:background`, with the same answers on the base rows, give identical donations.
 - **Budget.** /boot grows by ≤ 1 KB gzip (gate 200, target 165).
 
 ---
@@ -991,12 +1018,12 @@ PLAN §1: "A KC counts when the learner answers fresh generated items on it corr
   - A is offered before your first lesson of the track is done;
   - B after the track's spiral is passed;
   - C ≥ 30 days after B.
-- **Recording.** Items record src `form` with `{form, track, slot, set}`. They pay XP like items but never reschedule a card (W18).
+- **Recording.** Items record src `form` with `{formId, track, formSlot, formSet}` (§3.2; never `data.form` or `data.slot`, which mean the ticket form and the Today position). They pay XP like items but never reschedule a card (W18).
 - **The card** shows k/12 per form with Wilson intervals, B − A labelled "including the pretest effect", and C beside B. Each step is about 8 points (100 ÷ 12), so only track-level results are shown, with intervals (the plan's risk line). The plan's opt-in metric, C/B ≥ 0.8 with a CI, is a partner selector (§15.1).
 
 ---
 
-## 13. Remaining P2: one registry, no credit without a prediction (tasks 3a-05, 3a-18 … 3a-21)
+## 13. Remaining P2: one registry, no credit without a prediction (tasks 3a-05b, 3a-18 … 3a-21)
 
 **Today** (HEAD; 2b adds the zoo's six outcome tasks):
 - **The registry** holds 80 tasks: 15 outcome tasks and 65 legacy ones. 36 more task ids live in inline arrays the registry never sees: `MemoryGridSim.tsx:51–56, 58–79`, `VmPagingSim.tsx:1018–1028`, `QuantizerSim.tsx:336–341`, `WgslSim.tsx:647–652`, `BatchingSim.tsx:618–623`, `ToyEngineSim.tsx:42–48`. RooflineSim repeats its 12 legacy ids at :1164–1177.
@@ -1008,7 +1035,7 @@ PLAN §1: "A KC counts when the learner answers fresh generated items on it corr
 - **Roofline (3a-18).** The twelve roofline ids become outcome tasks: a numeric predict spec, an observe key the sim emits, a three-idea explain, and a phone canonical where the model exists. Each names its old id in `legacyId`. RooflineSim's SMEM curve reads the cube's `smemBytes` and `ctasPerSm` (D24), so the sim, the cube and the family share one model.
 - **Allocator and block tables (3a-19).** `t-double-free` and the four `t-blk-*` tasks become outcome tasks. The five superseded allocator ids leave the registry, the detection calls and the checklist; old completions still show "you finished the old click-through".
 - **One registry (3a-20, 3a-21).** The 36 inline ids move into tasks files as legacy entries, with `HOME` exports (§4.2). The components import them and render exactly as before.
-- **The result.** 38 outcome and 79 legacy tasks, all in one registry (117, against the plan's "114 tasks", whose count mixed two lists; audit/content.md:40 and audit/interactive.md:23). Every lesson exercise block lists outcome tasks only.
+- **The result.** 38 outcome and 79 legacy tasks, all in one registry (117, against the plan's "114 tasks", whose count mixed two lists; audit/content.md:40 and audit/interactive.md:23). Every `taskIds` entry of a lesson exercise block resolves to an outcome task. Link-card blocks (no `taskIds`; 18 of the 28 lesson files with an exercise block on 2c, `exercise.tsx:5`) are exempt: they earn nothing and stay link cards, deferred with the legacy tasks (D17).
 - **Legacy tasks are exploration steps.** They earn 0 XP (as today), resolve to no KC (so they feed no card, ring or VRK₃₀), and unlock no lesson note. 3c-01's test proves all three, and that no sim component keeps an inline task array.
 - **Not in Wave 3.** Converting the remaining 79 legacy tasks into outcome tasks is not a 4-hour line (D17). They stay visible and uncredited.
 
@@ -1024,11 +1051,11 @@ PLAN §1: "A KC counts when the learner answers fresh generated items on it corr
 
 **The decision rule** (no partial keep, and no threshold relaxed after the numbers are known; `watcher.md:52`):
 1. **Unsigned at 3c's start** (`isSigned`, `score.ts:244–246`): outcome "not decided". The manual scan stays (PLAN §9's default), 3c-04 ships no code, and the 10 hours return to the queue.
-2. **Signed, but no independent rating:** the same. The rater is the owner, or a fresh agent given only `snapshot.json` and `match.ts --lessons`, who never reads `candidates.json` (`watcher.md:27–31`).
+2. **Signed, but no independent rating:** the same. The rater is the owner, or a fresh agent given only `snapshot.json` and `match.ts --lessons`, who never reads `candidates.json` (`watcher.md:27–31`). Only the owner or the orchestrator may launch that agent; 3c-04's implementer, who reads `candidates.json` and `match.ts`, never does.
 3. **Signed and rated:** `bun scripts/landscape/score.ts` writes `report.json` with `keep`, `drop` or `underpowered`.
    - `keep`: build the digest (below).
    - `drop`: the manual scan stays.
-   - `underpowered`: the manual scan stays, and the backtest repeats on a new 8-week window under a new pre-registration (`watcher.md:50`), in Wave 4.
+   - `underpowered`: the manual scan stays, and the backtest is repeated on a second 8-week window before the Wave 3 decision, as `watcher.md:50` says. Moving that repeat to Wave 4 would need a dated amendment the owner signs before any rating exists.
 
 **The digest, only on `keep`:**
 - **The script.** `scripts/landscape/digest.ts` fetches releases since the last digest (`fetch.ts`) and matches them with the frozen `match.ts`, untouched (`watcher.md:23`).
@@ -1051,24 +1078,26 @@ No telemetry: partners donate redacted exports privately and the owner runs `scr
 | `selectVrk30Spread` | VRK₃₀ across partners | `selectVrk30` per learner: median, spread and n |
 | `selectProveV2` | H4's keep-or-kill ("≥ 60 % of greens attempted") and `proved` | the share of unseen-seed greens on labs with `prove2` followed by a v2 attempt, and the share of those attempts proved |
 | `selectHintArms` | H3's keep-or-kill, decided at the Wave 3 exit | per `docs/prereg/hint-ladders.md`: first cold-check accuracy on a check's KCs 25–45 days after its first green, by arm; the learner-level ladder − packet difference with a one-sided 97.5 % bootstrap bound (10,000 resamples) against the 5-point margin |
-| `selectDailyVsOther` | the Fleet Daily's keep-or-kill (Wave 3 exit) | 30-day accuracy on unseen-seed `sig` items for Daily KCs vs other KCs (PLAN §9) |
-| `selectDiscrimination30` | P3's metric | 30-day accuracy on items of `t2.address-translation`, `t5.block-tables` and `t5.prefix-cache-keys`, with the share of misses whose `miss` id names another of the three |
+| `selectDailyVsOther` | the Fleet Daily's keep-or-kill (Wave 3 exit) | 30-day accuracy on unseen-seed `sig` items for Daily KCs vs other KCs (PLAN §9), read only after the owner signs `docs/prereg/fleet-daily.md` (3c-03 drafts it) |
+| `selectDiscrimination30` | P3's metric | 30-day accuracy on items of `t2.address-translation`, `t5.block-tables` and `t5.prefix-cache-keys` answered ≥ 30 days after the KC's card was created, with the confusion share: misses whose `miss` id is `confuse.<one of the other two KCs>` (§11.2's lure convention), over all misses. "Not enough data", never 0, when the content holds no such lure or the misses are below the minimum |
 | `selectCubeError30` | W7's metric | median \|log₁₀(answer ÷ truth)\| on `tiling` and `roofline/tile-ai` items ≥ 30 days after a learner's cube play |
-| `selectFormsGain` | K5's opt-in metric (C/B ≥ 0.8 with a CI) | per track: B − A and C ÷ B, with bootstrap intervals over learners |
+| `selectFormsGain` | K5's opt-in metric (C/B ≥ 0.8 with a CI) | per track (from the kept `kcs`: a KC id's track prefix), keyed by `formId`: B − A and C ÷ B, with bootstrap intervals over learners |
 | `selectReceiptStats` | receipts | receipts cited and verified per act, uncited figures, the rubric self-scores' distribution |
 | `selectSurfaceMinutes` | the journey re-cut (D22) | active minutes per surface per week (Today, lessons, plays, labs, Daily, Fleet Week, /me), from event `ms` and C19's span rule |
-| `selectPlacementLanding` (fixed) | Wave 2's F3 | also reads lesson events, not only `visit`, which a same-day revisit skips (`progress.ts:586–591`; Wave 2a review) |
+| `selectPlacementLanding` | Wave 2's F3 | unchanged: it already takes the first event on any lesson ref after the placement (25e4b8a, `outcomes.ts:725–748` on 2c); its tests stay green |
 
 ### 15.2 The donation (`src/lib/learner/redact.ts`)
 
-- **Kept**, added to the whitelist (`DATA_KEYS`, `redact.ts:43–64`):
+- **Kept**, added to the whitelist (`DATA_KEYS`, `redact.ts:43–64`; `form` and `slot` are there already and keep their meaning):
   - `sinceDays`, which Wave 2 dropped, so cold checks and ROOT's count read 0 on donations (`redact.test.ts:98`);
-  - `form`, `set` and `slot`;
+  - `formId`, `formSet` and `formSlot` (§3.2);
   - each level's `id`, `ok` and `view` from `levels`;
   - `metric`'s `name`, `mine` and `ghost`;
   - `qid`, `return` and `calls`;
-  - `value` and `truth` of numeric items (`ItemData`, `types.ts:194–237`): numbers only, which W7's metric needs.
-- **Still dropped:** seeds, hashes (`wasmSha256` included), free text, Prove-it v2's `answer` and `actual`, `profile:background`, `fw:runs` and calendar dates. A test proves it.
+  - `receipts` ({cited, verified, uncited}, non-negative integers) and `rubric` (four integers 0–3) of a fleet act, which `selectReceiptStats` reads;
+  - `miss`, only when it is a `confuse.<kcId>` id (§11.2), which `selectDiscrimination30` reads; every other miss id stays dropped, so the `'kv.priced-fp16'` assertion of `redact.test.ts:92` stands;
+  - `value` and `truth` of numeric items (`ItemData`, `types.ts:194–237`), numbers only, which W7's metric needs, and only on events whose provenance is not `field`: your own GPU or device measurements (§16.5, §16.10) never leave the device.
+- **Still dropped:** seeds, hashes (`wasmSha256` included), free text, Prove-it v2's `answer` and `actual`, `profile:background`, `fw:runs`, a field item's `value` and `truth`, and calendar dates. Tests prove it.
 
 ### 15.3 The report (`scripts/partner-report.ts`)
 
@@ -1083,33 +1112,34 @@ Stretch tasks start in the plan's order, while the review queue is under 10 h (P
 
 ### 16.1 The 3D cube and its evaluation (3s-01, 3s-02; 8 h)
 
-- **The view (3s-01).**
-  - `View3D` renders only for ids in `GATE_3D` (verify-plays already checks the ids, `verify-plays.ts:107–121` on 2b).
-  - It shows the 2D view first and opens the scene on request ("Show it in 3D").
+- **The view (3s-01) ships dark.**
+  - `View3D` renders only for ids in `GATE_3D` (verify-plays already checks the ids, `verify-plays.ts:107–121` on 2b), and only when its `available` prop is true. Nothing sets it until 3s-02 wires the counterbalanced arm, so no learner sees "Show it in 3D" before the evaluation exists (D9, Q7); a test proves the entry is absent by default.
+  - Once available, it shows the 2D view first and opens the scene on request ("Show it in 3D").
   - `Cube3D` builds on the three 0.185.1 and R3F 9.6.1 already in `package.json` (D9). It uses `InstancedMesh`, `frameloop="demand"`, DPR ≤ 1.5, no drei and ≤ 100 draw calls, and falls back to 2D without WebGL2 (games-3d.md:250–255).
 - **Budgets.** `verify-bundle` reports the three + R3F chunk against 240 KB (ParticleField's is 242.4 KB today) and fails the scene's own chunk above 40 KB. A static-import walk proves /today, /boot, /me and /play/tiling-cube never load three (the `tests/boot/imports.test.ts:16` pattern).
 - **The evaluation (3s-02).**
   - Within-learner, as PLAN §9 asks ("cube levels × view, fully counterbalanced"): each learner's six levels split 3 + 3 between "2D only" and "3D available" by `armOf('cube-view', level, expSeed, 2)`. The play records each level's view (`PlayLevel.view`, §3.2).
-  - The 2-item spatial proxy is opt-in, recorded as src `practice` with no KC, and stratifies the analysis (Höffler 2010, games-3d.md:407).
-  - `selectCubeByView` compares 30-day fresh-item error by view. `docs/prereg/tiling-cube-3d.md` sets the non-inferiority margin, and the default: 3D stays opt-in.
+  - The 2-item spatial proxy is opt-in and has no choice items: a cube count (numeric) and a view ordering (an ordered id list), so no pool applies. It records `item:cube.spatial.<n>` with src `practice` and no KC, and stratifies the analysis (Höffler 2010, games-3d.md:407).
+  - `selectCubeByView` compares 30-day fresh-item error by view. `docs/prereg/tiling-cube-3d.md` sets the non-inferiority margin, and the default: 3D stays opt-in. The owner signs it before 3s-02 merges, so no view data exists before the margin is registered (PLAN §9).
+  - 3s-01 and 3s-02 are cut or kept together (§19.3).
   - 3D as default is a Wave 4 gate (2027-12).
 
 ### 16.2 t6.l12: attention–FFN disaggregation (3s-03; 6 h)
 
 - **The lesson.** It sits between t6.l9 and t6.l10, so the spiral stays last. It has one new KC; a statline of pinned benchmark claims (Step-3: "up to 4,039 tok/s/GPU decode at a 50 ms TPOT SLA on Hopper"; MegaScale-Infer: "up to 1.90× per-GPU throughput"; serving-landscape.md:30–31); and the boundary that "per-layer, per-token activation exchange needs very low-latency fabric" (:126–129).
 - **Its blocks.** An isomorphism with breaks and a break item (databases' compute/storage separation), a 4-item quiz with whys, a ticket, and a `prefill/pd-ratio` item block.
-- **Counts.** The 68-lesson pins become 69: `verify-items.test.ts:186`, `scope.test.ts:28–29`, `packet.test.ts:86–87` and `recommend.test.ts:191`.
+- **Counts.** The 68-lesson pins become 69: `verify-items.test.ts:186`, `scope.test.ts:28–29`, `packet.test.ts:86–87`, `recommend.test.ts:191`, and the ticket XP pin `xp.test.ts:308` (`68 * 3 + 6 * 5` becomes `69 * 3 + 6 * 5`, or is derived from the lesson count). T6's lesson count in `src/lib/tracks.ts` (10) becomes 11, since TrackCard marks a track done at `done >= track.lessons` (`TrackCard.tsx:19–20`).
 
 ### 16.3 More W5 exercises (3s-04, 3s-05; 12 h)
 
 | Exercise | Lesson | What you predict |
 |---|---|---|
 | `broken-bench` | t7.l2 | a Fleet run is seeded with one of four benchmark flaws (warm-up counted, closed-loop clients, a warm prefix cache, outputs capped); you predict the p95 TTFT the benchmark should have reported, graded against the corrected run |
-| `push-luck` | t6.l6 | acceptances drawn at a pinned α; the expected tokens per step of the best draft length |
+| `push-luck` | t6.l6 | a seeded acceptance rate α and draft-to-target cost ratio c; the draft length γ (among the sweep's points) that maximises the speedup (1 − α^(γ+1)) ÷ ((1 − α)(γc + 1)). Without a draft cost the expected tokens per step, (1 − α^(γ+1)) ÷ (1 − α), only rises with γ, so the question needs c |
 | `straggler` | t6.l7 | the idle share of a synchronous rollout group with long-tail outputs |
 | `timing-oracle` | t6.l10 | the TTFT gap a probe sees through a shared prefix cache, and the hit rate lost when the cache key carries the tenant |
 
-All four are numeric, banded and deterministic, and register in `FLEET_EXERCISES`.
+All four are numeric, banded and deterministic, and register in `FLEET_EXERCISES` as one module each; the exercise job calls their `sweep(seed)` (§5.3), so no worker, host or session file changes. The Fleet engine models no speculation and no RL group (D7), so `push-luck` and `straggler` are model-only: their `sweep` computes the stated model (powers as repeated products) and puts its values in each point's `metrics`. `broken-bench` and `timing-oracle` run on the Fleet engine only for flaws it can express (warm-up, closed-loop clients, capped outputs; prefix-cache hits only if the engine models them); otherwise the flaw is left out, or the exercise is model-only and labelled so.
 
 ### 16.4 Interview mode (3s-06; 8 h)
 
@@ -1125,13 +1155,14 @@ All four are numeric, banded and deterministic, and register in `FLEET_EXERCISES
 
 - **The labs.** One after t5.l4 measures batch-1 decode and the KV-full concurrency against your Boot prediction. One after t5.l7 replays the pinned BurstGPT slice with vLLM's benchmark CLI.
 - **On your GPU.** Each runs on your own or a rented GPU, ≤ 1.5 GPU-hours (≈ $5 at the $3.39/h H100 median, a claim). Its commands are pinned claims.
-- **Recording.** Your entered measurements record `item:field.<lab>.<metric>` with provenance `field` (weight 0). Nothing leaves the device.
+- **Recording.** Your entered measurements record `item:field.<lab>.<metric>` with src `practice` and provenance `field` (weight 0; §3.2). Nothing leaves the device: a donation drops a field item's `value` and `truth` (§15.2).
+- **Owner step.** The owner signs off the pinned commands, and the owner or a partner runs each one once on a GPU, with its output recorded in 3s-07's PR. Agents cannot run them.
 
 ### 16.6 The On-Call pilot (3s-08; 6 h)
 
 - **The shift mode.** `/daily?shift=3` chains three drill-namespace incidents from one seed, with a handoff note between them that is never stored, and records each as practice.
 - **The protocol.** `docs/oncall/pilot.md` is a think-aloud protocol: consent, script, and what the owner writes down.
-- **What it is for.** It produces the evidence of the Wave 4 gate ("Daily KCs' 30-day diagnosis ≥ non-Daily, or favourable think-alouds"); it is not the On-Call shift (D23).
+- **What it is for.** It produces the evidence of the Wave 4 gate ("Daily KCs' 30-day diagnosis ≥ non-Daily, or favourable think-alouds"); it is not the On-Call shift (D23). The session notes stay private to the owner; only a de-identified summary feeds that gate.
 
 ### 16.7 Season 0 (3s-09; 4 h)
 
@@ -1154,7 +1185,9 @@ At `/capstone/service`, on the device:
 
 ### 16.10 The T0/T4 measured-versus-predicted real-engine run (3s-13; 4 h)
 
-After consent for the ~400 MB download (Wi-Fi), you predict decode tok/s for Qwen3-0.6B q4 on your device from its bytes and a bandwidth you choose. Then you run the real engine (`real-engine.ts`) and see measured against predicted. It is recorded as `predict` plus `item` with provenance `field`, and labelled "your device, not an H100".
+After consent for the ~400 MB download (Wi-Fi), you predict decode tok/s for Qwen3-0.6B q4 on your device from its bytes and a bandwidth you choose. Then you run the real engine (`real-engine.ts`) and see measured against predicted. It is recorded as `predict` plus `item` on `item:engine.measured-tps` with src `practice` and provenance `field` (§3.2), and labelled "your device, not an H100".
+- **Build acceptance** covers the prediction UI, the comparison and the recording, tested with a stubbed measurement.
+- **Owner step.** One device run on a laptop and one on a phone, with predicted and measured values in 3s-13's PR. Agents cannot satisfy the device run (as wave-2's F3b device runs).
 
 ---
 
@@ -1178,7 +1211,7 @@ After consent for the ~400 MB download (Wi-Fi), you predict decode tok/s for Qwe
 | FSRS + cards + composer | 6.2 KB | report 6 KB (warns today) | reported |
 | stretch: three + R3F chunk | 242.4 KB (ParticleField) | 240 KB | reported |
 | stretch: the cube's 3D scene chunk | — | ≤ 40 KB | fails (3s-01) |
-| stretch: `/drills`, `/capstone/service` | — | figure 200 KB | reported |
+| stretch: `/drills`, `/capstone/service` | — | figure 200 KB | reported (3s-06, 3s-10 add their `ROUTE_BUDGETS` lines) |
 
 ### 17.2 Accessibility (WCAG 2.2 AA) and the harness
 
@@ -1200,12 +1233,12 @@ After consent for the ~400 MB download (Wi-Fi), you predict decode tok/s for Qwe
   - focus not obscured;
   - verdicts in `aria-live`;
   - tables that scroll inside their own region, never the page.
-- **Screen readers** (owner step): a VoiceOver (iOS) and NVDA (Windows) pass at the wave exit, over Boot → Today → /me → /play/tiling-cube → /forge/batching-scheduler (Prove-it v2, the race) → /week (receipts).
+- **Screen readers** (owner step): a VoiceOver (iOS) and NVDA (Windows) pass at the wave exit, over Boot → Today → /me → /play/tiling-cube → /forge/batching-scheduler (Prove-it v2, the race) → /week (receipts). The owner records it in `docs/a11y/wave-3-screen-readers.md`: per route and reader, the findings and pass or fail (a serious or critical finding fails).
 
 ### 17.3 Determinism
 
 - **Already in scope:** everything new under `src/lib/world/**` (tiling, EPLB, bands, Fleet exercises, the bestiary, radix) and `src/lib/items/families/**` (`tiling`, `prefill`, `rollout`). That means no `Math.random`, no `Date`, and no `Math.pow`, `exp`, `log` or trigonometry (`verify-determinism.ts:37–48`).
-- **Added** (3a-05): the pure learner files (`provenance`, `vrk`, `competence`, `cold-checks`, `forms`, `iso`) and `src/lib/forge/prove2.ts`.
+- **Added** (3a-05b): the pure learner files (`provenance`, `vrk`, `competence`, `cold-checks`, `forms`, `iso`) and `src/lib/forge/prove2.ts`.
 - **Fixtures.** Per-family hash fixtures pin the families. The receipts test pins re-runs (§10.3), and the EPLB equivalence test pins the ghost.
 
 ### 17.4 Tests and verify scripts
@@ -1256,7 +1289,7 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 | B2 | receipts validate Fleet Week | `tests/fleet/receipts-exit.test.ts` replays a fixture Act I and Act III through the real grading: a verified receipt passes, and an edited value, another entropy or a missing module fails. No keyword, word count or screenshot remains in the grading (`receipts-act.test.ts`) | 3c-01, 3b-05 |
 | B3 | `proved` live on ≥ 3 labs | `tests/forge/proved-labs.test.ts`: labs 02, 04, 06 and 07 write `proved` after an unseen green and a right answer, and never after a miss, a v1 answer, a reference build or a practice-seed run | 3c-01 (labs: 3a-22, 3b-10, 3b-12, 3b-13) |
 | B4 | `/me` intervals | `tests/me/mirror.test.ts`: every figure has its n and an interval, or "not enough data"; `verify:bundle` gates /me at 200 KB | 3b-06 |
-| B5 | remaining P2 (scope) | `tests/sims/no-credit.test.ts`: one registry, no inline task arrays, every lesson exercise block lists outcome tasks, legacy tasks earn nothing and resolve to no KC | 3c-01 (content: 3a-18 … 3a-21) |
+| B5 | remaining P2 (scope) | `tests/sims/no-credit.test.ts`: one registry, no inline task arrays, every `taskIds` entry of a lesson exercise block resolves to an outcome task (link-card blocks, with no `taskIds`, are exempt and earn nothing), legacy tasks earn nothing and resolve to no KC | 3c-01 (content: 3a-18 … 3a-21) |
 | B6 | W7 (scope) | `verify:plays` with the cube's mirror, debrief, card and band; `e2e/tiling-cube.spec.ts`; the cube's pins (`tests/world/tiling.test.ts`) | 3a-13, 3b-01 |
 | B7 | W5's EPLB play (scope) | the equivalence test (`eplb-policy.test.ts`), `verify:plays`, `e2e/eplb.spec.ts` | 3a-14, 3b-02 |
 | B8 | accessibility (scope) | `npm run a11y` over §17.2's default routes: 0 serious or critical violations and no sideways scroll at 360, 320 and 1280 px; the six keyboard walks | 3c-02 and the owning tasks |
@@ -1267,17 +1300,17 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 | Gate | PLAN wording | Measurement (partner report, §15) |
 |---|---|---|
 | F1 | the journey re-cut | `selectSurfaceMinutes` over partners (n ≥ 5): minutes per surface per week next to §4.D's cadence. The owner re-cuts PLAN §4.D's table |
-| F2 | hint ladders keep-or-kill (Wave 3 exit) | `selectHintArms` under `docs/prereg/hint-ladders.md`, once signed: keep if the one-sided 97.5 % bootstrap bound of ladder − packet is above −5 points. Default if underpowered: R0–R2 only (`hint-ladders.md:50`) |
-| F3 | Fleet Daily keep-or-kill (Wave 3 exit) | `selectDailyVsOther`: Daily KCs' 30-day diagnosis accuracy on unseen seeds ≥ the other KCs'. Default if underpowered: weekly, no On-Call |
+| F2 | hint ladders keep-or-kill (Wave 3 exit) | `selectHintArms` under `docs/prereg/hint-ladders.md` (a draft, unsigned, while its arms already collect data; the owner signs it before any Wave 3 analysis of the arms): keep if the one-sided 97.5 % bootstrap bound of ladder − packet is above −5 points. Default if underpowered: R0–R2 only (`hint-ladders.md:50`) |
+| F3 | Fleet Daily keep-or-kill (Wave 3 exit) | `selectDailyVsOther` under `docs/prereg/fleet-daily.md` (3c-03 drafts it; the owner signs it before the selector is read, PLAN §9): Daily KCs' 30-day diagnosis accuracy on unseen seeds ≥ the other KCs'. Default if underpowered: weekly, no On-Call |
 | F4 | the watcher (Wave 3) | §14's rule on the signed pre-registration and an independent rating. Default: manual scan |
 | F5 | Prove-it (H4's metric, "≥ 60 % of greens attempted") | `selectProveV2`, with n and partners. Default if underpowered: 1 question (PLAN §9) |
-| F6 | P3's metric | `selectDiscrimination30`: 30-day accuracy and the confusion share on the paging, PagedAttention and radix set |
+| F6 | P3's metric | `selectDiscrimination30`: 30-day accuracy and the confusion share (`confuse.<kcId>` misses, §11.2) on the paging, PagedAttention and radix set; "not enough data" without tagged lures |
 | F7 | W7's metric | `selectCubeError30`: the 30-day fresh-item log error, reported with n |
 | F8 | K5's opt-in metric | `selectFormsGain`: C/B ≥ 0.8 with a CI, per track, among opt-in partners |
 | F9 | VRK₃₀ (the north star, PLAN §1) | `selectVrk30Spread`, reported as "among n partners (self-selected)", never as a pass |
 | F10 | `proved` in use (beyond B3's build half) | the share of partners with ≥ 1 `proved` lab; descriptive |
 | F11 | queue gating (PLAN §8) | Wave 3's review queue is under 10 h before Wave 4 starts. The owner sums the open tasks at PLAN §8's rates |
-| F12 | accessibility | the VoiceOver and NVDA passes of §17.2, recorded by the owner |
+| F12 | accessibility | the VoiceOver and NVDA passes of §17.2, recorded by the owner in `docs/a11y/wave-3-screen-readers.md` (routes, findings, pass or fail) |
 
 ---
 
@@ -1309,15 +1342,17 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
   It reports no problems.
 - **External dependencies** are written `w2:<task>` (`w2:2c-fix` is the 2c fix round); the base holds them.
-- **Opus first** marks a task whose design needs an Opus decision before (or while) a Sonnet implementer builds it. There are six: 3a-12 (the run record and rounding rule), 3a-13 (the cube's formulas and pins), 3a-14 (the EPLB turn rule, band and sentences), 3a-17 (VRK₃₀'s definition), 3a-22 (the Prove-it v2 template rules) and 3c-04 (the watcher rule on the signed inputs).
+- **Opus first** marks a task whose design needs an Opus decision before (or while) a Sonnet implementer builds it. There are six: 3a-12 (the run record, approved before 3a-01 starts because 3a-01 freezes it in the codec, and the rounding rule), 3a-13 (the cube's formulas and pins), 3a-14 (the EPLB turn rule, band and sentences), 3a-17 (VRK₃₀'s definition), 3a-22 (the Prove-it v2 template rules) and 3c-04 (the watcher rule on the signed inputs).
 - **Private solutions.** 3a-10 recalibrates, and lab tasks time stage 1, from `labs/_solutions/<lab>/` copied from the main checkout into the worktree's gitignored `labs/_solutions/`. They are never committed or packed; `pack-labs.py`'s audit fails on any `_solutions` path.
-- **Browser checks.** Headless Chromium runs only through the wrapper (`PW_CHROMIUM_EXECUTABLE`). Tasks that need it say "Browser" (36 of 62).
+- **Browser checks.** Headless Chromium runs only through the wrapper (`PW_CHROMIUM_EXECUTABLE`). Tasks that need it say "Browser" (36 of 64).
 - **Owner steps** are listed per task and are not build acceptance:
   - claim quotes and pins (3a-08, 3s-07);
   - item and content reviews (3a-18, 3a-19, 3b-05, 3b-10 … 3b-18, 3c-05, 3s-03, 3s-12);
-  - signing the watcher pre-registration and rating the backtest (3c-04), and the 3D and protégé pre-registrations (3s-02, 3s-11);
-  - the On-Call think-alouds (3s-08);
-  - the screen-reader passes (§17.2);
+  - signing the watcher pre-registration and rating the backtest (3c-04; a fresh rater agent is launched only by the owner or the orchestrator), and the 3D and protégé pre-registrations (3s-02, before it merges; 3s-11);
+  - signing `docs/prereg/hint-ladders.md` (carried from 2c-06, still a draft) before any Wave 3 analysis of `selectHintArms`, and `docs/prereg/fleet-daily.md` (3c-03 drafts it) before `selectDailyVsOther` is read (F2, F3);
+  - the On-Call think-alouds, whose notes stay with the owner (3s-08);
+  - the GPU runs of the field labs' pinned commands (3s-07) and the real-engine device runs (3s-13);
+  - the screen-reader passes, recorded in `docs/a11y/wave-3-screen-readers.md` (§17.2);
   - partner rounds and the journey re-cut (§18.2).
 - **Integration after 3c** (Opus):
   - Regenerate the generated files and run every gate.
@@ -1328,7 +1363,8 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 ```
         tasks in a level run in parallel (∥); * = Opus first; → = in sequence inside a level
-3a  L0: 3a-01 → 3a-03 → (3a-04 ∥ 3a-05 ∥ 3a-11) ∥ 3a-02 ∥ 3a-06 ∥ (3a-07 → 3a-08) ∥ (3a-09 → 3a-10) ∥ 3a-12*
+3a  L0: 3a-01 → {3a-01b, 3a-03, 3a-12*};  3a-03 → {3a-04, 3a-05b, 3a-11};  3a-07 → {3a-08, 3a-09 → 3a-10};
+        {3a-03, 3a-07} → 3a-05;  ∥ 3a-02 ∥ 3a-06            (→ = in sequence; every other pair in parallel)
     L1: 3a-13* ∥ 3a-14* ∥ 3a-15 ∥ 3a-16 ∥ 3a-17* ∥ 3a-19 ∥ 3a-20 ∥ 3a-21 ∥ 3a-22*
     L2: 3a-18                                                          ← wave-3b branches from 3a's merged tip
 3b  L0: 3b-01 ∥ 3b-03 ∥ 3b-04 ∥ 3b-05 ∥ 3b-06 ∥ 3b-07 ∥ 3b-08 ∥ 3b-09
@@ -1340,7 +1376,7 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
     L2: 3s-10
 ```
 
-**Task counts:** 3a 22, 3b 21, 3c 6, 3s 13 (62 in all; 49 outside stretch).
+**Task counts:** 3a 24, 3b 21, 3c 6, 3s 13 (64 in all; 51 outside stretch). 3a-01b and 3a-05b split the old 3a-01 and 3a-05 (the critique's A3, A10 and B4 grew them); 3b-06 stays whole at 13 files.
 
 ### 19.2 The tasks
 
@@ -1348,9 +1384,13 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **Level 0**
 
-**3a-01 · Ledger contract v3.3: Prove-it v2 and `proved`, form and play item sources, play metrics, receipts, background, Aggregate v4, RING 0 and ROOT fixes (spec §3)** M. Depends: w2:2b-21, w2:2c-fix.
-- **Files:** `src/lib/ledger/constants.ts`, `src/lib/ledger/types.ts`, `src/lib/ledger/codec.ts`, `src/lib/ledger/fold.ts`, `src/lib/progress.ts`, `src/lib/economy.ts`, `src/lib/economy-table.ts`, `tests/ledger/contract-v33.test.ts`, `tests/ledger/contract-v32.test.ts`, `tests/ledger/gen.ts`, `tests/ledger/codec.test.ts`, `tests/ledger/fold.test.ts`, `tests/ledger/facade.test.ts`, `tests/economy/rings.test.ts`, `tests/economy/table.test.ts`.
-- **Accept:** §3 as specified: SCHEMA_VERSION 6 and AGGREGATE_VERSION 4 with the upgrade chain v1→v2→v3→v4 at hydrate (no empty first paint); no new event kind and no new ref grammar; checkData accepts ProveData v2, the item sources `form` and `play` and the predict source `play`, PlayData's `metric` and `levels`, EplbSpecData, the `fw:runs` and `profile:background` working keys and fleet-act data with `receipts` and `rubric`, and rejects every malformed case listed in §3.2 (including provenance `proved` on a v1, a not-ok or a hash-less prove event); recordProve takes provenance `practice` (the default, so v1's callers and tests/forge/prove.test.ts are unchanged) or `proved`; the fold derives `proved[lab]` and `labFleetOk[lab]`; RING 0 adds lab 06 within 3 points of the reference from `labFleetOk` and ROOT's cold-check part reads the `ach:root-cold` achievement so it never flips back (§3.4); PLAY_MINUTES prices tiling-cube 25 and eplb 15, and the table test (tests/economy/table.test.ts:67 on 2b) allows prices for plays that register later, as it did for the scheduler; contract-v32 relaxes its pins to 'at least'; the property suite (P6, P7, round trip) passes at 100 seeds × 40 ops with every new shape in OPS_TABLE; a Wave 2 fixture ledger derives identically on every v3 field; the schema guard at 6 vs 5 goes read-only; entry growth ≤ 1 KB gzip, printed.
+**3a-01 · Ledger contract v3.3: Prove-it v2 and `proved`, form and play item sources, form keys, the return flag, play metrics, run records and receipts, background, the stretch shapes, Aggregate v4 (spec §3.1-3.3, §3.5-3.6)** M. Depends: w2:2b-21, w2:2c-fix.
+- **Files:** `src/lib/ledger/constants.ts`, `src/lib/ledger/types.ts`, `src/lib/ledger/codec.ts`, `src/lib/ledger/fold.ts`, `src/lib/progress.ts`, `tests/ledger/contract-v33.test.ts`, `tests/ledger/contract-v32.test.ts`, `tests/ledger/gen.ts`, `tests/ledger/codec.test.ts`, `tests/ledger/fold.test.ts`, `tests/ledger/facade.test.ts`.
+- **Accept:** §3 as specified: SCHEMA_VERSION 6 and AGGREGATE_VERSION 4 with the upgrade chain v1→v2→v3→v4 at hydrate (no empty first paint); no new event kind and no new ref grammar; checkData accepts ProveData v2, the item sources `form` and `play`, the predict sources `play` and `practice`, the form keys `formId`, `formSlot`, `formSet` and `track` (never `data.form` or `data.slot`, which stay the ticket form and the Today position), `return: true` on an item, PlayData's `metric` and `levels`, EplbSpecData, the `fw:runs` and `profile:background` working keys and fleet-act data with `receipts` and `rubric`, and rejects every malformed case listed in §3.2 (including provenance `proved` on a v1, a not-ok or a hash-less prove event); RunRecord and FleetActData are exported from types.ts in the shape the Opus check of 3a-12 approved before this task started (§3.2), and 3a-12 imports them; the stretch shapes of §3.2 pass the codec, so no stretch task edits the ledger; recordProve takes provenance `practice` (the default, so v1's callers and tests/forge/prove.test.ts are unchanged) or `proved`; the fold derives `proved[lab]` and `labFleetOk[lab]`; contract-v32 relaxes its pins to 'at least'; the property suite (P6, P7, round trip) passes at 100 seeds × 40 ops with every new shape in OPS_TABLE (a v1 return item and a form item among them); a Wave 2 fixture ledger derives identically on every v3 field; the schema guard at 6 vs 5 goes read-only; entry growth ≤ 1 KB gzip, printed.
+
+**3a-01b · Economy for Wave 3: RING 0's lab 06 race row from `labFleetOk`, the play prices, ROOT kept green (spec §3.4)** S. Depends: 3a-01.
+- **Files:** `src/lib/economy.ts`, `src/lib/economy-table.ts`, `src/pages/progress/ring-rows.ts`, `tests/economy/rings.test.ts`, `tests/economy/table.test.ts`.
+- **Accept:** §3.4: RING 0 (economy.ts) adds lab 06 within 3 points of the reference from the fold's `labFleetOk['batching-scheduler']`, and ring-rows.ts adds its checklist row (RING 0 goes from 2 rows to 3, so the row-count pin at tests/economy/rings.test.ts:595 on 2c becomes [3, 3, 3, 6]); PLAY_MINUTES prices tiling-cube 25 and eplb 15, and the table test (tests/economy/table.test.ts:67 on 2b) allows prices for plays that register later, as it did for the scheduler; ROOT's cold-check part is unchanged: it already reads the `ach:root-cold` achievement (25e4b8a, economy.ts:290-322 on 2c), and its existing tests stay green; RING 0 is tested with and without `labFleetOk`.
 
 **3a-02 · Routes and budgets: /me with /progress redirecting, nav and palette, budget lines for /me and the two plays, a11y defaults (spec §2.2, §17.1)** M. Depends: this spec.
 - **Files:** `src/App.tsx`, `src/pages/Me.tsx`, `scripts/prepare-pages.mjs`, `src/components/nav-links.ts`, `tests/shell/nav.test.ts`, `src/components/CommandPalette.tsx`, `src/components/Footer.tsx`, `src/components/Navbar.tsx`, `src/pages/Forge.tsx`, `scripts/verify-bundle.ts`, `scripts/a11y.mjs`.
@@ -1358,16 +1398,20 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **3a-03 · Lesson and bundle types, exporter and renderer seams: Fleet exercise blocks, active isomorphism fields, Prove-it v2 and faded ladders in bundles (spec §2.3)** M. Depends: 3a-01.
-- **Files:** `src/data/lessons/types.ts`, `src/data/forge/types.ts`, `src/pages/lesson/exercise.tsx`, `src/pages/lesson/blocks.tsx`, `src/components/lesson/Isomorphism.tsx`, `src/components/fleet-ex/FleetExercise.tsx`, `src/lib/world/fleet-ex/index.ts`, `scripts/export-lessons-md.ts`, `tests/lesson/isomorphism-view.test.ts`, `tests/lessons/export-blocks.test.ts`, `public/lessons-md/*.md`.
-- **Accept:** §2.3: ExerciseBlock becomes SimExerciseBlock | FleetExerciseBlock and every reader narrows; IsomorphismBlock gains principle, breakItem and kcs, IsomorphismPair gains work (typed with the ledger's Background); ForgeBundle gains prove2 and fade, with ProveV2Spec typed in forge/types.ts; ExerciseView renders a lazy FleetExercise stub (renders nothing, exports its final props type) for a fleet block; IsomorphismView moves unchanged into src/components/lesson/Isomorphism.tsx (a test renders a T2 panel identically); src/lib/world/fleet-ex/index.ts exports the FleetExerciseDef type and an empty FLEET_EXERCISES; the exporter prints fleet blocks (title plus 'run it in the lesson'), pairs with their breaks and the principle, and a break item without its key; every lesson exports byte-identically today (no lesson uses the new fields yet).
+- **Files:** `src/data/lessons/types.ts`, `src/data/forge/types.ts`, `src/pages/lesson/exercise.tsx`, `src/pages/lesson/blocks.tsx`, `src/components/lesson/Isomorphism.tsx`, `src/components/fleet-ex/FleetExercise.tsx`, `src/lib/world/fleet-ex/index.ts`, `src/pages/Progress.tsx`, `scripts/export-lessons-md.ts`, `tests/lesson/isomorphism-view.test.ts`, `tests/lessons/export-blocks.test.ts`, `public/lessons-md/*.md`.
+- **Accept:** §2.3: ExerciseBlock becomes SimExerciseBlock | FleetExerciseBlock and every reader narrows (src/pages/Progress.tsx:97 reads `block.tasks` and narrows with `'tasks' in block`; any other src reader of exercise-only fields that `tsc -b` flags is narrowed the same way and listed in the PR); IsomorphismBlock gains principle, breakItem and kcs, IsomorphismPair gains work (typed with the ledger's Background); ForgeBundle gains prove2 and fade, with ProveV2Spec typed in forge/types.ts; ExerciseView renders a lazy FleetExercise stub (renders nothing, exports its final props type) for a fleet block; IsomorphismView moves unchanged into src/components/lesson/Isomorphism.tsx (a test renders a T2 panel identically); src/lib/world/fleet-ex/index.ts exports the FleetExerciseDef, SweepPoint and SweepResult types (§5.3) and an empty FLEET_EXERCISES; the exporter prints fleet blocks (title plus 'run it in the lesson'), pairs with their breaks and the principle, and a break item without its key; lessons without isomorphism breaks export byte-identically; the ten T0-T2 lessons whose 29 pairs carry `breaks` change only by their 'where it breaks' lines (the diff is in the PR), and a test pins one such pair's exported line; public/lessons-md is regenerated.
 
-**3a-04 · Item gates for Wave 3: the iso and twin pools, the --subset margin report, alignment numbering, the PRIMM row (spec §4.1)** M. Depends: 3a-03.
+**3a-04 · Item gates for Wave 3: the iso and twin pools, and the --subset margin report (spec §4.1)** M. Depends: 3a-03.
 - **Files:** `scripts/item-pools.ts`, `scripts/verify-items.ts`, `scripts/baselines/verify-items.json`, `tests/items/verify-items.test.ts`.
-- **Accept:** §4.1: item-pools.ts collects `iso` (every IsomorphismBlock.breakItem, ref `item:<lesson>.iso.<n>.break`) and `twin` (every src/data/twins/<lab>.ts exporting TWIN_ITEMS, found by readdir); both run through checkPoolItems, the cue limits, the odd-one-out check, the ratchet and the adversary (ALL_OWN_POOLS), with baseline entries; OWN_POOLS in item-cues.ts is untouched (mc-cues pins it); `bun run verify:items -- --subset <ref-prefix>` prints that subset's hit rate per strategy and the adversary's, and exits 1 above chance + 10 points (the content margin, §4.1); alignment refs count from 0 in item-pools.ts as AlignItem does (fixture updated); the PRIMM row prints with the gate's own comparison; fixtures prove a break item without a why per option fails and a subset over the margin fails; verify:items passes on this tree.
+- **Accept:** §4.1: item-pools.ts collects `iso` (every IsomorphismBlock.breakItem, ref `item:<lesson>.iso.<n>.break`, n counting the lesson's isomorphism blocks from 1, as align refs count) and `twin` (every src/data/twins/<lab>.ts exporting TWIN_ITEMS, found by readdir); both run through checkPoolItems, the cue limits, the odd-one-out check, the ratchet and the adversary (ALL_OWN_POOLS), with baseline entries; OWN_POOLS in item-cues.ts is untouched (mc-cues pins it); `bun run verify:items -- --subset <selector>` takes comma-separated ref prefixes or one /regex/, matched against the ref verify-items prints for each item (`<lesson> q<n>` for lesson quizzes, `forge/<lab dir> <item id>` for PRIMM items, `item:…` for the align, iso and twin pools), prints n and the subset's hit rate per strategy and the adversary's, exits 1 when the subset is empty, exits 1 above chance + 10 points when n ≥ 12, and below n = 12 reports the rates without failing (the merged-level run decides, §4.1); alignment refs stay 1-based in both AlignItem and item-pools (2c fix 9111d08) and tests/lesson/align.test.ts stays green; the PRIMM row keeps the gate's own comparison (already true since 25e4b8a); fixtures prove a break item without a why per option fails, a PRIMM subset (`forge/kv-block-manager `) selects at least one item, an empty subset fails, a regex subset over iso refs works, and a subset of n ≥ 12 over the margin fails; verify:items passes on this tree.
 
-**3a-05 · Play, sim, determinism and mentor gates: practice bands by module, fleet blocks in hands-on, per-file task homes, faded ladders (spec §4.2)** S-M. Depends: 3a-03.
-- **Files:** `scripts/verify-plays.ts`, `src/lib/world/bands/block-placement.ts`, `src/lib/world/bands/scheduler.ts`, `tests/plays/bands.test.ts`, `tests/plays/play.test.ts`, `tests/kc/hands-on.test.ts`, `tests/sims/registry.test.ts`, `src/lib/sims/registry.ts`, `scripts/verify-determinism.ts`, `scripts/lint-mentor.ts`, `tests/forge/ladder.test.ts`, `tests/sims/host.test.ts`.
-- **Accept:** §4.2: verify-plays reads each play's practice band from src/lib/world/bands/<id>.ts (block-placement and scheduler move there unchanged; a registered play without one fails), puts src/components/fleet-ex in the mirror scope (MIRROR_SCOPE; tests/sims/host.test.ts follows), and keeps GATE_3D; the hands-on test counts a fleet block whose exercise is in FLEET_EXERCISES and still gates at ≥ 10; registry.test.ts accepts any outcome-id prefix a tasks file declares and narrows fleet blocks; a tasks file may export HOME {simId, machine?}, with LEGACY_HOME as the fallback; verify-determinism's scope adds src/lib/learner/{provenance,vrk,competence,cold-checks,forms,iso}.ts and src/lib/forge/prove2.ts; lint-mentor accepts a bundle with fade 'r2' whose required checks have R0-R2 only, and still requires R0-R4 elsewhere (tested); verify:plays, verify:determinism and verify:mentor pass.
+**3a-05 · Play gates: practice bands by module, claim ids from the full registry, the fleet-ex mirror scope, PLAY_IDS pins that admit new plays (spec §4.2)** S-M. Depends: 3a-03, 3a-07.
+- **Files:** `scripts/verify-plays.ts`, `src/lib/world/bands/block-placement.ts`, `src/lib/world/bands/scheduler.ts`, `tests/plays/bands.test.ts`, `tests/plays/play.test.ts`, `tests/plays/scheduler.test.ts`, `tests/sims/host.test.ts`.
+- **Accept:** §4.2: verify-plays reads each play's practice band from src/lib/world/bands/<id>.ts, whose `band(read)` returns Promise<{ok, detail}> and reads trace files only through the injected `read(repoPath)` loader (no node:fs under src/lib/world/bands); block-placement and scheduler move there unchanged, the scheduler band keeping its rule (ok = rules 1 and 4; the five-rule result in the detail); a registered play without a band module fails; `practiceBandOf(id, root)` stays exported with its signature, delegates to the module and returns null for an unknown play (tests/plays/scheduler.test.ts:420-423 stays green); verify-plays builds `claimIds` from src/data/claims/all.ts (§4.4), and every card-claim check in tests/plays/play.test.ts and tests/plays/scheduler.test.ts reads all.ts too, so 3b-01 and 3b-02 cite lazy claims; the exact PLAY_IDS pins (play.test.ts:84, scheduler.test.ts:114) become 'starts with block-placement, scheduler' and the PLAYS, PLAY_REGISTRY and PLAY_PRODUCTION_ROWS ties to PLAY_IDS stay; src/components/fleet-ex joins the mirror scope (MIRROR_SCOPE; tests/sims/host.test.ts follows); GATE_3D is unchanged; verify:plays passes.
+
+**3a-05b · Sim, hands-on, determinism and mentor gates: fleet blocks in hands-on, per-file task homes, faded ladders (spec §4.2)** S-M. Depends: 3a-03.
+- **Files:** `tests/kc/hands-on.test.ts`, `tests/sims/registry.test.ts`, `src/lib/sims/registry.ts`, `scripts/verify-determinism.ts`, `scripts/lint-mentor.ts`, `tests/forge/ladder.test.ts`.
+- **Accept:** §4.2: the hands-on test counts a fleet block whose exercise is in FLEET_EXERCISES and still gates at ≥ 10; its 'a pending play and an unregistered task do not count' fixture uses a play id that is not registered ('no-such-play') instead of 'scheduler', which 2b registers (it fails at :88 on the 2b + 2c merge); registry.test.ts accepts any outcome-id prefix a tasks file declares and narrows fleet blocks; a tasks file may export HOME {simId, machine?}, with LEGACY_HOME as the fallback; verify-determinism's scope adds src/lib/learner/{provenance,vrk,competence,cold-checks,forms,iso}.ts and src/lib/forge/prove2.ts; lint-mentor accepts a bundle with fade 'r2' whose required checks have R0-R2 only, and still requires R0-R4 elsewhere (tested); verify:determinism and verify:mentor pass.
 
 **3a-06 · Mount points for Wave 3 panels: twin, race and Prove-it v2 on ForgeLab, the 30-day return on Today (spec §2.3)** S. Depends: w2:2b-12.
 - **Files:** `src/pages/ForgeLab.tsx`, `src/components/forge/TwinPanel.tsx`, `src/components/forge/RaceReference.tsx`, `src/components/forge/ProveFromModule.tsx`, `src/pages/today/DoneCard.tsx`, `src/pages/today/EmptyState.tsx`, `src/components/learner/ProveReturnCard.tsx`, `tests/forge/panels.test.ts`, `tests/forge/forgelab-page.test.ts`.
@@ -1375,40 +1419,40 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **3a-07 · Lazy claim groups: registerClaims, a full registry for tooling, and a test that /boot and /today never load them (spec §4.4)** S-M. Depends: this spec.
-- **Files:** `src/data/claims/index.ts`, `src/data/claims/all.ts`, `scripts/verify-claims.ts`, `src/components/ClaimsTable.tsx`, `scripts/build-search-index.ts`, `tests/claims/lazy.test.ts`, `public/claims.json`, `src/data/search-index.json`.
-- **Accept:** §4.4: registerClaims(list) adds a group to the registry once (idempotent; a duplicate id with a different body throws); getClaim names the group to import when an id is unknown; src/data/claims/all.ts imports the registry and every group under src/data/claims/lazy/ and is what verify-claims, the /freshness claims table and the search index read; a static-import walk proves Boot.tsx and Today.tsx never reach src/data/claims/lazy/ (the tests/boot/imports.test.ts pattern); public/claims.json and the index are byte-identical (no group exists yet).
+- **Files:** `src/data/claims/index.ts`, `src/data/claims/all.ts`, `scripts/verify-claims.ts`, `src/components/ClaimsTable.tsx`, `scripts/build-search-index.ts`, `scripts/verify-search-index.ts`, `tests/claims/lazy.test.ts`, `public/claims.json`, `src/data/search-index.json`.
+- **Accept:** §4.4: registerClaims(list) adds a group to the registry once (idempotent; a duplicate id with a different body throws); getClaim names the group to import when an id is unknown; src/data/claims/all.ts imports the registry and every group under src/data/claims/lazy/ and is what verify-claims, the /freshness claims table, the search-index builder and verify-search-index read (verify-search-index.ts:12 imports `byId` from the eager registry today; it reads all.ts, so a lazy claim's index row is not 'not in the registry'); verify-plays (3a-05) and verify-kc (3a-09) switch to all.ts after this task; a static-import walk proves Boot.tsx and Today.tsx never reach src/data/claims/lazy/ (the tests/boot/imports.test.ts pattern), and src/data/plays.ts imports no lazy group; public/claims.json and the index are byte-identical (no group exists yet); verify:claims and verify:search-index pass.
 
 **3a-08 · Wave 3 claims: H100 tiling figures and FP8, DeepSeek-V3 experts and EPLB, engine flags for EPLB and disaggregation, the two twins, the cube and play card rows (spec §4.4)** M. Depends: 3a-07.
 - **Files:** `src/data/claims/lazy/tiling.ts`, `src/data/claims/lazy/moe.ts`, `src/data/claims/lazy/twins.ts`, `src/data/claims/lazy/serving3.ts`, `src/data/claims/all.ts`, `scripts/verify-claims.ts`, `tests/claims/wave3.test.ts`, `public/claims.json`, `src/data/search-index.json`.
 - **Accept:** §4.4: every claim in the §4.4 table exists with url, quote and verifiedAt (spec and price), or a pin {repo, ref} whose url contains the ref (status claims about engine flags, and the two twins with ttlDays 60), or is dropped with a note in the PR, never invented; the H100 FP8 dense figure is a derived claim from the sparse one with a DERIVATIONS entry; the DeepSeek-V3 expert counts reuse the zoo's pinned config revision; verify:claims passes; the index grows ≤ 1.2 KB gzip (printed); public/claims.json regenerated.
 - **Owner step (not build acceptance):** The owner signs off every new quote and pin in the PR.
 
-**3a-09 · KC contract for Wave 3: t4.raster-l2-reuse and the gen links for tiling, prefill and rollout (spec §4.3)** S-M. Depends: this spec.
+**3a-09 · KC contract for Wave 3: t4.raster-l2-reuse and the gen links for tiling, prefill and rollout (spec §4.3)** S-M. Depends: 3a-07.
 - **Files:** `src/data/kc/ids.ts`, `src/data/kc/t2.ts`, `src/data/kc/t4.ts`, `src/data/kc/t5.ts`, `src/data/kc/t6.ts`, `scripts/verify-kc.ts`, `tests/kc/graph.test.ts`, `src/data/lessons/t4/matmul-tiling.ts`, `public/lessons-md/*.md`, `src/data/search-index.json`.
-- **Accept:** §4.3: t4.raster-l2-reuse is defined (t4.l6, requires t4.tiling-intensity) and t4.l6's Lesson.kcs lists it third; every gen link of the §4.3 table is set, so each family lands later without a KC edit; PENDING_FAMILIES gains tiling, prefill and rollout; no confusable set changes (Q11; graph.test.ts:54-65 pins Wave 1's pairs); verify:kc passes; KC count printed (154).
+- **Accept:** §4.3: t4.raster-l2-reuse is defined (t4.l6, requires t4.tiling-intensity) and t4.l6's Lesson.kcs lists it third; every gen link of the §4.3 table is set, so each family lands later without a KC edit; PENDING_FAMILIES gains tiling, prefill and rollout; verify-kc builds its known-claims set from src/data/claims/all.ts (verify-kc.ts:414-427 reads the eager CLAIMS today), so a KC may cite a Wave 3 claim; no confusable set changes (Q11; graph.test.ts:54-65 pins Wave 1's pairs); verify:kc passes; KC count printed (154).
 
 **3a-10 · Labs 04-08 metadata: stages, KCs and expectations in labs.ts, lab tags on KCs, STAGE markers, repacked archives (spec §8.1)** M. Depends: 3a-09.
-- **Files:** `src/data/labs.ts`, `src/data/kc/t2.ts`, `src/data/kc/t3.ts`, `src/data/kc/t5.ts`, `src/data/kc/t6.ts`, `labs/mpmc-queue/src/queue.rs`, `labs/toy-executor/src/executor.rs`, `labs/batching-scheduler/src/scheduler.rs`, `labs/radix-cache/src/cache.rs`, `labs/xgrammar-lite/src/grammar.rs`, `labs/*/calibration.json`, `public/labs/*.zip`, `public/labs/*.tar.gz`, `tests/forge/labs-meta.test.ts`.
-- **Accept:** §8.1: every check of labs 04-08 has the stage its crate's `list` reply gives, the KCs of the §8.1 table and an expectation; each tagged KC's `labs` names the lab, and verify-kc's lab and readiness rules pass; the five TODO files carry STAGE markers and a header saying which check catches which mistake, with signatures and lib.rs unchanged; calibration reruns only for a crate whose calibration.json pins an edited file (from the private solutions in the main checkout's labs/_solutions, never committed); zips and .tar.gz repacked; verify:labs, verify:guardrails and verify:kc pass; a test holds labs.ts stages to each crate's committed calibration list.
+- **Files:** `src/data/labs.ts`, `src/data/kc/t2.ts`, `src/data/kc/t3.ts`, `src/data/kc/t5.ts`, `src/data/kc/t6.ts`, `labs/mpmc-queue/src/queue.rs`, `labs/toy-executor/src/executor.rs`, `labs/batching-scheduler/src/scheduler.rs`, `labs/radix-cache/src/cache.rs`, `labs/xgrammar-lite/src/grammar.rs`, `labs/*/calibration.json`, `public/labs/*.zip`, `public/labs/*.tar.gz`, `tests/forge/labs-meta.test.ts`, `tests/kc/graph.test.ts`.
+- **Accept:** §8.1: every check of labs 04-08 has the stage its crate's `list` reply gives, the KCs of the §8.1 table and an expectation; each tagged KC's `labs` names the lab, and verify-kc's lab and readiness rules pass; the KC table pins in tests/kc/graph.test.ts (:195-212 on 2c: the `labs` and `requires` of t5.continuous-batching, t5.admission-headroom, t5.sched-order and t5.block-refcounts) move with the new tags and any `requires` edge added; the five TODO files carry STAGE markers and a header saying which check catches which mistake, with signatures and lib.rs unchanged; calibration reruns only for a crate whose calibration.json pins an edited file (from the private solutions in the main checkout's labs/_solutions, never committed); zips and .tar.gz repacked; verify:labs, verify:guardrails and verify:kc pass; a test holds labs.ts stages to each crate's committed calibration list.
 
 **3a-11 · Verb calls in the lab worker, and the Prove-it v2 core: plan, grade, eligibility, retry and return timing (spec §7.1, §7.3)** M. Depends: 3a-03.
 - **Files:** `src/workers/lab-protocol.ts`, `src/workers/lab.worker.ts`, `src/lib/lab-worker.ts`, `src/lib/forge/prove2.ts`, `tests/forge/prove2.test.ts`, `tests/forge/lab-calls.test.ts`, `tests/forge/fixtures.ts`.
-- **Accept:** §7.1 and §7.3: a `calls` request instantiates the module once in the lab worker, sends each line through ks_invoke in order and returns the replies, with one 2 s budget for the whole list, LabTimeoutError on expiry and a trap reported as a failed call; replies are capped at 4 KiB each and `@reference` builds are refused; prove2.ts plans a question from (template, seed), grades the learner's answer against the module's replies, and returns a ProveResult v2 whose provenance is `proved` only when the answer is right and the run that graded this module (its sha256) had credit `unseen`; a miss opens the next credited attempt 24 h later and attempts in between are practice; the 30-day return is due 30 local days after a lab's first prove event; tested with fake modules (fixtures.ts, which no later task edits).
+- **Accept:** §7.1 and §7.3: a `calls` request instantiates the module once in the lab worker, sends each entry of `calls` through ks_invoke in order (an entry may contain newlines: a batching-scheduler `schedule` call is one multi-line entry, never split) and returns the replies, with one 2 s budget for the whole list, LabTimeoutError on expiry and a trap reported as a failed call; replies are capped at 4 KiB each and `@reference` builds are refused; prove2.ts plans a question from (template, seed), grades the learner's answer against the module's replies, and returns a ProveResult v2 whose provenance is `proved` only when the answer is right and the run that graded this module (its sha256) had credit `unseen`; a miss opens the next credited attempt 24 h later and attempts in between are practice; the 30-day return is due 30 local days after a lab's first prove event; tested with fake modules (fixtures.ts, which no later task edits).
 
-**3a-12 · Receipts engine: numeric run values, run records and their id, the receipt-token parser, verification by re-run, uncited figures [Opus first: approve the run record and the rounding rule] (spec §10.1-10.3)** M. Depends: w2:2b-17, w2:2b-21.
+**3a-12 · Receipts engine: numeric run values, run records and their id, the receipt-token parser, verification by re-run, uncited figures [Opus first: approve the run record before 3a-01 starts, and the rounding rule] (spec §10.1-10.3)** M. Depends: w2:2b-17, w2:2b-21, 3a-01.
 - **Files:** `src/lib/fleet-receipts.ts`, `src/lib/fleet-week.ts`, `src/workers/sim-client.ts`, `tests/fleet/receipts.test.ts`, `tests/fleet/act-values.test.ts`, `tests/world/faults.test.ts`.
-- **Accept:** §10.1-10.3: ActResult gains `values` (numbers, by §10.1's keys) for Acts I-III with `metrics` unchanged; runSim takes an optional entropy and returns the entropy it used; runRecord() builds {act, job with module bytes replaced by {slot, sha256}, entropy, values, at} and receiptId = the first 8 hex of sha256(stableStringify(record without at)); parseReceipts reads `[[r:<8 hex> <key≥<value>]]` tokens; verifyReceipts re-runs each distinct record with the same entropy and module bytes (from the components store) and verifies a cited value when it equals the re-run value rounded to the decimals written (at most 2); uncitedFigures flags every %, ms, s, iters, tok/s, req/s or $ figure outside a token; tests prove an edited value, a record for another entropy and a module missing from the device each fail, and a correct receipt passes; Acts I-III outputs are otherwise byte-identical: tests/world/faults.test.ts leaves the new `values` field out of its hashed outputs, and EXISTING_RUNS_SHA256 does not change (fix the change, never the hash).
+- **Accept:** §10.1-10.3: ActResult gains `values` (numbers, by §10.1's keys) for Acts I-III with `metrics` unchanged; runSim takes an optional entropy and returns the entropy it used; RunRecord is imported from src/lib/ledger/types.ts (3a-01 defines it; never redefined here); runRecord() builds {id, act, job with module bytes replaced by {slot, sha256}, entropy, values, at} with id = the first 8 hex of sha256(stableStringify(record without id and at)), and every record passes 3a-01's `fw:runs` codec (job ≤ 4 KB serialized, ≤ 40 values; tested); parseReceipts reads tokens of the form `[[r:7f3a9c21 goodput=41.2]]` (an 8-hex id, a value key, an equals sign, a number); verifyReceipts re-runs each distinct record with the same entropy and module bytes (from the components store) and verifies a cited value when it equals the re-run value rounded to the decimals written (at most 2); uncitedFigures flags every %, ms, s, iters, tok/s, req/s or $ figure outside a token; tests prove an edited value, a record for another entropy and a module missing from the device each fail, and a correct receipt passes; Acts I-III outputs are otherwise byte-identical: tests/world/faults.test.ts leaves the new `values` field out of its hashed outputs, and EXISTING_RUNS_SHA256 does not change (fix the change, never the hash).
 
 **Level 1**
 
-**3a-13 · The tiling world and the `tiling` family: the six levels on claims, and the cube practice band [Opus first: approve each level formula and its pins (64, 448, 3 CTAs, 130.0 vs 734.6, 590.7, 127.5)] (spec §6.1-6.2)** M-L. Depends: 3a-05, 3a-08, 3a-09.
+**3a-13 · The tiling world and the `tiling` family: the six levels on claims, and the cube practice band [Opus first: approve each level formula and its pins (64, 448, 3 CTAs, 130.0 vs 734.6, 590.4, 127.5)] (spec §6.1-6.2)** M-L. Depends: 3a-05, 3a-08, 3a-09.
 - **Files:** `src/lib/world/tiling.ts`, `src/lib/items/families/tiling.ts`, `src/lib/world/bands/tiling-cube.ts`, `tests/world/tiling.test.ts`, `tests/items/tiling.test.ts`, `tests/fixtures/items/hashes/tiling.json`.
-- **Accept:** §6.1-6.2: tiling.ts implements tileAI, smemBytes, maxTile, ctasPerSm, waveAI (row and grouped raster, with the L2 window check) and qBlockAI with products and sums only (determinism scope), on the §4.4 claims; pins: a 128 × 128 FP16 tile 64 FLOP/B; the largest square tile under 227 KiB at k = 64 and 2 stages 448; 3 CTAs per SM at T = 128; the 16384³ GEMM's 132-CTA wave 130.0 FLOP/B row-major and 734.6 grouped 11 × 12; the FP8 ridge 590.7; the FlashAttention Q-block pass at N = 32768, Br = 128 127.5; the family serves five numeric variants (levels 2-6 of the cube; level 1 is roofline/tile-ai) at levels 0-3 with ratio rules, Gen.kcs equal to §4.3's row, chunk ≤ 8 KB gzip (printed); verify:generators passes at 1,000 seeds; the practice band holds.
+- **Accept:** §6.1-6.2: tiling.ts implements tileAI, smemBytes, maxTile, ctasPerSm, waveAI (row and grouped raster, with the L2 window check, one CTA per SM as a persistent kernel) and qBlockAI with products and sums only (determinism scope), on the §4.4 claims; pins: a 128 × 128 FP16 tile 64 FLOP/B; the largest square tile whose slabs fit 227 KiB at k = 64 and 2 stages 448 (SMEM only: ctasPerSm(448) = 0, and the largest square tile with ≥ 1 CTA per SM is 256); 3 CTAs per SM at T = 128; the 16384³ GEMM's 132-CTA wave 130.0 FLOP/B row-major and 734.6 grouped 11 × 12; the FP8 ridge 590.4 (FP8 rate = 2 × BF16 dense, the rule RooflineSim and the roofline family use; a test holds hw.h100-sxm.fp8-dense within 1 TFLOPS of 2 × 989) and the square tile that reaches it T ≥ 591; the FlashAttention Q-block pass at N = 32768, Br = 128 127.5; every tile a level's debrief names as a reference choice has ctasPerSm ≥ 1, or the debrief names the register cap (tested over the §6.3 debriefs); the family serves five numeric variants (levels 2-6 of the cube; level 1 is roofline/tile-ai) at levels 0-3 with ratio rules, Gen.kcs equal to §4.3's row, chunk ≤ 8 KB gzip (printed); verify:generators passes at 1,000 seeds; the practice band holds.
 - **Pool:** none: numeric variants only.
 
 **3a-14 · The EPLB world: seeded expert loads, replicate-then-place turns, the EPLB ghost, first-divergence debrief, Compose dials and the equivalence proof [Opus first: approve the turn rule, the band and the debrief sentences on 50 seeds] (spec §5.2)** M. Depends: 3a-05, 3a-08.
 - **Files:** `src/lib/world/eplb.ts`, `src/lib/world/eplb-policy.ts`, `src/lib/world/bands/eplb.ts`, `tests/world/eplb.test.ts`, `tests/world/eplb-policy.test.ts`.
-- **Accept:** §5.2: drawLoads(seed) gives 16 expert loads in integer per-mille summing to 1,000, inside the band; the lockstep model (world/play.ts) runs 4 replicate turns, then 20 place turns, heaviest copy first; the ghost replicates the expert with the highest load per copy and places each copy on the least-loaded GPU with a free slot (DeepSeek EPLB's balanced packing); eplbDivergence names the first recoverable divergence with the §5.2 sentences; compileEplbPolicy({replicate: 'per-copy', place: 'least-loaded'}) equals the ghost at every turn on the practice load and 1,000 banded loads; deterministic; no Math.pow.
+- **Accept:** §5.2: drawLoads(seed) gives 16 expert loads in integer per-mille summing to 1,000, inside the band; the lockstep model (world/play.ts) runs 4 replicate turns, then 20 place turns, heaviest copy first; the ghost replicates the expert with the highest load per copy and places each copy on the least-loaded GPU with a free slot (DeepSeek EPLB's balanced packing); eplbDivergence names the first recoverable divergence with the §5.2 sentence templates, and tests generate each sentence from the world on banded seeds (never copied from the spec's examples): a place sentence's 'least loaded with a free slot' GPU is the one the ghost picks in that state, and the outcome sentence speaks of the layer's expert phase; compileEplbPolicy({replicate: 'per-copy', place: 'least-loaded'}) equals the ghost at every turn on the practice load and 1,000 banded loads; deterministic; no Math.pow.
 
 **3a-15 · Generator family `prefill`: P:D ratio, KV transfer time, load or recompute, the timing-oracle gap, the namespace cost (spec §5.1)** S-M. Depends: 3a-08, 3a-09.
 - **Files:** `src/lib/items/families/prefill.ts`, `tests/items/prefill.test.ts`, `tests/fixtures/items/hashes/prefill.json`.
@@ -1417,40 +1461,40 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3a-16 · Generator family `rollout`: rollout share, the long tail, group tokens, weight-sync seconds (spec §5.1)** S-M. Depends: 3a-08, 3a-09.
 - **Files:** `src/lib/items/families/rollout.ts`, `tests/items/rollout.test.ts`, `tests/fixtures/items/hashes/rollout.json`.
-- **Accept:** §5.1 (rollout): four numeric variants at levels 0-3 with ratio rules and pins; Gen.kcs = t6.rollout-bound-rl, t6.weight-sync; verify:generators passes at 1,000 seeds; chunk ≤ 8 KB gzip, printed.
+- **Accept:** §5.1 (rollout): four numeric variants at levels 0-3 with ratio rules and pins; `sync-seconds` divides params × bytes by one seeded shard count S (the ranks the weights are split over, labelled synthetic) and its slip is rollout.unsliced (×S), never a TP·EP product; bench.checkpoint-engine.sync appears only as a cited comparison line, never as a pin; Gen.kcs = t6.rollout-bound-rl, t6.weight-sync; verify:generators passes at 1,000 seeds; chunk ≤ 8 KB gzip, printed.
 - **Pool:** none: numeric variants only.
 
 **3a-17 · K5 selectors: provenance weights, VRK30, cold-check summaries and competence statements; forms never reschedule cards [Opus first: approve the VRK30 definition on fixture ledgers] (spec §12.1-12.4)** M. Depends: 3a-01.
 - **Files:** `src/lib/learner/provenance.ts`, `src/lib/learner/vrk.ts`, `src/lib/learner/competence.ts`, `src/lib/learner/cold-checks.ts`, `src/lib/learner/cards.ts`, `tests/learner/vrk.test.ts`, `tests/learner/competence.test.ts`, `tests/learner/cold-checks.test.ts`, `tests/learner/cards.test.ts`.
 - **Accept:** §12.1-12.4: creditOf(provenance) is 1.0 for proved and unseen, 0.3 for lab-green, practice and assisted, and 0 for field and anything else (read time, never stored); selectVrk30(events, content, now) returns the retained KCs (the latest credited, unassisted check ≥ 30 days after the KC's card was created is right), the checked KCs, the share retained with its Wilson interval, and the count per active study-month; selectColdCheckSummary gives n, accuracy and Wilson intervals at ≥ 7 and ≥ 30 days, overall and by track; selectCompetence returns a KC's `can` line after ≥ 6 credited fresh items over ≥ 2 local days with ≥ 5 of the last 6 right; cards.ts ignores items with src 'form' (measurement never reschedules a card, W18); all pure with `now` a parameter; fixture ledgers cover every rule.
 
-**3a-19 · Remaining P2, allocator and block-table explorer: t-double-free and the four t-blk tasks as outcome tasks, the superseded legacy ids retired (spec §13)** S-M. Depends: 3a-05.
+**3a-19 · Remaining P2, allocator and block-table explorer: t-double-free and the four t-blk tasks as outcome tasks, the superseded legacy ids retired (spec §13)** S-M. Depends: 3a-05b.
 - **Files:** `src/components/sims/allocator.tasks.ts`, `src/components/sims/AllocatorSim.tsx`, `src/lib/sims/models/allocator.ts`, `src/components/sims/blockTableExplorer.tasks.ts`, `src/components/sims/BlockTableExplorer.tsx`, `src/data/lessons/t5/pagedattention-deep-dive.ts`, `tests/sims/allocator.test.ts`, `tests/sims/block-table.test.ts`, `tests/sims/registry.test.ts`, `tests/sims/kv.test.ts`, `public/lessons-md/*.md`.
 - **Accept:** §13: alloc.double-free and blk.share, blk.cow, blk.preempt and blk.sweep are outcome tasks (numeric predict, an observe key the sim emits, a three-idea explain, a phone canonical where the model exists) that name the old ids in legacyId; t-frag, t-coalesce, t-paged, t-quiz and t-trace-lab leave the registry, the detection calls and the lab checklist, and old completions still show as 'you finished the old click-through'; t5.l5's exercise block lists the four blk ids (the pins at tests/sims/kv.test.ts:341 and tests/sims/registry.test.ts:78 move with them); verify:plays passes; exporter fresh. UI check (§17.2) on `/lab/allocator`, `/lab/kv-calc`, `/lesson/t5.l5`.
 - **Pool:** none: sim and Fleet task predictions are numeric (Wave 1's rule for task predictions).
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews the five tasks.
 
-**3a-20 · Remaining P2, one registry (A): the inline task lists of MemoryGridSim and VmPagingSim move into tasks files (spec §13)** S. Depends: 3a-05.
+**3a-20 · Remaining P2, one registry (A): the inline task lists of MemoryGridSim and VmPagingSim move into tasks files (spec §13)** S. Depends: 3a-05b.
 - **Files:** `src/components/sims/memoryGrid.tasks.ts`, `src/components/sims/latencyWalk.tasks.ts`, `src/components/sims/vmPaging.tasks.ts`, `src/components/sims/MemoryGridSim.tsx`, `src/components/sims/VmPagingSim.tsx`, `tests/sims/inline-registry-a.test.ts`.
 - **Accept:** §13: the grid, latency and paging lists become legacy entries of tasks files that export HOME, keep their ids and render exactly as before; the components import them; a test proves every id of those lists resolves in the registry and no array literal of tasks remains in the two components. UI check (§17.2) on `/lab/memory-grid`, `/lab/paging`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
-**3a-21 · Remaining P2, one registry (B): the inline task lists of QuantizerSim, WgslSim, BatchingSim and ToyEngineSim move into tasks files (spec §13)** S. Depends: 3a-05.
+**3a-21 · Remaining P2, one registry (B): the inline task lists of QuantizerSim, WgslSim, BatchingSim and ToyEngineSim move into tasks files (spec §13)** S. Depends: 3a-05b.
 - **Files:** `src/components/sims/quantizer.tasks.ts`, `src/components/sims/wgsl.tasks.ts`, `src/components/sims/batching.tasks.ts`, `src/components/sims/toyEngine.tasks.ts`, `src/components/sims/QuantizerSim.tsx`, `src/components/sims/WgslSim.tsx`, `src/components/sims/BatchingSim.tsx`, `src/components/sims/ToyEngineSim.tsx`, `tests/sims/inline-registry-b.test.ts`.
 - **Accept:** As 3a-20 for the quant, wgsl, batching and engine lists (ToyEngineSim keeps spreading ENGINE_EXT_TASKS after its own). UI check (§17.2) on `/lab/quantizer`, `/lab/wgsl`, `/lab/batching`, `/lab/engine`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **3a-22 · Prove-it v2 for lab 02 and the template rules [Opus first: approve that each template is answerable by reading your own code, and that a plausible bug changes the answer] (spec §7.2)** S-M. Depends: 3a-11.
 - **Files:** `src/data/forge/kv-block-manager/prove2.ts`, `src/data/forge/kv-block-manager/index.ts`, `tests/forge/prove2-lab02.test.ts`.
-- **Accept:** §7.2: three lab 02 templates (free blocks after a seeded fork-and-append trace; the physical block a token translates to; how many blocks a forked sequence shares after one append) drive init, allocate, append, fork, free, translate and free_blocks; answers are numbers; every trace is ≤ 12 calls and shown in words; the bundle exposes prove2; for every template a fake correct module and a fake module with the template's named bug answer differently on some seed (so the question reads your code); tests pass.
+- **Accept:** §7.2: three lab 02 templates (free blocks after a seeded fork-and-append trace; the physical block a token translates to; how many blocks a forked sequence shares after one append) drive init, allocate, append, fork, free, translate and free_blocks; answers are numbers; every trace is ≤ 12 calls and shown in words; the bundle exposes prove2; for every template a fake correct module and a fake module with the template's named bug answer differently on some seed (so the question reads your code), and the answer is not given by the story alone (it differs across seeds); the rule this Opus check sets (answerable from your own code, never from the story alone) is the one labs 04, 06 and 07 apply (§7.2); tests pass.
 - **Pool:** none: answers are numbers or ordered id lists, never options.
 
 **Level 2**
 
-**3a-18 · Remaining P2, roofline: the twelve legacy roofline tasks become outcome tasks, the sim reads the tiling model, T4 lessons point at them (spec §13)** M. Depends: 3a-13, 3a-05.
+**3a-18 · Remaining P2, roofline: the twelve legacy roofline tasks become outcome tasks, the sim reads the tiling model, T4 lessons point at them (spec §13)** M. Depends: 3a-13, 3a-05b.
 - **Files:** `src/components/sims/roofline.tasks.ts`, `src/components/sims/RooflineSim.tsx`, `src/lib/sims/models/roofline.ts`, `src/data/lessons/t4/cpu-vs-gpu.ts`, `src/data/lessons/t4/gpu-memory.ts`, `src/data/lessons/t4/roofline.ts`, `src/data/lessons/t4/occupancy-coalescing.ts`, `tests/sims/roofline.test.ts`, `tests/sims/registry.test.ts`, `public/lessons-md/*.md`.
-- **Accept:** §13: each of the twelve ids becomes an outcome task with a numeric predict spec, an observe key the sim emits on its bus, a three-idea explain and a phone canonical where the model exists, replacing the old id through legacyId; RooflineSim's synthetic SMEM curve (RooflineSim.tsx:286-294, which assumes 4-byte elements) reads smemBytes and ctasPerSm from src/lib/world/tiling.ts; the inline list at RooflineSim.tsx:1164-1177 goes; the t4.l1-t4.l4 exercise blocks list the new ids; verify:plays passes; exporter fresh. UI check (§17.2) on `/lab/roofline`, `/lesson/t4.l3`.
+- **Accept:** §13: each of the twelve ids becomes an outcome task with a numeric predict spec, an observe key the sim emits on its bus, a three-idea explain and a phone canonical where the model exists, replacing the old id through legacyId; RooflineSim's synthetic SMEM curve (RooflineSim.tsx:286-294, which assumes 4-byte elements) reads smemBytes and ctasPerSm from src/lib/world/tiling.ts, and its FP8 ceiling stays 2 × BF16 dense, the same rule as the cube (§6.1), so the app shows one H100 FP8 ridge (590.4); the inline list at RooflineSim.tsx:1164-1177 goes; the t4.l1-t4.l4 exercise blocks list the new ids; verify:plays passes; exporter fresh. UI check (§17.2) on `/lab/roofline`, `/lesson/t4.l3`.
 - **Pool:** none: sim and Fleet task predictions are numeric (Wave 1's rule for task predictions).
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews the twelve tasks.
@@ -1461,13 +1505,13 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3b-01 · The Tiling Cube in 2D: six prediction-opened levels, three linked face views, the DOM mirror, debrief, In-production card, registration (spec §6.3-6.4)** M-L. Depends: 3a-13, 3a-02, 3a-08.
 - **Files:** `src/components/play/tiling-cube/Play.tsx`, `src/components/play/tiling-cube/session.ts`, `src/components/play/tiling-cube/Mirror2D.tsx`, `src/components/play/tiling-cube/Mirror.tsx`, `src/components/play/tiling-cube/Level.tsx`, `src/components/play/tiling-cube/Debrief.tsx`, `src/components/play/tiling-cube/ProductionCard.tsx`, `src/data/plays.ts`, `src/components/play/registry.ts`, `tests/plays/tiling-cube.test.ts`, `tests/plays/play.test.ts`, `e2e/tiling-cube.spec.ts`, `src/data/search-index.json`.
-- **Accept:** §6.3-6.4: each level opens with a prediction on a fresh seed (level 1 from roofline/tile-ai, levels 2-6 from the tiling family; predict and item events with src 'play'), then the three face views and the DOM table update from stepper controls (no drag-only control, WCAG 2.5.7); each level's debrief shows the reference choice and the prediction's error, and the closing debrief lists the six; the card has ≥ 3 rows of pinned claims; recordPlay {phase 'play', turns 6, survived = levels right, ghostSurvived 6, levels}; registered in plays.ts and the registry with lessonId t4.l6 and 25 minutes; verify:plays passes (mirror, debrief, card, band); e2e/tiling-cube.spec.ts plays level 1 to its debrief by keyboard alone at 360 px; closure printed (figure 200 KB). UI check (§17.2) on `/play/tiling-cube`.
+- **Accept:** §6.3-6.4: each level opens with a prediction on a fresh seed (level 1 from roofline/tile-ai, levels 2-6 from the tiling family; predict and item events with src 'play'), then the three face views and the DOM table update from stepper controls (no drag-only control, WCAG 2.5.7); each level's debrief shows the reference choice and the prediction's error in §6.3's wording (level 2 names the register cap: 448 fits SMEM but not the register file; level 5 says no lone tile reaches the FP8 ridge), and the closing debrief lists the six; the card has ≥ 3 rows of pinned claims, which may be lazy claims (the plays tests and verify-plays read src/data/claims/all.ts since 3a-05; src/data/plays.ts imports no lazy group); recordPlay {phase 'play', turns 6, survived = levels right, ghostSurvived 6, levels}; registered in plays.ts and the registry with lessonId t4.l6 and 25 minutes; verify:plays passes (mirror, debrief, card, band); e2e/tiling-cube.spec.ts plays level 1 to its debrief by keyboard alone at 360 px; closure printed (figure 200 KB). UI check (§17.2) on `/play/tiling-cube`.
 - **Pool:** none: the predictions are numeric tiling and roofline items.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **3b-03 · Fleet exercise engine: an exercise job in the fleet worker, any prefill:decode split, the load-knee and pd-split exercises (spec §5.3)** M. Depends: 3a-03, 3a-08.
 - **Files:** `src/lib/world/fleet-ex/index.ts`, `src/lib/world/fleet-ex/knee.ts`, `src/lib/world/fleet-ex/pd-split.ts`, `src/workers/fleet-protocol.ts`, `src/lib/fleet-host.ts`, `src/lib/fleet-session.ts`, `tests/world/fleet-ex.test.ts`, `tests/fleet/exercise-session.test.ts`.
-- **Accept:** §5.3: job {kind: 'exercise', id, seed} returns the sweep's metrics per point inside the 10 s job budget; EpdOpen and the host take {prefill, decode} worker counts (1 + 1 stays the default, so existing EPD runs are byte-identical and the EPD session result that tests/fleet/session.test.ts pins keeps its shape) and EpdCluster's aggregate adds TPOT p95, which only the exercise job reports; knee sweeps the load multiplier over six values and pd-split sweeps 1:7 … 7:1 on 8 workers; each exercise's truth, band (≥ 20 % acceptance, printed) and pass rule are pure and deterministic; FLEET_EXERCISES lists both, so the hands-on test sees them.
+- **Accept:** §5.3: job {kind: 'exercise', id, seed} calls FLEET_EXERCISES[id].sweep(seed) in the fleet worker and returns its SweepResult inside the 10 s job budget, dispatching by id only, so a later exercise adds a fleet-ex module and never edits fleet-protocol, fleet-host or fleet-session (§16.3); each point's goodputRps is SLO-met requests ÷ the trace's arrival window in seconds at the engine's 50 ms tick (never Engine.goodput()'s percentage), for knee and pd-split alike; EpdOpen and the host take {prefill, decode} worker counts (1 + 1 stays the default, so existing EPD runs are byte-identical and the EPD session result that tests/fleet/session.test.ts pins keeps its shape) and EpdCluster's aggregate adds TPOT p95, which only the exercise job reports; knee sweeps the load multiplier over six values and pd-split sweeps 1:7 … 7:1 on 8 workers; each exercise's truth, band (≥ 20 % acceptance, printed) and pass rule are pure and deterministic; FLEET_EXERCISES lists both, so the hands-on test sees them.
 
 **3b-04 · Prove-it v2 in ForgeLab and the 30-day return card on Today (spec §7.4-7.5)** M. Depends: 3a-06, 3a-11, 3a-22.
 - **Files:** `src/components/forge/ProveFromModule.tsx`, `src/components/learner/ProveReturnCard.tsx`, `src/lib/forge/prove-return.ts`, `tests/forge/prove-ui.test.ts`, `tests/learner/prove-return.test.ts`.
@@ -1489,7 +1533,7 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3b-07 · Active isomorphisms: align by keyboard, name the break, then the principle; ledger items and the work-analogue slot (spec §11.1)** M. Depends: 3a-03, 3a-04, 3a-01.
 - **Files:** `src/components/lesson/Isomorphism.tsx`, `src/lib/learner/iso.ts`, `tests/learner/iso.test.ts`, `tests/lesson/isomorphism.test.ts`, `e2e/isomorphism.spec.ts`.
-- **Accept:** §11.1: a block with breakItem runs align (one row per OS element; the shuffled LLM labels are buttons; feedback per row is the pair's own lines), then the break item (choice with whys), then the principle and the pairs with their breaks; a block without breakItem renders as today; records `item:<lesson>.iso.<n>` (score = rows right ÷ rows) and `item:<lesson>.iso.<n>.break` with src 'lesson' and the block's KCs; the work line shows only when profile:background matches (empty until 3c-05); reduced motion respected; e2e/isomorphism.spec.ts completes a fixture block by keyboard at 360 px. UI check (§17.2) on `/lesson/t2.l2`.
+- **Accept:** §11.1: a block with breakItem runs align (one row per OS element; the shuffled LLM labels are buttons; feedback per row is the pair's own lines), then the break item (choice with whys), then the principle and the pairs with their breaks; a block without breakItem renders as today; records `item:<lesson>.iso.<n>` (n from 1; score = base rows right ÷ base rows, ok = all base rows right) and `item:<lesson>.iso.<n>.break` with src 'lesson' and the block's KCs; a work row (shown only when profile:background matches, empty until 3c-05) gets its feedback but is never graded, so the score never depends on the background; reduced motion respected; e2e/isomorphism.spec.ts completes a fixture block by keyboard at 360 px. UI check (§17.2) on `/lesson/t2.l2`.
 - **Pool:** iso (the break items; content arrives in 3b-16 and 3b-17).
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
@@ -1499,69 +1543,69 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 - **Pool:** twin (content arrives in 3b-15).
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
-**3b-09 · Lab 06's race against the reference and the bestiary: RING 0's 'within 3 points', W1's Code stage (spec §8.3)** M. Depends: 3a-06, 3a-01, 3a-12.
-- **Files:** `src/components/forge/RaceReference.tsx`, `src/lib/forge/race.ts`, `src/lib/world/bestiary.ts`, `src/workers/sim-protocol.ts`, `src/workers/sim.worker.ts`, `src/pages/progress/ring-rows.ts`, `tests/forge/race.test.ts`, `tests/world/bestiary.test.ts`.
-- **Accept:** §8.3: after an unseen-seed green of batching-scheduler, 'Race the reference' runs Act I's job with only your scheduler on a graded entropy drawn now and records fleet-run mode 'engine' {scheduler from batching-scheduler, seeds 'fresh', goodput, refGoodput}; RING 0's lab 06 row (ring-rows.ts) reads labFleetOk; the bestiary job runs the twelve §8.3 policies (compileSchedPolicy) on the same entropy, and the panel shows where your goodput falls as an SVG histogram with a SimMirror table; a link opens /fleet's real-engine panel with your scheduler; tested with a fake scheduler module. UI check (§17.2) on `/forge/batching-scheduler`.
+**3b-09 · Lab 06's race against the reference and the bestiary: RING 0's 'within 3 points', W1's Code stage (spec §8.3)** M. Depends: 3a-06, 3a-01b, 3a-12.
+- **Files:** `src/components/forge/RaceReference.tsx`, `src/lib/forge/race.ts`, `src/lib/world/bestiary.ts`, `src/workers/sim-protocol.ts`, `src/workers/sim.worker.ts`, `tests/forge/race.test.ts`, `tests/world/bestiary.test.ts`.
+- **Accept:** §8.3: after an unseen-seed green of batching-scheduler, 'Race the reference' runs Act I's job with only your scheduler on a graded entropy drawn now and records fleet-run mode 'engine' {scheduler from batching-scheduler, seeds 'fresh', goodput, refGoodput}; RING 0's lab 06 row (added by 3a-01b) turns green from labFleetOk; the bestiary job runs the twelve §8.3 policies (compileSchedPolicy) on the same entropy, and tests/world/bestiary.test.ts proves their goodputs pairwise distinct on ≥ 80 % of 30 banded Act I entropies (86.7 % measured on 2b) and that guard 2000 never fires within Act I (it equals guard 0), and the panel shows where your goodput falls as an SVG histogram with a SimMirror table; a link opens /fleet's real-engine panel with your scheduler; tested with a fake scheduler module. UI check (§17.2) on `/forge/batching-scheduler`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **Level 1**
 
 **3b-02 · The EPLB play: replicate and place experts by hand, the hidden EPLB ghost, debrief, Compose, In-production card, registration (spec §5.2)** M-L. Depends: 3a-14, 3b-01, 3a-08.
 - **Files:** `src/components/play/eplb/Play.tsx`, `src/components/play/eplb/session.ts`, `src/components/play/eplb/Board.tsx`, `src/components/play/eplb/Mirror.tsx`, `src/components/play/eplb/Debrief.tsx`, `src/components/play/eplb/Compose.tsx`, `src/components/play/eplb/ProductionCard.tsx`, `src/data/plays.ts`, `src/components/play/registry.ts`, `tests/plays/eplb.test.ts`, `tests/plays/play.test.ts`, `e2e/eplb.spec.ts`, `src/data/search-index.json`.
-- **Accept:** §5.2: predict round-robin's imbalance first (numeric); GPUs are rows of slot buttons (≥ 44 px), the next copy is announced and Enter places it; the ghost stays hidden until the debrief; recordPlay with metric {name 'imbalance', mine, ghost, lowerIsBetter} for play and compose; passes on the practice load and on 3 fresh loads within 0.05 of the ghost; registered with lessonId t6.l2 and 15 minutes; verify:plays passes; e2e/eplb.spec.ts plays the practice load to the debrief by keyboard alone at 360 px. UI check (§17.2) on `/play/eplb`.
+- **Accept:** §5.2: predict round-robin's imbalance first (numeric); GPUs are rows of slot buttons (≥ 44 px), the next copy is announced and Enter places it; the ghost stays hidden until the debrief; recordPlay with metric {name 'imbalance', mine, ghost, lowerIsBetter} for play and compose; the card's lazy claims (DeepSeek-V3, EPLB, engine flags) are checked through src/data/claims/all.ts, never by importing a lazy group into src/data/plays.ts; passes on the practice load and on 3 fresh loads within 0.05 of the ghost; registered with lessonId t6.l2 and 15 minutes; verify:plays passes; e2e/eplb.spec.ts plays the practice load to the debrief by keyboard alone at 360 px. UI check (§17.2) on `/play/eplb`.
 - **Pool:** none: the prediction is numeric and the play has no choice items.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
-**3b-10 · Lab 04 (mpmc-queue) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 and prove2 (three templates over init, push and pop) (spec §8.2)** M. Depends: 3a-10, 3a-05, 3a-04, 3a-22.
+**3b-10 · Lab 04 (mpmc-queue) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 and prove2 (three templates over init, push and pop) (spec §8.2)** M. Depends: 3a-10, 3a-05b, 3a-04, 3a-22.
 - **Files:** `src/data/forge/mpmc-queue/index.ts`, `src/data/forge/mpmc-queue/primm.ts`, `src/data/forge/mpmc-queue/ladder.ts`, `src/data/forge/mpmc-queue/prove.ts`, `src/data/forge/mpmc-queue/prove2.ts`, `tests/forge/mpmc-queue.test.ts`.
-- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 04; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; prove2 per §7.2, with a fake correct module and a fake module with each template’s named bug answering differently (fakes live in this test file); verify:mentor and verify:items pass, and `verify:items -- --subset item:lab04.` stays within the content margin; the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/mpmc-queue`.
+- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 04; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; prove2 per §7.2: this lab's required checks pin a correct module's behaviour, so each template is a tracing question about a correct module, and this lab's test file (where its fakes live) proves a fake correct module answers it and that the answer is not given by the story alone (it differs across seeds); `full-count` uses a capacity that is not a power of two, which queue.rs leaves to your design (round up or not), so it reads your own code; verify:mentor and verify:items pass, and `verify:items -- --subset 'forge/mpmc-queue '` selects this lab's PRIMM items (n printed; below 12 it reports, and the merged-level run decides); the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/mpmc-queue`.
 - **Pool:** primm.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews every new item.
 
-**3b-11 · Lab 05 (toy-executor) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 with no prove2 (its bridge answers probe only, §7.2) (spec §8.2)** M. Depends: 3a-10, 3a-05, 3a-04.
+**3b-11 · Lab 05 (toy-executor) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 with no prove2 (its bridge answers probe only, §7.2) (spec §8.2)** M. Depends: 3a-10, 3a-05b, 3a-04.
 - **Files:** `src/data/forge/toy-executor/index.ts`, `src/data/forge/toy-executor/primm.ts`, `src/data/forge/toy-executor/ladder.ts`, `src/data/forge/toy-executor/prove.ts`, `tests/forge/toy-executor.test.ts`.
-- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 05; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; verify:mentor and verify:items pass, and `verify:items -- --subset item:lab05.` stays within the content margin; the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/toy-executor`.
+- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 05; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; the reference run is a sequence of frames, as tests/forge/registry.test.ts:89 requires more than one: one frame per poll round of the committed seed-7 probe reply; verify:mentor and verify:items pass, and `verify:items -- --subset 'forge/toy-executor '` selects this lab's PRIMM items (n printed; below 12 it reports, and the merged-level run decides); the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/toy-executor`.
 - **Pool:** primm.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews every new item.
 
-**3b-12 · Lab 06 (batching-scheduler) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 and prove2 (which waiting requests your schedule admits, in order) (spec §8.2)** M. Depends: 3a-10, 3a-05, 3a-04, 3a-22.
+**3b-12 · Lab 06 (batching-scheduler) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 and prove2 (which waiting requests your schedule admits, in order) (spec §8.2)** M. Depends: 3a-10, 3a-05b, 3a-04, 3a-22.
 - **Files:** `src/data/forge/batching-scheduler/index.ts`, `src/data/forge/batching-scheduler/primm.ts`, `src/data/forge/batching-scheduler/ladder.ts`, `src/data/forge/batching-scheduler/prove.ts`, `src/data/forge/batching-scheduler/prove2.ts`, `tests/forge/batching-scheduler.test.ts`.
-- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 06; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; prove2 per §7.2, with a fake correct module and a fake module with each template’s named bug answering differently (fakes live in this test file); verify:mentor and verify:items pass, and `verify:items -- --subset item:lab06.` stays within the content margin; the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/batching-scheduler`.
+- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 06; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; prove2 per §7.2, with a fake correct module and a fake module with each template’s named bug answering differently (fakes live in this test file); verify:mentor and verify:items pass, and `verify:items -- --subset 'forge/batching-scheduler '` selects this lab's PRIMM items (n printed; below 12 it reports, and the merged-level run decides); the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/batching-scheduler`.
 - **Pool:** primm.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews every new item.
 
-**3b-13 · Lab 07 (radix-cache) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 and prove2 (match lengths after seeded inserts), with a JS radix reference for the run (spec §8.2)** M. Depends: 3a-10, 3a-05, 3a-04, 3a-22.
+**3b-13 · Lab 07 (radix-cache) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 and prove2 (two templates: match lengths after seeded inserts), with a JS radix reference for the run (spec §8.2)** M. Depends: 3a-10, 3a-05b, 3a-04, 3a-22.
 - **Files:** `src/data/forge/radix-cache/index.ts`, `src/data/forge/radix-cache/primm.ts`, `src/data/forge/radix-cache/ladder.ts`, `src/data/forge/radix-cache/prove.ts`, `src/data/forge/radix-cache/prove2.ts`, `tests/forge/radix-cache.test.ts`, `src/lib/world/radix.ts`, `tests/world/radix.test.ts`.
-- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 07; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; prove2 per §7.2, with a fake correct module and a fake module with each template’s named bug answering differently (fakes live in this test file); verify:mentor and verify:items pass, and `verify:items -- --subset item:lab07.` stays within the content margin; the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/radix-cache`.
+- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 07; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; prove2 per §7.2: this lab's required checks pin a correct module's behaviour, so each template is a tracing question about a correct module, and this lab's test file (where its fakes live) proves a fake correct module answers it and that the answer is not given by the story alone (it differs across seeds); no `match-cold` template (every eligible module replies 0); verify:mentor and verify:items pass, and `verify:items -- --subset 'forge/radix-cache '` selects this lab's PRIMM items (n printed; below 12 it reports, and the merged-level run decides); the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/radix-cache`.
 - **Pool:** primm.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews every new item.
 
-**3b-14 · Lab 08 (xgrammar-lite) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 with no prove2 (its bridge answers probe only, §7.2) (spec §8.2)** M. Depends: 3a-10, 3a-05, 3a-04.
+**3b-14 · Lab 08 (xgrammar-lite) on the forge layer with faded scaffolds: PRIMM, R0-R2 ladders, Prove-it v1 with no prove2 (its bridge answers probe only, §7.2) (spec §8.2)** M. Depends: 3a-10, 3a-05b, 3a-04.
 - **Files:** `src/data/forge/xgrammar-lite/index.ts`, `src/data/forge/xgrammar-lite/primm.ts`, `src/data/forge/xgrammar-lite/ladder.ts`, `src/data/forge/xgrammar-lite/prove.ts`, `tests/forge/xgrammar-lite.test.ts`.
-- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 08; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; verify:mentor and verify:items pass, and `verify:items -- --subset item:lab08.` stays within the content margin; the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/xgrammar-lite`.
+- **Accept:** §8.2: the bundle sets fade 'r2'; PRIMM has 2 predict, 3 investigate and 1 modify item around the run of §8.2's table for lab 08; R0-R2 for every required check (R2 names a function in that lab's lib.rs); six Prove-it v1 questions; the reference run is a sequence of frames, as tests/forge/registry.test.ts:89 requires more than one: one frame per grammar step of the committed seed-7 probe reply, with the legal tokens at that step; verify:mentor and verify:items pass, and `verify:items -- --subset 'forge/xgrammar-lite '` selects this lab's PRIMM items (n printed; below 12 it reports, and the merged-level run decides); the implementer's stopwatch time to stage 1 is recorded in the PR (a field measure, not a gate). UI check (§17.2) on `/forge/xgrammar-lite`.
 - **Pool:** primm.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews every new item.
 
 **3b-15 · Twin content: lab 07 against SGLang's Rust TreeCore and lab 06 against vLLM's scheduler at pinned refs (spec §9)** S-M. Depends: 3b-08, 3a-04.
 - **Files:** `src/data/twins/radix-cache.ts`, `src/data/twins/batching-scheduler.ts`, `src/data/twins/index.ts`, `tests/forge/twins-content.test.ts`.
-- **Accept:** §9: each twin names the file and symbols at the pinned ref of its claim and three tracing questions with a why per option and KCs from its lab's checks; the lab 06 twin ships only if the pinned vLLM file supports three such questions (otherwise the PR says so and lab 07 ships alone, which still meets the plan's line); `verify:items -- --subset item:lab07.twin` (and lab06) stays within the content margin; verify:items passes.
+- **Accept:** §9: each twin names the file and symbols at the pinned ref of its claim and three tracing questions with a why per option and KCs from its lab's checks; the lab 06 twin ships only if the pinned vLLM file supports three such questions (otherwise the PR says so and lab 07 ships alone, which still meets the plan's line); `verify:items -- --subset item:lab07.twin.,item:lab06.twin.` selects the twin items (n printed; below 12 it reports, and the merged-level run decides); verify:items passes.
 - **Pool:** twin.
 - **Owner step (not build acceptance):** The owner reviews the questions against the pinned files.
 
 **3b-16 · P3 content, T0-T2: break items and principles for the ten panels that already have breaks (spec §11.2)** M. Depends: 3b-07, 3a-04.
 - **Files:** `src/data/lessons/t0/why-systems.ts`, `src/data/lessons/t0/your-runtime.ts`, `src/data/lessons/t1/pointers.ts`, `src/data/lessons/t1/toy-allocator.ts`, `src/data/lessons/t1/rust-ownership-intro.ts`, `src/data/lessons/t2/processes-threads.ts`, `src/data/lessons/t2/virtual-memory.ts`, `src/data/lessons/t2/swapping-eviction.ts`, `src/data/lessons/t2/scheduling.ts`, `src/data/lessons/t2/exam-pagedattention.ts`, `public/lessons-md/*.md`.
-- **Accept:** §11.2: each panel gets a principle (≤ 40 words), its lesson's KCs and a break item (one true break from the pairs, three statements that hold on both sides, a why per option); existing pairs, titles and hooks unchanged; verify:items passes and `--subset` over the T0-T2 iso refs stays within the margin; exporter fresh.
+- **Accept:** §11.2: each panel gets a principle (≤ 40 words), its lesson's KCs and a break item (one true break from the pairs, three statements that hold on both sides, a why per option); on t2.l2 (virtual-memory.ts) and t2.l7 (exam-pagedattention.ts), quiz lures on t2.address-translation whose misconception is taking it for t5.block-tables or t5.prefix-cache-keys carry the miss id `confuse.<that KC>` (retagged where such a lure exists, added otherwise; §15.1); existing pairs, titles and hooks unchanged; verify:items passes and `verify:items -- --subset '/^item:t[0-2]\.l[0-9]+\.iso\./'` reports the T0-T2 iso refs (n printed; the merged-level run decides); exporter fresh.
 - **Pool:** iso.
 - **Owner step (not build acceptance):** The owner reviews every new item.
 
 **3b-17 · P3 content, T3-T7: breaks for the 23 pairs that have none, break items and principles for the eight panels (spec §11.2)** M. Depends: 3b-07, 3a-04.
-- **Files:** `src/data/lessons/t3/dynamo-case-study.ts`, `src/data/lessons/t5/prefix-caching.ts`, `src/data/lessons/t5/distributed-serving.ts`, `src/data/lessons/t6/moe-anatomy.ts`, `src/data/lessons/t6/epd-disaggregation.ts`, `src/data/lessons/t6/multi-lora-serving.ts`, `src/data/lessons/t6/security-boundaries.ts`, `src/data/lessons/t7/autoscaling-planner.ts`, `public/lessons-md/*.md`.
-- **Accept:** As 3b-16 for the eight T3-T7 panels, plus a `breaks` line for each of their 23 pairs; verify:items passes and `--subset` over the T3-T7 iso refs stays within the margin.
+- **Files:** `src/data/lessons/t3/dynamo-case-study.ts`, `src/data/lessons/t5/prefix-caching.ts`, `src/data/lessons/t5/distributed-serving.ts`, `src/data/lessons/t6/moe-anatomy.ts`, `src/data/lessons/t6/epd-disaggregation.ts`, `src/data/lessons/t6/multi-lora-serving.ts`, `src/data/lessons/t6/security-boundaries.ts`, `src/data/lessons/t7/autoscaling-planner.ts`, `src/data/lessons/t5/pagedattention-deep-dive.ts`, `public/lessons-md/*.md`.
+- **Accept:** As 3b-16 for the eight T3-T7 panels, plus a `breaks` line for each of their 23 pairs; the `confuse.<KC>` lures of §15.1 on t5.prefix-cache-keys items (t5.l6, prefix-caching.ts) and on t5.block-tables items (t5.l5, pagedattention-deep-dive.ts, touched for those lures only); verify:items passes and `verify:items -- --subset '/^item:t[3-7]\.l[0-9]+\.iso\./'` reports the T3-T7 iso refs (n printed; the merged-level run decides).
 - **Pool:** iso.
 - **Owner step (not build acceptance):** The owner reviews every new break and item.
 
@@ -1574,7 +1618,7 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3b-19 · K5 track forms A/B/C: parallel 12-item forms on unseen seeds, counterbalanced, opt-in, measurement only [cut 4th] (spec §12.6)** M. Depends: 3b-06, 3a-13, 3a-15, 3a-16.
 - **Files:** `src/lib/learner/forms.ts`, `src/components/me/FormsCard.tsx`, `src/lib/learner/experiments.ts`, `tests/learner/forms.test.ts`, `tests/mentor/experiments.test.ts`.
-- **Accept:** §12.6: formsFor(track) returns 12 slots over ≥ 3 KCs from loaded families at level 2, or null; three disjoint seed sets per track from the learner's exp:seed; the set-to-form order is one of 6 permutations from armOf('forms', track, expSeed, 6) (armFor generalised to n arms, the hint-ladder arms unchanged); A, B and C open by §12.6's timing and never gate; items record src 'form' with {form, track, slot, set}; the card shows k/12 with Wilson intervals, B − A labelled 'including the pretest effect' and C beside B; deterministic per seed. UI check (§17.2) on `/me`.
+- **Accept:** §12.6: formsFor(track) returns 12 slots over ≥ 3 KCs from loaded families at level 2, or null; three disjoint seed sets per track from the learner's exp:seed; the set-to-form order is one of 6 permutations from armOf('forms', track, expSeed, 6) (armFor generalised to n arms, the hint-ladder arms unchanged); A, B and C open by §12.6's timing and never gate; items record src 'form' with {formId, track, formSlot, formSet} (never data.form or data.slot, §3.2); the card shows k/12 with Wilson intervals, B − A labelled 'including the pretest effect' and C beside B; deterministic per seed. UI check (§17.2) on `/me`.
 - **Pool:** generator (forms serve family items).
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
@@ -1597,7 +1641,7 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3c-01 · Exit gates: 15/15 hands-on, `proved` on four labs, no credit without a prediction, receipts (spec §18.1)** S-M. Depends: 3b-21, 3a-22, 3b-10, 3b-12, 3b-13, 3a-18, 3a-19, 3a-20, 3a-21, 3b-05.
 - **Files:** `tests/kc/hands-on.test.ts`, `tests/forge/proved-labs.test.ts`, `tests/sims/no-credit.test.ts`, `tests/fleet/receipts-exit.test.ts`.
-- **Accept:** §18.1: the hands-on gate requires all 15 T6/T7 lessons by id (t6.l1-t6.l10, t7.l1-t7.l5); proved-labs drives recordProve through prove2 for labs 02, 04, 06 and 07 with fake modules and requires `proved` after an unseen green and a right answer, and none after a miss, a v1 answer, a reference build or a module graded on practice seeds; no-credit proves every registered task lives in exactly one tasks file, no sim component holds an inline task array, every lesson exercise block lists outcome tasks only, and a legacy completion earns 0 XP and resolves to no KC (so it feeds no card, ring or VRK30); receipts-exit replays a fixture Act I and Act III through the real grading and fails a tampered receipt.
+- **Accept:** §18.1: the hands-on gate requires all 15 T6/T7 lessons by id (t6.l1-t6.l10, t7.l1-t7.l5); proved-labs drives recordProve through prove2 for labs 02, 04, 06 and 07 with fake modules and requires `proved` after an unseen green and a right answer, and none after a miss, a v1 answer, a reference build or a module graded on practice seeds; no-credit proves every registered task lives in exactly one tasks file, no sim component holds an inline task array, every `taskIds` entry of a lesson exercise block resolves to an outcome task (link-card blocks, which have no `taskIds`, are exempt and earn nothing), and a legacy completion earns 0 XP and resolves to no KC (so it feeds no card, ring or VRK30); receipts-exit replays a fixture Act I and Act III through the real grading and fails a tampered receipt.
 
 **3c-02 · The a11y sweep and reflow list for Wave 3 surfaces (spec §17.2)** S. Depends: 3b-01, 3b-02, 3b-06, 3b-21.
 - **Files:** `scripts/a11y.mjs`, `e2e/smoke.spec.ts`, `.github/workflows/nightly.yml`.
@@ -1605,17 +1649,17 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **3c-03 · Partners v3: Wave 3 selectors, the donation whitelist, the field-gate table and the journey re-cut table (spec §15)** M. Depends: 3a-17, 3b-19, 3b-05.
-- **Files:** `src/lib/learner/outcomes.ts`, `src/lib/learner/redact.ts`, `scripts/partner-report.ts`, `tests/learner/outcomes.test.ts`, `tests/learner/redact.test.ts`.
-- **Accept:** §15: the §15.1 selectors on fixture ledgers; selectPlacementLanding also reads lesson events, not only visits (the Wave 2a review's bias); the donation keeps sinceDays, form, set, slot, levels, metric and the prove fields of §15.2 and still drops seeds, hashes, free text, background and calendar dates (test); the report prints gates F1-F12 of §18.2 with n, Wilson or bootstrap intervals and partners, 'not enough data' below each minimum, and the surface-minutes table for the journey re-cut.
+- **Files:** `src/lib/learner/outcomes.ts`, `src/lib/learner/redact.ts`, `scripts/partner-report.ts`, `tests/learner/outcomes.test.ts`, `tests/learner/redact.test.ts`, `docs/prereg/fleet-daily.md`.
+- **Accept:** §15: the §15.1 selectors on fixture ledgers; selectDiscrimination30 counts a miss as confusion only when its id is `confuse.<one of the other two KCs>`, reports 'not enough data' (never 0) when the content holds no such lure, and a test holds that each of the three KCs has ≥ 2 such lures in the lesson content (3b-16, 3b-17); selectFormsGain groups by track from the kept `kcs` (the KC id's track prefix); selectPlacementLanding keeps its Wave 2 fix (25e4b8a: the first lesson-ref event after the placement) and its tests stay green; the donation keeps sinceDays, formId, formSet, formSlot, levels, metric, receipts, rubric, `confuse.*` miss ids and the prove fields of §15.2, keeps `value` and `truth` only on events whose provenance is not `field`, and still drops every other miss id (the 'kv.priced-fp16' assertion in redact.test.ts stands), seeds, hashes, free text, background and calendar dates (tests, including a field item whose value and truth are dropped); docs/prereg/fleet-daily.md drafts the Daily's keep-or-kill rule (PLAN §9; minimum n, the comparison, the underpowered default) for the owner to sign before selectDailyVsOther is read; the report prints gates F1-F12 of §18.2 with n, Wilson or bootstrap intervals and partners, 'not enough data' below each minimum, and the surface-minutes table for the journey re-cut.
 
 **3c-04 · S4: apply the watcher decision rule; build the weekly digest only on `keep` [Opus first: apply the rule to the signed pre-registration and the report] (spec §14)** S-M. Depends: this spec.
 - **Files:** `scripts/landscape/digest.ts`, `.github/workflows/landscape-watch.yml`, `TRIAGE.md`, `tests/landscape/digest.test.ts`.
-- **Accept:** §14: if docs/prereg/watcher.md is signed and docs/backtest/report.json says `keep`, digest.ts fetches releases since the last digest (fetch.ts), matches them with the frozen match.ts and writes one 'Landscape digest YYYY-WW' issue body with candidate lessons and claims and the claims expiring within 14 days; the weekly workflow opens or updates that issue with GITHUB_TOKEN only and never commits; TRIAGE.md is the local triage prompt (OD2); digest.ts is tested on the frozen snapshot. Otherwise the task ships no code and the PR records the outcome (`drop`, `underpowered`, or 'not decided: manual scan stays').
-- **Owner step (not build acceptance):** Signing docs/prereg/watcher.md and the independent rating (docs/backtest/ratings.json) are the owner's; score.ts then writes report.json.
+- **Accept:** §14: if docs/prereg/watcher.md is signed and docs/backtest/report.json says `keep`, digest.ts fetches releases since the last digest (fetch.ts), matches them with the frozen match.ts and writes one 'Landscape digest YYYY-WW' issue body with candidate lessons and claims and the claims expiring within 14 days; the weekly workflow opens or updates that issue with GITHUB_TOKEN only and never commits; TRIAGE.md is the local triage prompt (OD2); digest.ts is tested on the frozen snapshot. Otherwise the task ships no code and the PR records the outcome (`drop`; `underpowered`, which repeats the backtest on a second 8-week window before the Wave 3 decision, watcher.md:50; or 'not decided: manual scan stays').
+- **Owner step (not build acceptance):** Signing docs/prereg/watcher.md and the independent rating (docs/backtest/ratings.json) are the owner's; a fresh rater agent may be launched only by the owner or the orchestrator, given only snapshot.json and `match.ts --lessons`, never by this task's implementer, who reads candidates.json; score.ts then writes report.json.
 
 **3c-05 · P3 work analogues by background: the optional background pick in Boot and /me, four work pairs [cut 3rd] (spec §11.3)** S-M. Depends: 3b-07, 3b-16, 3b-17, 3b-06.
 - **Files:** `src/pages/boot/You.tsx`, `src/pages/Me.tsx`, `src/pages/me/Background.tsx`, `src/components/lesson/Isomorphism.tsx`, `src/data/lessons/t2/exam-pagedattention.ts`, `src/data/lessons/t1/toy-allocator.ts`, `src/data/lessons/t2/scheduling.ts`, `src/data/lessons/t5/prefix-caching.ts`, `tests/lesson/work-analogue.test.ts`, `public/lessons-md/*.md`.
-- **Accept:** §11.3: You.tsx and /me offer the optional pick that writes profile:background; the four work pairs of §11.3 land on their panels, each with its own break; a panel shows the pair for a matching background and nothing otherwise; /boot grows ≤ 1 KB gzip (printed; gate 200); /me stays under its gate. UI check (§17.2) on `/boot`, `/me`, `/lesson/t2.l4`.
+- **Accept:** §11.3: You.tsx and /me offer the optional pick that writes profile:background; the four work pairs of §11.3 land on their panels, each with its own break; a panel shows the pair for a matching background and nothing otherwise; the work row's feedback is shown and never graded (§11.1), and a test proves two ledgers that differ only in profile:background, with the same answers on the base rows, give identical redacted donations; /boot grows ≤ 1 KB gzip (printed; gate 200); /me stays under its gate. UI check (§17.2) on `/boot`, `/me`, `/lesson/t2.l4`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews the four work pairs.
 
@@ -1631,33 +1675,33 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3s-01 · Stretch 1a, the Cube in 3D: View3D and Cube3D on the three and R3F already in package.json, opt-in after the 2D view, budgets (spec §16.1)** M. Depends: 3b-01.
 - **Files:** `src/components/three/View3D.tsx`, `src/components/play/tiling-cube/Cube3D.tsx`, `src/components/play/tiling-cube/Play.tsx`, `scripts/verify-bundle.ts`, `tests/plays/view3d.test.ts`, `tests/boot/imports.test.ts`.
-- **Accept:** §16.1: View3D renders only for ids in GATE_3D, shows the 2D view first and opens the scene on request; Cube3D uses InstancedMesh, frameloop 'demand', DPR ≤ 1.5, no drei, ≤ 100 draw calls, and falls back to 2D without WebGL2; verify-bundle reports the three + R3F chunk against 240 KB and fails the scene chunk above 40 KB; a static-import walk proves /today, /boot, /me and /play/tiling-cube never load three; verify:plays passes. UI check (§17.2) on `/play/tiling-cube`.
+- **Accept:** §16.1: View3D and Cube3D ship dark: View3D renders only for ids in GATE_3D and only when its `available` prop is true, which nothing sets until 3s-02 wires the arm (armOf('cube-view', …)), so no learner sees 'Show it in 3D' before then (a test proves the entry is absent by default); when shown, the 2D view comes first and the scene opens on request; Cube3D uses InstancedMesh, frameloop 'demand', DPR ≤ 1.5, no drei, ≤ 100 draw calls, and falls back to 2D without WebGL2; verify-bundle reports the three + R3F chunk against 240 KB and fails the scene chunk above 40 KB; a static-import walk proves /today, /boot, /me and /play/tiling-cube never load three; verify:plays passes. UI check (§17.2) on `/play/tiling-cube`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **3s-03 · Stretch 2, t6.l12 attention-FFN disaggregation (Step-3, MegaScale-Infer), placed before the t6.l10 spiral (spec §16.2)** M. Depends: 3b-21.
-- **Files:** `src/data/lessons/t6/attention-ffn.ts`, `src/data/lessons/index.ts`, `src/data/kc/t6.ts`, `src/data/kc/ids.ts`, `src/data/claims/lazy/serving3.ts`, `tests/items/verify-items.test.ts`, `tests/kc/scope.test.ts`, `tests/mentor/packet.test.ts`, `tests/learner/recommend.test.ts`, `public/lessons-md/*.md`, `public/llms.txt`, `public/claims.json`, `src/data/search-index.json`.
-- **Accept:** §16.2: the lesson (between t6.l9 and t6.l10 in reading order) with Lesson.kcs (one new KC), a statline of pinned benchmark claims, an isomorphism with breaks and a break item, a 4-item quiz with whys, a ticket and an item block (prefill/pd-ratio); the 68-lesson pins become 69; verify:kc, verify:items and verify:claims pass; exporter and llms.txt fresh. UI check (§17.2) on `/lesson/t6.l12`.
+- **Files:** `src/data/lessons/t6/attention-ffn.ts`, `src/data/lessons/index.ts`, `src/data/kc/t6.ts`, `src/data/kc/ids.ts`, `src/data/claims/lazy/serving3.ts`, `tests/items/verify-items.test.ts`, `tests/kc/scope.test.ts`, `tests/mentor/packet.test.ts`, `tests/learner/recommend.test.ts`, `tests/economy/xp.test.ts`, `src/lib/tracks.ts`, `public/lessons-md/*.md`, `public/llms.txt`, `public/claims.json`, `src/data/search-index.json`.
+- **Accept:** §16.2: the lesson (between t6.l9 and t6.l10 in reading order) with Lesson.kcs (one new KC), a statline of pinned benchmark claims, an isomorphism with breaks and a break item, a 4-item quiz with whys, a ticket and an item block (prefill/pd-ratio); the 68-lesson pins become 69, including the ticket XP pin (tests/economy/xp.test.ts:308 becomes 69 * 3 + 6 * 5, or is derived from the lesson count) and T6's lesson count in src/lib/tracks.ts (10 → 11, which TrackCard's 'done' reads); verify:kc, verify:items and verify:claims pass; exporter and llms.txt fresh. UI check (§17.2) on `/lesson/t6.l12`.
 - **Pool:** lessons, iso.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews the lesson and its claims.
 
 **3s-04 · Stretch 3a, more W5 exercises: the broken-benchmark detective (t7.l2) and speculation push-your-luck (t6.l6) (spec §16.3)** M. Depends: 3c-06.
 - **Files:** `src/lib/world/fleet-ex/broken-bench.ts`, `src/lib/world/fleet-ex/push-luck.ts`, `src/lib/world/fleet-ex/index.ts`, `src/data/lessons/t7/benchmarking.ts`, `src/data/lessons/t6/speculative-production.ts`, `tests/world/fleet-ex-more-a.test.ts`, `public/lessons-md/*.md`.
-- **Accept:** §16.3: broken-bench seeds one of four benchmark flaws into a Fleet run and asks for the p95 TTFT the benchmark should have reported (numeric, graded against the corrected run); push-luck draws acceptances at a pinned α and asks for the expected tokens per step of the best draft length; both pure, banded and deterministic, registered and placed as fleet blocks; verify:determinism passes. UI check (§17.2) on `/lesson/t7.l2`, `/lesson/t6.l6`.
+- **Accept:** §16.3: each exercise is one fleet-ex module whose `sweep(seed)` the existing exercise job calls, so no worker, host or session file changes; broken-bench seeds one of the benchmark flaws the Fleet engine can express into a Fleet run (a flaw it cannot express is left out and the PR says which) and asks for the p95 TTFT the benchmark should have reported (numeric, graded against the corrected run); push-luck is model-only (the Fleet engine has no speculation, D7): it seeds an acceptance rate α and a draft-to-target cost ratio c and asks for the draft length γ, among the sweep's points, that maximises the speedup (1 − α^(γ+1)) ÷ ((1 − α)(γc + 1)), with powers as repeated products; both pure, banded and deterministic, registered and placed as fleet blocks; verify:determinism passes. UI check (§17.2) on `/lesson/t7.l2`, `/lesson/t6.l6`.
 - **Pool:** none: sim and Fleet task predictions are numeric (Wave 1's rule for task predictions).
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 **3s-07 · Stretch 5, two field labs: decode and KV-full concurrency after t5.l4, the BurstGPT replay after t5.l7 (spec §16.5)** M. Depends: this spec.
 - **Files:** `src/data/field-labs/decode-kv.ts`, `src/data/field-labs/burstgpt-replay.ts`, `src/components/forge/FieldLabs.tsx`, `src/pages/Forge.tsx`, `src/data/claims/lazy/field.ts`, `src/data/claims/all.ts`, `tests/forge/field-labs.test.ts`, `public/claims.json`.
-- **Accept:** §16.5: each lab shows its pinned commands (claims with pin), the prediction from your Boot or roofline numbers and the [derived] cost at the H100 price claim (≤ 1.5 GPU-hours); entered measurements record `item:field.<lab>.<metric>` with provenance 'field'; nothing leaves the device. UI check (§17.2) on `/forge`.
+- **Accept:** §16.5: each lab shows its pinned commands (claims with pin), the prediction from your Boot or roofline numbers and the [derived] cost at the H100 price claim (≤ 1.5 GPU-hours); entered measurements record `item:field.<lab>.<metric>` with src 'practice' and provenance 'field' (§3.2), whose value and truth a donation drops (§15.2); nothing else leaves the device. UI check (§17.2) on `/forge`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
-- **Owner step (not build acceptance):** The owner signs off the pinned commands.
+- **Owner step (not build acceptance):** The owner signs off the pinned commands, and the owner or a partner runs each pinned command once on a GPU, with its output recorded in the PR; agents cannot run them.
 
 **3s-08 · Stretch 6, the On-Call pilot: a three-incident shift mode of the Daily and a think-aloud protocol (spec §16.6)** S. Depends: w2:2b-21.
 - **Files:** `docs/oncall/pilot.md`, `src/pages/Daily.tsx`, `src/lib/world/shift.ts`, `tests/world/shift.test.ts`.
-- **Accept:** §16.6: /daily?shift=3 chains three drill-namespace incidents from one seed with a handoff note between them (never stored) and records each as practice; the protocol covers consent, script and what the owner writes down; deterministic. UI check (§17.2) on `/daily`.
+- **Accept:** §16.6: /daily?shift=3 chains three drill-namespace incidents from one seed with a handoff note between them (never stored) and records each as practice; the protocol covers consent, script and what the owner writes down, and says the session notes stay private to the owner (only a de-identified summary feeds the Wave 4 gate); deterministic. UI check (§17.2) on `/daily`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
-- **Owner step (not build acceptance):** The owner runs the think-aloud sessions.
+- **Owner step (not build acceptance):** The owner runs the think-aloud sessions and keeps the notes.
 
 **3s-11 · Stretch 9a, the protégé block: type, renderer, pool and pre-registration (spec §16.9)** M. Depends: this spec.
 - **Files:** `src/data/lessons/types.ts`, `src/components/blocks/ProtegeBlock.tsx`, `src/pages/lesson/blocks.tsx`, `scripts/item-pools.ts`, `scripts/verify-items.ts`, `scripts/export-lessons-md.ts`, `tests/lesson/protege.test.ts`, `docs/prereg/protege.md`.
@@ -1667,19 +1711,21 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3s-13 · Stretch 10, the T0/T4 measured-versus-predicted real-engine run (Wi-Fi and consent) (spec §16.10)** S. Depends: this spec.
 - **Files:** `src/pages/fleet/RealEnginePanel.tsx`, `src/lib/real-engine.ts`, `src/components/engine/MeasuredRun.tsx`, `tests/engine/measured-run.test.ts`.
-- **Accept:** §16.10: after consent for the ~400 MB download, the learner predicts decode tok/s for Qwen3-0.6B q4 on this device from its bytes and a bandwidth they choose, runs the real engine and sees measured against predicted; recorded as predict plus item with provenance 'field'; labelled 'your device, not an H100'. UI check (§17.2) on `/fleet`.
+- **Accept:** §16.10: after consent for the ~400 MB download, the learner predicts decode tok/s for Qwen3-0.6B q4 on this device from its bytes and a bandwidth they choose, runs the real engine and sees measured against predicted; recorded as `predict` and `item` on `item:engine.measured-tps` with src 'practice' and provenance 'field' (§3.2); labelled 'your device, not an H100'; build acceptance covers the prediction UI, the comparison and the recording, tested with a stubbed measurement. UI check (§17.2) on `/fleet`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
+- **Owner step (not build acceptance):** One device run on a laptop and one on a phone, with predicted and measured values recorded in the PR; agents cannot satisfy the device run.
 
 **Level 1**
 
 **3s-02 · Stretch 1b, the 3D evaluation: pre-registration, levels × view counterbalanced, the opt-in spatial proxy, the selector (spec §16.1)** M. Depends: 3s-01, 3c-03.
 - **Files:** `docs/prereg/tiling-cube-3d.md`, `src/components/play/tiling-cube/Play.tsx`, `src/components/play/tiling-cube/SpatialProxy.tsx`, `src/lib/learner/outcomes.ts`, `tests/plays/cube-eval.test.ts`.
-- **Accept:** §16.1: each learner's six levels split 3 + 3 between '2D only' and '3D available' by armOf('cube-view', level, expSeed, 2); the play records each level's view in PlayData.levels; the 2-item spatial proxy is opt-in and recorded as src 'practice' with no KC; selectCubeByView compares 30-day fresh-item error by view; the pre-registration sets the non-inferiority margin and the default (3D stays opt-in).
-- **Owner step (not build acceptance):** The owner signs docs/prereg/tiling-cube-3d.md before release.
+- **Accept:** §16.1: this task turns the 3D entry on: each learner's six levels split 3 + 3 between '2D only' and '3D available' by armOf('cube-view', level, expSeed, 2); the play records each level's view in PlayData.levels; the 2-item spatial proxy is opt-in, has no choice items (a cube count, numeric, and a view ordering, an ordered id list) and records `item:cube.spatial.<n>` with src 'practice' and no KC; selectCubeByView compares 30-day fresh-item error by view; the pre-registration sets the non-inferiority margin and the default (3D stays opt-in).
+- **Pool:** none: the spatial proxy is a numeric count and an ordering, never options.
+- **Owner step (not build acceptance):** The owner signs docs/prereg/tiling-cube-3d.md before this task merges; 3s-01 and 3s-02 are cut or kept together (§19.3).
 
 **3s-05 · Stretch 3b, more W5 exercises: the rollout straggler (t6.l7) and the prefix-cache timing oracle (t6.l10) (spec §16.3)** M. Depends: 3s-04.
 - **Files:** `src/lib/world/fleet-ex/straggler.ts`, `src/lib/world/fleet-ex/timing-oracle.ts`, `src/lib/world/fleet-ex/index.ts`, `src/data/lessons/t6/rl-rollout.ts`, `src/data/lessons/t6/security-boundaries.ts`, `tests/world/fleet-ex-more-b.test.ts`, `public/lessons-md/*.md`.
-- **Accept:** As 3s-04 for the straggler (the idle share of a synchronous group with long-tail outputs) and the timing oracle (the TTFT gap a probe sees with a shared prefix cache, and the hit rate lost when the cache key carries the tenant). UI check (§17.2) on `/lesson/t6.l7`, `/lesson/t6.l10`.
+- **Accept:** As 3s-04 (one module each, no worker edits) for the straggler, model-only (the idle share of a synchronous group with long-tail outputs, from seeded lengths), and the timing oracle (the TTFT gap a probe sees with a shared prefix cache, and the hit rate lost when the cache key carries the tenant), on the Fleet engine only if it models prefix-cache hits, otherwise model-only and labelled so; values beyond goodput and TTFT go in each point's `metrics`. UI check (§17.2) on `/lesson/t6.l7`, `/lesson/t6.l10`.
 - **Pool:** none: sim and Fleet task predictions are numeric (Wave 1's rule for task predictions).
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
@@ -1696,16 +1742,16 @@ PLAN §8's Wave 3 exit is "15/15 T6/T7 hands-on; receipts validate Fleet Week; `
 
 **3s-12 · Stretch 9b, one protégé block per track (spec §16.9)** M. Depends: 3s-11.
 - **Files:** `src/data/lessons/r/borrowing-and-slices.ts`, `src/data/lessons/t0/memory-hierarchy.ts`, `src/data/lessons/t1/fragmentation.ts`, `src/data/lessons/t2/virtual-memory.ts`, `src/data/lessons/t3/toy-executor.ts`, `src/data/lessons/t4/roofline.ts`, `src/data/lessons/t5/pagedattention-deep-dive.ts`, `src/data/lessons/t6/moe-anatomy.ts`, `src/data/lessons/t7/objective-function.ts`, `public/lessons-md/*.md`.
-- **Accept:** §16.9: nine blocks, each on a misconception the evidence names, with a sim preset or a family item that proves the fix; verify:items passes and `--subset` over the protege refs stays within the margin. UI check (§17.2) on `/lesson/t4.l3`.
+- **Accept:** §16.9: nine blocks, each on a misconception the evidence names, with a sim preset or a family item that proves the fix; verify:items passes and `verify:items -- --subset '/\.protege\./'` reports the protégé refs (n printed; the merged-level run decides). UI check (§17.2) on `/lesson/t4.l3`.
 - **Pool:** protege.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 - **Owner step (not build acceptance):** The owner reviews the nine blocks.
 
 **Level 2**
 
-**3s-10 · Stretch 8, the bring-your-own-service capstone: your trace, your model config, your hardware, on the device (spec §16.8)** M. Depends: this spec.
-- **Files:** `src/pages/ServiceCapstone.tsx`, `src/lib/byo-service.ts`, `src/App.tsx`, `scripts/prepare-pages.mjs`, `tests/byo/service.test.ts`.
-- **Accept:** §16.8: a trace file through parseTraceArtifact (kind local-derived, traces.ts:118) or a CSV converted locally, a config through the zoo reader and a hardware row from the atlas give KV per token, a batching run on a 400-request sample in the fleet worker and $/Mtok at a dated price; nothing is uploaded or stored, and the summary downloads as a file. UI check (§17.2) on `/capstone/service`.
+**3s-10 · Stretch 8, the bring-your-own-service capstone: your trace, your model config, your hardware, on the device (spec §16.8)** M. Depends: 3s-06.
+- **Files:** `src/pages/ServiceCapstone.tsx`, `src/lib/byo-service.ts`, `src/App.tsx`, `scripts/prepare-pages.mjs`, `scripts/verify-bundle.ts`, `tests/byo/service.test.ts`.
+- **Accept:** §16.8: a trace file through parseTraceArtifact (kind local-derived, traces.ts:118) or a CSV converted locally, a config through the zoo reader and a hardware row from the atlas give KV per token, a batching run on a 400-request sample in the fleet worker and $/Mtok at a dated price; nothing is uploaded or stored, and the summary downloads as a file; verify-bundle's ROUTE_BUDGETS reports /capstone/service against a 200 KB figure (not gated), printed. UI check (§17.2) on `/capstone/service`.
 - **Browser:** Needs headless Chromium through the wrapper (`PW_CHROMIUM_EXECUTABLE`).
 
 ### 19.3 Budget reconciliation and cut order
@@ -1729,12 +1775,12 @@ PLAN §8 gives Wave 3 102 review hours (cap 110). The tasks map onto its lines a
 
 **Not in the plan's 102 h:**
 - The foundation: the ledger contract, routes, types, gates, mounts and lazy claims (3a-01 … 3a-07), the KC contract (3a-09), the exit-gate and a11y tasks (3c-01, 3c-02). About 12 h of review, like Wave 2's unbudgeted foundation.
-- The Wave 2 carry-overs of D24, about 2 h.
+- The one remaining Wave 2 carry-over of D24 (RooflineSim's SMEM curve, inside 3a-18), about 1 h.
 
-That takes the base to about 116 h against the 110 h cap. The watcher's 10 h return under its default (D18). If they do not, the first cut below closes the gap.
+That takes the base to about 115 h against the 110 h cap. The watcher's 10 h return under its default (D18). If they do not, cut 1 does not help, because stretch is not part of the 115 h base (it only frees review capacity); the second cut, W5's Fleet exercises (3b-03, 3b-20, 3c-06, about 7 of W5's 19 h), closes the gap.
 
 **Cut order** (PLAN §8.1, binding). If the review queue saturates, cut in this order; each cut rolls into Wave 4. Nothing that owns a build gate (B1–B9) or the partner instrumentation is ever cut.
-1. All of 3s (stretch is conditional anyway).
+1. All of 3s (stretch is conditional anyway). 3s-01 and 3s-02 are cut or kept together: the 3D view ships dark and appears only with its evaluation (Q7).
 2. W5's Fleet exercises: 3b-03, 3b-20 and 3c-06. No exit gate depends on them: t6.l3 and t7.l2 stay hands-on through their item blocks (§5.4).
 3. P3's work analogues: 3c-05. Panels then align and name breaks with no background pick.
 4. K5's track forms: 3b-19. /me then shows no forms, and 3c-03 drops `selectFormsGain`, its only reader of form data.
@@ -1755,6 +1801,9 @@ That takes the base to about 116 h against the 110 h cap. The watcher's 10 h ret
 | claims chunk on /boot and /today | 17.1–17.4 KB | Wave 2a review; `verify-bundle` |
 | three + R3F (ParticleField) | 242.4 KB gzip, lazy, Home only | build manifest |
 | `verify:items` | fails on HEAD: 4 failures in the `align` (7 items) and `primm` (12) pools; pools prequestion 49, predictAt 16, spiral 42; 290 lesson items, 6 Act IV, 67 errata; Wave 2 bar ≤ 2 of 68 holds (worst 1.63, middle-length) | `bun run verify:items` |
+| `verify:items` on `wave-2c` 8afa2b5 | passes again after the 2c fix round's first level | critique round, 2026-10-13 |
+| `hands-on.test.ts` on a 2b + 2c trial merge (2ecd0df + 4a36711) | 16 pass, 1 fail at :88 (its fixture uses the now-registered `scheduler`); prints "hands-on T6/T7 lessons: 12 of 15" | `bun test tests/kc/hands-on.test.ts` |
+| Act I scheduler dials (2b, 30 graded entropies) | 19 of the 48 dial settings behave differently; guard 2000 = guard 0 everywhere; runs end within 2,949 ticks | `compileSchedPolicy` on Act I's `Engine` (§8.3) |
 | KC graph | 153 KCs (r 19, t0 10, t1 14, t2 17, t3 13, t4 16, t5 28, t6 23, t7 13); 68 of 68 lessons tagged; 19 confusable sets | `bun run verify:kc` |
 | claims | 168 (106 spec, 17 derived, 15 benchmark, 9 synthetic, 10 price, 11 status) | `bun run verify:claims` |
 | hands-on T6/T7 | 12 of 15; not t6.l3, t6.l7, t6.l10 | `bun test tests/kc/hands-on.test.ts` |
