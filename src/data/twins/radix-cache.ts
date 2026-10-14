@@ -95,7 +95,7 @@ const twin: TwinModule = {
   claimId: 'twin.sglang.treecore',
   path: 'rust/sglang-radix-tree/src/unified_tree_core.rs',
   symbols: ['match_prefix', 'split_node_', 'insert', 'evict_device_next_node'],
-  youWrote: 'You just wrote the structure SGLang made its default on 2026-09-29: its Rust radix-tree core now serves every prefix lookup, insert and eviction. Trace three of them.',
+  youWrote: 'You just wrote the structure SGLang made its default on 2026-09-29: its Rust radix-tree core is now the default behind prefix lookup, insert and eviction. Trace three of them.',
   items: TWIN_ITEMS,
 }
 

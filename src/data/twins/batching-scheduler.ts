@@ -10,6 +10,9 @@ import type { TwinItem, TwinModule } from './types'
  *   vllm/config/scheduler.py               scheduler_reserve_full_isl = True, enable_chunked_prefill = True,
  *                                           long_prefill_token_threshold = 0, policy = "fcfs", watermark = 0.0
  *   vllm/v1/core/kv_cache_manager.py       KVCacheManager.allocate_slots (full_sequence_must_fit)
+ * The numbers in the stems (max_num_batched_tokens 2,048, 16-token blocks) are a stated setup, not vLLM defaults: the
+ * default in arg_utils.py depends on the usage context and the GPU, and the block size on the platform and backend.
+ * The policy flags (fcfs, chunked prefill, scheduler_reserve_full_isl) are read at their defaults.
  * The lab 06 twin ships because schedule() supports three questions that a learner who wrote the lab can answer from the
  * code and the lab's own rules would get wrong: what stops the waiting loop, who is preempted, and how the one token
  * budget is spent. The arithmetic in each stem is re-derived in tests/forge/twins-content.test.ts.
@@ -26,7 +29,7 @@ const q1: TwinItem = {
   id: 'lab06.twin.1',
   kcs: [KC.schedOrder, KC.admissionHeadroom],
   q: {
-    q: 'vLLM v0.31.0 runs with its defaults: first-come-first-served, chunked prefill on, max_num_batched_tokens 2,048, 16-token KV blocks and no KV connector. Other requests hold most of the pool, so 200 blocks (3,200 tokens) are free, and the running requests need no new block this step. The waiting queue, oldest first, is W1 (a 4,000-token prompt), W2 (300 tokens) and W3 (200 tokens); none has a prefix-cache hit. Which of them does schedule() admit this step?',
+    q: 'vLLM v0.31.0 is configured with max_num_batched_tokens 2,048 and 16-token KV blocks, and its policy flags are at their defaults: first-come-first-served, chunked prefill on, no KV connector. Other requests hold most of the pool, so 200 blocks (3,200 tokens) are free, and the running requests need no new block this step. The waiting queue, oldest first, is W1 (a 4,000-token prompt), W2 (300 tokens) and W3 (200 tokens); none has a prefix-cache hit. Which of them does schedule() admit this step?',
     options: [
       'W3 and then W2, as the loop admits the smallest prompts first and leaves the 4,000-token whale for when memory frees',
       'W2 and W3, as W1 does not fit and the loop skips it and keeps walking the queue, just like your reference scheduler',
@@ -47,7 +50,7 @@ const q2: TwinItem = {
   id: 'lab06.twin.2',
   kcs: [KC.admissionHeadroom, KC.continuousBatching],
   q: {
-    q: "vLLM v0.31.0, defaults, no KV connector. Three requests are running, admitted in this order: R1, R2, R3. The KV pool is full. This step R1's decode token crosses a block boundary and needs one new block; R2 needs none. R2 holds 40 blocks (the most) and R3 holds 5. schedule() reaches R1 first and allocate_slots returns None. What does it do?",
+    q: "vLLM v0.31.0 with its policy flags at their defaults (first-come-first-served, no KV connector). Three requests are running, admitted in this order: R1, R2, R3. The KV pool is full. This step R1's decode token crosses a block boundary and needs one new block; R2 needs none. R2 holds 40 blocks (the most) and R3 holds 5. schedule() reaches R1 first and allocate_slots returns None. What does it do?",
     options: [
       'It preempts R2, the request holding the most blocks, as freeing 40 blocks at once ends the memory pressure fastest on the next step, and R1 and R3 keep running',
       'It preempts R1, the request that asked for the block and cannot get it, and lets R2 and R3 carry on with their decode tokens as before',
@@ -58,7 +61,7 @@ const q2: TwinItem = {
     why: [
       'Blocks held play no part. With the fcfs policy the victim is self.running[-1]; only the priority policy picks by a key, and then by priority value and arrival time, not by memory held.',
       'R1 would be the victim only if it were the last request in `running`. The loop takes running[-1], and R1 is first. Preempting the oldest request would also throw away the most progress.',
-      'v1 has no swap. _preempt_request frees the blocks and sets num_computed_tokens to 0, so the request recomputes its prompt and the output so far when it resumes. Nothing is copied to CPU.',
+      'v1 has no swap. _preempt_request frees the blocks and sets num_computed_tokens to 0, so on resuming the request recomputes its prompt and the output so far, except for blocks that are still in the prefix cache. Nothing is copied to CPU.',
       'Right. With fcfs the victim is running[-1], the request admitted last (the priority policy takes the max by priority and arrival time instead). _preempt_request frees its blocks, sets num_computed_tokens = 0 and prepend_request puts it at the front of waiting. The waiting loop runs `if not preempted_reqs`, so no new request is admitted. This is the "auto-preempts the newest sequence" rule your lab\'s engine applied for you.',
     ],
   },
@@ -68,7 +71,7 @@ const q3: TwinItem = {
   id: 'lab06.twin.3',
   kcs: [KC.continuousBatching, KC.batchingThroughput],
   q: {
-    q: "vLLM v0.31.0, defaults, max_num_batched_tokens 2,048, chunked prefill on. 40 requests are decoding, one token each this step. The head of the waiting queue is a 6,000-token prompt with no prefix-cache hit, whose whole sequence fits in the free KV blocks. How many of its prompt tokens does this step's schedule() give it?",
+    q: "vLLM v0.31.0 with max_num_batched_tokens set to 2,048 and its policy flags at their defaults (chunked prefill on). 40 requests are decoding, one token each this step. The head of the waiting queue is a 6,000-token prompt with no prefix-cache hit, whose whole sequence fits in the free KV blocks. How many of its prompt tokens does this step's schedule() give it?",
     options: [
       '2,048 tokens, as prefill and decode draw on separate budgets and the 40 decode tokens do not shrink the chunk the prompt gets in this step',
       '6,000 tokens, the whole prompt in one step, as it fits in the free KV blocks and nothing else in the loop limits how much of it goes in',
