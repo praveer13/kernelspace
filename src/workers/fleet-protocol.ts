@@ -32,11 +32,16 @@ export const FLEET_JOB_BUDGET_MS = 10_000
  */
 export const FLEET_FINISH_BUDGET_MS = 5000
 
-/** Raw module bytes per Fleet slot; null = the JS reference driver. Never transferred, callers keep their bytes. */
+/**
+ * Raw module bytes per Fleet slot; null = the JS reference driver. Never transferred, callers keep their bytes.
+ * `router` is the prefix-router slot (a radix-cache module, docs/specs/wave-2.md §10.3): each cluster worker gets
+ * its own instance of it. Left out it is null, so a caller written before the slot existed still type-checks.
+ */
 export interface FleetSlotBytes {
   sched: ArrayBuffer | null
   mgr: ArrayBuffer | null
   queue: ArrayBuffer | null
+  router?: ArrayBuffer | null
 }
 
 /* ------------------------------- open ------------------------------- */
@@ -81,7 +86,7 @@ export interface PoolOpen {
 /**
  * An incident session (docs/specs/wave-2.md §9.5): a JSQ cluster of `spec.workers` engines carrying the
  * spec's fault, driven through the clock of world/incident-sim.ts. `slots` are the same three the other
- * modes take (scheduler, block manager and intake queue; the prefix-router slot joins in 2b-20); a null
+ * modes take (scheduler, block manager and intake queue, plus the prefix router); a null
  * slot runs the reference driver, as `buildStack` does for Fleet Week. Each worker gets its own
  * instance of every module. `open` runs the incident up to its alert, so it carries the whole warm-up.
  */
@@ -91,7 +96,16 @@ export interface IncidentOpen {
   slots: FleetSlotBytes
 }
 
-export type FleetOpen = EngineOpen | ClusterOpen | EpdOpen | PoolOpen | IncidentOpen
+/**
+ * Token-count mode (§10.5): the learner's bpe-tokenizer alone, asked for the token count of texts. It runs here
+ * for the same reason the other modules do: a `count` that spins stalls this worker, not the page.
+ */
+export interface TokensOpen {
+  mode: 'tokens'
+  slots: { tokenizer: ArrayBuffer }
+}
+
+export type FleetOpen = EngineOpen | ClusterOpen | EpdOpen | PoolOpen | IncidentOpen | TokensOpen
 
 /* ----------------------------- snapshots ----------------------------- */
 
@@ -248,6 +262,8 @@ export type FleetRequest =
   /** `tick` is the panel's tick number, echoed as progress so a timeout can name it */
   | { id: number; cmd: 'pool'; tick: number; ops: FleetOp[] }
   | { id: number; cmd: 'job'; job: LeaderboardJob }
+  /* tokens mode: the token count of each text, in order */
+  | { id: number; cmd: 'count'; texts: string[] }
   /* incident sessions: one command at a time, like the rest. `id` is the request id, so the probe and fix ids have their own fields. */
   | { id: number; cmd: 'hypothesis'; hypothesis: Hypothesis }
   | { id: number; cmd: 'probe'; probe: ProbeId }
@@ -265,6 +281,7 @@ export type FleetReply =
   | { type: 'step'; id: number; snapshot: FleetSnapshot }
   | { type: 'pool'; id: number; result: PoolTickResult }
   | { type: 'job'; id: number; result: LeaderboardJobResult }
+  | { type: 'count'; id: number; counts: number[] }
   | { type: 'hypothesis'; id: number }
   | { type: 'probe'; id: number; result: IncidentProbeReply }
   | { type: 'fix'; id: number; result: IncidentFixReply }
