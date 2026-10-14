@@ -257,7 +257,7 @@ export const PRIMM_ITEMS: readonly PrimmItem[] = [
     explain: 'The waiting task is polled once to park, then not again until the opener wakes it; that second poll finds the gate open and it finishes. Together with the opener’s 4 polls, `run()` reports 6.',
   },
   choice('lab05.primm.i2', 'investigate', [FUTURES, WAKERS], {
-    q: 'Your `run` is `while let Some(task) = self.queue.inner.borrow_mut().pop_front() { … }`, and everything else is correct. Which check is the first to go red, in the order the page lists them?',
+    q: 'Your `run` pops its next task in the head of a `while let`, with `queue.borrow_mut().pop_front()`, so the guard lives through the whole loop body. Everything else is correct. Which check is the first to go red, in the order the page lists them?',
     options: [
       '`block_on`, since its second future wakes itself and meets a queue that `run` has borrowed',
       '`fifo_poll`, since the borrow delays each wake and the poll order comes out wrong',

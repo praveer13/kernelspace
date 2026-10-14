@@ -34,7 +34,7 @@ export const PROVE_QUESTIONS: readonly ProveQuestion[] = [
     id: 'borrow-scope',
     prompt: 'Where does your `run` end its borrow of the queue, and what would happen if the borrow lasted through the poll?',
     model:
-      'The pop is its own statement: `let next = self.queue.inner.borrow_mut().pop_front();`. The `RefMut` is a temporary, so it is gone at the semicolon, before the poll starts. That matters because a poll can call `spawn` or a waker, and both take `borrow_mut` on the same queue. With a guard held across the poll, the first wake would panic with "already borrowed", which is what turns every check red, starting with `block_on`.',
+      'The pop is a `let` statement of its own, with `queue.borrow_mut().pop_front()` on the right. The `RefMut` is a temporary, so it is gone at the semicolon, before the poll starts. That matters because a poll can call `spawn` or a waker, and both take `borrow_mut` on the same queue. With a guard held across the poll, the first wake would panic with "already borrowed", which is what turns every check red, starting with `block_on`.',
     ideas: [
       'the pop is a statement of its own, so the RefMut guard is a temporary that ends at the semicolon',
       'a poll can wake or spawn, and both borrow the same queue mutably',
