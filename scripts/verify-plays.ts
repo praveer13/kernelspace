@@ -2,7 +2,7 @@
  * verify-plays: the canvas-mirror check of docs/specs/wave-1.md §10.5 (zero-waiver since wave-2.md §12.2) and the play
  * checks of §11.5.
  *
- * Canvas mirrors. Every file in src/components/sims and src/components/telemetry that renders a plotted element (a
+ * Canvas mirrors. Every file in src/components/sims, src/components/telemetry and src/components/fleet-ex that renders a plotted element (a
  * `<canvas>`, or a telemetry `<Sparkline`) needs a mirror for each one: the element's `aria-describedby` (`describedBy`
  * on a Sparkline) must name the id of a `<SimMirror` in the same file. A file with N canvases needs N mirrored canvases:
  * one `<SimMirror` no longer satisfies a file with two. The Wave 1 waiver comment
@@ -21,15 +21,17 @@
  * `<View3D` outside GATE_3D fails. The play's closure (the modules /play/<id> pulls in statically, with its KCs
  * and claims) is printed; `verify:bundle` prints the same route's gzip closure.
  *
- * Practice trace. Each play has its own check (`practiceBandOf`): block placement's seed must be in its band. The
- * scheduler's practice minute must be in band on all five rules of wave-2.md §8.2. It is a pinned fresh minute
- * (`SCHED_PRACTICE_MINUTE_SEED`, the first in-band seed from 0), because the busiest-minute artifact itself cannot
- * be (no prompt over 692 tokens, 1 to 4 token responses: 2b-01 pinned this in tests/world/sched-traces.test.ts).
+ * Practice trace. Each play has its own band module, src/lib/world/bands/<playId>.ts (`practiceBandOf` runs it; a
+ * play without one fails): block placement's seed must be in its band. The scheduler's practice minute must be in
+ * band on all five rules of wave-2.md §8.2. It is a pinned fresh minute (`SCHED_PRACTICE_MINUTE_SEED`, the first
+ * in-band seed from 0), because the busiest-minute artifact itself cannot be (no prompt over 692 tokens, 1 to 4
+ * token responses: 2b-01 pinned this in tests/world/sched-traces.test.ts). Claim ids come from src/data/claims/all.ts.
  *
  *   bun run verify:plays
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 
 /** The retired Wave 1 waiver: a scoped file that carries this marker anywhere is an error. */
@@ -226,29 +228,20 @@ export interface PracticeBand {
   note: string
 }
 
-/** Runs a play's practice-band check, or returns null for a play that has none (a new play must bring its own). */
+/** The folder of the practice-band modules: one `<playId>.ts` per play, each exporting `band(read)` (wave-3.md §4.2). */
+const BANDS_DIR = 'src/lib/world/bands'
+
+/** The play ids that have a band module, by readdir; `types.ts` holds the shared types, not a play. */
+function bandModules(root: string): Set<string> {
+  return new Set(readdirSync(join(root, BANDS_DIR)).filter((f) => f.endsWith('.ts') && f !== 'types.ts').map((f) => f.slice(0, -3)))
+}
+
+/** Runs a play's practice-band module, or returns null for a play that has none (a new play must bring its own). */
 export async function practiceBandOf(id: string, root: string): Promise<PracticeBand | null> {
-  if (id === 'block-placement') {
-    const { PLAY_PRACTICE_SEED, makePlacementTrace, checkPlacementBand } = await import('../src/lib/world/traces')
-    const band = checkPlacementBand(makePlacementTrace(PLAY_PRACTICE_SEED))
-    return { inBand: band.inBand, note: `practice seed ${PLAY_PRACTICE_SEED} ${band.inBand ? 'is in band' : 'is outside the band'}` }
-  }
-  if (id === 'scheduler') {
-    const { SCHED_PRACTICE_MINUTE_SEED, checkSchedBand, parseSchedSource, practiceMinute } = await import('../src/lib/world/sched-traces')
-    const dir = join(root, 'public', 'traces')
-    const source = await parseSchedSource(
-      JSON.parse(readFileSync(join(dir, 'burstgpt-v2-busiest-minute.json'), 'utf8')),
-      JSON.parse(readFileSync(join(dir, 'burstgpt-v2-busiest-hour.json'), 'utf8')),
-    )
-    const band = checkSchedBand(practiceMinute(source))
-    const missed = band.rules.flatMap((ok, i) => (ok ? [] : [i + 1]))
-    const note =
-      `practice minute (seed ${SCHED_PRACTICE_MINUTE_SEED}): the reference serves ${band.ghost.met} of ${band.ghost.total} within the SLO in ${band.ghost.turns} turns, FCFS ${band.fcfs.met}, ` +
-      `${band.greedy.autoPreempts} auto-preempt${band.greedy.autoPreempts === 1 ? '' : 's'} without headroom, longest prompt ${band.longestPrompt}; ` +
-      (missed.length === 0 ? 'in band on all five rules' : `outside the §8.2 band on rule${missed.length === 1 ? '' : 's'} ${missed.join(', ')} (${band.violations.join('; ')})`)
-    return { inBand: band.inBand, note }
-  }
-  return null
+  if (!bandModules(root).has(id)) return null
+  const mod: typeof import('../src/lib/world/bands/scheduler') = await import(`../${BANDS_DIR}/${id}`)
+  const result = await mod.band((repoPath) => readFile(join(root, repoPath), 'utf8'))
+  return { inBand: result.ok, note: result.detail }
 }
 
 async function checkPlays(failures: string[]): Promise<void> {
@@ -256,7 +249,7 @@ async function checkPlays(failures: string[]): Promise<void> {
   const srcDir = join(root, 'src')
   const { PLAYS, PLAY_PRODUCTION_ROWS } = await import('../src/data/plays')
   const { KC } = await import('../src/data/kc/ids')
-  const { CLAIMS } = await import('../src/data/claims')
+  const { CLAIMS } = await import('../src/data/claims/all')
   const sources = walk(srcDir).map((f) => ({ file: relative(root, f), text: readFileSync(f, 'utf8') }))
   const lessonIds = new Set<string>()
   for (const { file, text } of sources) {
@@ -271,7 +264,7 @@ async function checkPlays(failures: string[]): Promise<void> {
   for (const def of Object.values(PLAYS)) {
     const dir = join(srcDir, 'components', 'play', def.id)
     const band = await practiceBandOf(def.id, root)
-    if (band === null) failures.push(`play ${def.id}: no practice-band check (add it to practiceBandOf in scripts/verify-plays.ts)`)
+    if (band === null) failures.push(`play ${def.id}: no practice-band module (add src/lib/world/bands/${def.id}.ts exporting band(read))`)
     const rows = PLAY_PRODUCTION_ROWS[def.id]
     if (rows === undefined) failures.push(`play ${def.id}: no In-production rows (add it to PLAY_PRODUCTION_ROWS in src/data/plays.ts)`)
     const facts: PlayFacts = {
@@ -305,7 +298,7 @@ async function checkPlays(failures: string[]): Promise<void> {
 }
 
 /** The folders whose plotted elements need a mirror (wave-2.md §12.2). */
-export const MIRROR_SCOPE: readonly string[] = ['src/components/sims', 'src/components/telemetry']
+export const MIRROR_SCOPE: readonly string[] = ['src/components/sims', 'src/components/telemetry', 'src/components/fleet-ex']
 
 async function main(): Promise<void> {
   const root = join(import.meta.dir, '..')

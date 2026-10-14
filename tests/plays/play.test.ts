@@ -20,7 +20,7 @@ import Grid from '../../src/components/play/block-placement/Grid'
 import Mirror from '../../src/components/play/block-placement/Mirror'
 import BlockPlacementPlay from '../../src/components/play/block-placement/Play'
 import ProductionCard from '../../src/components/play/block-placement/ProductionCard'
-import { CLAIMS } from '../../src/data/claims'
+import { CLAIMS } from '../../src/data/claims/all'
 import { KC } from '../../src/data/kc/ids'
 import {
   BLOCK_PLACEMENT,
@@ -81,7 +81,7 @@ const practiceSession = () => newSession(makePlacementTrace(PLAY_PRACTICE_SEED),
 
 describe('the registry', () => {
   test('block placement is T1.L4, 15 minutes, KCs from the contract; the scheduler (2b-11) is the second play', () => {
-    expect(PLAY_IDS).toEqual(['block-placement', 'scheduler'])
+    expect(PLAY_IDS.slice(0, 2)).toEqual(['block-placement', 'scheduler'])
     expect(BLOCK_PLACEMENT.id).toBe(BLOCK_PLACEMENT_ID)
     expect(BLOCK_PLACEMENT.lessonId).toBe('t1.l4')
     expect(BLOCK_PLACEMENT.minutes).toBe(15)

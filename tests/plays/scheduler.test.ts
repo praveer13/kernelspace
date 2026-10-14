@@ -45,7 +45,7 @@ import {
   type SchedSession,
 } from '../../src/components/play/scheduler/session'
 import { PLAY_REGISTRY, resolvePlay } from '../../src/components/play/registry'
-import { CLAIMS, byId } from '../../src/data/claims'
+import { CLAIMS, byId } from '../../src/data/claims/all'
 import { KC } from '../../src/data/kc/ids'
 import { BUILD_THIS_SCHEDULER, PLAYS, PLAY_IDS, PLAY_PRODUCTION_ROWS, SCHEDULER, SCHEDULER_PRODUCTION_ROWS, getPlay } from '../../src/data/plays'
 import { Engine, HEADROOM_TOKENS, makeRefManager, referenceScheduler, type SchedView } from '../../src/lib/fleet-model'
@@ -222,7 +222,7 @@ function losingSession(pick: (v: SchedView) => number[]): SchedSession {
 
 describe('the registry', () => {
   test('the scheduler is the second play: T5.L7, 20 minutes, KCs from the contract, ids tied to the world and the economy', () => {
-    expect(PLAY_IDS).toEqual(['block-placement', 'scheduler'])
+    expect(PLAY_IDS.slice(0, 2)).toEqual(['block-placement', 'scheduler'])
     expect(SCHEDULER.id).toBe(SCHEDULER_PLAY_ID)
     expect(SCHEDULER.lessonId).toBe('t5.l7')
     expect(SCHEDULER.minutes).toBe(PLAY_MINUTES.scheduler)

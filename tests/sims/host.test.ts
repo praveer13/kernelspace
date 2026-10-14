@@ -487,6 +487,7 @@ describe('verify-plays: the zero-waiver canvas-mirror gate (§12.2)', () => {
   })
 
   test('the shipped scope is clean: every sim and telemetry file mirrors every canvas, and nothing is waived', () => {
+    expect(MIRROR_SCOPE).toEqual(['src/components/sims', 'src/components/telemetry', 'src/components/fleet-ex'])
     const files = MIRROR_SCOPE.flatMap((d) => readdirSync(join(ROOT, d)).filter((f) => f.endsWith('.tsx')).map((f) => ({ file: `${d}/${f}`, text: readFileSync(join(ROOT, d, f), 'utf8') })))
     const findings = checkCanvasMirrors(files)
     expect(findings.filter((f) => f.status !== 'mirrored')).toEqual([])
