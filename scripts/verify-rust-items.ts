@@ -14,15 +14,18 @@
  *   - the verdict quota: 20-30 % of verdict items have "compiles" as the key, and no family pool more
  *     than 30 % (the V1 lint fails a key that is strictly the longest option more often), so a fixed
  *     option set gives no cue;
- *   - at least 3 snippets per error code, the Error Museum's floor (§15.6): a failure since 2c-18 froze the bank.
- * scripts/build-rust-items.ts runs rustc and writes the banks; this script never does.
+ *   - at least 3 snippets per error code, the Error Museum's floor (§15.6): a failure since 2c-18 froze the bank;
+ *   - the files the app loads instead of the banks (`manifest.json`, `served/<group>.ts`, `museum.json`) are
+ *     exactly what scripts/build-rust-items.ts derives from the committed banks, so none is hand-edited or stale.
+ * scripts/build-rust-items.ts runs rustc and writes the banks and those files; this script never does.
  *
  *   bun scripts/verify-rust-items.ts
  */
 
 import { createHash } from 'node:crypto'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { KCS } from '../src/data/kc'
-import { addsClone, applyEdit, ERROR_CODES, loadRustGroups, MAX_COLS, MAX_LINES, PANIC_CODES, PERMISSION_CODES, variantCode } from '../src/data/rust-items'
+import { addsClone, applyEdit, ERROR_CODES, loadRustGroups, MAX_COLS, MAX_LINES, PANIC_CODES, PERMISSION_CODES, sameOutcome, variantCode } from '../src/data/rust-items'
 import type { BankOutcome, BankSnippet, Outcome, Permission, RustGroup, RustSnippet, SnippetVariant } from '../src/data/rust-items/types'
 import { KC } from '../src/data/kc/ids'
 import { stableStringify } from '../src/lib/ledger/stable'
@@ -34,7 +37,8 @@ export const EDITION = '2024'
 export const VERDICT_QUOTA = { min: 0.2, max: 0.3 } as const
 /** No KC pool of verdict items may have "compiles" as the key more often than this. */
 export const VERDICT_POOL_MAX = 0.3
-export { MIN_SNIPPETS_PER_CODE }
+export { MIN_SNIPPETS_PER_CODE, sameOutcome }
+const ITEMS_DIR = new URL('../src/data/rust-items/', import.meta.url)
 const ID = /^[a-z][a-z0-9-]*$/
 const MISS = /^[a-z0-9]+(\.[a-z0-9-]+)+$/
 const BAD_TEXT = /\b(NaN|Infinity|undefined)\b/
@@ -67,10 +71,6 @@ export function phoneProblems(code: string): string[] {
 
 const outcomeText = (o: Outcome | BankOutcome): string => (o === 'compiles' ? 'compiles' : `${o.code} at line ${o.line}`)
 
-/** Whether a recorded result is the authored outcome (code and line; the message is rustc's own). */
-export const sameOutcome = (want: Outcome, got: BankOutcome): boolean =>
-  want === 'compiles' ? got === 'compiles' : got !== 'compiles' && got.code === want.code && got.line === want.line
-
 /* ------------------------------ schema ------------------------------ */
 
 function checkEdit(where: string, code: string, edit: { line: number; text: string }, bad: (m: string) => void): void {
@@ -84,7 +84,7 @@ function checkEdit(where: string, code: string, edit: { line: number; text: stri
 function checkOutcome(where: string, s: RustSnippet, o: Outcome, lines: number, bad: (m: string) => void): void {
   if (o === 'compiles') return
   if (!o || typeof o !== 'object') return bad(`${where}: expect must be 'compiles' or {code, line}`)
-  if (!(o.code in ERROR_CODES)) bad(`${where}: code ${o.code} is not in ERROR_CODES (src/data/rust-items/index.ts)`)
+  if (!(o.code in ERROR_CODES)) bad(`${where}: code ${o.code} is not in ERROR_CODES (src/data/rust-items/constants.ts)`)
   if ((PANIC_CODES as readonly string[]).includes(o.code) && !s.run) bad(`${where}: ${o.code} is a run-time panic, so the snippet needs run: true`)
   if (!Number.isInteger(o.line) || o.line < 1 || o.line > lines) bad(`${where}: expected line ${o.line} is outside 1..${lines}`)
 }
@@ -315,13 +315,45 @@ export function codeCounts(groups: readonly RustGroup[]): Map<string, Set<string
   return out
 }
 
+/* ------------------------------ what the app loads ------------------------------ */
+
+/**
+ * The derived files that differ from what build-rust-items writes from the committed banks, a served group
+ * left over from a group that no longer exists, or a missing one. `files` maps a path under
+ * src/data/rust-items to its text (`derivedFiles`); `read` returns a committed file's text, or undefined.
+ */
+export function derivedProblems(files: ReadonlyMap<string, string>, read: (rel: string) => string | undefined, served: readonly string[]): string[] {
+  const out: string[] = []
+  const fix = 'run bun scripts/build-rust-items.ts --derived and commit it'
+  for (const [rel, want] of files) {
+    const have = read(rel)
+    if (have === undefined) out.push(`${rel} is missing; ${fix}`)
+    else if (have !== want) out.push(`${rel} is not what the banks and snippets give now (it is written, never edited); ${fix}`)
+  }
+  for (const name of served) if (!files.has(`served/${name}`)) out.push(`served/${name} has no group in snippets/; ${fix}`)
+  return out
+}
+
+async function checkDerived(groups: readonly RustGroup[]): Promise<string[]> {
+  // a dynamic import: build-rust-items imports this module for its checks
+  const { derivedFiles } = await import('./build-rust-items')
+  const read = (rel: string): string | undefined => {
+    const url = new URL(rel, ITEMS_DIR)
+    return existsSync(url) ? readFileSync(url, 'utf8') : undefined
+  }
+  const servedDir = new URL('served/', ITEMS_DIR)
+  const served = existsSync(servedDir) ? readdirSync(servedDir) : []
+  return derivedProblems(derivedFiles(groups), read, served)
+}
+
 /* ------------------------------ main ------------------------------ */
 
 async function main(): Promise<void> {
   const groups = await loadRustGroups()
   const problems = [...checkSnippets(groups)]
-  // a bank is only worth comparing once the snippets are sound
+  // a bank is only worth comparing once the snippets are sound, and the app's files once the banks are
   if (problems.length === 0) problems.push(...checkBanks(groups))
+  if (problems.length === 0) problems.push(...(await checkDerived(groups)))
   const q = verdictQuota(groups)
   problems.push(...quotaProblems(q))
   problems.push(...codeProblems(groups))

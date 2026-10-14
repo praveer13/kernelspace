@@ -5,6 +5,8 @@
  * error code" floor as a failure; one museum entry per code the bank holds, each built from a variant
  * rustc confirmed; each entry's permission diagram in src/data/aquascope/errors.json, hash-checked against
  * that entry's code like a lesson's; the R lessons each entry links; and the practice items the page serves.
+ * The page renders the exhibits from their own payload (src/data/rust-items/museum.json), which must be
+ * exactly `museumEntries` over the banks.
  */
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
@@ -16,23 +18,27 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { checkHashRows, readAllHashRows } from '../../scripts/verify-generators'
 import { codeCounts, codeProblems, MIN_SNIPPETS_PER_CODE } from '../../scripts/verify-rust-items'
-import ErrorEntry, { practiceResponse, traceFor, traceIsEmpty, traceRejects } from '../../src/components/rust/ErrorEntry'
+import ErrorEntry, { practiceResponse, traceFor, traceIsEmpty, traceRejects, type PracticeItem } from '../../src/components/rust/ErrorEntry'
 import { traceProblems, type PermissionTraceFile } from '../../src/data/aquascope/types'
 import { ALL_LESSONS } from '../../src/data/lessons'
-import { loadRustGroups, PERMISSION_CODES } from '../../src/data/rust-items'
+import { bankUnits, loadRustGroups, PERMISSION_CODES } from '../../src/data/rust-items'
 import type { RustGroup } from '../../src/data/rust-items/types'
-import compile, { practiceInstance, UNITS, unitOf } from '../../src/lib/items/families/compile'
+import compile, { practiceInstance, unitOf } from '../../src/lib/items/families/compile'
 import { correctResponse, gradeResponse } from '../../src/lib/items/grade'
 import { gradeItem, resultFor } from '../../src/lib/items/play'
 import { validateEvent } from '../../src/lib/ledger/codec'
 import { CORE_CODES, LESSON_TITLES, museumEntries, pickUnit, TAUGHT_IN, withLine } from '../../src/lib/rust/museum'
+import Errors from '../../src/pages/Errors'
 import { evt } from '../ledger/gen'
 
 const ROOT = path.resolve(import.meta.dir, '../..')
 const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
 const ERRORS = JSON.parse(readFileSync(path.join(ROOT, 'src/data/aquascope/errors.json'), 'utf8')) as PermissionTraceFile
 const GROUPS = await loadRustGroups()
+/** Every variant the bank confirms, with what rustc said (the banks stay with the scripts and tests). */
+const UNITS = bankUnits(GROUPS).units
 const ENTRIES = museumEntries(UNITS)
+const PAYLOAD = JSON.parse(readFileSync(path.join(ROOT, 'src/data/rust-items/museum.json'), 'utf8')) as unknown
 const BANK_CODES = [...new Set(UNITS.flatMap((u) => (u.result === 'compiles' ? [] : [u.result.code])))].sort()
 
 const lessonText = (id: string): string => JSON.stringify(ALL_LESSONS.find((l) => l.id === id)?.blocks ?? [])
@@ -118,7 +124,13 @@ describe('at least 3 snippets per error code is a failure', () => {
       const err = thin.stderr.toString()
       expect(err).toContain('E0381 has 2 snippet(s)')
       expect(err).toContain('at least 3 per error code')
-      expect(err).toContain('1 problem(s)')
+      // the floor is the one bank problem; the rest say the app's files no longer match the thinned bank, as they would
+      const lines = err.trim().split('\n')
+      const summary = lines.pop()!
+      const bankProblems = lines.filter((l) => !l.includes('is not what the banks and snippets give now'))
+      expect(bankProblems).toHaveLength(1)
+      expect(bankProblems[0]).toContain('E0381 has 2 snippet(s)')
+      expect(summary).toContain(`${lines.length} problem(s)`)
       expect(err).not.toContain('warning')
       expect(thin.exitCode).toBe(1)
     } finally {
@@ -128,6 +140,16 @@ describe('at least 3 snippets per error code is a failure', () => {
 })
 
 describe('the museum lists one entry per error code in the bank', () => {
+  test("the page's payload is exactly the entries the banks give, and the page renders every one from it", () => {
+    expect(PAYLOAD).toEqual(JSON.parse(JSON.stringify(ENTRIES)))
+    expect(ENTRIES).toHaveLength(21)
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(Errors)))
+    for (const e of ENTRIES) expect(html).toContain(`id="${e.code}"`)
+    // no loading state: nothing waits for the compile family or a group of the bank
+    expect(html).not.toContain('loading')
+    expect(html.split('Try an item on ').length - 1).toBe(ENTRIES.length)
+  })
+
   test('every code the bank holds, each once', () => {
     expect(ENTRIES.map((e) => e.code).sort()).toEqual(BANK_CODES)
     expect(new Set(ENTRIES.map((e) => e.code)).size).toBe(ENTRIES.length)
@@ -315,8 +337,12 @@ describe('practice this error serves compile items on the code', () => {
 })
 
 describe('the entry renders', () => {
+  const practice = async (code: string, seed: number): Promise<PracticeItem | undefined> => {
+    const inst = practiceInstance(code, seed)
+    return inst && { inst, gen: compile }
+  }
   const html = (code: string, extra: Record<string, unknown> = {}) =>
-    renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ErrorEntry, { entry: ENTRIES.find((e) => e.code === code)!, practice: practiceInstance, gen: compile, ...extra })))
+    renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ErrorEntry, { entry: ENTRIES.find((e) => e.code === code)!, practice, ...extra })))
 
   test('an entry has its snippet, diagram, real fix, the .clone() and its lessons, as headings a screen reader can walk', () => {
     const out = html('E0382')

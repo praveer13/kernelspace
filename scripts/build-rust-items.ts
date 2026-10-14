@@ -10,26 +10,36 @@
  * a labelled lure. It then writes `bank/<group>.json` (results, the rustc version and each snippet's
  * source hash), which verify-rust-items checks in the fast gate without rustc.
  *
+ * The banks stay with the scripts and tests. From them it writes what the app loads instead
+ * (docs/specs/wave-2.md §22.1: the bank data is a reported budget, and hashes and messages are no use to a
+ * learner): `manifest.json`, the units the compile family draws from, with each variant's outcome code and
+ * item kinds; `served/<group>.ts`, one chunk per group with its snippets and what rustc did after each fix;
+ * and `museum.json`, the Error Museum's exhibits. verify-rust-items fails when any of them is stale.
+ *
  *   bun scripts/build-rust-items.ts [--check] [--group a,b] [--force] [--jobs N]
+ *   bun scripts/build-rust-items.ts --derived
  *
  * `--check` (the labs workflow) recompiles everything and fails unless each bank file is exactly what
  * it would write. Without it, a snippet whose hash and compiler are unchanged keeps its recorded
- * results unless `--force`. `RUSTC` overrides the compiler binary (default `rustc` on PATH); it must
- * report version 1.96.0.
+ * results unless `--force`. `--derived` runs no compiler: it rewrites the manifest, the served groups and
+ * the museum from the committed banks. `RUSTC` overrides the compiler binary (default `rustc` on PATH); it
+ * must report version 1.96.0.
  */
 
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { availableParallelism, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadRustGroups, variantCode } from '../src/data/rust-items'
-import type { BankFile, BankOutcome, BankSnippet, Outcome, RustGroup, RustSnippet } from '../src/data/rust-items/types'
+import { bankUnits, loadRustGroups, variantCode } from '../src/data/rust-items'
+import type { BankFile, BankOutcome, BankSnippet, ManifestVariant, Outcome, RustGroup, RustManifest, RustSnippet } from '../src/data/rust-items/types'
+import { museumEntries } from '../src/lib/rust/museum'
 import { checkSnippets, compareSnippet, EDITION, fixCode, RUSTC_VERSION, snippetHash } from './verify-rust-items'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const BANK_DIR = path.join(ROOT, 'src/data/rust-items/bank')
+const ITEMS_DIR = path.join(ROOT, 'src/data/rust-items')
+const BANK_DIR = path.join(ITEMS_DIR, 'bank')
 const RUSTC = process.env.RUSTC || 'rustc'
 /** rustc on one snippet takes well under a second; a run snippet's binary must finish in this. */
 const COMPILE_TIMEOUT_MS = 60_000
@@ -193,6 +203,77 @@ export function formatBank(b: BankFile): string {
 
 const bankFile = (group: string) => path.join(BANK_DIR, `${group}.json`)
 
+/* ------------------------------ what the app loads ------------------------------ */
+
+/** A manifest variant: its outcome code ('' when it compiles), `p` with a permission label, `f` with fixes. */
+const manifestVariant = (v: RustSnippet['variants'][number]): string => `${v.expect === 'compiles' ? '' : v.expect.code}${v.permission && v.focus ? 'p' : ''}${v.fixes ? 'f' : ''}`
+
+/** `manifest.json`: every group's snippets as [kcs, variants], a variant null when the bank does not confirm it. */
+export function manifestOf(groups: readonly RustGroup[]): RustManifest {
+  const confirmed = new Set(bankUnits(groups).units.map((u) => u.key))
+  const out: RustManifest = { groups: {} }
+  for (const g of groups) {
+    out.groups[g.id] = g.snippets.map((s) => [[...s.kcs], s.variants.map((v): ManifestVariant => (confirmed.has(`${g.id}/${s.id}/${v.id}`) ? manifestVariant(v) : null))])
+  }
+  return out
+}
+
+/** One snippet per line, so a change diffs by snippet. */
+export function formatManifest(m: RustManifest): string {
+  const j = (x: unknown) => JSON.stringify(x)
+  const groups = Object.entries(m.groups).map(([id, snippets]) => `    ${j(id)}: [\n${snippets.map((s) => `      ${j(s)}`).join(',\n')}\n    ]`)
+  return `{\n  "groups": {\n${groups.join(',\n')}\n  }\n}\n`
+}
+
+const afterText = (o: Outcome): string => (o === 'compiles' ? o : `${o.code}@${o.line}`)
+
+/** `served/<group>.ts`: the group's snippets and, per snippet and variant, what rustc did after each fix. */
+export function servedSource(g: RustGroup): string {
+  const rows = g.snippets.map((s) =>
+    JSON.stringify(
+      s.variants.map((v) => {
+        if (!v.fixes) return null
+        const done = g.bank?.snippets[s.id]?.variants[v.id]?.fixes
+        return v.fixes.map((f) => (done?.[f.id] === undefined ? 'missing' : afterText(done[f.id])))
+      }),
+    ),
+  )
+  return [
+    `/* Written by scripts/build-rust-items.ts from bank/${g.id}.json; do not edit. verify:rust-items fails when it is stale. */`,
+    `import type { ServedGroup } from '../types'`,
+    '',
+    `export { SNIPPETS } from '../snippets/${g.id}'`,
+    '',
+    `/** By snippet and variant in authored order: what rustc did after each fix ('compiles' or <code>@<line>), null for a variant without fixes. */`,
+    `export const AFTER: ServedGroup['AFTER'] = [`,
+    ...rows.map((r) => `  ${r},`),
+    ']',
+    '',
+  ].join('\n')
+}
+
+/** `museum.json`: the Error Museum's exhibits, built from the banks, so /errors loads no group. */
+export function formatMuseum(groups: readonly RustGroup[]): string {
+  return `${JSON.stringify(museumEntries(bankUnits(groups).units), null, 2)}\n`
+}
+
+/** Every file the app loads instead of the banks, by path relative to src/data/rust-items, with its text. */
+export function derivedFiles(groups: readonly RustGroup[]): Map<string, string> {
+  const out = new Map<string, string>([['manifest.json', formatManifest(manifestOf(groups))]])
+  for (const g of groups) out.set(`served/${g.id}.ts`, servedSource(g))
+  out.set('museum.json', formatMuseum(groups))
+  return out
+}
+
+/** Write the derived files; a served group whose snippets no longer exist is removed. */
+function writeDerived(groups: readonly RustGroup[]): number {
+  const files = derivedFiles(groups)
+  mkdirSync(path.join(ITEMS_DIR, 'served'), { recursive: true })
+  for (const name of readdirSync(path.join(ITEMS_DIR, 'served'))) if (!files.has(`served/${name}`)) rmSync(path.join(ITEMS_DIR, 'served', name))
+  for (const [rel, text] of files) writeFileSync(path.join(ITEMS_DIR, rel), text)
+  return files.size
+}
+
 /* ------------------------------ main ------------------------------ */
 
 async function main(): Promise<void> {
@@ -203,6 +284,16 @@ async function main(): Promise<void> {
   }
   const check = argv.includes('--check')
   const force = argv.includes('--force')
+  if (argv.includes('--derived')) {
+    const groups = await loadRustGroups()
+    const missing = groups.filter((g) => !g.bank).map((g) => g.id)
+    if (missing.length > 0) {
+      console.error(`build-rust-items: no bank for ${missing.join(', ')}; build it first (bun scripts/build-rust-items.ts --group ${missing.join(',')})`)
+      process.exit(1)
+    }
+    console.log(`build-rust-items: wrote ${writeDerived(groups)} derived file(s) from the committed banks`)
+    return
+  }
   const only = flag('--group')?.split(',')
   const jobs = Number(flag('--jobs') ?? availableParallelism())
   const t0 = performance.now()
@@ -286,6 +377,8 @@ async function main(): Promise<void> {
   if (!check) {
     mkdirSync(BANK_DIR, { recursive: true })
     for (const [id, bank] of out) writeFileSync(bankFile(id), formatBank(bank))
+    // the app's files follow the banks: every group, with the banks just written in place of the old ones
+    writeDerived(all.map((g) => (out.has(g.id) ? { ...g, bank: out.get(g.id)! } : g)))
   }
   const verb = check ? 'checked' : 'wrote'
   console.log(`build-rust-items: ${verb} ${out.size} group(s) with ${version}: ${compiled} snippet(s) compiled, ${reused} unchanged (${secs} s)`)

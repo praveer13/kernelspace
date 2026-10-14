@@ -21,11 +21,20 @@
  * covers is served by its other kinds rather than by one or two snippets. Every level serves the same
  * pool: a bank item has no worked form, and the staircase still tracks accuracy per (KC, family).
  *
- * The bank is loaded at module evaluation (top-level await; synchronous under Vite's eager glob), so
- * `make` stays synchronous. A unit whose recorded result does not match its authored outcome is never
- * served (verify-rust-items fails on one in the fast gate). 2c-18 froze the bank: the family's hash
- * fixture (tests/fixtures/items/hashes/compile.json) pins its output, so a change to a snippet, a group
- * or this file's wording shows up as a drift to bump the version for, as in every other family.
+ * Loading (§22.1): this chunk holds only the manifest (src/data/rust-items/manifest.json, about 1 KB
+ * gzip), which lists every unit the bank confirms with its outcome code, KCs and item kinds. That is all
+ * the variants, the pools, the seeded draw and the verdict distractors need. The unit's code, whys and
+ * fixes are in its group, one chunk per group loaded on first need (src/data/rust-items/groups.ts):
+ * `make` stays synchronous, and when the group it draws from has not loaded it starts the load and
+ * throws `NotReady`, which `settle` (src/lib/items/on-demand.ts) turns into a second run once the group
+ * lands. Under Bun (scripts and tests) every group loads at module evaluation, so `make` never stops.
+ * Items serve each variant's authored outcome, which verify-rust-items proves equal to rustc's; no source
+ * hash, rustc version or rustc message reaches the app.
+ *
+ * 2c-18 froze the bank: the family's hash fixture (tests/fixtures/items/hashes/compile.json) pins its
+ * output, so a change to a snippet, a group or this file's wording shows up as a drift to bump the version
+ * for, as in every other family. Version 2 (CF1): the key's why no longer quotes rustc's message, which
+ * stays with the bank files.
  *
  * `practiceInstance` serves the Error Museum (/errors): an item on one error code, drawn from the units
  * whose key is that code, built by the same functions `make` uses. It is not part of `make`, so the
@@ -33,14 +42,16 @@
  */
 
 import { KC } from '@/data/kc/ids'
-import { CLONE_MISS, ERROR_CODES, loadRustGroups, PANIC_CODES, variantCode } from '@/data/rust-items'
-import type { BankOutcome, Outcome, Permission, RustSnippet, SnippetFix, SnippetVariant } from '@/data/rust-items/types'
+import { CLONE_MISS, ERROR_CODES, PANIC_CODES, variantCode } from '@/data/rust-items/constants'
+import { LAZY, loadGroups, servedGroup } from '@/data/rust-items/groups'
+import manifest from '@/data/rust-items/manifest.json'
+import type { Outcome, Permission, RustManifest, RustSnippet, ServedGroup, SnippetFix, SnippetVariant } from '@/data/rust-items/types'
 import { finishInstance, resolveVariant, rngFor, type Rng } from '../core'
 import { gradeResponse } from '../grade'
 import type { ChoiceOption, Gen, Instance, Level, PromptPart, SolutionStep, VariantSpec } from '../types'
 
 const ID = 'compile'
-const VERSION = 1
+const VERSION = 2
 const L3: Level = 3 // gen-literal-ok: the transfer level index
 const ALL_LEVELS: readonly Level[] = [0, 1, 2, L3]
 const NSEC = { verdict: 30, permission: 30, fix: 45 } // gen-literal-ok: nominal seconds per kind
@@ -61,67 +72,109 @@ export function compileVariantId(kind: CompileKind, kc: string): string {
 
 /* ------------------------------ the bank ------------------------------ */
 
-/** One code variant the bank has confirmed. */
+const MANIFEST = manifest as unknown as RustManifest
+
+/** A unit as the manifest lists it: enough to pool and draw it before its group loads. */
+export interface UnitRef {
+  group: string
+  /** Snippet and variant positions within the group. */
+  s: number
+  v: number
+  /** The key's outcome code, or 'compiles'. */
+  outcome: string
+  kcs: readonly string[]
+  permission: boolean
+  fixes: boolean
+}
+
+/** One code variant the bank has confirmed, with its group loaded. */
 export interface Unit {
   /** `group/snippet/variant` */
   key: string
   snippet: RustSnippet
   variant: SnippetVariant
   code: string
-  result: BankOutcome
+  /** The authored outcome, which rustc confirmed. */
+  result: Outcome
   /** fix id → what rustc did after it (variants with fixes only) */
   fixes: Record<string, Outcome>
 }
 
-const sameOutcome = (want: Outcome, got: BankOutcome): boolean =>
-  want === 'compiles' ? got === 'compiles' : got !== 'compiles' && got.code === want.code && got.line === want.line
+const MANIFEST_VARIANT = /^(?<code>E\d{4}|[A-Za-z]+Error)?(?<label>p?)(?<fixes>f?)$/
 
-const GROUPS = await loadRustGroups()
+/** The bank's groups, by id. */
+export const GROUP_IDS: readonly string[] = Object.keys(MANIFEST.groups).sort()
 
-/** Every confirmed unit, and the keys of those left out because the bank disagrees with the snippet. */
-export const UNITS: readonly Unit[] = []
-export const STALE: readonly string[] = []
-for (const g of GROUPS) {
-  for (const s of g.snippets) {
-    for (const v of s.variants) {
-      const key = `${g.id}/${s.id}/${v.id}`
-      const b = g.bank?.snippets[s.id]?.variants[v.id]
-      const fixesOk = (v.fixes ?? []).every((f) => {
-        const r = b?.fixes?.[f.id]
-        return r !== undefined && (!f.ok || r === 'compiles')
-      })
-      if (!b || !sameOutcome(v.expect, b.result) || !fixesOk) {
-        ;(STALE as string[]).push(key)
-        continue
-      }
-      ;(UNITS as Unit[]).push({ key, snippet: s, variant: v, code: variantCode(s, v), result: b.result, fixes: b.fixes ?? {} })
-    }
-  }
+/** Every unit the bank confirms, in bank order (groups by id, snippets and variants as authored). */
+export const REFS: readonly UnitRef[] = GROUP_IDS.flatMap((group) =>
+  MANIFEST.groups[group].flatMap(([kcs, variants], s) =>
+    variants.flatMap((mv, v): UnitRef[] => {
+      if (mv === null) return []
+      const m = MANIFEST_VARIANT.exec(mv)?.groups
+      if (!m) throw new Error(`manifest.json: ${group} snippet ${s} variant ${v} reads "${mv}"`)
+      return [{ group, s, v, outcome: m.code ?? 'compiles', kcs, permission: m.label === 'p', fixes: m.fixes === 'f' }]
+    }),
+  ),
+)
+
+const parseAfter = (a: string): Outcome => {
+  if (a === 'compiles') return a
+  const at = a.lastIndexOf('@')
+  return { code: a.slice(0, at), line: Number(a.slice(at + 1)) }
 }
+
+/** A loaded group's units, by `${s}/${v}`, built once per loaded group. */
+const unitsOf = new WeakMap<ServedGroup, Map<string, Unit>>()
+
+function unitIn(group: string, served: ServedGroup, s: number, v: number): Unit {
+  let units = unitsOf.get(served)
+  if (!units) unitsOf.set(served, (units = new Map()))
+  const at = `${s}/${v}`
+  let u = units.get(at)
+  if (!u) {
+    const snippet = served.SNIPPETS[s]
+    const variant = snippet?.variants[v]
+    if (!variant) throw new Error(`manifest.json lists ${group} snippet ${s} variant ${v}, which served/${group}.ts does not hold; run bun scripts/build-rust-items.ts --derived`)
+    const after = served.AFTER[s]?.[v] ?? []
+    const fixes: Record<string, Outcome> = {}
+    variant.fixes?.forEach((f, i) => {
+      if (after[i] !== undefined) fixes[f.id] = parseAfter(after[i])
+    })
+    u = { key: `${group}/${snippet.id}/${variant.id}`, snippet, variant, code: variantCode(snippet, variant), result: variant.expect, fixes }
+    units.set(at, u)
+  }
+  return u
+}
+
+/** The unit behind a ref. Throws `NotReady` (after starting the load) when its group has not loaded. */
+export const unitAt = (r: UnitRef): Unit => unitIn(r.group, servedGroup(r.group), r.s, r.v)
+
+// Scripts and tests have every group in hand; the app loads each on first need.
+if (!LAZY) await loadGroups(GROUP_IDS)
 
 /** Every outcome code some unit has as its key: verdict distractors come only from these. */
-const BANK_CODES: readonly string[] = [...new Set(UNITS.flatMap((u) => (u.result === 'compiles' ? [] : [u.result.code])))].sort()
+const BANK_CODES: readonly string[] = [...new Set(REFS.flatMap((r) => (r.outcome === 'compiles' ? [] : [r.outcome])))].sort()
 
 /** variant id → its pool, before the MIN_POOL cut. */
-const RAW_POOLS = new Map<string, Unit[]>()
-const addTo = (id: string, u: Unit) => {
+const RAW_POOLS = new Map<string, UnitRef[]>()
+const addTo = (id: string, r: UnitRef) => {
   const pool = RAW_POOLS.get(id) ?? []
-  pool.push(u)
+  pool.push(r)
   RAW_POOLS.set(id, pool)
 }
-for (const u of UNITS) {
-  for (const kc of u.snippet.kcs) {
-    addTo(compileVariantId('verdict', kc), u)
-    if (u.variant.fixes) addTo(compileVariantId('fix', kc), u)
+for (const r of REFS) {
+  for (const kc of r.kcs) {
+    addTo(compileVariantId('verdict', kc), r)
+    if (r.fixes) addTo(compileVariantId('fix', kc), r)
   }
-  if (u.variant.permission) addTo(compileVariantId('permission', KC.permissions), u)
+  if (r.permission) addTo(compileVariantId('permission', KC.permissions), r)
 }
 
 const KIND_TITLE: Record<CompileKind, string> = { verdict: 'Which error does rustc report?', permission: 'Which permission is missing?', fix: 'Which fix keeps the behaviour?' }
 
 const VARIANTS: VariantSpec[] = []
 /** Declared variant id → its pool. */
-export const POOLS = new Map<string, readonly Unit[]>()
+export const POOLS = new Map<string, readonly UnitRef[]>()
 for (const kc of COMPILE_KCS) {
   for (const kind of ['verdict', 'permission', 'fix'] as const) {
     if ((kind === 'permission') !== (kc === KC.permissions)) continue
@@ -142,7 +195,7 @@ const RUNS_TEXT = '0 errors, runs to the end'
 const panicText = (code: string) => `0 errors, then ${code}`
 
 /** What happened, as a clause: "rustc reports E0502 at line 5", "it compiles", "it panics at line 6 with BorrowMutError". */
-function outcomeClause(o: Outcome | BankOutcome, run: boolean): string {
+function outcomeClause(o: Outcome, run: boolean): string {
   if (o === 'compiles') return run ? 'it compiles and runs to the end' : 'it compiles'
   return isPanic(o.code) ? `it compiles, then panics at line ${o.line} with ${o.code}` : `rustc reports ${o.code} at line ${o.line}`
 }
@@ -150,12 +203,9 @@ function outcomeClause(o: Outcome | BankOutcome, run: boolean): string {
 /** A clause as a sentence; "rustc" keeps its lower case, as the tool spells it. */
 const sentence = (s: string) => (s.startsWith('rustc ') ? s : s.charAt(0).toUpperCase() + s.slice(1))
 
-/** rustc's own words, when there are some. */
-const quoted = (o: BankOutcome): string => (o === 'compiles' ? '' : `: "${o.message}"`)
-
 /** The why of the key of a verdict item, and of the solution. */
 function keyWhy(u: Unit): string {
-  return `${sentence(outcomeClause(u.result, Boolean(u.snippet.run)))}${quoted(u.result)}. ${u.variant.why}`
+  return `${sentence(outcomeClause(u.result, Boolean(u.snippet.run)))}. ${u.variant.why}`
 }
 
 /* ------------------------------ verdict ------------------------------ */
@@ -248,7 +298,7 @@ function fixWhy(u: Unit, f: SnippetFix): string {
 
 function makeFix(u: Unit): Pick<Instance, 'prompt' | 'answer' | 'params'> {
   const fixes = u.variant.fixes!
-  const r = u.result as Exclude<BankOutcome, 'compiles'>
+  const r = u.result as Exclude<Outcome, 'compiles'>
   const ask = isPanic(r.code)
     ? `This panics with ${r.code} at run time. Which one-line change stops the panic without changing what it does? `
     : `rustc rejects this with ${r.code}. Which one-line change makes it compile without changing what it does? `
@@ -271,7 +321,7 @@ function make(seed: number, level: Level, variant?: string): Instance {
   const spec = resolveVariant(gen, seed, level, variant)
   const pool = POOLS.get(spec.id)!
   const rng = rngFor(ID, spec.id, level, seed)
-  const u = rng.pick(pool)
+  const u = unitAt(rng.pick(pool))
   const kind = kindOf(spec.id)
   const built = kind === 'verdict' ? makeVerdict(u, rng) : kind === 'permission' ? makePermission(u) : makeFix(u)
   return finishInstance(gen, { variant: spec.id, seed, level, kcs: [...spec.kcs], nsec: spec.nsec, ...built })
@@ -282,28 +332,31 @@ function make(seed: number, level: Level, variant?: string): Instance {
  * (code, seed). The unit is drawn from those the bank confirms with that outcome; the kind (verdict,
  * permission, fix) from what the unit supports; the variant is the pool of the unit's first KC that has
  * one, so the item is recorded under a KC it assesses. Undefined when the bank holds no unit for `code`.
+ * The draw needs only the manifest, so only the drawn unit's group loads (`NotReady` until it has; the
+ * museum runs this under `settle`).
  */
 export function practiceInstance(code: string, seed: number): Instance | undefined {
   const level: Level = 2 // gen-literal-ok: the independent level
   const rng = rngFor(ID, `practice.${code}`, level, seed)
-  const units = UNITS.filter((u) => u.result !== 'compiles' && u.result.code === code)
-  const kindsOf = (u: Unit): CompileKind[] => [
-    'verdict',
-    ...(u.variant.focus && u.variant.permission ? (['permission'] as const) : []),
-    ...(u.variant.fixes ? (['fix'] as const) : []),
-  ]
-  const variantOf = (u: Unit, kind: CompileKind): string | undefined =>
-    kind === 'permission' ? (POOLS.has('permission') ? 'permission' : undefined) : u.snippet.kcs.map((kc) => compileVariantId(kind, kc)).find((id) => POOLS.has(id))
-  const options = units.flatMap((u) => kindsOf(u).flatMap((kind) => (variantOf(u, kind) ? [{ u, kind, id: variantOf(u, kind)! }] : [])))
+  const refs = REFS.filter((r) => r.outcome !== 'compiles' && r.outcome === code)
+  const kindsOf = (r: UnitRef): CompileKind[] => ['verdict', ...(r.permission ? (['permission'] as const) : []), ...(r.fixes ? (['fix'] as const) : [])]
+  const variantOf = (r: UnitRef, kind: CompileKind): string | undefined =>
+    kind === 'permission' ? (POOLS.has('permission') ? 'permission' : undefined) : r.kcs.map((kc) => compileVariantId(kind, kc)).find((id) => POOLS.has(id))
+  const options = refs.flatMap((r) => kindsOf(r).flatMap((kind) => (variantOf(r, kind) ? [{ r, kind, id: variantOf(r, kind)! }] : [])))
   if (options.length === 0) return undefined
-  const { u, kind, id } = rng.pick(options)
+  const { r, kind, id } = rng.pick(options)
+  const u = unitAt(r)
   const spec = VARIANTS.find((v) => v.id === id)!
   const built = kind === 'verdict' ? makeVerdict(u, rng) : kind === 'permission' ? makePermission(u) : makeFix(u)
   return finishInstance(gen, { variant: id, seed, level, kcs: [...spec.kcs], nsec: spec.nsec, ...built })
 }
 
-/** The unit an instance was drawn from. */
-export const unitOf = (inst: Instance): Unit | undefined => UNITS.find((u) => u.key === inst.params.unit)
+/** The unit an instance was drawn from (its group must have loaded). */
+export function unitOf(inst: Instance): Unit | undefined {
+  const group = String(inst.params.unit).split('/')[0]
+  const r = REFS.find((x) => x.group === group && unitAt(x).key === inst.params.unit)
+  return r ? unitAt(r) : undefined
+}
 
 function solution(inst: Instance): SolutionStep[] {
   const a = inst.answer

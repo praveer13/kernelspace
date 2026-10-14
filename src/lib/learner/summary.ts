@@ -9,6 +9,7 @@
  */
 
 import { RING2_LESSONS } from '@/lib/economy-table'
+import { settle } from '@/lib/items/on-demand'
 import type { Json, LedgerEvent, LocalDay, WeekPlan } from '@/lib/ledger/types'
 import { dayOf } from '@/lib/ledger/time'
 import {
@@ -157,7 +158,10 @@ export function summarize(events: readonly LedgerEvent[], content: TodayContent,
 export async function loadPreview(input: SummaryInput): Promise<TodayPreview> {
   const [{ getLedgerClient }, { loadTodayContent }] = await Promise.all([import('@/lib/ledger/client'), import('./today')])
   const [client, content] = await Promise.all([getLedgerClient(), loadTodayContent()])
-  return previewToday(await client.events(), content, input)
+  const events = await client.events()
+  const now = new Date()
+  // a compile item's group of the bank loads on demand, so the count waits for it as Today's session does
+  return settle(() => previewToday(events, content, input, now))
 }
 
 /** Read the ledger and the content, then `summarize`. */

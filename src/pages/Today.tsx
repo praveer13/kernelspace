@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { selectRings } from '@/lib/economy'
+import { collect, settle } from '@/lib/items/on-demand'
 import type { ItemResult } from '@/lib/items/play'
 import { cardsContent, deriveCards, recentReviewRefs, selectFirstReviewCalibration, type CardsContent, type DerivedCards } from '@/lib/learner/cards'
 import { composeExtra, composeSession, type ComposerContent } from '@/lib/learner/composer'
@@ -111,6 +112,8 @@ export default function Today() {
   const [outcomes, setOutcomes] = useState<SlotOutcome[]>([])
   const [frozen, setFrozen] = useState<SessionPlan | null>(null)
   const [sheet, setSheet] = useState(false)
+  // Bumped when data some generated item loads on demand (a group of the compile bank) has landed, so the session recomposes.
+  const [landed, setLanded] = useState(0)
   const runKey = useRef(0)
   // The learner has put focus somewhere on this page (Edit week, the header) before the first item mounted.
   const touched = useRef(false)
@@ -162,7 +165,9 @@ export default function Today() {
   )
 
   // 2. The session. Edits to the SLO or the set length reshape it until the first answer, then it is frozen.
-  const composed = useMemo<SessionPlan | null>(() => {
+  // A compile item's group of the bank loads on demand (src/lib/items/on-demand.ts): a composition that asked for one
+  // is held back until it lands, then composed again on the same seed, so the learner sees one session, not two.
+  const composedRun = useMemo(() => {
     if (!ready || !pool) return null
     const content: ComposerContent = {
       ...ready.cc,
@@ -171,8 +176,23 @@ export default function Today() {
         if (import.meta.env?.DEV) console.warn(`[today] needs-content: no item serves ${kc}`)
       },
     }
-    return composeSession(ready.cards, content, ready.day, { sessionMinutes: prefs.sessionMinutes, slo: weekPlan.slo }, ready.seed)
-  }, [ready, pool, prefs.sessionMinutes, weekPlan.slo])
+    return collect(() => composeSession(ready.cards, content, ready.day, { sessionMinutes: prefs.sessionMinutes, slo: weekPlan.slo }, ready.seed))
+    // `landed` recomposes once a group lands; the work reads it through the groups it loaded
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, pool, prefs.sessionMinutes, weekPlan.slo, landed])
+  useEffect(() => {
+    const wait = composedRun?.ready
+    if (!wait) return
+    let live = true
+    void wait.then(() => {
+      if (live) setLanded((n) => n + 1)
+    })
+    return () => {
+      live = false
+    }
+  }, [composedRun])
+  const preparing = !frozen && Boolean(composedRun?.ready)
+  const composed: SessionPlan | null = composedRun && !composedRun.ready ? (composedRun.value ?? null) : null
   const plan = frozen ?? composed
 
   // The review set is the plan until a "keep going" or practice set replaces it.
@@ -253,7 +273,7 @@ export default function Today() {
     return planLine(plan.estMinutes, pickContinue(kind, upNext ? [upNext] : []))
   }, [plan, weekPlan, ready, today, width, upNext])
 
-  const start = (kind: 'extra' | 'practice') => {
+  const start = async (kind: 'extra' | 'practice') => {
     if (!ready || !pool) return
     const livePool = buildPool({
       kcs: ready.content.kcs,
@@ -264,10 +284,12 @@ export default function Today() {
       recent: new Map(),
     })
     const seed = freshSeed()
-    const slots =
+    // composed again on the same seed once any compile bank group it asked for has landed
+    const slots = await settle(() =>
       kind === 'extra'
         ? composeExtra(ready.cards, { ...ready.cc, pool: livePool }, ready.day, seed)
-        : composePractice(ready.content.bootKcs, livePool, seed, 5)
+        : composePractice(ready.content.bootKcs, livePool, seed, 5),
+    )
     if (slots.length === 0) return
     runKey.current += 1
     setRun({ key: runKey.current, kind, grp: crypto.randomUUID(), slots, src: kind === 'extra' ? 'today' : 'practice' })
@@ -299,7 +321,7 @@ export default function Today() {
       />
 
       <div className="mt-6 min-h-[16rem]">
-        {load.status === 'loading' && (
+        {(load.status === 'loading' || (ready && !run && preparing)) && (
           <p role="status" className="font-mono text-body-sm text-text-3">
             Loading your queue…
           </p>
@@ -320,11 +342,11 @@ export default function Today() {
             </button>
           </div>
         )}
-        {ready && !active && (
+        {ready && !active && !preparing && (
           <EmptyState
             upNext={upNext}
             offerPlacement={offerPlacement}
-            {...(canPractice ? { onPractice: () => start('practice') } : {})}
+            {...(canPractice ? { onPractice: () => void start('practice') } : {})}
           />
         )}
         {ready && active && !done && (
@@ -354,7 +376,7 @@ export default function Today() {
             offerPlacement={offerPlacement}
             pendingHandoff={pending}
             extra={active.kind !== 'review'}
-            {...(canExtra ? { onKeepGoing: () => start('extra') } : {})}
+            {...(canExtra ? { onKeepGoing: () => void start('extra') } : {})}
           />
         )}
       </div>

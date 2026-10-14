@@ -1,67 +1,44 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, type MouseEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import ErrorEntry from '@/components/rust/ErrorEntry'
-import { museumEntries } from '@/lib/rust/museum'
-import type { Gen, Instance } from '@/lib/items/types'
-import type { Unit } from '@/lib/items/families/compile'
+import ErrorEntry, { type PracticeItem } from '@/components/rust/ErrorEntry'
+import exhibits from '@/data/rust-items/museum.json'
+import { settle } from '@/lib/items/on-demand'
+import type { MuseumEntry } from '@/lib/rust/museum'
 import { scrollBehavior } from '@/lib/lesson-scroll'
 import { isPlainClick, jumpToEntry } from '@/lib/museum-jump'
 
 /**
  * /errors (docs/specs/wave-2.md §15.6): the Error Museum, a view of the compile bank. One entry per error
  * code the bank holds: the smallest case, its permission diagram, the real fix, the `.clone()` that
- * tempts, the R lessons that teach it and compile items to practise on. The bank loads on demand with the
- * compile family, so no other page downloads it. `/errors#E0502` opens at that entry.
+ * tempts, the R lessons that teach it and compile items to practise on. `/errors#E0502` opens at that entry.
+ *
+ * The exhibits are their own payload (src/data/rust-items/museum.json, written from the banks by
+ * scripts/build-rust-items.ts), so the page loads no group of the bank. "Try an item on <code>" loads the
+ * compile family and the one group the drawn item lives in, on the click.
  */
 
-interface Museum {
-  units: readonly Unit[]
-  practice: (code: string, seed: number) => Instance | undefined
-  gen: Gen
-}
+const ENTRIES = exhibits as readonly MuseumEntry[]
 
-async function loadMuseum(): Promise<Museum> {
-  const m = await import('@/lib/items/families/compile')
-  return { units: m.UNITS, practice: m.practiceInstance, gen: m.default }
+/** One practice item on `code`: the family and the group its unit lives in load here, once each. */
+async function practiceItem(code: string, seed: number): Promise<PracticeItem | undefined> {
+  const family = await import('@/lib/items/families/compile')
+  const inst = await settle(() => family.practiceInstance(code, seed))
+  return inst ? { inst, gen: family.default } : undefined
 }
 
 export default function Errors() {
-  const [museum, setMuseum] = useState<Museum | null>(null)
-  const [failed, setFailed] = useState(false)
-  const [attempt, setAttempt] = useState(0)
   const { hash } = useLocation()
   const navigate = useNavigate()
   // The last hash already scrolled to and focused (by a chip click or a deep link), so the effect below does not repeat it.
   const handled = useRef('')
 
-  useEffect(() => {
-    let live = true
-    loadMuseum().then(
-      (m) => {
-        if (live) {
-          setMuseum(m)
-          setFailed(false)
-        }
-      },
-      () => {
-        if (live) setFailed(true)
-      },
-    )
-    return () => {
-      live = false
-    }
-  }, [attempt])
-
-  const entries = useMemo(() => (museum ? museumEntries(museum.units) : []), [museum])
-
-  // The entries mount after the bank loads, so a deep link scrolls to its entry then and focuses its heading.
-  const ready = entries.length > 0
+  // A deep link scrolls to its entry once the page has mounted and focuses its heading.
   useEffect(() => {
     if (!hash) handled.current = ''
-    if (!ready || !hash || handled.current === hash) return
+    if (!hash || handled.current === hash) return
     handled.current = hash
     jumpToEntry(document, decodeURIComponent(hash.slice(1)), 'instant') // a fragment link jumps, as the browser's own would
-  }, [ready, hash])
+  }, [hash])
 
   // A chip is a plain #anchor, which scrolls and leaves focus on body. A click does what a deep link does: it moves focus
   // to the entry's heading, and scrolls smoothly only if the learner has not asked for reduced motion.
@@ -83,38 +60,22 @@ export default function Errors() {
         the program&apos;s behaviour and the <code className="font-mono">.clone()</code> that silences the compiler and changes it.
       </p>
 
-      {failed && (
-        <p role="alert" className="mt-8 text-body-sm text-text-2">
-          The museum could not load.{' '}
-          <button type="button" className="min-h-11 underline underline-offset-2" onClick={() => setAttempt((n) => n + 1)}>
-            Try again
-          </button>
-        </p>
-      )}
-      {!museum && !failed && (
-        <p role="status" className="mt-8 font-mono text-body-sm text-text-3">
-          loading the museum…
-        </p>
-      )}
-
-      {ready && (
-        <>
-          <nav aria-label="Error codes" className="mt-6">
-            <ul className="flex flex-wrap gap-2">
-              {entries.map((e) => (
-                <li key={e.code}>
-                  <a href={`#${e.code}`} onClick={(ev) => goTo(ev, e.code)} className="inline-flex min-h-11 items-center rounded-md border border-line px-3 font-mono text-[13px] text-text-1 hover:bg-surface-2">
-                    {e.code}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <div className="mt-8 space-y-8">
-            {museum && entries.map((e) => <ErrorEntry key={e.code} entry={e} practice={museum.practice} gen={museum.gen} />)}
-          </div>
-        </>
-      )}
+      <nav aria-label="Error codes" className="mt-6">
+        <ul className="flex flex-wrap gap-2">
+          {ENTRIES.map((e) => (
+            <li key={e.code}>
+              <a href={`#${e.code}`} onClick={(ev) => goTo(ev, e.code)} className="inline-flex min-h-11 items-center rounded-md border border-line px-3 font-mono text-[13px] text-text-1 hover:bg-surface-2">
+                {e.code}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="mt-8 space-y-8">
+        {ENTRIES.map((e) => (
+          <ErrorEntry key={e.code} entry={e} practice={practiceItem} />
+        ))}
+      </div>
 
       <p className="mt-10">
         <Link to="/curriculum" className="inline-flex min-h-11 items-center text-body-sm text-info underline underline-offset-2">

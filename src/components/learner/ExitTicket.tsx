@@ -25,6 +25,7 @@ import type { ReactNode } from 'react'
 import ItemCard from '@/components/items/ItemCard'
 import { BOOT_KCS, KCS, kcById } from '@/data/kc'
 import type { Lesson } from '@/data/lessons/types'
+import { settle } from '@/lib/items/on-demand'
 import { loadFamily } from '@/lib/items/registry'
 import { refFor, type ItemResult } from '@/lib/items/play'
 import { seedFor } from '@/lib/items/core'
@@ -171,7 +172,10 @@ export default function ExitTicket({ lesson, form: formProp, trackColor, fallbac
 
   const plan = useCallback(async (): Promise<TicketPlan | null> => {
     const [events, content] = await Promise.all([loadHistory(lesson.id), loadContent(lesson, form)])
-    return planTicket(lesson, content, events, freshSeed(), { form, avoid: new Set(shown.current) })
+    const seed = freshSeed()
+    const avoid = new Set(shown.current)
+    // a compile item's group of the bank loads on demand: plan again, on the same seed, once it has
+    return settle(() => planTicket(lesson, content, events, seed, { form, avoid }))
   }, [lesson, form])
 
   const reset = useCallback((p: TicketPlan | null) => {

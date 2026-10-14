@@ -16,7 +16,7 @@
  *     permission items, so a snippet never lists it;
  *   - permission labels follow Crichton's model (see `SnippetFocus`); a label is allowed only where the
  *     focused operation lacks exactly one of the permissions it needs, and only for the error codes
- *     `PERMISSION_CODES` (src/data/rust-items/index.ts) lists;
+ *     `PERMISSION_CODES` (src/data/rust-items/constants.ts) lists;
  *   - the clone-lure rule (see `SnippetFix`).
  */
 
@@ -140,6 +140,49 @@ export interface RustGroup {
   id: string
   snippets: RustSnippet[]
   bank: BankFile | null
+}
+
+/** One code variant the bank confirms, with what rustc did (scripts and tests; the app never loads a bank). */
+export interface BankUnit {
+  /** `group/snippet/variant` */
+  key: string
+  snippet: RustSnippet
+  variant: SnippetVariant
+  code: string
+  result: BankOutcome
+  /** fix id → what rustc did after it (variants with fixes only) */
+  fixes: Record<string, Outcome>
+}
+
+/**
+ * A variant as the manifest lists it: its outcome code (`''` when it compiles), then `p` when it carries a
+ * permission label and `f` when it has fixes (`E0502pf`); null for a variant the bank does not confirm.
+ */
+export type ManifestVariant = string | null
+
+/**
+ * `manifest.json`, written by scripts/build-rust-items.ts from the banks: what the compile family needs to
+ * choose a unit for a seed before loading any group. Group id → its snippets in authored order, each as
+ * `[kcs, variants]`. No source, hash, rustc version or message.
+ */
+export interface RustManifest {
+  groups: Record<string, [string[], ManifestVariant[]][]>
+}
+
+/**
+ * What rustc did after one fix, as `served/<group>.ts` records it: `'compiles'`, or the first error as
+ * `<code>@<line>` (`E0499@7`).
+ */
+export type ServedAfter = string
+
+/**
+ * `served/<group>.ts`, written by scripts/build-rust-items.ts: the group's snippets and, by snippet and
+ * variant in authored order, what rustc did after each fix (null for a variant without fixes). The one
+ * chunk a group loads as (`groups.ts`).
+ */
+export interface ServedGroup {
+  SNIPPETS: RustSnippet[]
+  AFTER: readonly (readonly (readonly ServedAfter[] | null)[])[]
 }
 
 /**
