@@ -11,7 +11,7 @@ const lesson: Lesson = {
   exercise: 'sim',
   simId: 'sim-roofline',
   verifiedAt: '2026-10',
-  kcs: ['t4.tiling-intensity', 't4.flashattention-blocking'],
+  kcs: ['t4.tiling-intensity', 't4.flashattention-blocking', 't4.raster-l2-reuse'],
   ticket: {
     form: 'ticket',
     cr: [

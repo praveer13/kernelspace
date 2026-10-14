@@ -283,6 +283,45 @@ describe('the Wave 2 contract ids (§4.2)', () => {
   })
 })
 
+describe('the Wave 3 contract (§4.3)', () => {
+  test('t4.raster-l2-reuse is a concept of t4.l6 that requires t4.tiling-intensity, and the lesson lists it third', () => {
+    const k = kcById('t4.raster-l2-reuse')
+    expect(k?.kind).toBe('concept')
+    expect(k?.lessons).toEqual(['t4.l6'])
+    expect(k?.requires).toEqual(['t4.tiling-intensity'])
+    expect(Object.values(KC)).toContain('t4.raster-l2-reuse')
+    expect(ALL_LESSONS.find((l) => l.id === 't4.l6')?.kcs).toEqual(['t4.tiling-intensity', 't4.flashattention-blocking', 't4.raster-l2-reuse'])
+  })
+
+  test('the graph holds 154 KCs', () => {
+    expect(KCS).toHaveLength(154)
+  })
+
+  test('every gen link of the tiling, prefill and rollout rows is set, so each family lands without editing a KC file', () => {
+    const families: Record<string, string[]> = {
+      tiling: ['t4.shared-memory-scratchpad', 't4.occupancy', 't4.raster-l2-reuse', 't4.ridge-point', 't4.flashattention-blocking'],
+      prefill: ['t6.epd-phases', 't6.kv-tiering', 't6.cache-timing-oracle'],
+      rollout: ['t6.rollout-bound-rl', 't6.weight-sync'],
+    }
+    for (const [family, ids] of Object.entries(families)) {
+      expect({ family, kcs: KCS.filter((k) => k.gen?.includes(family)).map((k) => k.id).sort() }).toEqual({ family, kcs: [...ids].sort() })
+    }
+    expect(kcById('t4.ridge-point')?.gen).toContain('roofline')
+  })
+
+  test('no confusable set changes: t2.address-translation keeps its one Wave 1 partner', () => {
+    expect(kcById('t2.address-translation')?.confusable).toEqual(['t2.pagedattention-as-paging'])
+    expect(kcById('t5.block-tables')?.confusable ?? []).not.toContain('t2.address-translation')
+    expect(kcById('t5.prefix-cache-keys')?.confusable ?? []).not.toContain('t5.block-tables')
+  })
+
+  test('no KC cites a claim that only a lazy group holds (H2 packets read KC claims through the eager registry)', async () => {
+    const { CLAIMS } = await import('../../src/data/claims')
+    const eager = new Set(CLAIMS.map((c) => c.id))
+    for (const k of KCS) for (const id of k.claims ?? []) expect({ kc: k.id, id, eager: eager.has(id) }).toEqual({ kc: k.id, id, eager: true })
+  })
+})
+
 describe('graph utilities', () => {
   test('findCycle returns a closed path, and skips dangling edges', () => {
     const kcs = [kc('t0.a', ['t0.b']), kc('t0.b', ['t0.c', 't0.missing']), kc('t0.c', ['t0.a'])]
