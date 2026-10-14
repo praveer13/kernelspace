@@ -43,10 +43,10 @@
 //! order: a later stage reuses what an earlier one built. Look for the
 //! `STAGE` markers below; the signatures never change.
 //!
-//!   STAGE 1  runs_clean                     a legal `schedule`: admit what
-//!                                           fits, in arrival order
-//!   STAGE 2  slo_light, burst               fill the batch each call, not one
-//!                                           request at a time
+//!   STAGE 1  runs_clean                     a legal `schedule`: admit the
+//!                                           first waiting request that fits
+//!   STAGE 2  slo_light, burst               walk the whole queue: fill the
+//!                                           batch each call, not one request
 //!   STAGE 3  convoy, starvation             order by prompt size, keep
 //!                                           headroom, age the oldest
 //!   STAGE 4  goodput_score, overload_seeded the replay traces and a fresh
@@ -62,9 +62,10 @@
 //!                    than max_running, resident memory over mem_cap), or an
 //!                    admit list that is always empty
 //!   slo_light        admitting so slowly that light traffic misses its TTFT
-//!                    bound: one request per call, or none at all
-//!   burst            a batch that never fills: one request admitted at a
-//!                    time, or so much headroom per running sequence that the
+//!                    bound: waiting for the batch to empty before each
+//!                    admit, or admitting none at all
+//!   burst            a batch that never fills: one request admitted per
+//!                    call, or so much headroom per running sequence that the
 //!                    batch stays tiny
 //!   convoy           first-come-first-served, which sends the 8192-token
 //!                    whale first; largest-first; a huge headroom. No check
@@ -98,12 +99,13 @@ impl Scheduler {
     }
 
     // STAGE 1 · runs_clean
-    //   Walk `state.waiting` in order and admit while a slot is free and the
-    //   whole prompt fits under `mem_cap` minus what is resident.
+    //   Admit one request per call: the first one in `state.waiting` whose
+    //   whole prompt fits under `mem_cap` minus what is resident, if a slot
+    //   is free. Admit even while others run: waiting for an empty batch
+    //   can leave the light load unfinished.
     // STAGE 2 · slo_light, burst
-    //   Keep walking: one call should admit everything that fits, not the
-    //   first request only. Skip a request that does not fit yet; do not
-    //   stop at it.
+    //   Do not stop at the first admit: keep walking the queue while a slot
+    //   is free, so one call admits everything that fits.
     // STAGE 3 · convoy, starvation
     //   Sort the candidates smallest prompt first (FIFO within a size) and
     //   move requests older than about 900 to 1600 iterations to the front.
