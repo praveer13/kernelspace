@@ -31,10 +31,10 @@ export interface DebriefProps {
 function Chips({ level }: { level: CubeLevel }) {
   const ids = LEVEL_CLAIMS[level.id].filter((id) => byId[id])
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-text-2" data-claims>
+    <ul className="flex flex-wrap gap-x-4 gap-y-0 font-mono text-[11px] text-text-2" data-claims>
       {ids.map((id) => (
-        <li key={id}>
-          {byId[id].label} <ClaimValue id={id} className="text-text-1" />
+        <li key={id} className="flex min-h-11 items-center gap-1.5">
+          {byId[id].label} <ClaimValue id={id} className="inline-flex min-h-11 min-w-11 items-center justify-center text-text-1" />
         </li>
       ))}
     </ul>
