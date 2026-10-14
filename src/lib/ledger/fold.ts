@@ -6,6 +6,7 @@ import type {
   Aggregate,
   AggregateV1,
   AggregateV2,
+  AggregateV3,
   EventKind,
   FactKey,
   FleetRunAgg,
@@ -57,7 +58,7 @@ function emptyAggregateV2(): AggregateV2 {
 }
 
 export function emptyAggregate(): Aggregate {
-  return { ...emptyAggregateV2(), v: AGGREGATE_VERSION, incidents: {}, dailyDays: {}, fleetRuns: {} }
+  return { ...emptyAggregateV2(), v: AGGREGATE_VERSION, incidents: {}, dailyDays: {}, fleetRuns: {}, proved: {}, labFleetOk: {} }
 }
 
 /**
@@ -266,6 +267,7 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
       if (lab === null || !e.ok) break
       setOwn(agg.proves, lab, minIso(getOwn(agg.proves, lab), e.at))
       setOwn(agg.facts, `prove:${lab}`, true)
+      if (e.provenance === 'proved') setOwn(agg.proved, lab, minIso(getOwn(agg.proved, lab), e.at)) // v4 (wave-3.md §3.4)
       break
     }
     case 'incident': {
@@ -288,7 +290,13 @@ export function foldInto(agg: Aggregate, e: LedgerEvent): Aggregate {
       F.best = Math.max(F.best, e.score)
       if (e.ok) {
         setOwn(agg.facts, `fleet:${mode}` as FactKey, true)
-        if (e.provenance === 'unseen') F.unseenOk = true
+        if (e.provenance === 'unseen') {
+          F.unseenOk = true
+          // v4 (wave-3.md §3.4): an engine race with exactly one component credits that component's lab.
+          const parts = dataOf(e).components
+          const only = mode === 'engine' && Array.isArray(parts) && parts.length === 1 ? (parts[0] as { labId?: unknown } | null)?.labId : undefined
+          if (typeof only === 'string') setOwn(agg.labFleetOk, only, true)
+        }
       }
       break
     }
@@ -348,16 +356,22 @@ function upgradeV1(v1: AggregateV1): AggregateV2 {
 }
 
 /** A version-2 aggregate (Wave 1 snapshot) as a version-3 one: every v2 field unchanged, the incident and fleet-run maps empty until the derive (wave-2.md §3.1). */
-function upgradeV2(v2: AggregateV2): Aggregate {
-  return { ...structuredClone(v2), v: AGGREGATE_VERSION, incidents: {}, dailyDays: {}, fleetRuns: {} }
+function upgradeV2(v2: AggregateV2): AggregateV3 {
+  return { ...structuredClone(v2), v: 3, incidents: {}, dailyDays: {}, fleetRuns: {} }
+}
+
+/** A version-3 aggregate (Wave 2 snapshot) as a version-4 one: every v3 field unchanged, `proved` and `labFleetOk` empty until the derive (wave-3.md §3.1). */
+function upgradeV3(v3: AggregateV3): Aggregate {
+  return { ...structuredClone(v3), v: AGGREGATE_VERSION, proved: {}, labFleetOk: {} }
 }
 
 /**
- * An older snapshot's aggregate as the current one (wave-2.md §3.1): v1 -> v2 -> v3. Nothing stored is rewritten (OD1);
+ * An older snapshot's aggregate as the current one (wave-3.md §3.1): v1 -> v2 -> v3 -> v4. Nothing stored is rewritten (OD1);
  * what the old fold never knew stays empty until the engine's full derive replaces the upgrade.
  */
-export function upgradeAggregate(old: AggregateV1 | AggregateV2): Aggregate {
-  return upgradeV2(old.v === 1 ? upgradeV1(old) : old)
+export function upgradeAggregate(old: AggregateV1 | AggregateV2 | AggregateV3): Aggregate {
+  const v2 = old.v === 1 ? upgradeV1(old) : old
+  return upgradeV3(v2.v === 2 ? upgradeV2(v2) : v2)
 }
 
 /** Pure single-event fold: a copy of `agg` with `e` applied. Same code path as `derive`, so I7 holds by construction. */

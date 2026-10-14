@@ -14,6 +14,7 @@ import type {
   Aggregate,
   AggregateV1,
   AggregateV2,
+  AggregateV3,
   AckRef,
   BootRef,
   ComponentInstall,
@@ -191,6 +192,9 @@ const MAX_KCS = 6
 /** The codec rejects an incident or a run with more of these (wave-2.md §3.2), and a rejected event is lost at flush. */
 const MAX_PROBES = 12
 const MAX_RUN_COMPONENTS = 8
+/** The codec refuses more play levels or run records than these (wave-3.md §3.2). */
+const MAX_PLAY_LEVELS = 8
+const MAX_RUN_RECORDS = 50
 /** The most characters a context packet may report (H2); the codec refuses more. */
 const MAX_PACKET_CHARS = 6000
 /** Scroll position is device-local and changes constantly: commit it at most this often (§5). */
@@ -255,15 +259,17 @@ const clamp01 = (n: number): number => Math.min(1, Math.max(0, n))
 const withDefined = <T extends object>(o: T): Partial<T> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
 
-/** The aggregates of the Wave 0b and Wave 1 snapshots, which `upgradeAggregate` carries forward (wave-2.md §3.1). */
+/** The aggregates of the Wave 0b, Wave 1 and Wave 2 snapshots, which `upgradeAggregate` carries forward (wave-3.md §3.1). */
 const V1_AGGREGATE = 1
 const V2_AGGREGATE = 2
+const V3_AGGREGATE = 3
 
-function isAggregate(a: unknown): a is Aggregate | AggregateV2 | AggregateV1 {
-  if (!isRec(a) || (a.v !== AGGREGATE_VERSION && a.v !== V2_AGGREGATE && a.v !== V1_AGGREGATE) || typeof a.events !== 'number') return false
+function isAggregate(a: unknown): a is Aggregate | AggregateV3 | AggregateV2 | AggregateV1 {
+  if (!isRec(a) || (a.v !== AGGREGATE_VERSION && a.v !== V3_AGGREGATE && a.v !== V2_AGGREGATE && a.v !== V1_AGGREGATE) || typeof a.events !== 'number') return false
   const maps = ['lessons', 'sims', 'labs', 'facts', 'days', 'achievements', 'acks', 'completions']
   if (a.v !== V1_AGGREGATE) maps.push('plays', 'proves', 'itemSec')
-  if (a.v === AGGREGATE_VERSION) maps.push('incidents', 'dailyDays', 'fleetRuns')
+  if (a.v === AGGREGATE_VERSION || a.v === V3_AGGREGATE) maps.push('incidents', 'dailyDays', 'fleetRuns')
+  if (a.v === AGGREGATE_VERSION) maps.push('proved', 'labFleetOk')
   for (const key of maps) {
     if (!isRec(a[key])) return false
   }
@@ -281,7 +287,7 @@ const isWorkingShape = (w: unknown): w is WorkingRecord =>
 
 /**
  * §8.2 steps 1 and 3: the snapshot, or an empty ledger. A corrupt or foreign-format snapshot is ignored (§9.8).
- * A version-1 or version-2 aggregate (Wave 0b, Wave 1) is upgraded in place rather than discarded, so the first paint
+ * A version-1, -2 or -3 aggregate (Wave 0b, Wave 1, Wave 2) is upgraded in place rather than discarded, so the first paint
  * after a deploy shows the old numbers; `upgraded` tells the store to boot the engine now (wave-2.md §3.1).
  */
 function hydrate(storage: FacadeEnv['storage']): {
@@ -787,7 +793,8 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       else record([ev(stamp(), 'visit', ref)], [])
     },
 
-    setWorking: (key: WorkingKey, value: Json) => writeWorking([[key, value]]),
+    // `fw:runs` keeps the newest 50 (wave-3.md §3.5): the oldest drop, so the codec never refuses the list at the flush.
+    setWorking: (key: WorkingKey, value: Json) => writeWorking([[key, key === 'fw:runs' && Array.isArray(value) ? value.slice(-MAX_RUN_RECORDS) : value]]),
 
     /* Wave 1 actions (wave-1.md §3.3) */
 
@@ -840,14 +847,19 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
     },
 
     recordPlay: (r: PlayResult) => {
+      // The metric, the levels and the EPLB dials ride along in `data`; levels are clamped to what the codec accepts.
+      const data = r.data.levels ? { ...r.data, levels: r.data.levels.slice(0, MAX_PLAY_LEVELS) } : r.data
       record(
-        [ev(stamp(), 'play', `play:${r.playId}`, { ...graded(clamp01(r.score), r.ok, r.provenance, withDefined({ seed: r.seed, ms: r.ms })), data: r.data })],
+        [ev(stamp(), 'play', `play:${r.playId}`, { ...graded(clamp01(r.score), r.ok, r.provenance, withDefined({ seed: r.seed, ms: r.ms })), data })],
         [],
       )
     },
 
     recordProve: (r: ProveResult) => {
-      record([ev(stamp(), 'prove', `prove:${r.labId}`, { ...graded(clamp01(r.score), r.ok, 'practice', withDefined({ ms: r.ms })), data: r.data })], [])
+      // `proved` is for a Prove-it v2 that came out right on a named module; anything less is practice, which the codec would otherwise refuse (wave-3.md §3.2).
+      const proved = r.provenance === 'proved' && r.data.v === 2 && r.ok && r.wasmSha256 !== undefined
+      const data = r.data.v === 2 ? { ...r.data, kcs: r.data.kcs.slice(0, MAX_KCS) } : r.data
+      record([ev(stamp(), 'prove', `prove:${r.labId}`, { ...graded(clamp01(r.score), r.ok, proved ? 'proved' : 'practice', withDefined({ ms: r.ms, wasmSha256: r.wasmSha256 })), data })], [])
     },
 
     completePlacement: (result: JsonObject) => {

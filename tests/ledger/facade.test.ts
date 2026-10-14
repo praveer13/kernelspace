@@ -941,6 +941,25 @@ function runWave2Session(s: State) {
   s.setWorking('daily:team', 'blue')
 }
 
+/** One of every Wave 3 shape the façade writes (wave-3.md §3.2-3.3): Prove-it v2, play metrics and levels, receipts, the form, return, play and field items, and the two working keys. */
+function runWave3Session(s: State) {
+  s.recordProve({ labId: 'lab-a', score: 1, ok: true, provenance: 'proved', wasmSha256: SHAS[0], ms: 40000, data: { v: 2, qid: 'free-after', kcs: ['kc.kv.size'], answer: [3, 1, 2], actual: [3, 1, 2], calls: 6 } })
+  s.recordProve({ labId: 'lab-b', score: 0, ok: false, wasmSha256: SHAS[1], data: { v: 2, qid: 'queue-depth', kcs: [], answer: 4, actual: null, calls: 2, return: true } })
+  s.recordPlay({ playId: 'eplb', score: 0.9, ok: true, seed: 12, provenance: 'unseen', data: { phase: 'play', turns: 20, survived: 0, ghostSurvived: 0, metric: { name: 'imbalance', mine: 1.1, ghost: 1.05, lowerIsBetter: true } } })
+  s.recordPlay({ playId: 'eplb', score: 1, ok: true, seed: 13, provenance: 'unseen', data: { phase: 'compose', turns: 2, survived: 0, ghostSurvived: 0, spec: { replicate: 'total', place: 'least-loaded' }, equivalent: true } })
+  s.recordPlay({ playId: 'tiling-cube', score: 4 / 6, ok: true, seed: 14, provenance: 'unseen', data: { phase: 'play', turns: 6, survived: 4, ghostSurvived: 6, levels: [{ id: 'roofline', ok: true, view: '2d' }, { id: 'raster', ok: false, logErr: 0.4 }] } })
+  s.completeFleetWeekAct('engine', 0.8, { seed: 21, provenance: 'unseen', data: { receipts: { cited: 2, verified: 2, uncited: 0 }, rubric: { capacity: 2, slo: 3, cost: 1, failure: 2 }, runs: ['7f3a9c21', '00ab12ef'] } })
+  s.recordItems([
+    { kind: 'item', ref: 'gen:kv/bytes-per-token', rev: 'f1', score: 1, ok: true, provenance: 'unseen', seed: 5, data: { src: 'form', formId: 'B', track: 't5', formSlot: 11, formSet: 2, kcs: ['kc.kv.size'], nsec: 40 } },
+    { kind: 'item', ref: 'item:lab02.prove.free-order', rev: 'v1', score: 1, ok: true, data: { src: 'today', return: true, kcs: ['kc.kv.size'], slot: 0, of: 8, reason: 'due' } },
+    { kind: 'item', ref: 'gen:tiling/raster-ai', rev: 'pl1', score: 0, ok: false, provenance: 'unseen', seed: 6, data: { src: 'play', level: 2 } },
+    { kind: 'predict', ref: 'gen:tiling/raster-ai', rev: 'pl2', score: 1, ok: true, data: { value: 700, unit: 'FLOP/B', truth: 734.6, src: 'play' } },
+    { kind: 'predict', ref: 'item:engine.measured-tps', rev: 'fl1', score: 0, ok: false, provenance: 'field', data: { value: 90, unit: 'tok/s', truth: 40, src: 'practice' } },
+  ])
+  s.setWorking('fw:runs', [{ id: '7f3a9c21', act: 'engine', job: { kind: 'engine' }, entropy: 7, values: { goodput: 41.2 }, at: '2026-10-04T09:00:00.000Z' }])
+  s.setWorking('profile:background', 'sre')
+}
+
 /** One of every action; used for the codec round-trip. */
 function runSession(s: State) {
   s.markLessonStatus('t0.l1', 'reading')
@@ -967,12 +986,13 @@ function runSession(s: State) {
   s.setWorking('boot:week', { minutesPerWeek: 120, sessionMinutes: 30, phoneDays: [1], laptopDays: [3], slo: 0.9 })
   runWave1Session(s)
   runWave2Session(s)
+  runWave3Session(s)
 }
 
 function randomAction(rand: () => number, s: State, clockAdvance: (m: number) => void) {
   clockAdvance(int(rand, 1, 3000))
   const lesson = pick(rand, LESSONS)
-  switch (int(rand, 0, 39)) {
+  switch (int(rand, 0, 46)) {
     case 0:
       return s.markLessonStatus(lesson, 'reading')
     case 1:
@@ -1102,6 +1122,39 @@ function randomAction(rand: () => number, s: State, clockAdvance: (m: number) =>
       return s.setWorking(pick(rand, ['exp:seed', 'zoo:config', 'daily:team'] as const), pick(rand, ['x', 'y']))
     case 39:
       return s.recordIncident(incidentResult(rand, 'daily', `2026-10-${String(int(rand, 1, 28)).padStart(2, '0')}`))
+    case 40: {
+      const ok = chance(rand, 0.7)
+      return s.recordProve({ labId: pick(rand, Object.keys(LABS)), score: ok ? 1 : 0, ok, provenance: chance(rand, 0.8) ? 'proved' : 'practice', ...(chance(rand, 0.8) ? { wasmSha256: pick(rand, SHAS) } : {}), data: { v: 2, qid: 'free-after', kcs: ['kc.a'], answer: int(rand, 0, 9), actual: ok ? 1 : null, calls: int(rand, 1, 12) } })
+    }
+    case 41: {
+      const eplb = chance(rand, 0.5)
+      const mine = int(rand, 100, 180) / 100
+      return s.recordPlay({
+        playId: eplb ? 'eplb' : 'tiling-cube',
+        score: Math.round(rand() * 100) / 100,
+        ok: chance(rand, 0.6),
+        seed: int(rand, 0, 1e6),
+        provenance: 'unseen',
+        data: { phase: 'play', turns: int(rand, 1, 9), survived: 0, ghostSurvived: 0, ...(eplb ? { metric: { name: 'imbalance' as const, mine, ghost: 1.05, lowerIsBetter: true as const } } : { levels: Array.from({ length: int(rand, 1, 12) }, (_, i) => ({ id: `l${i}`, ok: chance(rand, 0.5) })) }) },
+      })
+    }
+    case 42:
+      return s.completeFleetWeekAct(pick(rand, ACTS), Math.round(rand() * 100) / 100, { seed: int(rand, 0, 0xffffffff), provenance: 'unseen', data: { receipts: { cited: int(rand, 0, 4), verified: int(rand, 0, 4), uncited: int(rand, 0, 2) }, rubric: { capacity: int(rand, 0, 3), slo: 1, cost: 2, failure: 3 } } })
+    case 43: {
+      const records = Array.from({ length: int(rand, 1, 60) }, (_, i) => ({ id: (i + 1).toString(16).padStart(8, '0'), act: 'engine' as const, job: { n: i }, entropy: i, values: { goodput: i }, at: '2026-10-04T09:00:00.000Z' }))
+      return s.setWorking('fw:runs', records) // more than 50 are cut to the newest 50 by the façade
+    }
+    case 44:
+      return s.setWorking('profile:background', pick(rand, ['jvm', 'backend', 'sre', 'ml', 'student', 'other']))
+    case 45:
+      return s.recordItems([
+        { kind: 'item', ref: pick(rand, WAVE1_ITEM_REFS) as `item:${string}`, rev: 'f', score: 1, ok: true, data: { src: 'form', formId: pick(rand, ['A', 'B', 'C'] as const), track: 't2', formSlot: int(rand, 0, 11), formSet: pick(rand, [0, 1, 2] as const) } },
+      ])
+    case 46:
+      return s.recordItems([
+        { kind: 'item', ref: 'item:lab02.prove.free-order', rev: 'v', score: 1, ok: true, data: { src: 'today', return: true, nsec: int(rand, 0, 600) } },
+        { kind: 'predict', ref: 'gen:tiling/raster-ai', rev: 'pl', score: 1, ok: true, data: { value: 1, unit: 'x', truth: 1, src: pick(rand, ['play', 'practice'] as const) } },
+      ])
     default:
       return s.recordQuizAttempt({ lessonId: lesson, seed: 1, responses: [{ qi: 0, rev: 'r0', pick: [0], ok: chance(rand, 0.5), kcs: ['kc.a', 'kc.b'] }] })
   }

@@ -49,6 +49,36 @@ describe('Wave 2 shapes at the import boundary (contract-v32.test.ts has the ful
   })
 })
 
+describe('Wave 3 shapes at the import boundary (contract-v33.test.ts has the full lists)', () => {
+  const sha = 'ab'.repeat(32)
+  const v2 = { v: 2, qid: 'free-after', kcs: ['kc.a'], answer: 3, actual: 3, calls: 4 }
+  const proved = evt('prove', 'prove:kv-block-manager', T1, { provenance: 'proved', wasmSha256: sha, data: v2 })
+
+  test('a Prove-it v2 with provenance proved, a form item and the new working keys import', () => {
+    const form = evt('item', 'gen:kv/bytes-per-token', T1, { rev: 'r', data: { src: 'form', formId: 'B', track: 't5', formSlot: 4, formSet: 2 } })
+    const keys = [
+      { key: 'fw:runs', value: [], at: T1, dev: 'd' },
+      { key: 'profile:background', value: 'jvm', at: T1, dev: 'd' },
+    ]
+    const parsed = parseImport(serializeExport(exportOf({ events: [proved, form], working: keys as never })))
+    expect(parsed.ok && [parsed.file.events.length, parsed.file.working.length]).toEqual([2, 2])
+  })
+
+  test('one proved event on a v1 prove, or a form item that sets data.form, refuses the whole file', () => {
+    const v1Proved = evt('prove', 'prove:kv-block-manager', T1, { provenance: 'proved', wasmSha256: sha, data: { v: 1, qids: ['q'], self: [1] } })
+    const formWithForm = evt('item', 'gen:kv/bytes-per-token', T1, { rev: 'r', data: { src: 'form', form: 'A', formId: 'A', track: 't5', formSlot: 0, formSet: 0 } })
+    for (const e of [v1Proved, formWithForm]) {
+      expect(parseImport(serializeExport(exportOf({ events: [proved, e], working: [] })))).toMatchObject({ ok: false, error: 'invalid' })
+    }
+    expect(parseImport(JSON.stringify({ ...exportOf({ events: [], working: [{ key: 'profile:background', value: 'rust', at: T1, dev: 'd' }] as never }) }))).toMatchObject({ ok: false, error: 'invalid' })
+  })
+
+  test('a Wave 2 export (schema 5) imports into a v6 ledger', () => {
+    const file = exportOf({ events: [evt('visit', 'lesson:t0.l1', T1)], working: [] })
+    expect(parseImport(JSON.stringify({ ...file, schemaVersion: 5 })).ok).toBe(true)
+  })
+})
+
 describe('prototype-unsafe ids at the import boundary', () => {
   const good = () => evt('quiz', 'lesson:t0.l1', T1, { score: 0.5, ok: false })
 

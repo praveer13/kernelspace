@@ -95,10 +95,10 @@ const slotEntry = (sha256 = SHA, over: Record<string, unknown> = {}) => ({ sha25
 /* ------------------------------------------------------------------ */
 
 describe('versions and the schema guard', () => {
-  test('SCHEMA_VERSION 5 and AGGREGATE_VERSION 3', () => {
-    expect(SCHEMA_VERSION).toBe(5)
-    expect(AGGREGATE_VERSION).toBe(3)
-    expect(emptyAggregate()).toMatchObject({ v: 3, incidents: {}, dailyDays: {}, fleetRuns: {} })
+  test('SCHEMA_VERSION and AGGREGATE_VERSION are at least the Wave 2 values (contract-v33 pins today\'s)', () => {
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(5)
+    expect(AGGREGATE_VERSION).toBeGreaterThanOrEqual(3)
+    expect(emptyAggregate()).toMatchObject({ incidents: {}, dailyDays: {}, fleetRuns: {} })
   })
 
   test('a Wave 1 bundle (schema 4) goes read-only on a v5 snapshot, hello, store or file; a v5 bundle reads v4 data', () => {
@@ -127,23 +127,25 @@ describe('versions and the schema guard', () => {
     expect((await p.store.readAll()).events).toHaveLength(before)
   })
 
-  test('the meta schema moves up to 5 on the first v5 boot, and the snapshot it writes is read-only to a Wave 1 bundle', async () => {
+  test('the meta schema moves up to at least 5 on the first boot, and the snapshot it writes is read-only to a Wave 1 bundle', async () => {
     const p = makeProfile({ seed: { meta: { schema: { version: 4, at: T1 } } } })
     const tab = startTab(p)
     await tab.progress.controls.engine()
-    expect((await p.store.readAll()).meta.schema?.version).toBe(5)
+    expect((await p.store.readAll()).meta.schema?.version).toBeGreaterThanOrEqual(5)
     tab.progress.getState().recordVisit('boot')
     await tab.progress.controls.flush()
     const snap = JSON.parse(p.storage.data.get(SNAPSHOT_KEY)!) as { schemaVersion: number; aggregateVersion: number }
-    expect(snap).toMatchObject({ schemaVersion: 5, aggregateVersion: 3 })
+    expect(snap.schemaVersion).toBeGreaterThanOrEqual(5)
+    expect(snap.aggregateVersion).toBeGreaterThanOrEqual(3)
     expect(checkSnapshot(4, snap)).toBe('snapshot-newer')
   })
 
-  test('exports carry schemaVersion 5; import accepts every older one and refuses 6', () => {
+  test('exports carry at least schemaVersion 5; import accepts every older one and refuses a newer one', () => {
     const file = buildExportV3({ events: [], working: [], device: 'd', exportedAt: T1 })
-    expect(file).toMatchObject({ version: 3, schemaVersion: 5 })
+    expect(file.version).toBe(3)
+    expect(file.schemaVersion).toBeGreaterThanOrEqual(5)
     for (const v of [1, 3, 4, 5]) expect(parseImport(JSON.stringify({ ...file, schemaVersion: v })).ok).toBe(true)
-    expect(parseImport(JSON.stringify({ ...file, schemaVersion: 6 }))).toMatchObject({ ok: false, error: 'newer-schema' })
+    expect(parseImport(JSON.stringify({ ...file, schemaVersion: SCHEMA_VERSION + 1 }))).toMatchObject({ ok: false, error: 'newer-schema' })
   })
 
   test('the constants lists are what §3.2 names', () => {
@@ -500,9 +502,11 @@ describe('aggregate v3 folds', () => {
 /* The upgrade chain (§3.1)                                             */
 /* ------------------------------------------------------------------ */
 
-/** The Wave 1 fold's view of a ledger: today's derive, less everything v3 added. Wave 1 marked the streak day of incident and fleet-run events and kept every ack, which is what the v3 fold still does. */
+/** The Wave 1 fold's view of a ledger: today's derive, less everything v3 and v4 added. Wave 1 marked the streak day of incident and fleet-run events and kept every ack, which is what the fold still does. */
 function deriveV2(events: LedgerEvent[]): AggregateV2 {
   const agg: Partial<Aggregate> & { v: number } = structuredClone(derive(events))
+  delete agg.proved
+  delete agg.labFleetOk
   delete agg.incidents
   delete agg.dailyDays
   delete agg.fleetRuns
@@ -515,6 +519,8 @@ function deriveV2(events: LedgerEvent[]): AggregateV2 {
 function v2Fields(a: Aggregate | AggregateV2) {
   const agg: Partial<Aggregate> = structuredClone(a)
   delete agg.v
+  delete agg.proved
+  delete agg.labFleetOk
   delete agg.incidents
   delete agg.dailyDays
   delete agg.fleetRuns
@@ -522,14 +528,14 @@ function v2Fields(a: Aggregate | AggregateV2) {
 }
 
 describe('upgradeAggregate', () => {
-  test('upgradeAggregate(derive_v2(L)) equals derive_v3(L) on every v2 field, over the generated ledgers', () => {
+  test('upgradeAggregate(derive_v2(L)) equals the derive on every v2 field, over the generated ledgers', () => {
     forSeeds((ctx) => {
       const d = ctx.device()
       runOps(d, OPS)
       const events = d.ledger().events
       const v2 = deriveV2(events)
       const up = upgradeAggregate(v2)
-      expect(up.v).toBe(3)
+      expect(up.v).toBe(AGGREGATE_VERSION)
       expect(stableStringify(v2Fields(up))).toBe(stableStringify(v2Fields(derive(events))))
       expect(up.incidents).toEqual({})
       expect(up.dailyDays).toEqual({})
@@ -557,7 +563,7 @@ describe('upgradeAggregate', () => {
       labs: {},
     }
     const up = upgradeAggregate(v1 as unknown as Parameters<typeof upgradeAggregate>[0])
-    expect(up).toMatchObject({ v: 3, incidents: {}, dailyDays: {}, fleetRuns: {}, plays: {}, proves: {}, itemSec: {} })
+    expect(up).toMatchObject({ v: AGGREGATE_VERSION, incidents: {}, dailyDays: {}, fleetRuns: {}, plays: {}, proves: {}, itemSec: {} })
     expect(up.lessons['t0.l1']).toMatchObject({ read: true })
     expect(up.lessons['t0.l2'].passedAt).toBe(T2)
   })
@@ -592,7 +598,7 @@ describe('hydrate from a Wave 1 snapshot', () => {
     expect(s.lessons['t0.l2']?.status).toBe('done')
     expect(s.lessons['t0.l3']?.status).toBe('reading')
     expect(s.xp).toBe(xpOf(derive(events))) // nothing the v2 fold priced changes
-    expect(s.aggregate).toMatchObject({ v: 3, incidents: {}, dailyDays: {}, fleetRuns: {} })
+    expect(s.aggregate).toMatchObject({ v: AGGREGATE_VERSION, incidents: {}, dailyDays: {}, fleetRuns: {} })
     expect(s.ledger).toMatchObject({ ready: false, readOnly: false })
     expect(tab.loads()).toBe(1)
 
@@ -612,7 +618,7 @@ describe('hydrate from a Wave 1 snapshot', () => {
     expect(second.progress.getState().aggregate.incidents['inc:drill/drain-stall']).toMatchObject({ n: 1 })
     expect(second.loads()).toBe(0)
 
-    const broken = { ...snapshotV2(wave1Events()), schemaVersion: 5, aggregateVersion: 3, aggregate: { ...derive(wave1Events()) } as Partial<Aggregate> }
+    const broken = { ...snapshotV2(wave1Events()), schemaVersion: SCHEMA_VERSION, aggregateVersion: AGGREGATE_VERSION, aggregate: { ...derive(wave1Events()) } as Partial<Aggregate> }
     delete broken.aggregate.incidents
     const q = makeProfile()
     q.storage.data.set(SNAPSHOT_KEY, JSON.stringify(broken))

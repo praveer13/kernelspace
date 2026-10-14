@@ -9,7 +9,7 @@
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { Erratum } from '@/data/errata/schema'
 import type { ProgressSettings, ProgressState } from '@/lib/progress'
-import type { ENGINE_SLOTS, FAULT_IDS, FLEET_RUN_MODES } from './constants'
+import type { BACKGROUNDS, ENGINE_SLOTS, FAULT_IDS, FLEET_RUN_MODES } from './constants'
 
 /* ------------------------------------------------------------------ */
 /* Primitives                                                          */
@@ -171,7 +171,8 @@ interface Graded {
  * Surface that served an item. Wave 0b: quiz, boot, card, cold. Wave 1 (spec §3.2): today (a Today
  * session), ticket (exit ticket or spiral checkpoint), testout, placement, pre (prequestion),
  * diagram (predictAt), practice ("new numbers" outside Today). Wave 2 (spec §3.2): lesson (an item block) and
- * daily (a signature item served with the Daily).
+ * daily (a signature item served with the Daily). Wave 3 (wave-3.md §3.2): form (a track form item, §12.6) and play
+ * (an item or prediction made inside a play).
  */
 export type ItemSrc =
   | 'quiz'
@@ -187,6 +188,8 @@ export type ItemSrc =
   | 'practice'
   | 'lesson'
   | 'daily'
+  | 'form'
+  | 'play'
 
 /** Exit-ticket shapes (V5). A `quiz` event with `data.form` set is a ticket, spiral or test-out summary. */
 export type TicketForm = 'ticket' | 'spiral' | 'testout'
@@ -234,6 +237,15 @@ export interface ItemData {
   form?: TicketForm
   /** Today: why the composer chose the item (spec §6.3). */
   reason?: 'priority' | 'threshold' | 'due' | 'confirm' | 'probe' | 'extra'
+
+  /* ---- Wave 3 (wave-3.md §3.2); optional. The form keys never reuse `form` (the ticket form) or `slot` (the Today position). ---- */
+  /** Form items (src `form`, §12.6): which form, which track, the slot within it (0-11) and the item set (0-2). */
+  formId?: 'A' | 'B' | 'C'
+  formSlot?: number
+  formSet?: 0 | 1 | 2
+  track?: string
+  /** The 30-day return's v1 follow-up item (§7.5). */
+  return?: true
 }
 
 /** One response to one item (quiz question, Boot step, change-card item). */
@@ -320,8 +332,8 @@ export interface LabCheckEvent extends Envelope<'lab-check', LabRef>, Graded {
 }
 
 export interface FleetActEvent extends Envelope<'fleet-act', FleetActRef>, Graded {
-  /** Wave 2: a Fleet Week act may carry run detail (`completeFleetWeekAct`'s `meta.data`). */
-  data?: JsonObject
+  /** Wave 2: a Fleet Week act may carry run detail (`completeFleetWeekAct`'s `meta.data`); Wave 3 adds `FleetActData`. */
+  data?: JsonObject | FleetActData
 }
 
 export interface CapstoneStepEvent extends Envelope<'capstone-step', CapstoneRef>, Graded {
@@ -339,9 +351,35 @@ export interface PlayData {
   divergenceOp?: number
   skipped?: boolean
   /** Compose: the dials, and whether they reproduce the reference exactly. */
-  spec?: PlacementSpecData | SchedSpecData
+  spec?: PlacementSpecData | SchedSpecData | EplbSpecData
   equivalent?: boolean
   kcs?: string[]
+  /** Wave 3 (wave-3.md §3.2): the play's numeric metric (mine against the ghost's) and per-level results (at most 8). */
+  metric?: PlayMetric
+  levels?: PlayLevel[]
+}
+
+/** The EPLB play's score (§5.2): the busiest GPU's load over the mean, lower is better. */
+export interface PlayMetric {
+  name: 'imbalance'
+  mine: number
+  ghost: number
+  lowerIsBetter: true
+}
+
+/** One level of a multi-level play (the Tiling Cube, §6.3). */
+export interface PlayLevel {
+  id: string
+  ok: boolean
+  /** The size of the learner's miss, in log units. */
+  logErr?: number
+  view?: '2d' | '3d'
+}
+
+/** Compose's dials for the EPLB play (wave-3.md §5.2). */
+export interface EplbSpecData {
+  replicate: 'none' | 'per-copy' | 'total'
+  place: 'round-robin' | 'least-loaded'
 }
 
 /** Compose's dials for the block-placement play. */
@@ -365,13 +403,58 @@ export interface PlayEvent extends Envelope<'play', PlayRef>, Graded {
 }
 
 /** H4 v1 (Wave 1): a self-graded Prove-it attempt, practice weight only. */
-export interface ProveData {
+export interface ProveDataV1 {
   v: 1
   /** Question ids served (3 of the lab's pool). */
   qids: string[]
   /** Self-grade per question, 1 = "I got it", parallel to `qids`. */
   self: number[]
   kcs?: string[]
+}
+
+/** H4 v2 (wave-3.md §3.2): the learner predicted what their own module replies to a seeded list of verb calls. Provenance `proved` needs `ok` and a `wasmSha256`. */
+export interface ProveDataV2 {
+  v: 2
+  /** The template, e.g. `free-after` (§7.2). */
+  qid: string
+  /** The KCs of the checks the template exercises, at most 6. */
+  kcs: string[]
+  /** The learner's prediction: a number or an ordered id list. */
+  answer: number | number[]
+  /** What the module replied; null when it trapped or timed out. */
+  actual: number | number[] | null
+  /** Verb calls that ran, 1-12. */
+  calls: number
+  /** The 30-day return (§7.5). */
+  return?: true
+}
+
+export type ProveData = ProveDataV1 | ProveDataV2
+
+/** The learner's background (wave-3.md §3.2). */
+export type Background = (typeof BACKGROUNDS)[number]
+
+/** One Fleet Week run that receipts cite (wave-3.md §10.2). 3a-12 builds these; `fw:runs` holds at most 50. */
+export interface RunRecord {
+  /** 8 lowercase hex: sha256(stableStringify(record without id and at)), first 8. */
+  id: string
+  act: 'engine' | 'fleet' | 'business'
+  /** The SimJob, module bytes replaced by `{slot, sha256}`. */
+  job: JsonObject
+  /** The uint32 handed to `drawGradedSeeds`. */
+  entropy: number
+  /** §10.1's keys. */
+  values: Record<string, number>
+  at: IsoInstant
+}
+
+/** `FleetActMeta.data` for Acts I-III (wave-3.md §3.2, §10.4). */
+export interface FleetActData {
+  receipts?: { cited: number; verified: number; uncited: number }
+  /** Self-review, never scored. */
+  rubric?: { capacity: 0 | 1 | 2 | 3; slo: 0 | 1 | 2 | 3; cost: 0 | 1 | 2 | 3; failure: 0 | 1 | 2 | 3 }
+  /** Receipt ids cited, at most 20. */
+  runs?: string[]
 }
 
 export interface ProveEvent extends Envelope<'prove', ProveRef>, Graded {
@@ -529,6 +612,11 @@ export type WorkingKey =
   | 'zoo:config'
   /** The team code of the Daily (stretch). */
   | 'daily:team'
+  /* Wave 3 (wave-3.md §3.5); the codec accepts them from task 3a-01 on */
+  /** `RunRecord[]`, newest last, at most 50: the Fleet Week runs that receipts cite. */
+  | 'fw:runs'
+  /** The learner's `Background` (optional, local, never donated). */
+  | 'profile:background'
 
 export interface EngineSlotEntry {
   sha256: string
@@ -656,8 +744,8 @@ export interface FleetRunAgg {
 }
 
 export interface Aggregate {
-  /** Aggregate format version; a mismatch means "rebuild from the ledger" (versions 1 and 2 are upgraded in place, spec §3.1). */
-  v: 3
+  /** Aggregate format version; a mismatch means "rebuild from the ledger" (versions 1 to 3 are upgraded in place, wave-3.md §3.1). */
+  v: 4
   /** Number of distinct events folded. */
   events: number
   lessons: Record<string, LessonAgg>
@@ -687,10 +775,19 @@ export interface Aggregate {
   dailyDays: Record<LocalDay, true>
   /** v3: per fleet-run mode. */
   fleetRuns: Record<string, FleetRunAgg>
+  /** v4 (wave-3.md §3.4): earliest `at` of an `ok` Prove-it with provenance `proved`, per lab id. */
+  proved: Record<string, IsoInstant>
+  /** v4: labs whose engine race (an `ok` `unseen` `fleet:engine` run with that lab's component alone) is within 3 points of the reference. */
+  labFleetOk: Record<string, true>
+}
+
+/** The Wave 2 aggregate under a version-3 snapshot; `upgradeAggregate` makes it an `Aggregate`. */
+export interface AggregateV3 extends Omit<Aggregate, 'v' | 'proved' | 'labFleetOk'> {
+  v: 3
 }
 
 /** The Wave 1 aggregate under a version-2 snapshot; `upgradeAggregate` makes it an `Aggregate`. */
-export interface AggregateV2 extends Omit<Aggregate, 'v' | 'incidents' | 'dailyDays' | 'fleetRuns'> {
+export interface AggregateV2 extends Omit<AggregateV3, 'v' | 'incidents' | 'dailyDays' | 'fleetRuns'> {
   v: 2
 }
 
@@ -706,7 +803,7 @@ export interface AggregateV1
 /** The derived snapshot under localStorage `kernelspace:v2`. Rebuildable from IndexedDB at any time. */
 export interface SnapshotV2 {
   schemaVersion: number
-  /** 3 now; a version-1 or version-2 snapshot is upgraded at hydrate (spec §3.1). */
+  /** 4 now; a version-1, -2 or -3 snapshot is upgraded at hydrate (wave-3.md §3.1). */
   aggregateVersion: number
   writtenAt: IsoInstant
   /** Tab that wrote it. */
@@ -1041,6 +1138,10 @@ export interface ProveResult {
   /** All questions answered. */
   ok: boolean
   ms?: number
+  /** Defaults to `practice`. `proved` needs ProveData v2, `ok` and `wasmSha256`; without them the façade writes `practice`. */
+  provenance?: Extract<Provenance, 'practice' | 'proved'>
+  /** The learner's module (lowercase hex SHA-256), required for `proved`. */
+  wasmSha256?: string
   data: ProveData
 }
 
@@ -1094,8 +1195,8 @@ export interface ComponentInstall {
 export interface FleetActMeta {
   seed?: number
   provenance?: Extract<Provenance, 'practice' | 'unseen'>
-  /** Kept on the `fleet-act` event as `data`. */
-  data?: JsonObject
+  /** Kept on the `fleet-act` event as `data`; Acts I-III carry `FleetActData` (wave-3.md §3.2). */
+  data?: JsonObject | FleetActData
 }
 
 /** The Wave 2 actions (spec §3.3). Each skip rule is the façade's. */

@@ -5,11 +5,11 @@
  * - splitmix32 drives every choice, so a seed replays exactly (`LEDGER_SEED=<n>`).
  * - Pools are fixed, so tests stay independent of content edits.
  * - Devices have their own tz and a deterministic id stream; the clock starts 2026-09-01T08:00Z.
- * - Ops mirror the façade actions (spec §8.3-8.4, the Wave 1 actions of wave-1.md §3.3 and the Wave 2 actions of
- *   wave-2.md §3.3), including their skip rules. Every shape is one the codec must accept, so the import
+ * - Ops mirror the façade actions (spec §8.3-8.4, the Wave 1 actions of wave-1.md §3.3, the Wave 2 actions of
+ *   wave-2.md §3.3 and the Wave 3 shapes of wave-3.md §3.2), including their skip rules. Every shape is one the codec must accept, so the import
  *   properties exercise it.
  */
-import { ENGINE_SLOTS, FAULT_IDS, FLEET_RUN_MODES } from '../../src/lib/ledger/constants'
+import { BACKGROUNDS, ENGINE_SLOTS, FAULT_IDS, FLEET_RUN_MODES } from '../../src/lib/ledger/constants'
 import { derive, fleetRunOk, fleetRunScore, incidentOk, incidentScore } from '../../src/lib/ledger/fold'
 import { compareEvents, compareWorking, type Ledger } from '../../src/lib/ledger/merge'
 import { stableStringify } from '../../src/lib/ledger/stable'
@@ -22,6 +22,7 @@ import type {
   IncidentData,
   LedgerEvent,
   Provenance,
+  RunRecord,
   WorkingKey,
   WorkingRecord,
 } from '../../src/lib/ledger/types'
@@ -57,6 +58,10 @@ export const FLEET_MODES = FLEET_RUN_MODES
 export const SHAS = ['a1', 'b2', 'c3', 'd4'].map((p) => p.repeat(32))
 export const PACKET_REFS = ['packet:lab/kv-block-manager/cow', 'packet:lesson/t5.l4', 'packet:sim/sim-kv']
 const KCS = ['kc.frag.external', 'kc.kv.size', 'kc.roofline.bound']
+/** Wave 3 pools (wave-3.md §3.2): form tracks, run ids and the item refs of the form, play, return, field and protégé shapes. */
+export const TRACKS = ['t0', 't2', 't5']
+export const FORM_REFS = ['gen:kv/bytes-per-token', 'gen:frag/first-fit', 'gen:tiling/raster-ai']
+export const RUN_IDS = ['7f3a9c21', '00ab12ef', 'deadbeef', '0123abcd']
 export const TZS = [-420, 0, 330, 540]
 export const START_MS = Date.parse('2026-09-01T08:00:00.000Z')
 const MINUTE = 60_000
@@ -620,12 +625,187 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
       return ref
     },
   },
+  /* ---- Wave 3 (wave-3.md §3.2): every new shape the codec accepts ---- */
+  {
+    weight: 4,
+    name: 'prove-v2',
+    run: (d) => {
+      const r = d.rand
+      const lab = pick(r, Object.keys(LABS))
+      const list = chance(r, 0.4)
+      const answer = list ? shuffle(r, [0, 1, 2, 3, 4, 5]).slice(0, int(r, 0, 6)) : int(r, 0, 99)
+      const trapped = chance(r, 0.1)
+      const actual = trapped ? null : chance(r, 0.6) ? answer : list ? shuffle(r, [0, 1, 2, 3, 4, 5]).slice(0, int(r, 0, 6)) : int(r, 0, 99)
+      const ok = actual !== null && stableStringify(actual) === stableStringify(answer)
+      const proved = ok && chance(r, 0.7)
+      d.graded('prove', `prove:${lab}`, ok ? 1 : 0, ok, {
+        provenance: proved ? 'proved' : 'practice',
+        ...(proved || chance(r, 0.3) ? { wasmSha256: pick(r, SHAS) } : {}),
+        ms: int(r, 1000, 300_000),
+        data: {
+          v: 2,
+          qid: pick(r, ['free-after', 'queue-depth', 'order-after']),
+          kcs: shuffle(r, KCS).slice(0, int(r, 0, 3)),
+          answer,
+          actual,
+          calls: int(r, 1, 12),
+          ...(chance(r, 0.2) ? { return: true } : {}),
+        },
+      })
+      return `${lab} ${proved ? 'proved' : ok ? 'ok' : 'miss'}`
+    },
+  },
+  {
+    weight: 3,
+    name: 'form-item',
+    run: (d) => {
+      const r = d.rand
+      const ok = chance(r, 0.6)
+      d.graded('item', pick(r, FORM_REFS), ok ? 1 : 0, ok, {
+        rev: 'f0',
+        provenance: chance(r, 0.5) ? 'unseen' : 'practice',
+        seed: int(r, 0, 0xffffffff),
+        ...maybeConf(r),
+        data: { src: 'form', formId: pick(r, ['A', 'B', 'C'] as const), track: pick(r, TRACKS), formSlot: int(r, 0, 11), formSet: pick(r, [0, 1, 2] as const), kcs: shuffle(r, KCS).slice(0, 2), nsec: int(r, 10, 120) },
+      })
+      return null
+    },
+  },
+  {
+    weight: 2,
+    name: 'return-item',
+    run: (d) => {
+      // The 30-day return's v1 follow-up (§7.5): an authored item back on Today, flagged `return`.
+      const r = d.rand
+      const ok = chance(r, 0.6)
+      d.graded('item', `item:lab02.prove.${pick(r, ['free-order', 'split-merge'])}`, ok ? 1 : 0, ok, {
+        rev: 'v0',
+        ...maybeConf(r),
+        data: { src: 'today', return: true, kcs: [KCS[1]], nsec: int(r, 10, 120), slot: int(r, 0, 7), of: 8, reason: 'due' },
+      })
+      return null
+    },
+  },
+  {
+    weight: 3,
+    name: 'play-item',
+    run: (d) => {
+      // An item or a prediction made inside a play (src `play`), and a prediction with src `practice`.
+      const r = d.rand
+      const ok = chance(r, 0.5)
+      if (chance(r, 0.5)) {
+        d.graded('item', pick(r, FORM_REFS), ok ? 1 : 0, ok, { rev: 'pl0', provenance: 'unseen', seed: int(r, 0, 0xffffffff), data: { src: 'play', level: pick(r, [0, 1, 2, 3] as const), variant: 'raster-ai', kcs: [KCS[2]], nsec: int(r, 5, 90) } })
+        return 'item'
+      }
+      d.graded('predict', pick(r, FORM_REFS), ok ? 1 : 0, ok, {
+        rev: 'pl1',
+        data: { value: int(r, 1, 900), unit: 'FLOP/B', truth: int(r, 1, 900), src: pick(r, ['play', 'practice'] as const), kcs: [KCS[2]], nsec: int(r, 5, 90) },
+      })
+      return 'predict'
+    },
+  },
+  {
+    weight: 2,
+    name: 'stretch-item',
+    run: (d) => {
+      // The stretch shapes (§3.2): field labs and the real-engine run (src practice, provenance field), protégé and the spatial proxy.
+      const r = d.rand
+      const ok = chance(r, 0.5)
+      switch (int(r, 0, 3)) {
+        case 0:
+          d.graded('item', 'item:field.decode-kv.tps', ok ? 1 : 0, ok, { rev: 'fl0', provenance: 'field', data: { src: 'practice', value: int(r, 10, 400), truth: int(r, 10, 400), unit: 'tok/s' } })
+          return 'field item'
+        case 1:
+          d.graded('predict', 'item:engine.measured-tps', ok ? 1 : 0, ok, { rev: 'fl1', provenance: 'field', data: { value: int(r, 10, 400), truth: int(r, 10, 400), unit: 'tok/s', src: 'practice' } })
+          return 'field predict'
+        case 2:
+          d.graded('item', `item:t4.l3.protege.${int(r, 1, 3)}.${pick(r, ['find', 'tag', 'fix'])}`, ok ? 1 : 0, ok, { rev: 'pr0', data: { src: 'lesson', lessonId: 't4.l3', pick: [int(r, 0, 3)] } })
+          return 'protege'
+        default:
+          d.graded('item', `item:cube.spatial.${int(r, 1, 4)}`, ok ? 1 : 0, ok, { rev: 'sp0', data: { src: 'practice', pick: [int(r, 0, 3)] } })
+          return 'spatial'
+      }
+    },
+  },
+  {
+    weight: 3,
+    name: 'play-metric',
+    run: (d) => {
+      const r = d.rand
+      const eplb = chance(r, 0.6)
+      const mine = Math.round((1 + r() * 0.8) * 100) / 100
+      const ghost = Math.round((1 + r() * 0.3) * 100) / 100
+      const phase = eplb ? pick(r, ['play', 'compose'] as const) : 'play'
+      const levels = eplb
+        ? undefined
+        : ['roofline', 'raster', 'tile', 'smem', 'regs', 'cube'].slice(0, int(r, 1, 6)).map((id) => ({
+            id,
+            ok: chance(r, 0.6),
+            ...(chance(r, 0.7) ? { logErr: Math.round(r() * 100) / 100 } : {}),
+            ...(chance(r, 0.3) ? { view: pick(r, ['2d', '3d'] as const) } : {}),
+          }))
+      const ok = eplb ? mine <= ghost + 0.05 : true
+      d.graded('play', eplb ? 'play:eplb' : 'play:tiling-cube', eplb ? Math.min(1, ghost / mine) : (levels?.filter((l) => l.ok).length ?? 0) / 6, ok, {
+        provenance: 'unseen',
+        seed: int(r, 0, 0xffffffff),
+        data: {
+          phase,
+          turns: int(r, 1, 20),
+          survived: int(r, 0, 20),
+          ghostSurvived: int(r, 0, 20),
+          ...(eplb ? { metric: { name: 'imbalance', mine, ghost, lowerIsBetter: true } } : { levels }),
+          ...(eplb && phase === 'compose'
+            ? { spec: { replicate: pick(r, ['none', 'per-copy', 'total'] as const), place: pick(r, ['round-robin', 'least-loaded'] as const) }, equivalent: ok }
+            : {}),
+        },
+      })
+      return `${eplb ? 'eplb' : 'cube'} ${ok ? 'ok' : 'miss'}`
+    },
+  },
+  {
+    weight: 3,
+    name: 'fleet-act-receipts',
+    run: (d) => {
+      const r = d.rand
+      const act = pick(r, ['engine', 'fleet', 'business'])
+      const cited = int(r, 0, 5)
+      const verified = int(r, 0, cited)
+      d.graded('fleet-act', `fw:${act}`, Math.round(r() * 100) / 100, true, {
+        provenance: 'unseen',
+        seed: int(r, 0, 0xffffffff),
+        data: {
+          receipts: { cited, verified, uncited: int(r, 0, 3) },
+          ...(chance(r, 0.7) ? { rubric: { capacity: int(r, 0, 3), slo: int(r, 0, 3), cost: int(r, 0, 3), failure: int(r, 0, 3) } } : {}),
+          runs: shuffle(r, RUN_IDS).slice(0, Math.min(cited, 3)),
+        },
+      })
+      return act
+    },
+  },
+  {
+    weight: 2,
+    name: 'engine-race',
+    run: (d) => {
+      // Lab 06's race (§8.3): one component alone on `fleet:engine`, fresh seeds, within 3 points of the reference or not.
+      const r = d.rand
+      const data: FleetRunData = {
+        v: 1,
+        mode: 'engine',
+        components: [{ slot: 'scheduler', labId: pick(r, Object.keys(LABS)), sha256: pick(r, SHAS) }],
+        seeds: 'fresh',
+        goodput: int(r, 30, 60),
+        refGoodput: 50,
+      }
+      d.graded('fleet-run', 'fleet:engine', fleetRunScore(data), fleetRunOk(data), { provenance: 'unseen', seed: int(r, 0, 0xffffffff), data })
+      return fleetRunOk(data) ? 'ok' : 'miss'
+    },
+  },
   {
     weight: 4,
     name: 'working',
     run: (d) => {
       const r = d.rand
-      switch (int(r, 0, 12)) {
+      switch (int(r, 0, 15)) {
         case 0: {
           const id = pick(r, LESSONS)
           if (d.skips && !d.agg.lessons[id]) return null
@@ -666,6 +846,24 @@ const OPS_TABLE: { weight: number; name: string; run: OpFn }[] = [
         case 12:
           d.setWorking('daily:team', pick(r, ['blue', 'red']))
           return 'daily:team'
+        case 13: {
+          // newest last, at most 50: the same list `setWorking('fw:runs', …)` keeps
+          const prior = (d.working.get('fw:runs')?.value ?? []) as unknown as RunRecord[]
+          const record: RunRecord = {
+            id: pick(r, RUN_IDS),
+            act: pick(r, ['engine', 'fleet', 'business'] as const),
+            job: { kind: 'engine', seed: int(r, 0, 99), modules: [{ slot: 'scheduler', sha256: pick(r, SHAS) }] },
+            entropy: int(r, 0, 0xffffffff),
+            values: { goodput: int(r, 100, 900) / 10, shed: int(r, 0, 20) },
+            at: d.iso,
+          }
+          d.setWorking('fw:runs', [...prior, record].slice(-50) as unknown as WorkingRecord['value'])
+          return 'fw:runs'
+        }
+        case 14:
+        case 15:
+          d.setWorking('profile:background', pick(r, BACKGROUNDS))
+          return 'profile:background'
         default:
           d.setWorking('boot:week', { minutesPerWeek: 180, sessionMinutes: 12, phoneDays: [1, 3], laptopDays: [6], slo: 0.9 })
           return 'boot:week'
