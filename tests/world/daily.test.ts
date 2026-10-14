@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { createFleetHost } from '../../src/lib/fleet-host'
 import { openIncidentSession, type FleetWorkerLike } from '../../src/lib/fleet-session'
-import { INCIDENT_FAULTS, PROBE_IDS, generateIncident, burnPercent, type IncidentFault } from '../../src/lib/world/incident-spec'
+import { FIXES, INCIDENT_FAULTS, PROBE_IDS, generateIncident, burnPercent, type IncidentFault } from '../../src/lib/world/incident-spec'
 import { IncidentSession, runExpert } from '../../src/lib/world/incident-sim'
 import {
   DAILY_EPOCH,
@@ -24,6 +24,7 @@ import {
   dailySource,
   elapsed,
   kcsFor,
+  menuOrderFor,
   observationsOf,
   parseLocalDate,
   probesTaken,
@@ -109,6 +110,15 @@ describe('one incident per local date', () => {
   test('the hypothesis menu is the four catalog faults then "unsure"', () => {
     expect(HYPOTHESIS_OPTIONS.map((o) => o.id)).toEqual([...INCIDENT_FAULTS, 'unsure'])
   })
+
+  test('the menus a Daily shows are a fixed shuffle of its own seed: the same on every visit, "Unsure" last', () => {
+    const spec = dailyIncident('2026-10-23')
+    const m = menuOrderFor(spec)
+    expect(menuOrderFor(dailyIncident('2026-10-23'))).toEqual(m)
+    expect(m.hypotheses.map((o) => o.id).slice(0, -1).sort()).toEqual([...INCIDENT_FAULTS].sort())
+    expect(m.hypotheses.at(-1)?.id).toBe('unsure')
+    expect([...m.fixes].sort()).toEqual(Object.keys(FIXES).sort())
+  })
 })
 
 describe('the pinned date of e2e/daily.spec.ts still draws the incident the walk plays', () => {
@@ -167,6 +177,20 @@ describe('the flow state', () => {
     expect(s.fixed).toBe(true)
     expect(s.log.map((e) => e.kind)).toEqual(['probe', 'wait', 'fix', 'fix'])
     expect(probesTaken(s)).toEqual(['intake'])
+  })
+
+  test('the first fix, right or wrong, locks the hypothesis held at that moment; a later revision is refused (F1)', () => {
+    let s = withHypothesis(startFlow(alert, 75), 'drain-stall')
+    expect(s.hypothesisAtFix).toBeNull()
+    s = withHypothesis(s, 'pool-shrink') // revisable until a fix goes in
+    expect(s.hypothesis).toBe('pool-shrink')
+    s = withFix(s, 'restore-drain', { minute: 21, effective: false, ended: false })
+    expect(s.hypothesisAtFix).toBe('pool-shrink')
+    const revised = withHypothesis(s, 'drain-stall')
+    expect(revised).toBe(s) // refused: nothing about the state changes
+    s = withFix(s, 'restore-pool', { minute: 22, effective: true, ended: false })
+    expect(s.hypothesisAtFix).toBe('pool-shrink')
+    expect(s.hypothesis).toBe('pool-shrink')
   })
 
   test('the fixed flag stays set once the right fix went in, and ended comes from the last reply', () => {

@@ -28,7 +28,7 @@ import { incidentScore } from '@/lib/ledger/fold'
 import { sha256Hex } from '@/lib/ledger/stable'
 import { freshSeed, splitmix32u } from '@/lib/rng'
 import { kcsFor, type FinishedIncident, type IncidentSource } from '@/lib/world/daily'
-import { FAULT_LABELS, INCIDENT_FAULTS, fixFor, generateIncident, type FixId, type IncidentFault, type IncidentSpec } from '@/lib/world/incident-spec'
+import { FAULT_LABELS, FIXES, INCIDENT_FAULTS, fixFor, generateIncident, type FixId, type IncidentFault, type IncidentSpec } from '@/lib/world/incident-spec'
 import { makeFaultInjector, type FaultSpec } from '@/lib/world/faults'
 import { instantiateLab } from '@/lib/wasm-lab'
 import { atlasRow } from '@/data/atlas'
@@ -718,11 +718,11 @@ const CAUSE_WHYS: Record<IncidentFault, Record<IncidentFault, string>> = {
   },
   'node-death': {
     'pool-shrink':
-      "A shrunken pool shows free blocks near zero on every worker that is up. The survivor's KV is in a normal range and the liveness probe shows one worker down, which a pool story cannot explain.",
+      "A shrunken pool shows free blocks near zero on every worker that is up. The KV of the workers still up is in a normal range and the liveness probe shows one worker down, which a pool story cannot explain.",
     'drain-stall':
       'A stalled drain fills the intake queue and leaves the scheduler waiting list near empty, and it never loses a request already running. Here the waiting list is long, the intake queue is normal and requests were lost in flight.',
     'node-death':
-      'Right: one worker is down in the liveness probe and the requests running on it were lost at the onset, so the survivor carries all the traffic. That gives a long waiting list and late first tokens, with the KV pool and the intake queue otherwise normal.',
+      'Right: one worker is down in the liveness probe and the requests running on it were lost at the onset, so the workers still up carry all the traffic. That gives a long waiting list and late first tokens, with the KV pool and the intake queue otherwise normal.',
     'tenant-burst':
       'A flooding tenant raises TPOT while every worker stays up. Here a worker is down and requests were lost, so capacity left the fleet; no tenant shifted it by sending long prompts.',
   },
@@ -762,13 +762,13 @@ const FIX_WHYS: Record<IncidentFault, Record<FixId, string>> = {
   },
   'node-death': {
     'restore-pool':
-      "The survivor's KV pool is in a normal range, so there are no blocks to give back. The shortfall is a worker that is no longer serving, which no memory setting restores.",
+      "The KV pools of the workers still up are in a normal range, so there are no blocks to give back. The shortfall is a worker that is no longer serving, which no memory setting restores.",
     'restore-drain':
-      'The intake queue is normal and the survivor already drains it every tick, so a faster drain moves nothing. The overload shows in the waiting list, because there is one engine less to admit from it.',
+      'The intake queue is normal and the workers still up already drain it every tick, so a faster drain moves nothing. The overload shows in the waiting list, because there is one engine fewer to admit from it.',
     'replace-node':
       'Right: the liveness probe shows one worker down, so capacity is what is missing. A replacement node joins the router and takes its share of the traffic back, and it takes one minute to roll out.',
     'limit-tenant':
-      'No tenant dominates the latency split; the load is ordinary traffic on half the engines. Capping a tenant sheds requests the surviving worker could not have served anyway, and the dead worker stays dead.',
+      'No tenant dominates the latency split; the load is ordinary traffic on a fleet one worker short. Capping a tenant sheds requests the workers still up could not have served anyway, and the dead worker stays dead.',
   },
   'tenant-burst': {
     'restore-pool':
@@ -796,7 +796,7 @@ const BRIEFINGS: Record<IncidentFault, { title: string; briefing: string }> = {
   'node-death': {
     title: 'incident 03 — the minute a worker stopped answering',
     briefing:
-      'TTFT p95 is up fleet-wide and some requests failed in flight at one moment. One worker is no longer stepping, and the survivor has a long waiting list. KV and the intake queue look normal.',
+      'TTFT p95 is up fleet-wide and some requests failed in flight at one moment. One worker is no longer stepping, and the workers still up have long waiting lists. KV and the intake queue look normal.',
   },
   'tenant-burst': {
     title: 'incident 04 — everyone slowed down at once',
@@ -806,30 +806,14 @@ const BRIEFINGS: Record<IncidentFault, { title: string; briefing: string }> = {
 }
 
 /**
- * The hypothesis menu as a multiple-choice item: one sentence per catalog fault, the same four in every entry. Every
- * sentence has the same character and word count and none carries a comma, a colon, a figure, an acronym or a
- * hedge word, so no length or wording rule can tell the key from the rest; scripts/verify-items.ts holds them to it.
+ * The menus as multiple-choice items: the labels are `FAULT_LABELS` and `FIXES`, the very text the flow shows, so what
+ * `verify-items` gates is what a learner chooses between.
  */
-const CAUSE_LABELS: Record<IncidentFault, string> = {
-  'pool-shrink': 'The cache memory pool shrank after a faulty setting',
-  'drain-stall': 'The intake drain stalled far below the arrival rate',
-  'node-death': 'A worker node died and dropped its running requests',
-  'tenant-burst': 'One tenant flooded the fleet with very long prompts',
-}
-
-/** The fix menu as a multiple-choice item, written to the same rule as `CAUSE_LABELS`. */
-const FIX_LABELS: Record<FixId, string> = {
-  'replace-node': 'Replace the dead worker node with a healthy one',
-  'limit-tenant': "Cap the noisy tenant's admissions at a low rate",
-  'restore-pool': 'Put the cache memory fraction back where it was',
-  'restore-drain': 'Put the intake drain rate back where it belongs',
-}
-
 const causeMenu = (running: IncidentFault): IncidentOption[] =>
-  INCIDENT_FAULTS.map((fault) => ({ id: fault, label: CAUSE_LABELS[fault], correct: fault === running, why: CAUSE_WHYS[running][fault] }))
+  INCIDENT_FAULTS.map((fault) => ({ id: fault, label: FAULT_LABELS[fault], correct: fault === running, why: CAUSE_WHYS[running][fault] }))
 
 const fixMenu = (running: IncidentFault): IncidentOption[] =>
-  FIX_MENU.map((fix) => ({ id: fix, label: FIX_LABELS[fix], correct: fixFor(running) === fix, why: FIX_WHYS[running][fix] }))
+  FIX_MENU.map((fix) => ({ id: fix, label: FIXES[fix].label, correct: fixFor(running) === fix, why: FIX_WHYS[running][fix] }))
 
 /** One entry per catalog fault, each holding the shared hypothesis and fix menus (§9.8). */
 export const INCIDENTS: Incident[] = INCIDENT_FAULTS.map((fault) => ({

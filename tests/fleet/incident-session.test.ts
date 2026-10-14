@@ -228,13 +228,63 @@ describe('a session replays to the same burn as incident-sim for the same action
     expect(done.expertBurn).toBe(want.expertBurn)
     expect(done.recovered).toBe(want.recovered)
     expect(done.firstHypothesis).toBe('unsure')
-    expect(done.hypothesis).toBe('pool-shrink')
-    expect(done.diagnosed).toBe(true)
+    // the first fix, a wrong one, went in under drain-stall: that is the hypothesis scored, and the later revision to the
+    // right fault (just before the right fix) changes nothing
+    expect(done.hypothesis).toBe('drain-stall')
+    expect(done.diagnosed).toBe(false)
+    expect(done.fixed).toBe(true)
     // looking and misfiring cost clock: the clumsy log burns more than the expert
     expect(done.burn).toBeGreaterThan(done.expertBurn)
     // finish is idempotent: asking again changes nothing
     expect((await session.finish()).burn).toBe(done.burn)
     session.close()
+  })
+
+  test('diagnosed is the hypothesis held at the first fix, over the wire, and a later revision cannot change it (F1)', async () => {
+    const spec = specFor('node-death')
+    const right = fixFor('node-death')
+    const wrong = fixFor('pool-shrink')
+    const t = spawner(() => hostScript())
+    // right fix first under the right hypothesis: diagnosed
+    const a = await openIncidentSession(open(spec), { spawn: t.spawn })
+    await a.hypothesis('node-death')
+    expect((await a.fix(right)).effective).toBe(true)
+    await a.hypothesis('pool-shrink') // after the first fix: ignored by the score
+    const da = await a.finish()
+    expect(da.diagnosed).toBe(true)
+    expect(da.hypothesis).toBe('node-death')
+    a.close()
+    // wrong fix first under a wrong hypothesis, then the right fault named just before the right fix: not diagnosed
+    const b = await openIncidentSession(open(spec), { spawn: t.spawn })
+    await b.hypothesis('pool-shrink')
+    expect((await b.fix(wrong)).effective).toBe(false)
+    await b.hypothesis('node-death')
+    expect((await b.fix(right)).effective).toBe(true)
+    const db = await b.finish()
+    expect(db.fixed).toBe(true)
+    expect(db.diagnosed).toBe(false)
+    expect(db.hypothesis).toBe('pool-shrink')
+    expect(db.firstHypothesis).toBe('pool-shrink')
+    b.close()
+    // the right fault named but a wrong fix first, then the right fix: diagnosed (the hypothesis was right at the first fix)
+    const c = await openIncidentSession(open(spec), { spawn: t.spawn })
+    await c.hypothesis('node-death')
+    await c.fix(wrong)
+    await c.hypothesis('drain-stall')
+    await c.fix(right)
+    const dc = await c.finish()
+    expect(dc.diagnosed).toBe(true)
+    c.close()
+  })
+
+  test('with no fix at all the hypothesis held at the end is reported, and the drill still fails (nothing fixed)', () => {
+    const spec = specFor('pool-shrink')
+    const out = replayIncident(spec, [
+      { kind: 'hypothesis', fault: 'unsure' },
+      { kind: 'hypothesis', fault: 'pool-shrink' },
+    ])
+    expect(out.hypothesis).toBe('pool-shrink')
+    expect(out.fixed).toBe(false)
   })
 
   test('an unfixed incident runs to the limit and does not recover', async () => {

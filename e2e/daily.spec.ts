@@ -48,11 +48,17 @@ test('/daily: the pinned Daily is played from the alert to the share string by k
   await expect(page.locator('[data-probe]').first()).toBeDisabled()
   await expect(page.locator('[data-probes-closed]')).toBeVisible()
 
-  // The arrow keys move the choice inside the radio group: down to the second fault, back up to the first.
+  // The arrow keys move the choice inside the radio group. The menu is shown in an order drawn from the incident's seed,
+  // so the walk reads the order first: down to the second fault, then on to the pinned one.
   await tabTo(page, 'input[type="radio"]')
+  const order = await page.locator('input[type="radio"]').evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value))
+  expect([...order].sort()).toEqual(['drain-stall', 'node-death', 'pool-shrink', 'tenant-burst', 'unsure'])
+  expect(order[order.length - 1]).toBe('unsure')
   await page.keyboard.press('ArrowDown')
-  await expect(page.locator(`input[value="drain-stall"]`)).toBeChecked()
+  await expect(page.locator(`input[value="${order[1]}"]`)).toBeChecked()
   await page.keyboard.press('ArrowUp')
+  await expect(page.locator(`input[value="${order[0]}"]`)).toBeChecked()
+  for (let i = 0; i < order.indexOf(PINNED_FAULT); i++) await page.keyboard.press('ArrowDown')
   await expect(page.locator(`input[value="${PINNED_FAULT}"]`)).toBeChecked()
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Log hypothesis' })).toBeFocused()

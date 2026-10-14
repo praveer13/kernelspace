@@ -164,14 +164,32 @@ describe('generateIncident', () => {
     for (const r of RESERVE_FAULTS) expect(INCIDENT_FAULTS as readonly string[]).not.toContain(r)
   })
 
-  test('a node death always hits a two-worker fleet; the other faults run on two and four', () => {
+  test('every fault, node death included, runs on two and on four workers', () => {
     const sizes = Object.fromEntries(INCIDENT_FAULTS.map((f) => [f, new Set<number>()])) as Record<IncidentFault, Set<number>>
     for (let i = 0; i < 400; i++) {
       const s = generateIncident('drill', `sizes-${i}`)
       sizes[s.fault].add(s.workers)
     }
-    expect([...sizes['node-death']]).toEqual([2])
-    for (const f of ['pool-shrink', 'drain-stall', 'tenant-burst'] as const) expect([...sizes[f]].sort()).toEqual([2, 4])
+    for (const f of INCIDENT_FAULTS) expect([...sizes[f]].sort()).toEqual([2, 4])
+  })
+
+  test('the fleet size is independent of the fault: it tells nothing about which fault is running (F8)', () => {
+    // the size is on the screen before the first probe, so P(fault | size) must be the base rate. 4,000 seeds: each of the
+    // four faults holds 25 % of the two-worker incidents and of the four-worker ones, within sampling error (4 SD of a
+    // binomial at p = 0.25 over ~2,000 draws is 3.9 points)
+    const n = 4000
+    const count = Object.fromEntries(INCIDENT_FAULTS.map((f) => [f, { 2: 0, 4: 0 }])) as Record<IncidentFault, Record<number, number>>
+    const total = { 2: 0, 4: 0 } as Record<number, number>
+    for (let i = 0; i < n; i++) {
+      const s = generateIncident('drill', `independence-${i}`)
+      count[s.fault][s.workers]++
+      total[s.workers]++
+    }
+    expect(total[2]).toBeGreaterThan(n * 0.45)
+    expect(total[4]).toBeGreaterThan(n * 0.45)
+    for (const f of INCIDENT_FAULTS) {
+      for (const w of [2, 4]) expect(Math.abs(count[f][w] / total[w] - 1 / INCIDENT_FAULTS.length)).toBeLessThan(0.04)
+    }
   })
 
   test('the catalog faults are ledger FaultIds, the reserves included', () => {
@@ -575,9 +593,11 @@ describe('determinism, the expert and one scorer (W10, W11)', () => {
     const b = replayIncident(spec, LOG)
     expect(b).toEqual(a)
     expect(a.fixed).toBe(true)
-    expect(a.diagnosed).toBe(true)
+    // the first fix, a wrong one, went in while the hypothesis was pool-shrink: that is the one scored, and the later
+    // revision to the right fault changes nothing
+    expect(a.diagnosed).toBe(false)
     expect(a.fix).toBe('replace-node')
-    expect(a.hypothesis).toBe('node-death')
+    expect(a.hypothesis).toBe('pool-shrink')
   }, SLOW)
 
   test('a live session and a replay of its log agree', () => {

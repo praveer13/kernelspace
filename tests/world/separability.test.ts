@@ -15,8 +15,9 @@
  *     so straggler and admission-greedy stay in reserve.
  *   - Scenario (world/incident-sim's INCIDENT_SCENARIO): 512-block pools, 24 running slots, interference
  *     on, a 16-deep intake draining 6 per tick, JSQ, a steady chat trace at 55 % of capacity (node death
- *     +8 to +12 points by severity, on a two-worker fleet: a four-worker fleet at a load it recovers from
- *     absorbs one death with no alert). SLO: TTFT 20 ticks, TPOT 2 ticks per token.
+ *     +8 to +12 points by severity on two workers, +25 to +27 on four: a four-worker fleet at 55 % absorbs one
+ *     death with no alert, and the size is drawn from the seed, never the fault). SLO: TTFT 20 ticks, TPOT 2
+ *     ticks per token.
  *   - Scoring: each chat request's outcome counts once, in the minute it is known; a request whose TTFT
  *     deadline passes without a first token is a miss then. Before this the book counted completions only,
  *     and the reference's shortest-first order let long prompts starve unseen: node death alerted at the
@@ -28,9 +29,12 @@
  *     burst, 0.37–0.63 on a node death's survivor and 0.82–0.99 under a drain stall (low < 0.35, high >
  *     0.78); TPOT p95 1.96–2.84 under a burst against ≤ 2.13 elsewhere, which is why "TPOT up" also asks
  *     that long prompts hold ≥ 35 % of the prefill (0.45–0.80 under a burst, 0 elsewhere).
- *   Result on this file's seeds: every expert call right, 1,000 of 1,000 per fault; every vector equal to
- *   EXPECTED but one (a node death whose survivor read kv "low free"); alerts 2–5 minutes after the onset
- *   (a tenant burst up to 13), never at the fallback; expert burn 1.4–8.9 burn-minutes on the sample.
+ *   Result on this file's seeds (BF2: the fleet size is drawn from the seed, so node death runs on two and four
+ *   workers): every expert call right, 1,000 of 1,000 per fault; every vector equal to EXPECTED but a node
+ *   death's 39 (38 on four workers whose alert came late enough that the lost requests left the probe window,
+ *   errors "none", and one whose survivors read kv "low free"); alerts 2–5 minutes after the onset (a tenant
+ *   burst, and a four-worker node death, up to 13), never at the fallback; expert burn 1.4–8.9 burn-minutes
+ *   on the sample.
  */
 import { describe, expect, test } from 'bun:test'
 import {
@@ -103,12 +107,12 @@ function separability(): Record<IncidentFault, FaultResult> {
 }
 
 describe('separability: 1,000 seeds per fault on reference components', () => {
-  test('the seeds are 1,000 distinct generated incidents per fault, on both fleet sizes where the fault allows', () => {
+  test('the seeds are 1,000 distinct generated incidents per fault, on both fleet sizes for every fault', () => {
     for (const fault of INCIDENT_FAULTS) {
       expect(SPECS[fault]).toHaveLength(PER_FAULT)
       expect(new Set(SPECS[fault].map((s) => s.seed)).size).toBe(PER_FAULT)
       const sizes = new Set(SPECS[fault].map((s) => s.workers))
-      expect([...sizes].sort()).toEqual(fault === 'node-death' ? [2] : [2, 4])
+      expect([...sizes].sort()).toEqual([2, 4])
     }
   })
 

@@ -21,6 +21,7 @@ import {
   dailySlotBytes,
   dailySource,
   engineLine,
+  menuOrderFor,
   ownBoxes,
   readingHeadline,
   recordDaily,
@@ -186,6 +187,7 @@ export default function Daily() {
   )
 
   const open = phase === 'play' && flow !== null && !flow.ended
+  const menus = useMemo(() => menuOrderFor(spec), [spec])
   const onMyEngine = boxes.some((b) => b.own)
   return (
     <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12" data-page="daily" data-phase={phase} data-daily-date={date}>
@@ -237,7 +239,7 @@ export default function Daily() {
             <Alert source={source} session={session} clock={flow.clock} />
             {phase === 'play' && (
               <>
-                <Hypothesis session={session} logged={flow.hypothesis} busy={busy} run={run} onLogged={onLogged} />
+                <Hypothesis session={session} logged={flow.hypothesis} lockedAt={flow.hypothesisAtFix} options={menus.hypotheses} busy={busy} run={run} onLogged={onLogged} />
                 <ProbeBar
                   session={session}
                   alert={flow.alert}
@@ -251,6 +253,7 @@ export default function Daily() {
                 <FixMenu
                   session={session}
                   enabled={open && flow.hypothesis !== null}
+                  fixes={menus.fixes}
                   busy={busy}
                   run={run}
                   onFix={onFix}
