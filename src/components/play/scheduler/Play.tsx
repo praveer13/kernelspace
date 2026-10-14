@@ -14,12 +14,14 @@
 import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Button, LinkButton } from '@/components/Button'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import { BUILD_THIS_SCHEDULER, SCHEDULER, freshEntropy } from '@/data/plays'
 import { useProgress } from '@/lib/progress'
 import { groups, schedEndLine } from '@/lib/world/sched'
 import { drawSchedTrace, loadSchedSource, practiceMinute, practiceSourceLine, type SchedSource } from '@/lib/world/sched-traces'
 import Debrief from './Debrief'
 import Mirror from './Mirror'
+import { prefetchAll } from './prefetch'
 import Queue, { KvBar } from './Queue'
 import {
   actionOf,
@@ -43,7 +45,43 @@ const loadCompose = () => import('./Compose')
 const loadCard = () => import('./ProductionCard')
 const Compose = lazy(loadCompose)
 const ProductionCard = lazy(loadCard)
-const afterDebrief = <p className="font-mono text-body-sm text-text-3">Loading Compose and the card…</p>
+
+/** The Suspense fallback while Compose and the card load: a status, so a screen reader hears that more is coming. */
+export function AfterDebriefLoading() {
+  return (
+    <p role="status" className="font-mono text-body-sm text-text-3">
+      Loading Compose and the card…
+    </p>
+  )
+}
+
+/**
+ * What replaces it when the load failed (offline, or a deploy replaced the chunks). The retry is a reload: the browser
+ * keeps a failed dynamic import for the life of the page (and React.lazy keeps its rejection), so loading them again
+ * in place cannot succeed. The play was recorded when the debrief opened, so nothing is lost by it.
+ */
+export function AfterDebriefFailed() {
+  return (
+    <div role="status" className="space-y-3" data-play-error="scheduler-after-debrief">
+      <p className="text-body-sm text-text-2">Compose and the card did not load, so you may be offline. Your play is saved; reload to try again.</p>
+      <Button variant="secondary" onClick={() => window.location.reload()}>
+        Reload to try again
+      </Button>
+    </div>
+  )
+}
+
+/** Compose and the In-production card, lazy: a failed load shows the retry message instead of unmounting the play. */
+function AfterDebrief({ trace, source }: { trace: SchedSession['trace']; source: SchedSource }) {
+  return (
+    <ErrorBoundary fallback={<AfterDebriefFailed />}>
+      <Suspense fallback={<AfterDebriefLoading />}>
+        <Compose key={trace.id} trace={trace} source={source} />
+        <ProductionCard />
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
 
 export interface SchedulerPlayProps {
   /** `embed` inside the lesson, `page` on /play/scheduler. */
@@ -94,7 +132,7 @@ export function SchedulerPlayView({ source, mode }: SchedulerPlayViewProps) {
 
   const mark = useCallback(() => {
     // The learner is in the run: start fetching what the debrief shows, so it is there by the time they get to it.
-    if (firstMoveAt.current === null) void Promise.all([loadCompose(), loadCard()])
+    if (firstMoveAt.current === null) void prefetchAll([loadCompose, loadCard])
     firstMoveAt.current ??= Date.now()
   }, [])
   const toggleAdmit = useCallback(
@@ -132,10 +170,7 @@ export function SchedulerPlayView({ source, mode }: SchedulerPlayViewProps) {
     return (
       <div className="space-y-6" data-play={SCHEDULER.id} data-mode={mode} data-phase-now="debrief">
         <Debrief session={session} onAgain={again} />
-        <Suspense fallback={afterDebrief}>
-          <Compose key={session.trace.id} trace={session.trace} source={source} />
-          <ProductionCard />
-        </Suspense>
+        <AfterDebrief trace={session.trace} source={source} />
         <div className="rounded-lg border border-accent/40 bg-accent-dim/40 p-4 sm:p-5">
           <p className="section-label">Code</p>
           <p className="mt-2 text-body-sm text-text-2">

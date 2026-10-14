@@ -10,12 +10,13 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import Compose from '../../src/components/play/scheduler/Compose'
 import Debrief from '../../src/components/play/scheduler/Debrief'
 import Mirror from '../../src/components/play/scheduler/Mirror'
-import { SchedulerPlayView } from '../../src/components/play/scheduler/Play'
+import { AfterDebriefFailed, AfterDebriefLoading, SchedulerPlayView } from '../../src/components/play/scheduler/Play'
+import { prefetchAll } from '../../src/components/play/scheduler/prefetch'
 import ProductionCard from '../../src/components/play/scheduler/ProductionCard'
 import Queue, { KvBar } from '../../src/components/play/scheduler/Queue'
 import {
@@ -64,6 +65,7 @@ import {
   type SchedSource,
   type SchedTrace,
 } from '../../src/lib/world/sched-traces'
+import { playChunkKey, type PlayManifestChunk } from '../../scripts/bundle-plays'
 import { checkPlay, closureOf, practiceBandOf, type PlayFacts, type PlayWorld } from '../../scripts/verify-plays'
 import { makeProfile, startTab } from '../ledger/env'
 
@@ -80,6 +82,114 @@ beforeAll(async () => {
     await Bun.file(new URL('burstgpt-v2-busiest-hour.json', dir)).json(),
   )
   banded = Array.from({ length: 12 }, (_, i) => drawSchedTrace((i + 1) * 7919, source).trace)
+})
+
+describe('the lazy Compose and card loads (BF8)', () => {
+  const html = (node: Parameters<typeof renderToString>[0]) => renderToString(node)
+
+  test('the prefetch swallows a failed chunk and says so, and starts every chunk', async () => {
+    const started: string[] = []
+    const ok = (name: string) => () => {
+      started.push(name)
+      return Promise.resolve({})
+    }
+    const offline = (name: string) => () => {
+      started.push(name)
+      return Promise.reject(new TypeError('Failed to fetch dynamically imported module'))
+    }
+    expect(await prefetchAll([ok('compose'), ok('card')])).toBe(true)
+    expect(await prefetchAll([offline('compose'), ok('card')])).toBe(false)
+    expect(await prefetchAll([ok('compose'), offline('card')])).toBe(false)
+    expect(started).toEqual(['compose', 'card', 'compose', 'card', 'compose', 'card'])
+  })
+
+  test('the loading fallback and the failure are both statuses, and the failure offers a reload', () => {
+    const loading = html(createElement(AfterDebriefLoading))
+    expect(loading).toContain('role="status"')
+    expect(loading).toContain('Loading Compose and the card…')
+    const failed = html(createElement(AfterDebriefFailed))
+    expect(failed).toContain('role="status"')
+    expect(failed).toContain('did not load')
+    expect(failed).toContain('Reload to try again')
+    expect(failed).not.toContain('Loading')
+  })
+
+  test('Play.tsx never leaves the prefetch bare, and a failed lazy load lands in a boundary with the reload message', () => {
+    const play = readFileSync(join(SRC, 'components', 'play', 'scheduler', 'Play.tsx'), 'utf8')
+    expect(play).not.toMatch(/void Promise\.all/)
+    expect(play).toContain('prefetchAll([loadCompose, loadCard])')
+    expect(play).toContain('<ErrorBoundary fallback={<AfterDebriefFailed />}>')
+    expect(play).toContain('window.location.reload()')
+    expect(play).toMatch(/<Suspense fallback=\{<AfterDebriefLoading \/>\}>/)
+  })
+})
+
+describe('verify-bundle finds every registered play’s chunk (BF8)', () => {
+  const chunk = (file: string, extra: Partial<PlayManifestChunk> = {}): PlayManifestChunk => ({ file: `assets/${file}`, ...extra })
+  const PAGE = 'src/pages/Play.tsx'
+  const BP = 'src/components/play/block-placement/Play.tsx'
+  const SCHED = 'src/components/play/scheduler/Play.tsx'
+  /** The shape the build gave after the lazy split: the scheduler play hoisted to `_Play-*` with no `src`, block placement under its source path. */
+  function built(extra: Record<string, PlayManifestChunk> = {}): Record<string, PlayManifestChunk> {
+    return {
+      'index.html': chunk('index.js'),
+      [PAGE]: chunk('Play-page.js', { name: 'Play', src: PAGE, isDynamicEntry: true, imports: ['index.html', '_PlayBlock-b.js'] }),
+      '_PlayBlock-b.js': chunk('PlayBlock-b.js', { name: 'PlayBlock', isDynamicEntry: true, imports: ['index.html'], dynamicImports: [BP, '_Play-s.js'] }),
+      [BP]: chunk('Play-bp.js', { name: 'Play', src: BP, isDynamicEntry: true, imports: ['index.html'] }),
+      '_Play-s.js': chunk('Play-s.js', { name: 'Play', isDynamicEntry: true, imports: ['index.html'], dynamicImports: ['src/components/play/scheduler/Compose.tsx', 'src/components/play/scheduler/ProductionCard.tsx'] }),
+      'src/components/play/scheduler/Compose.tsx': chunk('Compose-c.js', { name: 'Compose', src: 'src/components/play/scheduler/Compose.tsx', isDynamicEntry: true, imports: ['index.html', '_Play-s.js'] }),
+      'src/components/play/scheduler/ProductionCard.tsx': chunk('ProductionCard-c.js', { name: 'ProductionCard', src: 'src/components/play/scheduler/ProductionCard.tsx', isDynamicEntry: true, imports: ['index.html', '_Play-s.js'] }),
+      ...extra,
+    }
+  }
+  const find = (m: Record<string, PlayManifestChunk>, src: string) => playChunkKey(m, src, PAGE, [BP, SCHED])
+
+  test('a play filed under its source path is found there', () => {
+    expect(find(built(), BP)).toBe(BP)
+    expect(find({ ...built(), [SCHED]: chunk('Play-s2.js', { src: SCHED, isDynamicEntry: true }) }, SCHED)).toBe(SCHED)
+  })
+
+  test('a play Vite hoisted to `_Play-*` with no `src` is found through its lazy siblings, and is not block placement’s', () => {
+    expect(find(built(), SCHED)).toBe('_Play-s.js')
+    expect(find(built(), BP)).not.toBe('_Play-s.js')
+  })
+
+  test('with no lazy sibling the hoisted chunk is found by its name, once the other play’s chunk is set aside', () => {
+    const m = built()
+    m['_Play-s.js'].dynamicImports = []
+    expect(find(m, SCHED)).toBe('_Play-s.js')
+  })
+
+  test('a registered play with no chunk, or an ambiguous one, is not found (the gate then fails)', () => {
+    const m = built()
+    delete m['_Play-s.js']
+    m['_PlayBlock-b.js'].dynamicImports = [BP]
+    expect(find(m, SCHED)).toBeUndefined()
+    const twice = built({ '_Play-t.js': chunk('Play-t.js', { name: 'Play', isDynamicEntry: true, imports: ['index.html'] }) })
+    twice['_Play-s.js'].dynamicImports = []
+    twice['_PlayBlock-b.js'].dynamicImports = [BP, '_Play-s.js', '_Play-t.js']
+    expect(find(twice, SCHED)).toBeUndefined()
+  })
+
+  test('every play in the registry has a verify-bundle row with its source path, and that file exists', () => {
+    const bundle = readFileSync(join(ROOT, 'scripts', 'verify-bundle.ts'), 'utf8')
+    const registry = readFileSync(join(SRC, 'components', 'play', 'registry.ts'), 'utf8')
+    for (const id of Object.keys(PLAY_REGISTRY)) {
+      const src = `src/components/play/${id}/Play.tsx`
+      expect(registry).toContain(`import('@/components/play/${id}/Play')`)
+      expect(existsSync(join(ROOT, src))).toBe(true)
+      expect(bundle).toMatch(new RegExp(`route: '/play/${id}'[^}]*playSrc: '${src.replaceAll('/', '\\/').replaceAll('.', '\\.')}'`))
+    }
+  })
+
+  const manifestPath = join(ROOT, 'dist', '.vite', 'manifest.json')
+  test.skipIf(!existsSync(manifestPath))('in the current build every registered play has a chunk', () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, PlayManifestChunk>
+    const srcs = Object.keys(PLAY_REGISTRY).map((id) => `src/components/play/${id}/Play.tsx`)
+    const keys = srcs.map((src) => playChunkKey(manifest, src, PAGE, srcs))
+    expect(keys.every((k) => k !== undefined)).toBe(true)
+    expect(new Set(keys).size).toBe(srcs.length)
+  })
 })
 
 /** Plays a session to its end: at each turn the learner taps `pick(view)` in order (a tap the chips would refuse is skipped) and runs the iteration. */
