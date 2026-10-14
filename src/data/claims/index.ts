@@ -55,7 +55,22 @@ export function registerClaims(list: readonly Claim[]): void {
  * group, is not in the browser. Add a line with the group; tests/claims/lazy.test.ts fails when a lazy claim's id
  * has no line here or its line names another file.
  */
-export const LAZY_GROUP_HOMES: Record<string, string> = {}
+export const LAZY_GROUP_HOMES: Record<string, string> = {
+  'hw.h100-sxm.sm': 'lazy/tiling',
+  'hw.h100-sxm.l2': 'lazy/tiling',
+  'hw.h100-sxm.reg': 'lazy/tiling',
+  'hw.h100-sxm.fp8': 'lazy/tiling',
+  'production.triton.': 'lazy/tiling',
+  'model.deepseek-v3.routed': 'lazy/moe',
+  'model.deepseek-v3.experts': 'lazy/moe',
+  'production.eplb.': 'lazy/moe',
+  'production.vllm.eplb': 'lazy/moe',
+  'production.sglang.eplb': 'lazy/moe',
+  'production.vllm.disagg': 'lazy/serving3',
+  'production.sglang.disagg': 'lazy/serving3',
+  'bench.checkpoint-engine.': 'lazy/serving3',
+  'twin.': 'lazy/twins',
+}
 
 /** The module to import for an id that is not registered: the longest matching prefix of `LAZY_GROUP_HOMES`, or undefined. */
 export function lazyGroupFor(id: string): string | undefined {

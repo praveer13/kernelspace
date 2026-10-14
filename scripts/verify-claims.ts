@@ -2,9 +2,10 @@
  * Claims registry gate (PLAN-100X §5.2 S2): structure, sources, dates and derived formulas.
  * A pinned claim's source url must contain pin.ref, and a status claim about engine settings must be pinned.
  * The Attention Zoo's config claims (`zoo.*` from Hugging Face, spec §11.2) pin a full revision sha, point their
- * url at that revision's config.json and quote a JSON line that parses to the claim's value.
+ * url at that revision's config.json and quote a JSON line that parses to the claim's value; so does any later claim
+ * that pins a Hugging Face config.json (the DeepSeek-V3 expert counts, spec wave-3 §4.4).
  * Expiry never fails: stale claims are only listed. `--write` regenerates public/claims.json,
- * and a plain run fails if that file has drifted from the registry. `--online` also re-reads each zoo
+ * and a plain run fails if that file has drifted from the registry. `--online` also re-reads each such
  * config.json at its pinned revision and finds the quote in it exactly once (the one network step; bare runs stay offline).
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -45,6 +46,7 @@ function mixtralParams(n: Reader, routed: number): number {
 }
 const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'hw.h100-sxm.bf16-dense': (n) => Math.floor(n('hw.h100-sxm.bf16-sparse') / 2),
+  'hw.h100-sxm.fp8-dense': (n) => Math.floor(n('hw.h100-sxm.fp8-sparse') / 2),
   'hw.b200.hbm-capacity': (n) => n('hw.dgx-b200.hbm-total') / 8,
   'hw.b200.hbm-bw': (n) => n('hw.dgx-b200.hbm-bw') / 8,
   'hw.b200.bf16-dense': (n) => (n('hw.hgx-b200.bf16-sparse-system') * 1000) / 8 / 2,
@@ -82,9 +84,14 @@ const HF_CONFIG = /^https:\/\/huggingface\.co\/([^/]+\/[^/]+)\/raw\/([^/]+)\/con
 /** `key`, `parent.key`, or either followed by how an array's contents give the value: (length), (member) or (count of <json literal>). */
 const ZOO_ROW = /^([A-Za-z0-9_.]+)(?: \((length|member|count of (.+))\))?$/
 
-/** A zoo claim read from a Hugging Face config: pinned to a sha, sourced at that sha, and its quote parses to its value. */
+/** Whether a claim is read from a Hugging Face config.json: every zoo claim, and any other claim that pins one by its url (Wave 3's DeepSeek-V3 expert counts; Wave 1's unpinned `model.*` configs stay as they are). */
+function readsHfConfig(c: Claim): boolean {
+  return c.id.startsWith('zoo.') || (c.pin !== undefined && c.source !== undefined && HF_CONFIG.test(c.source.url))
+}
+
+/** A claim read from a Hugging Face config: pinned to a sha, sourced at that sha, and its quote parses to its value. */
 function zooProblems(c: Claim): string[] {
-  if (!c.id.startsWith('zoo.') || !c.source || !validUrl(c.source.url) || new URL(c.source.url).hostname !== 'huggingface.co') return []
+  if (!readsHfConfig(c) || !c.source || !validUrl(c.source.url) || new URL(c.source.url).hostname !== 'huggingface.co') return []
   const out: string[] = []
   const hf = HF_CONFIG.exec(c.source.url)
   if (!c.pin) out.push('a zoo claim read from Hugging Face needs pin {repo, ref = revision sha}')
@@ -191,11 +198,11 @@ for (const c of CLAIMS) {
 }
 for (const id of Object.keys(DERIVATIONS)) if (!byId.has(id)) fail(id, 'DERIVATIONS entry has no claim')
 
-// --online: each zoo config.json, read again at its pinned revision, contains the quote exactly once.
+// --online: each Hugging Face config.json (the zoo's and the DeepSeek-V3 expert counts'), read again at its pinned revision, contains the quote exactly once.
 if (process.argv.includes('--online') && errors.length === 0) {
   const files = new Map<string, string>()
   for (const c of CLAIMS) {
-    if (!c.id.startsWith('zoo.') || !c.source || !HF_CONFIG.test(c.source.url)) continue
+    if (!readsHfConfig(c) || !c.source || !HF_CONFIG.test(c.source.url)) continue
     let text = files.get(c.source.url)
     if (text === undefined) {
       const res = await fetch(c.source.url)
@@ -209,7 +216,7 @@ if (process.argv.includes('--online') && errors.length === 0) {
     const times = text.split((c.source.quote ?? '').replace(/\s+/g, ' ')).length - 1
     if (times !== 1) fail(c.id, `the quote appears ${times} times in ${c.source.url} (want exactly 1)`)
   }
-  console.log(`online: read ${files.size} zoo config.json files at their pinned revisions`)
+  console.log(`online: read ${files.size} config.json files at their pinned revisions`)
 }
 
 // public/claims.json mirrors the registry so non-bundled consumers (llms.txt, the freshness issue) can read it.
