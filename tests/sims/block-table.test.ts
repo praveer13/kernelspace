@@ -6,7 +6,9 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
+import { ALLOCATOR_OUTCOME_TASKS } from '../../src/components/sims/allocator.tasks'
 import BlockTableExplorer from '../../src/components/sims/BlockTableExplorer'
+import { TaskPanel } from '../../src/components/sims/TaskPanel'
 import { BLOCK_TABLE_EXPLORER_TASKS } from '../../src/components/sims/blockTableExplorer.tasks'
 import { KC } from '../../src/data/kc/ids'
 import { SimHostContext, createFinishedStore, createObservationBus, gradePrediction } from '../../src/lib/sims/host'
@@ -34,6 +36,7 @@ import {
   resizePool,
   sweepRow,
 } from '../../src/lib/sims/models/blocks'
+import { useProgress } from '../../src/lib/progress'
 import { buildRegistry } from '../../src/lib/sims/registry'
 import type { Observation, SimTaskDef } from '../../src/lib/sims/types'
 import { MiniEvent, installDom, type DomKit, type MiniElement } from '../dom/mini-dom'
@@ -358,5 +361,73 @@ describe('the explorer reports what each task asks about', () => {
     await dom.act(() => thumb?.dispatchEvent(new MiniEvent('keydown', { bubbles: true, cancelable: true, key: 'Home' })))
     expect(seen.at(-1)).toEqual({ key: 'blk.sweep-tail-4', value: 0, unit: 'tokens' })
     await page.unmount()
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* Old completions                                                      */
+/* ------------------------------------------------------------------ */
+
+describe('an earlier click-through completion still shows (the nine tasks of sim-allocator and the block-table explorer)', () => {
+  const NINE = [...ALLOCATOR_OUTCOME_TASKS, ...BLOCK_TABLE_EXPLORER_TASKS]
+  const OLD = 'You finished the old click-through of this task'
+
+  /** A host for one task, and the panel mounted in it. */
+  const panel = async (task: SimTaskDef) => {
+    const bus = createObservationBus()
+    const host: SimHostInternal = {
+      simId: task.simId,
+      mode: 'embed',
+      machine: task.machine,
+      initialConfig: null,
+      writeConfig: () => {},
+      selectMachine: () => {},
+      observe: bus.emit,
+      taskIds: [task.id],
+      bus,
+      finished: createFinishedStore(),
+    }
+    return dom.mount(createElement(SimHostContext.Provider, { value: host }, createElement(TaskPanel, { task, host })))
+  }
+
+  /** Mark `ids` done in the progress store's view of the sim, and put the store back afterwards. */
+  const withDone = async (simId: string, ids: string[], run: () => Promise<void>) => {
+    const before = useProgress.getState().sims
+    useProgress.setState({ sims: { ...before, [simId]: { visits: 0, tasksDone: ids } } })
+    try {
+      await run()
+    } finally {
+      useProgress.setState({ sims: before })
+    }
+  }
+
+  test('each task names the id it replaced, and the panel says so when that id is in the progress store', async () => {
+    for (const task of NINE) {
+      expect(task.legacyId, task.id).toBeDefined()
+      await withDone(task.simId, [task.legacyId as string], async () => {
+        const page = await panel(task)
+        expect(page.container.textContent, task.id).toContain(OLD)
+        await page.unmount()
+      })
+    }
+  })
+
+  test('without the old completion, or with another task\'s, the line is not shown', async () => {
+    const [first, second] = BLOCK_TABLE_EXPLORER_TASKS
+    for (const done of [[], [second.legacyId as string], ['blk.share']]) {
+      await withDone('sim-kv', done, async () => {
+        const page = await panel(first)
+        expect(page.container.textContent).not.toContain(OLD)
+        await page.unmount()
+      })
+    }
+  })
+
+  test('the retired ids are not in any registry list, yet the completion is read from the store', async () => {
+    const r = buildRegistry({
+      '/src/components/sims/allocator.tasks.ts': { ALLOCATOR_OUTCOME_TASKS },
+      '/src/components/sims/blockTableExplorer.tasks.ts': { BLOCK_TABLE_EXPLORER_TASKS },
+    })
+    for (const task of NINE) expect(r.byId(task.legacyId as string), task.legacyId).toBeUndefined()
   })
 })

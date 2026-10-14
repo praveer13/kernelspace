@@ -90,6 +90,8 @@ export default function BlockTableExplorer() {
   const [preemptResults, setPreemptResults] = useState<Partial<Record<'swap' | 'recompute', number>>>({})
   const tickRef = useRef(0)
   const [renderTick, setRenderTick] = useState(0)
+  /** The control that opened the preemption dialog; the dialog has no trigger of its own, so focus is handed back to it. */
+  const openerRef = useRef<HTMLElement | null>(null)
 
   const { pool } = state
   // The tables as the stage draws them: a name and a colour per sequence (requests past D share a grey).
@@ -203,6 +205,7 @@ export default function BlockTableExplorer() {
   /* ---------------- preemption ---------------- */
   const beginPreempt = useCallback(
     (needed: number) => {
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
       setPreempt({ open: true, needed })
       log(bump(), 'PREEMPT', `free queue exhausted — choose victim and policy`, 'warn')
     },
@@ -223,6 +226,7 @@ export default function BlockTableExplorer() {
       mode === 'swap' ? 'ok' : 'warn',
     )
     observe({ key: OBSERVE.preemptFreed(victimId), value: out.freed, unit: 'blocks' })
+    log(t, 'OBSERVE', `${out.freed} block(s) returned to the free queue (${OBSERVE.preemptFreed(victimId)})`, 'ok')
     if (out.admitted === null) {
       log(t, 'ALLOC', 'still not enough blocks after preemption — pick another victim', 'err')
       setPreempt((p) => ({ ...p, victimId: undefined }))
@@ -409,7 +413,16 @@ export default function BlockTableExplorer() {
               if (!open) setPreempt({ open: false, needed: 0 })
             }}
           >
-            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto bg-surface-1 p-4 sm:max-w-md sm:p-5">
+            <DialogContent
+              className="max-h-[calc(100dvh-2rem)] overflow-y-auto bg-surface-1 p-4 sm:max-w-md sm:p-5"
+              onCloseAutoFocus={(e) => {
+                const opener = openerRef.current
+                if (opener?.isConnected) {
+                  e.preventDefault()
+                  opener.focus()
+                }
+              }}
+            >
               <DialogHeader className="text-left">
                 <DialogTitle className="flex items-center gap-2 font-display text-[15px] font-semibold text-text-1">
                   <Cpu size={18} className="text-danger" />
