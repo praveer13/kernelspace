@@ -9,13 +9,19 @@ import ShareString from '@/components/daily/ShareString'
 import { localDateKey } from '@/lib/economy'
 import { describeFleetError, openIncidentSession, type IncidentClientSession } from '@/lib/fleet-session'
 import { useProgress } from '@/lib/progress'
+import { useSlots } from '@/pages/fleet/slots'
 import {
   DAILY_MINUTES,
   HYPOTHESIS_OPTIONS,
+  boxHashes,
+  dailyBoxes,
   dailyIncident,
   dailyNumber,
   dailyPlayed,
+  dailySlotBytes,
   dailySource,
+  engineLine,
+  ownBoxes,
   readingHeadline,
   recordDaily,
   shareString,
@@ -25,14 +31,14 @@ import {
   withHypothesis,
   withProbe,
   withWait,
+  type DailyBox,
   type FlowRun,
   type FlowState,
 } from '@/lib/world/daily'
 import type { Hypothesis as HypothesisId, FixId, ProbeId } from '@/lib/world/incident-spec'
-import type { FleetSlotBytes, IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
+import type { IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
 
-/** The reference drivers in every slot. 2b-21 fills these from the learner's installed engine. */
-const NO_SLOTS: FleetSlotBytes = { sched: null, mgr: null, queue: null }
+const BUTTON_QUIET = 'min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright'
 
 type Phase = 'opening' | 'play' | 'debrief' | 'failed'
 
@@ -45,8 +51,14 @@ const hypothesisName = (h: HypothesisId): string => HYPOTHESIS_OPTIONS.find((o) 
  * date, the session and the record; the flow components take the session and the incident's source as props, so
  * Act IV's drills (2b-17) play the same flow on a fresh seed.
  *
+ * Your engine (§9.7, 2b-21): the session opens on the modules installed in your scheduler, block manager, intake and
+ * prefix-router slots (`useSlots`), and the debrief says which boxes were yours. The boxes are read once, when the
+ * session opens, so installing something in another tab mid-incident changes the next attempt and not this one. A
+ * module that stops responding ends the attempt with its error card, and "Play on the reference engine" runs the same
+ * Daily without your modules, so a broken install never locks the Daily out.
+ *
  * Recording: the first completed attempt on a date writes one `incident` event (the Daily's seed is public, so
- * it is graded practice); a replay is practice and writes nothing.
+ * it is graded practice), naming the hashes of your modules that ran; a replay is practice and writes nothing.
  */
 export default function Daily() {
   // The date is read once per visit; a page left open past midnight keeps yesterday's incident until reloaded.
@@ -65,6 +77,14 @@ export default function Daily() {
   /** this attempt wrote the date's event */
   const [wrote, setWrote] = useState(false)
   const played = useProgress((s) => dailyPlayed({ getState: () => s }, date))
+  /** your installed modules are read before the incident opens (their bytes load from the components store) */
+  const ready = useSlots((s) => s.ready)
+  const installed = useSlots((s) => s.installed)
+  /** play without your modules: the fallback after one fails, and a choice for a replay */
+  const [reference, setReference] = useState(false)
+  /** the four boxes of the attempt in play: whose they were */
+  const [boxes, setBoxes] = useState<DailyBox[]>([])
+  const canUseYours = useMemo(() => ownBoxes(dailyBoxes(installed)).length > 0, [installed])
 
   const fail = useCallback((e: unknown) => {
     setFailure(describeFleetError(e, 'The incident stopped'))
@@ -72,9 +92,14 @@ export default function Daily() {
   }, [])
 
   useEffect(() => {
+    if (!ready) return
     let live = true
     let opened: IncidentClientSession | null = null
-    openIncidentSession({ mode: 'incident', spec, slots: NO_SLOTS }).then(
+    // read when the session opens: a module installed mid-incident belongs to the next attempt
+    const mine = useSlots.getState().installed
+    // named before the open, so a module that traps while the incident warms up still offers the reference engine
+    setBoxes(dailyBoxes(mine, reference))
+    openIncidentSession({ mode: 'incident', spec, slots: dailySlotBytes(mine, reference) }).then(
       (s) => {
         if (!live) {
           s.close()
@@ -93,7 +118,7 @@ export default function Daily() {
       live = false
       opened?.close()
     }
-  }, [spec, attempt, fail])
+  }, [spec, attempt, ready, reference, fail])
 
   const run = useCallback<FlowRun>(
     async (command) => {
@@ -118,7 +143,8 @@ export default function Daily() {
     hadHypothesis.current = has
   }, [flow?.hypothesis])
 
-  function restart() {
+  function restart(onReference = reference) {
+    setReference(onReference)
     setSession(null)
     setFlow(null)
     setWrote(false)
@@ -153,13 +179,14 @@ export default function Daily() {
 
   const onResult = useCallback(
     (result: IncidentFinish) => {
-      setWrote(recordDaily(useProgress, date, spec, result))
+      setWrote(recordDaily(useProgress, date, spec, result, boxHashes(boxes)))
       setAnnouncement('The debrief is ready.')
     },
-    [date, spec],
+    [date, spec, boxes],
   )
 
   const open = phase === 'play' && flow !== null && !flow.ended
+  const onMyEngine = boxes.some((b) => b.own)
   return (
     <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12" data-page="daily" data-phase={phase} data-daily-date={date}>
       <p className="section-label">0x00 — daily</p>
@@ -167,6 +194,11 @@ export default function Daily() {
       <p className="mt-2 text-body-sm text-text-2">
         #{number} · {date} · about {DAILY_MINUTES} min. One new incident each day, the same one for everybody on your date.
       </p>
+      {session && phase !== 'failed' && canUseYours && (
+        <p className="mt-1 text-body-sm text-text-2" data-engine-line data-on={onMyEngine ? 'yours' : 'reference'}>
+          {onMyEngine ? `Running on ${engineLine(ownBoxes(boxes).length)}.` : 'Running on the reference engine.'}
+        </p>
+      )}
       {played && !wrote && phase !== 'failed' && (
         <p className="mt-3 rounded-md border border-line bg-surface-1 p-3 text-body-sm text-text-2" data-practice>
           You have played today&rsquo;s Daily. This run is practice: it writes nothing to your record.
@@ -185,9 +217,14 @@ export default function Daily() {
             <h2 className="font-display text-h3 text-text-1">{failure.title}</h2>
             <p className="mt-2 text-body-sm text-text-2">{failure.detail}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={restart} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground">
+              <button type="button" onClick={() => restart()} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground">
                 Try again
               </button>
+              {boxes.some((b) => b.own) && !reference && (
+                <button type="button" onClick={() => restart(true)} className={BUTTON_QUIET} data-play-reference>
+                  Play on the reference engine
+                </button>
+              )}
               <Link to="/fleet" className="inline-flex min-h-11 items-center text-body-sm text-info underline underline-offset-2">
                 Run the fleet yourself
               </Link>
@@ -223,21 +260,22 @@ export default function Daily() {
               </>
             )}
             {phase === 'debrief' && (
-              <Debrief session={session} source={source} flow={flow} busy={busy} run={run} onResult={onResult}>
+              <Debrief session={session} source={source} flow={flow} busy={busy} run={run} boxes={boxes} onResult={onResult}>
                 {(result) => (
                   <>
-                    <ShareString text={shareString(number, result.probes.length, result.burn)} />
+                    <ShareString text={shareString(number, result.probes.length, result.burn, onMyEngine)} />
                     <p className="text-body-sm text-text-2" data-record-note>
                       {wrote ? 'Recorded as today’s Daily.' : 'Practice replay: nothing was written to your record.'}
                     </p>
                     <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={restart}
-                        className="min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright"
-                      >
+                      <button type="button" onClick={() => restart()} className={BUTTON_QUIET}>
                         Replay as practice
                       </button>
+                      {canUseYours && (
+                        <button type="button" onClick={() => restart(!reference)} className={BUTTON_QUIET} data-switch-engine>
+                          {reference ? 'Replay on your engine' : 'Replay on the reference engine'}
+                        </button>
+                      )}
                       <Link to="/today" className="inline-flex min-h-11 items-center text-body-sm text-info underline underline-offset-2">
                         Back to Today
                       </Link>

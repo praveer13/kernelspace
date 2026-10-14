@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { localDateKey } from '@/lib/economy'
 import { useProgress } from '@/lib/progress'
-import { DAILY_MINUTES, dailyNumber, dailyRef } from '@/lib/world/daily'
+import { readSlots } from '@/lib/engine/slots'
+import { DAILY_MINUTES, dailyNumber, dailyRef, engineLine, installedBoxCount } from '@/lib/world/daily'
 
 /**
  * The Fleet Daily card on Today (docs/specs/wave-2.md §9.7, §2.3): "Fleet Daily #47 · about 8 min". It sits under
@@ -10,8 +11,9 @@ import { DAILY_MINUTES, dailyNumber, dailyRef } from '@/lib/world/daily'
  * imports only the Daily's pure module, never the engine. Once today's Daily has been played, the card says so and
  * offers a practice replay (replays write nothing).
  *
- * "your engine: N of 4 boxes" joins the line when the Daily runs on your components (2b-21); until then the Daily
- * runs the reference engine and the card does not claim otherwise.
+ * "your engine: N of 4 boxes" joins the line once a scheduler, block manager, intake queue or prefix router is
+ * installed (2b-21): the Daily runs on them. It reads the working record `engine:slots` and not the engine store, so
+ * the card stays light.
  */
 export interface DailyCardProps {
   /** Where it sits: under the done card's result, or in the empty state. */
@@ -23,11 +25,12 @@ export default function DailyCard({ variant }: DailyCardProps) {
   const [date] = useState(() => localDateKey())
   const played = useProgress((s) => (s.aggregate.incidents[dailyRef(date)]?.n ?? 0) > 0)
   const number = dailyNumber(date)
+  const boxes = useProgress((s) => installedBoxCount(readSlots(s.working['engine:slots'])))
   return (
     <section aria-labelledby={`daily-card-${variant}`} className="rounded-lg border border-line bg-surface-1 p-4" data-daily-card={variant} data-played={played}>
       <p className="font-mono text-[11px] uppercase text-text-3">Fleet Daily</p>
       <h2 id={`daily-card-${variant}`} className="mt-1 font-display text-[17px] text-text-1">
-        Fleet Daily #{number} · about {DAILY_MINUTES} min
+        Fleet Daily #{number} · about {DAILY_MINUTES} min{boxes > 0 ? ` · ${engineLine(boxes)}` : ''}
       </h2>
       <p className="mt-1 text-body-sm text-text-2">
         {played

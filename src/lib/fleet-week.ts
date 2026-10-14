@@ -22,8 +22,10 @@ import {
   type SchedAction,
   type SchedView,
 } from '@/lib/fleet-model'
-import type { FleetActMeta, IncidentData, IncidentResult } from '@/lib/ledger/types'
+import { KIND_SLOT } from '@/lib/engine/slots'
+import type { FleetActMeta, FleetRunData, FleetRunResult, IncidentData, IncidentResult } from '@/lib/ledger/types'
 import { incidentScore } from '@/lib/ledger/fold'
+import { sha256Hex } from '@/lib/ledger/stable'
 import { freshSeed, splitmix32u } from '@/lib/rng'
 import { kcsFor, type FinishedIncident, type IncidentSource } from '@/lib/world/daily'
 import { FAULT_LABELS, INCIDENT_FAULTS, fixFor, generateIncident, type FixId, type IncidentFault, type IncidentSpec } from '@/lib/world/incident-spec'
@@ -44,6 +46,11 @@ export interface ActResult {
   seed?: number | null
   /** An uncounted practice run: informational, not a verdict on the act. */
   practice?: boolean
+  /**
+   * The run's numbers for the ledger's `fleet-run` event (docs/specs/wave-2.md §10.6). Present only when one of
+   * your components took part in Act I or II: an all-reference run is not evidence of your work.
+   */
+  run?: { goodput: number; refGoodput: number; ttftP95?: number }
 }
 
 export interface MeasurementEvidence {
@@ -206,8 +213,8 @@ export interface FleetBaseline {
   deathFired: boolean
 }
 
-/** The all-reference fleet (JSQ) through this seed's node death and flash crowd: Act II's baseline. */
-export function referenceFleet(seeds: FleetWeekSeeds, workers: 2 | 4): FleetBaseline {
+/** The all-reference fleet (JSQ unless `router` says otherwise) through this seed's node death and flash crowd: Act II's baseline. */
+export function referenceFleet(seeds: FleetWeekSeeds, workers: 2 | 4, router: RouterKind = 'jsq'): FleetBaseline {
   const engines = Array.from(
     { length: workers },
     () =>
@@ -216,7 +223,7 @@ export function referenceFleet(seeds: FleetWeekSeeds, workers: 2 | 4): FleetBase
         drainPerTick: 6,
       }),
   )
-  const cluster = new Cluster(traceFor(seeds), engines, 'jsq')
+  const cluster = new Cluster(traceFor(seeds), engines, router)
   const faults = makeFaultInjector(act2Faults(seeds, workers), faultRng(seeds))
   cluster.disrupt = faults.disrupt
   let guard = 0
@@ -237,7 +244,34 @@ async function buildStack(modules: ModuleBytes, numBlocks: number, blockSize: nu
   return { sched, mgr, queue }
 }
 
+/** The kinds of module in `modules`: the components of yours that take part in a run. */
+export const ownKindsOf = (modules: ModuleBytes): LabKind[] => (Object.keys(KIND_SLOT) as LabKind[]).filter((k) => modules[k] !== null)
+
+/**
+ * What Act I says to an all-reference run (docs/specs/wave-2.md §10.6): it is practice, and how to get a
+ * component of your own into the engine. A module is installed on ForgeLab after a fresh-seed pass of its lab, or
+ * by dropping it on the Fleet page, which runs the same check.
+ */
+export const INSTALL_HINT =
+  'practice: install one of your components to pass Act I. Pass a lab on fresh seeds in the Forge (scheduler, block manager or intake queue) and press "Install in your engine", or drop that module on the Fleet page; then run the trace again.'
+
 /* ------------------------------ ACT 1 ------------------------------ */
+
+/**
+ * Act I's verdict (§10.6). It races YOUR engine: against itself the reference ties, so an all-reference run proves
+ * nothing and passes nothing, however close the goodputs are. With a component of yours in it the bar is the
+ * old one: goodput within 3 points of the reference.
+ */
+export function act1Verdict(goodput: number, refGoodput: number, anyStudent: boolean): { pass: boolean; detail: string } {
+  if (!anyStudent) return { pass: false, detail: INSTALL_HINT }
+  const pass = goodput >= refGoodput - 3
+  return {
+    pass,
+    detail: pass
+      ? 'your engine holds the objective function against the reference stack.'
+      : `the gap is the lesson: ${refGoodput - goodput} points. Revisit lab 06's policy shape — guard, size-awareness, headroom.`,
+  }
+}
 
 /** The Engine: your stack vs the reference on the fleet trace. */
 export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onProgress?: ProgressFn): Promise<ActResult> {
@@ -263,17 +297,13 @@ export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onPro
   const myG = mine.goodput(REQ_COUNT)
   const refG = ref.goodput(REQ_COUNT)
   const ms = mine.stats()
-  const pass = myG >= refG - 3
-  const anyStudent = modules.sched || modules.mgr || modules.queue
+  const anyStudent = ownKindsOf(modules).length > 0
+  const { pass, detail } = act1Verdict(myG, refG, anyStudent)
   return {
     pass,
     score: Math.min(1, myG / Math.max(1, refG)),
     headline: `goodput ${myG}% vs reference ${refG}%`,
-    detail: pass
-      ? anyStudent
-        ? 'your engine holds the objective function against the reference stack.'
-        : 'all-reference run (upload your modules to race your own code).'
-      : `the gap is the lesson: ${refG - myG} points. Revisit lab 06's policy shape — guard, size-awareness, headroom.`,
+    detail,
     metrics: [
       ['your goodput', `${myG}%`],
       ['reference goodput', `${refG}%`],
@@ -286,6 +316,7 @@ export async function runAct1(modules: ModuleBytes, seeds: FleetWeekSeeds, onPro
       ['graded seed', seedLabel(seeds.seed)],
     ],
     seed: seeds.seed,
+    ...(anyStudent ? { run: runNumbers(myG, refG, mine.ttftP95()) } : { practice: true }),
   }
 }
 
@@ -337,6 +368,8 @@ export async function runAct2(
   const agg = cluster.aggregate()
   const { total, completedPct, goodput } = fleetOutcome(agg, faults.injected())
   const pass = completedPct >= ACT2_BAR.completedPct && goodput >= ACT2_BAR.goodput
+  // With a component of yours in the fleet, the ledger also gets the all-reference fleet on this topology and seed to compare with
+  const own = ownKindsOf(modules).length > 0
   return {
     pass,
     score: Math.min(1, (completedPct / 100) * 0.5 + Math.min(1, goodput / 60) * 0.5),
@@ -357,7 +390,52 @@ export async function runAct2(
       ...faults.events.map((e) => ['event', e] as [string, string]),
     ],
     seed: seeds.seed,
+    ...(own ? { run: runNumbers(goodput, referenceFleet(seeds, choice.workers, choice.router).goodput, agg.ttftP95) } : {}),
   }
+}
+
+/* --------------------- Acts I and II as `fleet-run` events --------------------- */
+
+/** A run's numbers for the ledger; `ttftP95` is left out when the run had none to report (the codec wants finite numbers). */
+function runNumbers(goodput: number, refGoodput: number, ttftP95: number): NonNullable<ActResult['run']> {
+  return { goodput, refGoodput, ...(Number.isFinite(ttftP95) ? { ttftP95 } : {}) }
+}
+
+/** The modules of a run as the ledger names them: slot, lab and content hash of the bytes that ran. */
+export async function runComponents(slots: Record<LabKind, { bytes: ArrayBuffer; lab: string } | null>): Promise<FleetRunData['components']> {
+  const out: FleetRunData['components'] = []
+  for (const kind of Object.keys(KIND_SLOT) as LabKind[]) {
+    const m = slots[kind]
+    if (m) out.push({ slot: KIND_SLOT[kind], labId: m.lab, sha256: await sha256Hex(m.bytes) })
+  }
+  return out
+}
+
+/**
+ * The `fleet-run` event of an Act I or II run (`fleet:act1`, `fleet:act2`), or null when there is nothing to
+ * record: no component of yours took part, or the run carried no numbers. Seeds drawn at run time are `fresh`
+ * (the façade grades them `unseen`); the fixed practice scenario is `practice`.
+ */
+export function fleetRunFor(mode: 'act1' | 'act2', result: ActResult, components: FleetRunData['components']): FleetRunResult | null {
+  if (!result.run || components.length === 0) return null
+  const fresh = result.seed !== undefined && result.seed !== null
+  return {
+    ...(fresh ? { seed: result.seed as number } : {}),
+    data: { v: 1, mode, components, seeds: fresh ? 'fresh' : 'practice', goodput: result.run.goodput, refGoodput: result.run.refGoodput, ...(result.run.ttftP95 === undefined ? {} : { ttftP95: result.run.ttftP95 }) },
+  }
+}
+
+/** The slice of the progress store `recordActRun` writes. */
+export interface ActRunStore {
+  getState(): { recordFleetRun(r: FleetRunResult): void }
+}
+
+/** Write the run's `fleet-run` event. Returns whether it wrote. */
+export function recordActRun(store: ActRunStore, mode: 'act1' | 'act2', result: ActResult, components: FleetRunData['components']): boolean {
+  const run = fleetRunFor(mode, result, components)
+  if (!run) return false
+  store.getState().recordFleetRun(run)
+  return true
 }
 
 /**
