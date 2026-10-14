@@ -12,7 +12,9 @@ const lesson: Lesson = {
   blocks: [
     {
       type: 'prose',
-      md: `Python and Java decide at run time whether an object is still reachable. Rust decides at compile time whether a name may still touch a value, and it keeps those books with three permissions. At every line, each path (a variable such as \`s\`, or a place inside one such as \`s.0\`) holds some of them:
+      md: `## Read, Write and Own on every path
+
+Python and Java decide at run time whether an object is still reachable. Rust decides at compile time whether a name may still touch a value, and it keeps those books with three permissions. At every line, each path (a variable such as \`s\`, or a place inside one such as \`s.0\`) holds some of them:
 
 - **Read (R):** the path can be read: printed, compared, lent out as a view.
 - **Write (W):** the path can be changed in place. A plain \`let\` does not grant it; \`let mut\` does.
@@ -57,20 +59,20 @@ print(prompt, queued)                 # runs: reference counting keeps it alive`
       },
       align: [
         {
-          q: 'The familiar version above runs, because both names refer to one live object. In the Rust version, which line does the compiler reject, and why?',
+          q: 'In Java and Python the same three steps run and print both strings, because the two names refer to one live object. In the Rust version, which line does the compiler reject, and why?',
           options: [
-            'Line 2, because a String has one Own and the assignment would hand it to two bindings at once',
-            'Line 3, because the move on line 2 left prompt with no permissions and printing needs Read',
-            'Line 3, because queued holds no Write permission and printing has to write the text out',
-            'Line 1, because String::from takes Own of the literal and nothing is left to assign to prompt',
+            'Line 2: a String has one Own, and the assignment would hand it to two bindings at once',
+            'Line 3: queued holds no Write, and printing has to write the text out to the terminal',
+            'Line 3: the earlier move left prompt holding nothing, so printing it needs Read',
+            'Line 1: String::from takes Own of the literal, so nothing is left to assign to prompt',
           ],
-          correct: [1],
+          correct: [2],
           explanation:
             'The move on line 2 takes Read and Own from prompt and gives them to queued. Line 2 itself is fine; line 3 needs Read on prompt, which no longer exists.',
           why: [
             'Line 2 is accepted. A move needs Read and Own on its source, and prompt holds both there; the assignment is how the one Own changes hands.',
-            'Right: the move on line 2 is legal because prompt held Read and Own then. It leaves prompt with nothing, so printing it on line 3 lacks Read.',
             'Printing reads and never writes, so queued does not need Write. The rejected path is prompt, which has lost Read, not queued.',
+            'Right: the move on line 2 is legal because prompt held Read and Own then. It leaves prompt with nothing, so printing it on line 3 lacks Read.',
             'String::from builds a new owned String and needs nothing from the literal that Rust would reject. Line 1 compiles.',
           ],
           kcs: ['r.permissions'],
@@ -121,8 +123,7 @@ Ask which permission the callee really needs. If it is only Read, lend it. A sig
 
 let batch = vec![12, 40, 7];
 let a = total(batch.clone());      // copies the buffer so total can own it
-let b = total(batch.clone());      // copies it again, only to read it
-// better: fn total(batch: &[u32]) -> u32, then total(&batch) twice, no copy`,
+let b = total(batch.clone());      // copies it again, only to read it`,
       alt: {
         java: `static int total(List<Integer> batch) {
     return batch.stream().mapToInt(Integer::intValue).sum();
@@ -140,20 +141,20 @@ b = total(batch)`,
       },
       align: [
         {
-          q: 'The familiar version passes batch twice with no copy. Which Rust change gets the same behaviour, and what does it keep?',
+          q: 'In Java and Python, total(batch) runs twice on the same list, because each call receives a reference to it and nothing is copied. Which change to the Rust gets the same behaviour, and what does batch keep?',
           options: [
-            'Clone before each call, because a clone moves nothing and the copy costs the program nothing',
-            'Declare batch with let mut, because the Write it gains lets total take the vector twice',
-            'Make total borrow the vector, so it needs the Read permission and batch keeps what it held',
-            'Call drop(batch) after the first call, because the second call then gets a fresh vector',
+            'Clone before each call: a clone moves nothing, so the copy costs the program nothing at the call',
+            'Declare batch with let mut: the Write it gains lets total take the vector twice',
+            'Make total take a view of the vector: it asks for Read, and batch keeps what it held',
+            'Call drop(batch) after the first call: the second call then gets a fresh vector',
           ],
           correct: [2],
           explanation:
             'total only reads, so it should ask for Read. Lending a view leaves batch with everything it had and copies no data; clone buys an owner the function never needed.',
           why: [
-            'A clone does allocate and copy the whole buffer on every call, and that is the cost the familiar version never pays. Moving nothing does not make it free.',
+            'A clone does allocate and copy the whole buffer on every call, and that is the cost the shared-reference version never pays. Moving nothing does not make it free.',
             'Write is not the missing permission. A mut binding adds W, but a call that takes the Vec by value still needs O, which the first call took.',
-            'Right: the familiar code shares one object because the callee only reads. In Rust that is a read-only view, which asks for R alone and leaves the owner untouched.',
+            'Right: the other languages share one object because the callee only reads. In Rust that is a read-only view, which asks for R and leaves the owner untouched.',
             'Dropping batch destroys it, and drop gives no fresh vector back. After it the name holds no permissions, so the second call fails too.',
           ],
           kcs: ['r.clone-copy-drop'],
@@ -197,7 +198,7 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
             'The buffer being in memory is not what the compiler checks. It tracks permissions, and the move removed Read from a along with the rest.',
             'Right: the move leaves a with no permissions, and b holds Read and Own. A later use of a needs Read and fails with E0382.',
             'Assignment of a String does not duplicate it. Only a clone() builds a second buffer, and two paths holding Own would mean two drops.',
-            'A move removes all of the source\'s permissions, not just Own. Write is gone too, and so is the right to read.',
+            'A move removes every permission the source held, not just Own. A plain let never granted Write, so what a loses is its Read as well as its Own.',
           ],
           kcs: ['r.ownership-moves', 'r.permissions'],
         },
@@ -221,21 +222,21 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
           kcs: ['r.clone-copy-drop', 'r.permissions'],
         },
         {
-          q: 'A function total(batch: Vec<u32>) reads its argument and nothing else, and a second call fails with E0382. What is a better repair than total(batch.clone())?',
+          q: 'A worker thread must sort the tokens while the handler keeps the original order to compare against afterwards. Why is handing the worker tokens.clone() the right fix here, when it was the wrong one for total(batch)?',
           options: [
-            'Declare batch with let mut, so it gains the Write permission the second call needs',
-            'Move batch into a second let binding first, so each call can take an Own',
-            'Call drop(batch) after the first call, so the second call gets a fresh Vec',
-            'Change total to borrow the vector, so it asks for Read and batch keeps what it had',
+            'Two buffers are wanted, since the worker needs its own W and O and the handler needs the original',
+            'A clone is free for the worker until it writes, because the copy is made lazily on the first write',
+            'A clone takes Own of tokens, so the handler hands the buffer over and the worker becomes its owner',
+            'E0382 always means a second owner is wanted, so cloning is the repair for every use after a move',
           ],
-          correct: [3],
+          correct: [0],
           explanation:
-            'The callee needs Read, so a view fits and copies nothing. Write is not the missing permission, and a clone buys an owner the function never needed.',
+            'Clone is the right tool when two independent owners are the goal. Sorting needs W on a buffer, and the handler still needs the unsorted original, so no loan of one buffer can serve both. total(batch) only needed Read, which a view supplies.',
           why: [
-            'The second call fails because the first took Own, not because Write is missing. mut adds W and cannot restore a permission the move took.',
-            'A value has one owner, so moving it into a second binding leaves the first empty. Two calls cannot each take the same Own.',
-            'drop(batch) is itself a move that ends the value. Afterwards batch holds nothing, so the second call would fail again.',
-            'Right: the function never needed to own anything. A read-only view asks for Read alone, so the caller keeps its permissions and nothing is copied.',
+            'Right: sorting writes, and a loan of the handler\'s buffer would take that buffer away from the handler. The job wants two buffers with an owner each, which is what a clone builds, at the price of an allocation and a copy.',
+            'Rust has no lazy copy for Vec. clone allocates and copies the whole buffer immediately, whether or not the worker ever writes.',
+            'clone needs only Read on its source, so the handler keeps everything it held. If the handler gave up Own, it would have nothing to compare against.',
+            'Not every E0382 wants a clone. When the callee only needs to read, as in total(batch), a read-only view fixes it without a copy.',
           ],
           kcs: ['r.clone-copy-drop', 'r.permissions'],
         },

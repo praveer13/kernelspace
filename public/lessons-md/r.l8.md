@@ -42,12 +42,12 @@ batch.append(64)
 print(first)
 ```
 
-**Align 1. The familiar version of this code compiles and prints 8. In the Rust version, which line does the compiler reject, and which permission is missing?**
+**Align 1. In Java and Python the same four steps (take the first element, add 64 to the list, print the element) compile and print 8. In the Rust version, which line does the compiler reject, and which permission is missing?**
 
-- (o1) Line 3, where push needs W on batch but the borrow on line 2 left it with R
-- (o2) Line 2, where borrowing &batch[0] needs O on batch, and a plain let never grants O
-- (o3) Line 3, where push needs R on batch and the borrow took every permission away
-- (o4) Line 4, where println needs W on first because it formats the value it prints
+- (o1) Line 3, where push needs R on batch, and the borrow on line 2 took R, W and O away
+- (o2) Line 2, where borrowing &batch[0] needs W on batch, and the let mut has not granted it yet
+- (o3) Line 3, where push needs W on batch, but the borrow on line 2 left it with R
+- (o4) Line 4, where println needs W on first, because it formats the value it prints
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
 
@@ -110,11 +110,11 @@ for (String entry : log) {
 }
 ```
 
-**Align 1. In Java the equivalent mistake, adding to a list while iterating it, throws ConcurrentModificationException when the loop runs. In this Rust version, what happens and when?**
+**Align 1. In Java, adding to a list while iterating over it throws ConcurrentModificationException when the loop runs. In this Rust version, where a Ref guard is alive when borrow_mut asks for the Vec, what happens and when?**
 
-- (o1) The compiler rejects line 5 with E0502, because seen still holds a shared borrow of log
-- (o2) It compiles, then panics on line 5 with BorrowMutError since a Ref guard is still alive
-- (o3) It compiles and runs, and the push on line 5 lands in the Vec while seen is still alive
+- (o1) The compiler rejects line 5 with E0502, because seen still holds a Ref guard on the log cell
+- (o2) It compiles, then panics on line 5 with BorrowMutError because a Ref guard is still alive
+- (o3) It compiles and runs, and the push on line 5 lands in the Vec while `seen` is still alive now
 - (o4) It compiles, then panics on line 4 because borrow() needs the cell to be empty first
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
@@ -128,7 +128,7 @@ In the diagram no line is marked rejected. Every use of `log` finds the R it nee
 | 4 | `seen` | 1 reader | `borrow_mut` needs 0 readers |
 | 5 | none new | 1 reader | panic: BorrowMutError |
 
-The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The [Error Museum](/errors) keeps BorrowMutError beside the compile-time codes, with the wrong fix that tempts people and the right one.
+The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The [Error Museum](/errors#BorrowMutError) keeps BorrowMutError beside the compile-time codes, with the wrong fix that tempts people and the right one.
 
 ## Make the guard shorter
 
@@ -195,18 +195,18 @@ The [R8 Forge drill](/forge/rust-zero-r8) uses Cell for a counter, RefCell for a
 - (o3) borrow_mut waits until the guard is dropped, the way a Mutex lock would behave
 - (o4) The compiler reports E0502 on that line, since the guard took W and O away from log
 
-**Q3. What releases a std::sync::Mutex lock?**
+**Q3. A thread holds the MutexGuard from shared.lock().unwrap(). What ends its exclusive access, so that the next thread's lock() can return?**
 
-- (o1) Dropping the MutexGuard that lock() returned, at scope end or by an explicit drop(guard)
-- (o2) Calling unlock() on the Mutex when the critical section ends, as with a Java ReentrantLock
-- (o3) The scheduler when the holding thread calls sleep() in the critical section
-- (o4) The end of the statement that called lock(), whether or not the guard was bound to a name
+- (o1) Dropping the guard, at scope end or with drop(guard), which ends the O that held the lock
+- (o2) Calling unlock() on the Mutex, which hands the O of the data back, as with a Java ReentrantLock
+- (o3) The scheduler, when the holding thread calls sleep() inside the critical section
+- (o4) The end of the statement that called lock(), even when the guard was bound to a name
 
-**Q4. Which type lets a single-threaded counter of Copy values change through a shared reference, which holds R only, with no guard and no lock?**
+**Q4. Code holds R on a single-threaded counter of Copy values, through a shared reference, and must change it with no guard and no lock. Which type makes that compile?**
 
-- (o1) Cell<usize> that sets and gets the value by copy with no borrow tracking
-- (o2) Rc<usize> that shares ownership and lets each owner update the counter
-- (o3) RefCell<usize> that mutates through a shared reference and is the general choice
-- (o4) Arc<Mutex<usize>> that is the standard way to share a mutable counter
+- (o1) Cell<usize>, whose set and get need R and copy the value in and out
+- (o2) Rc<usize>, which shares ownership and lets each owner update the counter
+- (o3) RefCell<usize>, which mutates through a shared reference and is the general choice
+- (o4) Arc<Mutex<usize>>, which is the standard way to share a mutable counter
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._

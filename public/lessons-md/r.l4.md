@@ -32,7 +32,7 @@ println!("{}", scores.len());
 
 ---
 
-Read the table down the lines. **first** is the shared loan: while it lives, **scores** holds only R. Its last use is the **println!** on line 3, which is where **scores** gets W and O back, so the **push** on line 4 is allowed. **all** is the exclusive loan: **scores** holds nothing until **all**'s last use on line 6, and then everything returns. On line 7 even **scores** drops to nothing, because no later line uses it.
+Read the table down the lines. **first** is the shared loan: while it lives, **scores** holds only R. Its last use is the **println!** on line 3, which is where **scores** gets W and O back, so the **push** on line 4 is allowed. **all** is the exclusive loan: **scores** holds nothing until **all**'s last use on line 6, and then everything returns. Line 7 reads **scores** through **scores.len()**, which needs only R, and **scores** holds all three there. That is also its last use, so the row ends with **scores** holding nothing: a path loses what it holds after its last use, even a path that nothing borrows.
 
 References also cannot outlive the value they point to. Together these rules prevent iterator invalidation, dangling references, and data races.
 
@@ -66,12 +66,12 @@ for s in scores:
     scores.append(s)   # runs; the loop never ends, because the list keeps growing
 ```
 
-**Align 1. The loop in your own language compiles and misbehaves at run time (Java throws, Python never stops). The Rust loop is rejected at compile time. Which line does the compiler reject, and which permission is missing there?**
+**Align 1. In Java, adding to a list inside a for-each loop over it throws ConcurrentModificationException at run time, and in Python the loop never stops because the list keeps growing. The Rust loop is rejected at compile time. Which line does the compiler reject, and which permission is missing there?**
 
-- (o1) Line 3, scores.push(*s): scores keeps only R while the loop borrows it, and push needs W
-- (o2) Line 1, let mut scores: a Vec that is iterated later cannot hold W from the start
-- (o3) Line 2, for s in &scores: scores has no O left to lend, so the loop cannot borrow it
-- (o4) Line 3, scores.push(*s): *s lacks R, because the loop variable stops borrowing after one pass
+- (o1) Line 2, for s in &scores: scores has no O left to lend, so the loop cannot borrow it
+- (o2) Line 3, scores.push(*s): scores has only R while the loop borrows it, so push lacks W
+- (o3) Line 3, scores.push(*s): *s lacks R, because the loop variable stops borrowing after one pass
+- (o4) Line 1, let mut scores: a Vec that can never hold W from the start if it is iterated later
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
 
@@ -88,8 +88,8 @@ Prefer slice parameters over **&Vec<T>** and **&String**. The narrower type acce
 ---
 
 ```rust
-fn checksum(bytes: &[u8]) -> u64 {
-    bytes.iter().map(|&b| u64::from(b)).sum()
+fn checksum(values: &[i32]) -> i64 {
+    values.iter().map(|&v| i64::from(v)).sum()
 }
 
 fn clamp_first(values: &mut [i32], ceiling: i32) {
@@ -103,6 +103,7 @@ let tail = &values[1..];       // shared window
 let sum = checksum(tail);
 // tail is no longer used, so its borrow ends here
 clamp_first(&mut values, 5);
+println!("{sum} {values:?}");
 ```
 
 ---

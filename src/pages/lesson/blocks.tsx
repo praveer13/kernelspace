@@ -371,9 +371,14 @@ function CodeView({ block, lesson, alignStart }: { block: CodeBlockData; lesson:
   )
 }
 
-/** Alignment items are numbered across the lesson's code blocks in block order (`item:<lessonId>.align.<n>`). */
-function alignStartOf(lesson: Lesson, block: ContentBlock): number {
-  let n = 0
+/**
+ * The number of a code block's first alignment item. Items are numbered across the lesson's code blocks in block
+ * order from 1, the way scripts/item-pools.ts numbers them (`item:<lessonId>.align.<n>`), so the ledger ref the
+ * lesson records is the ref the gates and the analysis name.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- exported for tests/lesson/align.test.ts
+export function alignStartOf(lesson: Lesson, block: ContentBlock): number {
+  let n = 1
   for (const b of lesson.blocks) {
     if (b === block) return n
     if (b.type === 'code') n += b.align?.length ?? 0

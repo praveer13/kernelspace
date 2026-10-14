@@ -3,6 +3,8 @@
 _Track R: Rust Zero · ~36 min · kernelspace_
 
 > Every resource has one owner. Follow the obligation through moves and the borrow checker stops feeling supernatural.
+## Read, Write and Own on every path
+
 Python and Java decide at run time whether an object is still reachable. Rust decides at compile time whether a name may still touch a value, and it keeps those books with three permissions. At every line, each path (a variable such as `s`, or a place inside one such as `s.0`) holds some of them:
 
 - **Read (R):** the path can be read: printed, compared, lent out as a view.
@@ -52,12 +54,12 @@ queued = prompt                       # two names for one object
 print(prompt, queued)                 # runs: reference counting keeps it alive
 ```
 
-**Align 1. The familiar version above runs, because both names refer to one live object. In the Rust version, which line does the compiler reject, and why?**
+**Align 1. In Java and Python the same three steps run and print both strings, because the two names refer to one live object. In the Rust version, which line does the compiler reject, and why?**
 
-- (o1) Line 1, because String::from takes Own of the literal and nothing is left to assign to prompt
-- (o2) Line 2, because a String has one Own and the assignment would hand it to two bindings at once
-- (o3) Line 3, because queued holds no Write permission and printing has to write the text out
-- (o4) Line 3, because the move on line 2 left prompt with no permissions and printing needs Read
+- (o1) Line 1: String::from takes Own of the literal, so nothing is left to assign to prompt
+- (o2) Line 2: a String has one Own, and the assignment would hand it to two bindings at once
+- (o3) Line 3: the earlier move left prompt holding nothing, so printing it needs Read
+- (o4) Line 3: queued holds no Write, and printing has to write the text out to the terminal
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
 
@@ -100,7 +102,6 @@ fn total(batch: Vec<u32>) -> u32 {
 let batch = vec![12, 40, 7];
 let a = total(batch.clone());      // copies the buffer so total can own it
 let b = total(batch.clone());      // copies it again, only to read it
-// better: fn total(batch: &[u32]) -> u32, then total(&batch) twice, no copy
 ```
 
 **Java**
@@ -126,12 +127,12 @@ a = total(batch)                   # passes a reference, nothing is copied
 b = total(batch)
 ```
 
-**Align 1. The familiar version passes batch twice with no copy. Which Rust change gets the same behaviour, and what does it keep?**
+**Align 1. In Java and Python, total(batch) runs twice on the same list, because each call receives a reference to it and nothing is copied. Which change to the Rust gets the same behaviour, and what does batch keep?**
 
-- (o1) Clone before each call, because a clone moves nothing and the copy costs the program nothing
-- (o2) Declare batch with let mut, because the Write it gains lets total take the vector twice
-- (o3) Make total borrow the vector, so it needs the Read permission and batch keeps what it held
-- (o4) Call drop(batch) after the first call, because the second call then gets a fresh vector
+- (o1) Clone before each call: a clone moves nothing, so the copy costs the program nothing at the call
+- (o2) Declare batch with let mut: the Write it gains lets total take the vector twice
+- (o3) Make total take a view of the vector: it asks for Read, and batch keeps what it held
+- (o4) Call drop(batch) after the first call: the second call then gets a fresh vector
 
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
 
@@ -167,12 +168,12 @@ The [R3 Forge drill](/forge/rust-zero-r3) makes ownership cross function boundar
 - (o3) It needs Read on s, and returns a separate buffer with an owner, leaving s intact
 - (o4) It needs Write on s, and returns a shared handle to the buffer, leaving s counted
 
-**Q3. A function total(batch: Vec<u32>) reads its argument and nothing else, and a second call fails with E0382. What is a better repair than total(batch.clone())?**
+**Q3. A worker thread must sort the tokens while the handler keeps the original order to compare against afterwards. Why is handing the worker tokens.clone() the right fix here, when it was the wrong one for total(batch)?**
 
-- (o1) Change total to borrow the vector, so it asks for Read and batch keeps what it had
-- (o2) Declare batch with let mut, so it gains the Write permission the second call needs
-- (o3) Move batch into a second let binding first, so each call can take an Own
-- (o4) Call drop(batch) after the first call, so the second call gets a fresh Vec
+- (o1) E0382 always means a second owner is wanted, so cloning is the repair for every use after a move
+- (o2) Two buffers are wanted, since the worker needs its own W and O and the handler needs the original
+- (o3) A clone is free for the worker until it writes, because the copy is made lazily on the first write
+- (o4) A clone takes Own of tokens, so the handler hands the buffer over and the worker becomes its owner
 
 **Q4. At the end of a scope, which permission decides which binding runs Drop?**
 
