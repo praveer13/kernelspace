@@ -74,6 +74,16 @@ const sha = (v: unknown) => new Bun.CryptoHasher('sha256').update(JSON.stringify
 const PRACTICE: week.FleetWeekSeeds = { seed: null, trace: PRACTICE_SEED, faults: 0xfa17, deathPick: 0, deathTick: 400 }
 const NO_MODULES: week.ModuleBytes = { sched: null, mgr: null, queue: null }
 
+/**
+ * An act's output without the receipt `values` 3a-12 added (docs/specs/wave-3.md §10.1): they restate numbers the
+ * output already holds, so the hash below covers everything else, byte for byte, and stays the base commit's.
+ */
+function withoutValues<T extends { values?: unknown }>(r: T): Omit<T, 'values'> {
+  const { values: _values, ...rest } = r
+  void _values
+  return rest
+}
+
 /** Fleet and Fleet Week outputs with no FaultSpec v2 kind anywhere: what 2b-03 must not move. */
 async function existingRuns() {
   const out: Record<string, unknown> = {}
@@ -103,9 +113,9 @@ async function existingRuns() {
     out[`week/${i}/policy`] = week.policyBaselines(s)
     out[`week/${i}/fleet2`] = week.referenceFleet(s, 2)
     out[`week/${i}/fleet4`] = week.referenceFleet(s, 4)
-    out[`week/${i}/act1`] = await week.runAct1(NO_MODULES, s)
-    out[`week/${i}/act2`] = await week.runAct2(NO_MODULES, { workers: 2, router: 'rr' }, s)
-    out[`week/${i}/act3`] = week.evalAct3(s)
+    out[`week/${i}/act1`] = withoutValues(await week.runAct1(NO_MODULES, s))
+    out[`week/${i}/act2`] = withoutValues(await week.runAct2(NO_MODULES, { workers: 2, router: 'rr' }, s))
+    out[`week/${i}/act3`] = withoutValues(week.evalAct3(s))
   }
   return out
 }
@@ -119,7 +129,8 @@ async function existingRuns() {
  * 2b-21 made Act I pass only with a component of yours in the engine (§10.6): the three all-reference `runAct1`
  * results now read `pass: false`, `practice: true` and the install hint. Every number, the metrics, the Act II
  * results and `referenceFleet` were diffed against the previous sources and are unchanged; the hash was re-taken on
- * exactly that difference.)
+ * exactly that difference. 3a-12 added receipt `values` to the act outputs; `withoutValues` leaves them out, and the
+ * hash did not move.)
  */
 const EXISTING_RUNS_SHA256 = '6a0c134adea8d7cbea5a4a120c4b110858119e2309dc62a7da8a360ef6f8241a'
 
