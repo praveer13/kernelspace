@@ -1,8 +1,9 @@
 /**
  * Lab 05's authored hint ladder (docs/specs/wave-3.md §8.2, D13 and D26): a faded ladder, R0 to R2 for each of the six
- * required checks. R0 is the teach-back and its three ideas, R1 the concept with an anchor in the host lesson, R2 where
- * to look: a function that exists in the zip's `src/lib.rs`. After R2 the page offers the H2 packet (`AskPacket`), as in
- * the ladder arm; there is no R3, R4 or bottom-out, and `ForgeBundle.fade` says so. The rules every lab shares
+ * required checks. R0 is the teach-back and its three ideas, R1 the concept with an anchor in the host lesson (for
+ * nested_spawn, the readiness lesson r.l8: see `SHORT_GUARD`), R2 where to look: a function that exists in the zip's
+ * `src/lib.rs`. After R2 the page offers the H2 packet (`AskPacket`), as in the ladder arm; there is no R3, R4 or
+ * bottom-out, and `ForgeBundle.fade` says so. The rules every lab shares
  * (unlocking, the reducer, the ledger refs, the "ask a human" link) live in src/lib/forge/ladder.ts.
  *
  * Pure data: the component (src/components/forge/HintLadder.tsx) owns the clock and the ledger, and
@@ -25,7 +26,11 @@ const POLL_LOOP: LessonLink = {
   anchor: 'half-two-the-waker-and-50-lines-of-executor',
 }
 const TOY_TO_TOKIO: LessonLink = { lessonId: 't3.l4', h2: 'From the toy to tokio', anchor: 'from-the-toy-to-tokio' }
-/** Lesson r.l8's H2 on guards that end with their statement. */
+/**
+ * Lesson r.l8's H2 on guards that end with their statement. nested_spawn's R1 is about a `RefCell` borrow held across a
+ * poll, and no H2 of the host lesson t3.l4 teaches a borrow's scope (its executor uses a `Mutex` and never says why the
+ * lock ends before the poll), so that one rung links lab 05's readiness lesson instead (labs.ts `readiness`: R7, R8).
+ */
 const SHORT_GUARD: LessonLink = { lessonId: 'r.l8', h2: 'Make the guard shorter', anchor: 'make-the-guard-shorter' }
 
 /** The required checks, in the order the module lists them and the page grades them. */

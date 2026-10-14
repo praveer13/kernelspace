@@ -503,6 +503,14 @@ describe('the ladder: R0 to R2 for every required check, then the packet', () =>
     }
   })
 
+  test('only nested_spawn’s R1 leaves the host lesson: t3.l4 never teaches a borrow’s scope, and r.l8 is the lab’s readiness', () => {
+    expect(bundle.ladder.filter((l) => l.r1.link.lessonId !== lab?.lessonId).map((l) => l.checkId)).toEqual(['nested_spawn'])
+    expect(LADDER.nested_spawn.r1.link).toMatchObject({ lessonId: 'r.l8', anchor: 'make-the-guard-shorter' })
+    expect(lab?.readiness?.lessonIds).toContain('r.l8')
+    const host = JSON.stringify(ALL_LESSONS.find((l) => l.id === lab?.lessonId)?.blocks)
+    expect(host).not.toMatch(/RefCell|borrow/)
+  })
+
   test('passes lint-mentor as a faded bundle, and would fail as a whole one (R3 and R4 missing)', () => {
     const deps = { required: required.map((c) => c.id), libRs: LIB_RS, h2s }
     expect(lintBundle(bundle, deps)).toEqual([])
