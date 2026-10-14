@@ -7,10 +7,16 @@ import { partsText } from '../../src/lib/items/core'
 import kv from '../../src/lib/items/families/kv'
 import { correctResponse } from '../../src/lib/items/grade'
 import type { Instance, Level, Response } from '../../src/lib/items/types'
+import { zooBytes, zooPresetById, ZOO_CONTEXTS, type ZooModel } from '../../src/lib/kv-zoo'
+import { stableStringify } from '../../src/lib/ledger/stable'
+import { hash32 } from '../../src/lib/rng'
 
 const SEEDS = genSeeds(200)
 const LEVELS: Level[] = [0, 1, 2, 3]
 const FILE = new URL('../../src/lib/items/families/kv.ts', import.meta.url)
+/** The four K-and-V variants of version 1; the zoo variants came in version 2. */
+const KV_VARIANTS = ['bytes-per-token', 'seq-bytes', 'capacity-tokens', 'capacity-chats']
+const ZOO_VARIANTS = ['mla-bytes', 'swa-capacity', 'linear-state']
 
 /** The first instance of a variant and level, over a fixed spread of seeds, that satisfies `pred`. */
 function find(variant: string, level: Level, pred: (i: Instance) => boolean): Instance {
@@ -37,7 +43,7 @@ describe('kv: the §5.6 suite', () => {
     const r = checkFamily(kv, { seeds: 100 })
     expect(r.problems).toEqual([])
     expect(r.warnings).toEqual([])
-    expect(r.instances).toBe(100 * 4 * 4)
+    expect(r.instances).toBe(100 * 7 * 4)
   })
 
   test('its hash rows match the fixture', () => {
@@ -50,10 +56,35 @@ describe('kv: the §5.6 suite', () => {
     expect(lintLiterals(FILE.pathname, readFileSync(FILE, 'utf8'))).toEqual([])
   })
 
-  test('declares the four variants at levels 0 to 3 and the three KCs', () => {
-    expect(kv.variants.map((v) => v.id)).toEqual(['bytes-per-token', 'seq-bytes', 'capacity-tokens', 'capacity-chats'])
+  test('declares the seven variants at levels 0 to 3 and the three KCs, version 2', () => {
+    expect(kv.version).toBe(2)
+    expect(kv.variants.map((v) => v.id)).toEqual([...KV_VARIANTS, ...ZOO_VARIANTS])
     for (const v of kv.variants) expect(v.levels).toEqual([0, 1, 2, 3])
     expect([...kv.kcs].sort()).toEqual(['t5.gqa-kv-heads', 't5.kv-bytes-per-token', 't5.kv-capacity'])
+  })
+
+  test('the zoo variants assess the family\'s existing KCs, so no KC file changes', () => {
+    const kcs = (id: string) => kv.variants.find((v) => v.id === id)?.kcs
+    expect(kcs('mla-bytes')).toEqual(['t5.kv-bytes-per-token'])
+    expect(kcs('linear-state')).toEqual(['t5.kv-bytes-per-token'])
+    expect(kcs('swa-capacity')).toEqual(['t5.kv-capacity'])
+    for (const v of ZOO_VARIANTS) for (const level of LEVELS) expect(kv.make(SEEDS[0], level, v).kcs).toEqual(kcs(v))
+  })
+
+  test('the four version-1 variants give the instances they gave before, apart from the version field', () => {
+    const all = []
+    for (const v of KV_VARIANTS) {
+      for (const level of LEVELS) {
+        for (const seed of genSeeds(25)) {
+          const { version, rev, ...rest } = kv.make(seed, level, v)
+          expect(version).toBe(2)
+          expect(typeof rev).toBe('string')
+          all.push(rest)
+        }
+      }
+    }
+    // computed from the version-1 family before the zoo variants were added
+    expect(hash32(stableStringify(all)).toString(16).padStart(8, '0')).toBe('cd2ac28a')
   })
 
   test('make is a pure function of (seed, level, variant); an unspecified variant is chosen by the seed', () => {
@@ -63,7 +94,7 @@ describe('kv: the §5.6 suite', () => {
         expect(kv.make(seed, level).level).toBe(level)
       }
       const seen = new Set(SEEDS.map((s) => kv.make(s, level).variant))
-      expect(seen.size).toBe(4)
+      expect(seen.size).toBe(7)
     }
   })
 })
@@ -108,7 +139,7 @@ describe('kv: the pins', () => {
 
 describe('kv: claim-backed and synthetic scenes', () => {
   test('every variant and level draws both, and a claim-backed shape equals its claims', () => {
-    for (const v of kv.variants) {
+    for (const v of kv.variants.filter((x) => KV_VARIANTS.includes(x.id))) {
       for (const level of LEVELS) {
         const all = SEEDS.map((s) => kv.make(s, level, v.id))
         const real = all.filter((i) => i.params.model !== 'synthetic')
@@ -176,7 +207,7 @@ describe('kv: levels', () => {
   })
 
   test('level 3 gives a group size, not the KV heads, and assesses the GQA KC too', () => {
-    for (const v of kv.variants) {
+    for (const v of kv.variants.filter((x) => KV_VARIANTS.includes(x.id))) {
       const i = find(v.id, 3, () => true)
       expect(i.kcs).toContain('t5.gqa-kv-heads')
       expect(partsText(i.prompt.stem)).toContain('share one K and V head')
@@ -312,5 +343,206 @@ describe('kv: diagnoses', () => {
     expect(g.interval?.hit).toBe(true)
     expect(kv.grade(i, { kind: 'estimate', value: t * 1.2 }).ok).toBe(true)
     expect(kv.grade(i, { kind: 'estimate', value: t * 1.3 }).ok).toBe(false)
+  })
+})
+
+describe('kv: the zoo variants (version 2)', () => {
+  const gradeOf = (i: Instance, rho: number) => kv.grade(i, slipped(i, rho))
+  const bytesPer = (i: Instance): number => ({ bf16: 2, fp16: 2, fp8: 1, int8: 1, fp4: 0.5 } as Record<string, number>)[String(i.params.dtype)]
+
+  /** The same model as a kv-zoo ZooModel: kv-zoo's per-layer arithmetic is the second reader of these items. */
+  const zooModelOf = (i: Instance): ZooModel => {
+    const base = { id: 'x', name: 'x', note: '', claimIds: [] }
+    if (i.variant === 'mla-bytes') return { ...base, groups: [{ count: num(i, 'layers'), label: 'MLA', layer: { kind: 'mla', latentDim: num(i, 'latentDim'), ropeDim: num(i, 'ropeDim') } }] }
+    if (i.variant === 'linear-state') {
+      return { ...base, groups: [{ count: num(i, 'layers'), label: 'linear', layer: { kind: 'linear', heads: num(i, 'heads'), keyDim: num(i, 'keyDim'), valueDim: num(i, 'valueDim') } }] }
+    }
+    const kvHeads = num(i, 'kvHeads')
+    const headDim = num(i, 'headDim')
+    return {
+      ...base,
+      groups: [
+        { count: num(i, 'swaLayers'), label: 'swa', layer: { kind: 'swa', kvHeads, headDim, window: num(i, 'window'), sinks: num(i, 'sinks') } },
+        { count: num(i, 'fullLayers'), label: 'full', layer: { kind: 'full', kvHeads, headDim } },
+      ],
+    }
+  }
+
+  test('every instance agrees with kv-zoo: bytes per token, the constant state, and the context that fills the budget', () => {
+    for (const level of LEVELS) {
+      for (const seed of SEEDS.slice(0, 60)) {
+        const mla = kv.make(seed, level, 'mla-bytes')
+        const unit = (mla.answer as { unit: string }).unit
+        expect(truthOf(mla) * (unit === 'KiB' ? 1024 : 1)).toBe(zooBytes(zooModelOf(mla), 1, bytesPer(mla)).stored)
+
+        const lin = kv.make(seed, level, 'linear-state')
+        const state = zooBytes(zooModelOf(lin), num(lin, 'tokens'), bytesPer(lin)).stored
+        const per = { MB: 1e6, GB: 1e9, MiB: 1024 ** 2, GiB: 1024 ** 3 }[(lin.answer as { unit: string }).unit] as number
+        expect(truthOf(lin)).toBeCloseTo(state / per, 9)
+        expect(zooBytes(zooModelOf(lin), 1, bytesPer(lin)).stored).toBe(zooBytes(zooModelOf(lin), 1048576, bytesPer(lin)).stored)
+
+        const swa = kv.make(seed, level, 'swa-capacity')
+        const t = truthOf(swa)
+        // kv-zoo takes whole tokens: the cache at the integer below the answer fits the budget, the one above does not
+        const lo = zooBytes(zooModelOf(swa), Math.floor(t), bytesPer(swa)).stored
+        const hi = zooBytes(zooModelOf(swa), Math.floor(t) + 1, bytesPer(swa)).stored
+        expect(lo).toBeLessThanOrEqual(num(swa, 'kvGb') * 1e9)
+        expect(hi).toBeGreaterThan(num(swa, 'kvGb') * 1e9)
+      }
+    }
+  })
+
+  test('the zoo pins equal the presets at the zoo contexts', () => {
+    const pin = (part: string) => {
+      const p = kv.pins.find((x) => x.name.includes(part))
+      if (!p) throw new Error(`no pin "${part}"`)
+      return p
+    }
+    const v3 = zooPresetById('deepseek-v3')
+    const kimi = zooPresetById('kimi-linear')
+    const qwen = zooPresetById('qwen3-5-397b')
+    const oss = zooPresetById('gpt-oss-120b')
+    if (!v3 || !kimi || !qwen || !oss) throw new Error('missing preset')
+    for (const t of ZOO_CONTEXTS) {
+      // MLA's stored bytes grow with t at 70,272 B per token; a linear layer's state is the same at every context
+      expect(zooBytes(v3, t).stored / t).toBe(70_272)
+      expect(zooBytes(qwen, t).groups[0].stored).toBe(188_743_680) // float32 state: the config's mamba_ssm_dtype
+      expect(zooBytes(kimi, t).groups[0].stored).toBe(20_971_520)
+    }
+    expect(truthOf(pin('DeepSeek-V3 MLA').make())).toBe(70_272)
+    expect(truthOf(pin('Kimi Linear MLA').make())).toBe(8_064)
+    expect(truthOf(pin('Qwen3.5 gated-DeltaNet').make())).toBeCloseTo(188.74368, 9)
+    expect(truthOf(pin('Kimi Linear KDA').make())).toBeCloseTo(20.97152, 9)
+    // a budget of exactly what kv-zoo stores at 128k (and at 1M) tokens fills at exactly that context
+    expect(truthOf(pin('128k-token cache').make())).toBeCloseTo(131_072, 3)
+    expect(truthOf(pin('1M-token cache').make())).toBeCloseTo(1_048_576, 3)
+    expect(zooBytes(oss, 131_072).stored).toBe(4_836_556_800)
+    for (const name of ['DeepSeek-V3 MLA', 'Kimi Linear MLA', 'Qwen3.5 gated-DeltaNet', 'Kimi Linear KDA', '128k-token cache', '1M-token cache']) {
+      expect(pin(name).source).toBe('kv-zoo')
+    }
+  })
+
+  test('claim-backed scenes read the zoo claims; synthetic ones say hypothetical', () => {
+    const models = new Set<string>()
+    for (const v of ZOO_VARIANTS) {
+      for (const level of LEVELS) {
+        const all = SEEDS.map((s) => kv.make(s, level, v))
+        for (const i of all) {
+          const model = String(i.params.model)
+          models.add(`${v}:${model}`)
+          if (model === 'synthetic') {
+            expect(i.claims).toEqual([])
+            expect(partsText(i.prompt.stem)).toContain('hypothetical')
+          } else {
+            expect(i.claims.length).toBeGreaterThanOrEqual(3)
+            for (const c of i.claims) expect(c.startsWith(`zoo.${model}.`)).toBe(true)
+            const chips = i.prompt.stem.filter((p) => p.t === 'claim')
+            expect(chips.length).toBeGreaterThan(0)
+            // the sentence around a chip says what the number counts, so the chip carries no unit of its own
+            for (const c of chips) if (c.t === 'claim' && c.claim !== `zoo.${model}.window`) expect(c.unit).toBe('')
+          }
+        }
+        expect(all.some((i) => i.params.model === 'synthetic')).toBe(true)
+        expect(all.some((i) => i.params.model !== 'synthetic')).toBe(true)
+      }
+    }
+    for (const m of ['mla-bytes:deepseek-v3', 'mla-bytes:kimi-linear', 'swa-capacity:gpt-oss-120b', 'linear-state:qwen3-5-397b', 'linear-state:kimi-linear']) expect(models.has(m)).toBe(true)
+  })
+
+  test('mla-bytes: one latent per layer, no factor 2; a 2-byte cache; binary units at the transfer level', () => {
+    const i = find('mla-bytes', 2, (x) => x.params.model === 'deepseek-v3')
+    expect(num(i, 'layers')).toBe(61)
+    expect(partsText(kv.solution(i)[1].text)).toContain('no factor 2')
+    for (const level of LEVELS) for (const s of SEEDS) expect(bytesPer(kv.make(s, level, 'mla-bytes'))).toBe(2)
+    expect(find('mla-bytes', 3, () => true).answer).toMatchObject({ kind: 'numeric', unit: 'KiB' })
+    expect(find('mla-bytes', 2, () => true).answer).toMatchObject({ kind: 'numeric', unit: 'B' })
+  })
+
+  test('kv.mla-as-gqa: twice the truth is a GQA-style price, and the K-and-V and query-head slips do not apply to MLA', () => {
+    const i = find('mla-bytes', 2, () => true)
+    const g = gradeOf(i, 2)
+    expect(g.ok).toBe(false)
+    expect(g.diagnosis?.id).toBe('kv.mla-as-gqa')
+    expect(g.diagnosis?.message).toContain('GQA')
+    // half is not "forgot K and V": MLA has no K and V planes
+    expect(gradeOf(i, 0.5).diagnosis?.id).toBeUndefined()
+    expect(gradeOf(i, 1 / num(i, 'layers')).diagnosis?.id).toBe('kv.one-layer')
+    expect(gradeOf(i, 1 / num(i, 'layers')).diagnosis?.message).toContain('latent')
+    // the rule is about MLA only
+    const gqa = find('bytes-per-token', 2, (x) => x.params.dtype === 'bf16' && num(x, 'attnHeads') === num(x, 'kvHeads'))
+    expect(gradeOf(gqa, 2).diagnosis?.id).toBeUndefined()
+  })
+
+  test('swa-capacity: the window layers stop growing, so the answer is past the window and in tokens', () => {
+    for (const level of LEVELS) {
+      for (const s of SEEDS) {
+        const i = kv.make(s, level, 'swa-capacity')
+        expect(i.answer).toMatchObject({ kind: 'estimate', unit: 'tokens', interval: true })
+        expect(truthOf(i)).toBeGreaterThanOrEqual(8 * (num(i, 'window') + num(i, 'sinks')))
+        expect(num(i, 'layers')).toBe(num(i, 'swaLayers') + num(i, 'fullLayers'))
+        expect(bytesPer(i)).toBe(2)
+      }
+    }
+    const l3 = find('swa-capacity', 3, () => true)
+    expect(partsText(l3.prompt.stem)).toContain('repeating pattern')
+    expect(kv.solution(l3)[0].text.map((p) => partsText([p])).join('')).toContain('Full-attention layers')
+    expect(partsText(find('swa-capacity', 2, () => true).prompt.stem)).not.toContain('repeating pattern')
+    // synthetic draws include sink tokens; a real one has none (gpt-oss's sinks are softmax logits, claim value 0)
+    expect(SEEDS.some((s) => num(kv.make(s, 2, 'swa-capacity'), 'sinks') > 0)).toBe(true)
+    expect(find('swa-capacity', 2, (x) => x.params.model === 'gpt-oss-120b').params.sinks).toBe(0)
+  })
+
+  test('kv.window-ignored: giving every layer the full cache lands on the uniform context, and it is diagnosed', () => {
+    for (const level of LEVELS) {
+      const i = find('swa-capacity', level, () => true)
+      const uniform = (num(i, 'kvGb') * 1e9) / (2 * num(i, 'kvHeads') * num(i, 'headDim') * bytesPer(i) * num(i, 'layers'))
+      const g = kv.grade(i, { kind: 'estimate', value: uniform })
+      expect(g.ok).toBe(false)
+      expect(g.diagnosis?.id).toBe('kv.window-ignored')
+      expect(g.diagnosis?.message).toContain(`${num(i, 'window')}-token window`)
+      expect(g.diagnosis?.message).toContain(`${num(i, 'fullLayers')} full-attention layers`)
+    }
+    // the K-and-V, query-head and one-layer slips are inexact for a window model, so they do not claim its wrong answers
+    const i = find('swa-capacity', 2, () => true)
+    for (const rho of [0.5, 2, 0.25, num(i, 'layers')]) expect(kv.grade(i, { kind: 'estimate', value: truthOf(i) * rho }).diagnosis?.id).not.toBe('kv.forgot-k-and-v')
+    expect(kv.grade(i, { kind: 'estimate', value: truthOf(i) * num(i, 'layers') }).diagnosis?.id).toBeUndefined()
+    // the rule is about window models only
+    const cap = find('capacity-tokens', 2, () => true)
+    const rule = kv.ratioRules.find((r) => r.id === 'kv.window-ignored')
+    expect(typeof rule?.ratio === 'function' ? rule.ratio(cap) : undefined).toBeNull()
+  })
+
+  test('linear-state: the state does not depend on the context, and the solution says so', () => {
+    for (const level of LEVELS) {
+      const i = find('linear-state', level, () => true)
+      const steps = kv.solution(i)
+      expect(steps.some((s) => s.result === undefined && partsText(s.text).includes('does not enter'))).toBe(true)
+      expect(partsText(i.prompt.stem)).toContain('After a context of')
+    }
+    expect((find('linear-state', 2, () => true).answer as { unit: string }).unit).toMatch(/^(MB|GB)$/)
+    expect((find('linear-state', 3, () => true).answer as { unit: string }).unit).toMatch(/^(MiB|GiB)$/)
+    // narrow dtypes are priced too: an FP8 state priced at 2 bytes is the FP16 slip
+    const fp8 = find('linear-state', 2, (x) => x.params.dtype === 'fp8')
+    expect(gradeOf(fp8, 2).diagnosis?.id).toBe('kv.priced-fp16')
+  })
+
+  test('kv.state-grows: scaling the state with the context is diagnosed, by the context the prompt names', () => {
+    for (const level of LEVELS) {
+      const i = find('linear-state', level, () => true)
+      const g = gradeOf(i, num(i, 'tokens'))
+      expect(g.ok).toBe(false)
+      expect(g.diagnosis?.id).toBe('kv.state-grows')
+      expect(g.diagnosis?.message).toContain('does not grow')
+    }
+    const i = find('linear-state', 2, () => true)
+    expect(gradeOf(i, 1 / num(i, 'layers')).diagnosis?.id).toBe('kv.one-layer')
+    expect(gradeOf(i, 1 / num(i, 'layers')).diagnosis?.message).toContain('state')
+    expect(gradeOf(i, 0.5).diagnosis?.id).toBeUndefined()
+  })
+
+  test('every zoo rule fires somewhere (the generator gate warns on a dead one)', () => {
+    const r = checkFamily(kv, { seeds: 100, speed: false })
+    expect(r.warnings).toEqual([])
+    for (const id of ['kv.mla-as-gqa', 'kv.window-ignored', 'kv.state-grows']) expect(kv.ratioRules.some((x) => x.id === id)).toBe(true)
   })
 })

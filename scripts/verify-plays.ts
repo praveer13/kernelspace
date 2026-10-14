@@ -1,23 +1,30 @@
 /**
- * verify-plays: the canvas-mirror check of docs/specs/wave-1.md §10.5 and the play checks of §11.5.
+ * verify-plays: the canvas-mirror check of docs/specs/wave-1.md §10.5 (zero-waiver since wave-2.md §12.2) and the play
+ * checks of §11.5.
  *
- * Canvas mirrors. Every file in src/components/sims that renders a `<canvas>` must either render
- * `<SimMirror` or carry the waiver comment on a line of its own:
+ * Canvas mirrors. Every file in src/components/sims and src/components/telemetry that renders a plotted element (a
+ * `<canvas>`, or a telemetry `<Sparkline`) needs a mirror for each one: the element's `aria-describedby` (`describedBy`
+ * on a Sparkline) must name the id of a `<SimMirror` in the same file. A file with N canvases needs N mirrored canvases:
+ * one `<SimMirror` no longer satisfies a file with two. The Wave 1 waiver comment
  *
  *   // a11y-mirror-pending: wave 2
  *
- * The waiver lives in the sim's own file so each task removes its own. A file that renders a mirror and
- * still carries the waiver fails (a stale waiver hides the next regression). The waiver list is printed:
- * Wave 1 exits with six (BatchingSim, ContentionLab, MatrixBench, QuantizerSim, SchedulerLab, WgslSim).
- * Canvases outside src/components/sims are out of scope (the Lab gallery previews sit in an aria-hidden
+ * is now an error wherever it appears in those files (a retired waiver hides the next regression), and the run prints
+ * "0 waived". Canvases outside those two folders are out of scope (the Lab gallery previews sit in an aria-hidden
  * wrapper; Home's two canvases are labelled role="img" previews).
  *
  * Plays. A play in src/data/plays.ts fails without a mirror component (src/components/play/<id>/Mirror.tsx,
  * rendered by its Play.tsx), a debrief (Debrief.tsx, rendered too), KCs that exist in the KC contract
- * (src/data/kc/ids.ts), a lesson that exists, a practice seed in band, or In-production claims that exist
- * (the card's rows and the play's `productionClaims` must name the same ids). Any `<View3D` outside
- * GATE_3D fails. The play's closure (the modules /play/<id> pulls in statically, with its KCs and claims)
- * is printed; `verify:bundle` prints the same route's gzip closure.
+ * (src/data/kc/ids.ts), a lesson that exists, a practice trace the play can be played on, or In-production
+ * claims that exist (the card's rows, read from the play's own entry in PLAY_PRODUCTION_ROWS, and the play's
+ * `productionClaims` must name the same ids, and the card needs at least three rows: wave-2.md §8.5). Any
+ * `<View3D` outside GATE_3D fails. The play's closure (the modules /play/<id> pulls in statically, with its KCs
+ * and claims) is printed; `verify:bundle` prints the same route's gzip closure.
+ *
+ * Practice trace. Each play has its own check (`practiceBandOf`): block placement's seed must be in its band. The
+ * scheduler's practice minute must be in band on all five rules of wave-2.md §8.2. It is a pinned fresh minute
+ * (`SCHED_PRACTICE_MINUTE_SEED`, the first in-band seed from 0), because the busiest-minute artifact itself cannot
+ * be (no prompt over 692 tokens, 1 to 4 token responses: 2b-01 pinned this in tests/world/sched-traces.test.ts).
  *
  *   bun run verify:plays
  */
@@ -25,30 +32,68 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 
+/** The retired Wave 1 waiver: a scoped file that carries this marker anywhere is an error. */
 export const WAIVER = '// a11y-mirror-pending: wave 2'
+const WAIVER_MARKER = 'a11y-mirror-pending'
 
 export interface CanvasFinding {
   file: string
+  /** Plotted elements in the file: `<canvas` tags and `<Sparkline` uses. */
   canvases: number
-  status: 'mirrored' | 'waived' | 'missing' | 'stale-waiver'
+  /** How many of them name a `<SimMirror` id of the same file in `aria-describedby` (`describedBy` on a Sparkline). */
+  mirrored: number
+  /** `mirrored`: every one is; `missing`: some are not; `waiver`: the retired waiver comment is present (an error whatever else is true). */
+  status: 'mirrored' | 'missing' | 'waiver'
 }
 
-/** Source without comments, so a `<canvas>` or `<SimMirror` named in prose or a doc comment counts for nothing. */
+/** Source without comments, so a `<canvas` or `<SimMirror` named in prose or a doc comment counts for nothing. */
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
 }
 
-/** One finding per file that renders a canvas. */
+/** The source of the JSX tag that starts at `from` (after `<name`), up to its closing `>`: braces and quotes inside attributes are skipped. */
+function tagText(code: string, from: number): string {
+  let depth = 0
+  let quote = ''
+  for (let i = from; i < code.length; i++) {
+    const c = code[i]
+    if (quote) {
+      if (c === '\\') i++
+      else if (c === quote) quote = ''
+    } else if (c === '"' || c === "'" || c === '`') quote = c
+    else if (c === '{') depth++
+    else if (c === '}') depth--
+    else if (c === '>' && depth === 0) return code.slice(from, i)
+  }
+  return code.slice(from)
+}
+
+/** The value of attribute `name` in a tag's text, as written (`mirrorId` for `{mirrorId}`, `m` for `"m"`), or null when it is absent. */
+function attrOf(tag: string, name: string): string | null {
+  const m = new RegExp(`(?:^|\\s)${name}=(?:"([^"]*)"|'([^']*)'|\\{\\s*([^}]*?)\\s*\\})`).exec(tag)
+  return m ? (m[1] ?? m[2] ?? m[3]) : null
+}
+
+/** Every `<name` tag in the code, as its attribute text. */
+function tagsOf(code: string, name: string): string[] {
+  return [...code.matchAll(new RegExp(`<${name}(?=[\\s>/])`, 'g'))].map((m) => tagText(code, (m.index as number) + m[0].length))
+}
+
+/** One finding per file that renders a plotted element or carries the retired waiver. */
 export function checkCanvasMirrors(files: readonly { file: string; text: string }[]): CanvasFinding[] {
   const out: CanvasFinding[] = []
   for (const { file, text } of files) {
     const code = stripComments(text)
-    const canvases = (code.match(/<canvas[\s>/]/g) ?? []).length
-    if (canvases === 0) continue
-    const mirrored = /<SimMirror[\s>/]/.test(code)
-    const waived = text.split('\n').some((line) => line.trim() === WAIVER)
-    const status = mirrored ? (waived ? 'stale-waiver' : 'mirrored') : waived ? 'waived' : 'missing'
-    out.push({ file, canvases, status })
+    const mirrorIds = new Set(tagsOf(code, 'SimMirror').flatMap((t) => attrOf(t, 'id') ?? []))
+    const plotted = [
+      ...tagsOf(code, 'canvas').map((t) => attrOf(t, 'aria-describedby')),
+      ...tagsOf(code, 'Sparkline').map((t) => attrOf(t, 'describedBy')),
+    ]
+    const waived = text.includes(WAIVER_MARKER)
+    if (plotted.length === 0 && !waived) continue
+    const mirrored = plotted.filter((id) => id !== null && mirrorIds.has(id)).length
+    const status = waived ? 'waiver' : mirrored === plotted.length ? 'mirrored' : 'missing'
+    out.push({ file, canvases: plotted.length, mirrored, status })
   }
   return out
 }
@@ -87,7 +132,7 @@ export interface PlayFacts {
   play: string | undefined
   mirror: string | undefined
   debrief: string | undefined
-  /** Whether the practice seed is in band (traces.ts). */
+  /** Whether the play's practice trace passes its band check (`practiceBandOf`). */
   practiceInBand: boolean
 }
 
@@ -113,7 +158,8 @@ export function checkPlay(p: PlayFacts, w: PlayWorld): string[] {
   for (const c of p.productionClaims) if (!w.claimIds.has(c)) fail(`claim ${c} does not exist`)
   for (const c of p.cardClaims) if (!p.productionClaims.includes(c)) fail(`the In-production card renders ${c}, which productionClaims does not list`)
   for (const c of p.productionClaims) if (!p.cardClaims.includes(c)) fail(`productionClaims lists ${c}, which no In-production row renders`)
-  if (!p.practiceInBand) fail('the practice seed is outside the band (traces.ts)')
+  if (p.cardClaims.length < 3) fail(`the In-production card has ${p.cardClaims.length} rows and needs at least three (wave-2.md §8.5)`)
+  if (!p.practiceInBand) fail('the practice trace is outside the band (practiceBandOf in scripts/verify-plays.ts)')
   return out
 }
 
@@ -174,13 +220,43 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
+/** The practice-band check of one play: whether it passes, and the line that says why. */
+export interface PracticeBand {
+  inBand: boolean
+  note: string
+}
+
+/** Runs a play's practice-band check, or returns null for a play that has none (a new play must bring its own). */
+export async function practiceBandOf(id: string, root: string): Promise<PracticeBand | null> {
+  if (id === 'block-placement') {
+    const { PLAY_PRACTICE_SEED, makePlacementTrace, checkPlacementBand } = await import('../src/lib/world/traces')
+    const band = checkPlacementBand(makePlacementTrace(PLAY_PRACTICE_SEED))
+    return { inBand: band.inBand, note: `practice seed ${PLAY_PRACTICE_SEED} ${band.inBand ? 'is in band' : 'is outside the band'}` }
+  }
+  if (id === 'scheduler') {
+    const { SCHED_PRACTICE_MINUTE_SEED, checkSchedBand, parseSchedSource, practiceMinute } = await import('../src/lib/world/sched-traces')
+    const dir = join(root, 'public', 'traces')
+    const source = await parseSchedSource(
+      JSON.parse(readFileSync(join(dir, 'burstgpt-v2-busiest-minute.json'), 'utf8')),
+      JSON.parse(readFileSync(join(dir, 'burstgpt-v2-busiest-hour.json'), 'utf8')),
+    )
+    const band = checkSchedBand(practiceMinute(source))
+    const missed = band.rules.flatMap((ok, i) => (ok ? [] : [i + 1]))
+    const note =
+      `practice minute (seed ${SCHED_PRACTICE_MINUTE_SEED}): the reference serves ${band.ghost.met} of ${band.ghost.total} within the SLO in ${band.ghost.turns} turns, FCFS ${band.fcfs.met}, ` +
+      `${band.greedy.autoPreempts} auto-preempt${band.greedy.autoPreempts === 1 ? '' : 's'} without headroom, longest prompt ${band.longestPrompt}; ` +
+      (missed.length === 0 ? 'in band on all five rules' : `outside the §8.2 band on rule${missed.length === 1 ? '' : 's'} ${missed.join(', ')} (${band.violations.join('; ')})`)
+    return { inBand: band.inBand, note }
+  }
+  return null
+}
+
 async function checkPlays(failures: string[]): Promise<void> {
   const root = join(import.meta.dir, '..')
   const srcDir = join(root, 'src')
-  const { PLAYS, PRODUCTION_ROWS } = await import('../src/data/plays')
+  const { PLAYS, PLAY_PRODUCTION_ROWS } = await import('../src/data/plays')
   const { KC } = await import('../src/data/kc/ids')
   const { CLAIMS } = await import('../src/data/claims')
-  const { PLAY_PRACTICE_SEED, makePlacementTrace, checkPlacementBand } = await import('../src/lib/world/traces')
   const sources = walk(srcDir).map((f) => ({ file: relative(root, f), text: readFileSync(f, 'utf8') }))
   const lessonIds = new Set<string>()
   for (const { file, text } of sources) {
@@ -194,16 +270,20 @@ async function checkPlays(failures: string[]): Promise<void> {
   console.log(`verify-plays: plays: ${Object.keys(PLAYS).length}`)
   for (const def of Object.values(PLAYS)) {
     const dir = join(srcDir, 'components', 'play', def.id)
+    const band = await practiceBandOf(def.id, root)
+    if (band === null) failures.push(`play ${def.id}: no practice-band check (add it to practiceBandOf in scripts/verify-plays.ts)`)
+    const rows = PLAY_PRODUCTION_ROWS[def.id]
+    if (rows === undefined) failures.push(`play ${def.id}: no In-production rows (add it to PLAY_PRODUCTION_ROWS in src/data/plays.ts)`)
     const facts: PlayFacts = {
       id: def.id,
       lessonId: def.lessonId,
       kcs: def.kcs,
       productionClaims: def.productionClaims,
-      cardClaims: PRODUCTION_ROWS.map((r) => r.claim),
+      cardClaims: (rows ?? []).map((r) => r.claim),
       play: read(join(dir, 'Play.tsx')),
       mirror: read(join(dir, 'Mirror.tsx')),
       debrief: read(join(dir, 'Debrief.tsx')),
-      practiceInBand: def.id !== 'block-placement' || checkPlacementBand(makePlacementTrace(PLAY_PRACTICE_SEED)).inBand,
+      practiceInBand: band?.inBand ?? false,
     }
     failures.push(...checkPlay(facts, world))
     // The page loads each play through the registry on demand, so the play's closure starts at the play itself.
@@ -212,7 +292,8 @@ async function checkPlays(failures: string[]): Promise<void> {
     console.log(`  play ${def.id} (${def.lessonId}, ${def.minutes} min)`)
     console.log(`    mirror ${facts.mirror ? 'yes' : 'NO'}, debrief ${facts.debrief ? 'yes' : 'NO'}`)
     console.log(`    KCs ${def.kcs.join(', ')}`)
-    console.log(`    claims ${def.productionClaims.join(', ')}`)
+    console.log(`    claims ${def.productionClaims.join(', ')} (${facts.cardClaims.length} card rows)`)
+    console.log(`    ${band?.note ?? 'no practice-band check'}`)
     console.log(`    closure of /play/${def.id}: ${c.files.length} source modules, ${c.lines} lines, ${c.packages.length} packages (static imports from the play's Play.tsx)`)
     console.log(`      the play's own: ${own.join(', ')}`)
     console.log(`      packages: ${c.packages.join(', ')}`)
@@ -223,25 +304,28 @@ async function checkPlays(failures: string[]): Promise<void> {
   console.log(`verify-plays: View3D: ${bad3d.length === 0 ? 'none outside GATE_3D' : `${bad3d.length} outside GATE_3D`}`)
 }
 
+/** The folders whose plotted elements need a mirror (wave-2.md §12.2). */
+export const MIRROR_SCOPE: readonly string[] = ['src/components/sims', 'src/components/telemetry']
+
 async function main(): Promise<void> {
-  const dir = join(import.meta.dir, '..', 'src', 'components', 'sims')
-  const files = readdirSync(dir)
+  const root = join(import.meta.dir, '..')
+  const files = MIRROR_SCOPE.flatMap((d) => walk(join(root, d)))
     .filter((f) => f.endsWith('.tsx'))
     .sort()
-    .map((f) => ({ file: `src/components/sims/${f}`, text: readFileSync(join(dir, f), 'utf8') }))
+    .map((f) => ({ file: relative(root, f), text: readFileSync(f, 'utf8') }))
   const findings = checkCanvasMirrors(files)
   const failures: string[] = []
 
   for (const f of findings) {
-    if (f.status === 'missing') failures.push(`${f.file}: renders <canvas> with no <SimMirror> and no "${WAIVER}" comment`)
-    if (f.status === 'stale-waiver') failures.push(`${f.file}: renders <SimMirror> but still carries "${WAIVER}"; remove the waiver`)
+    if (f.status === 'waiver') failures.push(`${f.file}: carries the retired waiver "${WAIVER}"; give every canvas a <SimMirror> and remove the comment`)
+    else if (f.status === 'missing') failures.push(`${f.file}: ${f.mirrored} of ${f.canvases} plotted elements name a <SimMirror> id in aria-describedby; each canvas needs its own mirror`)
   }
 
-  const waived = findings.filter((f) => f.status === 'waived')
+  const waived = findings.filter((f) => f.status === 'waiver')
   const mirrored = findings.filter((f) => f.status === 'mirrored')
-  console.log(`verify-plays: canvas mirrors: ${findings.length} sims render a canvas; ${mirrored.length} mirrored, ${waived.length} waived`)
-  for (const f of mirrored) console.log(`  mirrored  ${f.file}`)
-  for (const f of waived) console.log(`  waived    ${f.file}`)
+  const elements = findings.reduce((n, f) => n + f.canvases, 0)
+  console.log(`verify-plays: canvas mirrors: ${findings.length} files render a canvas or sparkline (${elements} elements); ${mirrored.length} mirrored, ${waived.length} waived`)
+  for (const f of findings) console.log(`  ${f.status === 'mirrored' ? 'mirrored' : f.status === 'waiver' ? 'waived  ' : 'MISSING '}  ${f.file} (${f.mirrored}/${f.canvases})`)
 
   await checkPlays(failures)
 

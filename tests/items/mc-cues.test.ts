@@ -413,7 +413,8 @@ describe('the old gates passed these fixtures; the new ones fail them', () => {
       options: list.map((o) => o.label),
       correct: list.flatMap((o, i) => (o.correct ? [i] : [])),
     }))
-    expect(asQuestions).toHaveLength(6)
+    // one cause and one mitigation item per catalog fault (2b-17: four faults, was three static incidents)
+    expect(asQuestions).toHaveLength(2 * INCIDENTS.length)
     for (const s of RANK_STRATEGIES) {
       expect(hitRate(asQuestions, s)).toBeLessThanOrEqual(chanceOf(asQuestions) + MAX_HIT_OVER_CHANCE)
       expect(passProbability(asQuestions.map(s.pick))).toBeLessThan(MAX_RANK_LESSON)

@@ -243,10 +243,10 @@ describe('the walk', () => {
   test('the generated KCs get generated items, the others checkpoint items, and the anchor its own items', () => {
     const { steps } = drive(real, expert, 3)
     const by = (kc: KcId) => steps.filter((s) => s.kc === kc).map((s) => s.item.source)
-    for (const kc of ['t1.external-frag', 't4.bound-classification', 't5.kv-bytes-per-token']) {
+    for (const kc of ['t1.external-frag', 't4.bound-classification', 't5.kv-bytes-per-token', 't2.admission-scheduling']) {
       expect(by(kc)).toEqual(['gen', 'gen'])
     }
-    for (const kc of ['t0.locality', 't2.address-translation', 't2.admission-scheduling']) {
+    for (const kc of ['t0.locality', 't2.address-translation']) {
       for (const s of by(kc)) expect(['quiz', 'item']).toContain(s)
     }
     for (const s of steps.filter((x) => x.kc === RUST_ANCHOR_KC)) {
@@ -255,15 +255,35 @@ describe('the walk', () => {
     }
   })
 
-  test('every item is on its KC, and no item is asked twice', () => {
-    for (const seed of SEEDS.slice(0, 40)) {
+  test('every item is on its KC, and no item is asked twice (250 walks)', () => {
+    let sigItems = 0
+    for (const seed of SEEDS) {
       const { steps } = drive(real, partial(0.7, seed), seed)
       // a generated item is its instance (the same variant may be asked again, on other numbers or at another level)
       const ids = steps.map((s) => (s.item.source === 'gen' ? s.item.inst.rev : playView(s.item, s.seed).ref))
       expect(new Set(ids).size).toBe(ids.length)
       for (const s of steps) {
         const kcs = s.item.source === 'gen' ? s.item.inst.kcs : s.item.source === 'quiz' ? s.item.kcs : s.item.source === 'item' ? s.item.item.kcs : []
+        // sig's fault (and the fault KC it carries) comes from the seed: the pool redraws until it is the KC asked for
         expect(kcs).toContain(s.kc)
+        if (s.item.source === 'gen' && s.item.inst.family === 'sig') sigItems++
+      }
+    }
+    // t2.admission-scheduling's only family is sig: it is still asked through sig, on-KC
+    expect(sigItems).toBeGreaterThan(400)
+  }, 30000)
+
+  test('a family no draw fits for the KC gives way to the authored items, never an off-KC item', () => {
+    const frag = gens.get('frag') as Gen
+    const offKc: Gen = { ...frag, make: (s, l, v) => ({ ...frag.make(s, l, v), kcs: ['t0.locality'] }) }
+    const content: WalkContent = { ...real, pool: makeGenPool(new Map([...gens, ['frag', offKc]]), (kc) => kcById(kc)?.gen ?? []) }
+    for (const seed of SEEDS.slice(0, 10)) {
+      const { steps } = drive(content, expert, seed)
+      const ext = steps.filter((s) => s.kc === 't1.external-frag')
+      expect(ext.length).toBeGreaterThan(0)
+      for (const s of ext) {
+        expect(['quiz', 'item']).toContain(s.item.source)
+        expect(s.item.source === 'quiz' ? s.item.kcs : s.item.source === 'item' ? s.item.item.kcs : []).toContain('t1.external-frag')
       }
     }
   })
@@ -474,7 +494,7 @@ describe('the item cap', () => {
         }
       }
     }
-  })
+  }, 60000) // 5,250 walks; sig's cold incident simulations, about 4 per item now that the pool redraws until the fault is the KC's, put it at about 17 s
 
   test('the worst case, confident right then wrong then right on every KC with items to spare, stops at exactly 20', () => {
     const q = (n: number): QuizQuestion => ({ q: `Item ${n}?`, options: ['key', 'a', 'b', 'c'], correct: [0], why: ['k', 'a', 'b', 'c'] })

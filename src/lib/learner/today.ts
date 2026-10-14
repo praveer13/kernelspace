@@ -4,8 +4,9 @@
  * (an item pool over the generator families and the authored lessons) and turns what the learner does
  * into ledger writes and into the lines the page prints.
  *
- * - **Pool:** `buildPool` serves a KC from a generator family at its staircase level on a fresh seed, else
- *   from the authored items tagged with it, else from its constructed response (composer.ts picks the order).
+ * - **Pool:** `buildPool` serves a KC from a generator family at its staircase level on a fresh seed (redrawn
+ *   until the instance carries the KC, on-kc.ts), else from the authored items tagged with it, else from its
+ *   constructed response (composer.ts picks the order).
  * - **Writes:** `itemResponseOf` is one `item` (or `probe`) event per answer, `src` `today`, `grp` the session id.
  *   A generated item on a seed the learner has never met is provenance `unseen`, anything else `practice` (§6.7).
  * - **Copy:** the SLO line, week bar, banner, done line and "item 3 of 9 · ~7 min left". None of it ever
@@ -24,6 +25,7 @@ import { CATCH_UP_COPY, WELCOME_BACK_COPY, dayNumber, weekdayOf } from '@/lib/le
 import type { ItemData, ItemRef, ItemResponse, Json, LedgerEvent, LocalDay } from '@/lib/ledger/types'
 import { seedFor } from '@/lib/items/core'
 import { budgetLine, itemSeconds, type ItemPool } from './composer'
+import { drawOnKc } from './on-kc'
 import type { FirstReviewCalibration, SessionMode, SessionPlan, SessionSlot, SlotReason, WeekStatus } from './types'
 
 /* ------------------------------------------------------------------ */
@@ -285,14 +287,17 @@ function servableLevel(gen: Gen, kc: KcId, level: Level): Level | null {
   return [...offered].sort((a, b) => Math.abs(a - level) - Math.abs(b - level) || a - b)[0]
 }
 
-/** One instance of `family` for `kc`: the seed picks among the variants that teach the KC at the level. Null when none does. */
+/**
+ * One instance of `family` for `kc`: the seed picks among the variants that teach the KC at the level, redrawn
+ * (on-kc.ts) until the instance carries the KC. Null when no variant teaches it, or no draw carries it: the
+ * composer then tries the KC's other families and its authored items, never an off-KC item.
+ */
 export function makeInstance(gen: Gen, kc: KcId, level: Level, seed: number): Instance | null {
   const at = servableLevel(gen, kc, level)
   if (at === null) return null
   const variants = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(at))
-  const variant = variants[(seed >>> 0) % variants.length]
   try {
-    return gen.make(seed >>> 0, at, variant.id)
+    return drawOnKc(kc, seed >>> 0, (s) => gen.make(s, at, variants[s % variants.length].id))
   } catch {
     return null
   }

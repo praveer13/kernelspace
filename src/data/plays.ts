@@ -1,8 +1,9 @@
 /**
- * The plays (W1 Play → Compose → Code, docs/specs/wave-1.md §11): the registry that /play/:playId, the
- * lesson's play block and verify-plays read, the In-production card's rows, and the pure session model
- * the block-placement components drive. Components keep no rules of their own, so the rules run under
- * `bun test` (tests/plays/play.test.ts).
+ * The plays (W1 Play → Compose → Code, docs/specs/wave-1.md §11; the scheduler play, wave-2.md §8): the registry
+ * that /play/:playId, the lesson's play block and verify-plays read, each play's In-production rows, and the pure
+ * session model the block-placement components drive. Components keep no rules of their own, so the rules run
+ * under `bun test` (tests/plays/play.test.ts). The scheduler's session model lives beside its components
+ * (src/components/play/scheduler/session.ts): it pulls in the Fleet engine, which block-placement must not.
  *
  * The ghost lives inside a `Session` (the lockstep runner plays it up front) and is read only by the
  * debrief: `stageOf`, the chips and the grid are built from the learner's side alone.
@@ -90,6 +91,80 @@ export const PRODUCTION_ROWS: readonly ProductionRow[] = [
   },
 ]
 
+/**
+ * The scheduler play's card (wave-2.md §8.5). Each row ties a Compose dial to a setting in vLLM or SGLang at the
+ * release its claim pins (D19). A fact that could not be quoted at that release is not a row: the spec never
+ * invents one. The copy holds no digits, because every number on the card is the claim chip.
+ */
+export const SCHEDULER_PRODUCTION_ROWS: readonly ProductionRow[] = [
+  {
+    claim: 'production.vllm.scheduling-policy',
+    dial: 'order: arrival or priority',
+    lead: "vLLM's scheduling policy defaults to",
+    tail: ': first come first served. Its only other choice is priority, a number each caller sets, so shortest prompt first is a policy you write yourself. Your order dial at fcfs is this default.',
+  },
+  {
+    claim: 'production.sglang.schedule-policy',
+    dial: 'order: shortest first is a flag',
+    lead: "SGLang's --schedule-policy also defaults to",
+    tail: ', and its choices include shortest-prefill-first: your sjf setting, one flag away. Neither engine orders by prompt length out of the box.',
+  },
+  {
+    claim: 'production.vllm.watermark',
+    dial: 'headroom: off by default',
+    lead: 'vLLM can keep a watermark of KV blocks free when it admits a waiting request. Its default is',
+    tail: ', so headroom is off until you ask for it. The reference you met reserves a fixed number of tokens per running request; the watermark is the same idea as a share of the pool.',
+  },
+  {
+    claim: 'production.sglang.schedule-conservativeness',
+    dial: 'headroom: a direction, not a token count',
+    lead: 'SGLang reserves decode room through its schedule conservativeness, which defaults to',
+    tail: '. A larger value schedules more cautiously, and its own help text says to raise it if requests are retracted often. That is the direction of your headroom dial; the source gives no token count.',
+  },
+  {
+    claim: 'production.vllm.v1-preemption',
+    dial: 'preempt: recompute',
+    lead: 'When vLLM V1 runs out of KV memory, its default preemption mode is',
+    tail: ': the evicted request goes back to waiting and is rebuilt from scratch later. That rebuild is what a preempt cost the request in your debrief.',
+  },
+  {
+    claim: 'production.sglang.retract',
+    dial: 'preempt: retract',
+    lead: "When a decode step cannot get KV memory, SGLang's scheduler will",
+    tail: ' requests: it puts them back on the waiting queue to be recomputed, and a retraction policy picks the victims. Your preempt dial picks the newest running request.',
+  },
+  {
+    claim: 'production.vllm.max-num-seqs',
+    dial: 'concurrency: fixed in the play',
+    lead: "The play fixes how many requests run at once. On the practice minute that cap and the pool both bind: the pool fills nearly to the brim and requests also wait for a free slot. vLLM's max_num_seqs defaults to",
+    tail: 'on a large GPU serving the API, and a smaller GPU gets a smaller default.',
+  },
+  {
+    claim: 'production.sglang.max-running-requests',
+    dial: 'concurrency: sized from the pool',
+    lead: 'When --max-running-requests is not given, SGLang uses',
+    tail: '. A real server runs far more requests at once than the play allows.',
+  },
+  {
+    claim: 'production.vllm.max-num-batched-tokens',
+    dial: 'chunk: fixed in the play',
+    lead: "The play prefills in fixed chunks. vLLM's max_num_batched_tokens, the per-iteration token budget that chunked prefill fills, defaults to",
+    tail: 'on a large GPU serving the API.',
+  },
+  {
+    claim: 'production.sglang.chunked-prefill-size',
+    dial: 'chunk: sized by the GPU',
+    lead: "SGLang's chunked prefill size defaults to",
+    tail: 'for GPUs in the middle of its memory table; smaller and larger GPUs get other defaults.',
+  },
+]
+
+/** The rows each play's card renders, by play id: verify-plays compares them with that play's own `productionClaims`. */
+export const PLAY_PRODUCTION_ROWS: Readonly<Record<string, readonly ProductionRow[]>> = {
+  'block-placement': PRODUCTION_ROWS,
+  scheduler: SCHEDULER_PRODUCTION_ROWS,
+}
+
 /* ------------------------------------------------------------------ */
 /* The registry                                                         */
 /* ------------------------------------------------------------------ */
@@ -105,7 +180,22 @@ export const BLOCK_PLACEMENT: PlayDef = {
   productionClaims: PRODUCTION_ROWS.map((r) => r.claim),
 }
 
-export const PLAYS: Readonly<Record<string, PlayDef>> = { [BLOCK_PLACEMENT.id]: BLOCK_PLACEMENT }
+/**
+ * T5.L7's play, "I was the scheduler" (wave-2.md §8). Its id is typed here rather than imported from
+ * src/lib/world/sched.ts, which holds the Fleet engine: this file loads with block-placement. A test holds the id to
+ * `SCHEDULER_PLAY_ID` and the minutes to `PLAY_MINUTES` (economy-table.ts).
+ */
+export const SCHEDULER: PlayDef = {
+  id: 'scheduler',
+  title: 'I was the scheduler',
+  lessonId: 't5.l7',
+  minutes: 20,
+  turnCap: TURN_CAP,
+  kcs: [KC.continuousBatching, KC.admissionHeadroom, KC.schedOrder, KC.batchingThroughput],
+  productionClaims: SCHEDULER_PRODUCTION_ROWS.map((r) => r.claim),
+}
+
+export const PLAYS: Readonly<Record<string, PlayDef>> = { [BLOCK_PLACEMENT.id]: BLOCK_PLACEMENT, [SCHEDULER.id]: SCHEDULER }
 export const PLAY_IDS: readonly string[] = Object.keys(PLAYS)
 
 /** The play behind a route or a block, or undefined for an id that is not a play (also `__proto__`). */
@@ -113,6 +203,9 @@ export const getPlay = (id: string): PlayDef | undefined => (Object.hasOwn(PLAYS
 
 /** Where lab 01 starts: the play ends by sending the learner here. */
 export const BUILD_THIS = { to: '/forge/rust-allocator', label: 'Build this: lab 01, stage 1 is a 2-minute win' } as const
+
+/** Where the scheduler play ends: lab 06, whose reference is the policy the ghost plays (wave-2.md §8.1). */
+export const BUILD_THIS_SCHEDULER = { to: '/forge/batching-scheduler', label: 'Build this: lab 06, Goodput or Nothing' } as const
 
 /* ------------------------------------------------------------------ */
 /* Display helpers                                                      */

@@ -311,7 +311,7 @@ describe('G1: tallyLoopCompletion', () => {
 /* ------------------------------------------------------------------ */
 
 describe('G2: the pooled first-review gate', () => {
-  const learners = (seeds: number[], accuracy: number) => seeds.map((s) => ({ events: simulate(s, { days: 90, pActive: 0.9, pLesson: 0.8, accuracy }).events }))
+  const learners = (seeds: number[], accuracy: number, days = 90) => seeds.map((s) => ({ events: simulate(s, { days, pActive: 0.9, pLesson: 0.8, accuracy }).events }))
 
   test('pools the first reviews of every ledger, each replayed on its own', () => {
     const ledgers = learners([21, 22, 23], 0.7)
@@ -371,18 +371,20 @@ describe('G2: the pooled first-review gate', () => {
     expect(small.n).toBeLessThan(G2_MIN_N)
     expect(small.status).toBe('insufficient')
 
-    const seeds = Array.from({ length: 12 }, (_, i) => 60 + i)
+    // four learners over sixty days: 163 and 278 first reviews, so both populations clear the 100 floor, and the gaps
+    // (0.48 and 0.016) sit far from the 0.1 threshold. Twelve over ninety days took about 2.4 s for the same verdicts.
+    const seeds = Array.from({ length: 4 }, (_, i) => 60 + i)
     // a learner population that forgets most of what the model expects them to remember: the gap is wide
-    const forgetful = selectFirstReviewGate(learners(seeds, 0.3), CONTENT)
+    const forgetful = selectFirstReviewGate(learners(seeds, 0.3, 60), CONTENT)
     expect(forgetful.n).toBeGreaterThanOrEqual(G2_MIN_N)
     expect(forgetful.gap as number).toBeGreaterThan(G2_MAX_GAP)
     expect(forgetful.status).toBe('fail')
     // one that remembers about what the model expects: the gap is narrow
-    const steady = selectFirstReviewGate(learners(seeds, 0.9), CONTENT)
+    const steady = selectFirstReviewGate(learners(seeds, 0.9, 60), CONTENT)
     expect(steady.n).toBeGreaterThanOrEqual(G2_MIN_N)
     expect(steady.gap as number).toBeLessThanOrEqual(G2_MAX_GAP)
     expect(steady.status).toBe('pass')
-  }, 30_000) // three 12-learner simulations: about 4 s on a quiet machine, over bun's 5 s default on a busy one
+  }, 15_000) // about 0.4 s quiet, 2.2 s with 35 busy loops on 20 cores; bun's 5 s default left too little for a loaded CI box
 })
 
 /* ------------------------------------------------------------------ */

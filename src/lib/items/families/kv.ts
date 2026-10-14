@@ -2,7 +2,7 @@
  * `kv`: KV bytes and capacity (docs/specs/wave-1.md §5.5; KCs t5.kv-bytes-per-token, t5.kv-capacity,
  * t5.gqa-kv-heads).
  *
- * Four variants: the bytes one token costs, the bytes one sequence costs, and how many tokens or
+ * Version 1 has four variants: the bytes one token costs, the bytes one sequence costs, and how many tokens or
  * chats fit in the HBM left after the weights. Each draws either a claim-backed scene (a model's
  * config and, for capacity, a GPU row, all through `claimNumber`) or a hypothetical model whose
  * numbers are declared in SYNTHETIC and announced as hypothetical in the prompt (W4).
@@ -10,14 +10,22 @@
  * The diagnoses are the slips of PLAN §4.A: you priced FP16, forgot K and V, used the query heads
  * (the GQA mistake), or counted one layer. A capacity answer divides by the per-token cost, so every
  * slip there lands on the inverse ratio. The shared unit rules catch KB against KiB.
+ *
+ * Version 2 (docs/specs/wave-2.md §11.5) adds three more variants, seven in all, for the Attention Zoo, each assessing a KC
+ * the family already had: `mla-bytes` (the latent cache, kv.mla-as-gqa), `swa-capacity` (the context
+ * that fits when window layers stop growing, kv.window-ignored) and `linear-state` (a recurrent state
+ * that does not depend on the context, kv.state-grows). Their claim-backed scenes read the zoo.* claims
+ * and their pins are checked against the kv-zoo presets. The first four variants' instances are the same
+ * as in version 1; only the version field (and so the fingerprint) changed.
  */
 
 import { claimNumber } from '@/data/claims'
 import { KC } from '@/data/kc/ids'
+import { zooBytes, zooPresetById, type ZooModel } from '@/lib/kv-zoo'
 import { claimRef, finishInstance, resolveVariant, rngFor, type Rng } from '../core'
 import { gradeResponse } from '../grade'
-import type { Gen, Instance, Level, ParamValue, Prompt, PromptPart, RatioRule, SolutionStep, VariantSpec } from '../types'
-import { BYTE_UNITS, byteUnitChoices, DTYPE_BYTES, formatNumber, GB, GIB, KV_PLANES, type Dtype } from '../units'
+import type { AnswerSpec, Gen, Instance, Level, ParamValue, Prompt, PromptPart, RatioRule, SolutionStep, VariantSpec } from '../types'
+import { BYTE_UNITS, byteUnitChoices, DTYPE_BYTES, formatNumber, GB, GIB, KV_PLANES, MB, type Dtype } from '../units'
 
 /** Scenario numbers: nothing here is a real model, GPU or price, and the prompt says "hypothetical". */
 const SYNTHETIC = {
@@ -44,11 +52,27 @@ const SYNTHETIC = {
   realPct: [20, 20, 20, 20],
   /** bytes per parameter of the weights on a claim-backed GPU, per level */
   weightBytes: [[2], [2], [2, 1], [2, 1]],
+  /** mla-bytes: the latent and decoupled-key widths of a hypothetical MLA layer */
+  latentDims: [64, 96, 128, 160, 240, 256, 320, 480, 512, 640],
+  ropeDims: [16, 32, 48, 64, 80],
+  /** swa-capacity: the window, the sink tokens kept for good, and the layer pattern (k window layers per full layer, `fullLayers` full ones) */
+  windows: [128, 256, 512, 1024, 4096],
+  sinks: [0, 4],
+  windowsPerFull: [1, 2, 3, 5],
+  fullLayers: [4, 6, 8, 10, 12],
+  swaKvHeads: [2, 4, 8],
+  /** GB left for one sequence's KV cache; a draw keeps those where the cache grows well past the window */
+  kvGb: [1, 2, 4, 8, 16, 24, 32, 40, 48],
+  minWindows: 8,
+  /** linear-state: heads and state widths of a hypothetical linear-attention layer, and the contexts it is asked about */
+  stateHeads: [8, 12, 16, 24, 32, 48, 64],
+  stateDims: [64, 80, 96, 128, 160, 256],
+  stateContexts: [4096, 32768, 131072, 1048576],
 }
 
 const L3: Level = 3 // gen-literal-ok: the transfer level index
 const ALL_LEVELS: readonly Level[] = [0, 1, 2, L3]
-const NSEC = { bytes: 45, seq: 60, tokens: 75, chats: 90 } // gen-literal-ok: nominal seconds per variant
+const NSEC = { bytes: 45, seq: 60, tokens: 75, chats: 90, mla: 60, swa: 90, state: 60 } // gen-literal-ok: nominal seconds per variant
 /** Grading windows: a capacity estimate is ok within 25 %; a numeric answer within 0.5 %, tighter than the 2.4 % between KB and KiB. */
 const OK_WITHIN = 1.25 // gen-literal-ok: grading window of the capacity estimates
 const REL_TOL = 0.005 // gen-literal-ok: grading window of the numeric answers
@@ -272,6 +296,304 @@ function workedFor(level: Level, steps: SolutionStep[]): SolutionStep[] | undefi
   return shown.map((s, i) => (i === blank ? { text: s.text, blank: true } : s))
 }
 
+/* ------------------------------ the zoo variants (version 2) ------------------------------ */
+
+type ZooVariant = 'mla-bytes' | 'swa-capacity' | 'linear-state'
+const ZOO_VARIANTS: readonly string[] = ['mla-bytes', 'swa-capacity', 'linear-state']
+const isZoo = (variant: string): boolean => ZOO_VARIANTS.includes(variant)
+
+/** The claim-backed models of each variant: the id suffix of every field it reads, under `zoo.<slug>.`. */
+const MLA_MODELS = {
+  'deepseek-v3': { name: 'DeepSeek-V3', layers: 'layers', note: '' },
+  'kimi-linear': { name: 'Kimi Linear', layers: 'mla-layers', note: " The model's linear layers keep a fixed-size state instead and are left out." },
+} as const
+type MlaKey = keyof typeof MLA_MODELS
+const MLA_KEYS = Object.keys(MLA_MODELS) as MlaKey[]
+
+const SWA_MODEL = 'gpt-oss-120b'
+
+const LINEAR_MODELS = {
+  'qwen3-5-397b': { name: 'Qwen3.5-397B', layers: 'linear-layers', heads: 'linear-value-heads', keyDim: 'linear-key-head-dim', valueDim: 'linear-value-head-dim', kind: 'gated DeltaNet' },
+  'kimi-linear': { name: 'Kimi Linear', layers: 'kda-layers', heads: 'kda-heads', keyDim: 'kda-head-dim', valueDim: 'kda-head-dim', kind: 'KDA' },
+} as const
+type LinearKey = keyof typeof LINEAR_MODELS
+const LINEAR_KEYS = Object.keys(LINEAR_MODELS) as LinearKey[]
+
+const zooClaim = (model: string, field: string): string => `zoo.${model}.${field}`
+
+interface ZooScene {
+  /** a zoo preset's slug, or `synthetic` */
+  model: string
+  dtype: Dtype
+  /** mla-bytes: MLA layers; linear-state: linear layers */
+  layers: number
+  latentDim: number
+  ropeDim: number
+  /** swa-capacity: sliding-window and full-attention layers, the window, the sink tokens, KV heads and head dimension */
+  swaLayers: number
+  fullLayers: number
+  window: number
+  sinks: number
+  kvHeads: number
+  headDim: number
+  /** swa-capacity: GB left for the KV cache of one sequence */
+  kvGb: number
+  /** linear-state: heads, key and value widths, and the context the question names */
+  heads: number
+  keyDim: number
+  valueDim: number
+  tokens: number
+}
+
+const BLANK_ZOO: ZooScene = {
+  model: 'synthetic', dtype: 'bf16', layers: 0, latentDim: 0, ropeDim: 0, swaLayers: 0, fullLayers: 0, window: 0, sinks: 0, kvHeads: 0, headDim: 0, kvGb: 0, heads: 0, keyDim: 0, valueDim: 0, tokens: 0,
+}
+
+/** MLA and window answers are priced against a 2-byte cache: a narrower one would make "priced FP16" and the variant's own slip the same ratio. */
+const wideDtypes = (level: Level): Dtype[] => SYNTHETIC.dtypes[level].filter((d) => DTYPE_BYTES[d] >= 2)
+
+/** KV bytes one token adds in one MLA layer, per layer: the latent plus the decoupled key, shared by every head. */
+const mlaPerToken = (z: ZooScene): number => z.layers * (z.latentDim + z.ropeDim) * DTYPE_BYTES[z.dtype]
+
+/** KV bytes one token adds in one layer of a window or full model: K and V for every KV head. */
+const swaLayerToken = (z: ZooScene): number => KV_PLANES * z.kvHeads * z.headDim * DTYPE_BYTES[z.dtype]
+/** The tokens a window layer keeps once the context passes the window: the window and the sinks. */
+const swaKept = (z: ZooScene): number => z.window + z.sinks
+const swaBudget = (z: ZooScene): number => z.kvGb * GB
+/** The context at which the cache fills the budget: the window layers hold a fixed share, the full layers grow with the context. */
+const swaContext = (z: ZooScene): number => (swaBudget(z) / swaLayerToken(z) - z.swaLayers * swaKept(z)) / z.fullLayers
+
+/** The context a learner who gave every layer the full cache would find: the budget over all the layers' bytes per token. */
+const swaUniform = (z: ZooScene): number => swaBudget(z) / swaLayerToken(z) / (z.swaLayers + z.fullLayers)
+
+/** Bytes of recurrent state in all of the linear layers: heads · d_k · d_v per layer, whatever the context. */
+const linearState = (z: ZooScene): number => z.layers * z.heads * z.keyDim * z.valueDim * DTYPE_BYTES[z.dtype]
+
+function realMla(key: MlaKey, dtype: Dtype): ZooScene {
+  const f = (s: string): number => claimNumber(zooClaim(key, s))
+  return { ...BLANK_ZOO, model: key, dtype, layers: f(MLA_MODELS[key].layers), latentDim: f('kv-lora-rank'), ropeDim: f('rope-head-dim') }
+}
+
+function realSwa(kvGb: number): ZooScene {
+  const f = (s: string): number => claimNumber(zooClaim(SWA_MODEL, s))
+  return {
+    ...BLANK_ZOO,
+    model: SWA_MODEL,
+    swaLayers: f('swa-layers'),
+    fullLayers: f('full-layers'),
+    window: f('window'),
+    sinks: f('sink-kv-tokens'),
+    kvHeads: f('kv-heads'),
+    headDim: f('head-dim'),
+    kvGb,
+  }
+}
+
+function realLinear(key: LinearKey, dtype: Dtype, tokens: number): ZooScene {
+  const m = LINEAR_MODELS[key]
+  const f = (s: string): number => claimNumber(zooClaim(key, s))
+  return { ...BLANK_ZOO, model: key, dtype, tokens, layers: f(m.layers), heads: f(m.heads), keyDim: f(m.keyDim), valueDim: f(m.valueDim) }
+}
+
+/** The claims a scene read, in the order its builder read them. */
+function zooClaimIds(variant: string, z: ZooScene): string[] {
+  if (z.model === 'synthetic') return []
+  if (variant === 'mla-bytes') return [MLA_MODELS[z.model as MlaKey].layers, 'kv-lora-rank', 'rope-head-dim'].map((s) => zooClaim(z.model, s))
+  if (variant === 'swa-capacity') return ['swa-layers', 'full-layers', 'window', 'sink-kv-tokens', 'kv-heads', 'head-dim'].map((s) => zooClaim(z.model, s))
+  const m = LINEAR_MODELS[z.model as LinearKey]
+  return [m.layers, m.heads, m.keyDim, m.valueDim].map((s) => zooClaim(z.model, s))
+}
+
+function drawZoo(rng: Rng, variant: ZooVariant, level: Level): ZooScene {
+  const real = rng.int(1, 100) <= SYNTHETIC.realPct[level]
+  if (variant === 'mla-bytes') {
+    const dtype = rng.pick(wideDtypes(level))
+    if (real) return realMla(rng.pick(MLA_KEYS), dtype)
+    return { ...BLANK_ZOO, dtype, layers: rng.int(SYNTHETIC.layersMin, SYNTHETIC.layersMax), latentDim: rng.pick(SYNTHETIC.latentDims), ropeDim: rng.pick(SYNTHETIC.ropeDims) }
+  }
+  if (variant === 'swa-capacity') {
+    const dtype = rng.pick(wideDtypes(level))
+    let z: ZooScene
+    if (real) {
+      z = { ...realSwa(0), dtype }
+    } else {
+      const full = rng.pick(SYNTHETIC.fullLayers)
+      z = {
+        ...BLANK_ZOO,
+        dtype,
+        fullLayers: full,
+        swaLayers: full * rng.pick(SYNTHETIC.windowsPerFull),
+        window: rng.pick(SYNTHETIC.windows),
+        sinks: rng.pick(SYNTHETIC.sinks),
+        kvHeads: rng.pick(SYNTHETIC.swaKvHeads),
+        headDim: rng.pick(SYNTHETIC.headDims),
+      }
+    }
+    // keep the budgets at which the cache grows well past the window, so ignoring the window is a real slip
+    const fits = SYNTHETIC.kvGb.filter((gb) => swaContext({ ...z, kvGb: gb }) >= SYNTHETIC.minWindows * swaKept(z))
+    return { ...z, kvGb: fits.length > 0 ? rng.pick(fits) : SYNTHETIC.kvGb[SYNTHETIC.kvGb.length - 1] }
+  }
+  const dtype = rng.pick(SYNTHETIC.dtypes[level])
+  if (real) return realLinear(rng.pick(LINEAR_KEYS), dtype, rng.pick(SYNTHETIC.stateContexts))
+  return {
+    ...BLANK_ZOO,
+    dtype,
+    layers: rng.int(SYNTHETIC.layersMin, SYNTHETIC.layersMax),
+    heads: rng.pick(SYNTHETIC.stateHeads),
+    keyDim: rng.pick(SYNTHETIC.stateDims),
+    valueDim: rng.pick(SYNTHETIC.stateDims),
+    tokens: rng.pick(SYNTHETIC.stateContexts),
+  }
+}
+
+/** The unit a zoo size is answered in: bytes for one token's MLA cache, MB or GB (MiB or GiB at the transfer level) for a state. */
+const zooUnit = (variant: string, level: Level, bytes: number): string => (variant === 'mla-bytes' ? (level === L3 ? 'KiB' : 'B') : sizeUnit('seq-bytes', level, bytes))
+
+/** A prompt number: a claim chip for a real model, a plain number for a hypothetical one. The zoo claims carry units ("layers", "dims") that the sentence around the chip already says, so a chip shows its unit only when asked. */
+const zooNum = (z: ZooScene, field: string, value: number, unit?: string): PromptPart => (z.model === 'synthetic' ? val(value, unit) : { t: 'claim', claim: zooClaim(z.model, field), unit: unit ?? '' })
+
+const zooName = (z: ZooScene, variant: string): string =>
+  z.model === 'synthetic' ? 'A hypothetical model' : variant === 'mla-bytes' ? MLA_MODELS[z.model as MlaKey].name : variant === 'swa-capacity' ? 'gpt-oss-120b' : LINEAR_MODELS[z.model as LinearKey].name
+
+function zooStem(variant: string, level: Level, z: ZooScene, unit: string): PromptPart[] {
+  if (variant === 'mla-bytes') {
+    const note = z.model === 'synthetic' ? '' : MLA_MODELS[z.model as MlaKey].note
+    return [
+      text(`${zooName(z, variant)} has `),
+      zooNum(z, MLA_MODELS[(z.model === 'synthetic' ? 'deepseek-v3' : z.model) as MlaKey].layers, z.layers),
+      text(' MLA (multi-head latent attention) layers. Each layer caches, for every token, one latent vector of '),
+      zooNum(z, 'kv-lora-rank', z.latentDim),
+      text(' values plus a decoupled RoPE key of '),
+      zooNum(z, 'rope-head-dim', z.ropeDim),
+      text(` values, shared by all of its attention heads.${note} The cache is stored in ${LABEL[z.dtype]}. How much KV cache does one token need, summed over these layers? Answer in ${unitName(unit)}.`),
+    ]
+  }
+  if (variant === 'swa-capacity') {
+    const sinks: PromptPart[] = z.sinks > 0 ? [text(' plus '), zooNum(z, 'sink-kv-tokens', z.sinks), text(' sink tokens kept for good')] : []
+    const pattern: PromptPart[] =
+      level === L3
+        ? [
+            text(`${zooName(z, variant)} has `),
+            val(z.swaLayers + z.fullLayers),
+            text(' layers in a repeating pattern: '),
+            ...(z.swaLayers === z.fullLayers ? [text('one')] : [val(z.swaLayers / z.fullLayers)]),
+            text(` sliding-window ${z.swaLayers === z.fullLayers ? 'layer' : 'layers'}, then one full-attention layer. `),
+          ]
+        : [text(`${zooName(z, variant)} has `), zooNum(z, 'swa-layers', z.swaLayers), text(' sliding-window layers and '), zooNum(z, 'full-layers', z.fullLayers), text(' full-attention layers. ')]
+    return [
+      ...pattern,
+      text('Every layer has '),
+      zooNum(z, 'kv-heads', z.kvHeads),
+      text(' KV heads of head dimension '),
+      zooNum(z, 'head-dim', z.headDim),
+      text(`. A sliding-window layer keeps K and V for only the last `),
+      zooNum(z, 'window', z.window, 'tokens'),
+      ...sinks,
+      text(`; a full-attention layer keeps every token. The cache is stored in ${LABEL[z.dtype]}. `),
+      text('The KV cache of one sequence may use '),
+      val(z.kvGb, 'GB'),
+      text(' of HBM. What is the longest context, in tokens, that fits?'),
+    ]
+  }
+  const m = z.model === 'synthetic' ? undefined : LINEAR_MODELS[z.model as LinearKey]
+  return [
+    text(`${zooName(z, variant)} has `),
+    zooNum(z, m?.layers ?? 'layers', z.layers),
+    text(` linear-attention${m ? ` (${m.kind})` : ''} layers. Each layer keeps a recurrent state of one `),
+    zooNum(z, m?.keyDim ?? 'key', z.keyDim),
+    text(' × '),
+    zooNum(z, m?.valueDim ?? 'value', z.valueDim),
+    text(' matrix for each of its '),
+    zooNum(z, m?.heads ?? 'heads', z.heads),
+    text(` heads, stored in ${LABEL[z.dtype]}, and folds every new token into it. After a context of `),
+    val(z.tokens, 'tokens'),
+    text(`, how much state do these layers hold in total? Answer in ${unit}.`),
+  ]
+}
+
+function zooSteps(variant: string, level: Level, z: ZooScene, unit: string): SolutionStep[] {
+  const b = DTYPE_BYTES[z.dtype]
+  const steps: SolutionStep[] = []
+  if (variant === 'mla-bytes') {
+    const values = z.latentDim + z.ropeDim
+    steps.push({ text: [text('Cached values per layer per token = latent + decoupled key = '), val(z.latentDim), text(' + '), val(z.ropeDim)], result: { value: values, unit: 'values' } })
+    steps.push({ text: [text('Bytes per layer per token = '), val(values), text(` × ${bytesText(b)} (${LABEL[z.dtype]}); one latent serves both K and V, so there is no factor 2`)], result: { value: values * b, unit: 'B' } })
+    steps.push({ text: [text('Bytes per token = '), val(values * b, 'B'), text(' × '), val(z.layers), text(' layers')], result: { value: mlaPerToken(z), unit: 'B' } })
+    if (unit !== 'B') steps.push({ text: [text(`In ${unit} = bytes ÷ `), val(BYTE_UNITS[unit], 'B')], result: { value: mlaPerToken(z) / BYTE_UNITS[unit], unit } })
+    return steps
+  }
+  if (variant === 'swa-capacity') {
+    const layer = swaLayerToken(z)
+    const kept = swaKept(z)
+    const flat = z.swaLayers * layer * kept
+    if (level === L3) {
+      steps.push({ text: [text('Full-attention layers = layers ÷ (window layers per full layer + 1) = '), val(z.swaLayers + z.fullLayers), text(' ÷ '), val(z.swaLayers / z.fullLayers + 1)], result: { value: z.fullLayers, unit: 'layers' } })
+      steps.push({ text: [text('Sliding-window layers = '), val(z.swaLayers + z.fullLayers), text(' − '), val(z.fullLayers)], result: { value: z.swaLayers, unit: 'layers' } })
+    }
+    steps.push({ text: [text('KV bytes per token per layer = 2 (K and V) × '), val(z.kvHeads), text(' KV heads × '), val(z.headDim), text(` head dim × ${bytesText(b)} (${LABEL[z.dtype]})`)], result: { value: layer, unit: 'B' } })
+    steps.push({ text: [text(`Once the context passes the window, a sliding-window layer holds ${z.sinks > 0 ? 'the window plus the sinks' : 'the window'} = `), val(z.window), ...(z.sinks > 0 ? [text(' + '), val(z.sinks)] : []), text(' tokens, whatever the context')], result: { value: kept, unit: 'tokens' } })
+    steps.push({ text: [text('Bytes the window layers hold = '), val(z.swaLayers), text(' layers × '), val(layer, 'B'), text(' × '), val(kept, 'tokens')], result: { value: flat, unit: 'B' } })
+    steps.push({ text: [text('Left for the full-attention layers = '), val(swaBudget(z), 'B'), text(' − '), val(flat, 'B')], result: { value: swaBudget(z) - flat, unit: 'B' } })
+    steps.push({ text: [text('Context that fits = left ÷ (full layers × bytes per token per layer) = '), val(swaBudget(z) - flat, 'B'), text(' ÷ ('), val(z.fullLayers), text(' × '), val(layer, 'B'), text(')')], result: { value: swaContext(z), unit: 'tokens' } })
+    return steps
+  }
+  const perHead = z.keyDim * z.valueDim
+  const perLayer = z.heads * perHead
+  steps.push({ text: [text('State values per head = d_k × d_v = '), val(z.keyDim), text(' × '), val(z.valueDim)], result: { value: perHead, unit: 'values' } })
+  steps.push({ text: [text('State values per layer = '), val(z.heads), text(' heads × '), val(perHead)], result: { value: perLayer, unit: 'values' } })
+  steps.push({ text: [text('Bytes per layer = '), val(perLayer), text(` × ${bytesText(b)} (${LABEL[z.dtype]})`)], result: { value: perLayer * b, unit: 'B' } })
+  steps.push({ text: [text('The state is a fixed size, so the context of '), val(z.tokens, 'tokens'), text(' does not enter: each new token is folded into the same matrices')] })
+  steps.push({ text: [text('Bytes for all layers = '), val(perLayer * b, 'B'), text(' × '), val(z.layers), text(' layers')], result: { value: linearState(z), unit: 'B' } })
+  steps.push({ text: [text(`In ${unit} = bytes ÷ `), val(BYTE_UNITS[unit], 'B')], result: { value: linearState(z) / BYTE_UNITS[unit], unit } })
+  return steps
+}
+
+function buildZoo(v: VariantSpec, level: Level, seed: number, z: ZooScene): Instance {
+  const params: Record<string, ParamValue> = { model: z.model, dtype: z.dtype }
+  let answer: AnswerSpec
+  let unit = ''
+  if (v.id === 'mla-bytes') {
+    Object.assign(params, { layers: z.layers, latentDim: z.latentDim, ropeDim: z.ropeDim })
+    unit = zooUnit(v.id, level, mlaPerToken(z))
+    answer = { kind: 'numeric', truth: mlaPerToken(z) / BYTE_UNITS[unit], unit, tolerance: { rel: REL_TOL }, units: byteUnitChoices(unit, ['B', 'KB', 'KiB']) }
+  } else if (v.id === 'swa-capacity') {
+    Object.assign(params, { layers: z.swaLayers + z.fullLayers, swaLayers: z.swaLayers, fullLayers: z.fullLayers, window: z.window, sinks: z.sinks, kvHeads: z.kvHeads, headDim: z.headDim, kvGb: z.kvGb })
+    answer = { kind: 'estimate', truth: swaContext(z), unit: 'tokens', okWithinFactor: OK_WITHIN, interval: true }
+  } else {
+    Object.assign(params, { layers: z.layers, heads: z.heads, keyDim: z.keyDim, valueDim: z.valueDim, tokens: z.tokens })
+    unit = zooUnit(v.id, level, linearState(z))
+    answer = { kind: 'numeric', truth: linearState(z) / BYTE_UNITS[unit], unit, tolerance: { rel: REL_TOL }, units: byteUnitChoices(unit, ['MB', 'GB', 'MiB', 'GiB']) }
+  }
+  const steps = zooSteps(v.id, level, z, unit)
+  const worked = workedFor(level, steps)
+  const prompt: Prompt = { stem: zooStem(v.id, level, z, unit), ...(worked ? { worked } : {}) }
+  return finishInstance(gen, { variant: v.id, seed, level, nsec: v.nsec, kcs: kcsFor(v, level), params, prompt, claims: zooClaimIds(v.id, z).map(claimRef), answer })
+}
+
+/** The ZooScene back out of an instance's params, for `solution`. */
+function zooSceneOf(inst: Instance): ZooScene {
+  const p = inst.params
+  const n = (k: string): number => (typeof p[k] === 'number' ? p[k] : 0)
+  return {
+    model: String(p.model),
+    dtype: p.dtype as Dtype,
+    layers: n('layers'),
+    latentDim: n('latentDim'),
+    ropeDim: n('ropeDim'),
+    swaLayers: n('swaLayers'),
+    fullLayers: n('fullLayers'),
+    window: n('window'),
+    sinks: n('sinks'),
+    kvHeads: n('kvHeads'),
+    headDim: n('headDim'),
+    kvGb: n('kvGb'),
+    heads: n('heads'),
+    keyDim: n('keyDim'),
+    valueDim: n('valueDim'),
+    tokens: n('tokens'),
+  }
+}
+
 /* ------------------------------ the instance ------------------------------ */
 
 const VARIANTS: readonly VariantSpec[] = [
@@ -279,11 +601,14 @@ const VARIANTS: readonly VariantSpec[] = [
   { id: 'seq-bytes', title: 'KV bytes of one sequence', kcs: [KC.kvBytesPerToken, KC.gqaKvHeads], levels: ALL_LEVELS, nsec: NSEC.seq },
   { id: 'capacity-tokens', title: 'Tokens that fit in HBM', kcs: [KC.kvCapacity, KC.gqaKvHeads], levels: ALL_LEVELS, nsec: NSEC.tokens },
   { id: 'capacity-chats', title: 'Chats that fit in HBM', kcs: [KC.kvCapacity, KC.gqaKvHeads], levels: ALL_LEVELS, nsec: NSEC.chats },
+  { id: 'mla-bytes', title: 'KV bytes per token of an MLA model', kcs: [KC.kvBytesPerToken], levels: ALL_LEVELS, nsec: NSEC.mla },
+  { id: 'swa-capacity', title: 'Context that fits with window layers', kcs: [KC.kvCapacity], levels: ALL_LEVELS, nsec: NSEC.swa },
+  { id: 'linear-state', title: 'State bytes of linear-attention layers', kcs: [KC.kvBytesPerToken], levels: ALL_LEVELS, nsec: NSEC.state },
 ]
 
 const variantOf = (id: string): VariantSpec => VARIANTS.find((v) => v.id === id) as VariantSpec
 
-/** Every level assesses the variant's first KC; the transfer level adds the GQA KC, because the model is given as a group size. */
+/** Every level assesses the variant's first KC; the transfer level adds the GQA KC, because the model is given as a group size (the zoo variants have one KC, so it adds nothing). */
 const kcsFor = (v: VariantSpec, level: Level): string[] => (level === L3 ? [...v.kcs] : [v.kcs[0]])
 
 function build(v: VariantSpec, level: Level, seed: number, sc: Scene): Instance {
@@ -325,7 +650,8 @@ function build(v: VariantSpec, level: Level, seed: number, sc: Scene): Instance 
 
 function make(seed: number, level: Level, variant?: string): Instance {
   const v = resolveVariant(gen, seed, level, variant)
-  return build(v, level, seed, drawScene(rngFor(gen.id, v.id, level, seed), v.id, level))
+  const rng = rngFor(gen.id, v.id, level, seed)
+  return isZoo(v.id) ? buildZoo(v, level, seed, drawZoo(rng, v.id as ZooVariant, level)) : build(v, level, seed, drawScene(rng, v.id, level))
 }
 
 /** The Scene back out of an instance's params, for `solution`. */
@@ -350,6 +676,7 @@ function sceneOf(inst: Instance): Scene {
 
 function solution(inst: Instance): SolutionStep[] {
   const a = inst.answer
+  if (isZoo(inst.variant)) return zooSteps(inst.variant, inst.level, zooSceneOf(inst), a.kind === 'numeric' ? a.unit : '')
   return stepsFor(inst.variant, inst.level, sceneOf(inst), a.kind === 'numeric' ? a.unit : '')
 }
 
@@ -364,20 +691,54 @@ const bytesOf = (inst: Instance): number => DTYPE_BYTES[inst.params.dtype as Dty
  */
 const slip = (inst: Instance, rho: number): number => (isCapacity(inst.variant) ? 1 / rho : rho)
 
+/**
+ * The first four rules were written for the K-and-V variants. The zoo variants keep only the ones that
+ * are exact for them: an MLA cache has one latent, not K and V planes or KV heads; the window answer is
+ * not proportional to the per-token cost, so only its own slip applies.
+ */
 const RATIO_RULES: readonly RatioRule[] = [
   {
     id: 'kv.priced-fp16',
     // FP8 and INT8 take half of FP16's 2 bytes, FP4 a quarter: pricing 2 bytes overshoots by 2 or 4
-    ratio: (inst) => (bytesOf(inst) < 2 ? slip(inst, 2 / bytesOf(inst)) : null),
+    ratio: (inst) => (bytesOf(inst) < 2 && inst.variant !== 'swa-capacity' ? slip(inst, 2 / bytesOf(inst)) : null),
     message: (inst) => `You priced FP16: this cache is ${LABEL[inst.params.dtype as Dtype]}, ${bytesText(bytesOf(inst))} per value.`,
   },
-  { id: 'kv.forgot-k-and-v', ratio: (inst) => slip(inst, 1 / KV_PLANES), message: 'You counted one plane: the cache stores both K and V, so it is twice that.' },
+  { id: 'kv.forgot-k-and-v', ratio: (inst) => (isZoo(inst.variant) ? null : slip(inst, 1 / KV_PLANES)), message: 'You counted one plane: the cache stores both K and V, so it is twice that.' },
   {
     id: 'kv.query-heads',
-    ratio: (inst) => (num(inst, 'attnHeads') === num(inst, 'kvHeads') ? null : slip(inst, num(inst, 'attnHeads') / num(inst, 'kvHeads'))),
-    message: (inst) => `You used the ${num(inst, 'attnHeads')} attention heads: only the ${num(inst, 'kvHeads')} KV heads are cached, because the query heads share them.`,
+    ratio: (inst) => (isZoo(inst.variant) || num(inst, 'attnHeads') === num(inst, 'kvHeads') ? null : slip(inst, num(inst, 'attnHeads') / num(inst, 'kvHeads'))),
+    message: (inst) => (isZoo(inst.variant) ? 'You used the query heads.' : `You used the ${num(inst, 'attnHeads')} attention heads: only the ${num(inst, 'kvHeads')} KV heads are cached, because the query heads share them.`),
   },
-  { id: 'kv.one-layer', ratio: (inst) => slip(inst, 1 / num(inst, 'layers')), message: (inst) => `You counted one layer: every one of the ${num(inst, 'layers')} layers keeps its own K and V.` },
+  {
+    id: 'kv.one-layer',
+    ratio: (inst) => (inst.variant === 'swa-capacity' ? null : slip(inst, 1 / num(inst, 'layers'))),
+    message: (inst) => `You counted one layer: every one of the ${num(inst, 'layers')} layers keeps its own ${inst.variant === 'linear-state' ? 'state' : inst.variant === 'mla-bytes' ? 'latent' : 'K and V'}.`,
+  },
+  {
+    id: 'kv.mla-as-gqa',
+    // GQA stores K and V for every token; an MLA layer stores one latent that serves both, so pricing it like GQA doubles it
+    ratio: (inst) => (inst.variant === 'mla-bytes' ? KV_PLANES : null),
+    message: 'You priced it as GQA, with separate K and V planes. An MLA layer caches one shared latent per token (plus the small decoupled key), so the cache is half that.',
+  },
+  {
+    id: 'kv.window-ignored',
+    // pricing every layer as full attention fills the budget at the context where all the layers grow, not just the full ones
+    ratio: (inst) => (inst.variant === 'swa-capacity' ? swaUniform(zooSceneOf(inst)) / swaContext(zooSceneOf(inst)) : null),
+    // every rule's message is rendered for every instance (the generator gate checks the text), so it reads its params only for the variant it is about
+    message: (inst) =>
+      inst.variant === 'swa-capacity'
+        ? `You let every layer grow with the context. A sliding-window layer stops at its ${num(inst, 'window')}-token window${num(inst, 'sinks') > 0 ? ` plus ${num(inst, 'sinks')} sinks` : ''}, so only the ${num(inst, 'fullLayers')} full-attention layers keep growing and the context that fits is longer.`
+        : 'You let every layer grow with the context.',
+  },
+  {
+    id: 'kv.state-grows',
+    // a linear layer's state is one fixed matrix per head; scaling it with the context treats it like a cache that gains a row per token
+    ratio: (inst) => (inst.variant === 'linear-state' ? num(inst, 'tokens') : null),
+    message: (inst) =>
+      inst.variant === 'linear-state'
+        ? `You scaled the state with the context. A linear layer folds each of the ${formatNumber(num(inst, 'tokens'))} tokens into the same fixed-size matrices, so its state does not grow.`
+        : 'You scaled the state with the context.',
+  },
 ]
 
 /* ------------------------------ pins ------------------------------ */
@@ -400,9 +761,38 @@ const pins: Gen['pins'] = [
   { name: 'Boot: chats of 4,096 tokens on an H100', source: 'boot', make: () => build(variantOf('capacity-chats'), 2, 1, bootScene(4096)), truth: 119.1, tolerance: { abs: 0.05 } },
 ]
 
+/* The zoo pins read the numbers off kv-zoo's presets, which are built from the same claims by other code: the two must agree. */
+const preset = (id: string): ZooModel => {
+  const m = zooPresetById(id)
+  if (!m) throw new RangeError(`kv: no kv-zoo preset ${id}`)
+  return m
+}
+/** What the groups of one layer kind store at context t, summed: kv-zoo's own arithmetic. */
+const zooKindBytes = (id: string, kind: string, t: number): number => {
+  const m = preset(id)
+  return zooBytes(m, t).groups.reduce((sum, g, i) => (m.groups[i].layer.kind === kind ? sum + g.stored : sum), 0)
+}
+const pinMla = (key: MlaKey): Instance => buildZoo(variantOf('mla-bytes'), 2, 1, realMla(key, 'bf16'))
+/** Each pin prices the state at the dtype kv-zoo does: the config's (Qwen3.5's mamba_ssm_dtype is float32), else BF16. Served instances draw their own stated dtype. */
+const pinState = (key: LinearKey, tokens: number): Instance => buildZoo(variantOf('linear-state'), 2, 1, realLinear(key, key === 'qwen3-5-397b' ? 'fp32' : 'bf16', tokens))
+/** A gpt-oss budget of exactly the bytes kv-zoo says its cache takes at `tokens`. */
+const pinWindow = (tokens: number): Instance => buildZoo(variantOf('swa-capacity'), 2, 1, realSwa(zooBytes(preset(SWA_MODEL), tokens).stored / GB))
+
+const zooPins: Gen['pins'] = [
+  { name: 'DeepSeek-V3 MLA KV bytes per token, as kv-zoo has it', source: 'kv-zoo', make: () => pinMla('deepseek-v3'), truth: zooBytes(preset('deepseek-v3'), 1).stored },
+  { name: 'Kimi Linear MLA layers KV bytes per token, as kv-zoo has them', source: 'kv-zoo', make: () => pinMla('kimi-linear'), truth: zooKindBytes('kimi-linear', 'mla', 1) },
+  // the state is constant, so the same figure holds at every context; the stem names 1M tokens
+  { name: 'Qwen3.5 gated-DeltaNet state at 1M tokens, in MB', source: 'kv-zoo', make: () => pinState('qwen3-5-397b', 1048576), truth: zooKindBytes('qwen3-5-397b', 'linear', 1048576) / MB, tolerance: { rel: 1e-9 } }, // gen-literal-ok: the zoo's longest context, 2^20 tokens
+  { name: 'Kimi Linear KDA state at 1k tokens, in MB', source: 'kv-zoo', make: () => pinState('kimi-linear', 1024), truth: zooKindBytes('kimi-linear', 'linear', 1024) / MB, tolerance: { rel: 1e-9 } }, // gen-literal-ok: the zoo's shortest context, 2^10 tokens
+  // gen-literal-ok: the zoo's 128k context (131,072 tokens)
+  { name: 'gpt-oss-120b: the context that fills what its 128k-token cache stores', source: 'kv-zoo', make: () => pinWindow(131072), truth: 131072, tolerance: { abs: 0.5 } },
+  // gen-literal-ok: the zoo's 1M context (1,048,576 tokens)
+  { name: 'gpt-oss-120b: the context that fills what its 1M-token cache stores', source: 'kv-zoo', make: () => pinWindow(1048576), truth: 1048576, tolerance: { abs: 0.5 } },
+]
+
 const gen: Gen = {
   id: 'kv',
-  version: 1,
+  version: 2,
   title: 'KV bytes and capacity',
   kcs: [KC.kvBytesPerToken, KC.kvCapacity, KC.gqaKvHeads],
   variants: VARIANTS,
@@ -410,7 +800,7 @@ const gen: Gen = {
   make,
   grade: (inst, response) => gradeResponse(inst, response, RATIO_RULES),
   solution,
-  pins,
+  pins: [...pins, ...zooPins],
 }
 
 export default gen

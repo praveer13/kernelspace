@@ -159,11 +159,12 @@ export function resolveTasks(
 }
 
 /**
- * The zoo's six task ids (docs/specs/wave-2.md §11.4) that lessons may list before 2b-13 registers
- * them, so 2a can put the zoo exercise in t5.l4 first. tests/sims/registry.test.ts fails once one of
- * these is registered, so the list cannot go stale; 2b-13 empties it.
+ * Task ids that lessons may list before the sim registers them, so one PR can add an exercise block ahead of
+ * the PR that adds its tasks. Empty since 2b-13 registered the zoo's six (docs/specs/wave-2.md §11.4, `zoo.*`
+ * in kvZoo.tasks.ts). tests/sims/registry.test.ts fails once a listed id is registered, so an entry cannot go
+ * stale: remove it in the PR that registers it.
  */
-export const PENDING_TASK_IDS: readonly string[] = ['zoo.mla-ratio', 'zoo.swa-flat', 'zoo.dsa-reads', 'zoo.linear-state', 'zoo.hybrid-share', 'zoo.gdn-prefix']
+export const PENDING_TASK_IDS: readonly string[] = []
 
 /** What an exercise block shows: nothing (all its ids are pending), the inline sim with the ids that exist, or the link card. */
 export type ExercisePlan = { show: 'hidden' } | { show: 'inline'; taskIds: string[] } | { show: 'card' }
@@ -178,9 +179,10 @@ export function planExercise(
   machine: string | null | undefined,
   taskIds: readonly string[] | undefined,
   from: Registry = registry,
+  pending: readonly string[] = PENDING_TASK_IDS,
 ): ExercisePlan {
   if (taskIds === undefined || taskIds.length === 0) return { show: 'card' }
-  if (taskIds.every((id) => PENDING_TASK_IDS.includes(id))) return { show: 'hidden' }
+  if (taskIds.every((id) => pending.includes(id))) return { show: 'hidden' }
   const known = resolveTasks(simId, machine, taskIds, from).map((t) => t.id)
   return known.length > 0 ? { show: 'inline', taskIds: known } : { show: 'card' }
 }

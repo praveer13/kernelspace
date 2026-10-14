@@ -24,8 +24,10 @@
  *     KC still to come one.
  * An item the learner skips ("not sure") is a miss that names no misconception.
  *
- * Items are generated where a family covers the KC (frag, roofline, kv); otherwise checkpoint and spiral
- * items tagged with the KC that the learner has not yet answered. The anchor uses `item:r.anchor.*`.
+ * Items are generated where a family covers the KC (frag, roofline, sig, kv); otherwise checkpoint and spiral
+ * items tagged with the KC that the learner has not yet answered. The anchor uses `item:r.anchor.*`. Every
+ * generated item carries the KC it is asked for: `makeGenPool` redraws a seed until the instance does (sig's
+ * fault comes from its seed), and a family no draw fits gives way to the authored items (on-kc.ts).
  *
  * **Guessing.** A walk of mostly multiple-choice items is exposed to a blind strategy (always B, always the
  * longest option). The options are shuffled per seed and the generated KCs ask for numbers, so a blind

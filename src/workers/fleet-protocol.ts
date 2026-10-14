@@ -16,6 +16,8 @@ import type {
 } from '../lib/fleet-model'
 import type { LabHarnessResult } from '../lib/leaderboard'
 import type { TraceArtifact } from '../lib/traces'
+import type { FixId, Hypothesis, IncidentAction, IncidentSpec, ProbeId } from '../lib/world/incident-spec'
+import type { ExpertRun, FixResult, IncidentOutcome, ProbeResult } from '../lib/world/incident-sim'
 
 /** `open` includes instantiating every module in the stack. */
 export const FLEET_OPEN_BUDGET_MS = 5000
@@ -23,12 +25,27 @@ export const FLEET_OPEN_BUDGET_MS = 5000
 export const FLEET_STEP_BUDGET_MS = 2000
 /** The leaderboard harness: seven canonical scenarios plus the Fleet run, as one job. */
 export const FLEET_JOB_BUDGET_MS = 10_000
+/**
+ * An incident's `finish`: the clock runs on to recovery or the limit (up to an hour of incident time),
+ * and then the expert replays the same incident on the same modules. Two simulations to the end are
+ * not one `step`. Spec §9.5 says 2 s per command; measured on the dev host (Bun, 160 incidents, 40 seeds per fault),
+ * `finish` takes at most 109 ms on the reference stack and at most 416 ms (p95 378 ms) on the learner modules built from the
+ * reference solutions, for the worst case of a learner who does nothing and finishes, so the whole hour and the replay run
+ * inside it; `open` takes at most 70 ms. That is under a fifth of 2 s, but the margin is about 5x and a low-end phone
+ * and a slower learner module are not measured, so a legitimate run could be cut off: `finish` keeps the open budget.
+ */
+export const FLEET_FINISH_BUDGET_MS = 5000
 
-/** Raw module bytes per Fleet slot; null = the JS reference driver. Never transferred, callers keep their bytes. */
+/**
+ * Raw module bytes per Fleet slot; null = the JS reference driver. Never transferred, callers keep their bytes.
+ * `router` is the prefix-router slot (a radix-cache module, docs/specs/wave-2.md §10.3): each cluster worker gets
+ * its own instance of it. Left out it is null, so a caller written before the slot existed still type-checks.
+ */
 export interface FleetSlotBytes {
   sched: ArrayBuffer | null
   mgr: ArrayBuffer | null
   queue: ArrayBuffer | null
+  router?: ArrayBuffer | null
 }
 
 /* ------------------------------- open ------------------------------- */
@@ -70,7 +87,29 @@ export interface PoolOpen {
   cfg: { numBlocks: number; blockSize: number }
 }
 
-export type FleetOpen = EngineOpen | ClusterOpen | EpdOpen | PoolOpen
+/**
+ * An incident session (docs/specs/wave-2.md §9.5): a JSQ cluster of `spec.workers` engines carrying the
+ * spec's fault, driven through the clock of world/incident-sim.ts. `slots` are the same three the other
+ * modes take (scheduler, block manager and intake queue, plus the prefix router); a null
+ * slot runs the reference driver, as `buildStack` does for Fleet Week. Each worker gets its own
+ * instance of every module. `open` runs the incident up to its alert, so it carries the whole warm-up.
+ */
+export interface IncidentOpen {
+  mode: 'incident'
+  spec: IncidentSpec
+  slots: FleetSlotBytes
+}
+
+/**
+ * Token-count mode (§10.5): the learner's bpe-tokenizer alone, asked for the token count of texts. It runs here
+ * for the same reason the other modules do: a `count` that spins stalls this worker, not the page.
+ */
+export interface TokensOpen {
+  mode: 'tokens'
+  slots: { tokenizer: ArrayBuffer }
+}
+
+export type FleetOpen = EngineOpen | ClusterOpen | EpdOpen | PoolOpen | IncidentOpen | TokensOpen
 
 /* ----------------------------- snapshots ----------------------------- */
 
@@ -189,6 +228,36 @@ export interface LeaderboardJobResult {
   fleet: { goodput: number; ticks: number; completed: number } | null
 }
 
+/* ------------------------------ incident ------------------------------ */
+
+/** What `open` reports for an incident: the clock minute the alert fired and the last minute the incident may run to. */
+export interface IncidentReady {
+  alert: number
+  limit: number
+}
+
+/** A probe's reading; `ended` says the incident ran out (recovered, or the limit) so nothing more counts. */
+export interface IncidentProbeReply extends ProbeResult {
+  ended: boolean
+}
+
+export interface IncidentFixReply extends FixResult {
+  ended: boolean
+}
+
+export interface IncidentWaitReply {
+  minute: number
+  ended: boolean
+}
+
+/** How the incident went (burn, recovered, ...), the expert's burn on the same modules, and the expert's play for the debrief. */
+export interface IncidentFinish extends IncidentOutcome {
+  expertBurn: number
+  /** the learner's action log, in order: replaying it in world/incident-sim gives the same `burn` on the same modules */
+  actions: IncidentAction[]
+  expert: Pick<ExpertRun, 'actions' | 'named' | 'steps'>
+}
+
 /* ------------------------------- wire ------------------------------- */
 
 export type FleetRequest =
@@ -197,6 +266,14 @@ export type FleetRequest =
   /** `tick` is the panel's tick number, echoed as progress so a timeout can name it */
   | { id: number; cmd: 'pool'; tick: number; ops: FleetOp[] }
   | { id: number; cmd: 'job'; job: LeaderboardJob }
+  /* tokens mode: the token count of each text, in order */
+  | { id: number; cmd: 'count'; texts: string[] }
+  /* incident sessions: one command at a time, like the rest. `id` is the request id, so the probe and fix ids have their own fields. */
+  | { id: number; cmd: 'hypothesis'; hypothesis: Hypothesis }
+  | { id: number; cmd: 'probe'; probe: ProbeId }
+  | { id: number; cmd: 'fix'; fix: FixId }
+  | { id: number; cmd: 'wait' }
+  | { id: number; cmd: 'finish' }
   | { id: number; cmd: 'close' }
 
 export type FleetReply =
@@ -204,9 +281,15 @@ export type FleetReply =
   | { type: 'boot' }
   /** progress: the tick the worker is about to run. A spin never reaches the next one, so the last one names it. */
   | { type: 'tick'; id: number; tick: number; scope?: string }
-  | { type: 'ready'; id: number; total: number; dump?: ManagerDump }
+  | { type: 'ready'; id: number; total: number; dump?: ManagerDump; incident?: IncidentReady }
   | { type: 'step'; id: number; snapshot: FleetSnapshot }
   | { type: 'pool'; id: number; result: PoolTickResult }
   | { type: 'job'; id: number; result: LeaderboardJobResult }
+  | { type: 'count'; id: number; counts: number[] }
+  | { type: 'hypothesis'; id: number }
+  | { type: 'probe'; id: number; result: IncidentProbeReply }
+  | { type: 'fix'; id: number; result: IncidentFixReply }
+  | { type: 'wait'; id: number; result: IncidentWaitReply }
+  | { type: 'finish'; id: number; result: IncidentFinish }
   | { type: 'closed'; id: number }
   | { type: 'failed'; id: number; kind: 'trap' | 'abi' | 'error'; message: string; phase?: 'invoke' }

@@ -5,6 +5,9 @@
  *
  * The rules live in src/data/plays.ts and run here without a DOM; the components are rendered to strings.
  * Pointer, keyboard and 360 px behaviour is checked in a real browser (the C11 report).
+ *
+ * Wave 2 (2b-11) added the scheduler to the registry: the pins below hold both plays, and the verify-plays
+ * facts now carry a card of at least three rows. The scheduler's own tests are tests/plays/scheduler.test.ts.
  */
 import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
@@ -77,8 +80,8 @@ const smallestFitting = (_: number[], s: Session) => {
 const practiceSession = () => newSession(makePlacementTrace(PLAY_PRACTICE_SEED), 'practice')
 
 describe('the registry', () => {
-  test('block placement is the one play: T1.L4, 15 minutes, KCs from the contract', () => {
-    expect(PLAY_IDS).toEqual(['block-placement'])
+  test('block placement is T1.L4, 15 minutes, KCs from the contract; the scheduler (2b-11) is the second play', () => {
+    expect(PLAY_IDS).toEqual(['block-placement', 'scheduler'])
     expect(BLOCK_PLACEMENT.id).toBe(BLOCK_PLACEMENT_ID)
     expect(BLOCK_PLACEMENT.lessonId).toBe('t1.l4')
     expect(BLOCK_PLACEMENT.minutes).toBe(15)
@@ -438,8 +441,8 @@ describe('verify-plays: the play checks (§11.5)', () => {
     id: 'block-placement',
     lessonId: 't1.l4',
     kcs: [KC.externalFrag],
-    productionClaims: ['production.vllm.block-size'],
-    cardClaims: ['production.vllm.block-size'],
+    productionClaims: ['production.vllm.block-size', 'production.vllm.v1-preemption', 'production.glibc.bins'],
+    cardClaims: ['production.vllm.block-size', 'production.vllm.v1-preemption', 'production.glibc.bins'],
     play: PLAY_SRC,
     mirror: 'x',
     debrief: 'x',
@@ -477,9 +480,10 @@ describe('verify-plays: the play checks (§11.5)', () => {
     ['an unknown lesson', { lessonId: 't9.l9' }, 'lesson t9.l9 does not exist'],
     ['no claims', { productionClaims: [], cardClaims: [] }, 'no In-production claims'],
     ['a claim that does not exist', { productionClaims: ['production.nope'], cardClaims: ['production.nope'] }, 'claim production.nope does not exist'],
-    ['a card row outside productionClaims', { cardClaims: ['production.vllm.block-size', 'production.glibc.bins'] }, 'productionClaims does not list'],
-    ['a listed claim no row renders', { cardClaims: [] }, 'no In-production row renders'],
-    ['a practice seed outside the band', { practiceInBand: false }, 'practice seed is outside the band'],
+    ['a card row outside productionClaims', { cardClaims: ['production.vllm.block-size', 'production.glibc.bins', 'production.vllm.v1-preemption', 'production.glibc.mmap-threshold'] }, 'productionClaims does not list'],
+    ['a listed claim no row renders', { cardClaims: ['production.vllm.block-size', 'production.vllm.v1-preemption'] }, 'no In-production row renders'],
+    ['a card of fewer than three rows', { productionClaims: ['production.vllm.block-size', 'production.vllm.v1-preemption'], cardClaims: ['production.vllm.block-size', 'production.vllm.v1-preemption'] }, 'needs at least three'],
+    ['a practice trace outside the band', { practiceInBand: false }, 'practice trace is outside the band'],
   ] as const)('fails %s', (_, patch, message) => {
     const problems = checkPlay({ ...good, ...patch } as PlayFacts, world)
     expect(problems.some((p) => p.includes(message))).toBe(true)

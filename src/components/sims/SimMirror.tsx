@@ -6,14 +6,16 @@
  *   <SimMirror id={MIRROR_ID} table={{ caption, columns, rows, announce }} />
  *
  * The table is visually hidden (still in the accessibility tree) until "Show data table" is pressed. The
- * live region speaks `table.announce` when it changes, at most once per second. A sim sets `announce`
+ * live region speaks `table.announce` when it changes, at most once per second, and again when the sim clears it
+ * and sets the same text (a re-run of a deterministic configuration). A sim sets `announce`
  * only on a discrete result ("decode at batch 32 is bandwidth-bound: 64 FLOP/B, ridge 295"), never per frame.
  * `verify:plays` requires every canvas in src/components/sims to render this or carry the waiver comment.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import { clsx as cn } from 'clsx'
-import { announceDelay, hitArea } from '@/lib/sims/host'
+import { createAnnouncer, type Announcer } from '@/lib/sims/announcer'
+import { hitArea } from '@/lib/sims/host'
 import type { MirrorTable } from '@/lib/sims/types'
 
 /** The table alone (phone mode shows it open beside its chart). */
@@ -51,19 +53,28 @@ export function MirrorTableView({ table }: { table: MirrorTable }) {
   )
 }
 
-/** `text`, delayed so that no two changes are spoken less than a second apart (the newest wins). */
+/**
+ * `text`, delayed so that no two changes are spoken less than a second apart (the newest wins). A sim that clears
+ * its announcement and later sets the same text is heard again (src/lib/sims/announcer.ts): BatchingSim's
+ * deterministic fixed trace ends with the same sentence every run, and its reset clears it.
+ */
 function useThrottledAnnouncement(text: string | undefined): string {
   const [spoken, setSpoken] = useState('')
-  const lastText = useRef('')
-  const lastAt = useRef<number | null>(null)
+  const announcer = useRef<Announcer | null>(null)
   useEffect(() => {
-    if (text === undefined || text === '' || text === lastText.current) return
-    const id = setTimeout(() => {
-      lastText.current = text
-      lastAt.current = Date.now()
-      setSpoken(text)
-    }, announceDelay(lastAt.current, Date.now()))
-    return () => clearTimeout(id)
+    const a = createAnnouncer({
+      speak: setSpoken,
+      now: Date.now,
+      schedule: (fn, ms) => {
+        const id = setTimeout(fn, ms)
+        return () => clearTimeout(id)
+      },
+    })
+    announcer.current = a
+    return () => a.cancel()
+  }, [])
+  useEffect(() => {
+    announcer.current?.push(text)
   }, [text])
   return spoken
 }
@@ -92,7 +103,12 @@ export default function SimMirror({ id, table, className }: SimMirrorProps) {
       >
         {open ? 'Hide data table' : 'Show data table'}
       </button>
-      <div id={id} className={open ? 'mt-2 max-h-72 overflow-auto rounded-sm border border-line bg-surface-1 p-2' : 'sr-only'}>
+      <div
+        id={id}
+        // an open table scrolls, so it takes the keyboard (axe: scrollable-region-focusable); closed it is sr-only text
+        {...(open ? { tabIndex: 0, role: 'region', 'aria-label': table.caption } : {})}
+        className={open ? 'mt-2 max-h-72 overflow-auto rounded-sm border border-line bg-surface-1 p-2' : 'sr-only'}
+      >
         <MirrorTableView table={table} />
       </div>
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">

@@ -398,9 +398,9 @@ describe('the watchdog', () => {
     expect(t.workers[0]!.terminated).toBe(true)
   })
 
-  test('the default budgets are open 5 s, step 2 s, job 10 s', async () => {
-    const { FLEET_JOB_BUDGET_MS, FLEET_OPEN_BUDGET_MS, FLEET_STEP_BUDGET_MS } = await import('../../src/workers/fleet-protocol')
-    expect([FLEET_OPEN_BUDGET_MS, FLEET_STEP_BUDGET_MS, FLEET_JOB_BUDGET_MS]).toEqual([5000, 2000, 10_000])
+  test('the default budgets are open 5 s, step 2 s, job 10 s, finish 5 s', async () => {
+    const { FLEET_FINISH_BUDGET_MS, FLEET_JOB_BUDGET_MS, FLEET_OPEN_BUDGET_MS, FLEET_STEP_BUDGET_MS } = await import('../../src/workers/fleet-protocol')
+    expect([FLEET_OPEN_BUDGET_MS, FLEET_STEP_BUDGET_MS, FLEET_JOB_BUDGET_MS, FLEET_FINISH_BUDGET_MS]).toEqual([5000, 2000, 10_000, 5000])
     const t = spawner(() => spinsAt412)
     const session = await openFleetSession(openMsg, { spawn: t.spawn })
     const pending = session.step(1).catch((e: unknown) => e)

@@ -1,6 +1,9 @@
 {
-  "bytes-per-token": "4284af30",
-  "capacity-chats": "82135e52",
-  "capacity-tokens": "dd7e6c3a",
-  "seq-bytes": "ba9ec9ee"
+  "bytes-per-token": "273f5536",
+  "capacity-chats": "62e12609",
+  "capacity-tokens": "b24b353a",
+  "linear-state": "1a0c8577",
+  "mla-bytes": "7c3ee408",
+  "seq-bytes": "8d35f24e",
+  "swa-capacity": "afda4ad7"
 }

@@ -4,17 +4,18 @@
  * batching; GPU slot timeline, utilization, TTFT/ITL, preemption,
  * chunked prefill — the scheduler-is-a-batcher aha.
  */
-// a11y-mirror-pending: wave 2
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ChevronDown, ChevronUp, Copy, Dices, Pause, Play, RotateCcw, StepForward, Trash2 } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import ContextSwitchLab from '@/components/sims/ContextSwitchLab'
 import PlaygroundShell, { completeSimTask } from '@/components/sims/PlaygroundShell'
 import SchedulerLab from '@/components/sims/SchedulerLab'
+import SimMirror from '@/components/sims/SimMirror'
 import { CONTEXT_SWITCH_LAB_TASKS } from '@/components/sims/contextSwitchLab.tasks'
 import { SCHEDULER_LAB_TASKS as SCHEDULER_TASKS } from '@/components/sims/schedulerLab.tasks'
 import { Slider } from '@/components/ui/slider'
+import type { MirrorTable } from '@/lib/sims/types'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -89,7 +90,9 @@ function LogConsole({ lines, onClear }: { lines: LogLine[]; onClear: () => void 
           ref={bodyRef}
           onMouseEnter={() => setStick(false)}
           onMouseLeave={() => setStick(true)}
-          aria-live="polite"
+          tabIndex={0}
+          role="region"
+          aria-label="log lines"
           className="scrollbar-slim h-36 overflow-y-auto px-3 py-2 font-mono text-[12px] leading-[1.7]"
         >
           {lines.map((l) => (
@@ -642,11 +645,27 @@ interface Snap {
   utilNow: number
   memNow: number
   batchNow: number
+  /** The plotted series sampled at up to 12 ticks, the newest last (the chart's DOM mirror reads these, not the engine). */
+  samples: { tick: number; util: number; batch: number; mem: number }[]
+  /** How many ticks the chart holds. */
+  window: number
+}
+
+function sampleSeries(e: Engine): Snap['samples'] {
+  const { util, batch, mem } = e.series
+  const n = util.length
+  const count = Math.min(n, 12)
+  return Array.from({ length: count }, (_, k) => {
+    const i = count === 1 ? 0 : Math.round((k * (n - 1)) / (count - 1))
+    return { tick: e.tick - n + i + 1, util: util[i], batch: batch[i], mem: mem[i] }
+  })
 }
 
 function snapshot(e: Engine): Snap {
   const w = e.genWindow.reduce((a, b) => a + b, 0)
   return {
+    samples: sampleSeries(e),
+    window: e.series.util.length,
     tick: e.tick,
     queue: e.queue.map((r) => ({ ...r })),
     active: e.active.map((r) => ({ ...r })),
@@ -731,6 +750,8 @@ export default function BatchingSim() {
   const [traceResult, setTraceResult] = useState<RunRecord | null>(null)
   const [policyComparison, setPolicyComparison] = useState<PolicyComparison | null>(null)
   const overloadPreemptionSeen = useRef(false)
+  const [announce, setAnnounce] = useState<string | undefined>(undefined)
+  const mirrorId = `${useId()}-mirror`
 
   const drainEvents = useCallback(() => {
     const eng = engineRef.current
@@ -771,6 +792,9 @@ export default function BatchingSim() {
           fairnessDelta: oldest.fairness - youngest.fairness,
         }
         setPolicyComparison(comparison)
+        setAnnounce(
+          `Matched policy comparison, oldest-first minus youngest-first: mean time to first token ${comparison.ttftDelta >= 0 ? 'plus' : 'minus'} ${Math.abs(comparison.ttftDelta).toFixed(2)} seconds, fairness ${comparison.fairnessDelta >= 0 ? 'plus' : 'minus'} ${Math.abs(comparison.fairnessDelta).toFixed(3)}.`,
+        )
         log(
           'ok',
           `MATCHED POLICY A/B  oldest − youngest: TTFT ${comparison.ttftDelta >= 0 ? '+' : ''}${comparison.ttftDelta.toFixed(2)}s · fairness ${comparison.fairnessDelta >= 0 ? '+' : ''}${comparison.fairnessDelta.toFixed(3)}`,
@@ -791,6 +815,7 @@ export default function BatchingSim() {
     configRef.current = next
     engineRef.current = createEngine(next)
     overloadPreemptionSeen.current = false
+    setAnnounce(undefined)
     setSnap(snapshot(engineRef.current))
   }, [])
 
@@ -875,10 +900,16 @@ export default function BatchingSim() {
         const rec = recordOf(eng)
         setPlaying(false)
         setTraceResult(rec)
+        setAnnounce(
+          `Fixed trace complete on ${configRef.current.mode} batching: ${rec.throughput.toFixed(1)} tokens per second, mean time to first token ${rec.meanTtft.toFixed(2)} seconds, ${rec.adIdleSlotSteps} of 160 idle slot-ticks for the four requests A to D, finished at tick ${rec.ticks}.`,
+        )
         completeSimTask('sim-batching', configRef.current.mode === 'static' ? 'batch-trace-static' : 'batch-trace-continuous', 60)
         log('ok', `FIXED TRACE COMPLETE  ${configRef.current.mode} · ${rec.throughput.toFixed(1)} tok/s · TTFT ${rec.meanTtft.toFixed(2)}s · A–D idle ${rec.adIdleSlotSteps}/160 · full trace idle ${rec.fullTraceIdleSlotSteps} slot-ticks`)
       } else if (eng.tick >= MAX_TICKS) {
         setPlaying(false)
+        setAnnounce(
+          `Run complete at 120 seconds logical on ${configRef.current.mode} batching: ${eng.done.length} sequences finished, ${eng.preemptCount} preempted.`,
+        )
         finishRunRef.current('120s logical complete', true)
         log('ok', `RUN COMPLETE  t=120s logical · ${eng.done.length} seqs finished`)
       }
@@ -987,6 +1018,25 @@ export default function BatchingSim() {
     ctx.fillText('100%', 2, 10)
     ctx.fillText('cap', w - 20, cy - 3)
   }, [snap, cfg.maxBatch, cfg.memCapacity])
+
+  /* DOM mirror of the utilization chart (the series sampled in the snapshot). */
+  const mirrorTable = useMemo<MirrorTable>(
+    () => ({
+      caption:
+        snap.window === 0
+          ? 'GPU utilization, batch size and memory over time. Press play to record the series.'
+          : `GPU utilization, batch size and memory over the last ${snap.window} ticks, sampled at ${snap.samples.length} of them (${cfg.mode} batching, ${cfg.preset} arrivals). Throughput ${snap.throughput.toFixed(0)} tokens per second, mean time to first token ${snap.meanTtft.toFixed(2)} seconds, ${snap.doneCount} finished, ${snap.preemptCount} preempted.`,
+      columns: ['Tick', 'GPU utilization', 'Batch size', 'Memory (tokens)'],
+      rows: snap.samples.map((p) => [
+        `t = ${p.tick}`,
+        `${p.util.toFixed(0)}%`,
+        `${p.batch} of ${cfg.maxBatch}`,
+        `${p.mem.toLocaleString()} of ${cfg.memCapacity.toLocaleString()}`,
+      ]),
+      announce,
+    }),
+    [snap, cfg.maxBatch, cfg.memCapacity, cfg.mode, cfg.preset, announce],
+  )
 
   const speed = SPEED_STEPS[speedIdx]
 
@@ -1293,8 +1343,9 @@ export default function BatchingSim() {
                 {snap.queue.slice(0, 24).map((r) => (
                   <motion.span
                     key={r.id}
-                    initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    // motion only, never an opacity fade: text caught mid-fade fails color-contrast (axe) for a few frames
+                    initial={reduced ? false : { scale: 0.8 }}
+                    animate={{ scale: 1 }}
                     transition={{ duration: 0.2 }}
                     className={cn(
                       'rounded-sm border px-1.5 py-0.5 font-mono text-[10px]',
@@ -1336,14 +1387,16 @@ export default function BatchingSim() {
                       <motion.div
                         key={r.id}
                         layout="position"
-                        initial={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={reduced ? { opacity: 0 } : { opacity: 0, x: 80 }}
+                        // motion only, never an opacity fade: the r<id> and token labels are text, and text caught
+                        // mid-fade fails color-contrast (axe flagged it right after play)
+                        initial={reduced ? false : { y: -6 }}
+                        animate={{ y: 0 }}
+                        exit={reduced ? undefined : { x: 80 }}
                         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                        className={cn('flex items-center gap-2', done && 'opacity-50')}
+                        className="flex items-center gap-2"
                       >
                         <span className="w-8 shrink-0 font-mono text-[10px] text-text-3">r{r.id}</span>
-                        <div className="relative h-5 flex-1 overflow-hidden rounded-[3px] border border-line bg-surface-3/50">
+                        <div className={cn('relative h-5 flex-1 overflow-hidden rounded-[3px] border border-line bg-surface-3/50', done && 'opacity-50')}>
                           <div
                             className="absolute inset-y-0 left-0 bg-t4/70"
                             style={{ width: `${prePct}%`, transition: reduced ? undefined : 'width 200ms linear' }}
@@ -1410,7 +1463,14 @@ export default function BatchingSim() {
                 <span><i className="mr-1 inline-block h-2 w-2 rounded-[1px] bg-info" />batch size</span>
                 <span><i className="mr-1 inline-block h-2 w-2 rounded-[1px] bg-t5" />memory</span>
               </div>
-              <canvas ref={chartRef} className="h-32 w-full rounded-sm border border-line bg-ink" />
+              <canvas
+                ref={chartRef}
+                role="img"
+                aria-label={`GPU utilization, batch size and memory over time, ${cfg.mode} batching. ${snap.tick === 0 ? 'Press play to draw.' : `Now ${snap.utilNow.toFixed(0)} percent utilization, batch ${snap.batchNow} of ${cfg.maxBatch}.`}`}
+                aria-describedby={mirrorId}
+                className="h-32 w-full rounded-sm border border-line bg-ink"
+              />
+              <SimMirror id={mirrorId} table={mirrorTable} className="mt-2" />
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {[
                   { label: 'throughput', value: `${snap.throughput.toFixed(0)} tok/s`, cls: 'text-accent' },

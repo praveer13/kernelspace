@@ -405,9 +405,11 @@ const SHUFFLED_SURFACES = [
   'src/components/sims/PlaygroundShell.tsx',
   // the placement walk replaced Curriculum's own modal: its items are shuffled by the item player's model
   'src/lib/items/play.ts',
-  'src/pages/FleetWeek.tsx',
+  // Act IV's drills (src/pages/FleetWeek.tsx) and the Daily show the hypothesis and fix menus in the order world/daily's
+  // menuOrderFor draws from the incident's seed, a fresh seed per drill; the menu texts are the very labels INCIDENTS gates
   // P1 diagram predictions shuffle their options themselves; the prequestions go through the item player (play.ts above)
   'src/pages/lesson/diagram.tsx',
+  'src/lib/world/daily.ts',
 ]
 /** Surfaces that draw a fresh seed per attempt, so a position cue cannot be learned across learners or visits. */
 const FRESH_SEED_SURFACES = ['src/components/blocks/Prequestions.tsx', 'src/pages/lesson/diagram.tsx']

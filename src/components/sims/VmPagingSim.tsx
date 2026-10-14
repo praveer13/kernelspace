@@ -1156,7 +1156,7 @@ export default function VmPagingSim() {
                             'flex h-8 min-w-14 items-center justify-center rounded-sm border px-1.5 font-mono text-[10px] transition-colors duration-200',
                             e
                               ? 'border-[#5CA8FF]/50 bg-[#5CA8FF]/10 text-[#5CA8FF]'
-                              : 'border-dashed border-line text-text-3/50',
+                              : 'border-dashed border-line text-text-3',
                             active && 'ring-2 ring-[#5CA8FF]',
                           )}
                         >
@@ -1174,7 +1174,8 @@ export default function VmPagingSim() {
                     <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.10em] text-[#22D3EE]">
                       virtual pages ({VPAGES})
                     </p>
-                    <div className="grid w-fit grid-cols-4 gap-1.5">
+                    {/* fixed 40 px tracks: grid-cols-4's 1fr tracks collapse in a narrow stage and the buttons overlap (target-size) */}
+                    <div className="grid w-fit grid-cols-[repeat(4,2.5rem)] gap-1.5">
                       {Array.from({ length: VPAGES }, (_, vpn) => {
                         const activeVpn = walk?.vpn === vpn
                         const resident = vm.pt[vpn].resident
@@ -1219,7 +1220,7 @@ export default function VmPagingSim() {
                             )}
                           >
                             <span className="w-6 text-[#22D3EE]">{hx(vpn)}</span>
-                            <span className={cn('w-5 text-right', pte.resident ? 'text-accent' : 'text-text-3/50')}>
+                            <span className={cn('w-5 text-right', pte.resident ? 'text-accent' : 'text-text-3')}>
                               {pte.resident && pte.pfn !== null ? pte.pfn : '—'}
                             </span>
                             <span className={pte.resident ? 'text-accent' : 'text-danger/70'}>
@@ -1245,7 +1246,7 @@ export default function VmPagingSim() {
                             'flex h-9 w-24 items-center justify-between rounded-sm border px-2 font-mono text-[10px] transition-all duration-200',
                             vpn !== null
                               ? 'border-accent/50 bg-accent/15 text-accent'
-                              : 'border-line bg-surface-1 text-text-3/50',
+                              : 'border-line bg-surface-1 text-text-3',
                             touchFrame === f && 'ring-2 ring-accent',
                             evictFrame === f && 'ring-2 ring-amber',
                           )}
@@ -1272,8 +1273,8 @@ export default function VmPagingSim() {
                           vm.pt[vpn].swap
                             ? 'bg-[#FB7185]/15 text-[#FB7185]'
                             : vm.pt[vpn].resident
-                              ? 'text-text-3/30'
-                              : 'text-text-3/50',
+                              ? 'bg-surface-2 text-text-3'
+                              : 'text-text-3',
                         )}
                       >
                         {hx(vpn)}
@@ -1426,7 +1427,7 @@ export default function VmPagingSim() {
                                 }
                                 className={cn(
                                   'flex h-9 min-w-12 items-center justify-center rounded-sm border px-1 font-mono text-[9px] transition-all duration-200 hover:brightness-125',
-                                  frame !== null ? 'text-text-1' : 'border-dashed border-line text-text-3/50',
+                                  frame !== null ? 'text-text-1' : 'border-dashed border-line text-text-3',
                                 )}
                                 style={
                                   frame !== null
@@ -1463,7 +1464,7 @@ export default function VmPagingSim() {
                         key={i}
                         className={cn(
                           'flex h-9 w-28 items-center justify-between rounded-sm border px-2 font-mono text-[10px]',
-                          f ? 'text-text-1' : 'border-line bg-surface-1 text-text-3/50',
+                          f ? 'text-text-1' : 'border-line bg-surface-1 text-text-3',
                         )}
                         style={
                           f
@@ -1669,9 +1670,10 @@ export default function VmPagingSim() {
                 onChange={setTlbSize}
               />
               <div>
-                <p className="mb-1.5 font-mono text-[11px] text-text-2">eviction policy</p>
+                <p id="vm-policy-label" className="mb-1.5 font-mono text-[11px] text-text-2">eviction policy</p>
                 <Select value={policy} onValueChange={(v) => setPolicy(v as Policy)}>
-                  <SelectTrigger className="h-8 border-line bg-surface-2 font-mono text-[12px]">
+                  {/* a combobox takes its name from a label, never from its content (axe: button-name) */}
+                  <SelectTrigger aria-labelledby="vm-policy-label" className="h-8 border-line bg-surface-2 font-mono text-[12px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="border-line bg-surface-1">

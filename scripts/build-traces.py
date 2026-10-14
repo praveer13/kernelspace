@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the small, deterministic trace artifacts used by Fleet and lab 06.
+"""Build the small, deterministic trace artifacts used by Fleet, lab 06 and the scheduler play.
 
 Committed outputs contain request timing and token counts only. BurstGPT is
 redistributable under CC BY 4.0. LMSYS-Chat-1M is not: its agreement forbids
@@ -37,6 +37,9 @@ BURST_SHA256 = "a4d068a7113ec0290e74063a1b3447dc6001a30e4298eb313581b71006dda1f4
 BURST_LIMIT = 480
 BURST_WINDOW_SECONDS = 3600
 BURST_SECONDS_PER_TICK = 4
+BURST_MINUTE_LIMIT = 40
+BURST_MINUTE_WINDOW_SECONDS = 60
+BURST_MINUTE_SECONDS_PER_TICK = 1
 
 LMSYS_CARD = "https://huggingface.co/datasets/lmsys/lmsys-chat-1m"
 LMSYS_PROMPT_MEAN = 69.5
@@ -105,14 +108,23 @@ def evenly_spaced(rows: list[tuple[int, int, int]], limit: int) -> list[tuple[in
     return [rows[(i * len(rows)) // limit] for i in range(limit)]
 
 
-def build_burstgpt(path: pathlib.Path) -> dict[str, Any]:
-    counts = Counter(ts // BURST_WINDOW_SECONDS for ts, _, _ in iter_burst_rows(path))
+def busiest_window(path: pathlib.Path, window_seconds: int) -> tuple[int, int, list[tuple[int, int, int]]]:
+    """The busiest aligned window: (start second, rows in it, those rows in source order).
+
+    Ties go to the earliest window, so the choice does not depend on dict order.
+    """
+    counts = Counter(ts // window_seconds for ts, _, _ in iter_burst_rows(path))
     if not counts:
         raise SystemExit("BurstGPT source had no usable rows")
     busiest_bin, source_count = min(counts.items(), key=lambda item: (-item[1], item[0]))
-    start = busiest_bin * BURST_WINDOW_SECONDS
-    stop = start + BURST_WINDOW_SECONDS
+    start = busiest_bin * window_seconds
+    stop = start + window_seconds
     window = [row for row in iter_burst_rows(path) if start <= row[0] < stop]
+    return start, source_count, window
+
+
+def build_burstgpt(path: pathlib.Path) -> dict[str, Any]:
+    start, source_count, window = busiest_window(path, BURST_WINDOW_SECONDS)
     selected = evenly_spaced(window, BURST_LIMIT)
     requests = [
         {
@@ -144,6 +156,55 @@ def build_burstgpt(path: pathlib.Path) -> dict[str, Any]:
             "sourceRowsInWindow": source_count,
             "selectedRows": len(requests),
             "secondsPerTick": BURST_SECONDS_PER_TICK,
+            "promptClamp": [8, 4096],
+            "outputClamp": [1, 256],
+        },
+        "requestCount": len(requests),
+        "requestSha256": request_sha256(requests),
+        "requests": requests,
+    }
+
+
+def build_burstgpt_minute(path: pathlib.Path) -> dict[str, Any]:
+    """The scheduler play's practice minute: 40 requests evenly sampled from the busiest aligned 60 s.
+
+    `sampling.sourceRowsInWindow` records how many requests that minute holds, so the play's
+    "N of M sampled" line reads it from the artifact rather than a typed number.
+    """
+    start, source_count, window = busiest_window(path, BURST_MINUTE_WINDOW_SECONDS)
+    selected = evenly_spaced(window, BURST_MINUTE_LIMIT)
+    requests = [
+        {
+            "t": (timestamp - start) // BURST_MINUTE_SECONDS_PER_TICK,
+            "p": min(4096, max(8, prompt)),
+            "o": min(256, max(1, output)),
+        }
+        for timestamp, prompt, output in selected
+    ]
+    return {
+        "schemaVersion": 1,
+        "id": "burstgpt-v2-busiest-minute",
+        "name": "BurstGPT v2.0 · busiest aligned minute, sampled",
+        "kind": "recorded",
+        "source": BURST_URL,
+        "sourceRevision": "v2.0",
+        "sourceSha256": BURST_SHA256,
+        "license": "CC-BY-4.0",
+        "attribution": "BurstGPT authors (KDD 2025), HPMLL/BurstGPT",
+        "note": (
+            "Token/timing metadata only. Busiest aligned 60-second bin; evenly spaced to 40 rows; "
+            "1 real second = 1 simulator tick; prompt tokens clamped to 8..4096 and response "
+            "tokens to 1..256. This is a sample of the minute, not the whole minute: "
+            "sampling.sourceRowsInWindow is the number of requests the minute holds. No prompt "
+            "text, session id, model, or user data is included."
+        ),
+        "sampling": {
+            "method": "busiest-aligned-window-then-even-index",
+            "windowSeconds": BURST_MINUTE_WINDOW_SECONDS,
+            "sourceWindowStart": start,
+            "sourceRowsInWindow": source_count,
+            "selectedRows": len(requests),
+            "secondsPerTick": BURST_MINUTE_SECONDS_PER_TICK,
             "promptClamp": [8, 4096],
             "outputClamp": [1, 256],
         },
@@ -381,18 +442,25 @@ def main() -> int:
     burst_source = download_burstgpt(args.burstgpt_csv)
     try:
         burst = build_burstgpt(burst_source)
+        minute = build_burstgpt_minute(burst_source)
     finally:
         if args.burstgpt_csv is None:
             burst_source.unlink(missing_ok=True)
     lmsys = build_lmsys_shape()
     burst_out = TRACE_DIR / "burstgpt-v2-busiest-hour.json"
+    minute_out = TRACE_DIR / "burstgpt-v2-busiest-minute.json"
     lmsys_out = TRACE_DIR / "lmsys-chat-1m-published-shape.json"
     kimi_out = TRACE_DIR / "kimi-conversation.json"
     write_json(burst_out, burst)
+    write_json(minute_out, minute)
     write_json(lmsys_out, lmsys)
     write_json(kimi_out, normalize_kimi())
     write_rust_tables(burst, lmsys)
     print(f"wrote {burst_out.relative_to(ROOT)} ({len(burst['requests'])} requests)")
+    print(
+        f"wrote {minute_out.relative_to(ROOT)} ({len(minute['requests'])} of "
+        f"{minute['sampling']['sourceRowsInWindow']} requests in the minute)"
+    )
     print(f"wrote {lmsys_out.relative_to(ROOT)} ({len(lmsys['requests'])} requests)")
     print(f"normalized {kimi_out.relative_to(ROOT)}")
     print(f"wrote {RUST_OUT.relative_to(ROOT)}")

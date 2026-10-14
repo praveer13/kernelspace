@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { KCS } from '../../src/data/kc'
+import { ALL_LESSONS } from '../../src/data/lessons'
 import { gradeItem, resultFor, type ItemResult } from '../../src/lib/items/play'
 import { loadFamily } from '../../src/lib/items/registry'
 import { correctResponse } from '../../src/lib/items/grade'
@@ -40,6 +41,8 @@ import { CONTENT, Journal, START, genItem, quizItem } from './ledger-gen'
 
 const frag = await loadFamily('frag')
 const kv = await loadFamily('kv')
+const sig = await loadFamily('sig')
+const goodput = await loadFamily('goodput')
 const GENS = new Map<string, Gen>([
   [frag.id, frag],
   [kv.id, kv],
@@ -383,6 +386,73 @@ describe('the item pool', () => {
     expect(new Set(slots.map((s) => (s.item.source === 'gen' ? s.item.inst.seed : 0))).size).toBe(5)
     expect(composePractice(['t0.locality'], p, 9, 5)).toEqual([])
     expect(composePractice([EXT], p, 9, 5)).toEqual(composePractice([EXT], p, 9, 5))
+  })
+})
+
+describe('items are on-KC (2b final review, blocking 1)', () => {
+  // sig's instance carries t7.incident-diagnosis and the KC of the fault its seed drew: the pool redraws until it is the card's
+  const FAULT_KCS = ['t2.admission-scheduling', 't5.prefill-decode-interference', 't5.kv-capacity', 't7.capacity-planning']
+  const { authored, constructed } = authoredFromLessons(ALL_LESSONS)
+  const realPool = (gens: ReadonlyMap<string, Gen>) => buildPool({ kcs: KCS, gens, authored, constructed, stair: [], recent: new Map() })
+  const dueCard = (kc: string) => ({
+    cards: {
+      [kc]: {
+        kc,
+        origin: 'ticket' as const,
+        createdDay: '2026-09-01',
+        memory: { stability: 4, difficulty: 5 },
+        lastReviewDay: '2026-09-10',
+        reps: 2,
+        lapses: 0,
+        dueDay: '2026-09-14',
+        priority: false,
+      },
+    },
+    pending: [],
+    offset: 0.02,
+    paused: false,
+  })
+  const kcsOf = (it: PlayableItem): readonly string[] =>
+    it.source === 'gen' ? it.inst.kcs : it.source === 'quiz' ? it.kcs : it.source === 'item' ? it.item.kcs : it.cr.kcs
+
+  test('a due card for each of the four fault KCs always gets an item carrying that KC, mostly a sig item', () => {
+    const content = { ...CONTENT, pool: realPool(new Map<string, Gen>([['sig', sig], ['kv', kv], ['goodput', goodput]])) }
+    for (const kc of FAULT_KCS) {
+      let fromSig = 0
+      for (let seed = 1; seed <= 30; seed++) {
+        const plan = composeSession(dueCard(kc), content, '2026-10-05', {}, seed * 7919)
+        const slot = plan.slots.find((s) => s.kc === kc)
+        expect(slot).toBeDefined()
+        for (const s of plan.slots.filter((x) => x.kc === kc)) expect(kcsOf(s.item)).toContain(kc)
+        if (slot?.item.source === 'gen' && slot.item.inst.family === 'sig') fromSig++
+      }
+      // the KCs sig shares with another family (kv, goodput) get some of theirs too
+      expect(fromSig).toBeGreaterThan(kc === 't5.kv-capacity' || kc === 't7.capacity-planning' ? 5 : 25)
+    }
+  })
+
+  test('the same seed draws the same sig item, and the item records the seed that made it', () => {
+    const pool = realPool(new Map([['sig', sig]]))
+    for (const kc of FAULT_KCS) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const a = pool.make('sig', kc, 2, seed)
+        expect(pool.make('sig', kc, 2, seed)).toEqual(a)
+        if (a?.source !== 'gen') continue
+        expect(a.inst.kcs).toEqual(['t7.incident-diagnosis', kc])
+        expect(sig.make(a.inst.seed, a.inst.level, a.inst.variant)).toEqual(a.inst)
+      }
+    }
+  })
+
+  test('when no draw carries the KC the card falls back to its authored item, never an off-KC instance', () => {
+    const offKc: Gen = { ...frag, make: (s, l, v) => ({ ...frag.make(s, l, v), kcs: ['t0.locality'] }) }
+    const q = quizItem(EXT, 0)
+    const pool = buildPool({ kcs: KCS, gens: new Map([['frag', offKc]]), authored: new Map([[EXT, [q]]]), constructed: new Map(), stair: [], recent: new Map() })
+    expect(pool.make('frag', EXT, 1, 77)).toBeNull()
+    for (let seed = 1; seed <= 10; seed++) {
+      const plan = composeSession(dueCard(EXT), { ...CONTENT, pool }, '2026-10-05', {}, seed)
+      expect(plan.slots[0].item).toEqual(q)
+    }
   })
 })
 
