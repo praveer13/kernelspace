@@ -72,6 +72,10 @@ const ROUTE_BUDGETS: RouteBudget[] = [
   { route: '/boot', src: 'src/pages/Boot.tsx', budgetKb: 200, targetKb: 165 },
   { route: '/today', src: 'src/pages/Today.tsx', budgetKb: 200 },
   { route: '/daily', src: 'src/pages/Daily.tsx', budgetKb: 200 },
+  // Stretch 4 (wave-3.md §16.4, §17.1): Interview mode is reported against a 200 KB figure, not gated. Its item player, the
+  // interview library (it reaches the claims registry and the packet helpers) and the generator families load on demand, so
+  // the closure is the page and the Daily's flow components.
+  { route: '/drills', src: 'src/pages/Drills.tsx', budgetKb: null, targetKb: 200 },
   { route: '/play/block-placement', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/block-placement/Play.tsx' },
   // The scheduler play shares the /play/:playId page; it holds fleet-model.ts, so its chunk is the larger of the two.
   { route: '/play/scheduler', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/scheduler/Play.tsx' },

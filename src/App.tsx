@@ -8,7 +8,7 @@ import RouteFallback from '@/components/RouteFallback'
 /**
  * A lazy page that (transitively) imports framer-motion. It loads `MotionScope` beside the page
  * and renders inside it, so reduced motion is honoured (PLAN-100X §7.3) without the entry chunk
- * ever importing framer-motion. Boot, Today, Daily, Errors, Play, NotFound and Me stay on plain `lazy`.
+ * ever importing framer-motion. Boot, Today, Daily, Errors, Drills, Play, NotFound and Me stay on plain `lazy`.
  */
 function lazyMotion(load: () => Promise<{ default: ComponentType }>) {
   return lazy(async () => {
@@ -45,6 +45,8 @@ const Boot = lazy(() => import('@/pages/Boot'))
 const Today = lazy(() => import('@/pages/Today'))
 const Daily = lazy(() => import('@/pages/Daily'))
 const Errors = lazy(() => import('@/pages/Errors'))
+// Interview mode (wave-3.md §16.4): plain `lazy`, like the other pages whose closure verify:bundle measures.
+const Drills = lazy(() => import('@/pages/Drills'))
 const Play = lazy(() => import('@/pages/Play'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -66,6 +68,7 @@ export default function App() {
             <Route path="/today" element={<Today />} />
             <Route path="/daily" element={<Daily />} />
             <Route path="/errors" element={<Errors />} />
+            <Route path="/drills" element={<Drills />} />
             <Route path="/play/:playId" element={<Play />} />
             <Route path="/curriculum" element={<Curriculum />} />
             <Route path="/tracks/:trackId" element={<Track />} />
