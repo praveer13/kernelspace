@@ -8,6 +8,9 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
 import { OBJECTIONS, LOOK_FOR_MAX, SAYS_MAX, TOPICS } from '../../src/data/interview/objections'
 import { partsText } from '../../src/lib/items/core'
 import { loadFamily } from '../../src/lib/items/registry'
@@ -42,6 +45,7 @@ import { dailyPlayed } from '../../src/lib/world/daily'
 import { FAULT_SHORT, generateIncident } from '../../src/lib/world/incident-spec'
 import { runExpert } from '../../src/lib/world/incident-sim'
 import { recordShift, seedKey, shiftPlayed, type ShiftFacts } from '../../src/lib/world/shift'
+import Drills from '../../src/pages/Drills'
 import { makeProfile, startTab } from '../ledger/env'
 
 const ROOT = path.join(import.meta.dir, '../..')
@@ -411,6 +415,9 @@ describe('the interviewer packet', () => {
       for (const n of names) expect(['scenario', 'learner-state', 'claims']).toContain(n)
       expect(new Set(names).size).toBe(names.length)
       expect(bodies[0]).toContain('Napkin 1:')
+      // a real round is not cut: every item is shown whole
+      expect(bodies[0]).not.toContain('…')
+      expect(bodies[0]).toContain(ctx.design!.cost.text)
       expect(bodies[1]).toContain('Napkin 1: answered, close')
       expect(bodies[1]).toContain('Napkin 2: answered, off')
       // the three objections, by code, each with its look-for note, above the line
@@ -483,20 +490,20 @@ describe('the interviewer packet', () => {
     const { ctx } = await contextFor(4)
     const short = buildInterviewerPacket(ctx)
     expect(parts(short.text).names).toContain('claims')
-    // long claims and long items: the claims are dropped while every item keeps its full 450 characters
+    // long claims and long items: the claims are dropped while every item keeps its full 700 characters
     const heavy = { ...ctx, claims: Array.from({ length: 5 }, (_, i) => ({ label: `claim ${i} ${'c'.repeat(250)}`, value: 'v', verifiedAt: '2026-10-14' })) }
     const fat = buildInterviewerPacket({ ...heavy, napkin: ctx.napkin.map((n) => ({ ...n, text: 'w'.repeat(1500) })), design: { replicas: { text: 'r'.repeat(1500), state: 'open' }, cost: { text: 'p'.repeat(1500), state: 'open' } } })
     expect(fat.chars).toBeLessThanOrEqual(PACKET_MAX)
     const { names, bodies } = parts(fat.text)
     const kept = names.includes('claims') ? bodies[names.indexOf('claims')].split('\n').length : 0
     expect(kept).toBeLessThan(5)
-    expect(bodies[0].split('\n')[0].length).toBe('Napkin 1: '.length + 450)
+    expect(bodies[0].split('\n')[0].length).toBe('Napkin 1: '.length + 700)
     // and only then is the item text cut: a packet this heavy with no claims to drop shrinks the items instead
     // (three objections leave room for all of this; the builder keeps its cap whatever it is handed, so give it six)
     const longest = [...OBJECTIONS].sort((a, b) => b.says.length + b.lookFor.length - (a.says.length + a.lookFor.length)).slice(0, 6)
     const huge = buildInterviewerPacket({ ...ctx, objections: longest, incident: 'i'.repeat(900), claims: [], napkin: ctx.napkin.map((n) => ({ ...n, text: 'w'.repeat(1500) })), design: { replicas: { text: 'r'.repeat(1500), state: 'open' }, cost: { text: 'p'.repeat(1500), state: 'open' } } })
     expect(huge.chars).toBeLessThanOrEqual(PACKET_MAX)
-    expect(parts(huge.text).bodies[0].split('\n')[0].length).toBeLessThan('Napkin 1: '.length + 450)
+    expect(parts(huge.text).bodies[0].split('\n')[0].length).toBeLessThan('Napkin 1: '.length + 700)
   })
 
   test('the claims it lists are the ones the items cite, once each, at most five, with their sources', async () => {
@@ -562,6 +569,14 @@ describe('nothing records free text or gates XP', () => {
     expect(read('scripts/prepare-pages.mjs')).toContain("'drills'")
     expect(read('src/components/CommandPalette.tsx')).toContain("to: '/drills'")
     expect(read('scripts/verify-bundle.ts')).toMatch(/route: '\/drills', src: 'src\/pages\/Drills.tsx', budgetKb: null, targetKb: 200/)
+  })
+
+  test('the page renders its frame before the round loads: the heading, the untimed note and a status, with no part open', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(Drills)))
+    expect(html).toContain('Interview mode')
+    expect(html).toContain('untimed')
+    expect(html).toContain('Setting up the round')
+    expect(html).not.toContain('data-part=')
   })
 
   test('every family a round serves loads by id from the registry (so the pool stays the generators\' own)', async () => {

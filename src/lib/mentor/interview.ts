@@ -237,6 +237,9 @@ export function incidentLine(done: ShiftFacts): string {
 /* The packet                                                           */
 /* ------------------------------------------------------------------ */
 
+/** The most characters of one item's text: above the longest prompt the pools make (642 over 600 rounds), so a round is never cut by this alone. */
+const ITEM_MAX = 700
+
 /** The most characters of the incident's debrief line. */
 const INCIDENT_MAX = 400
 
@@ -343,7 +346,7 @@ export function buildInterviewerPacket(ctx: InterviewContext): Packet {
     return [head, ...parts].join('\n\n')
   }
   // the claims go first, then each item's text is cut shorter; the last shape (no item text) fits any three objections
-  for (const cap of [450, 320, 220, 140, 0]) {
+  for (const cap of [ITEM_MAX, 450, 320, 220, 140, 0]) {
     for (let n = claims.length; n >= 0; n--) {
       const text = assemble(n, cap)
       if (text.length <= PACKET_MAX) return { text, chars: text.length }

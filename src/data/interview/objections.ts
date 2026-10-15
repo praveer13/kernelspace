@@ -143,6 +143,6 @@ export const OBJECTIONS: readonly Objection[] = [
     topic: 'cost',
     says: 'You priced input and output tokens alike. Does the cost of serving them match?',
     lookFor:
-      'Prefill is compute-bound and decode is memory-bound, so a token costs different amounts to serve in each. Providers price output above input and a cache read below fresh input, and the blend depends on the hit rate.',
+      'Prefill is compute-bound and decode is memory-bound, so a token costs different amounts to serve in each. Providers commonly price output above input and a cache read below fresh input, and the blend depends on the hit rate.',
   },
 ]
