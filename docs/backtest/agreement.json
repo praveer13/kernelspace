@@ -1,0 +1,27 @@
+{
+ "schema": 1,
+ "method": "Cohen's kappa between the panel's labels and a second blind rater's on a seeded random 10 % of the snapshot's distinct lines (random.Random(20261014).sample)",
+ "sampleLines": 996,
+ "bothTrue": 2,
+ "panelOnly": 2,
+ "secondOnly": 1,
+ "kappa": 0.57,
+ "note": "Below the pre-registration's 0.6 flag. With 3 to 4 true lines in 996, kappa is unstable: one line more or less in either column moves it by about 0.2. The owner decides whether the rating can be trusted (docs/prereg/watcher.md, Independent rating).",
+ "secondRaterTrue": [
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "**KVBM (KV Block Manager) is deprecated in v1.5.0 and removal is targeted for v1.6.0; the `kvbm` wheel and the vLLM KVBM launch and deploy examples ship unchanged for this release**."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "**Rust EPP Frontend Image:** Shipped the Rust Endpoint Picker binary inside the Dynamo Frontend image at `/epp`, replacing the Go EPP. A standalone `dynamo-epp` image is planned for a later release (\\#11355)."
+  },
+  {
+   "repo": "sgl-project/sglang",
+   "tag": "v0.5.17",
+   "line": "**Initial support for the Rust frontend**: Migrates the front half of the server, everything from network ingress up to the point a tokenized request is handed to the GPU scheduler, from Python to a multi-threaded Rust implementation ([#29799](https://github.com/sgl-project/sglang/pull/29799))."
+  }
+ ]
+}

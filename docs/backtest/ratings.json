@@ -1,0 +1,556 @@
+{
+ "schema": 1,
+ "rater": "fresh agents (claude-opus-5-5): 10 blind raters, one per batch of repos (about 1,000 lines each), each given only its lines of docs/backtest/snapshot.json (as match.ts novelLines produces them), the lesson list (match.ts --lessons) and the rules of docs/prereg/watcher.md verbatim; never candidates.json, match.ts or report.json. A second blind rater on a seeded 10 % sample: Cohen's kappa 0.57 (see docs/backtest/agreement.json).",
+ "ratedAt": "2026-10-14",
+ "sawMatcherOutput": false,
+ "lines": [
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc24",
+   "line": "Add the `MEGAMOE_CUTEDSL` backend option and disable deprecated `WIDEEP` selection ([#16190](https://github.com/NVIDIA/TensorRT-LLM/pull/16190), [#17119](https://github.com/NVIDIA/TensorRT-LLM/pull/17119))",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10",
+     "t6.l2"
+    ],
+    "claims": []
+   },
+   "note": "TensorRT-LLM's WIDEEP MoE backend, its wide expert parallelism path, is now deprecated and can no longer be selected, so a lesson presenting it as the current production wide-EP backend is out of date."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc25",
+   "line": "Enabled KV cache manager V2 by default for:",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "The default KV cache manager in TensorRT-LLM changes from V1 to V2 for the major model families (DeepSeek, Kimi, Qwen, Gemma and others), which changes how the engine's memory manager is described."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc25",
+   "line": "KV cache manager V2 is the recommended architecture, with improved scalability and stability. All new models will use V2 by default, existing models will be migrated to V2 gradually, and V1 will be deprecated.",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "TensorRT-LLM announces that the KV cache manager V2 is the recommended default and that V1 will be deprecated, so the engine's KV-cache architecture as taught has changed."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc25",
+   "line": "Remove all WIDEEP files #17797.",
+   "shouldChange": {
+    "lessons": [
+     "t6.l2"
+    ],
+    "claims": []
+   },
+   "note": "TensorRT-LLM removed its dedicated WIDEEP (wide expert parallelism) MoE path, so any lesson claim that presents TRT-LLM's WideEP backend as the current production route for wide EP no longer holds."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc28",
+   "line": "Remove deprecated TensorRT serve, evaluation, benchmark, and stress paths (BREAKING) #19022, #19021, #18850",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "TRT-LLM removes the deprecated TensorRT-engine serving path, leaving the PyTorch backend, so describing TRT-LLM as an engine that compiles to TensorRT is no longer current."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc27",
+   "line": "Remove unused legacy C++ runtime, batch-manager APIs, and Python bindings (BREAKING) #18846",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "TRT-LLM removes its legacy C++ runtime and batch-manager (in-flight batching) APIs, which changes how the course describes TRT-LLM's architecture and design center."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc28",
+   "line": "[None][chore] BREAKING: Remove TRT leftovers from serve and eval by @Funatiq in https://github.com/NVIDIA/TensorRT-LLM/pull/19022",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "A breaking change removes the remaining TensorRT-engine paths from trtllm-serve and eval, so describing TRT-LLM as built around compiled TensorRT engines is no longer true."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc28",
+   "line": "[None][chore] Remove TRT leftovers from bench by @Funatiq in https://github.com/NVIDIA/TensorRT-LLM/pull/18850",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "The TensorRT-engine path is also removed from trtllm-bench, which supports the finding that TRT-LLM no longer centers on a TensorRT engine backend."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc24",
+   "line": "[TRTLLM-14822][feat] deprecate WIDEEP MoE backend by @xxi-nv in https://github.com/NVIDIA/TensorRT-LLM/pull/17119",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10",
+     "t6.l2"
+    ],
+    "claims": []
+   },
+   "note": "This is the PR line that deprecates the WIDEEP MoE backend, which the course would treat as TensorRT-LLM's current wide expert parallelism path."
+  },
+  {
+   "repo": "NVIDIA/TensorRT-LLM",
+   "tag": "v1.3.0rc25",
+   "line": "[TRTLLM-15433][chore] BREAKING: Remove all WIDEEP files by @xxi-nv in https://github.com/NVIDIA/TensorRT-LLM/pull/17797",
+   "shouldChange": {
+    "lessons": [
+     "t6.l2"
+    ],
+    "claims": []
+   },
+   "note": "This is the PR form of the same breaking removal of TensorRT-LLM's WIDEEP MoE implementation, which wide-expert-parallelism material may still describe as current."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "**AIConfigurator renamed to AISimulate: aiconfigurator wheels replaced by the `aisimulate` package, and the `python -m dynamo.replay` CLI removed** ([#13665](https://github.com/ai-dynamo/dynamo/pull/13665)).",
+   "shouldChange": {
+    "lessons": [
+     "t7.l3",
+     "t7.l5"
+    ],
+    "claims": []
+   },
+   "note": "AIConfigurator was renamed to AISimulate and the dynamo.replay CLI was removed, so references in the Planner and profiling lessons need updating."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.4.0",
+   "line": "**Bundled NATS subchart disabled by default** ([#11951](https://github.com/ai-dynamo/dynamo/pull/11951)).",
+   "shouldChange": {
+    "lessons": [
+     "t0.l1",
+     "t3.l6"
+    ],
+    "claims": []
+   },
+   "note": "The course presents NATS messaging as a core part of Dynamo's data plane, but Dynamo's Helm install no longer deploys NATS by default, so NATS is now opt-in."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "**CRD storage version promoted from v1alpha1 to v1beta1, with examples and Profiler output moving with it** ([#11904](https://github.com/ai-dynamo/dynamo/pull/11904), [#12375](https://github.com/ai-dynamo/dynamo/pull/12375), [#12506](https://github.com/ai-dynamo/dynamo/pull/12506)).",
+   "shouldChange": {
+    "lessons": [
+     "t6.l3"
+    ],
+    "claims": []
+   },
+   "note": "The Dynamo operator's CRD API version was promoted from v1alpha1 to v1beta1, so v1alpha1 DynamoGraphDeployment examples are out of date."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "**Go EPP removed, and the Rust EPP shipped inside the Frontend image is the default Endpoint Picker, with `eppConfig` deprecated** ([#11355](https://github.com/ai-dynamo/dynamo/pull/11355)).",
+   "shouldChange": {
+    "lessons": [
+     "t3.l6",
+     "t6.l3"
+    ],
+    "claims": []
+   },
+   "note": "The Go-based Endpoint Picker for the inference gateway was removed, and the Rust EPP is now the default."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "**KVBM (KV Block Manager) is deprecated in v1.5.0 and removal is targeted for v1.6.0; the `kvbm` wheel and the vLLM KVBM launch and deploy examples ship unchanged for this release**.",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10",
+     "t5.l6"
+    ],
+    "claims": []
+   },
+   "note": "Dynamo's KV Block Manager for tiered KV offload is deprecated in favor of each engine's native offloading, so a lesson presenting KVBM as Dynamo's tiered-KV mechanism is stale."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.4.0",
+   "line": "**Router Queue Admission Strategy:** Added exact-worker lanes to the policy-class queue (\\#11363) with deferred blocked-lane rechecks (\\#11484), a public `PolicyClassAdmissionStrategy` contract (\\#11434), and a live `RequestProgress` reader (\\#11615). Kept Router queueing off unless a threshold is configured (\\#11599) and replaced `--admission-control` with opt-in thresholds, ignoring the legacy flag and `DYN_ADMISSION_CONTROL` with a warning (\\#11276).",
+   "shouldChange": {
+    "lessons": [
+     "t3.l6"
+    ],
+    "claims": []
+   },
+   "note": "The router's `--admission-control` flag and `DYN_ADMISSION_CONTROL` are retired in favor of opt-in thresholds, so router queueing and admission control are now off by default."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.4.0",
+   "line": "**Router queueing disabled by default (--router-queue-threshold default removed)** ([#11599](https://github.com/ai-dynamo/dynamo/pull/11599)).",
+   "shouldChange": {
+    "lessons": [
+     "t3.l6"
+    ],
+    "claims": []
+   },
+   "note": "The default for the KV-aware router's queueing/backpressure changed: queueing is now off unless a threshold is set, so any claim about default router backpressure is out of date."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "AIConfigurator is now **[AISimulate](https://github.com/ai-dynamo/aisimulate)**. It ships as its own package at v0.12.0 with one CLI, replacing the aiconfigurator wheels and the `dynamo.replay` entrypoint (\\#13665, \\#13478, \\#14867). Offline replay returns a single `ReplayReport`, with per-request capture opt-in (\\#12363).",
+   "shouldChange": {
+    "lessons": [
+     "t7.l3",
+     "t7.l5"
+    ],
+    "claims": []
+   },
+   "note": "Dynamo's performance-modeling and profiling tool used with the Planner has been renamed from AIConfigurator to AISimulate, and the dynamo.replay entrypoint has been removed."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "Dynamo v1.5.0 is the 18th feature release of the open-source distributed inference platform, spanning 658 merged PRs from 123 contributors. It opens **Dynamo Router** worker selection to custom scoring and picking policies and extends KV indexing to Mooncake and disk tiers. KVBM is deprecated, with removal targeted for v1.6.0. **Dynamo Frontend** streams guided tool calls by default and rejects over-context requests before the first token, and multimodal encode-prefill-decode deployments can decode images once at the Frontend. On Kubernetes, `nvidia.com/v1beta1` becomes the CRD storage version, the Rust Endpoint Picker replaces the Go EPP, and Dynamo Snapshot moves to a standalone operator. TLS and mutual TLS now cover the TCP and NATS transports. AIConfigurator becomes **[AISimulate](https://github.com/ai-dynamo/aisimulate)** and ships as its own package, and the engines move to SGLang v0.5.18, TensorRT-LLM v1.3.0rc25, and vLLM v0.28.0.",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10",
+     "t5.l6",
+     "t6.l3",
+     "t7.l5"
+    ],
+    "claims": []
+   },
+   "note": "The summary line says Dynamo's KVBM tiered-KV manager is deprecated, the Go EPP has been replaced by the Rust EPP, the CRDs moved to v1beta1 and AIConfigurator was renamed AISimulate, so any lesson presenting those as current is now stale."
+  },
+  {
+   "repo": "ai-dynamo/dynamo",
+   "tag": "v1.5.0",
+   "line": "`nvidia.com/v1beta1` is the CRD storage version, the version the API server persists, and the published examples drop their v1alpha1 copies (\\#11904, \\#11177, \\#12375). The Go Endpoint Picker is removed and the Rust EPP is the default. It ships inside the Dynamo Frontend image, with a standalone image planned (\\#11355, \\#11868, \\#12720, \\#13537). An llm-d batch gateway example brings offline OpenAI Batch requests through the inference gateway, with dispatch gated on Dynamo readiness (\\#12784, \\#13978).",
+   "shouldChange": {
+    "lessons": [
+     "t3.l6",
+     "t6.l3"
+    ],
+    "claims": []
+   },
+   "note": "Dynamo's Kubernetes CRDs move from v1alpha1 to v1beta1 and the Go Endpoint Picker is removed in favor of a default Rust EPP, which changes how the operator and gateway integration should be described."
+  },
+  {
+   "repo": "kubernetes-sigs/gateway-api-inference-extension",
+   "tag": "v1.6.0",
+   "line": "**Removed Alpha APIs**: The following experimental APIs have been removed from GAIE (migrated to `llm-d`):",
+   "shouldChange": {
+    "lessons": [
+     "t6.l3"
+    ],
+    "claims": []
+   },
+   "note": "InferenceObjective, InferenceModelRewrite and EndpointPickerConfig were removed from the Gateway API Inference Extension."
+  },
+  {
+   "repo": "kubernetes-sigs/gateway-api-inference-extension",
+   "tag": "v1.6.0",
+   "line": "Full-featured **Endpoint Picker (EPP)**, **Body-Based Routing (BBR)**, and **Latency Predictor** components have moved to the [llm-d](https://github.com/llm-d) repository to live in their dedicated ecosystem.",
+   "shouldChange": {
+    "lessons": [
+     "t5.l6",
+     "t6.l3"
+    ],
+    "claims": []
+   },
+   "note": "The full Endpoint Picker, including prefix-cache-aware routing, no longer lives in the Gateway API Inference Extension; it has moved to llm-d, which changes where the course should point for gateway routing."
+  },
+  {
+   "repo": "kubernetes-sigs/gateway-api-inference-extension",
+   "tag": "v1.6.0",
+   "line": "Remove inference objective, model rewrite and endpoint picker config APIs by @nicolexin in https://github.com/kubernetes-sigs/gateway-api-inference-extension/pull/2973",
+   "shouldChange": {
+    "lessons": [
+     "t6.l3"
+    ],
+    "claims": []
+   },
+   "note": "This is the PR that removes the InferenceObjective, model-rewrite and EndpointPickerConfig APIs from GAIE."
+  },
+  {
+   "repo": "llm-d/llm-d",
+   "tag": "v0.10.0",
+   "line": "[Docs] Replace deprecated `kv_both` for NIXLConnector and with explicit P/D Roles by @NickLucche in https://github.com/llm-d/llm-d/pull/1715",
+   "shouldChange": {
+    "lessons": [
+     "t5.l9",
+     "t6.l3"
+    ],
+    "claims": []
+   },
+   "note": "The `kv_both` role for vLLM's NIXLConnector is deprecated in favour of explicit producer and consumer (P/D) roles in disaggregated serving configs."
+  },
+  {
+   "repo": "llm-d/llm-d",
+   "tag": "v0.10.0",
+   "line": "docs(autoscaling): deprecate WVA and pin its image to release-0.9 by @lionelvillard in https://github.com/llm-d/llm-d/pull/2490",
+   "shouldChange": {
+    "lessons": [
+     "t7.l5"
+    ],
+    "claims": []
+   },
+   "note": "WVA, llm-d's autoscaler, is deprecated and frozen at release-0.9."
+  },
+  {
+   "repo": "llm-d/llm-d",
+   "tag": "v0.10.0",
+   "line": "docs(autoscaling): make KEDA + EPP the architecture path, deprecate WVA by @lionelvillard in https://github.com/llm-d/llm-d/pull/2497",
+   "shouldChange": {
+    "lessons": [
+     "t7.l5"
+    ],
+    "claims": []
+   },
+   "note": "llm-d deprecated its Workload Variant Autoscaler; KEDA plus EPP is now the recommended autoscaling control loop."
+  },
+  {
+   "repo": "sgl-project/sglang",
+   "tag": "v0.5.17",
+   "line": "**Initial support for the Rust frontend**: Migrates the front half of the server, everything from network ingress up to the point a tokenized request is handed to the GPU scheduler, from Python to a multi-threaded Rust implementation ([#29799](https://github.com/sgl-project/sglang/pull/29799)).",
+   "shouldChange": {
+    "lessons": [
+     "t3.l7",
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "SGLang's server front end (ingress through tokenization) moves from Python to Rust, so any claim that SGLang is a Python-fronted engine, or that Rust is mainly Dynamo's data-plane choice, stops being fully true."
+  },
+  {
+   "repo": "sgl-project/sglang",
+   "tag": "v0.5.20",
+   "line": "**Prefill context parallelism v1 removed.** The strategy-based implementation is now the only prefill CP path; the v1 runtime and its CLI options are gone. Prefill CP on HIP, NPU, and MUSA is rejected until those platforms are ported ([#36228](https://github.com/sgl-project/sglang/pull/36228)).",
+   "shouldChange": {
+    "lessons": [
+     "t6.l4"
+    ],
+    "claims": []
+   },
+   "note": "SGLang removed its v1 prefill context-parallelism runtime and CLI options, and non-CUDA platforms now reject prefill CP, which changes any claim about how SGLang exposes the context-parallel axis."
+  },
+  {
+   "repo": "sgl-project/sglang",
+   "tag": "v0.5.19",
+   "line": "**The unified radix tree is now the default cache for every configuration**, including Full-attention-only models; `SGLANG_ENABLE_UNIFIED_RADIX_TREE` is deprecated and can be unset: [#35081](https://github.com/sgl-project/sglang/pull/35081)",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10",
+     "t5.l6"
+    ],
+    "claims": []
+   },
+   "note": "The default radix cache in SGLang is now the unified radix tree, including for full-attention models, and its opt-in env var is deprecated, so any description of SGLang's prefix-cache radix tree as currently configured needs updating."
+  },
+  {
+   "repo": "sgl-project/sglang",
+   "tag": "v0.5.19",
+   "line": "**Unified radix tree by default.** The unified tree is now the cache for every model, not just hybrid ones ([#35081](https://github.com/sgl-project/sglang/pull/35081), see Breaking Changes). It also picked up three things this cycle: PD decode workers can reuse cached prefixes for SWA hybrid models like gpt-oss ([#27770](https://github.com/sgl-project/sglang/pull/27770)), you can attach or detach L3 storage on a running server ([#35269](https://github.com/sgl-project/sglang/pull/35269)), and pipeline parallelism with HiCache L3 stays consistent across ranks ([#27010](https://github.com/sgl-project/sglang/pull/27010)).",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10",
+     "t5.l6"
+    ],
+    "claims": []
+   },
+   "note": "SGLang changed the default for its prefix cache, which the course teaches as the radix tree: the unified radix tree, flagged as a breaking change, now replaces the classic radix cache for every model."
+  },
+  {
+   "repo": "sgl-project/sglang",
+   "tag": "v0.5.19",
+   "line": "Using unified radix tree by default for all case: [#35081](https://github.com/sgl-project/sglang/pull/35081)",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10",
+     "t5.l6"
+    ],
+    "claims": []
+   },
+   "note": "SGLang changed its default prefix cache to the unified radix tree for every configuration, a default change to the radix-tree prefix caching the course teaches as SGLang's design."
+  },
+  {
+   "repo": "verl-project/verl",
+   "tag": "v0.9.0",
+   "line": "**The V1 PPO trainer (`verl/trainer/ppo/v1`) is now the default** (#6823). `separate_async` also switches to the same step granularity as the other trainers (#6977).",
+   "shouldChange": {
+    "lessons": [
+     "t6.l7"
+    ],
+    "claims": []
+   },
+   "note": "verl's default trainer changed to the unified V1 trainer covering sync, colocated-async and separate-async rollout, so this changes verl's default training/rollout architecture."
+  },
+  {
+   "repo": "verl-project/verl",
+   "tag": "v0.9.1",
+   "line": "**`verl/experimental/fully_async_policy` and `verl/experimental/one_step_off_policy` are deprecated by V1 trainer and will be moved to verl-recipe in next release.**",
+   "shouldChange": {
+    "lessons": [
+     "t6.l7"
+    ],
+    "claims": []
+   },
+   "note": "verl's fully-async and one-step-off-policy rollout/trainer paths are deprecated in favor of the V1 trainer, which changes how verl's async rollout serving is described."
+  },
+  {
+   "repo": "verl-project/verl",
+   "tag": "v0.9.0",
+   "line": "New unified trainer abstraction covering sync and async training under `verl/trainer/ppo/v1` (#6710), **enabled by default** in this release (#6823). `sync`, `colocate_async` and `separate_async` now share one control-flow implementation, replay buffer and metric surface.",
+   "shouldChange": {
+    "lessons": [
+     "t6.l7"
+    ],
+    "claims": []
+   },
+   "note": "The default verl trainer changed to one implementation for colocated and separate async rollout, which changes how verl keeps the trainer and rollout engine in sync by default."
+  },
+  {
+   "repo": "verl-project/verl",
+   "tag": "v0.9.0",
+   "line": "[BREAKING][trainer, cfg] chore: enable V1 trainer by default by @Begunner in https://github.com/verl-project/verl/pull/6823",
+   "shouldChange": {
+    "lessons": [
+     "t6.l7"
+    ],
+    "claims": []
+   },
+   "note": "This breaking change makes the V1 unified sync/async trainer verl's default RL training loop."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.29.0",
+   "line": "**Breaking changes**: ten deprecated model architectures removed (#53608); FlexOlmo, Olmo3 and Hunyuan V1/VL migrated to the Transformers modeling backend (#53615); PyAV video decoder backend removed (#54231); `python -m vllm.entrypoints.openai.api_server` deprecated in favor of `vllm serve` (#52131); `VLLM_TEST_FORCE_FP8_MARLIN` (#52182) and `VLLM_ROCM_USE_AITER_FP4_ASM_GEMM` (#53141) removed.",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "The classic `python -m vllm.entrypoints.openai.api_server` launch command is deprecated in favour of `vllm serve`."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.28.0",
+   "line": "**Hybrid/Mamba**: prefix caching on by default (#50991), the final part of the Mamba attention module refactor (#44857), 3D-grid tiling of the state-copy Triton kernels (#49436), and Mamba alignment applied before encoder caps (#51603).",
+   "shouldChange": {
+    "lessons": [
+     "t5.l6"
+    ],
+    "claims": []
+   },
+   "note": "Prefix caching is now on by default for hybrid/Mamba models, which changes the default behaviour behind the APC lesson."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.29.0",
+   "line": "**Model Runner V2 is now the default for all models** (#53183), completing the rollout that began with pooling models (#48290). MRV2 also gained CUDA graph memory profiling for KV cache auto-sizing (#53306), batch-sharded sampling that cuts per-step logits memory by 1/TP (#50465), prompt embeds (#42963), `extract_hidden_states` speculation (#49811), padded FULL cudagraph dispatch for uniform decode under spec decode (#53407), and DP-sync skipping before EAGLE/MTP draft prefill (#53694). MRV1 remains in use for a few ROCm models and features MRV2 does not yet support.",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "vLLM's default execution architecture changed: Model Runner V2 replaces V1 for all models."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.29.0",
+   "line": "**New defaults**: FlashInfer all-reduce enabled by default for TP CUDA groups, opt out with `VLLM_ALLREDUCE_USE_FLASHINFER=0` (#52998); prefix-cache `NONE_HASH` is deterministic by default so distributed KV cache users no longer need to pin `PYTHONHASHSEED` (#51875); new `--max-num-queued-reqs` / `--max-num-queued-tokens` admission-control flags (#49445).",
+   "shouldChange": {
+    "lessons": [
+     "t5.l6",
+     "t6.l4"
+    ],
+    "claims": []
+   },
+   "note": "Default changes: prefix-cache block hashes are now deterministic across instances, so pinning PYTHONHASHSEED is no longer needed for cache-aware routing, and the TP all-reduce backend changed."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.28.0",
+   "line": "**New defaults**: `max_num_batched_tokens` raised from 8192 to 16384 (#51726), prefix caching enabled by default for Mamba models (#50991), and the Blackwell CUDA graph capture default raised to 1024 (#49390).",
+   "shouldChange": {
+    "lessons": [
+     "t5.l6",
+     "t5.l7",
+     "t5.l8"
+    ],
+    "claims": []
+   },
+   "note": "vLLM changed its default per-step token budget, which is the chunked-prefill and continuous-batching knob, and turned prefix caching on by default for Mamba/hybrid models."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.29.0",
+   "line": ":warning: Model Runner V1 Deprecation",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "Announces that vLLM's V1 model runner is deprecated."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.29.0",
+   "line": "Model Runner V2 is the default runner for all models (#53183).",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "Default runner changed to Model Runner V2 for all models."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.29.0",
+   "line": "Now that Model Runner V2 is used by default, we are considering Model Runner V1 deprecated and are targeting v0.32 for its removal. We do not intend to accept any more MRV1-specific improvements or optimizations.",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "Model Runner V1 is deprecated and scheduled for removal in v0.32, so descriptions of vLLM's runner architecture need updating."
+  },
+  {
+   "repo": "vllm-project/vllm",
+   "tag": "v0.29.0",
+   "line": "`python -m vllm.entrypoints.openai.api_server` is deprecated; use `vllm serve` (#52131).",
+   "shouldChange": {
+    "lessons": [
+     "t5.l10"
+    ],
+    "claims": []
+   },
+   "note": "The OpenAI api_server module entrypoint is deprecated; `vllm serve` is now the supported launch path."
+  }
+ ]
+}
