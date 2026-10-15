@@ -72,7 +72,7 @@ export default function SweepChart({ result, xLabel, tickLabel, answer, pick, ta
           <g key={i}>
             <line x1={PAD.l - 3} y1={py(t)} x2={PAD.l} y2={py(t)} className="stroke-line" />
             <text x={PAD.l - 6} y={py(t) + 3} textAnchor="end" className="fill-current font-mono" fontSize="9">
-              {formatNumber(t)}
+              {formatNumber(yIn === undefined ? t : Number(t.toPrecision(3)))}
             </text>
           </g>
         ))}
