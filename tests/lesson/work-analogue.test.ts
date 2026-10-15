@@ -198,6 +198,13 @@ describe('the pick', () => {
     const button = saved.container.querySelectorAll('button').find((b) => b.textContent.trim() === 'Clear my pick')!
     expect(button.getAttribute('type')).toBe('button')
     expect(button.tabIndex).toBe(0) // a native button: Tab, Enter and Space reach it
+    // just outside the group (3c final review r2, G6): the group holds only its radios, and the button follows it
+    const group = saved.container.querySelectorAll('[role="radiogroup"]')[0]
+    expect(button.closest('[role="radiogroup"]')).toBeNull()
+    expect(group.querySelectorAll('button')).toHaveLength(0)
+    expect(group.querySelectorAll('input[type="radio"]')).toHaveLength(BACKGROUNDS.length)
+    expect(group.parentNode).toBe(button.parentNode)
+    expect(group.nextSibling).toBe(button)
     expect(clears).toEqual([])
     await dom.press(button)
     expect(clears).toEqual(['profile:background'])

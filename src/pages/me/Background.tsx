@@ -30,7 +30,7 @@ const LABELS: Record<Background, string> = {
 interface ChoiceProps {
   value: Background | null
   onChange: (b: Background) => void
-  /** Goes back to none. The button shows only while a background is picked, and focus returns to the group. */
+  /** Goes back to none. The button sits just outside the group, shows only while a background is picked, and focus returns to the group. */
   onClear: () => void
   /** Names the group for assistive tech; the visible heading differs between Boot and /me. */
   label?: string
@@ -41,19 +41,22 @@ export function BackgroundChoice({ value, onChange, onClear, label = 'What you w
   const name = useId()
   const group = useRef<HTMLDivElement>(null)
   return (
-    <div ref={group} className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={label}>
-      {BACKGROUNDS.map((b) => (
-        <label
-          key={b}
-          className={cn(
-            'flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 text-body-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent',
-            value === b ? 'border-line-bright bg-surface-3 text-text-1' : 'border-line bg-surface-2 text-text-2',
-          )}
-        >
-          <input type="radio" name={name} checked={value === b} onChange={() => onChange(b)} className="size-4 accent-accent" />
-          {LABELS[b]}
-        </label>
-      ))}
+    <div className="flex flex-col items-start gap-2">
+      <div ref={group} className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={label}>
+        {BACKGROUNDS.map((b) => (
+          <label
+            key={b}
+            className={cn(
+              'flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 text-body-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent',
+              value === b ? 'border-line-bright bg-surface-3 text-text-1' : 'border-line bg-surface-2 text-text-2',
+            )}
+          >
+            <input type="radio" name={name} checked={value === b} onChange={() => onChange(b)} className="size-4 accent-accent" />
+            {LABELS[b]}
+          </label>
+        ))}
+      </div>
+      {/* just outside the group, so the group holds only its radios; the next Tab stop after it (3c final review r2, G6) */}
       {value !== null && (
         <button
           type="button"
