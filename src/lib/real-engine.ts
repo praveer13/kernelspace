@@ -13,7 +13,12 @@
  * (Apache-2.0) by default.
  */
 
+import { claimNumber } from '@/data/claims'
 import type { SchedulerDriver, SchedView } from '@/lib/fleet-model'
+import { estimateScore, logError } from '@/lib/items/grade'
+import { rev32 } from '@/lib/ledger/stable'
+import type { ItemResponse } from '@/lib/ledger/types'
+import { parseNumeric } from '@/lib/sims/host'
 
 export interface RealReq {
   id: number
@@ -215,4 +220,251 @@ export async function runRealEngine(
     totalMs: Math.round(totalMs),
     preemptions,
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* The measured-versus-predicted run (docs/specs/wave-3.md §16.10)     */
+/* ------------------------------------------------------------------ */
+
+/** The one model the run measures: Qwen3-0.6B at q4, the panel's default. */
+export const MEASURED_MODEL_ID = 'onnx-community/Qwen3-0.6B-ONNX'
+
+/**
+ * What the download holds, as the panel's own label says (~400 MB). Decode at batch 1 streams about every weight once
+ * per token, so this is the bytes a token costs; it is a nominal figure, and the page says so.
+ */
+export const MEASURED_BYTES = 400e6
+
+/** The ledger id of the run: its event ref is `item:engine.measured-tps`. */
+export const MEASURED_ITEM_ID = 'engine.measured-tps'
+export const MEASURED_REF = `item:${MEASURED_ITEM_ID}` as const
+export const MEASURED_UNIT = 'tok/s'
+
+/** A prediction is right within this factor of the measurement: software efficiency alone moves a device's rate that much. */
+export const OK_FACTOR = 2
+
+/** A memory a prediction might use: transfer rate (MT/s) times bus width (bits) over 8 is bytes per second. */
+export interface MemoryPreset {
+  id: string
+  label: string
+  /** Mega-transfers per second per pin. */
+  rate: number
+  /** Total bus width in bits. */
+  bits: number
+}
+
+export const MEMORY_PRESETS: readonly MemoryPreset[] = [
+  { id: 'lpddr5-64', label: 'LPDDR5-6400, 64-bit', rate: 6400, bits: 64 },
+  { id: 'ddr5-128', label: 'DDR5-5600, 2 × 64-bit', rate: 5600, bits: 128 },
+  { id: 'lpddr5x-128', label: 'LPDDR5X-8533, 128-bit', rate: 8533, bits: 128 },
+  { id: 'gddr6-128', label: 'GDDR6 14 Gb/s, 128-bit', rate: 14000, bits: 128 },
+]
+
+/** GB/s (10^9 bytes) of a memory configuration, to one decimal: rate × bits / 8 is MB/s. */
+export const presetGBs = (p: Pick<MemoryPreset, 'rate' | 'bits'>): number => Math.round((p.rate * p.bits) / 8 / 100) / 10
+
+/** The roofline ceiling on decode: every byte of the weights crosses memory once per token. */
+export const ceilingTps = (bytes: number, gbps: number): number => (gbps * 1e9) / bytes
+
+/** The KV cache's bytes per token of context: K and V for every layer and KV head (claims `model.qwen3-0-6b.*`). */
+export function kvBytesPerToken(bytesPerValue: number): number {
+  return 2 * claimNumber('model.qwen3-0-6b.layers') * claimNumber('model.qwen3-0-6b.kv-heads') * claimNumber('model.qwen3-0-6b.head-dim') * bytesPerValue
+}
+
+/** The H100 SXM's ceiling for the same bytes, from its HBM bandwidth claim (3.35 TB/s): the number this run is not. */
+export const h100CeilingTps = (bytes: number): number => ceilingTps(bytes, claimNumber('hw.h100-sxm.hbm-bw', 1000))
+
+export const MAX_GBS = 10_000
+export const MAX_TPS = 100_000
+
+/** A typed positive number within `max`, or null. */
+export function parsePositive(text: string, max: number): number | null {
+  const n = parseNumeric(text)
+  return n !== null && n > 0 && n <= max ? n : null
+}
+
+/* ------------------------------ consent ------------------------------ */
+
+/** The slice of `navigator.connection` the consent line reads. */
+export interface ConnectionInfo {
+  saveData?: boolean
+  type?: string
+  effectiveType?: string
+}
+
+/** What the browser says about the connection that bears on a 400 MB download, or null when it says nothing worrying. */
+export function connectionWarning(c: ConnectionInfo | undefined): string | null {
+  if (!c) return null
+  if (c.type === 'cellular') return 'Your browser reports a cellular connection.'
+  if (c.saveData === true) return 'Your browser has data saver on.'
+  if (c.effectiveType === 'slow-2g' || c.effectiveType === '2g' || c.effectiveType === '3g') return `Your browser reports a slow connection (${c.effectiveType}).`
+  return null
+}
+
+/** What the consent asks: the model, its size, where it goes and that nothing is sent. */
+export const consentLine = (label: string, mb: number): string =>
+  `${label} downloads about ${mb} MB into this browser, once: the browser keeps it, and nothing is sent anywhere. Do it on Wi-Fi.`
+
+/* ------------------------------ the measurement ------------------------------ */
+
+/** Greedy decode of the same prompt at two lengths: the difference of their times is pure decode. */
+export const MEASURE_LO = 8
+export const MEASURE_HI = 40
+export const MEASURE_ROUNDS = 3
+/** The workload's third prompt, which a thinking model answers at length, so 40 tokens are never the whole answer. */
+export const MEASURE_PROMPT = REAL_WORKLOAD[2].prompt
+/** The longest context a timed step sees: the chat template, the prompt and the 40 new tokens, rounded up. */
+export const MEASURE_CONTEXT_TOKENS = 70
+
+export interface DecodeMeasurement {
+  /** The median round, in decode tokens per second. */
+  tokPerSec: number
+  /** Every round's rate, in the order run. */
+  rounds: number[]
+  /** Decode tokens each round timed (HI − LO). */
+  tokens: number
+}
+
+/** A measurement that cannot be trusted; the message says what to do. */
+export class MeasureError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'MeasureError'
+  }
+}
+
+export interface MeasureOptions {
+  /** Defaults to `performance.now`; tests pass a fake clock. */
+  now?: () => number
+  rounds?: number
+  lo?: number
+  hi?: number
+  onProgress?: (done: number, total: number) => void
+}
+
+const median = (xs: readonly number[]): number => {
+  const s = [...xs].sort((a, b) => a - b)
+  const m = s.length >> 1
+  return s.length % 2 === 1 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+/**
+ * Decode tokens per second on this device. `gen` runs a prompt for `lo` and then `hi` new tokens; both runs pay the
+ * same prefill, the same worker round trip and the same first-token cost, so (hi − lo) tokens over the difference of
+ * the two times is the decode rate alone. One untimed run first lets the runtime compile and warm up. The median of
+ * the rounds is reported, because one slow round (a garbage collection, a throttled core) should not decide it.
+ *
+ * The generation function returns text, not a token count, so a run's tokens are the cap asked for. An answer that
+ * ended before the cap would break that, so a longer run whose text is not clearly longer than the shorter one's is
+ * refused (a 5x cap ratio must show as at least 4x the text: a run that ended at 32 tokens, 24 of them timed, reads 1.33x
+ * too fast, within the 2x a prediction is judged by). The prompt is greedy, so the short answer is a prefix of the long one.
+ */
+export async function measureDecodeTps(gen: RealGenFn, options: MeasureOptions = {}): Promise<DecodeMeasurement> {
+  const now = options.now ?? (() => performance.now())
+  const rounds = options.rounds ?? MEASURE_ROUNDS
+  const lo = options.lo ?? MEASURE_LO
+  const hi = options.hi ?? MEASURE_HI
+  const messages = [{ role: 'user', content: MEASURE_PROMPT }]
+  const timed = async (n: number): Promise<{ ms: number; text: string }> => {
+    const t0 = now()
+    const out = await gen(messages, { max_new_tokens: n, do_sample: false })
+    return { ms: now() - t0, text: out?.[0]?.generated_text?.at(-1)?.content ?? '' }
+  }
+
+  options.onProgress?.(0, rounds)
+  await timed(2)
+  const rates: number[] = []
+  for (let i = 0; i < rounds; i++) {
+    const short = await timed(lo)
+    const long = await timed(hi)
+    if (long.text.length === 0 || long.text.length < 4 * short.text.length) {
+      throw new MeasureError('The model stopped before the timed length, so its tokens cannot be counted. Run it again.')
+    }
+    const seconds = (long.ms - short.ms) / 1000
+    if (!(seconds > 0)) throw new MeasureError('The longer run did not take longer than the shorter one, so the clock cannot separate them. Run it again.')
+    rates.push((hi - lo) / seconds)
+    options.onProgress?.(i + 1, rounds)
+  }
+  const round1 = (x: number): number => Math.round(x * 10) / 10
+  return { tokPerSec: round1(median(rates)), rounds: rates.map(round1), tokens: hi - lo }
+}
+
+/* ------------------------------ the comparison ------------------------------ */
+
+export interface RunInputs {
+  /** Your prediction, tok/s. */
+  predicted: number
+  /** The bandwidth you chose, GB/s. */
+  bandwidthGBs: number
+  /** What the engine measured, tok/s. */
+  measured: number
+  /** Defaults to `MEASURED_BYTES`. */
+  bytes?: number
+}
+
+export interface RunComparison extends RunInputs {
+  bytes: number
+  /** The roofline for your bandwidth and these bytes. */
+  ceiling: number
+  /** measured ÷ predicted. */
+  ratio: number
+  /** |log10(predicted ÷ measured)|. */
+  logErr: number
+  ok: boolean
+  score: number
+  /** The bandwidth the measured rate implies: measured × bytes, in GB/s. */
+  effectiveGBs: number
+  /** effective ÷ chosen bandwidth. Above 1 means the device delivers more than the bandwidth chosen. */
+  utilisation: number
+}
+
+export function compareRun(inputs: RunInputs): RunComparison {
+  const bytes = inputs.bytes ?? MEASURED_BYTES
+  const { predicted, measured, bandwidthGBs } = inputs
+  const logErr = logError(predicted, measured) ?? Infinity
+  const effectiveGBs = (measured * bytes) / 1e9
+  return {
+    predicted,
+    measured,
+    bandwidthGBs,
+    bytes,
+    ceiling: ceilingTps(bytes, bandwidthGBs),
+    ratio: measured / predicted,
+    logErr,
+    ok: logErr <= Math.log10(OK_FACTOR) + 1e-9,
+    score: Number.isFinite(logErr) ? estimateScore(logErr, OK_FACTOR) : 0,
+    effectiveGBs,
+    utilisation: effectiveGBs / bandwidthGBs,
+  }
+}
+
+/** Where the gap comes from, said for the device the run used and hedged where the page cannot know. */
+export function gapReading(c: RunComparison, device: string | null): string {
+  if (c.utilisation > 1.05) {
+    return `The measured rate moves ${c.effectiveGBs.toFixed(1)} GB/s of weights, more than the ${c.bandwidthGBs} GB/s you chose. Either this device has more memory bandwidth than you gave it, or a token reads fewer bytes than the nominal 400 MB.`
+  }
+  const pct = Math.round(c.utilisation * 100)
+  const where =
+    device === 'webgpu'
+      ? 'With WebGPU the rest is usually kernel launches and the browser, not DRAM.'
+      : device === 'wasm'
+        ? 'On the wasm CPU path the rest is usually compute and threading, not DRAM: a few cores rarely saturate the memory bus.'
+        : 'The rest is software: kernels, scheduling and the browser.'
+  return `The engine used ${pct}% of the ${c.bandwidthGBs} GB/s you chose (${c.effectiveGBs.toFixed(1)} GB/s of weights). ${where}`
+}
+
+/**
+ * The two events of a run: a `predict` (what you said, against what was measured) and an `item` (the graded response).
+ * Provenance `field` gives them weight 0, and a donation drops their value and truth: your device's speed stays on it.
+ */
+export function measuredRunItems(c: RunComparison): ItemResponse[] {
+  const rev = rev32({ id: MEASURED_ITEM_ID, model: MEASURED_MODEL_ID, unit: MEASURED_UNIT, okWithinFactor: OK_FACTOR })
+  // No `kcs` tag: a field event resolves to no KC (`item:engine.measured-tps` is in no ref-map), because cards.ts counts any
+  // event that resolves to a KC as a review of its card, and a miss on your own device's speed is not a lapse.
+  const data = { src: 'practice' as const, value: c.predicted, unit: MEASURED_UNIT, truth: c.measured }
+  const base = { ref: MEASURED_REF, rev, score: c.score, ok: c.ok, provenance: 'field' as const, data }
+  return [
+    { kind: 'predict', ...base },
+    { kind: 'item', ...base },
+  ]
 }
