@@ -1,6 +1,6 @@
 # Pre-registration: the Fleet Daily against no Daily
 
-**Status:** DRAFT, not signed. Task 3c-03 (`docs/specs/wave-3.md` §15.1, §18.2 F3) drafts it; the owner signs it **before `selectDailyVsOther` is read**. `scripts/partner-report.ts` does not call the selector while the line at the end of this file is unsigned, and prints "NOT READ" for the Daily. Nothing below changes after the signature except by a dated amendment at the end of this file.
+**Status:** signed by the owner on 2026-10-14 (section 7), with the 5-point margin (section 6, item 1). Task 3c-03 (`docs/specs/wave-3.md` §15.1, §18.2 F3) drafts it; the owner signs it **before `selectDailyVsOther` is read**. `scripts/partner-report.ts` does not call the selector while the line at the end of this file is unsigned, and prints "NOT READ" for the Daily. Nothing below changes after the signature except by a dated amendment at the end of this file.
 **Feature:** the Fleet Daily, `src/lib/world/daily.ts`, page `/daily`: one seeded incident a local day on the learner's installed components (hypothesis first, probes spend SLO budget, a debrief against an expert's replay).
 **Rule it implements:** PLAN-100X §9, "Fleet Daily: Daily KCs' 30-day diagnosis accuracy on unseen seeds ≥ non-Daily KCs'. Decide by the Wave 3 exit. Default if underpowered: weekly; no On-Call." The On-Call shift of PLAN §8 is gated on the same comparison ("Daily KCs' 30-day diagnosis ≥ non-Daily, or favourable think-alouds"), so this file's verdict is that gate's evidence.
 
@@ -59,7 +59,7 @@ The Daily is a daily cost: 10 minutes a day of the learner's time, and a seeded 
 
 ## 6. Changes from the plan's wording
 
-1. **A margin.** PLAN says "≥". Read literally, a point estimate of 0 or more is a keep, and a Daily that is exactly as good as no Daily would be killed half the time by noise. The 5-point margin makes it the ladder's non-inferiority test. Strike section 4's margin (and this item) to restore the literal rule: keep when the mean of *d* is 0 or more and 197 learners have an outcome. The owner chooses; the draft proposes the margin.
+1. **A margin.** PLAN says "≥". Read literally, a point estimate of 0 or more is a keep, and a Daily that is exactly as good as no Daily would be killed half the time by noise. The 5-point margin makes it the ladder's non-inferiority test. Strike section 4's margin (and this item) to restore the literal rule: keep when the mean of *d* is 0 or more and 197 learners have an outcome. The owner chooses; the draft proposes the margin. **The owner chose the margin** (2026-10-14).
 2. **The diagnosis skill is left out of the comparison** (section 2).
 3. **The design is observational** (section 2).
 
@@ -67,6 +67,6 @@ The Daily is a daily cost: 10 minutes a day of the learner's time, and a seeded 
 
 The owner signs by replacing the pending text on the next line with a name and an ISO date (for example `Signed: P. Naigaonkar 2026-10-14`). `isPreregSigned` in `src/lib/learner/outcomes.ts` reads that line, as `scripts/landscape/score.ts` reads the watcher's.
 
-Signed: (pending owner)
+Signed: Praveer Naigaonkar 2026-10-14
 
 Amendments are appended below this line with their date. Nothing above it is edited after signature.
