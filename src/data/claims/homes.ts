@@ -24,6 +24,8 @@ export const LAZY_GROUP_HOMES: Record<string, string> = {
   'production.vllm.disagg': 'lazy/serving3',
   'production.sglang.disagg': 'lazy/serving3',
   'bench.checkpoint-engine.': 'lazy/serving3',
+  'bench.step3.': 'lazy/serving3',
+  'bench.megascale-infer.': 'lazy/serving3',
   'twin.': 'lazy/twins',
 }
 

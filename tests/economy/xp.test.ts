@@ -305,7 +305,7 @@ describe('a synthetic year', () => {
       )
       expect(by.labs).toBe(1310)
       expect(by.practice).toBe(15 + 5 + 40 * 3 + hours * 60) // play + prove + sim outcomes + the items
-      expect(by.tickets).toBe(68 * 3 + 6 * 5) // 62 passes at 3 and the six spirals (t2.l7 and the five track-end ones) at 8
+      expect(by.tickets).toBe(69 * 3 + 6 * 5) // 63 passes at 3 and the six spirals (t2.l7 and the five track-end ones) at 8
       expect(by.onboarding).toBe(20)
       expect(by.fleet).toBe(110)
       expect(by.capstone).toBe(245)

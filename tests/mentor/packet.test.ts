@@ -1,5 +1,5 @@
 /**
- * H2 context packets and short deep links (docs/specs/wave-2.md §14; task 2c-06). Over all 68 lessons and labs 01 to 03:
+ * H2 context packets and short deep links (docs/specs/wave-2.md §14; task 2c-06). Over all 69 lessons and labs 01 to 03:
  * a packet is at most 6,000 characters, every untrusted section is fenced, no answer key, learner code or solution code
  * reaches it, and every deep link is under 2 KB with an instruction of at most 500 characters. The rest of the file
  * covers the trimming order, the fences against a hostile excerpt, the learner-state lines and the rule for when a lab's
@@ -80,11 +80,11 @@ function fences(text: string): { names: string[]; bodies: string[] } {
 
 const pieces = (text: string) => fences(text)
 
-/* ------------------------------ the 68 lessons ------------------------------ */
+/* ------------------------------ the 69 lessons ------------------------------ */
 
-describe('a lesson packet, over all 68 lessons', () => {
-  test('there are 68 lessons and an exported markdown for each', () => {
-    expect(ALL_LESSONS.length).toBe(68)
+describe('a lesson packet, over all 69 lessons', () => {
+  test('there are 69 lessons and an exported markdown for each', () => {
+    expect(ALL_LESSONS.length).toBe(69)
     for (const l of ALL_LESSONS) expect(existsSync(join(root, 'public/lessons-md', `${l.id}.md`))).toBe(true)
   })
 
@@ -325,8 +325,8 @@ describe('deep links', () => {
     ...['sim-memory', 'sim-allocator', 'sim-vm', 'sim-roofline', 'sim-wgsl', 'sim-quant', 'sim-kv', 'sim-batching', 'sim-engine'].map((s) => `simulator ${s}`),
   ]
 
-  test('every URL is under 2 KB and carries an instruction of at most 500 characters, over all 68 lessons and labs 01 to 03', () => {
-    expect(labels.length).toBeGreaterThan(68 + 10)
+  test('every URL is under 2 KB and carries an instruction of at most 500 characters, over all 69 lessons and labs 01 to 03', () => {
+    expect(labels.length).toBeGreaterThan(69 + 10)
     for (const label of labels) {
       expect(instruction(label).length).toBeLessThanOrEqual(INSTRUCTION_MAX)
       for (const a of Object.keys(AGENTS) as (keyof typeof AGENTS)[]) {
