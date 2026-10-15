@@ -68,6 +68,15 @@ describe('Boot static imports', () => {
     expect(paths).not.toContain('src/lib/ledger/engine.ts')
   })
 
+  // 3c-05 had Boot's last step and /me read the pick from the align and grading module (1.0 KB gzip); it lives in learner/background.ts
+  test('the work pick is read without the align and grading module, in Boot\'s last step and on /me', () => {
+    for (const entry of ['src/pages/boot/You.tsx', 'src/pages/Me.tsx', 'src/pages/me/Background.tsx']) {
+      const paths = [...staticGraph([entry]).files].map((f) => relative(root, f))
+      expect(paths).toContain('src/lib/learner/background.ts')
+      expect(paths).not.toContain('src/lib/learner/iso.ts')
+    }
+  })
+
   test('the later steps are only reachable through the dynamic import', () => {
     const { files } = staticGraph(['src/pages/Boot.tsx'])
     const paths = [...files].map((f) => relative(root, f))

@@ -17,7 +17,6 @@
 
 import type { QuizQuestion } from '@/components/QuizBlock'
 import type { ContentBlock, IsomorphismBlock, IsomorphismPair } from '@/data/lessons/types'
-import { BACKGROUNDS } from '@/lib/ledger/constants'
 import { rev32 } from '@/lib/ledger/stable'
 import type { Background, ItemResponse } from '@/lib/ledger/types'
 import type { ItemResult } from '@/lib/items/play'
@@ -32,9 +31,8 @@ export const NSEC_PER_ROW = 15
 /** A block runs the active version only when it asks the break question (wave-3.md §11.1). */
 export const isActive = (block: IsomorphismBlock): block is IsomorphismBlock & { breakItem: QuizQuestion } => block.breakItem !== undefined
 
-/** `profile:background` as the working record holds it: one of the six values, else none. */
-export const backgroundOf = (value: unknown): Background | null =>
-  typeof value === 'string' && (BACKGROUNDS as readonly string[]).includes(value) ? (value as Background) : null
+// backgroundOf lives in background.ts (Boot and /me must not load this module); re-exported for existing importers
+export { backgroundOf } from './background'
 
 /** The block's number across its lesson's isomorphism blocks, from 1; 0 when the lesson does not hold it. */
 export function isoNumber(lesson: { blocks: readonly ContentBlock[] }, block: IsomorphismBlock): number {

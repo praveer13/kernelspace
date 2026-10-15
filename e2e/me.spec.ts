@@ -14,8 +14,23 @@ const noHorizontalScroll = (page: Page) => page.evaluate(() => document.document
 /** The page's content: everything /me renders between the shell's header and footer. */
 const PAGE = 'main'
 
-/** Tag every visible, focusable control inside the page with `data-e2e` = its document-order index; returns how many. */
-async function tagControls(page: Page): Promise<number> {
+/** A radio group as the page offers it: the Tab stop's tag, how many radios the arrow keys move through, and which one the Tab stop is. */
+interface RadioGroup {
+  stop: number
+  size: number
+  /** The Tab stop's place in the group, from 0: the checked radio, else the first. */
+  at: number
+  checked: boolean
+}
+
+/**
+ * Tag every Tab stop inside the page with `data-e2e` = its document-order index, and return how many there are and the
+ * radio groups. A radio group is ONE Tab stop (the checked radio, else the first) and the arrow keys move inside it, so
+ * only that radio is tagged; the others carry `data-e2e-radio` = `<stop>:<place>` for `walkRadioGroup`. What counts as a
+ * control and as a group is read from the DOM (a group is the radios with one name in one form), so a control added to
+ * /me later needs no edit here.
+ */
+async function tagControls(page: Page): Promise<{ count: number; radioGroups: RadioGroup[] }> {
   return page.evaluate((root) => {
     const scope = document.querySelector(root) ?? document.body
     const all = [...scope.querySelectorAll<HTMLElement>('a[href], button, summary, input, select, textarea, [tabindex]')]
@@ -24,9 +39,67 @@ async function tagControls(page: Page): Promise<number> {
       // checkVisibility also sees the content of a closed <details>, which keeps its box but cannot take focus
       return el.checkVisibility({ checkVisibilityCSS: true, contentVisibilityAuto: true }) && el.getBoundingClientRect().width > 0
     })
-    visible.forEach((el, i) => el.setAttribute('data-e2e', String(i)))
-    return visible.length
+    const groups = new Map<string, HTMLInputElement[]>()
+    const formIds = new Map<HTMLFormElement | null, number>()
+    for (const el of visible) {
+      if (!(el instanceof HTMLInputElement) || el.type !== 'radio' || el.name === '') continue
+      if (!formIds.has(el.form)) formIds.set(el.form, formIds.size)
+      const key = `${formIds.get(el.form)}|${el.name}`
+      groups.set(key, [...(groups.get(key) ?? []), el])
+    }
+    const stopOf = (members: HTMLInputElement[]) => members.find((r) => r.checked) ?? members[0]
+    const stops = new Set([...groups.values()].map(stopOf))
+    const grouped = new Set<HTMLElement>([...groups.values()].flat())
+    const tabStops = visible.filter((el) => !grouped.has(el) || stops.has(el as HTMLInputElement))
+    tabStops.forEach((el, i) => el.setAttribute('data-e2e', String(i)))
+    const radioGroups = [...groups.values()].map((members) => {
+      const stop = stopOf(members)
+      const tag = stop.getAttribute('data-e2e')
+      members.forEach((r, k) => r.setAttribute('data-e2e-radio', `${tag}:${k}`))
+      return { stop: Number(tag), size: members.length, at: members.indexOf(stop), checked: stop.checked }
+    })
+    return { count: tabStops.length, radioGroups }
   }, PAGE)
+}
+
+/** The place, from 0, of the focused radio in its group, and how many radios of the group are checked. */
+const radioState = (page: Page, stop: number) =>
+  page.evaluate((tag) => {
+    const members = [...document.querySelectorAll<HTMLInputElement>(`[data-e2e-radio^="${tag}:"]`)]
+    const focused = document.activeElement as HTMLInputElement | null
+    return { focusedAt: focused ? members.indexOf(focused) : -1, checkedAt: members.flatMap((r, k) => (r.checked ? [k] : [])) }
+  }, stop)
+
+/**
+ * The arrow-key step of one radio group (the Tab walk reaches the group once; the arrows do the rest): from the Tab stop,
+ * ArrowDown moves focus and the selection to the next radio, ArrowUp back, and each time exactly that radio is checked.
+ * Ends on the next radio, so the pick is now one the page did not start with; returns its place.
+ */
+async function walkRadioGroup(page: Page, g: RadioGroup): Promise<number> {
+  await page.locator(`[data-e2e="${g.stop}"]`).focus() // the Tab walk has already shown that Tab arrives here
+  expect(await radioState(page, g.stop)).toMatchObject({ focusedAt: g.at })
+  const next = (g.at + 1) % g.size
+  await page.keyboard.press('ArrowDown')
+  expect(await radioState(page, g.stop), 'ArrowDown moves focus and the selection to the next radio').toEqual({ focusedAt: next, checkedAt: [next] })
+  await page.keyboard.press('ArrowUp')
+  expect(await radioState(page, g.stop), 'ArrowUp moves them back').toEqual({ focusedAt: g.at, checkedAt: [g.at] })
+  await page.keyboard.press('ArrowDown')
+  expect(await radioState(page, g.stop)).toEqual({ focusedAt: next, checkedAt: [next] })
+  return next
+}
+
+/**
+ * Every radio group: the arrows move the selection, and the pick is still there after a reload (a group on /me is a
+ * saved setting, so it comes back as the Tab stop). Leaves the page reloaded, settled and re-tagged; returns its groups.
+ */
+async function walkRadioGroups(page: Page, groups: RadioGroup[], afterReload: () => Promise<unknown>): Promise<RadioGroup[]> {
+  const picked: number[] = []
+  for (const g of groups) picked.push(await walkRadioGroup(page, g))
+  await page.reload()
+  await afterReload()
+  const { radioGroups } = await tagControls(page)
+  expect(radioGroups.map((g) => ({ at: g.at, checked: g.checked, size: g.size }))).toEqual(groups.map((g, i) => ({ at: picked[i], checked: true, size: g.size })))
+  return radioGroups
 }
 
 /**
@@ -76,6 +149,25 @@ async function tabThrough(page: Page, count: number): Promise<number[]> {
   return reached
 }
 
+/** `profile:background` as the ledger's working store holds it: its value, or null when the record is not there. */
+const storedBackground = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<string | null>((resolve, reject) => {
+        const open = indexedDB.open('kernelspace')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const db = open.result
+          const get = db.transaction('working', 'readonly').objectStore('working').get('profile:background')
+          get.onsuccess = () => {
+            db.close()
+            resolve((get.result as { value: string } | undefined)?.value ?? null)
+          }
+          get.onerror = () => reject(get.error)
+        }
+      }),
+  )
+
 async function settled(page: Page) {
   await page.waitForSelector('[data-mirror="summary"]')
   await page.waitForSelector('[data-ring-panel]')
@@ -101,13 +193,34 @@ test('/me with an empty ledger: every control is reached by Tab in order, and ev
   await expect(page.locator('[data-figure="calibration"]')).toContainText('not enough data (n = 0 rated answers, needs 20)')
   await expect(page.locator('[data-figure="offset"]')).toContainText('0.02 (default) until 20 first reviews; n = 0 so far')
 
-  const count = await tagControls(page)
+  const { count, radioGroups } = await tagControls(page)
   expect(count).toBeGreaterThan(8)
+  // 3c-05's "what you work on" is a six-radio group: one Tab stop, no pick yet, so the first radio is the stop
+  expect(radioGroups.map((g) => ({ size: g.size, at: g.at, checked: g.checked }))).toEqual([{ size: 6, at: 0, checked: false }])
   const reached = await tabThrough(page, count)
   expect([...new Set(reached)].sort((a, b) => a - b)).toEqual(Array.from({ length: count }, (_, i) => i))
   // document order: the walk never goes back to an earlier control
   expect(reached).toEqual([...reached].sort((a, b) => a - b))
   expect(await noHorizontalScroll(page)).toBe(true)
+
+  // the arrow keys move inside the group, and the pick survives a reload
+  const groups = await walkRadioGroups(page, radioGroups, () => settled(page))
+  expect(await noHorizontalScroll(page)).toBe(true)
+
+  // "Clear my pick" is reachable by keyboard, takes the pick back to none (the record is deleted, not just unchecked),
+  // and leaves focus on the group, not on the page
+  const clear = page.getByRole('button', { name: 'Clear my pick' })
+  await clear.focus()
+  await page.keyboard.press('Enter')
+  await expect(clear).toHaveCount(0)
+  await expect(page.locator(`[data-e2e-radio^="${groups[0].stop}:"]:checked`)).toHaveCount(0)
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('type'))).toBe('radio')
+  await expect.poll(() => storedBackground(page)).toBeNull()
+  await page.reload()
+  await settled(page)
+  expect((await tagControls(page)).radioGroups.map((g) => g.checked)).toEqual([false])
+  await expect(page.getByRole('button', { name: 'Clear my pick' })).toHaveCount(0)
+  expect(await storedBackground(page)).toBeNull()
 
   // a disclosure opens with Enter and closes with Space, and its text reads in place
   const first = page.locator('[data-mirror="vrk30"] summary')
@@ -191,8 +304,54 @@ test('/me with a written ledger: cold checks and calibration show their interval
   await page.reload()
   await settled(page)
   await expect(page.locator('[data-competence]')).toHaveCount(6)
-  const count = await tagControls(page)
+  const { count, radioGroups } = await tagControls(page)
   const reached = await tabThrough(page, count)
   expect([...new Set(reached)].sort((a, b) => a - b)).toEqual(Array.from({ length: count }, (_, i) => i))
   expect(reached).toEqual([...reached].sort((a, b) => a - b))
+  await walkRadioGroups(page, radioGroups, async () => {
+    await settled(page)
+    await expect(page.locator('[data-competence]')).toHaveCount(6)
+  })
+})
+
+// D47: nothing on /me moves once it shows. The forms card is the one lazy section with no placeholder, so on a slow
+// network its chunk used to arrive after the Mirror and push the background pick (and everything below) down. The chunk
+// is held back here for 3 s, and the pick's heading is sampled on every frame: it must not be on the page before the
+// card, and from the frame it appears it stays where it is.
+test('/me with the forms card arriving late: the background pick appears with the card and never moves', async ({ page }) => {
+  await page.route(/\/assets\/FormsCard-[^/]+\.js/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    await route.continue()
+  })
+  await page.addInitScript(() => {
+    const w = window as unknown as { __tops: (number | null)[]; __forms: boolean[] }
+    w.__tops = []
+    w.__forms = []
+    const sample = () => {
+      const h = document.getElementById('me-background-heading')
+      w.__tops.push(h ? Math.round((h.getBoundingClientRect().top + scrollY) * 10) / 10 : null)
+      w.__forms.push(document.querySelector('[data-forms-card]') !== null)
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+  })
+  await page.goto('/me')
+  await page.waitForSelector('[data-mirror="summary"]')
+  // the Mirror has settled, the card has not: the pick is not on the page yet, and neither is anything below the Mirror
+  await expect(page.locator('[data-forms-card]')).toHaveCount(0)
+  await expect(page.locator('#me-background-heading')).toHaveCount(0)
+  await page.waitForSelector('[data-forms-card]', { timeout: 20_000 })
+  await expect(page.locator('#me-background-heading')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  await page.waitForTimeout(1500) // the journey and data ownership land, and the frames after them are sampled too
+  const { tops, forms } = await page.evaluate(() => {
+    const w = window as unknown as { __tops: (number | null)[]; __forms: boolean[] }
+    return { tops: w.__tops, forms: w.__forms }
+  })
+  const seen = tops.filter((t): t is number => t !== null)
+  expect(seen.length).toBeGreaterThan(30)
+  expect(new Set(seen).size, `the pick's top edge took these values: ${[...new Set(seen)].join(', ')}`).toBe(1)
+  // the pick is never on a frame without the card above it
+  expect(tops.some((t, i) => t !== null && !forms[i])).toBe(false)
+  expect(await noHorizontalScroll(page)).toBe(true)
 })

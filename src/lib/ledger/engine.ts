@@ -555,6 +555,29 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     return enqueue(() => commitPending(evs, ws))
   }
 
+  /**
+   * Delete working records (a learner clearing an optional pick). A working record has no tombstone, so a file exported
+   * before the delete can bring the record back on a later import, like any older value. Other tabs get a `reload` (the
+   * reason names the closest existing one: they re-read the store), which a rebuild applies as a delete.
+   */
+  function deleteWorking(keys: WorkingKey[]): Promise<void> {
+    if (guard.readOnly || closed || keys.length === 0) return Promise.resolve()
+    for (const k of keys) {
+      pendingWorking.delete(k)
+      working.delete(k)
+    }
+    emit()
+    return enqueue(async () => {
+      if (guard.readOnly) return
+      try {
+        await store.commit({ deleteWorkingKeys: keys }, resolvers)
+      } catch {
+        return // memory shows the delete; the next rebuild from the store shows the record again
+      }
+      channel.post({ t: 'reload', reason: 'import' })
+    })
+  }
+
   const readOnlyResult = (): { ok: false; error: ImportErrorCode; detail: string } => ({
     ok: false,
     error: 'read-only',
@@ -785,6 +808,7 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     componentBytes,
     putComponent,
     append,
+    deleteWorking,
     onAggregate(cb) {
       listeners.add(cb)
       // Replay the latest derive so a late subscriber starts current (the façade subscribes after boot).

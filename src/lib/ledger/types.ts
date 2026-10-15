@@ -1076,6 +1076,8 @@ export interface LedgerFacadeActions extends LedgerFacadeActionsV31, LedgerFacad
   completeRef(ref: BootRef, data?: JsonObject): void
   recordVisit(ref: LessonRef | SimRef | BootRef): void
   setWorking(key: WorkingKey, value: Json): void
+  /** Delete a working record: memory, the store, the outbox and other tabs. Nothing happens when the key holds none. */
+  clearWorking(key: WorkingKey): void
 }
 
 /* ---- Wave 1 façade additions (spec §3.3), merged into LedgerFacadeActions above. ---- */
@@ -1254,6 +1256,8 @@ export interface LedgerEngine extends LedgerClient {
   putComponent(rec: ComponentRecord): Promise<void>
   /** Commit events and working records already in this tab's outbox, then broadcast. Resolves after the commit. */
   append(events: LedgerEvent[], working: WorkingRecord[]): Promise<void>
+  /** Delete working records from memory and the store, then tell other tabs to re-read it. */
+  deleteWorking(keys: WorkingKey[]): Promise<void>
   /** Called after every full derive (boot, broadcast, import, undo, reset, re-projection). */
   onAggregate(cb: (agg: Aggregate, working: WorkingRecord[], status: LedgerStatus) => void): () => void
   status(): LedgerStatus
