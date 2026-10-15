@@ -25,6 +25,7 @@ export const LAZY_GROUP_HOMES: Record<string, string> = {
   'production.sglang.disagg': 'lazy/serving3',
   'bench.checkpoint-engine.': 'lazy/serving3',
   'twin.': 'lazy/twins',
+  'field.': 'lazy/field',
 }
 
 /** The module to import for an id that is not registered: the longest matching prefix of `LAZY_GROUP_HOMES`, or undefined. */

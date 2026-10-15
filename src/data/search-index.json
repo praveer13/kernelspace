@@ -418,7 +418,18 @@
     ["hw.h100-sxm.fp8-dense","H100 SXM FP8 Tensor Core, dense",1979,"TFLOPS"],
     ["production.triton.group-size-m","Triton matmul tutorial grouped-raster group size",8,"tile rows"],
     ["twin.sglang.treecore","SGLang radix-tree core default","rust",""],
-    ["twin.vllm.scheduler","vLLM v1 scheduler: one loop for every request","no prefill or decode phase",""]
+    ["twin.vllm.scheduler","vLLM v1 scheduler: one loop for every request","no prefill or decode phase",""],
+    ["field.decode-kv.serve","Field lab 1: start vLLM on Llama-3-8B with 4,096-token requests","vllm serve NousResearch/Meta-Llama-3-8B --dtype bfloat16 --max-model-len 4096 --gpu-memory-utilization 0.90",""],
+    ["field.decode-kv.bench","Field lab 1: one user decoding 256 tokens, 16 times","vllm bench serve --model NousResearch/Meta-Llama-3-8B --dataset-name random --input-len 128 --output-len 256 --num-prompts 16 --max-concurrency 1",""],
+    ["field.decode-kv.kv-log","Field lab 1: the server log line that sizes the KV cache","GPU KV cache size: N tokens, Maximum concurrency for 4,096 tokens per request: Mx",""],
+    ["field.decode-kv.tpot","Field lab 1: the benchmark line that gives one user's decode speed","Mean TPOT (ms)",""],
+    ["field.burstgpt.fetch","Field lab 2: download the pinned BurstGPT file and check its hash","curl -L -o BurstGPT_without_fails_1.csv https://github.com/HPMLL/BurstGPT/releases/download/v2.0/BurstGPT_without_fails_1.csv && echo \"a4d068a7113ec0290e74063a1b3447dc6001a30e4298eb313581b71006dda1f4  BurstGPT_without_fails_1.csv\" | sha256sum -c",""],
+    ["field.burstgpt.serve","Field lab 2: start vLLM on Llama-3-8B with 8,192-token requests","vllm serve NousResearch/Meta-Llama-3-8B --dtype bfloat16 --max-model-len 8192 --gpu-memory-utilization 0.90",""],
+    ["field.burstgpt.bench","Field lab 2: replay 480 BurstGPT requests all at once","vllm bench serve --model NousResearch/Meta-Llama-3-8B --dataset-name burstgpt --dataset-path BurstGPT_without_fails_1.csv --num-prompts 480 --request-rate inf --ignore-eos --seed 0",""],
+    ["field.burstgpt.loader","vLLM's BurstGPT loader: which rows it keeps and what it reads from them","GPT-4 rows with a positive response; lengths only",""],
+    ["field.burstgpt.out-tps","Field lab 2: the benchmark line that gives the saturated output rate","Output token throughput (tok/s)",""],
+    ["field.burstgpt.mean-request-tokens","BurstGPT v2.0: mean request tokens over the rows vLLM keeps",660.7,"tokens"],
+    ["field.burstgpt.mean-response-tokens","BurstGPT v2.0: mean response tokens over the rows vLLM keeps",218.8,"tokens"]
   ],
   "glossary": [
     ["page","Page","KV token block (16 tok)","t2.l2","block, chunk, memory unit"],
