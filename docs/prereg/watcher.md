@@ -1,6 +1,6 @@
 # Pre-registration: the landscape watcher backtest
 
-**Status:** drafted by task 2a-20 (docs/specs/wave-2.md §18) for owner sign-off. **Nothing is scored until the owner signs this file**: `scripts/landscape/score.ts` refuses to write a report while the `Signed:` line below is empty.
+**Status:** signed by the owner on 2026-10-14 (the end of this file); drafted by task 2a-20 (docs/specs/wave-2.md §18). **Nothing is scored until the owner signs this file**: `scripts/landscape/score.ts` refuses to write a report while the `Signed:` line below is empty.
 
 ## The question
 
@@ -55,4 +55,4 @@ Outcomes: `keep` (all five), `drop` (a bar missed with enough evidence: manual s
 
 The owner signs by replacing the pending text on the next line with a name and an ISO date (for example `Signed: P. Naigaonkar 2026-10-12`). `score.ts` reads that line.
 
-Signed: (pending owner)
+Signed: Praveer Naigaonkar 2026-10-14
