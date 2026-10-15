@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   OUTBOX_STALE_MS,
   appendToOutbox,
+  clearInOutboxes,
   collectOutboxes,
+  dropCleared,
   outboxKey,
   parseOutbox,
   pendingFrom,
@@ -222,5 +224,77 @@ describe('outbox: boot flush and the foreign-key rule (spec §8.6)', () => {
     const s = new FakeStorage()
     for (let i = 0; i < 50; i++) appendToOutbox(s, 'me', [ev(`e${i}`)], [], iso(NOW + i))
     expect(readOutbox(s, 'me')?.events.length).toBe(50)
+  })
+})
+
+describe('outbox: tombstones for a cleared working record (D50)', () => {
+  const BG = 'profile:background' as const
+
+  test('a clear strips the key at or before it from every outbox and leaves the tombstone in its own', () => {
+    const s = new FakeStorage()
+    appendToOutbox(s, 'me', [ev('mine')], [wr(BG, 'sre', iso(NOW - 10)), wr('boot:path', 'x')], iso(NOW - 10))
+    appendToOutbox(s, 'gone', [], [wr(BG, 'backend', iso(NOW - 5000))], iso(NOW - 5000))
+    appendToOutbox(s, 'mixed', [ev('theirs')], [wr(BG, 'jvm', iso(NOW))], iso(NOW - 3000))
+    appendToOutbox(s, 'later', [], [wr(BG, 'ml', iso(NOW + 1))], iso(NOW + 1))
+    expect(clearInOutboxes(s, 'me', BG, iso(NOW))).toBe(true)
+
+    const me = readOutbox(s, 'me')!
+    expect(me.events.map((e) => e.id)).toEqual(['mine'])
+    expect(me.working.map((w) => w.key)).toEqual(['boot:path'])
+    expect(me.cleared).toEqual([{ key: BG, at: iso(NOW) }])
+    expect(readOutbox(s, 'gone')).toBeNull() // emptied, so removed
+    const mixed = readOutbox(s, 'mixed')!
+    expect(mixed.working).toEqual([]) // at the same instant as the clear: cleared
+    expect(mixed.events.map((e) => e.id)).toEqual(['theirs'])
+    expect(mixed.updatedAt).toBe(iso(NOW - 3000)) // the 24 h rule still counts from its own last write
+    expect(readOutbox(s, 'later')?.working.map((w) => w.value)).toEqual(['ml']) // written after the clear: kept
+  })
+
+  test('boot drops what the latest tombstone clears, from any outbox, and keeps later writes', () => {
+    const s = new FakeStorage()
+    clearInOutboxes(s, 'a', BG, iso(NOW))
+    clearInOutboxes(s, 'b', BG, iso(NOW - 60_000))
+    s.data.set(outboxKey('old'), JSON.stringify({ tab: 'old', updatedAt: iso(NOW), events: [], working: [wr(BG, 'jvm', iso(NOW - 1000))] }))
+    s.data.set(outboxKey('new'), JSON.stringify({ tab: 'new', updatedAt: iso(NOW), events: [], working: [wr(BG, 'ml', iso(NOW + 1000))] }))
+    const { working, cleared } = pendingFrom(collectOutboxes(s, 'z'))
+    expect(working.map((w) => w.value)).toEqual(['ml'])
+    expect([...cleared]).toEqual([[BG, iso(NOW)]])
+  })
+
+  test("a later write in this tab drops this tab's tombstone for the key, even in the same millisecond", () => {
+    const s = new FakeStorage()
+    clearInOutboxes(s, 'me', BG, iso(NOW))
+    appendToOutbox(s, 'me', [], [wr('boot:path', 'x')], iso(NOW))
+    expect(readOutbox(s, 'me')?.cleared).toHaveLength(1) // another key leaves it alone
+    appendToOutbox(s, 'me', [], [wr(BG, 'student', iso(NOW))], iso(NOW))
+    expect(readOutbox(s, 'me')?.cleared).toBeUndefined()
+    expect(pendingFrom(collectOutboxes(s, 'me')).working.map((w) => w.value)).toEqual(['x', 'student'])
+  })
+
+  test('commits and the boot settle keep tombstones; dropCleared removes them and empties the key', () => {
+    const s = new FakeStorage()
+    appendToOutbox(s, 'me', [ev('a')], [], iso(NOW))
+    clearInOutboxes(s, 'me', BG, iso(NOW))
+    removeFromOutbox(s, 'me', [ev('a')], [])
+    expect(readOutbox(s, 'me')).toMatchObject({ events: [], working: [], cleared: [{ key: BG, at: iso(NOW) }] })
+    expect(settleOutboxes(s, 'me', collectOutboxes(s, 'me'), NOW)).toEqual([])
+    expect(readOutbox(s, 'me')?.cleared).toHaveLength(1)
+    clearInOutboxes(s, 'other', BG, iso(NOW + 1))
+    dropCleared(s, 'me', [BG])
+    expect(s.data.size).toBe(0)
+  })
+
+  test('a malformed tombstone is dropped, never the events beside it; older readers ignore the field', () => {
+    const raw = { tab: 't', updatedAt: iso(NOW), events: [ev('a')], working: [], cleared: [{ key: BG, at: 'yesterday' }, 7, { key: BG, at: iso(NOW) }] }
+    expect(parseOutbox(JSON.stringify(raw))?.cleared).toEqual([{ key: BG, at: iso(NOW) }])
+    expect(parseOutbox(JSON.stringify({ ...raw, cleared: 'nope' }))).toMatchObject({ events: [ev('a')] })
+    expect(parseOutbox(JSON.stringify({ ...raw, cleared: 'nope' }))?.cleared).toBeUndefined()
+  })
+
+  test('a clear without storage, or over quota, reports false', () => {
+    expect(clearInOutboxes(null, 'me', BG, iso(NOW))).toBe(false)
+    const s = new FakeStorage()
+    s.failWrites = true
+    expect(clearInOutboxes(s, 'me', BG, iso(NOW))).toBe(false)
   })
 })

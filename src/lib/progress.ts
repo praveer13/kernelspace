@@ -6,7 +6,7 @@ import { emptyAggregate, fleetRunOk, fleetRunScore, foldInto, incidentOk, incide
 import { checkSnapshot } from './ledger/guard'
 import { lwwWorking } from './ledger/merge'
 import { SNAPSHOT_KEY } from './ledger/names'
-import { appendToOutbox, outboxKey, readOutbox, removeFromOutbox } from './ledger/outbox'
+import { appendToOutbox, clearInOutboxes, outboxKey } from './ledger/outbox'
 import { getOwn, setOwn, sha256Hex, stableStringify } from './ledger/stable'
 import { refMatchesKind } from './ledger/refs'
 import { dayOf } from './ledger/time'
@@ -889,7 +889,8 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
     // `fw:runs` keeps the newest 50 (wave-3.md §3.5): the oldest drop, so the codec never refuses the list at the flush.
     setWorking: (key: WorkingKey, value: Json) => writeWorking([[key, key === 'fw:runs' && Array.isArray(value) ? value.slice(-MAX_RUN_RECORDS) : value]]),
 
-    // A delete, not a write: the record goes from memory, the snapshot, this tab's outbox and the store (the engine tells other tabs).
+    // A delete, not a write (D50): the record goes from memory, the snapshot, every outbox and the store (the engine tells
+    // other tabs). The tombstone left in this tab's outbox makes the clear durable before the store's delete commits.
     clearWorking: (key: WorkingKey) => {
       if (readOnlyReason) return
       const held = workingRecs.get(key)
@@ -899,7 +900,9 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       unconfirmedWorking.delete(key)
       if (!held && !waiting) return
       workingRecs.delete(key)
-      removeFromOutbox(storage, tabId, [], readOutbox(storage, tabId)?.working.filter((w) => w.key === key) ?? [], clock.nowIso())
+      // Never before the record it clears, so a clock that stepped back cannot leave the record standing.
+      const now = clock.nowIso()
+      clearInOutboxes(storage, tabId, key, held && held.at > now ? held.at : now)
       publish()
       scheduleSnapshot()
       track(bootEngine().then(() => engine?.deleteWorking([key])))
