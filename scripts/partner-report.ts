@@ -141,6 +141,6 @@ if (wave1) {
   })
   console.log(json ? JSON.stringify(report, null, 2) : formatWave3Report(report))
   if (donations > 0 && !json) {
-    console.log(donationNote("minutes count answer and run times only, rounded to a second; a donation keeps no per-check lab detail, so F2 takes a lab's first green for a check's; and it keeps no unit, so F7 leaves out the cube's byte-unit question."))
+    console.log(donationNote("Today's session minutes count answer times only, and every time is rounded to a second; it keeps no unit, so F7 leaves out the cube's byte-unit question. F2 reads every ledger from the lab's first all-green run, so a donation and its export agree there."))
   }
 }

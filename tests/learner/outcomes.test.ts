@@ -56,6 +56,9 @@ import {
   selectProvedInUse,
   selectProveRate,
   selectProveV2,
+  proveV2Verdict,
+  PROVE_MIN_RATE,
+  SURFACE_FOOTNOTE,
   selectReceiptStats,
   selectRetention30,
   selectSurfaceMinutes,
@@ -1799,7 +1802,7 @@ describe('selectHintArms', () => {
     expect(r.partners).toBe(0)
   })
 
-  test('only a generated cold check 25 to 45 days after the check\'s first green counts, and an assisted one never does', () => {
+  test('only a generated cold check 25 to 45 days after the lab\'s first all-green run counts, and an assisted one never does', () => {
     const at = (gap: number, extra: Partial<Parameters<typeof learner>[0]> = {}) => selectHintArms([learner({ armA: 'ladder', armB: 'packet', okA: true, okB: false, gap, ...extra })], CONTENT, options)
     // the packet check's probe is a day after the ladder check's
     expect(at(24).checks).toEqual({ ladder: 0, packet: 1 })
@@ -1827,7 +1830,39 @@ describe('selectHintArms', () => {
     expect(selectHintArms([{ events: later.events }], CONTENT).checks).toEqual({ ladder: 0, packet: 0 })
   })
 
-  test('a donation, which keeps no per-check detail, takes the lab\'s first green for the check\'s', () => {
+  test('the window follows the lab\'s first all-green run, not a check\'s own first pass, in a ledger with per-check detail', () => {
+    // owner decision (docs/prereg/hint-ladders.md §3 and §7): the lab's first `lab-check` with `ok` anchors every ledger
+    const helped = (j: Journal) => j.add('ack', `hint:rust-allocator/${CHECK_A.id}#R1`, d(0), { data: { arm: 'ladder' } })
+    const probeAt = (j: Journal, day: number) => unseen(j, 'probe', 'gen:frag/first-fit', d(day), true, { src: 'today', reason: 'probe', kcs: [CHECK_A.kc] })
+    const run = (j: Journal, day: number, ok: boolean, a: string) =>
+      j.add('lab-check', 'lab:rust-allocator', d(day), { ok, provenance: 'unseen', data: { checks: [{ id: CHECK_A.id, status: a }, { id: CHECK_B.id, status: 'pass' }] } })
+    // the lab went all-green on day 0 (`ok` is cumulative) while this run's detail had `align` failing; `align`'s own first
+    // pass is day 10. A cold check on day 30 is 30 days after the lab and 20 after the check: the lab's run decides, so it counts
+    const later = new Journal()
+    run(later, 0, true, 'fail')
+    helped(later)
+    run(later, 10, true, 'pass')
+    probeAt(later, 30)
+    expect(selectHintArms([{ events: later.events }], CONTENT, options).checks).toEqual({ ladder: 1, packet: 0 })
+    // and the mirror case: `align` passed in a red run on day 0 and the lab went all-green on day 20. A cold check on day 50
+    // is 30 days after the lab and 50 after the check: it counts, and one on day 30, 10 days after the lab, does not
+    const earlier = new Journal()
+    run(earlier, 0, false, 'pass')
+    helped(earlier)
+    run(earlier, 20, true, 'pass')
+    probeAt(earlier, 30)
+    expect(selectHintArms([{ events: earlier.events }], CONTENT, options).checks).toEqual({ ladder: 0, packet: 0 })
+    probeAt(earlier, 50)
+    expect(selectHintArms([{ events: earlier.events }], CONTENT, options).checks).toEqual({ ladder: 1, packet: 0 })
+    // a lab that never went all-green has no window at all, however many of its checks passed
+    const red = new Journal()
+    run(red, 0, false, 'pass')
+    helped(red)
+    probeAt(red, 30)
+    expect(selectHintArms([{ events: red.events }], CONTENT, options).checks).toEqual({ ladder: 0, packet: 0 })
+  })
+
+  test('a donation, which keeps no per-check detail, reads the same as its export: both start at the lab\'s first all-green run', () => {
     const own = crew(4, (i) => ({ armA: 'ladder', armB: 'packet', okA: true, okB: i % 2 === 0 }))
     const donated = own.map((l) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] })))
     const a = selectHintArms(own, CONTENT, options)
@@ -1960,6 +1995,23 @@ describe('selectProveV2 and selectProvedInUse', () => {
     attempt(j, 'kv-block-manager', 1)
     const donated = ledgerOfDonation(redactForPartner({ events: j.events, working: [] }))
     expect(selectProveV2([donated.events], V2).proved).toMatchObject({ n: 1, correct: 1 })
+  })
+
+  test('F5 keeps Prove-it v2 only on the Wilson lower bound: a share of 0.70 at n = 10 is not kept, at n = 200 it is', () => {
+    const at = (correct: number, n: number, partners = 5) => ({ n, correct, rate: correct / n, ci95: [wilson(correct, n).lo, wilson(correct, n).hi] as [number, number], partners })
+    // 7 of 10: the share clears 60 % but the lower bound, 39.7 %, does not
+    expect(at(7, 10).ci95[0]).toBeCloseTo(0.3968, 4)
+    expect(proveV2Verdict(at(7, 10))).toBe('underpowered')
+    // 140 of 200: the lower bound, 63.3 %, clears it
+    expect(at(140, 200).ci95[0]).toBeCloseTo(0.6332, 4)
+    expect(proveV2Verdict(at(140, 200))).toBe('keep')
+    // a lower bound just under the bar is not kept (130 of 200: 58.2 %); five of five is not either (56.6 %)
+    expect(proveV2Verdict(at(130, 200))).toBe('underpowered')
+    expect(proveV2Verdict(at(5, 5))).toBe('underpowered')
+    // below five partners nothing is kept, however many greens
+    expect(proveV2Verdict(at(140, 200, 4))).toBe('underpowered')
+    expect(proveV2Verdict({ n: 0, correct: 0, rate: null, ci95: null, partners: 0 })).toBe('underpowered')
+    expect(PROVE_MIN_RATE).toBe(0.6)
   })
 
   test('the share of partners with at least one proved lab, and how many labs that is', () => {
@@ -2512,16 +2564,18 @@ describe('buildWave3Report and formatWave3Report', () => {
   }
   const crew = (n: number) => Promise.all(partners(n, partner))
 
-  test('five partners: F1 is reported with the journey table, F5 passes, F10 is reported, the rest stay short', async () => {
+  test('five partners: F1 is reported with the journey table, F5 is read but 5 of 5 is not kept, F10 is reported, the rest stay short', async () => {
     const r = buildWave3Report(await crew(5), { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) })
     expect(status(r, 'F1')).toBe('reported')
-    expect(status(r, 'F5')).toBe('pass')
+    // 5 of 5 attempted, but the Wilson lower bound, 56.6 %, is under 60 %: the underpowered default, 1 question
+    expect(status(r, 'F5')).toBe('fail')
     expect(status(r, 'F10')).toBe('reported')
     expect(status(r, 'F7')).toBe('insufficient')
-    expect(r.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('keep')
+    expect(r.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('underpowered')
     const text = formatWave3Report(r)
-    expect(text).toContain('F5  Prove-it v2 keep-or-kill → PASS')
-    expect(text).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %')
+    expect(text).toContain('F5  Prove-it v2 keep-or-kill → FAIL')
+    expect(text).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %, Wilson 95 % interval 56.6 % to 100.0 %; kept only if the lower bound is at least 60 %: not kept')
+    expect(text).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
     expect(text).toContain('95 % interval')
     expect(text).toContain('5 of 5 partners = 100.0 %')
     expect(text).toContain('F1  the journey re-cut: minutes per surface per week → REPORTED')
@@ -2531,6 +2585,67 @@ describe('buildWave3Report and formatWave3Report', () => {
     expect(text).toContain('Fleet Week receipts (5 partners): engine 15 of 15 verified, 0 uncited (5 acts)')
     expect(text).toContain('over 5 acts: capacity 0 / 0 / 5 / 0')
     expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+  })
+
+  /** `partnerCount` partners, each green on an unseen seed on every one of `labs` v2 labs; the first `attempted` greens, in partner order, get a v2 attempt. */
+  const proveCrew = (partnerCount: number, labs: number, attempted: number) => {
+    const ids = Array.from({ length: labs }, (_, k) => `v2-lab-${k}`)
+    let left = attempted
+    const ledgers = partners(partnerCount, () => {
+      const j = new Journal()
+      ids.forEach((lab, k) => {
+        j.add('lab-check', `lab:${lab}`, d(k), { ok: true, score: 1, provenance: 'unseen', data: { passed: [] } })
+        if (left-- > 0) j.add('prove', `prove:${lab}`, d(k + 1), { ok: true, score: 1, provenance: 'proved', data: { v: 2, qid: 'free-after', kcs: [], answer: 1, actual: 1, calls: 2 } })
+      })
+      return { events: j.events }
+    })
+    return { ledgers, inputs: { cards: CONTENT, v2Labs: new Set(ids) } }
+  }
+
+  test('F5 on its Wilson lower bound: 7 of 10 greens attempted is the underpowered default, 140 of 200 is kept, and both print n, the share and both bounds', () => {
+    const small = proveCrew(5, 2, 7)
+    const r10 = buildWave3Report(small.ledgers, small.inputs)
+    expect(r10.proveV2.attempted).toMatchObject({ n: 10, correct: 7, partners: 5 })
+    expect(status(r10, 'F5')).toBe('fail')
+    expect(r10.keepOrKill.find((k) => k.id === 'F5')).toMatchObject({ verdict: 'underpowered', fallback: '1 question' })
+    const t10 = formatWave3Report(r10)
+    expect(t10).toContain('F5  Prove-it v2 keep-or-kill → FAIL')
+    expect(t10).toContain('n = 10, 5 partners: 7 of 10 unseen-seed greens followed by a v2 attempt = 70.0 %, Wilson 95 % interval 39.7 % to 89.2 %; kept only if the lower bound is at least 60 %: not kept, so the underpowered default, 1 question (PLAN §9)')
+    expect(t10).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
+    expect(t10).not.toContain('Prove-it v2: KILL')
+
+    const large = proveCrew(20, 10, 140)
+    const r200 = buildWave3Report(large.ledgers, large.inputs)
+    expect(r200.proveV2.attempted).toMatchObject({ n: 200, correct: 140, partners: 20 })
+    expect(status(r200, 'F5')).toBe('pass')
+    expect(r200.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('keep')
+    const t200 = formatWave3Report(r200)
+    expect(t200).toContain('F5  Prove-it v2 keep-or-kill → PASS')
+    expect(t200).toContain('n = 200, 20 partners: 140 of 200 unseen-seed greens followed by a v2 attempt = 70.0 %, Wilson 95 % interval 63.3 % to 75.9 %; kept only if the lower bound is at least 60 %: kept;')
+    expect(t200).toContain('Prove-it v2: KEEP')
+  })
+
+  test('F5 below five partners still prints n, the share and both bounds beside "not enough data"', () => {
+    const few = proveCrew(4, 2, 6)
+    const r = buildWave3Report(few.ledgers, few.inputs)
+    expect(status(r, 'F5')).toBe('insufficient')
+    expect(r.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('underpowered')
+    expect(formatWave3Report(r)).toContain('not enough data (n = 8, 4 partners; needs 5 partners); 6 of 8 unseen-seed greens followed by a v2 attempt = 75.0 %, Wilson 95 % interval')
+  })
+
+  test('the journey footnote says what the minutes are since EF1, and that overlapping work on /week counts twice', () => {
+    const text = formatWave3Report(buildWave3Report([], { cards: CONTENT }))
+    for (const line of SURFACE_FOOTNOTE) expect(text).toContain(line)
+    const note = SURFACE_FOOTNOTE.map((l) => l.trim()).join(' ')
+    expect(note).not.toContain('recorded answer and run times')
+    expect(note).toContain('Daily and Act IV drills from the alert to the debrief')
+    expect(note).toContain('a Fleet Week act the page\'s visible time up to its pass')
+    expect(note).toContain('only while the page is visible, capped per event')
+    expect(note).toContain('Overlapping work on /week counts twice (an Act I or II run started during a drill is in both)')
+    expect(note).toContain('A donation rounds each to a second')
+    // the footnote sits under the journey table, before the receipts
+    expect(text.indexOf(SURFACE_FOOTNOTE[0])).toBeGreaterThan(text.indexOf('the journey re-cut (F1)'))
+    expect(text.indexOf(SURFACE_FOOTNOTE[0])).toBeLessThan(text.indexOf('Fleet Week receipts'))
   })
 
   test('under five partners no gate is read as a pass', async () => {
@@ -2587,9 +2702,11 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
       expect(r.stdout).toContain('F1  the journey re-cut: minutes per surface per week → REPORTED')
       expect(r.stdout).toContain('the journey re-cut (F1): active minutes per week')
       expect(r.stdout).toContain('planned: Boot → Today; R.L1 ⇄ T0.L1')
-      // lab 02 ships a Prove-it v2 bundle, so the script finds it among the labs and F5 reads the five attempts
-      expect(r.stdout).toContain('F5  Prove-it v2 keep-or-kill → PASS')
-      expect(r.stdout).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %')
+      // lab 02 ships a Prove-it v2 bundle, so the script finds it among the labs and F5 reads the five attempts; 5 of 5 has
+      // a Wilson lower bound of 56.6 %, under the 60 % bar, so Prove-it v2 takes the underpowered default
+      expect(r.stdout).toContain('F5  Prove-it v2 keep-or-kill → FAIL')
+      expect(r.stdout).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %, Wilson 95 % interval 56.6 % to 100.0 %')
+      expect(r.stdout).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
       expect(r.stdout).toContain('F4  the watcher')
       expect(r.stdout).toContain('the manual scan stays')
       expect(r.stdout).toContain('5 of 5 files are redacted donations')
@@ -2626,7 +2743,8 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
       expect(r.status).toBe(0)
       expect(r.stdout).toContain('over 2 exports')
       expect(r.stdout).toContain('1 of 2 files is a redacted donation')
-      expect(r.stdout).toContain("F2 takes a lab's first green for a check's")
+      expect(r.stdout).toContain("F2 reads every ledger from the lab's first all-green run, so a donation and its export agree there")
+      expect(r.stdout).not.toContain('per-check')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
