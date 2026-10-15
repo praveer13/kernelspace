@@ -1,6 +1,6 @@
 # Pre-registration: hint ladders against packet-only help
 
-**Status:** DRAFT, not signed. The owner signs this before the release that ships packets (task 2c-06, `docs/specs/wave-2.md` §14.4 and Q4). No data is analysed before the signature, and nothing below changes after it except by a dated amendment at the end of this file.
+**Status:** signed by the owner on 2026-10-14 (section 7), before any analysis of the arms. Drafted to be signed before the release that ships packets (task 2c-06, `docs/specs/wave-2.md` §14.4 and Q4). No data is analysed before the signature, and nothing below changes after it except by a dated amendment at the end of this file.
 **Feature:** H3 authored hint ladders, `src/components/forge/HintLadder.tsx`; H2 context packets, `src/lib/mentor/packet.ts`.
 **Rule it implements:** PLAN-100X §9, "Hint ladders: 30-day accuracy non-inferior (5 pts) to packet-only help. Decide by the Wave 3 exit. Default if underpowered: R0 to R2 only."
 
@@ -31,7 +31,7 @@ The ladder is the expensive feature (five authored rungs per check, a walkthroug
 
 ## 3. Outcome
 
-**Primary:** accuracy on the first **cold check** of the check's KCs taken 25 to 45 days after the check's first green run, on fresh generated items (a `probe` event, graded `ok` or not; `data.sinceDays` gives the gap). The check's KCs are the `kcs` of its entry in `src/data/labs.ts`. A KC with no generator family has no outcome and is not analysed.
+**Primary:** accuracy on the first **cold check** of the check's KCs taken 25 to 45 days after the lab's first all-green run (the lab's first `lab-check` event with `ok`), on fresh generated items (a `probe` event, graded `ok` or not; `data.sinceDays` gives the gap). The check's KCs are the `kcs` of its entry in `src/data/labs.ts`. A KC with no generator family has no outcome and is not analysed.
 
 **Unit of analysis:** the learner. For each learner with at least one analysable check in each arm, the difference *d* = (accuracy on ladder-arm checks) - (accuracy on packet-arm checks), each averaged over that learner's checks.
 
@@ -71,8 +71,8 @@ The ladder is the expensive feature (five authored rungs per check, a walkthroug
 
 | | |
 |---|---|
-| Owner | |
-| Date signed | |
-| Amendments | none |
+| Owner | Praveer Naigaonkar |
+| Date signed | 2026-10-14 |
+| Amendments | none. Before signing, the owner chose to anchor section 3's window at the lab's first all-green run instead of each check's first green run: a donation keeps no per-check timing (`docs/specs/wave-3.md` §15.2), so the lab's run is the anchor every ledger can show, and the arms, randomized per check within a lab, share it alike. |
 
 Amendments are appended below this line with their date. Nothing above it is edited after signature.

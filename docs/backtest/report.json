@@ -1,0 +1,272 @@
+{
+  "schema": 1,
+  "rater": "fresh agents (claude-opus-5-5): 10 blind raters, one per batch of repos (about 1,000 lines each), each given only its lines of docs/backtest/snapshot.json (as match.ts novelLines produces them), the lesson list (match.ts --lessons) and the rules of docs/prereg/watcher.md verbatim; never candidates.json, match.ts or report.json. A second blind rater on a seeded 10 % sample: Cohen's kappa 0.57 (see docs/backtest/agreement.json).",
+  "ratedAt": "2026-10-14",
+  "weeks": 8.71,
+  "pooled": {
+    "flagged": 617,
+    "truth": 44,
+    "tp": 39,
+    "precision": 0.06320907617504051,
+    "recall": 0.8863636363636364,
+    "precisionCi": {
+      "lo": 0.046580417739818566,
+      "hi": 0.08524322294405313
+    },
+    "recallCi": {
+      "lo": 0.7602056485186641,
+      "hi": 0.950472924104325
+    }
+  },
+  "perRepo": {
+    "Dao-AILab/flash-attention": {
+      "flagged": 4,
+      "truth": 0,
+      "tp": 0,
+      "precision": 0,
+      "recall": null,
+      "precisionCi": {
+        "lo": 0,
+        "hi": 0.48990002040399916
+      },
+      "recallCi": null
+    },
+    "LMCache/LMCache": {
+      "flagged": 1,
+      "truth": 0,
+      "tp": 0,
+      "precision": 0,
+      "recall": null,
+      "precisionCi": {
+        "lo": 0,
+        "hi": 0.7934567085261071
+      },
+      "recallCi": null
+    },
+    "NVIDIA/TensorRT-LLM": {
+      "flagged": 145,
+      "truth": 10,
+      "tp": 10,
+      "precision": 0.06896551724137931,
+      "recall": 1,
+      "precisionCi": {
+        "lo": 0.03788854361530439,
+        "hi": 0.12229248104446813
+      },
+      "recallCi": {
+        "lo": 0.7224598312333834,
+        "hi": 1
+      }
+    },
+    "THUDM/slime": {
+      "flagged": 16,
+      "truth": 0,
+      "tp": 0,
+      "precision": 0,
+      "recall": null,
+      "precisionCi": {
+        "lo": 0,
+        "hi": 0.19361341827271994
+      },
+      "recallCi": null
+    },
+    "ai-dynamo/dynamo": {
+      "flagged": 185,
+      "truth": 10,
+      "tp": 7,
+      "precision": 0.03783783783783784,
+      "recall": 0.7,
+      "precisionCi": {
+        "lo": 0.018447194892158517,
+        "hi": 0.07603198766083828
+      },
+      "recallCi": {
+        "lo": 0.39677321997956516,
+        "hi": 0.892210712513788
+      }
+    },
+    "areal-project/AReaL": {
+      "flagged": 2,
+      "truth": 0,
+      "tp": 0,
+      "precision": 0,
+      "recall": null,
+      "precisionCi": {
+        "lo": 0,
+        "hi": 0.6576280471103807
+      },
+      "recallCi": null
+    },
+    "flashinfer-ai/flashinfer": {
+      "flagged": 20,
+      "truth": 0,
+      "tp": 0,
+      "precision": 0,
+      "recall": null,
+      "precisionCi": {
+        "lo": 0,
+        "hi": 0.16113012549493322
+      },
+      "recallCi": null
+    },
+    "kubernetes-sigs/gateway-api-inference-extension": {
+      "flagged": 12,
+      "truth": 3,
+      "tp": 2,
+      "precision": 0.16666666666666666,
+      "recall": 0.6666666666666666,
+      "precisionCi": {
+        "lo": 0.04696414761482223,
+        "hi": 0.44803635738467273
+      },
+      "recallCi": {
+        "lo": 0.2076549551264879,
+        "hi": 0.9385096847238394
+      }
+    },
+    "kvcache-ai/Mooncake": {
+      "flagged": 8,
+      "truth": 0,
+      "tp": 0,
+      "precision": 0,
+      "recall": null,
+      "precisionCi": {
+        "lo": 0,
+        "hi": 0.3244156195108769
+      },
+      "recallCi": null
+    },
+    "llm-d/llm-d": {
+      "flagged": 43,
+      "truth": 3,
+      "tp": 3,
+      "precision": 0.06976744186046512,
+      "recall": 1,
+      "precisionCi": {
+        "lo": 0.024011153791962503,
+        "hi": 0.18609268553034927
+      },
+      "recallCi": {
+        "lo": 0.43849391955098227,
+        "hi": 1
+      }
+    },
+    "sgl-project/sglang": {
+      "flagged": 72,
+      "truth": 5,
+      "tp": 4,
+      "precision": 0.05555555555555555,
+      "recall": 0.8,
+      "precisionCi": {
+        "lo": 0.02181386292692504,
+        "hi": 0.13432208357209396
+      },
+      "recallCi": {
+        "lo": 0.3755282641185388,
+        "hi": 0.9637768390302125
+      }
+    },
+    "verl-project/verl": {
+      "flagged": 44,
+      "truth": 4,
+      "tp": 4,
+      "precision": 0.09090909090909091,
+      "recall": 1,
+      "precisionCi": {
+        "lo": 0.035921611478836546,
+        "hi": 0.21159519397917487
+      },
+      "recallCi": {
+        "lo": 0.5100999795960008,
+        "hi": 1
+      }
+    },
+    "vllm-project/vllm": {
+      "flagged": 65,
+      "truth": 9,
+      "tp": 9,
+      "precision": 0.13846153846153847,
+      "recall": 1,
+      "precisionCi": {
+        "lo": 0.07459006187684232,
+        "hi": 0.24268321474659466
+      },
+      "recallCi": {
+        "lo": 0.7008472464490407,
+        "hi": 1
+      }
+    }
+  },
+  "byVia": {
+    "term": {
+      "flagged": 171,
+      "truth": 44,
+      "tp": 9,
+      "precision": 0.05263157894736842,
+      "recall": 0.20454545454545456,
+      "precisionCi": {
+        "lo": 0.027933280880335587,
+        "hi": 0.09698893442769177
+      },
+      "recallCi": {
+        "lo": 0.11153127823467596,
+        "hi": 0.34500863681833227
+      }
+    },
+    "repo": {
+      "flagged": 446,
+      "truth": 44,
+      "tp": 30,
+      "precision": 0.06726457399103139,
+      "recall": 0.6818181818181818,
+      "precisionCi": {
+        "lo": 0.04751973335138675,
+        "hi": 0.09440044477353542
+      },
+      "recallCi": {
+        "lo": 0.5344282746687306,
+        "hi": 0.8000087006832644
+      }
+    }
+  },
+  "flagsPerWeek": 70.8,
+  "mapping": {
+    "rated": 39,
+    "hit": 31
+  },
+  "missed": [
+    {
+      "repo": "ai-dynamo/dynamo",
+      "tag": "v1.5.0",
+      "line": "**CRD storage version promoted from v1alpha1 to v1beta1, with examples and Profiler output moving with it** ([#11904](https://github.com/ai-dynamo/dynamo/pull/11904), [#12375](https://github.com/ai-dynamo/dynamo/pull/12375), [#12506](https://github.com/ai-dynamo/dynamo/pull/12506))."
+    },
+    {
+      "repo": "ai-dynamo/dynamo",
+      "tag": "v1.4.0",
+      "line": "**Router Queue Admission Strategy:** Added exact-worker lanes to the policy-class queue (\\#11363) with deferred blocked-lane rechecks (\\#11484), a public `PolicyClassAdmissionStrategy` contract (\\#11434), and a live `RequestProgress` reader (\\#11615). Kept Router queueing off unless a threshold is configured (\\#11599) and replaced `--admission-control` with opt-in thresholds, ignoring the legacy flag and `DYN_ADMISSION_CONTROL` with a warning (\\#11276)."
+    },
+    {
+      "repo": "ai-dynamo/dynamo",
+      "tag": "v1.5.0",
+      "line": "AIConfigurator is now **[AISimulate](https://github.com/ai-dynamo/aisimulate)**. It ships as its own package at v0.12.0 with one CLI, replacing the aiconfigurator wheels and the `dynamo.replay` entrypoint (\\#13665, \\#13478, \\#14867). Offline replay returns a single `ReplayReport`, with per-request capture opt-in (\\#12363)."
+    },
+    {
+      "repo": "kubernetes-sigs/gateway-api-inference-extension",
+      "tag": "v1.6.0",
+      "line": "Full-featured **Endpoint Picker (EPP)**, **Body-Based Routing (BBR)**, and **Latency Predictor** components have moved to the [llm-d](https://github.com/llm-d) repository to live in their dedicated ecosystem."
+    },
+    {
+      "repo": "sgl-project/sglang",
+      "tag": "v0.5.17",
+      "line": "**Initial support for the Rust frontend**: Migrates the front half of the server, everything from network ingress up to the point a tokenized request is handed to the GPU scheduler, from Python to a multi-threaded Rust implementation ([#29799](https://github.com/sgl-project/sglang/pull/29799))."
+    }
+  ],
+  "blindRepos": [],
+  "verdict": {
+    "outcome": "drop",
+    "failures": [
+      "precision 0.063 < 0.25"
+    ]
+  },
+  "snapshotSha256": "ad25b58d6a27507e9589f80dbb7fa6bfa56be7501e702e752039e15187fca0d7"
+}
