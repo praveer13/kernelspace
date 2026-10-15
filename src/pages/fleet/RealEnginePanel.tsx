@@ -126,7 +126,7 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
         <button
           ref={loadRef}
           onClick={() => setAsking(true)}
-          disabled={(!!loadState && !device) || asking || !!device}
+          disabled={!!loadState || !!device}
           className="inline-flex items-center gap-2 rounded-md border border-line bg-surface-1 px-4 py-2 font-mono text-sm text-text-2 transition-colors hover:border-accent/50 hover:text-text-1 disabled:opacity-50"
         >
           {device ? <Zap className="h-4 w-4 text-accent" /> : loadState ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
