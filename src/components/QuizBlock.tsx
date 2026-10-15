@@ -45,6 +45,10 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E']
 const isRight = (q: QuizQuestion, sel: Set<number>) =>
   sel.size === q.correct.length && q.correct.every((c) => sel.has(c))
 
+/** A miss's misconception id: the first wrong pick (by authored index) whose option names one, as the item player diagnoses it. */
+const pickedMiss = (q: QuizQuestion, picks: readonly number[]): string | undefined =>
+  picks.filter((p) => !q.correct.includes(p) && q.miss?.[p]).sort((a, b) => a - b).map((p) => q.miss?.[p])[0]
+
 interface RestoredAttempt {
   seed: number
   selected: Record<number, Set<number>>
@@ -189,13 +193,17 @@ export default function QuizBlock({ lessonId, questions, className }: QuizBlockP
       ...(startedAt.current === null ? {} : { ms: Date.now() - startedAt.current }),
       responses: questions.map((q, qi) => {
         const sel = selected[qi] ?? new Set<number>()
+        const pick = [...sel].sort((a, b) => a - b)
+        const ok = isRight(q, sel)
+        const miss = ok ? undefined : pickedMiss(q, pick)
         return {
           qi,
           rev: rev32({ q: q.q, options: q.options, correct: q.correct }),
-          pick: [...sel].sort((a, b) => a - b),
-          ok: isRight(q, sel),
+          pick,
+          ok,
           ...(conf[qi] ? { conf: conf[qi] } : {}),
           ...(q.kcs?.length ? { kcs: q.kcs } : {}),
+          ...(miss ? { miss } : {}),
         }
       }),
     })

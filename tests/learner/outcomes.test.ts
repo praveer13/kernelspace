@@ -74,6 +74,8 @@ import { ledgerOfDonation, redactForPartner } from '../../src/lib/learner/redact
 import { addDays } from '../../src/lib/learner/reentry'
 import { sessionSpanMs } from '../../src/lib/learner/today'
 import { buildExportV3, parseImport, serializeExport } from '../../src/lib/ledger/codec'
+import { actMeta, drillFor, drillResult, fleetRunFor, type ActResult } from '../../src/lib/fleet-week'
+import { dailyIncident, dailyResult, type FinishedIncident } from '../../src/lib/world/daily'
 import type { ItemResponse, LedgerEvent, LocalDay, WorkingRecord } from '../../src/lib/ledger/types'
 import { hash32 } from '../../src/lib/rng'
 import { makeProfile, startTab } from '../ledger/env'
@@ -1423,6 +1425,27 @@ const ticket = (day: number, itemMs: readonly number[], ms: number) =>
     }),
   )
 
+/** What a finished incident reports (the fleet protocol's `IncidentFinish`, as `dailyResult` and `drillResult` read it). */
+const FINISHED: FinishedIncident = { fault: 'pool-shrink', severity: 2, hypothesis: 'pool-shrink', probes: ['kv'], diagnosed: true, fixed: true, burn: 6, expertBurn: 4, streetlight: 0 }
+/** An Act I run on one of your components, as the act reports it. */
+const ACT_RUN: ActResult = { pass: true, score: 1, headline: '', detail: '', metrics: [], seed: 99, run: { goodput: 10, refGoodput: 11 } }
+const DAILY_AND_FLEET_MS = { daily: 90_000, run: 10_000, drill: 10_000, act: 10_000 }
+
+/**
+ * The Daily and Fleet Week as the pages record them since EF1: the Daily's `incident` (`dailyResult`), an Act I
+ * `fleet-run` (`fleetRunFor`), an Act IV drill's `incident` (`drillResult`) and the act (`completeFleetWeekAct` with
+ * `actMeta`), each with the time the page measured. `ms` null gives the same events with no time, as they were before.
+ */
+const dailyAndFleet = (day: number, ms: typeof DAILY_AND_FLEET_MS | null) =>
+  written(day, (s) => {
+    const drill = drillFor(5)
+    s.recordIncident(dailyResult(d(day), dailyIncident(d(day)), FINISHED, [], ms?.daily))
+    const run = fleetRunFor('act1', ACT_RUN, [{ slot: 'scheduler', labId: 'batching-scheduler', sha256: 'a'.repeat(64) }], ms?.run)
+    if (run) s.recordFleetRun(run)
+    s.recordIncident(drillResult(drill, { ...FINISHED, fault: drill.spec.fault, hypothesis: drill.spec.fault }, [], ms?.drill))
+    s.completeFleetWeekAct('engine', 0.8, actMeta(ACT_RUN, { runId: '0a1b2c3d', checks: [], uncited: [] }, undefined, ms?.act))
+  })
+
 describe('the module graph', () => {
   test('outcomes.ts reads vrk.ts and forms.ts, and neither imports it back: what they share is in proportion.ts', () => {
     const src = (f: string) => readFileSync(path.resolve(import.meta.dir, '../../src/lib/learner', f), 'utf8')
@@ -1542,6 +1565,8 @@ describe('selectSurfaceMinutes', () => {
   /**
    * One partner: every surface once in the first calendar week (START is a Tuesday), 7.0833 minutes in all. The lesson time is
    * a QuizBlock attempt of 30 s and a ticket whose items took 10 s and 20 s (its summary says 77 s), both as the façade writes them.
+   * The Daily (90 s) and Fleet Week (an Act I run, an Act IV drill and an act of 10 s each) are the façade's events from the
+   * app's own builders (`dailyAndFleet`), not hand-written `ms` (EF1).
    */
   const firstWeek = async (day: number): Promise<LedgerEvent[]> => {
     const j = new Journal()
@@ -1550,11 +1575,9 @@ describe('selectSurfaceMinutes', () => {
     graded(j, 'item', 'gen:frag/c', d(day), { ms: 10_000, data: { src: 'today', grp: `s${day}`, slot: 2, of: 3, kcs: [FRAG_KC] } })
     graded(j, 'play', 'play:eplb', d(day), { ms: 60_000, data: { phase: 'play' } })
     graded(j, 'lab-check', 'lab:rust-allocator', d(day), { ms: 120_000, data: { passed: [], total: 6 } })
-    j.add('incident', `inc:daily/${d(day)}`, d(day), { ms: 90_000, data: { src: 'daily', fixed: true } })
-    j.add('fleet-act', 'fw:engine', d(day), { ms: 30_000 })
     graded(j, 'item', 'gen:tiling/raster-ai', d(day), { ms: 15_000, data: { src: 'form', formId: 'A', formSlot: 0, formSet: 0, kcs: ['t4.x'] } })
     graded(j, 'item', 'boot:value', d(day), { ms: 99_000, data: { src: 'boot' } })
-    return [...j.events, ...(await quizBlock(day, 30_000)), ...(await ticket(day, [10_000, 20_000], 77_000))]
+    return [...j.events, ...(await quizBlock(day, 30_000)), ...(await ticket(day, [10_000, 20_000], 77_000)), ...(await dailyAndFleet(day, DAILY_AND_FLEET_MS))]
   }
   const partner = () => firstWeek(0)
   const crew = (n: number) => Promise.all(partners(n, partner))
@@ -1595,6 +1618,26 @@ describe('selectSurfaceMinutes', () => {
     expect(r.total.median).toBeCloseTo(50 / 60 + 1 + 1 + 2 + 1.5 + 0.5 + 0.25, 9)
     expect(r.plannedWeeklyMinutes).toBe(PLANNED_WEEKLY_MINUTES)
     expect(r.surfaces.today.partners).toBe(5)
+  })
+
+  test('the Daily and Fleet Week read the time their recorders write, own and donated (EF1)', async () => {
+    const timed = await dailyAndFleet(0, DAILY_AND_FLEET_MS)
+    expect(timed.filter((e) => e.kind === 'incident' || e.kind === 'fleet-run' || e.kind === 'fleet-act').map((e) => [e.kind, e.ref.replace(/\d{4}-\d{2}-\d{2}/, 'date'), e.ms])).toEqual([
+      ['incident', 'inc:daily/date', 90_000],
+      ['fleet-run', 'fleet:act1', 10_000],
+      ['incident', `inc:drill/${drillFor(5).spec.fault}`, 10_000],
+      ['fleet-act', 'fw:engine', 10_000],
+    ])
+    const donated = (events: LedgerEvent[]) => ledgerOfDonation(redactForPartner({ events, working: [] })).events
+    for (const ledger of [timed, donated(timed)]) {
+      const r = selectSurfaceMinutes([ledger])
+      expect(r.surfaces.daily.median).toBeCloseTo(1.5, 9)
+      expect(r.surfaces['fleet-week'].median).toBeCloseTo(0.5, 9)
+    }
+    // the same events as they were written before EF1, with no time: 0 minutes on both surfaces, which is what F1 read
+    const before = await dailyAndFleet(0, null)
+    expect(before.some((e) => e.ms !== undefined)).toBe(false)
+    expect(selectSurfaceMinutes([[...before, ...(await quizBlock(0, 30_000))]]).surfaces).toMatchObject({ daily: { median: 0 }, 'fleet-week': { median: 0 } })
   })
 
   test('minutes per week average over the weeks with recorded time, and a quiet week is not one of them', async () => {
@@ -1936,11 +1979,14 @@ describe('selectDiscrimination30 and discriminationLures', () => {
   const lessonOf = (kc: string) => LESSONS.find((l) => l.kcs.includes(kc)) as (typeof LESSONS)[number]
   const LURES = { [AT]: 2, [BT]: 2, [PK]: 2 }
 
-  /** A learner with the three cards on day 0 and `answers` on `day`; `miss` is the ledger's `data.miss` for a miss. */
+  /**
+   * A learner with the three cards on day 0 and `answers` on `day`, served on Today as Today serves a lesson's question
+   * (`itemResponseOf` records the picked lure's id); `miss` is the ledger's `data.miss` for a miss.
+   */
   const learner = (answers: { kc: string; ok: boolean; miss?: string; ref?: string }[], day = 60) => {
     const j = new Journal()
     for (const kc of DISCRIMINATION_KCS) j.passLesson(d(0), lessonOf(kc).id, lessonOf(kc).kcs)
-    answers.forEach((a, i) => j.answer(d(day), a.kc, a.ok, { ref: a.ref ?? `quiz:${lessonOf(a.kc).id}#${i}`, extra: { src: 'quiz', ...(a.miss ? { miss: a.miss } : {}) } }))
+    answers.forEach((a, i) => j.answer(d(day), a.kc, a.ok, { ref: a.ref ?? `quiz:${lessonOf(a.kc).id}#${i}`, extra: { src: 'today', ...(a.miss ? { miss: a.miss } : {}) } }))
     return { events: j.events }
   }
   /** Per learner: 1 right, 2 confusions (a lure naming one of the other two), 1 miss naming itself, 1 miss with a Wave 1 id. */
@@ -1993,6 +2039,7 @@ describe('selectDiscrimination30 and discriminationLures', () => {
     ])
     const r = selectDiscrimination30([l], CONTENT, { lures: LURES })
     expect(r.misses).toBe(5)
+    expect(r.unattributed).toBe(0)
     expect(r.confusion.n).toBe(0)
     const ten = selectDiscrimination30([l, l], CONTENT, { lures: LURES })
     expect(ten.confusion).toMatchObject({ n: 10, correct: 2 })
@@ -2013,6 +2060,70 @@ describe('selectDiscrimination30 and discriminationLures', () => {
     const a = selectDiscrimination30(own, CONTENT, { lures: LURES })
     const b = selectDiscrimination30(donated, CONTENT, { lures: LURES })
     expect([b.accuracy.n, b.accuracy.correct, b.misses, b.confusion.correct]).toEqual([a.accuracy.n, a.accuracy.correct, a.misses, a.confusion.correct])
+  })
+
+  /**
+   * Lesson QuizBlock retakes through the façade (`recordQuizAttempt`, G4). Since EF1 a miss carries the picked lure's id
+   * and its place in the attempt (`slot` of `of`); before, it carried neither, which `beforeEf1` reproduces by taking them
+   * off the façade's own event.
+   */
+  const quizRetake = (lessonId: string, qi: number, pick: number, day = 60) => {
+    const q = ALL_LESSONS.find((l) => l.id === lessonId)!.blocks.flatMap((b) => (b.type === 'quiz' ? b.questions : []))[qi]
+    const ok = q.correct.includes(pick)
+    const miss = ok ? undefined : q.miss?.[pick] || undefined
+    return written(day, (s) => s.recordQuizAttempt({ lessonId, seed: 1, ms: 20_000, responses: [{ qi, rev: 'r', pick: [pick], ok, kcs: q.kcs, ...(miss ? { miss } : {}) }] }))
+  }
+  const beforeEf1 = (events: LedgerEvent[]): LedgerEvent[] =>
+    events.map((e) => {
+      if (e.kind !== 'item') return e
+      const data = { ...(e.data as Record<string, unknown>) }
+      delete data.slot
+      delete data.of
+      delete data.miss
+      return { ...e, data } as LedgerEvent
+    })
+  const withCards = async (retakes: Promise<LedgerEvent[]>[], before = false): Promise<{ events: LedgerEvent[] }> => {
+    const events = (await Promise.all(retakes)).flat()
+    return { events: [...learner([]).events, ...(before ? beforeEf1(events) : events)] }
+  }
+  const donate = (l: { events: LedgerEvent[] }) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] }))
+
+  test('a QuizBlock miss now records the picked lure\'s id and its place, so it reads as a confusion or as not one, own and donated', async () => {
+    // t2.l2 q4 assesses address translation: lure 0 is confuse.t5.block-tables, lure 3 a Wave 1 id; t5.l5 q3's lure 2 names no slip
+    const l = await withCards([quizRetake('t2.l2', 4, 0), quizRetake('t2.l2', 4, 3), quizRetake('t5.l5', 3, 2), quizRetake('t2.l2', 4, 2)])
+    const items = l.events.filter((e) => e.kind === 'item' && (e.data as { src?: string }).src === 'quiz')
+    expect(items.map((e) => [e.ref, (e.data as { miss?: string }).miss, (e.data as { slot?: number }).slot, (e.data as { of?: number }).of])).toEqual([
+      ['quiz:t2.l2#4', 'confuse.t5.block-tables', 0, 1],
+      ['quiz:t2.l2#4', 't2.translation-is-a-search', 0, 1],
+      ['quiz:t5.l5#3', undefined, 0, 1],
+      ['quiz:t2.l2#4', undefined, 0, 1],
+    ])
+    for (const ledger of [l, donate(l)]) {
+      const r = selectDiscrimination30([ledger, ledger, ledger, ledger], CONTENT, { lures: LURES })
+      expect(r.accuracy).toMatchObject({ n: 16, correct: 4 })
+      // all twelve misses are read: four confusions, and eight on lures that are not one (one named, one with no slip)
+      expect([r.misses, r.unattributed, r.confusion.n, r.confusion.correct]).toEqual([12, 0, 12, 4])
+    }
+  })
+
+  test('a QuizBlock miss written before EF1 counts in the accuracy but is left out of the share, own and donated', async () => {
+    const l = await withCards([quizRetake('t2.l2', 4, 0), quizRetake('t2.l2', 4, 3), quizRetake('t2.l2', 4, 2)], true)
+    for (const ledger of [l, donate(l)]) {
+      const r = selectDiscrimination30([ledger, ledger], CONTENT, { lures: LURES })
+      expect(r.accuracy).toMatchObject({ n: 6, correct: 2 })
+      expect([r.misses, r.unattributed, r.confusionStatus]).toEqual([0, 4, 'few-misses'])
+    }
+    // beside Today's misses, they no longer pull the share down: Today's two confusions of four stay a half
+    const today = learner([
+      { kc: AT, ok: false, miss: `confuse.${BT}` },
+      { kc: BT, ok: false, miss: `confuse.${AT}` },
+      { kc: PK, ok: false, miss: 'kv.priced-fp16' },
+      { kc: PK, ok: false },
+    ])
+    const mixed = { events: [...today.events, ...l.events.filter((e) => e.kind === 'item' && (e.data as { src?: string }).src === 'quiz' && e.ref === 'quiz:t2.l2#4')] }
+    const r = selectDiscrimination30(partners(3, () => mixed), CONTENT, { lures: LURES })
+    expect([r.misses, r.unattributed, r.confusion.correct]).toEqual([12, 6, 6])
+    expect(r.confusion.rate).toBe(0.5)
   })
 
   test('each of the three KCs has at least two confuse lures in the lesson content (3b-16, 3b-17)', () => {

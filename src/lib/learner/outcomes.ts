@@ -1275,9 +1275,16 @@ export type Surface = (typeof SURFACES)[number]
  *   summary repeats their sum (`recordTicket`), so `weeklyMs` counts a summary only when no item of its attempt has time;
  * - **plays**: `play` events and items made inside a play;
  * - **labs**: `lab-check` and `prove`;
- * - **daily**: the Fleet Daily and team incidents, and the signature item served with it (`src` `daily`);
- * - **fleet-week**: Fleet Week acts, engine runs and Act IV's drills;
+ * - **daily**: the Fleet Daily's `incident` event, whose `ms` is the attempt's visible time from the alert to the debrief
+ *   (`dailyResult`), and team incidents. An item with `src` `daily` would count here too, but no surface writes one;
+ * - **fleet-week**: Fleet Week acts, engine runs and Act IV's drills: a run's `ms` is its visible wall time
+ *   (`fleetRunFor`), a drill's its alert to its debrief (`drillResult`), and an act's the page's visible time that no
+ *   run or drill of the visit holds, up to the pass (`completeFleetWeekAct`), so a second is counted once;
  * - **me**: the track forms, which /me runs.
+ *
+ * Daily and Fleet Week time counts only while the page is visible, and each event is capped (`INCIDENT_MAX_MS`,
+ * `FLEET_RUN_MAX_MS`, `FLEET_ACT_MAX_MS`), so a tab left open does not log hours. Events written before EF1 carry no
+ * `ms` there and add none.
  */
 export function surfaceOf(e: LedgerEvent): Surface | null {
   const src = srcOf(e)
@@ -1731,6 +1738,11 @@ export interface Discrimination30 {
   lures: number
   /** Misses among those items, and the share of them that name a confusion with another of the three KCs: a null rate unless `confusionStatus` is `ok`. */
   misses: number
+  /**
+   * Misses left out of `misses` and the share: lesson QuizBlock answers (`src` `quiz`) written before EF1, which kept the
+   * pick but never the picked lure's misconception id, so they could not be read as a confusion or as not one.
+   */
+  unattributed: number
   confusion: Proportion
   /** Why the confusion share is not read, or `ok`. */
   confusionStatus: 'ok' | 'no-lures' | 'few-misses'
@@ -1765,17 +1777,31 @@ export function discriminationLures(lessons: readonly LureLesson[]): Record<stri
 }
 
 /**
+ * Whether a miss can be read for a confusion. Every source records the picked lure's misconception id (`miss`) on a miss
+ * when it has one, except lesson QuizBlock answers (`src` `quiz`) written before EF1. Since EF1 those carry their place in
+ * the attempt (`slot` of `of`) beside the id, and that marks them: a donation drops every miss id that is not
+ * `confuse.<kc>` (redact.ts), so on a donation the id alone cannot tell an old miss from a new one on another lure.
+ */
+function missReadable(e: LedgerEvent): boolean {
+  if (srcOf(e) !== 'quiz') return true
+  const d = dataOf(e)
+  return (typeof d.miss === 'string' && d.miss !== '') || typeof d.of === 'number'
+}
+
+/**
  * P3's metric (§15.1): graded answers (not assisted) on `t2.address-translation`, `t5.block-tables` and
  * `t5.prefix-cache-keys` at least 30 local days after the KC's card was created, with the confusion share: misses whose id
  * is `confuse.<one of the other two KCs>`, over all misses. An answer counts once. The share is `no-lures` ("not enough
  * data", never 0) when the content holds no such lure (`opts.lures`, from `discriminationLures`; none given is none), and
- * `few-misses` below `DISCRIMINATION_MIN_MISSES`.
+ * `few-misses` below `DISCRIMINATION_MIN_MISSES`. A lesson QuizBlock miss written before EF1 counts in the accuracy but
+ * not in the share (`unattributed`): it kept no lure id, so it could never be a confusion.
  */
 export function selectDiscrimination30(ledgers: readonly PartnerLedger[], content: CardsContent, opts: { lures?: Readonly<Record<string, number>> } = {}): Discrimination30 {
   const lures = Object.values(opts.lures ?? {}).reduce((n, x) => n + x, 0)
   let n = 0
   let correct = 0
   let misses = 0
+  let unattributed = 0
   let confusions = 0
   let partners = 0
   for (const l of ledgers) {
@@ -1792,6 +1818,10 @@ export function selectDiscrimination30(ledgers: readonly PartnerLedger[], conten
         correct += 1
         continue
       }
+      if (!missReadable(e)) {
+        unattributed += 1
+        continue
+      }
       misses += 1
       const miss = dataOf(e).miss
       const named = typeof miss === 'string' && miss.startsWith('confuse.') ? miss.slice('confuse.'.length) : null
@@ -1801,7 +1831,7 @@ export function selectDiscrimination30(ledgers: readonly PartnerLedger[], conten
   }
   const confusionStatus: Discrimination30['confusionStatus'] = lures === 0 ? 'no-lures' : misses < DISCRIMINATION_MIN_MISSES ? 'few-misses' : 'ok'
   // below its minimum the share is a null rate, which the table prints as "not enough data", never as 0
-  return { accuracy: proportion(correct, n), partners, lures, misses, confusion: confusionStatus === 'ok' ? proportion(confusions, misses) : proportion(0, 0), confusionStatus }
+  return { accuracy: proportion(correct, n), partners, lures, misses, unattributed, confusion: confusionStatus === 'ok' ? proportion(confusions, misses) : proportion(0, 0), confusionStatus }
 }
 
 /* ------------------------------------------------------------------ */
@@ -2211,6 +2241,8 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
   // F6: reported, from enough checks, enough misses and at least one tagged lure.
   const d = discrimination
   const f6Data = enough(d.partners, d.accuracy.n) && d.accuracy.n >= DISCRIMINATION_MIN_N && d.confusionStatus === 'ok'
+  // lesson quiz misses from before EF1 kept no lure id: the share leaves them out and says so
+  const f6Unattributed = d.unattributed > 0 ? `; ${plural(d.unattributed, 'lesson quiz miss', 'lesson quiz misses')} from before quizzes recorded the lure left out of the share` : ''
   const f6: FieldGate = {
     id: 'F6',
     label: 'P3: 30-day discrimination on paging, PagedAttention and the radix cache',
@@ -2218,8 +2250,8 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
     n: d.accuracy.n,
     partners: d.partners,
     detail: f6Data
-      ? `accuracy ${d.accuracy.correct} of ${d.accuracy.n} = ${fmtPct(d.accuracy.rate)}${fmtCi(d.accuracy)}; confusion share ${d.confusion.correct} of ${d.misses} misses = ${fmtPct(d.confusion.rate)}${fmtCi(d.confusion)}`
-      : `not enough data (n = ${d.accuracy.n} of ${DISCRIMINATION_MIN_N} checks, ${plural(d.partners, 'partner')}; confusion share: ${d.confusionStatus === 'no-lures' ? 'the lesson content holds no tagged lure' : d.confusionStatus === 'few-misses' ? `${d.misses} of ${DISCRIMINATION_MIN_MISSES} misses` : `${d.misses} misses, ${d.lures} tagged lures`})`,
+      ? `accuracy ${d.accuracy.correct} of ${d.accuracy.n} = ${fmtPct(d.accuracy.rate)}${fmtCi(d.accuracy)}; confusion share ${d.confusion.correct} of ${d.misses} misses = ${fmtPct(d.confusion.rate)}${fmtCi(d.confusion)}${f6Unattributed}`
+      : `not enough data (n = ${d.accuracy.n} of ${DISCRIMINATION_MIN_N} checks, ${plural(d.partners, 'partner')}; confusion share: ${d.confusionStatus === 'no-lures' ? 'the lesson content holds no tagged lure' : d.confusionStatus === 'few-misses' ? `${d.misses} of ${DISCRIMINATION_MIN_MISSES} misses` : `${d.misses} misses, ${d.lures} tagged lures`}${f6Unattributed})`,
   }
 
   // F7: reported, from 30 answers and five partners.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronRight, Loader2, Play, X } from 'lucide-react'
@@ -11,6 +11,7 @@ import ProbeBar from '@/components/daily/ProbeBar'
 import { ReceiptEditor, type ReceiptEditorHandle } from '@/components/fleetweek/ReceiptEditor'
 import { RubricReview } from '@/components/fleetweek/RubricReview'
 import { rubricData, type ExemplarAct, type RubricDraft } from '@/data/fleetweek/exemplars'
+import { useVisibleClock } from '@/hooks/use-visible-clock'
 import { useProgress, XP } from '@/lib/progress'
 import { useSlots, type SlotState } from '@/pages/fleet/slots'
 import {
@@ -76,8 +77,37 @@ const ACTS = [
   { id: 'incident', title: 'Act IV — The Incident', brief: 'probe drills on fresh seeds: name the fault, apply the fix', xp: XP.fleetWeekAct },
 ]
 
+/**
+ * The page's visible time (`useVisibleClock`: a hidden tab adds nothing) and how much of it the events this visit wrote
+ * already hold (wave-3.md §15.1, the journey re-cut). A run's `fleet-run` event holds its run, a drill's `incident`
+ * event its alert-to-debrief, and an act's `fleet-act` event the rest up to its pass, so each visible second is counted
+ * once. Each writer caps what one event records (`FLEET_RUN_MAX_MS`, `INCIDENT_MAX_MS`, `FLEET_ACT_MAX_MS`).
+ */
+interface FleetTime {
+  /** The page's visible milliseconds so far. */
+  now(): number
+  /** `ms` of the page's time is now held by an event just written. */
+  claim(ms: number): void
+  /** The page's visible time that no event of this visit holds yet. */
+  unclaimed(): number
+}
+
+const FleetTimeContext = createContext<FleetTime>({ now: () => 0, claim: () => {}, unclaimed: () => 0 })
+
 export default function FleetWeek() {
   const actsDone = useProgress((s) => s.fleetWeek.actsDone)
+  const visible = useVisibleClock()
+  const claimed = useRef(0)
+  const time = useMemo<FleetTime>(
+    () => ({
+      now: visible,
+      claim: (ms) => {
+        if (Number.isFinite(ms) && ms > 0) claimed.current += ms
+      },
+      unclaimed: () => Math.max(0, visible() - claimed.current),
+    }),
+    [visible],
+  )
   return (
     <div className="mx-auto max-w-app px-6 pb-24 pt-16 lg:px-12">
       <Link to="/capstone" className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-text-3 transition-colors hover:text-text-1">
@@ -97,13 +127,15 @@ export default function FleetWeek() {
           the page checks by re-running that record. Nothing is graded by what the text says, only by whether its numbers reproduce.
         </p>
       </div>
-      <div className="mt-10 space-y-6">
-        {ACTS.map((a) => (
-          <ActShell key={a.id} act={a} done={actsDone.includes(a.id)}>
-            {a.id === 'engine' ? <ActEngine /> : a.id === 'fleet' ? <ActFleet /> : a.id === 'business' ? <ActBusiness /> : <ActIncident />}
-          </ActShell>
-        ))}
-      </div>
+      <FleetTimeContext.Provider value={time}>
+        <div className="mt-10 space-y-6">
+          {ACTS.map((a) => (
+            <ActShell key={a.id} act={a} done={actsDone.includes(a.id)}>
+              {a.id === 'engine' ? <ActEngine /> : a.id === 'fleet' ? <ActFleet /> : a.id === 'business' ? <ActBusiness /> : <ActIncident />}
+            </ActShell>
+          ))}
+        </div>
+      </FleetTimeContext.Provider>
     </div>
   )
 }
@@ -196,18 +228,25 @@ function ActError({ message }: { message: string | null }) {
 
 function useActRunner(actId: string) {
   const completeAct = useProgress((s) => s.completeFleetWeekAct)
+  const time = useContext(FleetTimeContext)
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [graded, setGraded] = useState<ActResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const busyRef = useRef(false)
-  /** The write-up's verdict. It passes the act (and records it, with the receipts and the rubric) or says what is missing. */
+  /**
+   * The write-up's verdict. It passes the act (and records it, with the receipts, the rubric and the time on the act that
+   * no run event holds) or says what is missing.
+   */
   const finish = useCallback(
-    (r: ActResult, meta?: FleetActMeta) => {
+    (r: ActResult, meta: (ms: number) => FleetActMeta) => {
       setGraded(r)
-      if (r.pass) completeAct(actId, r.score, meta)
+      if (!r.pass) return
+      const ms = time.unclaimed()
+      completeAct(actId, r.score, meta(ms))
+      time.claim(ms)
     },
-    [actId, completeAct],
+    [actId, completeAct, time],
   )
   /**
    * Run one act job. A module that traps or spins rejects (the sim client times spinners out), so
@@ -229,19 +268,30 @@ function useActRunner(actId: string) {
       setRunning(false)
     }
   }, [])
-  return { running, progress, graded, error, finish, execute, setProgress }
+  return { running, progress, graded, error, finish, execute, setProgress, time }
 }
 
 /**
  * Write the run's `fleet-run` event (`fleet:act1`, `fleet:act2`) when a component of yours took part (docs/specs/wave-2.md
- * §10.6). A failure to hash or record never costs the learner their result.
+ * §10.6), with the run's visible wall time `ms`. Returns whether it wrote. A failure to hash or record never costs the
+ * learner their result.
  */
-async function recordRun(mode: 'act1' | 'act2', result: ActResult, slots: SlotState): Promise<void> {
+async function recordRun(mode: 'act1' | 'act2', result: ActResult, slots: SlotState, ms: number): Promise<boolean> {
   try {
-    recordActRun(useProgress, mode, result, await runComponents(slots))
+    return recordActRun(useProgress, mode, result, await runComponents(slots), ms)
   } catch {
     // the result on screen stands; only the ledger event is lost
+    return false
   }
+}
+
+/** Run an act's job, show it, and write its `fleet-run` event with the run's visible time, which that event then holds. */
+async function timedRun(time: FleetTime, mode: 'act1' | 'act2', slots: SlotState, run: () => Promise<Recorded<ActResult>>, show: (r: Recorded<ActResult>) => void): Promise<void> {
+  const start = time.now()
+  const done = await run()
+  const ms = time.now() - start
+  show(done)
+  if (await recordRun(mode, done.result, slots, ms)) time.claim(ms)
 }
 
 /* ------------------------------ run records and receipts ------------------------------ */
@@ -408,7 +458,7 @@ function Workbench({ act, label, hint, placeholder, record, text, setText, edito
 
 function ActEngine() {
   const slots = useSlots((s) => s.slots)
-  const { running, progress, graded, error, finish, execute, setProgress } = useActRunner('engine')
+  const { running, progress, graded, error, finish, execute, setProgress, time } = useActRunner('engine')
   const [traced, setTraced] = useState<Recorded<ActResult> | null>(null)
   const text = useProgress((s) => s.fleetWeek.measurementEvidence?.engine?.analysis ?? '')
   const setEvidence = useProgress((s) => s.setFleetWeekEvidence)
@@ -428,11 +478,7 @@ function ActEngine() {
         progress={progress}
         label="run the trace"
         onClick={() =>
-          void execute(async () => {
-            const run = await runRecorded('engine', { kind: 'act1', modules: moduleBytes(slots) }, setProgress)
-            setTraced(run)
-            await recordRun('act1', run.result, slots)
-          })
+          void execute(() => timedRun(time, 'act1', slots, () => runRecorded('engine', { kind: 'act1', modules: moduleBytes(slots) }, setProgress), setTraced))
         }
       />
       <ActError message={error} />
@@ -465,7 +511,7 @@ function ActEngine() {
           graded={graded}
           onGrade={(evidence, rubric) => {
             const r = gradeMeasurementSubmission('engine', trace, evidence)
-            finish(r, actMeta(r, evidence, rubric))
+            finish(r, (ms) => actMeta(r, evidence, rubric, ms))
           }}
         />
       )}
@@ -488,7 +534,7 @@ function MeasurementHint() {
 
 function ActFleet() {
   const slots = useSlots((s) => s.slots)
-  const { running, progress, graded, error, finish, execute, setProgress } = useActRunner('fleet')
+  const { running, progress, graded, error, finish, execute, setProgress, time } = useActRunner('fleet')
   const [traced, setTraced] = useState<Recorded<ActResult> | null>(null)
   const [workers, setWorkers] = useState<2 | 4>(2)
   const [router, setRouter] = useState<RouterKind>('jsq')
@@ -520,11 +566,7 @@ function ActFleet() {
         progress={progress}
         label="run with disruption"
         onClick={() =>
-          void execute(async () => {
-            const run = await runRecorded('fleet', { kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress)
-            setTraced(run)
-            await recordRun('act2', run.result, slots)
-          })
+          void execute(() => timedRun(time, 'act2', slots, () => runRecorded('fleet', { kind: 'act2', modules: moduleBytes(slots), choice: { workers, router } as Act2Choice }, setProgress), setTraced))
         }
       />
       <ActError message={error} />
@@ -545,7 +587,7 @@ function ActFleet() {
           graded={graded}
           onGrade={(evidence, rubric) => {
             const r = gradeMeasurementSubmission('fleet', trace, evidence)
-            finish(r, actMeta(r, evidence, rubric))
+            finish(r, (ms) => actMeta(r, evidence, rubric, ms))
           }}
         />
       )}
@@ -649,7 +691,7 @@ function ActBusiness() {
             graded={graded}
             onGrade={(evidence, rubric) => {
               const r = gradeAct3Doc(choice, evaluation, evidence)
-              finish(r, actMeta(r, evidence, rubric))
+              finish(r, (ms) => actMeta(r, evidence, rubric, ms))
             }}
           />
         </div>
@@ -721,6 +763,9 @@ function ActIncident() {
   const [graded, setGraded] = useState<{ grade: DrillGrade; done: IncidentFinish } | null>(null)
   const region = useRef<HTMLDivElement>(null)
   const recorded = useRef<Drill | null>(null)
+  const time = useContext(FleetTimeContext)
+  /** the page's visible time when this drill's alert showed */
+  const alertAt = useRef<number | null>(null)
 
   const fail = useCallback((e: unknown) => {
     setFailure(describeFleetError(e, 'The drill stopped'))
@@ -728,6 +773,7 @@ function ActIncident() {
   }, [])
 
   const begin = useCallback((next: Drill) => {
+    alertAt.current = null
     setSession(null)
     setFlow(null)
     setGraded(null)
@@ -752,6 +798,7 @@ function ActIncident() {
         setSession(s)
         setFlow(startFlow(s.alert, s.limit))
         setPhase('play')
+        alertAt.current = time.now()
       },
       (e) => {
         if (live) fail(e)
@@ -761,7 +808,7 @@ function ActIncident() {
       live = false
       opened?.close()
     }
-  }, [drill, fail])
+  }, [drill, fail, time])
 
   const run = useCallback<FlowRun>(
     async (command) => {
@@ -809,16 +856,23 @@ function ActIncident() {
     if (reply.ended) setPhase('debrief')
   }
 
-  // Called once per drill by the debrief: record it, grade it against the credits, show the verdict.
+  // Called once per drill by the debrief: record it with its times, grade it against the credits, show the verdict.
+  // The drill's event holds its alert-to-debrief time; the act's, should this drill complete it, the page's time that
+  // no event of this visit holds (practice drills included, since they write nothing).
   const onResult = useCallback(
     (done: IncidentFinish) => {
       if (!drill || recorded.current === drill) return
       recorded.current = drill
-      const grade = recordDrill(useProgress, drill, done)
+      const ms = alertAt.current === null ? undefined : time.now() - alertAt.current
+      const actMs = Math.max(0, time.unclaimed() - (ms ?? 0))
+      const wasDone = useProgress.getState().fleetWeek.actsDone.includes('incident')
+      const grade = recordDrill(useProgress, drill, done, [], { ms, actMs })
+      if (grade.verdict !== 'practice' && ms !== undefined) time.claim(ms)
+      if (grade.verdict === 'credited' && grade.pass && !wasDone) time.claim(actMs)
       setGraded({ grade, done })
       setAnnouncement(`The debrief is ready. ${grade.result.headline}.`)
     },
-    [drill],
+    [drill, time],
   )
 
   const open = phase === 'play' && flow !== null && !flow.ended

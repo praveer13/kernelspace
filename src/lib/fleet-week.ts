@@ -29,7 +29,7 @@ import type { FleetActData, FleetActMeta, FleetRunData, FleetRunResult, Incident
 import { incidentScore } from '@/lib/ledger/fold'
 import { sha256Hex } from '@/lib/ledger/stable'
 import { freshSeed, splitmix32u } from '@/lib/rng'
-import { kcsFor, type FinishedIncident, type IncidentSource } from '@/lib/world/daily'
+import { INCIDENT_MAX_MS, kcsFor, recordedMs, type FinishedIncident, type IncidentSource } from '@/lib/world/daily'
 import { FAULT_LABELS, FAULT_SHORT, FIXES, INCIDENT_FAULTS, fixFor, generateIncident, type FixId, type IncidentFault, type IncidentSpec } from '@/lib/world/incident-spec'
 import { makeFaultInjector, type FaultSpec } from '@/lib/world/faults'
 import { instantiateLab } from '@/lib/wasm-lab'
@@ -477,6 +477,19 @@ export async function runAct2(
 
 /* --------------------- Acts I and II as `fleet-run` events --------------------- */
 
+/**
+ * The most one act run records as its `ms` (wave-3.md §15.1, the journey re-cut). A run is the sim worker's, which
+ * times out a spinning module long before this; the page counts only visible time.
+ */
+export const FLEET_RUN_MAX_MS = 10 * 60_000
+
+/**
+ * The most one act records as its `ms`: the page's visible time that no run or drill event of the visit holds, up to
+ * the pass (reading the act, the write-up, the receipts, practice drills). The page counts only visible time; this cap
+ * is for a visible page nobody is reading.
+ */
+export const FLEET_ACT_MAX_MS = 60 * 60_000
+
 /** A run's numbers for the ledger; `ttftP95` is left out when the run had none to report (the codec wants finite numbers). */
 function runNumbers(goodput: number, refGoodput: number, ttftP95: number): NonNullable<ActResult['run']> {
   return { goodput, refGoodput, ...(Number.isFinite(ttftP95) ? { ttftP95 } : {}) }
@@ -495,13 +508,16 @@ export async function runComponents(slots: Record<LabKind, { bytes: ArrayBuffer;
 /**
  * The `fleet-run` event of an Act I or II run (`fleet:act1`, `fleet:act2`), or null when there is nothing to
  * record: no component of yours took part, or the run carried no numbers. Seeds drawn at run time are `fresh`
- * (the façade grades them `unseen`); the fixed practice scenario is `practice`.
+ * (the façade grades them `unseen`); the fixed practice scenario is `practice`. `ms` is the run's visible wall time,
+ * which the page measures (this module reads no clock), at most `FLEET_RUN_MAX_MS`.
  */
-export function fleetRunFor(mode: 'act1' | 'act2', result: ActResult, components: FleetRunData['components']): FleetRunResult | null {
+export function fleetRunFor(mode: 'act1' | 'act2', result: ActResult, components: FleetRunData['components'], ms?: number): FleetRunResult | null {
   if (!result.run || components.length === 0) return null
   const fresh = result.seed !== undefined && result.seed !== null
+  const time = recordedMs(ms, FLEET_RUN_MAX_MS)
   return {
     ...(fresh ? { seed: result.seed as number } : {}),
+    ...(time === undefined ? {} : { ms: time }),
     data: { v: 1, mode, components, seeds: fresh ? 'fresh' : 'practice', goodput: result.run.goodput, refGoodput: result.run.refGoodput, ...(result.run.ttftP95 === undefined ? {} : { ttftP95: result.run.ttftP95 }) },
   }
 }
@@ -511,9 +527,9 @@ export interface ActRunStore {
   getState(): { recordFleetRun(r: FleetRunResult): void }
 }
 
-/** Write the run's `fleet-run` event. Returns whether it wrote. */
-export function recordActRun(store: ActRunStore, mode: 'act1' | 'act2', result: ActResult, components: FleetRunData['components']): boolean {
-  const run = fleetRunFor(mode, result, components)
+/** Write the run's `fleet-run` event, with its time `ms` (`fleetRunFor`). Returns whether it wrote. */
+export function recordActRun(store: ActRunStore, mode: 'act1' | 'act2', result: ActResult, components: FleetRunData['components'], ms?: number): boolean {
+  const run = fleetRunFor(mode, result, components, ms)
   if (!run) return false
   store.getState().recordFleetRun(run)
   return true
@@ -605,16 +621,18 @@ export function gradeMeasurementSubmission(actId: MeasurementActId, traceResult:
 /**
  * What an act records beside its score (`completeFleetWeekAct`'s meta, §10.4): the run's seed, provenance `unseen`
  * (the entropy was drawn when the run started), and the receipts, the ids cited and, when the learner scored
- * themselves, the rubric. The rubric is recorded here and read nowhere in the score.
+ * themselves, the rubric. The rubric is recorded here and read nowhere in the score. `ms` is the time spent on the act
+ * that no run event holds (`FLEET_ACT_MAX_MS`), which the page measures.
  */
-export function actMeta(result: ActResult, evidence: ReceiptEvidence, rubric?: FleetActData['rubric']): FleetActMeta {
+export function actMeta(result: ActResult, evidence: ReceiptEvidence, rubric?: FleetActData['rubric'], ms?: number): FleetActMeta {
   const ids = [...new Set(evidence.checks.map((c) => c.receipt.id))].slice(0, 20)
   const data: FleetActData = {
     receipts: { cited: evidence.checks.length, verified: evidence.checks.filter((c) => c.status === 'verified').length, uncited: evidence.uncited.length },
     runs: ids,
     ...(rubric ? { rubric } : {}),
   }
-  return { ...(typeof result.seed === 'number' ? { seed: result.seed } : {}), provenance: 'unseen', data }
+  const time = recordedMs(ms, FLEET_ACT_MAX_MS)
+  return { ...(typeof result.seed === 'number' ? { seed: result.seed } : {}), ...(time === undefined ? {} : { ms: time }), provenance: 'unseen', data }
 }
 
 /* ------------------------------ ACT 3 ------------------------------ */
@@ -1114,9 +1132,10 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
 /**
  * The `incident` event of a drill (`src: 'drill'`, `act4: true`). Its ref names the fault (`inc:drill/<faultId>`, the
  * ledger's grammar), so the aggregate keeps one entry per fault; the drill's own seed rides on the event. The façade
- * grades it `unseen` for any drill, which is why a practice replay is never recorded.
+ * grades it `unseen` for any drill, which is why a practice replay is never recorded. `ms` is the drill's visible time
+ * from the alert to the end of the flow, as the Daily's (`INCIDENT_MAX_MS`), which the page measures.
  */
-export function drillResult(drill: Drill, done: FinishedIncident, components: string[] = []): IncidentResult {
+export function drillResult(drill: Drill, done: FinishedIncident, components: string[] = [], ms?: number): IncidentResult {
   const data: IncidentData = {
     v: 1,
     src: 'drill',
@@ -1135,7 +1154,8 @@ export function drillResult(drill: Drill, done: FinishedIncident, components: st
     act4: true,
     kcs: kcsFor(done.fault),
   }
-  return { ref: `inc:drill/${done.fault}`, seed: drill.seed, data }
+  const time = recordedMs(ms, INCIDENT_MAX_MS)
+  return { ref: `inc:drill/${done.fault}`, seed: drill.seed, ...(time === undefined ? {} : { ms: time }), data }
 }
 
 /** The slice of the progress store `recordDrill` reads and writes. */
@@ -1148,25 +1168,36 @@ export interface DrillStore {
   }
 }
 
+/** The times a finished drill records, measured by the page: the drill's own, and the act's should it complete it. */
+export interface DrillTimes {
+  /** The drill's visible time from the alert to the end of the flow. */
+  ms?: number
+  /** The act's: the page's visible time that no run or drill event of the visit holds, this drill's excluded. */
+  actMs?: number
+}
+
 /**
  * Record a finished drill and grade it against the learner's credits, which live in the progress store's working
  * state (`fw:evidence:incident`), so a reload or a second tab cannot reset them.
- *   - A fresh drill writes its `incident` event (provenance `unseen`, the drill's own seed), pass or fail.
+ *   - A fresh drill writes its `incident` event (provenance `unseen`, the drill's own seed, its time `times.ms`), pass
+ *     or fail.
  *   - A practice drill writes nothing, passed or not.
  *   - The drill that makes the third distinct fault completes the act once, with the mean drill score, the seed
- *     of that drill, provenance `unseen` and the faults and seeds that earned it.
+ *     of that drill, provenance `unseen`, the act's time `times.actMs` and the faults and seeds that earned it.
  */
-export function recordDrill(store: DrillStore, drill: Drill, done: FinishedIncident, components: string[] = []): DrillGrade {
+export function recordDrill(store: DrillStore, drill: Drill, done: FinishedIncident, components: string[] = [], times: DrillTimes = {}): DrillGrade {
   const state = store.getState()
   const prior = drillCreditsFrom(state.fleetWeek.measurementEvidence?.incident)
   const grade = gradeDrill(prior, { ...done, seed: drill.practice ? null : drill.seed })
   if (grade.verdict === 'practice') return grade
-  state.recordIncident(drillResult(drill, done, components))
+  state.recordIncident(drillResult(drill, done, components, times.ms))
   if (grade.verdict === 'credited') {
     state.setFleetWeekEvidence('incident', { credited: encodeCredits(grade.credits) })
     if (grade.pass && !state.fleetWeek.actsDone.includes('incident')) {
+      const actMs = recordedMs(times.actMs, FLEET_ACT_MAX_MS)
       state.completeFleetWeekAct('incident', actScore(grade.credits), {
         seed: drill.seed,
+        ...(actMs === undefined ? {} : { ms: actMs }),
         provenance: 'unseen',
         data: { faults: grade.credits.map((c) => c.fault), seeds: grade.credits.map((c) => drillKey(c.seed)) },
       })

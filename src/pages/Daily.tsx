@@ -8,6 +8,7 @@ import ProbeBar from '@/components/daily/ProbeBar'
 import ShareString from '@/components/daily/ShareString'
 import { localDateKey } from '@/lib/economy'
 import { describeFleetError, openIncidentSession, type IncidentClientSession } from '@/lib/fleet-session'
+import { useVisibleClock } from '@/hooks/use-visible-clock'
 import { useProgress } from '@/lib/progress'
 import { useSlots } from '@/pages/fleet/slots'
 import {
@@ -60,7 +61,9 @@ const hypothesisName = (h: HypothesisId): string => HYPOTHESIS_OPTIONS.find((o) 
  * Daily without your modules, so a broken install never locks the Daily out.
  *
  * Recording: the first completed attempt on a date writes one `incident` event (the Daily's seed is public, so
- * it is graded practice), naming the hashes of your modules that ran; a replay is practice and writes nothing.
+ * it is graded practice), naming the hashes of your modules that ran; a replay is practice and writes nothing. Its
+ * `ms` is the attempt's visible time from the alert to the debrief (`useVisibleClock`: a hidden tab adds nothing),
+ * capped at `INCIDENT_MAX_MS` (wave-3.md §15.1).
  */
 export default function Daily() {
   // The date is read once per visit; a page left open past midnight keeps yesterday's incident until reloaded.
@@ -87,6 +90,9 @@ export default function Daily() {
   /** the boxes of the attempt in play (three, plus an unused prefix router when one is installed): whose they were */
   const [boxes, setBoxes] = useState<DailyBox[]>([])
   const canUseYours = useMemo(() => ownBoxes(dailyBoxes(installed)).length > 0, [installed])
+  /** the page's visible time, and its reading when this attempt's alert showed */
+  const visible = useVisibleClock()
+  const alertAt = useRef<number | null>(null)
 
   const fail = useCallback((e: unknown) => {
     setFailure(describeFleetError(e, 'The incident stopped'))
@@ -111,6 +117,7 @@ export default function Daily() {
         setSession(s)
         setFlow(startFlow(s.alert, s.limit))
         setPhase('play')
+        alertAt.current = visible()
       },
       (e) => {
         if (live) fail(e)
@@ -120,7 +127,7 @@ export default function Daily() {
       live = false
       opened?.close()
     }
-  }, [spec, attempt, ready, reference, fail])
+  }, [spec, attempt, ready, reference, fail, visible])
 
   const run = useCallback<FlowRun>(
     async (command) => {
@@ -147,6 +154,7 @@ export default function Daily() {
 
   function restart(onReference = reference) {
     setReference(onReference)
+    alertAt.current = null
     setSession(null)
     setFlow(null)
     setWrote(false)
@@ -181,10 +189,11 @@ export default function Daily() {
 
   const onResult = useCallback(
     (result: IncidentFinish) => {
-      setWrote(recordDaily(useProgress, date, spec, result, boxHashes(boxes)))
+      const ms = alertAt.current === null ? undefined : visible() - alertAt.current
+      setWrote(recordDaily(useProgress, date, spec, result, boxHashes(boxes), ms))
       setAnnouncement('The debrief is ready.')
     },
-    [date, spec, boxes],
+    [date, spec, boxes, visible],
   )
 
   const open = phase === 'play' && flow !== null && !flow.ended
