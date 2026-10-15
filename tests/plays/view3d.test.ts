@@ -82,10 +82,13 @@ describe('View3D ships dark', () => {
     expect(seen.loads).toBe(0)
   })
 
-  test('the play passes nothing for `available`, so the shipped cube has no 3D entry (and 3s-02 is the only place to set it)', () => {
+  test('the play sets `available` only from the learner’s split (3s-02), so a first paint, or a learner with no split, has no 3D entry', () => {
     const play = read('src/components/play/tiling-cube/Play.tsx')
     expect(play).toMatch(/<View3D id="tiling-cube"/)
-    expect(play).not.toMatch(/<CubeView3D[^>]*available/)
+    // the one place that sets it, and never to a literal true (tests/plays/cube-eval.test.ts walks the play)
+    expect(play.match(/<CubeView3D[^>]*available/g)).toHaveLength(1)
+    expect(play).toContain("available={views[level.id] === '3d'}")
+    expect(play).not.toMatch(/<CubeView3D[^>]*available=\{true\}/)
     // nothing else under src mounts or enables a View3D yet
     const users = walk(join(ROOT, 'src'))
       .map((f) => relative(ROOT, f))
