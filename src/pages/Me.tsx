@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState, type ComponentType } from 'react'
 import { Link } from 'react-router'
 import BackgroundPick from '@/pages/me/Background'
 
@@ -17,9 +17,13 @@ import BackgroundPick from '@/pages/me/Background'
  * settled; the three sections below load in the meantime (the dynamic imports start at once), so they appear together
  * with it, and nothing already on screen is pushed down. A Mirror that fails to read the ledger settles too, so the rest
  * of the page is never held back for good.
+ *
+ * The forms card has no placeholder (its closed height is not one every width agrees on), so it is held back the same way:
+ * the page keeps the card's module in state and shows the card, the pick and the sections below only when both the Mirror
+ * has settled and the card's chunk is here. Rendering the loaded module directly, not through `lazy`, leaves no Suspense
+ * fallback to swap, so the pick (3c-05) and everything under the card stay where they first appear (D47, 3c final review F8).
  */
 const MirrorSummary = lazy(() => import('@/pages/me/MirrorSummary'))
-const FormsCard = lazy(() => import('@/components/me/FormsCard'))
 const Journey = lazy(() => import('@/pages/me/Journey'))
 const DataOwnership = lazy(() => import('@/pages/me/DataOwnership'))
 
@@ -29,11 +33,20 @@ const SectionFallback = ({ tall }: { tall: string }) => <div aria-hidden classNa
 export default function Me() {
   const [mirrorSettled, setMirrorSettled] = useState(false)
   const onMirrorSettled = useCallback(() => setMirrorSettled(true), [])
+  // the forms card's module, held in state once its chunk is here; a chunk that fails to load settles with no card, never a held page
+  const [forms, setForms] = useState<{ Card: ComponentType | null } | null>(null)
   // fetch the sections below while the Mirror reads the ledger (the lazy() calls above share these imports' results)
   useEffect(() => {
-    void import('@/components/me/FormsCard')
+    let live = true
+    import('@/components/me/FormsCard').then(
+      (m) => live && setForms({ Card: m.default }),
+      () => live && setForms({ Card: null }),
+    )
     void import('@/pages/me/Journey')
     void import('@/pages/me/DataOwnership')
+    return () => {
+      live = false
+    }
   }, [])
 
   return (
@@ -53,11 +66,9 @@ export default function Me() {
           </Suspense>
         </div>
 
-        {mirrorSettled && (
+        {mirrorSettled && forms && (
           <>
-            <Suspense fallback={null}>
-              <FormsCard />
-            </Suspense>
+            {forms.Card && <forms.Card />}
 
             <BackgroundPick />
 

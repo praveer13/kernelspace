@@ -9,7 +9,8 @@ import { createElement } from 'react'
 import { IsomorphismView } from '../../src/components/lesson/Isomorphism'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import type { IsomorphismBlock, Lesson } from '../../src/data/lessons/types'
-import { alignResponse, alignRows, backgroundOf, breakRef, gradeAlign, isActive, isoNumber, workApplies } from '../../src/lib/learner/iso'
+import { backgroundOf } from '../../src/lib/learner/background'
+import { alignResponse, alignRows, breakRef, gradeAlign, isActive, isoNumber, workApplies } from '../../src/lib/learner/iso'
 import { redactForPartner } from '../../src/lib/learner/redact'
 import { validateEvent, validateWorkingRecord } from '../../src/lib/ledger/codec'
 import { BACKGROUNDS } from '../../src/lib/ledger/constants'
@@ -159,13 +160,20 @@ describe('the real panel (t2.l4)', () => {
 
 describe('the pick', () => {
   const savedSet = useProgress.getState().setWorking
+  const savedClear = useProgress.getState().clearWorking
   const savedWorking = useProgress.getState().working
   let writes: [string, unknown][]
+  let clears: string[]
   beforeEach(() => {
     writes = []
-    useProgress.setState({ working: {} as never, setWorking: ((k: string, v: unknown) => void writes.push([k, v])) as never })
+    clears = []
+    useProgress.setState({
+      working: {} as never,
+      setWorking: ((k: string, v: unknown) => void writes.push([k, v])) as never,
+      clearWorking: ((k: string) => void clears.push(k)) as never,
+    })
   })
-  afterEach(() => useProgress.setState({ setWorking: savedSet, working: savedWorking }))
+  afterEach(() => useProgress.setState({ setWorking: savedSet, clearWorking: savedClear, working: savedWorking }))
 
   test('/me offers the six values, none chosen until one is, and a click writes profile:background', async () => {
     const m = await dom.mount(createElement(BackgroundPick))
@@ -176,6 +184,33 @@ describe('the pick', () => {
     expect(writes).toEqual([])
     await dom.press(radios[2])
     expect(writes).toEqual([['profile:background', BACKGROUNDS[2]]])
+    await m.unmount()
+  })
+
+  test('"Clear my pick" shows only with a pick, deletes the record on the click, and leaves focus in the group', async () => {
+    const m = await dom.mount(createElement(BackgroundPick))
+    const clearButton = () => m.container.querySelectorAll('button').find((b) => b.textContent.trim() === 'Clear my pick')
+    expect(clearButton()).toBeUndefined() // nothing to clear yet
+    await m.unmount()
+
+    useProgress.setState({ working: { 'profile:background': 'student' } as never })
+    const saved = await dom.mount(createElement(BackgroundPick))
+    const button = saved.container.querySelectorAll('button').find((b) => b.textContent.trim() === 'Clear my pick')!
+    expect(button.getAttribute('type')).toBe('button')
+    expect(button.tabIndex).toBe(0) // a native button: Tab, Enter and Space reach it
+    expect(clears).toEqual([])
+    await dom.press(button)
+    expect(clears).toEqual(['profile:background'])
+    expect(writes).toEqual([]) // a delete, not a write of some value
+    expect(dom.document.activeElement.getAttribute('type')).toBe('radio')
+    await saved.unmount()
+  })
+
+  test('the copy says the pick stays on your devices and in your own exports, and never goes in a donation', async () => {
+    const m = await dom.mount(createElement(BackgroundPick))
+    const text = m.container.textContent.replace(/\s+/g, ' ')
+    expect(text).toContain('It stays on your devices: in this browser and in the progress files you export yourself. It is never part of a donation.')
+    expect(text).not.toContain('stays in this browser')
     await m.unmount()
   })
 

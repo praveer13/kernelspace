@@ -6,7 +6,7 @@ import { emptyAggregate, fleetRunOk, fleetRunScore, foldInto, incidentOk, incide
 import { checkSnapshot } from './ledger/guard'
 import { lwwWorking } from './ledger/merge'
 import { SNAPSHOT_KEY } from './ledger/names'
-import { appendToOutbox, outboxKey } from './ledger/outbox'
+import { appendToOutbox, outboxKey, readOutbox, removeFromOutbox } from './ledger/outbox'
 import { getOwn, setOwn, sha256Hex, stableStringify } from './ledger/stable'
 import { refMatchesKind } from './ledger/refs'
 import { dayOf } from './ledger/time'
@@ -880,6 +880,22 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
 
     // `fw:runs` keeps the newest 50 (wave-3.md §3.5): the oldest drop, so the codec never refuses the list at the flush.
     setWorking: (key: WorkingKey, value: Json) => writeWorking([[key, key === 'fw:runs' && Array.isArray(value) ? value.slice(-MAX_RUN_RECORDS) : value]]),
+
+    // A delete, not a write: the record goes from memory, the snapshot, this tab's outbox and the store (the engine tells other tabs).
+    clearWorking: (key: WorkingKey) => {
+      if (readOnlyReason) return
+      const held = workingRecs.get(key)
+      const waiting = deferred.get(key)
+      if (waiting) clearTimeout(waiting.timer)
+      deferred.delete(key)
+      unconfirmedWorking.delete(key)
+      if (!held && !waiting) return
+      workingRecs.delete(key)
+      removeFromOutbox(storage, tabId, [], readOutbox(storage, tabId)?.working.filter((w) => w.key === key) ?? [], clock.nowIso())
+      publish()
+      scheduleSnapshot()
+      track(bootEngine().then(() => engine?.deleteWorking([key])))
+    },
 
     /* Wave 1 actions (wave-1.md §3.3) */
 

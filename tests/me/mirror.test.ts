@@ -364,9 +364,13 @@ describe('/me: the Mirror reserves no height, and nothing below it moves when it
     // the fallback has the loading line's height, so the swap from one to the other moves nothing
     expect(me.slice(0, me.indexOf('<MirrorSummary'))).toContain('<SectionFallback tall="h-6" />')
     expect(src('pages/me/MirrorSummary.tsx')).not.toContain('min-h-[24rem]')
-    const gate = me.indexOf('{mirrorSettled && (')
+    // the sections wait for the Mirror and for the forms card's chunk, which has no placeholder (D47, 3c final review F8)
+    const gate = me.indexOf('{mirrorSettled && forms && (')
+    expect(gate).toBeGreaterThan(0)
     expect(me.indexOf('<MirrorSummary')).toBeLessThan(gate)
-    for (const s of ['FormsCard', 'Journey', 'DataOwnership']) expect(me.search(new RegExp(`<${s} />`))).toBeGreaterThan(gate)
+    for (const s of ['forms\\.Card', 'BackgroundPick', 'Journey', 'DataOwnership']) expect(me.search(new RegExp(`<${s} />`))).toBeGreaterThan(gate)
+    // the card is the loaded module held in state, not a lazy component: no Suspense fallback to swap in
+    expect(me).not.toContain("lazy(() => import('@/components/me/FormsCard'))")
   })
 })
 
@@ -394,10 +398,12 @@ describe('/me: the order of the page, and what its sections import', () => {
     }
     const me = src('pages/Me.tsx')
     expect(me).toContain("const MirrorSummary = lazy(() => import('@/pages/me/MirrorSummary'))")
-    expect(me).toContain("const FormsCard = lazy(() => import('@/components/me/FormsCard'))")
+    expect(me).toContain("import('@/components/me/FormsCard')")
     // document order in the page: the Mirror, the forms mount, the journey, data ownership
     const at = (s: string) => me.search(new RegExp(`<${s}( [^>]*)? />`))
-    expect([at('MirrorSummary'), at('FormsCard'), at('Journey'), at('DataOwnership')]).toEqual([...[at('MirrorSummary'), at('FormsCard'), at('Journey'), at('DataOwnership')]].sort((a, b) => a - b))
+    const order = [at('MirrorSummary'), at('forms\\.Card'), at('BackgroundPick'), at('Journey'), at('DataOwnership')]
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(order.every((i) => i > 0)).toBe(true)
     expect(at('MirrorSummary')).toBeGreaterThan(0)
   })
 })
