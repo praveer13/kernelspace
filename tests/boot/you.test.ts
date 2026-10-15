@@ -47,7 +47,8 @@ const group = (root: MiniElement) => root.querySelector('[role="radiogroup"][ari
 const radios = (root: MiniElement) => group(root).querySelectorAll('input[type="radio"]')
 const checkedOf = (root: MiniElement) => radios(root).map((r) => r.checked)
 const only = (b: string) => BACKGROUNDS.map((x) => x === b)
-const clearButton = (root: MiniElement) => group(root).querySelectorAll('button').find((b) => b.textContent.trim() === 'Clear my pick')
+// the button sits just outside the group (3c final review r2, G6), in the wrapper that holds the group and the button
+const clearButton = (root: MiniElement) => group(root).parentNode!.querySelectorAll('button').find((b) => b.textContent.trim() === 'Clear my pick')
 const goToToday = (root: MiniElement) => root.querySelectorAll('button').find((b) => b.textContent.trim() === 'Go to Today')!
 const hydrate = (working: Record<string, unknown>) => dom.act(() => useProgress.setState({ working: working as never }))
 
@@ -92,6 +93,8 @@ describe('a pick can be cleared, and the clearing waits for Go to Today as well'
     const clear = clearButton(root)!
     expect(clear.getAttribute('type')).toBe('button') // not a submit: it must not finish the step
     expect(clear.tabIndex).toBe(0)
+    expect(group(root).querySelectorAll('button')).toHaveLength(0) // the group holds only its radios
+    expect(clear.closest('[role="radiogroup"]')).toBeNull()
     await dom.press(clear)
     expect(checkedOf(root).some(Boolean)).toBe(false)
     expect(clearButton(root)).toBeUndefined()
