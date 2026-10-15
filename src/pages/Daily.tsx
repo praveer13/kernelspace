@@ -107,8 +107,8 @@ function DailyPage({ shifting }: { shifting: boolean }) {
   /** your installed modules are read before the incident opens (their bytes load from the components store) */
   const ready = useSlots((s) => s.ready)
   const installed = useSlots((s) => s.installed)
-  /** play without your modules: the fallback after one fails, and a choice for a replay */
-  const [reference, setReference] = useState(false)
+  /** play without your modules: the fallback after one fails, and a choice for a replay; the shift always plays this way */
+  const [reference, setReference] = useState(shifting)
   /** the boxes of the attempt in play (three, plus an unused prefix router when one is installed): whose they were */
   const [boxes, setBoxes] = useState<DailyBox[]>([])
   // the shift plays the reference engine, so every session of the pilot plays the same boxes
@@ -123,14 +123,14 @@ function DailyPage({ shifting }: { shifting: boolean }) {
   }, [])
 
   useEffect(() => {
-    if (!ready && !shifting) return
+    if (!ready) return
     let live = true
     let opened: IncidentClientSession | null = null
     // read when the session opens: a module installed mid-incident belongs to the next attempt
     const mine = useSlots.getState().installed
     // named before the open, so a module that traps while the incident warms up still offers the reference engine
-    setBoxes(shifting ? [] : dailyBoxes(mine, reference))
-    openIncidentSession({ mode: 'incident', spec, slots: dailySlotBytes(mine, reference || shifting) }).then(
+    setBoxes(dailyBoxes(mine, reference))
+    openIncidentSession({ mode: 'incident', spec, slots: dailySlotBytes(mine, reference) }).then(
       (s) => {
         if (!live) {
           s.close()
@@ -150,7 +150,7 @@ function DailyPage({ shifting }: { shifting: boolean }) {
       live = false
       opened?.close()
     }
-  }, [spec, attempt, ready, reference, shifting, fail, visible])
+  }, [spec, attempt, ready, reference, fail, visible])
 
   const run = useCallback<FlowRun>(
     async (command) => {
@@ -175,29 +175,21 @@ function DailyPage({ shifting }: { shifting: boolean }) {
     hadHypothesis.current = has
   }, [flow?.hypothesis])
 
-  function reset(onReference = reference) {
+  /** `advance` takes the shift's next incident: its spec differs, so the new session opens on it */
+  function restart(onReference = reference, advance = false) {
     setReference(onReference)
     alertAt.current = null
     setSession(null)
     setFlow(null)
     setWrote(false)
     setFailure(null)
-    setAnnouncement('')
+    setAnnouncement(advance ? `Incident ${step + 2} of ${SHIFT_LENGTH}. The handoff note from incident ${step + 1} is above the alert once it opens.` : '')
     setPhase('opening')
-  }
-
-  function restart(onReference = reference) {
-    reset(onReference)
     setAttempt((a) => a + 1)
+    if (advance) setStep((i) => i + 1)
   }
 
-  // The next shift incident: its spec differs, so the session effect opens it by itself. Focus goes to the new header,
-  // since the button that asked for it is gone.
-  function nextIncident() {
-    reset()
-    setStep((i) => i + 1)
-    setAnnouncement(`Incident ${step + 2} of ${SHIFT_LENGTH}. The handoff note from incident ${step + 1} is above the alert once it opens.`)
-  }
+  // Focus goes to the new shift header, since the button that asked for the next incident is gone.
   useEffect(() => {
     if (step > 0) shiftHead.current?.focus()
   }, [step])
@@ -350,7 +342,7 @@ function DailyPage({ shifting }: { shifting: boolean }) {
                     )}
                     <div className="flex flex-wrap items-center gap-3">
                       {step < plan.length - 1 && (
-                        <button type="button" onClick={nextIncident} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground" data-next-incident>
+                        <button type="button" onClick={() => restart(undefined, true)} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground" data-next-incident>
                           Take incident {step + 2} of {plan.length}
                         </button>
                       )}
