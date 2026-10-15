@@ -1,12 +1,13 @@
 {
  "schema": 1,
- "method": "Cohen's kappa between the panel's labels and a second blind rater's on a seeded random 10 % of the snapshot's distinct lines (random.Random(20261014).sample)",
+ "method": "Cohen's kappa between the panel's labels and a second blind rater's on a seeded random 10 % of the snapshot's distinct lines. Population: match.ts novelLines(snapshot) as {repo, tag, line} (text), grouped by repo in novelLines' order and cut into slices of at most 450 lines; the slices sorted by line count, largest first (Python's stable sort, so equal counts keep that order), and concatenated. Sample: Python random.Random(20261014).sample(population, 996). sampleSha256 is the SHA-256 of the sample's 'repo<TAB>line' keys, sorted and joined by newlines, so a re-draw can be checked.",
  "sampleLines": 996,
+ "sampleSha256": "ce5d40c90cd9bf73f95afd04d9aa07909e17bb90be6953c4b25b20ce8c5db9e7",
  "bothTrue": 2,
  "panelOnly": 2,
  "secondOnly": 1,
  "kappa": 0.57,
- "note": "Below the pre-registration's 0.6 flag. With 3 to 4 true lines in 996, kappa is unstable: one line more or less in either column moves it by about 0.2. The owner decides whether the rating can be trusted (docs/prereg/watcher.md, Independent rating).",
+ "note": "Below the pre-registration's 0.6 flag. With 3 to 4 true lines in 996, kappa is unstable: one line more or less in either column moves it by about 0.2. The owner decides whether the rating can be trusted (docs/prereg/watcher.md, Independent rating). The verdict does not rest on the rating's precision: even if every one of the 110 flagged lines in the batch that rated no line true (batch 8, which holds llm-d v0.10.0's fs-connector deprecation) were true, precision would be 24.1 %, still under the 25 % bar. Do not reuse ratings.json as a gold set.",
  "secondRaterTrue": [
   {
    "repo": "ai-dynamo/dynamo",

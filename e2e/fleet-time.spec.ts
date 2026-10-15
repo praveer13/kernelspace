@@ -79,10 +79,11 @@ async function playDailyToDebrief(page: Page): Promise<void> {
 }
 
 test('/daily: the incident holds the visible time from the alert to the debrief, not a hidden stretch, under its cap', async ({ page }) => {
+  // the page marks its alert before Playwright's poll sees the play phase (up to ~500 ms later), so the wall starts first
+  const alert = Date.now()
   await page.goto('/daily')
   await expect(page.locator('[data-page="daily"][data-phase="play"]')).toBeVisible({ timeout: 60_000 })
   await page.evaluate(() => document.fonts.ready)
-  const alert = Date.now()
   await page.waitForTimeout(1500)
   await hiddenFor(page, HIDDEN_MS)
   await page.waitForTimeout(1500)
@@ -106,9 +107,9 @@ test('/week: a drill holds its visible alert-to-debrief time, and Act III the vi
   const loaded = Date.now()
 
   /* ---- an Act IV drill, hidden for a stretch in the middle ---- */
+  const alert = Date.now()
   await page.locator('[data-start-drill]').click()
   await expect(page.locator('[data-drill][data-phase="play"]')).toBeVisible({ timeout: 60_000 })
-  const alert = Date.now()
   await page.waitForTimeout(1500)
   await hiddenFor(page, HIDDEN_MS)
   await page.waitForTimeout(1500)

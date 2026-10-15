@@ -1128,7 +1128,9 @@ export function buildFieldReport(ledgers: readonly PartnerLedger[], content: Car
   return { partners: ledgers.length, retention, boot, landing, confirm, tickets, today, prove, daily, gates: [f1, f2, f3, f4, f5, f6, f7, f8, f9], keepOrKill }
 }
 
-const STATUS_LABEL: Record<FieldStatus, string> = { pass: 'PASS', fail: 'FAIL', insufficient: 'NOT ENOUGH DATA', reported: 'REPORTED', owner: 'OWNER' }
+// 'NOT MET', not 'FAIL': a bar not met sends the feature to its pre-registered default (F4's drop, F5's one question), which is a
+// decision, not a defect.
+const STATUS_LABEL: Record<FieldStatus, string> = { pass: 'PASS', fail: 'NOT MET', insufficient: 'NOT ENOUGH DATA', reported: 'REPORTED', owner: 'OWNER' }
 
 /** The report as text: the field-gate table, the keep-or-kill lines and the Fleet Daily. */
 export function formatFieldReport(r: FieldReport): string {

@@ -2573,7 +2573,7 @@ describe('buildWave3Report and formatWave3Report', () => {
     expect(status(r, 'F7')).toBe('insufficient')
     expect(r.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('underpowered')
     const text = formatWave3Report(r)
-    expect(text).toContain('F5  Prove-it v2 keep-or-kill → FAIL')
+    expect(text).toContain('F5  Prove-it v2 keep-or-kill → NOT MET')
     expect(text).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %, Wilson 95 % interval 56.6 % to 100.0 %; kept only if the lower bound is at least 60 %: not kept')
     expect(text).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
     expect(text).toContain('95 % interval')
@@ -2609,7 +2609,7 @@ describe('buildWave3Report and formatWave3Report', () => {
     expect(status(r10, 'F5')).toBe('fail')
     expect(r10.keepOrKill.find((k) => k.id === 'F5')).toMatchObject({ verdict: 'underpowered', fallback: '1 question' })
     const t10 = formatWave3Report(r10)
-    expect(t10).toContain('F5  Prove-it v2 keep-or-kill → FAIL')
+    expect(t10).toContain('F5  Prove-it v2 keep-or-kill → NOT MET')
     expect(t10).toContain('n = 10, 5 partners: 7 of 10 unseen-seed greens followed by a v2 attempt = 70.0 %, Wilson 95 % interval 39.7 % to 89.2 %; kept only if the lower bound is at least 60 %: not kept, so the underpowered default, 1 question (PLAN §9)')
     expect(t10).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
     expect(t10).not.toContain('Prove-it v2: KILL')
@@ -2704,7 +2704,7 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
       expect(r.stdout).toContain('planned: Boot → Today; R.L1 ⇄ T0.L1')
       // lab 02 ships a Prove-it v2 bundle, so the script finds it among the labs and F5 reads the five attempts; 5 of 5 has
       // a Wilson lower bound of 56.6 %, under the 60 % bar, so Prove-it v2 takes the underpowered default
-      expect(r.stdout).toContain('F5  Prove-it v2 keep-or-kill → FAIL')
+      expect(r.stdout).toContain('F5  Prove-it v2 keep-or-kill → NOT MET')
       expect(r.stdout).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %, Wilson 95 % interval 56.6 % to 100.0 %')
       expect(r.stdout).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
       expect(r.stdout).toContain('F4  the watcher')
