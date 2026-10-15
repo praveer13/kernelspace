@@ -14,14 +14,17 @@
  *      the model answer and its three ideas, all three of which the line must cover before the round saves. The line
  *      is never stored: only the ticks are.
  *   4. Saved. One `item item:fleet.<id>` event (src `lesson`, `grp` = `<lessonId>#<block>`, the seed, provenance
- *      `unseen`). The first round of a block also writes the block's one `predict` event, as soon as it is locked and
- *      graded, the way an item block writes its one prediction before the practice.
+ *      `unseen`). Every round also writes a `predict` event at its lock, as soon as it is graded and before anything is
+ *      explained: the block's first carries the learner's confidence and its nominal seconds, like an item block's one
+ *      prediction, and a later one is only the marker that the round was locked (`predictEvent`'s `first`).
  *
  * The exercise is done after `PASSES_NEEDED` (3) right predictions in a row, on fresh seeds, whose answers are not all
  * the same (`ANSWERS_NEEDED`, 2): repeating one value never gets there, and a guess that ignores the scene rarely
  * strings three together (tests/fleet-ex/done-rule.test.ts measures both). `readExercise` rebuilds that from the
- * ledger's events, so a reload shows "3/3 · done" and never asks again. Only a saved round is on the record: one left
- * before it is saved neither counts nor breaks the run. Nothing locks: another seed is always on offer.
+ * ledger's events, so a reload shows "3/3 · done" and never asks again. A round whose lock was recorded and whose
+ * `item` never was (the learner reloaded, or navigated away, between the lock and the save) counts as a miss, so
+ * leaving after a wrong verdict cannot erase it from the run of rights (D39, D48). Nothing locks: another seed is
+ * always on offer.
  */
 
 import { byId } from '@/data/claims'
@@ -81,18 +84,20 @@ export interface BlockAt {
   needs: number
 }
 
-/** One saved round. */
+/** One round on the record: a saved one, or (`unsaved`) one locked and never saved, which counts as a miss. */
 export interface Played {
   seed: number
   ok: boolean
   value: number
   truth: number
+  /** Locked, with no `item` saved after it. `ok` is false whatever the lock graded. */
+  unsaved?: true
 }
 
 export interface ExerciseState {
   /** The block's one prediction event exists. */
   predicted: boolean
-  /** Saved rounds, oldest first. */
+  /** Rounds on the record, oldest first: the saved ones and the ones left unsaved. */
   played: Played[]
   /** Right predictions on distinct seeds, in all. */
   passes: number
@@ -127,18 +132,31 @@ export function runOf(played: readonly Played[], needs: number): { run: number; 
 const rec = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
 const byTime = (a: ExerciseEvent, b: ExerciseEvent): number => (a.at < b.at ? -1 : a.at > b.at ? 1 : (a.id ?? '') < (b.id ?? '') ? -1 : (a.id ?? '') > (b.id ?? '') ? 1 : 0)
 
-/** The block's state from the events that carry its `grp`: its saved rounds, how many pass, whether it is done. */
-export function readExercise(events: readonly ExerciseEvent[], at: BlockAt): ExerciseState {
+/**
+ * The block's state from the events that carry its `grp`: its rounds, how many pass, whether it is done. A `predict`
+ * whose seed has no `item` is a round locked and never saved, and counts as a miss (`unsaved`), unless it is the round
+ * still open in this tab (`open`, its seed), which has not had its chance to save yet.
+ */
+export function readExercise(events: readonly ExerciseEvent[], at: BlockAt, open?: number): ExerciseState {
   const grp = exerciseGrp(at.lessonId, at.index)
   const ref = exerciseRef(at.id)
   const mine = events.filter((e) => e.ref === ref && rec(e.data).src === 'lesson' && rec(e.data).grp === grp && typeof e.seed === 'number').sort(byTime)
+  const graded = (e: ExerciseEvent): boolean => typeof rec(e.data).value === 'number' && typeof rec(e.data).truth === 'number'
+  const saved = new Set(mine.filter((e) => e.kind === 'item' && graded(e)).map((e) => e.seed as number))
   const played: Played[] = []
+  const left = new Set<number>()
   let predicted = false
   for (const e of mine) {
     const d = rec(e.data)
-    if (e.kind === 'predict') predicted = true
-    else if (e.kind === 'item' && typeof d.value === 'number' && typeof d.truth === 'number') {
-      played.push({ seed: e.seed as number, ok: e.ok === true, value: d.value, truth: d.truth })
+    const seed = e.seed as number
+    if (e.kind === 'predict') {
+      predicted = true
+      if (graded(e) && !saved.has(seed) && seed !== open && !left.has(seed)) {
+        left.add(seed)
+        played.push({ seed, ok: false, value: d.value as number, truth: d.truth as number, unsaved: true })
+      }
+    } else if (e.kind === 'item' && graded(e)) {
+      played.push({ seed, ok: e.ok === true, value: d.value as number, truth: d.truth as number })
     }
   }
   const passes = new Set(played.filter((p) => p.ok).map((p) => p.seed)).size
@@ -300,10 +318,13 @@ function filled(r: Round): Required<Pick<Round, 'prediction' | 'seed' | 'truth' 
 }
 
 /**
- * The block's `predict` event: the locked prediction against the sweep's answer on the round's seed, `src: 'lesson'`.
- * `ms` is the time from the round's scene being shown to the lock.
+ * A round's `predict` event, written at its lock: the locked prediction against the sweep's answer on the round's
+ * seed, `src: 'lesson'`. `ms` is the time from the round's scene being shown to the lock. The block's `first` carries
+ * the learner's confidence and `PREDICT_NSEC`, as an item block's one prediction does. A later round's is only the
+ * record that the lock happened, which is how a round left unsaved is found again: it adds no second calibration
+ * sample (its `item` carries the confidence) and no time (the `item`'s `ROUND_NSEC` covers the round).
  */
-export function predictEvent(def: FleetExerciseDef, ctx: EventCtx, round: Round): ItemResponse {
+export function predictEvent(def: FleetExerciseDef, ctx: EventCtx, round: Round, first = true): ItemResponse {
   const f = filled(round)
   return {
     kind: 'predict',
@@ -311,7 +332,7 @@ export function predictEvent(def: FleetExerciseDef, ctx: EventCtx, round: Round)
     rev: exerciseRev(def),
     score: f.ok ? 1 : 0,
     ok: f.ok,
-    ...(round.conf ? { conf: round.conf } : {}),
+    ...(first && round.conf ? { conf: round.conf } : {}),
     seed: f.seed,
     ms: Math.max(0, Math.round(f.committedAt - round.startedAt)),
     provenance: 'unseen',
@@ -321,7 +342,7 @@ export function predictEvent(def: FleetExerciseDef, ctx: EventCtx, round: Round)
       unit: def.unit,
       truth: f.truth,
       kcs: kcsOf(def),
-      nsec: PREDICT_NSEC,
+      nsec: first ? PREDICT_NSEC : 0,
       grp: exerciseGrp(ctx.lessonId, ctx.index),
       lessonId: ctx.lessonId,
     },

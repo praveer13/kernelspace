@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
-import { AGGREGATE_VERSION, EXPORT_FORMAT, QUIZ_PASS_SCORE, SCHEMA_VERSION } from './ledger/constants'
+import { AGGREGATE_VERSION, EXPORT_FORMAT, MAX_ACT_RUNS, MAX_PROVE_CALLS, MAX_PROVE_IDS, MAX_QID_LENGTH, QUIZ_PASS_SCORE, RUBRIC_KEYS, SCHEMA_VERSION } from './ledger/constants'
 import { browserEnv, loadDeviceId, onLedgerClientRequest } from './ledger/client'
 import { emptyAggregate, fleetRunOk, fleetRunScore, foldInto, incidentOk, incidentScore, upgradeAggregate } from './ledger/fold'
 import { checkSnapshot } from './ledger/guard'
 import { lwwWorking } from './ledger/merge'
 import { SNAPSHOT_KEY } from './ledger/names'
-import { appendToOutbox, outboxKey } from './ledger/outbox'
+import { appendToOutbox, clearInOutboxes, outboxKey } from './ledger/outbox'
 import { getOwn, setOwn, sha256Hex, stableStringify } from './ledger/stable'
 import { refMatchesKind } from './ledger/refs'
 import { dayOf } from './ledger/time'
@@ -196,12 +196,8 @@ const MAX_RUN_COMPONENTS = 8
 /** The codec refuses more play levels or run records than these (wave-3.md §3.2). */
 const MAX_PLAY_LEVELS = 8
 const MAX_RUN_RECORDS = 50
-/** The codec's bounds on a Prove-it v2 event and a Fleet Week act's data (wave-3.md §3.2); it refuses the whole event past them. */
-const MAX_QID_LENGTH = 40
-const MAX_PROVE_CALLS = 12
-const MAX_PROVE_IDS = 12
-const MAX_ACT_RUNS = 20
-const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
+// The codec's bounds on a Prove-it v2 event and a Fleet Week act's data (MAX_QID_LENGTH, MAX_PROVE_IDS, MAX_PROVE_CALLS,
+// MAX_ACT_RUNS, RUBRIC_KEYS) come from ledger/constants.ts, which the codec reads too: one source, and no codec load (D35).
 /** The most characters a context packet may report (H2); the codec refuses more. */
 const MAX_PACKET_CHARS = 6000
 /** Scroll position is device-local and changes constantly: commit it at most this often (§5). */
@@ -754,7 +750,8 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       if (!Number.isFinite(score) || !sendableRef('fleet-act', ref)) return
       const s = stamp()
       // Held to what the codec accepts, so the act is never shown and then dropped at the flush (more than 20 runs, say).
-      const extra = withDefined({ seed: isUint32(meta?.seed) ? meta.seed : undefined, data: fleetActData(meta?.data) })
+      // `ms` is the time spent on the act (wave-3.md §15.1): the codec takes a finite one of 0 or more.
+      const extra = withDefined({ seed: isUint32(meta?.seed) ? meta.seed : undefined, ms: nonNegative(meta?.ms), data: fleetActData(meta?.data) })
       const provenance = meta?.provenance === 'unseen' ? 'unseen' : 'practice'
       const evs = [ev(s, 'fleet-act', ref, graded(clamp01(score), true, provenance, extra))]
       const acts = new Set([...Object.keys(agg.fleetWeek.acts), actId])
@@ -836,11 +833,22 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       const grp = newId()
       const correct = attempt.responses.filter((r) => r.ok).length
       const score = correct / n
-      const evs = attempt.responses.map((r) =>
+      // Each answer says its place in the attempt (`slot` of `of`, as a ticket's do) and, on a miss, the picked lure's
+      // misconception id (`miss`, as Today's quiz items carry it), which P3's confusion share reads (selectDiscrimination30).
+      const evs = attempt.responses.map((r, i) =>
         ev(s, 'item', `quiz:${attempt.lessonId}#${r.qi}`, {
           ...graded(r.ok ? 1 : 0, r.ok, 'practice', withDefined({ conf: r.conf, seed: attempt.seed })),
           rev: r.rev,
-          data: { src: 'quiz', pick: r.pick, grp, lessonId: attempt.lessonId, ...(r.kcs ? { kcs: r.kcs.slice(0, MAX_KCS) } : {}) },
+          data: {
+            src: 'quiz',
+            pick: r.pick,
+            grp,
+            slot: i,
+            of: n,
+            lessonId: attempt.lessonId,
+            ...(r.kcs ? { kcs: r.kcs.slice(0, MAX_KCS) } : {}),
+            ...(!r.ok && typeof r.miss === 'string' && r.miss !== '' ? { miss: r.miss } : {}),
+          },
         }),
       )
       evs.push(
@@ -880,6 +888,25 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
 
     // `fw:runs` keeps the newest 50 (wave-3.md §3.5): the oldest drop, so the codec never refuses the list at the flush.
     setWorking: (key: WorkingKey, value: Json) => writeWorking([[key, key === 'fw:runs' && Array.isArray(value) ? value.slice(-MAX_RUN_RECORDS) : value]]),
+
+    // A delete, not a write (D50): the record goes from memory, the snapshot, every outbox and the store (the engine tells
+    // other tabs). The tombstone left in this tab's outbox makes the clear durable before the store's delete commits.
+    clearWorking: (key: WorkingKey) => {
+      if (readOnlyReason) return
+      const held = workingRecs.get(key)
+      const waiting = deferred.get(key)
+      if (waiting) clearTimeout(waiting.timer)
+      deferred.delete(key)
+      unconfirmedWorking.delete(key)
+      if (!held && !waiting) return
+      workingRecs.delete(key)
+      // Never before the record it clears, so a clock that stepped back cannot leave the record standing.
+      const now = clock.nowIso()
+      clearInOutboxes(storage, tabId, key, held && held.at > now ? held.at : now)
+      publish()
+      scheduleSnapshot()
+      track(bootEngine().then(() => engine?.deleteWorking([key])))
+    },
 
     /* Wave 1 actions (wave-1.md §3.3) */
 

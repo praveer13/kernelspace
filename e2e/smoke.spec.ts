@@ -49,8 +49,9 @@ test('/today: Tab reaches every control', async ({ page }) => {
 })
 
 // Reflow (WCAG 1.4.10): axe does not test it, so measure it. These pages scrolled sideways before their fixes
-// (Home's code comparison, long lesson titles, the isomorphism panel); the full sweep is `npm run a11y`.
-for (const route of ['/', '/lesson/t4.l7', '/lesson/t6.l4', '/lesson/t6.l9']) {
+// (Home's code comparison, long lesson titles, the isomorphism panel); /me and /lesson/t4.l6 joined in Wave 3
+// (spec §17.2). The full sweep, at 1280 px too, is `npm run a11y`.
+for (const route of ['/', '/me', '/lesson/t4.l6', '/lesson/t4.l7', '/lesson/t6.l4', '/lesson/t6.l9']) {
   test(`${route}: no sideways scroll at 360 and 320 px`, async ({ page }) => {
     for (const width of [360, 320]) {
       await page.setViewportSize({ width, height: 800 })

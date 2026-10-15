@@ -5,7 +5,8 @@
  * module script in dist/index.html, FAILS if it exceeds the entry budget, and prints the 10 largest
  * chunks. It then walks dist/.vite/manifest.json (`build.manifest`) to measure each gated route's
  * closure: the entry chunk, the route's chunk and their static imports, with every CSS file they
- * name. Dynamic imports (the ledger engine, other pages, lazy decoration) are not followed.
+ * name. Dynamic imports (the ledger engine, other pages, lazy decoration) are not followed; the on-demand line
+ * names them with their own static imports, so a lazy step counts what it really loads.
  * Which modules a route may not import is tests/boot/imports.test.ts's job; this gate measures bytes.
  * Wave 1 (docs/specs/wave-1.md §16.1): /boot and /today are gated at 200 KB with a tighter target, the
  * entry has a 125 KB target after the entry diet (B2), and the play closure, the generator family
@@ -205,17 +206,30 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   console.log(`${route} closure (JS + CSS, gzip):`)
   for (const f of unique) console.log(`  ${(f.gzip / KB).toFixed(1).padStart(7)} KB  ${f.file}`)
 
-  // Information only: what the route fetches on demand after first load (not part of the budget).
+  // Information only: what the route fetches on demand after first load (not part of the budget). Each on-demand chunk
+  // brings its own static imports (Boot's last step imports the Background card, which a shared chunk may hold), so the
+  // list follows them: a file is named once, under the first chunk that reaches it, and never when the closure above
+  // already counts it.
   const counted = new Set(unique.map((f) => f.file))
   const onDemand: string[] = []
   let onDemandKb = 0
-  for (const dyn of [...(manifest[key].dynamicImports ?? []), ...(playKey ? (manifest[playKey].dynamicImports ?? []) : [])]) {
-    const chunk = manifest[dyn]
-    if (chunk && !counted.has(chunk.file)) {
-      const kb = (await gzipSize(chunk.file)) / KB
-      onDemandKb += kb
-      onDemand.push(`${chunk.file.split('/').pop()} ${kb.toFixed(1)} KB`)
+  const dynamicRoots = [...(manifest[key].dynamicImports ?? []), ...(playKey ? (manifest[playKey].dynamicImports ?? []) : [])]
+  for (const dyn of dynamicRoots) {
+    if (!manifest[dyn]) continue
+    const parts: string[] = []
+    let chunkKb = 0
+    for (const { chunk } of closure([dyn])) {
+      for (const file of [chunk.file, ...(chunk.css ?? [])]) {
+        if (counted.has(file)) continue
+        counted.add(file)
+        const kb = (await gzipSize(file)) / KB
+        chunkKb += kb
+        parts.push(`${file.split('/').pop()} ${kb.toFixed(1)} KB`)
+      }
     }
+    if (parts.length === 0) continue
+    onDemandKb += chunkKb
+    onDemand.push(parts.length === 1 ? parts[0] : `${parts[0]} (with its static imports ${parts.slice(1).join(', ')}: ${chunkKb.toFixed(1)} KB)`)
   }
   if (onDemand.length > 0) console.log(`  on demand, not counted: ${onDemand.join(', ')}`)
   if (budgetKb === null) {

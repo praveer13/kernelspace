@@ -14,9 +14,10 @@
  *   lesson that needs it. Sliding forward is left only for a run due before the very first T lesson,
  *   which happens only in a placed plan (anchor missed, early tracks skipped); recommend()'s rule 5 still
  *   sends that learner to the prerequisite first.
- * - `serving-first`: t0.l1, t0.l2, t4.l3, T5, T6, T7 (755 declared minutes). R arrives as reading items
- *   only, and labs are optional, so neither is a step. A registered play is a step after its host lesson
- *   (the scheduler play after t5.l7), on every path that has the host.
+ * - `serving-first`: t0.l1, t0.l2, t4.l3, T5, T6, T7 (755 declared minutes). R is not on this path, and
+ *   nothing serves its lessons as reading items either (PR 16 found none): they stay open in the
+ *   Curriculum, as Boot's blurb says. Labs are optional, so they are not steps. A registered play is a step
+ *   after its host lesson (the scheduler play after t5.l7), on every path that has the host.
  * - `rust-systems`: R.L1-R.L5, T1 (lab 01 after t1.l3), R.L6-R.L10, T2 (lab 04 after t2.l5), T3 (lab 05
  *   after t3.l4).
  *

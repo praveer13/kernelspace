@@ -21,7 +21,6 @@ import type { IsomorphismBlock, IsomorphismPair, Lesson } from '@/data/lessons/t
 import {
   alignResponse,
   alignRows,
-  backgroundOf,
   breakItem,
   breakResponse,
   gradeAlign,
@@ -32,6 +31,7 @@ import {
   type AlignGrade,
   type IsoRow,
 } from '@/lib/learner/iso'
+import { backgroundOf } from '@/lib/learner/background'
 import type { ItemResult } from '@/lib/items/play'
 import type { Background } from '@/lib/ledger/types'
 import { useProgress } from '@/lib/progress'

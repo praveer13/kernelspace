@@ -42,6 +42,7 @@ import {
 } from '../../src/components/fleet-ex/session'
 import { byId, getClaim } from '../../src/data/claims'
 import '../../src/data/claims/lazy/serving3'
+import { lessonById } from '../../src/data/lessons'
 import type { FleetExerciseBlock } from '../../src/data/lessons/types'
 import { validateEvent } from '../../src/lib/ledger/codec'
 import type { ItemResponse, LedgerEvent } from '../../src/lib/ledger/types'
@@ -49,6 +50,7 @@ import { blockGrp } from '../../src/lib/learner/item-block'
 import { formatNumber } from '../../src/lib/sims/host'
 import { PRE_NSEC } from '../../src/lib/learner/prequestions'
 import { FLEET_EXERCISES, type FleetExerciseDef, type SweepResult } from '../../src/lib/world/fleet-ex'
+import { KNEE_TARGETS } from '../../src/lib/world/fleet-ex/knee'
 import { installDom, MiniEvent, type DomKit, type MiniElement, type Mounted } from '../dom/mini-dom'
 
 const knee = FLEET_EXERCISES.knee
@@ -273,6 +275,18 @@ describe('the events', () => {
     expect(validateEvent(stamp(ev, 2)).ok).toBe(true)
   })
 
+  test('a later round’s predict is only the record of its lock: no confidence and no seconds, so its item is not counted twice', () => {
+    const round = savedRound(knee, seed, truth, 'sure')
+    const first = predictEvent(knee, CTX, round)
+    const later = predictEvent(knee, CTX, round, false)
+    expect(first).toMatchObject({ conf: 'sure', data: { nsec: PREDICT_NSEC } })
+    expect(later).not.toHaveProperty('conf')
+    expect(later).toMatchObject({ kind: 'predict', ok: true, seed, data: { nsec: 0, value: truth, truth, grp: `${LESSON}#${BLOCK}` } })
+    expect(validateEvent(stamp(later, 5)).ok).toBe(true)
+    // the item carries the round's confidence
+    expect(itemEvent(knee, CTX, round)).toMatchObject({ conf: 'sure' })
+  })
+
   test('a round whose prediction is not locked writes nothing', () => {
     const shown = shownRound(knee, seed)
     expect(() => itemEvent(knee, CTX, shown)).toThrow('after its lock')
@@ -355,6 +369,50 @@ describe('readExercise: restored from events', () => {
     const evs = [...events(right(s1), 1, true), ...events(right(s2), 3, false), ...events(right(s3), 5, false)]
     expect(readExercise([...evs].reverse(), AT)).toEqual(readExercise(evs, AT))
   })
+
+  /** What the lock alone leaves: the round's predict event and no item. */
+  const locked = (round: Round, n: number): ExerciseEvent[] => [exerciseEventOf(predictEvent(knee, CTX, round, n !== 1), new Date(T0 + n * 1000).toISOString(), `e${n}`)]
+
+  test('a round locked and never saved is a miss: it breaks the run of rights, right or wrong at the lock', () => {
+    const [x, y] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.25)]
+    const rights = [...events(right(x), 1, true), ...events(right(y), 3, false)]
+    expect(readExercise(rights, AT)).toMatchObject({ run: 2, runAnswers: 2, done: false })
+    // locked on a right answer and left: still not a pass, and the two rights before it no longer stand
+    const leftRight = readExercise([...rights, ...locked(right(s3), 5)], AT)
+    expect(leftRight).toMatchObject({ predicted: true, passes: 2, run: 0, done: false })
+    expect(leftRight.played[2]).toEqual({ seed: s3, ok: false, value: knee.truth(sweepOf(knee, s3)), truth: knee.truth(sweepOf(knee, s3)), unsaved: true })
+    expect(progressText(leftRight, 3)).toBe('0/3 right in a row · 0/2 different answers')
+    // locked on a wrong answer and left: the same
+    expect(readExercise([...rights, ...locked(savedRound(knee, s3, wrongOn(knee, s3)), 5)], AT)).toMatchObject({ run: 0, done: false })
+    // the seed is on the record, so the next draw skips it
+    expect(leftRight.seeds.has(s3)).toBe(true)
+  })
+
+  test('the unsaved miss does not undo a finished exercise, and a save after it starts the run again', () => {
+    const [x, y] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.25)]
+    const done = [...events(right(x), 1, true), ...events(right(y), 3, false), ...events(right(s3), 5, false)]
+    expect(readExercise(done, AT).done).toBe(true)
+    expect(readExercise([...done, ...locked(right(s4), 7)], AT)).toMatchObject({ done: true, run: 0 })
+    const after = readExercise([...events(right(x), 1, true), ...locked(right(s3), 3), ...events(right(y), 5, false)], AT)
+    expect(after).toMatchObject({ passes: 2, run: 1 })
+  })
+
+  test('a predict whose item was saved counts once, as the item; two predicts of one seed count once', () => {
+    const r1 = right(s1)
+    const both = readExercise([...locked(r1, 1), ...events(r1, 2, false)], AT)
+    expect(both.played).toHaveLength(1)
+    expect(both.played[0]).not.toHaveProperty('unsaved')
+    expect(both).toMatchObject({ passes: 1, run: 1 })
+    expect(readExercise([...locked(r1, 1), ...locked(r1, 2)], AT).played).toHaveLength(1)
+  })
+
+  test('the round still open in this tab is not a miss yet, and a predict without a graded value is ignored', () => {
+    const open = readExercise([...events(right(s1), 1, true), ...locked(right(s2), 3)], AT, s2)
+    expect(open).toMatchObject({ predicted: true, passes: 1, run: 1 })
+    expect(open.played).toHaveLength(1)
+    const bare = locked(right(s2), 3).map((e) => ({ ...e, data: { src: 'lesson', grp: `${LESSON}#${BLOCK}` } }))
+    expect(readExercise([...events(right(s1), 1, true), ...bare], AT)).toMatchObject({ passes: 1, run: 1 })
+  })
 })
 
 describe('what the sweep says', () => {
@@ -402,6 +460,60 @@ describe('what the sweep says', () => {
     expect(String(table.rows[2][0])).toContain('3 prefill, 5 decode')
     expect(c.tickLabel(2)).toBe('2:6')
     expect(verdictText(pd, c, pd.truth(r), r).detail).toContain(`${pd.truth(r)} prefill, ${8 - pd.truth(r)} decode`)
+  })
+})
+
+describe('the lesson blocks (3c-06)', () => {
+  /** The exercise's block in its own lesson, with its index among the lesson's blocks. */
+  function blockOf(def: FleetExerciseDef): { lesson: NonNullable<ReturnType<typeof lessonById>>; index: number; block: FleetExerciseBlock } {
+    const lesson = lessonById(def.lessonId)!
+    const found = lesson.blocks.flatMap((b, index) => (b.type === 'exercise' && 'fleet' in b && b.fleet === def.id ? [{ lesson, index, block: b }] : []))
+    expect(found).toHaveLength(1)
+    return found[0]
+  }
+
+  test('each exercise sits once in the lesson it names, with its own title, before that lesson’s quiz and after its item block', () => {
+    for (const def of [knee, pd]) {
+      const { lesson, index, block } = blockOf(def)
+      expect(lesson.id).toBe(def.lessonId)
+      expect(block.title).toBe(def.title)
+      const quiz = lesson.blocks.findIndex((b) => b.type === 'quiz')
+      expect(index).toBeLessThan(quiz)
+      expect(lesson.blocks[index + 1].type).toBe('quiz')
+      expect(lesson.blocks.findIndex((b) => b.type === 'item')).toBeLessThan(index)
+      // the exercise assesses KCs its lesson teaches
+      for (const kc of def.kcs) expect(lesson.kcs).toContain(kc)
+    }
+  })
+
+  test('each block carries a note that says what happened, in terms of the model the panel runs', () => {
+    for (const def of [knee, pd]) {
+      const note = blockOf(def).block.note ?? ''
+      expect(note.split(/\s+/).length).toBeGreaterThan(60)
+      expect(note).toContain('flat-tick')
+    }
+    expect(blockOf(knee).block.note).toContain('Little')
+    expect(blockOf(pd).block.note).toContain('prefill')
+  })
+
+  test('each note says what its lesson and its generator do: the knee names the loads seeds set it at, the split points at the lesson\'s ratio items', () => {
+    // the knee's seeds share four targets (kneeTarget), so the note names them and says the answer repeats across seeds
+    const kneeNote = blockOf(knee).block.note ?? ''
+    for (const t of KNEE_TARGETS) expect(kneeNote).toContain(`${String(t)}×`)
+    expect(kneeNote).toContain(`one of ${['zero', 'one', 'two', 'three', 'four', 'five'][KNEE_TARGETS.length]} loads`)
+    expect(kneeNote).not.toContain('a different load')
+    // the split is sized by the lesson's pd-ratio items, which sit in the item block above the exercise; whether to
+    // disaggregate at all is the deep dive's, from the KV-transfer budget
+    const { lesson, index, block } = blockOf(pd)
+    const above = lesson.blocks[index - 1]
+    expect(above.type === 'item' && above.variants.includes('pd-ratio')).toBe(true)
+    expect(block.note).toContain('prefill-to-decode ratio items above')
+    const deep = lesson.blocks.find((b) => b.type === 'deepdive')
+    expect(deep?.type === 'deepdive' && deep.title).toBe('When to still say no')
+    expect(deep?.type === 'deepdive' && deep.md).toContain('KV-transfer budget')
+    expect(block.note).toContain('*When to still say no*')
+    expect(block.note).toContain('KV-transfer budget')
+    expect(block.note).not.toContain('decision procedure starts from the traffic')
   })
 })
 
@@ -670,7 +782,7 @@ describe('the panel, mounted', () => {
     await page.unmount()
   })
 
-  test('a wrong prediction saves as a miss that starts the run again, and the next round writes an item but no second predict', async () => {
+  test('a wrong prediction saves as a miss that starts the run again, and the next round writes its own predict at its lock and an item at its save', async () => {
     const [a, b] = seedsWhere(knee, 2, true)
     const r = rig([a, b])
     const page = await open(r)
@@ -691,9 +803,11 @@ describe('the panel, mounted', () => {
     expect(dom.document.activeElement).toBe(q(page, '[data-fleet-predict]'))
     expect(page.container.querySelector('[data-fleet-played]')!.textContent).toContain('1. you said')
     await predict(page, knee.truth(sweepOf(knee, b)))
+    // the lock writes the round's predict before anything is explained
+    expect(r.recorded.map((e) => e.kind)).toEqual(['predict', 'item', 'predict'])
     await explainAndSave(page)
-    expect(r.recorded.map((e) => e.kind)).toEqual(['predict', 'item', 'item'])
-    expect(r.recorded.map((e) => e.seed)).toEqual([a, a, b])
+    expect(r.recorded.map((e) => e.kind)).toEqual(['predict', 'item', 'predict', 'item'])
+    expect(r.recorded.map((e) => e.seed)).toEqual([a, a, b, b])
     expect(progress(page)).toBe('1/3 right in a row · 1/2 different answers')
     await page.unmount()
   })
@@ -712,7 +826,7 @@ describe('the panel, mounted', () => {
     expect(r.runs).toEqual([a, b, c])
     expect(progress(page)).toBe('3/3 · done')
     expect(r.recorded.filter((e) => e.kind === 'item').map((e) => e.seed)).toEqual([a, b, c])
-    expect(r.recorded.filter((e) => e.kind === 'predict')).toHaveLength(1)
+    expect(r.recorded.filter((e) => e.kind === 'predict').map((e) => e.seed)).toEqual([a, b, c])
     // nothing locks: another seed is drawn and asked
     await another(page)
     expect(page.container.textContent).toContain('3 right predictions in a row on new seeds, on at least 2 different answers. Done. There are always more seeds.')
@@ -761,13 +875,179 @@ describe('the panel, mounted', () => {
     expect(page.container.textContent).toContain('3 right predictions in a row on new seeds, on at least 2 different answers. Done.')
     expect(page.container.querySelectorAll('[data-fleet-played] li')).toHaveLength(3)
     expect(r.runs).toHaveLength(0)
-    // the one prediction is already on the ledger: a new round writes an item only
+    // the block's first prediction is already on the ledger: a new round's lock writes a marker without a confidence, and its save an item
     await draw(page)
     expect(r.runs).toEqual([d]) // `a` was played, so it was skipped without a run
     await predict(page, knee.truth(sweepOf(knee, d)))
-    expect(r.recorded.map((e) => e.kind)).toEqual([])
+    expect(r.recorded.map((e) => e.kind)).toEqual(['predict'])
+    expect(r.recorded[0]).not.toHaveProperty('conf')
+    expect(r.recorded[0].data).toMatchObject({ nsec: 0 })
     await explainAndSave(page)
-    expect(r.recorded.map((e) => e.kind)).toEqual(['item'])
+    expect(r.recorded.map((e) => e.kind)).toEqual(['predict', 'item'])
+    await page.unmount()
+  })
+
+  /** The ledger as a later mount reads it: what an earlier one recorded, stamped after `before`. */
+  const ledgerOf = (before: ExerciseEvent[], recorded: ItemResponse[]): ExerciseEvent[] => [
+    ...before,
+    ...recorded.map((e, i) => exerciseEventOf(e, new Date(T0 + 100000 + i * 1000).toISOString(), `n${i}`)),
+  ]
+  /** Two saved right rounds on different answers (the first with the block's one confidence-carrying predict): a run of 2. */
+  function tworights(): { history: ExerciseEvent[]; seeds: number[] } {
+    const [a, b] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.25)]
+    const history = [a, b].flatMap((s, i) => {
+      const round = savedRound(knee, s, knee.truth(sweepOf(knee, s)))
+      return [predictEvent(knee, CTX, round, i === 0), itemEvent(knee, CTX, round)].map((e, j) => exerciseEventOf(e, new Date(T0 + (i * 2 + j) * 1000).toISOString(), `h${i}${j}`))
+    })
+    return { history, seeds: [a, b] }
+  }
+  const RUN_OF_TWO = '2/3 right in a row · 2/2 different answers'
+
+  test('navigating away after a wrong verdict cannot erase the miss: the lock was recorded, so the run starts again when the panel returns', async () => {
+    const { history, seeds } = tworights()
+    const [c, d] = seedsWhere(knee, 3, true).filter((s) => !seeds.includes(s))
+    const r = rig([c, d], {}, history)
+    const page = await open(r)
+    expect(progress(page)).toBe(RUN_OF_TWO)
+    await draw(page)
+    await predict(page, wrongOn(knee, c))
+    // the round is open in this tab: its miss is not on the count yet, and the lock is already on the ledger
+    expect(progress(page)).toBe(RUN_OF_TWO)
+    expect(r.recorded.map((e) => [e.kind, e.ok, e.seed])).toEqual([['predict', false, c]])
+    await page.unmount() // the learner follows a link out of the lesson, with the explain step unsaved
+
+    const back = rig([c, d], {}, ledgerOf(history, r.recorded))
+    const again = await open(back)
+    expect(progress(again)).toBe(START)
+    const played = again.container.querySelectorAll('[data-fleet-played] li')
+    expect(played).toHaveLength(3)
+    expect(played[2].textContent).toContain('left before saving, counts as off')
+    expect(q(again, '[data-fleet-done]')).toBeNull()
+    // the abandoned seed is not asked again
+    await draw(again)
+    expect(back.runs).toEqual([d])
+    await again.unmount()
+  })
+
+  test('a reload after a right lock that was never saved is a miss too, and three more rights still finish it', async () => {
+    const { history, seeds } = tworights()
+    const [c, d, e, f] = seedsWhere(knee, 6, true).filter((s) => !seeds.includes(s))
+    const r = rig([c], {}, history)
+    const page = await open(r)
+    await draw(page)
+    await predict(page, knee.truth(sweepOf(knee, c))) // right at the lock; the page is reloaded before the save
+    expect(q(page, '[data-verdict]').getAttribute('data-verdict')).toBe('right')
+    await page.unmount()
+
+    const reloaded = rig([d, e, f], {}, ledgerOf(history, r.recorded))
+    const again = await open(reloaded)
+    expect(progress(again)).toBe(START) // a right that was never saved is not a pass
+    expect(again.container.querySelectorAll('[data-fleet-played] li')).toHaveLength(3)
+    await draw(again)
+    for (const s of [d, e, f]) {
+      await predict(again, knee.truth(sweepOf(knee, s)))
+      await explainAndSave(again)
+      if (s !== f) await another(again)
+    }
+    // d, e, f are three rights in a row on fresh seeds; whether they are two different answers is the done rule's, not this test's
+    expect(reloaded.runs).toEqual([d, e, f])
+    expect(readExercise(ledgerOf(ledgerOf(history, r.recorded), reloaded.recorded), AT).passes).toBe(5)
+    await again.unmount()
+  })
+
+  test('a round saved after its lock is one round: the count moves once and nothing is listed as left', async () => {
+    const { history, seeds } = tworights()
+    const [c] = seedsWhere(knee, 3, true).filter((s) => !seeds.includes(s))
+    const r = rig([c], {}, history)
+    const page = await open(r)
+    await draw(page)
+    await predict(page, wrongOn(knee, c))
+    await explainAndSave(page)
+    expect(progress(page)).toBe(START)
+    expect(page.container.textContent).not.toContain('left before saving')
+    await page.unmount()
+    const again = await open(rig([], {}, ledgerOf(history, r.recorded)))
+    expect(progress(again)).toBe(START)
+    expect(again.container.textContent).not.toContain('left before saving')
+    expect(again.container.querySelectorAll('[data-fleet-played] li')).toHaveLength(3)
+    await again.unmount()
+  })
+
+  test('the lesson’s own block shows its note once the exercise is done, and not before', async () => {
+    const real = lessonById(LESSON)!.blocks.find((b): b is FleetExerciseBlock => b.type === 'exercise' && 'fleet' in b)!
+    const [a, b, c] = [seedWithTruth(knee, 1), seedWithTruth(knee, 1.5), seedsWhere(knee, 1, true)[0]]
+    const history: ExerciseEvent[] = [a, b, c].flatMap((s, i) => {
+      const round = savedRound(knee, s, knee.truth(sweepOf(knee, s)))
+      return [itemEvent(knee, CTX, round)].map((e) => exerciseEventOf(e, new Date(T0 + i * 1000).toISOString(), `h${i}`))
+    })
+    const early = await open(rig([]), { block: real })
+    expect(q(early, '[data-fleet-note]')).toBeNull()
+    await early.unmount()
+    const done = await open(rig([], {}, history), { block: real })
+    expect(progress(done)).toBe('3/3 · done')
+    const note = q(done, '[data-fleet-note]')
+    expect(note.textContent).toContain('What just happened')
+    expect(note.textContent).toContain('Each seed puts its knee at one of four loads')
+    expect(note.textContent).toContain("Little's law")
+    await done.unmount()
+  })
+
+  // The note states the answer rule ("peaks near the load that reaches it, usually a little below"), so it must not show
+  // before a prediction: in embed mode it waits for done, in phone mode for the lock on the canonical seed (F1).
+  const realBlock = (lessonId: string) => lessonById(lessonId)!.blocks.find((b): b is FleetExerciseBlock => b.type === 'exercise' && 'fleet' in b)!
+  const realIndex = (lessonId: string) => lessonById(lessonId)!.blocks.findIndex((b) => b.type === 'exercise' && 'fleet' in b)
+  const RULE: Record<string, string> = { knee: 'usually a little below', 'pd-split': 'about balanced' }
+  const buttonNamed = (page: Mounted, name: string) => page.container.querySelectorAll('button').find((b) => (b.textContent ?? '').trim() === name) as MiniElement
+
+  test.each([
+    ['knee', 't7.l2'],
+    ['pd-split', 't6.l3'],
+  ] as const)('phone mode (%s): the note is hidden before the lock, a refused answer does not open it, the lock does', async (id, lessonId) => {
+    const def = FLEET_EXERCISES[id]
+    const real = realBlock(lessonId)
+    const index = realIndex(lessonId)
+    expect(real.fleet).toBe(id)
+    expect(real.note).toContain(RULE[id])
+    const r = rig([])
+    const page = await open(r, { block: real, lessonId, index, env: { ...r.env, mode: 'phone' } })
+    expect(q(page, '[data-phone]')).not.toBeNull()
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    expect(page.container.textContent).not.toContain(RULE[id])
+    // a value that is not a point of the sweep is refused, and nothing is shown
+    await type(q(page, '[data-fleet-predict]'), '99')
+    await dom.press(q(page, '[data-fleet-lock]'))
+    expect(page.container.querySelector('[role="alert"]')!.textContent).toContain('Enter one of the points')
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    // the lock shows the canonical outcome, and the note with it
+    await type(q(page, '[data-fleet-predict]'), String(wrongOn(def, def.phone.seed)))
+    await dom.press(q(page, '[data-fleet-lock]'))
+    expect(q(page, '[data-verdict]')).not.toBeNull()
+    const note = q(page, '[data-fleet-note]')
+    expect(note.textContent).toContain('What just happened')
+    expect(note.textContent).toContain(RULE[id])
+    // the outcome took focus from the lock button, which is gone
+    expect(dom.document.activeElement).toBe(q(page, '[data-verdict]'))
+    // a forced mode stays phone, so "run it here" is e2e/fleet-exercise.spec.ts's, which finds the note gone in embed mode
+    expect(buttonNamed(page, 'Run it on a fresh seed here instead')).toBeDefined()
+    expect(r.recorded).toHaveLength(0)
+    await page.unmount()
+  })
+
+  test('embed mode: the note is hidden before the lock, after the lock and after a save that does not finish the exercise', async () => {
+    const real = realBlock(LESSON)
+    const [a] = seedsWhere(knee, 1, true)
+    const r = rig([a])
+    const page = await open(r, { block: real })
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    await draw(page)
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    await predict(page, knee.truth(sweepOf(knee, a)))
+    expect(q(page, '[data-verdict]').getAttribute('data-verdict')).toBe('right')
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    await explainAndSave(page)
+    expect(progress(page)).toBe('1/3 right in a row · 1/2 different answers')
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    expect(page.container.textContent).not.toContain(RULE.knee)
     await page.unmount()
   })
 

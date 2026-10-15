@@ -23,8 +23,9 @@ import { chromium } from '@playwright/test'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-// Routes that exist today. A task that adds a page adds it here, or passes --routes for its own check;
-// later spec §22.2 routes (/daily, /play/scheduler, /errors, /forge/kv-block-manager, ...) join when they land.
+// The default sweep (docs/specs/wave-3.md §17.2). A task that adds a page adds it here, or passes --routes for its
+// own check. Wave 2's pages (/daily, /play/scheduler, /errors, /forge/kv-block-manager) and two lessons that carry its
+// panels (/lesson/t7.l2, /lesson/t2.l4) are in the sweep below.
 const DEFAULT_ROUTES = [
   '/',
   '/boot',
@@ -40,6 +41,17 @@ const DEFAULT_ROUTES = [
   '/freshness',
   '/week',
   '/lab/kv-calc',
+  '/play/tiling-cube',
+  '/play/eplb',
+  '/lesson/t6.l3',
+  '/lesson/t2.l2',
+  '/forge/batching-scheduler',
+  '/daily',
+  '/play/scheduler',
+  '/errors',
+  '/forge/kv-block-manager',
+  '/lesson/t7.l2',
+  '/lesson/t2.l4',
 ]
 const DEFAULT_WIDTHS = [360, 320, 1280]
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']

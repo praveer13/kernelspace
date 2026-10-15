@@ -1,9 +1,11 @@
 import { useEffect, useId, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Button } from '@/components/Button'
-import type { LearningPath, WeekPlan } from '@/lib/ledger/types'
+import type { Background, LearningPath, WeekPlan } from '@/lib/ledger/types'
+import { backgroundOf } from '@/lib/learner/background'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
+import { BACKGROUND_STAYS, BackgroundChoice } from '@/pages/me/Background'
 import { bootLine } from './firstLine'
 import { StepBtn, StepTitle } from './ui'
 
@@ -44,14 +46,21 @@ interface YouProps {
 export default function You({ onFinish }: YouProps) {
   const navigate = useNavigate()
   const setWorking = useProgress((s) => s.setWorking)
+  const clearWorking = useProgress((s) => s.clearWorking)
   const installDismissed = useProgress((s) => s.working['boot:install-dismissed'] === true)
   const placementRaw = useProgress((s) => s.working['placement:result'])
+  const savedBackground = backgroundOf(useProgress((s) => s.working['profile:background']))
   // On a replay the stored path is the one in force until another is picked (finish() writes only a pick).
   const storedRaw = useProgress((s) => s.working['boot:path'])
   const stored = PATHS.find((p) => p.id === storedRaw)?.id ?? null
   const uid = useId()
   const [job, setJob] = useState<boolean | null>(null)
   const [valueText, setValueText] = useState('')
+  // The optional work pick (wave-3.md §11.3), written with the rest at Go to Today. Until the learner touches it the step
+  // shows the store's pick (undefined = untouched), so a ledger that hydrates after this step has mounted still shows it;
+  // a touch holds the learner's choice, and null is a pick cleared.
+  const [touched, setTouched] = useState<Background | null | undefined>(undefined)
+  const background = touched === undefined ? savedBackground : touched
   const [path, setPath] = useState<LearningPath | null>(null)
   const [week, setWeek] = useState<WeekPlan>(DEFAULT_WEEK)
   const [weekTouched, setWeekTouched] = useState(false)
@@ -83,6 +92,10 @@ export default function You({ onFinish }: YouProps) {
 
   const finish = () => {
     if (valueText.trim() !== '') setWorking('boot:value', { variant: job === false ? 'no-job' : 'job', text: valueText.trim() })
+    if (touched !== undefined && touched !== savedBackground) {
+      if (touched === null) clearWorking('profile:background')
+      else setWorking('profile:background', touched)
+    }
     if (path) setWorking('boot:path', path)
     if (weekTouched) setWorking('boot:week', { ...week })
     onFinish()
@@ -142,6 +155,11 @@ export default function You({ onFinish }: YouProps) {
               className="mt-2 w-full rounded-md border border-line bg-surface-2 p-3 text-body text-text-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
           </div>
+        </fieldset>
+
+        <fieldset className="space-y-3">
+          <legend className="text-body text-text-1">What do you work on? <span className="text-text-3">Optional. Some lesson examples follow it. {BACKGROUND_STAYS}</span></legend>
+          <BackgroundChoice value={background} onChange={setTouched} onClear={() => setTouched(null)} />
         </fieldset>
 
         <fieldset className="space-y-2">

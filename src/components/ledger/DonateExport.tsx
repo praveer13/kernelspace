@@ -96,8 +96,9 @@ export default function DonateExport() {
         <div className="min-w-0 flex-1">
           <p className="text-body-sm font-medium text-text-1">Help the partner study</p>
           <p className="text-body-sm text-text-3">
-            A file with how you did and when, in days since your first event. No answers you typed, no dates, seeds
-            or device ids. You see it before it is saved.
+            A file with how you did and when, in days since your first event. No text you typed, no dates, seeds
+            or device ids; the numbers you gave to number questions stay, with the right ones. You see it before it
+            is saved.
           </p>
         </div>
         <button
@@ -130,8 +131,9 @@ export default function DonateExport() {
                 what it was about, whether you got it right, how long it took (to the second) and its day number.
               </span>
               <span className="mt-2 block">
-                Left out: anything you typed, your Boot answer, seeds, module hashes, device ids, dates, clock times
-                and your Capstone drafts.
+                Left out: any text you typed, your Boot answer, seeds, module hashes, device ids, dates, clock times
+                and your Capstone drafts. Kept besides: the number you answered a number question with and the right
+                one, except for measurements of your own hardware.
               </span>
             </>
           }

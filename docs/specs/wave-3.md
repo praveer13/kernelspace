@@ -71,6 +71,28 @@ Section numbers below are cited by the task DAG (§19) and by `wave3-dag.json`.
 | D47 | **/me shows its sections once the Mirror's read settles.** The forms card, the journey and data ownership wait for the Mirror, so nothing on screen moves when it lands. On a fresh profile under Fast-3G at 360 px the rings and "Reset everything" appear at 6.6 s (3.05 s before the fix round); the Mirror lands at 6.1–6.6 s either way, because its read loads every generator family. A lighter Mirror read would fix both and is left to a later wave; the owner may instead ask for data ownership to render without waiting. | §12.5, 3b-06b |
 | D48 | **The 3b reviews' carry-overs go to the tasks that own the files**, written into their Accept lines: 3c-06 (a locked round with no saved item counts as a miss, so leaving before saving cannot erase one; D39), 3c-02 (the routes it adds already pass at 360, 320 and 1280 px in the 3b review), 3c-05, 3s-11 and 3s-12 (check verify:items' length-cue margins before adding lesson choice items: the Wave 2 bar's middle-length strategy is at 1.81 of 2 and the gated tracks' aggregate at 1.93 of 2), and 3s-07 (a choice item added to a lab pool must not raise the PRIMM pool's worst strategy, 39.3 % against 40.0 %). D35's move of the shared codec bounds into `ledger/constants.ts`, with `exemplars.ts`'s `RUBRIC_KEYS` as a third copy, goes to the next task that changes a codec bound. PR 3b lists the known limits that no Wave 3 task owns. | §19 |
 
+**Decisions from the 3c fix rounds and the owner's sign-offs** (the final review of 3c, rounds 1 to 4, and the owner's answers of 2026-10-14):
+
+| # | Decision | Where |
+|---|---|---|
+| D49 | **A donation keeps a form item's `track`.** Only for src `form`, and only as one of the KC graph's nine tracks (`DONATION_TRACKS`, which `redact.test.ts` holds to the KC graph; `parseDonation` checks it again). `selectFormsGain` reads it and falls back to the kcs majority only for an event without one: T5's forms draw sig items whose kcs tie T5 and T7, so the kcs alone sent a quarter of T5's slots to T7. Replaces 3c-03's "track from the kept kcs" and adds one field to §15.2's whitelist. | §15.2, 3c-03 |
+| D50 | **"Clear my pick" deletes `profile:background` everywhere it could come back from.** Memory clears at once and the snapshot at its next write (at the latest when the page hides). Every outbox clears synchronously, before the store's delete commits: the key's records written at or before the clear are stripped, and a tombstone `{ key, at }` stays in this tab's outbox. Then the store. Boot applies every outbox's tombstones by `at`: a record written at or before the latest tombstone is dropped and other tabs reload, and a later write wins, in the same tab even within one millisecond. An import or undo that writes the key drops its tombstones, so a file exported before the clear still restores the pick; reset removes them; otherwise a tombstone lives as long as its outbox, 24 h after that tab's last write. (Fix round 3: an earlier page's unsaved pick under another tab id used to come back.) | §11.3, 3c-05 |
+| D51 | **An F1 `quiz` summary counts its time unless an answer of the same attempt (same `grp`) carries its own `ms`.** Lesson QuizBlock attempts keep their time on the `quiz` event, so F1's lessons row no longer drops them, and nothing counts twice. | §15.1, 3c-03 |
+| D52 | **F2 applies `hint-ladders.md` §4 whole:** a powered result whose upper bound is below 0 cuts the ladder to R0-R2 ('packet-better'), as well as one whose lower bound is at or below -5 points. | §18.2 F2 |
+| D53 | **D35's shared codec bounds live in `ledger/constants.ts`** (`MAX_QID_LENGTH`, `MAX_PROVE_IDS`, `MAX_ACT_RUNS`, `RUBRIC_KEYS`; D48's carry-over), imported by the codec, the façade, the exemplars, the redaction and the outcomes, and `learner/proportion.ts` breaks the outcomes, vrk and forms import cycle. | D35, D48 |
+| D54 | **/me shows the forms card, the background pick and the sections below them only once the Mirror has settled and the card's chunk has loaded**; the card renders from the loaded module. Extends D47. | §12.5, D47 |
+| D55 | **verify-bundle's on-demand line counts each on-demand chunk's own static imports**, so Boot's last step reports what it really loads. Reported, not gated (D33). | §17.1, D33 |
+| D56 | **A Fleet exercise's note shows in phone mode only after the lock, and in embed mode only when the exercise is done**: it states the answer rule, so it never shows before a prediction. | §5.3, 3c-06 |
+| D57 | **F9 prints a seeded bootstrap interval for each median** of the VRK30 spread. | §18.2 F9 |
+| D58 | **The G1 work pair's break says a paged KV cache never moves a block to compact**, and names the other reasons an engine moves or copies one (swapping a preempted sequence out, copy-on-write for a shared block). Refines §11.3's "KV blocks never move". | §11.3, 3c-05 |
+| D59 | **Daily and Fleet Week events carry `ms`, the page's visible time** (`useVisibleClock`), passed into the builders, since `world/` and `fleet-*.ts` read no clock. The Daily and an Act IV drill count from the alert to the debrief (capped at 32 min); an act run its visible wall time (10 min); an act the visible page time to its pass that no run or drill of the visit holds (60 min). A hidden tab adds nothing, and each second counts once, except that an Act I or II run started during a drill is counted in both. Events written before this carry no `ms`. | §15.1 F1, 3c-03 |
+| D60 | **A QuizBlock answer records `slot` of `of`, and on a miss the picked lure's `miss` id.** F6 reports a quiz miss with neither as `unattributed`: out of the confusion share, in the accuracy. No current QuizBlock question carries a miss id (QuizBlock renders only on R.L1-R.L10, and the P3 lessons' tickets already record their lures), so this matters for answers written earlier and for future content. | §18.2 F6 |
+| D61 | **F2's window starts at the lab's first all-green run, for every ledger.** The owner's choice, signed in `docs/prereg/hint-ladders.md` (section 3 and the sign-off table, 2026-10-14): a donation keeps no per-check timing, so the lab's run is the anchor every ledger can show, and the arms, randomized per check within a lab, share it alike. | §18.2 F2 |
+| D62 | **F5 keeps Prove-it v2 only if the lower bound of the attempted share's 95 % Wilson interval is at least 0.60**, with 5 partners; anything else takes the underpowered default (one question, PLAN §9), never a kill. The report prints n, the share and both bounds. The owner's choice (2026-10-14), over the point estimate. | §18.2 F5 |
+| D63 | **F3 keeps the Daily daily if the one-sided 97.5 % lower bound of d is above -5 points**, with 197 learners. The owner chose the margin over PLAN §9's literal "≥" and signed `docs/prereg/fleet-daily.md` (2026-10-14). | §18.2 F3 |
+| D64 | **F4: the watcher is dropped and the manual release-note scan stays.** The owner signed `docs/prereg/watcher.md` (2026-10-14). Ten blind raters labelled the snapshot's 9,960 distinct lines, and `score.ts` scored the matcher: precision 6.3 % (39 of 617; bar 25 %), recall 88.6 % (39 of 44), 70.8 flags a week. A second rater on a seeded 10 % sample gave kappa 0.57 (`docs/backtest/agreement.json`). The verdict does not rest on the rating's misses: even if all 110 flagged lines of the batch that rated none true were true, precision would be 24.1 %. `ratings.json` is not a gold set. 3c-04 builds no digest. | §14, §18.2 F4, 3c-04 |
+| D65 | **The 3c reviews' carry-overs.** The signed pre-registrations promise secondary outputs the report does not print yet (`hint-ladders.md` §3 and §5: the intention-to-treat population, packet use per arm, a lab-by-arm table, attempts and minutes to green, rungs reached, bottom-outs; `fleet-daily.md` §3 and §5: the per-fault-KC table and the learners with a check in only one group); they are added before the Wave 3 exit readings. Each file's standard deviation (20 and 25 points) is replaced by the observed value in a dated amendment, the owner's, before the first report that could reach 126 or 197 learners. Budgets left for 3s: the entry chunk about 0.25 KB of §17.1's 2 KB, /daily 14.3 KB (D32 planned 15.7). | §15, §17.1, §19 |
+
 ## Owner questions
 
 The owner has asked us to proceed on these defaults and record them; nothing waits for an answer.
@@ -1265,9 +1287,10 @@ After consent for the ~400 MB download (Wi-Fi), you predict decode tok/s for Qwe
   | `e2e/tiling-cube.spec.ts` | level 1 to its debrief | 3b-01 |
   | `e2e/eplb.spec.ts` | the practice load to the debrief | 3b-02 |
   | `e2e/me.spec.ts` | every control on /me | 3b-06b |
-  | `e2e/isomorphism.spec.ts` | a fixture block | 3b-07 |
+  | `e2e/isomorphism.spec.ts` | t2.l2's shipped block, at 360 and 320 px (D42) | 3b-07 |
   | `e2e/receipts.spec.ts` | cite and check receipts on an Act I run with no passing module (they verify), then pass Act III | 3b-05 |
   | `e2e/fleet-exercise.spec.ts` | the knee | 3c-06 |
+  | `e2e/boot.spec.ts` | Boot from the intro to its last step: the path line, the background pick and its clear, Go to Today; a replay keeps the stored path | 3c (fix round 2) |
 - **WCAG 2.2 specifics** as in Wave 1 §16.2:
   - targets ≥ 44 px;
   - steppers instead of sliders or drags (2.5.7);
@@ -1300,7 +1323,9 @@ After consent for the ~400 MB download (Wi-Fi), you predict decode tok/s for Qwe
 - `tests/sims/{block-table,inline-registry-a,inline-registry-b,no-credit}.test.ts`;
 - `tests/claims/{lazy,wave3}.test.ts`;
 - `tests/kc/hands-on.test.ts` (all 15);
-- `tests/landscape/digest.test.ts` (only on `keep`).
+- `tests/landscape/digest.test.ts` (only on `keep`; the watcher scored drop, D64, so it is not written).
+
+**`npm run e2e` gains** `e2e/fleet-time.spec.ts` (D59: a Daily and a drill with a hidden stretch record their visible time).
 
 **The existing gates cover more:**
 - `verify:items`: the `iso` and `twin` pools, and `--subset`;

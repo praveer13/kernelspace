@@ -1,47 +1,87 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { KCS } from '../../src/data/kc'
+import { ALL_LESSONS } from '../../src/data/lessons'
 import { SYSTEMS_FORGE_LABS } from '../../src/data/labs'
+import { correctResponse, gradeResponse } from '../../src/lib/items/grade'
+import { resultFor } from '../../src/lib/items/play'
+import { loadAllFamilies } from '../../src/lib/items/registry'
+import type { Gen, PlayableItem } from '../../src/lib/items/types'
 import { wilson } from '../../src/lib/learner/calibration'
 import { deriveCards, selectFirstReviewCalibration } from '../../src/lib/learner/cards'
 import {
+  BOOTSTRAP_RESAMPLES,
+  bootstrapDraws,
   buildFieldReport,
   buildOutcomeReport,
+  buildWave3Report,
+  CADENCE,
+  DAILY_MARGIN,
+  DAILY_MIN_LEARNERS,
+  discriminationLures,
+  DISCRIMINATION_KCS,
   firstReviewsOf,
   formatFieldReport,
   formatOutcomeReport,
+  formatWave3Report,
   G1_MIN_PARTNERS,
   G2_MAX_GAP,
   G2_MIN_N,
   G3_MIN_N,
   G7_MAX_MINUTES,
+  HINT_MARGIN,
+  HINT_MIN_LEARNERS,
+  hintVerdict,
+  isPreregSigned,
   isTodayProbe,
   loopSpec,
   LOOP_STEPS,
+  percentile,
+  PLANNED_WEEKLY_MINUTES,
   selectBootToFirstT,
+  selectCubeError30,
   selectDailyStats,
+  selectDailyVsOther,
+  selectDiscrimination30,
   selectFirstReviewGate,
+  selectFormsGain,
+  selectHintArms,
   selectLoopCompletion,
   selectPlacementConfirm7,
   selectPlacementLanding,
   selectProbeAccuracy,
+  selectProvedInUse,
   selectProveRate,
+  selectProveV2,
+  proveV2Verdict,
+  PROVE_MIN_RATE,
+  SURFACE_FOOTNOTE,
+  selectReceiptStats,
   selectRetention30,
+  selectSurfaceMinutes,
   selectTicketStats,
   selectTodayDuration,
   selectTodaySessions,
   selectTodayStats,
+  selectVrk30Spread,
   stripFreeText,
+  SURFACES,
+  surfaceOf,
   tallyLoopCompletion,
 } from '../../src/lib/learner/outcomes'
+import { formItemResponse, formsFor, type FormId } from '../../src/lib/learner/forms'
 import { ledgerOfDonation, redactForPartner } from '../../src/lib/learner/redact'
 import { addDays } from '../../src/lib/learner/reentry'
 import { sessionSpanMs } from '../../src/lib/learner/today'
 import { buildExportV3, parseImport, serializeExport } from '../../src/lib/ledger/codec'
-import type { LedgerEvent, LocalDay, WorkingRecord } from '../../src/lib/ledger/types'
+import { actMeta, drillFor, drillResult, fleetRunFor, type ActResult } from '../../src/lib/fleet-week'
+import { dailyIncident, dailyResult, type FinishedIncident } from '../../src/lib/world/daily'
+import type { ItemResponse, LedgerEvent, LocalDay, WorkingRecord } from '../../src/lib/ledger/types'
+import { hash32 } from '../../src/lib/rng'
+import { makeProfile, startTab } from '../ledger/env'
 import { CONTENT, Journal, LESSONS, shuffled, simulate, START } from './ledger-gen'
 
 /* ------------------------------------------------------------------ */
@@ -1267,7 +1307,7 @@ describe('a donation reads like its export', () => {
   })
 })
 
-describe('scripts/partner-report.ts: the Wave 2 field gates', () => {
+describe('scripts/partner-report.ts --wave2: the Wave 2 field gates', () => {
   const script = path.resolve(import.meta.dir, '../../scripts/partner-report.ts')
   const run = (...args: string[]) => spawnSync('bun', [script, ...args], { encoding: 'utf8' })
 
@@ -1298,8 +1338,8 @@ describe('scripts/partner-report.ts: the Wave 2 field gates', () => {
       const days = [1, 1, 2, 3, 1]
       const donations = days.map((n, i) => donationFile(dir, `donation-${i}.json`, partnerEvents(n)))
       const fulls = days.map((n, i) => fullFile(dir, `export-${i}.json`, partnerEvents(n), `dev-${i}`))
-      const a = run(...donations)
-      const b = run(...fulls)
+      const a = run('--wave2', ...donations)
+      const b = run('--wave2', ...fulls)
       expect(a.status).toBe(0)
       expect(b.status).toBe(0)
       expect(a.stdout).toContain('Wave 2 field gates over 5 exports')
@@ -1311,7 +1351,7 @@ describe('scripts/partner-report.ts: the Wave 2 field gates', () => {
       const line = (out: string, id: string) => out.split('\n').find((l) => l.startsWith(`${id}  `))
       for (const id of ['F1', 'F2', 'F3', 'F6']) expect(line(a.stdout, id)).toBe(line(b.stdout, id))
       expect(a.stdout + b.stdout).not.toMatch(/\d{4}-\d{2}-\d{2}/)
-      const j = run('--json', ...donations)
+      const j = run('--json', '--wave2', ...donations)
       expect(j.status).toBe(0)
       expect(JSON.parse(j.stdout).gates).toHaveLength(9)
     } finally {
@@ -1343,6 +1383,1368 @@ describe('scripts/partner-report.ts: the Wave 2 field gates', () => {
       const w = run('--wave1', ok)
       expect(w.status).toBe(2)
       expect(w.stderr).toContain('full export')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+/* ================================================================== */
+/* Wave 3 field gates (docs/specs/wave-3.md §15, §18.2; task 3c-03)    */
+/* ================================================================== */
+
+/** n fresh Journals, one per partner. */
+const partners = <T>(n: number, make: (i: number) => T): T[] => Array.from({ length: n }, (_, i) => make(i))
+
+/** A graded answer that is `unseen`, as Today writes a generated item on a fresh seed. */
+const unseen = (j: Journal, kind: 'item' | 'probe', ref: string, day: LocalDay, ok: boolean, data: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+  j.add(kind, ref, day, { score: ok ? 1 : 0, ok, rev: 'r', provenance: 'unseen', data, ...extra })
+
+type Facade = ReturnType<ReturnType<typeof startTab>['progress']['getState']>
+
+/** The events the façade (progress.ts) writes: `write` runs on a fresh tab whose clock reads noon of Journal day `day`, and the ledger is read back. */
+async function written(day: number, write: (s: Facade) => void): Promise<LedgerEvent[]> {
+  const tab = startTab(makeProfile({ ms: Date.parse(`${d(day)}T12:00:00.000Z`) }))
+  write(tab.progress.getState())
+  await tab.progress.controls.flush()
+  return (await (await tab.engine()).events()) as LedgerEvent[]
+}
+
+/** A lesson QuizBlock attempt of `ms`, as `recordQuizAttempt` writes it: two `quiz` items with no `ms`, and the time on the `quiz` summary alone. */
+const quizBlock = (day: number, ms: number, kcs: string[] = [FRAG_KC]) =>
+  written(day, (s) => s.recordQuizAttempt({ lessonId: 't1.l3', seed: 1, ms, responses: [{ qi: 0, rev: 'r0', pick: [0], ok: true, kcs }, { qi: 1, rev: 'r1', pick: [1], ok: false, kcs }] }))
+
+/** An exit ticket, as `recordTicket` writes it: each item with its own `ms`, and the summary with the attempt's whole time `ms`. */
+const ticket = (day: number, itemMs: readonly number[], ms: number) =>
+  written(day, (s) =>
+    s.recordTicket({
+      lessonId: 't1.l3',
+      form: 'ticket',
+      seed: 1,
+      ms,
+      ok: true,
+      nonMcqOk: true,
+      responses: itemMs.map((m, i) => ({ ref: `gen:frag/v${i}` as const, rev: `r${i}`, score: 1, ok: true, ms: m, provenance: 'unseen' as const, data: { src: 'ticket' as const, kcs: [FRAG_KC], nsec: 40 } })),
+    }),
+  )
+
+/** What a finished incident reports (the fleet protocol's `IncidentFinish`, as `dailyResult` and `drillResult` read it). */
+const FINISHED: FinishedIncident = { fault: 'pool-shrink', severity: 2, hypothesis: 'pool-shrink', probes: ['kv'], diagnosed: true, fixed: true, burn: 6, expertBurn: 4, streetlight: 0 }
+/** An Act I run on one of your components, as the act reports it. */
+const ACT_RUN: ActResult = { pass: true, score: 1, headline: '', detail: '', metrics: [], seed: 99, run: { goodput: 10, refGoodput: 11 } }
+const DAILY_AND_FLEET_MS = { daily: 90_000, run: 10_000, drill: 10_000, act: 10_000 }
+
+/**
+ * The Daily and Fleet Week as the pages record them since EF1: the Daily's `incident` (`dailyResult`), an Act I
+ * `fleet-run` (`fleetRunFor`), an Act IV drill's `incident` (`drillResult`) and the act (`completeFleetWeekAct` with
+ * `actMeta`), each with the time the page measured. `ms` null gives the same events with no time, as they were before.
+ */
+const dailyAndFleet = (day: number, ms: typeof DAILY_AND_FLEET_MS | null) =>
+  written(day, (s) => {
+    const drill = drillFor(5)
+    s.recordIncident(dailyResult(d(day), dailyIncident(d(day)), FINISHED, [], ms?.daily))
+    const run = fleetRunFor('act1', ACT_RUN, [{ slot: 'scheduler', labId: 'batching-scheduler', sha256: 'a'.repeat(64) }], ms?.run)
+    if (run) s.recordFleetRun(run)
+    s.recordIncident(drillResult(drill, { ...FINISHED, fault: drill.spec.fault, hypothesis: drill.spec.fault }, [], ms?.drill))
+    s.completeFleetWeekAct('engine', 0.8, actMeta(ACT_RUN, { runId: '0a1b2c3d', checks: [], uncited: [] }, undefined, ms?.act))
+  })
+
+describe('the module graph', () => {
+  test('outcomes.ts reads vrk.ts and forms.ts, and neither imports it back: what they share is in proportion.ts', () => {
+    const src = (f: string) => readFileSync(path.resolve(import.meta.dir, '../../src/lib/learner', f), 'utf8')
+    expect(src('outcomes.ts')).toMatch(/from '\.\/vrk'/)
+    expect(src('outcomes.ts')).toMatch(/from '\.\/forms'/)
+    for (const f of ['vrk.ts', 'forms.ts', 'proportion.ts']) expect(src(f), f).not.toMatch(/from '\.\/outcomes'/)
+    for (const f of ['vrk.ts', 'forms.ts', 'outcomes.ts']) expect(src(f), f).toMatch(/from '\.\/proportion'/)
+  })
+})
+
+describe('the bootstrap', () => {
+  test('percentile interpolates; draws are sorted, seeded and as many as asked', () => {
+    expect(percentile([1, 2, 3, 4], 0.5)).toBe(2.5)
+    expect(percentile([1, 2, 3, 4], 0)).toBe(1)
+    expect(percentile([1, 2, 3, 4], 1)).toBe(4)
+    expect(percentile([], 0.5)).toBeNull()
+    const mean = (s: readonly number[]) => s.reduce((a, b) => a + b, 0) / s.length
+    const a = bootstrapDraws([1, 2, 3, 4, 10], mean, 7, 500)
+    expect(a).toHaveLength(500)
+    expect([...a].sort((x, y) => x - y)).toEqual(a)
+    expect(bootstrapDraws([1, 2, 3, 4, 10], mean, 7, 500)).toEqual(a)
+    expect(bootstrapDraws([1, 2, 3, 4, 10], mean, 8, 500)).not.toEqual(a)
+    expect(bootstrapDraws([], mean, 7, 10)).toEqual([])
+    expect(bootstrapDraws([5, 5, 5], mean, 1, 50).every((x) => x === 5)).toBe(true)
+    expect(BOOTSTRAP_RESAMPLES).toBe(10_000)
+  })
+
+  test('a resample whose statistic cannot be computed is left out', () => {
+    expect(bootstrapDraws([1, 2], () => null, 1, 20)).toEqual([])
+  })
+})
+
+describe('isPreregSigned', () => {
+  test('a Signed line needs a name and an ISO date; a table needs the owner and the date', () => {
+    expect(isPreregSigned('Signed: (pending owner)')).toBe(false)
+    expect(isPreregSigned('Signed: P. Owner')).toBe(false)
+    expect(isPreregSigned('text\nSigned: P. Owner 2026-10-14\nmore')).toBe(true)
+    expect(isPreregSigned('| Owner | |\n| Date signed | |')).toBe(false)
+    expect(isPreregSigned('| Owner | P. Owner |\n| Date signed | |')).toBe(false)
+    expect(isPreregSigned('| Owner | P. Owner |\n| Date signed | 2026-10-14 |')).toBe(true)
+    expect(isPreregSigned('say `Signed: P. Owner 2026-10-14` here')).toBe(false)
+  })
+
+  test('the three pre-registrations of the repo are read by it, whichever way they are signed', () => {
+    const read = (f: string) => readFileSync(path.resolve(import.meta.dir, `../../docs/prereg/${f}`), 'utf8')
+    for (const f of ['fleet-daily.md', 'watcher.md']) {
+      const pending = read(f).replace(/^Signed:.*$/m, 'Signed: (pending owner)')
+      expect(pending).toContain('Signed: (pending owner)')
+      expect(isPreregSigned(pending)).toBe(false)
+      expect(isPreregSigned(pending.replace('Signed: (pending owner)', 'Signed: P. Owner 2026-10-14'))).toBe(true)
+    }
+    const hint = read('hint-ladders.md').replace(/^\|\s*Owner\s*\|.*$/m, '| Owner | |').replace(/^\|\s*Date signed\s*\|.*$/m, '| Date signed | |')
+    expect(isPreregSigned(hint)).toBe(false)
+    expect(isPreregSigned(hint.replace('| Owner | |', '| Owner | P. Owner |').replace('| Date signed | |', '| Date signed | 2026-10-14 |'))).toBe(true)
+  })
+})
+
+describe('docs/prereg/fleet-daily.md', () => {
+  const text = readFileSync(path.resolve(import.meta.dir, '../../docs/prereg/fleet-daily.md'), 'utf8')
+
+  test('states the rule, the minimum n, the comparison and the underpowered default PLAN §9 asks for', () => {
+    expect(text).toMatch(/Fleet Daily: Daily KCs' 30-day diagnosis accuracy on unseen seeds ≥ non-Daily KCs'/)
+    expect(text).toContain('Default if underpowered')
+    expect(text).toContain('weekly, and the On-Call shift is not built on it')
+    expect(text).toContain('one-sided 97.5 %')
+    expect(text).toContain(`**${DAILY_MIN_LEARNERS}**`)
+    expect(text).toContain(`${DAILY_MARGIN * 100} percentage points`)
+    expect(text).toContain('before `selectDailyVsOther` is read')
+  })
+
+  test('its minimum n is the power calculation it states, and the ladder file\'s is the same recipe', () => {
+    const z = 1.959964 + 0.841621
+    expect(DAILY_MIN_LEARNERS).toBe(Math.ceil(((z * 25) / (DAILY_MARGIN * 100)) ** 2))
+    expect(HINT_MIN_LEARNERS).toBe(Math.ceil(((z * 20) / (HINT_MARGIN * 100)) ** 2))
+  })
+})
+
+describe('surfaceOf', () => {
+  const at = iso(1)
+  const of = (kind: string, ref: string, src?: string) => surfaceOf(ev(kind, ref, at, src === undefined ? {} : { data: { src } }))
+
+  test('every kind of event goes to one of the seven surfaces, or to none', () => {
+    expect(of('item', 'gen:frag/v', 'today')).toBe('today')
+    expect(of('probe', 'gen:frag/v', 'today')).toBe('today')
+    expect(of('item', 'gen:frag/v', 'practice')).toBe('today')
+    expect(of('item', 'item:field.decode-kv.tps', 'practice')).toBeNull()
+    expect(of('item', 'quiz:t1.l3#0', 'quiz')).toBe('lessons')
+    expect(of('quiz', 'lesson:t1.l3')).toBe('lessons')
+    expect(of('item', 'cr:t1.l3#0', 'ticket')).toBe('lessons')
+    expect(of('item', 'item:t2.l2.iso.1', 'lesson')).toBe('lessons')
+    expect(of('predict', 'dia:t1.l1#0', 'diagram')).toBe('lessons')
+    expect(of('sim-task', 'sim:alloc/frag-pct')).toBe('lessons')
+    expect(of('exercise', 'lesson:t1.l1')).toBe('lessons')
+    expect(of('item', 'gen:sig/name-fault', 'daily')).toBe('daily')
+    expect(of('incident', 'inc:daily/2026-09-01')).toBe('daily')
+    expect(of('incident', 'inc:team/blue/2026-09-01')).toBe('daily')
+    expect(of('incident', 'inc:drill/pool-shrink')).toBe('fleet-week')
+    expect(of('item', 'gen:tiling/raster-ai', 'form')).toBe('me')
+    expect(of('item', 'gen:tiling/raster-ai', 'play')).toBe('plays')
+    expect(of('play', 'play:eplb')).toBe('plays')
+    expect(of('lab-check', 'lab:rust-allocator')).toBe('labs')
+    expect(of('prove', 'prove:rust-allocator')).toBe('labs')
+    expect(of('fleet-run', 'fleet:engine')).toBe('fleet-week')
+    expect(of('fleet-act', 'fw:engine')).toBe('fleet-week')
+  })
+
+  test('Boot, the placement walk, visits and acks are not surfaces', () => {
+    expect(of('item', 'boot:value', 'boot')).toBeNull()
+    expect(of('item', 'gen:frag/v', 'placement')).toBeNull()
+    expect(of('visit', 'lesson:t1.l1')).toBeNull()
+    expect(of('ack', 'hint:lab/x#R1')).toBeNull()
+    expect(of('capstone-step', 'cap:a')).toBeNull()
+  })
+})
+
+describe('selectSurfaceMinutes', () => {
+  /**
+   * One partner: every surface once in the first calendar week (START is a Tuesday), 7.0833 minutes in all. The lesson time is
+   * a QuizBlock attempt of 30 s and a ticket whose items took 10 s and 20 s (its summary says 77 s), both as the façade writes them.
+   * The Daily (90 s) and Fleet Week (an Act I run, an Act IV drill and an act of 10 s each) are the façade's events from the
+   * app's own builders (`dailyAndFleet`), not hand-written `ms` (EF1).
+   */
+  const firstWeek = async (day: number): Promise<LedgerEvent[]> => {
+    const j = new Journal()
+    graded(j, 'item', 'gen:frag/a', d(day), { ms: 1000, data: { src: 'today', grp: `s${day}`, slot: 0, of: 3, kcs: [FRAG_KC] } })
+    graded(j, 'item', 'gen:frag/b', d(day), { ms: 1000, data: { src: 'today', grp: `s${day}`, slot: 1, of: 3, kcs: [FRAG_KC] } })
+    graded(j, 'item', 'gen:frag/c', d(day), { ms: 10_000, data: { src: 'today', grp: `s${day}`, slot: 2, of: 3, kcs: [FRAG_KC] } })
+    graded(j, 'play', 'play:eplb', d(day), { ms: 60_000, data: { phase: 'play' } })
+    graded(j, 'lab-check', 'lab:rust-allocator', d(day), { ms: 120_000, data: { passed: [], total: 6 } })
+    graded(j, 'item', 'gen:tiling/raster-ai', d(day), { ms: 15_000, data: { src: 'form', formId: 'A', formSlot: 0, formSet: 0, kcs: ['t4.x'] } })
+    graded(j, 'item', 'boot:value', d(day), { ms: 99_000, data: { src: 'boot' } })
+    return [...j.events, ...(await quizBlock(day, 30_000)), ...(await ticket(day, [10_000, 20_000], 77_000)), ...(await dailyAndFleet(day, DAILY_AND_FLEET_MS))]
+  }
+  const partner = () => firstWeek(0)
+  const crew = (n: number) => Promise.all(partners(n, partner))
+
+  test('a lesson quiz\'s time is on its summary and counts; a ticket\'s is on its items and counts once', async () => {
+    // the façade's own events: a QuizBlock's items carry no ms, so only the summary holds the attempt's 45 s
+    const quiz = await quizBlock(0, 45_000)
+    expect(quiz.filter((e) => e.kind === 'item').map((e) => (e as { ms?: number }).ms)).toEqual([undefined, undefined])
+    expect(quiz.filter((e) => e.kind === 'quiz').map((e) => (e as { ms?: number }).ms)).toEqual([45_000])
+    expect(selectSurfaceMinutes([quiz]).surfaces.lessons.median).toBeCloseTo(0.75, 9)
+    // a ticket's items carry 10 s and 20 s and its summary 77 s: the items count, the summary does not add itself again
+    const t = await ticket(0, [10_000, 20_000], 77_000)
+    expect(t.filter((e) => e.kind === 'quiz').map((e) => (e as { ms?: number }).ms)).toEqual([77_000])
+    expect(selectSurfaceMinutes([t]).surfaces.lessons.median).toBeCloseTo(0.5, 9)
+    // a ticket whose items were not timed falls back to its summary
+    const untimed = await written(0, (s) =>
+      s.recordTicket({ lessonId: 't1.l3', form: 'ticket', seed: 1, ms: 60_000, ok: false, nonMcqOk: true, responses: [{ ref: 'gen:frag/v0', rev: 'r0', score: 0, ok: false, data: { src: 'ticket', kcs: [FRAG_KC] } }] }),
+    )
+    expect(selectSurfaceMinutes([untimed]).surfaces.lessons.median).toBeCloseTo(1, 9)
+    // and from a donation, whose attempt groups are renumbered, the same
+    const donated = (events: LedgerEvent[]) => ledgerOfDonation(redactForPartner({ events, working: [] })).events
+    expect(selectSurfaceMinutes([donated(quiz)]).surfaces.lessons.median).toBeCloseTo(0.75, 9)
+    expect(selectSurfaceMinutes([donated(t)]).surfaces.lessons.median).toBeCloseTo(0.5, 9)
+  })
+
+  test('a Today session is its span by the C19 rule, the other surfaces the sum of their ms, and what is not a surface is left out', async () => {
+    const r = selectSurfaceMinutes(await crew(5))
+    expect(r.partners).toBe(5)
+    // the three Today items are 20 s apart in the Journal: 40 s + the last item's 10 s
+    expect(r.surfaces.today.median).toBeCloseTo(50 / 60, 9)
+    // the QuizBlock's 30 s and the ticket items' 10 + 20 s; Boot's 99 s is not a surface
+    expect(r.surfaces.lessons.median).toBeCloseTo(1, 9)
+    expect(r.surfaces.plays.median).toBeCloseTo(1, 9)
+    expect(r.surfaces.labs.median).toBeCloseTo(2, 9)
+    expect(r.surfaces.daily.median).toBeCloseTo(1.5, 9)
+    expect(r.surfaces['fleet-week'].median).toBeCloseTo(0.5, 9)
+    expect(r.surfaces.me.median).toBeCloseTo(0.25, 9)
+    expect(r.total.median).toBeCloseTo(50 / 60 + 1 + 1 + 2 + 1.5 + 0.5 + 0.25, 9)
+    expect(r.plannedWeeklyMinutes).toBe(PLANNED_WEEKLY_MINUTES)
+    expect(r.surfaces.today.partners).toBe(5)
+  })
+
+  test('the Daily and Fleet Week read the time their recorders write, own and donated (EF1)', async () => {
+    const timed = await dailyAndFleet(0, DAILY_AND_FLEET_MS)
+    expect(timed.filter((e) => e.kind === 'incident' || e.kind === 'fleet-run' || e.kind === 'fleet-act').map((e) => [e.kind, e.ref.replace(/\d{4}-\d{2}-\d{2}/, 'date'), e.ms])).toEqual([
+      ['incident', 'inc:daily/date', 90_000],
+      ['fleet-run', 'fleet:act1', 10_000],
+      ['incident', `inc:drill/${drillFor(5).spec.fault}`, 10_000],
+      ['fleet-act', 'fw:engine', 10_000],
+    ])
+    const donated = (events: LedgerEvent[]) => ledgerOfDonation(redactForPartner({ events, working: [] })).events
+    for (const ledger of [timed, donated(timed)]) {
+      const r = selectSurfaceMinutes([ledger])
+      expect(r.surfaces.daily.median).toBeCloseTo(1.5, 9)
+      expect(r.surfaces['fleet-week'].median).toBeCloseTo(0.5, 9)
+    }
+    // the same events as they were written before EF1, with no time: 0 minutes on both surfaces, which is what F1 read
+    const before = await dailyAndFleet(0, null)
+    expect(before.some((e) => e.ms !== undefined)).toBe(false)
+    expect(selectSurfaceMinutes([[...before, ...(await quizBlock(0, 30_000))]]).surfaces).toMatchObject({ daily: { median: 0 }, 'fleet-week': { median: 0 } })
+  })
+
+  test('minutes per week average over the weeks with recorded time, and a quiet week is not one of them', async () => {
+    // the next calendar week is empty; the one after it holds a 30 s lesson quiz only
+    const r = selectSurfaceMinutes([[...(await firstWeek(0)), ...(await quizBlock(14, 30_000))]])
+    expect(r.surfaces.lessons.median).toBeCloseTo((1 + 0.5) / 2, 9)
+    expect(r.surfaces.labs.median).toBeCloseTo(2 / 2, 9)
+  })
+
+  test('a partner who never opened a surface counts 0 there, and an empty ledger is no partner', async () => {
+    const lessonsOnly = (n: number) => quizBlock(0, n * 60_000)
+    const r = selectSurfaceMinutes([await lessonsOnly(1), await lessonsOnly(2), await lessonsOnly(9), await partner(), []])
+    expect(r.partners).toBe(4)
+    expect(r.surfaces.labs.median).toBe(0)
+    expect(r.surfaces.labs.partners).toBe(1)
+    // lessons 1, 2, 9 and the partner's 1: the median of four is 1.5
+    expect(r.surfaces.lessons.median).toBeCloseTo(1.5, 9)
+  })
+
+  test('each stage row reads the partners\' own journey weeks, not the calendar', async () => {
+    // journey week 1, then a 1-minute lesson quiz in week 2 and a 3-minute one in week 3
+    const events = [...(await firstWeek(0)), ...(await quizBlock(7, 60_000)), ...(await quizBlock(14, 180_000))]
+    const r = selectSurfaceMinutes(partners(5, () => events))
+    const row = (first: number) => r.stages.find((s) => s.row.weeks[0] === first)!
+    expect(row(1).partners).toBe(5)
+    expect(row(1).medians?.lessons).toBeCloseTo(1, 9)
+    expect(row(1).medians?.labs).toBeCloseTo(2, 9)
+    // weeks 2 and 3 are one row: (1 + 3) / 2 minutes of lessons a week
+    expect(row(2).medians?.lessons).toBeCloseTo(2, 9)
+    expect(row(2).medians?.labs).toBe(0)
+    expect(row(4).partners).toBe(0)
+    expect(row(4).medians).toBeNull()
+    expect(r.stages.map((s) => s.row.weeks)).toEqual(CADENCE.map((c) => c.weeks))
+  })
+
+  test('PLAN §4.D\'s cadence is whole: nine rows covering weeks 1 to 26 once, each naming real surfaces', () => {
+    expect(CADENCE).toHaveLength(9)
+    expect(CADENCE[0].weeks[0]).toBe(1)
+    expect(CADENCE[CADENCE.length - 1].weeks[1]).toBe(26)
+    CADENCE.forEach((row, i) => {
+      if (i > 0) expect(row.weeks[0]).toBe(CADENCE[i - 1].weeks[1] + 1)
+      expect(row.surfaces.length).toBeGreaterThan(0)
+      for (const s of row.surfaces) expect(SURFACES).toContain(s)
+    })
+  })
+
+  test('a donation reads like its export for every surface but Today\'s session spans', async () => {
+    const events = await partner()
+    const own = selectSurfaceMinutes([events])
+    const donated = selectSurfaceMinutes([ledgerOfDonation(redactForPartner({ events, working: [] })).events])
+    for (const s of SURFACES.filter((x) => x !== 'today')) expect(donated.surfaces[s].median).toBeCloseTo(own.surfaces[s].median as number, 9)
+  })
+})
+
+describe('selectHintArms', () => {
+  // only rust-allocator's `fragmentation` check has a generator-covered KC; these tests cover every KC so that a learner can hold two checks
+  const COVERED = KCS.map((k) => ({ ...k, gen: k.gen ?? ['frag'] }))
+  const options = { kcs: COVERED }
+  const CHECK_A = { id: 'align', kc: 't1.alignment' }
+  const CHECK_B = { id: 'coalesce', kc: 't1.split-coalesce' }
+
+  /** A learner who got help on `align` under `armA` and on `coalesce` under `armB`, with a cold check 30 days after the lab's first green. */
+  const learner = (o: { armA: string; armB: string; okA: boolean; okB: boolean; gap?: number }) => {
+    const j = new Journal()
+    j.add('lab-check', 'lab:rust-allocator', d(0), {
+      ok: true,
+      provenance: 'unseen',
+      data: { passed: [CHECK_A.id, CHECK_B.id], total: 6, checks: [CHECK_A, CHECK_B].map((c) => ({ id: c.id, status: 'pass' })) },
+    })
+    j.add('ack', `hint:rust-allocator/${CHECK_A.id}#R1`, d(0), { data: { arm: o.armA } })
+    j.add('ack', `packet:lab/rust-allocator/${CHECK_B.id}`, d(0), { data: { arm: o.armB, via: 'copy' } })
+    const gap = o.gap ?? 30
+    unseen(j, 'probe', 'gen:frag/first-fit', d(gap), o.okA, { src: 'today', reason: 'probe', kcs: [CHECK_A.kc] })
+    unseen(j, 'probe', 'gen:frag/first-fit', d(gap + 1), o.okB, { src: 'today', reason: 'probe', kcs: [CHECK_B.kc] })
+    return { events: j.events }
+  }
+  const crew = (n: number, f: (i: number) => Parameters<typeof learner>[0]) => partners(n, (i) => learner(f(i)))
+
+  test('the learner-level difference ladder − packet, its one-sided bounds and the checks behind it', () => {
+    // the ladder check is always right; the packet check is right for 4 of 5 learners: d is 0 or +1, mean +0.2
+    const r = selectHintArms(crew(130, (i) => ({ armA: 'ladder', armB: 'packet', okA: true, okB: i % 5 !== 0 })), CONTENT, options)
+    expect(r.learners).toBe(130)
+    expect(r.partners).toBe(130)
+    expect(r.checks).toEqual({ ladder: 130, packet: 130 })
+    expect(r.diff.mean).toBeCloseTo(0.2, 9)
+    expect(r.diff.lower as number).toBeGreaterThan(0.1)
+    expect(r.diff.upper as number).toBeLessThan(0.3)
+    expect(r.verdict).toBe('keep')
+    expect(r.required).toBe(HINT_MIN_LEARNERS)
+  })
+
+  test('the arm is the recorded one, not a recomputed one: the packet arm\'s check can be the first', () => {
+    const swapped = crew(130, (i) => ({ armA: 'packet', armB: 'ladder', okA: i % 5 !== 0, okB: true }))
+    const r = selectHintArms(swapped, CONTENT, options)
+    expect(r.diff.mean).toBeCloseTo(0.2, 9)
+    expect(r.verdict).toBe('keep')
+  })
+
+  test('a ladder clearly worse than the packet is cut, and a lower bound just inside the margin is kept', () => {
+    const worse = selectHintArms(crew(130, () => ({ armA: 'ladder', armB: 'packet', okA: false, okB: true })), CONTENT, options)
+    expect(worse.diff.mean).toBe(-1)
+    expect(worse).toMatchObject({ verdict: 'cut', because: 'margin' })
+    // no difference at all: every d is 0, so the bound is 0, above −5 points
+    const same = selectHintArms(crew(130, () => ({ armA: 'ladder', armB: 'packet', okA: true, okB: true })), CONTENT, options)
+    expect(same.diff.lower).toBe(0)
+    expect(same.verdict).toBe('keep')
+    // a mean of −10 points over a large spread has a lower bound below −5 points
+    const wide = selectHintArms(crew(130, (i) => ({ armA: 'ladder', armB: 'packet', okA: i % 10 !== 0, okB: true })), CONTENT, options)
+    expect(wide.diff.mean).toBeCloseTo(-0.1, 9)
+    expect(wide.verdict).toBe('cut')
+  })
+
+  test('a packet arm clearly better cuts the ladder even with the margin met (prereg §4): a powered d of −3 points', () => {
+    // 18 of 600 learners got the ladder check wrong and the packet one right, the rest both right: d = −18/600 = −3 points
+    const r = selectHintArms(crew(600, (i) => ({ armA: 'ladder', armB: 'packet', okA: i % 100 >= 3, okB: true })), CONTENT, options)
+    expect(r.learners).toBe(600)
+    expect(r.diff.mean).toBeCloseTo(-0.03, 9)
+    // the margin alone would keep it: the lower bound, −26/600 = −4.3 points, is above −5 points
+    expect(r.diff.lower as number).toBeGreaterThan(-HINT_MARGIN)
+    expect(r.diff.lower as number).toBeCloseTo(-26 / 600, 9)
+    // but the upper bound, −10/600 = −1.7 points, is below 0, so the packet arm is clearly better
+    expect(r.diff.upper as number).toBeLessThan(0)
+    expect(r.diff.upper as number).toBeCloseTo(-10 / 600, 9)
+    expect(r).toMatchObject({ verdict: 'cut', because: 'packet-better' })
+  })
+
+  test('hintVerdict is the pre-registration\'s rule whole: the margin on the lower bound, and 0 on the upper', () => {
+    const diff = (lower: number, upper: number, n = HINT_MIN_LEARNERS) => ({ n, mean: (lower + upper) / 2, lower, upper, ci95: [lower, upper] as [number, number] })
+    expect(hintVerdict(diff(-0.04, 0.01))).toEqual({ verdict: 'keep', because: null })
+    expect(hintVerdict(diff(-0.04, 0))).toEqual({ verdict: 'keep', because: null })
+    expect(hintVerdict(diff(-0.044, -0.016))).toEqual({ verdict: 'cut', because: 'packet-better' })
+    expect(hintVerdict(diff(-HINT_MARGIN, 0.02))).toEqual({ verdict: 'cut', because: 'margin' })
+    expect(hintVerdict(diff(-0.2, -0.1))).toEqual({ verdict: 'cut', because: 'margin' })
+    expect(hintVerdict(diff(-0.044, -0.016, HINT_MIN_LEARNERS - 1))).toEqual({ verdict: 'underpowered', because: null })
+  })
+
+  test('fewer learners than the pre-registration\'s power calculation is underpowered, at 125 and at 126', () => {
+    const f = () => ({ armA: 'ladder', armB: 'packet', okA: true, okB: true })
+    expect(selectHintArms(crew(HINT_MIN_LEARNERS - 1, f), CONTENT, options).verdict).toBe('underpowered')
+    expect(selectHintArms(crew(HINT_MIN_LEARNERS, f), CONTENT, options).verdict).toBe('keep')
+    expect(selectHintArms([], CONTENT, options)).toMatchObject({ learners: 0, verdict: 'underpowered', diff: { mean: null, lower: null } })
+  })
+
+  test('a check with both arms recorded is dropped, one helped without an arm is excluded, and neither is counted', () => {
+    const both = new Journal()
+    both.add('lab-check', 'lab:rust-allocator', d(0), { ok: true, provenance: 'unseen', data: { checks: [{ id: CHECK_A.id, status: 'pass' }] } })
+    both.add('ack', `hint:rust-allocator/${CHECK_A.id}#R1`, d(0), { data: { arm: 'ladder' } })
+    both.add('ack', `packet:lab/rust-allocator/${CHECK_A.id}`, d(0), { data: { arm: 'packet', via: 'copy' } })
+    unseen(both, 'probe', 'gen:frag/v', d(30), true, { src: 'today', kcs: [CHECK_A.kc] })
+    const noArm = new Journal()
+    noArm.add('lab-check', 'lab:rust-allocator', d(0), { ok: true, provenance: 'unseen', data: { checks: [{ id: CHECK_A.id, status: 'pass' }] } })
+    noArm.add('ack', `hint:rust-allocator/${CHECK_A.id}#R1`, d(0), { data: { arm: 'ladder' } })
+    noArm.add('ack', `hint:rust-allocator/${CHECK_A.id}#R2`, d(0), {})
+    unseen(noArm, 'probe', 'gen:frag/v', d(30), true, { src: 'today', kcs: [CHECK_A.kc] })
+    const r = selectHintArms([{ events: both.events }, { events: noArm.events }], CONTENT, options)
+    expect(r.both).toBe(1)
+    expect(r.unarmed).toBe(1)
+    expect(r.checks).toEqual({ ladder: 0, packet: 0 })
+    expect(r.partners).toBe(0)
+  })
+
+  test('only a generated cold check 25 to 45 days after the lab\'s first all-green run counts, and an assisted one never does', () => {
+    const at = (gap: number, extra: Partial<Parameters<typeof learner>[0]> = {}) => selectHintArms([learner({ armA: 'ladder', armB: 'packet', okA: true, okB: false, gap, ...extra })], CONTENT, options)
+    // the packet check's probe is a day after the ladder check's
+    expect(at(24).checks).toEqual({ ladder: 0, packet: 1 })
+    expect(at(25).checks.ladder).toBe(1)
+    expect(at(44).checks.ladder).toBe(1)
+    expect(at(45)).toMatchObject({ checks: { ladder: 1, packet: 0 } })
+    expect(at(46).checks).toEqual({ ladder: 0, packet: 0 })
+    const j = new Journal()
+    j.add('lab-check', 'lab:rust-allocator', d(0), { ok: true, provenance: 'unseen', data: { checks: [{ id: CHECK_A.id, status: 'pass' }] } })
+    j.add('ack', `hint:rust-allocator/${CHECK_A.id}#R1`, d(0), { data: { arm: 'ladder' } })
+    j.add('probe', 'gen:frag/v', d(30), { ok: true, score: 1, rev: 'r', provenance: 'assisted', data: { src: 'today', kcs: [CHECK_A.kc] } })
+    j.add('probe', 'quiz:t1.l3#0', d(30), { ok: true, score: 1, rev: 'r', provenance: 'practice', data: { src: 'cold', kcs: [CHECK_A.kc] } })
+    expect(selectHintArms([{ events: j.events }], CONTENT, options).checks).toEqual({ ladder: 0, packet: 0 })
+  })
+
+  test('the first cold check is the outcome, and a KC with no generator has none', () => {
+    // the ladder check is missed first and right a day later; the packet check is right: d is 0 − 1, not 1 − 1
+    const l = learner({ armA: 'ladder', armB: 'packet', okA: false, okB: true })
+    const later = Journal.from(l.events)
+    unseen(later, 'probe', 'gen:frag/first-fit', d(32), true, { src: 'today', reason: 'probe', kcs: [CHECK_A.kc] })
+    const r = selectHintArms([{ events: later.events }], CONTENT, options)
+    expect(r.checks).toEqual({ ladder: 1, packet: 1 })
+    expect(r.diff.mean).toBe(-1)
+    // the same learner against the real graph: neither check's KC has a generator family
+    expect(selectHintArms([{ events: later.events }], CONTENT).checks).toEqual({ ladder: 0, packet: 0 })
+  })
+
+  test('the window follows the lab\'s first all-green run, not a check\'s own first pass, in a ledger with per-check detail', () => {
+    // owner decision (docs/prereg/hint-ladders.md §3 and §7): the lab's first `lab-check` with `ok` anchors every ledger
+    const helped = (j: Journal) => j.add('ack', `hint:rust-allocator/${CHECK_A.id}#R1`, d(0), { data: { arm: 'ladder' } })
+    const probeAt = (j: Journal, day: number) => unseen(j, 'probe', 'gen:frag/first-fit', d(day), true, { src: 'today', reason: 'probe', kcs: [CHECK_A.kc] })
+    const run = (j: Journal, day: number, ok: boolean, a: string) =>
+      j.add('lab-check', 'lab:rust-allocator', d(day), { ok, provenance: 'unseen', data: { checks: [{ id: CHECK_A.id, status: a }, { id: CHECK_B.id, status: 'pass' }] } })
+    // the lab went all-green on day 0 (`ok` is cumulative) while this run's detail had `align` failing; `align`'s own first
+    // pass is day 10. A cold check on day 30 is 30 days after the lab and 20 after the check: the lab's run decides, so it counts
+    const later = new Journal()
+    run(later, 0, true, 'fail')
+    helped(later)
+    run(later, 10, true, 'pass')
+    probeAt(later, 30)
+    expect(selectHintArms([{ events: later.events }], CONTENT, options).checks).toEqual({ ladder: 1, packet: 0 })
+    // and the mirror case: `align` passed in a red run on day 0 and the lab went all-green on day 20. A cold check on day 50
+    // is 30 days after the lab and 50 after the check: it counts, and one on day 30, 10 days after the lab, does not
+    const earlier = new Journal()
+    run(earlier, 0, false, 'pass')
+    helped(earlier)
+    run(earlier, 20, true, 'pass')
+    probeAt(earlier, 30)
+    expect(selectHintArms([{ events: earlier.events }], CONTENT, options).checks).toEqual({ ladder: 0, packet: 0 })
+    probeAt(earlier, 50)
+    expect(selectHintArms([{ events: earlier.events }], CONTENT, options).checks).toEqual({ ladder: 1, packet: 0 })
+    // a lab that never went all-green has no window at all, however many of its checks passed
+    const red = new Journal()
+    run(red, 0, false, 'pass')
+    helped(red)
+    probeAt(red, 30)
+    expect(selectHintArms([{ events: red.events }], CONTENT, options).checks).toEqual({ ladder: 0, packet: 0 })
+  })
+
+  test('a donation, which keeps no per-check detail, reads the same as its export: both start at the lab\'s first all-green run', () => {
+    const own = crew(4, (i) => ({ armA: 'ladder', armB: 'packet', okA: true, okB: i % 2 === 0 }))
+    const donated = own.map((l) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] })))
+    const a = selectHintArms(own, CONTENT, options)
+    const b = selectHintArms(donated, CONTENT, options)
+    expect(b.checks).toEqual(a.checks)
+    expect(b.diff.mean).toBe(a.diff.mean)
+  })
+})
+
+describe('selectDailyVsOther', () => {
+  const KV = 't5.kv-capacity'
+  const ADMIT = 't2.admission-scheduling'
+  const KV_LESSON = LESSONS.find((l) => l.kcs.includes(KV)) as (typeof LESSONS)[number]
+  const ADMIT_LESSON = LESSONS.find((l) => l.kcs.includes(ADMIT)) as (typeof LESSONS)[number]
+
+  /** A learner with both cards on day 0 and a Daily on `dailyDay` that trained `KV`; then `sig` answers on day 60. */
+  const learner = (o: { daily?: number; kv: boolean; admit: boolean; provenance?: string; gap?: number; extra?: Record<string, unknown> }) => {
+    const j = new Journal()
+    j.passLesson(d(0), KV_LESSON.id, KV_LESSON.kcs)
+    j.passLesson(d(0), ADMIT_LESSON.id, ADMIT_LESSON.kcs)
+    const day = o.gap ?? 60
+    if (o.daily !== undefined) j.add('incident', `inc:daily/${d(o.daily)}`, d(o.daily), { score: 1, ok: true, provenance: 'practice', data: { src: 'daily', fixed: true, diagnosed: true, kcs: ['t7.incident-diagnosis', KV] } })
+    const sig = (kc: string, ok: boolean) => j.add('item', 'gen:sig/name-fault', d(day), { score: ok ? 1 : 0, ok, rev: 'r', provenance: o.provenance ?? 'unseen', data: { src: 'today', kcs: [kc], ...o.extra } })
+    sig(KV, o.kv)
+    sig(ADMIT, o.admit)
+    return { events: j.events }
+  }
+  const crew = (n: number, f: (i: number) => Parameters<typeof learner>[0]) => partners(n, (i) => learner(f(i)))
+
+  test('Daily KCs against the others, within learner: the groups, their n and the mean difference', () => {
+    const r = selectDailyVsOther(crew(4, (i) => ({ daily: 1, kv: true, admit: i % 2 === 0 })), CONTENT)
+    expect(r.daily).toMatchObject({ n: 4, correct: 4 })
+    expect(r.other).toMatchObject({ n: 4, correct: 2 })
+    expect(r.learners).toBe(4)
+    expect(r.diff.mean).toBeCloseTo(0.5, 9)
+    expect(r.verdict).toBe('underpowered')
+  })
+
+  test('the groups are as of the answer: a Daily played after it does not make the KC a Daily KC', () => {
+    const r = selectDailyVsOther([learner({ daily: 90, kv: true, admit: true })], CONTENT)
+    expect(r.daily.n).toBe(0)
+    expect(r.other.n).toBe(2)
+    expect(r.learners).toBe(0)
+  })
+
+  test('a learner who never played a Daily has only other checks, and is in no difference', () => {
+    const r = selectDailyVsOther([learner({ kv: true, admit: false })], CONTENT)
+    expect([r.daily.n, r.other.n, r.learners, r.partners]).toEqual([0, 2, 0, 1])
+    expect(r.diff.mean).toBeNull()
+  })
+
+  test('only unseen, 30-day-old answers to sig items count, and the diagnosis skill is no contrast', () => {
+    expect(selectDailyVsOther([learner({ daily: 1, kv: true, admit: true, provenance: 'practice' })], CONTENT).partners).toBe(0)
+    expect(selectDailyVsOther([learner({ daily: 1, kv: true, admit: true, gap: 20 })], CONTENT).partners).toBe(0)
+    // 30 days after the card: the card is created on day 0 at the earliest, so day 40 is far enough and day 5 is not
+    expect(selectDailyVsOther([learner({ daily: 1, kv: true, admit: true, gap: 40 })], CONTENT).partners).toBe(1)
+    const j = new Journal()
+    j.passLesson(d(0), KV_LESSON.id, KV_LESSON.kcs)
+    j.add('incident', `inc:daily/${d(1)}`, d(1), { data: { src: 'daily', kcs: ['t7.incident-diagnosis', KV] } })
+    unseen(j, 'item', 'gen:kv/capacity', d(60), true, { src: 'today', kcs: [KV] })
+    unseen(j, 'item', 'gen:sig/name-fault', d(60), true, { src: 'today', kcs: ['t7.incident-diagnosis'] })
+    expect(selectDailyVsOther([{ events: j.events }], CONTENT)).toMatchObject({ partners: 0, daily: { n: 0 }, other: { n: 0 } })
+  })
+
+  test('197 learners are needed, and the one-sided bound against −5 points decides keep or kill', () => {
+    const keep = selectDailyVsOther(crew(DAILY_MIN_LEARNERS, (i) => ({ daily: 1, kv: true, admit: i % 5 !== 0 })), CONTENT)
+    expect(keep.learners).toBe(DAILY_MIN_LEARNERS)
+    expect(keep.verdict).toBe('keep')
+    expect(keep.diff.mean as number).toBeGreaterThan(0)
+    const kill = selectDailyVsOther(crew(DAILY_MIN_LEARNERS, () => ({ daily: 1, kv: false, admit: true })), CONTENT)
+    expect(kill.diff.mean).toBe(-1)
+    expect(kill.verdict).toBe('kill')
+    expect(selectDailyVsOther(crew(DAILY_MIN_LEARNERS - 1, () => ({ daily: 1, kv: true, admit: true })), CONTENT).verdict).toBe('underpowered')
+  })
+
+  test('a donation reads like its export', () => {
+    const own = crew(6, (i) => ({ daily: 1, kv: i % 3 !== 0, admit: i % 2 === 0 }))
+    const donated = own.map((l) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] })))
+    const a = selectDailyVsOther(own, CONTENT)
+    const b = selectDailyVsOther(donated, CONTENT)
+    expect([b.daily.n, b.daily.correct, b.other.n, b.other.correct]).toEqual([a.daily.n, a.daily.correct, a.other.n, a.other.correct])
+  })
+})
+
+describe('selectProveV2 and selectProvedInUse', () => {
+  const V2 = new Set(['kv-block-manager', 'mpmc-queue'])
+  const green = (j: Journal, lab: string, day: number, provenance = 'unseen') => j.add('lab-check', `lab:${lab}`, d(day), { ok: true, score: 1, provenance, data: { passed: [] } })
+  const attempt = (j: Journal, lab: string, day: number, o: { ok?: boolean; provenance?: string; v1?: boolean } = {}) =>
+    j.add('prove', `prove:${lab}`, d(day), {
+      ok: o.ok ?? true,
+      score: o.ok === false ? 0 : 1,
+      provenance: o.provenance ?? 'proved',
+      data: o.v1 ? { v: 1, qids: ['a'], self: [1] } : { v: 2, qid: 'free-after', kcs: [], answer: 1, actual: 1, calls: 3 },
+    })
+
+  test('the share of unseen greens on v2 labs followed by a v2 attempt, and the share of first attempts proved', () => {
+    const a = new Journal()
+    green(a, 'kv-block-manager', 0)
+    attempt(a, 'kv-block-manager', 1)
+    attempt(a, 'kv-block-manager', 2, { ok: false, provenance: 'practice' }) // a retry: counted as an attempt, not as a first
+    green(a, 'mpmc-queue', 3) // green, no attempt
+    const b = new Journal()
+    green(b, 'kv-block-manager', 0)
+    attempt(b, 'kv-block-manager', 1, { ok: false, provenance: 'practice' })
+    const r = selectProveV2([a.events, b.events], V2)
+    expect(r.attempted).toMatchObject({ n: 3, correct: 2, partners: 2 })
+    expect(r.attempted.rate).toBeCloseTo(2 / 3, 9)
+    expect(r.attempted.ci95).not.toBeNull()
+    expect(r.proved).toMatchObject({ n: 2, correct: 1 })
+    expect(r.attempts).toBe(3)
+  })
+
+  test('a lab with no v2 bundle, a green on seen seeds, a v1 attempt and an attempt before the green count for nothing', () => {
+    const j = new Journal()
+    attempt(j, 'kv-block-manager', 0) // before the green
+    green(j, 'kv-block-manager', 1)
+    green(j, 'mpmc-queue', 1, 'lab-green') // not an unseen-seed green
+    green(j, 'rust-allocator', 1) // no v2 bundle
+    attempt(j, 'rust-allocator', 2)
+    attempt(j, 'mpmc-queue', 2, { v1: true })
+    const r = selectProveV2([j.events], V2)
+    expect(r.attempted).toMatchObject({ n: 1, correct: 0 })
+    expect(r.attempts).toBe(0)
+    expect(r.proved).toMatchObject({ n: 0, rate: null })
+  })
+
+  test('a donation, which keeps qid and not v, still reads a v2 attempt', () => {
+    const j = new Journal()
+    green(j, 'kv-block-manager', 0)
+    attempt(j, 'kv-block-manager', 1)
+    const donated = ledgerOfDonation(redactForPartner({ events: j.events, working: [] }))
+    expect(selectProveV2([donated.events], V2).proved).toMatchObject({ n: 1, correct: 1 })
+  })
+
+  test('F5 keeps Prove-it v2 only on the Wilson lower bound: a share of 0.70 at n = 10 is not kept, at n = 200 it is', () => {
+    const at = (correct: number, n: number, partners = 5) => ({ n, correct, rate: correct / n, ci95: [wilson(correct, n).lo, wilson(correct, n).hi] as [number, number], partners })
+    // 7 of 10: the share clears 60 % but the lower bound, 39.7 %, does not
+    expect(at(7, 10).ci95[0]).toBeCloseTo(0.3968, 4)
+    expect(proveV2Verdict(at(7, 10))).toBe('underpowered')
+    // 140 of 200: the lower bound, 63.3 %, clears it
+    expect(at(140, 200).ci95[0]).toBeCloseTo(0.6332, 4)
+    expect(proveV2Verdict(at(140, 200))).toBe('keep')
+    // a lower bound just under the bar is not kept (130 of 200: 58.2 %); five of five is not either (56.6 %)
+    expect(proveV2Verdict(at(130, 200))).toBe('underpowered')
+    expect(proveV2Verdict(at(5, 5))).toBe('underpowered')
+    // below five partners nothing is kept, however many greens
+    expect(proveV2Verdict(at(140, 200, 4))).toBe('underpowered')
+    expect(proveV2Verdict({ n: 0, correct: 0, rate: null, ci95: null, partners: 0 })).toBe('underpowered')
+    expect(PROVE_MIN_RATE).toBe(0.6)
+  })
+
+  test('the share of partners with at least one proved lab, and how many labs that is', () => {
+    const a = new Journal()
+    attempt(a, 'kv-block-manager', 1)
+    attempt(a, 'mpmc-queue', 1)
+    const b = new Journal()
+    attempt(b, 'kv-block-manager', 1, { ok: false, provenance: 'practice' })
+    const r = selectProvedInUse([a.events, b.events, []])
+    expect(r).toMatchObject({ n: 2, correct: 1, labs: 2 })
+    expect(r.rate).toBe(0.5)
+  })
+})
+
+describe('selectDiscrimination30 and discriminationLures', () => {
+  const [AT, BT, PK] = DISCRIMINATION_KCS
+  const lessonOf = (kc: string) => LESSONS.find((l) => l.kcs.includes(kc)) as (typeof LESSONS)[number]
+  const LURES = { [AT]: 2, [BT]: 2, [PK]: 2 }
+
+  /**
+   * A learner with the three cards on day 0 and `answers` on `day`, served on Today as Today serves a lesson's question
+   * (`itemResponseOf` records the picked lure's id); `miss` is the ledger's `data.miss` for a miss.
+   */
+  const learner = (answers: { kc: string; ok: boolean; miss?: string; ref?: string }[], day = 60) => {
+    const j = new Journal()
+    for (const kc of DISCRIMINATION_KCS) j.passLesson(d(0), lessonOf(kc).id, lessonOf(kc).kcs)
+    answers.forEach((a, i) => j.answer(d(day), a.kc, a.ok, { ref: a.ref ?? `quiz:${lessonOf(a.kc).id}#${i}`, extra: { src: 'today', ...(a.miss ? { miss: a.miss } : {}) } }))
+    return { events: j.events }
+  }
+  /** Per learner: 1 right, 2 confusions (a lure naming one of the other two), 1 miss naming itself, 1 miss with a Wave 1 id. */
+  const mixed = () =>
+    learner([
+      { kc: AT, ok: true },
+      { kc: AT, ok: false, miss: `confuse.${BT}` },
+      { kc: BT, ok: false, miss: `confuse.${AT}` },
+      { kc: PK, ok: false, miss: `confuse.${PK}` },
+      { kc: PK, ok: false, miss: 'kv.priced-fp16' },
+    ])
+
+  test('accuracy over the three KCs, and the confusion share: misses whose id names one of the other two KCs', () => {
+    const r = selectDiscrimination30(partners(6, mixed), CONTENT, { lures: LURES })
+    expect(r.accuracy).toMatchObject({ n: 30, correct: 6 })
+    expect(r.partners).toBe(6)
+    expect(r.misses).toBe(24)
+    expect(r.confusion).toMatchObject({ n: 24, correct: 12 })
+    expect(r.confusion.rate).toBe(0.5)
+    expect(r.confusion.ci95).not.toBeNull()
+    expect(r.confusionStatus).toBe('ok')
+    expect(r.lures).toBe(6)
+  })
+
+  test('with no tagged lure in the content the share is "not enough data", never 0', () => {
+    const r = selectDiscrimination30(partners(6, mixed), CONTENT)
+    expect(r.confusionStatus).toBe('no-lures')
+    expect(r.confusion.rate).toBeNull()
+    expect(r.confusion.ci95).toBeNull()
+    expect(r.misses).toBe(24)
+    expect(selectDiscrimination30(partners(6, mixed), CONTENT, { lures: { [AT]: 0, [BT]: 0, [PK]: 0 } }).confusionStatus).toBe('no-lures')
+    // accuracy is still read
+    expect(r.accuracy.rate).toBeCloseTo(6 / 30, 9)
+  })
+
+  test('below the misses a share needs it is "not enough data" too', () => {
+    const r = selectDiscrimination30([mixed()], CONTENT, { lures: LURES })
+    expect(r.misses).toBe(4)
+    expect(r.confusionStatus).toBe('few-misses')
+    expect(r.confusion.rate).toBeNull()
+  })
+
+  test('a miss that names its own KC, a miss with another id and a lure outside the three are not confusions', () => {
+    const l = learner([
+      { kc: AT, ok: false, miss: `confuse.${AT}` },
+      { kc: AT, ok: false, miss: 'confuse.t1.alignment' },
+      { kc: AT, ok: false, miss: 'confuse.' },
+      { kc: AT, ok: false },
+      { kc: AT, ok: false, miss: `confuse.${PK}` },
+    ])
+    const r = selectDiscrimination30([l], CONTENT, { lures: LURES })
+    expect(r.misses).toBe(5)
+    expect(r.unattributed).toBe(0)
+    expect(r.confusion.n).toBe(0)
+    const ten = selectDiscrimination30([l, l], CONTENT, { lures: LURES })
+    expect(ten.confusion).toMatchObject({ n: 10, correct: 2 })
+  })
+
+  test('only answers 30 or more days after the card was created, not assisted, count', () => {
+    const early = learner([{ kc: AT, ok: false, miss: `confuse.${BT}` }], 10)
+    expect(selectDiscrimination30([early], CONTENT, { lures: LURES }).accuracy.n).toBe(0)
+    const j = Journal.from(learner([]).events)
+    j.add('item', `quiz:t2.l2#9`, d(60), { score: 1, ok: true, rev: 'r', provenance: 'assisted', data: { src: 'quiz', kcs: [AT] } })
+    j.add('item', `gen:frag/v`, d(60), { score: 1, ok: true, rev: 'r', provenance: 'unseen', data: { src: 'today', kcs: ['t1.external-frag'] } })
+    expect(selectDiscrimination30([{ events: j.events }], CONTENT, { lures: LURES }).accuracy.n).toBe(0)
+  })
+
+  test('a donation reads like its export (the confuse ids survive it, the other ids do not)', () => {
+    const own = partners(6, mixed)
+    const donated = own.map((l) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] })))
+    const a = selectDiscrimination30(own, CONTENT, { lures: LURES })
+    const b = selectDiscrimination30(donated, CONTENT, { lures: LURES })
+    expect([b.accuracy.n, b.accuracy.correct, b.misses, b.confusion.correct]).toEqual([a.accuracy.n, a.accuracy.correct, a.misses, a.confusion.correct])
+  })
+
+  /**
+   * Lesson QuizBlock retakes through the façade (`recordQuizAttempt`, G4). Since EF1 a miss carries the picked lure's id
+   * and its place in the attempt (`slot` of `of`); before, it carried neither, which `beforeEf1` reproduces by taking them
+   * off the façade's own event.
+   */
+  const quizRetake = (lessonId: string, qi: number, pick: number, day = 60) => {
+    const q = ALL_LESSONS.find((l) => l.id === lessonId)!.blocks.flatMap((b) => (b.type === 'quiz' ? b.questions : []))[qi]
+    const ok = q.correct.includes(pick)
+    const miss = ok ? undefined : q.miss?.[pick] || undefined
+    return written(day, (s) => s.recordQuizAttempt({ lessonId, seed: 1, ms: 20_000, responses: [{ qi, rev: 'r', pick: [pick], ok, kcs: q.kcs, ...(miss ? { miss } : {}) }] }))
+  }
+  const beforeEf1 = (events: LedgerEvent[]): LedgerEvent[] =>
+    events.map((e) => {
+      if (e.kind !== 'item') return e
+      const data = { ...(e.data as Record<string, unknown>) }
+      delete data.slot
+      delete data.of
+      delete data.miss
+      return { ...e, data } as LedgerEvent
+    })
+  const withCards = async (retakes: Promise<LedgerEvent[]>[], before = false): Promise<{ events: LedgerEvent[] }> => {
+    const events = (await Promise.all(retakes)).flat()
+    return { events: [...learner([]).events, ...(before ? beforeEf1(events) : events)] }
+  }
+  const donate = (l: { events: LedgerEvent[] }) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] }))
+
+  test('a QuizBlock miss now records the picked lure\'s id and its place, so it reads as a confusion or as not one, own and donated', async () => {
+    // t2.l2 q4 assesses address translation: lure 0 is confuse.t5.block-tables, lure 3 a Wave 1 id; t5.l5 q3's lure 2 names no slip
+    const l = await withCards([quizRetake('t2.l2', 4, 0), quizRetake('t2.l2', 4, 3), quizRetake('t5.l5', 3, 2), quizRetake('t2.l2', 4, 2)])
+    const items = l.events.filter((e) => e.kind === 'item' && (e.data as { src?: string }).src === 'quiz')
+    expect(items.map((e) => [e.ref, (e.data as { miss?: string }).miss, (e.data as { slot?: number }).slot, (e.data as { of?: number }).of])).toEqual([
+      ['quiz:t2.l2#4', 'confuse.t5.block-tables', 0, 1],
+      ['quiz:t2.l2#4', 't2.translation-is-a-search', 0, 1],
+      ['quiz:t5.l5#3', undefined, 0, 1],
+      ['quiz:t2.l2#4', undefined, 0, 1],
+    ])
+    for (const ledger of [l, donate(l)]) {
+      const r = selectDiscrimination30([ledger, ledger, ledger, ledger], CONTENT, { lures: LURES })
+      expect(r.accuracy).toMatchObject({ n: 16, correct: 4 })
+      // all twelve misses are read: four confusions, and eight on lures that are not one (one named, one with no slip)
+      expect([r.misses, r.unattributed, r.confusion.n, r.confusion.correct]).toEqual([12, 0, 12, 4])
+    }
+  })
+
+  test('a QuizBlock miss written before EF1 counts in the accuracy but is left out of the share, own and donated', async () => {
+    const l = await withCards([quizRetake('t2.l2', 4, 0), quizRetake('t2.l2', 4, 3), quizRetake('t2.l2', 4, 2)], true)
+    for (const ledger of [l, donate(l)]) {
+      const r = selectDiscrimination30([ledger, ledger], CONTENT, { lures: LURES })
+      expect(r.accuracy).toMatchObject({ n: 6, correct: 2 })
+      expect([r.misses, r.unattributed, r.confusionStatus]).toEqual([0, 4, 'few-misses'])
+    }
+    // beside Today's misses, they no longer pull the share down: Today's two confusions of four stay a half
+    const today = learner([
+      { kc: AT, ok: false, miss: `confuse.${BT}` },
+      { kc: BT, ok: false, miss: `confuse.${AT}` },
+      { kc: PK, ok: false, miss: 'kv.priced-fp16' },
+      { kc: PK, ok: false },
+    ])
+    const mixed = { events: [...today.events, ...l.events.filter((e) => e.kind === 'item' && (e.data as { src?: string }).src === 'quiz' && e.ref === 'quiz:t2.l2#4')] }
+    const r = selectDiscrimination30(partners(3, () => mixed), CONTENT, { lures: LURES })
+    expect([r.misses, r.unattributed, r.confusion.correct]).toEqual([12, 6, 6])
+    expect(r.confusion.rate).toBe(0.5)
+  })
+
+  test('each of the three KCs has at least two confuse lures in the lesson content (3b-16, 3b-17)', () => {
+    const lures = discriminationLures(ALL_LESSONS)
+    for (const kc of DISCRIMINATION_KCS) expect(lures[kc]).toBeGreaterThanOrEqual(2)
+    // the lures are on the lessons the spec names: t2.l2 and t2.l7, t5.l5 and t5.l6
+    const lessons = ['t2.l2', 't2.l7', 't5.l5', 't5.l6']
+    const only = discriminationLures(ALL_LESSONS.filter((l) => lessons.includes(l.id)))
+    for (const kc of DISCRIMINATION_KCS) expect(only[kc]).toBeGreaterThanOrEqual(2)
+  })
+
+  test('discriminationLures counts a lure on the item of the KC that is taken for another, and only between the three', () => {
+    const lesson = (questions: { kcs?: string[]; miss?: string[] }[]) => ({ blocks: [{ type: 'prose' }, { type: 'quiz', questions }] })
+    const r = discriminationLures([
+      lesson([
+        { kcs: [AT], miss: [`confuse.${BT}`, '', `confuse.${PK}`] },
+        { kcs: [AT, BT], miss: [`confuse.${AT}`] },
+        { kcs: [AT], miss: [`confuse.${AT}`, 'confuse.t1.alignment', 'kv.priced-fp16'] },
+        { kcs: ['t1.alignment'], miss: [`confuse.${AT}`] },
+        {},
+      ]),
+    ])
+    expect(r).toEqual({ [AT]: 2, [BT]: 1, [PK]: 0 })
+    expect(discriminationLures([])).toEqual({ [AT]: 0, [BT]: 0, [PK]: 0 })
+  })
+})
+
+describe('selectCubeError30', () => {
+  const cube = (j: Journal, day: number) => j.add('play', 'play:tiling-cube', d(day), { ok: true, score: 1, provenance: 'practice', data: { phase: 'play' } })
+  const answer = (j: Journal, ref: string, day: number, value: number, truth: number, o: { src?: string; provenance?: string } = {}) =>
+    j.add('item', ref, d(day), { ok: true, score: 1, rev: 'r', provenance: o.provenance ?? 'unseen', data: { src: o.src ?? 'today', kcs: ['t4.tiling-intensity'], value, truth } })
+
+  test('the median |log10(answer ÷ truth)| over answers 30 days or more after the first cube play', () => {
+    const mine = (factor: number) => {
+      const j = new Journal()
+      cube(j, 0)
+      cube(j, 5) // the first play is the one that counts
+      answer(j, 'gen:tiling/raster-ai', 30, 100 * factor, 100)
+      answer(j, 'gen:roofline/tile-ai', 31, 100 / factor, 100)
+      answer(j, 'gen:tiling/ctas-per-sm', 40, 100, 100)
+      return j.events
+    }
+    const r = selectCubeError30([mine(2), mine(2), mine(10)])
+    expect(r.n).toBe(9)
+    expect(r.partners).toBe(3)
+    // errors: log10(2) x4, log10(10) x2, 0 x3: the median of nine is the fifth, log10(2)
+    expect(r.median).toBeCloseTo(Math.log10(2), 9)
+    expect(r.ci95).not.toBeNull()
+  })
+
+  test('answers before day 30, outside the cube\'s families, inside a play, on seen seeds or without a log are left out', () => {
+    const j = new Journal()
+    cube(j, 0)
+    answer(j, 'gen:tiling/raster-ai', 29, 200, 100) // too soon
+    answer(j, 'gen:roofline/decode-b1', 40, 200, 100) // another variant of another family
+    answer(j, 'gen:tiling/raster-ai', 40, 200, 100, { src: 'play' })
+    answer(j, 'gen:tiling/raster-ai', 40, 200, 100, { provenance: 'practice' })
+    answer(j, 'gen:tiling/qblock-ai', 40, 200, 100) // byte units, which a donation cannot bring to the truth's
+    answer(j, 'gen:tiling/raster-ai', 40, 0, 100)
+    answer(j, 'gen:tiling/raster-ai', 40, 5, 0)
+    j.add('item', 'gen:tiling/raster-ai', d(41), { ok: true, score: 1, rev: 'r', provenance: 'unseen', data: { src: 'today', kcs: ['t4.tiling-intensity'] } })
+    expect(selectCubeError30([j.events])).toMatchObject({ n: 0, partners: 0, median: null, ci95: null })
+  })
+
+  test('a learner who never played the cube contributes nothing', () => {
+    const j = new Journal()
+    answer(j, 'gen:tiling/raster-ai', 40, 200, 100)
+    expect(selectCubeError30([j.events]).n).toBe(0)
+  })
+
+  test('a donation reads like its export, and a field item is in neither', () => {
+    const j = new Journal()
+    cube(j, 0)
+    answer(j, 'gen:tiling/raster-ai', 35, 130, 100)
+    answer(j, 'gen:roofline/tile-ai', 36, 80, 100, { provenance: 'field' })
+    const donated = ledgerOfDonation(redactForPartner({ events: j.events, working: [] }))
+    expect(selectCubeError30([j.events]).n).toBe(1)
+    expect(selectCubeError30([donated.events])).toMatchObject({ n: 1, partners: 1 })
+    expect(selectCubeError30([donated.events]).median).toBeCloseTo(Math.log10(1.3), 9)
+  })
+})
+
+describe('selectFormsGain', () => {
+  /** A learner's forms on `track`: the right counts of A, B and C (a missing form is not taken), 12 slots each. */
+  const forms = (track: string, right: Partial<Record<'A' | 'B' | 'C', number>>, o: { kcs?: string[]; slots?: number; recorded?: boolean } = {}) => {
+    const j = new Journal()
+    for (const id of ['A', 'B', 'C'] as const) {
+      const k = right[id]
+      if (k === undefined) continue
+      for (let slot = 0; slot < (o.slots ?? 12); slot++) {
+        const ok = slot < k
+        j.add('item', `gen:kv/capacity`, d(slot), {
+          ok,
+          score: ok ? 1 : 0,
+          rev: 'r',
+          provenance: 'unseen',
+          data: { src: 'form', formId: id, formSet: 0, formSlot: slot, ...(o.recorded === false ? {} : { track }), kcs: o.kcs ?? [`${track}.kv-capacity`] },
+        })
+      }
+    }
+    return j.events
+  }
+
+  test('B − A and C ÷ B per track, with bootstrap intervals over learners', () => {
+    const r = selectFormsGain(partners(6, () => forms('t5', { A: 6, B: 9, C: 9 })))
+    expect(r.tracks).toHaveLength(1)
+    const t = r.tracks[0]
+    expect(t.track).toBe('t5')
+    expect(t.forms.A).toMatchObject({ n: 72, correct: 36 })
+    expect(t.forms.B).toMatchObject({ n: 72, correct: 54 })
+    expect(t.bMinusA.n).toBe(6)
+    expect(t.bMinusA.mean).toBeCloseTo(0.25, 9)
+    expect(t.bMinusA.ci95).toEqual([0.25, 0.25])
+    expect(t.cOverB).toMatchObject({ n: 6, ratio: 1, ci95: [1, 1] })
+    expect(t.status).toBe('pass')
+    expect(r.partners).toBe(6)
+  })
+
+  test('the recorded track decides, an event without one falls back to the majority of its kcs, and a donation reads the same', () => {
+    const own = [
+      // recorded as T5's form although every kcs names t7 first: the track it was recorded with wins
+      ...partners(5, () => forms('t5', { A: 6, B: 10, C: 6 }, { kcs: ['t7.incident-diagnosis', 't5.prefill-decode-interference'] })), // C ÷ B = 0.6
+      // no track (the codec requires one, but a donation drops a track outside the graph's): t4 is the kcs' majority
+      ...partners(5, () => forms('t4', { A: 6, B: 8, C: 8 }, { kcs: ['t4.tiling-intensity', 't4.occupancy', 't2.x'], recorded: false })),
+    ]
+    const donated = own.map((events) => ledgerOfDonation(redactForPartner({ events, working: [] })).events)
+    for (const ledgers of [own, donated]) {
+      const r = selectFormsGain(ledgers)
+      expect(r.tracks.map((t) => t.track)).toEqual(['t4', 't5'])
+      const t5 = r.tracks.find((t) => t.track === 't5')!
+      expect(t5.cOverB.ratio).toBeCloseTo(0.6, 9)
+      expect(t5.status).toBe('fail')
+      expect(r.tracks.find((t) => t.track === 't4')!.status).toBe('pass')
+    }
+  })
+
+  test('the interval decides: one that holds 0.8 is reported, not a pass or a fail; fewer than five learners is insufficient', () => {
+    const mixed = partners(10, (i) => forms('t5', { A: 6, B: 10, C: i % 2 === 0 ? 12 : 4 }))
+    const t = selectFormsGain(mixed).tracks[0]
+    expect(t.cOverB.ratio).toBeCloseTo(0.8, 9)
+    expect(t.cOverB.ci95![0]).toBeLessThan(0.8)
+    expect(t.cOverB.ci95![1]).toBeGreaterThan(0.8)
+    expect(t.status).toBe('reported')
+    expect(selectFormsGain(partners(4, () => forms('t5', { A: 6, B: 9, C: 9 }))).tracks[0].status).toBe('insufficient')
+  })
+
+  test('only a complete form has an accuracy; a repeated slot counts once; an item with no track or slot is skipped', () => {
+    const r = selectFormsGain([forms('t5', { A: 6, B: 9, C: 9 }, { slots: 11 })])
+    expect(r.tracks).toEqual([])
+    expect(r.partners).toBe(1)
+    const twice = forms('t5', { A: 6, B: 9 })
+    const again = Journal.from(twice)
+    again.add('item', 'gen:kv/capacity', d(40), { ok: false, score: 0, rev: 'r', provenance: 'unseen', data: { src: 'form', formId: 'A', formSet: 0, formSlot: 0, track: 't5', kcs: ['t5.kv-capacity'] } })
+    again.add('item', 'gen:kv/capacity', d(41), { ok: true, score: 1, rev: 'r', provenance: 'unseen', data: { src: 'form', formId: 'A', formSet: 0, formSlot: 3, kcs: [] } })
+    expect(selectFormsGain([again.events]).tracks[0].forms.A).toMatchObject({ n: 12, correct: 6 })
+    expect(selectFormsGain([]).tracks).toEqual([])
+  })
+
+  describe('on real forms: a slot counts under the track whose form it is (B2)', () => {
+    let gens: ReadonlyMap<string, Gen>
+    beforeAll(async () => {
+      gens = new Map((await loadAllFamilies()).map((g) => [g.id, g] as const))
+    })
+    /** Right answers per form: a learner gets the first `right[id]` slots of form `id` right. */
+    const RIGHT: Record<'t5' | 't7', Record<FormId, number>> = { t5: { A: 6, B: 9, C: 9 }, t7: { A: 3, B: 6, C: 12 } }
+
+    /** One learner takes T5's forms A, B and C and then T7's, drawn by `formsFor` and written by the façade as /me writes them. */
+    const learner = async (expSeed: number): Promise<LedgerEvent[]> => {
+      const responses: ItemResponse[] = []
+      for (const track of ['t5', 't7'] as const) {
+        const forms = (await formsFor(track, { gens, kcs: KCS, expSeed }))!
+        for (const id of ['A', 'B', 'C'] as const) {
+          forms.forms[id].slots.forEach((slot, i) => {
+            const item: PlayableItem = { source: 'gen', inst: slot.inst }
+            const result = resultFor(item, correctResponse(slot.inst), gradeResponse(slot.inst, correctResponse(slot.inst)), { seed: slot.inst.seed, ms: 2000 })
+            const r = formItemResponse(result, item, { track, formId: id, formSlot: i, formSet: forms.forms[id].set }, new Set())
+            responses.push(i < RIGHT[track][id] ? r : { ...r, ok: false, score: 0 })
+          })
+        }
+      }
+      return written(0, (s) => s.recordItems(responses))
+    }
+
+    test('T5\'s sig slots carry a t7 majority of kcs, yet every T5 slot lands in T5 and T7\'s slots are untouched', async () => {
+      const ledgers = await Promise.all([1, 2, 3, 4, 5].map((i) => learner(hash32(`forms-gain:${i}`))))
+      // the case B2 found: 3 of each T5 form's 12 slots are sig items whose kcs name t7 first, which the kcs rule gave to T7
+      for (const events of ledgers) {
+        const t5 = events.filter((e) => (e as { data?: { track?: string } }).data?.track === 't5')
+        expect(t5).toHaveLength(36)
+        const sig = t5.filter((e) => e.ref.startsWith('gen:sig/'))
+        expect(sig).toHaveLength(9)
+        for (const e of sig) expect((e as { data: { kcs: string[] } }).data.kcs).toEqual(['t7.incident-diagnosis', 't5.prefill-decode-interference'])
+      }
+      for (const own of [ledgers, ledgers.map((events) => ledgerOfDonation(redactForPartner({ events, working: [] })).events)]) {
+        const r = selectFormsGain(own)
+        expect(r.tracks.map((t) => t.track)).toEqual(['t5', 't7'])
+        for (const track of ['t5', 't7'] as const) {
+          const t = r.tracks.find((x) => x.track === track)!
+          // five learners, each form complete with its 12 slots and exactly its own right answers
+          for (const id of ['A', 'B', 'C'] as const) expect(t.forms[id]).toMatchObject({ n: 60, correct: 5 * RIGHT[track][id] })
+          expect(t.cOverB.n).toBe(5)
+          expect(t.cOverB.ratio).toBeCloseTo(RIGHT[track].C / RIGHT[track].B, 9)
+        }
+      }
+    })
+  })
+
+  test('B − A has no interval without a learner with both forms, and C ÷ B none without B', () => {
+    const r = selectFormsGain(partners(5, () => forms('t5', { C: 9 })))
+    expect(r.tracks[0].bMinusA).toMatchObject({ n: 0, mean: null, ci95: null })
+    expect(r.tracks[0].cOverB).toMatchObject({ n: 0, ratio: null })
+  })
+})
+
+describe('selectVrk30Spread', () => {
+  const lesson = LESSONS.find((l) => l.kcs.length >= 5) as (typeof LESSONS)[number]
+
+  /** A learner whose card for each of the lesson's KCs is 30+ days old; the first `right` KCs are answered right on a fresh seed on day 60, and the next one wrong. */
+  const learner = (right: number) => {
+    const j = new Journal()
+    j.passLesson(d(0), lesson.id, lesson.kcs)
+    lesson.kcs.forEach((kc, i) => unseen(j, 'item', `gen:frag/v${i}`, d(60), i < right, { src: 'today', kcs: [kc] }))
+    return { events: j.events }
+  }
+
+  test('retained KCs per partner: the spread, the checked share and n', () => {
+    const r = selectVrk30Spread([0, 1, 2, 3, 5].map(learner), CONTENT)
+    expect(r.partners).toBe(5)
+    expect(r.checked).toBe(5)
+    expect(r.retained).toEqual({ min: 0, q1: 1, median: 2, q3: 3, max: 5 })
+    expect(r.share?.median).toBeCloseTo(2 / 5, 9)
+  })
+
+  test('the median carries a seeded 95 % bootstrap interval over partners, the same on every run', () => {
+    const ledgers = [0, 1, 2, 3, 5].map(learner)
+    const r = selectVrk30Spread(ledgers, CONTENT)
+    // the median of a resample of five is one of the five values, so the bounds are partners' own counts around the median 2
+    const [lo, hi] = r.medianCi95.retained!
+    expect([0, 1, 2, 3, 5]).toContain(lo)
+    expect([0, 1, 2, 3, 5]).toContain(hi)
+    expect(lo).toBeLessThanOrEqual(2)
+    expect(hi).toBeGreaterThanOrEqual(2)
+    expect(lo).toBeLessThan(hi)
+    const draws = bootstrapDraws([0, 1, 2, 3, 5], (xs) => percentile([...xs].sort((a, b) => a - b), 0.5), hash32('vrk30:retained'))
+    expect(r.medianCi95.retained).toEqual([percentile(draws, 0.025)!, percentile(draws, 0.975)!])
+    expect(selectVrk30Spread(ledgers, CONTENT).medianCi95).toEqual(r.medianCi95)
+    expect(r.medianCi95.share).not.toBeNull()
+    // the report prints it beside the spread
+    const f9 = buildWave3Report(ledgers, { cards: CONTENT }).gates.find((g) => g.id === 'F9')!
+    expect(f9.detail).toContain(`retained KCs 0 / 2 / 5 (min / median / max), the median's 95 % bootstrap interval ${lo} to ${hi}`)
+    expect(f9.detail).toContain('a reading, never a pass')
+  })
+
+  test('a partner with no checked KC is in n and has 0 retained; an empty ledger is no partner', () => {
+    const r = selectVrk30Spread([learner(2), { events: [] }, { events: new Journal().events }], CONTENT)
+    expect(r.partners).toBe(1)
+    expect(selectVrk30Spread([], CONTENT)).toMatchObject({ partners: 0, checked: 0, retained: null, perMonth: null, share: null, medianCi95: { retained: null, perMonth: null, share: null } })
+    const none = new Journal()
+    none.add('visit', 'lesson:t1.l1', d(0))
+    expect(selectVrk30Spread([{ events: none.events }], CONTENT)).toMatchObject({ partners: 1, checked: 0, retained: { median: 0 }, share: null })
+  })
+
+  test('a donation reads like its export', () => {
+    const own = [0, 1, 2, 3, 5].map(learner)
+    const donated = own.map((l) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] })))
+    const a = selectVrk30Spread(own, CONTENT)
+    const b = selectVrk30Spread(donated, CONTENT)
+    expect(b.retained).toEqual(a.retained)
+    expect(b.checked).toBe(a.checked)
+  })
+})
+
+describe('selectReceiptStats', () => {
+  const act = (j: Journal, act: string, day: number, data: Record<string, unknown>) => j.add('fleet-act', `fw:${act}`, d(day), { score: 1, ok: true, provenance: 'unseen', data })
+  const rubric = (capacity: number, slo: number, cost: number, failure: number) => ({ capacity, slo, cost, failure })
+
+  test('receipts cited and verified per act, uncited figures and the rubric distribution; the latest event on an act counts', () => {
+    const a = new Journal()
+    act(a, 'engine', 0, { receipts: { cited: 9, verified: 1, uncited: 9 }, rubric: rubric(0, 0, 0, 0) }) // replaced by the next
+    act(a, 'engine', 1, { receipts: { cited: 4, verified: 3, uncited: 1 }, rubric: rubric(3, 2, 1, 0) })
+    act(a, 'business', 2, { receipts: { cited: 5, verified: 5, uncited: 0 }, rubric: rubric(3, 3, 3, 3) })
+    const b = new Journal()
+    act(b, 'engine', 0, { receipts: { cited: 2, verified: 0, uncited: 4 } })
+    act(b, 'fleet', 1, { rubric: rubric(1, 1, 1, 1) })
+    const r = selectReceiptStats([a.events, b.events, []])
+    expect(r.partners).toBe(2)
+    expect(r.acts.engine).toEqual({ acts: 2, cited: 6, verified: 3, uncited: 5 })
+    expect(r.acts.business).toEqual({ acts: 1, cited: 5, verified: 5, uncited: 0 })
+    expect(r.acts.fleet).toEqual({ acts: 0, cited: 0, verified: 0, uncited: 0 })
+    expect(r.verified).toMatchObject({ n: 11, correct: 8 })
+    expect(r.rubricActs).toBe(3)
+    expect(r.rubric.capacity).toEqual([0, 1, 0, 2])
+    expect(r.rubric.failure).toEqual([1, 1, 0, 1])
+  })
+
+  test('a malformed receipt or rubric is not read, and an act with neither counts nothing', () => {
+    const j = new Journal()
+    act(j, 'engine', 0, { receipts: { cited: -1, verified: 0, uncited: 0 }, rubric: rubric(4, 0, 0, 0) })
+    act(j, 'fleet', 0, { receipts: { cited: 1.5, verified: 0, uncited: 0 } })
+    act(j, 'business', 0, {})
+    j.add('fleet-act', 'fw:other', d(0), { data: { receipts: { cited: 1, verified: 1, uncited: 0 } } })
+    expect(selectReceiptStats([j.events])).toMatchObject({ partners: 0, rubricActs: 0, verified: { n: 0, rate: null } })
+  })
+
+  test('a donation reads like its export', () => {
+    const j = new Journal()
+    act(j, 'business', 0, { receipts: { cited: 5, verified: 4, uncited: 2 }, rubric: rubric(3, 2, 1, 0), runs: ['abcd1234'] })
+    const donated = ledgerOfDonation(redactForPartner({ events: j.events, working: [] }))
+    expect(selectReceiptStats([donated.events])).toEqual(selectReceiptStats([j.events]))
+  })
+})
+
+describe('buildWave3Report and formatWave3Report', () => {
+  const IDS = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12']
+  const status = (r: ReturnType<typeof buildWave3Report>, id: string) => r.gates.find((g) => g.id === id)?.status
+
+  test('with nothing, F1 to F12 are listed, every measured gate says there is not enough data, and none passes', () => {
+    const r = buildWave3Report([], { cards: CONTENT })
+    expect(r.gates.map((g) => g.id)).toEqual(IDS)
+    expect(IDS.filter((id) => status(r, id) === 'insufficient')).toEqual(['F1', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'])
+    expect(IDS.filter((id) => status(r, id) === 'owner')).toEqual(['F2', 'F3', 'F4', 'F11', 'F12'])
+    const text = formatWave3Report(r)
+    expect(text).not.toContain('PASS')
+    expect(text).toContain('not enough data (n = 0')
+    expect(text).toContain('Wave 3 field gates over 0 exports')
+    expect(text).toContain('F6  P3: 30-day discrimination')
+    expect(text).toContain('the lesson content holds no tagged lure')
+    expect(text).toContain('the journey re-cut (F1)')
+    expect(text).toContain('not enough data (n = 0 partners with recorded time; needs 5)')
+    expect(text).toContain('Fleet Week receipts: not enough data (n = 0 acts with receipts)')
+  })
+
+  test('F2 and F3 are not read while their pre-registrations are unsigned, and say so', () => {
+    const r = buildWave3Report([], { cards: CONTENT })
+    expect(r.hint).toBeNull()
+    expect(r.daily).toBeNull()
+    expect(r.gates.find((g) => g.id === 'F2')?.detail).toContain('docs/prereg/hint-ladders.md is not signed')
+    expect(r.gates.find((g) => g.id === 'F3')?.detail).toContain('docs/prereg/fleet-daily.md is not signed')
+    expect(r.keepOrKill.map((k) => [k.id, k.verdict])).toEqual([['F2', 'unsigned'], ['F3', 'unsigned'], ['F5', 'underpowered']])
+    const text = formatWave3Report(r)
+    expect(text).toContain('hint ladders: NOT READ, the pre-registration is unsigned; default: R0 to R2 only')
+    expect(text).toContain('Fleet Daily: NOT READ, the pre-registration is unsigned; default: weekly, no On-Call')
+    expect(text).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
+  })
+
+  test('once signed they are read, and below their minimum they print "not enough data" with the minimum', () => {
+    const r = buildWave3Report([], { cards: CONTENT, signed: { hintLadders: true, fleetDaily: true } })
+    expect(r.hint?.verdict).toBe('underpowered')
+    expect(r.daily?.verdict).toBe('underpowered')
+    expect(status(r, 'F2')).toBe('insufficient')
+    expect(status(r, 'F3')).toBe('insufficient')
+    const text = formatWave3Report(r)
+    expect(text).toContain(`not enough data (n = 0 of ${HINT_MIN_LEARNERS} learners`)
+    expect(text).toContain(`not enough data (n = 0 of ${DAILY_MIN_LEARNERS} learners`)
+    expect(text).toContain('hint ladders: UNDERPOWERED, default: R0 to R2 only')
+  })
+
+  test('F4 follows §14: unsigned or unrated is not decided, and a report decides it', () => {
+    for (const watcher of ['unsigned', 'unrated'] as const) {
+      const g = buildWave3Report([], { cards: CONTENT, watcher }).gates.find((x) => x.id === 'F4')!
+      expect(g.status).toBe('owner')
+      expect(g.detail).toContain('not decided')
+      expect(g.detail).toContain('the manual scan stays')
+    }
+    expect(status(buildWave3Report([], { cards: CONTENT, watcher: 'keep' }), 'F4')).toBe('pass')
+    expect(status(buildWave3Report([], { cards: CONTENT, watcher: 'drop' }), 'F4')).toBe('fail')
+    expect(status(buildWave3Report([], { cards: CONTENT, watcher: 'underpowered' }), 'F4')).toBe('insufficient')
+    expect(buildWave3Report([], { cards: CONTENT, watcher: 'underpowered' }).gates.find((x) => x.id === 'F4')!.detail).toContain('second 8-week window')
+  })
+
+  test('the owner gates F11 and F12 are listed and never decided', () => {
+    const r = buildWave3Report([], { cards: CONTENT })
+    for (const id of ['F11', 'F12']) expect(status(r, id)).toBe('owner')
+    expect(formatWave3Report(r)).toContain('F12  accessibility: VoiceOver and NVDA passes')
+  })
+
+  /** A partner who has a bit of everything the gates read; the lesson quiz is the façade's own events. */
+  const partner = async (i: number) => {
+    const j = new Journal()
+    j.passLesson(d(0), 't1.l3', ['t1.split-coalesce'])
+    graded(j, 'item', 'gen:frag/a', d(1), { ms: 60_000, data: { src: 'today', grp: 'g', slot: 0, of: 1, kcs: [FRAG_KC] } })
+    j.add('lab-check', 'lab:kv-block-manager', d(3), { ok: true, score: 1, provenance: 'unseen', data: { passed: [] } })
+    j.add('prove', 'prove:kv-block-manager', d(4), { ok: true, score: 1, provenance: 'proved', data: { v: 2, qid: 'free-after', kcs: [], answer: 1, actual: 1, calls: 2 } })
+    j.add('fleet-act', 'fw:engine', d(5), { score: 1, ok: true, provenance: 'unseen', data: { receipts: { cited: 3, verified: 3, uncited: 0 }, rubric: { capacity: 2, slo: 2, cost: 2, failure: 2 } } })
+    return { events: [...j.events, ...(await quizBlock(2, 60_000 * (i + 1), ['t1.split-coalesce']))] }
+  }
+  const crew = (n: number) => Promise.all(partners(n, partner))
+
+  test('five partners: F1 is reported with the journey table, F5 is read but 5 of 5 is not kept, F10 is reported, the rest stay short', async () => {
+    const r = buildWave3Report(await crew(5), { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) })
+    expect(status(r, 'F1')).toBe('reported')
+    // 5 of 5 attempted, but the Wilson lower bound, 56.6 %, is under 60 %: the underpowered default, 1 question
+    expect(status(r, 'F5')).toBe('fail')
+    expect(status(r, 'F10')).toBe('reported')
+    expect(status(r, 'F7')).toBe('insufficient')
+    expect(r.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('underpowered')
+    const text = formatWave3Report(r)
+    expect(text).toContain('F5  Prove-it v2 keep-or-kill → NOT MET')
+    expect(text).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %, Wilson 95 % interval 56.6 % to 100.0 %; kept only if the lower bound is at least 60 %: not kept')
+    expect(text).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
+    expect(text).toContain('95 % interval')
+    expect(text).toContain('5 of 5 partners = 100.0 %')
+    expect(text).toContain('F1  the journey re-cut: minutes per surface per week → REPORTED')
+    expect(text).toContain('against PLAN §4.D\'s about 240')
+    expect(text).toContain('  weeks 1 ')
+    expect(text).toContain('planned: Boot → Today; R.L1 ⇄ T0.L1 [today, lessons]')
+    expect(text).toContain('Fleet Week receipts (5 partners): engine 15 of 15 verified, 0 uncited (5 acts)')
+    expect(text).toContain('over 5 acts: capacity 0 / 0 / 5 / 0')
+    expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+  })
+
+  /** `partnerCount` partners, each green on an unseen seed on every one of `labs` v2 labs; the first `attempted` greens, in partner order, get a v2 attempt. */
+  const proveCrew = (partnerCount: number, labs: number, attempted: number) => {
+    const ids = Array.from({ length: labs }, (_, k) => `v2-lab-${k}`)
+    let left = attempted
+    const ledgers = partners(partnerCount, () => {
+      const j = new Journal()
+      ids.forEach((lab, k) => {
+        j.add('lab-check', `lab:${lab}`, d(k), { ok: true, score: 1, provenance: 'unseen', data: { passed: [] } })
+        if (left-- > 0) j.add('prove', `prove:${lab}`, d(k + 1), { ok: true, score: 1, provenance: 'proved', data: { v: 2, qid: 'free-after', kcs: [], answer: 1, actual: 1, calls: 2 } })
+      })
+      return { events: j.events }
+    })
+    return { ledgers, inputs: { cards: CONTENT, v2Labs: new Set(ids) } }
+  }
+
+  test('F5 on its Wilson lower bound: 7 of 10 greens attempted is the underpowered default, 140 of 200 is kept, and both print n, the share and both bounds', () => {
+    const small = proveCrew(5, 2, 7)
+    const r10 = buildWave3Report(small.ledgers, small.inputs)
+    expect(r10.proveV2.attempted).toMatchObject({ n: 10, correct: 7, partners: 5 })
+    expect(status(r10, 'F5')).toBe('fail')
+    expect(r10.keepOrKill.find((k) => k.id === 'F5')).toMatchObject({ verdict: 'underpowered', fallback: '1 question' })
+    const t10 = formatWave3Report(r10)
+    expect(t10).toContain('F5  Prove-it v2 keep-or-kill → NOT MET')
+    expect(t10).toContain('n = 10, 5 partners: 7 of 10 unseen-seed greens followed by a v2 attempt = 70.0 %, Wilson 95 % interval 39.7 % to 89.2 %; kept only if the lower bound is at least 60 %: not kept, so the underpowered default, 1 question (PLAN §9)')
+    expect(t10).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
+    expect(t10).not.toContain('Prove-it v2: KILL')
+
+    const large = proveCrew(20, 10, 140)
+    const r200 = buildWave3Report(large.ledgers, large.inputs)
+    expect(r200.proveV2.attempted).toMatchObject({ n: 200, correct: 140, partners: 20 })
+    expect(status(r200, 'F5')).toBe('pass')
+    expect(r200.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('keep')
+    const t200 = formatWave3Report(r200)
+    expect(t200).toContain('F5  Prove-it v2 keep-or-kill → PASS')
+    expect(t200).toContain('n = 200, 20 partners: 140 of 200 unseen-seed greens followed by a v2 attempt = 70.0 %, Wilson 95 % interval 63.3 % to 75.9 %; kept only if the lower bound is at least 60 %: kept;')
+    expect(t200).toContain('Prove-it v2: KEEP')
+  })
+
+  test('F5 below five partners still prints n, the share and both bounds beside "not enough data"', () => {
+    const few = proveCrew(4, 2, 6)
+    const r = buildWave3Report(few.ledgers, few.inputs)
+    expect(status(r, 'F5')).toBe('insufficient')
+    expect(r.keepOrKill.find((k) => k.id === 'F5')?.verdict).toBe('underpowered')
+    expect(formatWave3Report(r)).toContain('not enough data (n = 8, 4 partners; needs 5 partners); 6 of 8 unseen-seed greens followed by a v2 attempt = 75.0 %, Wilson 95 % interval')
+  })
+
+  test('the journey footnote says what the minutes are since EF1, and that overlapping work on /week counts twice', () => {
+    const text = formatWave3Report(buildWave3Report([], { cards: CONTENT }))
+    for (const line of SURFACE_FOOTNOTE) expect(text).toContain(line)
+    const note = SURFACE_FOOTNOTE.map((l) => l.trim()).join(' ')
+    expect(note).not.toContain('recorded answer and run times')
+    expect(note).toContain('Daily and Act IV drills from the alert to the debrief')
+    expect(note).toContain('a Fleet Week act the page\'s visible time up to its pass')
+    expect(note).toContain('only while the page is visible, capped per event')
+    expect(note).toContain('Overlapping work on /week counts twice (an Act I or II run started during a drill is in both)')
+    expect(note).toContain('A donation rounds each to a second')
+    // the footnote sits under the journey table, before the receipts
+    expect(text.indexOf(SURFACE_FOOTNOTE[0])).toBeGreaterThan(text.indexOf('the journey re-cut (F1)'))
+    expect(text.indexOf(SURFACE_FOOTNOTE[0])).toBeLessThan(text.indexOf('Fleet Week receipts'))
+  })
+
+  test('under five partners no gate is read as a pass', async () => {
+    const r = buildWave3Report(await crew(4), { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) })
+    for (const id of ['F1', 'F5', 'F9', 'F10']) expect(status(r, id)).toBe('insufficient')
+    expect(formatWave3Report(r)).not.toContain('PASS')
+  })
+
+  test('the report is deterministic, and the JSON of it carries every gate', async () => {
+    const ledgers = await crew(5)
+    const a = JSON.stringify(buildWave3Report(ledgers, { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) }))
+    expect(JSON.stringify(buildWave3Report(ledgers, { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) }))).toBe(a)
+    expect(JSON.parse(a).gates).toHaveLength(12)
+  })
+
+  test('a donation gives the same table as the export it came from, for the gates both can compute', async () => {
+    const own = await crew(5)
+    const donated = own.map((l) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] })))
+    const inputs = { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) }
+    const a = buildWave3Report(own, inputs)
+    const b = buildWave3Report(donated, inputs)
+    const line = (r: ReturnType<typeof buildWave3Report>, id: string) => formatWave3Report(r).split('\n').find((l) => l.startsWith(`${id}  `))
+    for (const id of ['F5', 'F6', 'F7', 'F8', 'F10', 'F11', 'F12']) expect(line(b, id)).toBe(line(a, id))
+    expect(b.receipts).toEqual(a.receipts)
+  })
+})
+
+describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
+  const script = path.resolve(import.meta.dir, '../../scripts/partner-report.ts')
+  const run = (...args: string[]) => spawnSync('bun', [script, ...args], { encoding: 'utf8' })
+
+  /** A partner who boots, gets lab 02 green on an unseen seed and makes a Prove-it v2 attempt, and spends a little time on a lesson quiz (the façade's own events). */
+  const partnerEvents = async (i: number): Promise<LedgerEvent[]> => {
+    const j = new Journal()
+    j.add('complete', 'boot', d(0))
+    j.add('lab-check', 'lab:kv-block-manager', d(2), { ok: true, score: 1, provenance: 'unseen', data: { passed: [] } })
+    j.add('prove', 'prove:kv-block-manager', d(3), { ok: true, score: 1, provenance: 'proved', wasmSha256: 'a'.repeat(64), data: { v: 2, qid: 'free-after', kcs: [], answer: 1, actual: 1, calls: 2 } })
+    return [...j.events, ...(await quizBlock(1, 60_000 * (i + 1), ['t1.split-coalesce']))]
+  }
+  const donationFile = (dir: string, name: string, events: LedgerEvent[]): string => {
+    const p = path.join(dir, name)
+    writeFileSync(p, JSON.stringify(redactForPartner({ events, working: [] })))
+    return p
+  }
+
+  test('prints F1 to F12 from five donations, with the journey table, and reads no unsigned pre-registration', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-w3-'))
+    try {
+      const files = await Promise.all([0, 1, 2, 3, 4].map(async (i) => donationFile(dir, `donation-${i}.json`, await partnerEvents(i))))
+      const r = run(...files)
+      expect(r.status).toBe(0)
+      expect(r.stdout).toContain('Wave 3 field gates over 5 exports')
+      for (let n = 1; n <= 12; n++) expect(r.stdout).toContain(`F${n}  `)
+      expect(r.stdout).toContain('F1  the journey re-cut: minutes per surface per week → REPORTED')
+      expect(r.stdout).toContain('the journey re-cut (F1): active minutes per week')
+      expect(r.stdout).toContain('planned: Boot → Today; R.L1 ⇄ T0.L1')
+      // lab 02 ships a Prove-it v2 bundle, so the script finds it among the labs and F5 reads the five attempts; 5 of 5 has
+      // a Wilson lower bound of 56.6 %, under the 60 % bar, so Prove-it v2 takes the underpowered default
+      expect(r.stdout).toContain('F5  Prove-it v2 keep-or-kill → NOT MET')
+      expect(r.stdout).toContain('5 of 5 unseen-seed greens followed by a v2 attempt = 100.0 %, Wilson 95 % interval 56.6 % to 100.0 %')
+      expect(r.stdout).toContain('Prove-it v2: UNDERPOWERED, default: 1 question')
+      expect(r.stdout).toContain('F4  the watcher')
+      expect(r.stdout).toContain('the manual scan stays')
+      expect(r.stdout).toContain('5 of 5 files are redacted donations')
+      expect(r.stdout).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+      expect(r.stdout + r.stderr).not.toContain('donation-0')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('--json carries the twelve gates, and --wave1 with --wave2 is a usage error', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-w3-'))
+    try {
+      const file = donationFile(dir, 'a.json', await partnerEvents(0))
+      const j = run('--json', file)
+      expect(j.status).toBe(0)
+      const report = JSON.parse(j.stdout)
+      expect(report.gates.map((g: { id: string }) => g.id)).toEqual(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'])
+      expect(report.gates.find((g: { id: string }) => g.id === 'F1').status).toBe('insufficient')
+      const both = run('--wave1', '--wave2', file)
+      expect(both.status).toBe(2)
+      expect(both.stderr).toContain('usage')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('mixes a full export and a donation, and says what a donation cannot carry', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-w3-'))
+    try {
+      const full = path.join(dir, 'export.json')
+      writeFileSync(full, serializeExport(buildExportV3({ events: await partnerEvents(0), working: [], device: 'dev-w3', exportedAt: '2026-10-07T12:00:00.000Z' })))
+      const r = run(full, donationFile(dir, 'don.json', await partnerEvents(1)))
+      expect(r.status).toBe(0)
+      expect(r.stdout).toContain('over 2 exports')
+      expect(r.stdout).toContain('1 of 2 files is a redacted donation')
+      expect(r.stdout).toContain("F2 reads every ledger from the lab's first all-green run, so a donation and its export agree there")
+      expect(r.stdout).not.toContain('per-check')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

@@ -1037,6 +1037,8 @@ export interface QuizResponse {
   conf?: Confidence
   /** KCs of the question (`QuizQuestion.kcs`), written to the item's `data.kcs`. */
   kcs?: string[]
+  /** On a miss, the misconception id (`QuizQuestion.miss`) of the first wrong pick that names one, as Today's items carry it. */
+  miss?: string
 }
 
 export interface QuizAttempt {
@@ -1076,6 +1078,8 @@ export interface LedgerFacadeActions extends LedgerFacadeActionsV31, LedgerFacad
   completeRef(ref: BootRef, data?: JsonObject): void
   recordVisit(ref: LessonRef | SimRef | BootRef): void
   setWorking(key: WorkingKey, value: Json): void
+  /** Delete a working record: memory, the store, the outbox and other tabs. Nothing happens when the key holds none. */
+  clearWorking(key: WorkingKey): void
 }
 
 /* ---- Wave 1 façade additions (spec §3.3), merged into LedgerFacadeActions above. ---- */
@@ -1196,6 +1200,8 @@ export interface ComponentInstall {
 /** Optional detail on a Fleet Week act (`completeFleetWeekAct`'s third argument). */
 export interface FleetActMeta {
   seed?: number
+  /** The time spent on the act that no run or drill event holds (wave-3.md §15.1); the façade clamps it to the codec's `ms`. */
+  ms?: number
   provenance?: Extract<Provenance, 'practice' | 'unseen'>
   /** Kept on the `fleet-act` event as `data`; Acts I-III carry `FleetActData` (wave-3.md §3.2). */
   data?: JsonObject | FleetActData
@@ -1254,6 +1260,8 @@ export interface LedgerEngine extends LedgerClient {
   putComponent(rec: ComponentRecord): Promise<void>
   /** Commit events and working records already in this tab's outbox, then broadcast. Resolves after the commit. */
   append(events: LedgerEvent[], working: WorkingRecord[]): Promise<void>
+  /** Delete working records from memory and the store, then tell other tabs to re-read it. */
+  deleteWorking(keys: WorkingKey[]): Promise<void>
   /** Called after every full derive (boot, broadcast, import, undo, reset, re-projection). */
   onAggregate(cb: (agg: Aggregate, working: WorkingRecord[], status: LedgerStatus) => void): () => void
   status(): LedgerStatus

@@ -15,6 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { ALL_EXEMPLARS, EXEMPLARS, RUBRIC, RUBRIC_KEYS, exemplarTotal, type Exemplar } from '../../src/data/fleetweek/exemplars'
 import { HEADROOM_TOKENS, PRACTICE_SEED } from '../../src/lib/fleet-model'
+import { RUBRIC_KEYS as LEDGER_RUBRIC_KEYS } from '../../src/lib/ledger/constants'
 import {
   ACT1_MACHINE,
   ACT2_MACHINE,
@@ -307,7 +308,7 @@ describe('an act records its seed, provenance unseen and its receipts', () => {
     expect(high.score).toBeCloseTo(graded.score, 10)
   })
 
-  test('the rubric’s four keys are the codec’s RUBRIC_KEYS (D35): the façade keeps a rubric of exactly these keys and drops one missing any', async () => {
+  test('the rubric’s four keys are the codec’s RUBRIC_KEYS (D35, D48): the façade keeps a rubric of exactly these keys and drops one missing any', async () => {
     const keep = async (rubric: Record<string, number>) => {
       const tab = startTab(makeProfile())
       tab.progress.getState().completeFleetWeekAct('engine', 1, { provenance: 'unseen', data: { rubric: rubric as never } })
@@ -318,7 +319,9 @@ describe('an act records its seed, provenance unseen and its receipts', () => {
     const all = Object.fromEntries(RUBRIC_KEYS.map((k) => [k, 2]))
     expect(await keep(all)).toEqual(all)
     for (const k of RUBRIC_KEYS) expect(await keep(Object.fromEntries(Object.entries(all).filter(([key]) => key !== k)))).toBeUndefined()
-    expect([...RUBRIC_KEYS]).toEqual(['capacity', 'slo', 'cost', 'failure'])
+    // one source: the exemplars hand on ledger/constants.ts's own list, the one the codec and the façade read, not a copy
+    // (tests/ledger/shared-bounds.test.ts holds every other file to it)
+    expect(RUBRIC_KEYS).toBe(LEDGER_RUBRIC_KEYS)
     expect(RUBRIC.map((c) => c.key)).toEqual([...RUBRIC_KEYS])
   })
 })

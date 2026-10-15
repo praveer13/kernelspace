@@ -24,6 +24,7 @@ import type { ChannelLike, LedgerChannel, StorageEventTarget } from './channel'
 import {
   buildExportV3,
   IMPORT_ERROR_MESSAGES,
+  isWorkingKey,
   mergeExtras,
   parseImport,
   previewImport as previewImportText,
@@ -38,7 +39,7 @@ import { IdbStore } from './idb-store'
 import { MemoryStore } from './memory-store'
 import { canonicalEvent, compareEvents, lwwWorking } from './merge'
 import { SNAPSHOT_KEY } from './names'
-import { collectOutboxes, pendingFrom, removeFromOutbox, settleOutboxes } from './outbox'
+import { clearedBy, collectOutboxes, dropCleared, pendingFrom, removeFromOutbox, settleOutboxes } from './outbox'
 import { sameJson } from './stable'
 import type { Ledger } from './merge'
 import type {
@@ -351,8 +352,15 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
 
   /* ---------------- boot (§9.6) ---------------- */
 
-  /** Outbox contents that pass validation: they come from storage, so they are untrusted like an import. */
-  function validPending(found: ReturnType<typeof collectOutboxes>): { events: LedgerEvent[]; working: WorkingRecord[] } {
+  /**
+   * Outbox contents that pass validation: they come from storage, so they are untrusted like an import. `working` is
+   * already less what a tombstone clears; `cleared` holds the latest tombstone per known working key.
+   */
+  function validPending(found: ReturnType<typeof collectOutboxes>): {
+    events: LedgerEvent[]
+    working: WorkingRecord[]
+    cleared: Map<WorkingKey, IsoInstant>
+  } {
     const raw = pendingFrom(found)
     const evs: LedgerEvent[] = []
     const ws: WorkingRecord[] = []
@@ -364,8 +372,12 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
       const checked = validateWorkingRecord(w)
       if (checked.ok) ws.push(checked.value)
     }
-    return { events: evs, working: ws }
+    const cleared = new Map([...raw.cleared].filter(([key]) => isWorkingKey(key)))
+    return { events: evs, working: ws, cleared }
   }
+
+  /** Set when boot applied a tombstone to the store, so the other tabs re-read it. */
+  let clearedAtBoot = false
 
   const versionWatch: { off: (() => void) | null } = { off: null }
 
@@ -394,9 +406,17 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
       tx.putMeta = { schema: deps.build ? { version: bundle, at, build: deps.build } : { version: bundle, at } }
     }
     await store.commit(tx, resolvers)
+    // A tombstone also beats the store's record written at or before it: a clear whose delete never committed (D50).
+    const contents = await store.readAll()
+    const stale = contents.working.filter((w) => clearedBy(pending.cleared, w))
+    if (stale.length > 0) {
+      await store.commit({ deleteWorkingKeys: stale.map((w) => w.key) }, resolvers)
+      contents.working = contents.working.filter((w) => !clearedBy(pending.cleared, w))
+      clearedAtBoot = true
+    }
     // When IndexedDB is gone the outbox is the store: leave it (§8.6).
     if (!fellBack) settleOutboxes(storage, tabId, found, nowMs())
-    return { schemaVersion: info.schemaVersion, contents: await store.readAll() }
+    return { schemaVersion: info.schemaVersion, contents }
   }
 
   function safeGet(key: string): string | null {
@@ -464,6 +484,8 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
       })
   for (const m of early.splice(0)) onMessage(m)
   if (!guard.readOnly) channel.post({ t: 'hello' })
+  // A tab still showing the record that boot's tombstone deleted re-reads the store, as after deleteWorking.
+  if (!guard.readOnly && clearedAtBoot) channel.post({ t: 'reload', reason: 'import' })
 
   // Step 8: durability. `persisted()` never prompts.
   let persistAsked = false
@@ -555,6 +577,32 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     return enqueue(() => commitPending(evs, ws))
   }
 
+  /**
+   * Delete working records (a learner clearing an optional pick). The façade has already written the clear's tombstone
+   * to its outbox and stripped the key's earlier records from every outbox (`clearInOutboxes`), so a page that unloads
+   * before this commit still clears at the next boot. The store keeps no tombstone, so a file exported before the delete
+   * can bring the record back on a later import, like any older value (the import drops the outbox tombstone too). Other
+   * tabs get a `reload` (the reason names the closest existing one: they re-read the store), which a rebuild applies as
+   * a delete.
+   */
+  function deleteWorking(keys: WorkingKey[]): Promise<void> {
+    if (guard.readOnly || closed || keys.length === 0) return Promise.resolve()
+    for (const k of keys) {
+      pendingWorking.delete(k)
+      working.delete(k)
+    }
+    emit()
+    return enqueue(async () => {
+      if (guard.readOnly) return
+      try {
+        await store.commit({ deleteWorkingKeys: keys }, resolvers)
+      } catch {
+        return // memory shows the delete; the next rebuild from the store shows the record again
+      }
+      channel.post({ t: 'reload', reason: 'import' })
+    })
+  }
+
   const readOnlyResult = (): { ok: false; error: ImportErrorCode; detail: string } => ({
     ok: false,
     error: 'read-only',
@@ -627,6 +675,8 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
       }
       if (mode === 'replace') tx.clear = ['events', 'working']
       await store.commit(tx, resolvers)
+      // The file's records are restored on purpose, so an earlier "Clear my pick" stops applying to them (D50).
+      dropCleared(storage, tabId, checkpoint.fileWorkingKeys)
 
       const local = readExtras(storage)
       writeExtras(
@@ -683,6 +733,8 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
         { clear: ['events', 'working'], putEvents: [...restored.values()], putWorking, deleteCheckpoint: true },
         resolvers,
       )
+      // Like an import, an undo writes these records back on purpose: an earlier clear stops applying to them (D50).
+      dropCleared(storage, tabId, putWorking.map((w) => w.key))
       setMemory(await store.readAll())
       delete base.undo
       emit()
@@ -785,6 +837,7 @@ export async function createEngine(deps: EngineDeps): Promise<BootedEngine> {
     componentBytes,
     putComponent,
     append,
+    deleteWorking,
     onAggregate(cb) {
       listeners.add(cb)
       // Replay the latest derive so a late subscriber starts current (the façade subscribes after boot).
