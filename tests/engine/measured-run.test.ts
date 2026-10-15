@@ -356,6 +356,7 @@ describe('the section, with the measurement stubbed', () => {
     const page = await open(r)
     await lockAt(page, '51.2', '70')
     expect(q(page, '[data-locked]').textContent).toContain('Locked: 70 tok/s at 51.2 GB/s.')
+    expect(dom.document.activeElement).toBe(q(page, '[data-run]'))
     expect(q(page, '[data-bandwidth]').disabled).toBe(true)
     expect(q(page, '[data-prediction]').disabled).toBe(true)
     expect(r.recorded).toHaveLength(0)
@@ -365,6 +366,9 @@ describe('the section, with the measurement stubbed', () => {
     expect(r.measured).toBe(1)
     expect(r.busy).toEqual([true, false])
 
+    expect(dom.document.activeElement).toBe(q(page, '[data-comparison]'))
+    expect(q(page, '[data-measure-status]').getAttribute('role')).toBe('status')
+    expect(q(page, '[data-measure-status]').querySelector('[data-verdict]')).not.toBeNull()
     const verdict = q(page, '[data-verdict]').textContent
     expect(verdict).toContain('You predicted 70 tok/s; this device measured 40 tok/s (0.57')
     expect(verdict).toContain('Within 2×')
@@ -445,6 +449,7 @@ describe('the section, with the measurement stubbed', () => {
     await dom.until(() => q(page, '[data-comparison]') !== null)
     await dom.press(q(page, '[data-again]'))
     expect(q(page, '[data-comparison]')).toBeNull()
+    expect(dom.document.activeElement).toBe(q(page, '[data-prediction]'))
     expect(q(page, '[data-prediction]').disabled).toBe(false)
     expect(q(page, '[data-prediction]').value).toBe('')
     expect(q(page, '[data-bandwidth]').value).toBe('51.2')

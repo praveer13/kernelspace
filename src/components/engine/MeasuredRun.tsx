@@ -8,7 +8,7 @@
  * this section only needs the loaded generation function. The measurement and the recording are injectable (`env`), so a test stubs the measurement and reads the
  * events written. The numbers and the arithmetic are src/lib/real-engine.ts's.
  */
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { Download, Gauge, Loader2, Minus, Play, Plus } from 'lucide-react'
 import { ClaimValue } from '@/components/ClaimValue'
 import { formatNumber } from '@/lib/items/units'
@@ -118,6 +118,22 @@ export default function MeasuredRun({ gen, device, isMeasuredModel, busy = false
     }
   }, [])
 
+  // Focus follows the controls that come and go, so a keyboard walk never lands on <body>: the lock button is replaced
+  // by the run button, which is replaced by the result, and "predict again" brings the prediction back.
+  const runRef = useRef<HTMLButtonElement>(null)
+  const lockedRef = useRef<HTMLParagraphElement>(null)
+  const resultRef = useRef<HTMLDivElement>(null)
+  const predictionRef = useRef<HTMLInputElement>(null)
+  const moved = useRef<Phase>('predict')
+  useEffect(() => {
+    const from = moved.current
+    moved.current = phase
+    if (phase === from) return
+    if (phase === 'locked') (runRef.current && !runRef.current.disabled ? runRef.current : lockedRef.current)?.focus()
+    else if (phase === 'done') resultRef.current?.focus()
+    else if (phase === 'predict') predictionRef.current?.focus()
+  }, [phase])
+
   const bw = parsePositive(bwText, MAX_GBS)
   const tps = parsePositive(tpsText, MAX_TPS)
   const editing = phase === 'predict'
@@ -226,6 +242,7 @@ export default function MeasuredRun({ gen, device, isMeasuredModel, busy = false
           </label>
           <input
             id={`${uid}-tps`}
+            ref={predictionRef}
             data-prediction
             inputMode="decimal"
             autoComplete="off"
@@ -243,14 +260,14 @@ export default function MeasuredRun({ gen, device, isMeasuredModel, busy = false
             lock my prediction
           </button>
         ) : (
-          <p className="font-mono text-[12px] text-text-2" data-locked>
+          <p ref={lockedRef} tabIndex={-1} className="font-mono text-[12px] text-text-2 outline-none" data-locked>
             Locked: {formatNumber(locked?.predicted ?? 0)} tok/s at {formatNumber(locked?.bandwidthGBs ?? 0)} GB/s.
           </p>
         )}
 
         {phase !== 'predict' && phase !== 'done' && (
           <div>
-            <button type="button" data-run className={cn(btn, 'border-accent/60 bg-accent/10 text-accent hover:bg-accent/20')} disabled={!canRun} onClick={() => void run()}>
+            <button ref={runRef} type="button" data-run className={cn(btn, 'border-accent/60 bg-accent/10 text-accent hover:bg-accent/20')} disabled={!canRun} onClick={() => void run()}>
               {phase === 'running' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
               {phase === 'running' ? 'measuring…' : 'run the real engine'}
             </button>
@@ -266,7 +283,13 @@ export default function MeasuredRun({ gen, device, isMeasuredModel, busy = false
       </div>
 
       <div role="status" className="mt-3 font-mono text-[11px] text-text-3 empty:mt-0" data-measure-status>
-        {phase === 'running' ? (progress && progress.total > 0 ? `timing round ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : 'warming the model up…') : null}
+        {phase === 'running' ? (
+          progress && progress.total > 0 ? `timing round ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : 'warming the model up…'
+        ) : result ? (
+          <span className="text-sm text-text-1" data-verdict>
+            {verdictOf(result)}
+          </span>
+        ) : null}
       </div>
       {error && (
         <p role="alert" className="mt-3 rounded-lg border border-danger/40 bg-danger/5 p-3 font-mono text-[12px] text-danger" data-measure-error>
@@ -274,7 +297,7 @@ export default function MeasuredRun({ gen, device, isMeasuredModel, busy = false
         </p>
       )}
 
-      {result && <Comparison c={result} device={device} onAgain={again} />}
+      {result && <Comparison c={result} device={device} onAgain={again} resultRef={resultRef} />}
     </section>
   )
 }
@@ -283,7 +306,13 @@ export default function MeasuredRun({ gen, device, isMeasuredModel, busy = false
 
 const tpsOf = (n: number): string => formatNumber(n, n >= 100 ? 0 : 1)
 
-function Comparison({ c, device, onAgain }: { c: RunComparison; device: string | null; onAgain: () => void }) {
+/** The sentence a result opens with; it goes in the section's live region, so it is announced when the run lands. */
+function verdictOf(c: RunComparison): string {
+  const gap = c.ok ? `Within ${OK_FACTOR}×: close enough.` : `Outside ${OK_FACTOR}×: ${c.ratio < 1 ? 'the device was slower than you expected' : 'the device was faster than you expected'}.`
+  return `You predicted ${tpsOf(c.predicted)} tok/s; this device measured ${tpsOf(c.measured)} tok/s (${formatNumber(c.ratio, 2)}× your prediction). ${gap}`
+}
+
+function Comparison({ c, device, onAgain, resultRef }: { c: RunComparison; device: string | null; onAgain: () => void; resultRef: RefObject<HTMLDivElement | null> }) {
   const max = Math.max(c.predicted, c.measured, c.ceiling)
   const bars: { id: string; label: string; v: number; tone: string }[] = [
     { id: 'predicted', label: 'you predicted', v: c.predicted, tone: 'bg-info' },
@@ -292,13 +321,8 @@ function Comparison({ c, device, onAgain }: { c: RunComparison; device: string |
   ]
   const kv32 = MEASURE_CONTEXT_TOKENS * kvBytesPerToken(4)
   return (
-    <div className="mt-4 border-t border-line pt-4" data-comparison>
-      <p role="status" aria-live="polite" className="font-mono text-sm text-text-1" data-verdict>
-        You predicted {tpsOf(c.predicted)} tok/s; this device measured {tpsOf(c.measured)} tok/s ({formatNumber(c.ratio, 2)}× your prediction).{' '}
-        {c.ok ? `Within ${OK_FACTOR}×: close enough.` : `Outside ${OK_FACTOR}×: ${c.ratio < 1 ? 'the device was slower than you expected' : 'the device was faster than you expected'}.`}
-      </p>
-
-      <div className="mt-3 space-y-2" aria-hidden="true">
+    <div ref={resultRef} tabIndex={-1} aria-label="measured against predicted" role="group" className="mt-2 border-t border-line pt-4 outline-none" data-comparison>
+      <div className="space-y-2" aria-hidden="true">
         {bars.map((b) => (
           <div key={b.id} className="flex items-center gap-2 font-mono text-[10px] text-text-3">
             <span className="w-32 shrink-0 sm:w-44">{b.label}</span>

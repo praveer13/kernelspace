@@ -108,6 +108,7 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
       {/* model loader */}
       <div className="flex flex-wrap items-center gap-3">
         <select
+          aria-label="model to load"
           value={modelId}
           onChange={(e) => {
             setModelId(e.target.value)
