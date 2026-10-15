@@ -117,6 +117,8 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
             setLoadState(null)
             setDevice(null)
           }}
+          // locked while a load runs: its result lands in `genRef`, and the measured run must name the model that was loaded
+          disabled={!!loadState && !device}
           className="rounded-md border border-line bg-surface-1 px-3 py-2 font-mono text-[12px] text-text-1 outline-none focus:border-accent/60"
         >
           {MODELS.map((m) => (

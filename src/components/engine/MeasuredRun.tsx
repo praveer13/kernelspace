@@ -349,7 +349,7 @@ function Comparison({ c, device, onAgain, resultRef }: { c: RunComparison; devic
       <p className="mt-3 max-w-2xl text-body-sm text-text-2">{gapReading(c, device)}</p>
       <p className="mt-2 max-w-2xl font-mono text-[10px] leading-relaxed text-text-3">
         Your device, not an H100: an H100 SXM has <ClaimValue id="hw.h100-sxm.hbm-bw" /> of HBM bandwidth, a ceiling of {formatNumber(h100CeilingTps(c.bytes), 0)} tok/s for the same bytes. The KV cache
-        adds at most about {formatNumber((kv32 / c.bytes) * 100, 1)}% to a token&apos;s bytes here ({MEASURE_CONTEXT_TOKENS} tokens of context at 229,376 B per token in fp32), so it is left out. The
+        adds at most about {formatNumber((kv32 / c.bytes) * 100, 1)}% to a token&apos;s bytes here ({MEASURE_CONTEXT_TOKENS} tokens of context at {formatNumber(kvBytesPerToken(4), 0)} B per token in fp32), so it is left out. The
         rate is the median of three rounds that time a 40-token against an 8-token generation of one prompt, so prefill cancels.
       </p>
       <p className="mt-2 font-mono text-[10px] text-text-3" data-recorded>

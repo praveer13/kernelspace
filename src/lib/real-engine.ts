@@ -239,8 +239,6 @@ export const MEASURED_BYTES = 400e6
 export const MEASURED_ITEM_ID = 'engine.measured-tps'
 export const MEASURED_REF = `item:${MEASURED_ITEM_ID}` as const
 export const MEASURED_UNIT = 'tok/s'
-/** The KC the run is evidence for (src/data/kc/ids.ts: `decodeBandwidth`). */
-export const MEASURED_KC = 't4.decode-bandwidth'
 
 /** A prediction is right within this factor of the measurement: software efficiency alone moves a device's rate that much. */
 export const OK_FACTOR = 2
@@ -358,7 +356,8 @@ const median = (xs: readonly number[]): number => {
  *
  * The generation function returns text, not a token count, so a run's tokens are the cap asked for. An answer that
  * ended before the cap would break that, so a longer run whose text is not clearly longer than the shorter one's is
- * refused (a 5x cap ratio must show as at least 3x the text).
+ * refused (a 5x cap ratio must show as at least 4x the text: a run that ended at 32 tokens, 24 of them timed, reads 1.33x
+ * too fast, within the 2x a prediction is judged by). The prompt is greedy, so the short answer is a prefix of the long one.
  */
 export async function measureDecodeTps(gen: RealGenFn, options: MeasureOptions = {}): Promise<DecodeMeasurement> {
   const now = options.now ?? (() => performance.now())
@@ -378,7 +377,7 @@ export async function measureDecodeTps(gen: RealGenFn, options: MeasureOptions =
   for (let i = 0; i < rounds; i++) {
     const short = await timed(lo)
     const long = await timed(hi)
-    if (long.text.length === 0 || long.text.length < 3 * short.text.length) {
+    if (long.text.length === 0 || long.text.length < 4 * short.text.length) {
       throw new MeasureError('The model stopped before the timed length, so its tokens cannot be counted. Run it again.')
     }
     const seconds = (long.ms - short.ms) / 1000
@@ -442,7 +441,7 @@ export function compareRun(inputs: RunInputs): RunComparison {
 /** Where the gap comes from, said for the device the run used and hedged where the page cannot know. */
 export function gapReading(c: RunComparison, device: string | null): string {
   if (c.utilisation > 1.05) {
-    return `The measured rate moves ${c.effectiveGBs.toFixed(1)} GB/s of weights, more than the ${c.bandwidthGBs} GB/s you chose. Either this device has more memory bandwidth than you gave it, or a token reads fewer bytes than the download holds (the input embedding is a one-row lookup).`
+    return `The measured rate moves ${c.effectiveGBs.toFixed(1)} GB/s of weights, more than the ${c.bandwidthGBs} GB/s you chose. Either this device has more memory bandwidth than you gave it, or a token reads fewer bytes than the nominal 400 MB.`
   }
   const pct = Math.round(c.utilisation * 100)
   const where =
@@ -460,7 +459,9 @@ export function gapReading(c: RunComparison, device: string | null): string {
  */
 export function measuredRunItems(c: RunComparison): ItemResponse[] {
   const rev = rev32({ id: MEASURED_ITEM_ID, model: MEASURED_MODEL_ID, unit: MEASURED_UNIT, okWithinFactor: OK_FACTOR })
-  const data = { src: 'practice' as const, value: c.predicted, unit: MEASURED_UNIT, truth: c.measured, kcs: [MEASURED_KC] }
+  // No `kcs` tag: a field event resolves to no KC (`item:engine.measured-tps` is in no ref-map), because cards.ts counts any
+  // event that resolves to a KC as a review of its card, and a miss on your own device's speed is not a lapse.
+  const data = { src: 'practice' as const, value: c.predicted, unit: MEASURED_UNIT, truth: c.measured }
   const base = { ref: MEASURED_REF, rev, score: c.score, ok: c.ok, provenance: 'field' as const, data }
   return [
     { kind: 'predict', ...base },

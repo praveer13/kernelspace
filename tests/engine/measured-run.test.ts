@@ -3,15 +3,18 @@
  * prediction (bytes, a bandwidth you choose, the ceiling), the measurement protocol against a fake generation function and
  * a fake clock, the comparison, the two events it records (a `predict` and an `item` on `item:engine.measured-tps`, src
  * `practice`, provenance `field`) through a real ledger, the section mounted in a small DOM (tests/dom/mini-dom.ts) with
- * the measurement stubbed, and the panel asking before it downloads.
+ * the measurement stubbed, and the panel asking before it downloads (RealEnginePanel mounted with the loader stubbed).
  *
  * No model is ever loaded here: `gen` is a stand-in that spends virtual time per token, and the mounted section takes a
  * stubbed `measure`. What the real model measures on a laptop and a phone is the owner's device run (§16.10).
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import { createElement } from 'react'
 import MeasuredRun, { DownloadConsent, type MeasuredRunEnv } from '../../src/components/engine/MeasuredRun'
 import { claimNumber } from '../../src/data/claims'
+import { KCS } from '../../src/data/kc'
+import { buildKcContent, kcsOfEvent } from '../../src/lib/kc/resolve'
+import { cardsContent, deriveCardsDetailed } from '../../src/lib/learner/cards'
 import { validateEvent } from '../../src/lib/ledger/codec'
 import type { ItemResponse } from '../../src/lib/ledger/types'
 import { redactForPartner } from '../../src/lib/learner/redact'
@@ -20,7 +23,6 @@ import {
   MAX_TPS,
   MEASURED_BYTES,
   MEASURED_ITEM_ID,
-  MEASURED_KC,
   MEASURED_MODEL_ID,
   MEASURED_REF,
   MEASURE_CONTEXT_TOKENS,
@@ -45,8 +47,9 @@ import {
   type DecodeMeasurement,
   type RealGenFn,
 } from '../../src/lib/real-engine'
-import { installDom, MiniEvent, type DomKit, type MiniElement, type Mounted } from '../dom/mini-dom'
+import { installDom, MiniElement, MiniEvent, type DomKit, type Mounted } from '../dom/mini-dom'
 import { makeProfile, startTab, tick } from '../ledger/env'
+import { Journal } from '../learner/ledger-gen'
 
 /* ------------------------------ a model that takes time ------------------------------ */
 
@@ -176,6 +179,19 @@ describe('measureDecodeTps', () => {
     await expect(measureDecodeTps(m.gen, { now: m.now })).rejects.toThrow(/stopped before the timed length/)
   })
 
+  test('an answer that ends well short of the cap is refused: 24 of 40 tokens would read 1.5x too fast', async () => {
+    const m = fakeModel({ prefillMs: 100, msPerToken: 20, stopAt: 24 })
+    await expect(measureDecodeTps(m.gen, { now: m.now })).rejects.toThrow(/stopped before the timed length/)
+  })
+
+  test('an answer that reaches 32 of 40 tokens is timed, and reads 1.33x too fast at most', async () => {
+    const m = fakeModel({ prefillMs: 100, msPerToken: 25, stopAt: 32 })
+    const r = await measureDecodeTps(m.gen, { now: m.now })
+    // 24 tokens timed (32 - 8) over 32 counted: 40 tok/s true, 53.3 reported
+    expect(r.tokPerSec).toBe(53.3)
+    expect(r.tokPerSec / 40).toBeLessThan(1.34)
+  })
+
   test('a clock that cannot tell the two runs apart is refused', async () => {
     const m = fakeModel({ prefillMs: 100, msPerToken: 0 })
     await expect(measureDecodeTps(m.gen, { now: m.now })).rejects.toThrow(/clock cannot separate/)
@@ -241,10 +257,30 @@ describe('the recording', () => {
     for (const e of [predict, item]) {
       expect(e).toMatchObject({ ref: MEASURED_REF, provenance: 'field', ok: true })
       expect(e.score).toBeCloseTo(cmp.score, 12)
-      expect(e.data).toEqual({ src: 'practice', value: 70, unit: 'tok/s', truth: 40, kcs: [MEASURED_KC] })
+      // no `kcs`: a KC tag would make cards.ts treat the pair as reviews of that KC (see the regression below)
+      expect(e.data).toEqual({ src: 'practice', value: 70, unit: 'tok/s', truth: 40 })
     }
     expect(predict.rev).toBe(item.rev)
-    expect(MEASURED_KC).toBe('t4.decode-bandwidth')
+  })
+
+  test('a run updates no card and adds no first review: the ledger derives the same with and without it', () => {
+    const kc = KCS.find((k) => k.id === 't4.decode-bandwidth')
+    if (!kc) throw new Error('the KC graph has no t4.decode-bandwidth')
+    const kcContent = buildKcContent({ lessons: [] })
+    const content = cardsContent({ kcs: [kc], lessons: [{ id: 't4.l3', kcs: [kc.id] }], bootKcs: [], resolve: (e) => kcsOfEvent(e, kcContent) })
+    const D = (n: number) => `2026-10-${String(10 + n).padStart(2, '0')}` as never
+    const base = new Journal()
+    base.passLesson(D(0), 't4.l3', [kc.id])
+    const withRuns = Journal.from(base.events)
+    // a miss, three days after the card was earned: the case that used to lapse it
+    const miss = measuredRunItems(compareRun({ predicted: 4000, bandwidthGBs: 51.2, measured: 40 }))
+    expect(miss.every((m) => !m.ok)).toBe(true)
+    for (const m of miss) withRuns.add(m.kind, m.ref, D(3), { score: m.score, ok: m.ok, rev: m.rev, provenance: m.provenance, data: m.data })
+    const without = deriveCardsDetailed(base.events, content, D(4))
+    const with_ = deriveCardsDetailed(withRuns.events, content, D(4))
+    expect(with_.set.cards).toEqual(without.set.cards)
+    expect(with_.firstReviews).toEqual(without.firstReviews)
+    expect(with_.set.cards[kc.id]).toMatchObject({ reps: 0, lapses: 0, lastReviewDay: null })
   })
 
   test('the rev changes with the model or the tolerance, so a re-scoped item reads as a new one', () => {
@@ -532,6 +568,90 @@ describe('the consent', () => {
     const { el } = ask({ name: 'SmolLM2-135M', mb: 90 })
     const page = await dom.mount(el)
     expect(q(page, '[data-consent]').textContent).toContain('SmolLM2-135M downloads about 90 MB')
+    await page.unmount()
+  })
+})
+
+/* ------------------------------ the panel asks before it downloads ------------------------------ */
+
+describe('RealEnginePanel', () => {
+  let dom: DomKit
+  const loads: string[] = []
+  /** When set, a load waits for it. */
+  let hold: Promise<void> | null = null
+  let Panel: typeof import('../../src/pages/fleet/RealEnginePanel').default
+  let real: typeof import('../../src/lib/real-engine')
+  // React reads `options` of a native select, which mini-dom's elements do not have: added for these tests and put back after.
+  const hadOptions = Object.getOwnPropertyDescriptor(MiniElement.prototype, 'options')
+  beforeAll(async () => {
+    dom = await installDom()
+    Object.defineProperty(MiniElement.prototype, 'options', {
+      configurable: true,
+      get(this: MiniElement) {
+        return this.querySelectorAll('option')
+      },
+    })
+    real = await import('../../src/lib/real-engine')
+    mock.module('../../src/lib/real-engine', () => ({
+      ...real,
+      loadRealModel: async (id: string) => {
+        loads.push(id)
+        if (hold) await hold
+        return { gen: async () => [], device: 'wasm' }
+      },
+    }))
+    Panel = (await import('../../src/pages/fleet/RealEnginePanel')).default
+  })
+  afterAll(async () => {
+    mock.module('../../src/lib/real-engine', () => real)
+    if (hadOptions) Object.defineProperty(MiniElement.prototype, 'options', hadOptions)
+    else delete (MiniElement.prototype as unknown as Record<string, unknown>).options
+    await dom.uninstall()
+  })
+
+  const buttons = (page: Mounted) => page.container.querySelectorAll('button')
+  const loadButton = (page: Mounted) => buttons(page).find((b) => b.textContent.includes('load model')) as MiniElement
+  const mountPanel = () => dom.mount(createElement(Panel, { slots: { sched: null, mgr: null, queue: null } }))
+
+  test('the load button opens the consent and downloads nothing; not now returns focus to it; yes loads once', async () => {
+    const page = await mountPanel()
+    expect(page.container.querySelector('[data-consent]')).toBeNull()
+    expect(loads).toEqual([])
+
+    await dom.press(loadButton(page))
+    expect(page.container.querySelector('[data-consent]')).not.toBeNull()
+    expect(loads).toEqual([])
+
+    await dom.press(page.container.querySelector('[data-consent-no]') as MiniElement)
+    expect(page.container.querySelector('[data-consent]')).toBeNull()
+    expect(dom.document.activeElement).toBe(loadButton(page))
+    expect(loads).toEqual([])
+
+    await dom.press(loadButton(page))
+    await dom.press(page.container.querySelector('[data-consent-yes]') as MiniElement)
+    await dom.until(() => loads.length > 0)
+    expect(loads).toEqual([MEASURED_MODEL_ID])
+    await dom.until(() => page.container.textContent.includes('ready (wasm)'))
+    expect(page.container.querySelector('[data-consent]')).toBeNull()
+    await page.unmount()
+  })
+
+  test('the model select is locked while a load runs, so the measured run cannot name the wrong model', async () => {
+    let release: () => void = () => {}
+    hold = new Promise<void>((resolve) => (release = resolve))
+    const page = await mountPanel()
+    const select = page.container.querySelector('select') as MiniElement
+    expect(select.disabled).toBe(false)
+    await dom.press(loadButton(page))
+    await dom.press(page.container.querySelector('[data-consent-yes]') as MiniElement)
+    expect(select.disabled).toBe(true)
+    await dom.act(async () => {
+      release()
+      await new Promise((res) => setTimeout(res, 10))
+    })
+    await dom.until(() => page.container.textContent.includes('ready (wasm)'))
+    expect(select.disabled).toBe(false)
+    hold = null
     await page.unmount()
   })
 })
