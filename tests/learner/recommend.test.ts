@@ -25,6 +25,7 @@ import {
 } from '../../src/lib/learner/recommend'
 import type { DayKind, PlacementResult } from '../../src/lib/learner/types'
 import { currentLessonNow, firstLessonsNow, isFirstVisit, loadUpNext, recommendNow, type UpNextInput } from '../../src/lib/learner/up-next'
+import { bootLine } from '../../src/pages/boot/firstLine'
 import type { Json, LearningPath } from '../../src/lib/ledger/types'
 
 const CONTENT: RecommendContent = { kcs: KCS, lessons: ALL_LESSONS, labs: FORGE_LABS }
@@ -470,6 +471,67 @@ describe('Boot and Today name where the path begins', () => {
     }
     expect(firstLessonsNow(loaded, 'rust-systems', undefined).r.map((l) => l.code)).toEqual(['R.L1', 'R.L2', 'R.L3', 'R.L4', 'R.L5'])
     expect(firstLessonsNow(loaded, undefined, undefined).t?.code).toBe('T0.L1')
+  })
+
+  // Boot's line for a path and a raw placement record, computed as You.tsx computes it
+  const lineOf = (loaded: Awaited<ReturnType<typeof loadUpNext>>, path: LearningPath | undefined, placement: Json | undefined) =>
+    bootLine(firstLessonsNow(loaded, path, placement), loaded.cachedPathPlan(loaded.pathOf(path), loaded.content, loaded.readPlacement(placement)), loaded.content.lessons)
+
+  test('each path blurb says what its unplaced plan does, and Boot says where Rust starts', async () => {
+    const loaded = await loadUpNext()
+    const trackOf = new Map(ALL_LESSONS.map((l) => [l.id, l.trackId]))
+    const runs = (path: LearningPath) => pathPlan(path, CONTENT).lessons.map((id) => trackOf.get(id)).filter((t, i, a) => t !== a[i - 1])
+    const title = (id: string) => ALL_LESSONS.find((l) => l.id === id)?.title
+    // the full ramp holds every track, opens with a T lesson and reaches R.L1 second (a learner once read "Rust Zero,
+    // then Track 0" there and was surprised to land in T0.L1); Boot names both
+    expect([...new Set(runs('full-ramp'))].sort()).toEqual(['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7'])
+    expect(pathPlan('full-ramp', CONTENT).lessons.slice(0, 2)).toEqual(['t0.l1', 'r.l1'])
+    expect(lineOf(loaded, 'full-ramp', undefined)).toEqual({
+      line: `Your first lesson is T0.L1 · ${title('t0.l1')}. Rust starts right after it, with R.L1 · ${title('r.l1')}.`,
+      skips: false,
+    })
+    // a learner who skips the choice is on the full ramp, and Boot says the same
+    expect(lineOf(loaded, undefined, undefined)).toEqual(lineOf(loaded, 'full-ramp', undefined))
+    // rust-systems: half of R, T1, the other half, T2, T3, and nothing after
+    expect(runs('rust-systems')).toEqual(['r', 't1', 'r', 't2', 't3'])
+    expect(lineOf(loaded, 'rust-systems', undefined).line).toBe(`Your path starts with R.L1 · ${title('r.l1')} and reaches T1.L1 · ${title('t1.l1')} after 5 Rust lessons.`)
+    // serving-first: two T0 lessons and the roofline, then T5 to T7, and no R lesson at all
+    expect(pathPlan('serving-first', CONTENT).lessons.slice(0, 4)).toEqual(['t0.l1', 't0.l2', 't4.l3', 't5.l1'])
+    expect(runs('serving-first')).toEqual(['t0', 't4', 't5', 't6', 't7'])
+    expect(lineOf(loaded, 'serving-first', undefined).line).toBe(`Your first lesson is T0.L1 · ${title('t0.l1')}.`)
+    const you = readFileSync(join(import.meta.dir, '../../src/pages/boot/You.tsx'), 'utf8')
+    for (const gone of ['Rust Zero, then Track 0', 'serving later', 'Rust arrives as short reading items']) expect(you).not.toContain(gone)
+    for (const said of ['each Rust Zero lesson woven in', 'Rust Zero is not on this path', 'Serving (Tracks 4 to 7) is not on this path', 'Systems Forge labs 01, 04 and 05']) {
+      expect(you).toContain(said)
+    }
+  })
+
+  test("a placement moves where Rust starts, and Boot's line follows the placed plan, never the blurb", async () => {
+    const loaded = await loadUpNext()
+    const placed = (entryTrack: TrackId, rustAnchor: 'solid' | 'missed' | 'skipped', missedKcs: string[] = []): Json =>
+      ({ v: 1, at: NOW, entryTrack, solidKcs: [], missedKcs, misconceptions: [], rustAnchor, items: 12 }) as Json
+    const gapOf = (p: Json, t: string) => {
+      const lessons = loaded.cachedPathPlan('full-ramp', loaded.content, loaded.readPlacement(p)).lessons
+      return lessons.indexOf('r.l1') - lessons.indexOf(t) - 1
+    }
+    // entered at T4 with the Rust anchor missed: R.L1 comes after the T4 lessons, so "right after it" would be false
+    const t4 = placed('t4', 'missed', ['t4.bound-classification', 'r.borrow-rules'])
+    expect(gapOf(t4, 't4.l1')).toBe(5)
+    const at4 = lineOf(loaded, 'full-ramp', t4)
+    expect(at4.line).toMatch(/^Your first lesson is T4\.L1 · .+\. After it come 5 more lessons, then Rust starts with R\.L1 · /)
+    expect(at4.skips).toBe(true)
+    // one lesson between them reads in the singular
+    const one = placed('t7', 'missed', ['t0.flame-graphs'])
+    expect(gapOf(one, 't0.l6')).toBe(1)
+    expect(lineOf(loaded, 'full-ramp', one).line).toMatch(/^Your first lesson is T0\.L6 · .+\. After it comes 1 more lesson, then Rust starts with R\.L1 · /)
+    // a solid anchor turns R into test-outs: no R lesson in the plan, so the line names none
+    expect(lineOf(loaded, 'full-ramp', placed('t1', 'solid'))).toMatchObject({ line: expect.stringMatching(/^Your first lesson is T1\.L1 · [^.]+\.$/), skips: true })
+    // rust-systems entered at T5: nothing left with a solid anchor, only R with a missed one
+    expect(lineOf(loaded, 'rust-systems', placed('t5', 'solid')).line).toBe('Your placement already covers this path, so Today offers practice; another path still has lessons for you.')
+    expect(lineOf(loaded, 'rust-systems', placed('t5', 'missed', ['r.borrow-rules'])).line).toMatch(/^Your path is 10 Rust lessons, starting with R\.L1 · /)
+    // the legend's placement clause needs a placement that moved something: not a refused record, not a no-op one
+    expect(lineOf(loaded, 'full-ramp', { v: 2, at: NOW } as Json).skips).toBe(false)
+    expect(lineOf(loaded, 'serving-first', placed('t0', 'missed', ['r.borrow-rules'])).skips).toBe(false)
   })
 
   test("Boot's last step shows the line, and the surfaces read the one recommender", () => {
