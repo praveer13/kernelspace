@@ -6,22 +6,13 @@ import { backgroundOf } from '@/lib/learner/background'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
 import { BACKGROUND_STAYS, BackgroundChoice } from '@/pages/me/Background'
+import { bootLine } from './firstLine'
 import { StepBtn, StepTitle } from './ui'
 
-/** The line under the path choice: where the chosen path begins (wave-2.md §7.3). */
-function firstLessonLine(first: { t: { code: string; title: string } | null; r: { code: string; title: string }[] }): string | null {
-  const { t, r } = first
-  if (!t) return null
-  const name = (l: { code: string; title: string }) => `${l.code} · ${l.title}`
-  if (r.length === 0) return `Your first lesson is ${name(t)}.`
-  if (r.length === 1) return `Your path starts with ${name(r[0])}, then ${name(t)}.`
-  return `Your path starts with ${name(r[0])} and reaches ${name(t)} after ${r.length} Rust lessons.`
-}
-
 const PATHS: { id: LearningPath; name: string; blurb: string }[] = [
-  { id: 'full-ramp', name: 'Full ramp', blurb: 'Rust Zero, then Track 0 up through serving. Best if systems are new to you.' },
-  { id: 'serving-first', name: 'Serving first', blurb: 'Straight to batching, the KV cache and engines (T5 to T7); Rust arrives as short reading items.' },
-  { id: 'rust-systems', name: 'Rust systems', blurb: 'Rust Zero and the Forge labs first; serving later.' },
+  { id: 'full-ramp', name: 'Full ramp', blurb: 'Every track, Track 0 up through serving, with each Rust Zero lesson woven in just before the lesson that first needs it. Best if systems are new to you.' },
+  { id: 'serving-first', name: 'Serving first', blurb: 'Two Track 0 lessons and the roofline (T4.L3), then batching, the KV cache and engines (T5 to T7). Rust Zero is not on this path; its lessons stay open in the Curriculum.' },
+  { id: 'rust-systems', name: 'Rust systems', blurb: 'Half of Rust Zero, then Track 1, the other half, then Tracks 2 and 3, with Systems Forge labs 01, 04 and 05 (the allocator, the intake ring, the executor). Serving (Tracks 4 to 7) is not on this path; switch to the full ramp to reach it.' },
 ]
 
 const DAYS = [
@@ -59,6 +50,9 @@ export default function You({ onFinish }: YouProps) {
   const installDismissed = useProgress((s) => s.working['boot:install-dismissed'] === true)
   const placementRaw = useProgress((s) => s.working['placement:result'])
   const savedBackground = backgroundOf(useProgress((s) => s.working['profile:background']))
+  // On a replay the stored path is the one in force until another is picked (finish() writes only a pick).
+  const storedRaw = useProgress((s) => s.working['boot:path'])
+  const stored = PATHS.find((p) => p.id === storedRaw)?.id ?? null
   const uid = useId()
   const [job, setJob] = useState<boolean | null>(null)
   const [valueText, setValueText] = useState('')
@@ -71,22 +65,25 @@ export default function You({ onFinish }: YouProps) {
   const [week, setWeek] = useState<WeekPlan>(DEFAULT_WEEK)
   const [weekTouched, setWeekTouched] = useState(false)
   const [showInstall] = useState(needsIosInstallTip)
-  const [firstLine, setFirstLine] = useState<string | null>(null)
+  const [first, setFirst] = useState<{ line: string; skips: boolean } | null>(null)
+  const shown = path ?? stored
 
   // The lessons and the KC graph load on demand (Boot imports neither), so the line appears a moment after the step.
-  // The path not yet chosen reads as the full ramp, which is where Today sends a learner who skips the choice.
+  // A path not yet chosen reads as the stored one, else as the full ramp, which is where Today sends a learner who skips
+  // the choice.
   useEffect(() => {
     let live = true
     import('@/lib/learner/up-next')
       .then(async (m) => {
         const loaded = await m.loadUpNext()
-        if (live) setFirstLine(firstLessonLine(m.firstLessonsNow(loaded, path ?? undefined, placementRaw)))
+        const plan = loaded.cachedPathPlan(loaded.pathOf(shown ?? undefined), loaded.content, loaded.readPlacement(placementRaw))
+        if (live) setFirst(bootLine(m.firstLessonsNow(loaded, shown ?? undefined, placementRaw), plan, loaded.content.lessons))
       })
-      .catch(() => live && setFirstLine(null))
+      .catch(() => live && setFirst(null))
     return () => {
       live = false
     }
-  }, [path, placementRaw])
+  }, [shown, placementRaw])
 
   const editWeek = (patch: Partial<WeekPlan>) => {
     setWeek((w) => ({ ...w, ...patch }))
@@ -166,16 +163,21 @@ export default function You({ onFinish }: YouProps) {
         </fieldset>
 
         <fieldset className="space-y-2">
-          <legend className="mb-1 text-body text-text-1">Your path <span className="text-text-3">You can change it later.</span></legend>
+          <legend className="mb-1 text-body text-text-1">
+            Your path{' '}
+            <span className="text-text-3">
+              You can change it later by replaying Boot.{first?.skips ? ' Your placement skips what you already know; the line above Go to Today says where you start.' : ''}
+            </span>
+          </legend>
           {PATHS.map((p) => (
             <label
               key={p.id}
               className={cn(
                 'flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 text-body-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent',
-                path === p.id ? 'border-line-bright bg-surface-3 text-text-1' : 'border-line bg-surface-2 text-text-2',
+                shown === p.id ? 'border-line-bright bg-surface-3 text-text-1' : 'border-line bg-surface-2 text-text-2',
               )}
             >
-              <input type="radio" name={`${uid}-path`} checked={path === p.id} onChange={() => setPath(p.id)} className="mt-1 size-4 shrink-0 accent-accent" />
+              <input type="radio" name={`${uid}-path`} checked={shown === p.id} onChange={() => setPath(p.id)} className="mt-1 size-4 shrink-0 accent-accent" />
               <span>
                 <strong className="text-text-1">{p.name}.</strong> {p.blurb}
               </span>
@@ -275,7 +277,7 @@ export default function You({ onFinish }: YouProps) {
 
         <div>
           <p aria-live="polite" data-boot-first-lesson className="mb-3 text-body-sm text-text-2 empty:hidden">
-            {firstLine}
+            {first?.line}
           </p>
           <Button type="submit" className="w-full sm:w-auto">
             Go to Today
