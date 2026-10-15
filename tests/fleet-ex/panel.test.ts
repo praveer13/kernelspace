@@ -987,7 +987,7 @@ describe('the panel, mounted', () => {
     expect(progress(done)).toBe('3/3 · done')
     const note = q(done, '[data-fleet-note]')
     expect(note.textContent).toContain('What just happened')
-    expect(note.textContent).toContain('Each seed put its knee at one of four loads')
+    expect(note.textContent).toContain('Each seed puts its knee at one of four loads')
     expect(note.textContent).toContain("Little's law")
     await done.unmount()
   })
