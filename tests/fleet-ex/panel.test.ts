@@ -50,6 +50,7 @@ import { blockGrp } from '../../src/lib/learner/item-block'
 import { formatNumber } from '../../src/lib/sims/host'
 import { PRE_NSEC } from '../../src/lib/learner/prequestions'
 import { FLEET_EXERCISES, type FleetExerciseDef, type SweepResult } from '../../src/lib/world/fleet-ex'
+import { KNEE_TARGETS } from '../../src/lib/world/fleet-ex/knee'
 import { installDom, MiniEvent, type DomKit, type MiniElement, type Mounted } from '../dom/mini-dom'
 
 const knee = FLEET_EXERCISES.knee
@@ -493,6 +494,26 @@ describe('the lesson blocks (3c-06)', () => {
     }
     expect(blockOf(knee).block.note).toContain('Little')
     expect(blockOf(pd).block.note).toContain('prefill')
+  })
+
+  test('each note says what its lesson and its generator do: the knee names the loads seeds set it at, the split points at the lesson\'s ratio items', () => {
+    // the knee's seeds share four targets (kneeTarget), so the note names them and says the answer repeats across seeds
+    const kneeNote = blockOf(knee).block.note ?? ''
+    for (const t of KNEE_TARGETS) expect(kneeNote).toContain(`${String(t)}×`)
+    expect(kneeNote).toContain(`one of ${['zero', 'one', 'two', 'three', 'four', 'five'][KNEE_TARGETS.length]} loads`)
+    expect(kneeNote).not.toContain('a different load')
+    // the split is sized by the lesson's pd-ratio items, which sit in the item block above the exercise; whether to
+    // disaggregate at all is the deep dive's, from the KV-transfer budget
+    const { lesson, index, block } = blockOf(pd)
+    const above = lesson.blocks[index - 1]
+    expect(above.type === 'item' && above.variants.includes('pd-ratio')).toBe(true)
+    expect(block.note).toContain('prefill-to-decode ratio items above')
+    const deep = lesson.blocks.find((b) => b.type === 'deepdive')
+    expect(deep?.type === 'deepdive' && deep.title).toBe('When to still say no')
+    expect(deep?.type === 'deepdive' && deep.md).toContain('KV-transfer budget')
+    expect(block.note).toContain('*When to still say no*')
+    expect(block.note).toContain('KV-transfer budget')
+    expect(block.note).not.toContain('decision procedure starts from the traffic')
   })
 })
 
@@ -966,9 +987,68 @@ describe('the panel, mounted', () => {
     expect(progress(done)).toBe('3/3 · done')
     const note = q(done, '[data-fleet-note]')
     expect(note.textContent).toContain('What just happened')
-    expect(note.textContent).toContain('Every seed set its knee at a different load')
+    expect(note.textContent).toContain('Each seed puts its knee at one of four loads')
     expect(note.textContent).toContain("Little's law")
     await done.unmount()
+  })
+
+  // The note states the answer rule ("peaks near the load that reaches it, usually a little below"), so it must not show
+  // before a prediction: in embed mode it waits for done, in phone mode for the lock on the canonical seed (F1).
+  const realBlock = (lessonId: string) => lessonById(lessonId)!.blocks.find((b): b is FleetExerciseBlock => b.type === 'exercise' && 'fleet' in b)!
+  const realIndex = (lessonId: string) => lessonById(lessonId)!.blocks.findIndex((b) => b.type === 'exercise' && 'fleet' in b)
+  const RULE: Record<string, string> = { knee: 'usually a little below', 'pd-split': 'about balanced' }
+  const buttonNamed = (page: Mounted, name: string) => page.container.querySelectorAll('button').find((b) => (b.textContent ?? '').trim() === name) as MiniElement
+
+  test.each([
+    ['knee', 't7.l2'],
+    ['pd-split', 't6.l3'],
+  ] as const)('phone mode (%s): the note is hidden before the lock, a refused answer does not open it, the lock does', async (id, lessonId) => {
+    const def = FLEET_EXERCISES[id]
+    const real = realBlock(lessonId)
+    const index = realIndex(lessonId)
+    expect(real.fleet).toBe(id)
+    expect(real.note).toContain(RULE[id])
+    const r = rig([])
+    const page = await open(r, { block: real, lessonId, index, env: { ...r.env, mode: 'phone' } })
+    expect(q(page, '[data-phone]')).not.toBeNull()
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    expect(page.container.textContent).not.toContain(RULE[id])
+    // a value that is not a point of the sweep is refused, and nothing is shown
+    await type(q(page, '[data-fleet-predict]'), '99')
+    await dom.press(q(page, '[data-fleet-lock]'))
+    expect(page.container.querySelector('[role="alert"]')!.textContent).toContain('Enter one of the points')
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    // the lock shows the canonical outcome, and the note with it
+    await type(q(page, '[data-fleet-predict]'), String(wrongOn(def, def.phone.seed)))
+    await dom.press(q(page, '[data-fleet-lock]'))
+    expect(q(page, '[data-verdict]')).not.toBeNull()
+    const note = q(page, '[data-fleet-note]')
+    expect(note.textContent).toContain('What just happened')
+    expect(note.textContent).toContain(RULE[id])
+    // the outcome took focus from the lock button, which is gone
+    expect(dom.document.activeElement).toBe(q(page, '[data-verdict]'))
+    // a forced mode stays phone, so "run it here" is e2e/fleet-exercise.spec.ts's, which finds the note gone in embed mode
+    expect(buttonNamed(page, 'Run it on a fresh seed here instead')).toBeDefined()
+    expect(r.recorded).toHaveLength(0)
+    await page.unmount()
+  })
+
+  test('embed mode: the note is hidden before the lock, after the lock and after a save that does not finish the exercise', async () => {
+    const real = realBlock(LESSON)
+    const [a] = seedsWhere(knee, 1, true)
+    const r = rig([a])
+    const page = await open(r, { block: real })
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    await draw(page)
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    await predict(page, knee.truth(sweepOf(knee, a)))
+    expect(q(page, '[data-verdict]').getAttribute('data-verdict')).toBe('right')
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    await explainAndSave(page)
+    expect(progress(page)).toBe('1/3 right in a row · 1/2 different answers')
+    expect(q(page, '[data-fleet-note]')).toBeNull()
+    expect(page.container.textContent).not.toContain(RULE.knee)
+    await page.unmount()
   })
 
   test('another block’s events do not count here', async () => {

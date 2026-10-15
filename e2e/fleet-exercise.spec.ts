@@ -8,8 +8,10 @@ import { FLEET_EXERCISES } from '../src/lib/world/fleet-ex'
 // here instead" hands focus to the draw button. Enter draws a fresh seed, the scene is read (the knee's offered rate and
 // slot-hold time), the prediction is typed and sent with Enter, the verdict and the chart with its table follow, a line
 // of eight words opens the model answer, Space ticks its three ideas and Enter saves. /lesson/t6.l3's P:D split is
-// walked as far as its verdict. A last test locks a round, reloads the page and finds the round counted as a miss,
-// because the lock was recorded and the save never was (D39, D48).
+// walked as far as its verdict. In phone mode the block's note ("What just happened"), which states the answer rule,
+// appears only once the canonical seed is locked, and is gone again in embed mode until the exercise is done. A last
+// test locks a round, waits until the ledger holds that lock's predict event, reloads the page and finds the round
+// counted as a miss, because the lock was recorded and the save never was (D39, D48).
 // The block's ids come from the lesson's own data, so a rewording there cannot break the walk.
 
 const BLOCK = '[data-block="fleet-exercise"]'
@@ -20,6 +22,8 @@ const pdBlock = lessonById('t6.l3')?.blocks.find((b) => b.type === 'exercise' &&
 if (pdBlock?.type !== 'exercise' || !('fleet' in pdBlock) || pdBlock.fleet !== 'pd-split') throw new Error('t6.l3 has no pd-split block')
 const KNEE = FLEET_EXERCISES.knee
 const PD = FLEET_EXERCISES['pd-split']
+/** A phrase of each note's answer rule: it must not be on the page before a prediction. */
+const RULE: Record<string, string> = { knee: 'usually a little below', 'pd-split': 'about balanced' }
 const LINE = 'goodput peaks where arrivals meet the rate the slots free at and then the queue pushes requests past the SLO'
 
 const active = (page: Page) =>
@@ -62,6 +66,11 @@ async function open(page: Page, lesson: string, exercise: string) {
  */
 async function phoneToEmbed(page: Page, block: ReturnType<Page['locator']>, guess: () => Promise<number> = () => kneeFromScene(block)): Promise<'right' | 'off' | null> {
   if ((await block.getAttribute('data-mode')) !== 'phone') return null
+  const exercise = (await block.getAttribute('data-exercise')) ?? ''
+  const note = block.locator('[data-fleet-note]')
+  // the note states the answer rule, so nothing of it shows before the lock
+  await expect(note).toHaveCount(0)
+  await expect(block).not.toContainText(RULE[exercise])
   await tabUntil(page, (a) => a.inBlock, 400, 'the Fleet exercise block')
   await focusIs(page, 'data-fleet-predict')
   await page.keyboard.type(String(await guess()))
@@ -70,6 +79,10 @@ async function phoneToEmbed(page: Page, block: ReturnType<Page['locator']>, gues
   await expect(verdict).toBeVisible()
   await expect(verdict).toBeFocused()
   const result = (await verdict.getAttribute('data-verdict')) as 'right' | 'off'
+  // locked: the note follows the outcome
+  await expect(note).toBeVisible()
+  await expect(note).toContainText('What just happened')
+  await expect(note).toContainText(RULE[exercise])
   // the canonical outcome shows its table open, and it earns nothing: the progress line is empty and the ledger untouched
   await expect(block.locator('[data-sweep-chart] table tbody tr')).not.toHaveCount(0)
   await expect(block.locator('[data-fleet-progress]')).toHaveText('')
@@ -78,6 +91,8 @@ async function phoneToEmbed(page: Page, block: ReturnType<Page['locator']>, gues
   await expect(block).toHaveAttribute('data-mode', 'embed')
   // the button that was pressed is gone: focus lands on the draw button, not on the page
   await expect(block.locator('[data-fleet-draw]')).toBeFocused()
+  // embed mode keeps the note until the exercise is done
+  await expect(note).toHaveCount(0)
   return result
 }
 
@@ -108,6 +123,29 @@ async function kneeFromScene(block: ReturnType<Page['locator']>): Promise<number
   const capacity = slots / (held * 0.05)
   const fits = KNEE.points.filter((m) => m * offered <= capacity)
   return fits.length > 0 ? Math.max(...fits) : KNEE.points[0]
+}
+
+/** How many `predict` events of the knee exercise on `seed` the ledger holds, read from IndexedDB. */
+async function predictsFor(page: Page, seed: number): Promise<number> {
+  return page.evaluate(
+    ({ ref, seed }) =>
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open('kernelspace')
+        // the app has not created its database yet: abort the upgrade, so this read never creates one without stores
+        open.onupgradeneeded = () => open.transaction?.abort()
+        open.onerror = () => (open.error?.name === 'AbortError' ? resolve(0) : reject(open.error))
+        open.onsuccess = () => {
+          const db = open.result
+          const all = db.transaction('events', 'readonly').objectStore('events').getAll()
+          all.onerror = () => reject(all.error)
+          all.onsuccess = () => {
+            db.close()
+            resolve((all.result as { kind: string; ref: string; seed?: number }[]).filter((e) => e.kind === 'predict' && e.ref === ref && e.seed === seed).length)
+          }
+        }
+      }),
+    { ref: `item:fleet.${KNEE.id}`, seed },
+  )
 }
 
 for (const width of [360, 320]) {
@@ -210,12 +248,17 @@ test('/lesson/t6.l3: the P:D split shows its scene, takes a worker count and sho
 test('a round locked and left unsaved is a miss after a reload: the run of rights cannot be erased by leaving', async ({ page }) => {
   const block = await open(page, 't7.l2', 'knee')
   await drawByKeyboard(page, block)
+  const seed = Number(/Seed (\d+)/.exec((await block.locator('[data-seed]').textContent()) ?? '')?.[1])
+  expect(Number.isInteger(seed)).toBe(true)
+  // nothing of this seed is in the ledger before the lock
+  expect(await predictsFor(page, seed)).toBe(0)
   await page.keyboard.type(String(await kneeFromScene(block)))
   await page.keyboard.press('Enter')
   await expect(block.locator('[data-verdict]')).toBeVisible({ timeout: 30_000 })
-  // the lock is in the ledger now; the page goes away before the explain step is saved
   await expect(block.locator('[data-fleet-progress]')).toHaveText('0/3 right in a row · 0/2 different answers')
-  await expect.poll(() => page.evaluate(async () => (await indexedDB.databases()).length), { message: 'the ledger database exists' }).toBeGreaterThan(0)
+  // the ledger writes in the background: wait until IndexedDB holds this lock's predict event, then leave before the
+  // explain step is saved
+  await expect.poll(() => predictsFor(page, seed), { message: `the predict event of seed ${seed} is in the ledger`, timeout: 30_000 }).toBe(1)
   await page.reload()
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   const again = page.locator(`${BLOCK}[data-exercise="knee"]`)

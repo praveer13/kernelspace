@@ -68,7 +68,7 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
       type: 'exercise',
       fleet: 'knee',
       title: 'Find the knee',
-      note: `Every seed set its knee at a different load, and the scene told you where. By Little's law the engine finishes at most *slots ÷ (time a request holds a slot)* requests a second. Goodput climbs while the offered rate stays under that bound and peaks near the load that reaches it, usually a little below, because bursts queue before the average rate does. Past the peak a queue builds, queued requests wait out the TTFT SLO, and a request served late does not count: goodput falls although the engine is as busy as ever.
+      note: `Each seed puts its knee at one of four loads (0.75×, 1×, 1.25× or 1.5×), so the same answer comes up on different seeds, and the scene gave you what you needed to tell which one this seed uses. By Little's law the engine finishes at most *slots ÷ (time a request holds a slot)* requests a second. Goodput climbs while the offered rate stays under that bound and peaks near the load that reaches it, usually a little below, because bursts queue before the average rate does. Past the peak a queue builds, queued requests wait out the TTFT SLO, and a request served late does not count: goodput falls although the engine is as busy as ever.
 
 That is Rule 3 on a small engine. The capacity number is where the curve bends, which a sweep of load steps finds and a single run does not: one run at a load past the knee reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
     },

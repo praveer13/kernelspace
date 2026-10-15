@@ -260,8 +260,8 @@ Add the real world's finishing touches and you have glibc malloc: per-thread are
           work: {
             backgrounds: ['jvm'],
             os: 'G1 regions',
-            osLine: 'The Java heap is cut into equal-size regions; allocation fills one region at a time and the collector reclaims whole regions.',
-            breaks: 'G1 evacuates: it copies the live objects out of a region to compact them, so objects move; a KV block never moves, and a sequence\'s block table keeps pointing at the same physical block until the sequence frees it.',
+            osLine: 'The Java heap is cut into equal-size regions; threads allocate most new objects in their own buffers (TLABs) carved from eden regions, and the collector reclaims whole regions.',
+            breaks: 'G1 evacuates: it copies a region\'s live objects into other regions and updates every reference to them, so objects move and the region is freed whole. A paged KV cache never moves a block to compact, since identical blocks leave no holes; a block is moved or copied only for other reasons, such as swapping or offloading it to host memory, sending it from a prefill worker to a decode worker, or copy-on-write, which gives the writer of a shared block its own copy.',
           },
         },
       ],

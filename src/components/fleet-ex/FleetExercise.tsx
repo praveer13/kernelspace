@@ -15,6 +15,10 @@
  * On a phone (or with the phone preference) the predict step is the same, on the exercise's canonical seed and its
  * scene, and the outcome is that seed's, which earns nothing; the fresh-seed run is one tap away ("run it here instead").
  *
+ * The block's note ("What just happened") states the answer rule, so it stays hidden until there is nothing left for it
+ * to spoil, as a sim exercise's does: in embed mode until the exercise is done, in phone mode once the canonical seed is
+ * locked and its outcome shown.
+ *
  * The worker, the ledger, the clock and the seed come in through `env`, so tests replace them (as ProveFromModule's do).
  */
 
@@ -137,6 +141,8 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
   const phoneViewport = usePhoneViewport()
   const prefs = useProgress((s) => s.working['today:prefs'])
   const [forceEmbed, setForceEmbed] = useState(false)
+  // the phone prediction on the canonical seed, once locked: held here so the note follows it and a remount keeps it
+  const [phoneLock, setPhoneLock] = useState<number | null>(null)
   const mode = env.mode ?? (forceEmbed ? 'embed' : resolveInlineMode(phoneViewport, prefs))
 
   const [load, setLoad] = useState<Load>('loading')
@@ -302,7 +308,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
         <p className="text-body-sm text-text-2">{copy.setup}</p>
 
         {mode === 'phone' ? (
-          <PhoneOutcome def={def} copy={copy} allowed={allowed} onEmbed={() => setForceEmbed(true)} />
+          <PhoneOutcome def={def} copy={copy} allowed={allowed} locked={phoneLock} onLock={setPhoneLock} onEmbed={() => setForceEmbed(true)} />
         ) : (
           <>
             {load === 'loading' && <p className="mt-3 min-h-11 font-mono text-body-sm text-text-3">loading…</p>}
@@ -539,7 +545,8 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
 
         <ProductionRows claims={def.productionClaims} />
 
-        {block.note && (state.done || mode === 'phone') && (
+        {/* the note states the answer rule: shown once the exercise is done, or on a phone once its one seed is locked */}
+        {block.note && (state.done || (mode === 'phone' && phoneLock !== null)) && (
           <div className="mt-4 rounded-sm border border-line bg-surface-2 px-2.5 py-2" data-fleet-note>
             <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-text-3">What just happened</p>
             <div className="text-body-sm text-text-2 [&_p]:!text-body-sm">
@@ -591,16 +598,34 @@ function Scene({ id, def, seed, fresh }: { id: string; def: Def; seed: number; f
  * Phone mode: the same prediction, then the exercise's canonical outcome, a fixed seed that earns nothing and writes
  * nothing, because the same answer every time is no evidence. The chart and its table sit open beside each other.
  */
-function PhoneOutcome({ def, copy, allowed, onEmbed }: { def: Def; copy: ExerciseCopy; allowed: string; onEmbed: () => void }) {
+function PhoneOutcome({
+  def,
+  copy,
+  allowed,
+  locked,
+  onLock,
+  onEmbed,
+}: {
+  def: Def
+  copy: ExerciseCopy
+  allowed: string
+  /** The locked prediction, or null before the lock. */
+  locked: number | null
+  onLock: (prediction: number) => void
+  onEmbed: () => void
+}) {
   const uid = useId()
   const [draft, setDraft] = useState('')
   const [invalid, setInvalid] = useState(false)
-  const [locked, setLocked] = useState<number | null>(null)
   const resultRef = useRef<HTMLParagraphElement>(null)
   const canonical = def.phone.canonical
   const verdict = locked === null ? null : verdictText(def, copy, locked, canonical)
+  // the lock button that held focus unmounts: hand it to the outcome, but only for a lock made here, not on a remount
+  const lockedHere = useRef(false)
   useEffect(() => {
-    if (locked !== null) resultRef.current?.focus({ preventScroll: true })
+    if (locked === null || !lockedHere.current) return
+    lockedHere.current = false
+    resultRef.current?.focus({ preventScroll: true })
   }, [locked])
 
   const submit = () => {
@@ -610,7 +635,8 @@ function PhoneOutcome({ def, copy, allowed, onEmbed }: { def: Def; copy: Exercis
       return
     }
     setInvalid(false)
-    setLocked(prediction)
+    lockedHere.current = true
+    onLock(prediction)
   }
 
   return (
