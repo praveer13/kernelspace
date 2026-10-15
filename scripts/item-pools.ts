@@ -8,6 +8,7 @@ import { readdir, stat } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { QuizQuestion } from '../src/components/QuizBlock'
 import type { Lesson } from '../src/data/lessons/types'
+import { PROTEGE_STEPS, protegeErrors, stepQuestion, stepRef } from '../src/lib/learner/protege'
 import { shuffledOrder } from '../src/lib/rng'
 import { type CueQuestion, type CueStrategy, MAX_RANK_LESSON, MAX_RANK_SUBSET_OPTIONS, PASS_BAR, passProbability } from './item-cues'
 
@@ -105,6 +106,41 @@ export function collectIsoItems(lessons: readonly Lesson[]): PoolItem[] {
     }
   }
   return out
+}
+
+/** The own pool of P4 protégé items: the find, tag and fix steps of every `ProtegeBlock` (wave-3.md §16.9). */
+export const PROTEGE_POOL = 'protege'
+
+/**
+ * Every protégé block's three steps, in lesson and block order: `item:<lessonId>.protege.<n>.find`, `.tag` and `.fix`, with n the
+ * 1-based count of the lesson's protégé blocks (src/lib/learner/protege.ts numbers them the same way). The find question is
+ * built from the block (its options are sentence numbers); tag and fix are the block's own questions. The KCs are the block's, else the lesson's.
+ */
+export function collectProtegeItems(lessons: readonly Lesson[]): PoolItem[] {
+  const out: PoolItem[] = []
+  for (const lesson of lessons) {
+    let n = 0
+    for (const block of lesson.blocks) {
+      if (block.type !== 'protege') continue
+      n++
+      for (const step of PROTEGE_STEPS) {
+        out.push({ pool: PROTEGE_POOL, ref: stepRef(lesson.id, n, step), lessonId: lesson.id, q: stepQuestion(block, step), needsExplanation: false, kcs: block.kcs ?? lesson.kcs })
+      }
+    }
+  }
+  return out
+}
+
+/** The block-level defects of every protégé block (passage length, false sentence, find offer, one key per question), one line each naming the block. */
+export function protegeFailures(lessons: readonly Lesson[]): string[] {
+  return lessons.flatMap((lesson) => {
+    let n = 0
+    return lesson.blocks.flatMap((block) => {
+      if (block.type !== 'protege') return []
+      n++
+      return protegeErrors(block).map((e) => `protege: item:${lesson.id}.protege.${n} "${block.title}": ${e}`)
+    })
+  })
 }
 
 /**

@@ -11,6 +11,7 @@
 import { writeFileSync, mkdirSync } from 'fs'
 import { ALL_LESSONS, TRACK_EXTRAS } from '../src/data/lessons'
 import type { ContentBlock, Lesson } from '../src/data/lessons/types'
+import { PROTEGE_STEPS, stepQuestion } from '../src/lib/learner/protege'
 import { exportOrder } from '../src/lib/rng'
 import { TRACKS } from '../src/lib/tracks'
 
@@ -23,6 +24,7 @@ export function blockToMd(
   firstDiagram: number,
   firstAlign: number,
   firstIso = 0,
+  firstProtege = 0,
 ): string {
   switch (b.type) {
     case 'prose':
@@ -76,6 +78,19 @@ export function blockToMd(
         : ''
       const principle = b.principle ? `\n\n**Principle:** ${b.principle}` : ''
       return `_${b.title ?? 'isomorphism'}_\n\n${pairs}${check}${principle}`
+    }
+    case 'protege': {
+      // P4 (wave-3.md §16.9): the passage numbered as the learner sees it, with nothing marking the false line, then the
+      // three questions without their keys. Each step's options use a salt of their own, so they never shift the quiz permutations.
+      const lines = b.sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')
+      const steps = PROTEGE_STEPS.map((step, k) => {
+        const q = stepQuestion(b, step)
+        const opts = exportOrder(`${lessonId}#protege`, firstProtege * PROTEGE_STEPS.length + k, q.options.length)
+          .map((authored, j) => `- (o${j + 1}) ${q.options[authored]}`)
+          .join('\n')
+        return `**${step === 'find' ? 'Find' : step === 'tag' ? 'Tag' : 'Fix'}. ${q.q}**\n\n${opts}`
+      }).join('\n\n')
+      return `**${b.title}**${b.setup ? `\n\n${b.setup}` : ''}\n\n${lines}\n\n_One sentence above is false._\n\n${steps}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`
     }
     case 'quiz': {
       // Answer keys are withheld: tutors fed this markdown must not see them.
@@ -132,13 +147,15 @@ export function lessonToMd(l: Lesson): string {
   let diagrams = 0 // diagram index, salts the option order of predictAt gates
   let aligns = 0 // alignment-item index across the lesson's code blocks
   let isos = 0 // break-item index across the lesson's isomorphism blocks
+  let proteges = 0 // protégé-block index across the lesson
   const body = l.blocks
     .map((b) => {
-      const md = blockToMd(b, l.id, questions, diagrams, aligns, isos)
+      const md = blockToMd(b, l.id, questions, diagrams, aligns, isos, proteges)
       if (b.type === 'quiz') questions += b.questions.length
       if (b.type === 'diagram') diagrams++
       if (b.type === 'code') aligns += b.align?.length ?? 0
       if (b.type === 'isomorphism' && b.breakItem) isos++
+      if (b.type === 'protege') proteges++
       return md
     })
     .filter(Boolean)

@@ -240,6 +240,37 @@ export interface ItemBlock {
   predict?: boolean
 }
 
+/**
+ * P4 (stretch, docs/specs/wave-3.md §16.9): a protégé block, the plan's fourth new block type. "Sam" explains an idea in
+ * 4-6 sentences and exactly one is false; the learner finds it, tags the misconception behind it and picks the sentence that
+ * repairs it. Each step is a choice item with a why per option (item pool `protege`, refs
+ * `item:<lessonId>.protege.<n>.<find|tag|fix>`, n counting the lesson's protégé blocks from 1). Once the false line is found it
+ * stays on the page struck through, with a visible "false" tag, so a wrong sentence is never left looking like a right one.
+ */
+export interface ProtegeBlock {
+  type: 'protege'
+  /** "Sam explains PagedAttention" */
+  title: string
+  /** One line before the passage: who Sam is and what Sam was asked. */
+  setup?: string
+  /** 4-6 sentences, shown numbered in this order. Exactly one is false: `falseAt`. */
+  sentences: string[]
+  /** 0-based index of the false sentence in `sentences`. */
+  falseAt: number
+  /**
+   * Step 1, find. A choice item takes at most 4 options (the pool's cap), so the question offers these sentence numbers
+   * (0-based indices into `sentences`, `falseAt` among them): every sentence when the passage has 4, else the false one and
+   * 3 true ones. `why` is parallel to `offer`: for a true sentence why it holds, for the false one what is wrong with it.
+   */
+  find: { offer: number[]; why: string[] }
+  /** Step 2, tag: which misconception sits behind the false sentence. Options are named mistaken ideas; `miss` may name them. */
+  tag: QuizQuestion
+  /** Step 3, fix: which sentence repairs the false one. The key option is the corrected sentence, shown once the learner picks it. */
+  fix: QuizQuestion
+  /** The block's KCs; default: the lesson's. */
+  kcs?: KcId[]
+}
+
 /** OS ≡ LLM isomorphism panel (lesson.md §2.8). */
 export interface IsomorphismPair {
   os: string
@@ -298,6 +329,7 @@ export type ContentBlock =
   | PredictBlock
   | PlayBlock
   | ItemBlock
+  | ProtegeBlock
 
 /* ------------------------------ lesson ------------------------------ */
 
