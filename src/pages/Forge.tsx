@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Link } from 'react-router'
 import { motion } from 'framer-motion'
 import { ArrowRight, Check, Download, Flame, HardDrive, Package, Terminal } from 'lucide-react'
@@ -6,6 +7,9 @@ import { getTrack } from '@/lib/tracks'
 import { labXp } from '@/lib/economy'
 import { useProgress } from '@/lib/progress'
 import { cn } from '@/lib/utils'
+
+// The field labs (wave-3.md §16.5) and the claims and lab data behind them load with this route, as their own chunk.
+const FieldLabs = lazy(() => import('@/components/forge/FieldLabs'))
 
 const STEPS = [
   {
@@ -179,6 +183,11 @@ export default function Forge() {
           </div>
         </section>
       ))}
+
+      {/* field labs: optional runs on the learner's own GPU */}
+      <Suspense fallback={<p className="mt-16 font-mono text-[11px] text-text-3">loading the field labs…</p>}>
+        <FieldLabs />
+      </Suspense>
 
       {/* honesty box */}
       <motion.div
