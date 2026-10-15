@@ -1057,7 +1057,8 @@ describe('verify-plays: the cube’s checks (§6.3)', () => {
     expect(bundle).toMatch(/route: '\/play\/tiling-cube'[^}]*budgetKb: null[^}]*playSrc: 'src\/components\/play\/tiling-cube\/Play\.tsx'/)
   })
 
-  test('no View3D here: the 2D cube ships, the 3D one is stretch (D9)', () => {
-    for (const f of ['Play.tsx', 'Level.tsx', 'Mirror2D.tsx', 'Mirror.tsx', 'Debrief.tsx', 'session.ts', 'ProductionCard.tsx']) expect(read(f)).not.toContain('<View3D')
+  test('the 3D cube ships dark (D9, 3s-01): only Play.tsx mounts a View3D, and it never sets `available` (tests/plays/view3d.test.ts)', () => {
+    for (const f of ['Level.tsx', 'Mirror2D.tsx', 'Mirror.tsx', 'Debrief.tsx', 'session.ts', 'ProductionCard.tsx']) expect(read(f)).not.toContain('<View3D')
+    expect(read('Play.tsx')).not.toMatch(/<CubeView3D[^>]*available/)
   })
 })

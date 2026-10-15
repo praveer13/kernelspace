@@ -8,6 +8,9 @@
  * `predict` event (src `play`) before any view opens; the check is an `item` event on the same instance. The play itself
  * is recorded once, when the closing debrief is reached.
  *
+ * The 3D box (Cube3D.tsx) is a second picture of the faces, behind View3D: it is off until 3s-02 sets `available` for a level
+ * (nothing here does), and the scene's chunk, three and R3F, is fetched only when a learner then asks for it.
+ *
  * The first session runs on the practice seed that the cube's band checks; "Play again with new numbers" draws a seed that
  * passes the same band, so a new session is unseen.
  */
@@ -16,12 +19,15 @@ import { Suspense, lazy, useCallback, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Button } from '@/components/Button'
 import ErrorBoundary from '@/components/ErrorBoundary'
+import View3D from '@/components/three/View3D'
 import { TILING_CUBE, freshEntropy } from '@/data/plays'
 import { useProgress } from '@/lib/progress'
 import { CUBE_PLAY_ID, checkEvent, choose, freshSession, levelOf, nextLevel, nudge, openViews, practiceSession, predictEvent, predictedOf, recordOf, runOf, toCheck, toDebrief, withChecked, withPrediction } from './session'
 import type { ChoiceControl, CubeSession, NumberControl } from './session'
 import Level from './Level'
+import type { Cube3DProps } from './Cube3D'
 import type { ItemResult } from '@/lib/items/play'
+import type { CubeLevel } from '@/lib/world/tiling'
 
 // The first screen is the prediction, so it carries only the session, the level and its item card. The views and their
 // table (Views.tsx, Mirror.tsx), the debriefs (their chips pull in the claim popover) and the In-production card load on
@@ -33,6 +39,14 @@ const loadCard = () => import('./ProductionCard')
 const Mirror = lazy(loadMirror)
 const Debrief = lazy(loadDebrief)
 const ProductionCard = lazy(loadCard)
+
+/** The scene, three and R3F with it: its chunk is fetched when View3D first renders it, on a learner's request. */
+const Cube3DScene = lazy(() => import('./Cube3D'))
+
+/** The cube in 3D under the 2D faces and their table: nothing renders until `available` is true, which only 3s-02 sets. */
+export function CubeView3D({ level, explore, mirrorId, available }: { level: CubeLevel; explore: CubeSession['explore']; mirrorId: string; available?: boolean }) {
+  return <View3D id="tiling-cube" available={available} Scene={Cube3DScene} sceneProps={{ level, explore, describedBy: mirrorId } satisfies Cube3DProps} />
+}
 
 /** Room for a debrief while it loads (level 1 measures 603 px at 360 px wide and 441 px at 1280), so what follows it does not jump. */
 const DEBRIEF_ROOM = 'min-h-[37rem] sm:min-h-[27rem]'
@@ -183,7 +197,12 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
           session={session}
           level={level}
           mirrorId={mirrorId}
-          mirror={<Mirror id={mirrorId} level={level} explore={session.explore} />}
+          mirror={
+            <>
+              <Mirror id={mirrorId} level={level} explore={session.explore} />
+              <CubeView3D level={level} explore={session.explore} mirrorId={mirrorId} />
+            </>
+          }
           focus={touched}
           onPredicted={onPredicted}
           onOpenViews={() => act(openViews)}
