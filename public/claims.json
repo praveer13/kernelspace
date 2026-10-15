@@ -3221,6 +3221,215 @@
       "verifiedAt": "2026-10-14",
       "ttlDays": 60,
       "boundary": "Each request has a count of computed tokens that catches up with its tokens to compute; schedule() spends one token budget per step across running and waiting requests, so chunked prefill, prefix caching and speculative decoding fall out of one rule."
+    },
+    {
+      "id": "field.decode-kv.serve",
+      "kind": "status",
+      "value": "vllm serve NousResearch/Meta-Llama-3-8B --dtype bfloat16 --max-model-len 4096 --gpu-memory-utilization 0.90",
+      "label": "Field lab 1: start vLLM on Llama-3-8B with 4,096-token requests",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/cli/README.md",
+        "title": "vLLM v0.31.0 docs: cli/README.md (vllm serve)",
+        "quote": "Starts the vLLM OpenAI Compatible API server.",
+        "row": "serve"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py (default 0.92, so 0.90 is given on purpose and Boot-sized arithmetic uses it). 4,096 is Boot's chat length, so the log's concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step)."
+    },
+    {
+      "id": "field.decode-kv.bench",
+      "kind": "status",
+      "value": "vllm bench serve --model NousResearch/Meta-Llama-3-8B --dataset-name random --input-len 128 --output-len 256 --num-prompts 16 --max-concurrency 1",
+      "label": "Field lab 1: one user decoding 256 tokens, 16 times",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/benchmarking/cli.md",
+        "title": "vLLM v0.31.0 docs: benchmarking/cli.md (vllm bench serve)",
+        "quote": "`--max-concurrency`: Limits concurrent outstanding requests. If this argument is not provided, concurrency is unlimited.",
+        "row": "Parameters: --max-concurrency"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "With --max-concurrency 1 the server holds one request at a time, so every decode step is batch 1. --input-len and --output-len map to the random dataset's lengths, and the random dataset sets ignore_eos on the OpenAI-compatible backends, so each request generates exactly 256 tokens. Run it in a second terminal while the server from field.decode-kv.serve is up."
+    },
+    {
+      "id": "field.decode-kv.kv-log",
+      "kind": "status",
+      "value": "GPU KV cache size: N tokens, Maximum concurrency for 4,096 tokens per request: Mx",
+      "label": "Field lab 1: the server log line that sizes the KV cache",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/v1/core/kv_cache_utils.py",
+        "title": "vLLM v0.31.0 source: vllm/v1/core/kv_cache_utils.py (update_kv_cache_capacity)",
+        "quote": "\"%s KV cache size: %s tokens, \" \"Maximum concurrency for %s tokens per request: %.2fx\",",
+        "row": "update_kv_cache_capacity (logger.info_once)"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "Printed once while the server starts, before it accepts requests. The first %s is \"GPU\" on CUDA, the second is the token count with thousands separators, the third is --max-model-len; the concurrency is get_max_concurrency_for_kv_cache_config, so it equals the token count divided by --max-model-len. Enter the number before the x."
+    },
+    {
+      "id": "field.decode-kv.tpot",
+      "kind": "status",
+      "value": "Mean TPOT (ms)",
+      "label": "Field lab 1: the benchmark line that gives one user's decode speed",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/benchmarks/serve.py",
+        "title": "vLLM v0.31.0 source: vllm/benchmarks/serve.py (vllm bench serve)",
+        "quote": "process_one_metric(\"tpot\", \"TPOT\", \"Time per Output Token (excl. 1st token)\")",
+        "row": "the TPOT block of the Serving Benchmark Result"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "TPOT is computed once per request as (end-to-end latency - TTFT) / (output tokens - 1), then averaged, so it leaves out the first token (the prefill). At batch 1, 1000 / TPOT in ms is the tokens per second one user gets."
+    },
+    {
+      "id": "field.burstgpt.fetch",
+      "kind": "status",
+      "value": "curl -L -o BurstGPT_without_fails_1.csv https://github.com/HPMLL/BurstGPT/releases/download/v2.0/BurstGPT_without_fails_1.csv && echo \"a4d068a7113ec0290e74063a1b3447dc6001a30e4298eb313581b71006dda1f4  BurstGPT_without_fails_1.csv\" | sha256sum -c",
+      "label": "Field lab 2: download the pinned BurstGPT file and check its hash",
+      "source": {
+        "url": "https://github.com/HPMLL/BurstGPT/releases/download/v2.0/BurstGPT_without_fails_1.csv",
+        "title": "BurstGPT v2.0 release asset: BurstGPT_without_fails_1.csv (HPMLL/BurstGPT, CC-BY-4.0)",
+        "row": "release asset BurstGPT_without_fails_1.csv"
+      },
+      "pin": {
+        "repo": "HPMLL/BurstGPT",
+        "ref": "v2.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "A 51,429,517-byte CSV, 1,404,294 rows. Its SHA-256 is the one public/traces/burstgpt-v2-busiest-hour.json records as sourceSha256: the Fleet's recorded hour is cut from this very file. sha256sum -c prints \"BurstGPT_without_fails_1.csv: OK\" or fails; do not benchmark a file that fails."
+    },
+    {
+      "id": "field.burstgpt.serve",
+      "kind": "status",
+      "value": "vllm serve NousResearch/Meta-Llama-3-8B --dtype bfloat16 --max-model-len 8192 --gpu-memory-utilization 0.90",
+      "label": "Field lab 2: start vLLM on Llama-3-8B with 8,192-token requests",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/cli/README.md",
+        "title": "vLLM v0.31.0 docs: cli/README.md (vllm serve)",
+        "quote": "Starts the vLLM OpenAI Compatible API server.",
+        "row": "serve"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "As field.decode-kv.serve, with --max-model-len 8192, the longest context the model's config.json allows (max_position_embeddings 8192). A request whose prompt plus output exceeds it is refused and counts under \"Failed requests\"."
+    },
+    {
+      "id": "field.burstgpt.bench",
+      "kind": "status",
+      "value": "vllm bench serve --model NousResearch/Meta-Llama-3-8B --dataset-name burstgpt --dataset-path BurstGPT_without_fails_1.csv --num-prompts 480 --request-rate inf --ignore-eos --seed 0",
+      "label": "Field lab 2: replay 480 BurstGPT requests all at once",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/docs/benchmarking/cli.md",
+        "title": "vLLM v0.31.0 docs: benchmarking/cli.md (vllm bench serve)",
+        "quote": "BurstGPT | ✅ | ✅ | `wget https://github.com/HPMLL/BurstGPT/releases/download/v1.1/BurstGPT_without_fails_2.csv`",
+        "row": "Supported datasets table: BurstGPT"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "--request-rate inf sends every request at time 0 (the flag's default), so the run measures saturation, not arrival bursts. --ignore-eos makes each request generate exactly the response length its BurstGPT row records. 480 matches the Fleet slice's request count. --seed 0 is the default, written out so the draw is the same on every run.",
+      "discrepancy": "vLLM's docs point at BurstGPT v1.1's BurstGPT_without_fails_2.csv. This lab pins v2.0's BurstGPT_without_fails_1.csv, the file the Fleet's trace is cut from; the loader needs a Model column and the request and response token counts as the third and fourth columns, which the v2.0 file has (header: Timestamp,Model,Request tokens,Response tokens,Total tokens,Log Type)."
+    },
+    {
+      "id": "field.burstgpt.loader",
+      "kind": "status",
+      "value": "GPT-4 rows with a positive response; lengths only",
+      "label": "vLLM's BurstGPT loader: which rows it keeps and what it reads from them",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/benchmarks/datasets/datasets.py",
+        "title": "vLLM v0.31.0 source: vllm/benchmarks/datasets/datasets.py (BurstGPTDataset)",
+        "quote": "Only rows with Model \"GPT-4\" and positive response tokens are used.",
+        "row": "BurstGPTDataset"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "load_data keeps Model == \"GPT-4\" and Response tokens > 0, then sample() draws num_requests rows at random (pandas sample, random_state = --seed) and reads only the third and fourth columns of each, the request and response token counts. The Timestamp column is never read: the CLI replays BurstGPT's token lengths, not its arrival times. The prompt it sends is made-up token ids of the right length."
+    },
+    {
+      "id": "field.burstgpt.out-tps",
+      "kind": "status",
+      "value": "Output token throughput (tok/s)",
+      "label": "Field lab 2: the benchmark line that gives the saturated output rate",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.31.0/vllm/benchmarks/serve.py",
+        "title": "vLLM v0.31.0 source: vllm/benchmarks/serve.py (vllm bench serve)",
+        "quote": "\"Output token throughput (tok/s):\", metrics.output_throughput",
+        "row": "the Serving Benchmark Result block"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.31.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 60,
+      "boundary": "Generated tokens divided by the benchmark duration, which runs from the first request sent to the last one finished, so it includes the slow tail of the longest responses and the prefill of every prompt. \"Failed requests\" prints just above it and should read 0."
+    },
+    {
+      "id": "field.burstgpt.mean-request-tokens",
+      "kind": "benchmark",
+      "value": 660.7,
+      "unit": "tokens",
+      "label": "BurstGPT v2.0: mean request tokens over the rows vLLM keeps",
+      "source": {
+        "url": "https://github.com/HPMLL/BurstGPT/releases/download/v2.0/BurstGPT_without_fails_1.csv",
+        "title": "BurstGPT v2.0 release asset: BurstGPT_without_fails_1.csv (HPMLL/BurstGPT, CC-BY-4.0)",
+        "row": "Request tokens, Model == \"GPT-4\" and Response tokens > 0"
+      },
+      "pin": {
+        "repo": "HPMLL/BurstGPT",
+        "ref": "v2.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "Mean of the Request tokens column over the 215,127 of 1,404,294 rows of BurstGPT_without_fails_1.csv (sha256 a4d068a7113e...) that vLLM's loader keeps, computed with the standard library's csv module on the file whose hash was checked. The median is 484, the 90th percentile 1,370 and the 99.9th 4,364: the mean sits well above the typical request."
+    },
+    {
+      "id": "field.burstgpt.mean-response-tokens",
+      "kind": "benchmark",
+      "value": 218.8,
+      "unit": "tokens",
+      "label": "BurstGPT v2.0: mean response tokens over the rows vLLM keeps",
+      "source": {
+        "url": "https://github.com/HPMLL/BurstGPT/releases/download/v2.0/BurstGPT_without_fails_1.csv",
+        "title": "BurstGPT v2.0 release asset: BurstGPT_without_fails_1.csv (HPMLL/BurstGPT, CC-BY-4.0)",
+        "row": "Response tokens, Model == \"GPT-4\" and Response tokens > 0"
+      },
+      "pin": {
+        "repo": "HPMLL/BurstGPT",
+        "ref": "v2.0"
+      },
+      "verifiedAt": "2026-10-14",
+      "ttlDays": 365,
+      "boundary": "Mean of the Response tokens column over the same 215,127 rows. The median is 65, the 90th percentile 650 and the 99.9th 1,489; 0.026 % of the kept rows need more than 8,192 tokens of prompt plus response."
     }
   ]
 }

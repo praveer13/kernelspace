@@ -27,6 +27,7 @@ export const LAZY_GROUP_HOMES: Record<string, string> = {
   'bench.step3.': 'lazy/serving3',
   'bench.megascale-infer.': 'lazy/serving3',
   'twin.': 'lazy/twins',
+  'field.': 'lazy/field',
 }
 
 /** The module to import for an id that is not registered: the longest matching prefix of `LAZY_GROUP_HOMES`, or undefined. */

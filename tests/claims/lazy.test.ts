@@ -7,6 +7,7 @@ import * as everything from '@/data/claims/all'
 import { ENGINE_CLAIMS } from '@/data/claims/engines'
 import { HARDWARE_CLAIMS } from '@/data/claims/hardware'
 import { LAZY_GROUP_HOMES, lazyGroupFor } from '@/data/claims/homes'
+import { FIELD_CLAIMS } from '@/data/claims/lazy/field'
 import { MOE_CLAIMS } from '@/data/claims/lazy/moe'
 import { SERVING3_CLAIMS } from '@/data/claims/lazy/serving3'
 import { TILING_CLAIMS } from '@/data/claims/lazy/tiling'
@@ -176,12 +177,12 @@ describe('the full registry (all.ts)', () => {
     for (const home of Object.values(LAZY_GROUP_HOMES)) expect(existsSync(join(src, 'data/claims', `${home}.ts`))).toBe(true)
   })
 
-  test('ALL_CLAIMS is the registry in one order: the eager groups as CLAIMS lists them, then the lazy groups as all.ts imports them', () => {
+  test('ALL_CLAIMS is the registry in one order: the eager groups as CLAIMS lists them, then the lazy groups in the order all.ts lists them', () => {
     const ids = (list: readonly Claim[]) => list.map((c) => c.id)
     const eager = [...HARDWARE_CLAIMS, ...MODEL_CLAIMS, ...PRICE_CLAIMS, ...PRODUCTION_CLAIMS, ...ENGINE_CLAIMS, ...SERVING_CLAIMS, ...ZOO_CLAIMS]
     const held = new Set(ids(eager))
     // a claim an earlier group holds is skipped, as registerClaims skips it
-    const lazy = ids([...MOE_CLAIMS, ...SERVING3_CLAIMS, ...TILING_CLAIMS, ...TWIN_CLAIMS]).filter((id, i, all) => all.indexOf(id) === i && !held.has(id))
+    const lazy = ids([...MOE_CLAIMS, ...SERVING3_CLAIMS, ...TILING_CLAIMS, ...TWIN_CLAIMS, ...FIELD_CLAIMS]).filter((id, i, all) => all.indexOf(id) === i && !held.has(id))
     expect(ids(everything.ALL_CLAIMS.slice(0, eager.length))).toEqual(ids(CLAIMS.slice(0, eager.length)))
     expect(ids(everything.ALL_CLAIMS.slice(eager.length))).toEqual(lazy)
     // a group imported by all.ts but left out of ALL_CLAIMS registers into CLAIMS, so the two sets differ
