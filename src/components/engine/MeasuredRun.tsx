@@ -334,8 +334,8 @@ function Comparison({ c, device, onAgain, resultRef }: { c: RunComparison; devic
         ))}
       </div>
 
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[18rem] border-collapse text-left font-mono text-[12px]">
+      <div className="mt-3">
+        <table className="w-full border-collapse text-left font-mono text-[12px]">
           <caption className="sr-only">Predicted against measured decode speed, and what the measurement implies</caption>
           <tbody>
             <Row k="predicted" v={`${tpsOf(c.predicted)} tok/s`} />
@@ -365,10 +365,10 @@ function Comparison({ c, device, onAgain, resultRef }: { c: RunComparison; devic
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <tr className="border-b border-line last:border-b-0">
-      <th scope="row" className="py-2 pr-3 font-normal text-text-3">
+      <th scope="row" className="py-2 pr-3 text-left font-normal text-text-3">
         {k}
       </th>
-      <td className="py-2 text-right text-text-1">{v}</td>
+      <td className="py-2 pl-3 text-right text-text-1">{v}</td>
     </tr>
   )
 }
