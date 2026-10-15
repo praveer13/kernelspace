@@ -6,6 +6,7 @@ import FixMenu from '@/components/daily/FixMenu'
 import Hypothesis from '@/components/daily/Hypothesis'
 import ProbeBar from '@/components/daily/ProbeBar'
 import ShareString from '@/components/daily/ShareString'
+import { season0Day, season0Header } from '@/data/season0'
 import { localDateKey } from '@/lib/economy'
 import { describeFleetError, openIncidentSession, type IncidentClientSession } from '@/lib/fleet-session'
 import { useVisibleClock } from '@/hooks/use-visible-clock'
@@ -72,6 +73,9 @@ const hypothesisName = (h: HypothesisId): string => HYPOTHESIS_OPTIONS.find((o) 
  * component's state and nowhere else; each incident writes one event graded practice (`recordShift`), and the Daily's
  * own record is untouched. The shift is a pilot URL the owner hands to a think-aloud participant (docs/oncall/pilot.md),
  * not a link anywhere on the site.
+ *
+ * Season 0 (§16.7, 3s-09): on the seven dates of `data/season0` the header says "Season 0 · day k of 7", and the card on
+ * /me lists your results. The incident is the date's own, as on any other day; the shift has no Season 0 line.
  */
 export default function Daily() {
   const [params] = useSearchParams()
@@ -90,6 +94,8 @@ function DailyPage({ shifting }: { shifting: boolean }) {
   const source = useMemo(() => incident?.source ?? dailySource(date), [incident, date])
   const spec = useMemo(() => incident?.spec ?? dailyIncident(date), [incident, date])
   const number = dailyNumber(date)
+  /** which day of Season 0 the date is, or null outside it and in the shift */
+  const seasonDay = shifting ? null : season0Day(date)
   /** what each shift incident reported, kept in this page's memory for the handoff note and the summary: never written */
   const [finished, setFinished] = useState<Record<number, ShiftFacts>>({})
   const shiftHead = useRef<HTMLParagraphElement>(null)
@@ -245,6 +251,16 @@ function DailyPage({ shifting }: { shifting: boolean }) {
     >
       <p className="section-label">0x00 — daily</p>
       <h1 className="mt-3 font-display text-h3 text-text-1 sm:text-h2">{shifting ? 'On-call shift' : 'Fleet Daily'}</h1>
+      {seasonDay !== null && (
+        <p className="mt-2 text-body-sm text-text-2" data-season0={seasonDay}>
+          <span className="font-mono text-label uppercase text-text-1">{season0Header(seasonDay)}</span>
+          {' · '}your results stay on this device, listed on{' '}
+          <Link to="/me" className="text-info underline underline-offset-2">
+            Me
+          </Link>
+          .
+        </p>
+      )}
       {shifting ? (
         <p className="mt-2 text-body-sm text-text-2" data-shift-intro>
           Pilot · {date} · {SHIFT_LENGTH} incidents in a row, about {SHIFT_LENGTH * DAILY_MINUTES} min. The same three for everybody on your date. Each one is

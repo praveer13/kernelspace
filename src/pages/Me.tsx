@@ -22,6 +22,10 @@ import BackgroundPick from '@/pages/me/Background'
  * the page keeps the card's module in state and shows the card, the pick and the sections below only when both the Mirror
  * has settled and the card's chunk is here. Rendering the loaded module directly, not through `lazy`, leaves no Suspense
  * fallback to swap, so the pick (3c-05) and everything under the card stay where they first appear (D47, 3c final review F8).
+ *
+ * Season 0 (3s-09, §16.7) is a card of the seven Dailies and your results, read from the ledger. It loads with the forms
+ * card (one chunk of its own, never in this file's static closure), sits under the background pick, and holds the journey
+ * and what follows back until it has read the ledger or failed to, so the card grows into empty space like the Mirror.
  */
 const MirrorSummary = lazy(() => import('@/pages/me/MirrorSummary'))
 const Journey = lazy(() => import('@/pages/me/Journey'))
@@ -34,14 +38,24 @@ export default function Me() {
   const [mirrorSettled, setMirrorSettled] = useState(false)
   const onMirrorSettled = useCallback(() => setMirrorSettled(true), [])
   // the forms card's module, held in state once its chunk is here; a chunk that fails to load settles with no card, never a held page
-  const [forms, setForms] = useState<{ Card: ComponentType | null } | null>(null)
+  const [forms, setForms] = useState<{ Card: ComponentType | null; Season0: ComponentType<{ onSettled: () => void }> | null } | null>(null)
+  // Season 0's card settles once it has read the ledger (or failed to); the journey waits for it, so nothing already shown moves
+  const [season0Settled, setSeason0Settled] = useState(false)
+  const onSeason0Settled = useCallback(() => setSeason0Settled(true), [])
   // fetch the sections below while the Mirror reads the ledger (the lazy() calls above share these imports' results)
   useEffect(() => {
     let live = true
-    import('@/components/me/FormsCard').then(
-      (m) => live && setForms({ Card: m.default }),
-      () => live && setForms({ Card: null }),
-    )
+    // each chunk fails on its own: a card that does not load is left out and never holds the page
+    Promise.all([
+      import('@/components/me/FormsCard').then(
+        (m) => m.default as ComponentType | null,
+        () => null,
+      ),
+      import('@/pages/me/Season0Card').then(
+        (m) => m.default as ComponentType<{ onSettled: () => void }> | null,
+        () => null,
+      ),
+    ]).then(([Card, Season0]) => live && setForms({ Card, Season0 }))
     void import('@/pages/me/Journey')
     void import('@/pages/me/DataOwnership')
     return () => {
@@ -72,20 +86,26 @@ export default function Me() {
 
             <BackgroundPick />
 
-            <div className="mt-14">
-              <Suspense fallback={<SectionFallback tall="min-h-[24rem]" />}>
-                <Journey />
-              </Suspense>
-            </div>
-            <Suspense fallback={<SectionFallback tall="mt-14 min-h-[16rem]" />}>
-              <DataOwnership />
-            </Suspense>
+            {forms.Season0 && <forms.Season0 onSettled={onSeason0Settled} />}
 
-            <div className="mt-16 font-mono text-[11px] text-text-3">
-              <Link to="/curriculum" className="hover:text-accent">
-                ← back to curriculum
-              </Link>
-            </div>
+            {(forms.Season0 === null || season0Settled) && (
+              <>
+                <div className="mt-14">
+                  <Suspense fallback={<SectionFallback tall="min-h-[24rem]" />}>
+                    <Journey />
+                  </Suspense>
+                </div>
+                <Suspense fallback={<SectionFallback tall="mt-14 min-h-[16rem]" />}>
+                  <DataOwnership />
+                </Suspense>
+
+                <div className="mt-16 font-mono text-[11px] text-text-3">
+                  <Link to="/curriculum" className="hover:text-accent">
+                    ← back to curriculum
+                  </Link>
+                </div>
+              </>
+            )}
           </>
         )}
       </section>
