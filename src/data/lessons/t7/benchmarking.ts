@@ -73,6 +73,14 @@ Same hardware (GPU SKU, clocks, power cap), same model artifact (weights, quanti
 That is Rule 3 on a small engine. The capacity number is where the curve bends, which a sweep of load steps finds and a single run does not: one run at a load past the knee reports a low goodput and blames the engine. The engine here is a flat-tick toy (version 1 of the model), so take the shape and the method from it, not its multipliers.`,
     },
     {
+      type: 'exercise',
+      fleet: 'broken-bench',
+      title: 'The broken benchmark',
+      note: `Every flaw here is a way a number comes out of a run that is not the traffic it is quoted for. Closed-loop clients, replies cut short and a cached prompt prefix all hide work, so the benchmark reported a TTFT that was too low (Rule 1: the traffic is the benchmark). Counting the cold start did the opposite and reported one that was too high (Rule 2: warm up, then measure).
+
+To correct the number, take the flaw out and ask whether production's load queues. Little's law gives the capacity, *slots ÷ (time a request holds one)*, from the prompt and output lengths. Under capacity almost nothing waits, and the p95 is the prefill of a 95th-percentile prompt: *⌈P95 ÷ 128⌉ − 1* ticks of 50 ms. Over capacity the queue grows for the whole window, so the request at the 95th percentile of arrivals waits about *(load − 1) × 95 % of the window* before its prefill starts. That is why a p95 taken past the knee is not a latency number: it depends on how long the run lasted, and it is Rule 3's reason to sweep load in steps rather than quote one point. The engine is a flat-tick toy (version 1) and its cold start is a stand-in, so take the method from it, not its numbers.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {

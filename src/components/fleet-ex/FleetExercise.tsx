@@ -29,7 +29,7 @@ import type { FleetExerciseBlock } from '@/data/lessons/types'
 import type { Confidence, ItemResponse } from '@/lib/ledger/types'
 import { useProgress } from '@/lib/progress'
 import { freshSeed } from '@/lib/rng'
-import { formatNumber, hitArea, resolveInlineMode, usePhoneViewport } from '@/lib/sims/host'
+import { hitArea, resolveInlineMode, usePhoneViewport } from '@/lib/sims/host'
 import { FLEET_EXERCISES, type FleetExerciseDef, type SweepResult } from '@/lib/world/fleet-ex'
 import { ProseView } from '@/pages/lesson/prose'
 import ProductionRows from './ProductionRows'
@@ -44,6 +44,7 @@ import {
   canSave,
   copyFor,
   drawFairSweep,
+  entryText,
   exerciseEventOf,
   exerciseRef,
   explainReady,
@@ -277,7 +278,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
     dispatch({ type: 'next', at: env.now() })
   }
 
-  const allowed = def.points.map((p) => formatNumber(p)).join(', ')
+  const entry = entryText(def, copy)
   const verdict = round.result !== undefined && round.prediction !== undefined ? verdictText(def, copy, round.prediction, round.result) : null
   const table = round.result !== undefined ? sweepTable(def, copy, round.result, round.prediction) : null
   const ready = explainReady(round.explain)
@@ -308,7 +309,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
         <p className="text-body-sm text-text-2">{copy.setup}</p>
 
         {mode === 'phone' ? (
-          <PhoneOutcome def={def} copy={copy} allowed={allowed} locked={phoneLock} onLock={setPhoneLock} onEmbed={() => setForceEmbed(true)} />
+          <PhoneOutcome def={def} copy={copy} entry={entry} locked={phoneLock} onLock={setPhoneLock} onEmbed={() => setForceEmbed(true)} />
         ) : (
           <>
             {load === 'loading' && <p className="mt-3 min-h-11 font-mono text-body-sm text-text-3">loading…</p>}
@@ -402,12 +403,12 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                         className={cn(hitArea(false), 'h-9 w-28 min-w-0 rounded-sm border border-line bg-ink px-2 font-mono text-body-sm text-text-1 disabled:opacity-70 [@media(pointer:coarse)]:h-11')}
                       />
                       <span id={`${uid}-allowed`} className="font-mono text-[11px] text-text-3">
-                        one of {allowed}
+                        {entry.hint}
                       </span>
                     </div>
                     {invalid && (
                       <p id={`${uid}-err`} role="alert" className="mt-1.5 text-[12px] text-danger">
-                        Enter one of the points the sweep runs: {allowed}.
+                        {entry.error}
                       </p>
                     )}
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5" role="group" aria-label="How sure are you? (optional)">
@@ -457,7 +458,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                       <span className="block font-medium">{verdict.headline}</span>
                       <span className="block text-text-2">{verdict.detail}</span>
                     </p>
-                    <SweepChart result={round.result} xLabel={copy.xLabel} tickLabel={copy.tickLabel} answer={round.truth} pick={round.prediction} table={table} />
+                    <SweepChart result={round.result} xLabel={copy.xLabel} tickLabel={copy.tickLabel} answer={round.truth} pick={round.prediction} table={table} y={copy.view?.plot} />
 
                     {round.phase === 'explain' && (
                       <div>
@@ -543,7 +544,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
           </>
         )}
 
-        <ProductionRows claims={def.productionClaims} />
+        {def.productionClaims.length > 0 && <ProductionRows claims={def.productionClaims} />}
 
         {/* the note states the answer rule: shown once the exercise is done, or on a phone once its one seed is locked */}
         {block.note && (state.done || (mode === 'phone' && phoneLock !== null)) && (
@@ -567,7 +568,7 @@ function Played({ played, copy }: { played: ReturnType<typeof readExercise>['pla
       <ol className="mt-1 space-y-0.5">
         {played.map((p, i) => (
           <li key={`${p.seed}:${i}`} className="font-mono text-[11px] text-text-2">
-            {i + 1}. you said {copy.pointLabel(p.value)}, the peak was {copy.pointLabel(p.truth)}:{' '}
+            {i + 1}. {copy.view !== undefined ? copy.view.played(p.value, p.truth) : `you said ${copy.pointLabel(p.value)}, the peak was ${copy.pointLabel(p.truth)}`}:{' '}
             <span className={p.ok ? 'text-accent' : 'text-text-3'}>{p.ok ? 'right' : p.unsaved ? 'left before saving, counts as off' : 'off'}</span>
           </li>
         ))}
@@ -601,14 +602,14 @@ function Scene({ id, def, seed, fresh }: { id: string; def: Def; seed: number; f
 function PhoneOutcome({
   def,
   copy,
-  allowed,
+  entry,
   locked,
   onLock,
   onEmbed,
 }: {
   def: Def
   copy: ExerciseCopy
-  allowed: string
+  entry: { hint: string; error: string }
   /** The locked prediction, or null before the lock. */
   locked: number | null
   onLock: (prediction: number) => void
@@ -667,12 +668,12 @@ function PhoneOutcome({
             className="h-11 w-28 min-w-0 rounded-sm border border-line bg-ink px-2 font-mono text-body-sm text-text-1 disabled:opacity-70"
           />
           <span id={`${uid}-allowed`} className="font-mono text-[11px] text-text-3">
-            one of {allowed}
+            {entry.hint}
           </span>
         </div>
         {invalid && (
           <p id={`${uid}-err`} role="alert" className="mt-1.5 text-[12px] text-danger">
-            Enter one of the points the sweep runs: {allowed}.
+            {entry.error}
           </p>
         )}
       </fieldset>
@@ -704,6 +705,7 @@ function PhoneOutcome({
             pick={locked}
             table={sweepTable(def, copy, canonical, locked)}
             tableOpen
+            y={copy.view?.plot}
           />
           <p className="text-body-sm text-text-2">
             This is one fixed seed, shown on a phone in place of a run, so it earns nothing: the same answer every time is no evidence. On a fresh seed it counts.

@@ -22,11 +22,12 @@ describe('the shared rate', () => {
 
   test('no exercise module imports another: each takes the rate from ./rate and its types from ./index', () => {
     const exercises = readdirSync(dir).filter((f) => f.endsWith('.ts') && !['index.ts', 'rate.ts'].includes(f))
-    expect(exercises.sort()).toEqual(['knee.ts', 'pd-split.ts'])
+    expect(exercises.sort()).toEqual(['broken-bench.ts', 'knee.ts', 'pd-split.ts', 'push-luck.ts'])
     for (const f of exercises) {
       const local = imports(read(f)).filter((p) => p.startsWith('./'))
       expect(local.every((p) => p === './index' || p === './rate')).toBe(true)
-      expect(local).toContain('./rate')
+      // push-luck is model-only (§16.3): it serves no request, so it reports no rate
+      if (f !== 'push-luck.ts') expect(local).toContain('./rate')
     }
     expect(imports(read('rate.ts')).every((p) => !p.startsWith('./'))).toBe(true)
   })
