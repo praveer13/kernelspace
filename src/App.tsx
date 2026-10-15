@@ -8,7 +8,7 @@ import RouteFallback from '@/components/RouteFallback'
 /**
  * A lazy page that (transitively) imports framer-motion. It loads `MotionScope` beside the page
  * and renders inside it, so reduced motion is honoured (PLAN-100X §7.3) without the entry chunk
- * ever importing framer-motion. Boot, Today, Daily, Errors, Drills, Play, NotFound and Me stay on plain `lazy`.
+ * ever importing framer-motion. Boot, Today, Daily, Errors, Drills, ServiceCapstone, Play, NotFound and Me stay on plain `lazy`.
  */
 function lazyMotion(load: () => Promise<{ default: ComponentType }>) {
   return lazy(async () => {
@@ -47,6 +47,8 @@ const Daily = lazy(() => import('@/pages/Daily'))
 const Errors = lazy(() => import('@/pages/Errors'))
 // Interview mode (wave-3.md §16.4): plain `lazy`, like the other pages whose closure verify:bundle measures.
 const Drills = lazy(() => import('@/pages/Drills'))
+// The bring-your-own-service capstone (wave-3.md §16.8): plain `lazy` too, so verify:bundle's closure for it is the whole of it.
+const ServiceCapstone = lazy(() => import('@/pages/ServiceCapstone'))
 const Play = lazy(() => import('@/pages/Play'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -79,6 +81,7 @@ export default function App() {
             <Route path="/me" element={<Me />} />
             <Route path="/progress" element={<Navigate to="/me" replace />} />
             <Route path="/capstone" element={<Capstone />} />
+            <Route path="/capstone/service" element={<ServiceCapstone />} />
             <Route path="/forge" element={<Forge />} />
             <Route path="/forge/:labId" element={<ForgeLab />} />
             <Route path="/fleet" element={<Fleet />} />

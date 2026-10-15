@@ -76,6 +76,9 @@ const ROUTE_BUDGETS: RouteBudget[] = [
   // interview library (it reaches the claims registry and the packet helpers) and the generator families load on demand, so
   // the closure is the page and the Daily's flow components.
   { route: '/drills', src: 'src/pages/Drills.tsx', budgetKb: null, targetKb: 200 },
+  // Stretch 8 (wave-3.md §16.8, §17.1): the bring-your-own-service capstone is reported against a 200 KB figure, not gated. The
+  // fleet session loads when a run starts, and the trace, zoo and atlas readers are the page's own closure.
+  { route: '/capstone/service', src: 'src/pages/ServiceCapstone.tsx', budgetKb: null, targetKb: 200 },
   { route: '/play/block-placement', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/block-placement/Play.tsx' },
   // The scheduler play shares the /play/:playId page; it holds fleet-model.ts, so its chunk is the larger of the two.
   { route: '/play/scheduler', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/scheduler/Play.tsx' },
