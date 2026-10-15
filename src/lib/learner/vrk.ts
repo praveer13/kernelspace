@@ -23,9 +23,8 @@ import type { KcId } from '@/lib/kc/types'
 import { GRADED_KINDS } from '@/lib/ledger/fold'
 import { compareEvents } from '@/lib/ledger/merge'
 import type { LedgerEvent, LocalDay } from '@/lib/ledger/types'
-import { wilson } from './calibration'
 import { deriveCards, isFormItem, type CardsContent, type CardsExtra, type CardsPlan } from './cards'
-import type { Proportion } from './outcomes'
+import { proportionOf, type Proportion } from './proportion'
 import { isCredited } from './provenance'
 import { daysBetween } from './reentry'
 
@@ -39,12 +38,8 @@ export const VRK_SHARE_MIN_N = 5
 /** The kinds a check can be (§12.2). */
 const CHECK_KINDS: ReadonlySet<string> = new Set(['item', 'probe', 'prove'])
 
-/** `correct` of `n` with its Wilson 95 % interval; a null rate and interval with no trial. */
-export function proportionOf(correct: number, n: number): Proportion {
-  if (n === 0) return { n, correct, rate: null, ci95: null }
-  const w = wilson(correct, n)
-  return { n, correct, rate: correct / n, ci95: [w.lo, w.hi] }
-}
+/** `correct` of `n` with its Wilson 95 % interval (proportion.ts; /me and its tests read it from here). */
+export { proportionOf }
 
 /** The ledger as of `now`: duplicates collapsed (a merge may deliver one twice), later days left out, `(at, id)` order. */
 export function asOf(events: Iterable<LedgerEvent>, now: LocalDay): LedgerEvent[] {

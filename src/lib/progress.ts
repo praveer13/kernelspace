@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { StoreApi, UseBoundStore } from 'zustand'
-import { AGGREGATE_VERSION, EXPORT_FORMAT, QUIZ_PASS_SCORE, SCHEMA_VERSION } from './ledger/constants'
+import { AGGREGATE_VERSION, EXPORT_FORMAT, MAX_ACT_RUNS, MAX_PROVE_CALLS, MAX_PROVE_IDS, MAX_QID_LENGTH, QUIZ_PASS_SCORE, RUBRIC_KEYS, SCHEMA_VERSION } from './ledger/constants'
 import { browserEnv, loadDeviceId, onLedgerClientRequest } from './ledger/client'
 import { emptyAggregate, fleetRunOk, fleetRunScore, foldInto, incidentOk, incidentScore, upgradeAggregate } from './ledger/fold'
 import { checkSnapshot } from './ledger/guard'
@@ -196,12 +196,8 @@ const MAX_RUN_COMPONENTS = 8
 /** The codec refuses more play levels or run records than these (wave-3.md §3.2). */
 const MAX_PLAY_LEVELS = 8
 const MAX_RUN_RECORDS = 50
-/** The codec's bounds on a Prove-it v2 event and a Fleet Week act's data (wave-3.md §3.2); it refuses the whole event past them. */
-const MAX_QID_LENGTH = 40
-const MAX_PROVE_CALLS = 12
-const MAX_PROVE_IDS = 12
-const MAX_ACT_RUNS = 20
-const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
+// The codec's bounds on a Prove-it v2 event and a Fleet Week act's data (MAX_QID_LENGTH, MAX_PROVE_IDS, MAX_PROVE_CALLS,
+// MAX_ACT_RUNS, RUBRIC_KEYS) come from ledger/constants.ts, which the codec reads too: one source, and no codec load (D35).
 /** The most characters a context packet may report (H2); the codec refuses more. */
 const MAX_PACKET_CHARS = 6000
 /** Scroll position is device-local and changes constantly: commit it at most this often (§5). */

@@ -8,11 +8,11 @@
  * week plan's SLO and nothing else.
  *
  * Wave 3 (docs/specs/wave-3.md §15.2, task 3c-03) adds what its selectors read: `sinceDays`; the form identity
- * (`formId`, `formSet`, `formSlot`); a play's per-level results and metric; a Prove-it v2 attempt's template,
- * return flag and call count (never its `answer` or `actual`); a Fleet Week act's receipt counts and rubric; a
- * `miss` only when it is a `confuse.<kcId>` id (every other misconception id still goes); and the `value` and
- * `truth` of numeric items, numbers only and never on an event of provenance `field`, so a learner's own GPU or
- * device measurements stay on the device.
+ * (`formId`, `formSet`, `formSlot`, and on a form item the form's `track`, one of the KC graph's nine track ids); a
+ * play's per-level results and metric; a Prove-it v2 attempt's template, return flag and call count (never its `answer`
+ * or `actual`); a Fleet Week act's receipt counts and rubric; a `miss` only when it is a `confuse.<kcId>` id (every
+ * other misconception id still goes); and the `value` and `truth` of numeric items, numbers only and never on an event
+ * of provenance `field`, so a learner's own GPU or device measurements stay on the device.
  *
  * What goes: free text (explanations, constructed responses, `boot:value`, `fw:doc`, pasted configs), seeds,
  * wasm and component hashes, device ids, event ids, calendar dates and times of day, components, capstone
@@ -31,6 +31,7 @@
  * Pure: no clock, no storage.
  */
 
+import { MAX_PROVE_CALLS, RUBRIC_KEYS } from '@/lib/ledger/constants'
 import type { ExportV3, Json, LedgerEvent, LocalDay, WorkingRecord } from '@/lib/ledger/types'
 import { compareEvents } from '@/lib/ledger/merge'
 import type { CardsPlan } from './cards'
@@ -50,7 +51,7 @@ export const EVENT_KEYS = ['kind', 'ref', 'score', 'ok', 'conf', 'provenance', '
  * The Wave 3 fields (§15.2). Each has its own shape check (`redactStructure`), because a value of the wrong shape under a
  * whitelisted name is as dangerous as a field nobody listed.
  */
-const STRUCTURE_KEYS = ['sinceDays', 'formId', 'formSet', 'formSlot', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth'] as const
+const STRUCTURE_KEYS = ['sinceDays', 'formId', 'formSet', 'formSlot', 'track', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth'] as const
 
 /** The `data` fields a donation keeps (§20.2, §15.2). `grp` is re-numbered, and `probes` becomes the probe count. */
 export const DATA_KEYS = [
@@ -137,12 +138,16 @@ function scrubRef(ref: string, first: LocalDay): string {
 /** A `miss` id that names a confusion between KCs (wave-3.md §11.2): `confuse.` and a KC id, `<track>.<slug>`. Every other misconception id stays out of a donation. */
 const CONFUSE_RE = /^confuse\.[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/
 
-const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
 const RECEIPT_KEYS = ['cited', 'verified', 'uncited'] as const
 const MAX_LEVELS = 8
 const MAX_RECEIPT_COUNT = 10_000
-const MAX_CALLS = 12
 const MAX_FORM_SLOT = 11
+
+/**
+ * The tracks a form item's `track` may name: the KC graph's tracks (`Kc.track`), a fixed list so that the donation does not
+ * load the graph; redact.test.ts holds it to the graph. Any other string under `track` stays on the device.
+ */
+export const DONATION_TRACKS: readonly string[] = ['r', 't0', 't1', 't2', 't3', 't4', 't5', 't6', 't7']
 
 const nonNegInt = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max
 
@@ -157,6 +162,8 @@ function redactStructure(d: Rec, provenance: unknown): Partial<Record<DonationDa
   if (d.formId === 'A' || d.formId === 'B' || d.formId === 'C') out.formId = d.formId
   if (d.formSet === 0 || d.formSet === 1 || d.formSet === 2) out.formSet = d.formSet
   if (nonNegInt(d.formSlot, MAX_FORM_SLOT)) out.formSlot = d.formSlot
+  // the form's track, so the report counts a slot under the track whose form it is, not the track its KCs mostly name (B2)
+  if (d.src === 'form' && typeof d.track === 'string' && DONATION_TRACKS.includes(d.track)) out.track = d.track
   if (Array.isArray(d.levels)) {
     const levels: Json[] = []
     for (const raw of d.levels.slice(0, MAX_LEVELS)) {
@@ -175,7 +182,7 @@ function redactStructure(d: Rec, provenance: unknown): Partial<Record<DonationDa
   const qid = safeToken(d.qid)
   if (qid !== null) out.qid = qid
   if (d.return === true) out.return = true
-  if (nonNegInt(d.calls, MAX_CALLS) && d.calls >= 1) out.calls = d.calls
+  if (nonNegInt(d.calls, MAX_PROVE_CALLS) && d.calls >= 1) out.calls = d.calls
   const receipts = asRec(d.receipts)
   if (RECEIPT_KEYS.every((k) => nonNegInt(receipts[k], MAX_RECEIPT_COUNT))) {
     out.receipts = { cited: receipts.cited as number, verified: receipts.verified as number, uncited: receipts.uncited as number }

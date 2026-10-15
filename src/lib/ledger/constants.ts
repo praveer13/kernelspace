@@ -44,4 +44,21 @@ export const ENGINE_SLOTS = ['scheduler', 'block-manager', 'intake', 'prefix-rou
 /** The learner's background, an optional local pick (wave-3.md §3.2; the `profile:background` working key). */
 export const BACKGROUNDS = ['jvm', 'backend', 'sre', 'ml', 'student', 'other'] as const
 
+/*
+ * The codec's bounds on a Prove-it v2 event and a Fleet Week act's data (wave-3.md §3.2), in one place (D35, D48). The
+ * codec refuses a whole event past them; the façade (progress.ts) holds what it writes to them without loading the
+ * codec, and the donation (learner/redact.ts) and the partner report (learner/outcomes.ts) read them.
+ */
+
+/** A Prove-it v2 template id (`data.qid`) is 1 to this many characters. */
+export const MAX_QID_LENGTH = 40
+/** A Prove-it v2 `answer` or `actual` that is a list holds at most this many ids. */
+export const MAX_PROVE_IDS = 12
+/** A Prove-it v2 attempt makes 1 to this many verb calls (`data.calls`). */
+export const MAX_PROVE_CALLS = 12
+/** A Fleet Week act cites at most this many run records (`data.runs`). */
+export const MAX_ACT_RUNS = 20
+/** A Fleet Week act's self-review rubric: these four criteria, each a whole score 0 to 3 (`data.rubric`, §10.4). */
+export const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
+
 export type XpUnitPrefix = keyof typeof XP_UNITS
