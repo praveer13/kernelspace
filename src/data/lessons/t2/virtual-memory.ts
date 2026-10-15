@@ -134,6 +134,65 @@ Hold the pattern: **trap → kernel inspects → fix mapping → transparent ret
       variant: 'analogy',
       md: `The JVM is a heavy virtual-memory user: the heap is one big lazily-committed \`mmap\` region (committed on touch — that's why \`-Xms\` and \`-Xmx\` matter for latency), ZGC's **colored pointers** literally store GC metadata in address bits the MMU ignores, and humongous allocations go straight to huge pages. If you've ever puzzled over VIRT vs RES in \`top\`: VIRT is the virtual address space (cheap, sparse), RES is the frames actually backed. You were reading a page table summary.`,
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: paging is swapping. The evidence names it: "paging
+    // = swapping" is one of the named misconceptions distractors should encode (community.md §2.1). The sim preset that
+    // proves the fix: the translation walk below (sim-vm, machine 'walk4'), which translates an address through four levels
+    // with every page resident and no disk touched; the swap-out is a separate task of its own.
+    {
+      type: 'protege',
+      title: 'Sam explains paging',
+      setup: 'Sam moved from web services to the platform team and wrote this primer for the next hire.',
+      sentences: [
+        'Paging cuts virtual and physical memory into pages and frames of one fixed size, 4 KiB by default.',
+        'A page table maps each virtual page number to a frame, and the offset within the page passes through unchanged.',
+        'The TLB caches recent translations, so most loads skip the four-level walk.',
+        'Paging means writing a process\'s pages out to disk when RAM runs low.',
+        'A page fault traps into the kernel, which fixes the mapping and retries the access, or sends SIGSEGV for a bad address.',
+      ],
+      falseAt: 3,
+      find: {
+        offer: [0, 2, 3, 4],
+        why: [
+          'True: pages are virtual and frames are physical, and both are 4 KiB unless huge pages are in use.',
+          'True: a TLB hit returns the frame in about a cycle, so the walk runs only on a TLB miss.',
+          'False: that is swapping, one thing paging makes possible. Paging is the translation itself: every load goes through it, and a machine with RAM to spare and no swap still pages.',
+          'True: faults are how virtual memory works, from lazy allocation to copy-on-write, and SIGSEGV is the case where the address is not valid.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Mixing up the page table with the TLB that caches it',
+          'Treating paging and swapping as one thing',
+          'Believing a page fault is a bug in the program',
+          'Assuming a process sees physical addresses directly',
+        ],
+        correct: [1],
+        why: [
+          'Not this one: sentence 3 keeps the two apart correctly, and sentence 4 is about what paging is.',
+          'Right: swapping writes cold pages to disk, and it needs paging to mark them not present. Paging itself is the translation every access goes through.',
+          'A real mix-up, but not this one: sentence 5 already treats faults as normal, and sentence 4 is about disk.',
+          'Not this one: sentence 4 never mentions addresses, and the rest of the passage has every load translated.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 4?',
+        options: [
+          'Paging means writing pages to disk on a schedule, whether RAM runs low or not, so that faults stay rare.',
+          'Paging means copying a process into frames that sit next to each other, so that loads need no table.',
+          'Paging means reading a file from disk into RAM in pieces the size of a page when a program opens it.',
+          'Paging means translating virtual pages to frames, and writing cold pages out to disk is one use of it.',
+        ],
+        correct: [3],
+        why: [
+          'Wrong: it still makes paging a disk operation. Paging translates every access, with no disk involved, and swapping is a separate policy built on it.',
+          'Wrong: paging exists so a process does not need frames next to each other; the page table lets any page land in any frame.',
+          'Wrong: reading a file in page-size pieces describes a file read or mmap, which uses paging; it is not what paging is.',
+          'Right: translation is paging, and swapping is a use of it. In the translation walk below every page is resident and no disk is touched, and the swap-out is a task of its own.',
+        ],
+      },
+      kcs: ['t2.address-translation'],
+    },
     {
       type: 'prose',
       md: `## In the simulator

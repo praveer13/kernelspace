@@ -57,6 +57,67 @@ An SLO is also a budget. A **99% SLO** lets 1 request in 100 miss, and that 1% i
       family: 'goodput',
       variants: ['slo-count', 'goodput-rate'],
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: every completed request is goodput, so goodput is
+    // throughput. The evidence: the content audit's charge that t7.l1 never had the learner compute goodput and that raw
+    // tok/s benchmarks stand in for it (content.md §6, weakest 4), and the goodput family's `goodput.all-requests` lure
+    // ("You counted every request"). The family item that proves the fix: goodput/slo-count, the block just above. It sits
+    // after the item block so the item keeps its block index (its done state is keyed `t7.l1#<blockIndex>`).
+    // Hypothetical numbers: 60 requests in 20 s, 45 meet TTFT, 51 meet TPOT, 43 meet both (between 45 + 51 - 60 = 36 and 45).
+    {
+      type: 'protege',
+      title: 'Sam explains a load test',
+      setup: 'Sam ran a load test on a new GPU fleet and wrote up the result for the team.',
+      sentences: [
+        'In a 20 s window the fleet completed 60 requests, which is 3.0 requests per second of throughput.',
+        'Our SLO is TTFT under 2 s and TPOT under 100 ms, and a request meets it when it meets both.',
+        'Of the 60, 45 met the TTFT bound, 51 met the TPOT bound and 43 met both.',
+        'Every request the fleet completed counts toward goodput, so goodput is also 3.0 requests per second.',
+        'Pushing more load would raise throughput a little, but past the knee fewer of the requests would meet the SLO.',
+      ],
+      falseAt: 3,
+      find: {
+        offer: [0, 2, 3, 4],
+        why: [
+          'True: 60 requests in 20 s is 3.0 requests per second, and throughput counts everything completed, met or not.',
+          'True: 43 is no more than either single count and no less than 45 + 51 - 60 = 36, so the three counts fit together.',
+          'False: goodput counts only the requests that met both bounds, 43 of the 60, so it is 43 ÷ 20 = 2.15 requests per second. Counting every completion turns goodput back into throughput.',
+          'True: past the knee, latency climbs faster than throughput, so requests start missing the SLO while the request rate still creeps up.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Counting a request that meets one bound as meeting the SLO',
+          'Dividing the count by the requests in place of the window',
+          'Treating each completed request as goodput',
+          'Reading the p50 latency where the SLO names a tail percentile',
+        ],
+        correct: [2],
+        why: [
+          'A real mix-up, but not this one: sentence 4 counts all 60, including those that met neither bound, not those that met one.',
+          'Not this one: sentence 4 divides by the 20 s window, which is right, and its mistake is the 60 on top.',
+          'Right: throughput counts what completed and goodput counts what met the SLO. Sentence 4 counts the 17 requests that missed a bound as well.',
+          'Not this one: the passage judges each request against the bounds, and no percentile enters sentence 4.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 4?',
+        options: [
+          'The 45 requests that met the TTFT bound count toward goodput, so goodput is 2.25 requests per second.',
+          'The 51 requests that met the TPOT bound count toward goodput, so goodput is 2.55 requests per second.',
+          'The 53 requests that met at least one bound count toward goodput, so goodput is 2.65 requests per second.',
+          'The 43 requests that met both of the bounds count toward goodput, so goodput is 2.15 requests per second.',
+        ],
+        correct: [3],
+        why: [
+          'Wrong: that counts the TTFT bound alone, 45 ÷ 20 = 2.25. Two of those 45 missed TPOT, so they missed the SLO.',
+          'Wrong: that counts the TPOT bound alone, 51 ÷ 20 = 2.55. Eight of those 51 missed TTFT.',
+          'Wrong: that counts a request meeting either bound, 45 + 51 - 43 = 53, and 53 ÷ 20 = 2.65. A request has to meet both.',
+          'Right: 43 ÷ 20 = 2.15 requests per second, against 3.0 of throughput. The item just above has you count fresh windows the same way, both bounds at once.',
+        ],
+      },
+      kcs: ['t7.goodput'],
+    },
     {
       type: 'quiz',
       questions: [
