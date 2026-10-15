@@ -10,6 +10,7 @@ const staticRoutes = [
   'boot',
   'today',
   'daily',
+  'drills',
   'errors',
   'curriculum',
   'lab',
