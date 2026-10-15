@@ -1166,7 +1166,11 @@ export const BOOTSTRAP_RESAMPLES = 10_000
 /** F2: the non-inferiority margin, in accuracy (5 points), and the learners the pre-registration's power calculation needs. */
 export const HINT_MARGIN = 0.05
 export const HINT_MIN_LEARNERS = 126
-/** F2: a cold check counts 25 to 45 days after the check's first green. */
+/**
+ * F2: a cold check counts 25 to 45 days after the lab's first all-green run (its first `lab-check` with `ok`), for every
+ * ledger, as the owner signed it (docs/prereg/hint-ladders.md §3 and §7): a donation keeps no per-check detail, so the
+ * lab's run is the anchor every ledger can show, and the arms, randomized per check within a lab, share it alike.
+ */
 export const HINT_WINDOW_DAYS: readonly [number, number] = [25, 45]
 /** F3: the margin, the learners with an eligible check in both groups that the power calculation needs (docs/prereg/fleet-daily.md §4), and the age of a check. */
 export const DAILY_MARGIN = 0.05
@@ -1279,7 +1283,9 @@ export type Surface = (typeof SURFACES)[number]
  *   (`dailyResult`), and team incidents. An item with `src` `daily` would count here too, but no surface writes one;
  * - **fleet-week**: Fleet Week acts, engine runs and Act IV's drills: a run's `ms` is its visible wall time
  *   (`fleetRunFor`), a drill's its alert to its debrief (`drillResult`), and an act's the page's visible time that no
- *   run or drill of the visit holds, up to the pass (`completeFleetWeekAct`), so a second is counted once;
+ *   run or drill of the visit holds, up to the pass (`completeFleetWeekAct`), so the act never counts a run's or a
+ *   drill's second again. A run and a drill can overlap, though: an Act I or II run started during a drill is in both
+ *   `ms`, because each claims its own visible time, and that rare overlap counts twice (`SURFACE_FOOTNOTE` says so);
  * - **me**: the track forms, which /me runs.
  *
  * Daily and Fleet Week time counts only while the page is visible, and each event is capped (`INCIDENT_MAX_MS`,
@@ -1473,7 +1479,7 @@ export interface HintArms {
   learners: number
   /** Learners with any analysable check. */
   partners: number
-  /** Analysable checks (a check asked for help, one recorded arm, a cold check 25 to 45 days after its first green). */
+  /** Analysable checks (a check asked for help, one recorded arm, a cold check 25 to 45 days after its lab's first all-green run). */
   checks: { ladder: number; packet: number }
   /** Checks with both arms recorded (dropped, prereg §2) and checks helped by an ack with no arm (excluded, prereg §6.3). */
   both: number
@@ -1508,9 +1514,11 @@ export function hintVerdict(diff: MeanDifference, required = HINT_MIN_LEARNERS):
 /**
  * H3's keep-or-kill, as `docs/prereg/hint-ladders.md` pre-registers it: for each check of the randomized labs that the
  * learner asked help on, the arm recorded on its `hint:` and `packet:` acks; the outcome is the learner's first cold check
- * (a generated `probe`) on the check's generator-covered KCs 25 to 45 days after the check's first green; the unit is the
- * learner, d = mean(ladder checks) − mean(packet checks). A check's first green is the first `lab-check` that lists it as
- * passed; a donation keeps no per-check detail, so there the lab's first `ok` run stands for it.
+ * (a generated `probe`) on the check's generator-covered KCs 25 to 45 days after the lab's first all-green run (its first
+ * `lab-check` with `ok`); the unit is the learner, d = mean(ladder checks) − mean(packet checks). The window starts at the
+ * lab's run for every ledger, a full export's per-check detail included, as the signed pre-registration says (§3): a
+ * check that passed in an earlier red run, or only in a later one, still counts from the lab's first all-green run, so a
+ * full export and its donation read the same.
  */
 export function selectHintArms(
   ledgers: readonly PartnerLedger[],
@@ -1528,9 +1536,7 @@ export function selectHintArms(
     const list = sorted(l.events)
     const arms = new Map<string, Set<string>>()
     const noArm = new Set<string>()
-    const checkGreen = new Map<string, LocalDay>()
     const labGreen = new Map<string, LocalDay>()
-    const detailed = new Set<string>()
     for (const e of list) {
       if (e.kind === 'ack') {
         const hint = parseHintRef(e.ref)
@@ -1542,14 +1548,6 @@ export function selectHintArms(
         else noArm.add(key)
       } else if (e.kind === 'lab-check' && e.ref.startsWith('lab:')) {
         const lab = e.ref.slice('lab:'.length)
-        const detail = dataOf(e).checks
-        if (Array.isArray(detail)) {
-          detailed.add(lab)
-          for (const c of detail as unknown[]) {
-            const k = typeof c === 'object' && c !== null ? (c as Rec) : {}
-            if (typeof k.id === 'string' && k.status === 'pass' && !checkGreen.has(`${lab}/${k.id}`)) checkGreen.set(`${lab}/${k.id}`, e.day)
-          }
-        }
         if (isOk(e) && !labGreen.has(lab)) labGreen.set(lab, e.day)
       }
     }
@@ -1567,7 +1565,7 @@ export function selectHintArms(
           both += 1
           continue
         }
-        const green = checkGreen.get(key) ?? (detailed.has(lab.id) ? undefined : labGreen.get(lab.id))
+        const green = labGreen.get(lab.id)
         const wanted = new Set((check.kcs ?? []).filter((kc) => covered.has(kc)))
         if (green === undefined || wanted.size === 0) continue
         const cold = list.find((e) => {
@@ -1703,6 +1701,17 @@ export function selectProveV2(ledgers: readonly Ledger[], v2Labs: ReadonlySet<st
     if (green.size > 0) partners += 1
   }
   return { attempted: { ...proportion(attempted, greens), partners }, proved: proportion(proved, first), attempts }
+}
+
+/**
+ * F5's keep-or-kill, the owner's rule for H4's "at least 60 % of greens attempted" (§18.2 F5): keep Prove-it v2 only when
+ * the lower bound of the attempted share's Wilson 95 % interval is at least `PROVE_MIN_RATE`, so a share of 0.70 keeps it
+ * at n = 200 (lower bound 63.3 %) and not at n = 10 (39.7 %). Anything else, a share below the bar or one too thin to
+ * show it, gets the underpowered default, one question (PLAN §9). The same five partners as every gate are needed first.
+ */
+export function proveV2Verdict(attempted: ProveV2['attempted']): 'keep' | 'underpowered' {
+  if (!enough(attempted.partners, attempted.n) || attempted.ci95 === null) return 'underpowered'
+  return attempted.ci95[0] >= PROVE_MIN_RATE ? 'keep' : 'underpowered'
 }
 
 export interface ProvedInUse extends Proportion {
@@ -2225,17 +2234,22 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
           detail: `not decided: ${watcher === 'unsigned' ? 'docs/prereg/watcher.md is not signed' : 'no independent rating and report.json yet'}; the manual scan stays`,
         }
 
-  // F5: H4's bar, the share of unseen greens on v2 labs followed by an attempt.
-  const f5Data = enough(proveV2.attempted.partners, proveV2.attempted.n)
+  // F5: H4's bar, the share of unseen greens on v2 labs followed by an attempt, kept only on its Wilson lower bound.
+  const pa = proveV2.attempted
+  const f5Data = enough(pa.partners, pa.n)
+  const f5Verdict = proveV2Verdict(pa)
+  // n, the share and both bounds, printed whatever the verdict
+  const f5Share = `${pa.correct} of ${pa.n} unseen-seed greens followed by a v2 attempt = ${fmtPct(pa.rate)}${pa.ci95 ? `, Wilson 95 % interval ${fmtPct(pa.ci95[0])} to ${fmtPct(pa.ci95[1])}` : ''}`
+  const f5Rule = `kept only if the lower bound is at least ${PROVE_MIN_RATE * 100} %`
   const f5: FieldGate = {
     id: 'F5',
     label: 'Prove-it v2 keep-or-kill',
-    status: !f5Data ? 'insufficient' : (proveV2.attempted.rate ?? 0) >= PROVE_MIN_RATE ? 'pass' : 'fail',
-    n: proveV2.attempted.n,
-    partners: proveV2.attempted.partners,
+    status: !f5Data ? 'insufficient' : f5Verdict === 'keep' ? 'pass' : 'fail',
+    n: pa.n,
+    partners: pa.partners,
     detail: f5Data
-      ? `${proveV2.attempted.correct} of ${proveV2.attempted.n} unseen-seed greens followed by a v2 attempt = ${fmtPct(proveV2.attempted.rate)}${fmtCi(proveV2.attempted)} (bar ${PROVE_MIN_RATE * 100} %); ${proveV2.proved.correct} of ${proveV2.proved.n} first attempts proved${proveV2.proved.n > 0 ? `${fmtCi(proveV2.proved)}` : ''}`
-      : thin(proveV2.attempted.n, proveV2.attempted.partners),
+      ? `${f5Share}; ${f5Rule}: ${f5Verdict === 'keep' ? 'kept' : 'not kept, so the underpowered default, 1 question (PLAN §9)'}; ${proveV2.proved.correct} of ${proveV2.proved.n} first attempts proved${proveV2.proved.n > 0 ? `${fmtCi(proveV2.proved)}` : ''}`
+      : `${thin(pa.n, pa.partners)}${pa.n > 0 ? `; ${f5Share}` : ''}`,
   }
 
   // F6: reported, from enough checks, enough misses and at least one tagged lure.
@@ -2312,7 +2326,8 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
   const keepOrKill: KeepOrKill[] = [
     { id: 'F2', label: 'hint ladders', verdict: verdict(f2), fallback: 'R0 to R2 only' },
     { id: 'F3', label: 'Fleet Daily', verdict: verdict(f3), fallback: 'weekly, no On-Call' },
-    { id: 'F5', label: 'Prove-it v2', verdict: verdict(f5), fallback: '1 question' },
+    // the owner's rule: below the bar is the underpowered default too, never a kill
+    { id: 'F5', label: 'Prove-it v2', verdict: f5Verdict, fallback: '1 question' },
   ]
 
   return {
@@ -2334,6 +2349,19 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
 }
 
 const cell = (x: number | null): string => (x === null ? 'n/a' : x >= 10 ? x.toFixed(0) : x.toFixed(1))
+
+/**
+ * What the re-cut's minutes are (G5 and G6 of the 3c review, round 3): since EF1 the Daily and Act IV's drills count from
+ * the alert to the debrief, and a Fleet Week act the page's visible time up to its pass, capped (`surfaceOf`). Work that
+ * overlaps on /week counts twice: each event claims its own visible time, so an Act I or II run started during a drill is
+ * in the run's `ms` and in the drill's. That is rare, and the table says so rather than claiming intervals.
+ */
+export const SURFACE_FOOTNOTE: readonly string[] = [
+  '  minutes: Today sessions by C19\'s span rule; lesson, play, lab and /me answers and runs by their recorded times; the',
+  '  Daily and Act IV drills from the alert to the debrief; a Fleet Week act the page\'s visible time up to its pass that',
+  '  no run or drill holds. Daily and Fleet Week time counts only while the page is visible, capped per event. Overlapping',
+  '  work on /week counts twice (an Act I or II run started during a drill is in both). A donation rounds each to a second',
+]
 
 /** The Wave 3 report as text: the gate table, the keep-or-kill lines, the journey re-cut beside PLAN §4.D, and the receipts. */
 export function formatWave3Report(r: Wave3Report): string {
@@ -2364,7 +2392,7 @@ export function formatWave3Report(r: Wave3Report): string {
       ? `  not enough data (n = ${s.partners} partners with recorded time; needs ${SURFACE_MIN_PARTNERS})`
       : `  all weeks (planned about ${s.plannedWeeklyMinutes} min a week): ${SURFACES.map((x) => `${x} ${cell(s.surfaces[x].median)}`).join('  ')}  | total ${cell(s.total.median)}`,
     ...stages.flat(),
-    '  minutes are recorded answer and run times (Today sessions by C19\'s span rule); a donation rounds each to a second',
+    ...SURFACE_FOOTNOTE,
     '',
     ra.partners === 0
       ? 'Fleet Week receipts: not enough data (n = 0 acts with receipts)'
