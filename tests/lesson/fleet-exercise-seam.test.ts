@@ -65,7 +65,7 @@ describe('ExerciseView on a fleet block', () => {
 })
 
 describe('FLEET_EXERCISES', () => {
-  test('lists the load knee and the P:D split (3b-03), the broken benchmark and push your luck (3s-04)', () => {
-    expect(Object.keys(FLEET_EXERCISES)).toEqual(['knee', 'pd-split', 'broken-bench', 'push-luck'])
+  test('lists the load knee and the P:D split (3b-03), the broken benchmark and push your luck (3s-04), the straggler and the timing oracle (3s-05)', () => {
+    expect(Object.keys(FLEET_EXERCISES)).toEqual(['knee', 'pd-split', 'broken-bench', 'push-luck', 'straggler', 'timing-oracle'])
   })
 })

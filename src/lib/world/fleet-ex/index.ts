@@ -1,7 +1,8 @@
 /**
  * Fleet exercises (docs/specs/wave-3.md §5.3): a seeded sweep of the Fleet engine at several points, and the one
  * number a learner predicts from it. 3a-03 created the contract, 3b-03 adds `knee` and `pd-split`, 3s-04 `broken-bench` and
- * `push-luck` (§16.3; the second is model-only). The fleet worker's
+ * `push-luck` and 3s-05 `straggler` and `timing-oracle` (§16.3; `push-luck` and `straggler` are model-only, and
+ * `timing-oracle` models which requests hit the cache and runs the hits on the engine). The fleet worker's
  * `exercise` job dispatches by id (`FLEET_EXERCISES[id].sweep(seed)`), so a later exercise adds a module and a table
  * entry here and never edits the protocol, the host or the session.
  */
@@ -11,6 +12,8 @@ import { brokenBenchExercise } from './broken-bench'
 import { kneeExercise } from './knee'
 import { pdSplitExercise } from './pd-split'
 import { pushLuckExercise } from './push-luck'
+import { stragglerExercise } from './straggler'
+import { timingOracleExercise } from './timing-oracle'
 
 export interface SweepPoint {
   /** The swept value: a load multiplier, a prefill-worker count. */
@@ -40,7 +43,7 @@ export interface SceneFact {
 }
 
 export interface FleetExerciseDef {
-  /** `knee` | `pd-split` | `broken-bench` | `push-luck` (stretch adds two more, §16.3). */
+  /** `knee` | `pd-split` | `broken-bench` | `push-luck` | `straggler` | `timing-oracle` (§16.3). */
   id: string
   title: string
   lessonId: string
@@ -76,4 +79,6 @@ export const FLEET_EXERCISES: Readonly<Record<string, FleetExerciseDef>> = {
   [pdSplitExercise.id]: pdSplitExercise,
   [brokenBenchExercise.id]: brokenBenchExercise,
   [pushLuckExercise.id]: pushLuckExercise,
+  [stragglerExercise.id]: stragglerExercise,
+  [timingOracleExercise.id]: timingOracleExercise,
 }

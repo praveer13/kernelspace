@@ -378,6 +378,16 @@ Isolation costs hit rate. That is a real performance trade, not a reason to eras
       variants: ['hit-gap', 'namespace-cost'],
     },
     {
+      type: 'exercise',
+      fleet: 'timing-oracle',
+      title: 'The prefix-cache timing oracle',
+      note: `A hit skips the cached prefix's prefill, so a guess at a prefix someone used comes back faster than a guess at one nobody used, by the cached tokens ÷ the prefill rate. On this toy engine, which prefills 128 tokens in each 50 ms tick, a 2,048-token prefix is 16 ticks, so the probe sees a gap of 800 ms. Putting the tenant in the cache key gives the prober a namespace with nothing of the others' in it: every guess misses, and the gap is 0.
+
+The price is the shared work. With a shared key each prefix misses once in all, so K misses; with the tenant in the key each tenant misses it once, T × K. Of n requests, K × (T − 1) ÷ n turn from hits into misses: 8 tenants, 2 prefixes and 400 requests go from 2 misses to 16, a loss of 3.5 points of hit rate (99.5 % down to 96 %). It shows in TTFT p95 once misses pass about 5 % of requests, since the p95 request is then a miss.
+
+The model is flat-tick (version 1). The engine skips a hit's prefill but has no cache of its own, so which requests hit is decided in arrival order with an unbounded cache that holds a prefix from its first request. A real cache is bounded and fills only when a prefill finishes, so a real tenant key loses at least this much. The other controls above (rate limits, probe detection, latency normalization) are not modelled here.`,
+    },
+    {
       type: 'field-note',
       title: 'Firecracker security design',
       source: 'Firecracker project',

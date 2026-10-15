@@ -3,9 +3,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { lessonById } from '../src/data/lessons'
 import { FLEET_EXERCISES } from '../src/lib/world/fleet-ex'
 
-// The stretch Fleet exercises of docs/specs/wave-3.md §16.3 (3s-04) in a real browser, against the real fleet worker:
+// The stretch Fleet exercises of docs/specs/wave-3.md §16.3 (3s-04, 3s-05) in a real browser, against the real fleet worker:
 // /lesson/t7.l2's broken benchmark (a free number of milliseconds, a table and no chart) and /lesson/t6.l6's push your
-// luck (a draft length, a speedup chart). At 360 px the panel is in phone mode (the canonical seed, which earns
+// luck (a draft length, a speedup chart), then /lesson/t6.l7's rollout straggler (an idle share in percent) and
+// /lesson/t6.l10's prefix-cache timing oracle (percentage points of hit rate), both a table and no chart. At 360 px the panel is in phone mode (the canonical seed, which earns
 // nothing); "Run it on a fresh seed here instead" draws a fresh one, the learner predicts, reads the verdict, explains,
 // ticks the three ideas and saves. Each walk ends with axe on the block and a check that nothing scrolls sideways.
 // The right answer is the exercise's own `truth` on the seed the page shows, so a rewording of the scene cannot break it.
@@ -39,9 +40,13 @@ async function axeOn(page: Page, block: Locator) {
   expect(bad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([])
 }
 
+// `bad` is a value the exercise refuses, `wrong` a value it takes and marks a miss (a percentage must stay within 0 … 100)
 const CASES = [
-  { lesson: 't7.l2', id: 'broken-bench', chart: false, rows: 2, header: 'p95 TTFT (ms)', invalid: 'Enter the p95 time to first token as a number of milliseconds' },
-  { lesson: 't6.l6', id: 'push-luck', chart: true, rows: 8, header: 'Speedup', invalid: 'Enter one of the points the sweep runs: 1, 2, 3, 4, 5, 6, 7, 8.' },
+  { lesson: 't7.l2', id: 'broken-bench', chart: false, rows: 2, header: 'p95 TTFT (ms)', invalid: 'Enter the p95 time to first token as a number of milliseconds', bad: '0', wrong: (t: number) => Math.round(t * 3) },
+  { lesson: 't6.l6', id: 'push-luck', chart: true, rows: 8, header: 'Speedup', invalid: 'Enter one of the points the sweep runs: 1, 2, 3, 4, 5, 6, 7, 8.', bad: '99', wrong: (t: number) => (t === 1 ? 2 : 1) },
+  // 3s-05: the model-only straggler (a percentage, a table and no chart) and the timing oracle (percentage points, a table and no chart)
+  { lesson: 't6.l7', id: 'straggler', chart: false, rows: 7, header: 'Idle share (%)', invalid: 'Enter the idle share as a percentage from 0 to 100', bad: '-1', wrong: (t: number) => (t > 50 ? t - 30 : t + 30) },
+  { lesson: 't6.l10', id: 'timing-oracle', chart: false, rows: 2, header: 'Probe gap (ms)', invalid: 'Enter the hit rate lost as a number of percentage points', bad: '-1', wrong: (t: number) => t + 20 },
 ] as const
 
 for (const c of CASES) {
@@ -59,7 +64,7 @@ for (const c of CASES) {
     await expect(block.locator('[data-fleet-note]')).toHaveCount(0)
 
     // a value the exercise does not take is refused in words, and nothing is shown
-    await block.locator('[data-fleet-predict]').fill(c.id === 'push-luck' ? '99' : '0')
+    await block.locator('[data-fleet-predict]').fill(c.bad)
     await block.locator('[data-fleet-lock]').click()
     await expect(block.getByRole('alert')).toContainText(c.invalid)
     await expect(block.locator('[data-verdict]')).toHaveCount(0)
@@ -113,7 +118,7 @@ for (const c of CASES) {
     await expect(block.locator('[data-fleet-scene]')).toBeVisible({ timeout: 30_000 })
     const seed = await seedOf(block)
     const truth = def.truth(def.sweep(seed))
-    const wrong = c.id === 'push-luck' ? (truth === 1 ? 2 : 1) : Math.round(truth * 3)
+    const wrong = c.wrong(truth)
     await block.locator('[data-fleet-predict]').fill(String(wrong))
     await block.locator('[data-fleet-lock]').click()
     await expect(block.locator('[data-verdict]')).toHaveAttribute('data-verdict', 'off', { timeout: 30_000 })
