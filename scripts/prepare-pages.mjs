@@ -18,6 +18,7 @@ const staticRoutes = [
   'me',
   'progress',
   'capstone',
+  'capstone/service',
   'forge',
   'fleet',
   'week',
