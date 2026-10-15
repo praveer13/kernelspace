@@ -336,7 +336,7 @@ export function toScene(seed: number): SceneFact[] {
   const c = toCase(seed)
   return [
     { label: 'Tenants', value: c.tenants, unit: 'sharing one deployment, and the prober, a tenant outside them' },
-    { label: 'Shared prefixes', value: c.prefixes, unit: 'prompts every tenant may send, each a cacheable prefix' },
+    { label: 'Shared prefixes', value: c.prefixes, unit: 'in all, each a prompt any tenant may send and a cacheable prefix' },
     { label: 'Prefix length', value: c.prefixTokens, unit: `tokens, each followed by a suffix of ${TO_SUFFIX.min} to ${TO_SUFFIX.max} tokens that is never repeated` },
     { label: 'Requests', value: c.requests, unit: 'in the window, each from one tenant with one prefix, and every tenant sends every prefix at least once' },
   ]
