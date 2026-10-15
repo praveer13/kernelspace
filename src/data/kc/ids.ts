@@ -10,6 +10,7 @@
  * goodput, cost, memory, spec, sig and compile, the labs 02-03 checks, the scheduler play, the attention
  * zoo and the fault catalogue. 2a-11 may add KCs but never renames these.
  * Wave 3 adds `rasterL2Reuse` (docs/specs/wave-3.md §4.3, task 3a-09), then the cube's three other level KCs (3b-01) and the EPLB play's two (3b-02).
+ * Stretch adds `attentionFfnSplit`, t6.l12's KC (wave-3.md §16.2, task 3s-03).
  */
 
 export const KC = {
@@ -46,6 +47,8 @@ export const KC = {
   /* ---- Wave 3 (3b-02): the EPLB play's KCs, named here so verify-plays finds them in the contract ---- */
   expertLoadBalance: 't6.expert-load-balance',
   allToAll: 't6.all-to-all',
+  /* ---- Wave 3 stretch (3s-03): t6.l12, attention-FFN disaggregation ---- */
+  attentionFfnSplit: 't6.attention-ffn-split',
 
   /* ---- kv family, KvCacheSim tasks, Boot ---- */
   kvCapacity: 't5.kv-capacity',

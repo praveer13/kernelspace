@@ -514,7 +514,7 @@ describe('the Wave 2 bar: every strategy passes at most 2 of the lesson pool in 
 
   test('the shipped lesson pool is inside the bar for every strategy', () => {
     const lessons = ALL_LESSONS.map((l) => l.blocks.flatMap((b) => (b.type === 'quiz' ? b.questions : []))).filter((qs) => qs.length > 0)
-    expect(lessons).toHaveLength(68)
+    expect(lessons).toHaveLength(69)
     for (const s of [...RANK_STRATEGIES, ...CUE_STRATEGIES]) {
       const expected = lessons.reduce((a, qs) => a + passProbability(qs.map(s.pick)), 0)
       expect({ name: s.name, ok: expected <= WAVE2_BAR }).toEqual({ name: s.name, ok: true })

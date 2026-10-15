@@ -234,13 +234,13 @@ describe('braid() on fixtures', () => {
 })
 
 describe('serving-first and rust-systems', () => {
-  test('serving-first: t0.l1, t0.l2, t4.l3, T5, T6, T7 (755 declared minutes), no R, no labs', () => {
+  test('serving-first: t0.l1, t0.l2, t4.l3, T5, T6, T7 (785 declared minutes), no R, no labs', () => {
     const plan = pathPlan('serving-first', GRAPH)
     const want = ['t0.l1', 't0.l2', 't4.l3', ...ALL_LESSONS.filter((l) => ['t5', 't6', 't7'].includes(l.trackId)).map((l) => l.id)]
     expect(plan.lessons).toEqual(want)
     expect(plan.steps).toEqual(want)
     const minutes = plan.lessons.reduce((m, id) => m + (ALL_LESSONS.find((l) => l.id === id)?.minutes ?? 0), 0)
-    expect(minutes).toBe(755)
+    expect(minutes).toBe(785) // 755 before stretch's t6.l12 (30 min, wave-3 §16.2)
     expect(plan.testOut).toEqual([])
   })
 

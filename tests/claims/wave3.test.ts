@@ -43,6 +43,10 @@ const TABLE = [
   'bench.checkpoint-engine.sync',
   'twin.sglang.treecore',
   'twin.vllm.scheduler',
+  // stretch (§16.2, 3s-03): t6.l12's statline, in serving3
+  'bench.step3.afd-decode',
+  'bench.step3.dsv3-decode',
+  'bench.megascale-infer.per-gpu',
 ]
 
 const ENGINE_FLAGS = ['production.vllm.eplb', 'production.sglang.eplb', 'production.vllm.disagg', 'production.sglang.disagg']

@@ -102,7 +102,7 @@ describe('the graph', () => {
   test('every T3-T7 lesson has 2+ KCs its Lesson.kcs may name, i.e. introduced there or earlier (wave-2 §4.1, §4.4)', () => {
     const order = new Map(ALL_LESSONS.map((l, i) => [l.id, i]))
     const t37 = ALL_LESSONS.filter((x) => ['t3', 't4', 't5', 't6', 't7'].includes(x.trackId))
-    expect(t37).toHaveLength(39)
+    expect(t37).toHaveLength(40)
     for (const l of t37) {
       const at = order.get(l.id) as number
       const nameable = KCS.filter((k) => k.lessons.includes(l.id) && (order.get(k.lessons[0]) as number) <= at)
@@ -293,8 +293,16 @@ describe('the Wave 3 contract (§4.3)', () => {
     expect(ALL_LESSONS.find((l) => l.id === 't4.l6')?.kcs).toEqual(['t4.tiling-intensity', 't4.flashattention-blocking', 't4.raster-l2-reuse'])
   })
 
-  test('the graph holds 154 KCs', () => {
-    expect(KCS).toHaveLength(154)
+  test('the graph holds 155 KCs', () => {
+    expect(KCS).toHaveLength(155)
+  })
+
+  test('t6.l12 introduces t6.attention-ffn-split and revisits t6.epd-phases, the KC its prefill/pd-ratio block assesses (§16.2)', () => {
+    const k = kcById(KC.attentionFfnSplit)
+    expect(k?.lessons).toEqual(['t6.l12'])
+    expect(k?.claims).toEqual(['bench.step3.afd-decode', 'bench.step3.dsv3-decode', 'bench.megascale-infer.per-gpu'])
+    expect(kcById('t6.epd-phases')?.lessons).toEqual(['t6.l3', 't6.l12'])
+    expect(ALL_LESSONS.find((l) => l.id === 't6.l12')?.kcs).toEqual([KC.attentionFfnSplit, 't6.epd-phases'])
   })
 
   test('every gen link of the tiling, prefill and rollout rows is set, so each family lands without editing a KC file', () => {

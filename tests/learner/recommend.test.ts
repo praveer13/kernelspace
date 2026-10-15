@@ -189,7 +189,7 @@ describe('recommend(): the six rules in order', () => {
   })
 
   test('5. the next lesson of the plan, with the braid pair as the why', () => {
-    expect(recommend(fresh(), CONTENT, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't0.l1', why: 'Next on the full ramp: lesson 1 of 68' })
+    expect(recommend(fresh(), CONTENT, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't0.l1', why: 'Next on the full ramp: lesson 1 of 69' })
     const r1 = recommend(fresh({ lessons: doneUpTo('full-ramp', 1) }), CONTENT, NOW, 'phone')
     expect(r1).toMatchObject({ ref: 'r.l1', why: 'R.L1 first: T0.L2 builds on bindings, shadowing and block values' })
     const t2 = recommend(fresh({ lessons: doneUpTo('full-ramp', 2) }), CONTENT, NOW, 'phone')
