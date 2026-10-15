@@ -186,6 +186,43 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
 
 ---
 
+**Sam explains what the borrow checker rejects**
+
+Sam came to Rust from Java and wrote this note for the team wiki.
+
+1. A shared borrow takes W and O from the lender until its last use, so the lender can still be read.
+2. A mutable borrow takes R, W and O, so while it lives the borrower is the one way to reach the value.
+3. Pushing to a Vec while a reference into it is live is rejected, because the push may move the buffer and leave the reference dangling.
+4. So every program the borrow checker rejects would have read freed or moved memory if it had compiled.
+5. A borrow ends at its last use, not at the end of its scope, so a later write to the lender can be accepted.
+
+_One sentence above is false._
+
+**Find. In "Sam explains what the borrow checker rejects", one sentence is false. Which one?**
+
+- (o1) Sentence 3
+- (o2) Sentence 4
+- (o3) Sentence 1
+- (o4) Sentence 5
+
+**Tag. Which mistaken idea sits behind the false sentence?**
+
+- (o1) Taking the borrow checker for an exact test of memory safety
+- (o2) Believing a clone is the repair for a rejected borrow
+- (o3) Assuming a borrow lasts to the end of its scope and not to its last use
+- (o4) Thinking a shared borrow takes away the right to read the value
+
+**Fix. Which sentence should replace sentence 4?**
+
+- (o1) Some rejected programs are safe, and a clone of the borrowed value proves it by making the program compile.
+- (o2) Some rejected programs are safe to run once unsafe is added, because unsafe turns the borrow checker off for them.
+- (o3) Some rejected programs would have raced with another thread instead, but each rejection is still a real bug.
+- (o4) Some rejected programs are safe and still rejected, such as two mutable borrows of different elements of one Vec.
+
+_Answers withheld: ask the learner to commit to an answer and explain it before discussing._
+
+---
+
 **Q1. While a live &mut v borrow exists, which permissions has v itself given up?**
 
 - (o1) Only O: v can still be read and written, but it can no longer be moved

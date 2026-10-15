@@ -183,6 +183,65 @@ The units are deliberately paired: \`GFLOPs / GB = FLOPs / byte\`. Predict each 
       variant: 'info',
       md: `Use the order a performance review expects: **hypothesis → model → measure → explain**. First predict the roof from FLOPs and DRAM bytes. Then measure the real kernel. If the point lands far below its predicted ceiling, investigate occupancy, launch latency, synchronization, or uncoalesced traffic; do not silently rewrite the model after seeing the result.`,
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: decode is compute-bound. The evidence names it as
+    // the example seeded error for a protégé explanation (ai-tutoring.md §2.7 and idea 7). The sim preset that proves the
+    // fix: the playground below opens on { m: 'H100', dtype: 'fp16', batch: 1 }, where task roof.decode-bound plots batch-1
+    // decode on the bandwidth slope; the family items roofline/bound and roofline/decode-b1 test it on fresh numbers.
+    {
+      type: 'protege',
+      title: 'Sam explains why decode is slow',
+      setup: 'Sam is telling a product manager why a chatbot on one H100 types at the speed it does.',
+      sentences: [
+        'An 8B model in FP16 holds about 16 GB of weights, and each decode step at batch 1 reads all of them.',
+        'The step does about 2 FLOPs per parameter, about 16 GFLOP in all.',
+        'That is about 1 FLOP per byte, against an H100 ridge near 295 FLOP per byte.',
+        'So the tensor cores are the limit, and a chip with more FLOP/s at the same bandwidth would decode faster.',
+        'At 3.35 TB/s the step takes about 5 ms, so one sequence gets about 200 tokens per second.',
+      ],
+      falseAt: 3,
+      find: {
+        offer: [1, 2, 3, 4],
+        why: [
+          'True: a multiply and an add per parameter per token, 2 × 8e9 = 16 GFLOP.',
+          'True: 16 GFLOP over 16 GB is 1 FLOP per byte, and 990 TFLOP/s over 3.35 TB/s puts the ridge near 295.',
+          'False: 1 FLOP per byte sits about 300 times left of the ridge, so the step waits on memory and the tensor cores are mostly idle. More FLOP/s at the same bandwidth leaves the step time where it was.',
+          'True: 16 GB ÷ 3.35 TB/s ≈ 4.8 ms a step, about 210 tokens per second, which rounds to the lesson\'s 200.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Counting one byte per FP16 weight in place of two',
+          'Assuming decode at batch 1 is compute-bound',
+          'Mixing up the ridge of the chip with the intensity of the kernel',
+          'Believing the KV cache is the main read at batch 1',
+        ],
+        correct: [1],
+        why: [
+          'Not this one: sentence 1 counts 16 GB for 8B FP16 weights, two bytes each, which is right.',
+          'Right: at 1 FLOP per byte the step is far below the ridge, so memory sets its speed. Sentence 4 puts the limit on the tensor cores instead.',
+          'Not this one: sentence 3 keeps them apart correctly, the kernel at 1 and the chip near 295.',
+          'Not this one: sentence 4 never mentions the KV cache, and at batch 1 with a short context the weights are the main read.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 4?',
+        options: [
+          'So the step is close to the ridge, and batching a few more sequences would make it compute-bound.',
+          'So memory bandwidth is the limit, and a chip with more TB/s would decode faster at batch 1.',
+          'So the limit is launch overhead, and fusing the layers into fewer kernels would decode much faster.',
+          'So the tensor cores are the limit at FP16, and doing the math in FP32 would decode faster.',
+        ],
+        correct: [1],
+        why: [
+          'Wrong: the step is about 300 times below the ridge, so it would take a batch near 300, not a few more sequences, to reach it.',
+          'Right: at 1 FLOP per byte the bandwidth term is the smaller one in the min(), so bytes per second set the speed. The playground below opens on this preset, an H100 at FP16 with batch 1: plot decode and it sits on the bandwidth slope.',
+          'Wrong: launch overhead adds to a step, but the 16 GB read alone takes about 4.8 ms at 3.35 TB/s, and no fusion moves those bytes faster.',
+          'Wrong: FP32 stores four bytes per weight where FP16 stores two, so each step reads twice the bytes and decode gets slower.',
+        ],
+      },
+      kcs: ['t4.decode-bandwidth', 't4.bound-classification'],
+    },
     {
       type: 'prose',
       md: `## In the playground

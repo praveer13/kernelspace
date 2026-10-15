@@ -13,7 +13,7 @@ import { blockToMd, lessonToMd } from '../../scripts/export-lessons-md'
 import { checkPoolItems, collectProtegeItems, PROTEGE_POOL, protegeFailures } from '../../scripts/item-pools'
 import { poolCueFailures } from '../../scripts/item-cues'
 import ProtegeBlockView from '../../src/components/blocks/ProtegeBlock'
-import { ALL_LESSONS } from '../../src/data/lessons'
+import { ALL_LESSONS, TRACK_IDS } from '../../src/data/lessons'
 import type { Lesson, ProtegeBlock } from '../../src/data/lessons/types'
 import { gradeItem, playView, resultFor } from '../../src/lib/items/play'
 import {
@@ -347,6 +347,8 @@ describe('the protege pool: a fixture lesson passes verify:items\' pool gates', 
 describe('verify:items runs the fixture lesson through every gate', () => {
   const root = new URL('../../', import.meta.url).pathname
   const fixture = lessonOf([prose, SAM, prose, SAM_BATCH, SAM_PREFIX], 't9.l2')
+  /** The shipped lessons' protégé items (3s-12: one block per track), which the pool holds beside the fixture's nine. */
+  const shipped = collectProtegeItems(ALL_LESSONS).length
 
   /** Run scripts/verify-items.ts with `lessons` added to the protege pool (VERIFY_ITEMS_PROTEGE_FIXTURE: a module whose default export is a lesson list). */
   const run = (lessons: unknown[], ...args: string[]) => {
@@ -361,11 +363,11 @@ describe('verify:items runs the fixture lesson through every gate', () => {
     }
   }
 
-  test('a fixture lesson with three well-formed blocks passes the whole run; the protege row counts its nine items', () => {
+  test('a fixture lesson with three well-formed blocks passes the whole run; the protege row counts its nine items beside the shipped ones', () => {
     const r = run([fixture])
     expect(r.err).toBe('')
     expect(r.code).toBe(0)
-    expect(r.out).toMatch(/^ {2}protege\s+9\s/m)
+    expect(r.out).toMatch(new RegExp(`^ {2}protege\\s+${9 + shipped}\\s`, 'm'))
     expect(r.out.trimEnd().endsWith('verify-items: ok')).toBe(true)
     expect(r.out).not.toContain('FAIL')
   }, 60_000)
@@ -373,15 +375,17 @@ describe('verify:items runs the fixture lesson through every gate', () => {
   test('--subset on the protege refs reports them, with n printed', () => {
     const r = run([fixture], '--subset', '/\\.protege\\./')
     expect(r.code).toBe(0)
-    expect(r.out).toContain('9 item(s) selected, n = 9 single-key')
-    expect(r.out).toContain('selected by pool: protege 9')
+    expect(r.out).toContain(`${9 + shipped} item(s) selected, n = ${9 + shipped} single-key`)
+    expect(r.out).toContain(`selected by pool: protege ${9 + shipped}`)
     expect(r.out).toContain('verify-items --subset: ok')
   }, 60_000)
 
-  test('the shipped tree alone has an empty protege pool until a lesson uses the block (3s-12)', () => {
+  test('the shipped tree alone: the protege row counts the shipped blocks, one or more in every track (3s-12)', () => {
     const none = Bun.spawnSync(['bun', 'scripts/verify-items.ts'], { cwd: root })
     expect(none.exitCode).toBe(0)
-    const shipped = ALL_LESSONS.flatMap((l) => l.blocks).filter((b) => b.type === 'protege').length * 3
+    const blocks = ALL_LESSONS.flatMap((l) => l.blocks).filter((b) => b.type === 'protege').length
+    expect(blocks * 3).toBe(shipped)
+    expect(new Set(ALL_LESSONS.filter((l) => l.blocks.some((b) => b.type === 'protege')).map((l) => l.trackId))).toEqual(new Set(TRACK_IDS))
     expect(none.stdout.toString()).toMatch(new RegExp(`^ {2}protege\\s+${shipped}\\b`, 'm'))
   }, 60_000)
 
@@ -389,8 +393,11 @@ describe('verify:items runs the fixture lesson through every gate', () => {
     const bad = run([lessonOf([{ ...SAM, falseAt: 9 }], 't9.l3')])
     expect(bad.code).toBe(1)
     expect(bad.err).toContain('protege: item:t9.l3.protege.1 "Sam explains the paged KV cache": falseAt 9 is not a sentence index')
-    const longest = (b: ProtegeBlock): ProtegeBlock => ({ ...b, fix: { ...b.fix, options: [b.fix.options[0] + ' and then a long tail of words nobody needs', ...b.fix.options.slice(1)] } })
-    const leaky = run(Array.from({ length: 4 }, (_, i) => lessonOf([longest(SAM), longest(SAM_BATCH), longest(SAM_PREFIX)], `t9.m${i}`)))
+    // the tag and fix keys (option 0 in each fixture) made the longest option, in enough copies that the shipped items,
+    // which keep the pool near chance, cannot dilute the strategy under its limit
+    const tail = (q: ProtegeBlock['fix']) => ({ ...q, options: [q.options[0] + ' and then a long tail of words nobody needs', ...q.options.slice(1)] })
+    const longest = (b: ProtegeBlock): ProtegeBlock => ({ ...b, tag: tail(b.tag), fix: tail(b.fix) })
+    const leaky = run(Array.from({ length: Math.max(4, Math.ceil(shipped / 9)) }, (_, i) => lessonOf([longest(SAM), longest(SAM_BATCH), longest(SAM_PREFIX)], `t9.m${i}`)))
     expect(leaky.code).toBe(1)
     expect(leaky.err).toContain("the strategy '1st-longest' hits")
     expect(leaky.err).toContain('protege items on their own')

@@ -176,6 +176,66 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
       variant: 'warning',
       md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is a balance, not a proven optimum: the PagedAttention paper's sweep found 16 to 128 tokens best on ShareGPT). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KiB frames fragments huge (2 MiB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: a pool of equal blocks still needs malloc's
+    // coalescing. The evidence names it: "the real lesson is that fixed blocks remove the need for coalescing" (content.md §3,
+    // on t1.l3's split + coalesce pair; PLAN-100X §6.1 error 12). The sim preset that proves the fix: the fragmentation lab
+    // below (sim-allocator, task alloc.fixed-block-waste): in fixed-block mode the coalescing switch is off, and a malloc
+    // fails only when every block is in use.
+    {
+      type: 'protege',
+      title: 'Sam explains a pool of fixed blocks',
+      setup: 'Sam is reviewing a pool allocator for a game server and summed it up in the design doc.',
+      sentences: [
+        'The pool cuts its memory into equal 64 B blocks and keeps the free ones on a list.',
+        'Each request takes one whole block, so a 20 B request leaves 44 B unused inside it.',
+        'Any free block can serve the next request, so free memory never splits into holes too small to use.',
+        'When two neighbouring blocks are freed, the pool merges them into one 128 B block so later requests still fit.',
+        'The price of the design is the unused tail inside each block, at most 63 B per block.',
+      ],
+      falseAt: 3,
+      find: {
+        offer: [0, 1, 3, 4],
+        why: [
+          'True: one block size and a free list is the whole design, which is why a free block is found in O(1).',
+          'True: the request rounds up to a whole block, and 64 - 20 = 44 bytes sit unused inside it as internal waste.',
+          'False: no request here needs more than one block, so a 128 B block serves nothing a 64 B one cannot. Merging neighbours is the cure a variable-size heap needs for its holes, and equal blocks leave no holes to cure.',
+          'True: a request of at least 1 B in a 64 B block leaves at most 63 B unused, and that bound is what the design buys.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Counting the waste inside a block as external fragmentation',
+          'Assuming equal blocks remove internal waste as well',
+          'Carrying heap coalescing over to a pool of equal blocks',
+          'Believing the free list has to be kept sorted by address',
+        ],
+        correct: [2],
+        why: [
+          'Not this one: sentence 2 counts the waste inside a block correctly, and sentence 4 is about what happens between blocks when they are freed.',
+          'A real mix-up, but not this one: sentence 5 says the tail waste stays, and sentence 4 is about merging free blocks.',
+          'Right: a variable-size heap merges neighbours because a hole can be too small for the next request. With equal blocks no free block is ever too small, so there is nothing to merge.',
+          'Not this one: an address-ordered free list helps a heap find neighbours to merge, and the mistake is wanting to merge them at all.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 4?',
+        options: [
+          'A freed block is merged with its free neighbours later, in a background pass that runs while the pool is idle.',
+          'A freed block is held back until its neighbour is freed too, so the pool can hand the pair out together.',
+          'A freed block goes back on the free list as it is, since any free block can serve the next request.',
+          'A freed block is zeroed and moved to the end of the pool, so that the free blocks stay next to each other.',
+        ],
+        correct: [2],
+        why: [
+          'Wrong: merging later is still merging, and a merged pair serves no request a single block could not.',
+          'Wrong: holding a block back strands memory that could serve a request right now, for a pair that no request needs.',
+          'Right: equal blocks never form an unusable hole. In the lab below, fixed-block mode turns the coalescing switch off, and a malloc fails only when every block is in use.',
+          'Wrong: to keep free blocks together the pool would have to move the live ones, which raw pointers into them pin in place. It never needs to, since any free block serves any request.',
+        ],
+      },
+      kcs: ['t1.fixed-blocks'],
+    },
     {
       type: 'prose',
       md: `## Measuring it in the wild
