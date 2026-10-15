@@ -567,7 +567,7 @@ describe('verify-items collects every pool and prints the bar', () => {
     expect(run.exitCode).toBe(0)
     expect(out).toContain(barLine(lessonsWithQuiz))
     expect(out).toContain('always-B 2-SD band: exact')
-    for (const pool of ['prequestion', 'predictAt', 'spiral', 'align', 'iso', 'twin', 'primm']) expect(out).toMatch(new RegExp(`^  ${pool}\\s+\\d+`, 'm'))
+    for (const pool of ['prequestion', 'predictAt', 'spiral', 'align', 'iso', 'protege', 'twin', 'primm']) expect(out).toMatch(new RegExp(`^  ${pool}\\s+\\d+`, 'm'))
     expect(out.trimEnd().endsWith('verify-items: ok')).toBe(true)
     // a tree that passes every gate never prints FAIL in a table (F3: the own-pool row once did, by rounding at the limit)
     expect(out).not.toContain('FAIL')
