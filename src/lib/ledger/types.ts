@@ -1037,6 +1037,8 @@ export interface QuizResponse {
   conf?: Confidence
   /** KCs of the question (`QuizQuestion.kcs`), written to the item's `data.kcs`. */
   kcs?: string[]
+  /** On a miss, the misconception id (`QuizQuestion.miss`) of the first wrong pick that names one, as Today's items carry it. */
+  miss?: string
 }
 
 export interface QuizAttempt {
@@ -1198,6 +1200,8 @@ export interface ComponentInstall {
 /** Optional detail on a Fleet Week act (`completeFleetWeekAct`'s third argument). */
 export interface FleetActMeta {
   seed?: number
+  /** The time spent on the act that no run or drill event holds (wave-3.md §15.1); the façade clamps it to the codec's `ms`. */
+  ms?: number
   provenance?: Extract<Provenance, 'practice' | 'unseen'>
   /** Kept on the `fleet-act` event as `data`; Acts I-III carry `FleetActData` (wave-3.md §3.2). */
   data?: JsonObject | FleetActData

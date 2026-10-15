@@ -271,8 +271,10 @@ describe('/week records the runs', () => {
 
   // 3b-05: an all-reference run is still recorded for receipts (a receipt check needs no pass), but its write-up cannot be submitted
   test('Act I and Act II record fleet-run after their trace, and an all-reference Act I cannot submit its write-up', () => {
-    expect(page).toContain("recordRun('act1', run.result, slots)")
-    expect(page).toContain("recordRun('act2', run.result, slots)")
+    // EF1: each run is timed (visible time) and its fleet-run event carries that time
+    expect(page).toContain("timedRun(time, 'act1', slots, () => runRecorded('engine'")
+    expect(page).toContain("timedRun(time, 'act2', slots, () => runRecorded('fleet'")
+    expect(page).toContain('recordActRun(useProgress, mode, result, await runComponents(slots), ms)')
     expect(page).toContain('blocked={trace.pass ? null : trace.practice ?')
     expect(page).toContain('data-install-hint')
   })

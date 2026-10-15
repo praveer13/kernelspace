@@ -21,7 +21,8 @@
  * RECORDING (§9.7). `recordIncident` runs for the first completed attempt on a date only. The ledger already
  * knows (`aggregate.incidents[ref].n`), so a replay, a second tab or a reload cannot write a second event:
  * replays are practice and write nothing. The Daily's seed is public, so the façade grades the event
- * `practice`.
+ * `practice`. The event's `ms` is the attempt's visible time from the alert to the debrief, which the page measures
+ * and passes in (this module reads no clock), capped at `INCIDENT_MAX_MS` (wave-3.md §15.1, the journey re-cut).
  */
 
 import { KC } from '@/data/kc/ids'
@@ -62,6 +63,21 @@ export const DAILY_EPOCH = '2026-10-13'
 
 /** About how long the Daily takes, for the Today card. */
 export const DAILY_MINUTES = 8
+
+/**
+ * The most one Daily or Act IV drill records as its `ms`: four times the Daily's eight minutes. The page counts only
+ * visible time; this cap is for a visible page nobody is reading (wave-3.md §15.1).
+ */
+export const INCIDENT_MAX_MS = 4 * DAILY_MINUTES * 60_000
+
+/**
+ * A measured time as an event keeps it: whole milliseconds within [0, `max`] (the codec takes any finite `ms` of 0 or
+ * more), or undefined when there is no finite measurement, so the event carries no `ms` rather than a wrong one.
+ */
+export function recordedMs(ms: number | undefined, max: number): number | undefined {
+  if (ms === undefined || !Number.isFinite(ms)) return undefined
+  return Math.round(Math.min(max, Math.max(0, ms)))
+}
 
 /** What an incident is generated from: `generateIncident(ns, key)`. A drill's key is its fresh seed's hex, the Daily's is its date. */
 export interface IncidentSource {
@@ -508,8 +524,11 @@ export interface FinishedIncident {
   streetlight: number
 }
 
-/** The Daily's `incident` event for `date`; `components` are the hashes of the modules of yours that ran (`boxHashes`). */
-export function dailyResult(date: string, spec: IncidentSpec, done: FinishedIncident, components: string[] = []): IncidentResult {
+/**
+ * The Daily's `incident` event for `date`; `components` are the hashes of the modules of yours that ran (`boxHashes`),
+ * and `ms` the attempt's visible time from the alert to the end of the flow (`recordedMs`, at most `INCIDENT_MAX_MS`).
+ */
+export function dailyResult(date: string, spec: IncidentSpec, done: FinishedIncident, components: string[] = [], ms?: number): IncidentResult {
   const data: IncidentData = {
     v: 1,
     src: 'daily',
@@ -528,7 +547,8 @@ export function dailyResult(date: string, spec: IncidentSpec, done: FinishedInci
     date,
     kcs: kcsFor(done.fault),
   }
-  return { ref: dailyRef(date), seed: spec.seed, data }
+  const time = recordedMs(ms, INCIDENT_MAX_MS)
+  return { ref: dailyRef(date), seed: spec.seed, ...(time === undefined ? {} : { ms: time }), data }
 }
 
 /** The slice of the progress store `recordDaily` reads and writes. */
@@ -543,12 +563,12 @@ export interface DailyStore {
 export const dailyPlayed = (store: DailyStore, date: string): boolean => (store.getState().aggregate.incidents[dailyRef(date)]?.n ?? 0) > 0
 
 /**
- * Write the Daily's one event for `date`: the first completed attempt. Returns whether it wrote. Any later
- * attempt, in this tab, another tab or after a reload, writes nothing.
+ * Write the Daily's one event for `date`: the first completed attempt, with its time `ms` (`dailyResult`). Returns
+ * whether it wrote. Any later attempt, in this tab, another tab or after a reload, writes nothing.
  */
-export function recordDaily(store: DailyStore, date: string, spec: IncidentSpec, done: FinishedIncident, components: string[] = []): boolean {
+export function recordDaily(store: DailyStore, date: string, spec: IncidentSpec, done: FinishedIncident, components: string[] = [], ms?: number): boolean {
   if (dailyPlayed(store, date)) return false
-  store.getState().recordIncident(dailyResult(date, spec, done, components))
+  store.getState().recordIncident(dailyResult(date, spec, done, components, ms))
   return true
 }
 

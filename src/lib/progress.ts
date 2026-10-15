@@ -750,7 +750,8 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       if (!Number.isFinite(score) || !sendableRef('fleet-act', ref)) return
       const s = stamp()
       // Held to what the codec accepts, so the act is never shown and then dropped at the flush (more than 20 runs, say).
-      const extra = withDefined({ seed: isUint32(meta?.seed) ? meta.seed : undefined, data: fleetActData(meta?.data) })
+      // `ms` is the time spent on the act (wave-3.md §15.1): the codec takes a finite one of 0 or more.
+      const extra = withDefined({ seed: isUint32(meta?.seed) ? meta.seed : undefined, ms: nonNegative(meta?.ms), data: fleetActData(meta?.data) })
       const provenance = meta?.provenance === 'unseen' ? 'unseen' : 'practice'
       const evs = [ev(s, 'fleet-act', ref, graded(clamp01(score), true, provenance, extra))]
       const acts = new Set([...Object.keys(agg.fleetWeek.acts), actId])
@@ -832,11 +833,22 @@ export function createProgressStore(env: FacadeEnv, options: FacadeOptions = {})
       const grp = newId()
       const correct = attempt.responses.filter((r) => r.ok).length
       const score = correct / n
-      const evs = attempt.responses.map((r) =>
+      // Each answer says its place in the attempt (`slot` of `of`, as a ticket's do) and, on a miss, the picked lure's
+      // misconception id (`miss`, as Today's quiz items carry it), which P3's confusion share reads (selectDiscrimination30).
+      const evs = attempt.responses.map((r, i) =>
         ev(s, 'item', `quiz:${attempt.lessonId}#${r.qi}`, {
           ...graded(r.ok ? 1 : 0, r.ok, 'practice', withDefined({ conf: r.conf, seed: attempt.seed })),
           rev: r.rev,
-          data: { src: 'quiz', pick: r.pick, grp, lessonId: attempt.lessonId, ...(r.kcs ? { kcs: r.kcs.slice(0, MAX_KCS) } : {}) },
+          data: {
+            src: 'quiz',
+            pick: r.pick,
+            grp,
+            slot: i,
+            of: n,
+            lessonId: attempt.lessonId,
+            ...(r.kcs ? { kcs: r.kcs.slice(0, MAX_KCS) } : {}),
+            ...(!r.ok && typeof r.miss === 'string' && r.miss !== '' ? { miss: r.miss } : {}),
+          },
         }),
       )
       evs.push(
