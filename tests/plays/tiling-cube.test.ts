@@ -895,11 +895,14 @@ describe('the play as the page renders it', () => {
     expect(html).toContain('data-mode="embed"')
   })
 
-  test('a level whose views have not loaded shows a status that holds their room, and a debrief the same', () => {
+  test('a level whose views have not loaded shows a status that holds their room, and a debrief the same', async () => {
     let s = practiceSession()
     s = openViews(withPrediction(s, predictedOf(answerItem(s, 0, 64, 'predict'), s.runs[0].inst)))
+    // A fresh copy of Level.tsx, with its own unresolved `lazy` views: another test file that walks the play loads Views.tsx
+    // for the whole process (bun runs every file in one, in no fixed order), and a resolved lazy renders its content at once.
+    const { default: Unloaded } = (await import('../../src/components/play/tiling-cube/Level.tsx?unloaded')) as { default: typeof Level }
     const level = renderToString(
-      createElement(Level, {
+      createElement(Unloaded, {
         session: s,
         level: levelOf(s),
         mirrorId: 'm',
@@ -1057,8 +1060,10 @@ describe('verify-plays: the cube’s checks (§6.3)', () => {
     expect(bundle).toMatch(/route: '\/play\/tiling-cube'[^}]*budgetKb: null[^}]*playSrc: 'src\/components\/play\/tiling-cube\/Play\.tsx'/)
   })
 
-  test('the 3D cube ships dark (D9, 3s-01): only Play.tsx mounts a View3D, and it never sets `available` (tests/plays/view3d.test.ts)', () => {
+  test('the 3D cube is off unless the evaluation turns it on (D9, 3s-01, 3s-02): only Play.tsx mounts a View3D, and it sets `available` from the learner’s split (tests/plays/cube-eval.test.ts)', () => {
     for (const f of ['Level.tsx', 'Mirror2D.tsx', 'Mirror.tsx', 'Debrief.tsx', 'session.ts', 'ProductionCard.tsx']) expect(read(f)).not.toContain('<View3D')
-    expect(read('Play.tsx')).not.toMatch(/<CubeView3D[^>]*available/)
+    // never a literal `true` or a bare prop: only the level's view from the split
+    expect(read('Play.tsx')).not.toMatch(/<CubeView3D[^>]*available(=\{true\}|\s|\/)/)
+    expect(read('Play.tsx')).toContain("available={views[level.id] === '3d'}")
   })
 })

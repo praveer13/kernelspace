@@ -1186,6 +1186,14 @@ export const DISCRIMINATION_MIN_MISSES = 10
 /** F7: answers a reading needs, and the age of an answer after a learner's cube play. */
 export const CUBE_MIN_N = 30
 export const CUBE_MIN_DAYS = 30
+/**
+ * The 3D evaluation (docs/prereg/tiling-cube-3d.md, 3s-02): the non-inferiority margin, in log10 units of error (0.10 is a
+ * factor of 1.26; the cube counts an opening prediction right within a factor of 2, 0.301), the learners with an answer in both views that its
+ * power calculation needs, and the cap on one answer's error (a factor of ten), so one wild entry cannot carry a learner.
+ */
+export const CUBE_VIEW_MARGIN = 0.1
+export const CUBE_VIEW_MIN_LEARNERS = 71
+export const CUBE_VIEW_ERROR_CAP = 1
 /** F8: K5's bar, C ÷ B at least 0.8, and the learners with both forms a track needs. */
 export const FORMS_MIN_RATIO = 0.8
 export const FORMS_MIN_LEARNERS = FIELD_MIN_PARTNERS
@@ -1887,6 +1895,118 @@ export function selectCubeError30(ledgers: readonly Ledger[]): CubeError30 {
   const ci95 = perLearner.length < 2 ? null : interval95(bootstrapDraws(perLearner, (s) => median(s.flat()), hash32('cube-error')))
   return { n: pooled.length, partners: perLearner.length, median: median(pooled), ci95 }
 }
+
+/* ------------------------------------------------------------------ */
+/* F7b: selectCubeByView (the 3D evaluation, 3s-02)                    */
+/* ------------------------------------------------------------------ */
+
+/** The cube's levels that a fresh `gen:` item can follow: the item ref to the level whose KC it serves. `tiling/qblock-ai` is left out for the reason F7 gives (byte units). */
+const CUBE_REF_LEVEL: Readonly<Record<string, string>> = {
+  'gen:roofline/tile-ai': 'count',
+  'gen:tiling/smem-fit': 'smem',
+  'gen:tiling/ctas-per-sm': 'occupancy',
+  'gen:tiling/raster-ai': 'raster',
+  'gen:tiling/fp8-ridge': 'fp8',
+}
+
+/** The learner's score on the two spatial puzzles (`item:cube.spatial.1` and `.2`): `none` unless both were answered, then `high` for two right and `low` for fewer. */
+export type SpatialStratum = 'low' | 'high' | 'none'
+
+export interface CubeByView {
+  /** Learners with an eligible answer in both views: the sample of the decision. */
+  learners: number
+  /** Learners with any eligible answer. */
+  partners: number
+  /** Eligible answers by the view their level was given. */
+  answers: { '2d': number; '3d': number }
+  /** The mean capped |log₁₀(answer ÷ truth)| of those answers, pooled; null with none. */
+  mean: { '2d': number | null; '3d': number | null }
+  /** The learner-level mean of (3D error − 2D error), in log₁₀ units, so above 0 is worse in 3D, with its one-sided 97.5 % bootstrap bounds (10,000 resamples over learners). */
+  diff: MeanDifference
+  /** The same difference within each stratum of spatial score; descriptive, never decisive (prereg section 3). */
+  strata: Record<SpatialStratum, MeanDifference>
+  margin: number
+  required: number
+  /**
+   * `noninferior`: enough learners and the upper bound below the margin. `inferior`: enough learners and the lower bound at
+   * or above the margin (the entry is removed). `inconclusive`: enough learners and neither. `underpowered`: too few. No
+   * verdict makes 3D the default: that is a Wave 4 gate.
+   */
+  verdict: 'noninferior' | 'inferior' | 'inconclusive' | 'underpowered'
+}
+
+/**
+ * The 3D evaluation (docs/prereg/tiling-cube-3d.md, spec §16.1), read only after the owner signs the pre-registration; nothing
+ * calls it before. The unit is the learner and the exposure is the view their cube play recorded for a level
+ * (`PlayLevel.view`, from the first `play:tiling-cube` event that carries any view; a level's first recorded view counts).
+ * The outcome is the 30-day fresh-item error: a graded `gen:` answer on an unseen seed, outside the cube (src not `play`),
+ * on a level's item (`CUBE_REF_LEVEL`), at least `CUBE_MIN_DAYS` local days after that play, with `value` and `truth` above
+ * zero. A level with no recorded view is in neither group. d = (mean error on 3D levels' items) − (mean on 2D levels'),
+ * each error capped at `CUBE_VIEW_ERROR_CAP`; a learner needs an answer in each view.
+ */
+export function selectCubeByView(ledgers: readonly Ledger[]): CubeByView {
+  const errors: Record<'2d' | '3d', number[]> = { '2d': [], '3d': [] }
+  const ds: { d: number; stratum: SpatialStratum }[] = []
+  let partners = 0
+  for (const events of ledgers) {
+    const list = sorted(events)
+    const views = new Map<string, '2d' | '3d'>()
+    let anchor: LedgerEvent | undefined
+    for (const e of list) {
+      if (e.kind !== 'play' || e.ref !== 'play:tiling-cube' || !Array.isArray(dataOf(e).levels)) continue
+      for (const l of dataOf(e).levels as unknown[]) {
+        const r = typeof l === 'object' && l !== null ? (l as Rec) : {}
+        if (typeof r.id !== 'string' || (r.view !== '2d' && r.view !== '3d')) continue
+        anchor ??= e
+        if (!views.has(r.id)) views.set(r.id, r.view)
+      }
+    }
+    if (anchor === undefined) continue
+    const mine: Record<'2d' | '3d', number[]> = { '2d': [], '3d': [] }
+    for (const e of list) {
+      if (!isGradedAnswer(e) || provenanceOf(e) !== 'unseen' || srcOf(e) === 'play' || daysBetween(anchor.day, e.day) < CUBE_MIN_DAYS) continue
+      const level = Object.hasOwn(CUBE_REF_LEVEL, e.ref) ? CUBE_REF_LEVEL[e.ref] : undefined
+      const view = level === undefined ? undefined : views.get(level)
+      const d = dataOf(e)
+      if (view === undefined || typeof d.value !== 'number' || typeof d.truth !== 'number' || !Number.isFinite(d.value) || !Number.isFinite(d.truth) || d.value <= 0 || d.truth <= 0) continue
+      mine[view].push(Math.min(CUBE_VIEW_ERROR_CAP, Math.abs(Math.log10(d.value / d.truth))))
+    }
+    if (mine['2d'].length + mine['3d'].length === 0) continue
+    partners += 1
+    errors['2d'].push(...mine['2d'])
+    errors['3d'].push(...mine['3d'])
+    if (mine['2d'].length > 0 && mine['3d'].length > 0) ds.push({ d: (meanOf(mine['3d']) as number) - (meanOf(mine['2d']) as number), stratum: spatialStratum(list) })
+  }
+  const diff = meanDifference(ds.map((x) => x.d), hash32('cube-view'))
+  const strata = { low: spatialDifference(ds, 'low'), high: spatialDifference(ds, 'high'), none: spatialDifference(ds, 'none') }
+  const verdict: CubeByView['verdict'] =
+    diff.n < CUBE_VIEW_MIN_LEARNERS ? 'underpowered' : (diff.upper as number) < CUBE_VIEW_MARGIN ? 'noninferior' : (diff.lower as number) >= CUBE_VIEW_MARGIN ? 'inferior' : 'inconclusive'
+  return {
+    learners: diff.n,
+    partners,
+    answers: { '2d': errors['2d'].length, '3d': errors['3d'].length },
+    mean: { '2d': meanOf(errors['2d']), '3d': meanOf(errors['3d']) },
+    diff,
+    strata,
+    margin: CUBE_VIEW_MARGIN,
+    required: CUBE_VIEW_MIN_LEARNERS,
+    verdict,
+  }
+}
+
+/** A learner's spatial stratum from their first answer to each of the two puzzles (src `practice`, ref `item:cube.spatial.<n>`). */
+function spatialStratum(sortedEvents: readonly LedgerEvent[]): SpatialStratum {
+  const first = new Map<number, boolean>()
+  for (const e of sortedEvents) {
+    const n = /^item:cube\.spatial\.([12])$/.exec(e.ref)?.[1]
+    if (e.kind === 'item' && n !== undefined && typeof (e as { ok?: unknown }).ok === 'boolean' && !first.has(Number(n))) first.set(Number(n), isOk(e))
+  }
+  if (first.size < 2) return 'none'
+  return [...first.values()].every(Boolean) ? 'high' : 'low'
+}
+
+const spatialDifference = (ds: readonly { d: number; stratum: SpatialStratum }[], stratum: SpatialStratum): MeanDifference =>
+  meanDifference(ds.filter((x) => x.stratum === stratum).map((x) => x.d), hash32(`cube-view:${stratum}`))
 
 /* ------------------------------------------------------------------ */
 /* F8: selectFormsGain                                                 */
