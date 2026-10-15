@@ -39,6 +39,8 @@ import { BB_AS_RUN, BB_COLD_EVERY, BB_ENGINE, BB_TOLERANCE, BB_WINDOWS, bbPass, 
 import { KNEE_POINTS, KNEE_WINDOW_TICKS } from '@/lib/world/fleet-ex/knee'
 import { PD_ENGINE, PD_LOAD, PD_TRANSFER_RATE, PD_WINDOW_TICKS, PD_WORKERS } from '@/lib/world/fleet-ex/pd-split'
 import { PL_POINTS, plPass, plTruth } from '@/lib/world/fleet-ex/push-luck'
+import { STR_GROUP, STR_POINTS, STR_TOLERANCE, strPass, strTruth } from '@/lib/world/fleet-ex/straggler'
+import { TO_ENGINE, TO_PROBE_PAIRS, TO_SHARED, TO_SUFFIX, TO_TENANT, TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE, toGap, toPass, toTruth } from '@/lib/world/fleet-ex/timing-oracle'
 
 export { MAX_EXPLAIN_CHARS, MIN_EXPLAIN_WORDS, explainReady, wordCount }
 
@@ -595,7 +597,130 @@ function pushLuckCopy(): ExerciseCopy {
   }
 }
 
-const COPIES: Readonly<Record<string, () => ExerciseCopy>> = { knee: kneeCopy, 'pd-split': pdSplitCopy, 'broken-bench': brokenBenchCopy, 'push-luck': pushLuckCopy }
+const pointsText = (n: number): string => `${formatNumber(Math.round(n * 100) / 100)} point${n === 1 ? '' : 's'}`
+
+function stragglerCopy(): ExerciseCopy {
+  const first = STR_POINTS[0]
+  const metricAt = (r: SweepResult, k: number, name: string): number => r.points.find((p) => p.x === k)?.metrics?.[name] ?? NaN
+  const view: ExerciseView = {
+    plot: null,
+    entry: {
+      hint: 'a percentage from 0 to 100',
+      error: 'Enter the idle share as a percentage from 0 to 100, such as 62.5.',
+    },
+    verdict: (prediction, result) => {
+      const truth = strTruth(result)
+      const mean = metricAt(result, STR_GROUP, 'meanTokens')
+      const longest = metricAt(result, STR_GROUP, 'longestTokens')
+      const facts = `The mean length is ${formatNumber(mean)} tokens and the longest ${formatNumber(longest)}.`
+      if (strPass(prediction, result)) return { ok: true, headline: 'Your prediction held.', detail: `The group of ${STR_GROUP} leaves ${formatNumber(truth)}% of its slot-time idle on this seed. ${facts}` }
+      return {
+        ok: false,
+        headline: 'Your prediction was off.',
+        detail: `You said ${formatNumber(prediction)}%. The group of ${STR_GROUP} leaves ${formatNumber(truth)}% idle (within ${STR_TOLERANCE} point is right: ${formatNumber(truth - STR_TOLERANCE)} to ${formatNumber(truth + STR_TOLERANCE)}). ${facts}`,
+      }
+    },
+    table: (result) => ({
+      caption: 'The rollout straggler: idle share of slot-time by group size',
+      columns: ['Samples per group', 'Mean length (tokens)', 'Longest (tokens)', 'Idle share (%)'],
+      rows: result.points.map((p) => [
+        p.x === STR_GROUP ? `${p.x} (the answer)` : `${p.x}`,
+        formatNumber(p.metrics?.meanTokens ?? NaN),
+        formatNumber(p.metrics?.longestTokens ?? NaN),
+        formatNumber(p.metrics?.idleShare ?? NaN),
+      ]),
+    }),
+    played: (value, truth) => `you said ${formatNumber(value)}%, the idle share was ${formatNumber(truth)}%`,
+  }
+  return {
+    setup:
+      `A hypothetical RL group decodes ${STR_GROUP} samples of one prompt, each in a slot of its own, all at the same rate, and it is scored only when its longest sample is done. A slot sits idle from the moment its sample ends. ` +
+      `Each seed draws ${STR_GROUP} output lengths with a long tail: one to three of them are reasoning-length chains and the rest are short, and the scene lists every length. ` +
+      `With lengths l, a group lasts max l token-times, so its slot-time is ${STR_GROUP} × max l and the busy part is the sum of the lengths: the idle share is 1 − Σ l ÷ (${STR_GROUP} × max l), which is 1 − mean ÷ max. ` +
+      `This is a model (version 1), not a Fleet run: the Fleet engine has no RL group, so the sweep computes that share for the seed's lengths, and also for the first k = ${first} … ${STR_GROUP} of them run as a smaller group. ` +
+      `Predict the idle share of the whole group of ${STR_GROUP}, to within ${STR_TOLERANCE} percentage point.`,
+    xLabel: 'Samples per group',
+    pointLabel: (x) => `${x} samples`,
+    tickLabel: (x) => `${x}`,
+    explainPrompt: 'In a sentence or two, say why a group wastes most of its slot-time when one sample runs far longer than the rest.',
+    model:
+      'A synchronous group is scored when its longest sample finishes, so every slot is held for that long, but a slot is busy only for its own sample. The idle share is therefore one minus the mean length over the longest, ' +
+      'and a long tail pushes the longest far above the mean: one chain of 21,000 tokens among seven of about 3,500 leaves nearly three quarters of the group\'s slot-time idle. The table shows the share move as samples join the group: a short sample adds a slot that is idle for most of the group\'s time, and a long one raises how long every slot waits. ' +
+      'That idle slot-time is what partial rollout (checkpoint the long chain and resume it next step) and length-aware placement go after.',
+    ideas: [
+      'The group is scored only when its longest sample ends, so every slot is held for the longest length.',
+      'A slot is busy only for its own sample\'s length, so the idle share is 1 − mean ÷ longest.',
+      'A long tail puts the longest far above the mean, so most slot-time is idle; partial rollout and length-aware placement target exactly that.',
+    ],
+    view,
+  }
+}
+
+function timingOracleCopy(): ExerciseCopy {
+  const metricOf = (r: SweepResult, x: number, name: string): number => r.points.find((p) => p.x === x)?.metrics?.[name] ?? NaN
+  const view: ExerciseView = {
+    plot: null,
+    entry: {
+      hint: 'a number of percentage points',
+      error: 'Enter the hit rate lost as a number of percentage points, such as 7.5.',
+    },
+    verdict: (prediction, result) => {
+      const truth = toTruth(result)
+      const shared = metricOf(result, TO_SHARED, 'hitRate')
+      const tenant = metricOf(result, TO_TENANT, 'hitRate')
+      const gap = `The probe sees a gap of ${msText(toGap(result, TO_SHARED))} with the shared cache and ${msText(toGap(result, TO_TENANT))} with the tenant in the key.`
+      if (toPass(prediction, result)) {
+        return { ok: true, headline: 'Your prediction held.', detail: `The tenant key loses ${pointsText(truth)} of hit rate on this seed (${formatNumber(shared)}% down to ${formatNumber(tenant)}%). ${gap}` }
+      }
+      const tol = Math.max(TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE * truth)
+      return {
+        ok: false,
+        headline: 'Your prediction was off.',
+        detail:
+          `You said ${pointsText(prediction)}. The shared cache hit ${formatNumber(shared)}% of requests and the tenant-keyed one ${formatNumber(tenant)}%: ${pointsText(truth)} lost ` +
+          `(within ${formatNumber(Math.round(tol * 100) / 100)} is right: ${formatNumber(truth - tol)} to ${formatNumber(truth + tol)}). ${gap}`,
+      }
+    },
+    table: (result) => ({
+      caption: 'The timing oracle: hit rate, the probe and the fleet’s TTFT by cache key',
+      columns: ['Cache key', 'Hit rate (%)', 'Probe, used prefix (ms)', 'Probe, unused prefix (ms)', 'Probe gap (ms)', 'TTFT p95 (ms)'],
+      rows: result.points.map((p) => [
+        p.x === TO_SHARED ? 'Shared across tenants' : 'Tenant in the key',
+        formatNumber(p.metrics?.hitRate ?? NaN),
+        formatNumber(p.metrics?.probeHitMs ?? NaN),
+        formatNumber(p.metrics?.probeMissMs ?? NaN),
+        formatNumber(p.metrics?.gapMs ?? NaN),
+        formatNumber(p.metrics?.ttftP95Ms ?? NaN),
+      ]),
+    }),
+    played: (value, truth) => `you said ${pointsText(value)}, the tenant key lost ${pointsText(truth)}`,
+  }
+  return {
+    setup:
+      `Tenants share one deployment, one engine of ${TO_ENGINE.maxRunning} sequences at once, first come, first served. A flat-tick model (version 1): one tick of ${MS_PER_TICK} ms advances every running sequence by one prefill chunk of ${TO_ENGINE.prefillChunk} tokens or one decode token. ` +
+      `Every request is one of K shared prefixes, a prompt any tenant may send, plus a suffix of ${TO_SUFFIX.min} to ${TO_SUFFIX.max} tokens that is never repeated. A request that hits the prefix cache skips the cached prefix's prefill, so it holds a slot ⌈(prompt − cached) ÷ ${TO_ENGINE.prefillChunk}⌉ ticks for its prefill instead of ⌈prompt ÷ ${TO_ENGINE.prefillChunk}⌉. ` +
+      `The sweep runs the same traffic twice. With the shared key a request hits if any tenant has sent its prefix before. With the tenant in the key it hits only if its own tenant has. ` +
+      `The hit rate is the share of requests that hit. Each tenant sends each prefix at least once. After the traffic, a prober, a tenant outside the others, times ${TO_PROBE_PAIRS} pairs of guesses on an idle engine: one at a prefix the others used, one at a prefix nobody used. Their difference is the probe's gap. ` +
+      `This is partly a model: the Fleet engine serves a hit (it skips the cached prefill) but has no cache to decide which requests hit, so the sweep decides in arrival order with an unbounded cache that holds a prefix from its first request. ` +
+      `A real cache is bounded and fills when a prefill finishes, so a real tenant key loses at least this much. Predict the hit rate the tenant key loses, in percentage points, to within ${formatNumber(TO_TOLERANCE_POINTS)} point or ${Math.round(TO_TOLERANCE_SHARE * 100)}%, whichever is larger.`,
+    xLabel: 'Cache key',
+    pointLabel: (x) => (x === TO_SHARED ? 'the shared cache' : 'the tenant in the key'),
+    tickLabel: (x) => (x === TO_SHARED ? 'shared' : 'tenant'),
+    explainPrompt: 'In a sentence or two, say how a shared cache lets a prober see what others sent, and what closing that costs.',
+    model:
+      'A hit skips the cached prefix\'s prefill, so a guess at a prefix someone used comes back faster than a guess at one nobody used. That gap is an observable bit, and a prober who times guesses reads it without ever seeing a KV tensor. ' +
+      'Putting the tenant in the cache key gives each tenant its own namespace, so the prober\'s guesses all miss and the gap is zero. The price is that tenants no longer share work: with a shared key each prefix misses once in all, K misses, ' +
+      'and with the tenant in the key each tenant misses it once, T × K. Of n requests that is K × (T − 1) ÷ n of them turned from hits into misses. How much that matters depends on the tenant mix, which is why the lesson says to measure the reuse you give up.',
+    ideas: [
+      'A hit skips the cached prefill, so a guess at a used prefix returns faster than one at an unused prefix: the gap is the oracle.',
+      'With the tenant in the key the prober\'s namespace holds nothing of the others\', so every guess misses and the gap closes.',
+      'The cost is the shared work: K misses in all become T × K, so the hit rate falls by K × (T − 1) ÷ n.',
+    ],
+    view,
+  }
+}
+
+const COPIES: Readonly<Record<string, () => ExerciseCopy>> = { knee: kneeCopy, 'pd-split': pdSplitCopy, 'broken-bench': brokenBenchCopy, 'push-luck': pushLuckCopy, straggler: stragglerCopy, 'timing-oracle': timingOracleCopy }
 
 /** The panel's copy for an exercise id. A later exercise (§16.3) adds a line here; a test fails until every listed exercise has one. */
 export function copyFor(id: string): ExerciseCopy | null {

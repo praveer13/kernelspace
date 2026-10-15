@@ -48,6 +48,14 @@ The stack that emerged for this (verl, slime, OpenRLHF, AReaL): a **trainer** (F
       variants: ['rollout-share', 'long-tail'],
     },
     {
+      type: 'exercise',
+      fleet: 'straggler',
+      title: 'The rollout straggler',
+      note: `A synchronous group is scored only when its longest sample ends, so every slot is held for that long and is busy only for its own sample. The idle share of that slot-time is 1 − mean ÷ longest, whatever the lengths: samples of 2,000, 4,000, 6,000 and 8,000 tokens have a mean of 5,000 and a longest of 8,000, so 37.5 % of the slot-time is idle. A tail makes it worse, because one long chain raises the longest while it barely moves the mean: seven samples of 3,000 tokens and one of 21,000 have a mean of 5,250 against a longest of 21,000, and 75 % idle. That wait is what the trainer feels, and what partial rollout (checkpoint the long chain and resume it next step) and length-aware placement go after.
+
+The lengths here are synthetic, every sample decodes at one rate, and the Fleet engine has no RL group, so this is the formula and not a run. A continuous-batching engine can hand a freed slot to other work, so the idle share is the group's wait, and the engine's own waste only when nothing else is queued.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {
