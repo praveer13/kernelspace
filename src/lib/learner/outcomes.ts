@@ -30,6 +30,7 @@ import { SYSTEMS_FORGE_LABS } from '@/data/labs'
 import { KCS } from '@/data/kc'
 import { KC } from '@/data/kc/ids'
 import type { Kc } from '@/lib/kc/types'
+import { RUBRIC_KEYS } from '@/lib/ledger/constants'
 import { compareEvents } from '@/lib/ledger/merge'
 import { parseHintRef } from '@/lib/ledger/refs'
 import { dayOf } from '@/lib/ledger/time'
@@ -40,6 +41,7 @@ import { DEFAULT_SLO, deriveCardsDetailed, type CardsContent, type CardsExtra, t
 import { RANDOMIZED_LABS } from './experiments'
 import { FORM_SLOTS, type FormId } from './forms'
 import { weekStartOf } from './planner'
+import { proportionOf, type Proportion } from './proportion'
 import { daysBetween } from './reentry'
 import { instanceKey, sessionSpanMs } from './today'
 import type { FirstReviewCalibration } from './types'
@@ -534,19 +536,9 @@ export const PROVE_MIN_RATE = 0.6
 /** F7: the share of solid placement KCs confirmed at day 7. */
 export const CONFIRM7_MIN_RATE = 0.85
 
-export interface Proportion {
-  n: number
-  correct: number
-  rate: number | null
-  /** Wilson 95 % interval; null with no trial. */
-  ci95: [number, number] | null
-}
-
-function proportion(correct: number, n: number): Proportion {
-  if (n === 0) return { n, correct, rate: null, ci95: null }
-  const w = wilson(correct, n)
-  return { n, correct, rate: correct / n, ci95: [w.lo, w.hi] }
-}
+/** A count with its Wilson 95 % interval (proportion.ts, which vrk.ts and forms.ts share with this file). */
+export type { Proportion }
+const proportion = proportionOf
 
 const lessonIdOf = (ref: string): string | null => (ref.startsWith('lesson:') ? ref.slice('lesson:'.length) : null)
 const isOk = (e: LedgerEvent): boolean => (e as { ok?: boolean }).ok === true
@@ -1274,12 +1266,13 @@ export const SURFACES = ['today', 'lessons', 'plays', 'labs', 'daily', 'fleet-we
 export type Surface = (typeof SURFACES)[number]
 
 /**
- * The surface an event's time belongs to, or null for time the table leaves out (Boot, the placement walk, the Capstone,
- * and `quiz` summaries, whose items already carry their own `ms`).
+ * The surface an event's time belongs to, or null for time the table leaves out (Boot, the placement walk, the Capstone).
  *
  * - **today**: Today sessions and the empty state's "new numbers" (`src` `today`, or `practice` on a generated item);
  * - **lessons**: every other answered item (quizzes, tickets, prequestions, diagrams, item blocks, cold checks, change
- *   cards), sim tasks and lesson exercises;
+ *   cards), the `quiz` summary of a lesson quiz or ticket, sim tasks and lesson exercises. A lesson QuizBlock's items carry
+ *   no `ms` and its summary holds the attempt's time (`recordQuizAttempt`), while a ticket's items carry their own and its
+ *   summary repeats their sum (`recordTicket`), so `weeklyMs` counts a summary only when no item of its attempt has time;
  * - **plays**: `play` events and items made inside a play;
  * - **labs**: `lab-check` and `prove`;
  * - **daily**: the Fleet Daily and team incidents, and the signature item served with it (`src` `daily`);
@@ -1299,6 +1292,7 @@ export function surfaceOf(e: LedgerEvent): Surface | null {
       if (src === 'play') return 'plays'
       if (src === 'boot' || src === 'placement') return null
       return 'lessons'
+    case 'quiz':
     case 'sim-task':
     case 'exercise':
       return 'lessons'
@@ -1347,10 +1341,16 @@ const zeroSurfaces = (): SurfaceRecord => ({ today: 0, lessons: 0, plays: 0, lab
  * Milliseconds per calendar week (Monday's local day) and surface for one ledger. A Today session is its span by C19's
  * rule (`sessionSpanMs`: the last item's `at` minus the first item's `at`, plus the last item's `ms`), counted on the day
  * of its first item; any other time is the sum of its events' `ms`, which a donation rounds to seconds. An event with no
- * `ms` adds none.
+ * `ms` adds none, and a `quiz` summary adds none when an answer of its attempt (the same `grp`) has its own, so a ticket's
+ * time is counted once and a lesson quiz's, which only its summary holds, is counted.
  */
 function weeklyMs(events: Ledger): Map<LocalDay, SurfaceRecord> {
   const weeks = new Map<LocalDay, SurfaceRecord>()
+  const timedAttempts = new Set<string>()
+  for (const e of events) {
+    const grp = dataOf(e).grp
+    if (isAnswer(e) && msOf(e) !== null && typeof grp === 'string' && grp !== '') timedAttempts.add(grp)
+  }
   const add = (day: LocalDay, surface: Surface, ms: number) => {
     const week = weekStartOf(day)
     const row = weeks.get(week) ?? zeroSurfaces()
@@ -1368,6 +1368,7 @@ function weeklyMs(events: Ledger): Map<LocalDay, SurfaceRecord> {
       else sessions.set(grp, [e])
       continue
     }
+    if (e.kind === 'quiz' && typeof grp === 'string' && timedAttempts.has(grp)) continue
     const ms = msOf(e)
     if (ms !== null) add(e.day, surface, ms)
   }
@@ -1473,8 +1474,28 @@ export interface HintArms {
   /** The learner-level mean of ladder − packet accuracy, in [−1, 1], with its one-sided 97.5 % bootstrap bounds (10,000 resamples over learners). */
   diff: MeanDifference
   required: number
-  /** `keep`: lower bound above −5 points. `cut`: it is not (R0 to R2 only). `underpowered`: fewer learners than `required` (the same default). */
+  /**
+   * docs/prereg/hint-ladders.md §4, the whole rule: `keep` when the lower bound is above −5 points and the upper bound is
+   * not below 0; `cut` (R0 to R2 only) when the lower bound is not above −5 points (`because: 'margin'`) or the upper bound
+   * is below 0, the packet arm clearly better (`because: 'packet-better'`); `underpowered` with fewer learners than
+   * `required` (the same default as a cut).
+   */
   verdict: 'keep' | 'cut' | 'underpowered'
+  /** Why a `cut` is one: the margin is not met, or (with the margin met) the packet arm is clearly better. Null otherwise. */
+  because: 'margin' | 'packet-better' | null
+}
+
+/**
+ * The pre-registered decision on a powered difference (docs/prereg/hint-ladders.md §4): keep the ladder if the one-sided
+ * 97.5 % lower bound of d is above −`HINT_MARGIN`; cut it to R0 to R2 if it is not, and also if the upper bound is below 0
+ * ("the packet arm is clearly better"), which can happen with the margin met: 18 of 600 learners at d = −1 and the rest at 0
+ * give d = −3 points with bounds −4.3 and −1.7 (outcomes.test.ts).
+ */
+export function hintVerdict(diff: MeanDifference, required = HINT_MIN_LEARNERS): Pick<HintArms, 'verdict' | 'because'> {
+  if (diff.n < required || diff.lower === null || diff.upper === null) return { verdict: 'underpowered', because: null }
+  if (diff.lower <= -HINT_MARGIN) return { verdict: 'cut', because: 'margin' }
+  if (diff.upper < 0) return { verdict: 'cut', because: 'packet-better' }
+  return { verdict: 'keep', because: null }
 }
 
 /**
@@ -1557,8 +1578,7 @@ export function selectHintArms(
     if (outcomes.ladder.length > 0 && outcomes.packet.length > 0) ds.push((meanOf(outcomes.ladder) as number) - (meanOf(outcomes.packet) as number))
   }
   const diff = meanDifference(ds, hash32('hint-ladders'))
-  const verdict: HintArms['verdict'] = diff.n < HINT_MIN_LEARNERS ? 'underpowered' : (diff.lower as number) > -HINT_MARGIN ? 'keep' : 'cut'
-  return { learners: diff.n, partners, checks, both, unarmed, diff, required: HINT_MIN_LEARNERS, verdict }
+  return { learners: diff.n, partners, checks, both, unarmed, diff, required: HINT_MIN_LEARNERS, ...hintVerdict(diff) }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1582,12 +1602,11 @@ export interface DailyVsOther {
 
 /**
  * The Fleet Daily's keep-or-kill (PLAN §9), under `docs/prereg/fleet-daily.md` and read only after the owner signs it
- * (`buildWave3Report` does not call it before). An
- * eligible check is a graded `sig`-family answer on an unseen seed (provenance `unseen`, not assisted) on a KC the
- * signature items serve other than the diagnosis skill itself, at least `DAILY_MIN_DAYS` local days after that KC's card
- * was created. It is a *Daily* check when the learner had played a Daily that trained the KC (an `inc:daily/` event
- * carrying it in `kcs`) before the answer, and an *other* check otherwise. The skill `t7.incident-diagnosis` is in every
- * Daily, so it has no contrast and is left out.
+ * (`buildWave3Report` does not call it before). An eligible check is a graded `sig`-family answer on an unseen seed
+ * (provenance `unseen`, not assisted) on a KC the signature items serve other than the diagnosis skill itself, at least
+ * `DAILY_MIN_DAYS` local days after that KC's card was created. It is a *Daily* check when the learner had played a Daily
+ * that trained the KC (an `inc:daily/` event carrying it in `kcs`) before the answer, and an *other* check otherwise. The
+ * skill `t7.incident-diagnosis` is in every Daily, so it has no contrast and is left out.
  */
 export function selectDailyVsOther(ledgers: readonly PartnerLedger[], content: CardsContent): DailyVsOther {
   const sig = new Set(content.kcs.filter((k) => k.gen?.includes('sig') && k.id !== KC.incidentDiagnosis).map((k) => k.id))
@@ -1850,7 +1869,12 @@ export interface FormsGain {
   partners: number
 }
 
-/** A form item's track: the most common track prefix of its `kcs` (a KC id's text before the first dot), the first one on a tie. */
+/**
+ * The track of a form item without a recorded `track`: the most common track prefix of its `kcs` (a KC id's text before
+ * the first dot), the first one on a tie. Only a fallback: T5's forms draw 3 of their 12 slots from the `sig` family,
+ * whose items carry ['t7.incident-diagnosis', 't5.prefill-decode-interference'], and a T7 slot on t7.incident-diagnosis
+ * can carry the same pair, so no rule over `kcs` alone tells the two tracks apart.
+ */
 function trackOfKcs(kcs: readonly string[]): string | null {
   const counts = new Map<string, number>()
   for (const kc of kcs) {
@@ -1863,9 +1887,11 @@ function trackOfKcs(kcs: readonly string[]): string | null {
 }
 
 /**
- * K5's opt-in metric (§15.1): per track, from the form items' kept `kcs` (a donation keeps no `track`), the learner's
- * three forms by `formId`, the first answer to each of the 12 slots counting. Only a complete form has an accuracy. B − A
- * and C ÷ B are over the learners who have both forms; the intervals are 10,000-resample bootstraps over those learners.
+ * K5's opt-in metric (§15.1): per track, the learner's three forms by `formId`, the first answer to each of the 12 slots
+ * counting. A form item's track is the `track` it was recorded with (the codec requires one on every form item, and a
+ * donation keeps it when it is one of the graph's tracks); only an event without one falls back to its `kcs`
+ * (`trackOfKcs`). Only a complete form has an accuracy. B − A and C ÷ B are over the learners who have both forms; the
+ * intervals are 10,000-resample bootstraps over those learners.
  */
 export function selectFormsGain(ledgers: readonly Ledger[]): FormsGain {
   const pooled = new Map<string, Record<FormId, { n: number; correct: number }>>()
@@ -1877,9 +1903,10 @@ export function selectFormsGain(ledgers: readonly Ledger[]): FormsGain {
       if (e.kind !== 'item' || srcOf(e) !== 'form') continue
       const d = dataOf(e)
       const slot = d.formSlot
-      const track = trackOfKcs(kcsOf(e))
+      const track = typeof d.track === 'string' && d.track !== '' ? d.track : trackOfKcs(kcsOf(e))
       if ((d.formId !== 'A' && d.formId !== 'B' && d.formId !== 'C') || track === null || !Number.isInteger(slot) || (slot as number) < 0 || (slot as number) >= FORM_SLOTS) continue
-      const key = `${track}/${d.formId}`
+      // the form id first: it is one letter, and a full export's track may hold any character
+      const key = `${d.formId}/${track}`
       const mine = slots.get(key) ?? new Map<number, boolean>()
       if (!mine.has(slot as number)) mine.set(slot as number, isOk(e))
       slots.set(key, mine)
@@ -1888,7 +1915,8 @@ export function selectFormsGain(ledgers: readonly Ledger[]): FormsGain {
     const byTrack = new Map<string, Partial<Record<FormId, number>>>()
     for (const [key, answers] of slots) {
       if (answers.size < FORM_SLOTS) continue
-      const [track, id] = key.split('/') as [string, FormId]
+      const id = key[0] as FormId
+      const track = key.slice(2)
       const right = [...answers.values()].filter(Boolean).length
       byTrack.set(track, { ...byTrack.get(track), [id]: right / FORM_SLOTS })
       const p = pooled.get(track) ?? { A: { n: 0, correct: 0 }, B: { n: 0, correct: 0 }, C: { n: 0, correct: 0 } }
@@ -1938,6 +1966,11 @@ export interface Vrk30Spread {
   perMonth: ReturnType<typeof spreadOf>
   /** The share of checked KCs retained, over partners with a checked KC. */
   share: ReturnType<typeof spreadOf>
+  /**
+   * The 95 % percentile-bootstrap interval of each spread's median, over partners (10,000 resamples, seeded, so the same
+   * exports give the same interval); null with no partner. A reading of where the middle partner sits, not a pass.
+   */
+  medianCi95: { retained: [number, number] | null; perMonth: [number, number] | null; share: [number, number] | null }
 }
 
 /**
@@ -1950,12 +1983,17 @@ export function selectVrk30Spread(ledgers: readonly PartnerLedger[], content: Ca
     return now === null ? [] : [selectVrk30(l.events, content, now, l.plan, { placement: l.placement })]
   })
   const withChecks = rows.filter((r) => r.checked.length > 0)
+  const retained = rows.map((r) => r.retained.length)
+  const perMonth = rows.flatMap((r) => (r.perActiveMonth === null ? [] : [r.perActiveMonth]))
+  const share = withChecks.map((r) => r.share.rate as number)
+  const ciOfMedian = (xs: readonly number[], name: string) => interval95(bootstrapDraws(xs, median, hash32(`vrk30:${name}`)))
   return {
     partners: rows.length,
     checked: withChecks.length,
-    retained: spreadOf(rows.map((r) => r.retained.length)),
-    perMonth: spreadOf(rows.flatMap((r) => (r.perActiveMonth === null ? [] : [r.perActiveMonth]))),
-    share: spreadOf(withChecks.map((r) => r.share.rate as number)),
+    retained: spreadOf(retained),
+    perMonth: spreadOf(perMonth),
+    share: spreadOf(share),
+    medianCi95: { retained: ciOfMedian(retained, 'retained'), perMonth: ciOfMedian(perMonth, 'per-month'), share: ciOfMedian(share, 'share') },
   }
 }
 
@@ -1965,7 +2003,6 @@ export function selectVrk30Spread(ledgers: readonly PartnerLedger[], content: Ca
 
 export const FLEET_ACTS = ['engine', 'fleet', 'business'] as const
 export type FleetAct = (typeof FLEET_ACTS)[number]
-export const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
 
 export interface ReceiptStats {
   partners: number
@@ -2075,6 +2112,7 @@ export interface Wave3Report {
 const points = (x: number | null): string => (x === null ? 'n/a' : `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1)} points`)
 const pointsCi = (d: MeanDifference): string => (d.ci95 === null ? '' : `, 95 % interval ${points(d.ci95[0])} to ${points(d.ci95[1])}`)
 const range = (s: ReturnType<typeof spreadOf>, unit = ''): string => (s === null ? 'n/a' : `${fmtNum(s.min, unit)} / ${fmtNum(s.median, unit)} / ${fmtNum(s.max, unit)} (min / median / max)`)
+const medianCi = (ci: [number, number] | null, unit = ''): string => (ci === null ? '' : `, the median's 95 % bootstrap interval ${fmtNum(ci[0], unit)} to ${fmtNum(ci[1], unit)}`)
 const minutes = (x: number | null): string => (x === null ? 'n/a' : `${x.toFixed(0)} min`)
 
 /** Every selector over the partners' ledgers, then F1 to F12 and the keep-or-kill lines. One ledger is one partner. */
@@ -2119,7 +2157,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
         detail:
           hint.verdict === 'underpowered'
             ? `not enough data (n = ${hint.learners} of ${hint.required} learners with a cold check in both arms, ${plural(hint.partners, 'partner')}; ${hint.checks.ladder} ladder and ${hint.checks.packet} packet checks)`
-            : `ladder − packet ${points(hint.diff.mean)}, one-sided 97.5 % bootstrap bound ${points(hint.diff.lower)} against −${HINT_MARGIN * 100} points${pointsCi(hint.diff)}; ${hint.both} checks with both arms dropped, ${hint.unarmed} unarmed excluded`,
+            : `ladder − packet ${points(hint.diff.mean)}, one-sided 97.5 % bootstrap bound ${points(hint.diff.lower)} against −${HINT_MARGIN * 100} points${pointsCi(hint.diff)}${hint.because === 'packet-better' ? '; the upper bound is below 0, so the packet arm is clearly better and the ladder is cut (prereg §4)' : ''}; ${hint.both} checks with both arms dropped, ${hint.unarmed} unarmed excluded`,
       }
 
   // F3: the Daily's pre-registered comparison; not read while unsigned.
@@ -2220,7 +2258,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
     n: vrk.partners,
     partners: vrk.partners,
     detail: f9Data
-      ? `among ${vrk.partners} partners (self-selected), ${vrk.checked} with a checked KC: retained KCs ${range(vrk.retained)}${vrk.perMonth ? `; per active study-month ${range(vrk.perMonth)}` : ''}; a reading, never a pass`
+      ? `among ${vrk.partners} partners (self-selected), ${vrk.checked} with a checked KC: retained KCs ${range(vrk.retained)}${medianCi(vrk.medianCi95.retained)}${vrk.perMonth ? `; per active study-month ${range(vrk.perMonth)}${medianCi(vrk.medianCi95.perMonth)}` : ''}; a reading, never a pass`
       : thin(vrk.partners, vrk.partners),
   }
 

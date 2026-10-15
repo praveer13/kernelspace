@@ -40,10 +40,10 @@ import type { IsoInstant, ItemData, ItemResponse, LedgerEvent, LessonAgg, LocalD
 import { hash32 } from '@/lib/rng'
 import { armOf } from './experiments'
 import { drawOnKc } from './on-kc'
-import type { Proportion } from './outcomes'
+import { proportionOf, type Proportion } from './proportion'
 import { addDays, daysBetween } from './reentry'
 import { itemResponseOf } from './today'
-import { asOf, proportionOf } from './vrk'
+import { asOf } from './vrk'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */

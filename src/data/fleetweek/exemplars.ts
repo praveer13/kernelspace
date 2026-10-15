@@ -16,10 +16,11 @@
  */
 
 import type { Act2Choice } from '@/lib/fleet-week'
+import { RUBRIC_KEYS } from '@/lib/ledger/constants'
 import type { FleetActData } from '@/lib/ledger/types'
 
-/** The four criteria, in the codec's order (`RUBRIC_KEYS` in ledger/codec.ts and progress.ts, D35). */
-export const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
+/** The four criteria, in the codec's order: the codec's own `RUBRIC_KEYS` (ledger/constants.ts, D35, D48). */
+export { RUBRIC_KEYS }
 export type RubricKey = (typeof RUBRIC_KEYS)[number]
 export type RubricScore = 0 | 1 | 2 | 3
 export const RUBRIC_SCORES: readonly RubricScore[] = [0, 1, 2, 3]

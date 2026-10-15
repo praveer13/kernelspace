@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import { KCS } from '../../src/data/kc'
 import {
   DATA_KEYS,
   DONATION_DAY_ZERO,
   DONATION_FORMAT,
+  DONATION_TRACKS,
   EVENT_KEYS,
   isDonationText,
   ledgerOfDonation,
@@ -18,7 +20,7 @@ const SPEC_EVENT_KEYS = ['kind', 'ref', 'score', 'ok', 'conf', 'provenance', 'ms
 const SPEC_DATA_KEYS = [
   'src', 'kcs', 'form', 'grp', 'slot', 'of', 'level', 'variant', 'phase', 'reason', 'fault', 'severity', 'diagnosed', 'fixed', 'burn', 'expertBurn', 'streetlight', 'probes', 'arm', 'via',
   // Wave 3 (wave-3.md §15.2)
-  'sinceDays', 'formId', 'formSet', 'formSlot', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth',
+  'sinceDays', 'formId', 'formSet', 'formSlot', 'track', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth',
 ]
 
 const SECRET_EXPLAIN = 'because my cat walked on the keyboard'
@@ -393,9 +395,25 @@ function wave3(): { events: LedgerEvent[]; working: WorkingRecord[] } {
 describe('redactForPartner: the Wave 3 fields (§15.2)', () => {
   const byRef = (d: ReturnType<typeof redactForPartner>, ref: string) => d.events.find((e) => e.ref === ref)
 
-  test('a form item keeps its identity, the numbers and the KC; the track, unit and interval go', () => {
+  test('a form item keeps its identity with its track, the numbers and the KC; the unit and interval go', () => {
     const e = d3().events.find((x) => x.data?.src === 'form')
-    expect(e?.data).toEqual({ src: 'form', formId: 'B', formSet: 1, formSlot: 7, kcs: ['t5.kv-capacity'], value: 42.5, truth: 40 })
+    expect(e?.data).toEqual({ src: 'form', formId: 'B', formSet: 1, formSlot: 7, track: 't5', kcs: ['t5.kv-capacity'], value: 42.5, truth: 40 })
+  })
+
+  test('the track is kept only on a form item and only as one of the KC graph\'s tracks', () => {
+    // the fixed list is the graph's tracks, so the donation need not load the graph to check one
+    expect(new Set(DONATION_TRACKS)).toEqual(new Set(KCS.map((k) => k.track)))
+    const j = new Journal()
+    const form = (track: unknown) => j.add('item', 'gen:sig/name-fault', '2026-09-01', { score: 1, ok: true, rev: 'r', provenance: 'unseen', data: { src: 'form', formId: 'A', formSet: 0, formSlot: 2, track, kcs: ['t7.incident-diagnosis', 't5.prefill-decode-interference'] } })
+    for (const t of DONATION_TRACKS) form(t)
+    for (const t of ['t8', 'T5', ' t5', 't5.kv-capacity', SECRET_EXPLAIN, 5, ['t5'], null]) form(t)
+    j.add('item', 'gen:kv/a', '2026-09-01', { score: 1, ok: true, rev: 'r', provenance: 'unseen', data: { src: 'today', track: 't5' } })
+    const kept = redactForPartner({ events: j.events, working: [] }).events.map((e) => e.data?.track)
+    expect(kept).toEqual([...DONATION_TRACKS, ...Array<undefined>(9).fill(undefined)])
+    // a hand-edited donation is held to the same rule
+    const edited = JSON.stringify({ format: DONATION_FORMAT, version: 1, events: [{ kind: 'item', ref: 'gen:kv/a', dayOffset: 0, data: { src: 'form', track: 't5' } }, { kind: 'item', ref: 'gen:kv/a', dayOffset: 0, data: { src: 'form', track: SECRET_EXPLAIN } }, { kind: 'item', ref: 'gen:kv/a', dayOffset: 0, data: { src: 'today', track: 't5' } }] })
+    const parsed = parseDonation(edited)
+    expect(parsed.ok && parsed.donation.events.map((e) => e.data)).toEqual([{ src: 'form', track: 't5' }, { src: 'form' }, { src: 'today' }])
   })
 
   test('sinceDays is kept (rounded to whole days), so cold checks and ROOT read their gap on a donation', () => {
@@ -472,7 +490,7 @@ describe('redactForPartner: the Wave 3 fields (§15.2)', () => {
     j.add('item', 'gen:kv/a', '2026-09-01', {
       score: 1, ok: true, rev: 'r', provenance: 'unseen',
       data: {
-        src: 'form', formId: 'D', formSet: 3, formSlot: 12, sinceDays: -2, qid: SECRET_EXPLAIN, return: false, calls: 13,
+        src: 'form', formId: 'D', formSet: 3, formSlot: 12, track: 't9', sinceDays: -2, qid: SECRET_EXPLAIN, return: false, calls: 13,
         receipts: { cited: 1.5, verified: 0, uncited: 0 }, rubric: { capacity: 4, slo: 0, cost: 0, failure: 0 }, metric: { name: 'imbalance', mine: -1, ghost: 1 }, levels: [{ id: '2026-09-01', ok: true }, { id: 'l1', ok: 'yes' }],
       },
     })
@@ -494,7 +512,7 @@ describe('redactForPartner: the Wave 3 fields (§15.2)', () => {
     expect(text).not.toMatch(ISO_DATE)
     expect(text).not.toMatch(CLOCK_TIME)
     expect(text).not.toMatch(HEX64)
-    for (const secret of [String(SEED), String(SEED + 1), SECRET_EXPLAIN, 'GiB', 'logErr', 'track']) expect(text).not.toContain(secret)
+    for (const secret of [String(SEED), String(SEED + 1), SECRET_EXPLAIN, 'GiB', 'logErr']) expect(text).not.toContain(secret)
   })
 
   test('parseDonation reads the Wave 3 fields back, and holds a hand-edited file to the same shapes', () => {

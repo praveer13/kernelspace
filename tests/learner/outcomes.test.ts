@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,6 +6,10 @@ import path from 'node:path'
 import { KCS } from '../../src/data/kc'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import { SYSTEMS_FORGE_LABS } from '../../src/data/labs'
+import { correctResponse, gradeResponse } from '../../src/lib/items/grade'
+import { resultFor } from '../../src/lib/items/play'
+import { loadAllFamilies } from '../../src/lib/items/registry'
+import type { Gen, PlayableItem } from '../../src/lib/items/types'
 import { wilson } from '../../src/lib/learner/calibration'
 import { deriveCards, selectFirstReviewCalibration } from '../../src/lib/learner/cards'
 import {
@@ -30,6 +34,7 @@ import {
   G7_MAX_MINUTES,
   HINT_MARGIN,
   HINT_MIN_LEARNERS,
+  hintVerdict,
   isPreregSigned,
   isTodayProbe,
   loopSpec,
@@ -64,11 +69,14 @@ import {
   surfaceOf,
   tallyLoopCompletion,
 } from '../../src/lib/learner/outcomes'
+import { formItemResponse, formsFor, type FormId } from '../../src/lib/learner/forms'
 import { ledgerOfDonation, redactForPartner } from '../../src/lib/learner/redact'
 import { addDays } from '../../src/lib/learner/reentry'
 import { sessionSpanMs } from '../../src/lib/learner/today'
 import { buildExportV3, parseImport, serializeExport } from '../../src/lib/ledger/codec'
-import type { LedgerEvent, LocalDay, WorkingRecord } from '../../src/lib/ledger/types'
+import type { ItemResponse, LedgerEvent, LocalDay, WorkingRecord } from '../../src/lib/ledger/types'
+import { hash32 } from '../../src/lib/rng'
+import { makeProfile, startTab } from '../ledger/env'
 import { CONTENT, Journal, LESSONS, shuffled, simulate, START } from './ledger-gen'
 
 /* ------------------------------------------------------------------ */
@@ -1387,6 +1395,44 @@ const partners = <T>(n: number, make: (i: number) => T): T[] => Array.from({ len
 const unseen = (j: Journal, kind: 'item' | 'probe', ref: string, day: LocalDay, ok: boolean, data: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
   j.add(kind, ref, day, { score: ok ? 1 : 0, ok, rev: 'r', provenance: 'unseen', data, ...extra })
 
+type Facade = ReturnType<ReturnType<typeof startTab>['progress']['getState']>
+
+/** The events the façade (progress.ts) writes: `write` runs on a fresh tab whose clock reads noon of Journal day `day`, and the ledger is read back. */
+async function written(day: number, write: (s: Facade) => void): Promise<LedgerEvent[]> {
+  const tab = startTab(makeProfile({ ms: Date.parse(`${d(day)}T12:00:00.000Z`) }))
+  write(tab.progress.getState())
+  await tab.progress.controls.flush()
+  return (await (await tab.engine()).events()) as LedgerEvent[]
+}
+
+/** A lesson QuizBlock attempt of `ms`, as `recordQuizAttempt` writes it: two `quiz` items with no `ms`, and the time on the `quiz` summary alone. */
+const quizBlock = (day: number, ms: number, kcs: string[] = [FRAG_KC]) =>
+  written(day, (s) => s.recordQuizAttempt({ lessonId: 't1.l3', seed: 1, ms, responses: [{ qi: 0, rev: 'r0', pick: [0], ok: true, kcs }, { qi: 1, rev: 'r1', pick: [1], ok: false, kcs }] }))
+
+/** An exit ticket, as `recordTicket` writes it: each item with its own `ms`, and the summary with the attempt's whole time `ms`. */
+const ticket = (day: number, itemMs: readonly number[], ms: number) =>
+  written(day, (s) =>
+    s.recordTicket({
+      lessonId: 't1.l3',
+      form: 'ticket',
+      seed: 1,
+      ms,
+      ok: true,
+      nonMcqOk: true,
+      responses: itemMs.map((m, i) => ({ ref: `gen:frag/v${i}` as const, rev: `r${i}`, score: 1, ok: true, ms: m, provenance: 'unseen' as const, data: { src: 'ticket' as const, kcs: [FRAG_KC], nsec: 40 } })),
+    }),
+  )
+
+describe('the module graph', () => {
+  test('outcomes.ts reads vrk.ts and forms.ts, and neither imports it back: what they share is in proportion.ts', () => {
+    const src = (f: string) => readFileSync(path.resolve(import.meta.dir, '../../src/lib/learner', f), 'utf8')
+    expect(src('outcomes.ts')).toMatch(/from '\.\/vrk'/)
+    expect(src('outcomes.ts')).toMatch(/from '\.\/forms'/)
+    for (const f of ['vrk.ts', 'forms.ts', 'proportion.ts']) expect(src(f), f).not.toMatch(/from '\.\/outcomes'/)
+    for (const f of ['vrk.ts', 'forms.ts', 'outcomes.ts']) expect(src(f), f).toMatch(/from '\.\/proportion'/)
+  })
+})
+
 describe('the bootstrap', () => {
   test('percentile interpolates; draws are sorted, seeded and as many as asked', () => {
     expect(percentile([1, 2, 3, 4], 0.5)).toBe(2.5)
@@ -1464,6 +1510,7 @@ describe('surfaceOf', () => {
     expect(of('item', 'gen:frag/v', 'practice')).toBe('today')
     expect(of('item', 'item:field.decode-kv.tps', 'practice')).toBeNull()
     expect(of('item', 'quiz:t1.l3#0', 'quiz')).toBe('lessons')
+    expect(of('quiz', 'lesson:t1.l3')).toBe('lessons')
     expect(of('item', 'cr:t1.l3#0', 'ticket')).toBe('lessons')
     expect(of('item', 'item:t2.l2.iso.1', 'lesson')).toBe('lessons')
     expect(of('predict', 'dia:t1.l1#0', 'diagram')).toBe('lessons')
@@ -1482,10 +1529,9 @@ describe('surfaceOf', () => {
     expect(of('fleet-act', 'fw:engine')).toBe('fleet-week')
   })
 
-  test('Boot, the placement walk, quiz summaries, visits and acks are not surfaces', () => {
+  test('Boot, the placement walk, visits and acks are not surfaces', () => {
     expect(of('item', 'boot:value', 'boot')).toBeNull()
     expect(of('item', 'gen:frag/v', 'placement')).toBeNull()
-    expect(of('quiz', 'lesson:t1.l1')).toBeNull()
     expect(of('visit', 'lesson:t1.l1')).toBeNull()
     expect(of('ack', 'hint:lab/x#R1')).toBeNull()
     expect(of('capstone-step', 'cap:a')).toBeNull()
@@ -1493,74 +1539,88 @@ describe('surfaceOf', () => {
 })
 
 describe('selectSurfaceMinutes', () => {
-  /** One partner: every surface once in the first calendar week (START is a Tuesday), 6.5833 minutes in all. */
-  const firstWeek = (j: Journal, day: number) => {
+  /**
+   * One partner: every surface once in the first calendar week (START is a Tuesday), 7.0833 minutes in all. The lesson time is
+   * a QuizBlock attempt of 30 s and a ticket whose items took 10 s and 20 s (its summary says 77 s), both as the façade writes them.
+   */
+  const firstWeek = async (day: number): Promise<LedgerEvent[]> => {
+    const j = new Journal()
     graded(j, 'item', 'gen:frag/a', d(day), { ms: 1000, data: { src: 'today', grp: `s${day}`, slot: 0, of: 3, kcs: [FRAG_KC] } })
     graded(j, 'item', 'gen:frag/b', d(day), { ms: 1000, data: { src: 'today', grp: `s${day}`, slot: 1, of: 3, kcs: [FRAG_KC] } })
     graded(j, 'item', 'gen:frag/c', d(day), { ms: 10_000, data: { src: 'today', grp: `s${day}`, slot: 2, of: 3, kcs: [FRAG_KC] } })
-    graded(j, 'item', 'quiz:t1.l3#0', d(day), { ms: 30_000, data: { src: 'quiz', kcs: [FRAG_KC] } })
     graded(j, 'play', 'play:eplb', d(day), { ms: 60_000, data: { phase: 'play' } })
     graded(j, 'lab-check', 'lab:rust-allocator', d(day), { ms: 120_000, data: { passed: [], total: 6 } })
     j.add('incident', `inc:daily/${d(day)}`, d(day), { ms: 90_000, data: { src: 'daily', fixed: true } })
     j.add('fleet-act', 'fw:engine', d(day), { ms: 30_000 })
     graded(j, 'item', 'gen:tiling/raster-ai', d(day), { ms: 15_000, data: { src: 'form', formId: 'A', formSlot: 0, formSet: 0, kcs: ['t4.x'] } })
     graded(j, 'item', 'boot:value', d(day), { ms: 99_000, data: { src: 'boot' } })
-    j.add('quiz', 'lesson:t1.l3', d(day), { ms: 77_000, score: 1, ok: true, data: { form: 'ticket', n: 3 } })
+    return [...j.events, ...(await quizBlock(day, 30_000)), ...(await ticket(day, [10_000, 20_000], 77_000))]
   }
-  const partner = () => {
-    const j = new Journal()
-    firstWeek(j, 0)
-    return j.events
-  }
+  const partner = () => firstWeek(0)
+  const crew = (n: number) => Promise.all(partners(n, partner))
 
-  test('a Today session is its span by the C19 rule, the other surfaces the sum of their ms, and what is not a surface is left out', () => {
-    const r = selectSurfaceMinutes(partners(5, partner))
+  test('a lesson quiz\'s time is on its summary and counts; a ticket\'s is on its items and counts once', async () => {
+    // the façade's own events: a QuizBlock's items carry no ms, so only the summary holds the attempt's 45 s
+    const quiz = await quizBlock(0, 45_000)
+    expect(quiz.filter((e) => e.kind === 'item').map((e) => (e as { ms?: number }).ms)).toEqual([undefined, undefined])
+    expect(quiz.filter((e) => e.kind === 'quiz').map((e) => (e as { ms?: number }).ms)).toEqual([45_000])
+    expect(selectSurfaceMinutes([quiz]).surfaces.lessons.median).toBeCloseTo(0.75, 9)
+    // a ticket's items carry 10 s and 20 s and its summary 77 s: the items count, the summary does not add itself again
+    const t = await ticket(0, [10_000, 20_000], 77_000)
+    expect(t.filter((e) => e.kind === 'quiz').map((e) => (e as { ms?: number }).ms)).toEqual([77_000])
+    expect(selectSurfaceMinutes([t]).surfaces.lessons.median).toBeCloseTo(0.5, 9)
+    // a ticket whose items were not timed falls back to its summary
+    const untimed = await written(0, (s) =>
+      s.recordTicket({ lessonId: 't1.l3', form: 'ticket', seed: 1, ms: 60_000, ok: false, nonMcqOk: true, responses: [{ ref: 'gen:frag/v0', rev: 'r0', score: 0, ok: false, data: { src: 'ticket', kcs: [FRAG_KC] } }] }),
+    )
+    expect(selectSurfaceMinutes([untimed]).surfaces.lessons.median).toBeCloseTo(1, 9)
+    // and from a donation, whose attempt groups are renumbered, the same
+    const donated = (events: LedgerEvent[]) => ledgerOfDonation(redactForPartner({ events, working: [] })).events
+    expect(selectSurfaceMinutes([donated(quiz)]).surfaces.lessons.median).toBeCloseTo(0.75, 9)
+    expect(selectSurfaceMinutes([donated(t)]).surfaces.lessons.median).toBeCloseTo(0.5, 9)
+  })
+
+  test('a Today session is its span by the C19 rule, the other surfaces the sum of their ms, and what is not a surface is left out', async () => {
+    const r = selectSurfaceMinutes(await crew(5))
     expect(r.partners).toBe(5)
     // the three Today items are 20 s apart in the Journal: 40 s + the last item's 10 s
     expect(r.surfaces.today.median).toBeCloseTo(50 / 60, 9)
-    expect(r.surfaces.lessons.median).toBeCloseTo(0.5, 9)
+    // the QuizBlock's 30 s and the ticket items' 10 + 20 s; Boot's 99 s is not a surface
+    expect(r.surfaces.lessons.median).toBeCloseTo(1, 9)
     expect(r.surfaces.plays.median).toBeCloseTo(1, 9)
     expect(r.surfaces.labs.median).toBeCloseTo(2, 9)
     expect(r.surfaces.daily.median).toBeCloseTo(1.5, 9)
     expect(r.surfaces['fleet-week'].median).toBeCloseTo(0.5, 9)
     expect(r.surfaces.me.median).toBeCloseTo(0.25, 9)
-    expect(r.total.median).toBeCloseTo(50 / 60 + 0.5 + 1 + 2 + 1.5 + 0.5 + 0.25, 9)
+    expect(r.total.median).toBeCloseTo(50 / 60 + 1 + 1 + 2 + 1.5 + 0.5 + 0.25, 9)
     expect(r.plannedWeeklyMinutes).toBe(PLANNED_WEEKLY_MINUTES)
     expect(r.surfaces.today.partners).toBe(5)
   })
 
-  test('minutes per week average over the weeks with recorded time, and a quiet week is not one of them', () => {
-    const a = new Journal()
-    firstWeek(a, 0)
-    // the next calendar week is empty; the one after it holds 0.5 minutes of lessons only
-    graded(a, 'item', 'quiz:t1.l3#0', d(14), { ms: 30_000, data: { src: 'quiz', kcs: [FRAG_KC] } })
-    const r = selectSurfaceMinutes([a.events])
-    expect(r.surfaces.lessons.median).toBeCloseTo((0.5 + 0.5) / 2, 9)
+  test('minutes per week average over the weeks with recorded time, and a quiet week is not one of them', async () => {
+    // the next calendar week is empty; the one after it holds a 30 s lesson quiz only
+    const r = selectSurfaceMinutes([[...(await firstWeek(0)), ...(await quizBlock(14, 30_000))]])
+    expect(r.surfaces.lessons.median).toBeCloseTo((1 + 0.5) / 2, 9)
     expect(r.surfaces.labs.median).toBeCloseTo(2 / 2, 9)
   })
 
-  test('a partner who never opened a surface counts 0 there, and an empty ledger is no partner', () => {
-    const lessonsOnly = (n: number) => {
-      const j = new Journal()
-      graded(j, 'item', 'quiz:t1.l3#0', d(0), { ms: n * 60_000, data: { src: 'quiz', kcs: [FRAG_KC] } })
-      return j.events
-    }
-    const r = selectSurfaceMinutes([lessonsOnly(1), lessonsOnly(2), lessonsOnly(9), partner(), []])
+  test('a partner who never opened a surface counts 0 there, and an empty ledger is no partner', async () => {
+    const lessonsOnly = (n: number) => quizBlock(0, n * 60_000)
+    const r = selectSurfaceMinutes([await lessonsOnly(1), await lessonsOnly(2), await lessonsOnly(9), await partner(), []])
     expect(r.partners).toBe(4)
     expect(r.surfaces.labs.median).toBe(0)
     expect(r.surfaces.labs.partners).toBe(1)
+    // lessons 1, 2, 9 and the partner's 1: the median of four is 1.5
     expect(r.surfaces.lessons.median).toBeCloseTo(1.5, 9)
   })
 
-  test('each stage row reads the partners\' own journey weeks, not the calendar', () => {
-    const j = new Journal()
-    firstWeek(j, 0) // journey week 1
-    graded(j, 'item', 'quiz:t1.l3#0', d(7), { ms: 60_000, data: { src: 'quiz', kcs: [FRAG_KC] } }) // journey week 2
-    graded(j, 'item', 'quiz:t1.l3#1', d(14), { ms: 180_000, data: { src: 'quiz', kcs: [FRAG_KC] } }) // journey week 3
-    const r = selectSurfaceMinutes(partners(5, () => j.events))
+  test('each stage row reads the partners\' own journey weeks, not the calendar', async () => {
+    // journey week 1, then a 1-minute lesson quiz in week 2 and a 3-minute one in week 3
+    const events = [...(await firstWeek(0)), ...(await quizBlock(7, 60_000)), ...(await quizBlock(14, 180_000))]
+    const r = selectSurfaceMinutes(partners(5, () => events))
     const row = (first: number) => r.stages.find((s) => s.row.weeks[0] === first)!
     expect(row(1).partners).toBe(5)
-    expect(row(1).medians?.lessons).toBeCloseTo(0.5, 9)
+    expect(row(1).medians?.lessons).toBeCloseTo(1, 9)
     expect(row(1).medians?.labs).toBeCloseTo(2, 9)
     // weeks 2 and 3 are one row: (1 + 3) / 2 minutes of lessons a week
     expect(row(2).medians?.lessons).toBeCloseTo(2, 9)
@@ -1581,8 +1641,8 @@ describe('selectSurfaceMinutes', () => {
     })
   })
 
-  test('a donation reads like its export for every surface but Today\'s session spans', () => {
-    const events = partner()
+  test('a donation reads like its export for every surface but Today\'s session spans', async () => {
+    const events = await partner()
     const own = selectSurfaceMinutes([events])
     const donated = selectSurfaceMinutes([ledgerOfDonation(redactForPartner({ events, working: [] })).events])
     for (const s of SURFACES.filter((x) => x !== 'today')) expect(donated.surfaces[s].median).toBeCloseTo(own.surfaces[s].median as number, 9)
@@ -1636,7 +1696,7 @@ describe('selectHintArms', () => {
   test('a ladder clearly worse than the packet is cut, and a lower bound just inside the margin is kept', () => {
     const worse = selectHintArms(crew(130, () => ({ armA: 'ladder', armB: 'packet', okA: false, okB: true })), CONTENT, options)
     expect(worse.diff.mean).toBe(-1)
-    expect(worse.verdict).toBe('cut')
+    expect(worse).toMatchObject({ verdict: 'cut', because: 'margin' })
     // no difference at all: every d is 0, so the bound is 0, above −5 points
     const same = selectHintArms(crew(130, () => ({ armA: 'ladder', armB: 'packet', okA: true, okB: true })), CONTENT, options)
     expect(same.diff.lower).toBe(0)
@@ -1645,6 +1705,30 @@ describe('selectHintArms', () => {
     const wide = selectHintArms(crew(130, (i) => ({ armA: 'ladder', armB: 'packet', okA: i % 10 !== 0, okB: true })), CONTENT, options)
     expect(wide.diff.mean).toBeCloseTo(-0.1, 9)
     expect(wide.verdict).toBe('cut')
+  })
+
+  test('a packet arm clearly better cuts the ladder even with the margin met (prereg §4): a powered d of −3 points', () => {
+    // 18 of 600 learners got the ladder check wrong and the packet one right, the rest both right: d = −18/600 = −3 points
+    const r = selectHintArms(crew(600, (i) => ({ armA: 'ladder', armB: 'packet', okA: i % 100 >= 3, okB: true })), CONTENT, options)
+    expect(r.learners).toBe(600)
+    expect(r.diff.mean).toBeCloseTo(-0.03, 9)
+    // the margin alone would keep it: the lower bound, −26/600 = −4.3 points, is above −5 points
+    expect(r.diff.lower as number).toBeGreaterThan(-HINT_MARGIN)
+    expect(r.diff.lower as number).toBeCloseTo(-26 / 600, 9)
+    // but the upper bound, −10/600 = −1.7 points, is below 0, so the packet arm is clearly better
+    expect(r.diff.upper as number).toBeLessThan(0)
+    expect(r.diff.upper as number).toBeCloseTo(-10 / 600, 9)
+    expect(r).toMatchObject({ verdict: 'cut', because: 'packet-better' })
+  })
+
+  test('hintVerdict is the pre-registration\'s rule whole: the margin on the lower bound, and 0 on the upper', () => {
+    const diff = (lower: number, upper: number, n = HINT_MIN_LEARNERS) => ({ n, mean: (lower + upper) / 2, lower, upper, ci95: [lower, upper] as [number, number] })
+    expect(hintVerdict(diff(-0.04, 0.01))).toEqual({ verdict: 'keep', because: null })
+    expect(hintVerdict(diff(-0.04, 0))).toEqual({ verdict: 'keep', because: null })
+    expect(hintVerdict(diff(-0.044, -0.016))).toEqual({ verdict: 'cut', because: 'packet-better' })
+    expect(hintVerdict(diff(-HINT_MARGIN, 0.02))).toEqual({ verdict: 'cut', because: 'margin' })
+    expect(hintVerdict(diff(-0.2, -0.1))).toEqual({ verdict: 'cut', because: 'margin' })
+    expect(hintVerdict(diff(-0.044, -0.016, HINT_MIN_LEARNERS - 1))).toEqual({ verdict: 'underpowered', because: null })
   })
 
   test('fewer learners than the pre-registration\'s power calculation is underpowered, at 125 and at 126', () => {
@@ -2013,7 +2097,7 @@ describe('selectCubeError30', () => {
 
 describe('selectFormsGain', () => {
   /** A learner's forms on `track`: the right counts of A, B and C (a missing form is not taken), 12 slots each. */
-  const forms = (track: string, right: Partial<Record<'A' | 'B' | 'C', number>>, o: { kcs?: string[]; slots?: number } = {}) => {
+  const forms = (track: string, right: Partial<Record<'A' | 'B' | 'C', number>>, o: { kcs?: string[]; slots?: number; recorded?: boolean } = {}) => {
     const j = new Journal()
     for (const id of ['A', 'B', 'C'] as const) {
       const k = right[id]
@@ -2025,7 +2109,7 @@ describe('selectFormsGain', () => {
           score: ok ? 1 : 0,
           rev: 'r',
           provenance: 'unseen',
-          data: { src: 'form', formId: id, formSet: 0, formSlot: slot, track, kcs: o.kcs ?? [`${track}.kv-capacity`] },
+          data: { src: 'form', formId: id, formSet: 0, formSlot: slot, ...(o.recorded === false ? {} : { track }), kcs: o.kcs ?? [`${track}.kv-capacity`] },
         })
       }
     }
@@ -2047,10 +2131,12 @@ describe('selectFormsGain', () => {
     expect(r.partners).toBe(6)
   })
 
-  test('the track comes from the kept kcs, and a donation, which keeps no track, reads the same', () => {
+  test('the recorded track decides, an event without one falls back to the majority of its kcs, and a donation reads the same', () => {
     const own = [
-      ...partners(5, () => forms('t5', { A: 6, B: 10, C: 6 })), // C ÷ B = 0.6
-      ...partners(5, () => forms('t4', { A: 6, B: 8, C: 8 }, { kcs: ['t4.tiling-intensity', 't4.occupancy', 't2.x'] })),
+      // recorded as T5's form although every kcs names t7 first: the track it was recorded with wins
+      ...partners(5, () => forms('t5', { A: 6, B: 10, C: 6 }, { kcs: ['t7.incident-diagnosis', 't5.prefill-decode-interference'] })), // C ÷ B = 0.6
+      // no track (the codec requires one, but a donation drops a track outside the graph's): t4 is the kcs' majority
+      ...partners(5, () => forms('t4', { A: 6, B: 8, C: 8 }, { kcs: ['t4.tiling-intensity', 't4.occupancy', 't2.x'], recorded: false })),
     ]
     const donated = own.map((events) => ledgerOfDonation(redactForPartner({ events, working: [] })).events)
     for (const ledgers of [own, donated]) {
@@ -2085,6 +2171,55 @@ describe('selectFormsGain', () => {
     expect(selectFormsGain([]).tracks).toEqual([])
   })
 
+  describe('on real forms: a slot counts under the track whose form it is (B2)', () => {
+    let gens: ReadonlyMap<string, Gen>
+    beforeAll(async () => {
+      gens = new Map((await loadAllFamilies()).map((g) => [g.id, g] as const))
+    })
+    /** Right answers per form: a learner gets the first `right[id]` slots of form `id` right. */
+    const RIGHT: Record<'t5' | 't7', Record<FormId, number>> = { t5: { A: 6, B: 9, C: 9 }, t7: { A: 3, B: 6, C: 12 } }
+
+    /** One learner takes T5's forms A, B and C and then T7's, drawn by `formsFor` and written by the façade as /me writes them. */
+    const learner = async (expSeed: number): Promise<LedgerEvent[]> => {
+      const responses: ItemResponse[] = []
+      for (const track of ['t5', 't7'] as const) {
+        const forms = (await formsFor(track, { gens, kcs: KCS, expSeed }))!
+        for (const id of ['A', 'B', 'C'] as const) {
+          forms.forms[id].slots.forEach((slot, i) => {
+            const item: PlayableItem = { source: 'gen', inst: slot.inst }
+            const result = resultFor(item, correctResponse(slot.inst), gradeResponse(slot.inst, correctResponse(slot.inst)), { seed: slot.inst.seed, ms: 2000 })
+            const r = formItemResponse(result, item, { track, formId: id, formSlot: i, formSet: forms.forms[id].set }, new Set())
+            responses.push(i < RIGHT[track][id] ? r : { ...r, ok: false, score: 0 })
+          })
+        }
+      }
+      return written(0, (s) => s.recordItems(responses))
+    }
+
+    test('T5\'s sig slots carry a t7 majority of kcs, yet every T5 slot lands in T5 and T7\'s slots are untouched', async () => {
+      const ledgers = await Promise.all([1, 2, 3, 4, 5].map((i) => learner(hash32(`forms-gain:${i}`))))
+      // the case B2 found: 3 of each T5 form's 12 slots are sig items whose kcs name t7 first, which the kcs rule gave to T7
+      for (const events of ledgers) {
+        const t5 = events.filter((e) => (e as { data?: { track?: string } }).data?.track === 't5')
+        expect(t5).toHaveLength(36)
+        const sig = t5.filter((e) => e.ref.startsWith('gen:sig/'))
+        expect(sig).toHaveLength(9)
+        for (const e of sig) expect((e as { data: { kcs: string[] } }).data.kcs).toEqual(['t7.incident-diagnosis', 't5.prefill-decode-interference'])
+      }
+      for (const own of [ledgers, ledgers.map((events) => ledgerOfDonation(redactForPartner({ events, working: [] })).events)]) {
+        const r = selectFormsGain(own)
+        expect(r.tracks.map((t) => t.track)).toEqual(['t5', 't7'])
+        for (const track of ['t5', 't7'] as const) {
+          const t = r.tracks.find((x) => x.track === track)!
+          // five learners, each form complete with its 12 slots and exactly its own right answers
+          for (const id of ['A', 'B', 'C'] as const) expect(t.forms[id]).toMatchObject({ n: 60, correct: 5 * RIGHT[track][id] })
+          expect(t.cOverB.n).toBe(5)
+          expect(t.cOverB.ratio).toBeCloseTo(RIGHT[track].C / RIGHT[track].B, 9)
+        }
+      }
+    })
+  })
+
   test('B − A has no interval without a learner with both forms, and C ÷ B none without B', () => {
     const r = selectFormsGain(partners(5, () => forms('t5', { C: 9 })))
     expect(r.tracks[0].bMinusA).toMatchObject({ n: 0, mean: null, ci95: null })
@@ -2111,10 +2246,30 @@ describe('selectVrk30Spread', () => {
     expect(r.share?.median).toBeCloseTo(2 / 5, 9)
   })
 
+  test('the median carries a seeded 95 % bootstrap interval over partners, the same on every run', () => {
+    const ledgers = [0, 1, 2, 3, 5].map(learner)
+    const r = selectVrk30Spread(ledgers, CONTENT)
+    // the median of a resample of five is one of the five values, so the bounds are partners' own counts around the median 2
+    const [lo, hi] = r.medianCi95.retained!
+    expect([0, 1, 2, 3, 5]).toContain(lo)
+    expect([0, 1, 2, 3, 5]).toContain(hi)
+    expect(lo).toBeLessThanOrEqual(2)
+    expect(hi).toBeGreaterThanOrEqual(2)
+    expect(lo).toBeLessThan(hi)
+    const draws = bootstrapDraws([0, 1, 2, 3, 5], (xs) => percentile([...xs].sort((a, b) => a - b), 0.5), hash32('vrk30:retained'))
+    expect(r.medianCi95.retained).toEqual([percentile(draws, 0.025)!, percentile(draws, 0.975)!])
+    expect(selectVrk30Spread(ledgers, CONTENT).medianCi95).toEqual(r.medianCi95)
+    expect(r.medianCi95.share).not.toBeNull()
+    // the report prints it beside the spread
+    const f9 = buildWave3Report(ledgers, { cards: CONTENT }).gates.find((g) => g.id === 'F9')!
+    expect(f9.detail).toContain(`retained KCs 0 / 2 / 5 (min / median / max), the median's 95 % bootstrap interval ${lo} to ${hi}`)
+    expect(f9.detail).toContain('a reading, never a pass')
+  })
+
   test('a partner with no checked KC is in n and has 0 retained; an empty ledger is no partner', () => {
     const r = selectVrk30Spread([learner(2), { events: [] }, { events: new Journal().events }], CONTENT)
     expect(r.partners).toBe(1)
-    expect(selectVrk30Spread([], CONTENT)).toMatchObject({ partners: 0, checked: 0, retained: null, perMonth: null, share: null })
+    expect(selectVrk30Spread([], CONTENT)).toMatchObject({ partners: 0, checked: 0, retained: null, perMonth: null, share: null, medianCi95: { retained: null, perMonth: null, share: null } })
     const none = new Journal()
     none.add('visit', 'lesson:t1.l1', d(0))
     expect(selectVrk30Spread([{ events: none.events }], CONTENT)).toMatchObject({ partners: 1, checked: 0, retained: { median: 0 }, share: null })
@@ -2234,20 +2389,20 @@ describe('buildWave3Report and formatWave3Report', () => {
     expect(formatWave3Report(r)).toContain('F12  accessibility: VoiceOver and NVDA passes')
   })
 
-  /** A partner who has a bit of everything the gates read. */
-  const partner = (i: number) => {
+  /** A partner who has a bit of everything the gates read; the lesson quiz is the façade's own events. */
+  const partner = async (i: number) => {
     const j = new Journal()
     j.passLesson(d(0), 't1.l3', ['t1.split-coalesce'])
     graded(j, 'item', 'gen:frag/a', d(1), { ms: 60_000, data: { src: 'today', grp: 'g', slot: 0, of: 1, kcs: [FRAG_KC] } })
-    graded(j, 'item', 'quiz:t1.l3#0', d(2), { ms: 60_000 * (i + 1), data: { src: 'quiz', kcs: ['t1.split-coalesce'] } })
     j.add('lab-check', 'lab:kv-block-manager', d(3), { ok: true, score: 1, provenance: 'unseen', data: { passed: [] } })
     j.add('prove', 'prove:kv-block-manager', d(4), { ok: true, score: 1, provenance: 'proved', data: { v: 2, qid: 'free-after', kcs: [], answer: 1, actual: 1, calls: 2 } })
     j.add('fleet-act', 'fw:engine', d(5), { score: 1, ok: true, provenance: 'unseen', data: { receipts: { cited: 3, verified: 3, uncited: 0 }, rubric: { capacity: 2, slo: 2, cost: 2, failure: 2 } } })
-    return { events: j.events }
+    return { events: [...j.events, ...(await quizBlock(2, 60_000 * (i + 1), ['t1.split-coalesce']))] }
   }
+  const crew = (n: number) => Promise.all(partners(n, partner))
 
-  test('five partners: F1 is reported with the journey table, F5 passes, F10 is reported, the rest stay short', () => {
-    const r = buildWave3Report(partners(5, partner), { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) })
+  test('five partners: F1 is reported with the journey table, F5 passes, F10 is reported, the rest stay short', async () => {
+    const r = buildWave3Report(await crew(5), { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) })
     expect(status(r, 'F1')).toBe('reported')
     expect(status(r, 'F5')).toBe('pass')
     expect(status(r, 'F10')).toBe('reported')
@@ -2267,21 +2422,21 @@ describe('buildWave3Report and formatWave3Report', () => {
     expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/)
   })
 
-  test('under five partners no gate is read as a pass', () => {
-    const r = buildWave3Report(partners(4, partner), { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) })
+  test('under five partners no gate is read as a pass', async () => {
+    const r = buildWave3Report(await crew(4), { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) })
     for (const id of ['F1', 'F5', 'F9', 'F10']) expect(status(r, id)).toBe('insufficient')
     expect(formatWave3Report(r)).not.toContain('PASS')
   })
 
-  test('the report is deterministic, and the JSON of it carries every gate', () => {
-    const ledgers = partners(5, partner)
+  test('the report is deterministic, and the JSON of it carries every gate', async () => {
+    const ledgers = await crew(5)
     const a = JSON.stringify(buildWave3Report(ledgers, { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) }))
     expect(JSON.stringify(buildWave3Report(ledgers, { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) }))).toBe(a)
     expect(JSON.parse(a).gates).toHaveLength(12)
   })
 
-  test('a donation gives the same table as the export it came from, for the gates both can compute', () => {
-    const own = partners(5, partner)
+  test('a donation gives the same table as the export it came from, for the gates both can compute', async () => {
+    const own = await crew(5)
     const donated = own.map((l) => ledgerOfDonation(redactForPartner({ events: l.events, working: [] })))
     const inputs = { cards: CONTENT, v2Labs: new Set(['kv-block-manager']) }
     const a = buildWave3Report(own, inputs)
@@ -2296,14 +2451,13 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
   const script = path.resolve(import.meta.dir, '../../scripts/partner-report.ts')
   const run = (...args: string[]) => spawnSync('bun', [script, ...args], { encoding: 'utf8' })
 
-  /** A partner who boots, gets lab 02 green on an unseen seed and makes a Prove-it v2 attempt, and spends a little time. */
-  const partnerEvents = (i: number): LedgerEvent[] => {
+  /** A partner who boots, gets lab 02 green on an unseen seed and makes a Prove-it v2 attempt, and spends a little time on a lesson quiz (the façade's own events). */
+  const partnerEvents = async (i: number): Promise<LedgerEvent[]> => {
     const j = new Journal()
     j.add('complete', 'boot', d(0))
-    graded(j, 'item', 'quiz:t1.l3#0', d(1), { ms: 60_000 * (i + 1), data: { src: 'quiz', kcs: ['t1.split-coalesce'] } })
     j.add('lab-check', 'lab:kv-block-manager', d(2), { ok: true, score: 1, provenance: 'unseen', data: { passed: [] } })
     j.add('prove', 'prove:kv-block-manager', d(3), { ok: true, score: 1, provenance: 'proved', wasmSha256: 'a'.repeat(64), data: { v: 2, qid: 'free-after', kcs: [], answer: 1, actual: 1, calls: 2 } })
-    return j.events
+    return [...j.events, ...(await quizBlock(1, 60_000 * (i + 1), ['t1.split-coalesce']))]
   }
   const donationFile = (dir: string, name: string, events: LedgerEvent[]): string => {
     const p = path.join(dir, name)
@@ -2311,10 +2465,10 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
     return p
   }
 
-  test('prints F1 to F12 from five donations, with the journey table, and reads no unsigned pre-registration', () => {
+  test('prints F1 to F12 from five donations, with the journey table, and reads no unsigned pre-registration', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-w3-'))
     try {
-      const files = [0, 1, 2, 3, 4].map((i) => donationFile(dir, `donation-${i}.json`, partnerEvents(i)))
+      const files = await Promise.all([0, 1, 2, 3, 4].map(async (i) => donationFile(dir, `donation-${i}.json`, await partnerEvents(i))))
       const r = run(...files)
       expect(r.status).toBe(0)
       expect(r.stdout).toContain('Wave 3 field gates over 5 exports')
@@ -2335,10 +2489,10 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
     }
   })
 
-  test('--json carries the twelve gates, and --wave1 with --wave2 is a usage error', () => {
+  test('--json carries the twelve gates, and --wave1 with --wave2 is a usage error', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-w3-'))
     try {
-      const file = donationFile(dir, 'a.json', partnerEvents(0))
+      const file = donationFile(dir, 'a.json', await partnerEvents(0))
       const j = run('--json', file)
       expect(j.status).toBe(0)
       const report = JSON.parse(j.stdout)
@@ -2352,12 +2506,12 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
     }
   })
 
-  test('mixes a full export and a donation, and says what a donation cannot carry', () => {
+  test('mixes a full export and a donation, and says what a donation cannot carry', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'partner-report-w3-'))
     try {
       const full = path.join(dir, 'export.json')
-      writeFileSync(full, serializeExport(buildExportV3({ events: partnerEvents(0), working: [], device: 'dev-w3', exportedAt: '2026-10-07T12:00:00.000Z' })))
-      const r = run(full, donationFile(dir, 'don.json', partnerEvents(1)))
+      writeFileSync(full, serializeExport(buildExportV3({ events: await partnerEvents(0), working: [], device: 'dev-w3', exportedAt: '2026-10-07T12:00:00.000Z' })))
+      const r = run(full, donationFile(dir, 'don.json', await partnerEvents(1)))
       expect(r.status).toBe(0)
       expect(r.stdout).toContain('over 2 exports')
       expect(r.stdout).toContain('1 of 2 files is a redacted donation')

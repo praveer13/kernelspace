@@ -1,4 +1,17 @@
-import { BACKGROUNDS, ENGINE_SLOTS, EXPORT_FORMAT, FAULT_IDS, FLEET_RUN_MODES, IMPORT_MAX_BYTES, SCHEMA_VERSION } from './constants'
+import {
+  BACKGROUNDS,
+  ENGINE_SLOTS,
+  EXPORT_FORMAT,
+  FAULT_IDS,
+  FLEET_RUN_MODES,
+  IMPORT_MAX_BYTES,
+  MAX_ACT_RUNS,
+  MAX_PROVE_CALLS,
+  MAX_PROVE_IDS,
+  MAX_QID_LENGTH,
+  RUBRIC_KEYS,
+  SCHEMA_VERSION,
+} from './constants'
 import { derive, GRADED_KINDS } from './fold'
 import {
   mergeEvents,
@@ -70,16 +83,12 @@ const REV_REQUIRED = new Set<EventKind>(['item', 'probe', 'predict'])
 const MAX_ID_LENGTH = 200
 const FORM_IDS = new Set(['A', 'B', 'C'])
 const MAX_FORM_SLOT = 11
-const MAX_QID_LENGTH = 40
-const MAX_PROVE_CALLS = 12
 const MAX_PLAY_LEVELS = 8
 const PLAY_VIEWS = new Set(['2d', '3d'])
 const PLAY_METRICS = new Set(['imbalance'])
 const EPLB_REPLICATE = new Set(['none', 'per-copy', 'total'])
 const EPLB_PLACE = new Set(['round-robin', 'least-loaded'])
 const RUN_ACTS = new Set(['engine', 'fleet', 'business'])
-const RUBRIC_KEYS = ['capacity', 'slo', 'cost', 'failure'] as const
-const MAX_ACT_RUNS = 20
 const MAX_RUN_RECORDS = 50
 const MAX_RUN_VALUES = 40
 const MAX_RUN_JOB_BYTES = 4096
@@ -125,9 +134,9 @@ function checkFormKeys(data: Record<string, unknown>): string | null {
   return null
 }
 
-/** A Prove-it answer: a finite number, or an ordered list of at most 12 non-negative whole numbers (ids). */
+/** A Prove-it answer: a finite number, or an ordered list of at most `MAX_PROVE_IDS` (12) non-negative whole numbers (ids). */
 const isProveAnswer = (v: unknown): boolean =>
-  isFiniteNumber(v) || (Array.isArray(v) && v.length <= MAX_PROVE_CALLS && v.every((n) => Number.isInteger(n) && (n as number) >= 0))
+  isFiniteNumber(v) || (Array.isArray(v) && v.length <= MAX_PROVE_IDS && v.every((n) => Number.isInteger(n) && (n as number) >= 0))
 
 /** `prove` data: v1 (self-graded) as before, now with `v` checked, or v2 (wave-3.md §3.2). */
 function checkProve(data: unknown): string | null {
@@ -135,8 +144,8 @@ function checkProve(data: unknown): string | null {
   if (data.v === 2) {
     if (!isNonEmptyString(data.qid, MAX_QID_LENGTH)) return `data.qid must be 1-${MAX_QID_LENGTH} characters`
     if (!(Array.isArray(data.kcs) && data.kcs.length <= MAX_KCS && data.kcs.every((k) => typeof k === 'string'))) return `data.kcs must be at most ${MAX_KCS} strings`
-    if (!isProveAnswer(data.answer)) return 'data.answer must be a number or a list of at most 12 ids'
-    if (data.actual !== null && !isProveAnswer(data.actual)) return 'data.actual must be a number, a list of at most 12 ids or null'
+    if (!isProveAnswer(data.answer)) return `data.answer must be a number or a list of at most ${MAX_PROVE_IDS} ids`
+    if (data.actual !== null && !isProveAnswer(data.actual)) return `data.actual must be a number, a list of at most ${MAX_PROVE_IDS} ids or null`
     if (!(Number.isInteger(data.calls) && (data.calls as number) >= 1 && (data.calls as number) <= MAX_PROVE_CALLS)) return `data.calls must be a whole number within [1, ${MAX_PROVE_CALLS}]`
     if (data.return !== undefined && data.return !== true) return 'data.return must be true when present'
     return null
