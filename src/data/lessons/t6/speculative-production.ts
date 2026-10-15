@@ -51,6 +51,14 @@ The speedup math is T5.L8's one line. With per-token acceptance α and draft len
       variants: ['expected-tokens', 'speedup', 'best-k'],
     },
     {
+      type: 'exercise',
+      fleet: 'push-luck',
+      title: 'Push your luck',
+      note: `A drafted token counts only if every token before it was accepted, so the *j*-th adds α^*j* expected tokens to the round, a gain that shrinks by a factor α each time. Each one also adds *c* to the cost of every round, accepted or not, so the cost grows in a straight line. The speedup, tokens per round ÷ cost per round, rises while one more token raises the tokens by a larger share than it raises the cost, and falls after that. For α = 0.77 and c = 0.07 it reads 1.65, 2.07, 2.33, 2.48, 2.55 and 2.57 at γ = 1 … 6, then 2.56 and 2.52 at γ = 7 and 8: the peak is at 6, and it is flat.
+
+Without *c* the expected tokens, (1 − α^(γ+1)) ÷ (1 − α), rise with every extra token and there is no best length, so the cost of drafting is what makes the question. The model holds α fixed at every position. A real MTP module's acceptance falls with each step (the acceptance economy above), so its best k is shorter than this model's, and the Fleet engine has no speculation, so this is the formula and not a run.`,
+    },
+    {
       type: 'quiz',
       questions: [
         {

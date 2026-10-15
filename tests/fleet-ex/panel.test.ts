@@ -479,7 +479,8 @@ describe('the lesson blocks (3c-06)', () => {
       expect(block.title).toBe(def.title)
       const quiz = lesson.blocks.findIndex((b) => b.type === 'quiz')
       expect(index).toBeLessThan(quiz)
-      expect(lesson.blocks[index + 1].type).toBe('quiz')
+      // only another Fleet exercise (the broken benchmark follows the knee, 3s-04) may sit between it and the quiz
+      expect(lesson.blocks.slice(index + 1).find((b) => !(b.type === 'exercise' && 'fleet' in b))?.type).toBe('quiz')
       expect(lesson.blocks.findIndex((b) => b.type === 'item')).toBeLessThan(index)
       // the exercise assesses KCs its lesson teaches
       for (const kc of def.kcs) expect(lesson.kcs).toContain(kc)

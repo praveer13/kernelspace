@@ -35,8 +35,10 @@ import type { MirrorTable } from '@/lib/sims/types'
 import { SIM_TICK_SECONDS } from '@/lib/fleet-model'
 import { getFleetTrafficProfile } from '@/lib/traces'
 import type { FleetExerciseDef, SceneFact, SweepPoint, SweepResult } from '@/lib/world/fleet-ex'
+import { BB_AS_RUN, BB_COLD_EVERY, BB_ENGINE, BB_TOLERANCE, BB_WINDOWS, bbPass, bbReported, bbTruth } from '@/lib/world/fleet-ex/broken-bench'
 import { KNEE_POINTS, KNEE_WINDOW_TICKS } from '@/lib/world/fleet-ex/knee'
 import { PD_ENGINE, PD_LOAD, PD_TRANSFER_RATE, PD_WINDOW_TICKS, PD_WORKERS } from '@/lib/world/fleet-ex/pd-split'
+import { PL_POINTS, plPass, plTruth } from '@/lib/world/fleet-ex/push-luck'
 
 export { MAX_EXPLAIN_CHARS, MIN_EXPLAIN_WORDS, explainReady, wordCount }
 
@@ -230,7 +232,7 @@ export function reduceRound(def: FleetExerciseDef, state: Round, action: RoundAc
       if (state.phase !== 'draw' || !def.band(action.result)) return state
       return { ...state, phase: 'predict', seed: action.seed, result: action.result, startedAt: action.at }
     case 'commit': {
-      if (state.phase !== 'predict' || state.result === undefined || !def.points.includes(action.prediction)) return state
+      if (state.phase !== 'predict' || state.result === undefined || !accepts(def, action.prediction)) return state
       return {
         ...state,
         phase: 'explain',
@@ -256,10 +258,14 @@ export function reduceRound(def: FleetExerciseDef, state: Round, action: RoundAc
   }
 }
 
-/** A typed prediction as one of the exercise's points, or null (the panel then says which values are allowed). */
-export function parsePrediction(def: Pick<FleetExerciseDef, 'points'>, text: string): number | null {
+/** A prediction the exercise takes: one of its points, or (a `range` exercise) a number in the range. */
+export const accepts = (def: Pick<FleetExerciseDef, 'points' | 'range'>, n: number): boolean =>
+  def.range === undefined ? def.points.includes(n) : Number.isFinite(n) && n >= def.range.min && n <= def.range.max
+
+/** A typed prediction as one the exercise takes, or null (the panel then says which values are allowed). */
+export function parsePrediction(def: Pick<FleetExerciseDef, 'points' | 'range'>, text: string): number | null {
   const n = parseNumeric(text)
-  return n !== null && def.points.includes(n) ? n : null
+  return n !== null && accepts(def, n) ? n : null
 }
 
 /* ------------------------------ drawing a fair seed ------------------------------ */
@@ -394,6 +400,22 @@ export interface ExerciseCopy {
   explainPrompt: string
   model: string
   ideas: readonly [string, string, string]
+  /**
+   * An exercise whose answer is not "the point where goodput peaks" (the stretch ones, §16.3) says its own chart,
+   * verdict, table, earlier rounds and entry rule. Absent: the goodput chart of the knee and the P:D split.
+   */
+  view?: ExerciseView
+}
+
+export interface ExerciseView {
+  /** The chart's y axis: its name in the chart's description, its short axis title, the answer's mark and the value plotted. `null`: no chart, the table alone. */
+  plot: { label: string; axis: string; mark: string; of: (p: SweepPoint) => number } | null
+  verdict: (prediction: number, result: SweepResult) => { ok: boolean; headline: string; detail: string }
+  table: (result: SweepResult, prediction?: number) => MirrorTable
+  /** An earlier round: "you said …, the answer was …". */
+  played: (value: number, truth: number) => string
+  /** What the prediction field says it takes, and says when it refuses a value (a `range` exercise; absent: "one of" the points). */
+  entry?: { hint: string; error: string }
 }
 
 const seconds = (ticks: number): string => formatNumber(ticks * SIM_TICK_SECONDS)
@@ -448,11 +470,143 @@ function pdSplitCopy(): ExerciseCopy {
   }
 }
 
-const COPIES: Readonly<Record<string, () => ExerciseCopy>> = { knee: kneeCopy, 'pd-split': pdSplitCopy }
+const msText = (n: number): string => `${formatNumber(n)} ms`
+
+function brokenBenchCopy(): ExerciseCopy {
+  const slots = BB_ENGINE.maxRunning
+  const chunk = BB_ENGINE.prefillChunk
+  const view: ExerciseView = {
+    plot: null,
+    entry: {
+      hint: 'a number of milliseconds',
+      error: 'Enter the p95 time to first token as a number of milliseconds, such as 1250.',
+    },
+    verdict: (prediction, result) => {
+      const truth = bbTruth(result)
+      const reported = bbReported(result)
+      if (bbPass(prediction, result)) {
+        return { ok: true, headline: 'Your prediction held.', detail: `The corrected run's p95 TTFT is ${msText(truth)} on this seed. The benchmark reported ${msText(reported)}.` }
+      }
+      return {
+        ok: false,
+        headline: 'Your prediction was off.',
+        detail:
+          `You said ${msText(prediction)}. The corrected run's p95 TTFT is ${msText(truth)} (within ${Math.round(BB_TOLERANCE * 100)}% is right: ` +
+          `${formatNumber(truth * (1 - BB_TOLERANCE))} to ${formatNumber(truth * (1 + BB_TOLERANCE))} ms). The benchmark reported ${msText(reported)}.`,
+      }
+    },
+    table: (result) => ({
+      caption: 'The broken benchmark: p95 TTFT as run and corrected',
+      columns: ['Run', 'p95 TTFT (ms)', 'Goodput (req/s)', 'SLO met'],
+      rows: result.points.map((p) => [
+        p.x === BB_AS_RUN ? 'The benchmark as run' : 'The corrected run (the answer)',
+        formatNumber(p.ttftP95 * MS_PER_TICK),
+        formatNumber(p.goodputRps),
+        p.metrics?.sloMet === undefined || p.metrics.requests === undefined ? '' : `${p.metrics.sloMet} of ${p.metrics.requests}`,
+      ]),
+    }),
+    played: (value, truth) => `you said ${msText(value)}, the corrected p95 was ${msText(truth)}`,
+  }
+  return {
+    setup:
+      `One engine serves production's traffic: ${slots} sequences at once, first come, first served. A flat-tick model (version 1): one tick of ${MS_PER_TICK} ms advances every running sequence by one prefill chunk of ${chunk} tokens or one decode token, ` +
+      `so a request holds a slot ⌈prompt ÷ ${chunk}⌉ ticks for its prefill and then about one tick per output token. Production's requests arrive at random times over a window of ${seconds(Math.min(...BB_WINDOWS))} to ${seconds(Math.max(...BB_WINDOWS))} s that the scene gives, ` +
+      `with prompt and output lengths spread evenly over the ranges the scene gives. A benchmark replayed this traffic and reported a p95 time to first token (TTFT), but it had one flaw, listed in the scene as what it did differently: ` +
+      `closed-loop clients, replies cut short, a cached prompt prefix, or the engine's cold start counted (modelled as one tick in ${BB_COLD_EVERY} running until it warms). ` +
+      `The corrected run is production's traffic as it is: open-loop arrivals, replies at their own length, new prompts, an engine already warm. Predict its p95 TTFT. ` +
+      `With ${slots} slots each held H ticks the engine finishes at most ${slots} ÷ (H × ${formatNumber(SIM_TICK_SECONDS)} s) requests a second (Little's law), and a request that waits for no one has a TTFT of ⌈prompt ÷ ${chunk}⌉ − 1 ticks.`,
+    xLabel: 'Run',
+    pointLabel: (x) => (x === BB_AS_RUN ? 'the benchmark as run' : 'the corrected run'),
+    tickLabel: (x) => (x === BB_AS_RUN ? 'as run' : 'corrected'),
+    explainPrompt: "In a sentence or two, say why the benchmark's number was wrong, and whether it was too low or too high.",
+    model:
+      "A benchmark's number is true of the traffic and the engine state it ran, and of nothing else. Closed-loop clients send only after the last reply, so they slow down when the server does and no queue forms, while production's arrivals keep coming whatever the server does. " +
+      "A reply cut short frees its slot early, so the same arrivals never queue, while real replies hold slots for their whole length. A cached prefix skips most of the prefill that production's new prompts must do. " +
+      'Each of these hides work and reports a TTFT that is too low. Counting the cold start does the opposite: the slow first minutes happen once, and a steady-state number leaves them out. ' +
+      "Little's law (slots ÷ the time a request holds one) says whether production's load queues. Under capacity almost nothing waits, and the p95 is the prefill of a 95th-percentile prompt. " +
+      'Over it the queue grows for the whole window, and the p95 request waits about (load − 1) × 95% of the window, so a p95 past capacity depends on how long the run lasted.',
+    ideas: [
+      "A benchmark's number holds only for the traffic and engine state it ran, and the flaw changed one of them.",
+      "Little's law (slots ÷ the time a request holds one) says whether production's load queues: under capacity the p95 is prefill alone, over it the queue grows all window.",
+      'Closed loops, short replies and a warm cache hide work and report a TTFT that is too low; counting the cold start reports one that is too high.',
+    ],
+    view,
+  }
+}
+
+function pushLuckCopy(): ExerciseCopy {
+  const first = PL_POINTS[0]
+  const last = PL_POINTS[PL_POINTS.length - 1]
+  const speedupOf = (r: SweepResult, x: number): number | undefined => r.points.find((p) => p.x === x)?.metrics?.speedup
+  const view: ExerciseView = {
+    plot: { label: 'Speedup over plain decoding', axis: 'speedup (×)', mark: 'best', of: (p) => p.metrics?.speedup ?? 0 },
+    verdict: (prediction, result) => {
+      const truth = plTruth(result)
+      const best = speedupOf(result, truth)
+      const pick = speedupOf(result, prediction)
+      const bestText = best === undefined ? '' : `${formatNumber(best)}×`
+      if (plPass(prediction, result)) return { ok: true, headline: 'Your prediction held.', detail: `The speedup peaks at γ = ${truth} on this seed: ${bestText}.` }
+      const below = pick === undefined || best === undefined || !(best > 0) ? '' : `, ${formatNumber(Math.round((1 - pick / best) * 1000) / 10)}% below the best`
+      return {
+        ok: false,
+        headline: 'Your prediction was off.',
+        detail: `You said γ = ${prediction}${pick === undefined ? '' : `, where the speedup is ${formatNumber(pick)}×${below}`}. It peaks at γ = ${truth}: ${bestText}.`,
+      }
+    },
+    table: (result, prediction) => {
+      const truth = plTruth(result)
+      return {
+        caption: 'Push your luck: speedup by draft length',
+        columns: ['Draft length γ', 'Tokens per round', 'Round cost (target steps)', 'Speedup'],
+        rows: result.points.map((p) => {
+          const marks = [p.x === truth ? 'best' : '', p.x === prediction ? 'your pick' : ''].filter(Boolean)
+          return [
+            `γ = ${p.x}${marks.length > 0 ? ` (${marks.join(', ')})` : ''}`,
+            formatNumber(p.metrics?.tokensPerRound ?? NaN),
+            formatNumber(p.metrics?.roundCost ?? NaN),
+            formatNumber(p.metrics?.speedup ?? NaN),
+          ]
+        }),
+      }
+    },
+    played: (value, truth) => `you said γ = ${value}, the best was γ = ${truth}`,
+  }
+  return {
+    setup:
+      `A hypothetical drafter proposes γ tokens a round (the lesson's k) and the target verifies them in one pass. The target accepts each drafted token with probability α, independently, until the first rejection, and then adds one token of its own: ` +
+      `the bonus token after a clean sweep, or the correction at the first rejection. A round emits (1 − α^(γ+1)) ÷ (1 − α) tokens on average, and costs one target step plus γ draft steps of c of a target step each, so γc + 1 target steps. ` +
+      `Plain decoding emits one token per target step, and the speedup is a round's tokens divided by its cost: (1 − α^(γ+1)) ÷ ((1 − α)(γc + 1)). ` +
+      `This is a model (version 1), not a Fleet run: the Fleet engine has no speculation, so the sweep computes that formula at γ = ${first} … ${last} for the seed's α and c, with powers as repeated products. ` +
+      `The best γ beats the runner-up by at least 0.5%, so work to four significant digits.`,
+    xLabel: 'Draft length γ',
+    pointLabel: (x) => `γ = ${x}`,
+    tickLabel: (x) => `${x}`,
+    explainPrompt: 'In a sentence or two, say why the speedup falls again once the draft is long enough, instead of rising for ever.',
+    model:
+      'A drafted token counts only if every token before it was accepted, so each extra token adds a smaller α^(γ+1) of expected gain to the round, while it adds c to the cost of every round, accepted or not. ' +
+      'The gain shrinks geometrically and the cost grows in a straight line, so the speedup rises while one more token raises the tokens per round by a larger share than it raises the cost, and falls once it does not. ' +
+      'Past that draft length you are pushing your luck. Without a draft cost the expected tokens only rise with γ, which is why the question needs c.',
+    ideas: [
+      'A drafted token counts only if every earlier one was accepted, so each extra token adds a smaller expected gain, α^(γ+1).',
+      'Each extra draft step adds c to the cost of every round, accepted or not, so the cost grows in a straight line.',
+      'The speedup peaks where one more token stops raising the tokens per round by a larger share than the cost; past it a longer draft is slower.',
+    ],
+    view,
+  }
+}
+
+const COPIES: Readonly<Record<string, () => ExerciseCopy>> = { knee: kneeCopy, 'pd-split': pdSplitCopy, 'broken-bench': brokenBenchCopy, 'push-luck': pushLuckCopy }
 
 /** The panel's copy for an exercise id. A later exercise (§16.3) adds a line here; a test fails until every listed exercise has one. */
 export function copyFor(id: string): ExerciseCopy | null {
   return Object.hasOwn(COPIES, id) ? COPIES[id]() : null
+}
+
+/** What the prediction field says it takes and says when it refuses a value: the exercise's own words, or "one of" its points. */
+export function entryText(def: Pick<FleetExerciseDef, 'points'>, copy: Pick<ExerciseCopy, 'view'>): { hint: string; error: string } {
+  if (copy.view?.entry !== undefined) return copy.view.entry
+  const allowed = def.points.map((p) => formatNumber(p)).join(', ')
+  return { hint: `one of ${allowed}`, error: `Enter one of the points the sweep runs: ${allowed}.` }
 }
 
 /** A scene fact as the panel lists it: "Prompts: 1,792–2,815 tokens". */
@@ -467,6 +621,7 @@ const ms = (ticks: number): string => formatNumber(ticks * MS_PER_TICK)
 
 /** The verdict in words: right or off, with the goodput at the learner's pick against the peak. */
 export function verdictText(def: FleetExerciseDef, copy: ExerciseCopy, prediction: number, result: SweepResult): { ok: boolean; headline: string; detail: string } {
+  if (copy.view !== undefined) return copy.view.verdict(prediction, result)
   const truth = def.truth(result)
   const peak = pointAt(result, truth)
   const pick = pointAt(result, prediction)
@@ -484,6 +639,7 @@ export function verdictText(def: FleetExerciseDef, copy: ExerciseCopy, predictio
 
 /** The sweep as the DOM table that mirrors the chart. The learner's pick and the peak are named in the first cell. */
 export function sweepTable(def: FleetExerciseDef, copy: ExerciseCopy, result: SweepResult, prediction?: number): MirrorTable {
+  if (copy.view !== undefined) return copy.view.table(result, prediction)
   const truth = def.truth(result)
   const hasTpot = result.points.some((p) => p.tpotP95 !== undefined)
   const columns = [copy.xLabel, 'Goodput (req/s)', 'TTFT p95 (ms)', ...(hasTpot ? ['TPOT p95 (ms)'] : []), 'SLO met']

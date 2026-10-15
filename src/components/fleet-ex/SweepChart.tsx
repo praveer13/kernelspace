@@ -9,7 +9,7 @@ import { useId } from 'react'
 import SimMirror, { MirrorTableView } from '@/components/sims/SimMirror'
 import { formatNumber } from '@/lib/sims/host'
 import type { MirrorTable } from '@/lib/sims/types'
-import type { SweepResult } from '@/lib/world/fleet-ex'
+import type { SweepPoint, SweepResult } from '@/lib/world/fleet-ex'
 
 const W = 320
 const H = 200
@@ -27,26 +27,40 @@ export interface SweepChartProps {
   table: MirrorTable
   /** Phone mode shows the table open beside the chart. */
   tableOpen?: boolean
+  /** What the y axis plots (the stretch exercises, §16.3); absent: goodput. `null`: no chart, the table alone, open. */
+  y?: { label: string; axis: string; mark: string; of: (p: SweepPoint) => number } | null
 }
 
-export default function SweepChart({ result, xLabel, tickLabel, answer, pick, table, tableOpen = false }: SweepChartProps) {
+const GOODPUT = { label: 'Goodput in requests per second', axis: 'goodput (req/s)', mark: 'peak', of: (p: SweepPoint) => p.goodputRps }
+
+export default function SweepChart({ result, xLabel, tickLabel, answer, pick, table, tableOpen = false, y: yIn }: SweepChartProps) {
   const uid = useId()
   const mirrorId = `${uid}-mirror`
   const pts = result.points
   if (pts.length === 0) return null
-  const ys = pts.map((p) => p.goodputRps)
+  if (yIn === null) {
+    return (
+      <div data-sweep-chart>
+        <div id={mirrorId} tabIndex={0} role="region" aria-label={table.caption} className="rounded-sm border border-line bg-surface-1 p-2">
+          <MirrorTableView table={table} />
+        </div>
+      </div>
+    )
+  }
+  const y = yIn ?? GOODPUT
+  const ys = pts.map((p) => y.of(p))
   const yMax = Math.max(...ys) * 1.12 || 1
   const iw = W - PAD.l - PAD.r
   const ih = H - PAD.t - PAD.b
   const px = (i: number) => PAD.l + ((i + 0.5) / pts.length) * iw
-  const py = (y: number) => PAD.t + ih - (y / yMax) * ih
+  const py = (v: number) => PAD.t + ih - (v / yMax) * ih
   const answerAt = pts.findIndex((p) => p.x === answer)
   const pickAt = pick === undefined ? -1 : pts.findIndex((p) => p.x === pick)
   const yTicks = [0, yMax / 1.12 / 2, yMax / 1.12]
   const best = answerAt >= 0 ? pts[answerAt] : undefined
   const label =
-    `Goodput in requests per second at each ${xLabel.toLowerCase()} point` +
-    (best === undefined ? '.' : `. It peaks at ${tickLabel(best.x)} with ${formatNumber(best.goodputRps)}.`) +
+    `${y.label} at each ${xLabel.toLowerCase()} point` +
+    (best === undefined ? '.' : `. It peaks at ${tickLabel(best.x)} with ${formatNumber(y.of(best))}.`) +
     (pickAt >= 0 ? ` Your pick was ${tickLabel(pts[pickAt].x)}.` : '')
 
   return (
@@ -58,29 +72,29 @@ export default function SweepChart({ result, xLabel, tickLabel, answer, pick, ta
           <g key={i}>
             <line x1={PAD.l - 3} y1={py(t)} x2={PAD.l} y2={py(t)} className="stroke-line" />
             <text x={PAD.l - 6} y={py(t) + 3} textAnchor="end" className="fill-current font-mono" fontSize="9">
-              {formatNumber(t)}
+              {formatNumber(yIn === undefined ? t : Number(t.toPrecision(3)))}
             </text>
           </g>
         ))}
-        <polyline fill="none" strokeWidth="1.5" className="stroke-text-3" points={pts.map((p, i) => `${px(i).toFixed(1)},${py(p.goodputRps).toFixed(1)}`).join(' ')} />
+        <polyline fill="none" strokeWidth="1.5" className="stroke-text-3" points={pts.map((p, i) => `${px(i).toFixed(1)},${py(y.of(p)).toFixed(1)}`).join(' ')} />
         {pts.map((p, i) => (
           <g key={p.x}>
-            <circle cx={px(i)} cy={py(p.goodputRps)} r={i === answerAt ? 5 : 2.5} className={i === answerAt ? 'fill-accent' : 'fill-text-3'} />
+            <circle cx={px(i)} cy={py(y.of(p))} r={i === answerAt ? 5 : 2.5} className={i === answerAt ? 'fill-accent' : 'fill-text-3'} />
             <text x={px(i)} y={H - PAD.b + 13} textAnchor="middle" className="fill-current font-mono" fontSize="9">
               {tickLabel(p.x)}
             </text>
           </g>
         ))}
         {pickAt >= 0 && (
-          <circle cx={px(pickAt)} cy={py(pts[pickAt].goodputRps)} r={9} fill="none" strokeWidth="1.5" strokeDasharray="3 2" className="stroke-text-1" />
+          <circle cx={px(pickAt)} cy={py(y.of(pts[pickAt]))} r={9} fill="none" strokeWidth="1.5" strokeDasharray="3 2" className="stroke-text-1" />
         )}
         {answerAt >= 0 && (
-          <text x={px(answerAt)} y={py(pts[answerAt].goodputRps) - 11} textAnchor="middle" className="fill-accent font-mono" fontSize="9">
-            peak
+          <text x={px(answerAt)} y={py(y.of(pts[answerAt])) - 11} textAnchor="middle" className="fill-accent font-mono" fontSize="9">
+            {y.mark}
           </text>
         )}
         {pickAt >= 0 && pickAt !== answerAt && (
-          <text x={px(pickAt)} y={py(pts[pickAt].goodputRps) - 13} textAnchor="middle" className="fill-current font-mono text-text-1" fontSize="9">
+          <text x={px(pickAt)} y={py(y.of(pts[pickAt])) - 13} textAnchor="middle" className="fill-current font-mono text-text-1" fontSize="9">
             you
           </text>
         )}
@@ -88,7 +102,7 @@ export default function SweepChart({ result, xLabel, tickLabel, answer, pick, ta
           {xLabel}
         </text>
         <text x={10} y={PAD.t + ih / 2} textAnchor="middle" transform={`rotate(-90 10 ${PAD.t + ih / 2})`} className="fill-current font-mono" fontSize="9">
-          goodput (req/s)
+          {y.axis}
         </text>
       </svg>
       {tableOpen ? (
