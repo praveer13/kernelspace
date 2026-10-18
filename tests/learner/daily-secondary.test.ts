@@ -326,7 +326,7 @@ describe('the report prints every line', () => {
   })
 
   test('nothing while the file is unsigned; the block reproduces byte for byte, and a donation prints the same block', () => {
-    expect(report(crew, false)).not.toContain('secondary outputs')
+    expect(report(crew, false)).not.toContain('fleet-daily.md §3 and §5')
     expect(report(powered)).toBe(report(powered))
     for (const ledgers of [crew, powered]) expect(block(report(ledgers.map((l) => donated(l.events))))).toEqual(block(report(ledgers)))
   })
