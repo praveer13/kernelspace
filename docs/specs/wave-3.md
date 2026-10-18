@@ -93,6 +93,19 @@ Section numbers below are cited by the task DAG (§19) and by `wave3-dag.json`.
 | D64 | **F4: the watcher is dropped and the manual release-note scan stays.** The owner signed `docs/prereg/watcher.md` (2026-10-14). Ten blind raters labelled the snapshot's 9,960 distinct lines, and `score.ts` scored the matcher: precision 6.3 % (39 of 617; bar 25 %), recall 88.6 % (39 of 44), 70.8 flags a week. A second rater on a seeded 10 % sample gave kappa 0.57 (`docs/backtest/agreement.json`). The verdict does not rest on the rating's misses: even if all 110 flagged lines of the batch that rated none true were true, precision would be 24.1 %. `ratings.json` is not a gold set. 3c-04 builds no digest. | §14, §18.2 F4, 3c-04 |
 | D65 | **The 3c reviews' carry-overs.** The signed pre-registrations promise secondary outputs the report does not print yet (`hint-ladders.md` §3 and §5: the intention-to-treat population, packet use per arm, a lab-by-arm table, attempts and minutes to green, rungs reached, bottom-outs; `fleet-daily.md` §3 and §5: the per-fault-KC table and the learners with a check in only one group); they are added before the Wave 3 exit readings. Each file's standard deviation (20 and 25 points) is replaced by the observed value in a dated amendment, the owner's, before the first report that could reach 126 or 197 learners. Budgets left for 3s: the entry chunk about 0.25 KB of §17.1's 2 KB, /daily 14.3 KB (D32 planned 15.7). | §15, §17.1, §19 |
 
+**Decisions from the 3s reviews and the owner's answers** (the final review of 3s, rounds 1 and 2, and the owner's answers of 2026-10-15):
+
+| # | Decision | Where |
+|---|---|---|
+| D66 | **The 3D cube is a plain opt-in on every level, with no study** (the owner, 2026-10-15). Every level offers "Show it in 3D" after the 2D faces and their table. `CUBE_VIEW_STUDY` (`src/lib/learner/cube-views.ts`) stays false while `docs/prereg/tiling-cube-3d.md` is unsigned, and `tests/plays/cube-eval.test.ts` fails if it is true while the draft is unsigned; so the cube creates no `exp:seed`, records no `PlayLevel.view` and offers no spatial puzzle. 3s-02's split, `SpatialProxy` and `selectCubeByView` stay built and dormant, and a signature turns them on in that one line. Learners who play before a switch-on have seen 3D on every level, so the draft must exclude or stratify them before it is signed (its status note says so). Replaces Q7's default, §16.1's "learners see it only through 3s-02's counterbalanced arms" and 3s-02's "merges only after the owner signs"; amends D9: the view ships without its evaluation, and no view data exists. | §16.1, Q7, D9 |
+| D67 | **`docs/prereg/protege.md` stays an unsigned draft** (the owner, 2026-10-15). No reading arm, assignment or recording is built, every protégé block shows the protégé arm to everyone, and the Wave 3 + 60 d decision takes PLAN §9's default: one block per track. | §16.9 |
+| D68 | **Season 0 runs Monday 2026-11-02 to Sunday 2026-11-08**, Dailies #21 to #27 (the owner, 2026-10-15; `SEASON0_START`). The /me card shows until the season ends and is gone from 2026-11-09 (`season0Over`). Replaces §16.7's "the Monday after 3s-09 merges"; PR 3s merges before 2026-11-02. | §16.7 |
+| D69 | **The timing oracle asks one number per seed**, drawn from a stream of its own, each on about half the seeds: the probe's TTFT gap with the shared key, P ÷ 128 ticks of 50 ms, right within 50 ms or 5 %; or the hit rate the tenant key loses, K(T − 1) ÷ n, right within 0.25 point or 5 %. The prompt says which. Three fresh seeds in a row ask for both numbers 3 times in 4. Replaces reading §16.3's row as two predictions per round. | §16.3, 3s-05 |
+| D70 | **The broken benchmark draws its answer first**, by D39's rule: over capacity the p95 request's wait, uniform in log over 100 to 2,503 ticks; under capacity the p95 prompt's prefill, 5 to 150 ticks weighted 1 ÷ ticks. On 480 seeds the scene's reading passes 99.0 %; the best scene-blind constant finishes within 10 rounds 2.8 % of the time, and the flaw-label constants 9.4 % (30.6 % within 30), inside D39's 14 % and 40 %. | §16.3, 3s-04, D39 |
+| D71 | **F1 leaves the team grammar's practice incidents out of Daily minutes**: `inc:team/shift-<k>/<date>` (the On-Call pilot), `inc:team/interview/<date>` (Interview mode), and a donation's `inc:team/-/d<k>`, since a donation drops every team code and the only team incidents so far are those two. `PRACTICE_TEAM_CODE` reserves the codes; a team Daily must keep its code through a donation (or take a grammar of its own) before the re-cut can count it. Refines §15.1 F1's "team incidents". | §15.1 F1, 3s-06, 3s-08 |
+| D72 | **Wave 3's closing budgets.** The entry is 115,701 B gzip: +2,028 B over wave-3a's 113,673 B base (4b32c09), 2.0 KB at the gate's 0.1 KB precision (D27's rule) and 28 B over a byte-exact 2,000, so the allowance is spent, Wave 4 inherits none, and any entry growth needs bytes back first. The ⌘K index is 19,723 B, 19.3 of 20 KiB, after plan §4.4's cut (`CAN_MAX` 41 to 32); Wave 3 added 1,106 B against its 1.2 KiB line. /daily is 189.6 KB: 3s used 3.9 KB of the 14.3 KB D65 left it. | §17.1, D27, D65 |
+| D73 | **`t6.attention-ffn-split` cites no claims**: its three benchmark claims are lazy (§4.4, D19), and `claimsFor` reads only the eager registry. t6.l12's statline cites them, and its H2 packet carries none. **Either sign-off form is a signature**: `isPreregSigned` accepts a `Signed:` line with a name and an ISO date, or the table's Owner and Date signed cells, and both drafts say so. | §4.4, D19, 3s-03, 3s-11 |
+
 ## Owner questions
 
 The owner has asked us to proceed on these defaults and record them; nothing waits for an answer.
@@ -105,7 +118,7 @@ The owner has asked us to proceed on these defaults and record them; nothing wai
 | Q4 | W5's two families are `prefill` and `rollout`, and no exit gate depends on the Fleet exercises (D6, D7)? | Yes. |
 | Q5 | Does the EPLB play use synthetic seeded loads on a 16-expert toy layer, scored by max/mean imbalance, with no step-time physics (D8)? | Yes. |
 | Q6 | Do W7's level-4 figures become 130.0 vs 734.6 FLOP/B, one tile shape with raster order alone, instead of the plan's ≈127 vs ≈950 (D10)? | Yes. |
-| Q7 | Build the 3D cube (stretch) on the three and R3F already in `package.json` (D9)? | Yes, after the 2D cube ships. 3s-01 builds the scene dark; learners see it only through 3s-02's counterbalanced arms, and 3s-02 merges only after the owner signs the 3D pre-registration. The two are cut or kept together. |
+| Q7 | Build the 3D cube (stretch) on the three and R3F already in `package.json` (D9)? | Yes, after the 2D cube ships. 3s-01 builds the scene dark; learners see it only through 3s-02's counterbalanced arms, and 3s-02 merges only after the owner signs the 3D pre-registration. The two are cut or kept together. **Superseded by D66** (the owner, 2026-10-15): a plain opt-in on every level, with the evaluation built and dormant. |
 | Q8 | /me replaces /progress (a redirect) and is gated at 200 KB once rebuilt (D20)? | Yes. |
 | Q9 | K5 forms: opt-in; A before a track's first lesson, B after its spiral, C at least 30 days after B; measurement only (no card is rescheduled); only tracks with 12 generated items over at least 3 KCs (§12.6)? | Yes. |
 | Q10 | Receipts verify by equality at the cited precision with a re-run; the rubric is self-review only; the screenshot goes (D14)? | Yes. |
@@ -1174,6 +1187,8 @@ Stretch tasks start in the plan's order, while the review queue is under 10 h (P
 
 ### 16.1 The 3D cube and its evaluation (3s-01, 3s-02; 8 h)
 
+**D66 (the owner, 2026-10-15):** the view ships as a plain opt-in on every level, with no study. The evaluation below is built and stays dormant behind `CUBE_VIEW_STUDY` until `docs/prereg/tiling-cube-3d.md` is signed.
+
 - **The view (3s-01) ships dark.**
   - `View3D` renders only for ids in `GATE_3D` (verify-plays already checks the ids, `verify-plays.ts:106–121`), and only when its `available` prop is true. Nothing sets it until 3s-02 wires the counterbalanced arm, so no learner sees "Show it in 3D" before the evaluation exists (D9, Q7); a test proves the entry is absent by default.
   - Once available, it shows the 2D view first and opens the scene on request ("Show it in 3D").
@@ -1229,7 +1244,7 @@ All four are numeric, banded and deterministic, and register in `FLEET_EXERCISES
 
 ### 16.7 Season 0 (3s-09; 4 h)
 
-- **Seven dated Daily seeds:** the Dailies of seven consecutive dates, starting the Monday after 3s-09 merges.
+- **Seven dated Daily seeds:** the Dailies of seven consecutive dates, starting the Monday after 3s-09 merges. **D68:** Monday 2026-11-02 to Sunday 2026-11-08, Dailies #21 to #27.
 - **What shows.** The Daily's header says "Season 0 · day k of 7", and a card on /me lists your own results and share strings from the ledger.
 - **Nothing to moderate:** no board, no fetch. Seasons stay gated (PLAN §10).
 
@@ -1244,7 +1259,7 @@ At `/capstone/service`, on the device:
 
 - **The block.** A `protege` block, the plan's fourth new block type (PLAN §7.2), shows 4–6 sentences with one false. Finding, tagging and fixing it are choice items with whys in a new `protege` pool. Once found, the false line is shown struck through (the plan's risk mitigation).
 - **The content.** One block per track, nine in all, on misconceptions the evidence names (ai-tutoring.md:294). A sim preset or a family item proves each fix.
-- **The decision.** `docs/prereg/protege.md` fixes the within-learner comparison. The keep-or-kill is due at Wave 3 + 60 days (PLAN §9), so it lands after this wave.
+- **The decision.** `docs/prereg/protege.md` fixes the within-learner comparison. The keep-or-kill is due at Wave 3 + 60 days (PLAN §9), so it lands after this wave. **D67:** the draft stays unsigned, so no arm is built and the default holds: one block per track.
 
 ### 16.10 The T0/T4 measured-versus-predicted real-engine run (3s-13; 4 h)
 

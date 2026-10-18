@@ -727,7 +727,7 @@ describe('docs/prereg/protege.md', () => {
   })
 
   test('fixes the within-learner comparison: protégé against reading the same correction, per block, randomized, 30-day cold check', () => {
-    for (const part of ['Within-learner, per block, randomized', 'Protégé arm', 'Reading arm', 'armFor(', 'cold check', '25 to 45 days', 'intention to treat', 'one-sided 97.5 %', 'Wave 3 + 60 days', 'stay at one per track']) expect(text).toContain(part)
+    for (const part of ['Within-learner, per block, randomized', 'Protégé arm', 'Reading arm', "armOf('protege', '<lessonId>.protege.<n>', expSeed, 2)", 'cold check', '25 to 45 days', 'intention to treat', 'one-sided 97.5 %', 'Wave 3 + 60 days', 'stay at one per track']) expect(text).toContain(part)
   })
 
   test('its sign-off, like the 3D draft\'s, says what isPreregSigned accepts: either form alone, and nothing less', () => {
