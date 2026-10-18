@@ -639,6 +639,23 @@ describe('docs/prereg/protege.md', () => {
     for (const part of ['Within-learner, per block, randomized', 'Protégé arm', 'Reading arm', 'armFor(', 'cold check', '25 to 45 days', 'intention to treat', 'one-sided 97.5 %', 'Wave 3 + 60 days', 'stay at one per track']) expect(text).toContain(part)
   })
 
+  test('its sign-off, like the 3D draft\'s, says what isPreregSigned accepts: either form alone, and nothing less', () => {
+    for (const file of ['protege.md', 'tiling-cube-3d.md']) {
+      const draft = readFileSync(new URL(`../../docs/prereg/${file}`, import.meta.url), 'utf8')
+      expect(draft, file).toContain('The owner signs in either of two ways, and either one alone is a signature')
+      expect(draft, file).not.toContain('until both are in')
+      expect(isPreregSigned(draft), file).toBe(false)
+      // the two forms the text names, each alone, read as signed
+      expect(isPreregSigned(draft.replace('Signed: (pending owner)', 'Signed: Someone 2026-11-02')), file).toBe(true)
+      expect(isPreregSigned(draft.replace('| Owner | |', '| Owner | Someone |').replace('| Date signed | |', '| Date signed | 2026-11-02 |')), file).toBe(true)
+      // and the half-forms it names do not
+      expect(isPreregSigned(draft.replace('Signed: (pending owner)', 'Signed: Someone')), file).toBe(false)
+      expect(isPreregSigned(draft.replace('Signed: (pending owner)', 'Signed: 2026-11-02')), file).toBe(false)
+      expect(isPreregSigned(draft.replace('| Owner | |', '| Owner | Someone |')), file).toBe(false)
+      expect(isPreregSigned(draft.replace('| Date signed | |', '| Date signed | 2026-11-02 |')), file).toBe(false)
+    }
+  })
+
   test('the required n follows the recipe of its siblings: ((1.960 + 0.842) x sd / effect)^2, rounded up', () => {
     expect(Math.ceil((((1.96 + 0.842) * 30) / 5) ** 2)).toBe(283)
     expect(text).toContain('so **283**')
