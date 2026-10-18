@@ -40,7 +40,23 @@ import { KNEE_POINTS, KNEE_WINDOW_TICKS } from '@/lib/world/fleet-ex/knee'
 import { PD_ENGINE, PD_LOAD, PD_TRANSFER_RATE, PD_WINDOW_TICKS, PD_WORKERS } from '@/lib/world/fleet-ex/pd-split'
 import { PL_POINTS, plPass, plTruth } from '@/lib/world/fleet-ex/push-luck'
 import { STR_GROUP, STR_POINTS, STR_TOLERANCE, strPass, strTruth } from '@/lib/world/fleet-ex/straggler'
-import { TO_ENGINE, TO_PROBE_PAIRS, TO_SHARED, TO_SUFFIX, TO_TENANT, TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE, toGap, toPass, toTruth } from '@/lib/world/fleet-ex/timing-oracle'
+import {
+  TO_ENGINE,
+  TO_PROBE_PAIRS,
+  TO_SHARED,
+  TO_SUFFIX,
+  TO_TENANT,
+  TO_TOLERANCE_GAP_MS,
+  TO_TOLERANCE_POINTS,
+  TO_TOLERANCE_SHARE,
+  toAskOf,
+  toAskOfTruth,
+  toGap,
+  toLost,
+  toPass,
+  toTolerance,
+  toTruth,
+} from '@/lib/world/fleet-ex/timing-oracle'
 
 export { MAX_EXPLAIN_CHARS, MIN_EXPLAIN_WORDS, explainReady, wordCount }
 
@@ -66,6 +82,9 @@ export const exerciseRef = (id: string): `item:${string}` => `item:fleet.${id}`
 
 /** `data.grp` of every event of one block, as the item block keys its own (`blockGrp`, item-block.ts; a test holds them equal). */
 export const exerciseGrp = (lessonId: string, index: number): string => `${lessonId}#${index}`
+
+/** What a round on `seed` asks the learner to predict: the exercise's `ask` for that seed, or its one `unit`. */
+export const askFor = (def: Pick<FleetExerciseDef, 'unit' | 'ask'>, seed?: number): string => (seed !== undefined && def.ask !== undefined ? def.ask(seed) : def.unit)
 
 /** The fingerprint the events are graded against: what a learner is asked and the points they may answer. */
 export const exerciseRev = (def: Pick<FleetExerciseDef, 'id' | 'unit' | 'points'>): string => rev32({ id: def.id, unit: def.unit, points: [...def.points] })
@@ -658,27 +677,34 @@ function stragglerCopy(): ExerciseCopy {
 
 function timingOracleCopy(): ExerciseCopy {
   const metricOf = (r: SweepResult, x: number, name: string): number => r.points.find((p) => p.x === x)?.metrics?.[name] ?? NaN
+  const valueText = (gap: boolean, n: number): string => (gap ? msText(n) : pointsText(n))
   const view: ExerciseView = {
     plot: null,
     entry: {
-      hint: 'a number of percentage points',
-      error: 'Enter the hit rate lost as a number of percentage points, such as 7.5.',
+      hint: 'milliseconds or percentage points, as asked',
+      error: 'Enter the number asked for: the probe’s gap in milliseconds, such as 800, or the hit rate lost in percentage points, such as 7.5.',
     },
     verdict: (prediction, result) => {
+      const gapAsked = toAskOf(result) === 'gap'
       const truth = toTruth(result)
+      const lost = toLost(result)
       const shared = metricOf(result, TO_SHARED, 'hitRate')
       const tenant = metricOf(result, TO_TENANT, 'hitRate')
       const gap = `The probe sees a gap of ${msText(toGap(result, TO_SHARED))} with the shared cache and ${msText(toGap(result, TO_TENANT))} with the tenant in the key.`
+      const price = `The tenant key loses ${pointsText(lost)} of hit rate on this seed (${formatNumber(shared)}% down to ${formatNumber(tenant)}%).`
       if (toPass(prediction, result)) {
-        return { ok: true, headline: 'Your prediction held.', detail: `The tenant key loses ${pointsText(truth)} of hit rate on this seed (${formatNumber(shared)}% down to ${formatNumber(tenant)}%). ${gap}` }
+        return { ok: true, headline: 'Your prediction held.', detail: gapAsked ? `${gap} ${price}` : `${price} ${gap}` }
       }
-      const tol = Math.max(TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE * truth)
+      const tol = toTolerance(result)
+      const window = gapAsked
+        ? `(within ${msText(tol)} is right: ${formatNumber(truth - tol)} to ${msText(truth + tol)})`
+        : `(within ${formatNumber(Math.round(tol * 100) / 100)} is right: ${formatNumber(truth - tol)} to ${formatNumber(truth + tol)})`
       return {
         ok: false,
         headline: 'Your prediction was off.',
-        detail:
-          `You said ${pointsText(prediction)}. The shared cache hit ${formatNumber(shared)}% of requests and the tenant-keyed one ${formatNumber(tenant)}%: ${pointsText(truth)} lost ` +
-          `(within ${formatNumber(Math.round(tol * 100) / 100)} is right: ${formatNumber(truth - tol)} to ${formatNumber(truth + tol)}). ${gap}`,
+        detail: gapAsked
+          ? `You said ${msText(prediction)}. With the shared cache the probe's gap is ${msText(truth)} ${window}, and ${msText(toGap(result, TO_TENANT))} with the tenant in the key. ${price}`
+          : `You said ${pointsText(prediction)}. The shared cache hit ${formatNumber(shared)}% of requests and the tenant-keyed one ${formatNumber(tenant)}%: ${pointsText(truth)} lost ${window}. ${gap}`,
       }
     },
     table: (result) => ({
@@ -693,7 +719,10 @@ function timingOracleCopy(): ExerciseCopy {
         formatNumber(p.metrics?.ttftP95Ms ?? NaN),
       ]),
     }),
-    played: (value, truth) => `you said ${pointsText(value)}, the tenant key lost ${pointsText(truth)}`,
+    played: (value, truth) => {
+      const gap = toAskOfTruth(truth) === 'gap'
+      return `you said ${valueText(gap, value)}, ${gap ? 'the probe’s gap was' : 'the tenant key lost'} ${valueText(gap, truth)}`
+    },
   }
   return {
     setup:
@@ -702,7 +731,9 @@ function timingOracleCopy(): ExerciseCopy {
       `The sweep runs the same traffic twice. With the shared key a request hits if any tenant has sent its prefix before. With the tenant in the key it hits only if its own tenant has. ` +
       `The hit rate is the share of requests that hit. Each tenant sends each prefix at least once. After the traffic, a prober, a tenant outside the others, times ${TO_PROBE_PAIRS} pairs of guesses on an idle engine: one at a prefix the others used, one at a prefix nobody used. Their difference is the probe's gap. ` +
       `This is partly a model: the Fleet engine serves a hit (it skips the cached prefill) but has no cache to decide which requests hit, so the sweep decides in arrival order with an unbounded cache that holds a prefix from its first request. ` +
-      `A real cache is bounded and fills when a prefill finishes, so a real tenant key loses at least this much. Predict the hit rate the tenant key loses, in percentage points, to within ${formatNumber(TO_TOLERANCE_POINTS)} point or ${Math.round(TO_TOLERANCE_SHARE * 100)}%, whichever is larger.`,
+      `A real cache is bounded and fills when a prefill finishes, so a real tenant key loses at least this much. Each seed asks for one of two numbers and says which: ` +
+      `the probe's gap with the shared key, in milliseconds, to within ${msText(TO_TOLERANCE_GAP_MS)} or ${Math.round(TO_TOLERANCE_SHARE * 100)}%, whichever is larger, ` +
+      `or the hit rate the tenant key loses, in percentage points, to within ${formatNumber(TO_TOLERANCE_POINTS)} point or ${Math.round(TO_TOLERANCE_SHARE * 100)}%, whichever is larger.`,
     xLabel: 'Cache key',
     pointLabel: (x) => (x === TO_SHARED ? 'the shared cache' : 'the tenant in the key'),
     tickLabel: (x) => (x === TO_SHARED ? 'shared' : 'tenant'),

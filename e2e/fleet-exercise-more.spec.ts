@@ -6,7 +6,7 @@ import { FLEET_EXERCISES } from '../src/lib/world/fleet-ex'
 // The stretch Fleet exercises of docs/specs/wave-3.md §16.3 (3s-04, 3s-05) in a real browser, against the real fleet worker:
 // /lesson/t7.l2's broken benchmark (a free number of milliseconds, a table and no chart) and /lesson/t6.l6's push your
 // luck (a draft length, a speedup chart), then /lesson/t6.l7's rollout straggler (an idle share in percent) and
-// /lesson/t6.l10's prefix-cache timing oracle (percentage points of hit rate), both a table and no chart. At 360 px the panel is in phone mode (the canonical seed, which earns
+// /lesson/t6.l10's prefix-cache timing oracle (the probe's gap in ms or the hit rate lost in points, as the seed asks), both a table and no chart. At 360 px the panel is in phone mode (the canonical seed, which earns
 // nothing); "Run it on a fresh seed here instead" draws a fresh one, the learner predicts, reads the verdict, explains,
 // ticks the three ideas and saves. Each walk ends with axe on the block and a check that nothing scrolls sideways.
 // The right answer is the exercise's own `truth` on the seed the page shows, so a rewording of the scene cannot break it.
@@ -44,9 +44,9 @@ async function axeOn(page: Page, block: Locator) {
 const CASES = [
   { lesson: 't7.l2', id: 'broken-bench', chart: false, rows: 2, header: 'p95 TTFT (ms)', invalid: 'Enter the p95 time to first token as a number of milliseconds', bad: '0', wrong: (t: number) => Math.round(t * 3) },
   { lesson: 't6.l6', id: 'push-luck', chart: true, rows: 8, header: 'Speedup', invalid: 'Enter one of the points the sweep runs: 1, 2, 3, 4, 5, 6, 7, 8.', bad: '99', wrong: (t: number) => (t === 1 ? 2 : 1) },
-  // 3s-05: the model-only straggler (a percentage, a table and no chart) and the timing oracle (percentage points, a table and no chart)
+  // 3s-05: the model-only straggler (a percentage, a table and no chart) and the timing oracle (ms or points as asked, a table and no chart)
   { lesson: 't6.l7', id: 'straggler', chart: false, rows: 7, header: 'Idle share (%)', invalid: 'Enter the idle share as a percentage from 0 to 100', bad: '-1', wrong: (t: number) => (t > 50 ? t - 30 : t + 30) },
-  { lesson: 't6.l10', id: 'timing-oracle', chart: false, rows: 2, header: 'Probe gap (ms)', invalid: 'Enter the hit rate lost as a number of percentage points', bad: '-1', wrong: (t: number) => t + 20 },
+  { lesson: 't6.l10', id: 'timing-oracle', chart: false, rows: 2, header: 'Probe gap (ms)', invalid: 'Enter the number asked for: the probe’s gap in milliseconds', bad: '-1', wrong: (t: number) => 2 * t + 20 },
 ] as const
 
 for (const c of CASES) {
