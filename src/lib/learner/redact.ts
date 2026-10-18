@@ -14,6 +14,11 @@
  * other misconception id still goes); and the `value` and `truth` of numeric items, numbers only and never on an event
  * of provenance `field`, so a learner's own GPU or device measurements stay on the device.
  *
+ * A `field` event (a field lab's reading, the real-engine run's `predict` and `item`) keeps one bit and nothing else
+ * (`fieldOnly`): its `kind`, `ref`, `dayOffset`, `provenance`, `ok` and `data.src`. Its `score` goes too, because a field
+ * item's score is 1 − |log10(value ÷ prediction)| and the prediction is public, so a kept score gave the measurement back
+ * up to the sign of the ratio; and so does every other field, so no number a later writer adds can carry the reading out.
+ *
  * What goes: free text (explanations, constructed responses, `boot:value`, `fw:doc`, pasted configs), seeds,
  * wasm and component hashes, device ids, event ids, calendar dates and times of day, components, capstone
  * drafts, `profile:background`, `fw:runs`. Refs that name a date (`inc:daily/<date>`, `inc:team/<code>/<date>`) are
@@ -46,6 +51,11 @@ export const DONATION_VERSION = 1
 
 /** The event fields a donation keeps, besides `data`. */
 export const EVENT_KEYS = ['kind', 'ref', 'score', 'ok', 'conf', 'provenance', 'ms', 'dayOffset'] as const
+
+/** All a donation keeps of an event of provenance `field`: `ok` is the one bit of how the reading compared with its prediction. */
+export const FIELD_EVENT_KEYS = ['kind', 'ref', 'ok', 'provenance', 'dayOffset'] as const
+/** All it keeps of that event's `data`: `src` (`practice`), which keeps the reading out of the surface table's lessons row (outcomes.ts `surfaceOf`). */
+export const FIELD_DATA_KEYS = ['src'] as const
 
 /**
  * The Wave 3 fields (§15.2). Each has its own shape check (`redactStructure`), because a value of the wrong shape under a
@@ -199,6 +209,21 @@ function redactStructure(d: Rec, provenance: unknown): Partial<Record<DonationDa
   return out
 }
 
+/**
+ * A `field` event as a donation keeps it: the ref and the day, and `ok`, the one bit of how the reading compared with its
+ * prediction. No `score` (with the public prediction it gives the reading back up to the sign of the ratio), no `ms` or
+ * `conf`, and of `data` only `src`. No selector reads a field event's score (outcomes.ts reads no event's), and
+ * `creditOf('field')` is 0, so nothing the report prints changes.
+ */
+function fieldOnly(e: { kind: string; ref: string; dayOffset: number; ok?: unknown; data?: unknown }): DonatedEvent {
+  const kept: DonatedEvent = { kind: e.kind, ref: e.ref, dayOffset: e.dayOffset }
+  if (typeof e.ok === 'boolean') kept.ok = e.ok
+  kept.provenance = 'field'
+  const src = safeToken(asRec(e.data).src)
+  if (src !== null) kept.data = { src }
+  return kept
+}
+
 /** One `data` object through the whitelist. `grpId` numbers attempt groups across the whole donation. */
 function redactData(raw: unknown, provenance: unknown, grpId: (grp: string) => number): DonatedEvent['data'] | undefined {
   const d = asRec(raw)
@@ -263,6 +288,7 @@ export function redactForPartner(input: Pick<ExportV3, 'events' | 'working'>): D
     const r = e as unknown as Rec
     const base = first as LocalDay
     const kept: DonatedEvent = { kind: e.kind, ref: scrubRef(e.ref, base), dayOffset: daysBetween(base, e.day) }
+    if (r.provenance === 'field') return fieldOnly({ ...kept, ok: r.ok, data: r.data })
     if (finite(r.score)) kept.score = r.score
     if (typeof r.ok === 'boolean') kept.ok = r.ok
     const conf = safeToken(r.conf)
@@ -334,6 +360,11 @@ export function parseDonation(text: string): ParsedDonation {
     const e = asRec(item)
     if (typeof e.kind !== 'string' || typeof e.ref !== 'string' || !finite(e.dayOffset) || !Number.isInteger(e.dayOffset)) {
       return { ok: false, error: 'this donation is damaged: an event is missing its kind, ref or dayOffset' }
+    }
+    // a hand-edited file cannot put a number back on a field event either
+    if (e.provenance === 'field') {
+      events.push(fieldOnly({ kind: e.kind, ref: e.ref, dayOffset: e.dayOffset, ok: e.ok, data: e.data }))
+      continue
     }
     const kept: DonatedEvent = { kind: e.kind, ref: e.ref, dayOffset: e.dayOffset }
     if (finite(e.score)) kept.score = e.score

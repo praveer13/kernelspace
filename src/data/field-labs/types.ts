@@ -5,8 +5,9 @@
  * A field lab is optional work on a GPU the learner owns or rents. It shows pinned commands (claims), a prediction
  * worked from the claims Boot already uses, and what the run should cost at the dated H100 rental price. A reading the
  * learner types in is written as `item:field.<lab>.<metric>` with src `practice` and provenance `field`: weight 0 in
- * every selector (provenance.ts), and a donation drops its `value` and `truth` (redact.ts), so the number stays on the
- * device. Nothing here fetches, posts or beacons.
+ * every selector (provenance.ts), and a donation keeps only its `ok` (redact.ts `fieldOnly`), so the number stays on the
+ * device. Its `score` goes too: the score is 1 − |log10(value ÷ prediction)| and the prediction is the page's, public, so
+ * a donated score would give the reading back up to the sign of the ratio. Nothing here fetches, posts or beacons.
  */
 
 import { claimNumber, getClaim } from '@/data/claims'
@@ -226,7 +227,8 @@ export function fieldRev(lab: FieldLab, metric: FieldMetric): string {
 
 /**
  * The ledger event for one reading (spec §16.5, §3.2): an `item` on `item:field.<lab>.<metric>`, src `practice`,
- * provenance `field`, the recorded value and the prediction it was judged against. No KCs, so no KC is credited, and
+ * provenance `field`, the recorded value and the prediction it was judged against. A donation keeps its ref, its day, `ok`
+ * and `src`, and nothing else (redact.ts `fieldOnly`). No KCs, so no KC is credited, and
  * `nsec` 0, because the minutes on a rented GPU are not minutes of study. `typed` is the number as the tool printed it
  * and `unit` the recorded value's unit.
  */
