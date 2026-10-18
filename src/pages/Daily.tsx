@@ -142,13 +142,19 @@ function DailyPage({ shifting }: { shifting: boolean }) {
     let live = true
     import('@/pages/daily/shift-kit').then(
       (k) => live && setKit(k),
-      (e) => live && fail(e),
+      (e) => {
+        if (!live) return
+        // the page's own code, not the incident: after a deploy the old chunk is gone, and only a reload fetches the new one
+        const why = e instanceof Error ? e.message : String(e)
+        setFailure({ title: 'The shift did not load', detail: `Its code could not be fetched (${why}). Try again; if the site was updated since this page opened, reload the page.` })
+        setPhase('failed')
+      },
     )
     return () => {
       live = false
     }
     // `attempt` is "Try again" after the chunk failed to load
-  }, [shifting, kit, attempt, fail])
+  }, [shifting, kit, attempt])
 
   useEffect(() => {
     if (!ready || waiting) return
