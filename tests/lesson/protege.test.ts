@@ -2,7 +2,8 @@
  * The protégé block (docs/specs/wave-3.md §16.9; task 3s-11): the type's authoring rules, the question each step asks, the
  * `protege` item pool a fixture lesson passes, the markdown export that withholds the keys, and the block mounted in a
  * small DOM (tests/dom/mini-dom.ts): find, tag and fix unlock in order, the false line is struck through once found and stays
- * so, and every attempt is a ledger event. A real browser (focus ring, reflow at 360 px) is the a11y harness.
+ * so, and every attempt is a ledger event; a reload reads the block back from the ledger, so the false line is struck again and
+ * nothing answered right is asked twice. A real browser (focus ring, reflow at 360 px) is the a11y harness.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -15,7 +16,7 @@ import { poolCueFailures } from '../../scripts/item-cues'
 import ProtegeBlockView from '../../src/components/blocks/ProtegeBlock'
 import { ALL_LESSONS, TRACK_IDS } from '../../src/data/lessons'
 import type { Lesson, ProtegeBlock } from '../../src/data/lessons/types'
-import { gradeItem, playView, resultFor } from '../../src/lib/items/play'
+import { gradeItem, playView, resultFor, revFor } from '../../src/lib/items/play'
 import {
   correction,
   findQuestion,
@@ -30,7 +31,7 @@ import {
 } from '../../src/lib/learner/protege'
 import { validateEvent } from '../../src/lib/ledger/codec'
 import { isPreregSigned } from '../../src/lib/learner/outcomes'
-import type { ItemResponse } from '../../src/lib/ledger/types'
+import type { ItemResponse, LedgerEvent } from '../../src/lib/ledger/types'
 import { useProgress } from '../../src/lib/progress'
 import { RenderBlock } from '../../src/pages/lesson/blocks'
 import { installDom, type DomKit, type MiniElement } from '../dom/mini-dom'
@@ -459,6 +460,11 @@ describe('the markdown export withholds the keys', () => {
     // no why, no miss id, no marker of which sentence is false
     for (const leak of [...SAM.find.why, ...SAM.tag.why!, ...SAM.fix.why!, 'confuse.heap-compaction', 'falseAt', '~~']) expect(md).not.toContain(leak)
     expect(md.match(/\(o\d\)/g)).toHaveLength(12)
+    // the authored fix stem names sentence 4, the find's answer, so the export asks a fixed stem instead
+    expect(SAM.fix.q).toContain('sentence 4')
+    expect(md).toContain('**Fix. Which sentence should replace the false one?**')
+    expect(md).not.toContain(SAM.fix.q)
+    expect(md.match(/Sentence 4/gi)).toHaveLength(1)
   })
 
   test('option order is a fixed permutation of its own, so it is stable and not the authored order', () => {
@@ -490,12 +496,24 @@ beforeAll(async () => {
 afterAll(() => dom.uninstall())
 
 let events: ItemResponse[]
-const saved = useProgress.getState().recordItems
+/** What the ledger engine holds when the block reads it back; empty unless a test says otherwise. */
+let ledger: ItemResponse[]
+let ledgerFails = false
+const saved = { recordItems: useProgress.getState().recordItems, engine: useProgress.controls.engine }
 beforeEach(() => {
   events = []
+  ledger = []
+  ledgerFails = false
   useProgress.setState({ recordItems: (items: ItemResponse[]) => void events.push(...items) })
+  ;(useProgress.controls as { engine: unknown }).engine = async () => {
+    if (ledgerFails) throw new Error('the ledger engine could not load')
+    return { events: async (f?: { refPrefix?: string }) => ledger.filter((e) => e.ref.startsWith(f?.refPrefix ?? '')) as unknown as LedgerEvent[] }
+  }
 })
-afterEach(() => useProgress.setState({ recordItems: saved }))
+afterEach(() => {
+  useProgress.setState({ recordItems: saved.recordItems })
+  ;(useProgress.controls as { engine: unknown }).engine = saved.engine
+})
 
 const lesson = lessonOf([prose, SAM])
 const buttonNamed = (root: MiniElement, text: string) => root.querySelectorAll('button').find((b) => b.textContent.trim().startsWith(text))
@@ -612,6 +630,84 @@ describe('the block', () => {
     await m.unmount()
   })
 
+  test('a reload after the whole walk reads the block back: struck, tagged, repaired, and nothing asked again', async () => {
+    const m = await mountBlock()
+    await submit(m.container, 'Sentence 4', 1)
+    await dom.until(() => m.container.textContent.includes(SAM.tag.q))
+    await submit(m.container, 'Treating the KV pool like a heap', 2)
+    await dom.until(() => m.container.textContent.includes(SAM.fix.q))
+    await submit(m.container, 'Free blocks can stay scattered', 3)
+    await m.unmount()
+
+    // the reload: the ledger holds what the visit wrote, and the page state is gone
+    ledger = [...events]
+    events = []
+    const r = await mountBlock()
+    await dom.until(() => r.container.querySelector('[data-protege-loading]') === null)
+    const struck = sentenceItems(r.container)[SAM.falseAt]
+    expect(struck.getAttribute('data-false')).toBe('true')
+    expect(struck.querySelector('del')!.textContent).toContain(SAM.sentences[SAM.falseAt])
+    expect(struck.querySelector('[data-correction]')!.textContent).toContain(correction(SAM))
+    expect(sentenceItems(r.container).filter((li) => li.querySelector('del'))).toHaveLength(1)
+    expect(r.container.querySelector('[data-protege-note]')).not.toBeNull()
+    expect(r.container.querySelector('[data-protege-done]')).not.toBeNull()
+    expect(r.container.querySelectorAll('[data-protege-earlier]').map((p) => p.getAttribute('data-protege-earlier'))).toEqual(['find', 'tag', 'fix'])
+    expect(r.container.textContent).toContain('Found earlier: Sentence 4 is the false line.')
+    expect(r.container.textContent).toContain('Tagged earlier: Treating the KV pool like a heap whose free space must be contiguous.')
+    // no question is asked again, and the reload writes nothing
+    expect(options(r.container)).toHaveLength(0)
+    expect(events).toEqual([])
+    await r.unmount()
+  })
+
+  test('a reload after the find alone strikes the line and opens the tag step, without moving focus', async () => {
+    const m = await mountBlock()
+    await submit(m.container, 'Sentence 2', 1)
+    await dom.press(buttonNamed(m.container, 'Try again')!)
+    await submit(m.container, 'Sentence 4', 2)
+    await m.unmount()
+
+    ledger = [...events]
+    events = []
+    const r = await mountBlock()
+    await dom.until(() => options(r.container).length > 0)
+    expect(sentenceItems(r.container)[SAM.falseAt].querySelector('del')).not.toBeNull()
+    expect(r.container.querySelector('[data-protege-earlier="find"]')).not.toBeNull()
+    expect(r.container.textContent).toContain('2 · Tag the mistaken idea')
+    expect(r.container.textContent).not.toContain('3 · Repair it')
+    expect(r.container.querySelector('[data-correction]')).toBeNull()
+    // the open question is the tag; the restored step did not take focus from the reader
+    expect(options(r.container).some((o) => o.textContent.includes('Treating the KV pool'))).toBe(true)
+    expect(options(r.container).some((o) => /Sentence \d/.test(o.textContent))).toBe(false)
+    const tagHead = r.container.querySelectorAll('h4').find((h) => h.textContent.includes('Tag the mistaken idea'))
+    expect(tagHead).toBeDefined()
+    expect(dom.document.activeElement === tagHead).toBe(false)
+    await r.unmount()
+  })
+
+  test('only a right answer to this block\'s current question counts: a miss, a reworded question, a later step alone or another block restores nothing', async () => {
+    const at = (step: 'find' | 'tag' | 'fix', ok: boolean, block = SAM): ItemResponse =>
+      ({ kind: 'item', ref: stepRef('t9.l1', 1, step), rev: revFor(stepItem('t9.l1', 1, block, step)), ok, score: ok ? 1 : 0, seed: 1, ms: 1, data: {} }) as unknown as ItemResponse
+    const reworded: ProtegeBlock = { ...SAM, find: { ...SAM.find, offer: [3, 0, 1, 2] } }
+    for (const held of [[at('find', false)], [at('find', true, reworded)], [at('tag', true), at('fix', true)], [{ ...at('find', true), ref: stepRef('t9.l1', 2, 'find') }]]) {
+      ledger = held
+      const r = await mountBlock()
+      await dom.until(() => options(r.container).length > 0)
+      expect(r.container.querySelector('del')).toBeNull()
+      expect(r.container.querySelector('[data-protege-earlier]')).toBeNull()
+      expect(r.container.textContent).not.toContain('2 · Tag the mistaken idea')
+      await r.unmount()
+    }
+  })
+
+  test('a ledger that cannot be read leaves the block fresh and playable', async () => {
+    ledgerFails = true
+    const m = await mountBlock()
+    await submit(m.container, 'Sentence 4', 1)
+    expect(sentenceItems(m.container)[SAM.falseAt].querySelector('del')).not.toBeNull()
+    await m.unmount()
+  })
+
   test('the lesson dispatcher renders the block, and a block outside its lesson still mounts', async () => {
     const m = await dom.mount(createElement(RenderBlock, { block: SAM, lesson, trackColor: '#22D3EE', h2Start: 0 }))
     await dom.until(() => m.container.querySelector('[data-block="protege"]') !== null)
@@ -632,6 +728,23 @@ describe('docs/prereg/protege.md', () => {
 
   test('fixes the within-learner comparison: protégé against reading the same correction, per block, randomized, 30-day cold check', () => {
     for (const part of ['Within-learner, per block, randomized', 'Protégé arm', 'Reading arm', 'armFor(', 'cold check', '25 to 45 days', 'intention to treat', 'one-sided 97.5 %', 'Wave 3 + 60 days', 'stay at one per track']) expect(text).toContain(part)
+  })
+
+  test('its sign-off, like the 3D draft\'s, says what isPreregSigned accepts: either form alone, and nothing less', () => {
+    for (const file of ['protege.md', 'tiling-cube-3d.md']) {
+      const draft = readFileSync(new URL(`../../docs/prereg/${file}`, import.meta.url), 'utf8')
+      expect(draft, file).toContain('The owner signs in either of two ways, and either one alone is a signature')
+      expect(draft, file).not.toContain('until both are in')
+      expect(isPreregSigned(draft), file).toBe(false)
+      // the two forms the text names, each alone, read as signed
+      expect(isPreregSigned(draft.replace('Signed: (pending owner)', 'Signed: Someone 2026-11-02')), file).toBe(true)
+      expect(isPreregSigned(draft.replace('| Owner | |', '| Owner | Someone |').replace('| Date signed | |', '| Date signed | 2026-11-02 |')), file).toBe(true)
+      // and the half-forms it names do not
+      expect(isPreregSigned(draft.replace('Signed: (pending owner)', 'Signed: Someone')), file).toBe(false)
+      expect(isPreregSigned(draft.replace('Signed: (pending owner)', 'Signed: 2026-11-02')), file).toBe(false)
+      expect(isPreregSigned(draft.replace('| Owner | |', '| Owner | Someone |')), file).toBe(false)
+      expect(isPreregSigned(draft.replace('| Date signed | |', '| Date signed | 2026-11-02 |')), file).toBe(false)
+    }
   })
 
   test('the required n follows the recipe of its siblings: ((1.960 + 0.842) x sd / effect)^2, rounded up', () => {

@@ -17,6 +17,12 @@ import { TRACKS } from '../src/lib/tracks'
 
 const SITE = 'https://kernelspace.naigap.com'
 
+/** The exported stems of the protégé tag and fix steps: they never name the false sentence, which is the find's answer. */
+export const PROTEGE_EXPORT_STEM = {
+  tag: 'Which mistaken idea sits behind the false sentence?',
+  fix: 'Which sentence should replace the false one?',
+} as const
+
 export function blockToMd(
   b: ContentBlock,
   lessonId: string,
@@ -82,13 +88,15 @@ export function blockToMd(
     case 'protege': {
       // P4 (wave-3.md §16.9): the passage numbered as the learner sees it, with nothing marking the false line, then the
       // three questions without their keys. Each step's options use a salt of their own, so they never shift the quiz permutations.
+      // On the page the tag and fix steps open only after the find, so their authored stems may name the false sentence
+      // ("Which sentence should replace sentence 4?"); here all three are read at once, so tag and fix ask a fixed stem.
       const lines = b.sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')
       const steps = PROTEGE_STEPS.map((step, k) => {
         const q = stepQuestion(b, step)
         const opts = exportOrder(`${lessonId}#protege`, firstProtege * PROTEGE_STEPS.length + k, q.options.length)
           .map((authored, j) => `- (o${j + 1}) ${q.options[authored]}`)
           .join('\n')
-        return `**${step === 'find' ? 'Find' : step === 'tag' ? 'Tag' : 'Fix'}. ${q.q}**\n\n${opts}`
+        return `**${step === 'find' ? 'Find' : step === 'tag' ? 'Tag' : 'Fix'}. ${step === 'find' ? q.q : PROTEGE_EXPORT_STEM[step]}**\n\n${opts}`
       }).join('\n\n')
       return `**${b.title}**${b.setup ? `\n\n${b.setup}` : ''}\n\n${lines}\n\n_One sentence above is false._\n\n${steps}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`
     }

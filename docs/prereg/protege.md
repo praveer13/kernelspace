@@ -76,7 +76,7 @@ Task 3s-11 builds the block, its pool and this file. **It does not build the rea
 
 ## 7. Sign-off
 
-The owner signs by replacing the pending text on the next line with a name and an ISO date, and by filling both cells of the table. Anything that reads this file for its signature (`isPreregSigned` in `src/lib/learner/outcomes.ts`, as for the sibling files) treats it as unsigned until both are in.
+The owner signs in either of two ways, and either one alone is a signature: replace the pending text on the next line with a name and an ISO date (`Signed: <name> YYYY-MM-DD`, as in `fleet-daily.md` and `watcher.md`), or fill the table's Owner cell with a name and its Date signed cell with an ISO date (as in `hint-ladders.md`). Doing both is fine. Anything that reads this file for its signature (`isPreregSigned` in `src/lib/learner/outcomes.ts`, as for the sibling files) treats it as signed as soon as one form is complete, and as unsigned while neither is: a `Signed:` line without a date, an Owner cell without a Date signed, or a date without a name does not count.
 
 Signed: (pending owner)
 

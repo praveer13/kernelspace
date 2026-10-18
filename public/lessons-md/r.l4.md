@@ -212,7 +212,7 @@ _One sentence above is false._
 - (o3) Assuming a borrow lasts to the end of its scope and not to its last use
 - (o4) Thinking a shared borrow takes away the right to read the value
 
-**Fix. Which sentence should replace sentence 4?**
+**Fix. Which sentence should replace the false one?**
 
 - (o1) Some rejected programs are safe, and a clone of the borrowed value proves it by making the program compile.
 - (o2) Some rejected programs are safe to run once unsafe is added, because unsafe turns the borrow checker off for them.
