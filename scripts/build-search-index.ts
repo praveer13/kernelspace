@@ -32,7 +32,7 @@ export const INDEX_PATH = 'src/data/search-index.json'
  * the size in hand (`bun scripts/build-search-index.ts` prints it).
  */
 const HOOK_MAX = 60
-const CAN_MAX = 32
+export const CAN_MAX = 32
 
 /** `text` cut at a word boundary to at most `max` characters, with an ellipsis when something was cut. */
 export function clip(text: string, max: number): string {
