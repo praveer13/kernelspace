@@ -42,10 +42,11 @@ describe('content scope: every lesson is tagged', () => {
     expect(LESSONS_BY_TRACK.t6.map((l) => l.id).slice(-3)).toEqual(['t6.l9', 't6.l12', 't6.l10'])
   })
 
-  test('t6.l12\'s statline shows its KC\'s benchmark claims at their registered values', () => {
+  test('t6.l12\'s statline shows its three lazy benchmark claims at their registered values (the KC cites none, §4.4)', () => {
     const l = ALL_LESSONS.find((x) => x.id === 't6.l12') as Lesson
     const chips = l.blocks.flatMap((b) => (b.type === 'statline' ? b.stats : []))
-    const ids = kcById(KC.attentionFfnSplit)?.claims ?? []
+    const ids = ['bench.step3.afd-decode', 'bench.step3.dsv3-decode', 'bench.megascale-infer.per-gpu']
+    expect(kcById(KC.attentionFfnSplit)?.claims).toBeUndefined()
     expect(chips).toHaveLength(ids.length)
     ids.forEach((id, i) => {
       const claim = CLAIMS.find((c) => c.id === id)

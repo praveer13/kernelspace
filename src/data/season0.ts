@@ -5,17 +5,18 @@
  * seed list here, only the dates. Seasons stay gated (PLAN §10), so there is no board and nothing is fetched: the
  * card reads `incident` events this browser wrote and recomputes each share string with the Daily's own `shareString`.
  *
- * The first date is a constant, as `DAILY_EPOCH` is. The spec starts the season "the Monday after 3s-09 merges", which
- * only the owner knows: `SEASON0_START` is the first Monday after the task was built, and the owner moves it to the
- * Monday after the merge before release (tests/world/season0.test.ts holds that it is a Monday, so a move to any other
- * weekday fails). Every function takes the start as an argument for the test's sake.
+ * The first date is a constant, as `DAILY_EPOCH` is. The owner answered on 2026-10-15 that the season starts on Monday
+ * 2026-11-02, so it runs Monday 2026-11-02 to Sunday 2026-11-08 (tests/world/season0.test.ts holds that the start is a
+ * Monday, so a move to any other weekday fails). The /me card hides itself the day after the last date
+ * (`season0Over`); the Daily's header already shows only on the seven dates. Every function takes the start as an
+ * argument for the test's sake.
  */
 
 import type { IncidentData, LedgerEvent } from '@/lib/ledger/types'
 import { dailyNumber, dailyRef, daysBetween, shareString } from '@/lib/world/daily'
 
 /** Day 1 of Season 0, a Monday (local date). */
-export const SEASON0_START = '2026-10-19'
+export const SEASON0_START = '2026-11-02'
 
 /** Seven consecutive dates. */
 export const SEASON0_DAYS = 7
@@ -32,6 +33,12 @@ export const season0Dates = (start: string = SEASON0_START, days: number = SEASO
 export function season0Day(date: string, start: string = SEASON0_START, days: number = SEASON0_DAYS): number | null {
   const k = daysBetween(start, date)
   return k !== null && k >= 0 && k < days ? k + 1 : null
+}
+
+/** Whether the season is over on `today`: the day after its last date and every day since (false before and during it, and for a malformed date). */
+export function season0Over(today: string, start: string = SEASON0_START, days: number = SEASON0_DAYS): boolean {
+  const k = daysBetween(start, today)
+  return k !== null && k >= days
 }
 
 /** What the Daily's header says on a date of the season. */

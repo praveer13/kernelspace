@@ -27,11 +27,12 @@ export const INDEX_PATH = 'src/data/search-index.json'
  * Hooks and competence statements are crumbs in the palette; the full text is one click away. Cut to keep the chunk
  * under budget: the largest lengths that keep the index at 18 KB gzip, 2 KB under verify:search-index's 20 KB budget
  * (wave-2 D24), so 2b and 2c content has room. They were 32 and 0 under Wave 1's 15 KB; at 0 a concept row's crumb
- * fell back to its lesson title and the competence wording was not searchable. Raise them only with the size in hand
- * (`bun scripts/build-search-index.ts` prints it).
+ * fell back to its lesson title and the competence wording was not searchable. Wave 3 grew the index to 20,317 bytes
+ * gzip (19.8 KB of 20) at CAN_MAX 41; wave-3.md §4.4's cut to 32 brought it to 19,723 (19.3 KB). Raise them only with
+ * the size in hand (`bun scripts/build-search-index.ts` prints it).
  */
 const HOOK_MAX = 60
-const CAN_MAX = 41
+const CAN_MAX = 32
 
 /** `text` cut at a word boundary to at most `max` characters, with an ellipsis when something was cut. */
 export function clip(text: string, max: number): string {

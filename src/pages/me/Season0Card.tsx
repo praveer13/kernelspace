@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { SEASON0_DAYS, SEASON0_START, season0Dates, season0Outcome, season0Rows, season0State, type Season0Row } from '@/data/season0'
+import { SEASON0_DAYS, SEASON0_START, season0Dates, season0Outcome, season0Over, season0Rows, season0State, type Season0Row } from '@/data/season0'
 import { localDateKey } from '@/lib/economy'
 import { useProgress } from '@/lib/progress'
 import type { LedgerEvent } from '@/lib/ledger/types'
@@ -10,7 +10,8 @@ import type { LedgerEvent } from '@/lib/ledger/types'
  * browser's ledger. Nothing is fetched and nothing is ranked: the share strings are the Daily's own, recomputed from the
  * `incident` events (`season0Rows`), listed so you can copy one and send it to a person yourself. The card holds
  * what sits below it back until it has read the ledger (`onSettled`, as the Mirror does), so it grows into empty space.
- * No framer-motion, no lesson content.
+ * The card is gone the day after the season's last date: it renders nothing and reads no ledger, and it settles at
+ * once so the sections below it are not held back. No framer-motion, no lesson content.
  */
 
 type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: Season0Row[] }
@@ -88,6 +89,14 @@ export interface Season0CardProps {
 }
 
 export default function Season0Card({ onSettled, read = readIncidents, today = localDateKey() }: Season0CardProps) {
+  const over = season0Over(today)
+  useEffect(() => {
+    if (over) onSettled?.()
+  }, [over, onSettled])
+  return over ? null : <Season0Open onSettled={onSettled} read={read} today={today} />
+}
+
+function Season0Open({ onSettled, read, today }: Season0CardProps & { read: () => Promise<readonly LedgerEvent[]>; today: string }) {
   const { state, retry } = useRows(read)
   const settled = state.status !== 'loading'
   useEffect(() => {
