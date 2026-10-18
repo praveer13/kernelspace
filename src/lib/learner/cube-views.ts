@@ -13,6 +13,15 @@
 
 import { armOf } from './experiments'
 
+/**
+ * Whether the play runs the evaluation above. It stays false until the owner signs docs/prereg/tiling-cube-3d.md: the
+ * owner's answer of 2026-10-15 makes the 3D view a plain opt-in on every level, with no study, so while it is false the
+ * play creates no `exp:seed` for the cube, assigns and records no view (no `PlayLevel.view`), offers "Show it in 3D" on
+ * all six levels and offers no spatial puzzles. A signature turns the study on here, in this one line;
+ * tests/plays/cube-eval.test.ts fails if it is true while the draft is unsigned.
+ */
+export const CUBE_VIEW_STUDY: boolean = false
+
 /** The experiment name `armOf` hashes with the level and the learner's seed. */
 export const CUBE_VIEW_EXPERIMENT = 'cube-view'
 

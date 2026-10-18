@@ -8,13 +8,15 @@
  * `predict` event (src `play`) before any view opens; the check is an `item` event on the same instance. The play itself
  * is recorded once, when the closing debrief is reached.
  *
- * The 3D box (Cube3D.tsx) is a second picture of the faces, behind View3D, and the evaluation of it lives here
- * (docs/prereg/tiling-cube-3d.md): a learner's six levels split 3 + 3 between "2D only" and "3D available"
- * (`cubeViewsFor`, by the learner's `exp:seed`), the split is fixed when a level's views open, and the closing record carries
- * each level's view. A learner with no seed yet (the ledger still loading, or a read-only tab) is offered no 3D and has no
- * view recorded, so the level is not in the comparison. The scene's chunk, three and R3F, is fetched only when a learner
- * asks for it on a level that offers it. The two optional spatial puzzles (SpatialProxy.tsx) follow the closing debrief for
- * learners who are in the evaluation.
+ * The 3D box (Cube3D.tsx) is a second picture of the faces, behind View3D: every level offers "Show it in 3D" after the 2D
+ * faces and their table, as an opt-in (the owner's answer of 2026-10-15), and nothing about it is randomized or recorded.
+ * The scene's chunk, three and R3F, is fetched only when a learner asks for it.
+ *
+ * The evaluation of the 3D view (docs/prereg/tiling-cube-3d.md) is built but dormant behind `CUBE_VIEW_STUDY`
+ * (cube-views.ts), which stays false until the owner signs that draft. Switched on, a learner's six levels split 3 + 3
+ * between "2D only" and "3D available" (`cubeViewsFor`, by the learner's `exp:seed`, which the play then creates), the split
+ * is fixed when a level's views open, the closing record carries each level's view, and the two optional spatial puzzles
+ * (SpatialProxy.tsx) follow the closing debrief; a learner with no seed yet is offered no 3D and has no view recorded.
  *
  * The first session runs on the practice seed that the cube's band checks; "Play again with new numbers" draws a seed that
  * passes the same band, so a new session is unseen.
@@ -27,7 +29,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import View3D from '@/components/three/View3D'
 import { TILING_CUBE, freshEntropy } from '@/data/plays'
 import { ensureExpSeed, readExpSeed } from '@/lib/learner/experiments'
-import { cubeViewsFor, withViews, type CubeView } from '@/lib/learner/cube-views'
+import { CUBE_VIEW_STUDY, cubeViewsFor, withViews, type CubeView } from '@/lib/learner/cube-views'
 import { useProgress } from '@/lib/progress'
 import { CUBE_PLAY_ID, checkEvent, choose, freshSession, levelOf, nextLevel, nudge, openViews, practiceSession, predictEvent, predictedOf, recordOf, runOf, toCheck, toDebrief, withChecked, withPrediction } from './session'
 import type { ChoiceControl, CubeSession, NumberControl } from './session'
@@ -46,13 +48,13 @@ const loadCard = () => import('./ProductionCard')
 const Mirror = lazy(loadMirror)
 const Debrief = lazy(loadDebrief)
 const ProductionCard = lazy(loadCard)
-// The optional spatial puzzles are offered only at the end, so they load only then.
+// The optional spatial puzzles exist only for the study, and are offered only at its end, so they load only then.
 const SpatialProxy = lazy(() => import('./SpatialProxy'))
 
 /** The scene, three and R3F with it: its chunk is fetched when View3D first renders it, on a learner's request. */
 const Cube3DScene = lazy(() => import('./Cube3D'))
 
-/** The cube in 3D under the 2D faces and their table: nothing renders until `available` is true, which the play sets only on a level the evaluation gives 3D. */
+/** The cube in 3D under the 2D faces and their table: nothing renders until `available` is true, which the play sets on every level, or with the study on only on a level the split gives 3D. */
 export function CubeView3D({ level, explore, mirrorId, available }: { level: CubeLevel; explore: CubeSession['explore']; mirrorId: string; available?: boolean }) {
   return <View3D id="tiling-cube" available={available} Scene={Cube3DScene} sceneProps={{ level, explore, describedBy: mirrorId } satisfies Cube3DProps} />
 }
@@ -110,25 +112,29 @@ export function DebriefFailed() {
 export interface TilingCubePlayProps {
   /** `embed` inside the lesson, `page` on /play/tiling-cube. */
   mode: 'embed' | 'page'
+  /** Whether the 3D evaluation runs; tests set it, and every page takes the default, `CUBE_VIEW_STUDY`. */
+  study?: boolean
 }
 
 const provenanceLine = (s: CubeSession): string => (s.provenance === 'unseen' ? 'new numbers' : 'the shared practice numbers')
 
-export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
+export default function TilingCubePlay({ mode, study = CUBE_VIEW_STUDY }: TilingCubePlayProps) {
   const uid = useId()
   const recordPlay = useProgress((s) => s.recordPlay)
   const recordItems = useProgress((s) => s.recordItems)
   const [session, setSession] = useState<CubeSession>(practiceSession)
   // Set once the learner has acted, so the first paint never takes focus. A ref cannot drive the render, so it is state.
   const [touched, setTouched] = useState(false)
-  // The evaluation (docs/prereg/tiling-cube-3d.md): the view each opened level was given, by level id, fixed when its views open.
+  // The evaluation (docs/prereg/tiling-cube-3d.md), only with the study on: the view each opened level was given, by level
+  // id, fixed when its views open. With it off this stays empty, so nothing is assigned and the record carries no view.
   const [views, setViews] = useState<Readonly<Record<string, CubeView>>>({})
   const ledgerReady = useProgress((s) => s.ledger.ready)
   const expSeed = useProgress((s) => readExpSeed(s.working['exp:seed']))
-  // `exp:seed` is created once, after the ledger has loaded (the ladder experiment does the same; the first one wins).
+  // With the study on, `exp:seed` is created once, after the ledger has loaded (the ladder experiment does the same; the
+  // first one wins). With it off the cube creates none.
   useEffect(() => {
-    if (ledgerReady && expSeed === undefined) ensureExpSeed(useProgress.getState(), Math.random)
-  }, [ledgerReady, expSeed])
+    if (study && ledgerReady && expSeed === undefined) ensureExpSeed(useProgress.getState(), Math.random)
+  }, [study, ledgerReady, expSeed])
   // Wall-clock of the first prediction, for the ledger's `ms`. Set in handlers, so a render stays pure.
   const startedAt = useRef<number | null>(null)
 
@@ -152,10 +158,11 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
     act((s) => withChecked(s, r.ok))
   }
 
-  // The level's views open: the learner's split fixes this level's view, so what is shown and what is recorded cannot differ.
+  // The level's views open: with the study on, the learner's split fixes this level's view, so what is shown and what is
+  // recorded cannot differ.
   const onOpenViews = () => {
     const id = levelOf(session).id
-    if (expSeed !== undefined && views[id] === undefined) {
+    if (study && expSeed !== undefined && views[id] === undefined) {
       const split = cubeViewsFor(CUBE_LEVELS.map((l) => l.id), expSeed)
       setViews({ ...views, [id]: split[CUBE_LEVELS.findIndex((l) => l.id === id)] })
     }
@@ -167,7 +174,7 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
     setTouched(true)
     setSession(next)
     const result = recordOf(next, startedAt.current === null ? undefined : Date.now() - startedAt.current)
-    if (result) recordPlay(result.data ? { ...result, data: { ...result.data, levels: withViews(result.data.levels ?? [], views) } } : result)
+    if (result) recordPlay(study && result.data ? { ...result, data: { ...result.data, levels: withViews(result.data.levels ?? [], views) } } : result)
   }
 
   const onAgain = () => {
@@ -177,7 +184,7 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
   }
 
   const level = levelOf(session)
-  const inEvaluation = Object.keys(views).length > 0
+  const inEvaluation = study && Object.keys(views).length > 0
   const mirrorId = `${uid}-mirror`
   const embedLink =
     mode === 'embed' ? (
@@ -242,10 +249,10 @@ export default function TilingCubePlay({ mode }: TilingCubePlayProps) {
           mirror={
             <>
               <Mirror id={mirrorId} level={level} explore={session.explore} />
-              {views[level.id] === '3d' && (
+              {study && views[level.id] === '3d' && (
                 <p className="font-mono text-[11px] text-text-3">Three of the six levels offer a 3D view, picked at random for you, to find out whether it helps.</p>
               )}
-              <CubeView3D level={level} explore={session.explore} mirrorId={mirrorId} available={views[level.id] === '3d'} />
+              <CubeView3D level={level} explore={session.explore} mirrorId={mirrorId} available={!study || views[level.id] === '3d'} />
             </>
           }
           focus={touched}

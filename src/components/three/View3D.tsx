@@ -1,9 +1,9 @@
 /**
- * The one door to a 3D scene (docs/specs/wave-3.md §16.1, D9, Q7). It ships dark: it renders nothing unless the id is in
- * the 3D gate AND its `available` prop is true, and nothing sets that prop until 3s-02 wires the counterbalanced arm
- * (`armOf('cube-view', …)`), so no learner is offered "Show it in 3D" before the evaluation that decides whether the view
- * helps exists. Once it is available the 2D view the learner already has stays first; this adds one button, and the scene
- * (three and R3F, a lazy chunk of about 240 KB) is fetched only when the button is pressed.
+ * The one door to a 3D scene (docs/specs/wave-3.md §16.1, D9, Q7). It is dark by default: it renders nothing unless the id
+ * is in the 3D gate AND its `available` prop is true. The Tiling Cube sets it on every level, a plain opt-in (the owner's
+ * answer of 2026-10-15; with the dormant study on, only on the levels its split gives 3D, cube-views.ts). Once it is
+ * available the 2D view the learner already has stays first; this adds one button, and the scene (three and R3F, a lazy
+ * chunk of about 240 KB) is fetched only when the button is pressed.
  *
  * This file imports neither three nor R3F: the scene is a `lazy` component the caller made, so a page that mounts a View3D
  * loads them only on the request, and tests/boot/imports.test.ts holds that /today, /boot, /me and /play/tiling-cube reach no three.
@@ -61,7 +61,7 @@ export function SceneUnavailable({ why }: { why: 'webgl2' | 'failed' }) {
 export interface View3DProps<P extends object> {
   /** One of VIEW3D_IDS; write it as a literal, because verify-plays reads this attribute. */
   id: string
-  /** Off until 3s-02 turns it on for a learner's level; the default is the shipped state. */
+  /** Off by default; the caller turns it on where the view is offered. */
   available?: boolean
   /** The scene, made with `lazy(() => import(...))` at module level, so its chunk is fetched when the press first renders it and no earlier. */
   Scene: ComponentType<P>

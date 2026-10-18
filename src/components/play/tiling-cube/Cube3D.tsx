@@ -2,7 +2,7 @@
  * The cube's tile as a box (docs/specs/wave-3.md §16.1, D9): the same three faces as Mirror2D, drawn where they meet.
  * C's tile (Tm × Tn) is the top face, A's slab (Tm × k) one side and B's slab (k × Tn) the other, so the box is Tm × Tn × k
  * and its volume is the tile's FLOPs. It adds no number the 2D view and the DOM table do not already carry; it is a second
- * picture of the same model, opened on request (View3D) and, until 3s-02, for nobody.
+ * picture of the same model, opened on request (View3D) on any level, never by default.
  *
  * Budgets (games-3d.md:250–255): one InstancedMesh holds every cell of the box's shell (at most 1,536 quads, 16 per edge
  * like the 2D gridlines), one line set draws its edges, so a frame is 2 draw calls against a budget of 100; the loop is
@@ -200,9 +200,34 @@ function Rig({ turn }: { turn: number }) {
   return null
 }
 
-/** Writes the renderer's own counts of the last frame onto the wrapper, so the budget is read off the page, not assumed. */
+/** What `frameCounts` needs of R3F's state: the renderer, with its per-frame counts, and what it draws. */
+export interface FrameState {
+  gl: { render(scene: THREE.Scene, camera: THREE.Camera): void; info: { render: { calls: number; triangles: number } } }
+  scene: THREE.Scene
+  camera: THREE.Camera
+}
+
+/**
+ * Draws one frame and returns the renderer's own counts of it, [draw calls, triangles]. three resets `info.render` when a
+ * frame starts (`info.autoReset`), so the counts are read after the draw: read before it, they are the previous frame's,
+ * and the first frame of a `demand` loop would read 0.
+ */
+export function frameCounts({ gl, scene, camera }: FrameState): [number, number] {
+  gl.render(scene, camera)
+  return [gl.info.render.calls, gl.info.render.triangles]
+}
+
+/** Stats' `useFrame` priority: above 0, so it, not R3F, renders the frame, and reads the counts after the draw. */
+export const STATS_PRIORITY = 1
+
+/**
+ * Renders each frame itself and writes that frame's counts onto the wrapper, so the budget is read off the page, not
+ * assumed. R3F renders after every `useFrame` callback has run, so a callback that only reads `gl.info` sees the frame
+ * before; a priority above 0 hands the render to this callback instead (R3F then skips its own), and the counts are read
+ * after the draw they count.
+ */
 function Stats({ report }: { report: (calls: number, triangles: number) => void }) {
-  useFrame(({ gl }) => report(gl.info.render.calls, gl.info.render.triangles))
+  useFrame((state) => report(...frameCounts(state)), STATS_PRIORITY)
   return null
 }
 

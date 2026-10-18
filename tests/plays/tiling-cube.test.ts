@@ -1060,10 +1060,10 @@ describe('verify-plays: the cube’s checks (§6.3)', () => {
     expect(bundle).toMatch(/route: '\/play\/tiling-cube'[^}]*budgetKb: null[^}]*playSrc: 'src\/components\/play\/tiling-cube\/Play\.tsx'/)
   })
 
-  test('the 3D cube is off unless the evaluation turns it on (D9, 3s-01, 3s-02): only Play.tsx mounts a View3D, and it sets `available` from the learner’s split (tests/plays/cube-eval.test.ts)', () => {
+  test('the 3D cube is a plain opt-in on every level while the study is off (the owner’s answer of 2026-10-15; D9, 3s-01, 3s-02): only Play.tsx mounts a View3D, and its `available` follows the split only with the study on (tests/plays/cube-eval.test.ts)', () => {
     for (const f of ['Level.tsx', 'Mirror2D.tsx', 'Mirror.tsx', 'Debrief.tsx', 'session.ts', 'ProductionCard.tsx']) expect(read(f)).not.toContain('<View3D')
-    // never a literal `true` or a bare prop: only the level's view from the split
+    // never a literal `true` or a bare prop: every level with the study off, the level's view from the split with it on
     expect(read('Play.tsx')).not.toMatch(/<CubeView3D[^>]*available(=\{true\}|\s|\/)/)
-    expect(read('Play.tsx')).toContain("available={views[level.id] === '3d'}")
+    expect(read('Play.tsx')).toContain("available={!study || views[level.id] === '3d'}")
   })
 })
