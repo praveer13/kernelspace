@@ -36,25 +36,46 @@ import {
   verdictText,
   type Played,
 } from '../../src/components/fleet-ex/session'
-import { Engine, SIM_TICK_SECONDS, makeRefManager, makeRefScheduler } from '../../src/lib/fleet-model'
+import { Engine, HEADROOM_TOKENS, SIM_TICK_SECONDS, makeRefManager, makeRefScheduler } from '../../src/lib/fleet-model'
+import { FLEET_JOB_BUDGET_MS } from '../../src/workers/fleet-protocol'
 import { splitmix32u } from '../../src/lib/rng'
 import { FLEET_EXERCISES, type FleetExerciseDef, type SceneFact, type SweepResult } from '../../src/lib/world/fleet-ex'
 import {
   BB_CANONICAL_SEED,
+  BB_CAPPED_LOAD,
+  BB_COLD_PER_PREFILL,
   BB_ENGINE,
   BB_FLAWS,
+  BB_LOAD_LIGHT,
+  BB_LOAD_MAX,
+  BB_LOAD_MIN,
+  BB_MIN_QUEUE_TICKS,
+  BB_PREFILL_MAX_TICKS,
+  BB_PREFILL_MIN_TICKS,
+  BB_PROMPT_WIDTH,
+  BB_QUEUE_GRID,
   BB_TOLERANCE,
+  BB_TRIES,
   BB_WINDOWS,
   bbBand,
   bbCapacity,
   bbCase,
+  bbCaseDraws,
+  bbHold,
+  bbKeeps,
+  bbLightest,
+  bbLoadFor,
   bbPass,
   bbPoint,
+  bbPrefillTicks,
+  bbPromptFor,
+  bbQueue,
   bbRead,
   bbReported,
   bbScene,
   bbSweep,
   bbTruth,
+  bbWindowsFor,
 } from '../../src/lib/world/fleet-ex/broken-bench'
 import {
   PL_ALPHA_MAX,
@@ -82,7 +103,8 @@ const pct = (x: number) => `${(100 * x).toFixed(1)} %`
 
 /* ------------------------------ surveys, shared ------------------------------ */
 
-const BB_SEEDS = 240
+// 480, not 240: each flaw's best constant is fit to its own seeds, and on about 60 a flaw that fit overstates its share
+const BB_SEEDS = 480
 const PL_SEEDS = 400
 
 interface BbRow {
@@ -92,21 +114,27 @@ interface BbRow {
   reported: number
   read: number
   banded: boolean
+  /** The seed's sweep, kept so no test sweeps it again. */
+  sweep: SweepResult
 }
 
 let bbRows: BbRow[] | undefined
-/** The broken benchmark's 0 … 239, swept once. */
+/** The slowest of those sweeps, in ms. */
+let bbWorstMs = 0
+/** The broken benchmark's 0 … 479, swept once. */
 function bbSurvey(): BbRow[] {
   if (bbRows) return bbRows
   const rows: BbRow[] = []
   for (let seed = 0; seed < BB_SEEDS; seed++) {
+    const t0 = performance.now()
     const r = bbSweep(seed)
-    rows.push({ seed, flaw: bbCase(seed).flaw, truth: bbTruth(r), reported: bbReported(r), read: bbRead(bbScene(seed)), banded: bbBand(r) })
+    bbWorstMs = Math.max(bbWorstMs, performance.now() - t0)
+    rows.push({ seed, flaw: bbCase(seed).flaw, truth: bbTruth(r), reported: bbReported(r), read: bbRead(bbScene(seed)), banded: bbBand(r), sweep: r })
   }
   return (bbRows = rows)
 }
 const bbBanded = () => bbSurvey().filter((r) => r.banded)
-// swept at collection, so no test carries the five seconds the 240 sweeps take
+// swept at collection, so no test carries the twelve seconds the 480 sweeps take
 bbSurvey()
 
 /** The panel's rule on a list of rounds: P(done within `rounds`) for a player whose guess is `guess(row)`, Monte Carlo over the rows. */
@@ -337,20 +365,122 @@ describe('broken-bench: what the header and copy say about the engine', () => {
 
   test('a closed loop of one client per slot finishes at Little’s-law capacity and never queues', () => {
     const seed = bbSurvey().find((r) => r.flaw === 'closed-loop' && r.banded)!.seed
-    const c = bbCase(seed)
-    const run = bbPoint(seed, 0)
-    const rate = (run.metrics?.['completed'] as number) / c.window
-    console.log(`closed loop (seed ${seed}): ${rate.toFixed(4)} requests a tick against capacity ${bbCapacity(c).toFixed(4)}`)
-    expect(rate / bbCapacity(c)).toBeGreaterThan(0.8)
-    expect(rate / bbCapacity(c)).toBeLessThan(1.1)
-    // no queue: its p95 TTFT is a prefill, at most the longest prompt’s
-    expect(run.ttftP95).toBeLessThanOrEqual(Math.ceil(c.prompt.max / BB_ENGINE.prefillChunk) - 1)
+    expect(bbPoint(seed, 0)).toEqual(bbSurvey()[seed]!.sweep.points[0]!)
+    const ratios: number[] = []
+    for (const r of bbBanded().filter((r) => r.flaw === 'closed-loop')) {
+      const c = bbCase(r.seed)
+      const run = r.sweep.points[0]!
+      // each client's last request is sent inside the window and finishes after it, so the window holds all but 64
+      const rate = ((run.metrics?.['completed'] as number) - BB_ENGINE.maxRunning) / c.window
+      ratios.push(rate / bbCapacity(c))
+      // no queue: its p95 TTFT is a prefill, at most the longest prompt’s
+      expect(run.ttftP95).toBeLessThanOrEqual(Math.ceil(c.prompt.max / BB_ENGINE.prefillChunk) - 1)
+    }
+    // a short window holds only a few holds per client, so the count is coarse there (a client whose second request
+    // ends just past the window has finished one); the median is capacity, and no closed loop ever exceeds it
+    ratios.sort((a, b) => a - b)
+    const median = ratios[Math.floor(ratios.length / 2)] as number
+    console.log(`closed loops: finished within the window at ${pct(ratios[0]!)} … ${pct(ratios[ratios.length - 1]!)} of Little’s-law capacity, median ${pct(median)}, over ${ratios.length} seeds`)
+    expect(median).toBeGreaterThan(0.9)
+    expect(median).toBeLessThan(1.05)
+    for (const x of ratios) expect(x).toBeLessThan(1.1)
   })
 
   test('every flaw is expressed on the Engine: none is left out', () => {
     expect([...BB_FLAWS]).toEqual(['closed-loop', 'capped-output', 'warm-cache', 'warm-up'])
     const seen = new Set(bbSurvey().map((r) => r.flaw))
     expect([...seen].sort()).toEqual([...BB_FLAWS].sort())
+  })
+})
+
+/* ------------------------------ broken-bench: the draw ------------------------------ */
+
+describe('broken-bench: the draw picks the answer, then traffic that gives it', () => {
+  const CASES = 4000
+  const cases = Array.from({ length: CASES }, (_, seed) => ({ seed, c: bbCase(seed) }))
+  const isOver = (f: string) => f === 'closed-loop' || f === 'capped-output'
+  const p95Ticks = (c: { prompt: { min: number; max: number } }) => Math.ceil((c.prompt.min + 0.95 * (c.prompt.max - c.prompt.min)) / BB_ENGINE.prefillChunk) - 1
+
+  test('over capacity: the wait is on a geometric grid from 100 ticks, and the load that gives it is 1.15 … 4', () => {
+    expect(BB_QUEUE_GRID.length).toBe(67)
+    expect(BB_QUEUE_GRID[0]).toBe(BB_MIN_QUEUE_TICKS)
+    for (let i = 1; i < BB_QUEUE_GRID.length; i++) expect(BB_QUEUE_GRID[i]).toBeCloseTo((BB_QUEUE_GRID[i - 1] as number) * 1.05, 9)
+    expect(Math.round(BB_QUEUE_GRID[BB_QUEUE_GRID.length - 1] as number)).toBe(2503)
+    // the comment in bbCase: the shortest wait fits the shortest window and the longest the longest
+    expect(bbLoadFor(BB_MIN_QUEUE_TICKS, 400)).toBe(1.27)
+    expect(bbLoadFor(BB_QUEUE_GRID[BB_QUEUE_GRID.length - 1] as number, 1000)).toBe(3.64)
+    for (const { c } of cases.filter(({ c }) => isOver(c.flaw))) {
+      expect(c.load).toBeGreaterThanOrEqual(BB_LOAD_MIN)
+      expect(c.load).toBeLessThanOrEqual(BB_LOAD_MAX)
+      // rounding the load up keeps the wait at least the grid's, so never under 100 ticks
+      expect(bbQueue(c.load, c.window)).toBeGreaterThanOrEqual(BB_MIN_QUEUE_TICKS)
+      expect(BB_QUEUE_GRID.some((q) => Math.abs(bbLoadFor(q, c.window) - c.load) < 1e-9)).toBe(true)
+    }
+  })
+
+  test('under capacity: the answer is 5 … 150 prefill ticks weighted 1 ÷ ticks, and the prompt range gives exactly it', () => {
+    expect(bbPrefillTicks(0)).toBe(BB_PREFILL_MIN_TICKS)
+    expect(bbPrefillTicks(2 ** 32 - 1)).toBe(BB_PREFILL_MAX_TICKS)
+    for (let t = BB_PREFILL_MIN_TICKS; t <= BB_PREFILL_MAX_TICKS; t++) {
+      for (const w of BB_PROMPT_WIDTH) {
+        const p = bbPromptFor(t, w)
+        expect(p.max).toBe(p.min * w - 1)
+        expect(p.min % 16).toBe(0)
+        expect(p95Ticks({ prompt: p })).toBe(t)
+      }
+    }
+    // weighted 1 ÷ ticks, 5 … 10 and 50 … 100 are about equally likely (each about ln 2 of the weight)
+    const light = cases.filter(({ c }) => !isOver(c.flaw))
+    const ticks = light.map(({ c }) => p95Ticks(c))
+    const low = ticks.filter((t) => t <= 10).length / ticks.length
+    const high = ticks.filter((t) => t >= 50 && t <= 100).length / ticks.length
+    console.log(`broken-bench light-load answers over ${ticks.length} cases: 5 … 10 ticks ${pct(low)}, 50 … 100 ticks ${pct(high)}`)
+    expect(Math.abs(low - high)).toBeLessThan(0.05)
+    for (const { seed, c } of light) {
+      expect(bbRead(bbScene(seed))).toBe(p95Ticks(c) * 50)
+      expect(BB_LOAD_LIGHT as readonly number[]).toContain(c.load)
+    }
+  })
+
+  test('every case keeps its own rules: 120 requests or more, a capped run under 0.8 of its engine, a cold start of 3 × the prefill or more', () => {
+    let most = 0
+    for (const { seed, c } of cases) {
+      most = Math.max(most, bbCaseDraws(seed))
+      expect(bbKeeps(c)).toBe(true)
+      expect(c.load * bbCapacity(c) * c.window).toBeGreaterThanOrEqual(120)
+      if (c.flaw === 'capped-output') expect((c.load * bbHold(c, c.cap)) / bbHold(c)).toBeLessThanOrEqual(BB_CAPPED_LOAD)
+      if (c.flaw === 'warm-up') {
+        expect(c.cold as number).toBeGreaterThanOrEqual(BB_COLD_PER_PREFILL * p95Ticks(c))
+        expect(c.cold as number).toBeGreaterThanOrEqual(100)
+      }
+    }
+    // the traffic is drawn again when it breaks a rule, and never runs out of draws here
+    console.log(`broken-bench draws: the most any of seeds 0 … ${CASES - 1} needs is ${most} of ${BB_TRIES + 1}`)
+    expect(most).toBeLessThanOrEqual(BB_TRIES)
+    // the lightest traffic a seed would fall back on keeps every rule, for every answer the grids can draw
+    for (const q of BB_QUEUE_GRID) {
+      expect(bbWindowsFor(q).length).toBeGreaterThan(0)
+      for (const f of ['closed-loop', 'capped-output'] as const) expect(bbKeeps(bbLightest(f, q))).toBe(true)
+    }
+    for (let t = BB_PREFILL_MIN_TICKS; t <= BB_PREFILL_MAX_TICKS; t++) {
+      for (const w of BB_PROMPT_WIDTH) for (const f of ['warm-cache', 'warm-up'] as const) expect(bbKeeps(bbLightest(f, 0, bbPromptFor(t, w)))).toBe(true)
+    }
+  })
+
+  test('KV never binds: 64 of the longest prompt with the longest reply and the headroom fit the engine', () => {
+    let worst = 0
+    for (const { c } of cases) worst = Math.max(worst, BB_ENGINE.maxRunning * (c.prompt.max + c.output.max + HEADROOM_TOKENS))
+    // the longest prompt any draw can make: 150 ticks on a range three times as wide, or 3,072 three times as wide
+    const longest = Math.max(bbPromptFor(BB_PREFILL_MAX_TICKS, 3).max, 3072 * 3 - 1)
+    const bound = BB_ENGINE.maxRunning * (longest + (128 * 2 - 1) + HEADROOM_TOKENS)
+    console.log(`broken-bench KV: the most any of ${CASES} cases needs is ${worst} tokens, the most any draw can is ${bound}, the engine holds ${BB_ENGINE.numBlocks * BB_ENGINE.blockSize}`)
+    expect(worst).toBeLessThanOrEqual(bound)
+    expect(bound).toBeLessThanOrEqual(BB_ENGINE.numBlocks * BB_ENGINE.blockSize)
+  })
+
+  test('a sweep stays inside its job budget: the slowest of the survey’s takes under a fifth of it', () => {
+    console.log(`broken-bench slowest sweep over seeds 0 … ${BB_SEEDS - 1}: ${bbWorstMs.toFixed(0)} ms (job budget ${FLEET_JOB_BUDGET_MS} ms)`)
+    expect(bbWorstMs).toBeLessThan(FLEET_JOB_BUDGET_MS / 5)
   })
 })
 
@@ -366,7 +496,6 @@ describe('broken-bench: a fair question, deterministic, and the flaw goes the wa
     expect(bb.points).toEqual([0, 1])
     expect(bb.range).toEqual({ min: 1, max: 600000 })
     expect(bbScene(5)).toEqual(bbScene(5))
-    expect(bbScene(5)).toEqual(bbScene(5))
   })
 
   test('the seeds in band: all four flaws appear, 90 % or more of seeds are questions, and every run completes', () => {
@@ -378,7 +507,7 @@ describe('broken-bench: a fair question, deterministic, and the flaw goes the wa
     expect(banded.length / rows.length).toBeGreaterThan(0.9)
     for (const f of BB_FLAWS) expect((byFlaw.get(f) ?? 0) / rows.length).toBeGreaterThan(0.18)
     for (const r of banded) {
-      const sweep = bbSweep(r.seed)
+      const sweep = r.sweep
       for (const p of sweep.points) {
         expect(p.metrics?.['completed']).toBe(p.metrics?.['requests'])
         expect(p.metrics?.['shed']).toBe(0)
@@ -396,7 +525,7 @@ describe('broken-bench: a fair question, deterministic, and the flaw goes the wa
 
   test('the number the benchmark reported never passes, so the flaw has to be corrected', () => {
     for (const r of bbBanded()) {
-      expect(bbPass(r.reported, bbSweep(r.seed))).toBe(false)
+      expect(bbPass(r.reported, r.sweep)).toBe(false)
     }
   })
 
@@ -462,16 +591,33 @@ describe('broken-bench: a strategy that ignores the scene does not finish', () =
     expect(d30).toBeLessThan(0.33)
   })
 
-  test('naming only the flaw’s own constant is a partial reading: said so, measured, and still short of a finish in 10 rounds', () => {
+  test('naming only the flaw’s own constant is a partial reading, and no better than the scene-blind bound D39 sets for the knee', () => {
+    // G1 of the 3s review: on fixed prompt and load grids the flaw label alone passed 35.6 % of rounds and finished
+    // within 10 rounds 23.5 % of the time (60.2 % within 30). The draw now picks each flaw's answer first, uniform in log,
+    // so the label names a spread of answers. D39: the knee's best scene-ignoring guess finishes within 10 rounds 14 %
+    // of the time and within 30 rounds 40 %, its answers none right on more than about 29 % of seeds.
     const rows = bbBanded()
     const by = new Map(BB_FLAWS.map((f) => [f, bestConstant(rows.filter((r) => r.flaw === f))] as const))
-    const share = rows.filter((r) => Math.abs((by.get(r.flaw as (typeof BB_FLAWS)[number])!.value) - r.truth) <= BB_TOLERANCE * r.truth).length / rows.length
     const guess = (r: BbRow) => by.get(r.flaw as (typeof BB_FLAWS)[number])!.value
+    const share = rows.filter((r) => Math.abs(guess(r) - r.truth) <= BB_TOLERANCE * r.truth).length / rows.length
     const d10 = doneWithin(rows, guess, 10)
     const d30 = doneWithin(rows, guess, 30)
-    console.log(`broken-bench flaw-only constants (${[...by].map(([f, b]) => `${f} ${Math.round(b.value)} ms`).join(', ')}): pass on ${pct(share)} of banded seeds; done within 10 rounds ${pct(d10)}, within 30 ${pct(d30)}`)
-    expect(share).toBeLessThan(0.45)
-    expect(d10).toBeLessThan(0.4)
+    console.log(`broken-bench flaw-only constants (${[...by].map(([f, b]) => `${f} ${Math.round(b.value)} ms ${pct(b.share)}`).join(', ')}): pass on ${pct(share)} of banded seeds; done within 10 rounds ${pct(d10)}, within 30 ${pct(d30)}`)
+    for (const [, b] of by) expect(b.share).toBeLessThan(0.32)
+    expect(share).toBeLessThan(0.29)
+    expect(d10).toBeLessThan(0.14)
+    expect(d30).toBeLessThan(0.4)
+  })
+
+  test('the draw picks the answer first: each flaw’s answers spread over a wide range, so no one flaw names a number', () => {
+    const rows = bbBanded()
+    for (const f of BB_FLAWS) {
+      const t = rows.filter((r) => r.flaw === f).map((r) => r.truth).sort((a, b) => a - b)
+      const q = (p: number) => t[Math.floor(p * (t.length - 1))] as number
+      console.log(`broken-bench ${f}: corrected p95 from ${t[0]} to ${t[t.length - 1]} ms, quartiles ${q(0.25)}, ${q(0.5)}, ${q(0.75)}`)
+      // the middle half of the answers spans more than one pass window (1.3 ÷ 0.7 = 1.86×), so no constant holds it
+      expect(q(0.75) / q(0.25)).toBeGreaterThan((1 + BB_TOLERANCE) / (1 - BB_TOLERANCE))
+    }
   })
 
   test('a learner who applies the scene’s reading finishes within 10 rounds', () => {
