@@ -113,7 +113,8 @@ function DailyPage({ shifting }: { shifting: boolean }) {
   const [session, setSession] = useState<IncidentClientSession | null>(null)
   const [flow, setFlow] = useState<FlowState | null>(null)
   const [phase, setPhase] = useState<Phase>('opening')
-  const [failure, setFailure] = useState<{ title: string; detail: string } | null>(null)
+  /** what stopped the attempt; `reload` when only a reload can retry it (the browser keeps a failed dynamic import for the life of the page) */
+  const [failure, setFailure] = useState<{ title: string; detail: string; reload?: true } | null>(null)
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   /** this attempt wrote the date's event */
@@ -142,19 +143,17 @@ function DailyPage({ shifting }: { shifting: boolean }) {
     let live = true
     import('@/pages/daily/shift-kit').then(
       (k) => live && setKit(k),
-      (e) => {
+      () => {
         if (!live) return
-        // the page's own code, not the incident: after a deploy the old chunk is gone, and only a reload fetches the new one
-        const why = e instanceof Error ? e.message : String(e)
-        setFailure({ title: 'The shift did not load', detail: `Its code could not be fetched (${why}). Try again; if the site was updated since this page opened, reload the page.` })
+        // the page's own code, not the incident; a second import() would get the same failure back, so the retry is a reload
+        setFailure({ title: 'The shift did not load', detail: 'Its code could not be fetched, so you may be offline, or the site was updated since this page opened. Nothing was played or recorded yet.', reload: true })
         setPhase('failed')
       },
     )
     return () => {
       live = false
     }
-    // `attempt` is "Try again" after the chunk failed to load
-  }, [shifting, kit, attempt])
+  }, [shifting, kit])
 
   useEffect(() => {
     if (!ready || waiting) return
@@ -313,8 +312,8 @@ function DailyPage({ shifting }: { shifting: boolean }) {
             <h2 className="font-display text-h3 text-text-1">{failure.title}</h2>
             <p className="mt-2 text-body-sm text-text-2">{failure.detail}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={() => restart()} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground">
-                Try again
+              <button type="button" onClick={() => (failure.reload ? window.location.reload() : restart())} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground">
+                {failure.reload ? 'Reload to try again' : 'Try again'}
               </button>
               {boxes.some((b) => b.own) && !reference && (
                 <button type="button" onClick={() => restart(true)} className={BUTTON_QUIET} data-play-reference>

@@ -175,3 +175,24 @@ for (const width of [360, 320, 1280]) {
     })
   })
 }
+
+// The shift's code is a chunk of its own (D74). When it cannot be fetched (offline, or a deploy replaced the chunks), the page
+// says so and its retry is a reload: the browser keeps a failed dynamic import for the life of the page, so a second
+// import() would only get the failure back. main.tsx's preload handler may reload once on its own first; the card is what
+// remains when that reload fails too.
+test('the shift says when its code did not load, and a reload brings it', async ({ page }) => {
+  let blocked = true
+  await page.route(/\/assets\/shift-kit-[^/]+\.js$/, (route) => (blocked ? route.abort() : route.continue()))
+  await page.clock.setFixedTime(new Date(`${PINNED_DATE}T12:00:00`))
+  await page.goto('/daily?shift=3')
+  const card = page.locator('[data-failure]')
+  await expect(card).toBeVisible({ timeout: 30_000 })
+  await expect(card.getByRole('heading')).toHaveText('The shift did not load')
+  // nothing of the shift was played, so nothing was written
+  expect((await storedEvents(page)).filter((e) => e.kind === 'incident')).toEqual([])
+  await check(page, 'the shift kit failed')
+  blocked = false
+  await card.getByRole('button', { name: 'Reload to try again' }).click()
+  await expect(page.locator('[data-page="daily"][data-phase="play"]')).toBeVisible({ timeout: 60_000 })
+  await expect(card).toHaveCount(0)
+})
