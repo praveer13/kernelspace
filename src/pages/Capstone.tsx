@@ -836,7 +836,7 @@ function Hero({
           </button>
           <Link
             to="/lab/sim-engine"
-            className="font-mono text-body-sm text-text-2 transition-colors hover:text-accent"
+            className="inline-flex min-h-11 items-center justify-center font-mono text-body-sm text-text-2 transition-colors hover:text-accent"
           >
             open in free play ↗
           </Link>
