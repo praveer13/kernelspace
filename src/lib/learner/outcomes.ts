@@ -1280,7 +1280,18 @@ export const SURFACES = ['today', 'lessons', 'plays', 'labs', 'daily', 'fleet-we
 export type Surface = (typeof SURFACES)[number]
 
 /**
- * The surface an event's time belongs to, or null for time the table leaves out (Boot, the placement walk, the Capstone).
+ * The team codes reserved for practice incidents (`inc:team/<code>/<date>`): the On-Call pilot's shift writes
+ * `shift-<k>` (world/shift.ts `shiftRef`, k = 1 … 3) and Interview mode `interview` (mentor/interview.ts
+ * `interviewRef`). A team Daily must take another code, or its minutes go uncounted; tests/learner/outcomes.test.ts
+ * fails when a source file writes a team code this does not name.
+ */
+export const PRACTICE_TEAM_CODE = /^(?:shift-[1-9]\d*|interview)$/
+/** The team code a donation leaves in its place (`inc:team/-/d<k>`, redact.ts). */
+export const REDACTED_TEAM_CODE = '-'
+
+/**
+ * The surface an event's time belongs to, or null for time the table leaves out (Boot, the placement walk, the Capstone,
+ * the On-Call shift's and Interview mode's practice incidents).
  *
  * - **today**: Today sessions and the empty state's "new numbers" (`src` `today`, or `practice` on a generated item);
  * - **lessons**: every other answered item (quizzes, tickets, prequestions, diagrams, item blocks, cold checks, change
@@ -1290,7 +1301,13 @@ export type Surface = (typeof SURFACES)[number]
  * - **plays**: `play` events and items made inside a play;
  * - **labs**: `lab-check` and `prove`;
  * - **daily**: the Fleet Daily's `incident` event, whose `ms` is the attempt's visible time from the alert to the debrief
- *   (`dailyResult`), and team incidents. An item with `src` `daily` would count here too, but no surface writes one;
+ *   (`dailyResult`), and a team Daily's (`inc:team/<code>/<date>` with a code `PRACTICE_TEAM_CODE` leaves free). An item
+ *   with `src` `daily` would count here too, but no surface writes one. The team grammar's practice incidents are not
+ *   Daily time: the On-Call pilot's shift (`inc:team/shift-<k>/<date>`, world/shift.ts) and Interview mode's round
+ *   (`inc:team/interview/<date>`, mentor/interview.ts) are drill-namespace practice that §4.D's cadence plans no time
+ *   for, so the table leaves them out, as it does Boot. A donation drops every team code (`inc:team/-/d<k>`, redact.ts),
+ *   and until a team Daily ships the only team incidents are those two, so a dropped code is practice too; a team Daily
+ *   must keep its code through the donation (or take a grammar of its own) before the re-cut can count it;
  * - **fleet-week**: Fleet Week acts, engine runs and Act IV's drills: a run's `ms` is its visible wall time
  *   (`fleetRunFor`), a drill's its alert to its debrief (`drillResult`), and an act's the page's visible time that no
  *   run or drill of the visit holds, up to the pass (`completeFleetWeekAct`), so the act never counts a run's or a
@@ -1324,8 +1341,11 @@ export function surfaceOf(e: LedgerEvent): Surface | null {
     case 'lab-check':
     case 'prove':
       return 'labs'
-    case 'incident':
-      return e.ref.startsWith('inc:drill/') ? 'fleet-week' : 'daily'
+    case 'incident': {
+      if (e.ref.startsWith('inc:drill/')) return 'fleet-week'
+      const team = /^inc:team\/([^/]*)\//.exec(e.ref)
+      return team !== null && (PRACTICE_TEAM_CODE.test(team[1] as string) || team[1] === REDACTED_TEAM_CODE) ? null : 'daily'
+    }
     case 'fleet-run':
     case 'fleet-act':
       return 'fleet-week'

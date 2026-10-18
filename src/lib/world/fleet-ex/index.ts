@@ -50,6 +50,12 @@ export interface FleetExerciseDef {
   kcs: KcId[]
   /** What the learner predicts. */
   unit: string
+  /**
+   * What this seed's round asks for, when the exercise asks for more than one number (the timing oracle asks for the
+   * probe's gap on some seeds and the hit rate lost on the rest, §16.3): the panel's "Predict …" reads it in place of
+   * `unit`. A pure function of the seed, like `scene`.
+   */
+  ask?(seed: number): string
   /** The sweep, e.g. load multipliers or prefill-worker counts. */
   points: readonly number[]
   /**

@@ -25,15 +25,15 @@
  * prefill chunk of 128 tokens or one decode token per tick per sequence, 50 ms a tick. A request holds a slot for
  * ⌈prompt ÷ 128⌉ prefill ticks and then one tick per output token after the first (the reading counts every token, a tick
  * high), so Little's law bounds the rate at 64 ÷ the mean hold, and a request that waits for no one has a TTFT of
- * ⌈prompt ÷ 128⌉ − 1 ticks. KV is sized so it never binds, which keeps the question about slots. Arrivals are uniform
- * random times over a window of 400, 600, 800 or 1,000 ticks (20 to 50 s), and the engine runs on after the window until
- * every request has finished.
+ * ⌈prompt ÷ 128⌉ − 1 ticks. KV is sized so it never binds (64 of the longest prompt with its reply fit), which keeps the
+ * question about slots. Arrivals are uniform random times over a window of 400, 600, 800 or 1,000 ticks (20 to 50 s), and
+ * the engine runs on after the window until every request has finished.
  *
  * THE CORRECTED RUN is always the same kind of run: production's arrivals, open loop, the real prompts and outputs, a
  * cold prefix cache, a warm engine. What the flaw changes is the load, so the reading differs (`bbRead`):
- *   - after `closed-loop` and `capped-output` production offers 1.2 to 2 times capacity. A queue grows for the whole
+ *   - after `closed-loop` and `capped-output` production offers 1.15 to 4 times capacity. A queue grows for the whole
  *     window at (load − 1) times capacity, so the request arriving 95 % of the way through waits about
- *     (load − 1) × 95 % of the window, plus its prefill: that is the p95 (`bbQueue`). The fluid reading runs about 10 %
+ *     (load − 1) × 95 % of the window, plus its prefill: that is the p95 (`bbQueue`). The fluid reading runs about 7 %
  *     high at the median, because the first requests find free slots and the queue starts a little late.
  *   - after `warm-cache` and `warm-up` it offers 0.3 to 0.5 of capacity, so almost nothing queues and the p95 is the
  *     prefill of a 95th-percentile prompt, ⌈P95 ÷ 128⌉ − 1 ticks.
@@ -41,15 +41,28 @@
  * passes and how often a guess that ignores the scene does (BF8). Past capacity the p95 depends on how long the run lasted,
  * which the lesson's note says: a p95 taken beyond the knee is not a latency number.
  *
- * THE DRAW (`bbCase`). The seed draws the flaw (the four equally often), the prompt range (from 384 … 3,072 tokens, two
- * or three times as wide), the output range (from 16 … 128 tokens, twice as wide), the load, the window and the flaw's own
- * number (the cap, the cached share, the cold ticks). A growing queue under 100 ticks is mostly noise, so such a draw is
- * redrawn; so is one that offers fewer than 120 requests, and a capped run that would itself load its engine past 0.8.
+ * THE DRAW (`bbCase`) draws the answer first, as the knee and the P:D split do (D39), so the flaw's label does not name it.
+ * The seed draws the flaw (the four equally often) and then:
+ *   - over capacity, the p95 request's wait, uniform in log over 100 … 2,503 ticks (`BB_QUEUE_GRID`: 67 waits, each
+ *     1.05 times the last), then the prompt range (from 384 … 3,072 tokens, two or three times as wide), the output range
+ *     (from 16 … 128 tokens, twice as wide) and a window on which that wait needs a load of 1.15 to 4 (`bbLoadFor`,
+ *     rounded up to a hundredth), and for `capped-output` a cap of 4, 8 or 16 that keeps the capped run under 0.8 of its
+ *     own engine, so that run cannot queue itself;
+ *   - under capacity, the 95th-percentile prompt's prefill, 5 … 150 ticks weighted 1 ÷ ticks (`bbPrefillTicks`, uniform
+ *     in log), then a prompt range two or three times as wide whose P95 lands mid-way through that chunk (`bbPromptFor`),
+ *     the output range, the load and the window;
+ *   - the flaw's own number (the cached share, or the cold ticks: 100, 150 or 200, and at least 3 × the answer's ticks,
+ *     so a cold start long enough to move the p95 is counted however long the prompts are).
+ * A traffic that offers fewer than 120 requests, or on which no cap fits, is drawn again; the answer never is. On fixed
+ * prompt and load grids each flaw's answers bunched, and the best constant for each flaw label passed 35.6 % of rounds
+ * and finished the exercise within 10 rounds 23.5 % of the time (the 3s review's G1). Drawn this way the flaw label alone
+ * is no better than the scene-blind bound D39 sets for the knee (14 % within 10 rounds, 40 % within 30); the test
+ * prints both.
  * The scene shows the traffic and what the benchmark did differently; it never shows either run's p95. The band
  * (`bbBand`): every request completes, the corrected run has at least 100 requests (a p95 of fewer is a rumour) and a p95
  * of at least 4 ticks, and the benchmark's p95 is at least 1.5 times too low (or too high), so the number it reported
- * cannot pass and the flaw matters. Every draw is a splitmix32 output and every step is +, −, × or ÷, so a seed gives one
- * run in every browser.
+ * cannot pass and the flaw matters. Every draw is a splitmix32 output and every step is +, −, ×, ÷ or a rounding, so a
+ * seed gives one run in every browser.
  */
 
 import { splitmix32u } from '@/lib/rng'
@@ -77,7 +90,7 @@ export type BbFlaw = (typeof BB_FLAWS)[number]
 
 /** The engine every run uses: KV is large enough that 64 sequences of the longest prompt never fill it. */
 export const BB_ENGINE: EngineConfig = {
-  numBlocks: 40000,
+  numBlocks: 84000,
   blockSize: 16,
   maxRunning: 64,
   sloTtft: 40,
@@ -92,15 +105,32 @@ export const BB_PROMPT_FROM = [384, 544, 768, 1088, 1536, 2176, 3072] as const
 export const BB_PROMPT_WIDTH = [2, 3] as const
 export const BB_OUTPUT_FROM = [16, 24, 32, 48, 64, 96, 128] as const
 
-/** Production's load as a multiple of the engine's capacity, after a flaw that hid a queue and after one that made the number too high or too low without one. */
-export const BB_LOAD_OVER = [1.2, 1.3, 1.4, 1.5, 1.75, 2] as const
+/** Production's load as a multiple of the engine's capacity, after a flaw that hid a queue (from `BB_LOAD_MIN` to `BB_LOAD_MAX`) and after one that made the number too high or too low without one. */
+export const BB_LOAD_MIN = 1.15
+export const BB_LOAD_MAX = 4
 export const BB_LOAD_LIGHT = [0.3, 0.4, 0.5] as const
 
-/** The flaws' own numbers: the output cap, the share of each prompt cached, the ticks counted while cold and how cold (one tick in `BB_COLD_EVERY` runs). */
+/** Over capacity the answer is mostly the p95 request's wait, (load − 1) × 95 % of the window: drawn first, uniform in log from `BB_MIN_QUEUE_TICKS` up to this many ticks. */
+export const BB_QUEUE_MAX_TICKS = 2600
+/** The step of that grid: each wait is this many times the one before. */
+export const BB_QUEUE_STEP = 1.05
+
+/** Under capacity the answer is the prefill of a 95th-percentile prompt, ⌈P95 ÷ 128⌉ − 1 ticks: drawn first, weighted 1 ÷ ticks (uniform in log) over these. */
+export const BB_PREFILL_MIN_TICKS = 5
+export const BB_PREFILL_MAX_TICKS = 150
+/** Light-load prompt ranges start at a multiple of this many tokens. */
+export const BB_PROMPT_ROUND = 16
+
+/**
+ * The flaws' own numbers: the output cap, the share of each prompt cached, the ticks counted while cold (at least
+ * `BB_COLD_PER_PREFILL` times the answer's prefill ticks, so a long prompt's cold start still moves the p95) and how cold
+ * (one tick in `BB_COLD_EVERY` runs).
+ */
 export const BB_CAPS = [4, 8, 16] as const
 export const BB_HITS = [75, 80, 90] as const
 export const BB_COLD_TICKS = [100, 150, 200] as const
 export const BB_COLD_EVERY = 4
+export const BB_COLD_PER_PREFILL = 3
 
 /** The share of the window the p95 request arrives after. */
 export const BB_P95 = 0.95
@@ -114,6 +144,8 @@ export const BB_MIN_RATIO = 1.5
 export const BB_MIN_REQUESTS = 100
 /** A draw offers at least this many requests, so the band's 100 holds with room to spare. */
 export const BB_DRAW_REQUESTS = 120
+/** Draws of the traffic a seed may make before it takes the lightest the grids allow. */
+export const BB_TRIES = 256
 export const BB_MIN_TICKS = 4
 /** A prediction passes within this share of the right answer. */
 export const BB_TOLERANCE = 0.3
@@ -158,41 +190,126 @@ export const bbCapacity = (c: Pick<BbCase, 'prompt' | 'output'>): number => BB_E
 /**
  * Ticks the request at the 95th percentile of arrivals waits when the queue grows all window: it builds at (load − 1)
  * times capacity, so a request arriving 95 % of the way through has waited about (load − 1) × 95 % of the window.
- * Nothing queues at or under capacity. The fluid reading runs about 10 % high at the median on the banded seeds (the first
+ * Nothing queues at or under capacity. The fluid reading runs about 7 % high at the median on the banded seeds (the first
  * requests find free slots, so the queue starts a little late), and tests/world/fleet-ex-more-a.test.ts measures it.
  */
 export const bbQueue = (load: number, window: number): number => (load > 1 ? (load - 1) * BB_P95 * window : 0)
 
+/** The waits an over-capacity seed draws from: `BB_MIN_QUEUE_TICKS` … `BB_QUEUE_MAX_TICKS`, each `BB_QUEUE_STEP` times the last (products, so every browser builds the same grid). */
+export const BB_QUEUE_GRID: readonly number[] = (() => {
+  const grid: number[] = []
+  for (let q = BB_MIN_QUEUE_TICKS; q <= BB_QUEUE_MAX_TICKS; q *= BB_QUEUE_STEP) grid.push(q)
+  return grid
+})()
+
+/** The load that gives the p95 request a wait of `queue` ticks over `window`, rounded up to a hundredth so the wait is at least that. */
+export const bbLoadFor = (queue: number, window: number): number => Math.ceil((1 + queue / (BB_P95 * window)) * 100) / 100
+
+const PREFILL_WEIGHTS: readonly number[] = (() => {
+  const cum: number[] = []
+  let sum = 0
+  for (let t = BB_PREFILL_MIN_TICKS; t <= BB_PREFILL_MAX_TICKS; t++) cum.push((sum += 1 / t))
+  return cum
+})()
+
+/** A light-load seed's answer in ticks from one draw: `BB_PREFILL_MIN_TICKS` … `BB_PREFILL_MAX_TICKS`, weighted 1 ÷ ticks. */
+export function bbPrefillTicks(u: number): number {
+  const x = (u / 4294967296) * (PREFILL_WEIGHTS[PREFILL_WEIGHTS.length - 1] as number)
+  const i = PREFILL_WEIGHTS.findIndex((c) => x < c)
+  return BB_PREFILL_MIN_TICKS + (i < 0 ? PREFILL_WEIGHTS.length - 1 : i)
+}
+
 /**
- * The case the seed draws. A seed whose growing queue is under `BB_MIN_QUEUE_TICKS` (a short queue is mostly noise),
- * or that offers fewer than `BB_DRAW_REQUESTS`, redraws its output range, load and window; so does a capped-output
- * seed whose capped run would load its own engine past `BB_CAPPED_LOAD`, because it must not queue itself.
+ * The prompt range, `width` times as wide as its start, whose 95th percentile is mid-way through the `ticks` + 1-th
+ * prefill chunk, so ⌈P95 ÷ 128⌉ − 1 = `ticks`: P95 = min + 0.95 × (max − min) with max = width × min − 1, solved for min
+ * and rounded to `BB_PROMPT_ROUND` tokens (which moves P95 by under half a chunk).
  */
-export function bbCase(seed: number): BbCase {
+export function bbPromptFor(ticks: number, width: number): { min: number; max: number } {
+  const p95 = BB_ENGINE.prefillChunk * (ticks + 0.5)
+  const min = Math.round((p95 + BB_P95) / (1 + BB_P95 * (width - 1)) / BB_PROMPT_ROUND) * BB_PROMPT_ROUND
+  return { min, max: min * width - 1 }
+}
+
+/**
+ * The case the seed draws: the flaw, then its answer (an over-capacity wait from `BB_QUEUE_GRID`, or an under-capacity
+ * prefill from `bbPrefillTicks`), then the traffic that gives it (see the file header). The answer is never redrawn: a
+ * traffic that offers fewer than `BB_DRAW_REQUESTS` is (its output range, window and load or prompt range), and so is a
+ * capped-output one on which every cap would load the capped run's own engine past `BB_CAPPED_LOAD`, because that run
+ * must not queue itself; the cap is drawn among the ones that do not. The wait stays at least `BB_MIN_QUEUE_TICKS` (a
+ * short queue is mostly noise), since `bbLoadFor` rounds the load up.
+ */
+function drawCase(seed: number): { c: BbCase; draws: number } {
   const next = splitmix32u(seed ^ CASE_SALT)
   const flaw = BB_FLAWS[next() % BB_FLAWS.length] as BbFlaw
-  const pmin = BB_PROMPT_FROM[next() % BB_PROMPT_FROM.length] as number
-  const width = BB_PROMPT_WIDTH[next() % BB_PROMPT_WIDTH.length] as number
-  const prompt = { min: pmin, max: pmin * width - 1 }
-  const over = flaw === 'closed-loop' || flaw === 'capped-output'
-  const loads = over ? BB_LOAD_OVER : BB_LOAD_LIGHT
-  const cap = flaw === 'capped-output' ? (BB_CAPS[next() % BB_CAPS.length] as number) : undefined
+  const over = isOver(flaw)
+  // the answer first: the p95 request's wait over capacity, the p95 prompt's prefill under it
+  const queue = over ? (BB_QUEUE_GRID[next() % BB_QUEUE_GRID.length] as number) : 0
+  const ticks = over ? 0 : bbPrefillTicks(next())
+  const light = over ? undefined : bbPromptFor(ticks, BB_PROMPT_WIDTH[next() % BB_PROMPT_WIDTH.length] as number)
+  const windows = bbWindowsFor(queue)
   const pick = (): BbCase => {
     const omin = BB_OUTPUT_FROM[next() % BB_OUTPUT_FROM.length] as number
-    const load = loads[next() % loads.length] as number
-    const window = BB_WINDOWS[next() % BB_WINDOWS.length] as number
-    return { flaw, prompt, output: { min: omin, max: omin * 2 - 1 }, load, window }
+    const output = { min: omin, max: omin * 2 - 1 }
+    if (light !== undefined) {
+      const load = BB_LOAD_LIGHT[next() % BB_LOAD_LIGHT.length] as number
+      const window = BB_WINDOWS[next() % BB_WINDOWS.length] as number
+      return { flaw, prompt: light, output, load, window }
+    }
+    const from = BB_PROMPT_FROM[next() % BB_PROMPT_FROM.length] as number
+    const prompt = { min: from, max: from * (BB_PROMPT_WIDTH[next() % BB_PROMPT_WIDTH.length] as number) - 1 }
+    const window = windows[next() % windows.length] as number
+    const c: BbCase = { flaw, prompt, output, load: bbLoadFor(queue, window), window }
+    if (flaw !== 'capped-output') return c
+    // the caps under which the capped run stays under BB_CAPPED_LOAD of its own engine, one at random
+    const caps = BB_CAPS.filter((k) => (c.load * bbHold(c, k)) / bbHold(c) <= BB_CAPPED_LOAD)
+    return caps.length === 0 ? c : { ...c, cap: caps[next() % caps.length] as number }
   }
-  const fine = (c: BbCase): boolean =>
-    c.load * bbCapacity(c) * c.window >= BB_DRAW_REQUESTS &&
-    (!over || bbQueue(c.load, c.window) >= BB_MIN_QUEUE_TICKS) &&
-    (cap === undefined || (c.load * bbHold(c, cap)) / bbHold(c) <= BB_CAPPED_LOAD)
   let c = pick()
-  for (let tries = 0; tries < 64 && !fine(c); tries++) c = pick()
-  if (cap !== undefined) c = { ...c, cap }
-  else if (flaw === 'warm-cache') c = { ...c, hit: BB_HITS[next() % BB_HITS.length] as number }
-  else if (flaw === 'warm-up') c = { ...c, cold: BB_COLD_TICKS[next() % BB_COLD_TICKS.length] as number }
-  return c
+  let draws = 1
+  for (; draws <= BB_TRIES && !bbKeeps(c); draws++) c = pick()
+  // never on seeds 0 … 99,999, none of which draws more than 21 times
+  if (!bbKeeps(c)) c = bbLightest(flaw, queue, light)
+  if (flaw === 'warm-cache') c = { ...c, hit: BB_HITS[next() % BB_HITS.length] as number }
+  else if (flaw === 'warm-up') {
+    c = { ...c, cold: Math.max(BB_COLD_TICKS[next() % BB_COLD_TICKS.length] as number, BB_COLD_PER_PREFILL * ticks) }
+  }
+  return { c, draws }
+}
+
+export const bbCase = (seed: number): BbCase => drawCase(seed).c
+
+/** How many times the seed drew its traffic before a draw kept every rule (tests/world/fleet-ex-more-a.test.ts reads it). */
+export const bbCaseDraws = (seed: number): number => drawCase(seed).draws
+
+const isOver = (flaw: BbFlaw): boolean => flaw === 'closed-loop' || flaw === 'capped-output'
+
+/**
+ * The windows on which an over-capacity wait needs a load in `BB_LOAD_MIN` … `BB_LOAD_MAX`. Never none: 100 ticks needs
+ * 1.27 on the 400-tick window, and the grid's last wait, 2,503, needs 3.64 on the 1,000-tick one.
+ */
+export const bbWindowsFor = (queue: number): number[] => BB_WINDOWS.filter((w) => bbLoadFor(queue, w) >= BB_LOAD_MIN && bbLoadFor(queue, w) <= BB_LOAD_MAX)
+
+/** A traffic keeps the draw's rules: `BB_DRAW_REQUESTS` or more, an over-capacity wait of `BB_MIN_QUEUE_TICKS` or more, and a capped-output case has a cap that fits. */
+export const bbKeeps = (c: BbCase): boolean =>
+  c.load * bbCapacity(c) * c.window >= BB_DRAW_REQUESTS &&
+  bbQueue(c.load, c.window) >= (isOver(c.flaw) ? BB_MIN_QUEUE_TICKS : 0) &&
+  (c.flaw !== 'capped-output' || (c.cap !== undefined && (c.load * bbHold(c, c.cap)) / bbHold(c) <= BB_CAPPED_LOAD))
+
+/**
+ * The lightest traffic the grids allow for an answer, which a seed takes if `BB_TRIES` draws all break a rule, and which
+ * keeps them all (the test checks every answer): over capacity the shortest prompts, the longest replies (so the
+ * smallest cap fits) and the longest window the wait fits; under it the `light` prompt range, the shortest replies, the
+ * highest load and the longest window.
+ */
+export function bbLightest(flaw: BbFlaw, queue: number, light?: { min: number; max: number }): BbCase {
+  const over = isOver(flaw)
+  const omin = (over ? BB_OUTPUT_FROM[BB_OUTPUT_FROM.length - 1] : BB_OUTPUT_FROM[0]) as number
+  const output = { min: omin, max: omin * 2 - 1 }
+  const from = BB_PROMPT_FROM[0] as number
+  const prompt = light ?? { min: from, max: from * 2 - 1 }
+  const window = (over ? bbWindowsFor(queue).at(-1) : BB_WINDOWS[BB_WINDOWS.length - 1]) as number
+  const c: BbCase = { flaw, prompt, output, load: over ? bbLoadFor(queue, window) : (BB_LOAD_LIGHT[BB_LOAD_LIGHT.length - 1] as number), window }
+  return flaw === 'capped-output' ? { ...c, cap: BB_CAPS[0] } : c
 }
 
 /** First come, first served: admit the oldest waiting request while a slot and its prompt plus headroom fit. */
@@ -252,8 +369,9 @@ function runOpen(stream: RequestSpec[], window: number, coldTicks = 0): Run {
 }
 
 /**
- * 32 closed-loop clients with no think time: each sends its next request on the tick after its last one finished, and
- * stops sending once the window has passed. The lengths are the traffic's, drawn in the order the clients ask.
+ * `BB_ENGINE.maxRunning` (64) closed-loop clients, one per slot, with no think time: each sends its next request on the
+ * tick after its last one finished, and stops sending once the window has passed. The lengths are the traffic's, drawn
+ * in the order the clients ask.
  */
 function runClosed(seed: number, c: BbCase): Run {
   const next = splitmix32u(seed ^ CLIENT_SALT)

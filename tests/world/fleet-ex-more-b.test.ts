@@ -10,7 +10,9 @@
  *   - fairness: the draws spread the right answers, every banded seed completes, the lesson notes' numbers re-derived;
  *   - BF8 (a generated exercise must not let a strategy that ignores the scene pass): the best constant, cycling
  *     constants, and the scene's reading, each judged by the panel's own done rule (`runOf`);
- *   - the panel's pure session on the two new exercises (free number in a range, own verdict and table, a full round).
+ *   - the panel's pure session on the two new exercises (free number in a range, own verdict and table, a full round);
+ *   - G13 of the 3s review: the timing oracle asks for the probe's gap on half its seeds (§16.3's table names both
+ *     numbers), with its own derivation (P ÷ 128 ticks of 50 ms) and tolerance (a tick or 5 %), and the legend says which.
  */
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
@@ -20,6 +22,7 @@ import type { FleetExerciseBlock } from '../../src/data/lessons/types'
 import {
   PASSES_NEEDED,
   accepts,
+  askFor,
   canSave,
   copyFor,
   entryText,
@@ -68,21 +71,30 @@ import {
   TO_SHARED,
   TO_SUFFIX,
   TO_TENANT,
+  TO_TOLERANCE_GAP_MS,
   TO_TOLERANCE_POINTS,
   TO_TOLERANCE_SHARE,
+  toAsk,
+  toAskOf,
+  toAskOfTruth,
   toBand,
   toCase,
   toCombosByLost,
   toGap,
+  toGapRead,
   toHits,
+  toLost,
   toLostPct,
+  toLostRead,
   toPass,
   toPoint,
   toRead,
   toScene,
   toStream,
   toSweep,
+  toTolerance,
   toTruth,
+  type ToAsk,
 } from '../../src/lib/world/fleet-ex/timing-oracle'
 
 const str = FLEET_EXERCISES['straggler'] as FleetExerciseDef
@@ -108,20 +120,27 @@ const strRows: Row[] = Array.from({ length: STR_SEEDS }, (_, seed) => {
   const r = strSweep(seed)
   return { seed, truth: strTruth(r), read: strRead(strScene(seed)), banded: strBand(r), pass: (g) => strPass(g, r) }
 })
-const toRows: (Row & { pairShare: number; shared: number; tenant: number })[] = Array.from({ length: TO_SEEDS }, (_, seed) => {
+/** The timing oracle's rows: `truth` and `read` are what the seed asks for, `lost` and `gap` both numbers whatever it asks. */
+const toRows: (Row & { asks: ToAsk; lost: number; gap: number; pairShare: number; shared: number; tenant: number; sweep: SweepResult })[] = Array.from({ length: TO_SEEDS }, (_, seed) => {
   const r = toSweep(seed)
   const c = toCase(seed)
   return {
     seed,
+    asks: c.asks,
     truth: toTruth(r),
-    read: toRead(toScene(seed)),
+    read: toRead(toScene(seed), c.asks),
+    lost: toLost(r),
+    gap: toGap(r, TO_SHARED),
     banded: toBand(r),
     pass: (g) => toPass(g, r),
     pairShare: (c.tenants * c.prefixes) / c.requests,
     shared: r.points[0]?.ttftP95 ?? NaN,
     tenant: r.points[1]?.ttftP95 ?? NaN,
+    sweep: r,
   }
 })
+const toLostRows = toRows.filter((r) => r.asks === 'lost')
+const toGapRows = toRows.filter((r) => r.asks === 'gap')
 
 /** The panel's rule on a list of rounds: P(done within `rounds`) for a player whose guess is `guess(row)`, Monte Carlo over the rows. */
 function doneWithin(rows: readonly Row[], guess: (r: Row) => number, rounds: number, trials = 4000): number {
@@ -406,8 +425,8 @@ describe('timing-oracle: the cache’s misses are K shared and T × K tenant-key
   test('the sweep’s measured loss is the hand reading on every seed, and the lesson’s note example is 3.5 points', () => {
     for (const row of toRows) {
       expect(row.banded).toBe(true)
-      expect(row.read).toBeCloseTo(row.truth, 9)
-      expect(toLostPct(toCase(row.seed))).toBeCloseTo(row.truth, 9)
+      expect(toLostRead(toScene(row.seed))).toBeCloseTo(row.lost, 9)
+      expect(toLostPct(toCase(row.seed))).toBeCloseTo(row.lost, 9)
     }
     // 8 tenants, 2 prefixes, 400 requests: 2 misses against 16, 99.5 % down to 96 %
     expect(toLostPct({ tenants: 8, prefixes: 2, requests: 400 })).toBe(3.5)
@@ -441,6 +460,70 @@ describe('timing-oracle: the cache’s misses are K shared and T × K tenant-key
   })
 })
 
+/* ------------------------------ timing oracle: the gap, asked (G13) ------------------------------ */
+
+describe('timing-oracle: half the seeds ask for the probe’s gap, read as P ÷ 128 ticks of 50 ms', () => {
+  test('each seed asks for one number, from a stream of its own: about half ask for the gap', () => {
+    const share = toGapRows.length / toRows.length
+    console.log(`timing-oracle: ${toGapRows.length} of ${toRows.length} seeds ask for the gap, ${toLostRows.length} for the hit rate lost`)
+    expect(share).toBeGreaterThan(0.4)
+    expect(share).toBeLessThan(0.6)
+    for (const r of toRows) expect(toAskOf(r.sweep)).toBe(r.asks)
+  })
+
+  test('the gap is the scene’s P ÷ 128 ticks of 50 ms on every seed that asks for it, and no other prefix length’s gap passes', () => {
+    const gaps = TO_PREFIX_TOKENS.map((p) => (p / TO_ENGINE.prefillChunk) * 50)
+    expect(gaps).toEqual([200, 400, 600, 800, 1200, 1600])
+    for (const r of toGapRows) {
+      expect(r.truth).toBe(r.gap)
+      expect(r.read).toBe(r.truth)
+      expect(toGapRead(toScene(r.seed))).toBe(r.truth)
+      for (const other of gaps) expect(r.pass(other)).toBe(other === r.truth)
+    }
+    // the lesson’s note: a 2,048-token prefix is 16 ticks, so 800 ms
+    expect(toGapRead([{ label: 'Tenants', value: 8, unit: '' }, { label: 'Shared prefixes', value: 2, unit: '' }, { label: 'Prefix length', value: 2048, unit: '' }])).toBe(800)
+  })
+
+  test('the six gaps are drawn about equally often, so none is right on more than about a fifth of the seeds that ask', () => {
+    const counts = new Map<number, number>()
+    for (const r of toGapRows) counts.set(r.truth, (counts.get(r.truth) ?? 0) + 1)
+    console.log(`timing-oracle gaps asked: ${[...counts].sort((a, b) => a[0] - b[0]).map(([g, n]) => `${g} ms ${pct(n / toGapRows.length)}`).join(', ')}`)
+    expect(counts.size).toBe(TO_PREFIX_TOKENS.length)
+    for (const n of counts.values()) expect(n / toGapRows.length).toBeLessThan(0.25)
+  })
+
+  test('a loss and a gap never meet, so a played round knows its unit from its answer', () => {
+    expect(Math.max(...toRows.map((r) => r.lost))).toBeLessThanOrEqual(25)
+    expect(Math.min(...toRows.map((r) => r.gap))).toBeGreaterThanOrEqual(TO_MIN_GAP_TICKS * 50)
+    for (const r of toRows) expect(toAskOfTruth(r.truth)).toBe(r.asks)
+  })
+
+  test('the legend says which number the seed asks for; an exercise without `ask` keeps its unit', () => {
+    const gapSeed = toGapRows[0]!.seed
+    const lostSeed = toLostRows[0]!.seed
+    expect(toAsk(gapSeed)).toContain('gap with the shared cache key, in milliseconds')
+    expect(toAsk(lostSeed)).toBe('the percentage points of hit rate lost when the cache key carries the tenant')
+    expect(askFor(to, gapSeed)).toBe(toAsk(gapSeed))
+    expect(askFor(to, lostSeed)).toBe(toAsk(lostSeed))
+    expect(askFor(to)).toBe(to.unit)
+    expect(askFor(knee, 3)).toBe(knee.unit)
+    expect(askFor(str, 3)).toBe(str.unit)
+  })
+
+  test('what done certifies: three fresh seeds in a row ask for both numbers three times in four', () => {
+    // the three seeds of a finishing run are three independent draws: both kinds unless all three are the same kind
+    const rnd = splitmix32u(0x0d0e)
+    let mixed = 0
+    const trials = 20000
+    for (let i = 0; i < trials; i++) {
+      const kinds = new Set([0, 1, 2].map(() => (toRows[rnd() % toRows.length] as (typeof toRows)[number]).asks))
+      if (kinds.size === 2) mixed++
+    }
+    console.log(`timing-oracle: three seeds in a row ask for both numbers ${pct(mixed / trials)} of the time (1 − 2 × (1/2)³ = 75 %)`)
+    expect(Math.abs(mixed / trials - 0.75)).toBeLessThan(0.03)
+  })
+})
+
 /* ------------------------------ timing oracle: fairness, determinism, strategies ------------------------------ */
 
 describe('timing-oracle: a fair question, deterministic, and a strategy that ignores the scene does not finish', () => {
@@ -451,15 +534,15 @@ describe('timing-oracle: a fair question, deterministic, and a strategy that ign
     expect(to.sweep(5)).toEqual(a)
     expect(a.points.map((p) => p.x)).toEqual([0, 1])
     expect(to.points).toEqual([0, 1])
-    expect(to.range).toEqual({ min: 0, max: 100 })
+    expect(to.range).toEqual({ min: 0, max: 10000 })
     expect(toScene(5)).toEqual(toScene(5))
     expect(toStream(5)).toEqual(toStream(5))
   })
 
   test('every drawn seed is a fair question: it completes, the oracle is open and then closed, the loss is 2 … 25 points', () => {
     const banded = toRows.filter((r) => r.banded)
-    const lo = Math.min(...toRows.map((r) => r.truth))
-    const hi = Math.max(...toRows.map((r) => r.truth))
+    const lo = Math.min(...toRows.map((r) => r.lost))
+    const hi = Math.max(...toRows.map((r) => r.lost))
     console.log(`timing-oracle: ${banded.length} of ${toRows.length} seeds in 0 … ${TO_SEEDS - 1} are in band; hit rate lost ${lo.toFixed(2)} … ${hi.toFixed(2)} points`)
     expect(banded.length).toBe(toRows.length)
     expect(lo).toBeGreaterThanOrEqual(2)
@@ -484,7 +567,7 @@ describe('timing-oracle: a fair question, deterministic, and a strategy that ign
     })
     const share = new Map<number, number>()
     for (const r of toRows) {
-      const band = TO_LOST_EDGES.findIndex((e, i) => i > 0 && r.truth < e) - 1
+      const band = TO_LOST_EDGES.findIndex((e, i) => i > 0 && r.lost < e) - 1
       share.set(band < 0 ? bands.length - 1 : band, (share.get(band < 0 ? bands.length - 1 : band) ?? 0) + 1 / toRows.length)
     }
     console.log(`timing-oracle loss bands (${TO_LOST_EDGES.join(', ')}): ${[...share].sort((a, b) => a[0] - b[0]).map(([i, s]) => `${i}: ${pct(s)}`).join(', ')}`)
@@ -506,32 +589,55 @@ describe('timing-oracle: a fair question, deterministic, and a strategy that ign
     }
   })
 
-  test('the pass rule is a quarter of a point or 5 %, whichever is larger; the phone seed is the first in band', () => {
-    const r = toSweep(2)
-    const t = toTruth(r)
-    const tol = Math.max(TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE * t)
-    expect(toPass(t, r)).toBe(true)
-    expect(toPass(t + tol, r)).toBe(true)
-    expect(toPass(t - tol, r)).toBe(true)
-    expect(toPass(t + tol + 0.01, r)).toBe(false)
-    expect(to.truth(r)).toBe(t)
+  test('the pass rule is a quarter of a point or 5 % for the loss, a tick (50 ms) or 5 % for the gap, whichever is larger; the phone seed is the first in band', () => {
+    for (const row of [toLostRows[0]!, toGapRows[0]!, toGapRows.find((g) => g.gap >= 1200)!]) {
+      const r = row.sweep
+      const t = toTruth(r)
+      const tol = row.asks === 'gap' ? Math.max(TO_TOLERANCE_GAP_MS, TO_TOLERANCE_SHARE * t) : Math.max(TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE * t)
+      expect(toTolerance(r)).toBe(tol)
+      expect(t).toBe(row.asks === 'gap' ? row.gap : row.lost)
+      expect(toPass(t, r)).toBe(true)
+      expect(toPass(t + tol, r)).toBe(true)
+      expect(toPass(t - tol, r)).toBe(true)
+      expect(toPass(t + tol + 0.01, r)).toBe(false)
+      expect(to.truth(r)).toBe(t)
+    }
     expect(TO_CANONICAL_SEED).toBe(toRows.find((r) => r.banded)?.seed)
     expect(to.phone.seed).toBe(TO_CANONICAL_SEED)
     expect(to.phone.canonical).toEqual(toSweep(TO_CANONICAL_SEED))
   })
 
   test('the best constant passes on at most a fifth of seeds and finishes within 10 rounds about 3 % of the time (30 rounds: under a third)', () => {
-    const best = bestConstant(toRows, 2, 25, 0.05)
+    // one number for every round: a loss in points or a gap in ms, never both, since the two never meet
+    const points = bestConstant(toRows, 2, 25, 0.05)
+    const ms = bestConstant(toRows, 150, 1700, 5)
+    const best = points.share >= ms.share ? points : ms
     const d10 = doneWithin(toRows, () => best.value, 10)
     const d30 = doneWithin(toRows, () => best.value, 30)
-    console.log(`timing-oracle best constant ${best.value.toFixed(2)} points: passes on ${pct(best.share)} of seeds; done within 10 rounds ${pct(d10)}, within 30 ${pct(d30)}`)
+    console.log(`timing-oracle best constant ${best.value.toFixed(2)} (points ${points.value.toFixed(2)}: ${pct(points.share)}, ms ${ms.value}: ${pct(ms.share)}): passes on ${pct(best.share)} of seeds; done within 10 rounds ${pct(d10)}, within 30 ${pct(d30)}`)
     expect(best.share).toBeLessThan(0.2)
     expect(d10).toBeLessThan(0.12)
     expect(d30).toBeLessThan(0.33)
   })
 
+  test('knowing only which number is asked is no better than the scene-blind bound D39 sets for the knee', () => {
+    // the legend says which number this seed asks for; a guess that reads that and nothing else is one constant for each
+    const lost = bestConstant(toLostRows, 2, 25, 0.05)
+    const gap = bestConstant(toGapRows, 150, 1700, 5)
+    const guess = (r: Row) => ((r as (typeof toRows)[number]).asks === 'gap' ? gap.value : lost.value)
+    const share = toRows.filter((r) => r.pass(guess(r))).length / toRows.length
+    const d10 = doneWithin(toRows, guess, 10)
+    const d30 = doneWithin(toRows, guess, 30)
+    console.log(`timing-oracle ask-only constants (loss ${lost.value.toFixed(2)} points ${pct(lost.share)}, gap ${gap.value} ms ${pct(gap.share)}): pass on ${pct(share)} of seeds; done within 10 rounds ${pct(d10)}, within 30 ${pct(d30)}`)
+    expect(lost.share).toBeLessThan(0.25)
+    expect(gap.share).toBeLessThan(0.25)
+    expect(share).toBeLessThan(0.25)
+    expect(d10).toBeLessThan(0.14)
+    expect(d30).toBeLessThan(0.4)
+  })
+
   test('the misreadings the scene tempts do not pass: all-miss (T − 1) ÷ T, the tenant-keyed miss rate, and K ÷ n', () => {
-    const slip = (f: (c: ReturnType<typeof toCase>) => number) => toRows.filter((r) => r.pass(f(toCase(r.seed)))).length / toRows.length
+    const slip = (f: (c: ReturnType<typeof toCase>) => number) => toLostRows.filter((r) => r.pass(f(toCase(r.seed)))).length / toLostRows.length
     const a = slip((c) => (100 * (c.tenants - 1)) / c.tenants)
     const b = slip((c) => (100 * c.tenants * c.prefixes) / c.requests)
     const d = slip((c) => (100 * c.prefixes) / c.requests)
@@ -557,18 +663,25 @@ describe('the panel session on the new exercises', () => {
       expect(accepts(def, 0)).toBe(true)
       expect(accepts(def, 100)).toBe(true)
       expect(accepts(def, -1)).toBe(false)
-      expect(accepts(def, 100.5)).toBe(false)
       expect(accepts(def, NaN)).toBe(false)
       expect(parsePrediction(def, '62.5')).toBe(62.5)
       expect(parsePrediction(def, 'much')).toBeNull()
-      expect(parsePrediction(def, '101')).toBeNull()
     }
+    expect(accepts(str, 100.5)).toBe(false)
+    expect(parsePrediction(str, '101')).toBeNull()
+    // the timing oracle takes a gap in ms as well as a loss in points: every right answer is in its range
+    expect(to.range).toEqual({ min: 0, max: 10000 })
+    for (const r of toRows) expect(accepts(to, r.truth)).toBe(true)
+    expect(parsePrediction(to, '800')).toBe(800)
     expect(parsePrediction(knee, '1.3')).toBeNull()
   })
 
   test('the entry rule names the unit each takes', () => {
     expect(entryText(str, copyFor('straggler')!)).toEqual({ hint: 'a percentage from 0 to 100', error: 'Enter the idle share as a percentage from 0 to 100, such as 62.5.' })
-    expect(entryText(to, copyFor('timing-oracle')!)).toEqual({ hint: 'a number of percentage points', error: 'Enter the hit rate lost as a number of percentage points, such as 7.5.' })
+    expect(entryText(to, copyFor('timing-oracle')!)).toEqual({
+      hint: 'milliseconds or percentage points, as asked',
+      error: 'Enter the number asked for: the probe’s gap in milliseconds, such as 800, or the hit rate lost in percentage points, such as 7.5.',
+    })
   })
 
   test('each has copy: a setup that states its own constants and its label, three ideas, a model answer, and a label for every point', () => {
@@ -588,7 +701,9 @@ describe('the panel session on the new exercises', () => {
     const s = copyFor('straggler')!
     for (const part of ['hypothetical', '1 − Σ l ÷ (8 × max l)', '1 − mean ÷ max', 'not a Fleet run', 'k = 2 … 8', '1 percentage point']) expect(s.setup).toContain(part)
     const t = copyFor('timing-oracle')!
-    for (const part of ['64 sequences', '50 ms', '128 tokens', '64 to 319 tokens', '⌈(prompt − cached) ÷ 128⌉', 'partly a model', 'unbounded cache', 'at least this much', '0.25 point or 5%']) expect(t.setup).toContain(part)
+    for (const part of ['64 sequences', '50 ms', '128 tokens', '64 to 319 tokens', '⌈(prompt − cached) ÷ 128⌉', 'partly a model', 'unbounded cache', 'at least this much', 'one of two numbers and says which', '50 ms or 5%, whichever is larger', '0.25 point or 5%, whichever is larger']) {
+      expect(t.setup).toContain(part)
+    }
   })
 
   test('the straggler’s verdict and table name the idle share, the mean and the longest, and the window that counts as right', () => {
@@ -611,8 +726,9 @@ describe('the panel session on the new exercises', () => {
   })
 
   test('the timing oracle’s verdict and table name both hit rates, the loss, the probe’s gap with each key and the TTFT p95', () => {
-    const r = toSweep(4)
     const c = copyFor('timing-oracle')!
+    // a seed that asks for the loss
+    const r = toLostRows[0]!.sweep
     const truth = toTruth(r)
     const right = verdictText(to, c, truth, r)
     expect(right.ok).toBe(true)
@@ -621,6 +737,20 @@ describe('the panel session on the new exercises', () => {
     const off = verdictText(to, c, truth + 10, r)
     expect(off.ok).toBe(false)
     expect(off.detail).toContain('is right:')
+    expect(off.detail).toContain('points lost')
+    expect(c.view!.played(truth + 10, truth)).toContain('the tenant key lost')
+    // a seed that asks for the gap: the verdict leads with it, in ms, and still prices it
+    const g = toGapRows[0]!.sweep
+    const gap = toTruth(g)
+    expect(gap).toBe(toGap(g, TO_SHARED))
+    const held = verdictText(to, c, gap, g)
+    expect(held.ok).toBe(true)
+    expect(held.detail.startsWith(`The probe sees a gap of ${gap.toLocaleString('en-US')} ms with the shared cache`)).toBe(true)
+    expect(held.detail).toContain('of hit rate on this seed')
+    const miss = verdictText(to, c, gap + 200, g)
+    expect(miss.ok).toBe(false)
+    expect(miss.detail).toContain(`the probe's gap is ${gap.toLocaleString('en-US')} ms (within 50 ms is right:`)
+    expect(c.view!.played(gap + 200, gap)).toBe(`you said ${(gap + 200).toLocaleString('en-US')} ms, the probe’s gap was ${gap.toLocaleString('en-US')} ms`)
     const table = sweepTable(to, c, r, truth)
     expect(table.columns).toEqual(['Cache key', 'Hit rate (%)', 'Probe, used prefix (ms)', 'Probe, unused prefix (ms)', 'Probe gap (ms)', 'TTFT p95 (ms)'])
     expect(table.rows.map((row) => row[0])).toEqual(['Shared across tenants', 'Tenant in the key'])

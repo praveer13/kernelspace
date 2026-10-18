@@ -3,9 +3,10 @@
  * deployment whose prefix cache serves a hit by skipping the cached prefill. An outside tenant, the prober, sends a
  * guess at a prefix the others use and times it. With one cache for everyone the guess hits, and it comes back faster
  * than a guess nobody used: that gap is the oracle. Putting the tenant in the cache key closes it, because the prober's
- * namespace holds nothing, and it costs hit rate. You predict that cost: the percentage points of hit rate lost when
- * the key carries the tenant. The sweep has two points, x = 0 the shared key and x = 1 the tenant in the key, and shows
- * the probe's gap at each beside the hit rate and the fleet's TTFT.
+ * namespace holds nothing, and it costs hit rate. Each seed asks for one of the two numbers §16.3's table names, and
+ * says which (`ToAsk`, `toAsk`): the oracle, the probe's TTFT gap with the shared key in milliseconds, or its price, the
+ * percentage points of hit rate lost when the key carries the tenant. The sweep has two points, x = 0 the shared key and
+ * x = 1 the tenant in the key, and shows the probe's gap at each beside the hit rate and the fleet's TTFT.
  *
  * WHAT RUNS ON THE FLEET ENGINE, AND WHAT IS MODELLED. The Engine models what a hit does, not which requests hit: it
  * skips the cached part of a prompt's prefill (`RequestSpec.cachedPrefix`, the same mechanism the broken benchmark's warm
@@ -38,15 +39,29 @@
  * THE PROBES (`toProbe`). After the traffic has drained, the prober (tenant T, outside the others) times four pairs on
  * an idle engine: a guess at prefix 0, which the others used, and a guess at a prefix nobody used, with the same suffix.
  * Whether the first hits is the same cache's answer for the prober's key: with the shared key, yes; with the tenant in the
- * key the prober's namespace is empty, so both miss and the gap is 0. The probe's gap is the miss's TTFT less the hit's.
+ * key the prober's namespace is empty, so both miss and the gap is 0. The probe's gap is the mean miss's TTFT less the
+ * mean hit's. The cache is never told about the prober's own guesses, so each pair's unused guess stands for a fresh
+ * prefix nobody used, and a real prober would send a new one each time (a real cache would hold its first miss). On an
+ * idle engine a hit's TTFT is ⌈suffix ÷ 128⌉ − 1 ticks and a miss's ⌈(P + suffix) ÷ 128⌉ − 1, and P is a multiple of
+ * 128, so the gap is exactly P ÷ 128 ticks of 50 ms (`toGapRead`): 512 … 4,096 tokens give 200 … 1,600 ms.
  *
- * THE DRAW (`toCase`). The seed draws T, K, n, P and the load from the grids below. A (T, K, n) is kept when the tenants'
- * pairs are at most a quarter of the requests (so the tenant-keyed hit rate stays at 75 % or more) and the hit rate lost is
+ * THE DRAW (`toCase`). The seed draws T, K, n, P and the load from the grids below, and, from a stream of its own so the
+ * rest of the case is the same either way, which number it asks for (each on half the seeds). A (T, K, n) is kept when
+ * the tenants' pairs are at most a quarter of the requests (so the tenant-keyed hit rate stays at 75 % or more) and the hit rate lost is
  * between 2 and 25 points; the seed then draws one of six bands of that loss first and a combination in it, so no one
  * answer is right on more than about a fifth of seeds (tests/world/fleet-ex-more-b.test.ts measures it). The scene gives T, K, n, P and
  * the suffix range, never a hit rate or a TTFT. The band (`toBand`): every request completes, the probe's gap is at least
  * four ticks (200 ms) with the shared key and 0 with the tenant key, and the hit rate lost is in that 2 … 25. A prediction
- * passes within a quarter of a percentage point or 5 % of the truth, whichever is larger.
+ * of the hit rate lost passes within a quarter of a percentage point or 5 % of the truth, whichever is larger; one of the
+ * gap within one tick (50 ms) or 5 %, whichever is larger, which no neighbouring prefix length's gap is (the closest,
+ * 600 and 800 ms or 1,200 and 1,600 ms, are a third apart). The six prefix lengths are drawn equally often, so each gap is
+ * right on about a sixth of the seeds that ask for it (the test bounds every one under a quarter). The two kinds of answer never overlap (a loss is at
+ * most 25 points, a gap at least 200 ms), which is how a played round's line knows its unit (`toAskOfTruth`).
+ *
+ * WHAT DONE CERTIFIES. The panel's done rule is three right in a row on fresh seeds (D39). With each seed asking either
+ * number, three fresh seeds in a row ask for both kinds 3 times in 4 (all three the same kind: 2 × (1/2)³ = 1/4), so a
+ * finished exercise has read both the oracle and its price from the scene on three runs in four, and on the fourth has
+ * read one of them right three times running.
  */
 
 import { splitmix32u } from '@/lib/rng'
@@ -100,9 +115,14 @@ export const TO_MAX_LOST = 25
 export const TO_LOST_EDGES = [2, 4, 6, 9, 13, 18, 25] as const
 /** The probe must see at least this many ticks of gap with the shared key. */
 export const TO_MIN_GAP_TICKS = 4
-/** A prediction passes within this many percentage points or this share of the truth, whichever is larger. */
+/** A prediction passes within this many percentage points (the hit rate lost) or milliseconds (the gap), or this share of the truth, whichever is larger. */
 export const TO_TOLERANCE_POINTS = 0.25
+export const TO_TOLERANCE_GAP_MS = 50
 export const TO_TOLERANCE_SHARE = 0.05
+
+/** What a seed asks for: the hit rate the tenant key loses (percentage points), or the probe's gap with the shared key (ms). */
+export const TO_ASKS = ['lost', 'gap'] as const
+export type ToAsk = (typeof TO_ASKS)[number]
 
 const PERCENT = 100
 const MS_PER_TICK = Math.round(SIM_TICK_SECONDS * 1000)
@@ -113,6 +133,7 @@ const TO_DRAIN_TICKS = 20000
 const CASE_SALT = 0x74696d65
 const TRAFFIC_SALT = 0x74726166
 const PROBE_SALT = 0x70726f62
+const ASK_SALT = 0x61736b73
 
 /** A seed's case: who shares the deployment and what the prefix is. */
 export interface ToCase {
@@ -122,6 +143,8 @@ export interface ToCase {
   prefixTokens: number
   /** The arrival window in ticks. */
   window: number
+  /** What the seed asks for. */
+  asks: ToAsk
 }
 
 /** Ticks a request holds a slot on average if it misses: ⌈mean prompt ÷ chunk⌉ for its prefill, then one tick per output token. */
@@ -172,8 +195,17 @@ export function toCase(seed: number): ToCase {
   const load = TO_LOADS[next() % TO_LOADS.length] as number
   // window = n ÷ (load × capacity), capacity = slots ÷ hold
   const window = Math.round((combo.requests * hold(prefixTokens)) / (load * TO_ENGINE.maxRunning))
-  return { ...combo, prefixTokens, window }
+  return { ...combo, prefixTokens, window, asks: TO_ASKS[splitmix32u(seed ^ ASK_SALT)() % TO_ASKS.length] as ToAsk }
 }
+
+/** The legend over the prediction: what this seed asks for, in the panel's "Predict …" (`FleetExerciseDef.ask`). */
+export const toAsk = (seed: number): string =>
+  toCase(seed).asks === 'gap'
+    ? 'the probe’s TTFT gap with the shared cache key, in milliseconds (an unused prefix’s TTFT less a used one’s)'
+    : 'the percentage points of hit rate lost when the cache key carries the tenant'
+
+/** Which number a right answer is: a loss is at most `TO_MAX_LOST` points and a gap at least `TO_MIN_GAP_TICKS` ticks (200 ms), so they never meet. */
+export const toAskOfTruth = (truth: number): ToAsk => (truth > TO_MAX_LOST ? 'gap' : 'lost')
 
 /** One request of the traffic with who sent it and which prefix it carries. */
 export interface ToRequest extends RequestSpec {
@@ -299,6 +331,8 @@ export function toPoint(seed: number, mode: number): SweepPoint {
       probeMissMs: mean(missTicks) * MS_PER_TICK,
       gapMs: (mean(missTicks) - mean(hitTicks)) * MS_PER_TICK,
       ttftP95Ms: ttftP95 * MS_PER_TICK,
+      // what the seed asks for, so the truth and the pass rule read it from the sweep alone
+      asksGap: c.asks === 'gap' ? 1 : 0,
     },
   }
 }
@@ -309,10 +343,20 @@ const at = (r: SweepResult, x: number): SweepPoint => r.points.find((p) => p.x =
 const metric = (r: SweepResult, x: number, name: string): number => at(r, x).metrics?.[name] ?? NaN
 
 /** The hit rate the tenant key lost, in percentage points: the shared cache's hit rate less the tenant-keyed one. */
-export const toTruth = (r: SweepResult): number => metric(r, TO_SHARED, 'hitRate') - metric(r, TO_TENANT, 'hitRate')
+export const toLost = (r: SweepResult): number => metric(r, TO_SHARED, 'hitRate') - metric(r, TO_TENANT, 'hitRate')
 
 /** The probe's gap in milliseconds with the shared key (the oracle) and with the tenant in the key. */
 export const toGap = (r: SweepResult, x: number): number => metric(r, x, 'gapMs')
+
+/** What the sweep's seed asked for. */
+export const toAskOf = (r: SweepResult): ToAsk => (metric(r, TO_SHARED, 'asksGap') === 1 ? 'gap' : 'lost')
+
+/** The right answer: the probe's gap with the shared key in ms, or the hit rate lost in points, as the seed asks. */
+export const toTruth = (r: SweepResult): number => (toAskOf(r) === 'gap' ? toGap(r, TO_SHARED) : toLost(r))
+
+/** The window either side of the truth that passes: a quarter of a point or a tick (50 ms), or 5 %, whichever is larger. */
+export const toTolerance = (r: SweepResult): number =>
+  Math.max(toAskOf(r) === 'gap' ? TO_TOLERANCE_GAP_MS : TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE * toTruth(r))
 
 /** The seed is a fair question (see the file header). */
 export function toBand(r: SweepResult): boolean {
@@ -321,15 +365,12 @@ export function toBand(r: SweepResult): boolean {
     const p = at(r, x)
     if ((p.metrics?.['completed'] ?? 0) !== (p.metrics?.['requests'] ?? -1) || (p.metrics?.['shed'] ?? 1) !== 0) return false
   }
-  const lost = toTruth(r)
+  const lost = toLost(r)
   return toGap(r, TO_SHARED) >= TO_MIN_GAP_TICKS * MS_PER_TICK && toGap(r, TO_TENANT) === 0 && lost >= TO_MIN_LOST && lost <= TO_MAX_LOST
 }
 
-/** You pass within a quarter of a point or 5 % of the hit rate the tenant key lost, whichever is larger. */
-export const toPass = (prediction: number, r: SweepResult): boolean => {
-  const truth = toTruth(r)
-  return Math.abs(prediction - truth) <= Math.max(TO_TOLERANCE_POINTS, TO_TOLERANCE_SHARE * truth)
-}
+/** You pass within `toTolerance` of what the seed asked for. */
+export const toPass = (prediction: number, r: SweepResult): boolean => Math.abs(prediction - toTruth(r)) <= toTolerance(r)
 
 /** What the learner reads before predicting: who shares the deployment and what is cached; never a hit rate or a TTFT. */
 export function toScene(seed: number): SceneFact[] {
@@ -342,11 +383,20 @@ export function toScene(seed: number): SceneFact[] {
   ]
 }
 
-/** The scene's reading, which a learner makes by hand: 100 × K × (T − 1) ÷ n, the misses the tenant key adds. */
-export function toRead(scene: readonly SceneFact[]): number {
+/** The scene's reading of the hit rate lost, which a learner makes by hand: 100 × K × (T − 1) ÷ n, the misses the tenant key adds. */
+export function toLostRead(scene: readonly SceneFact[]): number {
   const [tenants, prefixes, , requests] = scene as [SceneFact, SceneFact, SceneFact, SceneFact]
   return (PERCENT * prefixes.value * (tenants.value - 1)) / requests.value
 }
+
+/** The scene's reading of the gap: the prefix's P ÷ 128 ticks of prefill, which a hit skips, at 50 ms a tick. */
+export function toGapRead(scene: readonly SceneFact[]): number {
+  const prefix = scene[2] as SceneFact
+  return (prefix.value / TO_ENGINE.prefillChunk) * MS_PER_TICK
+}
+
+/** The scene's reading of what the seed asks for (the legend says which). */
+export const toRead = (scene: readonly SceneFact[], asks: ToAsk): number => (asks === 'gap' ? toGapRead(scene) : toLostRead(scene))
 
 /** The seed phone mode shows: the first in-band seed from 0 (tests/world/fleet-ex-more-b.test.ts re-derives it). */
 export const TO_CANONICAL_SEED = 0
@@ -358,9 +408,11 @@ export const timingOracleExercise: FleetExerciseDef = {
   title: 'The prefix-cache timing oracle',
   lessonId: 't6.l10',
   kcs: ['t6.cache-timing-oracle'],
-  unit: 'the percentage points of hit rate lost when the cache key carries the tenant',
+  unit: 'the probe’s TTFT gap with the shared cache key (ms) or the percentage points of hit rate lost when the key carries the tenant, as the seed asks',
+  ask: toAsk,
   points: TO_POINTS,
-  range: { min: 0, max: 100 },
+  // both kinds of answer: a loss of 2 … 25 points and a gap of 200 … 1,600 ms
+  range: { min: 0, max: 10000 },
   sweep: toSweep,
   truth: toTruth,
   band: toBand,

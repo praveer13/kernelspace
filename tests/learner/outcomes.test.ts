@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { KCS } from '../../src/data/kc'
@@ -69,6 +69,8 @@ import {
   selectVrk30Spread,
   stripFreeText,
   SURFACES,
+  PRACTICE_TEAM_CODE,
+  REDACTED_TEAM_CODE,
   surfaceOf,
   tallyLoopCompletion,
 } from '../../src/lib/learner/outcomes'
@@ -79,6 +81,9 @@ import { sessionSpanMs } from '../../src/lib/learner/today'
 import { buildExportV3, parseImport, serializeExport } from '../../src/lib/ledger/codec'
 import { actMeta, drillFor, drillResult, fleetRunFor, type ActResult } from '../../src/lib/fleet-week'
 import { dailyIncident, dailyResult, type FinishedIncident } from '../../src/lib/world/daily'
+import { SHIFT_LENGTH, recordShift, shiftIncidents, shiftRef, type ShiftIncident } from '../../src/lib/world/shift'
+import { interviewRef, roundIncident, roundPlan } from '../../src/lib/mentor/interview'
+import { parseIncidentRef } from '../../src/lib/ledger/refs'
 import type { ItemResponse, LedgerEvent, LocalDay, WorkingRecord } from '../../src/lib/ledger/types'
 import { hash32 } from '../../src/lib/rng'
 import { makeProfile, startTab } from '../ledger/env'
@@ -1561,6 +1566,68 @@ describe('surfaceOf', () => {
     expect(of('visit', 'lesson:t1.l1')).toBeNull()
     expect(of('ack', 'hint:lab/x#R1')).toBeNull()
     expect(of('capstone-step', 'cap:a')).toBeNull()
+  })
+
+  /** One practice incident written as the page writes it: `recordShift` on the progress store, the façade's own event out. */
+  const recorded = async (day: number, incident: ShiftIncident, ms: number): Promise<LedgerEvent[]> => {
+    const tab = startTab(makeProfile({ ms: Date.parse(`${d(day)}T12:00:00.000Z`) }))
+    expect(recordShift(tab.progress, d(day), incident, FINISHED, ms)).toBe(true)
+    await tab.progress.controls.flush()
+    return ((await (await tab.engine()).events()) as LedgerEvent[]).filter((e) => e.kind === 'incident')
+  }
+
+  test('the On-Call shift’s and Interview mode’s practice incidents are not Daily minutes, as written and as donated (G8)', async () => {
+    const shift = (await Promise.all(shiftIncidents(d(0)).map((inc) => recorded(0, inc, 60_000)))).flat()
+    const interview = await recorded(0, roundIncident(roundPlan(d(0), 0)), 90_000)
+    expect(shift.map((e) => e.ref)).toEqual([1, 2, 3].map((k) => `inc:team/shift-${k}/${d(0)}`))
+    expect(interview.map((e) => e.ref)).toEqual([`inc:team/interview/${d(0)}`])
+    const donated = (events: LedgerEvent[]) => ledgerOfDonation(redactForPartner({ events, working: [] })).events
+    for (const events of [shift, interview]) {
+      for (const e of events) {
+        expect((e as { ms?: number }).ms).toBeGreaterThan(0)
+        expect(surfaceOf(e)).toBeNull()
+      }
+      // a donation drops the team code, and the dropped code is practice too
+      for (const e of donated(events)) {
+        expect(e.ref).toMatch(/^inc:team\/-\/d0$/)
+        expect(surfaceOf(e)).toBeNull()
+      }
+      expect(selectSurfaceMinutes([events]).partners).toBe(0)
+      expect(selectSurfaceMinutes([donated(events)]).partners).toBe(0)
+    }
+    // beside the Daily of the same day, only the Daily's 90 s count, as written and as donated
+    const daily = await dailyAndFleet(0, DAILY_AND_FLEET_MS)
+    for (const events of [[...daily, ...shift, ...interview], donated([...daily, ...shift, ...interview])]) {
+      expect(selectSurfaceMinutes([events]).surfaces.daily.median).toBeCloseTo(1.5, 9)
+    }
+  })
+
+  test('the practice team codes are reserved: every team code the app writes is one, and any other is a team Daily', () => {
+    for (const code of ['shift-1', 'shift-2', 'shift-3', 'interview']) expect(PRACTICE_TEAM_CODE.test(code)).toBe(true)
+    for (const code of ['blue', 'shift', 'shift-0', 'interviews', 'team-interview', '-']) expect(PRACTICE_TEAM_CODE.test(code)).toBe(false)
+    expect(of('incident', 'inc:team/blue/2026-09-01')).toBe('daily')
+    expect(of('incident', 'inc:team/shift-2/2026-09-01')).toBeNull()
+    expect(of('incident', 'inc:team/interview/2026-09-01')).toBeNull()
+    expect(of('incident', `inc:team/${REDACTED_TEAM_CODE}/d4`)).toBeNull()
+    for (let k = 0; k < SHIFT_LENGTH; k++) expect(parseIncidentRef(shiftRef('2026-09-01', k))).toMatchObject({ src: 'team', code: `shift-${k + 1}` })
+    expect(parseIncidentRef(interviewRef('2026-09-01'))).toMatchObject({ src: 'team', code: 'interview' })
+    // every team ref a source file builds names a reserved code (a placeholder `${…}` read as 1), or the donation's `-`:
+    // a writer of a new team code, such as a team Daily, fails here until surfaceOf is told which it is
+    const root = path.resolve(import.meta.dir, '../../src')
+    const files = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((f) => /\.tsx?$/.test(f))
+    const codes = new Map<string, string>()
+    for (const f of files) {
+      const code = readFileSync(path.join(root, f), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      for (const m of code.matchAll(/`inc:team\/((?:[^/`$]|\$\{[^}]*\})*)\//g)) {
+        // `inc:team/${string}/${string}` is the ref type (ledger/types.ts), which writes nothing
+        if (m[1] !== '${string}') codes.set(`${f}: ${m[1]}`, (m[1] as string).replace(/\$\{[^}]*\}/g, '1'))
+      }
+    }
+    console.log(`team codes the app writes: ${[...codes.keys()].join('; ')}`)
+    expect([...codes.values()].sort()).toEqual(['-', 'interview', 'shift-1'])
+    for (const [where, c] of codes) expect(PRACTICE_TEAM_CODE.test(c) || c === REDACTED_TEAM_CODE, where).toBe(true)
   })
 })
 

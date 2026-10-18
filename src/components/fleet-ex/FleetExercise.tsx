@@ -42,6 +42,7 @@ import {
   NoFairSeed,
   PASSES_NEEDED,
   canSave,
+  askFor,
   copyFor,
   drawFairSweep,
   entryText,
@@ -378,7 +379,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                 {/* 2. predict: a number, from the scene, before any outcome is shown */}
                 {(round.phase === 'predict' || round.prediction !== undefined) && (
                   <fieldset className="mt-4 min-w-0" disabled={round.phase !== 'predict'}>
-                    <legend className="mb-1.5 text-body-sm font-medium text-text-1">Predict {def.unit}.</legend>
+                    <legend className="mb-1.5 text-body-sm font-medium text-text-1">Predict {askFor(def, round.seed)}.</legend>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
                         ref={inputRef}
@@ -397,7 +398,7 @@ function Panel({ block, lessonId, index, env: envIn, def, copy }: PanelProps) {
                             commit()
                           }
                         }}
-                        aria-label={`Your prediction: ${def.unit}`}
+                        aria-label={`Your prediction: ${askFor(def, round.seed)}`}
                         aria-invalid={invalid}
                         aria-describedby={`${uid}-scene ${uid}-allowed${invalid ? ` ${uid}-err` : ''}`}
                         className={cn(hitArea(false), 'h-9 w-28 min-w-0 rounded-sm border border-line bg-ink px-2 font-mono text-body-sm text-text-1 disabled:opacity-70 [@media(pointer:coarse)]:h-11')}
@@ -644,7 +645,7 @@ function PhoneOutcome({
     <div className="mt-4" data-phone>
       <Scene id={`${uid}-scene`} def={def} seed={def.phone.seed} fresh={false} />
       <fieldset className="mt-4 min-w-0" disabled={locked !== null}>
-        <legend className="mb-1.5 text-body-sm font-medium text-text-1">Predict {def.unit}.</legend>
+        <legend className="mb-1.5 text-body-sm font-medium text-text-1">Predict {askFor(def, def.phone.seed)}.</legend>
         <div className="flex flex-wrap items-center gap-2">
           <input
             data-fleet-predict
@@ -662,7 +663,7 @@ function PhoneOutcome({
                 submit()
               }
             }}
-            aria-label={`Your prediction: ${def.unit}`}
+            aria-label={`Your prediction: ${askFor(def, def.phone.seed)}`}
             aria-invalid={invalid}
             aria-describedby={`${uid}-scene ${uid}-allowed${invalid ? ` ${uid}-err` : ''}`}
             className="h-11 w-28 min-w-0 rounded-sm border border-line bg-ink px-2 font-mono text-body-sm text-text-1 disabled:opacity-70"
