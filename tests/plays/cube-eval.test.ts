@@ -2,14 +2,18 @@
  * The cube's 3D evaluation (docs/specs/wave-3.md §16.1, task 3s-02; docs/prereg/tiling-cube-3d.md): the 3 + 3 split of a
  * learner's six levels by `armOf('cube-view', level, expSeed, 2)`, the views the play records, the two opt-in spatial puzzles
  * (no choice items: a count and an ordered id list), `selectCubeByView`, and the pre-registration, which stays unsigned.
+ *
+ * The owner's answer of 2026-10-15: the 3D view is a plain opt-in on every level, with no study, so the play runs the
+ * evaluation only when `CUBE_VIEW_STUDY` is true, and it stays false until the draft is signed. The walks below play the
+ * shipped state (nothing randomized or recorded, 3D on every level) and the switched-on one (the split as 3s-02 built it).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { CUBE_VIEW_EXPERIMENT, cubeViewsFor, withViews } from '../../src/lib/learner/cube-views'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { CUBE_VIEW_EXPERIMENT, CUBE_VIEW_STUDY, cubeViewsFor, withViews } from '../../src/lib/learner/cube-views'
 import { armOf } from '../../src/lib/learner/experiments'
 import { addDays } from '../../src/lib/learner/reentry'
 import { ledgerOfDonation, redactForPartner } from '../../src/lib/learner/redact'
@@ -403,6 +407,45 @@ describe('SpatialProxy, mounted: opt-in, two items, no feedback', () => {
     await m.unmount()
   })
 
+  /** Opens the puzzles and answers the count, so the order puzzle is on screen. */
+  async function toOrder(env: ReturnType<typeof envOf>['env']) {
+    const m = await dom.mount(createElement(SpatialProxy, { env }))
+    await dom.until(() => text(m).includes('Take the two puzzles'))
+    await dom.press(buttonNamed(m, 'Take the two puzzles'))
+    const input = fields(m, 'input')[0] as { value: string; dispatchEvent(e: unknown): boolean }
+    await dom.act(() => {
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input) as object, 'value')?.set
+      if (setter) setter.call(input, '15')
+      else input.value = '15'
+      input.dispatchEvent(new (dom.window.Event as new (t: string, i?: object) => unknown)('input', { bubbles: true }))
+    })
+    await dom.press(buttonNamed(m, 'Record my answer'))
+    await dom.until(() => text(m).includes('Puzzle 2 of 2'))
+    return m
+  }
+
+  const focusedName = () => (dom.document.activeElement as unknown as { getAttribute(n: string): string | null }).getAttribute('aria-label')
+
+  test('a move keeps focus on the row that moved: on its other button when the press took it to an end, else on the button pressed', async () => {
+    const m = await toOrder(envOf().env)
+    // right, top, left. Up on row 2 takes Top to the top, which disables its Up: focus goes to its Down, not to the page
+    await dom.press(buttonNamed(m, 'Move Top view up'))
+    expect((buttonNamed(m, 'Move Top view up') as { disabled: boolean }).disabled).toBe(true)
+    expect(focusedName()).toBe('Move Top view down')
+    // top, right, left. Down on row 2 takes Right to the bottom, which disables its Down: focus goes to its Up
+    await dom.press(buttonNamed(m, 'Move Right view down'))
+    expect((buttonNamed(m, 'Move Right view down') as { disabled: boolean }).disabled).toBe(true)
+    expect(focusedName()).toBe('Move Right view up')
+    // top, left, right. Up on row 3 leaves Right on row 2 with both buttons live: focus stays on the button pressed
+    await dom.press(buttonNamed(m, 'Move Right view up'))
+    expect(focusedName()).toBe('Move Right view up')
+    // top, right, left. Down on row 1 moves Top to row 2: focus stays on the button pressed, though its row moved
+    await dom.press(buttonNamed(m, 'Move Top view down'))
+    expect(focusedName()).toBe('Move Top view down')
+    expect(fields(m, 'ol li').map((li) => (li as { textContent: string }).textContent.replace(/^\d\. /, '').replace(/ ?(Up|Down)/g, '').trim())).toEqual(['Right view', 'Top view', 'Left view'])
+    await m.unmount()
+  })
+
   test('a learner who answered both before is not asked again; one who answered a single item still is', async () => {
     const both = await dom.mount(createElement(SpatialProxy, { env: envOf([`${SPATIAL_PREFIX}1`, `${SPATIAL_PREFIX}2`]).env }))
     await dom.until(() => text(both).includes('not offered again'))
@@ -621,6 +664,11 @@ describe('docs/prereg/tiling-cube-3d.md: a draft the owner signs', () => {
     expect(isPreregSigned(text.replace('Signed: (pending owner)', 'Signed: Someone 2026-10-15'))).toBe(true)
   })
 
+  test('the study is off while the draft is unsigned: nothing randomizes without a signature', () => {
+    // a signature allows the switch (cube-views.ts, one line); it never turns it on by itself
+    if (!isPreregSigned(text)) expect(CUBE_VIEW_STUDY).toBe(false)
+  })
+
   test('it sets the margin and the default, and the numbers are the code’s', () => {
     expect(CUBE_VIEW_MARGIN).toBe(0.1)
     expect(text).toContain('0.10 in *d*')
@@ -651,32 +699,45 @@ describe('docs/prereg/tiling-cube-3d.md: a draft the owner signs', () => {
 /* The play                                                            */
 /* ------------------------------------------------------------------ */
 
-describe('the play, walked: the split decides where 3D is offered, and the record carries it', () => {
+describe('the play, walked: with the study off 3D is a plain opt-in; switched on, the split decides where 3D is offered, and the record carries it', () => {
   let dom: DomKit
   const progress = useProgress
-  const saved = { working: progress.getState().working, recordPlay: progress.getState().recordPlay, recordItems: progress.getState().recordItems, engine: progress.controls.engine }
+  const saved = {
+    working: progress.getState().working,
+    recordPlay: progress.getState().recordPlay,
+    recordItems: progress.getState().recordItems,
+    setWorking: progress.getState().setWorking,
+    ledger: progress.getState().ledger,
+    engine: progress.controls.engine,
+  }
   beforeAll(async () => {
     dom = await installDom()
   })
   afterAll(async () => {
     await dom.uninstall()
-    progress.setState({ working: saved.working, recordPlay: saved.recordPlay, recordItems: saved.recordItems } as never)
+    progress.setState({ working: saved.working, recordPlay: saved.recordPlay, recordItems: saved.recordItems, setWorking: saved.setWorking, ledger: saved.ledger } as never)
     ;(progress.controls as { engine: unknown }).engine = saved.engine
   })
 
   type El = { tagName: string; textContent: string; value: string; getAttribute(n: string): string | null; dispatchEvent(e: unknown): boolean }
 
-  /** Plays all six levels on the practice seed, answering with the truth, and says on which levels the 3D entry showed. */
-  async function walk(working: Record<string, unknown>) {
+  /**
+   * Plays all six levels on the practice seed, answering with the truth, and says on which levels the 3D entry showed. The
+   * ledger is loaded and writable, so a play that wanted an `exp:seed` would write one (`written` keeps the working keys).
+   */
+  async function walk(working: Record<string, unknown>, study?: boolean) {
     const plays: PlayResult[] = []
     const items: ItemResponse[] = []
+    const written: string[] = []
     progress.setState({
       working,
       recordPlay: (r: PlayResult) => void plays.push(r),
       recordItems: (r: ItemResponse[]) => void items.push(...r),
+      setWorking: (key: string) => void written.push(key),
+      ledger: { ...saved.ledger, ready: true, readOnly: false },
     } as never)
     ;(progress.controls as { engine: unknown }).engine = async () => ({ events: async () => [] })
-    const m = await dom.mount(createElement(MemoryRouter, null, createElement(TilingCubePlay, { mode: 'page' })))
+    const m = await dom.mount(createElement(MemoryRouter, null, createElement(TilingCubePlay, { mode: 'page', ...(study === undefined ? {} : { study }) })))
     const all = (sel: string) => Array.from(m.container.querySelectorAll(sel) as ArrayLike<never>) as El[]
     const btn = (name: string | RegExp) => all('button').find((b) => (typeof name === 'string' ? b.textContent.trim().startsWith(name) : name.test(b.textContent.trim())))
     const body = () => m.container.textContent ?? ''
@@ -711,13 +772,51 @@ describe('the play, walked: the split decides where 3D is offered, and the recor
       await dom.press(btn(/^(Level \d|See all six)/) as never)
     }
     await dom.until(() => m.container.querySelector('[data-phase-now="debrief"]') !== null)
-    return { m, plays, items, shown, noted, body, btn }
+    return { m, plays, items, written, shown, noted, body, btn }
   }
 
-  test('a learner with an exp:seed is offered 3D on exactly the levels the split gives it, three of six', async () => {
+  test('with the study off (CUBE_VIEW_STUDY while the draft is unsigned): every level offers 3D, and nothing is randomized, recorded or said about a study', async () => {
+    for (const working of [{ 'exp:seed': 12345 }, {}]) {
+      const r = await walk(working, false)
+      expect(r.shown).toEqual([true, true, true, true, true, true])
+      expect(r.noted).toEqual([false, false, false, false, false, false])
+      // no exp:seed is made for the cube, even with the ledger loaded and writable and none there
+      expect(r.written).not.toContain('exp:seed')
+      expect(r.written).toEqual([])
+      // the record carries no view
+      expect(r.plays).toHaveLength(1)
+      const levels = r.plays[0].data.levels ?? []
+      expect(levels.map((l) => l.id)).toEqual(IDS)
+      expect(levels.some((l) => 'view' in l)).toBe(false)
+      // the closing screen says nothing about a random pick or a pre-registration, and offers no spatial puzzles
+      expect(r.body()).not.toContain('picked at random')
+      expect(r.body()).not.toContain('the rule for reading it was fixed')
+      expect(r.body()).not.toContain('tiling-cube-3d.md')
+      expect(r.body()).not.toContain('spatial puzzles')
+      expect(r.m.container.querySelector('[data-spatial]')).toBeNull()
+      expect(r.items.filter((i) => i.ref.startsWith('item:cube.spatial.'))).toEqual([])
+      await r.m.unmount()
+    }
+  })
+
+  test('every page mounts the play with the default, CUBE_VIEW_STUDY, so it is the one switch', () => {
+    const walkSrc = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => {
+        const f = join(dir, n)
+        return statSync(f).isDirectory() ? walkSrc(f) : /\.(ts|tsx)$/.test(n) ? [f] : []
+      })
+    const mounts = walkSrc(join(ROOT, 'src'))
+      .map((f) => ({ file: relative(ROOT, f), text: read(relative(ROOT, f)) }))
+      .filter((f) => /<found\.entry\.Component\b/.test(f.text))
+    expect(mounts.map((f) => f.file).sort()).toEqual(['src/components/blocks/PlayBlock.tsx', 'src/pages/Play.tsx'])
+    for (const f of mounts) for (const tag of f.text.match(/<found\.entry\.Component\b[^>]*>/g) ?? []) expect(tag).toMatch(/^<found\.entry\.Component mode="(page|embed)" \/>$/)
+    expect(read('src/components/play/tiling-cube/Play.tsx')).toContain('study = CUBE_VIEW_STUDY')
+  })
+
+  test('switched on, a learner with an exp:seed is offered 3D on exactly the levels the split gives it, three of six', async () => {
     const seed = 12345
     const want = cubeViewsFor(IDS, seed)
-    const r = await walk({ 'exp:seed': seed })
+    const r = await walk({ 'exp:seed': seed }, true)
     expect(r.shown).toEqual(want.map((v) => v === '3d'))
     expect(r.shown.filter(Boolean)).toHaveLength(3)
     // the note that says why appears with the entry and nowhere else
@@ -731,16 +830,18 @@ describe('the play, walked: the split decides where 3D is offered, and the recor
     await r.m.unmount()
   })
 
-  test('the closing screen says the levels were picked at random and offers the puzzles, and no puzzle answer is recorded unasked', async () => {
-    const r = await walk({ 'exp:seed': 777 })
+  test('switched on, the closing screen says the levels were picked at random and offers the puzzles, and no puzzle answer is recorded unasked', async () => {
+    const r = await walk({ 'exp:seed': 777 }, true)
     await dom.until(() => r.body().includes('Take the two puzzles'))
     expect(r.body()).toContain('picked at random for you, to find out whether the 3D view helps')
     expect(r.items.filter((i) => i.ref.startsWith('item:cube.spatial.'))).toEqual([])
     await r.m.unmount()
   })
 
-  test('a learner with no exp:seed yet is offered no 3D, has no view recorded, is told nothing about an experiment and sees no puzzles', async () => {
-    const r = await walk({})
+  test('switched on, a learner with no exp:seed yet gets one made, is offered no 3D until it is read, has no view recorded, is told nothing about an experiment and sees no puzzles', async () => {
+    const r = await walk({}, true)
+    // the play asks for the seed once the ledger is ready (this stand-in store keeps it, so the walk stays seedless)
+    expect(r.written).toContain('exp:seed')
     expect(r.shown).toEqual([false, false, false, false, false, false])
     expect(r.noted).toEqual([false, false, false, false, false, false])
     expect(r.plays).toHaveLength(1)
@@ -750,10 +851,10 @@ describe('the play, walked: the split decides where 3D is offered, and the recor
     await r.m.unmount()
   })
 
-  test('different learners get different splits through the same play', async () => {
+  test('switched on, different learners get different splits through the same play', async () => {
     const seen = new Set<string>()
     for (const seed of [1, 2, 3]) {
-      const r = await walk({ 'exp:seed': seed })
+      const r = await walk({ 'exp:seed': seed }, true)
       seen.add((r.plays[0].data.levels ?? []).map((l) => l.view).join(','))
       await r.m.unmount()
     }

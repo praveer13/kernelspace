@@ -1,8 +1,10 @@
 /**
- * The cube in 3D, shipped dark (docs/specs/wave-3.md §16.1, D9, Q7, task 3s-01): View3D renders nothing until its
- * `available` prop is true (which nothing sets before 3s-02), only for the ids in GATE_3D, and only the button until it is
- * pressed; Cube3D's shell, budgets and imports; and verify-bundle's two lines for the scene. The static-import walk that
- * proves /today, /boot, /me and /play/tiling-cube never load three is tests/boot/imports.test.ts's.
+ * The cube in 3D (docs/specs/wave-3.md §16.1, D9, Q7, task 3s-01; the owner's answer of 2026-10-15): View3D renders
+ * nothing until its `available` prop is true, only for the ids in GATE_3D, and only the button until it is pressed; the
+ * play sets it on every level, a plain opt-in after the 2D faces and their table (the study that would set it on half of
+ * them is dormant, tests/plays/cube-eval.test.ts); Cube3D's shell, budgets, frame counts and imports; and verify-bundle's
+ * two lines for the scene. The static-import walk that proves /today, /boot, /me and /play/tiling-cube never load three is
+ * tests/boot/imports.test.ts's.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createElement, lazy, useState, type ComponentType } from 'react'
@@ -21,9 +23,12 @@ import {
   basisOf,
   MAX_DPR,
   MAX_INSTANCES,
+  STATS_PRIORITY,
   cellsPerEdge,
+  frameCounts,
   legendOf,
   shellOf,
+  type FrameState,
   type Shell,
 } from '../../src/components/play/tiling-cube/Cube3D'
 import { MAX_LINES, exploreFor, layoutFaces, openViews, practiceSession, predictedOf, withPrediction, type CubeSession, type Explore } from '../../src/components/play/tiling-cube/session'
@@ -50,7 +55,7 @@ function fakeScene() {
   return { seen, Scene: lazy(async () => { seen.loads++; return { default: Scene } }) }
 }
 
-describe('View3D ships dark', () => {
+describe('View3D is dark by default, and the play turns it on', () => {
   test('its id list is the gate verify-plays checks', () => {
     expect([...VIEW3D_IDS]).toEqual([...GATE_3D])
   })
@@ -82,12 +87,12 @@ describe('View3D ships dark', () => {
     expect(seen.loads).toBe(0)
   })
 
-  test('the play sets `available` only from the learner’s split (3s-02), so a first paint, or a learner with no split, has no 3D entry', () => {
+  test('the play sets `available` in one place: on every level, or with the dormant study on, from the learner’s split; its first paint is the prediction, with no 3D entry', () => {
     const play = read('src/components/play/tiling-cube/Play.tsx')
     expect(play).toMatch(/<View3D id="tiling-cube"/)
-    // the one place that sets it, and never to a literal true (tests/plays/cube-eval.test.ts walks the play)
+    // the one place that sets it (tests/plays/cube-eval.test.ts walks the play both ways)
     expect(play.match(/<CubeView3D[^>]*available/g)).toHaveLength(1)
-    expect(play).toContain("available={views[level.id] === '3d'}")
+    expect(play).toContain("available={!study || views[level.id] === '3d'}")
     expect(play).not.toMatch(/<CubeView3D[^>]*available=\{true\}/)
     // nothing else under src mounts or enables a View3D yet
     const users = walk(join(ROOT, 'src'))
@@ -193,7 +198,8 @@ describe('View3D, mounted: the scene opens on request, and without WebGL2 it nev
     expect(hasWebGL2(canvas((kind: string) => (kind === 'webgl' ? {} : null)))).toBe(false)
   })
 
-  test('the default level view in the play (mounted at the explore step) has no 3D entry, and the 2D faces come before the table', async () => {
+  /** Level 1 at its explore step, with the table and the 3D entry the play passes it (`available` as given). */
+  async function mountLevel1(available: boolean | undefined) {
     const level = CUBE_LEVELS[0]
     let s: CubeSession = practiceSession()
     s = openViews(withPrediction(s, predictedOf({ ok: true, response: { kind: 'estimate', value: 1 } } as never, s.runs[0].inst)))
@@ -203,7 +209,7 @@ describe('View3D, mounted: the scene opens on request, and without WebGL2 it nev
         session,
         level,
         mirrorId: 'm',
-        mirror: createElement('div', null, createElement(Mirror, { id: 'm', level, explore: session.explore }), createElement(CubeView3D, { level, explore: session.explore, mirrorId: 'm' })),
+        mirror: createElement('div', null, createElement(Mirror, { id: 'm', level, explore: session.explore }), createElement(CubeView3D, { level, explore: session.explore, mirrorId: 'm', available })),
         focus: false,
         onPredicted: () => {},
         onOpenViews: () => {},
@@ -216,9 +222,29 @@ describe('View3D, mounted: the scene opens on request, and without WebGL2 it nev
     }
     const m = await dom.mount(createElement(Level1))
     await dom.until(() => m.container.querySelector('[data-views]') !== null)
-    expect(m.container.querySelector('[data-views]')).not.toBeNull()
+    return m
+  }
+
+  /** Which of the 2D faces, their table and the 3D entry are on the page, in document order. */
+  const orderOf = (m: { container: { querySelectorAll(sel: string): unknown } }) =>
+    Array.from(m.container.querySelectorAll('[data-views], [data-play-mirror], [data-view3d]') as ArrayLike<{ hasAttribute(n: string): boolean }>).map((el) =>
+      el.hasAttribute('data-views') ? 'faces' : el.hasAttribute('data-play-mirror') ? 'table' : '3d',
+    )
+
+  test('a level view with no `available` has no 3D entry, and the 2D faces come before the table', async () => {
+    const m = await mountLevel1(undefined)
     expect(m.container.textContent).not.toContain('Show it in 3D')
     expect(m.container.querySelector('[data-view3d]')).toBeNull()
+    expect(orderOf(m)).toEqual(['faces', 'table'])
+    await m.unmount()
+  })
+
+  test('as the play mounts it, the level view offers 3D after the 2D faces and their table, closed and unloaded', async () => {
+    const m = await mountLevel1(true)
+    expect(orderOf(m)).toEqual(['faces', 'table', '3d'])
+    expect(m.container.textContent).toContain('Show it in 3D')
+    expect(m.container.querySelector('[data-view3d] button')?.getAttribute('aria-expanded')).toBe('false')
+    expect(m.container.querySelector('[data-cube3d]')).toBeNull()
     await m.unmount()
   })
 })
@@ -336,6 +362,38 @@ describe('Cube3D: the budgets the spec names (games-3d.md:250–255)', () => {
     expect(DRAW_CALL_BUDGET).toBe(100)
     // the whole scene is one instanced mesh and one line set: 2 draws
     expect(code.match(/<(instancedMesh|mesh|lineSegments|points|line|sprite)\b/g)).toEqual(['<instancedMesh', '<lineSegments'])
+  })
+
+  test('the draw counts are the frame’s own, read after it renders, so the first frame of the demand loop reads 2 and not 0', () => {
+    // a renderer as three's: `render` resets `info.render` (autoReset), then counts its draws
+    const drawn: number[] = []
+    const gl: FrameState['gl'] = {
+      info: { render: { calls: 0, triangles: 0 } },
+      render: () => {
+        gl.info.render = { calls: 0, triangles: 0 }
+        gl.info.render.calls += 2
+        gl.info.render.triangles += 2200
+        drawn.push(1)
+      },
+    }
+    const state = { gl, scene: {}, camera: {} } as unknown as FrameState
+    // read before any draw, as a plain useFrame callback read them, the counts are 0
+    expect([gl.info.render.calls, gl.info.render.triangles]).toEqual([0, 0])
+    expect(frameCounts(state)).toEqual([2, 2200])
+    expect(drawn).toHaveLength(1)
+    // each call draws one frame and reads that frame
+    expect(frameCounts(state)).toEqual([2, 2200])
+    expect(drawn).toHaveLength(2)
+    // Stats renders the frame itself: with a subscriber above priority 0, fiber's loop skips its own render, so each frame
+    // is drawn once, and its counts are read after it
+    expect(STATS_PRIORITY).toBeGreaterThan(0)
+    expect(code).toContain('useFrame((state) => report(...frameCounts(state)), STATS_PRIORITY)')
+    expect(code.match(/useFrame\(/g)).toHaveLength(1)
+    // and the installed fiber does skip it: its loop renders only when no subscriber has a priority
+    const dist = join(ROOT, 'node_modules', '@react-three', 'fiber', 'dist')
+    const loops = readdirSync(dist).filter((f) => /^events-.*\.esm\.js$/.test(f))
+    expect(loops).toHaveLength(1)
+    expect(readFileSync(join(dist, loops[0]), 'utf8')).toContain('if (!state.internal.priority && state.gl.render) state.gl.render(state.scene, state.camera)')
   })
 
   test('nothing animates on a clock: no always loop, no requestAnimationFrame, no clock', () => {

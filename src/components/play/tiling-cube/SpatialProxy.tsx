@@ -1,7 +1,9 @@
 /**
  * The cube's two spatial puzzles (docs/specs/wave-3.md §16.1, task 3s-02; docs/prereg/tiling-cube-3d.md section 3), offered
  * once the six levels are done: how many unit cubes make a stack (a number), and which order three flat views of another
- * stack come in (an ordered list, moved with buttons, never dragged: WCAG 2.5.7). They are opt-in: nothing happens
+ * stack come in (an ordered list, moved with buttons, never dragged: WCAG 2.5.7). A move keeps focus on the row that moved:
+ * on the button pressed, or on the row's other one when the press took the row to an end and disabled the button (a disabled
+ * button cannot hold focus, which would drop to the page). They are opt-in: nothing happens
  * until the learner presses "Take the two puzzles", and nothing is lost by not pressing it. Each answer is one `item`
  * event with src `practice` and no KC (spatial.ts), and the learner is not told which were right.
  *
@@ -84,6 +86,9 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
   const shownAt = useRef(0)
   const heading = useRef<HTMLHeadingElement>(null)
   const first = useRef(true)
+  // The order puzzle's buttons by `${view}:${dir}`, and the one a move hands focus to once the list has re-rendered.
+  const moveButtons = useRef(new Map<string, HTMLButtonElement>())
+  const focusAfterMove = useRef<string | null>(null)
 
   // The ledger says whether both answers exist. Until it has answered nothing is offered, so a learner who did them is not asked twice.
   useEffect(() => {
@@ -112,6 +117,14 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
     if (step === 'count' || step === 'order' || step === 'done') heading.current?.focus()
   }, [step])
 
+  // After a move, focus follows the row that moved. React may re-insert a moved row's node, which drops focus even when its
+  // button stays enabled, so focus is put back every time, not only when the button pressed was disabled.
+  useEffect(() => {
+    const key = focusAfterMove.current
+    focusAfterMove.current = null
+    if (key) moveButtons.current.get(key)?.focus()
+  }, [order])
+
   const open = () => {
     shownAt.current = env.now()
     setStep('count')
@@ -134,8 +147,16 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
     if (j < 0 || j >= order.length) return
     const next = [...order]
     ;[next[i], next[j]] = [next[j], next[i]]
+    // the pressed button is disabled once its row reaches that end, so focus goes to the row's other button
+    const pressedOff = dir < 0 ? j === 0 : j === next.length - 1
+    focusAfterMove.current = `${next[j]}:${(dir < 0) !== pressedOff ? 'up' : 'down'}`
     setOrder(next)
     setMoved(`${VIEW_NAMES[next[j]]} is now number ${j + 1} of ${next.length}.`)
+  }
+
+  const moveRef = (key: string) => (el: HTMLButtonElement | null) => {
+    if (el) moveButtons.current.set(key, el)
+    else moveButtons.current.delete(key)
   }
 
   const recordOrder = () => {
@@ -234,10 +255,17 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
                 <span className="w-24 text-body-sm text-text-1">
                   {i + 1}. {VIEW_NAMES[v]}
                 </span>
-                <Button variant="ghost" className="min-h-11 !px-3" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${VIEW_NAMES[v]} up`}>
+                <Button ref={moveRef(`${v}:up`)} variant="ghost" className="min-h-11 !px-3" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${VIEW_NAMES[v]} up`}>
                   Up
                 </Button>
-                <Button variant="ghost" className="min-h-11 !px-3" disabled={i === order.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${VIEW_NAMES[v]} down`}>
+                <Button
+                  ref={moveRef(`${v}:down`)}
+                  variant="ghost"
+                  className="min-h-11 !px-3"
+                  disabled={i === order.length - 1}
+                  onClick={() => move(i, 1)}
+                  aria-label={`Move ${VIEW_NAMES[v]} down`}
+                >
                   Down
                 </Button>
               </li>
