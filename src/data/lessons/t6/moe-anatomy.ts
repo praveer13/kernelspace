@@ -43,6 +43,68 @@ This is why MoE serving is a *scheduling and networking* discipline:
       family: 'memory',
       variants: ['active-bytes'],
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: an MoE needs memory only for its active parameters.
+    // The evidence: PLAN-100X §4 gives every lure a misconception id, and this one is the memory family's
+    // `memory.active-for-total` ("You counted only the active parameters"), the slip t6.l1 warns about; the frontier models
+    // the evidence lists are all total/active pairs (serving-landscape.md F5: Kimi K3 2.8T/104B, gpt-oss-120b 117B/5.1B).
+    // The numbers are claims model.deepseek-v3.total-params (671) and model.deepseek-v3.active-params (37), one byte per FP8 weight.
+    // The family item that proves the fix: memory/active-bytes, the block just above, whose `resident` ask has that lure.
+    // It sits after the item block so the item keeps its block index (its done state is keyed `t6.l1#<blockIndex>`).
+    {
+      type: 'protege',
+      title: 'Sam explains what an MoE holds in memory',
+      setup: 'Sam is sizing a DeepSeek-V3 deployment and drafted this for the capacity review.',
+      sentences: [
+        'DeepSeek-V3 has 671B parameters in all, and about 37B of them are used for each token.',
+        'The router sends each token to 8 of its 256 routed experts, and the shared expert runs for every token.',
+        'At FP8, one token\'s decode step reads about 37 GB of weights, which is why an MoE decodes fast for its size.',
+        'So the deployment needs HBM for about 37 GB of weights, since the other experts sit idle for that token.',
+        'Under expert parallelism each expert lives on one GPU, so tokens travel to their experts and back in two all-to-alls per MoE layer.',
+      ],
+      falseAt: 3,
+      find: {
+        offer: [0, 2, 3, 4],
+        why: [
+          'True: 671B in all and about 37B active per token are DeepSeek-V3\'s published figures.',
+          'True: at one byte per FP8 weight, the 37B active parameters are about 37 GB read for one token, against 671 GB for a dense model of the same size.',
+          'False: the next token may route to any expert, so every one of the 671B parameters stays resident, about 671 GB at FP8. Active parameters set the bytes a step reads, not the bytes the deployment holds.',
+          'True: a dispatch and a combine all-to-all per MoE layer move each token to its experts and its results back.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Counting the dense layers as MoE layers in the all-to-all count',
+          'Treating an FP8 weight as two bytes in place of one',
+          'Sizing memory by the active parameter count',
+          'Believing the shared expert runs only when the router picks it',
+        ],
+        correct: [2],
+        why: [
+          'A real mix-up, but not this one: sentence 5 says per MoE layer, which leaves the 3 dense layers out, and sentence 4 is about memory.',
+          'Not this one: sentence 3 counts one byte per FP8 weight, which is right, and sentence 4 keeps the same rate.',
+          'Right: the active count is per token, and the tokens of a batch, and the next step, pick other experts. Memory has to hold the total.',
+          'Not this one: sentence 2 says the shared expert runs for every token, and sentence 4 is about the routed ones.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 4?',
+        options: [
+          'So the deployment holds about 37 GB in HBM and pulls in other experts from host memory as tokens need them.',
+          'So the deployment holds about 296 GB, the 37B active parameters times the 8 experts each token visits.',
+          'So the deployment holds about 74 GB, two bytes for each of the 37B active parameters at FP8.',
+          'So the deployment holds about 671 GB of weights in HBM, since the next token may route to any expert.',
+        ],
+        correct: [3],
+        why: [
+          'Wrong: an expert pulled over PCIe when a token routes to it takes far longer than the step it serves, so the capacity review has to count every expert as resident.',
+          'Wrong: the 37B already counts the 8 routed experts a token visits, so multiplying by 8 counts them again, and it still leaves out the experts no token picked.',
+          'Wrong: FP8 is one byte per weight, and the total, not the active count, is what has to be resident.',
+          'Right: 671B parameters at one byte each is about 671 GB, which has to stay resident. The item just above asks both numbers on fresh models: the bytes a step reads and the bytes that must stay resident.',
+        ],
+      },
+      kcs: ['t6.moe-active-params'],
+    },
     {
       type: 'prose',
       md: `## MLA: the other half of the DeepSeek trick

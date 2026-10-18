@@ -3,7 +3,7 @@
  * Renders every ContentBlock type: prose (markdown-lite), code compare tabs,
  * five callout variants, step-through SVG diagrams, statlines, quizzes,
  * exercise embed cards, isomorphism panels, collapsible deep-dives, and the
- * Wave 1 prequestion, play and exit-ticket blocks and the Wave 2 item block (lazy), and on code blocks
+ * Wave 1 prequestion, play and exit-ticket blocks, the Wave 2 item block (lazy), the stretch protégé block (lazy), and on code blocks
  * F4's language switch, permission diagram and alignment items (lazy). ProseView, DiagramView
  * and ExerciseView live in their own modules beside this one.
  */
@@ -45,6 +45,8 @@ const PlayBlock = lazy(() => import('@/components/blocks/PlayBlock'))
 const ExitTicketBlock = lazy(() => import('@/components/learner/ExitTicketBlock'))
 // Wave 2: generated items inside a lesson (a stub until 2a-12).
 const ItemBlock = lazy(() => import('@/components/blocks/ItemBlock'))
+// Stretch P4 (wave-3 §16.9): a protégé block loads only in a lesson that has one.
+const ProtegeBlock = lazy(() => import('@/components/blocks/ProtegeBlock'))
 // F4 (wave-2 §17): permission diagrams and alignment items load only with a code block that has them.
 const PermissionDiagram = lazy(() => import('@/components/lesson/PermissionDiagram'))
 const AlignItem = lazy(() => import('@/components/lesson/AlignItem'))
@@ -418,6 +420,12 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
       return (
         <Suspense fallback={<BlockFallback />}>
           <ItemBlock lessonId={lesson.id} blockIndex={lesson.blocks.indexOf(block)} block={block} trackColor={trackColor} />
+        </Suspense>
+      )
+    case 'protege':
+      return (
+        <Suspense fallback={<BlockFallback />}>
+          <ProtegeBlock block={block} lesson={lesson} trackColor={trackColor} />
         </Suspense>
       )
     default:

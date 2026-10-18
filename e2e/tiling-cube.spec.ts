@@ -75,6 +75,18 @@ test('/play/tiling-cube: level 1 is played to its debrief by keyboard alone at 3
   await expect(page.locator('input[type="range"]')).toHaveCount(0)
   expect(await noSidewaysScroll(page)).toBe(true)
 
+  // The 3D view is a plain opt-in on every level (the owner's answer of 2026-10-15): one closed button after the faces and
+  // the table, with no scene loaded and nothing about a study.
+  const entry = page.getByRole('button', { name: 'Show it in 3D' })
+  await expect(entry).toHaveAttribute('aria-expanded', 'false')
+  expect(await page.evaluate(() => {
+    const [faces, table, view3d] = ['[data-views]', '[data-play-mirror]', '[data-view3d]'].map((s) => document.querySelector(s))
+    const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    return !!(faces && table && view3d && before(faces, table) && before(table, view3d))
+  })).toBe(true)
+  await expect(page.locator('[data-cube3d], canvas')).toHaveCount(0)
+  await expect(page.getByText('picked at random')).toHaveCount(0)
+
   // A stepper moves with Enter, and Page Up steps four notches; the value changes and the table follows.
   const tm = page.locator('[data-control="tm"]')
   const up = tm.locator('[data-step="up"]')

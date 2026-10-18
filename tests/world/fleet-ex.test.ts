@@ -74,8 +74,8 @@ function survey(def: FleetExerciseDef, n: number) {
 }
 
 describe('the table', () => {
-  test('FLEET_EXERCISES lists the knee and the P:D split, keyed by their ids', () => {
-    expect(Object.keys(FLEET_EXERCISES)).toEqual(['knee', 'pd-split'])
+  test('FLEET_EXERCISES lists the knee, the P:D split, the broken benchmark, push your luck, the straggler and the timing oracle, keyed by their ids', () => {
+    expect(Object.keys(FLEET_EXERCISES)).toEqual(['knee', 'pd-split', 'broken-bench', 'push-luck', 'straggler', 'timing-oracle'])
     for (const [key, def] of Object.entries(FLEET_EXERCISES)) expect(def.id).toBe(key)
   })
 

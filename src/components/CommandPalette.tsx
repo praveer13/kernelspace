@@ -28,6 +28,7 @@ export const STATIC_ITEMS: SearchItem[] = [
   { id: 'forge', group: 'Pages', title: 'Forge', crumb: '~/forge', to: '/forge', keywords: ['rust', 'labs', 'build', 'wasm'] },
   { id: 'fleet', group: 'Pages', title: 'Fleet', crumb: '~/fleet', to: '/fleet', keywords: ['cluster', 'serving', 'simulator'] },
   { id: 'daily', group: 'Pages', title: 'Fleet Daily', crumb: '~/daily', to: '/daily', keywords: ['incident', 'daily', 'on-call', 'debug', 'probe', 'wordle'] },
+  { id: 'drills', group: 'Pages', title: 'Interview drills', crumb: '~/drills', to: '/drills', keywords: ['interview', 'drills', 'napkin', 'system design', 'capacity', 'mock', 'interviewer'] },
   { id: 'fleet-week', group: 'Pages', title: 'Fleet Week', crumb: '~/week', to: '/week', keywords: ['capstone', 'incidents', 'portfolio'] },
   { id: 'leaderboard', group: 'Pages', title: 'Leaderboard', crumb: '~/leaderboard', to: '/leaderboard', keywords: ['scores', 'goodput', 'competition', 'personal best'] },
   { id: 'changes', group: 'Pages', title: 'Changes', crumb: '~/freshness', to: '/freshness', keywords: ['errata', 'corrections', 'freshness', 'what changed', 'report an error'] },

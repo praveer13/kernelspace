@@ -213,6 +213,65 @@ class BlockManager:
 
 The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% → **<4%**, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: paging copies KV, "confusing block-table indirection
+    // with copying KV", the evidence's own example of a seeded error in a protégé explanation of PagedAttention
+    // (ai-tutoring.md §2.7 and idea 7). The sim preset that proves the fix: the block-table explorer below (sim-kv, machine
+    // 'blocks', task blk.share): forking beam C from B leaves the free-block count where it was, because the fork adds references.
+    {
+      type: 'protege',
+      title: 'Sam explains a beam fork',
+      setup: 'Sam is on the serving team and wrote this note about beam search and shared prompts.',
+      sentences: [
+        'Each sequence has a block table that maps its logical blocks to physical blocks of 16 tokens.',
+        'Two requests with the same 48-token system prompt point their tables at the same three blocks, each at refcount 2.',
+        'When a beam forks, the manager copies every block of the parent into new blocks for the child.',
+        'When a sequence writes into a block that is still shared, it gets a private copy of that one block.',
+        'When a sequence finishes, each of its blocks loses a reference, and a block at refcount 0 joins the free queue still cached.',
+      ],
+      falseAt: 2,
+      find: {
+        offer: [1, 2, 3, 4],
+        why: [
+          'True: 48 tokens fill three 16-token blocks, and both tables map to the same physical blocks, so the prefix is stored once.',
+          'False: a fork copies the block table, not the KV. The child\'s table points at the parent\'s blocks and each gains a reference; a block is copied when one of them writes into it.',
+          'True: that is copy-on-write. One block is allocated and its KV copied, and the other owner keeps the original.',
+          'True: releasing drops the count, and a block at zero joins the free queue with its contents and hash intact until it is reused.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Treating a block at refcount 0 as wiped the moment it is freed',
+          'Believing a block table shares memory by duplicating the block',
+          'Assuming a block grows to fit a longer shared prompt',
+          'Mixing up the block table with the hash of a prefix',
+        ],
+        correct: [1],
+        why: [
+          'Not this one: sentence 5 keeps freed blocks cached correctly, and sentence 3 is about what a fork does.',
+          'Right: the table is the indirection that makes copies unnecessary. Pointing a second table at a block and raising its refcount is the whole of a share.',
+          'Not this one: sentence 1 keeps blocks at 16 tokens, and sentence 3 never mentions their size.',
+          'Not this one: the hash finds a cached block for a prefix hit, and sentence 3 is about a fork, which needs no lookup.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 3?',
+        options: [
+          'When a beam forks, the manager copies the parent\'s blocks in the background, so that the fork returns at once.',
+          'When a beam forks, the child gets a copy of the block table, and each shared block gains a reference.',
+          'When a beam forks, the manager copies the last block of the parent and shares the full blocks before it.',
+          'When a beam forks, the child waits for the parent to finish, so that the blocks can pass to it unchanged.',
+        ],
+        correct: [1],
+        why: [
+          'Wrong: copying later still copies every block, and the KV of a shared prefix never needs copying at all.',
+          'Right: a fork adds references, not KV. In the explorer below, fork beam C from B and the free-block count stays where it was.',
+          'Wrong: even the partly filled last block is shared at the fork; it is copied when one of the beams first writes into it.',
+          'Wrong: beams run side by side in the same steps, and a shared block lets both read it while neither waits.',
+        ],
+      },
+      kcs: ['t5.block-tables', 't5.kv-copy-on-write'],
+    },
     {
       type: 'exercise',
       simId: 'sim-kv',

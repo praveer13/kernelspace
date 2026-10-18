@@ -6,6 +6,8 @@ import {
   DONATION_FORMAT,
   DONATION_TRACKS,
   EVENT_KEYS,
+  FIELD_DATA_KEYS,
+  FIELD_EVENT_KEYS,
   isDonationText,
   ledgerOfDonation,
   parseDonation,
@@ -464,18 +466,33 @@ describe('redactForPartner: the Wave 3 fields (§15.2)', () => {
   test('a field item keeps neither value nor truth; the same numbers on a non-field event are kept', () => {
     const j = new Journal()
     const data = { src: 'practice', kcs: ['t4.roofline'], value: 812.5, truth: 790.1 }
-    j.add('item', 'item:field.decode-kv.tps', '2026-09-01', { score: 1, ok: true, rev: 'r', provenance: 'field', data })
-    j.add('predict', 'item:engine.measured-tps', '2026-09-02', { score: 1, ok: true, rev: 'r', provenance: 'field', data })
-    j.add('item', 'item:t4.l2.q1', '2026-09-03', { score: 1, ok: true, rev: 'r', provenance: 'practice', data })
-    j.add('item', 'item:t4.l2.q2', '2026-09-04', { score: 1, ok: true, rev: 'r', data })
+    j.add('item', 'item:field.decode-kv.tps', '2026-09-01', { score: 0.989, ok: true, rev: 'r', provenance: 'field', data })
+    j.add('predict', 'item:engine.measured-tps', '2026-09-02', { score: 0.989, ok: true, rev: 'r', provenance: 'field', data })
+    j.add('item', 'item:t4.l2.q1', '2026-09-03', { score: 0.989, ok: true, rev: 'r', provenance: 'practice', data })
+    j.add('item', 'item:t4.l2.q2', '2026-09-04', { score: 0.989, ok: true, rev: 'r', data })
     const d = redactForPartner({ events: j.events, working: [] })
     expect(d.events.map((e) => e.data)).toEqual([
-      { src: 'practice', kcs: ['t4.roofline'] },
-      { src: 'practice', kcs: ['t4.roofline'] },
+      { src: 'practice' },
+      { src: 'practice' },
       { src: 'practice', kcs: ['t4.roofline'], value: 812.5, truth: 790.1 },
       { src: 'practice', kcs: ['t4.roofline'], value: 812.5, truth: 790.1 },
     ])
-    expect(JSON.stringify(d.events.slice(0, 2))).not.toMatch(/812|790/)
+    expect(JSON.stringify(d.events.slice(0, 2))).not.toMatch(/812|790|989/)
+    expect(d.events.map((e) => e.score)).toEqual([undefined, undefined, 0.989, 0.989])
+  })
+
+  test('a field event keeps one bit: its kind, ref, day, provenance, ok and src, and no score, time, confidence or other data', () => {
+    expect(FIELD_EVENT_KEYS).toEqual(['kind', 'ref', 'ok', 'provenance', 'dayOffset'])
+    expect(FIELD_DATA_KEYS).toEqual(['src'])
+    const j = new Journal()
+    // every field the whitelist keeps on other events, put on a field one
+    const data = {
+      src: 'practice', kcs: ['t4.roofline'], grp: 'g-1', slot: 1, of: 3, level: 2, variant: 'v', sinceDays: 4, miss: 'confuse.t5.block-tables',
+      metric: { name: 'tps', mine: 812.5, ghost: 790.1 }, levels: [{ id: 'l1', ok: true }], probes: [1, 2, 3], burn: 812.5, value: 812.5, truth: 790.1,
+    }
+    j.add('item', 'item:field.decode-kv.tps', '2026-09-01', { score: 0.989, ok: false, conf: 'sure', ms: 812_000, rev: 'r', provenance: 'field', data })
+    const [e] = redactForPartner({ events: j.events, working: [] }).events
+    expect(e).toEqual({ kind: 'item', ref: 'item:field.decode-kv.tps', dayOffset: 0, ok: false, provenance: 'field', data: { src: 'practice' } })
   })
 
   test('value and truth are numbers only: text, NaN and Infinity are dropped', () => {
@@ -529,9 +546,16 @@ describe('redactForPartner: the Wave 3 fields (§15.2)', () => {
     })
     const out = parseDonation(edited)
     expect(out.ok && out.donation.events.map((e) => e.data)).toEqual([
-      { src: 'practice', miss: 'confuse.t5.block-tables' },
+      { src: 'practice' },
       { src: 'today', value: 5, truth: 6 },
     ])
+    const scored = JSON.stringify({
+      format: DONATION_FORMAT,
+      version: 1,
+      events: [{ kind: 'item', ref: 'item:field.decode-kv.tps', dayOffset: 0, score: 0.989, ok: true, ms: 9000, conf: 'sure', provenance: 'field', data: { src: 'practice', kcs: ['t4.roofline'] } }],
+    })
+    const back = parseDonation(scored)
+    expect(back.ok && back.donation.events).toEqual([{ kind: 'item', ref: 'item:field.decode-kv.tps', dayOffset: 0, ok: true, provenance: 'field', data: { src: 'practice' } }])
   })
 
   test('the Wave 3 fields come back on the synthetic ledger the selectors read', () => {

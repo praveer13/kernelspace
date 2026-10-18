@@ -4,13 +4,23 @@ import { Cpu, Download, Loader2, Play, Zap } from 'lucide-react'
 import { instantiateLab } from '@/lib/wasm-lab'
 import { type SchedulerDriver, type SchedView } from '@/lib/fleet-model'
 import { makeWasmScheduler } from '@/pages/fleet/drivers'
-import { loadRealModel, runRealEngine, type RealGenFn, type RealReqState, type RealRunMetrics } from '@/lib/real-engine'
+import MeasuredRun, { DownloadConsent } from '@/components/engine/MeasuredRun'
+import {
+  MEASURED_MODEL_ID,
+  connectionWarning,
+  loadRealModel,
+  runRealEngine,
+  type ConnectionInfo,
+  type RealGenFn,
+  type RealReqState,
+  type RealRunMetrics,
+} from '@/lib/real-engine'
 import type { SlotState } from '@/pages/fleet/slots'
 import { cn } from '@/lib/utils'
 
 const MODELS = [
-  { id: 'onnx-community/Qwen3-0.6B-ONNX', label: 'Qwen3-0.6B (better, ~400MB)' },
-  { id: 'onnx-community/SmolLM2-135M-Instruct-ONNX-GQA', label: 'SmolLM2-135M (fastest, ~90MB)' },
+  { id: MEASURED_MODEL_ID, label: 'Qwen3-0.6B (better, ~400MB)', name: 'Qwen3-0.6B', mb: 400 },
+  { id: 'onnx-community/SmolLM2-135M-Instruct-ONNX-GQA', label: 'SmolLM2-135M (fastest, ~90MB)', name: 'SmolLM2-135M', mb: 90 },
 ]
 
 /** FCFS baseline: admit the oldest when the slot is free. */
@@ -34,8 +44,21 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
   const [metrics, setMetrics] = useState<RealRunMetrics | null>(null)
   const [error, setError] = useState<string | null>(null)
   const genRef = useRef<RealGenFn | null>(null)
+  /** The download is asked about before it starts (docs/specs/wave-3.md §16.10): nothing is fetched on a page visit. */
+  const [asking, setAsking] = useState(false)
+  /** The measured run is using the one generation slot. */
+  const [measuring, setMeasuring] = useState(false)
+  const loadRef = useRef<HTMLButtonElement>(null)
+  const model = MODELS.find((m) => m.id === modelId) ?? MODELS[0]
+  const warning = connectionWarning(typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { connection?: ConnectionInfo }).connection)
+
+  const decline = () => {
+    setAsking(false)
+    loadRef.current?.focus()
+  }
 
   const load = useCallback(async () => {
+    setAsking(false)
     setError(null)
     setLoadState({ phase: 'starting', frac: 0 })
     try {
@@ -85,13 +108,18 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
       {/* model loader */}
       <div className="flex flex-wrap items-center gap-3">
         <select
+          aria-label="model to load"
           value={modelId}
           onChange={(e) => {
             setModelId(e.target.value)
+            setAsking(false)
             genRef.current = null
             setLoadState(null)
             setDevice(null)
           }}
+          // locked while a load runs (its result lands in `genRef`, and the measured run must name the model that was loaded)
+          // and while a run holds the slot: a change nulls `genRef` under the run, and the measured run's hint would flip mid-way
+          disabled={(!!loadState && !device) || running || measuring}
           className="rounded-md border border-line bg-surface-1 px-3 py-2 font-mono text-[12px] text-text-1 outline-none focus:border-accent/60"
         >
           {MODELS.map((m) => (
@@ -99,8 +127,9 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
           ))}
         </select>
         <button
-          onClick={() => void load()}
-          disabled={!!loadState && !device}
+          ref={loadRef}
+          onClick={() => setAsking(true)}
+          disabled={!!loadState || !!device}
           className="inline-flex items-center gap-2 rounded-md border border-line bg-surface-1 px-4 py-2 font-mono text-sm text-text-2 transition-colors hover:border-accent/50 hover:text-text-1 disabled:opacity-50"
         >
           {device ? <Zap className="h-4 w-4 text-accent" /> : loadState ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -113,13 +142,15 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
         )}
         <button
           onClick={() => void run()}
-          disabled={!genRef.current || running}
+          disabled={!genRef.current || running || measuring}
           className="inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-4 py-2 font-mono text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
         >
           {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
           {running ? 'serving…' : slots.sched ? 'run with YOUR scheduler' : 'run (FCFS reference)'}
         </button>
       </div>
+
+      {asking && <DownloadConsent name={model.name} mb={model.mb} warning={warning} onConfirm={() => void load()} onDecline={decline} />}
 
       <AnimatePresence>
         {error && (
@@ -133,6 +164,9 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* the stretch run: predict decode tok/s from the model's bytes and a bandwidth, then measure it (§16.10) */}
+      <MeasuredRun gen={device ? genRef.current : null} device={device} isMeasuredModel={modelId === MEASURED_MODEL_ID} busy={running} onBusyChange={setMeasuring} />
 
       {/* request cards */}
       {reqs && (
@@ -171,7 +205,7 @@ export default function RealEnginePanel({ slots }: { slots: SlotState }) {
       {metrics && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border border-accent/50 bg-accent/10 p-4">
           <p className="font-mono text-sm text-accent">
-            run complete — avg TTFT {metrics.avgTtftMs}ms · {metrics.tokPerSec} tok/s · {metrics.preemptions} preemptions · {(metrics.totalMs / 1000).toFixed(1)}s wall
+            run complete — avg TTFT {metrics.avgTtftMs}ms · {metrics.tokPerSec} end-to-end tok/s (prefill and recompute included) · {metrics.preemptions} preemptions · {(metrics.totalMs / 1000).toFixed(1)}s wall
           </p>
           <p className="mt-1 text-body-sm text-text-2">
             {slots.sched

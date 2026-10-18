@@ -137,6 +137,66 @@ An inference engine's control plane is an async-runtime workload: thousands of S
       variant: 'info',
       md: `**Build this.** Lab 05, [Async, Demystified](/forge/toy-executor), is this executor in a file you edit: \`spawn\`, \`run\` and \`block_on\` in \`src/executor.rs\`, with the unsafe waker plumbing already given. Start with its first check, \`block_on\`, which needs only \`spawn\`, \`run\` and one wrapper task. The page grades each of the six checks on its own, so that first green arrives before you touch the other five. Readiness: R7 and R8.`,
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: an executor keeps re-polling a Pending task until
+    // it is ready. No research file names an executor misconception; this one is the lesson's own named footgun ("the
+    // forgotten wake", the warning callout above), the slip the content audit counts as misconception handling
+    // (content.md §2). The sim preset that proves the fix: the toy executor below (sim-engine, machine 'executor'), where a
+    // task that returns Pending with no wake registered is never polled again and hangs silently.
+    {
+      type: 'protege',
+      title: 'Sam explains a Pending future',
+      setup: 'Sam is porting a Java NIO service to tokio and wrote down how the executor works.',
+      sentences: [
+        'An async fn returns a future, and creating it runs none of its body.',
+        'The executor polls a task, which runs until it finishes or returns Pending.',
+        'A Pending task goes back on the queue, and the executor polls it again on the next pass until it is ready.',
+        'Before returning Pending, a future registers its waker with whatever will make progress possible.',
+        'When the socket becomes readable, the reactor calls wake() and the task goes back on the queue.',
+      ],
+      falseAt: 2,
+      find: {
+        offer: [0, 2, 3, 4],
+        why: [
+          'True: futures are inert, so nothing runs until an executor polls one. A JavaScript Promise, by contrast, starts at once.',
+          'False: a Pending task leaves the queue and costs nothing until its waker fires. Polling it on every pass would burn a core per task, and the executor in this lesson parks its thread when the queue is empty.',
+          'True: the waker is the future\'s way back onto the queue, so it has to be registered before Pending is returned.',
+          'True: wake() pushes the task onto the ready queue, and the next poll resumes it at its saved state.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Believing that creating a future starts running its body',
+          'Mixing up the reactor that fires wakers with the executor that polls',
+          'Assuming each task needs a thread of its own to wait on',
+          'Believing a waiting future gets retried in a busy loop and not woken',
+        ],
+        correct: [3],
+        why: [
+          'A real mix-up, but not this one: sentence 1 states that futures are inert, and sentence 3 is about what happens after Pending.',
+          'Not this one: sentence 5 gives each its job correctly, and sentence 3 is about whether a waiting task is polled at all.',
+          'Not this one: sentence 3 keeps the task on one executor, and the mistake is how often it is polled, not where it waits.',
+          'Right: that is busy polling. A Pending task is polled again after its waker puts it back, which is why a task that never arranges a wake hangs forever.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 3?',
+        options: [
+          'A Pending task stays on the queue but is polled less often, so that a slow socket costs a little CPU.',
+          'A Pending task is moved to a thread of its own, which blocks on the socket until the data arrives.',
+          'A Pending task is dropped, and its future is created again from the start once the socket is ready.',
+          'A Pending task leaves the queue, and the next poll comes after its waker puts it back on the queue.',
+        ],
+        correct: [3],
+        why: [
+          'Wrong: polling less often is still polling. A waiting task costs nothing because nothing polls it until its waker fires.',
+          'Wrong: a thread per waiting task is the blocking model async replaces. One executor thread multiplexes thousands of waiting tasks.',
+          'Wrong: the future keeps its state across Pending and resumes where it stopped; starting again would repeat work and lose its place.',
+          'Right: the waker is the one way back. In the toy executor below, a task that returns Pending with no wake registered is never polled again and hangs silently.',
+        ],
+      },
+      kcs: ['t3.wakers-executor'],
+    },
     {
       type: 'exercise',
       simId: 'sim-engine',

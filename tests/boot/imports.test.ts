@@ -84,6 +84,48 @@ describe('Boot static imports', () => {
   })
 })
 
+/**
+ * Spec §16.1 (3s-01): the cube's 3D scene is one lazy chunk, three and R3F with it, that View3D imports on a learner's
+ * request. So no page's static graph may reach three, R3F or the scene: not /today, /boot, /me, nor /play/tiling-cube with
+ * its play (the registry and View3D load their targets with `import()`, which the walker does not follow).
+ */
+describe('Three stays out of every first load', () => {
+  const SCENE = 'src/components/play/tiling-cube/Cube3D.tsx'
+  const THREE_PACKAGES = [/^three($|\/)/, /^@react-three\//]
+  const PAGES = [
+    ['/today', ['src/pages/Today.tsx']],
+    ['/boot', ['src/pages/Boot.tsx', 'src/pages/boot/later.ts']],
+    ['/me', ['src/pages/Me.tsx']],
+    ['/play/tiling-cube (the page)', ['src/pages/Play.tsx']],
+    ['/play/tiling-cube (the play)', ['src/components/play/tiling-cube/Play.tsx']],
+    ['the entry chunk', ['src/main.tsx']],
+  ] as const
+
+  for (const [route, entries] of PAGES) {
+    test(`${route} reaches no three, no R3F and not the scene`, () => {
+      const { files, packages } = staticGraph([...entries])
+      expect(files.size).toBeGreaterThan(3)
+      expect([...packages].filter((p) => THREE_PACKAGES.some((re) => re.test(p)))).toEqual([])
+      expect([...files].map((f) => relative(root, f))).not.toContain(SCENE)
+    })
+  }
+
+  test('the walker does see three where it is imported, and the play reaches View3D but only imports the scene', () => {
+    const scene = staticGraph([SCENE])
+    expect([...scene.packages]).toContain('three')
+    expect([...scene.packages]).toContain('@react-three/fiber')
+    const play = staticGraph(['src/components/play/tiling-cube/Play.tsx'])
+    expect([...play.files].map((f) => relative(root, f))).toContain('src/components/three/View3D.tsx')
+    expect(readFileSync(join(root, 'src/components/play/tiling-cube/Play.tsx'), 'utf8')).toContain("import('./Cube3D')")
+  })
+
+  test('View3D itself imports neither three nor R3F nor the scene', () => {
+    const view = staticGraph(['src/components/three/View3D.tsx'])
+    expect([...view.packages].filter((p) => THREE_PACKAGES.some((re) => re.test(p)))).toEqual([])
+    expect([...view.files].map((f) => relative(root, f))).not.toContain(SCENE)
+  })
+})
+
 describe('Entry chunk diet', () => {
   const entry = staticGraph(['src/main.tsx'])
   const entryPaths = [...entry.files].map((f) => relative(root, f))

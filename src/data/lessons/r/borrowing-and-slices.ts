@@ -209,6 +209,66 @@ b[0] += 1;`,
 
 The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable slice updates, non-overlapping **split_at_mut**, strings as **&str**, early borrow endings, and returning a subslice. Each function should operate without cloning or allocating unless its signature explicitly returns an owned value. The compile items for the lifetimes group, which cover these analyzer limits, have no page of their own, so practise them from the Error Museum entries they come from: [E0499](/errors#E0499) and [E0502](/errors#E0502). Each shows the diagram, the fix that keeps the program's behaviour, the clone that changes it, and practice items.`,
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: the borrow checker is an exact test of memory
+    // safety, so every rejected program was a real bug. The evidence names it: the checker is sound but incomplete, and
+    // learners must tell real violations from analyzer limits (Crichton, The Usability of Ownership; computing-education.md F4).
+    // The family item that proves the fix: compile/verdict.analyzer-limits, whose options always include "compiles with 0
+    // errors", the lure of this misconception, on programs such as disjoint.rs above (KC r.analyzer-limits).
+    {
+      type: 'protege',
+      title: 'Sam explains what the borrow checker rejects',
+      setup: 'Sam came to Rust from Java and wrote this note for the team wiki.',
+      sentences: [
+        'A shared borrow takes W and O from the lender until its last use, so the lender can still be read.',
+        'A mutable borrow takes R, W and O, so while it lives the borrower is the one way to reach the value.',
+        'Pushing to a Vec while a reference into it is live is rejected, because the push may move the buffer and leave the reference dangling.',
+        'So every program the borrow checker rejects would have read freed or moved memory if it had compiled.',
+        'A borrow ends at its last use, not at the end of its scope, so a later write to the lender can be accepted.',
+      ],
+      falseAt: 3,
+      find: {
+        offer: [0, 2, 3, 4],
+        why: [
+          'True: a shared loan leaves the lender R, which is why any number of readers can share it while writes wait.',
+          'True: push may reallocate, so a live reference into the old buffer would dangle. That rejection is a real bug report.',
+          'False: the checker is sound but not complete. It tracks v[0] and v[1] as one path, v, so two mutable borrows of different elements are rejected with E0499 although they never overlap.',
+          'True: a loan ends at its last use, so the lender gets W back after that line even inside the same block.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Assuming a borrow lasts to the end of its scope and not to its last use',
+          'Taking each refusal by the checker as proof of unsafe code',
+          'Thinking a shared borrow takes away the right to read the value',
+          'Believing a clone is the repair for a rejected borrow',
+        ],
+        correct: [1],
+        why: [
+          'A real mix-up, but not this one: sentence 5 states the last-use rule correctly, and sentence 4 is about which programs get rejected.',
+          'Right: the checker reasons about paths and loans, so it rejects some programs it cannot prove safe. Sentence 4 treats every rejection as a real bug.',
+          'Not this one: a shared borrow leaves the lender R, and sentence 4 says nothing about reading through the lender.',
+          'Not this one: sentence 4 is about why a program is rejected, not about how to repair it, and a clone can change what the program does.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 4?',
+        options: [
+          'Some rejected programs would have raced with another thread instead, but each rejection is still a real bug.',
+          'Some rejected programs are safe and still rejected, such as two mutable borrows of different elements of one Vec.',
+          'Some rejected programs are safe to run once unsafe is added, because unsafe turns the borrow checker off for them.',
+          'Some rejected programs are safe, and a clone of the borrowed value proves it by making the program compile.',
+        ],
+        correct: [1],
+        why: [
+          'Wrong: it keeps the false claim that every rejection is a real bug. disjoint.rs above is rejected and could not race or dangle.',
+          'Right: the checker cannot see that two indexes differ, so v[0] and v[1] are one path and the second &mut is E0499. The E0499 practice items in the Error Museum, linked above, ask for exactly that verdict.',
+          'Wrong: unsafe does not switch the borrow checker off. It allows raw-pointer dereferences and unsafe calls, which is how split_at_mut proves its two halves disjoint.',
+          'Wrong: a clone makes a copy, so the program then works on different data. It compiles because the borrow is gone, which proves nothing about the original.',
+        ],
+      },
+      kcs: ['r.analyzer-limits'],
+    },
     {
       type: 'quiz',
       questions: [

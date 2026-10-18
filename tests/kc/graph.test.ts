@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { resolve } from 'node:path'
 import { BOOT_KCS, KC, KC_GRAPH, KCS, REF_KCS, RUST_ANCHOR_KC, THRESHOLD_KCS, kcById } from '../../src/data/kc'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import { GRADED_STEPS } from '../../src/lib/boot/model'
@@ -102,7 +103,7 @@ describe('the graph', () => {
   test('every T3-T7 lesson has 2+ KCs its Lesson.kcs may name, i.e. introduced there or earlier (wave-2 §4.1, §4.4)', () => {
     const order = new Map(ALL_LESSONS.map((l, i) => [l.id, i]))
     const t37 = ALL_LESSONS.filter((x) => ['t3', 't4', 't5', 't6', 't7'].includes(x.trackId))
-    expect(t37).toHaveLength(39)
+    expect(t37).toHaveLength(40)
     for (const l of t37) {
       const at = order.get(l.id) as number
       const nameable = KCS.filter((k) => k.lessons.includes(l.id) && (order.get(k.lessons[0]) as number) <= at)
@@ -293,8 +294,17 @@ describe('the Wave 3 contract (§4.3)', () => {
     expect(ALL_LESSONS.find((l) => l.id === 't4.l6')?.kcs).toEqual(['t4.tiling-intensity', 't4.flashattention-blocking', 't4.raster-l2-reuse'])
   })
 
-  test('the graph holds 154 KCs', () => {
-    expect(KCS).toHaveLength(154)
+  test('the graph holds 155 KCs', () => {
+    expect(KCS).toHaveLength(155)
+  })
+
+  test('t6.l12 introduces t6.attention-ffn-split and revisits t6.epd-phases, the KC its prefill/pd-ratio block assesses (§16.2)', () => {
+    const k = kcById(KC.attentionFfnSplit)
+    expect(k?.lessons).toEqual(['t6.l12'])
+    // its three benchmark claims are lazy, so they sit in the lesson's statline and not in the KC (§4.4; G4 of the 3s final review)
+    expect(k?.claims).toBeUndefined()
+    expect(kcById('t6.epd-phases')?.lessons).toEqual(['t6.l3', 't6.l12'])
+    expect(ALL_LESSONS.find((l) => l.id === 't6.l12')?.kcs).toEqual([KC.attentionFfnSplit, 't6.epd-phases'])
   })
 
   test('every gen link of the tiling, prefill and rollout rows is set, so each family lands without editing a KC file', () => {
@@ -315,10 +325,22 @@ describe('the Wave 3 contract (§4.3)', () => {
     expect(kcById('t5.prefix-cache-keys')?.confusable ?? []).not.toContain('t5.block-tables')
   })
 
-  test('no KC cites a claim that only a lazy group holds (H2 packets read KC claims through the eager registry)', async () => {
-    const { CLAIMS } = await import('../../src/data/claims')
-    const eager = new Set(CLAIMS.map((c) => c.id))
-    for (const k of KCS) for (const id of k.claims ?? []) expect({ kc: k.id, id, eager: eager.has(id) }).toEqual({ kc: k.id, id, eager: true })
+  // A cold process: tests share one module registry, so a lazy group another file registered would hide a KC claim that
+  // only a lazy group holds. This runs the packet's own reader (claimsFor) in a fresh bun process that imports no group.
+  test('no KC cites a claim that only a lazy group holds: on a cold load claimsFor returns one claim per KC claim id, t6.l12 included (§4.4)', () => {
+    const script = `
+      const { KCS } = await import('./src/data/kc')
+      const { byId } = await import('./src/data/claims')
+      const { claimsFor } = await import('./src/lib/mentor/packet')
+      const lazy = []
+      for (const k of KCS) for (const id of k.claims ?? []) if (byId[id] === undefined) lazy.push(k.id + ' ' + id)
+      const l12 = await claimsFor({ lessonId: 't6.l12' })
+      const l12ids = KCS.filter((k) => k.lessons.includes('t6.l12')).flatMap((k) => k.claims ?? [])
+      console.log(JSON.stringify({ lazy, l12: l12.length, l12ids: l12ids.length }))
+    `
+    const r = Bun.spawnSync(['bun', '-e', script], { cwd: resolve(import.meta.dirname, '../..') })
+    expect(r.stderr.toString()).toBe('')
+    expect(JSON.parse(r.stdout.toString())).toEqual({ lazy: [], l12: 0, l12ids: 0 })
   })
 })
 

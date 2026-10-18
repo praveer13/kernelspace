@@ -514,7 +514,7 @@ describe('the Wave 2 bar: every strategy passes at most 2 of the lesson pool in 
 
   test('the shipped lesson pool is inside the bar for every strategy', () => {
     const lessons = ALL_LESSONS.map((l) => l.blocks.flatMap((b) => (b.type === 'quiz' ? b.questions : []))).filter((qs) => qs.length > 0)
-    expect(lessons).toHaveLength(68)
+    expect(lessons).toHaveLength(69)
     for (const s of [...RANK_STRATEGIES, ...CUE_STRATEGIES]) {
       const expected = lessons.reduce((a, qs) => a + passProbability(qs.map(s.pick)), 0)
       expect({ name: s.name, ok: expected <= WAVE2_BAR }).toEqual({ name: s.name, ok: true })
@@ -567,7 +567,7 @@ describe('verify-items collects every pool and prints the bar', () => {
     expect(run.exitCode).toBe(0)
     expect(out).toContain(barLine(lessonsWithQuiz))
     expect(out).toContain('always-B 2-SD band: exact')
-    for (const pool of ['prequestion', 'predictAt', 'spiral', 'align', 'iso', 'twin', 'primm']) expect(out).toMatch(new RegExp(`^  ${pool}\\s+\\d+`, 'm'))
+    for (const pool of ['prequestion', 'predictAt', 'spiral', 'align', 'iso', 'protege', 'twin', 'primm']) expect(out).toMatch(new RegExp(`^  ${pool}\\s+\\d+`, 'm'))
     expect(out.trimEnd().endsWith('verify-items: ok')).toBe(true)
     // a tree that passes every gate never prints FAIL in a table (F3: the own-pool row once did, by rounding at the limit)
     expect(out).not.toContain('FAIL')

@@ -80,9 +80,13 @@
  * The longest-key ratchet covers the own pools and the errata items too (`longestKeyByPool` in the baseline).
  * IMPORT FAILURES: a src/data/forge/<lab>/primm.ts or src/data/twins/<lab>.ts that throws on import, or exports its list as a non-array, FAILS the run
  * (and a --subset run) with a line naming the file and the error; a module that does not load never leaves its pool quietly. The env var
- * VERIFY_ITEMS_TWINS_DIR replaces the twins directory, for the tests' fixtures.
+ * VERIFY_ITEMS_TWINS_DIR replaces the twins directory, and VERIFY_ITEMS_PROTEGE_FIXTURE adds a module's lessons to the protege pool, for the tests' fixtures.
  * (21) WAVE 3 (spec 4.1): two more own pools run every gate of (19) and carry a baseline entry: `iso` (every IsomorphismBlock.breakItem,
  * ref item:<lesson>.iso.<n>.break) and `twin` (every src/data/twins/<lab>.ts that exports TWIN_ITEMS, found by readdir).
+ * (22) WAVE 3 STRETCH (spec 16.9, task 3s-11): the `protege` pool, the find, tag and fix steps of every `ProtegeBlock` (refs
+ * item:<lesson>.protege.<n>.<find|tag|fix>), runs every gate of (19) and carries a baseline entry (a missing entry counts 0). A block's own
+ * defects (a passage of fewer than 4 or more than 6 sentences, a false sentence out of range, a find offer without it, a question with two
+ * keys, a fix key that is the false sentence) FAIL the run, one line naming the block. The find question's options are sentence numbers.
  * `--subset <selector>` reports the margin of one task's items: the hit rate of every strategy and of the adversary over the items whose printed ref
  * matches; it fails when none match, and at n >= 12 above chance + 10 points; below 12 it reports and the merged-level run decides.
  * REPORTS (never fails): the item-level hit rate of each surface-feature strategy against chance, longest-key rates, `why` coverage, the length-rank aggregate, the lexical-cue and
@@ -101,6 +105,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import type { QuizQuestion } from '../src/components/QuizBlock'
 import { ALL_LESSONS, TRACK_IDS } from '../src/data/lessons'
+import type { Lesson } from '../src/data/lessons/types'
 import { INCIDENTS } from '../src/lib/fleet-week'
 import { exportOrder, shuffledOrder } from '../src/lib/rng'
 import {
@@ -133,6 +138,7 @@ import {
   alwaysBBand,
   ALIGN_POOL,
   ISO_POOL,
+  PROTEGE_POOL,
   TWIN_POOL,
   barFailures,
   barLine,
@@ -140,10 +146,12 @@ import {
   checkPoolItems,
   collectAlignItems,
   collectIsoItems,
+  collectProtegeItems,
   collectTwinItems,
   discoverPrimm,
   discoverTwins,
   parseSubset,
+  protegeFailures,
   pseudoLessonFailures,
   structureErrors as optionErrors,
   SUBSET_MARGIN,
@@ -859,16 +867,20 @@ const errataFile = new Map<Item, string>()
 const ownItems: Item[] = []
 const ownFile = new Map<Item, string>()
 const ownLesson = new Map<Item, string>()
-// Wave 3 adds two: P3's break items (`IsomorphismBlock.breakItem`) and the production twins' tracing questions (src/data/twins/<lab>.ts `TWIN_ITEMS`, found by readdir).
+// Wave 3 adds three: P3's break items (`IsomorphismBlock.breakItem`), P4's protégé items (`ProtegeBlock`, stretch) and the production twins' tracing questions (src/data/twins/<lab>.ts `TWIN_ITEMS`, found by readdir).
 // VERIFY_ITEMS_TWINS_DIR points the twin pool at a fixture directory: the tests drive the import-failure and margin paths from fixtures, not from shipped content.
 const twinsDir = process.env.VERIFY_ITEMS_TWINS_DIR ? pathToFileURL(process.env.VERIFY_ITEMS_TWINS_DIR) : new URL('../src/data/twins/', import.meta.url)
 const twinDiscovery = await discoverTwins(twinsDir)
 discoveryProblems.push(...twinDiscovery.problems)
 failures.push(...twinDiscovery.problems) // `failures` was seeded before the twins were read
 const twinFiles = twinDiscovery.found
-const ownEntries = [...collectOwnPools(ALL_LESSONS), ...collectAlignItems(ALL_LESSONS), ...collectIsoItems(ALL_LESSONS), ...collectTwinItems(twinFiles)]
+// VERIFY_ITEMS_PROTEGE_FIXTURE names a module whose default export is a list of extra lessons for the protege pool only (the tests' fixture lesson,
+// which has to pass every gate before a real protégé block ships); with it unset the pool holds the shipped lessons' blocks and nothing else.
+const fixtureModule = process.env.VERIFY_ITEMS_PROTEGE_FIXTURE
+const protegeLessons: readonly Lesson[] = fixtureModule ? [...ALL_LESSONS, ...(((await import(pathToFileURL(fixtureModule).href)) as { default: Lesson[] }).default ?? [])] : ALL_LESSONS
+const ownEntries = [...collectOwnPools(ALL_LESSONS), ...collectAlignItems(ALL_LESSONS), ...collectIsoItems(ALL_LESSONS), ...collectProtegeItems(protegeLessons), ...collectTwinItems(twinFiles)]
 const ownChecked = checkPoolItems(ownEntries)
-failures.push(...ownChecked.failures)
+failures.push(...ownChecked.failures, ...protegeFailures(protegeLessons))
 const ownValidRefs = new Set(ownChecked.valid.map((e) => e.ref))
 for (const e of ownEntries) {
   if (!ownValidRefs.has(e.ref)) structureByRef.set(e.ref, ownChecked.failures.find((f) => f.startsWith(`structure: ${e.ref} (`)) ?? 'structure')
@@ -879,9 +891,9 @@ for (const e of ownChecked.valid) {
   ownFile.set(item, lessonFile.get(e.lessonId) ?? e.lessonId)
   ownLesson.set(item, e.lessonId)
 }
-/** The pools of learner-facing items outside the lesson quizzes that are judged item by item on their own: Wave 1's three, the alignment items, P3's break items, the twin questions, and every lab's PRIMM items. */
+/** The pools of learner-facing items outside the lesson quizzes that are judged item by item on their own: Wave 1's three, the alignment items, P3's break items, P4's protégé items, the twin questions, and every lab's PRIMM items. */
 const PRIMM_POOL = 'primm'
-const ALL_OWN_POOLS: string[] = [...OWN_POOLS, ALIGN_POOL, ISO_POOL, TWIN_POOL]
+const ALL_OWN_POOLS: string[] = [...OWN_POOLS, ALIGN_POOL, ISO_POOL, PROTEGE_POOL, TWIN_POOL]
 const ownPool = (pool: string) => ownItems.filter((i) => i.track === pool)
 /** The items of one own pool; the PRIMM items are lesson-shaped (one pseudo-lesson per lab) and live in validItems. */
 const poolItems = (pool: string) => (pool === PRIMM_POOL ? validItems.filter((i) => i.track === FORGE_TRACK) : ownPool(pool))
@@ -1298,7 +1310,7 @@ const cueRows = CUE_STRATEGIES.map((s) => {
 }
 
 console.log('')
-console.log(`own pools (prequestions, diagram predictions, spiral items, alignment items, break items, twin questions, PRIMM items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
+console.log(`own pools (prequestions, diagram predictions, spiral items, alignment items, break items, protégé items, twin questions, PRIMM items), each held to chance + ${MAX_HIT_OVER_CHANCE * 100} points on its own: the worst single-feature strategy and the adversary`)
 console.log(`  ${'pool'.padEnd(12)}${'items'.padStart(6)}${'worst strategy'.padStart(24)}${'hit'.padStart(8)}${'chance'.padStart(8)}${'adv hit'.padStart(9)}  odd`)
 for (const pool of [...ALL_OWN_POOLS, PRIMM_POOL]) {
   const rows = poolCueRows(poolItems(pool))

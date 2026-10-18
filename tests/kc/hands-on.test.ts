@@ -3,7 +3,8 @@
  * graded active block other than its checkpoint: an `item` block whose family and variants exist, an `exercise` block
  * with at least one registered outcome task, a `fleet` exercise block whose exercise is in `FLEET_EXERCISES`
  * (wave-3.md §4.2, 3a-05b), or a `play` block whose play is registered (a pending play does not
- * count). All 15 T6 and T7 lessons must be, by id (wave-3.md §18.1 B1; 3c-01 raised the gate from 10); the test prints the
+ * count). All 15 T6 and T7 lessons must be, by id (wave-3.md §18.1 B1; 3c-01 raised the gate from 10), and stretch's t6.l12
+ * (§16.2, 3s-03) makes them 16, all hands-on; the test prints the
  * list. Each item block's variant KCs must intersect its lesson's `Lesson.kcs`.
  */
 import { describe, expect, test } from 'bun:test'
@@ -16,8 +17,8 @@ import { loadFamily } from '../../src/lib/items/registry'
 import type { Gen } from '../../src/lib/items/types'
 import { buildRegistry, type Registry } from '../../src/lib/sims/registry'
 
-/** The gate: every one of these lessons is hands-on (t6.l1-t6.l10, t7.l1-t7.l5). */
-const REQUIRED_IDS = [...Array.from({ length: 10 }, (_, i) => `t6.l${i + 1}`), ...Array.from({ length: 5 }, (_, i) => `t7.l${i + 1}`)]
+/** The gate: every one of these lessons is hands-on (t6.l1-t6.l10, t6.l12, t7.l1-t7.l5; t6.l11 is reserved). */
+const REQUIRED_IDS = [...Array.from({ length: 10 }, (_, i) => `t6.l${i + 1}`), 't6.l12', ...Array.from({ length: 5 }, (_, i) => `t7.l${i + 1}`)]
 
 const SIMS_DIR = join(import.meta.dir, '..', '..', 'src', 'components', 'sims')
 
@@ -62,17 +63,17 @@ function handsOnBlocks(l: Lesson, fleet: Readonly<Record<string, unknown>> = FLE
 const T67 = ALL_LESSONS.filter((l) => l.trackId === 't6' || l.trackId === 't7')
 
 describe('hands-on T6/T7 lessons (spec §5.4)', () => {
-  test('there are 15 T6/T7 lessons', () => {
-    expect(T67).toHaveLength(15)
+  test('there are 16 T6/T7 lessons', () => {
+    expect(T67).toHaveLength(16)
   })
 
   test('the required ids are exactly the T6/T7 lessons', () => {
-    expect(REQUIRED_IDS).toHaveLength(15)
-    expect(new Set(REQUIRED_IDS).size).toBe(15)
+    expect(REQUIRED_IDS).toHaveLength(16)
+    expect(new Set(REQUIRED_IDS).size).toBe(16)
     expect(T67.map((l) => l.id).sort()).toEqual([...REQUIRED_IDS].sort())
   })
 
-  test('all 15 of them are hands-on, by id, and the list is printed', () => {
+  test('all 16 of them are hands-on, by id, and the list is printed', () => {
     const rows = T67.map((l) => ({ id: l.id, title: l.title, how: handsOnBlocks(l) }))
     const yes = rows.filter((r) => r.how.length > 0)
     const no = rows.filter((r) => r.how.length === 0)

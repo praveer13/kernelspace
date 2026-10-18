@@ -79,7 +79,8 @@ export const T6_KCS: readonly Kc[] = [
     can: 'You can say why multimodal encode becomes a third fleet beside prefill and decode, and what each phase is bound by.',
     track: 't6',
     kind: 'concept',
-    lessons: ['t6.l3'],
+    // t6.l12 revisits it: attention and FFN pools are sized in proportion to their work, as prefill and decode are
+    lessons: ['t6.l3', 't6.l12'],
     requires: ['t5.pd-disaggregation'],
     gen: ['prefill'],
     since,
@@ -247,6 +248,19 @@ export const T6_KCS: readonly Kc[] = [
     lessons: ['t6.l9'],
     requires: [KC.loraAdapterBytes, KC.blockTables],
     since,
+  },
+
+  /* ---- t6.l12 (wave-3.md §16.2, 3s-03): read after t6.l9 and before the spiral; t6.epd-phases lists it too ---- */
+  {
+    id: KC.attentionFfnSplit,
+    title: 'Attention-FFN disaggregation',
+    can: 'You can say why MoE decode puts attention and experts on separate GPUs, and when the per-layer hop eats the gain.',
+    track: 't6',
+    kind: 'concept',
+    lessons: ['t6.l12'],
+    requires: [KC.allToAll, 't6.comm-overlap', 't6.epd-phases'],
+    // no `claims`: its three benchmark claims are lazy (claims/lazy/serving3.ts), and a KC's claims are read through the eager registry (wave-3.md §4.4); the lesson's statline cites them
+    since: '2026-10-14',
   },
 
   /* ---- t6.l10 (the T6 spiral) ---- */

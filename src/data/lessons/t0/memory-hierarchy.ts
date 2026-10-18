@@ -148,6 +148,65 @@ Two kinds of locality make the whole scheme work. **Temporal locality:** data yo
       variant: 'analogy',
       md: `The JVM and CPython both spend enormous engineering effort hiding this from you, and both leak. A Java **HashMap** scatters entries across the heap; iterating it pointer-chases through DRAM. CPython objects are pointers all the way down — a "list of ints" is an array of pointers to heap-allocated int objects, each a boxed object with its own header, refcount and pointer hop, and a cache miss once the heap fragments. **numpy** exists precisely to escape this: one contiguous buffer of raw values, no boxing, handed to compiled SIMD loops and iterated in cache-line order. Layout is part of the trick, interpreter overhead is most of it, and together they are worth 50–500× on numeric loops.`,
     },
+    // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: every cache miss is a trip to DRAM. The evidence
+    // names it: the old fig 1 wired the CPU straight to L2 and L3, and "a miss walks L1 → L2 → L3" (content.md §3 on t0.l2,
+    // PLAN-100X §6.1 error 10). The sim preset that proves the fix: the latency walk below (sim-memory, machine 'latency'),
+    // where a working set past L1's 32 KiB but inside L2's 1 MiB is answered by L2 at about 5 ns, not by DRAM at 100.
+    {
+      type: 'protege',
+      title: 'Sam explains a cache miss',
+      setup: 'Sam is profiling a Java service and wrote up what a cache miss costs.',
+      sentences: [
+        'A load first checks L1, which answers in about half a nanosecond when the line is there.',
+        'Caches move data in 64-byte lines, so touching one byte brings its neighbours along.',
+        'An L1 miss sends the load straight to DRAM, so every miss costs about 100 ns.',
+        'A pointer chase over a working set far larger than L3 pays about 100 ns on most loads.',
+        'Walking an array in order lets the prefetcher fetch lines before the loads ask for them.',
+      ],
+      falseAt: 2,
+      find: {
+        offer: [1, 2, 3, 4],
+        why: [
+          'True: the cache line is the unit of transfer, 64 bytes on these CPUs, which is why spatial locality pays.',
+          'False: a miss in L1 walks down the ladder. L2 answers in about 5 ns and L3 in about 15 ns, and the load waits on DRAM only after missing in L3 too.',
+          'True: once the working set is far bigger than L3, each dependent load usually misses every cache and waits on DRAM.',
+          'True: a sequential walk is the pattern hardware prefetchers detect, so the lines arrive before the loads need them.',
+        ],
+      },
+      tag: {
+        q: 'Which mistaken idea sits behind the false sentence?',
+        options: [
+          'Assuming a miss fetches single bytes rather than whole lines',
+          'Thinking a prefetcher can hide the cost of any access pattern',
+          'Treating each cache miss as a trip to main memory',
+          'Mixing up the latency of one load with the bandwidth of a level',
+        ],
+        correct: [2],
+        why: [
+          'Not this one: sentence 2 states the 64-byte line correctly, and sentence 3 is about where a miss goes next.',
+          'A real mix-up, but not this one: sentence 3 says nothing about prefetching, which helps sequential walks and not pointer chases.',
+          'Right: a miss in L1 is a question for L2, then L3. Sentence 3 skips both and charges the DRAM price for every miss.',
+          'Not this one: every number in sentence 3 is a latency, and the mistake is which level answers, not how many bytes per second it moves.',
+        ],
+      },
+      fix: {
+        q: 'Which sentence should replace sentence 3?',
+        options: [
+          'An L1 miss costs about 100 ns unless the walk is in order, because then the prefetcher hides the trip to DRAM.',
+          'An L1 miss goes to L3 before L2, as L3 is shared by the cores and each L2 is private to one core.',
+          'An L1 miss costs about 15 ns wherever the line is, because L2, L3 and DRAM are searched at the same time.',
+          'An L1 miss is tried in L2 and then L3, and the load waits about 100 ns on DRAM after missing in L3 as well.',
+        ],
+        correct: [3],
+        why: [
+          'Wrong: it still charges 100 ns for every miss the prefetcher does not hide, and a pointer chase over a 256 KiB working set misses L1 and is answered by L2 in a few nanoseconds.',
+          'Wrong: the lookup runs from the smallest, fastest level down, L1 then L2 then L3. Being shared is why L3 is larger and slower, not why it comes first.',
+          'Wrong: the levels answer at different speeds, about 5 ns for L2, 15 for L3 and 100 for DRAM, so a miss has no one price.',
+          'Right: each level is tried in turn, and the price is set by the level that holds the line. In the latency walk below, a 256 KiB working set misses L1, and L2 answers in a few nanoseconds, far from 100.',
+        ],
+      },
+      kcs: ['t0.latency-ladder'],
+    },
     {
       type: 'prose',
       md: `## The same ladder, on the GPU

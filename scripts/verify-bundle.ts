@@ -11,6 +11,8 @@
  * Wave 1 (docs/specs/wave-1.md §16.1): /boot and /today are gated at 200 KB with a tighter target, the
  * entry has a 125 KB target after the entry diet (B2), and the play closure, the generator family
  * chunks, the search index and the FSRS + cards + composer figure are reported. A route whose page file does not exist yet is skipped.
+ * Wave 3 stretch (docs/specs/wave-3.md §16.1, §17.1) reports the three + R3F chunk against 240 KB and fails the cube's 3D
+ * scene chunk above 40 KB (3s-01); which pages may reach three at all is tests/boot/imports.test.ts's job.
  * Wave 2 (§22.1) reports the compile bank: each group's chunk and "compile bank data (all groups)" against its
  * 30 KB figure. One check here does fail: no chunk may hold a compile bank file's data (a snippet's source hash or
  * the rustc version line from src/data/rust-items/bank/*.json). Those stay with the scripts and tests; the app
@@ -34,6 +36,10 @@ const LEARNER_REPORT_KB = 6
 /** The compile bank's groups together (spec §22.1): reported, not gated. */
 const BANK_REPORT_KB = 30
 const KB = 1000
+/** Stretch 1a (spec §16.1): three + R3F is reported against this (ParticleField's lazy chunk was 242.4 KB); the cube's own scene code is gated. */
+const THREE_REPORT_KB = 240
+const SCENE_GATE_KB = 40
+const SCENE_SRC = 'src/components/play/tiling-cube/Cube3D.tsx'
 
 interface RouteBudget {
   route: string
@@ -66,6 +72,13 @@ const ROUTE_BUDGETS: RouteBudget[] = [
   { route: '/boot', src: 'src/pages/Boot.tsx', budgetKb: 200, targetKb: 165 },
   { route: '/today', src: 'src/pages/Today.tsx', budgetKb: 200 },
   { route: '/daily', src: 'src/pages/Daily.tsx', budgetKb: 200 },
+  // Stretch 4 (wave-3.md §16.4, §17.1): Interview mode is reported against a 200 KB figure, not gated. Its item player, the
+  // interview library (it reaches the claims registry and the packet helpers) and the generator families load on demand, so
+  // the closure is the page and the Daily's flow components.
+  { route: '/drills', src: 'src/pages/Drills.tsx', budgetKb: null, targetKb: 200 },
+  // Stretch 8 (wave-3.md §16.8, §17.1): the bring-your-own-service capstone is reported against a 200 KB figure, not gated. The
+  // fleet session loads when a run starts, and the trace, zoo and atlas readers are the page's own closure.
+  { route: '/capstone/service', src: 'src/pages/ServiceCapstone.tsx', budgetKb: null, targetKb: 200 },
   { route: '/play/block-placement', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/block-placement/Play.tsx' },
   // The scheduler play shares the /play/:playId page; it holds fleet-model.ts, so its chunk is the larger of the two.
   { route: '/play/scheduler', src: 'src/pages/Play.tsx', budgetKb: null, targetKb: 220, playSrc: 'src/components/play/scheduler/Play.tsx' },
@@ -250,6 +263,32 @@ for (const { route, src, budgetKb, targetKb, playSrc } of ROUTE_BUDGETS) {
   }
   if (targetKb !== undefined) {
     console.log(`${totalKb <= targetKb ? 'ok  ' : 'warn'} ${route} target ${targetKb} KB (not gated): ${totalKb.toFixed(1)} KB`)
+  }
+}
+
+// Stretch 1a (spec §16.1): the cube's 3D scene. Its own chunk (Cube3D.tsx, the scene code without the engine) FAILS above
+// 40 KB. The three + R3F chunk is the JS the scene reaches by static imports that neither the entry nor the play's
+// closure already holds (Home's ParticleField shares it), and is reported against 240 KB. The play's closure above
+// never contains either: View3D imports the scene on a request, which tests/boot/imports.test.ts holds.
+if (!existsSync(new URL(`../${SCENE_SRC}`, import.meta.url))) {
+  console.log(`skip 3D scene: ${SCENE_SRC} does not exist yet`)
+} else {
+  const sceneKey = routeKey(SCENE_SRC)
+  if (!sceneKey) throw new Error(`manifest has no chunk for ${SCENE_SRC}; is it still imported lazily (View3D) and is build.manifest on?`)
+  const sceneFile = manifest[sceneKey].file
+  const held = closureFiles.get('/play/tiling-cube') ?? new Set(closure(['index.html']).map((c) => c.chunk.file))
+  const vendor = closure([sceneKey]).filter(({ key, chunk }) => key !== sceneKey && !held.has(chunk.file))
+  let vendorBytes = 0
+  for (const { chunk } of vendor) vendorBytes += await gzipSize(chunk.file)
+  const vendorKb = vendorBytes / KB
+  const vendorNames = vendor.map(({ chunk }) => chunk.file.split('/').pop()).join(', ')
+  console.log(`${vendorKb <= THREE_REPORT_KB ? 'ok  ' : 'warn'} three + R3F chunk ${vendorNames || '(none: inlined in the scene chunk)'} is ${vendorKb.toFixed(1)} KB gzip (figure ${THREE_REPORT_KB} KB, not gated)`)
+  const sceneKb = (await gzipSize(sceneFile)) / KB
+  if (sceneKb > SCENE_GATE_KB) {
+    console.error(`FAIL the cube's 3D scene chunk ${sceneFile.split('/').pop()} is ${sceneKb.toFixed(1)} KB gzip, over the ${SCENE_GATE_KB} KB budget (is three inlined in it, or has it grown?)`)
+    failed = true
+  } else {
+    console.log(`ok   the cube's 3D scene chunk ${sceneFile.split('/').pop()} is ${sceneKb.toFixed(1)} KB gzip (budget ${SCENE_GATE_KB} KB)`)
   }
 }
 

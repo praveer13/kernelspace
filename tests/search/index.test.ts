@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { byId, CLAIMS } from '../../src/data/claims'
-import { buildSearchIndex, clip, INDEX_PATH, serializeSearchIndex } from '../../scripts/build-search-index'
+import { buildSearchIndex, CAN_MAX, clip, INDEX_PATH, serializeSearchIndex } from '../../scripts/build-search-index'
 import { ACCEPTANCE_QUERIES, checkSearchIndex } from '../../scripts/verify-search-index'
 import { GROUP_ORDER, claimPath, indexItems, makeSearcher, type SearchIndex } from '../../src/lib/search'
 
@@ -109,6 +109,20 @@ describe('search index shape', () => {
   test('clip cuts at a word and marks the cut', () => {
     expect(clip('short', 10)).toBe('short')
     expect(clip('a longer hook that runs on', 12)).toBe('a longer…')
+  })
+
+  test('the competence crumbs keep the plan cut (CAN_MAX 32, wave-3.md §4.4, D72): none is longer, and one is cut at exactly 32', () => {
+    expect(CAN_MAX).toBe(32)
+    expect(Math.max(...index.kcs.map((k) => k[2].length))).toBe(CAN_MAX)
+    // r.control-flow-match's clause has a space at character 32, so the cut keeps 31 characters and the ellipsis: 32 in all.
+    // At 31 it would end "covers…" and at 25 "that…"; at 33 it would read the same, which the pin above catches.
+    const clause = 'write a match that covers every case of an enum, and use if and match as expressions'
+    const row = index.kcs.find((k) => k[0] === 'r.control-flow-match')!
+    expect(row[2]).toBe('write a match that covers every…')
+    expect(row[2]).toHaveLength(CAN_MAX)
+    expect(clip(clause, CAN_MAX)).toBe(row[2])
+    expect(clip(clause, 31)).toBe('write a match that covers…')
+    expect(clip(clause, 25)).toBe('write a match that…')
   })
 
   test('the palette fetches the index on open and the claims table gives rows their ids', () => {

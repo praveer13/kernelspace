@@ -21,7 +21,7 @@ choice with a measured number.
 **Audience:** Java/Python backend engineers. No prior systems knowledge or
 C++ assumed.
 
-## Curriculum — 68 lessons, 9 tracks
+## Curriculum — 69 lessons, 9 tracks
 
 | Track | Name | Lessons | Promise |
 |---|---|---|---|
@@ -32,7 +32,7 @@ C++ assumed.
 | T3 | Rust for Systems | 7 | Ownership as a compile-time memory protocol. |
 | T4 | GPU Architecture | 7 | SMs, HBM, rooflines — why bandwidth is the whole game. |
 | T5 | LLM Serving Systems | 10 | PagedAttention, prefix caching, continuous batching. |
-| T6 | Mega-Scale Serving | 10 | MoE, wide EP, disaggregation, FP4 — the production canon. |
+| T6 | Mega-Scale Serving | 11 | MoE, wide EP, disaggregation, FP4 — the production canon. |
 | T7 | Economics & SLO Engineering | 5 | Goodput, honest benchmarks, the frontier, the invoice. |
 | T* | Capstone | 7 steps | Build a toy inference engine: tokenize → batch → measure. |
 

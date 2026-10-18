@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import Alert from '@/components/daily/Alert'
 import Debrief from '@/components/daily/Debrief'
 import FixMenu from '@/components/daily/FixMenu'
 import Hypothesis from '@/components/daily/Hypothesis'
 import ProbeBar from '@/components/daily/ProbeBar'
 import ShareString from '@/components/daily/ShareString'
+import { season0Day, season0Header } from '@/data/season0'
 import { localDateKey } from '@/lib/economy'
 import { describeFleetError, openIncidentSession, type IncidentClientSession } from '@/lib/fleet-session'
 import { useVisibleClock } from '@/hooks/use-visible-clock'
@@ -38,7 +39,12 @@ import {
   type FlowState,
 } from '@/lib/world/daily'
 import type { Hypothesis as HypothesisId, FixId, ProbeId } from '@/lib/world/incident-spec'
+import type { ShiftFacts } from '@/lib/world/shift'
+import { wantsShift } from '@/pages/daily/wants-shift'
 import type { IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
+
+/** The shift's code, loaded when the URL asks for a shift (`pages/daily/shift-kit`). */
+type ShiftKit = typeof import('@/pages/daily/shift-kit')
 
 const BUTTON_QUIET = 'min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright'
 
@@ -64,19 +70,51 @@ const hypothesisName = (h: HypothesisId): string => HYPOTHESIS_OPTIONS.find((o) 
  * it is graded practice), naming the hashes of your modules that ran; a replay is practice and writes nothing. Its
  * `ms` is the attempt's visible time from the alert to the debrief (`useVisibleClock`: a hidden tab adds nothing),
  * capped at `INCIDENT_MAX_MS` (wave-3.md §15.1).
+ *
+ * The On-Call pilot (§16.6, 3s-08): `/daily?shift=3` plays three drill-namespace incidents from one seed in a row
+ * (`world/shift`), on the reference engine so every session in the pilot plays the same boxes. The shift's code and its
+ * note card (`pages/daily/shift-kit`) load with `import()` only when the URL asks for a shift, so an ordinary visit does
+ * not download them (TF3, 3s-08 m2); until they arrive a shift visit opens no session. Between the incidents a handoff
+ * note, built from the debrief just shown, is read before the next alert. The notes and results live in this
+ * component's state and nowhere else; each incident writes one event graded practice (`recordShift`), and the Daily's
+ * own record is untouched. The shift is a pilot URL the owner hands to a think-aloud participant (docs/oncall/pilot.md),
+ * not a link anywhere on the site.
+ *
+ * Season 0 (§16.7, 3s-09): on the seven dates of `data/season0` the header says "Season 0 · day k of 7", and the card on
+ * /me lists your results. The incident is the date's own, as on any other day; the shift has no Season 0 line.
  */
 export default function Daily() {
+  const [params] = useSearchParams()
+  const shifting = wantsShift(params.get('shift'))
+  // keyed, so turning the shift on or off starts the page afresh rather than carrying a step or a result across
+  return <DailyPage key={shifting ? 'shift' : 'daily'} shifting={shifting} />
+}
+
+function DailyPage({ shifting }: { shifting: boolean }) {
   // The date is read once per visit; a page left open past midnight keeps yesterday's incident until reloaded.
   const [date] = useState(() => localDateKey())
-  const source = useMemo(() => dailySource(date), [date])
-  const spec = useMemo(() => dailyIncident(date), [date])
+  /** the shift's place (0-based): the Daily has no steps */
+  const [step, setStep] = useState(0)
+  /** the shift's code: loaded when the URL asks for a shift, so it is `null` on an ordinary visit and until the chunk arrives */
+  const [kit, setKit] = useState<ShiftKit | null>(null)
+  /** a shift visit holds the session back until its code, and so its incidents, are known */
+  const waiting = shifting && kit === null
+  const plan = useMemo(() => (kit ? kit.shiftIncidents(date) : null), [kit, date])
+  const incident = plan?.[step] ?? null
+  const source = useMemo(() => incident?.source ?? dailySource(date), [incident, date])
+  const spec = useMemo(() => incident?.spec ?? dailyIncident(date), [incident, date])
   const number = dailyNumber(date)
+  /** which day of Season 0 the date is, or null outside it and in the shift */
+  const seasonDay = shifting ? null : season0Day(date)
+  /** what each shift incident reported, kept in this page's memory for the handoff note and the summary: never written */
+  const [finished, setFinished] = useState<Record<number, ShiftFacts>>({})
 
   const [attempt, setAttempt] = useState(0)
   const [session, setSession] = useState<IncidentClientSession | null>(null)
   const [flow, setFlow] = useState<FlowState | null>(null)
   const [phase, setPhase] = useState<Phase>('opening')
-  const [failure, setFailure] = useState<{ title: string; detail: string } | null>(null)
+  /** what stopped the attempt; `reload` when only a reload can retry it (the browser keeps a failed dynamic import for the life of the page) */
+  const [failure, setFailure] = useState<{ title: string; detail: string; reload?: true } | null>(null)
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   /** this attempt wrote the date's event */
@@ -85,11 +123,12 @@ export default function Daily() {
   /** your installed modules are read before the incident opens (their bytes load from the components store) */
   const ready = useSlots((s) => s.ready)
   const installed = useSlots((s) => s.installed)
-  /** play without your modules: the fallback after one fails, and a choice for a replay */
-  const [reference, setReference] = useState(false)
+  /** play without your modules: the fallback after one fails, and a choice for a replay; the shift always plays this way */
+  const [reference, setReference] = useState(shifting)
   /** the boxes of the attempt in play (three, plus an unused prefix router when one is installed): whose they were */
   const [boxes, setBoxes] = useState<DailyBox[]>([])
-  const canUseYours = useMemo(() => ownBoxes(dailyBoxes(installed)).length > 0, [installed])
+  // the shift plays the reference engine, so every session of the pilot plays the same boxes
+  const canUseYours = useMemo(() => !shifting && ownBoxes(dailyBoxes(installed)).length > 0, [shifting, installed])
   /** the page's visible time, and its reading when this attempt's alert showed */
   const visible = useVisibleClock()
   const alertAt = useRef<number | null>(null)
@@ -100,7 +139,24 @@ export default function Daily() {
   }, [])
 
   useEffect(() => {
-    if (!ready) return
+    if (!shifting || kit !== null) return
+    let live = true
+    import('@/pages/daily/shift-kit').then(
+      (k) => live && setKit(k),
+      () => {
+        if (!live) return
+        // the page's own code, not the incident; a second import() would get the same failure back, so the retry is a reload
+        setFailure({ title: 'The shift did not load', detail: 'Its code could not be fetched, so you may be offline, or the site was updated since this page opened. Nothing was played or recorded yet.', reload: true })
+        setPhase('failed')
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [shifting, kit])
+
+  useEffect(() => {
+    if (!ready || waiting) return
     let live = true
     let opened: IncidentClientSession | null = null
     // read when the session opens: a module installed mid-incident belongs to the next attempt
@@ -127,7 +183,7 @@ export default function Daily() {
       live = false
       opened?.close()
     }
-  }, [spec, attempt, ready, reference, fail, visible])
+  }, [spec, attempt, ready, waiting, reference, fail, visible])
 
   const run = useCallback<FlowRun>(
     async (command) => {
@@ -152,16 +208,18 @@ export default function Daily() {
     hadHypothesis.current = has
   }, [flow?.hypothesis])
 
-  function restart(onReference = reference) {
+  /** `advance` takes the shift's next incident: its spec differs, so the new session opens on it */
+  function restart(onReference = reference, advance = false) {
     setReference(onReference)
     alertAt.current = null
     setSession(null)
     setFlow(null)
     setWrote(false)
     setFailure(null)
-    setAnnouncement('')
+    setAnnouncement(kit && advance ? kit.nextAnnouncement(step) : '')
     setPhase('opening')
     setAttempt((a) => a + 1)
+    if (advance) setStep((i) => i + 1)
   }
 
   function onLogged(h: HypothesisId) {
@@ -190,28 +248,53 @@ export default function Daily() {
   const onResult = useCallback(
     (result: IncidentFinish) => {
       const ms = alertAt.current === null ? undefined : visible() - alertAt.current
-      setWrote(recordDaily(useProgress, date, spec, result, boxHashes(boxes), ms))
+      if (kit && incident) {
+        // graded practice, once per incident of the date; the facts are kept for the note and the summary, in memory only
+        setWrote(kit.recordShift(useProgress, date, incident, result, ms))
+        setFinished((f) => ({ ...f, [incident.index]: result }))
+      } else if (!shifting) setWrote(recordDaily(useProgress, date, spec, result, boxHashes(boxes), ms))
       setAnnouncement('The debrief is ready.')
     },
-    [date, spec, boxes, visible],
+    [date, spec, boxes, visible, incident, kit, shifting],
   )
 
   const open = phase === 'play' && flow !== null && !flow.ended
   const menus = useMemo(() => menuOrderFor(spec), [spec])
   const onMyEngine = boxes.some((b) => b.own)
   return (
-    <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12" data-page="daily" data-phase={phase} data-daily-date={date}>
+    <section
+      className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12"
+      data-page="daily"
+      data-phase={phase}
+      data-daily-date={date}
+      {...(kit ? { 'data-shift': kit.SHIFT_LENGTH, 'data-shift-step': step + 1 } : {})}
+    >
       <p className="section-label">0x00 — daily</p>
-      <h1 className="mt-3 font-display text-h3 text-text-1 sm:text-h2">Fleet Daily</h1>
-      <p className="mt-2 text-body-sm text-text-2">
-        #{number} · {date} · about {DAILY_MINUTES} min. One new incident each day, the same one for everybody on your date.
-      </p>
+      <h1 className="mt-3 font-display text-h3 text-text-1 sm:text-h2">{shifting ? 'On-call shift' : 'Fleet Daily'}</h1>
+      {seasonDay !== null && (
+        <p className="mt-2 text-body-sm text-text-2" data-season0={seasonDay}>
+          <span className="font-mono text-label uppercase text-text-1">{season0Header(seasonDay)}</span>
+          {' · '}your results stay on this device, listed on{' '}
+          <Link to="/me" className="text-info underline underline-offset-2">
+            Me
+          </Link>
+          .
+        </p>
+      )}
+      {shifting ? (
+        kit && <kit.ShiftIntro date={date} />
+      ) : (
+        <p className="mt-2 text-body-sm text-text-2">
+          #{number} · {date} · about {DAILY_MINUTES} min. One new incident each day, the same one for everybody on your date.
+        </p>
+      )}
+      {kit && plan && <kit.ShiftHead step={step} total={plan.length} />}
       {session && phase !== 'failed' && canUseYours && (
         <p className="mt-1 text-body-sm text-text-2" data-engine-line data-on={onMyEngine ? 'yours' : 'reference'}>
           {onMyEngine ? `Running on ${engineLine(ownBoxes(boxes).length)}.` : 'Running on the reference engine.'}
         </p>
       )}
-      {played && !wrote && phase !== 'failed' && (
+      {!shifting && played && !wrote && phase !== 'failed' && (
         <p className="mt-3 rounded-md border border-line bg-surface-1 p-3 text-body-sm text-text-2" data-practice>
           You have played today&rsquo;s Daily. This run is practice: it writes nothing to your record.
         </p>
@@ -229,8 +312,8 @@ export default function Daily() {
             <h2 className="font-display text-h3 text-text-1">{failure.title}</h2>
             <p className="mt-2 text-body-sm text-text-2">{failure.detail}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={() => restart()} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground">
-                Try again
+              <button type="button" onClick={() => (failure.reload ? window.location.reload() : restart())} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground">
+                {failure.reload ? 'Reload to try again' : 'Try again'}
               </button>
               {boxes.some((b) => b.own) && !reference && (
                 <button type="button" onClick={() => restart(true)} className={BUTTON_QUIET} data-play-reference>
@@ -243,6 +326,8 @@ export default function Daily() {
             </div>
           </div>
         )}
+
+        {phase !== 'debrief' && phase !== 'failed' && kit && <kit.CarriedNote finished={finished} step={step} />}
 
         {session && flow && phase !== 'failed' && (
           <>
@@ -272,7 +357,14 @@ export default function Daily() {
                 />
               </>
             )}
-            {phase === 'debrief' && (
+            {kit && plan && phase === 'debrief' && (
+              <Debrief session={session} source={source} flow={flow} busy={busy} run={run} onResult={onResult}>
+                {(result) => (
+                  <kit.ShiftDebrief plan={plan} step={step} result={result} finished={finished} wrote={wrote} onNext={() => restart(undefined, true)} onReplay={() => restart()} />
+                )}
+              </Debrief>
+            )}
+            {phase === 'debrief' && !shifting && (
               <Debrief session={session} source={source} flow={flow} busy={busy} run={run} boxes={boxes} onResult={onResult}>
                 {(result) => (
                   <>

@@ -895,11 +895,14 @@ describe('the play as the page renders it', () => {
     expect(html).toContain('data-mode="embed"')
   })
 
-  test('a level whose views have not loaded shows a status that holds their room, and a debrief the same', () => {
+  test('a level whose views have not loaded shows a status that holds their room, and a debrief the same', async () => {
     let s = practiceSession()
     s = openViews(withPrediction(s, predictedOf(answerItem(s, 0, 64, 'predict'), s.runs[0].inst)))
+    // A fresh copy of Level.tsx, with its own unresolved `lazy` views: another test file that walks the play loads Views.tsx
+    // for the whole process (bun runs every file in one, in no fixed order), and a resolved lazy renders its content at once.
+    const { default: Unloaded } = (await import('../../src/components/play/tiling-cube/Level.tsx?unloaded')) as { default: typeof Level }
     const level = renderToString(
-      createElement(Level, {
+      createElement(Unloaded, {
         session: s,
         level: levelOf(s),
         mirrorId: 'm',
@@ -1057,7 +1060,10 @@ describe('verify-plays: the cube’s checks (§6.3)', () => {
     expect(bundle).toMatch(/route: '\/play\/tiling-cube'[^}]*budgetKb: null[^}]*playSrc: 'src\/components\/play\/tiling-cube\/Play\.tsx'/)
   })
 
-  test('no View3D here: the 2D cube ships, the 3D one is stretch (D9)', () => {
-    for (const f of ['Play.tsx', 'Level.tsx', 'Mirror2D.tsx', 'Mirror.tsx', 'Debrief.tsx', 'session.ts', 'ProductionCard.tsx']) expect(read(f)).not.toContain('<View3D')
+  test('the 3D cube is a plain opt-in on every level while the study is off (the owner’s answer of 2026-10-15; D9, 3s-01, 3s-02): only Play.tsx mounts a View3D, and its `available` follows the split only with the study on (tests/plays/cube-eval.test.ts)', () => {
+    for (const f of ['Level.tsx', 'Mirror2D.tsx', 'Mirror.tsx', 'Debrief.tsx', 'session.ts', 'ProductionCard.tsx']) expect(read(f)).not.toContain('<View3D')
+    // never a literal `true` or a bare prop: every level with the study off, the level's view from the split with it on
+    expect(read('Play.tsx')).not.toMatch(/<CubeView3D[^>]*available(=\{true\}|\s|\/)/)
+    expect(read('Play.tsx')).toContain("available={!study || views[level.id] === '3d'}")
   })
 })

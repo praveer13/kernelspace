@@ -356,7 +356,7 @@ describe('/daily wires your engine', () => {
   const page = read('src/pages/Daily.tsx')
 
   test('the incident opens on the installed modules once they are read, and the boxes are fixed at open', () => {
-    expect(page).toContain('if (!ready) return')
+    expect(page).toContain('if (!ready || waiting) return')
     expect(page).toContain('dailySlotBytes(mine, reference)')
     expect(page).toContain('useSlots.getState().installed')
     expect(page).not.toContain('NO_SLOTS')

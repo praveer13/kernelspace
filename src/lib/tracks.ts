@@ -126,7 +126,7 @@ export const TRACKS: TrackMeta[] = [
     color: '#5CA8FF',
     glyph: Network,
     promise: 'MoE, wide EP, disaggregation, FP4 — the 2026 production canon.',
-    lessons: 10,
+    lessons: 11,
     exercises: 10,
     hours: 5,
   },
@@ -259,7 +259,16 @@ export const SIMS: SimMeta[] = [
   },
 ]
 
+/**
+ * Tracks whose reading order is not l1…lN. T6 reads t6.l12 (wave-3 §16.2) between t6.l9 and its t6.l10 spiral, and
+ * t6.l11 is reserved (PLAN-100X §9). Kept here rather than read from the lesson registry, which carries every lesson's
+ * content; tests/kc/scope.test.ts holds the two orders equal.
+ */
+const READING_ORDER: Readonly<Record<string, readonly number[]>> = {
+  t6: [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 10],
+}
+
 /** Ordered lesson ids across tracks (R.L1 … T7.L5) for next-lesson selectors. */
 export const ORDERED_LESSON_IDS: string[] = TRACKS.flatMap((t) =>
-  Array.from({ length: t.lessons }, (_, i) => `${t.id}.l${i + 1}`),
+  (READING_ORDER[t.id] ?? Array.from({ length: t.lessons }, (_, i) => i + 1)).map((n) => `${t.id}.l${n}`),
 )
