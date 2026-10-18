@@ -136,8 +136,9 @@ Hold the pattern: **trap → kernel inspects → fix mapping → transparent ret
     },
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: paging is swapping. The evidence names it: "paging
     // = swapping" is one of the named misconceptions distractors should encode (community.md §2.1). The sim preset that
-    // proves the fix: the translation walk below (sim-vm, machine 'walk4'), which translates an address through four levels
-    // with every page resident and no disk touched; the swap-out is a separate task of its own.
+    // proves the fix: the exercise below (sim-vm, machine 'walk4'). Its first four tasks page with no disk I/O (the 4-level
+    // walk, which never faults, a TLB hit, a minor fault, copy-on-write); only task 5 reaches the disk, by forcing a swap-out
+    // first and timing the major fault (VmPagingSim: a major fault is the re-access of a page marked `swap` on eviction).
     {
       type: 'protege',
       title: 'Sam explains paging',
@@ -163,7 +164,7 @@ Hold the pattern: **trap → kernel inspects → fix mapping → transparent ret
         q: 'Which mistaken idea sits behind the false sentence?',
         options: [
           'Mixing up the page table with the TLB that caches it',
-          'Treating paging and swapping as one thing',
+          'Treating paging and swapping as the same mechanism',
           'Believing a page fault is a bug in the program',
           'Assuming a process sees physical addresses directly',
         ],
@@ -188,7 +189,7 @@ Hold the pattern: **trap → kernel inspects → fix mapping → transparent ret
           'Wrong: it still makes paging a disk operation. Paging translates every access, with no disk involved, and swapping is a separate policy built on it.',
           'Wrong: paging exists so a process does not need frames next to each other; the page table lets any page land in any frame.',
           'Wrong: reading a file in page-size pieces describes a file read or mmap, which uses paging; it is not what paging is.',
-          'Right: translation is paging, and swapping is a use of it. In the translation walk below every page is resident and no disk is touched, and the swap-out is a task of its own.',
+          'Right: translation is paging, and swapping is a use of it. In the exercise below, the first four tasks page without touching disk, and only task 5 does, because it forces a swap-out first.',
         ],
       },
       kcs: ['t2.address-translation'],

@@ -11,17 +11,14 @@
 import { writeFileSync, mkdirSync } from 'fs'
 import { ALL_LESSONS, TRACK_EXTRAS } from '../src/data/lessons'
 import type { ContentBlock, Lesson } from '../src/data/lessons/types'
-import { PROTEGE_STEPS, stepQuestion } from '../src/lib/learner/protege'
+import { findQuestion, PROTEGE_STEPS } from '../src/lib/learner/protege'
 import { exportOrder } from '../src/lib/rng'
 import { TRACKS } from '../src/lib/tracks'
 
 const SITE = 'https://kernelspace.naigap.com'
 
-/** The exported stems of the protégé tag and fix steps: they never name the false sentence, which is the find's answer. */
-export const PROTEGE_EXPORT_STEM = {
-  tag: 'Which mistaken idea sits behind the false sentence?',
-  fix: 'Which sentence should replace the false one?',
-} as const
+/** What a protégé block's export says in place of its tag and fix steps, which it never prints (wave-3.md §16.9). */
+export const protegeLater = (lessonId: string) => `_The Tag and Fix steps follow in the app once the false line is found: ${SITE}/lesson/${lessonId}._`
 
 export function blockToMd(
   b: ContentBlock,
@@ -86,19 +83,16 @@ export function blockToMd(
       return `_${b.title ?? 'isomorphism'}_\n\n${pairs}${check}${principle}`
     }
     case 'protege': {
-      // P4 (wave-3.md §16.9): the passage numbered as the learner sees it, with nothing marking the false line, then the
-      // three questions without their keys. Each step's options use a salt of their own, so they never shift the quiz permutations.
-      // On the page the tag and fix steps open only after the find, so their authored stems may name the false sentence
-      // ("Which sentence should replace sentence 4?"); here all three are read at once, so tag and fix ask a fixed stem.
+      // P4 (wave-3.md §16.9): the passage numbered as the learner sees it, with nothing marking the false line, then the find
+      // question without its key (options in a salt of their own, so they never shift the quiz permutations). Nothing of the tag
+      // and fix steps is printed, stem, option or why: a fix restates the false line and a tag can echo it, so beside the
+      // passage their options would name the line the find asks for. On the page they open only once it is found.
       const lines = b.sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')
-      const steps = PROTEGE_STEPS.map((step, k) => {
-        const q = stepQuestion(b, step)
-        const opts = exportOrder(`${lessonId}#protege`, firstProtege * PROTEGE_STEPS.length + k, q.options.length)
-          .map((authored, j) => `- (o${j + 1}) ${q.options[authored]}`)
-          .join('\n')
-        return `**${step === 'find' ? 'Find' : step === 'tag' ? 'Tag' : 'Fix'}. ${step === 'find' ? q.q : PROTEGE_EXPORT_STEM[step]}**\n\n${opts}`
-      }).join('\n\n')
-      return `**${b.title}**${b.setup ? `\n\n${b.setup}` : ''}\n\n${lines}\n\n_One sentence above is false._\n\n${steps}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._`
+      const find = findQuestion(b)
+      const opts = exportOrder(`${lessonId}#protege`, firstProtege * PROTEGE_STEPS.length, find.options.length)
+        .map((authored, j) => `- (o${j + 1}) ${find.options[authored]}`)
+        .join('\n')
+      return `**${b.title}**${b.setup ? `\n\n${b.setup}` : ''}\n\n${lines}\n\n_One sentence above is false._\n\n**Find. ${find.q}**\n\n${opts}\n\n_Answers withheld: ask the learner to commit to an answer and explain it before discussing._\n\n${protegeLater(lessonId)}`
     }
     case 'quiz': {
       // Answer keys are withheld: tutors fed this markdown must not see them.

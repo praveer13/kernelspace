@@ -176,7 +176,7 @@ Two kinds of locality make the whole scheme work. **Temporal locality:** data yo
       tag: {
         q: 'Which mistaken idea sits behind the false sentence?',
         options: [
-          'Assuming a cache holds single bytes rather than whole lines',
+          'Assuming a miss fetches single bytes rather than whole lines',
           'Thinking a prefetcher can hide the cost of any access pattern',
           'Treating each cache miss as a trip to main memory',
           'Mixing up the latency of one load with the bandwidth of a level',

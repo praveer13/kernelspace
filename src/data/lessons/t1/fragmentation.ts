@@ -179,8 +179,9 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: a pool of equal blocks still needs malloc's
     // coalescing. The evidence names it: "the real lesson is that fixed blocks remove the need for coalescing" (content.md §3,
     // on t1.l3's split + coalesce pair; PLAN-100X §6.1 error 12). The sim preset that proves the fix: the fragmentation lab
-    // below (sim-allocator, task alloc.fixed-block-waste): in fixed-block mode the coalescing switch is off, and a malloc
-    // fails only when every block is in use.
+    // below (sim-allocator, task alloc.fixed-block-waste): fixed-block mode disables the coalescing switch and its free()
+    // never merges (AllocatorSim passes `coalesceOn && !fixedMode`), and a malloc fails for two reasons only, every block in
+    // use ('full') or a request bigger than one block ('too-big'), never for a hole too small to use (models/allocator.ts).
     {
       type: 'protege',
       title: 'Sam explains a pool of fixed blocks',
@@ -207,8 +208,8 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
         options: [
           'Counting the waste inside a block as external fragmentation',
           'Assuming equal blocks remove internal waste as well',
-          'Carrying heap coalescing over to a pool of equal blocks',
-          'Believing the free list has to be kept sorted by address',
+          'Carrying the heap\'s coalescing over to blocks of equal size',
+          'Believing freed blocks have to be kept sorted by address',
         ],
         correct: [2],
         why: [
@@ -230,7 +231,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
         why: [
           'Wrong: merging later is still merging, and a merged pair serves no request a single block could not.',
           'Wrong: holding a block back strands memory that could serve a request right now, for a pair that no request needs.',
-          'Right: equal blocks never form an unusable hole. In the lab below, fixed-block mode turns the coalescing switch off, and a malloc fails only when every block is in use.',
+          'Right: equal blocks never form an unusable hole. In the lab below, fixed-block mode disables the coalescing switch and never merges a freed block, and a malloc fails only when every block is in use or the request is bigger than one block.',
           'Wrong: to keep free blocks together the pool would have to move the live ones, which raw pointers into them pin in place. It never needs to, since any free block serves any request.',
         ],
       },

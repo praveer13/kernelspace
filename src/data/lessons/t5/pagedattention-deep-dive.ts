@@ -242,7 +242,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         q: 'Which mistaken idea sits behind the false sentence?',
         options: [
           'Treating a block at refcount 0 as wiped the moment it is freed',
-          'Believing a block table shares memory by copying blocks',
+          'Believing a block table shares memory by duplicating the block',
           'Assuming a block grows to fit a longer shared prompt',
           'Mixing up the block table with the hash of a prefix',
         ],

@@ -122,8 +122,10 @@ describe('RING 1, RING 0 and ROOT ids (wave-2.md §6.4)', () => {
   test('the lesson lists are whole tracks, in curriculum order', () => {
     expect([...RING1_LESSONS]).toEqual(lessonIds(['t3', 't4']))
     expect([...RING0_LESSONS]).toEqual(lessonIds(['t5']))
-    // stretch's t6.l12 (wave-3 §16.2, 3s-03) is not a ROOT requirement: rings are derived, so adding it would un-earn
-    // ROOT for every learner who holds it on deploy (the reasoning of wave-3 D25); the owner decides whether ROOT grows
+    // ROOT_LESSONS is the T6 and T7 tracks minus one lesson, which its doc comment names (G7): stretch's t6.l12 (wave-3
+    // §16.2, 3s-03) is not a ROOT requirement, because rings are derived, so adding it would un-earn ROOT for every learner
+    // who holds it on deploy (the reasoning of wave-3 D25); the owner decides whether ROOT grows. Only t6.l12 is filtered,
+    // so any other T6 or T7 lesson added later still has to join the list
     expect([...ROOT_LESSONS]).toEqual(lessonIds(['t6', 't7']).filter((id) => id !== 't6.l12'))
   })
 

@@ -130,7 +130,7 @@ export const ROOT_ACTS: readonly string[] = ['engine', 'fleet', 'business']
 /** ROOT: Daily incidents solved, on distinct local dates. */
 export const ROOT_DAILIES = 5
 
-/** ROOT: every T6 and T7 lesson *done*. */
+/** ROOT: every T6 and T7 lesson *done* but stretch's t6.l12, left out: rings are derived, so adding it un-earns ROOT (D25). */
 export const ROOT_LESSONS: readonly string[] = [
   't6.l1', 't6.l2', 't6.l3', 't6.l4', 't6.l5', 't6.l6', 't6.l7', 't6.l8', 't6.l9', 't6.l10',
   't7.l1', 't7.l2', 't7.l3', 't7.l4', 't7.l5',

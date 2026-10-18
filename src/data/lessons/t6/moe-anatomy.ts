@@ -76,7 +76,7 @@ This is why MoE serving is a *scheduling and networking* discipline:
         options: [
           'Counting the dense layers as MoE layers in the all-to-all count',
           'Treating an FP8 weight as two bytes in place of one',
-          'Sizing memory by the active parameters in place of the total',
+          'Sizing memory by the active parameter count',
           'Believing the shared expert runs only when the router picks it',
         ],
         correct: [2],

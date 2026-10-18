@@ -211,8 +211,8 @@ The units are deliberately paired: \`GFLOPs / GB = FLOPs / byte\`. Predict each 
       tag: {
         q: 'Which mistaken idea sits behind the false sentence?',
         options: [
-          'Counting one byte per FP16 weight in place of two',
-          'Assuming decode at batch 1 is compute-bound',
+          'Counting one byte per FP16 weight',
+          'Assuming a batch-1 step is compute-bound',
           'Mixing up the ridge of the chip with the intensity of the kernel',
           'Believing the KV cache is the main read at batch 1',
         ],
