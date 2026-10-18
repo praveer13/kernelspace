@@ -40,6 +40,7 @@ import { wilson } from './calibration'
 import { DEFAULT_SLO, deriveCardsDetailed, type CardsContent, type CardsExtra, type CardsPlan, type FirstReview } from './cards'
 import { RANDOMIZED_LABS } from './experiments'
 import { FORM_SLOTS, type FormId } from './forms'
+import { formatHintSecondary, selectHintSecondary, type HintSecondary } from './hint-secondary'
 import { weekStartOf } from './planner'
 import { proportionOf, type Proportion } from './proportion'
 import { daysBetween } from './reentry'
@@ -2276,6 +2277,8 @@ export interface Wave3Report {
   surface: SurfaceMinutes
   /** Null while docs/prereg/hint-ladders.md is unsigned. */
   hint: HintArms | null
+  /** F2's secondary outputs (hint-secondary.ts; prereg §3 and §5), reported and never decisive; null while unsigned, as `hint` is. */
+  hintSecondary: HintSecondary | null
   /** Null while docs/prereg/fleet-daily.md is unsigned. */
   daily: DailyVsOther | null
   proveV2: ProveV2
@@ -2304,6 +2307,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
   const watcher = inputs.watcher ?? 'unsigned'
   const surface = selectSurfaceMinutes(events)
   const hint = signed.hintLadders ? selectHintArms(ledgers, cards) : null
+  const hintSecondary = signed.hintLadders ? selectHintSecondary(ledgers, cards, { window: HINT_WINDOW_DAYS, bootstrapDraws, percentile }) : null
   const daily = signed.fleetDaily ? selectDailyVsOther(ledgers, cards) : null
   const proveV2 = selectProveV2(events, inputs.v2Labs ?? new Set())
   const provedInUse = selectProvedInUse(events)
@@ -2476,6 +2480,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
     partners: ledgers.length,
     surface,
     hint,
+    hintSecondary,
     daily,
     proveV2,
     provedInUse,
@@ -2528,6 +2533,8 @@ export function formatWave3Report(r: Wave3Report): string {
     ...r.keepOrKill.map(
       (k) => `  ${k.label}: ${k.verdict === 'unsigned' ? `NOT READ, the pre-registration is unsigned; default: ${k.fallback}` : k.verdict === 'underpowered' ? `UNDERPOWERED, default: ${k.fallback}` : k.verdict === 'keep' ? 'KEEP' : `KILL, default: ${k.fallback}`}`,
     ),
+    '',
+    ...formatHintSecondary(r.hintSecondary),
     '',
     'the journey re-cut (F1): active minutes per week, median over partners, beside PLAN §4.D',
     s.partners < SURFACE_MIN_PARTNERS

@@ -23,6 +23,8 @@ const SPEC_DATA_KEYS = [
   'src', 'kcs', 'form', 'grp', 'slot', 'of', 'level', 'variant', 'phase', 'reason', 'fault', 'severity', 'diagnosed', 'fixed', 'burn', 'expertBurn', 'streetlight', 'probes', 'arm', 'via',
   // Wave 3 (wave-3.md §15.2)
   'sinceDays', 'formId', 'formSet', 'formSlot', 'track', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth',
+  // F2's secondary outputs (hint-secondary.ts): a lab run's passed check ids
+  'passed',
 ]
 
 const SECRET_EXPLAIN = 'because my cat walked on the keyboard'
@@ -416,6 +418,27 @@ describe('redactForPartner: the Wave 3 fields (§15.2)', () => {
     const edited = JSON.stringify({ format: DONATION_FORMAT, version: 1, events: [{ kind: 'item', ref: 'gen:kv/a', dayOffset: 0, data: { src: 'form', track: 't5' } }, { kind: 'item', ref: 'gen:kv/a', dayOffset: 0, data: { src: 'form', track: SECRET_EXPLAIN } }, { kind: 'item', ref: 'gen:kv/a', dayOffset: 0, data: { src: 'today', track: 't5' } }] })
     const parsed = parseDonation(edited)
     expect(parsed.ok && parsed.donation.events.map((e) => e.data)).toEqual([{ src: 'form', track: 't5' }, { src: 'form' }, { src: 'today' }])
+  })
+
+  test('a lab run keeps the check ids it passed, check-id-shaped and on a lab-check only; its seeds, hashes and per-check detail go', () => {
+    const run = sensitive().events.find((e) => e.kind === 'lab-check')
+    const kept = redactForPartner({ events: run ? [run] : [], working: [] }).events[0]
+    expect(kept.data).toEqual({ passed: ['boot'] })
+    expect(JSON.stringify(kept)).not.toContain('"checks"')
+    const j = new Journal()
+    const lab = (passed: unknown) => j.add('lab-check', 'lab:rust-allocator', '2026-09-01', { score: 0, ok: false, provenance: 'lab-green', data: { passed, total: 6 } })
+    lab(['boot', 'no_overlap', 'boot'])
+    lab([])
+    lab(['Boot', 'no-overlap', '2026-09-01', 'a'.repeat(32), 'x'.repeat(49), SECRET_EXPLAIN, 7, null, 'align'])
+    lab(Array.from({ length: 40 }, (_, i) => `c${i}`))
+    lab('boot')
+    j.add('item', 'gen:kv/a', '2026-09-01', { score: 1, ok: true, rev: 'r', provenance: 'unseen', data: { src: 'today', passed: ['boot'] } })
+    const out = redactForPartner({ events: j.events, working: [] }).events.map((e) => e.data?.passed)
+    expect(out).toEqual([['boot', 'no_overlap'], [], ['align'], Array.from({ length: 32 }, (_, i) => `c${i}`), undefined, undefined])
+    // a hand-edited donation is held to the same rule
+    const edited = JSON.stringify({ format: DONATION_FORMAT, version: 1, events: [{ kind: 'lab-check', ref: 'lab:rust-allocator', dayOffset: 0, data: { passed: ['boot', SECRET_EXPLAIN] } }, { kind: 'item', ref: 'gen:kv/a', dayOffset: 0, data: { passed: ['boot'] } }] })
+    const parsed = parseDonation(edited)
+    expect(parsed.ok && parsed.donation.events.map((e) => e.data)).toEqual([{ passed: ['boot'] }, undefined])
   })
 
   test('sinceDays is kept (rounded to whole days), so cold checks and ROOT read their gap on a donation', () => {
