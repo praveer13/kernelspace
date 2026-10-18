@@ -38,6 +38,7 @@ import type { IsoInstant, LedgerEvent, LocalDay, WorkingKey, WorkingRecord } fro
 import { hash32, splitmix32 } from '@/lib/rng'
 import { wilson } from './calibration'
 import { DEFAULT_SLO, deriveCardsDetailed, type CardsContent, type CardsExtra, type CardsPlan, type FirstReview } from './cards'
+import { formatDailySecondary, selectDailySecondary, type DailyCheck, type DailySecondary } from './daily-secondary'
 import { RANDOMIZED_LABS } from './experiments'
 import { FORM_SLOTS, type FormId } from './forms'
 import { formatHintSecondary, selectHintSecondary, type HintSecondary } from './hint-secondary'
@@ -1642,14 +1643,15 @@ export interface DailyVsOther {
  * (provenance `unseen`, not assisted) on a KC the signature items serve other than the diagnosis skill itself, at least
  * `DAILY_MIN_DAYS` local days after that KC's card was created. It is a *Daily* check when the learner had played a Daily
  * that trained the KC (an `inc:daily/` event carrying it in `kcs`) before the answer, and an *other* check otherwise. The
- * skill `t7.incident-diagnosis` is in every Daily, so it has no contrast and is left out.
+ * skill `t7.incident-diagnosis` is in every Daily, so it has no contrast and is left out. `onCheck` receives each check as
+ * it is counted, so the secondary outputs (daily-secondary.ts) read the primary's own classification.
  */
-export function selectDailyVsOther(ledgers: readonly PartnerLedger[], content: CardsContent): DailyVsOther {
+export function selectDailyVsOther(ledgers: readonly PartnerLedger[], content: CardsContent, onCheck?: (check: DailyCheck) => void): DailyVsOther {
   const sig = new Set(content.kcs.filter((k) => k.gen?.includes('sig') && k.id !== KC.incidentDiagnosis).map((k) => k.id))
   const counts = { daily: { n: 0, correct: 0 }, other: { n: 0, correct: 0 } }
   const ds: number[] = []
   let partners = 0
-  for (const l of ledgers) {
+  for (const [learner, l] of ledgers.entries()) {
     const cards = cardsOf(l, content)
     if (cards === null) continue
     const met = new Set<string>()
@@ -1666,6 +1668,7 @@ export function selectDailyVsOther(ledgers: readonly PartnerLedger[], content: C
         const group = met.has(kc) ? mine.daily : mine.other
         group.n += 1
         if (isOk(e)) group.correct += 1
+        onCheck?.({ learner, kc, group: group === mine.daily ? 'daily' : 'other', ok: isOk(e) })
       }
     }
     for (const g of ['daily', 'other'] as const) {
@@ -2281,6 +2284,8 @@ export interface Wave3Report {
   hintSecondary: HintSecondary | null
   /** Null while docs/prereg/fleet-daily.md is unsigned. */
   daily: DailyVsOther | null
+  /** F3's secondary outputs (fleet-daily.md §3 and §5), reported and never decisive; null while the file is unsigned. */
+  dailySecondary: DailySecondary | null
   proveV2: ProveV2
   provedInUse: ProvedInUse
   discrimination: Discrimination30
@@ -2308,7 +2313,9 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
   const surface = selectSurfaceMinutes(events)
   const hint = signed.hintLadders ? selectHintArms(ledgers, cards) : null
   const hintSecondary = signed.hintLadders ? selectHintSecondary(ledgers, cards, { window: HINT_WINDOW_DAYS, bootstrapDraws, percentile }) : null
-  const daily = signed.fleetDaily ? selectDailyVsOther(ledgers, cards) : null
+  const dailyChecks: DailyCheck[] = []
+  const daily = signed.fleetDaily ? selectDailyVsOther(ledgers, cards, (c) => dailyChecks.push(c)) : null
+  const dailySecondary = daily ? selectDailySecondary(ledgers, dailyChecks, daily) : null
   const proveV2 = selectProveV2(events, inputs.v2Labs ?? new Set())
   const provedInUse = selectProvedInUse(events)
   const discrimination = selectDiscrimination30(ledgers, cards, { lures: inputs.lures })
@@ -2482,6 +2489,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
     hint,
     hintSecondary,
     daily,
+    dailySecondary,
     proveV2,
     provedInUse,
     discrimination,
@@ -2527,6 +2535,8 @@ export function formatWave3Report(r: Wave3Report): string {
     ...r.gates.flatMap((g) => [
       `${g.id}  ${g.label} → ${STATUS_LABEL[g.status]}`,
       `      ${g.status === 'owner' || g.status === 'insufficient' ? '' : `n = ${g.n}, ${plural(g.partners, 'partner')}: `}${g.detail}`,
+      // F3's secondary outputs (fleet-daily.md §3 and §5) under its row: reported, never decisive, once the file is signed
+      ...(g.id === 'F3' && r.dailySecondary ? formatDailySecondary(r.dailySecondary).map((line) => `      ${line}`) : []),
     ]),
     '',
     'keep-or-kill',
