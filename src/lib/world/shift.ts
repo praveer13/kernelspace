@@ -13,10 +13,11 @@
  *     The same date gives everybody the same shift, which is what lets the owner compare sessions. The three faults are
  *     drawn independently: a shift that never repeated a fault would let the learner rule the third one out by
  *     elimination, and a handoff note that named which faults were gone would give the next fault away.
- *   - The handoff note (`handoffNote`) and the summary after the third incident (`shiftSummary`). Both are pure
+ *   - The handoff note (`handoffNote`) and the summary after the third incident (`shiftSummary`), in `shift-note`: pure
  *     functions of what the debrief already showed. They are shown on the page and held in its memory, never written:
  *     nothing here touches the ledger, a working key or browser storage, and the recorded event carries no text from
- *     them (tests/world/shift.test.ts checks both).
+ *     them (tests/world/shift.test.ts checks both). They sit in a module of their own because Act IV's drills import
+ *     this one only for `recordShift`, and a shared module is one chunk that every importer downloads whole.
  *   - The record (`shiftResult`, `recordShift`): one `incident` event per incident per date, graded practice.
  *
  * WHY THE EVENT IS A TEAM-GRAMMAR REF. The ledger contract adds no ref grammar in Wave 3 (D4) and `codec.ts` holds
@@ -33,8 +34,8 @@
 
 import type { IncidentData, IncidentRef, IncidentResult } from '@/lib/ledger/types'
 import { hash32, splitmix32u } from '@/lib/rng'
-import { INCIDENT_MAX_MS, burnMinutes, dailyResult, recordedMs, type FinishedIncident, type IncidentSource } from './daily'
-import { FAULT_SHORT, FIXES, LIMIT_MINUTES, fixFor, generateIncident, type IncidentSpec } from './incident-spec'
+import { INCIDENT_MAX_MS, dailyResult, recordedMs, type FinishedIncident, type IncidentSource } from './daily'
+import { generateIncident, type IncidentSpec } from './incident-spec'
 
 /** The shift's length: `?shift=3` is the only value that turns it on. */
 export const SHIFT_LENGTH = 3
@@ -72,7 +73,7 @@ export function shiftIncidents(date: string): ShiftIncident[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* The handoff note and the summary                                     */
+/* What a note reads (the notes are in shift-note)                      */
 /* ------------------------------------------------------------------ */
 
 /** What a finished incident reports that the note reads (a structural slice of the fleet protocol's `IncidentFinish`). */
@@ -89,47 +90,15 @@ export interface ShiftNote {
   lines: string[]
 }
 
-const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`
-
 /**
- * The note the on-call hands to the next one, after incident `index` (0-based) of `total`: what it was, how it ended, what
- * was changed, and the one habit the debrief measured. It claims nothing about the next incident beyond the fact that its
- * fault is drawn independently of this one (`shiftIncidents`), so it can be read before the next alert without a hint.
+ * Which suspect the learner held, as a debrief scores it: `fault` (the suspect was the fault), `wrong` (a suspect that was
+ * not), or `none` (nobody: no hypothesis was logged, or the answer was "unsure"). `diagnosed` alone cannot tell the last
+ * two apart, and `hypothesis` is the one held when the first fix went in (incident-sim `outcome`), so it is read first.
+ * It sits here, not in `shift-note`, because Interview mode's debrief line reads it too and must not load the notes.
  */
-export function handoffNote(done: ShiftFacts, index: number, total: number = SHIFT_LENGTH): ShiftNote {
-  const taken = done.probes.length
-  const lines = [
-    `Closed: incident ${index + 1} of ${total}, "${FAULT_SHORT[done.fault]}".`,
-    done.recovered
-      ? `Status: recovered ${done.end - done.alert} min after the alert, with ${burnMinutes(done.burn)} burn-minutes against the expert's ${burnMinutes(done.expertBurn)}.`
-      : `Status: not recovered within the ${LIMIT_MINUTES}-minute limit, with ${burnMinutes(done.burn)} burn-minutes against the expert's ${burnMinutes(done.expertBurn)}.`,
-    done.fixed
-      ? `Changed: ${FIXES[fixFor(done.fault)].short}, which reverts the fault.`
-      : done.fix
-        ? `Changed: ${FIXES[done.fix].short}, which was not the fix for this fault. The fault was left in place.`
-        : 'Changed: nothing. No fix went in.',
-    done.diagnosed ? 'Diagnosis: the suspect you held was the fault.' : 'Diagnosis: the suspect you held was not the fault.',
-    taken === 0
-      ? 'Probes: none taken.'
-      : done.streetlight > 0
-        ? `Probes: ${plural(taken, 'probe')}, ${done.streetlight} of them Streetlight (every suspect still standing predicted the same reading). Before the next probe, ask which suspects it would separate.`
-        : `Probes: ${plural(taken, 'probe')}, none of them Streetlight.`,
-    'Next: a new incident on a new fleet. Its fault is drawn independently of this one, so nothing above says what it is. Start from the alert.',
-  ]
-  return { heading: `Handoff note: incident ${index + 1} to ${index + 2}`, lines }
-}
-
-/** The shift in numbers, after its last incident: one line each, then the totals. */
-export function shiftSummary(done: readonly ShiftFacts[]): ShiftNote {
-  const lines = done.map(
-    (d, i) =>
-      `Incident ${i + 1}, "${FAULT_SHORT[d.fault]}": ${d.diagnosed ? 'named' : 'not named'}, ${d.recovered ? `recovered after ${d.end - d.alert} min` : 'not recovered'}, ${burnMinutes(d.burn)} burn-minutes (the expert's ${burnMinutes(d.expertBurn)}).`,
-  )
-  const sum = (pick: (d: ShiftFacts) => number): number => done.reduce((a, d) => a + pick(d), 0)
-  lines.push(
-    `Shift: ${done.filter((d) => d.diagnosed).length} of ${done.length} named, ${done.filter((d) => d.recovered).length} of ${done.length} recovered, ${burnMinutes(sum((d) => d.burn))} burn-minutes (the expert's ${burnMinutes(sum((d) => d.expertBurn))}), ${plural(sum((d) => d.streetlight), 'Streetlight probe')}.`,
-  )
-  return { heading: 'Shift summary', lines }
+export function suspectHeld(done: Pick<ShiftFacts, 'diagnosed' | 'hypothesis'>): 'fault' | 'wrong' | 'none' {
+  if (done.hypothesis === undefined || done.hypothesis === 'unsure') return 'none'
+  return done.diagnosed ? 'fault' : 'wrong'
 }
 
 /* ------------------------------------------------------------------ */

@@ -27,8 +27,10 @@ import {
   designItems,
   designSheet,
   incidentLine,
+  incidentSupport,
   interviewRef,
   napkinItems,
+  objectionSupported,
   pickObjections,
   roundIncident,
   roundPlan,
@@ -36,14 +38,15 @@ import {
   scenarioText,
   sheetLines,
   stateOf,
+  supportedObjections,
   type InterviewContext,
   type PacketItem,
   type RoundItem,
 } from '../../src/lib/mentor/interview'
 import { END, LINE, PACKET_MAX, URL_MAX, agentUrl } from '../../src/lib/mentor/packet'
 import { dailyPlayed } from '../../src/lib/world/daily'
-import { FAULT_SHORT, generateIncident } from '../../src/lib/world/incident-spec'
-import { runExpert } from '../../src/lib/world/incident-sim'
+import { FAULT_SHORT, INCIDENT_FAULTS, fixFor, generateIncident, type IncidentAction } from '../../src/lib/world/incident-spec'
+import { runExpert, scoreIncident } from '../../src/lib/world/incident-sim'
 import { recordShift, seedKey, shiftPlayed, type ShiftFacts } from '../../src/lib/world/shift'
 import Drills from '../../src/pages/Drills'
 import { makeProfile, startTab } from '../ledger/env'
@@ -350,6 +353,136 @@ describe('the incident is a drill-namespace incident, recorded as practice', () 
     expect(line).toContain('the suspect held was the fault')
     expect(incidentLine(facts(plan, { diagnosed: false, recovered: false }))).toContain('not recovered')
   })
+
+  test('it says no suspect was held when the learner logged nothing or "unsure", and blames a suspect only when one was held (G9)', () => {
+    const spec = incident.spec
+    const wrongOne = INCIDENT_FAULTS.find((f) => f !== spec.fault) as (typeof INCIDENT_FAULTS)[number]
+    const right: IncidentAction = { kind: 'fix', fix: fixFor(spec.fault) }
+    const flow = (held: IncidentAction[]): ShiftFacts => scoreIncident(spec, [...held, right])
+    const lines = {
+      fault: incidentLine(flow([{ kind: 'hypothesis', fault: spec.fault }])),
+      wrong: incidentLine(flow([{ kind: 'hypothesis', fault: wrongOne }])),
+      unsure: incidentLine(flow([{ kind: 'hypothesis', fault: 'unsure' }])),
+      nothing: incidentLine(flow([])),
+    }
+    expect(lines.fault).toContain('the suspect held was the fault')
+    expect(lines.wrong).toContain('the suspect held was not the fault')
+    for (const none of [lines.unsure, lines.nothing]) {
+      expect(none).toContain('no suspect was held')
+      expect(none).not.toContain('not the fault')
+      expect(none).not.toContain('suspect held was')
+    }
+    // the rest of the line is the same whichever suspect was held
+    const rest = (line: string): string => line.slice(line.indexOf(', recovered '))
+    expect(new Set(Object.values(lines).map(rest)).size).toBe(1)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* The objections the packet's state supports                           */
+/* ------------------------------------------------------------------ */
+
+describe('the incident objections are raised only when the incident supports them (3s-06 m2)', () => {
+  const INCIDENT_IDS = OBJECTIONS.filter((o) => o.topic === 'incident').map((o) => o.id)
+  const rounds = Array.from({ length: 400 }, (_, r) => roundPlan(DATE, r))
+  const topicOrder = (list: readonly { topic: string }[]): number[] => list.map((o) => (TOPICS as readonly string[]).indexOf(o.topic))
+
+  /** The learner's play through the real session, as the debrief would report it. */
+  function flow(plan: ReturnType<typeof roundPlan>, actions: IncidentAction[]): ShiftFacts {
+    return scoreIncident(roundIncident(plan).spec, actions)
+  }
+  const wait = (n: number): IncidentAction[] => Array.from({ length: n }, () => ({ kind: 'wait' }))
+
+  test('the table knows all four incident objections: with a played incident and nothing else to push on, only "replicas" stands', () => {
+    expect(INCIDENT_IDS).toHaveLength(4)
+    const bare = { played: true, suspect: false, probes: 0, recovered: false }
+    const standing = OBJECTIONS.filter((o) => o.topic === 'incident' && objectionSupported(o, bare)).map((o) => o.id)
+    expect(standing).toEqual(['incident.replicas'])
+    const full = { played: true, suspect: true, probes: 3, recovered: true }
+    for (const o of OBJECTIONS) expect(objectionSupported(o, full)).toBe(true)
+    const skipped = incidentSupport(null)
+    for (const o of OBJECTIONS) expect(objectionSupported(o, skipped)).toBe(o.topic !== 'incident')
+  })
+
+  test('the state is read back from the debrief line the page builds', () => {
+    const plan = rounds[0]
+    const spec = roundIncident(plan).spec
+    const expert = flow(plan, runExpert(spec).actions)
+    expect(incidentSupport(incidentLine(expert))).toEqual({ played: true, suspect: true, probes: expert.probes.length, recovered: true })
+    expect(expert.probes.length).toBeGreaterThan(0)
+    const giveUp = flow(plan, wait(3))
+    expect(incidentSupport(incidentLine(giveUp))).toEqual({ played: true, suspect: false, probes: 0, recovered: false })
+    expect(incidentSupport(null)).toEqual({ played: false, suspect: false, probes: 0, recovered: false })
+  })
+
+  test('skipped: no round raises an incident objection, the swap keeps three objections from three topics in topic order, and it is deterministic', () => {
+    let drewIncident = 0
+    for (const plan of rounds) {
+      const hadIncident = plan.objections.some((o) => o.topic === 'incident')
+      if (hadIncident) drewIncident++
+      const got = supportedObjections(plan.objections, null)
+      expect(got).toHaveLength(3)
+      expect(got.some((o) => o.topic === 'incident')).toBe(false)
+      expect(new Set(got.map((o) => o.topic)).size).toBe(3)
+      expect(topicOrder(got)).toEqual([...topicOrder(got)].sort((a, b) => a - b))
+      expect(supportedObjections(plan.objections, null).map((o) => o.id)).toEqual(got.map((o) => o.id))
+      // what the draw already had that the state supports stays
+      for (const o of plan.objections.filter((x) => x.topic !== 'incident')) expect(got).toContain(o)
+      // a draw with no incident objection is untouched
+      if (!hadIncident) expect(got).toEqual(plan.objections)
+    }
+    // the check has teeth: the draw does hand out the incident's objections (3 of 4 topics, so about three rounds in four)
+    expect(drewIncident / rounds.length).toBeGreaterThan(0.6)
+  })
+
+  test('skipped: the packet lists no incident objection and says "not played yet"; played with a suspect and probes it lists the drawn ones', async () => {
+    let checked = 0
+    for (let r = 0; r < 40; r++) {
+      const plan = rounds[r]
+      const drewIncident = plan.objections.find((o) => o.topic === 'incident')
+      const skipped = await contextFor(r, { incident: false })
+      const text = buildInterviewerPacket(skipped.ctx).text
+      const { head, bodies } = parts(text)
+      expect(bodies[1]).toContain('- Incident: not played yet')
+      for (const o of OBJECTIONS.filter((x) => x.topic === 'incident')) expect(head).not.toContain(o.says)
+      expect(head.split('\n').filter((l) => /^\d\. /.test(l))).toHaveLength(3)
+      if (drewIncident === undefined) continue
+      checked++
+      const playedCtx = await contextFor(r, { incident: true })
+      expect(parts(buildInterviewerPacket(playedCtx.ctx).text).head).toContain(drewIncident.says)
+    }
+    expect(checked).toBeGreaterThan(20)
+  })
+
+  test('played: an objection stays only when the play gives it something to push on', () => {
+    for (const plan of rounds.slice(0, 24)) {
+      const spec = roundIncident(plan).spec
+      const fix: IncidentAction = { kind: 'fix', fix: fixFor(spec.fault) }
+      const lineOf = (actions: IncidentAction[]): string => incidentLine(flow(plan, actions))
+      const ids = (line: string): string[] => supportedObjections(plan.objections, line).map((o) => o.id)
+
+      // the expert held a suspect, probed and recovered: everything the draw made stands
+      expect(supportedObjections(plan.objections, lineOf(runExpert(spec).actions))).toEqual(plan.objections)
+
+      // recovered by the right fix with no suspect and no probe: nothing about a hypothesis or a probe is left, the recovery is
+      const quick = ids(lineOf([fix]))
+      expect(quick).not.toContain('incident.separate')
+      expect(quick).not.toContain('incident.cost-of-probe')
+
+      // gave up: no suspect, no probe, no recovery: only "replicas" can stand
+      const idle = ids(lineOf(wait(3)))
+      for (const id of idle) expect(['incident.separate', 'incident.coincidence', 'incident.cost-of-probe']).not.toContain(id)
+
+      // a suspect held (wrong) with a probe, not recovered: its objections stand, the recovery one does not
+      const held = ids(lineOf([{ kind: 'hypothesis', fault: INCIDENT_FAULTS.find((f) => f !== spec.fault) as (typeof INCIDENT_FAULTS)[number] }, { kind: 'probe', probe: 'intake' }, ...wait(3)]))
+      expect(held).not.toContain('incident.coincidence')
+
+      for (const list of [quick, idle, held]) {
+        expect(list).toHaveLength(3)
+        expect(new Set(list.map((id) => OBJECTIONS.find((o) => o.id === id)?.topic)).size).toBe(3)
+      }
+    }
+  }, 20_000)
 })
 
 /* ------------------------------------------------------------------ */
@@ -420,14 +553,15 @@ describe('the interviewer packet', () => {
       expect(bodies[0]).toContain(ctx.design!.cost.text)
       expect(bodies[1]).toContain('Napkin 1: answered, close')
       expect(bodies[1]).toContain('Napkin 2: answered, off')
-      // the three objections, by code, each with its look-for note, above the line
-      expect(ctx.objections).toHaveLength(3)
-      for (const o of ctx.objections) {
+      // the three objections, by code, each with its look-for note, above the line (an incident one only when the incident was played)
+      const raised = supportedObjections(ctx.objections, ctx.incident)
+      expect(raised).toHaveLength(3)
+      for (const o of raised) {
         expect(head).toContain(o.says)
         expect(head).toContain(`Look for: ${o.lookFor}`)
       }
       // no objection beyond those three
-      expect(OBJECTIONS.filter((o) => head.includes(o.says)).map((o) => o.id)).toEqual(ctx.objections.map((o) => o.id))
+      expect(OBJECTIONS.filter((o) => head.includes(o.says)).map((o) => o.id)).toEqual(raised.map((o) => o.id))
     }
     expect(longest).toBeGreaterThan(3000)
   })

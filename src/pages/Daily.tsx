@@ -39,8 +39,12 @@ import {
   type FlowState,
 } from '@/lib/world/daily'
 import type { Hypothesis as HypothesisId, FixId, ProbeId } from '@/lib/world/incident-spec'
-import { SHIFT_LENGTH, handoffNote, recordShift, shiftIncidents, shiftRequested, shiftSummary, type ShiftFacts, type ShiftNote } from '@/lib/world/shift'
+import type { ShiftFacts } from '@/lib/world/shift'
+import { wantsShift } from '@/pages/daily/wants-shift'
 import type { IncidentFinish, IncidentFixReply, IncidentProbeReply, IncidentWaitReply } from '@/workers/fleet-protocol'
+
+/** The shift's code, loaded when the URL asks for a shift (`pages/daily/shift-kit`). */
+type ShiftKit = typeof import('@/pages/daily/shift-kit')
 
 const BUTTON_QUIET = 'min-h-11 rounded-md border border-line bg-surface-2 px-4 text-body-sm text-text-1 hover:border-line-bright'
 
@@ -68,7 +72,9 @@ const hypothesisName = (h: HypothesisId): string => HYPOTHESIS_OPTIONS.find((o) 
  * capped at `INCIDENT_MAX_MS` (wave-3.md §15.1).
  *
  * The On-Call pilot (§16.6, 3s-08): `/daily?shift=3` plays three drill-namespace incidents from one seed in a row
- * (`world/shift`), on the reference engine so every session in the pilot plays the same boxes. Between them a handoff
+ * (`world/shift`), on the reference engine so every session in the pilot plays the same boxes. The shift's code and its
+ * note card (`pages/daily/shift-kit`) load with `import()` only when the URL asks for a shift, so an ordinary visit does
+ * not download them (TF3, 3s-08 m2); until they arrive a shift visit opens no session. Between the incidents a handoff
  * note, built from the debrief just shown, is read before the next alert. The notes and results live in this
  * component's state and nowhere else; each incident writes one event graded practice (`recordShift`), and the Daily's
  * own record is untouched. The shift is a pilot URL the owner hands to a think-aloud participant (docs/oncall/pilot.md),
@@ -79,7 +85,7 @@ const hypothesisName = (h: HypothesisId): string => HYPOTHESIS_OPTIONS.find((o) 
  */
 export default function Daily() {
   const [params] = useSearchParams()
-  const shifting = shiftRequested(params.get('shift'))
+  const shifting = wantsShift(params.get('shift'))
   // keyed, so turning the shift on or off starts the page afresh rather than carrying a step or a result across
   return <DailyPage key={shifting ? 'shift' : 'daily'} shifting={shifting} />
 }
@@ -87,9 +93,13 @@ export default function Daily() {
 function DailyPage({ shifting }: { shifting: boolean }) {
   // The date is read once per visit; a page left open past midnight keeps yesterday's incident until reloaded.
   const [date] = useState(() => localDateKey())
-  const plan = useMemo(() => (shifting ? shiftIncidents(date) : null), [shifting, date])
   /** the shift's place (0-based): the Daily has no steps */
   const [step, setStep] = useState(0)
+  /** the shift's code: loaded when the URL asks for a shift, so it is `null` on an ordinary visit and until the chunk arrives */
+  const [kit, setKit] = useState<ShiftKit | null>(null)
+  /** a shift visit holds the session back until its code, and so its incidents, are known */
+  const waiting = shifting && kit === null
+  const plan = useMemo(() => (kit ? kit.shiftIncidents(date) : null), [kit, date])
   const incident = plan?.[step] ?? null
   const source = useMemo(() => incident?.source ?? dailySource(date), [incident, date])
   const spec = useMemo(() => incident?.spec ?? dailyIncident(date), [incident, date])
@@ -98,7 +108,6 @@ function DailyPage({ shifting }: { shifting: boolean }) {
   const seasonDay = shifting ? null : season0Day(date)
   /** what each shift incident reported, kept in this page's memory for the handoff note and the summary: never written */
   const [finished, setFinished] = useState<Record<number, ShiftFacts>>({})
-  const shiftHead = useRef<HTMLParagraphElement>(null)
 
   const [attempt, setAttempt] = useState(0)
   const [session, setSession] = useState<IncidentClientSession | null>(null)
@@ -129,7 +138,20 @@ function DailyPage({ shifting }: { shifting: boolean }) {
   }, [])
 
   useEffect(() => {
-    if (!ready) return
+    if (!shifting || kit !== null) return
+    let live = true
+    import('@/pages/daily/shift-kit').then(
+      (k) => live && setKit(k),
+      (e) => live && fail(e),
+    )
+    return () => {
+      live = false
+    }
+    // `attempt` is "Try again" after the chunk failed to load
+  }, [shifting, kit, attempt, fail])
+
+  useEffect(() => {
+    if (!ready || waiting) return
     let live = true
     let opened: IncidentClientSession | null = null
     // read when the session opens: a module installed mid-incident belongs to the next attempt
@@ -156,7 +178,7 @@ function DailyPage({ shifting }: { shifting: boolean }) {
       live = false
       opened?.close()
     }
-  }, [spec, attempt, ready, reference, fail, visible])
+  }, [spec, attempt, ready, waiting, reference, fail, visible])
 
   const run = useCallback<FlowRun>(
     async (command) => {
@@ -189,16 +211,11 @@ function DailyPage({ shifting }: { shifting: boolean }) {
     setFlow(null)
     setWrote(false)
     setFailure(null)
-    setAnnouncement(advance ? `Incident ${step + 2} of ${SHIFT_LENGTH}. The handoff note from incident ${step + 1} is above the alert once it opens.` : '')
+    setAnnouncement(kit && advance ? kit.nextAnnouncement(step) : '')
     setPhase('opening')
     setAttempt((a) => a + 1)
     if (advance) setStep((i) => i + 1)
   }
-
-  // Focus goes to the new shift header, since the button that asked for the next incident is gone.
-  useEffect(() => {
-    if (step > 0) shiftHead.current?.focus()
-  }, [step])
 
   function onLogged(h: HypothesisId) {
     setFlow((f) => f && withHypothesis(f, h))
@@ -226,28 +243,26 @@ function DailyPage({ shifting }: { shifting: boolean }) {
   const onResult = useCallback(
     (result: IncidentFinish) => {
       const ms = alertAt.current === null ? undefined : visible() - alertAt.current
-      if (incident) {
+      if (kit && incident) {
         // graded practice, once per incident of the date; the facts are kept for the note and the summary, in memory only
-        setWrote(recordShift(useProgress, date, incident, result, ms))
+        setWrote(kit.recordShift(useProgress, date, incident, result, ms))
         setFinished((f) => ({ ...f, [incident.index]: result }))
-      } else setWrote(recordDaily(useProgress, date, spec, result, boxHashes(boxes), ms))
+      } else if (!shifting) setWrote(recordDaily(useProgress, date, spec, result, boxHashes(boxes), ms))
       setAnnouncement('The debrief is ready.')
     },
-    [date, spec, boxes, visible, incident],
+    [date, spec, boxes, visible, incident, kit, shifting],
   )
 
   const open = phase === 'play' && flow !== null && !flow.ended
   const menus = useMemo(() => menuOrderFor(spec), [spec])
   const onMyEngine = boxes.some((b) => b.own)
-  /** the note from the incident before this one, read again while this one plays */
-  const carried = step > 0 && finished[step - 1] ? handoffNote(finished[step - 1], step - 1) : null
   return (
     <section
       className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12"
       data-page="daily"
       data-phase={phase}
       data-daily-date={date}
-      {...(shifting ? { 'data-shift': SHIFT_LENGTH, 'data-shift-step': step + 1 } : {})}
+      {...(kit ? { 'data-shift': kit.SHIFT_LENGTH, 'data-shift-step': step + 1 } : {})}
     >
       <p className="section-label">0x00 — daily</p>
       <h1 className="mt-3 font-display text-h3 text-text-1 sm:text-h2">{shifting ? 'On-call shift' : 'Fleet Daily'}</h1>
@@ -262,20 +277,13 @@ function DailyPage({ shifting }: { shifting: boolean }) {
         </p>
       )}
       {shifting ? (
-        <p className="mt-2 text-body-sm text-text-2" data-shift-intro>
-          Pilot · {date} · {SHIFT_LENGTH} incidents in a row, about {SHIFT_LENGTH * DAILY_MINUTES} min. The same three for everybody on your date. Each one is
-          graded practice: it pays nothing and does not count as your Daily.
-        </p>
+        kit && <kit.ShiftIntro date={date} />
       ) : (
         <p className="mt-2 text-body-sm text-text-2">
           #{number} · {date} · about {DAILY_MINUTES} min. One new incident each day, the same one for everybody on your date.
         </p>
       )}
-      {plan && (
-        <p ref={shiftHead} tabIndex={-1} className="mt-3 font-mono text-label uppercase text-text-2 outline-none" data-shift-head>
-          Incident {step + 1} of {plan.length}
-        </p>
-      )}
+      {kit && plan && <kit.ShiftHead step={step} total={plan.length} />}
       {session && phase !== 'failed' && canUseYours && (
         <p className="mt-1 text-body-sm text-text-2" data-engine-line data-on={onMyEngine ? 'yours' : 'reference'}>
           {onMyEngine ? `Running on ${engineLine(ownBoxes(boxes).length)}.` : 'Running on the reference engine.'}
@@ -314,7 +322,7 @@ function DailyPage({ shifting }: { shifting: boolean }) {
           </div>
         )}
 
-        {carried && phase !== 'debrief' && phase !== 'failed' && <NoteCard note={carried} carried />}
+        {phase !== 'debrief' && phase !== 'failed' && kit && <kit.CarriedNote finished={finished} step={step} />}
 
         {session && flow && phase !== 'failed' && (
           <>
@@ -344,36 +352,14 @@ function DailyPage({ shifting }: { shifting: boolean }) {
                 />
               </>
             )}
-            {phase === 'debrief' && plan && (
+            {kit && plan && phase === 'debrief' && (
               <Debrief session={session} source={source} flow={flow} busy={busy} run={run} onResult={onResult}>
                 {(result) => (
-                  <>
-                    <p className="text-body-sm text-text-2" data-record-note>
-                      {wrote ? `Recorded as practice: incident ${step + 1} of ${plan.length}.` : 'Practice replay: nothing was written to your record.'}
-                    </p>
-                    {step < plan.length - 1 ? (
-                      <NoteCard note={handoffNote(result, step)} />
-                    ) : (
-                      <NoteCard note={shiftSummary(plan.flatMap((p) => (p.index === step ? [result] : finished[p.index] ? [finished[p.index]] : [])))} summary />
-                    )}
-                    <div className="flex flex-wrap items-center gap-3">
-                      {step < plan.length - 1 && (
-                        <button type="button" onClick={() => restart(undefined, true)} className="min-h-11 rounded-md bg-accent px-5 font-display text-[15px] font-semibold text-accent-foreground" data-next-incident>
-                          Take incident {step + 2} of {plan.length}
-                        </button>
-                      )}
-                      <button type="button" onClick={() => restart()} className={BUTTON_QUIET} data-replay-incident>
-                        Replay this incident
-                      </button>
-                      <Link to="/today" className="inline-flex min-h-11 items-center text-body-sm text-info underline underline-offset-2">
-                        Back to Today
-                      </Link>
-                    </div>
-                  </>
+                  <kit.ShiftDebrief plan={plan} step={step} result={result} finished={finished} wrote={wrote} onNext={() => restart(undefined, true)} onReplay={() => restart()} />
                 )}
               </Debrief>
             )}
-            {phase === 'debrief' && !plan && (
+            {phase === 'debrief' && !shifting && (
               <Debrief session={session} source={source} flow={flow} busy={busy} run={run} boxes={boxes} onResult={onResult}>
                 {(result) => (
                   <>
@@ -405,38 +391,6 @@ function DailyPage({ shifting }: { shifting: boolean }) {
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" data-live>
         {announcement}
       </div>
-    </section>
-  )
-}
-
-/**
- * A handoff note or the shift summary: a heading and a line each. It says it is not saved, because it is not: it is
- * computed from the debrief on screen and lives in the page's memory (world/shift). `carried` is the note read again
- * while the next incident plays, folded away so it does not push the alert down a 360 px screen.
- */
-function NoteCard({ note, carried = false, summary = false }: { note: ShiftNote; carried?: boolean; summary?: boolean }) {
-  const lines = (
-    <>
-      <ul className="mt-2 space-y-1 text-body-sm text-text-2">
-        {note.lines.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
-      <p className="mt-2 text-[12px] text-text-3">This is shown here only. It is not saved, and it is gone when you leave the page.</p>
-    </>
-  )
-  if (carried) {
-    return (
-      <details className="rounded-lg border border-line bg-surface-1 p-4" data-handoff="carried">
-        <summary className="min-h-11 cursor-pointer font-display text-[16px] text-text-1">{note.heading}</summary>
-        {lines}
-      </details>
-    )
-  }
-  return (
-    <section className="rounded-lg border border-line bg-surface-1 p-4 sm:p-5" aria-label={note.heading} data-handoff={summary ? 'summary' : 'next'}>
-      <h3 className="font-display text-[16px] text-text-1">{note.heading}</h3>
-      {lines}
     </section>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { SEASON0_DAYS, SEASON0_START, season0Dates, season0Outcome, season0Over, season0Rows, season0State, type Season0Row } from '@/data/season0'
+import { SEASON0_DAYS, SEASON0_START } from '@/data/season0'
+import { season0Dates, season0Outcome, season0Over, season0Rows, season0State, type Season0Row } from '@/data/season0-rows'
 import { localDateKey } from '@/lib/economy'
 import { useProgress } from '@/lib/progress'
 import type { LedgerEvent } from '@/lib/ledger/types'
