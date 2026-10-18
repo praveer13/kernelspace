@@ -10,18 +10,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement } from 'react'
 import { MemoryRouter } from 'react-router'
-import {
-  SEASON0_DAYS,
-  SEASON0_START,
-  season0Dates,
-  season0Day,
-  season0Header,
-  season0Outcome,
-  season0Over,
-  season0Rows,
-  season0State,
-  type Season0Row,
-} from '../../src/data/season0'
+import { SEASON0_DAYS, SEASON0_START, season0Day, season0Header } from '../../src/data/season0'
+import { season0Dates, season0Outcome, season0Over, season0Rows, season0State, type Season0Row } from '../../src/data/season0-rows'
 import type { IncidentEvent, LedgerEvent } from '../../src/lib/ledger/types'
 import { DAILY_EPOCH, dailyIncident, dailyNumber, recordDaily, shareString } from '../../src/lib/world/daily'
 import { installDom, type DomKit, type MiniElement } from '../dom/mini-dom'
@@ -289,7 +279,7 @@ describe('the Daily\'s header', () => {
 
 describe('nothing to moderate: no board, no fetch', () => {
   test('the season\'s files make no network call and name no board', () => {
-    for (const f of ['src/data/season0.ts', 'src/pages/me/Season0Card.tsx']) {
+    for (const f of ['src/data/season0.ts', 'src/data/season0-rows.ts', 'src/pages/me/Season0Card.tsx']) {
       const code = src(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
       expect(code, f).not.toMatch(/\bfetch\b|XMLHttpRequest|sendBeacon|WebSocket|EventSource|navigator\.share|clipboard/)
       expect(code, f).not.toMatch(/leaderboard|ranking|friends/i)

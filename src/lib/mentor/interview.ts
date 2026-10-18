@@ -20,7 +20,10 @@
  *
  * THE OBJECTIONS ARE CHOSEN BY CODE. `pickObjections` draws three of `data/interview/objections.ts` from the round's
  * seed, from three different topics; the model voices them and chooses none (ai-tutoring.md §2.4: the agent that was
- * asked to pick drew the same case 86 % of the time, a seed mapping brought the largest share to 22 %). The contract and
+ * asked to pick drew the same case 86 % of the time, a seed mapping brought the largest share to 22 %). The incident's
+ * objections press on the learner's hypothesis and probes, so the packet swaps one out when its state does not support it
+ * (the incident not played yet, no suspect held, no probe taken, no recovery: `supportedObjections`), by a hash of the
+ * objection it replaces, so a rebuilt packet is the same packet. The contract and
  * the objections are authored text and sit above the line; the scenario, the learner's state and the claims are fenced
  * as untrusted study material, as every H2 packet is (mentor/packet.ts).
  */
@@ -34,7 +37,7 @@ import type { IncidentRef } from '@/lib/ledger/types'
 import { hash32, shuffledOrder, splitmix32u } from '@/lib/rng'
 import { burnMinutes } from '@/lib/world/daily'
 import { FAULT_SHORT, generateIncident } from '@/lib/world/incident-spec'
-import { seedKey, type ShiftFacts, type ShiftIncident } from '@/lib/world/shift'
+import { seedKey, suspectHeld, type ShiftFacts, type ShiftIncident } from '@/lib/world/shift'
 import { END, LINE, PACKET_MAX, agentUrl, clip, defang, type Agent, type Packet, type PacketClaim } from './packet'
 
 /* ------------------------------------------------------------------ */
@@ -227,10 +230,78 @@ export function roundIncident(plan: RoundPlan): ShiftIncident {
   return { index: 0, seed: plan.incidentSeed, source: { ns: 'drill', key }, spec: generateIncident('drill', key), ref: interviewRef(plan.date) }
 }
 
+/** How the debrief line says which suspect was held: it blames a suspect only when one was held. */
+const SUSPECT_CLAUSE: Record<ReturnType<typeof suspectHeld>, string> = {
+  fault: 'the suspect held was the fault',
+  wrong: 'the suspect held was not the fault',
+  none: 'no suspect was held',
+}
+
 /** What the debrief showed, as one line for the packet: the fault, the diagnosis, the end and the burn. Facts only. */
 export function incidentLine(done: ShiftFacts): string {
   const end = done.recovered ? `recovered ${done.end - done.alert} min after the alert` : 'not recovered within the limit'
-  return `Incident drill, fault "${FAULT_SHORT[done.fault]}": ${done.diagnosed ? 'the suspect held was the fault' : 'the suspect held was not the fault'}, ${end}, ${done.probes.length} probes (${done.streetlight} Streetlight), ${burnMinutes(done.burn)} burn-minutes against the expert's ${burnMinutes(done.expertBurn)}.`
+  return `Incident drill, fault "${FAULT_SHORT[done.fault]}": ${SUSPECT_CLAUSE[suspectHeld(done)]}, ${end}, ${done.probes.length} probes (${done.streetlight} Streetlight), ${burnMinutes(done.burn)} burn-minutes against the expert's ${burnMinutes(done.expertBurn)}.`
+}
+
+/* ------------------------------------------------------------------ */
+/* Objections the state supports                                        */
+/* ------------------------------------------------------------------ */
+
+/** What the packet's incident line lets an interviewer push on: read back from the line itself, so the packet's state is the only input. */
+export interface IncidentSupport {
+  played: boolean
+  /** a suspect was held, so there is a hypothesis to push on */
+  suspect: boolean
+  probes: number
+  recovered: boolean
+}
+
+/** The state of the incident as `incidentLine` states it (`null`: not played yet). */
+export function incidentSupport(line: string | null): IncidentSupport {
+  if (line === null) return { played: false, suspect: false, probes: 0, recovered: false }
+  const probes = /, (\d+) probes \(/.exec(line)
+  return {
+    played: true,
+    suspect: line.includes(SUSPECT_CLAUSE.fault) || line.includes(SUSPECT_CLAUSE.wrong),
+    probes: probes === null ? 0 : Number(probes[1]),
+    recovered: line.includes(', recovered '),
+  }
+}
+
+/**
+ * What each incident objection needs of the learner's play, by id. The incident objections push on the learner's
+ * hypothesis and probes ("You held one suspect...", "Every probe spends incident minutes..."), so one is only fair to
+ * draw when the debrief line shows what it presses on. An objection of another topic needs nothing of the incident.
+ */
+const NEEDS: Readonly<Record<string, (s: IncidentSupport) => boolean>> = {
+  'incident.separate': (s) => s.suspect,
+  'incident.coincidence': (s) => s.recovered,
+  'incident.replicas': (s) => s.played,
+  'incident.cost-of-probe': (s) => s.probes > 0,
+}
+
+/** Whether `o` can be raised given the incident's state. An incident objection with no entry in `NEEDS` needs a played incident. */
+export const objectionSupported = (o: Objection, s: IncidentSupport): boolean => o.topic !== 'incident' || (NEEDS[o.id] ?? ((x) => x.played))(s)
+
+/**
+ * The drawn objections with any the incident's state does not support swapped out: another objection of the same topic
+ * when one is supported, else one of the topic the draw left out (three of four topics are drawn, so one is free). The
+ * swap is a function of the draw and the incident line alone (a hash of the objection it replaces), so a rebuilt packet is
+ * the same packet; when everything drawn is supported the draw is returned as it was. Always three, one per topic, in topic order.
+ */
+export function supportedObjections(drawn: readonly Objection[], incident: string | null): Objection[] {
+  const state = incidentSupport(incident)
+  if (drawn.every((o) => objectionSupported(o, state))) return [...drawn]
+  const out = drawn.filter((o) => objectionSupported(o, state))
+  for (const o of drawn.filter((x) => !objectionSupported(x, state))) {
+    let pool = OBJECTIONS.filter((x) => x.topic === o.topic && objectionSupported(x, state))
+    if (pool.length === 0) {
+      const free = TOPICS.find((t) => !drawn.some((d) => d.topic === t))
+      pool = OBJECTIONS.filter((x) => x.topic === free)
+    }
+    if (pool.length > 0) out.push(pool[hash32(`objection:${o.id}`) % pool.length])
+  }
+  return out.sort((a, b) => TOPICS.indexOf(a.topic) - TOPICS.indexOf(b.topic))
 }
 
 /* ------------------------------------------------------------------ */
@@ -338,7 +409,8 @@ function stateBody(ctx: InterviewContext): string {
  * then each item's text is cut shorter, so the three objections always stay.
  */
 export function buildInterviewerPacket(ctx: InterviewContext): Packet {
-  const head = `${CONTRACT}\n\nObjections:\n${objectionLines(ctx.objections)}\n${LINE}`
+  // an incident objection presses on the learner's hypothesis and probes, so it is drawn only when the incident's line supports it
+  const head = `${CONTRACT}\n\nObjections:\n${objectionLines(supportedObjections(ctx.objections, ctx.incident))}\n${LINE}`
   const claims = (ctx.claims ?? []).slice(0, MAX_CLAIMS).map(claimLine)
   const assemble = (nClaims: number, cap: number): string => {
     const parts = [fence('scenario', scenarioBody(ctx, cap)), fence('learner-state', stateBody(ctx))]
