@@ -777,12 +777,20 @@ describe('the block', () => {
     expect(wait).not.toBeNull()
     expect(wait.getAttribute('role')).toBe('status')
     expect(wait.textContent).toContain('Loading your earlier answers')
-    // 5 sentences at 3.5rem and the find heading at 3rem: the passage and heading at one line a sentence
-    expect(wait.style.minHeight).toBe(`${SAM.sentences.length * 3.5 + 3}rem`)
-    expect(wait.style.minHeight).toBe('20.5rem')
-    expect(sentenceItems(m.container)).toHaveLength(0)
+    // the place is held by the passage and the find heading laid out unseen and unread: every sentence there is in the
+    // ghost, which is invisible and aria-hidden, nothing is struck and no question is asked yet
+    const ghost = wait.querySelector('[data-protege-ghost]')!
+    expect(ghost.getAttribute('aria-hidden')).toBe('true')
+    expect(ghost.getAttribute('class')).toContain('invisible')
+    expect(ghost.textContent).toContain('1 · Find the false line')
+    expect(sentenceItems(m.container)).toHaveLength(SAM.sentences.length)
+    expect(sentenceItems(ghost)).toHaveLength(SAM.sentences.length)
+    expect(m.container.querySelector('del')).toBeNull()
+    expect(options(m.container)).toHaveLength(0)
+    expect(m.container.querySelectorAll('h4')).toHaveLength(0)
     release()
     await dom.until(() => m.container.querySelector('[data-protege-loading]') === null)
+    expect(m.container.querySelector('[data-protege-ghost]')).toBeNull()
     expect(sentenceItems(m.container)).toHaveLength(SAM.sentences.length)
     await m.unmount()
   })

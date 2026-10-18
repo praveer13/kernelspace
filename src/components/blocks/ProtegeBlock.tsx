@@ -211,11 +211,16 @@ export default function ProtegeBlock({ block, lesson, trackColor }: ProtegeBlock
       {block.setup && <p className="mt-1 break-words text-body-sm text-text-2">{block.setup}</p>}
       <p className="mb-3 mt-3 text-body-sm text-text-2">One of Sam&apos;s sentences is false. Read all {block.sentences.length}, then find it.</p>
       {before === null ? (
-        // a status, so a screen reader hears why the passage is not there yet, at least as tall as the passage and the find
-        // heading at one line a sentence (3.5rem a sentence and 3rem), so the block below does not jump up when the read lands
-        <p data-protege-loading role="status" className="text-body-sm text-text-3" style={{ minHeight: `${block.sentences.length * 3.5 + 3}rem` }}>
-          Loading your earlier answers…
-        </p>
+        // a status, so a screen reader hears why the passage is not there yet; under the line, the passage and the find
+        // heading laid out unseen and unread (invisible, aria-hidden), so the block holds its height at every width and
+        // nothing below moves when the read lands
+        <div data-protege-loading role="status" className="relative">
+          <p className="absolute left-0 top-0 text-body-sm text-text-3">Loading your earlier answers…</p>
+          <div data-protege-ghost aria-hidden className="invisible">
+            <Passage block={block} found={false} fixed={false} />
+            <div className="mb-2 mt-6 font-display text-[15px] font-semibold">{STEP_TITLE.find}</div>
+          </div>
+        </div>
       ) : (
         <>
           <Passage block={block} found={found} fixed={fixed} />
