@@ -18,6 +18,7 @@ import {
   ByoError,
   DRAIN_CAP_TICKS,
   HEADROOM_TOKENS,
+  MAX_ARRIVAL_TICK,
   NOTES,
   PREFILL_CHUNK,
   PRICE_CLAIMS,
@@ -158,6 +159,37 @@ describe('a CSV converts locally into a local-derived artifact that parseTraceAr
     expect(await bad('a.csv', 'arrival_s,p,o\n0,5,0\n')).toContain('line 2: o must be a whole number of at least 1')
     expect(await bad('a.csv', 'arrival_s,p,o\n-1,5,5\n')).toContain('line 2: arrival_s must be a number of at least 0')
     expect(await bad('a.csv', 'arrival_s,p,o\nsoon,5,5\n')).toContain('"soon"')
+  })
+
+  test('a span past the parser\'s 10,000,000 ticks is refused at the first CSV line past it, before the parser numbers it by sorted index', async () => {
+    // the parser's own refusal, for the record: it names the request's index after sorting
+    const raw = { schemaVersion: 1, id: 'x', name: 'x', kind: 'local-derived', source: 's', sourceRevision: 'r', license: 'l', attribution: 'a', note: 'n', sampling: {}, requestCount: 2, requestSha256: '0'.repeat(64) }
+    await expect(parseTraceArtifact({ ...raw, requests: [{ t: 0, p: 1, o: 1 }, { t: MAX_ARRIVAL_TICK + 1, p: 1, o: 1 }] })).rejects.toThrow('trace request 1 has invalid arrival tick')
+    expect(MAX_ARRIVAL_TICK).toBe(10_000_000)
+
+    // the file is out of order, so the late row is line 3 in the file and index 1 after the sort; the learner gets line 3
+    const rows = 'arrival_s,prompt_tokens,output_tokens\n300000,5,5\n0,5,5\n500000.05,5,5\n'
+    const e = (await csvToTraceArtifact('long.csv', rows).then(() => null, (x: unknown) => x)) as Error
+    expect(e).toBeInstanceOf(ByoError)
+    expect(e.message).toStartWith('line 4: this request arrives 500,000 s after the earliest one')
+    expect(e.message).toContain('at most 10,000,000 ticks (500,000 s, about 5.8 days)')
+    expect(e.message).toContain('this file spans 500,000 s')
+    expect(e.message).not.toContain('trace request')
+
+    // the first line in file order that is past the limit is the one named
+    const two = await csvToTraceArtifact('two.csv', 't,p,o\n0,5,5\n10000002,5,5\n10000001,5,5\n').then(() => null, (x: unknown) => x as Error)
+    expect((two as Error).message).toStartWith('line 3: ')
+  })
+
+  test('exactly 10,000,000 ticks is read; one more is not, in each arrival unit', async () => {
+    const ok = await csvToTraceArtifact('edge.csv', 't,p,o\n5,1,1\n10000005,1,1\n')
+    expect(ok.requests.map((r) => r.t)).toEqual([0, MAX_ARRIVAL_TICK])
+    await expect(csvToTraceArtifact('edge.csv', 't,p,o\n5,1,1\n10000006,1,1\n')).rejects.toThrow('line 3')
+    // 500,000 s is 10,000,000 ticks; 500,000.05 s is one more
+    expect((await csvToTraceArtifact('s.csv', 'arrival_s,p,o\n0,1,1\n500000,1,1\n')).requests[1].t).toBe(MAX_ARRIVAL_TICK)
+    await expect(csvToTraceArtifact('s.csv', 'arrival_s,p,o\n0,1,1\n500000.05,1,1\n')).rejects.toThrow('line 3')
+    expect((await csvToTraceArtifact('ms.csv', 'arrival_ms,p,o\n0,1,1\n500000000,1,1\n')).requests[1].t).toBe(MAX_ARRIVAL_TICK)
+    await expect(csvToTraceArtifact('ms.csv', 'arrival_ms,p,o\n0,1,1\n500000050,1,1\n')).rejects.toThrow('line 3')
   })
 
   test('50,000 rows is the parser\'s limit, said before the parser says it', async () => {
@@ -524,7 +556,9 @@ describe('nothing is uploaded or stored', () => {
   const FORBIDDEN = [/\bfetch\s*\(/, /localStorage/, /sessionStorage/, /indexedDB/, /XMLHttpRequest/, /sendBeacon/, /WebSocket/, /document\.cookie/, /navigator\.storage/]
   const LEDGER = [/@\/lib\/progress/, /@\/lib\/ledger/, /useProgress/, /from '\.\/progress'/]
 
-  for (const file of ['src/lib/byo-service.ts', 'src/pages/ServiceCapstone.tsx']) {
+  // the page is held to it by a mounted run with every one of these trapped (tests/byo/service-dom.test.ts); the library
+  // has no page to mount, so its source is read
+  for (const file of ['src/lib/byo-service.ts']) {
     test(`${file} calls no network or storage API and reaches no ledger`, () => {
       const text = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
       for (const re of [...FORBIDDEN, ...LEDGER]) expect(text, `${file} ${re}`).not.toMatch(re)
@@ -572,10 +606,8 @@ describe('wiring', () => {
     expect(bundle).toMatch(/\{ route: '\/capstone\/service', src: 'src\/pages\/ServiceCapstone\.tsx', budgetKb: null, targetKb: 200 \}/)
   })
 
-  test('the page downloads the summary through a Blob and reaches no framer-motion', () => {
-    const page = read('src/pages/ServiceCapstone.tsx')
-    expect(page).toContain('new Blob(')
-    expect(page).toContain('SUMMARY_FILE')
-    expect(page).not.toContain('framer-motion')
+  // the download through a Blob is tested on the mounted page (tests/byo/service-dom.test.ts); this one is a bundle fact
+  test('the page reaches no framer-motion', () => {
+    expect(read('src/pages/ServiceCapstone.tsx')).not.toContain('framer-motion')
   })
 })

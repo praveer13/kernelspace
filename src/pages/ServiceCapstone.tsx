@@ -86,7 +86,7 @@ const messageOf = (e: unknown): string => (e instanceof Error ? e.message : Stri
  *
  * Everything is read and run in this tab. The page has no network call, writes nothing to the ledger or to browser storage,
  * and keeps no copy of what you picked: reload and it is gone. The summary leaves as a file you download
- * (src/lib/byo-service.ts, tests/byo/service.test.ts). The page awards nothing and counts as no practice.
+ * (src/lib/byo-service.ts, tests/byo/service.test.ts; the page itself mounted: tests/byo/service-dom.test.ts). The page awards nothing and counts as no practice.
  */
 export default function ServiceCapstone() {
   const [today] = useState(localToday)
@@ -114,7 +114,13 @@ export default function ServiceCapstone() {
   // a worker left running behind a page that is gone would be a leak: stop it on unmount
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  /** Any change to an input retires the last result: what is on screen always matches what is in the form. */
+  const busy = run.phase === 'running'
+
+  /**
+   * Any change to an input retires the last result, so what is on screen always matches what is in the form. A run in
+   * progress is not retired by an edit: the form is locked while it runs (every control below is `disabled={busy}`), so
+   * there is no edit to answer, and the results that land describe the settings the form still holds.
+   */
   const retire = useCallback(() => setRun((r) => (r.phase === 'running' ? r : { phase: 'idle' })), [])
 
   const onTraceFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -193,7 +199,7 @@ export default function ServiceCapstone() {
   const priceAge = settings.ok || form.priceDate !== '' ? priceAgeDays(form.priceDate, today) : null
   const errors = settings.ok ? {} : settings.errors
 
-  const ready = trace.state === 'ok' && config.state === 'ok' && settings.ok && pool !== null && 'plan' in pool && run.phase !== 'running'
+  const ready = trace.state === 'ok' && config.state === 'ok' && settings.ok && pool !== null && 'plan' in pool && !busy
 
   const onRun = async () => {
     if (!sample || !shape || !kv || config.state !== 'ok' || trace.state !== 'ok' || !settings.ok || !pool || !('plan' in pool)) return
@@ -261,7 +267,7 @@ export default function ServiceCapstone() {
       <div className="mt-6 space-y-4">
         {/* ----------------------------- trace ----------------------------- */}
         <fieldset className={CARD}>
-          <legend className="px-1 font-display text-h5 text-text-1">1 · Your trace</legend>
+          <legend className="px-1 font-display text-h4 text-text-1">1 · Your trace</legend>
           <label htmlFor="byo-trace" className={LABEL}>
             Trace file (.json or .csv)
           </label>
@@ -270,6 +276,7 @@ export default function ServiceCapstone() {
             type="file"
             accept=".json,.csv,application/json,text/csv"
             onChange={(e) => void onTraceFile(e)}
+            disabled={busy}
             aria-describedby="byo-trace-hint byo-trace-status"
             className={`${INPUT} py-2`}
           />
@@ -303,7 +310,7 @@ export default function ServiceCapstone() {
 
         {/* ----------------------------- model ----------------------------- */}
         <fieldset className={CARD}>
-          <legend className="px-1 font-display text-h5 text-text-1">2 · Your model</legend>
+          <legend className="px-1 font-display text-h4 text-text-1">2 · Your model</legend>
           <label htmlFor="byo-config" className={LABEL}>
             config.json
           </label>
@@ -317,6 +324,7 @@ export default function ServiceCapstone() {
               setConfigFileError(null)
             }}
             rows={6}
+            disabled={busy}
             spellCheck={false}
             aria-invalid={config.state === 'error'}
             aria-describedby="byo-config-hint byo-config-status"
@@ -335,6 +343,7 @@ export default function ServiceCapstone() {
               type="file"
               accept=".json,application/json"
               onChange={(e) => void onConfigFile(e)}
+              disabled={busy}
               className={`${INPUT} py-2`}
             />
           </div>
@@ -354,13 +363,13 @@ export default function ServiceCapstone() {
 
         {/* ---------------------------- hardware ---------------------------- */}
         <fieldset className={CARD}>
-          <legend className="px-1 font-display text-h5 text-text-1">3 · Your hardware and your price</legend>
+          <legend className="px-1 font-display text-h4 text-text-1">3 · Your hardware and your price</legend>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="byo-hw" className={LABEL}>
                 Chip
               </label>
-              <select id="byo-hw" value={form.hardwareId} onChange={onHardware} className={INPUT}>
+              <select id="byo-hw" value={form.hardwareId} onChange={onHardware} disabled={busy} className={INPUT}>
                 {SERVICE_HARDWARE.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name} · {r.hbmGb} GB
@@ -372,7 +381,7 @@ export default function ServiceCapstone() {
                 evidence has no capacity for them.
               </p>
             </div>
-            <Field id="byo-gpus" label="Chips in one replica" value={form.gpus} onChange={setField('gpus')} error={errors.gpus} hint="The weights and the cache are spread across them." mode="numeric" />
+            <Field id="byo-gpus" label="Chips in one replica" value={form.gpus} onChange={setField('gpus')} error={errors.gpus} hint="The weights and the cache are spread across them." disabled={busy} mode="numeric" />
             <Field
               id="byo-weights"
               label="Weights on those chips (GB)"
@@ -380,6 +389,7 @@ export default function ServiceCapstone() {
               onChange={setField('weightsGb')}
               error={errors.weightsGb}
               hint="The config has no parameter count: give the size of the weights as you load them (16 for an 8B model in BF16). GB is 10^9 bytes."
+              disabled={busy}
               mode="decimal"
             />
             <Field
@@ -389,10 +399,11 @@ export default function ServiceCapstone() {
               onChange={setField('hbmShare')}
               error={errors.hbmShare}
               hint="Weights and cache together. Set it to your engine's own setting."
+              disabled={busy}
               mode="decimal"
             />
-            <Field id="byo-running" label="Most requests running at once" value={form.maxRunning} onChange={setField('maxRunning')} error={errors.maxRunning} hint="The scheduler's cap." mode="numeric" />
-            <Field id="byo-slo" label="First-token deadline (ms)" value={form.sloMs} onChange={setField('sloMs')} error={errors.sloMs} hint="A request meets it when its first token lands inside. One tick is 50 ms." mode="numeric" />
+            <Field id="byo-running" label="Most requests running at once" value={form.maxRunning} onChange={setField('maxRunning')} error={errors.maxRunning} hint="The scheduler's cap." disabled={busy} mode="numeric" />
+            <Field id="byo-slo" label="First-token deadline (ms)" value={form.sloMs} onChange={setField('sloMs')} error={errors.sloMs} hint="A request meets it when its first token lands inside. One tick is 50 ms." disabled={busy} mode="numeric" />
             <Field
               id="byo-price"
               label="Rental price ($ per GPU-hour)"
@@ -406,9 +417,10 @@ export default function ServiceCapstone() {
                     ? `Changed from the atlas's ${usd(claimDefault.usdPerGpuHour)}.`
                     : 'The atlas has no dated price for this chip: type one you read.'
               }
+              disabled={busy}
               mode="decimal"
             />
-            <Field id="byo-price-date" label="Price read on (YYYY-MM-DD)" value={form.priceDate} onChange={setField('priceDate')} error={errors.priceDate} hint="A price without a date is not a price." mode="text" />
+            <Field id="byo-price-date" label="Price read on (YYYY-MM-DD)" value={form.priceDate} onChange={setField('priceDate')} error={errors.priceDate} hint="A price without a date is not a price." disabled={busy} mode="text" />
           </div>
           {priceAge !== null && priceAge > PRICE_TTL_DAYS && (
             <p className="mt-3 text-body-sm text-text-1" data-stale-price>
@@ -432,7 +444,7 @@ export default function ServiceCapstone() {
         {/* ------------------------------ KV ------------------------------ */}
         {kv && (
           <section className={CARD} aria-labelledby="byo-kv" data-result="kv">
-            <h2 id="byo-kv" className="font-display text-h5 text-text-1">
+            <h2 id="byo-kv" className="font-display text-h4 text-text-1">
               KV per token
             </h2>
             <div className="mt-3">
@@ -479,7 +491,7 @@ export default function ServiceCapstone() {
 
         {/* ------------------------------ run ------------------------------ */}
         <section className={CARD} aria-labelledby="byo-run">
-          <h2 id="byo-run" className="font-display text-h5 text-text-1">
+          <h2 id="byo-run" className="font-display text-h4 text-text-1">
             The batching run
           </h2>
           <p className={HINT}>
@@ -489,20 +501,20 @@ export default function ServiceCapstone() {
             <button type="button" className={BUTTON_PRIMARY} disabled={!ready} onClick={() => void onRun()} data-action="run">
               Run the sample
             </button>
-            {run.phase === 'running' && (
+            {busy && (
               <button type="button" className={BUTTON_QUIET} onClick={() => abortRef.current?.abort()}>
                 Cancel
               </button>
             )}
           </div>
-          {!ready && run.phase !== 'running' && (
+          {!ready && !busy && (
             <p className={HINT} data-needs>
               {needsText(trace, config, settings.ok, pool)}
             </p>
           )}
           {run.phase === 'running' && (
             <p className="mt-3 text-body-sm text-text-2" data-running>
-              Tick {fmtInt(run.tick)} · {fmtInt(run.done)} of {fmtInt(run.total)} requests done…
+              Tick {fmtInt(run.tick)} · {fmtInt(run.done)} of {fmtInt(run.total)} requests done. The form is locked until the run ends or you cancel it.
             </p>
           )}
           {run.phase === 'failed' && (
@@ -517,7 +529,7 @@ export default function ServiceCapstone() {
         {run.phase === 'done' && <Results outcome={run.outcome} onDownload={() => download(run.outcome)} />}
 
         <section className={CARD} aria-labelledby="byo-notes">
-          <h2 id="byo-notes" className="font-display text-h5 text-text-1">
+          <h2 id="byo-notes" className="font-display text-h4 text-text-1">
             How to read these numbers
           </h2>
           <ul className="mt-2 list-disc space-y-2 pl-5 text-body-sm text-text-2">
@@ -547,8 +559,9 @@ function Field(props: {
   error: string | undefined
   hint: string
   mode: 'numeric' | 'decimal' | 'text'
+  disabled: boolean
 }): ReactNode {
-  const { id, label, value, onChange, error, hint, mode } = props
+  const { id, label, value, onChange, error, hint, mode, disabled } = props
   return (
     <div>
       <label htmlFor={id} className={LABEL}>
@@ -561,6 +574,7 @@ function Field(props: {
         autoComplete="off"
         value={value}
         onChange={onChange}
+        disabled={disabled}
         aria-invalid={error !== undefined}
         aria-describedby={`${id}-hint${error ? ` ${id}-error` : ''}`}
         className={INPUT}
@@ -590,7 +604,7 @@ function Results({ outcome, onDownload }: { outcome: Outcome; onDownload: () => 
   const { batching: b, cost: c, summary } = outcome
   return (
     <section className={CARD} aria-labelledby="byo-results" data-result="run">
-      <h2 id="byo-results" className="font-display text-h5 text-text-1">
+      <h2 id="byo-results" className="font-display text-h4 text-text-1">
         What the run says
       </h2>
       {!b.finished && (
@@ -615,7 +629,7 @@ function Results({ outcome, onDownload }: { outcome: Outcome; onDownload: () => 
         <Row term={`GPU-hours (${c.gpus} × the drain time)`}>{fmt3(c.gpuHours)}</Row>
         <Row term={`Cost at ${usd(c.usdPerGpuHour)} per GPU-hour, read ${c.priceDate}`}>{usd(c.dollars)}</Row>
       </dl>
-      <p className="mt-4 font-display text-h5 text-text-1" data-per-mtok>
+      <p className="mt-4 font-display text-h4 text-text-1" data-per-mtok>
         {c.perMtok === null ? 'No tokens were delivered, so there is no price per token.' : `${usd(c.perMtok)} per million tokens`}
       </p>
       {c.perMtok !== null && c.perMtokOutput !== null && (

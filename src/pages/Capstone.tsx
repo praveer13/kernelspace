@@ -842,13 +842,13 @@ function Hero({
           </Link>
           <Link
             to="/week"
-            className="inline-flex items-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-4 py-2 font-mono text-body-sm text-accent transition-colors hover:bg-accent/20"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-4 font-mono text-body-sm text-accent transition-colors hover:bg-accent/20"
           >
             capstone 2.0: fleet week →
           </Link>
           <Link
             to="/capstone/service"
-            className="inline-flex items-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-4 py-2 font-mono text-body-sm text-accent transition-colors hover:bg-accent/20"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-4 font-mono text-body-sm text-accent transition-colors hover:bg-accent/20"
           >
             your own service: bring a trace →
           </Link>
