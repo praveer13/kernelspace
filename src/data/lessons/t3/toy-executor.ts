@@ -169,7 +169,7 @@ An inference engine's control plane is an async-runtime workload: thousands of S
           'Believing that creating a future starts running its body',
           'Mixing up the reactor that fires wakers with the executor that polls',
           'Assuming each task needs a thread of its own to wait on',
-          'Thinking a Pending task is polled again and again until it is ready',
+          'Believing a waiting future gets retried in a busy loop and not woken',
         ],
         correct: [3],
         why: [

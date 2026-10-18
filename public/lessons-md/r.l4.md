@@ -205,21 +205,9 @@ _One sentence above is false._
 - (o3) Sentence 1
 - (o4) Sentence 5
 
-**Tag. Which mistaken idea sits behind the false sentence?**
-
-- (o1) Taking the borrow checker for an exact test of memory safety
-- (o2) Believing a clone is the repair for a rejected borrow
-- (o3) Assuming a borrow lasts to the end of its scope and not to its last use
-- (o4) Thinking a shared borrow takes away the right to read the value
-
-**Fix. Which sentence should replace the false one?**
-
-- (o1) Some rejected programs are safe, and a clone of the borrowed value proves it by making the program compile.
-- (o2) Some rejected programs are safe to run once unsafe is added, because unsafe turns the borrow checker off for them.
-- (o3) Some rejected programs would have raced with another thread instead, but each rejection is still a real bug.
-- (o4) Some rejected programs are safe and still rejected, such as two mutable borrows of different elements of one Vec.
-
 _Answers withheld: ask the learner to commit to an answer and explain it before discussing._
+
+_The Tag and Fix steps follow in the app once the false line is found: https://kernelspace.naigap.com/lesson/r.l4._
 
 ---
 

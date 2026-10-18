@@ -239,7 +239,7 @@ The [R4 Forge drill](/forge/rust-zero-r4) covers shared slice queries, mutable s
         q: 'Which mistaken idea sits behind the false sentence?',
         options: [
           'Assuming a borrow lasts to the end of its scope and not to its last use',
-          'Taking the borrow checker for an exact test of memory safety',
+          'Taking each refusal by the checker as proof of unsafe code',
           'Thinking a shared borrow takes away the right to read the value',
           'Believing a clone is the repair for a rejected borrow',
         ],

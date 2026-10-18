@@ -2,15 +2,16 @@
  * The lesson exporter's Wave 3 blocks (docs/specs/wave-3.md §2.3, task 3a-03): a Fleet exercise prints its title and
  * "run it in the lesson", an isomorphism pair prints where it breaks, the principle follows, and a break item prints
  * its options without the key. A lesson with no breaks, principle or fleet block exports as it did. A protégé block
- * (§16.9) never names its false sentence, by number or by text, outside the passage and the find's options.
+ * (§16.9) prints its passage and its find step only, nothing of its tag and fix steps (G3 of the 3s review: their options
+ * gave the false line away), and never names its false sentence, by number or by text, outside the passage and the find's options.
  * scripts/export-lessons-md.ts writes files only when it is run as a script, so importing it here writes nothing.
  */
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { blockToMd, lessonToMd, PROTEGE_EXPORT_STEM } from '../../scripts/export-lessons-md'
+import { blockToMd, lessonToMd, protegeLater } from '../../scripts/export-lessons-md'
 import { ALL_LESSONS } from '../../src/data/lessons'
-import type { FleetExerciseBlock, IsomorphismBlock, ProtegeBlock } from '../../src/data/lessons/types'
+import type { FleetExerciseBlock, IsomorphismBlock, Lesson, ProtegeBlock } from '../../src/data/lessons/types'
 import { protegeNumber, sentenceLabel, stepQuestion } from '../../src/lib/learner/protege'
 
 const root = join(import.meta.dir, '../..')
@@ -102,48 +103,94 @@ describe('the committed export', () => {
   })
 })
 
-describe('protégé blocks never give away the find', () => {
+
+describe('protégé blocks export the passage and the find step only', () => {
   const blocks = ALL_LESSONS.flatMap((l) => l.blocks.filter((b): b is ProtegeBlock => b.type === 'protege').map((b) => ({ l, b })))
   const ORDINAL = /\b(first|second|third|fourth|fifth|sixth)\s+(sentence|line)\b/i
+  /** The block's own section of its lesson's export. */
+  const section = (md: string, b: ProtegeBlock) => md.split(`**${b.title}**`)[1].split('\n\n---\n\n')[0]
   /** The export below the passage, without the find's options (one per offered sentence number, each named once). */
   const below = (md: string) => md.split('_One sentence above is false._')[1].replace(/^- \(o\d\) Sentence \d$/gm, '')
 
-  test('the shipped lessons hold protégé blocks, and some authored fix stems name the false sentence (so the check bites)', () => {
+  /** Lower-case word runs of `n` words, the unit the leak check matches on (punctuation and markdown fall away). */
+  const words = (s: string) => s.toLowerCase().match(/[a-z0-9]+/g) ?? []
+  const runs = (s: string, n = 5) => {
+    const w = words(s)
+    return Array.from({ length: Math.max(0, w.length - n + 1) }, (_, i) => w.slice(i, i + n).join(' '))
+  }
+  const holds = (text: string, run: string) => ` ${words(text).join(' ')} `.includes(` ${run} `)
+  /**
+   * What of a block's tag and fix the lesson's markdown prints: a stem, an option or a why whole, or a 5-word run of an option
+   * that nothing else the lesson exports holds. A fix repairs the false line, so it shares runs with the passage ("toward
+   * goodput, so goodput is"), and a lure can share one with the lesson's prose; those are printed for their own sake, so a run
+   * counts only when the lesson exported without this block, and the passage, do not hold it.
+   */
+  function leaks(md: string, l: Lesson, b: ProtegeBlock): string[] {
+    const elsewhere = [lessonToMd({ ...l, blocks: l.blocks.filter((x) => x !== b) }), b.title, b.setup ?? '', ...b.sentences].join('\n')
+    const out: string[] = []
+    for (const step of ['tag', 'fix'] as const) {
+      const q = b[step]
+      for (const whole of [q.q, ...q.options, ...(q.why ?? [])]) if (md.includes(whole)) out.push(`${step}: "${whole}"`)
+      for (const o of q.options) for (const r of runs(o)) if (holds(md, r) && !holds(elsewhere, r)) out.push(`${step}: "${r}" of "${o}"`)
+    }
+    return out
+  }
+
+  test('the shipped lessons hold nine protégé blocks, and some authored fix stems name the false sentence (so the check bites)', () => {
     expect(blocks.length).toBeGreaterThanOrEqual(9)
     expect(blocks.some(({ b }) => stepQuestion(b, 'fix').q.includes(`sentence ${b.falseAt + 1}`))).toBe(true)
   })
 
-  test('tag and fix ask a fixed stem that names no sentence', () => {
-    for (const q of Object.values(PROTEGE_EXPORT_STEM)) {
-      expect(q).not.toMatch(/\d/)
-      expect(q).not.toMatch(ORDINAL)
+  test('each block prints its passage, the find step and one line that the tag and fix steps follow in the app', () => {
+    for (const { l, b } of blocks) {
+      const own = section(lessonToMd(l), b)
+      for (const [i, s] of b.sentences.entries()) expect(own).toContain(`${i + 1}. ${s}`)
+      expect(own).toContain(`**Find. ${stepQuestion(b, 'find').q}**`)
+      expect(own).toContain(protegeLater(l.id))
+      expect(protegeLater(l.id)).toBe(`_The Tag and Fix steps follow in the app once the false line is found: https://kernelspace.naigap.com/lesson/${l.id}._`)
+      expect(own, l.id).not.toMatch(/\*\*(Tag|Fix)\./)
+      expect(own.match(/\(o\d\)/g), l.id).toHaveLength(b.find.offer.length)
     }
-    expect(PROTEGE_EXPORT_STEM.fix).toBe('Which sentence should replace the false one?')
+  })
+
+  test('no tag or fix stem, option or why, nor a 5-word run of an option, is in the lesson\'s markdown as committed (G3)', () => {
+    for (const { l, b } of blocks) {
+      const md = readFileSync(join(root, 'public/lessons-md', `${l.id}.md`), 'utf8')
+      expect(leaks(md, l, b), l.id).toEqual([])
+    }
+  })
+
+  test('the leak check bites: an option printed whole, or a run of one, is caught', () => {
+    const { l, b } = blocks.find(({ l }) => l.id === 't7.l1')!
+    const md = lessonToMd(l)
+    expect(leaks(`${md}\n${b.fix.options[0]}`, l, b)).toContain(`fix: "${b.fix.options[0]}"`)
+    // the run the review found shared by t7.l1's fix options and its false sentence is held by the passage, so alone it is no leak
+    expect(holds(b.sentences[b.falseAt], 'toward goodput so goodput is')).toBe(true)
+    const tagRun = runs(b.tag.options[0])[1]
+    expect(leaks(`${md}\n${tagRun}`, l, b).some((x) => x.startsWith(`tag: "${tagRun}"`))).toBe(true)
   })
 
   test('no block names the false line by number or text outside the passage and the find options', () => {
     for (const { l, b } of blocks) {
       const md = lessonToMd(l)
       const n = protegeNumber(l, b)
-      const own = md.split(`**${b.title}**`)[1].split('\n\n---\n\n')[0]
+      const own = section(md, b)
       const rest = below(own)
       const falseLine = b.sentences[b.falseAt].trim()
       expect(md.split(falseLine).length - 1, `${l.id} #${n}: the false line appears once, in the passage`).toBe(1)
       expect(rest, `${l.id} #${n}`).not.toMatch(/\b(sentence|line)s?\s+\d/i)
       expect(rest, `${l.id} #${n}`).not.toMatch(ORDINAL)
-      expect(rest).toContain(`**Fix. ${PROTEGE_EXPORT_STEM.fix}**`)
-      expect(rest).toContain(`**Tag. ${PROTEGE_EXPORT_STEM.tag}**`)
       // every offered sentence number is printed once, so none is singled out
       for (const i of b.find.offer) expect(own.match(new RegExp(`^- \\(o\\d\\) ${sentenceLabel(i)}$`, 'gm'))).toHaveLength(1)
     }
   })
 
-  test('the export does not depend on which sentence is false, nor on the authored tag and fix stems', () => {
+  test('the export depends neither on which sentence is false nor on the tag and fix at all', () => {
     for (const { l, b } of blocks) {
       const md = blockToMd(b, l.id, 0, 0, 0, 0, 0)
       for (const i of b.find.offer) expect(blockToMd({ ...b, falseAt: i }, l.id, 0, 0, 0, 0, 0)).toBe(md)
-      const restemmed = { ...b, tag: { ...b.tag, q: 'Which idea is behind sentence 1?' }, fix: { ...b.fix, q: 'What replaces sentence 1?' } }
-      expect(blockToMd(restemmed, l.id, 0, 0, 0, 0, 0)).toBe(md)
+      const other = (q: ProtegeBlock['tag']) => ({ ...q, q: 'Which idea is behind sentence 1?', options: q.options.map((_, i) => `other option ${i}`), why: q.options.map(() => 'other why') })
+      expect(blockToMd({ ...b, tag: other(b.tag), fix: other(b.fix) }, l.id, 0, 0, 0, 0, 0)).toBe(md)
     }
   })
 })

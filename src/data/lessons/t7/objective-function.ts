@@ -89,7 +89,7 @@ An SLO is also a budget. A **99% SLO** lets 1 request in 100 miss, and that 1% i
         options: [
           'Counting a request that meets one bound as meeting the SLO',
           'Dividing the count by the requests in place of the window',
-          'Treating each completed request as goodput',
+          'Treating the rate of finished work as the rate of useful work',
           'Reading the p50 latency where the SLO names a tail percentile',
         ],
         correct: [2],

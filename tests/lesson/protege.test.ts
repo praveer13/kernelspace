@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createElement } from 'react'
-import { blockToMd, lessonToMd } from '../../scripts/export-lessons-md'
+import { blockToMd, lessonToMd, protegeLater } from '../../scripts/export-lessons-md'
 import { checkPoolItems, collectProtegeItems, PROTEGE_POOL, protegeFailures } from '../../scripts/item-pools'
 import { poolCueFailures } from '../../scripts/item-cues'
 import ProtegeBlockView from '../../src/components/blocks/ProtegeBlock'
@@ -447,43 +447,106 @@ describe('the ledger events', () => {
   })
 })
 
-describe('the markdown export withholds the keys', () => {
-  test('the passage is numbered with nothing marking the false line, and each step\'s options carry no key', () => {
+describe('the markdown export withholds the keys and the later steps', () => {
+  test('the passage is numbered with nothing marking the false line, the find carries no key, and nothing of tag or fix is printed', () => {
     const md = blockToMd(SAM, 't9.l1', 0, 0, 0, 0, 0)
     for (const [i, s] of SAM.sentences.entries()) expect(md).toContain(`${i + 1}. ${s}`)
     expect(md).toContain('One sentence above is false.')
-    expect(md).toContain('**Find.')
-    expect(md).toContain('**Tag.')
-    expect(md).toContain('**Fix.')
+    expect(md).toContain(`**Find. ${findQuestion(SAM).q}**`)
     expect(md).toContain('Answers withheld')
-    for (const o of [...findQuestion(SAM).options, ...SAM.tag.options, ...SAM.fix.options]) expect(md).toContain(`) ${o}`)
-    // no why, no miss id, no marker of which sentence is false
-    for (const leak of [...SAM.find.why, ...SAM.tag.why!, ...SAM.fix.why!, 'confuse.heap-compaction', 'falseAt', '~~']) expect(md).not.toContain(leak)
-    expect(md.match(/\(o\d\)/g)).toHaveLength(12)
-    // the authored fix stem names sentence 4, the find's answer, so the export asks a fixed stem instead
-    expect(SAM.fix.q).toContain('sentence 4')
-    expect(md).toContain('**Fix. Which sentence should replace the false one?**')
-    expect(md).not.toContain(SAM.fix.q)
+    expect(md).toContain(protegeLater('t9.l1'))
+    for (const o of findQuestion(SAM).options) expect(md).toContain(`) ${o}`)
+    expect(md.match(/\(o\d\)/g)).toHaveLength(4)
+    // no why, no miss id, no marker of which sentence is false, and no stem, option or why of the tag and fix steps (G3: a fix
+    // option restates the false line and a tag can echo it, so beside the passage they name the line the find asks for)
+    for (const leak of [...SAM.find.why, 'confuse.heap-compaction', 'falseAt', '~~', '**Tag.', '**Fix.', SAM.tag.q, SAM.fix.q, ...SAM.tag.options, ...SAM.fix.options, ...SAM.tag.why!, ...SAM.fix.why!]) {
+      expect(md).not.toContain(leak)
+    }
     expect(md.match(/Sentence 4/gi)).toHaveLength(1)
   })
 
-  test('option order is a fixed permutation of its own, so it is stable and not the authored order', () => {
+  test('the find\'s option order is a fixed permutation in a salt of its own, so it is stable and not the authored order', () => {
     expect(blockToMd(SAM, 't9.l1', 0, 0, 0, 0, 0)).toBe(blockToMd(SAM, 't9.l1', 0, 0, 0, 0, 0))
-    const tagOrder = (md: string) => [...md.matchAll(/\(o\d\) (Treating the KV pool|Mixing up|Assuming each|Believing a freed)/g)].map((m) => m[1])
+    const findOrder = (md: string) => [...md.matchAll(/\(o\d\) (Sentence \d)/g)].map((m) => m[1]).join('|')
     const orders = new Set<string>()
-    for (let k = 0; k < 6; k++) orders.add(tagOrder(blockToMd(SAM, 't9.l1', 0, 0, 0, 0, k)).join('|'))
+    for (let k = 0; k < 6; k++) orders.add(findOrder(blockToMd(SAM, 't9.l1', 0, 0, 0, 0, k)))
     expect(orders.size).toBeGreaterThan(1)
   })
 
-  test('lessonToMd numbers protégé blocks and renders one section per block', () => {
+  test('lessonToMd numbers protégé blocks and renders one section per block, each salted by its number', () => {
     const md = lessonToMd(lessonOf([SAM, prose, { ...SAM, title: 'Sam, again' }]))
     expect(md).toContain('**Sam explains the paged KV cache**')
     expect(md).toContain('**Sam, again**')
-    // a second block salts its options differently from the first
     const [first, second] = md.split('**Sam, again**')
-    const tagOpts = (s: string) => [...s.matchAll(/\(o(\d)\) Treating the KV pool/g)].map((m) => m[1])
-    expect(tagOpts(first)).toHaveLength(1)
-    expect(tagOpts(second)).toHaveLength(1)
+    expect(first).toContain(blockToMd(SAM, 't9.l1', 0, 0, 0, 0, 0))
+    expect(second).toContain(blockToMd({ ...SAM, title: 'Sam, again' }, 't9.l1', 0, 0, 0, 0, 1).split('**Sam, again**')[1])
+    expect(md.match(/\*\*Find\./g)).toHaveLength(2)
+  })
+})
+
+/**
+ * The tag step is not answered by matching words (G3's t3.l4 note, 3s-12 m2). On the page the tag opens once the false line
+ * is found, so a key that restates that line is picked by matching its words, not by naming the mistaken idea. The measure:
+ * the distinct content words an option shares with the false sentence (lower case, function words dropped, a light suffix
+ * strip so "polls" and "polled" match). The key shares at most one (the topic word, as "paging" or "block", may stay), and no
+ * lure shares fewer than the key, so no lure is ruled out because it echoes the false line less.
+ */
+const FUNCTION_WORDS = new Set(
+  'a an the of to in on at by for from with and or but not no nor so as is are was were be been being it its this that these those there their them they which who whom what when where why how than then into onto over under up down out off one each every any all some own same other another more most less least do does did done has have had can could may might must should would will shall per via about after before while until if just only also too very still such our your his her'.split(' '),
+)
+function stemOf(w: string): string {
+  if (w.length <= 3) return w
+  if (/ie[sd]$/.test(w)) return `${w.slice(0, -3)}y`
+  for (const suffix of ['ing', 'ed', 'es', 's']) {
+    if (w.endsWith(suffix) && !w.endsWith('ss') && w.length - suffix.length >= 3) {
+      w = w.slice(0, -suffix.length)
+      break
+    }
+  }
+  return w.replace(/e$/, '')
+}
+const contentWords = (s: string) => new Set((s.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 1 && !FUNCTION_WORDS.has(w)).map(stemOf))
+/** The content words of `option` that `sentence` also holds. */
+const sharedWords = (option: string, sentence: string): string[] => {
+  const s = contentWords(sentence)
+  return [...contentWords(option)].filter((w) => s.has(w))
+}
+/** What is wrong with a block's tag by the measure: empty when its key is not picked by matching the false sentence. */
+function tagByWording(b: ProtegeBlock): string[] {
+  const falseLine = b.sentences[b.falseAt]
+  const key = b.tag.correct[0]
+  const k = sharedWords(b.tag.options[key], falseLine)
+  const out: string[] = []
+  if (k.length > 1) out.push(`the key shares ${k.length} words with the false sentence (${k.join(', ')}); at most 1`)
+  b.tag.options.forEach((o, i) => {
+    const n = sharedWords(o, falseLine).length
+    if (i !== key && n < k.length) out.push(`option ${i + 1} shares ${n} words with the false sentence, fewer than the key's ${k.length}`)
+  })
+  return out
+}
+
+describe('the tag step names the idea, not the wording (3s-12 m2, G3)', () => {
+  const shipped = ALL_LESSONS.flatMap((l) => l.blocks.filter((b): b is ProtegeBlock => b.type === 'protege').map((b) => ({ l, b })))
+
+  test('the measure: content words, function words dropped, light stems', () => {
+    expect(sharedWords('Thinking a Pending task is polled again and again until it is ready', 'A Pending task goes back on the queue, and the executor polls it again on the next pass until it is ready.')).toEqual(['pend', 'task', 'poll', 'again', 'ready'])
+    expect(sharedWords('Believing a block table shares memory by copying blocks', 'When a beam forks, the manager copies every block of the parent into new blocks for the child.')).toEqual(['block', 'copy'])
+    expect(sharedWords('Treating each cache miss as a trip to main memory', 'An L1 miss sends the load straight to DRAM, so every miss costs about 100 ns.')).toEqual(['miss'])
+  })
+
+  test('every shipped block: the key shares at most one word with the false sentence, and no lure shares fewer than the key', () => {
+    expect(shipped.length).toBeGreaterThanOrEqual(9)
+    for (const { l, b } of shipped) expect(tagByWording(b), l.id).toEqual([])
+  })
+
+  test('the measure bites: the 3s tags that restated the false line fail it', () => {
+    const t34 = shipped.find(({ l }) => l.id === 't3.l4')!.b
+    const restated = { ...t34, tag: { ...t34.tag, options: t34.tag.options.map((o, i) => (i === t34.tag.correct[0] ? 'Thinking a Pending task is polled again and again until it is ready' : o)) } }
+    expect(tagByWording(restated)[0]).toContain('the key shares 5 words')
+    // a key with one shared word beside a lure with none: the lure is ruled out by wording alone
+    const t02 = shipped.find(({ l }) => l.id === 't0.l2')!.b
+    const bare = { ...t02, tag: { ...t02.tag, options: t02.tag.options.map((o, i) => (i === 0 ? 'Assuming a cache holds single bytes rather than whole lines' : o)) } }
+    expect(tagByWording(bare)).toEqual(['option 1 shares 0 words with the false sentence, fewer than the key\'s 1'])
   })
 })
 
@@ -698,6 +761,30 @@ describe('the block', () => {
       expect(r.container.textContent).not.toContain('2 · Tag the mistaken idea')
       await r.unmount()
     }
+  })
+
+  test('while the ledger is read, a status says so and holds the passage\'s place (SF2)', async () => {
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    ;(useProgress.controls as { engine: unknown }).engine = async () => {
+      await gate
+      return { events: async () => [] }
+    }
+    const m = await mountBlock()
+    const wait = m.container.querySelector('[data-protege-loading]')!
+    expect(wait).not.toBeNull()
+    expect(wait.getAttribute('role')).toBe('status')
+    expect(wait.textContent).toContain('Loading your earlier answers')
+    // 5 sentences at 3.5rem and the find heading at 3rem: the passage and heading at one line a sentence
+    expect(wait.style.minHeight).toBe(`${SAM.sentences.length * 3.5 + 3}rem`)
+    expect(wait.style.minHeight).toBe('20.5rem')
+    expect(sentenceItems(m.container)).toHaveLength(0)
+    release()
+    await dom.until(() => m.container.querySelector('[data-protege-loading]') === null)
+    expect(sentenceItems(m.container)).toHaveLength(SAM.sentences.length)
+    await m.unmount()
   })
 
   test('a ledger that cannot be read leaves the block fresh and playable', async () => {
