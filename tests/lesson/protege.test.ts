@@ -459,6 +459,11 @@ describe('the markdown export withholds the keys', () => {
     // no why, no miss id, no marker of which sentence is false
     for (const leak of [...SAM.find.why, ...SAM.tag.why!, ...SAM.fix.why!, 'confuse.heap-compaction', 'falseAt', '~~']) expect(md).not.toContain(leak)
     expect(md.match(/\(o\d\)/g)).toHaveLength(12)
+    // the authored fix stem names sentence 4, the find's answer, so the export asks a fixed stem instead
+    expect(SAM.fix.q).toContain('sentence 4')
+    expect(md).toContain('**Fix. Which sentence should replace the false one?**')
+    expect(md).not.toContain(SAM.fix.q)
+    expect(md.match(/Sentence 4/gi)).toHaveLength(1)
   })
 
   test('option order is a fixed permutation of its own, so it is stable and not the authored order', () => {
