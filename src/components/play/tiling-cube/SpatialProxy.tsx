@@ -170,7 +170,7 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
     <section aria-labelledby={`${uid}-h`} data-spatial={step} className="space-y-3 rounded-md border border-line bg-surface-1 p-4">
       {step === 'offer' && (
         <>
-          <h3 id={`${uid}-h`} className="font-display text-h5 text-text-1">
+          <h3 id={`${uid}-h`} className="font-display text-h4 text-text-1">
             Optional: two spatial puzzles
           </h3>
           <p className="text-body-sm text-text-2">
@@ -185,7 +185,7 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
 
       {step === 'before' && (
         <>
-          <h3 id={`${uid}-h`} className="font-display text-h5 text-text-1">
+          <h3 id={`${uid}-h`} className="font-display text-h4 text-text-1">
             The spatial puzzles
           </h3>
           <p className="text-body-sm text-text-2">You answered both before, so they are not offered again: a second go would measure practice.</p>
@@ -194,7 +194,7 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
 
       {step === 'count' && (
         <>
-          <h3 id={`${uid}-h`} ref={heading} tabIndex={-1} className="font-display text-h5 text-text-1 outline-none">
+          <h3 id={`${uid}-h`} ref={heading} tabIndex={-1} className="font-display text-h4 text-text-1 outline-none">
             Puzzle 1 of 2: count the cubes
           </h3>
           <SpatialFigure heights={COUNT_FIGURE} label={FIGURE_LABEL} />
@@ -239,7 +239,7 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
 
       {step === 'order' && (
         <>
-          <h3 id={`${uid}-h`} ref={heading} tabIndex={-1} className="font-display text-h5 text-text-1 outline-none">
+          <h3 id={`${uid}-h`} ref={heading} tabIndex={-1} className="font-display text-h4 text-text-1 outline-none">
             Puzzle 2 of 2: order the views
           </h3>
           <SpatialFigure heights={VIEWS_FIGURE} label={FIGURE_LABEL} />
@@ -282,7 +282,7 @@ export default function SpatialProxy({ env: envIn }: SpatialProxyProps) {
 
       {step === 'done' && (
         <>
-          <h3 id={`${uid}-h`} ref={heading} tabIndex={-1} className="font-display text-h5 text-text-1 outline-none">
+          <h3 id={`${uid}-h`} ref={heading} tabIndex={-1} className="font-display text-h4 text-text-1 outline-none">
             Recorded
           </h3>
           <p className="text-body-sm text-text-2">Thank you. They are not marked for you, and nothing about your lessons changes.</p>

@@ -124,6 +124,8 @@ export const CSV_HELP =
   'A header row, then one request per row: an arrival column (arrival_s in seconds, arrival_ms in milliseconds, or t in 50 ms ticks), a prompt column (prompt_tokens, input_tokens or p) and an output column (output_tokens, completion_tokens or o). Other columns are ignored.'
 
 const MAX_ROWS = 50_000
+/** The latest arrival tick `parseTraceArtifact` accepts (src/lib/traces.ts), counted from the first request: 500,000 s, about 5.8 days. */
+export const MAX_ARRIVAL_TICK = 10_000_000
 
 /** Parses a plain number cell; the empty string and anything that is not finite is a problem. */
 function numberCell(cell: string | undefined): number {
@@ -156,7 +158,7 @@ export async function csvToTraceArtifact(fileName: string, text: string): Promis
   const ticksPerUnit = ARRIVAL_COLUMNS[arrivalName]
   const at = { arrival: header.indexOf(arrivalName), prompt: header.indexOf(prompt), output: header.indexOf(output) }
 
-  const rows: { arrival: number; p: number; o: number }[] = []
+  const rows: { arrival: number; p: number; o: number; line: number }[] = []
   for (let i = headerAt + 1; i < lines.length; i++) {
     if (lines[i].trim() === '') continue
     const line = i + 1
@@ -167,14 +169,23 @@ export async function csvToTraceArtifact(fileName: string, text: string): Promis
     if (!Number.isFinite(arrival) || arrival < 0) throw new ByoError(`line ${line}: ${arrivalName} must be a number of at least 0, got "${cells[at.arrival] ?? ''}"`)
     if (!Number.isInteger(p) || p < 1) throw new ByoError(`line ${line}: ${prompt} must be a whole number of at least 1, got "${cells[at.prompt] ?? ''}"`)
     if (!Number.isInteger(o) || o < 1) throw new ByoError(`line ${line}: ${output} must be a whole number of at least 1, got "${cells[at.output] ?? ''}"`)
-    rows.push({ arrival, p, o })
+    rows.push({ arrival, p, o, line })
     if (rows.length > MAX_ROWS) throw new ByoError(`this CSV has more than ${MAX_ROWS.toLocaleString('en-US')} requests: cut it down to a window of the trace`)
   }
   if (rows.length === 0) throw new ByoError('this CSV has a header and no requests')
 
   const first = Math.min(...rows.map((r) => r.arrival))
-  const requests: TraceRequest[] = rows
-    .map((r, index) => ({ index, t: Math.round((r.arrival - first) * ticksPerUnit), p: r.p, o: r.o }))
+  const timed = rows.map((r, index) => ({ index, line: r.line, t: Math.round((r.arrival - first) * ticksPerUnit), p: r.p, o: r.o }))
+  // the parser's own limit, said here with the learner's line: after the sort its sentence names an index nobody can find
+  const late = timed.find((r) => r.t > MAX_ARRIVAL_TICK)
+  if (late) {
+    const days = ((MAX_ARRIVAL_TICK * TICK_SECONDS) / 86_400).toFixed(1)
+    const span = Math.max(...timed.map((r) => r.t)) * TICK_SECONDS
+    throw new ByoError(
+      `line ${late.line}: this request arrives ${Math.round(late.t * TICK_SECONDS).toLocaleString('en-US')} s after the earliest one, and the course reads a trace of at most ${MAX_ARRIVAL_TICK.toLocaleString('en-US')} ticks (${(MAX_ARRIVAL_TICK * TICK_SECONDS).toLocaleString('en-US')} s, about ${days} days); this file spans ${Math.round(span).toLocaleString('en-US')} s. Cut a window of the trace`,
+    )
+  }
+  const requests: TraceRequest[] = timed
     .sort((a, b) => a.t - b.t || a.index - b.index)
     .map(({ t, p, o }) => ({ t, p, o }))
   const requestSha256 = await sha256Hex(JSON.stringify(requests))
