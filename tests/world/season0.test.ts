@@ -17,6 +17,7 @@ import {
   season0Day,
   season0Header,
   season0Outcome,
+  season0Over,
   season0Rows,
   season0State,
   type Season0Row,
@@ -40,8 +41,23 @@ describe('Season 0 is seven consecutive dates starting on a Monday', () => {
     expect(SEASON0_DAYS).toBe(7)
   })
 
+  test("the season starts on the owner's date, Monday 2026-11-02, and ends Sunday 2026-11-08 (owner answer 3, 2026-10-15)", () => {
+    expect(SEASON0_START).toBe('2026-11-02')
+    expect(season0Dates().at(-1)).toBe('2026-11-08')
+  })
+
+  test('the season is over from the day after its last date, and not before', () => {
+    expect(season0Over('2026-10-15')).toBe(false)
+    expect(season0Over('2026-11-01')).toBe(false)
+    expect(season0Over('2026-11-02')).toBe(false)
+    expect(season0Over('2026-11-08')).toBe(false) // the last day
+    expect(season0Over('2026-11-09')).toBe(true) // the day after
+    expect(season0Over('2027-03-01')).toBe(true)
+    expect(season0Over('not a date')).toBe(false)
+  })
+
   test('the dates run Monday to Sunday with no gap, across a month end, a year end and a leap day', () => {
-    expect(season0Dates()).toEqual(['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'])
+    expect(season0Dates()).toEqual(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'])
     expect(season0Dates('2026-10-26')).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01'])
     expect(season0Dates('2026-12-28')).toEqual(['2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03'])
     expect(season0Dates('2028-02-28')).toContain('2028-02-29')
@@ -50,14 +66,14 @@ describe('Season 0 is seven consecutive dates starting on a Monday', () => {
 
   test('each date is its own Daily: seven different incidents and seven consecutive Daily numbers', () => {
     const dates = season0Dates()
-    expect(dates.map((d) => dailyNumber(d))).toEqual([7, 8, 9, 10, 11, 12, 13])
+    expect(dates.map((d) => dailyNumber(d))).toEqual([21, 22, 23, 24, 25, 26, 27])
     expect(new Set(dates.map((d) => dailyIncident(d).seed)).size).toBe(7)
   })
 
   test('the day of the season is 1 to 7 on those dates and nothing before or after, or for a malformed date', () => {
     expect(season0Dates().map((d) => season0Day(d))).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(season0Day('2026-10-18')).toBeNull()
-    expect(season0Day('2026-10-26')).toBeNull()
+    expect(season0Day('2026-11-01')).toBeNull()
+    expect(season0Day('2026-11-09')).toBeNull()
     expect(season0Day('2026-02-30')).toBeNull()
     expect(season0Day('not a date')).toBeNull()
   })
@@ -91,10 +107,10 @@ const finished = (over: Partial<Parameters<typeof recordDaily>[3]> = {}): Parame
 async function fixtureEvents(): Promise<LedgerEvent[]> {
   const tab = startTab(makeProfile())
   const store = tab.progress
-  expect(recordDaily(store, '2026-10-19', dailyIncident('2026-10-19'), finished())).toBe(true)
-  expect(recordDaily(store, '2026-10-21', dailyIncident('2026-10-21'), finished({ diagnosed: false, fixed: false, burn: 30, probes: ['a', 'b', 'c'] }), ['a'.repeat(64)])).toBe(true)
-  expect(recordDaily(store, '2026-10-26', dailyIncident('2026-10-26'), finished())).toBe(true) // the Monday after the season
-  expect(recordDaily(store, '2026-10-18', dailyIncident('2026-10-18'), finished())).toBe(true) // the Sunday before
+  expect(recordDaily(store, '2026-11-02', dailyIncident('2026-11-02'), finished())).toBe(true)
+  expect(recordDaily(store, '2026-11-04', dailyIncident('2026-11-04'), finished({ diagnosed: false, fixed: false, burn: 30, probes: ['a', 'b', 'c'] }), ['a'.repeat(64)])).toBe(true)
+  expect(recordDaily(store, '2026-11-09', dailyIncident('2026-11-09'), finished())).toBe(true) // the Monday after the season
+  expect(recordDaily(store, '2026-11-01', dailyIncident('2026-11-01'), finished())).toBe(true) // the Sunday before
   await store.controls.flush()
   return (await tab.engine()).events()
 }
@@ -103,19 +119,19 @@ describe('the card lists your own results and the Daily\'s own share strings', (
   test('one row per date, in order; a played date carries the recomputed share string, an unplayed one carries none', async () => {
     const rows = season0Rows(await fixtureEvents())
     expect(rows.map((r) => [r.day, r.date, r.result !== null])).toEqual([
-      [1, '2026-10-19', true],
-      [2, '2026-10-20', false],
-      [3, '2026-10-21', true],
-      [4, '2026-10-22', false],
-      [5, '2026-10-23', false],
-      [6, '2026-10-24', false],
-      [7, '2026-10-25', false],
+      [1, '2026-11-02', true],
+      [2, '2026-11-03', false],
+      [3, '2026-11-04', true],
+      [4, '2026-11-05', false],
+      [5, '2026-11-06', false],
+      [6, '2026-11-07', false],
+      [7, '2026-11-08', false],
     ])
     // the string the debrief offered: shareString(number, probes, burn, onMyEngine), identical to the byte
-    expect(rows[0].result?.share).toBe(shareString(dailyNumber('2026-10-19'), 2, 5.4, false))
-    expect(rows[0].result?.share).toBe('KS-Daily #7 · 2 probes · burn 18%')
-    expect(rows[2].result?.share).toBe(shareString(dailyNumber('2026-10-21'), 3, 30, true))
-    expect(rows[2].result?.share).toBe('KS-Daily #9 · 3 probes · burn 100% · on my engine')
+    expect(rows[0].result?.share).toBe(shareString(dailyNumber('2026-11-02'), 2, 5.4, false))
+    expect(rows[0].result?.share).toBe('KS-Daily #21 · 2 probes · burn 18%')
+    expect(rows[2].result?.share).toBe(shareString(dailyNumber('2026-11-04'), 3, 30, true))
+    expect(rows[2].result?.share).toBe('KS-Daily #23 · 3 probes · burn 100% · on my engine')
   })
 
   test('the string carries no hash, seed or component name, even for a run on your own engine', async () => {
@@ -126,19 +142,19 @@ describe('the card lists your own results and the Daily\'s own share strings', (
   test('a Daily outside the seven dates, a drill and a non-incident event are not in the rows', async () => {
     const events = await fixtureEvents()
     const rows = season0Rows(events)
-    expect(rows.flatMap((r) => (r.result ? [r.date] : []))).toEqual(['2026-10-19', '2026-10-21'])
+    expect(rows.flatMap((r) => (r.result ? [r.date] : []))).toEqual(['2026-11-02', '2026-11-04'])
     const drill = { ...(events.find((e) => e.kind === 'incident') as IncidentEvent) }
     const asDrill = { ...drill, id: 'x-drill', ref: 'inc:drill/ab12' as IncidentEvent['ref'], data: { ...drill.data, src: 'drill' as const } }
-    const notDaily = { ...drill, id: 'x-team', data: { ...drill.data, src: 'team' as const }, at: '2026-10-19T00:00:00.000Z' as IncidentEvent['at'] }
+    const notDaily = { ...drill, id: 'x-team', data: { ...drill.data, src: 'team' as const }, at: '2026-11-02T00:00:00.000Z' as IncidentEvent['at'] }
     expect(season0Rows([...events, asDrill, notDaily]).map((r) => r.result?.share ?? null)).toEqual(rows.map((r) => r.result?.share ?? null))
     expect(season0Rows([]).every((r) => r.result === null)).toBe(true)
   })
 
   test('two events on one date (a second device) list the earlier attempt and never replace it', async () => {
     const events = await fixtureEvents()
-    const first = events.find((e) => e.kind === 'incident' && e.ref === 'inc:daily/2026-10-19') as IncidentEvent
-    const later: IncidentEvent = { ...first, id: 'zz-later', at: '2026-10-20T08:00:00.000Z' as IncidentEvent['at'], data: { ...first.data, probes: ['a', 'b', 'c', 'd', 'e'], burn: 12 } }
-    for (const order of [[...events, later], [later, ...events]]) expect(season0Rows(order)[0].result?.share).toBe('KS-Daily #7 · 2 probes · burn 18%')
+    const first = events.find((e) => e.kind === 'incident' && e.ref === 'inc:daily/2026-11-02') as IncidentEvent
+    const later: IncidentEvent = { ...first, id: 'zz-later', at: '2026-11-03T08:00:00.000Z' as IncidentEvent['at'], data: { ...first.data, probes: ['a', 'b', 'c', 'd', 'e'], burn: 12 } }
+    for (const order of [[...events, later], [later, ...events]]) expect(season0Rows(order)[0].result?.share).toBe('KS-Daily #21 · 2 probes · burn 18%')
   })
 
   test('the outcome says what happened without a score', () => {
@@ -179,17 +195,34 @@ describe('the card on /me', () => {
     const Season0Card = (await import('../../src/pages/me/Season0Card')).default
     let settled = 0
     const read = () => Promise.resolve(events)
-    const page = await dom.mount(createElement(MemoryRouter, null, createElement(Season0Card, { read, today: '2026-10-22', onSettled: () => void settled++ })))
+    const page = await dom.mount(createElement(MemoryRouter, null, createElement(Season0Card, { read, today: '2026-11-05', onSettled: () => void settled++ })))
     await dom.until(() => page.container.querySelector('[data-season0-list]') !== null)
     expect(settled).toBe(1)
     const rows = page.container.querySelectorAll('[data-season0-row]')
     expect(rows.map((r) => r.getAttribute('data-state'))).toEqual(['played', 'missed', 'played', 'open', 'upcoming', 'upcoming', 'upcoming'])
     const shares = page.container.querySelectorAll('[data-season0-share]').map(textOf)
-    expect(shares).toEqual(['KS-Daily #7 · 2 probes · burn 18%', 'KS-Daily #9 · 3 probes · burn 100% · on my engine'])
+    expect(shares).toEqual(['KS-Daily #21 · 2 probes · burn 18%', 'KS-Daily #23 · 3 probes · burn 100% · on my engine'])
     expect(textOf(rows[3])).toContain('Open today')
     expect(page.container.querySelector('a[href="/daily"]')).not.toBeNull()
     expect(textOf(page.container.querySelector('[data-season0-card]') as MiniElement)).toContain('there is no board')
     await page.unmount()
+  })
+
+  test('on the last day the card is still there; the day after it renders nothing, reads no ledger and still settles', async () => {
+    const Season0Card = (await import('../../src/pages/me/Season0Card')).default
+    for (const [today, shown] of [['2026-11-08', true], ['2026-11-09', false], ['2027-01-15', false]] as const) {
+      let settled = 0
+      let reads = 0
+      const read = () => {
+        reads++
+        return Promise.resolve([] as LedgerEvent[])
+      }
+      const page = await dom.mount(createElement(MemoryRouter, null, createElement(Season0Card, { read, today, onSettled: () => void settled++ })))
+      await dom.until(() => settled > 0)
+      expect({ today, shown: page.container.querySelector('[data-season0-card]') !== null, reads: reads > 0 }).toEqual({ today, shown, reads: shown })
+      expect(settled).toBe(1)
+      await page.unmount()
+    }
   })
 
   test('an empty ledger shows seven days and no share string', async () => {
@@ -241,16 +274,16 @@ describe('the Daily\'s header', () => {
 
   test('on each of the seven dates it says Season 0 · day k of 7, and links to Me', async () => {
     for (let k = 1; k <= 7; k++) {
-      const { season } = await headerOn(new Date(2026, 9, 18 + k, 12))
+      const { season } = await headerOn(new Date(2026, 10, 1 + k, 12))
       expect(season).toContain(`Season 0 · day ${k} of 7`)
       expect(season).toContain('stay on this device')
     }
   })
 
   test('the day before, the day after and the on-call shift show no Season 0 line', async () => {
-    expect((await headerOn(new Date(2026, 9, 18, 12))).season).toBeNull()
-    expect((await headerOn(new Date(2026, 9, 26, 12))).season).toBeNull()
-    expect((await headerOn(new Date(2026, 9, 21, 12), '?shift=3')).season).toBeNull()
+    expect((await headerOn(new Date(2026, 10, 1, 12))).season).toBeNull()
+    expect((await headerOn(new Date(2026, 10, 9, 12))).season).toBeNull()
+    expect((await headerOn(new Date(2026, 10, 4, 12), '?shift=3')).season).toBeNull()
   })
 })
 

@@ -259,7 +259,7 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t6.l12'],
     requires: [KC.allToAll, 't6.comm-overlap', 't6.epd-phases'],
-    claims: ['bench.step3.afd-decode', 'bench.step3.dsv3-decode', 'bench.megascale-infer.per-gpu'],
+    // no `claims`: its three benchmark claims are lazy (claims/lazy/serving3.ts), and a KC's claims are read through the eager registry (wave-3.md §4.4); the lesson's statline cites them
     since: '2026-10-14',
   },
 

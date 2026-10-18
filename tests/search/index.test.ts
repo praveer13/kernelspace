@@ -111,6 +111,12 @@ describe('search index shape', () => {
     expect(clip('a longer hook that runs on', 12)).toBe('a longer…')
   })
 
+  test('the competence crumbs keep the plan cut (CAN_MAX 32, wave-3.md §4.4): at most 32 characters and an ellipsis', () => {
+    const longest = Math.max(...index.kcs.map((k) => k[2].length))
+    expect(longest).toBeGreaterThan(20) // the crumbs are still there, not cut to nothing
+    expect(longest).toBeLessThanOrEqual(33)
+  })
+
   test('the palette fetches the index on open and the claims table gives rows their ids', () => {
     const palette = readFileSync(join(root, 'src/components/CommandPalette.tsx'), 'utf8')
     expect(palette).toMatch(/import\('@\/data\/search-index\.json'\)/)
