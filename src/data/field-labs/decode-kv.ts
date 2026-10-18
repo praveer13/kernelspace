@@ -91,6 +91,27 @@ export function decodeKvRows(): DerivedRow[] {
 const ROWS = decodeKvRows()
 const value = (id: string): number => ROWS.find((r) => r.id === id)!.value
 
+/**
+ * What the driver reports as an H100 80GB's memory: nvidia-smi's memory.total, 81,559 MiB, which is 85.5 × 10⁹ bytes, not
+ * the claim's 80 × 10⁹. vLLM sizes its budget from the total CUDA reports (`request_memory`: total × --gpu-memory-utilization,
+ * vllm/v1/worker/utils.py at the pin), so the estimate's 0.90 × 80 × 10⁹ starts that much lower, and then vLLM takes out
+ * what its profiling run measures besides the weights (`determine_available_memory`, vllm/v1/worker/gpu_worker.py: the
+ * memory consumed since start-up plus the transient peak of a forward pass), which the estimate leaves out. A scenario figure
+ * for the verdict's wording, not a claim the prediction reads.
+ */
+export const DRIVER_MIB = 81_559
+
+/** The driver's extra memory, as vLLM budgets it: 0.90 × (81,559 MiB − 80 × 10⁹ B) = 4.97 × 10⁹ bytes, and the full-length requests that is (9.3). */
+export function driverHeadroom(): { bytes: number; requests: number; ratio: number } {
+  const i = fieldInputs()
+  const bytes = UTILIZATION * (DRIVER_MIB * 2 ** 20 - i.capacity)
+  const requests = bytes / i.kvPerToken / MAX_MODEL_LEN
+  return { bytes, requests, ratio: 1 + requests / value('concurrency') }
+}
+
+const HEADROOM = driverHeadroom()
+const gb = (bytes: number): string => (bytes / 1e9).toFixed(1)
+
 const LAB: FieldLab = {
   id: 'decode-kv',
   title: 'Decode speed and KV-full concurrency',
@@ -148,11 +169,9 @@ const LAB: FieldLab = {
         reads: 'field.decode-kv.kv-log',
         toValue: (x) => x,
       },
-      below:
-        'The estimate keeps back only the 10 % the flag reserves and the weights. vLLM also takes out everything its profiling run measures as not KV cache: the weights, the peak of a forward pass and whatever else the process holds. So a reading a little under is expected; far under means the card had less memory free than 80 GB when the server started.',
+      below: `The estimate takes 90 % of the claim's 80 × 10⁹ bytes. vLLM takes 90 % of what the driver reports, ${DRIVER_MIB.toLocaleString('en-US')} MiB (${gb(DRIVER_MIB * 2 ** 20)} × 10⁹ bytes) on an H100 80GB in nvidia-smi, which is up to ${gb(HEADROOM.bytes)} × 10⁹ bytes more, about ${Math.round(HEADROOM.requests)} more requests; then it takes out what its profiling run measures besides the weights, the peak of a forward pass and the memory the process holds, which the estimate leaves out. The two roughly cancel, so the reading can land a little either side of the estimate. Far under means the server had less to budget: check memory.total in nvidia-smi, and that the weights are BF16.`,
       near: 'Close to the estimate: the 10 % reserve, the weights and the KV bytes per token explain the cache size.',
-      above:
-        'More room than the paper count allows. Compare the card\'s memory.total in nvidia-smi with the 80 GB the claim gives: the server budgets a fraction of what the driver reports, not of 80 × 10⁹ bytes.',
+      above: `More room than an 80 GB card leaves: the driver's extra memory is worth at most ${HEADROOM.ratio.toFixed(2)}× the estimate, before profiling takes its share. Compare the card's memory.total in nvidia-smi with ${DRIVER_MIB.toLocaleString('en-US')} MiB, since the server budgets 90 % of what the driver reports, and check that the KV cache is BF16: an FP8 cache (--kv-cache-dtype fp8) halves the bytes per token.`,
     },
   ],
   limits: [

@@ -152,7 +152,8 @@ describe('measureDecodeTps', () => {
     }
     const progress: Array<[number, number]> = []
     await measureDecodeTps(spy, { now: m.now, onProgress: (d, t) => progress.push([d, t]) })
-    expect(m.calls).toEqual([2, 8, 40, 8, 40, 8, 40])
+    // the untimed first run asks for one token past the long run: the answer a long run that reached its cap falls short of
+    expect(m.calls).toEqual([41, 8, 40, 8, 40, 8, 40])
     expect(new Set(seen)).toEqual(new Set([MEASURE_PROMPT]))
     expect(MEASURE_PROMPT).toBe(REAL_WORKLOAD[2].prompt)
     expect(progress).toEqual([[0, 3], [1, 3], [2, 3], [3, 3]])
@@ -184,12 +185,52 @@ describe('measureDecodeTps', () => {
     await expect(measureDecodeTps(m.gen, { now: m.now })).rejects.toThrow(/stopped before the timed length/)
   })
 
-  test('an answer that reaches 32 of 40 tokens is timed, and reads 1.33x too fast at most', async () => {
-    const m = fakeModel({ prefillMs: 100, msPerToken: 25, stopAt: 32 })
+  test('an answer that ends anywhere short of the cap is refused, so no run is timed over tokens it did not make', async () => {
+    // the old character test let 32 of 40 through, timing 24 tokens as 32 (1.33x too fast); now any stop before 40 is refused
+    for (const stopAt of [32, 39]) {
+      const m = fakeModel({ prefillMs: 100, msPerToken: 25, stopAt })
+      await expect(measureDecodeTps(m.gen, { now: m.now })).rejects.toThrow(/stopped before the timed length/)
+    }
+    // one that ends exactly at the cap cannot be told from one cut by it, so it is refused too: asking for 41 gives nothing more
+    const m = fakeModel({ prefillMs: 100, msPerToken: 25, stopAt: MEASURE_HI })
+    await expect(measureDecodeTps(m.gen, { now: m.now })).rejects.toThrow(/stopped before the timed length/)
+  })
+
+  /**
+   * A Qwen3-style answer, token by token: a '<think>' tag and a newline, a few words, then a terse list whose tokens are
+   * short. Its first 8 tokens hold more characters per token than the 32 after them.
+   */
+  const THINK_HEAD = ['<think>', '\n', 'Okay', ',', ' so', ' the', ' user', ' wants']
+  const THINK_TAIL = [' 1', ')', ' HBM', ' bandwidth', ',', ' 2', ')', ' KV', ' reads', ',', ' 3', ')', ' batch', ' 1', '.', '\n', 'So', ':', ' W', ' /', ' BW', ' =', ' t', '/', 'tok', '.', ' 0', '.', '6', 'B', ' q', '4']
+  const thinkModel = (tokens: readonly string[], prefillMs: number, msPerToken: number) => {
+    const clock = { t: 0 }
+    const gen: RealGenFn = async (_messages, o) => {
+      const n = Math.min(Number(o.max_new_tokens), tokens.length)
+      clock.t += prefillMs + n * msPerToken
+      return [{ generated_text: [{ role: 'assistant', content: tokens.slice(0, n).join('') }] }]
+    }
+    return { gen, now: () => clock.t }
+  }
+
+  test("a healthy answer that opens with '<think>' is timed, though the old character test refused it", async () => {
+    const answer = [...THINK_HEAD, ...THINK_TAIL, ...Array.from({ length: 40 }, (_, i) => ` w${i}`)]
+    expect(THINK_HEAD).toHaveLength(MEASURE_LO)
+    expect(THINK_HEAD.length + THINK_TAIL.length).toBe(MEASURE_HI)
+    const short = answer.slice(0, MEASURE_LO).join('')
+    const long = answer.slice(0, MEASURE_HI).join('')
+    // the old guard: the long text at least 4x the short one. 31 characters in 8 tokens, then 71 in 32 (2.2 a token), 102 < 124
+    expect([short.length, long.length]).toEqual([31, 102])
+    expect(long.length < 4 * short.length).toBe(true)
+    const m = thinkModel(answer, 900, 25)
     const r = await measureDecodeTps(m.gen, { now: m.now })
-    // 24 tokens timed (32 - 8) over 32 counted: 40 tok/s true, 53.3 reported
-    expect(r.tokPerSec).toBe(53.3)
-    expect(r.tokPerSec / 40).toBeLessThan(1.34)
+    expect(r.tokPerSec).toBe(40)
+    expect(r.rounds).toEqual([40, 40, 40])
+  })
+
+  test("a truly short answer that opens with '<think>' is still refused", async () => {
+    // the model closes its answer after 30 tokens: 22 of the 32 timed tokens were never made
+    const m = thinkModel([...THINK_HEAD, ...THINK_TAIL].slice(0, 30), 900, 25)
+    await expect(measureDecodeTps(m.gen, { now: m.now })).rejects.toThrow(MeasureError)
   })
 
   test('a clock that cannot tell the two runs apart is refused', async () => {
@@ -579,6 +620,8 @@ describe('RealEnginePanel', () => {
   const loads: string[] = []
   /** When set, a load waits for it. */
   let hold: Promise<void> | null = null
+  /** What the loaded model's generation does; a test that runs it swaps in one that waits. */
+  let panelGen: RealGenFn = async () => []
   let Panel: typeof import('../../src/pages/fleet/RealEnginePanel').default
   let real: typeof import('../../src/lib/real-engine')
   // React reads `options` of a native select, which mini-dom's elements do not have: added for these tests and put back after.
@@ -597,7 +640,7 @@ describe('RealEnginePanel', () => {
       loadRealModel: async (id: string) => {
         loads.push(id)
         if (hold) await hold
-        return { gen: async () => [], device: 'wasm' }
+        return { gen: (messages: { role: string; content: string }[], o: Record<string, unknown>) => panelGen(messages, o), device: 'wasm' }
       },
     }))
     Panel = (await import('../../src/pages/fleet/RealEnginePanel')).default
@@ -652,6 +695,73 @@ describe('RealEnginePanel', () => {
     await dom.until(() => page.container.textContent.includes('ready (wasm)'))
     expect(select.disabled).toBe(false)
     hold = null
+    await page.unmount()
+  })
+
+  /** A generation that waits until `release`, then answers with four characters per token asked for. */
+  function heldGen() {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const calls: number[] = []
+    panelGen = async (_messages, o) => {
+      calls.push(Number(o.max_new_tokens))
+      await gate
+      return [{ generated_text: [{ role: 'assistant', content: 'abcd'.repeat(Number(o.max_new_tokens)) }] }]
+    }
+    return { release, calls }
+  }
+  const typeIn = (el: MiniElement, value: string) =>
+    dom.act(() => {
+      el.value = value
+      el.dispatchEvent(new MiniEvent('input', { bubbles: true }))
+    })
+  async function loaded() {
+    const page = await mountPanel()
+    await dom.press(loadButton(page))
+    await dom.press(page.container.querySelector('[data-consent-yes]') as MiniElement)
+    await dom.until(() => page.container.textContent.includes('ready (wasm)'))
+    return page
+  }
+
+  test('the model select is locked while the measured run is in flight, so the model cannot change under it', async () => {
+    const held = heldGen()
+    const page = await loaded()
+    const select = page.container.querySelector('select') as MiniElement
+    expect(select.disabled).toBe(false)
+    await typeIn(page.container.querySelector('[data-bandwidth]') as MiniElement, '51.2')
+    await typeIn(page.container.querySelector('[data-prediction]') as MiniElement, '70')
+    await dom.press(page.container.querySelector('[data-lock]') as MiniElement)
+    await dom.press(page.container.querySelector('[data-run]') as MiniElement)
+    await dom.until(() => held.calls.length > 0)
+    expect(held.calls).toEqual([MEASURE_HI + 1])
+    expect(select.disabled).toBe(true)
+    // the 'choose Qwen3' hint never shows: the model the run measures is still the one selected
+    expect(page.container.textContent).toContain('measuring…')
+    expect(page.container.textContent).not.toContain('Choose it in the loader above')
+    await dom.act(async () => {
+      held.release()
+      await new Promise((res) => setTimeout(res, 10))
+    })
+    await dom.until(() => !select.disabled)
+    expect(held.calls.length).toBeGreaterThan(1)
+    panelGen = async () => []
+    await page.unmount()
+  })
+
+  test('and while the scheduler run holds the slot', async () => {
+    const held = heldGen()
+    const page = await loaded()
+    const select = page.container.querySelector('select') as MiniElement
+    await dom.press(buttons(page).find((b) => b.textContent.includes('run (FCFS reference)')) as MiniElement)
+    await dom.until(() => held.calls.length > 0)
+    expect(select.disabled).toBe(true)
+    await dom.act(async () => {
+      held.release()
+      await new Promise((res) => setTimeout(res, 10))
+    })
+    await dom.until(() => page.container.textContent.includes('run complete'))
+    expect(select.disabled).toBe(false)
+    panelGen = async () => []
     await page.unmount()
   })
 })

@@ -37,13 +37,18 @@
  * holds them equal on every banded seed.
  *
  * THE PROBES (`toProbe`). After the traffic has drained, the prober (tenant T, outside the others) times four pairs on
- * an idle engine: a guess at prefix 0, which the others used, and a guess at a prefix nobody used, with the same suffix.
- * Whether the first hits is the same cache's answer for the prober's key: with the shared key, yes; with the tenant in the
- * key the prober's namespace is empty, so both miss and the gap is 0. The probe's gap is the mean miss's TTFT less the
- * mean hit's. The cache is never told about the prober's own guesses, so each pair's unused guess stands for a fresh
- * prefix nobody used, and a real prober would send a new one each time (a real cache would hold its first miss). On an
- * idle engine a hit's TTFT is ⌈suffix ÷ 128⌉ − 1 ticks and a miss's ⌈(P + suffix) ÷ 128⌉ − 1, and P is a multiple of
- * 128, so the gap is exactly P ÷ 128 ticks of 50 ms (`toGapRead`): 512 … 4,096 tokens give 200 … 1,600 ms.
+ * an idle engine, each a guess at a prefix the others used and a guess at one nobody used, with the same suffix. Whether
+ * the first hits is the same cache's answer for the prober's key: with the shared key, yes; with the tenant in the key the
+ * prober's namespace is empty, so both miss and the gap is 0. The probe's gap is the mean miss's TTFT less the mean hit's.
+ * In the code every pair asks about the same two prefix ids, 0 (used) and K (unused), and the probe cache is the traffic's
+ * alone: it never stores a guess the prober sends, its misses included. So the model is right only when each guess is read
+ * as its own: each used guess a prefix the others sent and the prober has not, and each unused guess a fresh prefix,
+ * distinct from every other guess, that nobody has sent. That is how a real prober works, sending a new guess each time,
+ * because a real cache would hold its first miss: had this one stored the prober's guesses, the guess at K would miss only
+ * in the first pair and the shared-key gap would read a quarter of P ÷ 128 ticks, while with the tenant key the guesses
+ * at 0 and at K would both hit from the second pair on and the gap would still be 0. On an idle engine a hit's TTFT is
+ * ⌈suffix ÷ 128⌉ − 1 ticks and a miss's ⌈(P + suffix) ÷ 128⌉ − 1, and P is a multiple of 128, so the gap is exactly
+ * P ÷ 128 ticks of 50 ms (`toGapRead`): 512 … 4,096 tokens give 200 … 1,600 ms.
  *
  * THE DRAW (`toCase`). The seed draws T, K, n, P and the load from the grids below, and, from a stream of its own so the
  * rest of the case is the same either way, which number it asks for (each on half the seeds). A (T, K, n) is kept when

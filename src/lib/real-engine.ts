@@ -351,13 +351,19 @@ const median = (xs: readonly number[]): number => {
 /**
  * Decode tokens per second on this device. `gen` runs a prompt for `lo` and then `hi` new tokens; both runs pay the
  * same prefill, the same worker round trip and the same first-token cost, so (hi − lo) tokens over the difference of
- * the two times is the decode rate alone. One untimed run first lets the runtime compile and warm up. The median of
- * the rounds is reported, because one slow round (a garbage collection, a throttled core) should not decide it.
+ * the two times is the decode rate alone. The median of the rounds is reported, because one slow round (a garbage
+ * collection, a throttled core) should not decide it.
  *
- * The generation function returns text, not a token count, so a run's tokens are the cap asked for. An answer that
- * ended before the cap would break that, so a longer run whose text is not clearly longer than the shorter one's is
- * refused (a 5x cap ratio must show as at least 4x the text: a run that ended at 32 tokens, 24 of them timed, reads 1.33x
- * too fast, within the 2x a prediction is judged by). The prompt is greedy, so the short answer is a prefix of the long one.
+ * A run's tokens are the cap asked for, which holds only if the answer did not end before the cap. The engine cannot say
+ * how many tokens it made: the worker (public/gen-worker.js) posts back the pipeline's decoded text and nothing else, so
+ * no token count reaches this function. Characters are a poor stand-in: the first tokens of a Qwen3 answer are a
+ * '<think>' tag and a newline, whose characters per token are not the prose's, and the old test (the long text at least
+ * 4× the short one) could refuse a healthy run. So the run checks the cap itself. The untimed first run, which lets the
+ * runtime compile and warm up, asks for hi + 1 tokens; the prompt is greedy, so every run is a prefix of the same
+ * answer, and a long run whose text is shorter than the first run's stopped at its cap of `hi` tokens, while one whose
+ * text is as long ended before it (asking for one token more gave nothing more). That is refused, as is every answer of
+ * `hi` tokens or fewer, one that ends exactly at `hi` too; `MEASURE_PROMPT` is one a thinking model answers at length,
+ * so a healthy run never ends that soon.
  */
 export async function measureDecodeTps(gen: RealGenFn, options: MeasureOptions = {}): Promise<DecodeMeasurement> {
   const now = options.now ?? (() => performance.now())
@@ -372,12 +378,13 @@ export async function measureDecodeTps(gen: RealGenFn, options: MeasureOptions =
   }
 
   options.onProgress?.(0, rounds)
-  await timed(2)
+  // the warm-up, and the answer one token past the long run: what a long run that reached its cap falls short of
+  const past = await timed(hi + 1)
   const rates: number[] = []
   for (let i = 0; i < rounds; i++) {
     const short = await timed(lo)
     const long = await timed(hi)
-    if (long.text.length === 0 || long.text.length < 4 * short.text.length) {
+    if (long.text.length === 0 || long.text.length >= past.text.length || long.text.length <= short.text.length) {
       throw new MeasureError('The model stopped before the timed length, so its tokens cannot be counted. Run it again.')
     }
     const seconds = (long.ms - short.ms) / 1000
@@ -455,7 +462,9 @@ export function gapReading(c: RunComparison, device: string | null): string {
 
 /**
  * The two events of a run: a `predict` (what you said, against what was measured) and an `item` (the graded response).
- * Provenance `field` gives them weight 0, and a donation drops their value and truth: your device's speed stays on it.
+ * Provenance `field` gives them weight 0, and a donation keeps of each only its ref, its day, `ok` and `src` (redact.ts
+ * `fieldOnly`): no value, no truth and no score, which with the prediction would give the measurement back. Your device's
+ * speed stays on it.
  */
 export function measuredRunItems(c: RunComparison): ItemResponse[] {
   const rev = rev32({ id: MEASURED_ITEM_ID, model: MEASURED_MODEL_ID, unit: MEASURED_UNIT, okWithinFactor: OK_FACTOR })
