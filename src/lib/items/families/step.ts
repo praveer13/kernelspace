@@ -26,7 +26,7 @@ import { claimNumber } from '@/data/claims'
 import { KC } from '@/data/kc/ids'
 import { claimRef, finishInstance, resolveVariant, rngFor, type Rng } from '@/lib/items/core'
 import { gradeResponse } from '@/lib/items/grade'
-import { familyPart, loadFamilyPart, PARTS_ON_DEMAND } from '@/lib/items/registry'
+import { familyPart, loadFamilyPart, PARTS_ON_DEMAND } from '@/lib/items/on-demand'
 import type { Gen, Instance, Level, Params, PromptPart, RatioRule, SolutionStep, VariantSpec } from '@/lib/items/types'
 import { BITS_PER_BYTE, DTYPE_BYTES, formatNumber, GB, type Dtype } from '@/lib/items/units'
 import type { KcId } from '@/lib/kc/types'
@@ -94,7 +94,7 @@ const VARIANTS: VariantSpec[] = [
 type Part = typeof Calibrated
 const CALIBRATED = 'step-calibrated'
 const isCal = (vid: string): boolean => vid === PREFILL_V2 || vid === SPEEDUP
-/** The part, now; otherwise its load starts and `make` stops with `NotReady` (the registry's `familyPart`). */
+/** The part, now; otherwise its load starts and `make` stops with `NotReady` (on-demand.ts's `familyPart`). */
 const calibrated = (): Part => familyPart<Part>(CALIBRATED)
 
 /**
