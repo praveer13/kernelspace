@@ -133,7 +133,7 @@ export default function DonateExport() {
               <span className="mt-2 block">
                 Left out: any text you typed, your Boot answer, seeds, module hashes, device ids, dates, clock times
                 and your Capstone drafts. Kept besides: the number you answered a number question with and the right
-                one, except for measurements of your own hardware.
+                one, except for measurements of your own hardware, and the names of the checks each lab run passed.
               </span>
             </>
           }
