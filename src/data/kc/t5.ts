@@ -78,6 +78,8 @@ export const T5_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t5.l3'],
     requires: ['t5.forward-pass-costs', KC.decodeBandwidth],
+    // `step` (s5 §7.5): the prefill step's milliseconds at the datasheet bound
+    gen: ['step'],
     since,
   },
   {
@@ -88,6 +90,8 @@ export const T5_KCS: readonly Kc[] = [
     kind: 'concept',
     lessons: ['t5.l3'],
     requires: ['t5.prefill-vs-decode'],
+    // `step` (s5 §7.2): the decode step's milliseconds, the ITL's floor
+    gen: ['step'],
     since,
   },
 

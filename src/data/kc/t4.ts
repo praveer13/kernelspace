@@ -69,7 +69,8 @@ export const T4_KCS: readonly Kc[] = [
     lessons: ['t4.l3'],
     requires: [KC.locality],
     confusable: [KC.decodeBandwidth],
-    gen: ['roofline', 'tiling'],
+    // `step` (s5 §7.5): the decode step's intensity with the KV cache, against the ridge
+    gen: ['roofline', 'tiling', 'step'],
     claims: ['hw.h100-sxm.bf16-dense', 'hw.h100-sxm.hbm-bw'],
     since,
   },
@@ -96,7 +97,8 @@ export const T4_KCS: readonly Kc[] = [
     lessons: ['t4.l3', 't0.l1', 't5.l3', 't6.l5'],
     requires: [KC.boundClassification],
     confusable: [KC.ridgePoint],
-    gen: ['roofline'],
+    // `step` (s5 §7.2): the decode step's milliseconds, KV and the max with the math included
+    gen: ['roofline', 'step'],
     claims: ['hw.h100-sxm.hbm-bw', 'model.llama3-8b.params'],
     since,
   },

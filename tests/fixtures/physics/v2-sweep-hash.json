@@ -1,0 +1,61 @@
+{
+  "header": "v2 sweep hash (docs/specs/s5.md §6.4, §8.4, S5-15): the sha256 of JSON.stringify of EngineV2 stats() on the six golden configurations, run with fixture parameters (the §3.6 and §3.7 [proto] sets), not the fitted table. Bun (tests/physics/sweep-hash.test.ts) and headless Chromium (e2e/physics-hash.spec.ts) both recompute it from tests/physics/sweep-hash.ts and compare with this file; Firefox and WebKit are checked by hand. It moves only with ENGINE_V2_REV: rewrite with SWEEP_HASH_WRITE=1 bun test tests/physics/sweep-hash.test.ts.",
+  "rev": "ev2-1",
+  "sha256": "62dcdba6b2f0e00423b1c117446a2b920db07cd2c4f8c4cb731b8fd4a0053573",
+  "configs": [
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "tp": 2,
+      "c": 4,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 2411395487,
+      "sha256": "5616e0286b4ab9ea9844dd9e1c78231a13230510ceaf1a16473c88ce248760bd"
+    },
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "tp": 8,
+      "c": 64,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 1876645935,
+      "sha256": "2176105b41998794fe9fcb59faea9b9f9305d369724d5faa7903974aebc3f695"
+    },
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "tp": 2,
+      "c": 4,
+      "isl": 8192,
+      "osl": 1024,
+      "seed": 3054172606,
+      "sha256": "05f3af410b6c1254d284ccc54a2e79969e5d8b61f7021782418f55e3999f9d49"
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "tp": 1,
+      "c": 4,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 3813228037,
+      "sha256": "db75ff5719e23c48a1bdb6dd02db87f698b28d4b5719ef78a45513c9a7ecd8b7"
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "tp": 8,
+      "c": 64,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 570197942,
+      "sha256": "a2aecce551ec0656b28ed59325e06b2e768a2c635bf1738982ebcc814741fd70"
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "tp": 1,
+      "c": 4,
+      "isl": 8192,
+      "osl": 1024,
+      "seed": 268628020,
+      "sha256": "b72f703a9639df5608e892f2817cc53cfe71aa3184a82450581609231d1d1ba3"
+    }
+  ]
+}

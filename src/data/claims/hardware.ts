@@ -42,7 +42,7 @@ export const HARDWARE_CLAIMS: Claim[] = [
     source: { ...H100_PAGE, quote: '3.35TB/s', row: 'H100 SXM > GPU Memory Bandwidth' },
     verifiedAt: '2026-10-04',
     ttlDays: 365,
-    boundary: 'Peak datasheet figure; real kernels reach roughly 80-90% of it.',
+    boundary: 'Peak datasheet figure; how much an engine reaches: physics tab.',
   },
   {
     id: 'hw.h100-sxm.bf16-sparse',
