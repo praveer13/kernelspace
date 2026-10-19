@@ -15,7 +15,8 @@ import { deriveBoot } from '../../src/lib/boot/model'
 import { partsText } from '../../src/lib/items/core'
 import * as stepModule from '../../src/lib/items/families/step'
 import { gradeResponse } from '../../src/lib/items/grade'
-import { loadAllFamilies } from '../../src/lib/items/registry'
+import { collect, NotReady, settle } from '../../src/lib/items/on-demand'
+import { forgetFamilyParts, loadAllFamilies, loadFamilyPart } from '../../src/lib/items/registry'
 import type { Gen, Instance, Level, Response } from '../../src/lib/items/types'
 import { formBlueprint } from '../../src/lib/learner/forms'
 import { BOX_BLOCK_SIZE, BOX_RANGE_RATIO, exceeds, inBox, kvRoomTokens } from '../../src/lib/world/physics/box'
@@ -30,6 +31,7 @@ const CALIBRATED = ['prefill-ms-v2', 'tp-speedup']
 /** Ratio variants: the protocol's ratio rule, constant cover only (no span bound; `items.ratioRule`, S5-D57). */
 const RATIOS = new Set(['tp-speedup'])
 const FILE = new URL('../../src/lib/items/families/step.ts', import.meta.url)
+const PART_FILE = new URL('../../src/lib/items/families/lazy/step-calibrated.ts', import.meta.url)
 const hashes = readHashRows('step') // tests/fixtures/items/hashes/step.json
 const TOL = 0.02
 const GB = 1e9
@@ -117,8 +119,9 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     expect([...step.kcs].sort()).toEqual(['t4.decode-bandwidth', 't4.ridge-point', 't5.latency-metrics', 't5.prefill-vs-decode', 't6.fp4-capacity', 't6.parallelism-composition'])
     // quant-bytes also stops before level 3, so the placement walk's confirmation on t6.fp4-capacity stays with `memory`
     expect(step.variants.map((v) => v.levels)).toEqual([[0, 1, 3], [0, 1, 3], [0, 1, 3], [0, 1], [0, 1, 3], [0, 1, 3]])
-    // the generator version moved with the calibrated variants, so every stored instance of version 1 stays itself
-    expect(step.version).toBe(2)
+    // the generator version moved with the calibrated variants (2) and with the prefill stems' wording (3, S5-10 m2 and
+    // S5-14 m3), so every stored instance of an earlier version stays itself
+    expect(step.version).toBe(3)
     for (const v of step.variants) {
       expect(() => step.make(1, 2, v.id)).toThrow()
       for (const l of v.levels) expect(step.make(7, l, v.id).answer.kind).toBe('numeric')
@@ -131,9 +134,28 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     expect(checkHashes(step, hashes)).toEqual([])
   })
 
-  test('its source passes the literal lint; it imports the card, the table and three lazy claim groups, never the engine', () => {
+  test('its source passes the literal lint; it imports the card, and no table, claim group or engine: those are the calibrated part\'s (B10)', () => {
     const text = readFileSync(FILE, 'utf8')
     expect(lintLiterals(FILE.pathname, text)).toEqual([])
+    const imports = [...text.matchAll(/(?:from |import )'([^']+)'/g)].map((m) => m[1])
+    expect(imports.filter((x) => /physics|lazy|ix-points|claims\/|registry/.test(x)).sort()).toEqual([
+      './lazy/step-calibrated',
+      '@/lib/items/registry',
+      '@/lib/world/physics/card',
+      '@/lib/world/physics/consumers',
+      '@/lib/world/physics/types',
+    ])
+    // the consumer contract and the part are types here: a value import would put the registries, or the part, in the chunk
+    expect(text).toContain("import type { PhysicsConsumer } from '@/lib/world/physics/consumers'")
+    expect(text).toContain("import type * as Calibrated from './lazy/step-calibrated'")
+    // nor does it import the part by `import()`: under Bun it awaits the part (top-level await), and Rollup treats an
+    // `import()` in such a module as a static import; the registry's `familyPart` issues it
+    expect(text).not.toMatch(/import\(/)
+  })
+
+  test("the calibrated part passes the same literal lint (verify:generators lints only families/<id>.ts) and holds the table and the three claim groups", () => {
+    const text = readFileSync(PART_FILE, 'utf8')
+    expect(lintLiterals(PART_FILE.pathname, text)).toEqual([])
     const imports = [...text.matchAll(/(?:from |import )'([^']+)'/g)].map((m) => m[1])
     expect(imports.filter((x) => /physics|lazy|ix-points|claims\//.test(x)).sort()).toEqual([
       '@/data/claims/lazy/ix-points',
@@ -144,8 +166,33 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
       '@/lib/world/physics/table',
       '@/lib/world/physics/types',
     ])
-    // the consumer contract is a type here: its module loads the registries, so it must not reach the chunk
     expect(text).toContain("import type { PhysicsConsumer } from '@/lib/world/physics/consumers'")
+    // it never imports the family (step.ts awaits it under Bun: a cycle would deadlock)
+    expect(imports.some((x) => /families\/step|\.\.\/step/.test(x))).toBe(false)
+  })
+
+  test('a calibrated draw before the part loads throws NotReady and starts the load; after settle it is the eager build, solution included', async () => {
+    const eager = CALIBRATED.flatMap((v) => [0, 1, 3].map((l) => step.make(seeds[l + 1], l as Level, v)))
+    const eagerFree = step.make(seeds[0], 1, 'decode-ms')
+    forgetFamilyParts()
+    try {
+      for (const v of CALIBRATED) expect(() => step.make(seeds[1], 0, v)).toThrow(NotReady)
+      // the η-free variants never need the part
+      expect(step.make(seeds[0], 1, 'decode-ms')).toEqual(eagerFree)
+      // inside collect the stop is reported with the load it asked for
+      const run = collect(() => step.make(seeds[1], 0, 'tp-speedup'))
+      expect(run.value).toBeUndefined()
+      expect(run.stopped).toBeInstanceOf(NotReady)
+      expect(run.ready).not.toBeNull()
+      forgetFamilyParts()
+      const made = await settle(() => CALIBRATED.flatMap((v) => [0, 1, 3].map((l) => step.make(seeds[l + 1], l as Level, v))))
+      expect(made).toEqual(eager)
+      made.forEach((i, k) => expect(step.solution(i)).toEqual(step.solution(eager[k])))
+      // once loaded it stays loaded: make is synchronous again
+      expect(step.make(seeds[1], 0, 'prefill-ms-v2')).toEqual(eager[0])
+    } finally {
+      await loadFamilyPart('step-calibrated')
+    }
   })
 
   test('the η-free variants still read no lazy claim group and no table: every claim they list is eager (S5-D61)', () => {
@@ -263,6 +310,20 @@ describe('truth: the card at η = 1, from the claims', () => {
           expect(text).toContain('datasheet bound')
           expect(text).not.toMatch(/\b(eta|η_|t_layer|t_seq|beta|β)\b|measured|fitted|InferenceX|vLLM/i)
         }
+      }
+    }
+  })
+
+  test("a prefill reads the weights and writes its prompt's KV: the stem says so, and the bytes it times are both (S5-10 m2)", () => {
+    for (const l of [0, 1, 3] as const) {
+      for (const s of seeds.slice(0, 50)) {
+        const i = step.make(s, l, 'prefill-ms')
+        const stem = partsText(i.prompt.stem)
+        expect(stem).toContain("reads the weights once and writes the prompt's KV bytes")
+        expect(stem).not.toContain("plus the prompt's KV")
+        // the card counts the written KV in its bytes: weights + P × KV bytes per token
+        const { a, chip } = scene(i)
+        expect(((a.W + a.kv * p(i, 'prompt')) / chip.bw) * 1e3).toBeLessThanOrEqual(truthOf(i) * (1 + 1e-12))
       }
     }
   })
@@ -543,7 +604,10 @@ describe('calibrated variants: labels, givens and whys (S5-14)', () => {
         const text = partsText(label)
         const name = r.key.startsWith('h100') ? 'H100 SXM' : 'B200'
         const prec = r.key.endsWith('nvfp4') ? 'NVFP4' : 'FP8'
-        expect(text.startsWith(`[v2 physics · ${name} · vLLM 0.10.2 · ${prec} · fitted on ${r.label.tpot.n} InferenceX points (2025-10-29)`)).toBe(true)
+        // n is the item's metric's (§7.0 H4): n_F, the points the fit read, on a ratio; G3's ~8k-prompt points on a TTFT label,
+        // which the fit read too, so the label says they are the points the TTFT error was checked on (S5-14 m3)
+        const points = RATIOS.has(v) ? `fitted on ${r.label.tpot.n} InferenceX points` : `checked on ${r.label.ttft.n} InferenceX points with ~8k prompts`
+        expect(text.startsWith(`[v2 physics · ${name} · vLLM 0.10.2 · ${prec} · ${points} (2025-10-29)`), text).toBe(true)
         expect(text.endsWith(` · ${PHYS_ID}]`)).toBe(true)
         // the label's metric: the claim it carries is the item's metric's leave-one-out p90, or none on a ratio
         const claims = label.flatMap((x) => (x.t === 'claim' ? [x.claim] : []))
@@ -553,8 +617,9 @@ describe('calibrated variants: labels, givens and whys (S5-14)', () => {
         } else {
           expect(METRIC[v]).toBe('ttft')
           expect(claims).toEqual([`phys.${r.key}.loo-ttft8k-p90`])
-          expect(text).toContain(`TTFT 9 in 10 within ${pct(r.label.ttft.p90)} % on the ${r.label.ttft.n} with ~8k prompts (leave-one-out, plus the harness term)`)
+          expect(text).toContain(` · TTFT 9 in 10 within ${pct(r.label.ttft.p90)} % (leave-one-out, plus the harness term) · `)
           expect(text).not.toContain('TPOT')
+          expect(text).not.toContain(`${r.label.tpot.n} InferenceX`)
         }
         // H4 only: no decision-level H1 figure, and the parameters are "the engine's numbers", not hardware facts
         expect(textOf(i)).not.toMatch(/frontier|\bH1\b|separation/)
