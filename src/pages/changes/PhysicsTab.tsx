@@ -197,12 +197,13 @@ function RunLink({ at, id, url }: { at: string; id: string; url: string }) {
 
 /**
  * A table that scrolls inside its own region, so the page never scrolls sideways. `wide` gives the table the width its
- * five columns of one point per row need; a small table has no minimum and fits the region at 360 and 320 px.
+ * five columns of one point per row need; a small table has no minimum and fits the region at 360 px, and at 320 px
+ * with its cells' side padding halved.
  */
 function Scroll({ label, wide = false, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
     <div role="region" aria-label={label} tabIndex={0} data-scroll-region className="mt-3 overflow-x-auto rounded-md border border-line">
-      <table className={`w-full ${wide ? 'min-w-[34rem] ' : ''}${mono}`}>
+      <table className={`w-full ${wide ? 'min-w-[34rem]' : 'max-[340px]:[&_td]:px-1 max-[340px]:[&_th]:px-1'} ${mono}`}>
         <caption className="sr-only">{label}</caption>
         {children}
       </table>

@@ -64,7 +64,7 @@ export default function Changes() {
             onClick={() => select(tab.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              '-mb-px min-h-11 whitespace-nowrap border-b-2 py-3 font-mono text-[12px] transition-colors duration-150 min-[360px]:text-body-sm',
+              '-mb-px min-h-11 min-w-11 whitespace-nowrap border-b-2 py-3 font-mono text-[12px] transition-colors duration-150 min-[360px]:text-body-sm',
               active === tab.id
                 ? 'border-accent text-text-1'
                 : 'border-transparent text-text-3 hover:text-text-1',
