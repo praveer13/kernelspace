@@ -89,7 +89,7 @@ export const PHYSICS_CLAIMS: Claim[] = [
       'Filters: a row whose requests do not fit the KV cache at 0.9 of memory, or whose median TTFT is 3 s or more (the server preempted), is dropped: ids 40752, 41507, 42070, 42140 and 44119, which leaves 160 (42, 58, 60). ' +
       `The extract the repository commits (src/data/physics/points/inferencex-l70-2025-10-29.json, 285 rows: these 165 plus 60 MI325X and 60 MI355X rows kept as an out-of-sample control) has sha256 ${EXTRACT_SHA256}. ` +
       'Official InferenceX results as published 2025-10-29 (SemiAnalysisAI/InferenceX, Apache-2.0; InferenceX is a trademark of SemiAnalysis), copied unmodified for the selected fields. The fitted model and its predictions are this course\'s own, not InferenceX results. ' +
-      'It describes vLLM 0.10.2 from almost a year before it goes stale (2027-04-16); a refit on a newer sweep is a new physics version, not an edit of this claim. Quotes of this group: adopted by the build on 2026-10-18, unsigned.',
+      'The sweep is dated 2025-10-29 and was read on 2026-10-18; this claim is stale from 2027-04-16 (180 days). It describes vLLM 0.10.2; a refit on a newer sweep is a new physics version, not an edit of this claim. Quotes of this group: adopted by the build on 2026-10-18, unsigned.',
   },
 
   harness(
@@ -154,7 +154,7 @@ export const PHYSICS_CLAIMS: Claim[] = [
     undefined,
     'InferenceX harness: vLLM max-num-seqs',
     { ...HARNESS_H100, quote: '--max-num-seqs=$CONC', row: 'vllm serve arguments' },
-    `The H100 script sets it to the run's concurrency; the B200 FP8 and FP4 scripts pass 512 (--max-num-seqs=512). With the client holding at most the run's concurrency (64 or fewer in the fit) requests in flight, the server never holds more than that many either way, so 512 never binds there. ${SNAPSHOT_NOTE}`,
+    `The H100 script sets it to the run's concurrency; the B200 FP8 script passes 512 (--max-num-seqs=512) and the B200 FP4 script the same (--max-num-seqs 512, with a space). With the client holding at most the run's concurrency (64 or fewer in the fit) requests in flight, the server never holds more than that many either way, so 512 never binds there. ${SNAPSHOT_NOTE}`,
   ),
 
   {

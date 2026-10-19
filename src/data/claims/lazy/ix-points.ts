@@ -23,7 +23,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.013192185948816437', row: 'id 41181' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41181 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41181 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot',
@@ -34,7 +34,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011776147370379336', row: 'id 41187' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41187 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41187 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-8192.c64.tpot',
@@ -45,7 +45,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.023406749752637908', row: 'id 41369' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41369 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41369 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-8192.c16.tpot',
@@ -56,7 +56,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.014094837221545944', row: 'id 41425' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41425 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41425 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c16.tpot',
@@ -67,7 +67,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.019740010395602685', row: 'id 41533' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41533 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41533 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-8192.c4.tpot',
@@ -78,7 +78,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.017971309306706262', row: 'id 41617' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41617 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41617 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c4.tpot',
@@ -89,7 +89,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.00911388713190063', row: 'id 41625' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41625 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41625 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-8192.c64.tpot',
@@ -100,7 +100,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01648915841245971', row: 'id 41703' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41703 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41703 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-8192.c4.tpot',
@@ -111,7 +111,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.009195374587034077', row: 'id 41708' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41708 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41708 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-8192.c16.tpot',
@@ -122,7 +122,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011583957083446606', row: 'id 41710' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41710 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41710 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-8192.c4.tpot',
@@ -133,7 +133,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011995474820029195', row: 'id 41759' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41759 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41759 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.8192-1024.c16.tpot',
@@ -144,7 +144,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.0210640703730332', row: 'id 41775' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41775 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41775 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-8192.c16.tpot',
@@ -155,7 +155,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.022130283086979487', row: 'id 41812' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41812 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41812 (run 18924543242, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c64.tpot',
@@ -166,7 +166,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01951460483344175', row: 'id 41821' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41821 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41821 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.8192-1024.c4.tpot',
@@ -177,7 +177,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.013274234163387794', row: 'id 41953' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41953 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41953 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.8192-1024.c64.tpot',
@@ -188,7 +188,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.05349472631709694', row: 'id 42004' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42004 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42004 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c4.tpot',
@@ -199,7 +199,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.017407217876067922', row: 'id 42017' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42017 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42017 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c64.tpot',
@@ -210,7 +210,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.028768600911294722', row: 'id 42096' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42096 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42096 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c16.tpot',
@@ -221,7 +221,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011391704482655638', row: 'id 42130' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42130 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42130 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.8192-1024.c64.tpot',
@@ -232,7 +232,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.0344826479783977', row: 'id 42149' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42149 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42149 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.8192-1024.c4.tpot',
@@ -243,7 +243,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01021780269800912', row: 'id 42299' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42299 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42299 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c64.tpot',
@@ -254,7 +254,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01545499440302193', row: 'id 42335' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42335 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42335 (run 18924448230, attempt 2): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.8192-1024.c16.tpot',
@@ -265,7 +265,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.03462533664177535', row: 'id 42685' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42685 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42685 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.8192-1024.c4.tpot',
@@ -276,7 +276,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.020615537434245056', row: 'id 42691' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42691 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42691 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.8192-1024.c16.tpot',
@@ -287,7 +287,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01585264566657153', row: 'id 44154' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 44154 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 44154 (run 18924487526, attempt 3): H100 SXM, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c64.tpot',
@@ -298,7 +298,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.023101786167630478', row: 'id 39409' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39409 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39409 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-1024.c64.tpot',
@@ -309,7 +309,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.015887478473743534', row: 'id 39458' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39458 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39458 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-1024.c16.tpot',
@@ -320,7 +320,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.007609429561126693', row: 'id 39779' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39779 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39779 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-1024.c64.tpot',
@@ -331,7 +331,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01359193267492726', row: 'id 39919' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39919 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39919 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot',
@@ -342,7 +342,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.008042216991168374', row: 'id 40041' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40041 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40041 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c16.tpot',
@@ -353,7 +353,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01767291094630351', row: 'id 40077' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40077 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40077 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-1024.c4.tpot',
@@ -364,7 +364,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.010637766567796445', row: 'id 40087' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40087 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40087 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-1024.c64.tpot',
@@ -375,7 +375,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.012544234115035396', row: 'id 40166' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40166 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40166 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.8192-1024.c16.tpot',
@@ -386,7 +386,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.00976988419333295', row: 'id 40260' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40260 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40260 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.8192-1024.c64.tpot',
@@ -397,7 +397,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.022277864127435053', row: 'id 40338' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40338 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40338 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-1024.c16.tpot',
@@ -408,7 +408,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011372750940119858', row: 'id 40352' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40352 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40352 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.8192-1024.c4.tpot',
@@ -419,7 +419,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011752254651128403', row: 'id 40435' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40435 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40435 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-1024.c4.tpot',
@@ -430,7 +430,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.006318136471278868', row: 'id 40483' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40483 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40483 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.8192-1024.c4.tpot',
@@ -441,7 +441,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.018341295891140703', row: 'id 40518' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40518 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40518 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.8192-1024.c4.tpot',
@@ -452,7 +452,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.00871441611499844', row: 'id 40555' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40555 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40555 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-1024.c16.tpot',
@@ -463,7 +463,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.00898021841896684', row: 'id 40571' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40571 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40571 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c4.tpot',
@@ -474,7 +474,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.016336672415144134', row: 'id 40624' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40624 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40624 (run 18924448230, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.8192-1024.c16.tpot',
@@ -485,7 +485,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.027706724988177465', row: 'id 40668' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40668 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40668 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.8192-1024.c16.tpot',
@@ -496,7 +496,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.017457259732727992', row: 'id 40741' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40741 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40741 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.8192-1024.c4.tpot',
@@ -507,7 +507,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.007181885904678309', row: 'id 40747' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40747 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40747 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.8192-1024.c64.tpot',
@@ -518,7 +518,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.027780663665277594', row: 'id 40815' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40815 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40815 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.8192-1024.c16.tpot',
@@ -529,7 +529,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.012071169169474299', row: 'id 40818' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40818 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40818 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.8192-1024.c64.tpot',
@@ -540,7 +540,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.04200622065793791', row: 'id 40877' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40877 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40877 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-8192.c4.tpot',
@@ -551,7 +551,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01038084843538897', row: 'id 41294' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41294 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41294 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-8192.c64.tpot',
@@ -562,7 +562,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.015677398847333383', row: 'id 41424' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41424 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41424 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-8192.c16.tpot',
@@ -573,7 +573,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01789299534381616', row: 'id 41472' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41472 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41472 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-8192.c64.tpot',
@@ -584,7 +584,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011500293662460592', row: 'id 41706' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41706 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41706 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-8192.c64.tpot',
@@ -595,7 +595,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.010453019377017507', row: 'id 41717' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41717 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41717 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-8192.c4.tpot',
@@ -606,7 +606,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.006519630837511817', row: 'id 41737' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41737 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41737 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-8192.c16.tpot',
@@ -617,7 +617,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.0070346015878713', row: 'id 41787' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41787 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41787 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-8192.c4.tpot',
@@ -628,7 +628,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.008399696667740892', row: 'id 41992' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41992 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41992 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-8192.c16.tpot',
@@ -639,7 +639,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01132335250388355', row: 'id 42027' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42027 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42027 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-8192.c4.tpot',
@@ -650,7 +650,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.016670736488500447', row: 'id 42028' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42028 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42028 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-8192.c16.tpot',
@@ -661,7 +661,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.008366643705958429', row: 'id 42134' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42134 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42134 (run 18924543242, attempt 2): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-1024.c16.tpot',
@@ -672,7 +672,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.008800759451515167', row: 'id 39515' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39515 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39515 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-1024.c64.tpot',
@@ -683,7 +683,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.013690351874495313', row: 'id 39536' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39536 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39536 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-1024.c4.tpot',
@@ -694,7 +694,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.007234912949786916', row: 'id 39563' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39563 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39563 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c16.tpot',
@@ -705,7 +705,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01415219549281905', row: 'id 39588' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39588 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39588 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-1024.c64.tpot',
@@ -716,7 +716,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.0130752578765089', row: 'id 39641' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 39641 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 39641 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.8192-1024.c64.tpot',
@@ -727,7 +727,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.05034475963454964', row: 'id 40030' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40030 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40030 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-8192.c64.tpot',
@@ -738,7 +738,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.01456308992357196', row: 'id 40059' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40059 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40059 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c4.tpot',
@@ -749,7 +749,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.013071160093486068', row: 'id 40085' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40085 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40085 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.8192-1024.c16.tpot',
@@ -760,7 +760,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011040995279626143', row: 'id 40124' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40124 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40124 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.8192-1024.c16.tpot',
@@ -771,7 +771,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.021767409659583504', row: 'id 40186' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40186 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40186 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-8192.c4.tpot',
@@ -782,7 +782,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.013549694428368463', row: 'id 40287' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40287 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40287 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-1024.c16.tpot',
@@ -793,7 +793,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.010672074106200937', row: 'id 40291' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40291 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40291 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.8192-1024.c4.tpot',
@@ -804,7 +804,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.008092805188188014', row: 'id 40300' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40300 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40300 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-8192.c64.tpot',
@@ -815,7 +815,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.011341161435739999', row: 'id 40361' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40361 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40361 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-8192.c16.tpot',
@@ -826,7 +826,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.010731015907022964', row: 'id 40407' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40407 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40407 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-1024.c4.tpot',
@@ -837,7 +837,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.009667559092225504', row: 'id 40415' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40415 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40415 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.8192-1024.c4.tpot',
@@ -848,7 +848,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.014377599486642861', row: 'id 40436' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40436 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40436 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c64.tpot',
@@ -859,7 +859,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.017842657499759267', row: 'id 40482' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40482 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40482 (run 18924448230, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-8192.c16.tpot',
@@ -870,7 +870,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.007976555415466853', row: 'id 40498' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40498 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40498 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-8192.c64.tpot',
@@ -881,7 +881,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.02089892901121676', row: 'id 40507' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40507 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40507 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-8192.c4.tpot',
@@ -892,7 +892,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.007464780910375318', row: 'id 40549' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40549 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40549 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.8192-1024.c4.tpot',
@@ -903,7 +903,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.010397310371980353', row: 'id 40701' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40701 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40701 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-8192.c4.tpot',
@@ -914,7 +914,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.009461090266727198', row: 'id 40725' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40725 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40725 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.8192-1024.c64.tpot',
@@ -925,7 +925,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.03363686275987711', row: 'id 40754' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40754 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40754 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.8192-1024.c16.tpot',
@@ -936,7 +936,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.014819955878565777', row: 'id 40816' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40816 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40816 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-8192.c16.tpot',
@@ -947,7 +947,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.014678575882916156', row: 'id 41370' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 41370 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 41370 (run 18924543242, attempt 2): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.8192-1024.c64.tpot',
@@ -958,7 +958,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"mean_tpot":0.024904034741117204', row: 'id 42068' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 42068 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 42068 (run 18924487526, attempt 3): B200, NVFP4 weights, nvidia/Llama-3.3-70B-Instruct-FP4, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
   {
     id: 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.8192-1024.c4.ttft-median',
@@ -969,7 +969,7 @@ export const IX_POINT_CLAIMS: Claim[] = [
     source: { ...IX_QUERY, quote: '"median_ttft":0.654017546446994', row: 'id 40518' },
     verifiedAt: '2026-10-18',
     ttlDays: 180,
-    boundary: 'InferenceX row 40518 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the median TTFT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
+    boundary: 'InferenceX row 40518 (run 18924487526, attempt 3): B200, FP8 weights, nvidia/Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the median TTFT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course\'s fit is its own.',
   },
 ]
 

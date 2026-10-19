@@ -254,6 +254,10 @@ describe('the generated point claims (lazy/ix-points.ts)', () => {
       expect(c.source?.quote).toBe(`"${member}":${JSON.stringify(point?.[member])}`)
       expect(c.verifiedAt).toBe('2026-10-18')
       expect(c.boundary).toContain(`row ${id}`)
+      // the checkpoint the row's job served (70b-tmpl.yml: bmk-*-fp8 serve the FP8 checkpoint, bmk-b200-fp4 the FP4 one)
+      const model = point?.precision === 'fp4' ? 'nvidia/Llama-3.3-70B-Instruct-FP4' : 'nvidia/Llama-3.3-70B-Instruct-FP8'
+      expect(c.boundary).toContain(`, ${model}, vLLM`)
+      expect(c.boundary).not.toContain(point?.precision === 'fp4' ? 'Instruct-FP8' : 'Instruct-FP4')
       expect(c.boundary).toContain(point?.run_url.split('/runs/')[1].split('/')[0] ?? 'no run')
     }
   })
