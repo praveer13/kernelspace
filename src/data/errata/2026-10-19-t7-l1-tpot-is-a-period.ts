@@ -27,9 +27,9 @@ export default {
       correct: [1],
       why: [
         'Bandwidth over bytes has units of per second: it is a rate, steps (and each user\'s tokens) per second. TPOT is its inverse, a time per token.',
-        'Right: bytes over bandwidth is the least time streaming them can take, and fixed per-step costs come on top. On 4 H100s the measured TPOT ran 2.2× and 3.1× it.',
+        'Right: bytes over bandwidth is the least time streaming them can take, and other per-step work comes on top. On 4 H100s the measured TPOT ran 2.2× and 3.1× it.',
         'Nothing reaches the datasheet rate for free, and streaming is not all a step does. On 4 H100s the measured TPOT ran 2.2× and 3.1× this figure (InferenceX ids 41187, 41821).',
-        'The roles are swapped. Bandwidth over bytes is a rate, and a rate cannot bound a time; bytes over bandwidth is the time.',
+        'The roles are swapped. Bandwidth over bytes is a rate, and a rate cannot bound a time; bytes over bandwidth is the lower bound on the time.',
       ],
     },
   ],

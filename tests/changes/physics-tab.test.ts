@@ -17,6 +17,7 @@ import controlsFile from '../../docs/physics/controls.json'
 import decisionsFile from '../../docs/physics/decisions.json'
 import reportFile from '../../docs/physics/report.json'
 import StepCard from '../../src/components/physics/StepCard'
+import { groupThousands } from '../../src/lib/physics-format'
 import ClaimsTable from '../../src/components/ClaimsTable'
 import { ALL_CLAIMS, byId, getClaim } from '../../src/data/claims/all'
 import PhysicsTab, { PhysicsView, type PhysicsControls, type PhysicsData, type PhysicsDecisions, type PhysicsReport } from '../../src/pages/changes/PhysicsTab'
@@ -104,7 +105,8 @@ function audit(tab: MiniElement, data: PhysicsData): string[] {
     const ref = el.getAttribute('data-report')!
     const v = lookup(data, ref)
     if (typeof v === 'string') {
-      if (el.textContent !== v) problems.push(`${ref} reads "${el.textContent}", the file has "${v}"`)
+      // a report string's whole numbers carry thousands separators on the page; without them it is the file's string
+      if (el.textContent.replace(/(?<=\d),(?=\d{3}(?!\d))/g, '') !== v) problems.push(`${ref} reads "${el.textContent}", the file has "${v}"`)
     } else if (typeof v === 'number') {
       const scale = Number(el.getAttribute('data-scale') ?? 1)
       const shown = quantities(el.textContent)
@@ -118,6 +120,33 @@ function audit(tab: MiniElement, data: PhysicsData): string[] {
     for (const d of text.match(DATE) ?? []) if (d !== '2025-10-29') problems.push(`a date outside a claim or report value: ${d} in "${text}"`)
     const loose = quantities(text)
     if (loose.length > 0) problems.push(`a number outside a chip or report value: "${text}"`)
+  }
+  return problems
+}
+
+/**
+ * The problems with a tab's point counts: each row's two tables must hold as many points as the row's sentence
+ * and summary say (`nFit`, `nHeldOut`), and `kept` is the two together.
+ */
+function rowCounts(tab: MiniElement, report: PhysicsReport): string[] {
+  const problems: string[] = []
+  const say = (el: MiniElement | null) => (el?.textContent ?? '').replace(/\s+/g, ' ').replace(/,/g, '')
+  for (const row of report.rows) {
+    const section = tab.querySelector(`[data-row="${row.key}"]`)!
+    const tables = section.querySelectorAll('details')
+    const [fit, held] = tables
+    const rowsIn = (d: MiniElement) => d.querySelectorAll('tbody tr').length
+    const f = row.points.filter((p) => p.subset === 'F').length
+    const h = row.points.filter((p) => p.subset === 'H').length
+    if (f !== row.nFit) problems.push(`${row.key}: nFit says ${row.nFit}, the points have ${f} fit`)
+    if (h !== row.nHeldOut) problems.push(`${row.key}: nHeldOut says ${row.nHeldOut}, the points have ${h} held out`)
+    if (rowsIn(fit) !== f) problems.push(`${row.key}: the leave-one-out table has ${rowsIn(fit)} rows for ${f} fit points`)
+    if (rowsIn(held) !== h) problems.push(`${row.key}: the held-out table has ${rowsIn(held)} rows for ${h} held-out points`)
+    if (!say(fit.querySelector('summary')).includes(`the ${f} fit points`)) problems.push(`${row.key}: the leave-one-out summary does not say ${f}`)
+    if (!say(held.querySelector('summary')).includes(`the ${h} points never fitted`)) problems.push(`${row.key}: the held-out summary does not say ${h}`)
+    if (!say(section).includes(`${f} fit the card and ${h} are held out`)) problems.push(`${row.key}: the row's sentence does not say ${f} and ${h}`)
+    const kept = row.kept
+    if (kept !== f + h) problems.push(`${row.key}: kept says ${kept}, fit and held out make ${f + h}`)
   }
   return problems
 }
@@ -237,10 +266,41 @@ describe('the positive state (docs/physics/report.json)', () => {
       const links = (region: MiniElement) => region.querySelectorAll('tbody a').map((a) => a.getAttribute('href'))
       expect(links(regions[0])).toEqual(row.points.filter((p) => p.subset === 'F').map((p) => p.runUrl))
       expect(links(regions[1])).toEqual(row.points.filter((p) => p.subset === 'H').map((p) => p.runUrl))
-      expect(regions[0].querySelectorAll('tbody tr')).toHaveLength((reportFile.rows[i] as { nFit: number }).nFit)
+      expect(regions[0].querySelectorAll('tbody tr')).toHaveLength(REAL.report.rows[i].nFit)
       // the worst points, with their runs
       expect(section.querySelectorAll(`[data-report^="report:rows.${i}.r1.worst."][data-report$=".id"]`)).toHaveLength(row.r1.worst.length)
     }
+  })
+
+  test('the report strings with numbers (gate details, dropped points\' reasons) print the thousands separators, every value unchanged', () => {
+    const h100 = tab.querySelector('[data-row="h100-vllm-0-10-2-fp8"]')!
+    expect(textOf(h100)).toContain('dropped 41507: KV: 64 × (1,024 + 8,192) = 589,824 > 448,303; TTFT: median 8.47 s ≥ 3 s')
+    expect(textOf(h100)).toContain('G5 passes: n_F 25 (≥ 20), TPs 3 (≥ 2), concurrencies 3 (≥ 3), shapes 3 (≥ 2), 8,192/1,024 present')
+    // an id and a status are not quantities: a five-digit run id stays as written
+    expect(textOf(h100.querySelector('[data-report="report:rows.0.dropped.0.id"]'))).toBe('41507')
+    expect(textOf(h100.querySelector('[data-report="report:rows.0.status"]'))).toBe('calibrated')
+    // the text the page prints reads back to the file's string with the separators taken out
+    expect(groupThousands('KV: 64 × (1024 + 8192) = 589824 > 448303')).toBe('KV: 64 × (1,024 + 8,192) = 589,824 > 448,303')
+    expect(groupThousands('adopted by the build on 2026-10-18, unsigned')).toBe('adopted by the build on 2026-10-18, unsigned')
+    expect(groupThousands('p90 11.3 % of 12345.678, 999, 0.10.2')).toBe('p90 11.3 % of 12345.678, 999, 0.10.2')
+    expect(audit(tab, REAL)).toEqual([])
+  })
+
+  test("the tables size themselves: the five-column point tables keep a minimum width, the worked examples' small tables have none, a row summary is 44 px", () => {
+    for (const r of tab.querySelectorAll('details [data-scroll-region]')) expect(r.querySelector('table')!.className).toContain('min-w-[34rem]')
+    const small = tab.querySelectorAll('[data-example] [data-scroll-region]')
+    expect(small).toHaveLength(REAL.report.workedExamples.length)
+    for (const r of small) {
+      expect(r.querySelector('table')!.className).not.toContain('min-w-')
+      expect(r.querySelectorAll('tbody tr').length).toBeGreaterThanOrEqual(4)
+    }
+    const summaries = tab.querySelectorAll('details > summary')
+    expect(summaries).toHaveLength(REAL.report.rows.length * 2)
+    for (const s of summaries) expect(s.className).toContain('min-h-11')
+  })
+
+  test('every row says how many points each table has, and each table has that many', () => {
+    expect(rowCounts(tab, REAL.report)).toEqual([])
   })
 
   test('the box: TP options, sequences, budget and shapes from the report', () => {
@@ -275,7 +335,7 @@ describe('the positive state (docs/physics/report.json)', () => {
       'rule 1 trips: 4 distinct answer codes survive H1, H2 and the width rule (at least 6); 7 (row, answer) classes',
       'rule 1b passes: the largest answer share under flattened sampling is 28.6 % (at most 29.0 %)',
       'rule 2 passes: the best scene-blind guesser finishes within 10 rounds 13.7 % (at most 14.0 %) and within 30 39.4 % (at most 40.0 %)',
-      'rule 3 passes: the reader finishes within 10 rounds 100.0 % (above 90.0 %); right on 1444 of 1444 class scenes',
+      'rule 3 passes: the reader finishes within 10 rounds 100.0 % (above 90.0 %); right on 1,444 of 1,444 class scenes',
     ])
   })
 
@@ -347,6 +407,20 @@ describe('the negative state (tests/fixtures/physics/report-negative.json)', () 
     await m.unmount()
   })
 
+  test("each row's counts are its points': the fixture's tables hold as many points as nFit and nHeldOut say (S5-11)", async () => {
+    const m = await dom.mount(createElement(PhysicsView, NEGATIVE))
+    const tab = tabOf(m)
+    expect(rowCounts(tab, NEGATIVE.report)).toEqual([])
+    const first = tab.querySelector('[data-row]')!
+    expect(textOf(first)).toContain('Leave-one-out: the 25 fit points')
+    expect(first.querySelectorAll('details')[0].querySelectorAll('tbody tr')).toHaveLength(25)
+    expect(first.querySelectorAll('details')[1].querySelectorAll('tbody tr')).toHaveLength(17)
+    // the check can fail: a row that says more points than it has is named
+    const trimmed = { ...NEGATIVE.report, rows: NEGATIVE.report.rows.map((r, i) => (i === 0 ? { ...r, points: r.points.slice(0, 5) } : r)) }
+    expect(rowCounts(tab, trimmed).length).toBeGreaterThan(0)
+    await m.unmount()
+  })
+
   test('the audit catches a stray number, a chip off its claim and a report value off its file', async () => {
     const m = await dom.mount(createElement(PhysicsView, NEGATIVE))
     const tab = tabOf(m)
@@ -388,7 +462,7 @@ describe('StepCard', () => {
     const bars = m.container.querySelectorAll('[role="img"]')
     expect(bars).toHaveLength(2)
     for (const bar of bars) expect(bar.getAttribute('aria-describedby')).toBe('mirror-a')
-    expect(bars.map((b) => b.getAttribute('aria-label'))).toEqual(['datasheet bound: 5.333 ms, memory-bound', "this fit's card: 12.090 ms, memory-bound"])
+    expect(bars.map((b) => b.getAttribute('aria-label'))).toEqual(['datasheet bound: 5.333 ms, memory-bound; fixed 0.000 ms, link 0.000 ms, memory 5.333 ms', "this fit's card: 12.090 ms, memory-bound; fixed 6.024 ms, link 0.074 ms, memory 5.992 ms"])
     const mirror = m.container.querySelector('[data-sim-mirror]')!
     expect(mirror.querySelector('#mirror-a')).not.toBeNull()
     const cells = mirror.querySelectorAll('tbody tr').map((tr) => [...tr.querySelectorAll('th'), ...tr.querySelectorAll('td')].map(textOf))
@@ -399,6 +473,14 @@ describe('StepCard', () => {
       ['bound', 'memory', 'memory'],
     ])
     expect(shown('card', 'fixedS')).toBe('6.024 ms')
+    // the legend: each term's name carries a swatch in the colour its segment of the bar has
+    for (const bar of bars) {
+      const legend = (bar.nextSibling as MiniElement).querySelectorAll('dt')
+      expect(legend.map(textOf)).toEqual(['fixed', 'link', 'memory', 'compute'])
+      const tones = legend.map((dt) => dt.querySelector('[aria-hidden="true"]')!.className.split(' ').find((c) => c.startsWith('bg-')))
+      expect(tones).toEqual(['bg-text-3', 'bg-info', 'bg-accent', 'bg-amber'])
+      for (const seg of bar.querySelectorAll('span')) expect(tones).toContain(seg.className)
+    }
     await m.unmount()
   })
 })

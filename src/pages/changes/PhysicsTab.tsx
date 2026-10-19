@@ -15,8 +15,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ClaimValue } from '@/components/ClaimValue'
 import RouteFallback from '@/components/RouteFallback'
-import StepCard, { fmtNum, Val } from '@/components/physics/StepCard'
+import StepCard, { Val } from '@/components/physics/StepCard'
 import { byId, staleSince, type Claim } from '@/data/claims'
+import { fmtNum, groupThousands } from '@/lib/physics-format'
 import type { StepCard as CardTerms } from '@/lib/world/physics/types'
 
 /* ------------------------------ the files' shapes (the parts the tab reads) ------------------------------ */
@@ -39,6 +40,10 @@ interface ReportPoint extends Config {
 interface ReportRow {
   key: string
   status: string
+  selected: number
+  kept: number
+  nFit: number
+  nHeldOut: number
   dropped: (Config & { reasons: string[] })[]
   params: Record<ParamKey, number>
   refit: Record<ParamKey, [number, number]>
@@ -124,13 +129,18 @@ const prose = 'max-w-3xl text-body leading-relaxed text-text-2'
 const mono = 'font-mono text-[11px] text-text-2'
 const th = 'p-2 text-left font-medium text-text-3'
 const td = 'whitespace-nowrap p-2 text-left align-top'
+/** a row label in a small table: it wraps, so the table fits the region without a minimum width */
+const rowHead = 'p-2 text-left align-top font-normal text-text-1'
 
 /* ------------------------------ references: every number comes through here ------------------------------ */
 
-/** A report string (a gate's detail, a rule), printed as the file has it. */
-function Txt({ at, s }: { at: string; s: string }) {
-  return <span data-report={at}>{s}</span>
+/** A report string (a gate's detail, a rule), printed as the file has it; `group` sets the thousands separators in its whole numbers. */
+function Txt({ at, s, group = false }: { at: string; s: string; group?: boolean }) {
+  return <span data-report={at}>{group ? groupThousands(s) : s}</span>
 }
+
+/** The report strings that carry numbers of their own: a gate's detail and a dropped point's reasons (ids and statuses stay as written). */
+const GROUPED = /\.(detail|reasons\.\d+)$/
 
 /** A claim chip; `scale` and `digits` print the claim's value in the unit the sentence uses. */
 function Chip({ id, scale = 1, digits, unit, prefix = '' }: { id: string; scale?: number; digits?: number; unit?: string; prefix?: string }) {
@@ -165,7 +175,7 @@ function Tpl({ d, t }: { d: PhysicsData; t: string }) {
         if (Number.isNaN(n)) throw new Error(`physics tab: "${part}" has no digit count`)
         if (ref.startsWith('#')) return <Chip key={j} id={ref.slice(1)} digits={n} unit={unit || undefined} scale={scale ? Number(scale) : 1} prefix={prefix} />
         const v = lookup(d, ref)
-        return typeof v === 'number' ? <Val key={j} at={ref} v={v} digits={n ?? 0} unit={unit} scale={scale ? Number(scale) : 1} /> : <Txt key={j} at={ref} s={String(v)} />
+        return typeof v === 'number' ? <Val key={j} at={ref} v={v} digits={n ?? 0} unit={unit} scale={scale ? Number(scale) : 1} /> : <Txt key={j} at={ref} s={String(v)} group={GROUPED.test(ref)} />
       })}
     </>
   )
@@ -185,11 +195,15 @@ function RunLink({ at, id, url }: { at: string; id: string; url: string }) {
   )
 }
 
-/** A table that scrolls inside its own region, so the page never scrolls sideways. */
-function Scroll({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * A table that scrolls inside its own region, so the page never scrolls sideways. `wide` gives the table the width its
+ * five columns of one point per row need; a small table has no minimum and fits the region at 360 px, and at 320 px
+ * with its cells' side padding halved.
+ */
+function Scroll({ label, wide = false, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
     <div role="region" aria-label={label} tabIndex={0} data-scroll-region className="mt-3 overflow-x-auto rounded-md border border-line">
-      <table className={`w-full min-w-[34rem] ${mono}`}>
+      <table className={`w-full ${wide ? 'min-w-[34rem]' : 'max-[340px]:[&_td]:px-1 max-[340px]:[&_th]:px-1'} ${mono}`}>
         <caption className="sr-only">{label}</caption>
         {children}
       </table>
@@ -219,10 +233,10 @@ function RowSection({ d, row, i }: { d: PhysicsData; row: ReportRow; i: number }
     calibrated && held(d.report, id) ? `{#${id}|${digits}|${unit}}` : `{${path}|${digits}|${unit}|${scale}}`
   const table = (subset: 'F' | 'H', title: string, label: string) => (
     <details className="mt-1">
-      <summary className="cursor-pointer py-2 text-body-sm text-text-1">
+      <summary className="min-h-11 cursor-pointer py-3 text-body-sm text-text-1">
         <Tpl d={d} t={title} />
       </summary>
-      <Scroll label={`${rowName(row.key)}: ${label}`}>
+      <Scroll wide label={`${rowName(row.key)}: ${label}`}>
         <Head cols={['point (run)', 'configuration', 'measured TPOT', subset === 'F' ? 'predicted without it' : 'predicted', 'error']} />
         <tbody>
           {row.points.map((p, j) => {
@@ -266,7 +280,7 @@ function RowSection({ d, row, i }: { d: PhysicsData; row: ReportRow; i: number }
             <span className={gate.ok ? 'text-accent' : 'text-amber'}>
               {g} {gate.ok ? 'passes' : 'fails'}
             </span>
-            : <Txt at={`${at}.gates.${g}.detail`} s={gate.detail} />
+            : <Txt at={`${at}.gates.${g}.detail`} s={gate.detail} group />
           </li>
         ))}
       </ul>
@@ -371,7 +385,7 @@ function Example({ d, ex, i }: { d: PhysicsData; ex: WorkedExample; i: number })
         <tbody>
           {lines.map(([label, ms, err]) => (
             <tr key={err} className="border-b border-line/60">
-              <th scope="row" className={`${td} font-normal text-text-1`}>
+              <th scope="row" className={rowHead}>
                 {label}
               </th>
               <td className={td}>
@@ -383,7 +397,7 @@ function Example({ d, ex, i }: { d: PhysicsData; ex: WorkedExample; i: number })
             </tr>
           ))}
           <tr>
-            <th scope="row" className={`${td} font-normal text-text-1`}>
+            <th scope="row" className={rowHead}>
               measured
             </th>
             <td className={td}>

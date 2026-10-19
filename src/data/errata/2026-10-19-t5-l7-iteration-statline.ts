@@ -5,12 +5,12 @@ export default {
   date: '2026-10-19',
   kind: 'error',
   lessons: ['t5.l7'],
-  title: 'A measured decode step took 11.8 ms, not "~50 ms"; the Fleet\'s 50 ms tick is a teaching unit',
+  title: 'InferenceX measured 11.8 ms per output token, not "~50 ms"; the Fleet\'s 50 ms tick is a teaching unit',
   before:
     'T5.L7\'s statline gave "~50 ms · one iteration" for a decode step of a mid-size model and batch, with no source.',
   after:
-    'A decode step of Llama-3.3-70B FP8 on 4 H100s with 4 users measured 11.8 ms (InferenceX 2025-10-29, id 41187); the Fleet\'s flat 50 ms tick is a teaching unit, labelled physics v1.',
-  why: 'The 50 ms figure had no source and was about four times a measured step. Steps vary with model, GPUs and batch, so the lesson now cites one measurement and names the tick for what it is.',
+    'InferenceX measured a mean 11.8 ms per output token for Llama-3.3-70B FP8 on 4 H100s with 4 users (id 41187), over every step a user waits through, prefills included. The Fleet\'s flat 50 ms tick is a teaching unit.',
+  why: 'The 50 ms figure had no source and was about four times the measured mean. Steps vary with model, GPUs and batch, so the lesson cites one measurement, says what it averages, and names the tick.',
   source: {
     url: 'https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true',
     title: 'InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (mean_tpot of id 41187)',
@@ -19,7 +19,7 @@ export default {
     {
       q: 'The Fleet moves its batch forward on a flat 50 ms tick. What is that tick?',
       options: [
-        'A teaching unit, and a measured 70B step on 4 H100s at 4 users took 11.8 ms',
+        'A teaching unit, and a measured mean was 11.8 ms per token at 4 users',
         'A measured figure, the mean decode step of a 70B model on 4 H100s at 4 users',
         'A floor, the least time any decode step can take at the datasheet bandwidth',
         'A vLLM default, the scheduling quantum the engine waits for between steps',
