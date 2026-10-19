@@ -144,7 +144,7 @@ Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: 
     {
       type: 'statline',
       stats: [
-        { value: '11.8 ms', label: 'one decode step', hint: 'Llama-3.3-70B FP8 on 4 H100s with 4 users, InferenceX 2025-10-29, id 41187 — the quantum of this timesharing system. The Fleet\'s flat 50 ms tick is a teaching unit, physics v1.' },
+        { value: '11.8 ms', label: 'mean time per token', hint: 'Llama-3.3-70B FP8 on 4 H100s with 4 users, InferenceX 2025-10-29, id 41187: a mean over every step a user waits through, prefills included, not one step, but the scale of this timesharing system\'s quantum. The Fleet\'s flat 50 ms tick is a teaching unit, physics v1.' },
         { value: '2–8×', label: 'goodput gain', hint: 'Continuous vs static batching on real traffic; the paper claims up to ~24× vs naive.' },
         { value: 'O(1)', label: 'slot recycle', hint: 'Finished sequence\'s blocks return to the free queue instantly — the T1 fixed-block win.' },
         { value: '1 step', label: 'preemption latency', hint: 'Eviction decisions happen between iterations, never mid-kernel.' },
@@ -218,12 +218,12 @@ The simulator includes a deterministic four-request trace — exactly **8/12/20/
           ],
           correct: [1],
           explanation:
-            'Iteration-level scheduling: the batch is edited after every model step (11.8 ms for a 70B FP8 model on 4 H100s at 4 users, InferenceX id 41187). The quantum is small because switching is metadata (block tables), not a context switch — the main enabler.',
+            'Iteration-level scheduling: the batch is edited after every model step (InferenceX measured a mean 11.8 ms per output token for a 70B FP8 model on 4 H100s at 4 users, id 41187: a mean over every step a user waits through, prefills included, so the scale of a step, not one step). The quantum is small because switching is metadata (block tables), not a context switch — the main enabler.',
           why: [
             'That is static batching. Per-request granularity keeps the batch fixed until it drains, so finished sequences wait for slow ones.',
-            'Right: the batch is edited after every step, a measured 11.8 ms for a 70B model on 4 H100s at 4 users. The quantum can be this small because switching only updates block tables, not a context.',
+            'Right: the batch is edited after every step, and the mean time per output token InferenceX measured for a 70B model on 4 H100s at 4 users, 11.8 ms, sets the scale. The quantum can be this small because switching only updates block tables, not a context.',
             'That is vLLM V0\'s optional multi-step scheduling, not the definition. It re-formed the batch only every n steps to cut CPU scheduling cost, but new requests waited for the block to end and TTFT rose at low request rates. Continuous batching edits it after every step, and V1 cuts the CPU overhead instead.',
-            'The quantum is one model step, not a wall-clock tick. A one-second period would leave finished slots idle for dozens of steps, at the 11.8 ms a measured 70B step on 4 H100s takes.',
+            'The quantum is one model step, not a wall-clock tick. A one-second period would leave a finished slot idle for up to about 85 steps (1 s ÷ 11.8 ms), counting each step at the mean time per output token InferenceX measured for a 70B model on 4 H100s.',
           ],
           kcs: ['t5.continuous-batching'],
           miss: ['t5.batch-per-request', '', 't5.batch-per-block', 't5.batch-per-time-slice'],
