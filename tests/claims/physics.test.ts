@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { ALL_CLAIMS, byId, lazyGroupFor, pinProblems, type Claim } from '@/data/claims/all'
 import { ENGINE_CLAIMS } from '@/data/claims/engines'
@@ -25,7 +26,7 @@ import {
   TTFT_CLAIM_ROW,
 } from '../../scripts/fetch-physics-points'
 import { readProtocol } from '../../scripts/physics-protocol'
-import { physProblems } from '../../scripts/verify-claims'
+import { physProblems, readPhysReports } from '../../scripts/verify-claims'
 
 /**
  * The physics claims (docs/specs/s5.md §4.5, S5-03): the input claims of `lazy/physics.ts`, the generated point claims of
@@ -347,8 +348,25 @@ describe('the phys.* reproducer rule (verify-claims)', () => {
 
   test('no phys.* claim, no check: a registry without them passes with no report', () => {
     expect(physProblems([other('hw.x.y')], {})).toEqual([])
-    expect(ALL_CLAIMS.filter((c) => c.id.startsWith('phys.'))).toEqual([])
-    for (const name of ['report.json', 'decisions.json', 'controls.json']) expect(existsSync(resolve(ROOT, 'docs/physics', name))).toBe(false)
+  })
+
+  test('the files on disk reach the rule: a missing, drifted or malformed report fails, a matching one passes', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'phys-reports-'))
+    try {
+      const claims = [phys('phys.a.b', 12.5)]
+      const missing = readPhysReports(dir)
+      expect(missing.problems).toEqual([])
+      expect(physProblems(claims, missing.reports).length).toBe(1)
+      writeFileSync(resolve(dir, 'report.json'), JSON.stringify({ claimValues: { 'phys.a.b': 13 } }))
+      const drifted = readPhysReports(dir)
+      expect(physProblems(claims, drifted.reports)[0]).toMatch(/drift/)
+      writeFileSync(resolve(dir, 'report.json'), JSON.stringify({ claimValues: { 'phys.a.b': 12.5 } }))
+      expect(physProblems(claims, readPhysReports(dir).reports)).toEqual([])
+      writeFileSync(resolve(dir, 'controls.json'), '{ not json')
+      expect(readPhysReports(dir).problems[0]).toMatch(/controls\.json: not valid JSON/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('a phys.* claim no report carries fails, naming the three reports', () => {
@@ -390,7 +408,7 @@ describe('the phys.* reproducer rule (verify-claims)', () => {
     expect(physProblems([other('physics.other'), other('hw.phys.x')], {})).toEqual([])
   })
 
-  test('verify-claims passes on the repository (no phys.* claim, no report) and checks the five new derivations', async () => {
+  test('verify-claims passes on the repository and checks the five new derivations', async () => {
     const run = Bun.spawn(['bun', 'scripts/verify-claims.ts'], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' })
     const [out, err, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited])
     expect(`${err}${out}`).toContain('verify-claims: ok')

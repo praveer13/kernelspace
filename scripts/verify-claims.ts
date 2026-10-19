@@ -185,7 +185,7 @@ export function physProblems(claims: readonly Claim[], reports: Partial<Record<(
   return out
 }
 
-function readPhysReports(dir = 'docs/physics'): { reports: Partial<Record<(typeof PHYS_REPORTS)[number], unknown>>; problems: string[] } {
+export function readPhysReports(dir = 'docs/physics'): { reports: Partial<Record<(typeof PHYS_REPORTS)[number], unknown>>; problems: string[] } {
   const reports: Partial<Record<(typeof PHYS_REPORTS)[number], unknown>> = {}
   const problems: string[] = []
   for (const name of PHYS_REPORTS) {
