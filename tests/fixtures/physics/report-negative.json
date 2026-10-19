@@ -1,0 +1,877 @@
+{
+  "schema": 1,
+  "fixture": "tests/fixtures/physics/report-negative.json (S5-11): docs/physics/report.json's shape with every row failed, for the physics tab's negative state; its gate figures are invented, its points a subset of the real ones, and it reproduces no claim",
+  "fitStatus": "adopted by the build on 2026-10-18, unsigned",
+  "physId": "v2-negative",
+  "rows": [
+    {
+      "key": "h100-vllm-0-10-2-fp8",
+      "hardware": "h100",
+      "precision": "fp8",
+      "status": "failed",
+      "ttftEligible": false,
+      "selected": 45,
+      "kept": 42,
+      "nFit": 25,
+      "nHeldOut": 17,
+      "dropped": [
+        {
+          "id": "41507",
+          "tp": 2,
+          "conc": 64,
+          "isl": 1024,
+          "osl": 8192,
+          "reasons": [
+            "KV: 64 × (1024 + 8192) = 589824 > 448303",
+            "TTFT: median 8.47 s ≥ 3 s"
+          ]
+        },
+        {
+          "id": "42070",
+          "tp": 2,
+          "conc": 64,
+          "isl": 8192,
+          "osl": 1024,
+          "reasons": [
+            "KV: 64 × (8192 + 1024) = 589824 > 448303",
+            "TTFT: median 57.89 s ≥ 3 s"
+          ]
+        },
+        {
+          "id": "44119",
+          "tp": 2,
+          "conc": 32,
+          "isl": 8192,
+          "osl": 1024,
+          "reasons": [
+            "TTFT: median 4.19 s ≥ 3 s"
+          ]
+        }
+      ],
+      "params": {
+        "etaMem": 0.89,
+        "etaFlop": 0.52,
+        "layerUs": 72.25251796224599,
+        "seqUs": 61.05094662261563,
+        "linkGBs": 213.15738887561244,
+        "harnessMs": 21.478665880471507
+      },
+      "refit": {
+        "etaMem": [
+          0.87,
+          0.91
+        ],
+        "etaFlop": [
+          0.5,
+          0.56
+        ],
+        "layerUs": [
+          69.7665374279724,
+          73.50750718808852
+        ],
+        "seqUs": [
+          52.98707020108217,
+          69.92766815376628
+        ],
+        "linkGBs": [
+          160.56232288994428,
+          250.3838841495788
+        ],
+        "harnessMs": [
+          17.493133189949308,
+          23.118093753267996
+        ]
+      },
+      "boundFlags": [],
+      "gates": {
+        "G1": {
+          "ok": false,
+          "detail": "TPOT LOO over F: n 25, mean 12.4 % (≤ 10.0 %), p90 21.2 % (≤ 15.0 %)"
+        },
+        "G2": {
+          "ok": false,
+          "detail": "TPOT held out (H): n 17, mean 11.8 % (≤ 10.0 %), p90 19.6 % (≤ 15.0 %)"
+        },
+        "G3": {
+          "ok": false,
+          "detail": "median TTFT LOO over F at ISL 8192, harness term added: n 8, mean 23.1 % (≤ 15.0 %)"
+        },
+        "G4": {
+          "ok": true,
+          "detail": "η_m 0.89, η_f 0.52, t_layer 72.3 µs, t_seq 61.1 µs, β 213 GB/s, harness 21.5 ms"
+        },
+        "G5": {
+          "ok": true,
+          "detail": "n_F 25 (≥ 20), TPs 3 (≥ 2), concurrencies 3 (≥ 3), shapes 3 (≥ 2), 8192/1024 present"
+        }
+      },
+      "stats": {
+        "g1": {
+          "n": 25,
+          "mean": 0.124,
+          "p90": 0.212,
+          "max": 0.1193276060066415
+        },
+        "g2": {
+          "n": 17,
+          "mean": 0.118,
+          "p90": 0.196,
+          "max": 0.1281874029057377
+        },
+        "g3": {
+          "n": 8,
+          "mean": 0.231,
+          "p90": 0.384,
+          "max": 0.20656983229295856
+        }
+      },
+      "r1": {
+        "worst": [
+          {
+            "id": "42149",
+            "tp": 8,
+            "conc": 64,
+            "isl": 8192,
+            "osl": 1024,
+            "error": 0.1193276060066415,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924487526/attempts/3"
+          },
+          {
+            "id": "41369",
+            "tp": 4,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 8192,
+            "error": 0.11930044057628642,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924543242/attempts/2"
+          },
+          {
+            "id": "42335",
+            "tp": 8,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 1024,
+            "error": 0.11251768148854402,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+          }
+        ]
+      },
+      "eligible": {
+        "tpot": false,
+        "ttft": false
+      },
+      "box": {
+        "tp": [
+          2,
+          4,
+          8
+        ],
+        "maxNumSeqs": 64,
+        "shapes": [
+          {
+            "isl": 1024,
+            "osl": 1024
+          },
+          {
+            "isl": 1024,
+            "osl": 8192
+          },
+          {
+            "isl": 8192,
+            "osl": 1024
+          }
+        ],
+        "batchTokens": 8192
+      },
+      "points": [
+        {
+          "id": "41181",
+          "subset": "F",
+          "tp": 4,
+          "conc": 16,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.013192185948816437,
+          "fullTpot": 0.013906907782585822,
+          "outTpot": 0.013951377308423623,
+          "tpotError": 0.05754856416917753,
+          "measTtft": 0.07335312385112047,
+          "fullTtft": 0.07885763965298591,
+          "outTtft": 0.07926910582905244,
+          "ttftError": 0.08065071625223785,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "41187",
+          "subset": "F",
+          "tp": 4,
+          "conc": 4,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.011776147370379336,
+          "fullTpot": 0.012206242245053477,
+          "outTpot": 0.012253206064676473,
+          "tpotError": 0.040510591392316275,
+          "measTtft": 0.07228933647274971,
+          "fullTtft": 0.07681444902593615,
+          "outTtft": 0.07717778012169953,
+          "ttftError": 0.06762330223894875,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "41369",
+          "subset": "F",
+          "tp": 4,
+          "conc": 64,
+          "isl": 1024,
+          "osl": 8192,
+          "measTpot": 0.023406749752637908,
+          "fullTpot": 0.02105844091293698,
+          "outTpot": 0.020614314194689322,
+          "tpotError": 0.11930044057628642,
+          "measTtft": 0.09707932826131582,
+          "fullTtft": 0.08457404343628228,
+          "outTtft": 0.08359460367141691,
+          "ttftError": 0.1389041810590309,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924543242/attempts/2"
+        },
+        {
+          "id": "41315",
+          "subset": "H",
+          "tp": 4,
+          "conc": 32,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.016491519799334907,
+          "fullTpot": 0.01618553052294677,
+          "outTpot": 0.01618553052294677,
+          "tpotError": 0.018554340661827817,
+          "measTtft": 0.07768223900347948,
+          "fullTtft": 0.0810090358755198,
+          "outTtft": 0.0810090358755198,
+          "ttftError": 0.042825707841548155,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "41343",
+          "subset": "H",
+          "tp": 2,
+          "conc": 32,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.023538136325633004,
+          "fullTpot": 0.023163431414855665,
+          "outTpot": 0.023163431414855665,
+          "tpotError": 0.015919056020135547,
+          "measTtft": 0.11708705965429544,
+          "fullTtft": 0.1077274512428808,
+          "outTtft": 0.1077274512428808,
+          "ttftError": 0.07993717187065152,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        }
+      ]
+    },
+    {
+      "key": "b200-vllm-0-10-2-fp8",
+      "hardware": "b200",
+      "precision": "fp8",
+      "status": "failed",
+      "ttftEligible": false,
+      "selected": 60,
+      "kept": 58,
+      "nFit": 34,
+      "nHeldOut": 24,
+      "dropped": [
+        {
+          "id": "40752",
+          "tp": 1,
+          "conc": 64,
+          "isl": 8192,
+          "osl": 1024,
+          "reasons": [
+            "KV: 64 × (8192 + 1024) = 589824 > 558166",
+            "TTFT: median 5.56 s ≥ 3 s"
+          ]
+        },
+        {
+          "id": "42140",
+          "tp": 1,
+          "conc": 64,
+          "isl": 1024,
+          "osl": 8192,
+          "reasons": [
+            "KV: 64 × (1024 + 8192) = 589824 > 558166"
+          ]
+        }
+      ],
+      "params": {
+        "etaMem": 0.84,
+        "etaFlop": 0.46,
+        "layerUs": 61.75659298019176,
+        "seqUs": 32.60538307323376,
+        "linkGBs": 291.10006545048697,
+        "harnessMs": 52.304301197230366
+      },
+      "refit": {
+        "etaMem": [
+          0.82,
+          0.85
+        ],
+        "etaFlop": [
+          0.44,
+          0.48
+        ],
+        "layerUs": [
+          61.088981674846195,
+          62.153127966696886
+        ],
+        "seqUs": [
+          27.014896509716376,
+          37.50425789057904
+        ],
+        "linkGBs": [
+          280.7530803947304,
+          316.05307022116847
+        ],
+        "harnessMs": [
+          50.25279602023868,
+          53.63217469307961
+        ]
+      },
+      "boundFlags": [],
+      "gates": {
+        "G1": {
+          "ok": false,
+          "detail": "TPOT LOO over F: n 34, mean 10.9 % (≤ 10.0 %), p90 17.3 % (≤ 15.0 %)"
+        },
+        "G2": {
+          "ok": false,
+          "detail": "TPOT held out (H): n 24, mean 10.2 % (≤ 10.0 %), p90 16.1 % (≤ 15.0 %)"
+        },
+        "G3": {
+          "ok": false,
+          "detail": "median TTFT LOO over F at ISL 8192, harness term added: n 11, mean 18.7 % (≤ 15.0 %)"
+        },
+        "G4": {
+          "ok": true,
+          "detail": "η_m 0.84, η_f 0.46, t_layer 61.8 µs, t_seq 32.6 µs, β 291 GB/s, harness 52.3 ms"
+        },
+        "G5": {
+          "ok": true,
+          "detail": "n_F 34 (≥ 20), TPs 4 (≥ 2), concurrencies 3 (≥ 3), shapes 3 (≥ 2), 8192/1024 present"
+        }
+      },
+      "stats": {
+        "g1": {
+          "n": 34,
+          "mean": 0.109,
+          "p90": 0.173,
+          "max": 0.15453167222858488
+        },
+        "g2": {
+          "n": 24,
+          "mean": 0.102,
+          "p90": 0.161,
+          "max": 0.11574566625452554
+        },
+        "g3": {
+          "n": 11,
+          "mean": 0.187,
+          "p90": 0.302,
+          "max": 0.2822338967371206
+        }
+      },
+      "r1": {
+        "worst": [
+          {
+            "id": "40166",
+            "tp": 8,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 1024,
+            "error": 0.15453167222858488,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+          },
+          {
+            "id": "41706",
+            "tp": 4,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 8192,
+            "error": 0.09920650934811182,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924543242/attempts/2"
+          },
+          {
+            "id": "39919",
+            "tp": 4,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 1024,
+            "error": 0.07456356463589053,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+          }
+        ]
+      },
+      "eligible": {
+        "tpot": false,
+        "ttft": false
+      },
+      "box": {
+        "tp": [
+          1,
+          2,
+          4,
+          8
+        ],
+        "maxNumSeqs": 64,
+        "shapes": [
+          {
+            "isl": 1024,
+            "osl": 1024
+          },
+          {
+            "isl": 1024,
+            "osl": 8192
+          },
+          {
+            "isl": 8192,
+            "osl": 1024
+          }
+        ],
+        "batchTokens": 8192
+      },
+      "points": [
+        {
+          "id": "39409",
+          "subset": "F",
+          "tp": 1,
+          "conc": 64,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.023101786167630478,
+          "fullTpot": 0.023236157472322137,
+          "outTpot": 0.023246470668357222,
+          "tpotError": 0.006262914030841005,
+          "measTtft": 0.14550020452588797,
+          "fullTtft": 0.12949198720759839,
+          "outTtft": 0.1292397183206145,
+          "ttftError": 0.11175576184417202,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39458",
+          "subset": "F",
+          "tp": 2,
+          "conc": 64,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.015887478473743534,
+          "fullTpot": 0.016217398343654755,
+          "outTpot": 0.016253133082213555,
+          "tpotError": 0.02301527011188842,
+          "measTtft": 0.1288647165056318,
+          "fullTtft": 0.10312238330379442,
+          "outTtft": 0.10257256783157151,
+          "ttftError": 0.20402907317854724,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39779",
+          "subset": "F",
+          "tp": 8,
+          "conc": 16,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.007609429561126693,
+          "fullTpot": 0.007396101750458784,
+          "outTpot": 0.00735644130289091,
+          "tpotError": 0.03324667850638774,
+          "measTtft": 0.07593826856464148,
+          "fullTtft": 0.08056331764369576,
+          "outTtft": 0.08089805923330315,
+          "ttftError": 0.06531345476279471,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39422",
+          "subset": "H",
+          "tp": 4,
+          "conc": 32,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.011432734904321932,
+          "fullTpot": 0.01010944538570982,
+          "outTpot": 0.01010944538570982,
+          "tpotError": 0.11574566625452554,
+          "measTtft": 0.13536295481026173,
+          "fullTtft": 0.0880741410894493,
+          "outTtft": 0.0880741410894493,
+          "ttftError": 0.34934826730915525,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39457",
+          "subset": "H",
+          "tp": 2,
+          "conc": 8,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.010732957708243795,
+          "fullTpot": 0.01088757671999799,
+          "outTpot": 0.01088757671999799,
+          "tpotError": 0.014406002143792618,
+          "measTtft": 0.11200838373042643,
+          "fullTtft": 0.09831085585431876,
+          "outTtft": 0.09831085585431876,
+          "ttftError": 0.12229020203589291,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        }
+      ]
+    },
+    {
+      "key": "b200-vllm-0-10-2-nvfp4",
+      "hardware": "b200",
+      "precision": "fp4",
+      "status": "failed",
+      "ttftEligible": false,
+      "selected": 60,
+      "kept": 60,
+      "nFit": 36,
+      "nHeldOut": 24,
+      "dropped": [],
+      "params": {
+        "etaMem": 0.76,
+        "etaFlop": 0.34,
+        "layerUs": 69.96641623759986,
+        "seqUs": 28.947309086175345,
+        "linkGBs": 283.73042692659664,
+        "harnessMs": 41.75697752543088
+      },
+      "refit": {
+        "etaMem": [
+          0.73,
+          0.77
+        ],
+        "etaFlop": [
+          0.34,
+          0.36
+        ],
+        "layerUs": [
+          69.1413976802407,
+          70.9357279061238
+        ],
+        "seqUs": [
+          21.20372780487031,
+          31.752009422436583
+        ],
+        "linkGBs": [
+          272.02106752083176,
+          289.4547955191977
+        ],
+        "harnessMs": [
+          40.95016475379919,
+          42.68375498498712
+        ]
+      },
+      "boundFlags": [],
+      "gates": {
+        "G1": {
+          "ok": false,
+          "detail": "TPOT LOO over F: n 36, mean 13.7 % (≤ 10.0 %), p90 24.6 % (≤ 15.0 %)"
+        },
+        "G2": {
+          "ok": false,
+          "detail": "TPOT held out (H): n 24, mean 12.1 % (≤ 10.0 %), p90 20.8 % (≤ 15.0 %)"
+        },
+        "G3": {
+          "ok": false,
+          "detail": "median TTFT LOO over F at ISL 8192, harness term added: n 12, mean 25.2 % (≤ 15.0 %)"
+        },
+        "G4": {
+          "ok": true,
+          "detail": "η_m 0.76, η_f 0.34, t_layer 70.0 µs, t_seq 28.9 µs, β 284 GB/s, harness 41.8 ms"
+        },
+        "G5": {
+          "ok": true,
+          "detail": "n_F 36 (≥ 20), TPs 4 (≥ 2), concurrencies 3 (≥ 3), shapes 3 (≥ 2), 8192/1024 present"
+        }
+      },
+      "stats": {
+        "g1": {
+          "n": 36,
+          "mean": 0.137,
+          "p90": 0.246,
+          "max": 0.24851893009586445
+        },
+        "g2": {
+          "n": 24,
+          "mean": 0.121,
+          "p90": 0.208,
+          "max": 0.16788827371156978
+        },
+        "g3": {
+          "n": 12,
+          "mean": 0.252,
+          "p90": 0.411,
+          "max": 0.3868380788823852
+        }
+      },
+      "r1": {
+        "worst": [
+          {
+            "id": "39423",
+            "tp": 8,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 1024,
+            "error": 0.24851893009586445,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+          },
+          {
+            "id": "39641",
+            "tp": 4,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 1024,
+            "error": 0.10086220872624896,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+          },
+          {
+            "id": "40361",
+            "tp": 4,
+            "conc": 64,
+            "isl": 1024,
+            "osl": 8192,
+            "error": 0.07550603571423009,
+            "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924543242/attempts/2"
+          }
+        ]
+      },
+      "eligible": {
+        "tpot": false,
+        "ttft": false
+      },
+      "box": {
+        "tp": [
+          1,
+          2,
+          4
+        ],
+        "maxNumSeqs": 64,
+        "shapes": [
+          {
+            "isl": 1024,
+            "osl": 1024
+          },
+          {
+            "isl": 1024,
+            "osl": 8192
+          },
+          {
+            "isl": 8192,
+            "osl": 1024
+          }
+        ],
+        "batchTokens": 8192
+      },
+      "points": [
+        {
+          "id": "39423",
+          "subset": "F",
+          "tp": 8,
+          "conc": 64,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.013775635198669544,
+          "fullTpot": 0.010821532834117246,
+          "outTpot": 0.010352129077705257,
+          "tpotError": 0.24851893009586445,
+          "measTtft": 0.12917722389101982,
+          "fullTtft": 0.07152718674504427,
+          "outTtft": 0.07036149770244365,
+          "ttftError": 0.4553103435493858,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39515",
+          "subset": "F",
+          "tp": 4,
+          "conc": 16,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.008800759451515167,
+          "fullTpot": 0.008380229018682937,
+          "outTpot": 0.008363028088738896,
+          "tpotError": 0.04973790786895216,
+          "measTtft": 0.10977824870496988,
+          "fullTtft": 0.07216015844094811,
+          "outTtft": 0.07136967340720964,
+          "ttftError": 0.3498741850125854,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39536",
+          "subset": "F",
+          "tp": 2,
+          "conc": 64,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.013690351874495313,
+          "fullTpot": 0.01421546382445756,
+          "outTpot": 0.014279740488165571,
+          "tpotError": 0.04305138531671138,
+          "measTtft": 0.08299736655317247,
+          "fullTtft": 0.08238074758898642,
+          "outTtft": 0.082442151941751,
+          "ttftError": 0.006689544915449375,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39504",
+          "subset": "H",
+          "tp": 8,
+          "conc": 8,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.006596137689856238,
+          "fullTpot": 0.006940135260800725,
+          "outTpot": 0.006940135260800725,
+          "tpotError": 0.052151362982233884,
+          "measTtft": 0.06583748920820653,
+          "fullTtft": 0.06854767963449832,
+          "outTtft": 0.06854767963449832,
+          "ttftError": 0.04116485089097166,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        },
+        {
+          "id": "39535",
+          "subset": "H",
+          "tp": 1,
+          "conc": 32,
+          "isl": 1024,
+          "osl": 1024,
+          "measTpot": 0.015105560947881519,
+          "fullTpot": 0.015367902636475538,
+          "outTpot": 0.015367902636475538,
+          "tpotError": 0.01736722585140482,
+          "measTtft": 0.07375830854289234,
+          "fullTtft": 0.09335186217945791,
+          "outTtft": 0.09335186217945791,
+          "ttftError": 0.2656453764143931,
+          "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2"
+        }
+      ]
+    }
+  ],
+  "workedExamples": [
+    {
+      "id": "41187",
+      "row": "h100-vllm-0-10-2-fp8",
+      "metric": "tpot",
+      "tp": 4,
+      "conc": 4,
+      "isl": 1024,
+      "osl": 1024,
+      "measuredClaim": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot",
+      "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924448230/attempts/2",
+      "derivation": "lengths uniform on [floor(0.8 x L), L]: prompt mean 921.5, output mean 921.5; 4 users decode at context 921.5 + 921.5 / 2 = 1382.25, so K = A = 4 x 1382.25 = 5529, T = seqs = 4",
+      "load": {
+        "seqs": 4,
+        "tokens": 4,
+        "kvTokens": 5529,
+        "attnPairs": 5529
+      },
+      "napkin": {
+        "memBytes": 17863967840,
+        "flops": 144723485440,
+        "linkBytes": 15728640,
+        "memS": 0.0053325277134328355,
+        "flopS": 7.312960355735219e-05,
+        "fixedS": 0,
+        "linkS": 0,
+        "stepS": 0.0053325277134328355,
+        "bound": "mem",
+        "us": 5333
+      },
+      "napkinMs": 5.332527713432835,
+      "card": {
+        "memBytes": 17863967840,
+        "flops": 144723485440,
+        "linkBytes": 15728640,
+        "memS": 0.0059916041723964445,
+        "flopS": 0.00014063385299490809,
+        "fixedS": 0.006024405223470141,
+        "linkS": 7.37888565954353e-05,
+        "stepS": 0.01208979825246202,
+        "bound": "mem",
+        "us": 12090
+      },
+      "cardMs": 12.09,
+      "harnessMs": 0,
+      "cardPlusHarnessMs": 12.09,
+      "v1Ms": 50,
+      "measuredMs": 11.776147370379336,
+      "error": {
+        "napkin": -0.5471755281488921,
+        "card": 0.02665155417552767,
+        "cardPlusHarness": 0.02665155417552767,
+        "v1": 3.2458707782279896
+      }
+    },
+    {
+      "id": "40518",
+      "row": "b200-vllm-0-10-2-fp8",
+      "metric": "ttft",
+      "tp": 1,
+      "conc": 4,
+      "isl": 8192,
+      "osl": 1024,
+      "measuredClaim": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.8192-1024.c4.ttft-median",
+      "runUrl": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/18924487526/attempts/3",
+      "derivation": "lengths uniform on [floor(0.8 x L), L]: prompt mean 7372.5, taken as p = 7373; it prefills in one step beside 3 decodes at context 7373 + 461 = 7834, so T = 7376, K = 30875, A = 7373 x 7374 / 2 + 3 x 7834 = 27207753, seqs = 4",
+      "load": {
+        "seqs": 4,
+        "tokens": 7376,
+        "kvTokens": 30875,
+        "attnPairs": 27207753
+      },
+      "napkin": {
+        "memBytes": 75608560000,
+        "flops": 1112077092024320,
+        "linkBytes": 0,
+        "memS": 0.00945107,
+        "flopS": 0.24712824267207112,
+        "fixedS": 0,
+        "linkS": 0,
+        "stepS": 0.24712824267207112,
+        "bound": "flop",
+        "us": 247128
+      },
+      "napkinMs": 247.1282426720711,
+      "card": {
+        "memBytes": 75608560000,
+        "flops": 1112077092024320,
+        "linkBytes": 0,
+        "memS": 0.01125127380952381,
+        "flopS": 0.5372353101566764,
+        "fixedS": 0.0050709489707082755,
+        "linkS": 0,
+        "stepS": 0.5423062591273846,
+        "bound": "flop",
+        "us": 542306
+      },
+      "cardMs": 542.306,
+      "harnessMs": 52.304301197230366,
+      "cardPlusHarnessMs": 594.6103011972305,
+      "v1Ms": 2850,
+      "measuredMs": 654.017546446994,
+      "error": {
+        "napkin": -0.6221382071251508,
+        "card": -0.17080817946533144,
+        "cardPlusHarness": -0.09083432940369629,
+        "v1": 3.357681251035034
+      }
+    }
+  ],
+  "claimValues": {}
+}
