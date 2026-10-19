@@ -4,7 +4,7 @@ import { hashFamily, readHashRows } from '../scripts/verify-generators'
 
 // A calibrated `step` draw in the built app (docs/specs/s5.md §8.1, B10, S5-D73; s5b final review round 2, F5). The
 // calibrated variants (`prefill-ms-v2`, `tp-speedup`) live in src/lib/items/families/lazy/step-calibrated.ts, which the
-// registry's Vite glob (familyPart, loadFamilyPart, PART_LOADERS) turns into a chunk of its own. Under Bun the part loads at
+// Vite glob in src/lib/items/on-demand.ts (familyPart, loadFamilyPart, PART_LOADERS; S5-D79) turns into a chunk of its own. Under Bun the part loads at
 // module evaluation, so tests/items/step.test.ts never takes that path; this is the one test that does, in the production
 // build the Playwright config serves.
 //
