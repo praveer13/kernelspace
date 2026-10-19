@@ -398,6 +398,11 @@ describe('protocol-history.json (S5-D63)', () => {
     expect(historyProblems(P, protocolSha256(), history)).toEqual([])
   })
 
+  test('is append-only: entry 1 keeps the sha256 the verdict was taken under, whatever is appended after it', () => {
+    // a prose edit plus entry 1 rewritten in place to the new sha would otherwise pass every other check
+    expect(history[0]).toEqual({ version: 1, date: '2026-10-18', sha256: '0a235a69821ffc67a66417b2ba23c6c2e8285e0483d7e2f23cf13e9699100fba' })
+  })
+
   test('historyProblems names a changed file, a version mismatch and a gap', () => {
     const sha = 'a'.repeat(64)
     const other = '0'.repeat(64)
