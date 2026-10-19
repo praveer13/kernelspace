@@ -311,11 +311,47 @@ if (!existsSync(new URL(`../${SCENE_SRC}`, import.meta.url))) {
 const chunksFor = (match: (key: string, chunk: ManifestChunk) => boolean) =>
   Object.entries(manifest).filter(([key, chunk]) => match(key, chunk))
 
+// A family that imports lazy claim groups statically (rollout's serving3; step's physics and ix-points, s5.md §8.1) loads
+// them with it, so its line names each group's chunk and gzip. A group's chunk is its own manifest entry when something
+// imports it dynamically; otherwise Rollup merged it into a shared chunk named after it (the tiling family's code may share
+// the name), and it is the one of those holding at least half of its ids, the most of them.
+const LAZY_GROUPS = new URL('../src/data/claims/lazy/', import.meta.url)
+const groupOf = new Map<string, string>()
+for (const f of readdirSync(LAZY_GROUPS).filter((x) => x.endsWith('.ts')).sort()) {
+  const name = f.replace(/\.ts$/, '')
+  let file = manifest[`src/data/claims/lazy/${f}`]?.file
+  if (!file) {
+    const mod = (await import(new URL(f, LAZY_GROUPS).href)) as Record<string, unknown>
+    const ids = ((Object.entries(mod).find(([k]) => k.endsWith('_CLAIMS'))?.[1] ?? []) as { id: string }[]).map((c) => c.id)
+    let most = ids.length / 2
+    for (const [, c] of chunksFor((key, c) => key.startsWith('_') && c.name === name)) {
+      const text = await readFile(new URL(c.file, dist), 'utf8')
+      const held = ids.filter((id) => text.includes(id)).length
+      if (held >= most) [most, file] = [held, c.file]
+    }
+  }
+  if (file) groupOf.set(file, name)
+}
+async function staticGroups(chunk: ManifestChunk): Promise<string[]> {
+  const out: string[] = []
+  for (const file of (chunk.imports ?? []).map((k) => manifest[k]?.file)) {
+    const name = file && groupOf.get(file)
+    if (name) out.push(`${name} ${((await gzipSize(file)) / KB).toFixed(1)} KB`)
+  }
+  return out
+}
+/** A family whose spec sets its own figure (s5.md §8.1 and B10: `step` ≤ 4 KB), reported against it, not gated. */
+const FAMILY_OWN_KB: Record<string, number> = { 'step.ts': 4 }
+
 const families = chunksFor((key) => key.startsWith('src/lib/items/families/'))
 if (families.length === 0) console.log('skip generator families: no src/lib/items/families/* chunks yet')
 for (const [key, chunk] of families) {
   const kb = (await gzipSize(chunk.file)) / KB
-  console.log(`${kb <= FAMILY_REPORT_KB ? 'ok  ' : 'warn'} family ${key.split('/').pop()} is ${kb.toFixed(1)} KB gzip (report ${FAMILY_REPORT_KB} KB, not gated)`)
+  const name = key.split('/').pop()!
+  const report = FAMILY_OWN_KB[name] ?? FAMILY_REPORT_KB
+  const groups = await staticGroups(chunk)
+  const beside = groups.length > 0 ? `; static claim groups ${groups.join(', ')} gzip` : ''
+  console.log(`${kb <= report ? 'ok  ' : 'warn'} family ${name} is ${kb.toFixed(1)} KB gzip (report ${report} KB, not gated)${beside}`)
 }
 
 // Reported only: the compile bank (spec §22.1). Each group is one chunk the compile family loads when an item draws

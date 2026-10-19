@@ -326,7 +326,11 @@ const CARD =
   ' The step card, per GPU: layers × t_layer + sequences × t_seq, plus link bytes ÷ β when TP > 1, plus the longer of bytes ÷ (η_m × bandwidth) and FLOP ÷ (η_f × peak); bytes = (weights + KV bytes per token × KV tokens) ÷ TP, FLOP = (2 × parameters × tokens + 4 × layers × hidden × attention pairs) ÷ TP, link bytes = 2 × layers × tokens × hidden × 2 B × 2 × (TP − 1) ÷ TP.' +
   " A user decoding at context C adds 1 token, C KV tokens and C pairs; a prompt of P tokens adds P tokens, P KV tokens and P(P + 1) ÷ 2 pairs. The η, t and β below are the engine's numbers: this fit's split of one benchmark sweep, not hardware facts. "
 
-/** The H4 label (§7.0, S5-D58) for the metric the answer reads; a ratio prints no "9 in 10" clause. */
+/**
+ * The H4 label (§7.0, S5-D58) for the metric the answer reads; a ratio prints no "9 in 10" clause. "Fitted on" is the fit
+ * set's size, n_F (TPOT's population, as the tab's "fit points"), for every metric: the fit read all of them, so a TTFT
+ * label gives its own n, the ~8k-prompt points its p90 is over, in its clause instead.
+ */
 function h4(r: CalibratedRow, metric: 'tpot' | 'ttft' | null): PromptPart[] {
   const { name, prec } = rowIds(r)
   const lab = (m: string, k: string, rest: string): PromptPart[] => [t(` · ${m} 9 in 10 within `), claim(`phys.${r.key}.${k}`), t(rest)]
