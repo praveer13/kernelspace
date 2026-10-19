@@ -1,0 +1,129 @@
+{
+  "header": "Golden EngineV2 fixture (docs/specs/s5.md §6.4, S5-05): the sha256 of JSON.stringify of stats() on six configurations, run with fixture parameters (the §3.6 and §3.7 [proto] sets from step-vectors.json), not the fitted table. A changed hash means scheduling or stamping changed: bump ENGINE_V2_REV, which changes PHYS_ID, and only then rewrite this file with EV2_GOLDEN_WRITE=1 bun test tests/physics/engine-v2.test.ts.",
+  "rev": "ev2-1",
+  "sha256": "62dcdba6b2f0e00423b1c117446a2b920db07cd2c4f8c4cb731b8fd4a0053573",
+  "configs": [
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "tp": 2,
+      "c": 4,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 2411395487
+    },
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "tp": 8,
+      "c": 64,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 1876645935
+    },
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "tp": 2,
+      "c": 4,
+      "isl": 8192,
+      "osl": 1024,
+      "seed": 3054172606
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "tp": 1,
+      "c": 4,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 3813228037
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "tp": 8,
+      "c": 64,
+      "isl": 1024,
+      "osl": 1024,
+      "seed": 570197942
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "tp": 1,
+      "c": 4,
+      "isl": 8192,
+      "osl": 1024,
+      "seed": 268628020
+    }
+  ],
+  "stats": [
+    {
+      "completed": 40,
+      "meanTpotUs": 18413.993975811223,
+      "medianTtftUs": 85272,
+      "tokPerSUser": 54.30652368593193,
+      "outputTokPerSGpu": 105.868268696554,
+      "outputTokens": 37244,
+      "clockUs": 175897842,
+      "iterations": 9510,
+      "outOfEnvelope": 0,
+      "preemptions": 0
+    },
+    {
+      "completed": 640,
+      "meanTpotUs": 16889.001844658345,
+      "medianTtftUs": 48008.5,
+      "tokPerSUser": 59.210130308339096,
+      "outputTokPerSGpu": 456.8804211189701,
+      "outputTokens": 587692,
+      "clockUs": 160789337,
+      "iterations": 9570,
+      "outOfEnvelope": 0,
+      "preemptions": 0
+    },
+    {
+      "completed": 40,
+      "meanTpotUs": 20851.201761025462,
+      "medianTtftUs": 663308,
+      "tokPerSUser": 47.95886642223062,
+      "outputTokPerSGpu": 91.64655665270145,
+      "outputTokens": 37399,
+      "clockUs": 204039308,
+      "iterations": 9431,
+      "outOfEnvelope": 40,
+      "preemptions": 0
+    },
+    {
+      "completed": 40,
+      "meanTpotUs": 15817.41958344788,
+      "medianTtftUs": 72673,
+      "tokPerSUser": 63.2214372720092,
+      "outputTokPerSGpu": 244.06636387321493,
+      "outputTokens": 37373,
+      "clockUs": 153126385,
+      "iterations": 9639,
+      "outOfEnvelope": 0,
+      "preemptions": 0
+    },
+    {
+      "completed": 640,
+      "meanTpotUs": 11047.806781214722,
+      "medianTtftUs": 32111.5,
+      "tokPerSUser": 90.51570323445216,
+      "outputTokPerSGpu": 693.9546503193241,
+      "outputTokens": 591723,
+      "clockUs": 106585315,
+      "iterations": 9725,
+      "outOfEnvelope": 0,
+      "preemptions": 0
+    },
+    {
+      "completed": 40,
+      "meanTpotUs": 17959.968017149364,
+      "medianTtftUs": 586694,
+      "tokPerSUser": 55.67938645799001,
+      "outputTokPerSGpu": 209.44282776304968,
+      "outputTokens": 37481,
+      "clockUs": 178955758,
+      "iterations": 9629,
+      "outOfEnvelope": 40,
+      "preemptions": 0
+    }
+  ]
+}

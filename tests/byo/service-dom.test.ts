@@ -177,8 +177,10 @@ async function pickFile(sel: string, file: File): Promise<void> {
     Object.defineProperty(el, 'files', { configurable: true, value: [file] })
     el.dispatchEvent(new MiniEvent('change', { bubbles: true }))
   })
-  // the page reads the file, then sets its state
-  await dom.until(() => true)
+  // the page reads the file, then sets its state: wait for the field's line that names this file, not a fixed turn, since a
+  // loaded runner can take longer than one turn to read it (a CI run saw no trace line yet)
+  const field = sel === '#byo-trace' ? 'trace' : 'config'
+  await dom.until(() => [`[data-ok="${field}"]`, `[data-error="${field}"]`].some((s) => ($(s)?.textContent ?? '').includes(file.name)))
 }
 
 const csvFile = (body: string, name = 'mine.csv') => new File([body], name, { type: 'text/csv' })

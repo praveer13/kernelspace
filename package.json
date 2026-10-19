@@ -18,6 +18,7 @@
     "verify:items": "bun scripts/verify-items.ts",
     "verify:capstone": "bun scripts/verify-capstone.ts",
     "verify:claims": "bun scripts/verify-claims.ts",
+    "verify:physics": "bun scripts/verify-physics.ts",
     "verify:bundle": "bun scripts/verify-bundle.ts",
     "verify:seeds": "bun scripts/verify-seeds.ts",
     "verify:kc": "bun scripts/verify-kc.ts",

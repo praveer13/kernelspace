@@ -44,6 +44,9 @@ jobs:
       - run: bun run verify:errata
       - run: bun run verify:claims
 
+      # Fleet physics v2 (docs/specs/s5.md §5.2): fast mode, as in ci.yml; the replays and the fit are `--full` (physics.yml).
+      - run: bun run verify:physics
+
       # Wave 1 gates (docs/specs/wave-1.md §16.4). Reserved by the scaffold; each exits 0 with
       # "pending: <task>" until its owner lands it, and then blocks like the rest.
       - run: bun run verify:kc
