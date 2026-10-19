@@ -1,0 +1,90 @@
+{
+  "header": "The v1 golden fixture (docs/specs/s5.md section 6.6, S5-01): one sha256 per v1 surface, taken at 9aa27de (wave-3's close). It is NEVER regenerated in an S5 PR: a changed hash means v1 moved, and that blocks the merge with no exception (section 9.4, stop rule 3). Fix the code that moved, not the hash. `bun scripts/v1-golden.ts --check` and tests/fleet/v1-golden.test.ts recompute every surface; `--write` only creates a missing file.",
+  "base": "9aa27de",
+  "fleetModel": {
+    "path": "src/lib/fleet-model.ts",
+    "sha256": "26443fe9b3b612b33edcc5c0505a6e98de9afd693e21a6575f9b3ae20c74c985"
+  },
+  "surfaces": {
+    "graded-seeds": {
+      "sha256": "fb8f92e84d0f0bb196b4dce2ef7da7987155880267b6a93b0ad45888fd74a31b",
+      "n": 20,
+      "covers": "drawGradedSeeds on 20 entropies (0x3a12-0x3a25): the seeds, the band outcome and the draw count"
+    },
+    "act1": {
+      "sha256": "9d439f92ae27bd5dd7e910647c1b91603593a2380c4f368cd560f9eb4a5f713b",
+      "n": 21,
+      "covers": "runAct1 with no modules on the practice scenario and on 20 graded seeds: the whole ActResult (metrics, values, verdict)"
+    },
+    "act2": {
+      "sha256": "87f99929993621e02b5527ce9a146e188d9e9fdc3bd5175d6500df8ed41d6779",
+      "n": 126,
+      "covers": "runAct2 for every worker count x router on the practice scenario and on 20 graded seeds: the whole ActResult"
+    },
+    "act3": {
+      "sha256": "5274aa5b4191e354540f3a668db7164d77d70e0c8c4737d05c0e28d1e2c0f367",
+      "n": 21,
+      "covers": "evalAct3 on the practice scenario and on 20 graded seeds: every hardware option priced, the best value, the receipt values"
+    },
+    "fleet-ex:knee": {
+      "sha256": "ffc19d26ea03801dc004a2edd67f2f8927049a7a7905a539032f815fa397273f",
+      "n": 20,
+      "covers": "the knee exercise on seeds 0-19: sweep, truth, band, scene"
+    },
+    "fleet-ex:pd-split": {
+      "sha256": "309166480b483ba4ac44b9f008413668cefe31214b58300b84f71efe0e9f4e24",
+      "n": 20,
+      "covers": "the pd-split exercise on seeds 0-19: sweep, truth, band, scene"
+    },
+    "fleet-ex:broken-bench": {
+      "sha256": "2a00835d613c48d64be5db4311766da322e551e7b35aaac2a044233280dde370",
+      "n": 20,
+      "covers": "the broken-bench exercise on seeds 0-19: sweep, truth, band, scene"
+    },
+    "fleet-ex:push-luck": {
+      "sha256": "e7e565b9a2cc19181b7dc1ec4aca9c4dcf4c39c3e09a67e5c495e86cfaef9b16",
+      "n": 20,
+      "covers": "the push-luck exercise on seeds 0-19: sweep, truth, band, scene"
+    },
+    "fleet-ex:straggler": {
+      "sha256": "32e14f1e15d8ec9b20876cc1badf92842044e2b64c8416f476570a797a8f4bab",
+      "n": 20,
+      "covers": "the straggler exercise on seeds 0-19: sweep, truth, band, scene"
+    },
+    "fleet-ex:timing-oracle": {
+      "sha256": "f1c168a798089777cd0a677449d981b0cd423b3143019a414a3a584dc72ebe59",
+      "n": 20,
+      "covers": "the timing-oracle exercise on seeds 0-19: sweep, truth, band, scene and ask"
+    },
+    "leaderboard-reference": {
+      "sha256": "bc53fa05157eed8dc78d8e227458d781886a27c4a35405d211c7adb38d759224",
+      "n": 1,
+      "covers": "scoreReferenceBenchmark on the committed BurstGPT and LMSYS-shape traces, and the Fleet leg (runFleetBenchmark) it scores: ticks, stats, goodput"
+    },
+    "leaderboard-lab": {
+      "sha256": "eff87816786e25452feda275597ff48988060899b9582c87bccd03eaf6ae6443",
+      "n": 1,
+      "covers": "runCanonicalLabHarness with the JS reference scheduler (the lab leg without the Rust lab): checks, the seven scenarios, scores"
+    },
+    "daily": {
+      "sha256": "fad85d9a34763fb2a80c17d0d45c37d2325a5b63a81eee5d2a48b786dce86865",
+      "n": 30,
+      "covers": "the 30 Daily dates from DAILY_EPOCH: the incident, the expert run (burn, probes, steps), two scripted plays' outcomes, the share strings"
+    },
+    "sig": {
+      "sha256": "1c96028d98495bf553bd6068405c395bd970319de63c898e9b95a3cecf10d660",
+      "n": 100,
+      "covers": "the sig family on the seeds of its own hash fixture (verify-generators' HASH_SEEDS from base 0x68617368), every variant at every level: params, prompt (the telemetry tables) and answer"
+    },
+    "scheduler-play": {
+      "sha256": "4836dabf52db429702e15cdc412a745357c657328119bad5f047688fa4c4e7a4",
+      "n": 1,
+      "covers": "the scheduler play's practice minute (seed 150): the trace, the five band rules with the ghost, FCFS and greedy runs, and the reference played to the debrief"
+    },
+    "primm": {
+      "sha256": "31bba63e7f4e3a13fa24c22c1be6bd9a5531db581c4ea3118a0c8eba633de521",
+      "n": 1,
+      "covers": "PRIMM's reference run, runTrace(REFERENCE) (recomputed: REFERENCE_RUN is not exported), and the run of every order x headroom x report on its seed"
+    }
+  }
+}
