@@ -280,7 +280,7 @@ function calWhy(vid: string, p: Params): SolutionStep[] {
   const ids = [num(p, 'tp'), tpTo].map((tp) => `bench.ix-l70.${p.row}.tp${tp}.${p.isl}-${p.osl}.c${p.users}.tpot`)
   if (ids.every((id) => Object.hasOwn(byId, id))) {
     const ms = (id: string): PromptPart => ({ t: 'claim', claim: id, scale: THOUSAND, unit: 'ms' })
-    out.push(step('InferenceX measured a mean TPOT of ', ms(ids[0]), ` at TP ${num(p, 'tp')} and `, ms(ids[1]), ` at TP ${tpTo} for this workload (`, v(claimNumber(ids[0], THOUSAND) / claimNumber(ids[1], THOUSAND), '×'), '): a mean over every step a user waits through, prefills included, not this one step.'))
+    out.push(step('InferenceX measured a mean TPOT of ', ms(ids[0]), ` at TP ${num(p, 'tp')} and `, ms(ids[1]), ` at TP ${tpTo} for this workload (`, v(claimNumber(ids[0], THOUSAND) / claimNumber(ids[1], THOUSAND), '×'), '): a mean over the steps after a user\'s first token, other requests\' prefills included, not this one step.'))
   }
   return out
 }

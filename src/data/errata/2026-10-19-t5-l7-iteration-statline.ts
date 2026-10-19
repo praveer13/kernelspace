@@ -9,7 +9,7 @@ export default {
   before:
     'T5.L7\'s statline gave "~50 ms · one iteration" for a decode step of a mid-size model and batch, with no source.',
   after:
-    'InferenceX measured a mean 11.8 ms per output token for Llama-3.3-70B FP8 on 4 H100s with 4 users (id 41187), over every step a user waits through, prefills included. The Fleet\'s flat 50 ms tick is a teaching unit.',
+    'InferenceX measured a mean 11.8 ms per output token for Llama-3.3-70B FP8 on 4 H100s with 4 users (id 41187), over the steps after a user\'s first token, other requests\' prefills included. The Fleet\'s flat 50 ms tick is a teaching unit.',
   why: 'The 50 ms figure had no source and was about four times the measured mean. Steps vary with model, GPUs and batch, so the lesson cites one measurement, says what it averages, and names the tick.',
   source: {
     url: 'https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true',

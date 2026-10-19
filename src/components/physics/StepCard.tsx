@@ -78,7 +78,7 @@ export default function StepCard({ id, caption, columns }: { id: string; caption
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-[11px] text-text-2 sm:grid-cols-4">
               {TERMS.map((t) => (
-                <div key={t.key} className="flex items-baseline gap-1.5">
+                <div key={t.key} className="flex items-baseline gap-1.5 whitespace-nowrap">
                   <dt className="text-text-3">
                     <span aria-hidden="true" className={`mr-1 inline-block size-2 rounded-[2px] ${t.tone}`} />
                     {t.name}

@@ -175,14 +175,14 @@ describe('the lesson lines the errata fix', () => {
     expect(text).toContain('2.2× it at 4 users and 3.1× at 64')
   })
 
-  test('t5.l7: the statline is the measured mean time per token, said to be a mean and not one step, and no copy keeps the unsourced 50 ms step', () => {
+  test('t5.l7: the statline is the measured mean time per output token, said to be a mean and not one step, and no copy keeps the unsourced 50 ms step', () => {
     const lesson = lessonById('t5.l7')!
     const stats = lesson.blocks.flatMap((b) => (b.type === 'statline' ? b.stats : []))
-    const step = stats.find((s) => s.label === 'mean time per token')
+    const step = stats.find((s) => s.label === 'mean time per output token')
     expect(stats.find((s) => s.label === 'one decode step')).toBeUndefined()
     expect(step?.value).toBe(`${ms(num(POINTS[0].claimId), 1)} ms`)
     expect(step?.hint).toContain('id 41187')
-    expect(step?.hint).toContain('a mean over every step a user waits through, prefills included, not one step')
+    expect(step?.hint).toContain('a mean over the steps after a user\'s first token, other requests\' prefills included, not one step')
     expect(stats.find((s) => s.value === '~50 ms')).toBeUndefined()
     const text = md('t5.l7')
     expect(text).not.toContain('~50 ms step')
@@ -201,7 +201,7 @@ describe('what the lines say of the gap and the mean (S5-D5, S5-11 review)', () 
     expect(why[3]).not.toContain('is the time.')
   })
 
-  test('t5.l7: 11.8 ms is a mean over every step a user waits through, not one step, and a one-second period is about 85 steps of it', () => {
+  test('t5.l7: 11.8 ms is a mean over the steps after a user\'s first token, not one step, and a one-second period is about 85 steps of it', () => {
     const lesson = lessonById('t5.l7')!
     const text = JSON.stringify(lesson.blocks)
     expect(text).not.toContain('one decode step')
@@ -210,8 +210,8 @@ describe('what the lines say of the gap and the mean (S5-D5, S5-11 review)', () 
     expect(Math.round(steps)).toBe(85)
     expect(text).toContain('up to about 85 steps (1 s ÷ 11.8 ms)')
     const quiz = lesson.blocks.flatMap((b) => (b.type === 'quiz' ? b.questions : [])).find((q) => q.q === 'Continuous batching schedules at what granularity?')!
-    expect(quiz.explanation).toContain('a mean over every step a user waits through, prefills included')
-    expect(statline.after).toContain('over every step a user waits through, prefills included')
+    expect(quiz.explanation).toContain('a mean over the steps after a user\'s first token, other requests\' prefills included')
+    expect(statline.after).toContain('over the steps after a user\'s first token, other requests\' prefills included')
     expect(statline.title).not.toContain('decode step')
   })
 })
