@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { KCS } from '../../src/data/kc'
 import {
   DATA_KEYS,
@@ -594,3 +596,10 @@ describe('redactForPartner: the Wave 3 fields (§15.2)', () => {
 function d3() {
   return redactForPartner(wave3())
 }
+
+describe('the donation dialog says what a donation keeps', () => {
+  test("it names the passed check ids a lab run keeps (D92), so the consent copy cannot drift from the whitelist", () => {
+    const copy = readFileSync(path.join(import.meta.dir, '../../src/components/ledger/DonateExport.tsx'), 'utf8').replace(/\s+/g, ' ')
+    expect(copy).toContain('Kept besides: the names of the checks each lab run passed')
+  })
+})

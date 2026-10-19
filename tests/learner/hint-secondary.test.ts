@@ -298,11 +298,15 @@ describe('selectHintSecondary', () => {
     expect(alloc?.arms.packet).toMatchObject({ checks: 2, help: 3 + 2, accuracy: { n: 1, correct: 1 } })
     expect(s.labs.find((l) => l.lab === KV)?.arms.ladder).toMatchObject({ checks: 1, help: 2, accuracy: { n: 0 } })
     expect(s.release).toEqual([
-      { lab: ALLOC, day: day(0) },
-      { lab: KV, day: day(5) },
-      { lab: 'bpe-tokenizer', day: null },
+      { lab: ALLOC, afterFirst: 0 },
+      { lab: KV, afterFirst: 5 },
+      { lab: 'bpe-tokenizer', afterFirst: null },
     ])
     expect([s.releaseLedgers, s.releaseDonations]).toEqual([2, 0])
+    // the report's header says day offsets only, no calendar dates: the release order keeps to it, in text and JSON
+    expect(formatHintSecondary(s).join('\n')).toContain('rust-allocator day 0, kv-block-manager day 5, bpe-tokenizer not seen')
+    expect(formatHintSecondary(s).join('\n')).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+    expect(JSON.stringify(hintSecondaryJson(s))).not.toMatch(/\d{4}-\d{2}-\d{2}/)
   })
 })
 
@@ -311,7 +315,7 @@ describe('a donation', () => {
     const own = secondary(await ledgers(), { kcs: COVERED })
     const gift = secondary(await donated(), { kcs: COVERED })
     expect(comparable(gift)).toEqual(comparable(own))
-    expect(gift.release.every((r) => r.day === null)).toBe(true)
+    expect(gift.release.every((r) => r.afterFirst === null)).toBe(true)
     expect([gift.releaseLedgers, gift.releaseDonations]).toEqual([0, 2])
     expect(formatHintSecondary(gift).join('\n')).toContain('not available from donations: 2 donations carry day offsets')
     // and its JSON view holds back the same values
@@ -448,7 +452,7 @@ describe('the Wave 3 report', () => {
       expect(view.arms.ladder.attempts).toEqual({ n: 4, held: true })
       expect(view.arms.packet.gap).toEqual({ n: 2, checks: 1, held: true })
       expect(view.arms.ladder.minutes).toEqual({ n: 4, held: true })
-      expect(view.unhelped.notGreen).toEqual({ held: true })
+      expect(view.unhelped.notGreen).toBe(0)
       expect(view.prove.mixed).toEqual({ n: 3, held: true })
       expect(view.labs[0].arms.ladder.accuracy).toEqual({ n: s.labs[0].arms.ladder.accuracy.n, held: true })
       expect(s.labs[0].arms.ladder.accuracy.n).toBe(opts.kcs ? 2 : 1)

@@ -143,8 +143,11 @@ export interface HintSecondary {
   prove: Record<ProveMix, Proportion> & { all: Proportion }
   /** (11) Lab by arm. */
   labs: { lab: string; arms: Record<ArmName, LabArmCell> }[]
-  /** (12) The day both an armed hint ack and an armed packet ack of the lab were first seen, from full exports. */
-  release: { lab: string; day: LocalDay | null }[]
+  /**
+   * (12) The day both an armed hint ack and an armed packet ack of the lab were first seen, from full exports, as days
+   * after the first lab's, so the report carries no calendar date (its header says day offsets only).
+   */
+  release: { lab: string; afterFirst: number | null }[]
   /** Ledgers that went into `release` (full exports), and donations, which carry no calendar day (wave-3.md §15.2). */
   releaseLedgers: number
   releaseDonations: number
@@ -431,7 +434,7 @@ export function selectHintSecondary(
       return { lab: l.id, day: h === undefined || p === undefined ? null : h > p ? h : p, i }
     })
     .sort((a, b) => (a.day === b.day ? a.i - b.i : a.day === null ? 1 : b.day === null ? -1 : a.day < b.day ? -1 : 1))
-    .map(({ lab, day }) => ({ lab, day }))
+  const firstRelease = release[0]?.day ?? null
 
   return {
     donors: ledgers.length,
@@ -457,7 +460,7 @@ export function selectHintSecondary(
       all: proportionOf(PROVE_MIXES.reduce((n, m) => n + proveCounts[m].done, 0), PROVE_MIXES.reduce((n, m) => n + proveCounts[m].n, 0)),
     },
     labs: labs.map((l) => ({ lab: l.id, arms: { ladder: cell(l.id, 'ladder'), packet: cell(l.id, 'packet') } })),
-    release,
+    release: release.map(({ lab, day }) => ({ lab, afterFirst: day === null || firstRelease === null ? null : daysBetween(firstRelease, day) })),
     releaseLedgers,
     releaseDonations,
     shown: primary.verdict !== 'underpowered' || opts.afterDecision === true,
@@ -525,7 +528,7 @@ export function formatHintSecondary(s: HintSecondary): string[] {
     s.shown ? `  ${prove}: ${proveLine((p) => share(p, 'labs'))}` : `  ${prove}: ${held}; ${proveLine((p) => `n = ${plural(p.n, 'lab')}`)}`,
     `  §5 lab-by-arm table, the carry-over check (checks; help acks, rungs opened and packet uses; first cold-check accuracy where there is an outcome)${s.shown ? '' : `, the accuracy ${held}, its n the checks with an outcome`}:`,
     ...s.labs.map((l) => `      ${l.lab}: ${byArm((x) => labCell(l.arms[x]))}`),
-    `  §5 release order of the randomized labs (descriptive, never an instrument): the first day the full exports show an armed hint and an armed packet for the lab, ${s.release.map((r) => `${r.lab} ${r.day ?? 'not seen'}`).join(', ')} (from ${plural(s.releaseLedgers, 'full export')})${s.releaseDonations > 0 ? `; not available from donations: ${plural(s.releaseDonations, 'donation')} carry day offsets from the learner's first event and no calendar day (wave-3.md §15.2), so they are not in it` : ''}`,
+    `  §5 release order of the randomized labs (descriptive, never an instrument): the first day the full exports show an armed hint and an armed packet for the lab, in days after the first lab's, ${s.release.map((r) => `${r.lab} ${r.afterFirst === null ? 'not seen' : `day ${r.afterFirst}`}`).join(', ')} (from ${plural(s.releaseLedgers, 'full export')})${s.releaseDonations > 0 ? `; not available from donations: ${plural(s.releaseDonations, 'donation')} carry day offsets from the learner's first event and no calendar day (wave-3.md §15.2), so they are not in it` : ''}`,
     `  §5 help-seeking counts per arm, the safety read: ${byArm((x) => `${plural(a[x].hintAcks, 'rung')} opened and ${plural(a[x].packetUses, 'packet use')} on ${plural(a[x].checks, 'check')} of ${plural(a[x].learners, 'learner')}, ${a[x].notGreen} not green yet`)}; "ask a human" is a link and records nothing`,
   ]
 }
@@ -558,9 +561,9 @@ export function hintSecondaryJson(s: HintSecondary): object {
     ...s,
     itt: { ...s.itt, unhelped: held(s.itt.unhelped.n) },
     arms: { ladder: { ...s.arms.ladder, ...outcomesOf(s.arms.ladder) }, packet: { ...s.arms.packet, ...outcomesOf(s.arms.packet) } },
-    // the never-helped checks' "not green yet" is printed only beside their attempts to green; each arm's stays shown,
-    // as the text's help-seeking safety line prints it (§5: help-seeking counts may be read for safety, D97)
-    unhelped: { ...s.unhelped, ...outcomesOf(s.unhelped), notGreen: held() },
+    // "not green yet" stays shown for the never-helped checks as for each arm: it is the stuck count of §5's safety read
+    // (D97), and checks less the attempts' n gives it back anyway
+    unhelped: { ...s.unhelped, ...outcomesOf(s.unhelped) },
     prove: { ladder: held(s.prove.ladder.n), packet: held(s.prove.packet.n), mixed: held(s.prove.mixed.n), none: held(s.prove.none.n), all: held(s.prove.all.n) },
     labs: s.labs.map((l) => ({ lab: l.lab, arms: { ladder: labCell(l.arms.ladder), packet: labCell(l.arms.packet) } })),
   }
