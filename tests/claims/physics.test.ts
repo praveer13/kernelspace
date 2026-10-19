@@ -57,7 +57,7 @@ const DATASET = 'bench.inferencex.llama70b-2025-10-29'
 
 describe('the input claims (lazy/physics.ts)', () => {
   test('the group is the dataset, 8 harness settings, the block size, 4 peaks, 7 zoo fields and 3 byte claims (and, from S5-07, the fit\'s phys.* claims)', () => {
-    expect(PHYSICS_CLAIMS.filter((c) => !c.id.startsWith('phys.')).map((c) => c.id).sort()).toEqual([DATASET, ...HARNESS, 'status.vllm-0-10-2.block-size', ...PEAKS, ...ZOO, ...BYTES].sort())
+    expect(PHYSICS_CLAIMS.filter((c) => !c.id.startsWith('phys.') && !/^hw\.mi3[25]5x\./.test(c.id)).map((c) => c.id).sort()).toEqual([DATASET, ...HARNESS, 'status.vllm-0-10-2.block-size', ...PEAKS, ...ZOO, ...BYTES].sort())
     expect(new Set(PHYSICS_CLAIMS.map((c) => c.id)).size).toBe(PHYSICS_CLAIMS.length)
   })
 

@@ -286,6 +286,85 @@ const PHYSICS_INPUT_CLAIMS: Claim[] = [
 ]
 
 /**
+ * The AMD peaks the out-of-sample control reads (S5-08, O13): registered because each quote was fetched with curl from
+ * AMD's product page on 2026-10-19 (the spec table's cell, or for the MI325X FP8 figure the page's footnote MI325-002, which
+ * gives the dense figure to more digits). Spec claims, per GPU. Adopted by the build on 2026-10-19, unsigned (F1).
+ */
+const MI325X_PAGE = { url: 'https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html', title: 'AMD Instinct™ MI325X Accelerators' }
+const MI355X_PAGE = { url: 'https://www.amd.com/en/products/accelerators/instinct/mi350/mi355x.html', title: 'AMD Instinct™ MI355X GPUs' }
+const AMD_VERIFIED = '2026-10-19'
+const AMD_CONTROL_NOTE = 'Read only by the out-of-sample control (docs/physics/controls.json); no AMD row is calibrated and nothing graded reads it.'
+
+const AMD_PEAK_CLAIMS: Claim[] = [
+  {
+    id: 'hw.mi325x.hbm-bw',
+    kind: 'spec',
+    value: 6,
+    unit: 'TB/s',
+    label: 'MI325X HBM3E peak memory bandwidth',
+    source: { ...MI325X_PAGE, quote: '6 TB/s', row: 'Specifications > GPU Memory > Peak Memory Bandwidth' },
+    verifiedAt: AMD_VERIFIED,
+    ttlDays: 365,
+    boundary: `Peak datasheet figure, per GPU (OAM). ${AMD_CONTROL_NOTE}`,
+  },
+  {
+    id: 'hw.mi325x.hbm-capacity',
+    kind: 'spec',
+    value: 256,
+    unit: 'GB',
+    label: 'MI325X HBM3E capacity',
+    source: { ...MI325X_PAGE, quote: '256 GB', row: 'Specifications > GPU Memory > Dedicated Memory Size' },
+    verifiedAt: AMD_VERIFIED,
+    ttlDays: 365,
+    boundary: `Per GPU (OAM), HBM3E. ${AMD_CONTROL_NOTE}`,
+  },
+  {
+    id: 'hw.mi325x.fp8-dense',
+    kind: 'spec',
+    value: 2614.9,
+    unit: 'TFLOPS',
+    label: 'MI325X FP8 peak, dense, per GPU',
+    source: { ...MI325X_PAGE, quote: '2614.9 TFLOPS peak theoretical 8-bit precision (FP8)', row: 'Footnote MI325-002 (the specifications table rounds it to 2.61 PFLOPs, 5.22 with structured sparsity)' },
+    verifiedAt: AMD_VERIFIED,
+    ttlDays: 365,
+    boundary: `Without sparsity, at the 2,100 MHz peak engine clock. ${AMD_CONTROL_NOTE} A wrong peak rescales the fitted efficiency only.`,
+  },
+  {
+    id: 'hw.mi355x.hbm-bw',
+    kind: 'spec',
+    value: 8,
+    unit: 'TB/s',
+    label: 'MI355X HBM3E peak memory bandwidth',
+    source: { ...MI355X_PAGE, quote: '8 TB/s', row: 'Specifications > GPU Memory > Peak Memory Bandwidth' },
+    verifiedAt: AMD_VERIFIED,
+    ttlDays: 365,
+    boundary: `Peak datasheet figure, per GPU (OAM). ${AMD_CONTROL_NOTE}`,
+  },
+  {
+    id: 'hw.mi355x.hbm-capacity',
+    kind: 'spec',
+    value: 288,
+    unit: 'GB',
+    label: 'MI355X HBM3E capacity',
+    source: { ...MI355X_PAGE, quote: '288 GB', row: 'Specifications > GPU Memory > Dedicated Memory Size' },
+    verifiedAt: AMD_VERIFIED,
+    ttlDays: 365,
+    boundary: `Per GPU (OAM), HBM3E. ${AMD_CONTROL_NOTE}`,
+  },
+  {
+    id: 'hw.mi355x.fp8-dense',
+    kind: 'spec',
+    value: 5,
+    unit: 'PFLOPS',
+    label: 'MI355X OCP-FP8 matrix peak, dense, per GPU',
+    source: { ...MI355X_PAGE, quote: '5 PFLOPs', row: 'Specifications > Peak Open Compute Project Eight-bit Precision Matrix (OCP-FP8) Performance (E5M2, E4M3)' },
+    verifiedAt: AMD_VERIFIED,
+    ttlDays: 365,
+    boundary: `Without sparsity (10.1 PFLOPs with structured sparsity), at the 2,400 MHz peak engine clock. ${AMD_CONTROL_NOTE} A wrong peak rescales the fitted efficiency only.`,
+  },
+]
+
+/**
  * The fit's claims (S5-07, spec §4.5): six parameters and six gate statistics for each calibrated row. Their values are the
  * report's `claimValues` at the report's rounding (`CLAIM_ROUNDING` in scripts/fit-physics.ts): `verify:claims` reproduces
  * each from docs/physics/report.json at 1e-9 relative and fails a `phys.*` claim the report does not carry, so a refit that
@@ -422,6 +501,124 @@ const PHYS_FIT_CLAIMS: Claim[] = PHYS_ROWS.flatMap((r): Claim[] => [
   physStat(r, 'loo-ttft8k-p90', 'median TTFT leave-one-out p90 error', `The 90th percentile (nearest rank) over the ${r.nTtft} fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (printed beside gate G3).`),
 ])
 
-export const PHYSICS_CLAIMS: Claim[] = [...PHYSICS_INPUT_CLAIMS, ...PHYS_FIT_CLAIMS]
+/**
+ * The decision tables' claims (S5-08, spec §4.5, §5.8, §7.0-7.1): `frontier`'s separation margin per FP8 row and the three
+ * measured findings, reproduced from docs/physics/decisions.json (`bun scripts/verify-physics.ts --full --write`) by
+ * `verify:claims`; and the printed controls (S5-D65), reproduced from docs/physics/controls.json (`bun
+ * scripts/physics-controls.ts`, refreshed by the integrator at each s5 integration). The counts in the boundaries are the
+ * files'; tests/physics/decisions.test.ts holds them to the files.
+ */
+const DECISIONS = 'docs/physics/decisions.json'
+const CONTROLS = 'docs/physics/controls.json'
+const DATASET = 'bench.inferencex.llama70b-2025-10-29'
+
+const sepClaim = (r: PhysRow, value: number, pairs: number): Claim => ({
+  id: `phys.${r.key}.frontier-sep-p90`,
+  kind: 'derived',
+  value,
+  unit: '%',
+  label: `${r.name}: frontier separation margin (pair-ratio LOO p90)`,
+  verifiedAt: VERIFIED,
+  ttlDays: PHYS_TTL,
+  derived: { from: physInputs(r), formula: `verify-physics --full: p90 (nearest rank) of |LOO ratio / measured ratio - 1| over the row's option pairs; ${DECISIONS}` },
+  boundary:
+    `δ_sep of decision-level H1 (spec §7.0): over the ${pairs} pairs of this row's frontier options (TP × concurrency 4, 16 and 64, inside the box, one shape at a time) of ${PHYS_SNAPSHOT}, ` +
+    `the 90th percentile of the error of the ratio of their tok/s per GPU, each side predicted by a leave-one-out refit. A frontier scene is gradeable only when its winner beats the runner-up by at least 1 ÷ (1 − δ_sep). ` +
+    `${FIT_STATUS_NOTE}`,
+})
+
+const DECISION_CLAIMS: Claim[] = [
+  sepClaim(PHYS_ROWS[0], 12.8, 92),
+  sepClaim(PHYS_ROWS[1], 10.9, 176),
+  {
+    id: 'phys.finding.b200-cheaper-per-token',
+    kind: 'derived',
+    value: 100,
+    unit: '%',
+    label: 'Share of measured FP8 frontier scenes where B200 is cheaper per output token than H100',
+    verifiedAt: VERIFIED,
+    ttlDays: 90,
+    derived: { from: [DATASET, 'price.h100.median', 'price.b200.median'], formula: `verify-physics --full: scenes where price.b200.median ÷ B200's best tok/s per GPU < price.h100.median ÷ H100's; ${DECISIONS}` },
+    boundary:
+      'Measured values only: in each of the 2,715 frontier scenes (a shape and a floor from 15.0 to 120.0 tok/s per user by 0.1) where both rows have a published option meeting the floor, each chip\'s best option (most output tok/s per GPU) is priced at the median on-demand GPU-hour of 2026-10-04 ($3.49 H100, $7.01 B200). ' +
+      'B200 is cheaper in all of them, by 1.13× to 12.7× (H100\'s cost ÷ B200\'s). Llama-3.3-70B FP8 on vLLM 0.10.2 (InferenceX 2025-10-29); the prices go stale first, so this claim has their 90-day life.',
+  },
+  {
+    id: 'phys.finding.nvfp4-tpot-gain',
+    kind: 'derived',
+    value: 1.32,
+    unit: '×',
+    label: 'Largest measured B200 TPOT gain from FP8 to NVFP4 weights at TP 1-4',
+    verifiedAt: VERIFIED,
+    ttlDays: PHYS_TTL,
+    derived: { from: [DATASET, 'model.llama3-70b.weight-bytes-fp8', 'model.llama3-70b.weight-bytes-nvfp4', 'bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c4.tpot', 'bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c4.tpot'], formula: `verify-physics --full: max over pairs of TPOT(FP8) ÷ TPOT(NVFP4); ${DECISIONS}` },
+    boundary:
+      'Measured mean TPOT at FP8 ÷ at NVFP4 on B200, over the 43 configurations both rows kept at TP 1, 2 and 4 (every concurrency and shape): 1.01× to 1.32×, while the weight bytes fall 1.78× (model.llama3-70b.weight-bytes-fp8 ÷ -nvfp4). ' +
+      'For example 16.34 → 13.07 ms (1.25×) at TP 1, 4 users, ~1k/~1k (ids 40624 → 40085). Some per-step cost does not scale with weight bytes; how a fit splits it is not a hardware fact. vLLM 0.10.2, InferenceX 2025-10-29.',
+  },
+  {
+    id: 'phys.finding.tp2-to-tp8',
+    kind: 'derived',
+    value: 1.91,
+    unit: '×',
+    label: 'Measured H100 TPOT speedup from TP 2 to TP 8 at 4 users, ~1k/~1k',
+    verifiedAt: VERIFIED,
+    ttlDays: PHYS_TTL,
+    derived: { from: [DATASET, 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c4.tpot', 'bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c4.tpot'], formula: `verify-physics --full: TPOT(TP 2) ÷ TPOT(TP 8); ${DECISIONS}` },
+    boundary:
+      'Measured mean TPOT 17.41 ms at TP 2 and 9.11 ms at TP 8 (ids 42017 → 41625), Llama-3.3-70B FP8 on H100, 4 users, ~1k prompts and outputs, vLLM 0.10.2 (InferenceX 2025-10-29). ' +
+      'The datasheet bound (η = 1, bytes ÷ bandwidth) divides by TP and predicts 4.0×: something per step does not divide by TP; how much of it is fixed cost is a fit\'s split, not a hardware fact.',
+  },
+]
+
+const H100_PARAMS = (['eta-mem', 'eta-flop', 'layer-us', 'seq-us', 'link-gbs'] as const).map((n) => `phys.${PHYS_ROWS[0].key}.${n}`)
+const NIM_70B = ['model.llama3-70b.params', 'model.llama3-70b.layers', 'model.llama3-70b.hidden-size', 'model.llama3-70b.kv-bytes-per-token-fp8', 'model.llama3-70b.weight-bytes-fp8']
+const NIM_8B = ['model.llama3-8b.params', 'model.llama3-8b.layers', 'model.llama3-8b.hidden-size', 'model.llama3-8b.kv-bytes-per-token']
+
+const nimClaim = (key: string, label: string, n: number, value: number, models: string, modelClaims: string[]): Claim => ({
+  id: `phys.nim.${key}.itl-mean`,
+  kind: 'derived',
+  value,
+  unit: '%',
+  label: `NIM cross-harness: ${label}, mean ITL error`,
+  verifiedAt: AMD_VERIFIED,
+  ttlDays: PHYS_TTL,
+  derived: {
+    from: [...H100_PARAMS, 'hw.h100-sxm.hbm-bw', 'hw.h100-sxm.fp8-dense', 'hw.h100-sxm.hbm-capacity', ...modelClaims, 'status.inferencex.harness.batch-tokens', 'status.vllm-0-10-2.block-size'],
+    formula: `physics-controls: mean |EngineV2 mean TPOT ÷ NIM ITL - 1| over the group; ${CONTROLS}`,
+  },
+  boundary:
+    `Printed, never gated (spec §4.4, R2). ${models} on H100 at FP8 from NVIDIA's NIM 1.8.0 benchmark page (https://docs.nvidia.com/nim/benchmarking/llm/1.0.0/performance.html; vendor numbers, backend unstated): the ${n} rows that pass the protocol's KV and 3 s TTFT filters, ` +
+    'each replayed through EngineV2 with the H100 · vLLM 0.10.2 · FP8 table\'s parameters (fitted on InferenceX), fixed lengths, FP8 weights and KV. Another harness and engine, so this is transfer error, not the gate\'s.',
+})
+
+const controlClaim = (chip: string, name: 'loo-tpot-mean' | 'loo-tpot-p90', value: number): Claim => ({
+  id: `phys.control.${chip}.${name}`,
+  kind: 'derived',
+  value,
+  unit: '%',
+  label: `Out-of-sample control, ${chip.toUpperCase()} · vLLM · FP8: TPOT leave-one-out ${name === 'loo-tpot-mean' ? 'mean' : 'p90'} error`,
+  verifiedAt: AMD_VERIFIED,
+  ttlDays: PHYS_TTL,
+  derived: {
+    from: [DATASET, `hw.${chip}.hbm-bw`, `hw.${chip}.fp8-dense`, `hw.${chip}.hbm-capacity`, 'model.llama3-70b.params', 'model.llama3-70b.layers', 'model.llama3-70b.hidden-size', 'model.llama3-70b.kv-bytes-per-token-fp8', 'model.llama3-70b.weight-bytes-fp8', 'status.vllm-0-10-2.block-size'],
+    formula: `physics-controls: G1's statistic on the ${chip} rows, the card form refitted by the protocol's procedure; ${CONTROLS}`,
+  },
+  boundary:
+    `Printed, never gated (spec §4.4, R2): the step card's form, frozen, refitted on the 36 fit points (concurrency 4, 16 and 64) of the 60 ${chip.toUpperCase()} vLLM FP8 rows of the same InferenceX sweep (2025-10-29), rows no design looked at when the form was chosen, ` +
+    `replayed at their own token budget of 131,072, each point predicted by a refit without it (G1's population: gate G1 asks mean at most 10 %, p90 at most 15 %). The prospective test of the form, not a calibration: no AMD row is in the Fleet.`,
+})
+
+const CONTROL_CLAIMS: Claim[] = [
+  nimClaim('h100-tp2', 'Llama-3.3-70B FP8, TP 2', 27, 4.9, 'Llama-3.3-70B', NIM_70B),
+  nimClaim('h100-tp4', 'Llama-3.x-70B FP8, TP 4', 66, 15.4, 'Llama-3.3-70B and Llama-3.1-70B (one architecture)', NIM_70B),
+  nimClaim('8b-tp1', 'Llama-3.1-8B FP8, TP 1', 59, 27.1, 'Llama-3.1-8B', NIM_8B),
+  controlClaim('mi325x', 'loo-tpot-mean', 8.3),
+  controlClaim('mi325x', 'loo-tpot-p90', 17),
+  controlClaim('mi355x', 'loo-tpot-mean', 6.1),
+  controlClaim('mi355x', 'loo-tpot-p90', 13.7),
+]
+
+export const PHYSICS_CLAIMS: Claim[] = [...PHYSICS_INPUT_CLAIMS, ...AMD_PEAK_CLAIMS, ...PHYS_FIT_CLAIMS, ...DECISION_CLAIMS, ...CONTROL_CLAIMS]
 
 registerClaims(PHYSICS_CLAIMS)

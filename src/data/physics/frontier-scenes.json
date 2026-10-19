@@ -1,0 +1,75 @@
+{
+  "generatedBy": "bun scripts/verify-physics.ts --full --write",
+  "physId": "v2-1o8xgqi",
+  "floorStep": 0.1,
+  "killed": true,
+  "classes": [
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "answer": 264,
+      "tp": 2,
+      "conc": 64,
+      "intervals": [{ "isl": 1024, "osl": 1024, "from": 15, "to": 31 }],
+      "scenes": 161,
+      "readerRight": 161
+    },
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "answer": 416,
+      "tp": 4,
+      "conc": 16,
+      "intervals": [{ "isl": 8192, "osl": 1024, "from": 35.8, "to": 42.6 }],
+      "scenes": 69,
+      "readerRight": 69
+    },
+    {
+      "row": "h100-vllm-0-10-2-fp8",
+      "answer": 464,
+      "tp": 4,
+      "conc": 64,
+      "intervals": [{ "isl": 1024, "osl": 1024, "from": 39.2, "to": 43.2 }, { "isl": 1024, "osl": 8192, "from": 15, "to": 38.4 }],
+      "scenes": 276,
+      "readerRight": 276
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "answer": 164,
+      "tp": 1,
+      "conc": 64,
+      "intervals": [{ "isl": 1024, "osl": 1024, "from": 15, "to": 40.1 }],
+      "scenes": 252,
+      "readerRight": 252
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "answer": 264,
+      "tp": 2,
+      "conc": 64,
+      "intervals": [
+        { "isl": 1024, "osl": 1024, "from": 46.7, "to": 52.7 },
+        { "isl": 1024, "osl": 8192, "from": 15, "to": 52 },
+        { "isl": 8192, "osl": 1024, "from": 15, "to": 22.1 }
+      ],
+      "scenes": 504,
+      "readerRight": 504
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "answer": 416,
+      "tp": 4,
+      "conc": 16,
+      "intervals": [{ "isl": 8192, "osl": 1024, "from": 62.2, "to": 74.2 }],
+      "scenes": 121,
+      "readerRight": 121
+    },
+    {
+      "row": "b200-vllm-0-10-2-fp8",
+      "answer": 464,
+      "tp": 4,
+      "conc": 64,
+      "intervals": [{ "isl": 1024, "osl": 8192, "from": 68.8, "to": 74.8 }],
+      "scenes": 61,
+      "readerRight": 61
+    }
+  ]
+}

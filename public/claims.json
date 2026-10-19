@@ -3879,6 +3879,102 @@
       "boundary": "Every parameter at NVFP4's 4.5 bits (4-bit value plus an FP8 scale per 16 values), the per-tensor FP32 scale and any tensors a checkpoint keeps at higher precision ignored; the fitted efficiency absorbs the difference."
     },
     {
+      "id": "hw.mi325x.hbm-bw",
+      "kind": "spec",
+      "value": 6,
+      "unit": "TB/s",
+      "label": "MI325X HBM3E peak memory bandwidth",
+      "source": {
+        "url": "https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html",
+        "title": "AMD Instinct™ MI325X Accelerators",
+        "quote": "6 TB/s",
+        "row": "Specifications > GPU Memory > Peak Memory Bandwidth"
+      },
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 365,
+      "boundary": "Peak datasheet figure, per GPU (OAM). Read only by the out-of-sample control (docs/physics/controls.json); no AMD row is calibrated and nothing graded reads it."
+    },
+    {
+      "id": "hw.mi325x.hbm-capacity",
+      "kind": "spec",
+      "value": 256,
+      "unit": "GB",
+      "label": "MI325X HBM3E capacity",
+      "source": {
+        "url": "https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html",
+        "title": "AMD Instinct™ MI325X Accelerators",
+        "quote": "256 GB",
+        "row": "Specifications > GPU Memory > Dedicated Memory Size"
+      },
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 365,
+      "boundary": "Per GPU (OAM), HBM3E. Read only by the out-of-sample control (docs/physics/controls.json); no AMD row is calibrated and nothing graded reads it."
+    },
+    {
+      "id": "hw.mi325x.fp8-dense",
+      "kind": "spec",
+      "value": 2614.9,
+      "unit": "TFLOPS",
+      "label": "MI325X FP8 peak, dense, per GPU",
+      "source": {
+        "url": "https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html",
+        "title": "AMD Instinct™ MI325X Accelerators",
+        "quote": "2614.9 TFLOPS peak theoretical 8-bit precision (FP8)",
+        "row": "Footnote MI325-002 (the specifications table rounds it to 2.61 PFLOPs, 5.22 with structured sparsity)"
+      },
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 365,
+      "boundary": "Without sparsity, at the 2,100 MHz peak engine clock. Read only by the out-of-sample control (docs/physics/controls.json); no AMD row is calibrated and nothing graded reads it. A wrong peak rescales the fitted efficiency only."
+    },
+    {
+      "id": "hw.mi355x.hbm-bw",
+      "kind": "spec",
+      "value": 8,
+      "unit": "TB/s",
+      "label": "MI355X HBM3E peak memory bandwidth",
+      "source": {
+        "url": "https://www.amd.com/en/products/accelerators/instinct/mi350/mi355x.html",
+        "title": "AMD Instinct™ MI355X GPUs",
+        "quote": "8 TB/s",
+        "row": "Specifications > GPU Memory > Peak Memory Bandwidth"
+      },
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 365,
+      "boundary": "Peak datasheet figure, per GPU (OAM). Read only by the out-of-sample control (docs/physics/controls.json); no AMD row is calibrated and nothing graded reads it."
+    },
+    {
+      "id": "hw.mi355x.hbm-capacity",
+      "kind": "spec",
+      "value": 288,
+      "unit": "GB",
+      "label": "MI355X HBM3E capacity",
+      "source": {
+        "url": "https://www.amd.com/en/products/accelerators/instinct/mi350/mi355x.html",
+        "title": "AMD Instinct™ MI355X GPUs",
+        "quote": "288 GB",
+        "row": "Specifications > GPU Memory > Dedicated Memory Size"
+      },
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 365,
+      "boundary": "Per GPU (OAM), HBM3E. Read only by the out-of-sample control (docs/physics/controls.json); no AMD row is calibrated and nothing graded reads it."
+    },
+    {
+      "id": "hw.mi355x.fp8-dense",
+      "kind": "spec",
+      "value": 5,
+      "unit": "PFLOPS",
+      "label": "MI355X OCP-FP8 matrix peak, dense, per GPU",
+      "source": {
+        "url": "https://www.amd.com/en/products/accelerators/instinct/mi350/mi355x.html",
+        "title": "AMD Instinct™ MI355X GPUs",
+        "quote": "5 PFLOPs",
+        "row": "Specifications > Peak Open Compute Project Eight-bit Precision Matrix (OCP-FP8) Performance (E5M2, E4M3)"
+      },
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 365,
+      "boundary": "Without sparsity (10.1 PFLOPs with structured sparsity), at the 2,400 MHz peak engine clock. Read only by the out-of-sample control (docs/physics/controls.json); no AMD row is calibrated and nothing graded reads it. A wrong peak rescales the fitted efficiency only."
+    },
+    {
       "id": "phys.h100-vllm-0-10-2-fp8.eta-mem",
       "kind": "derived",
       "value": 0.89,
@@ -4813,6 +4909,303 @@
         "formula": "fit-physics: median TTFT leave-one-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
       },
       "boundary": "The 90th percentile (nearest rank) over the 12 fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (printed beside gate G3). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.frontier-sep-p90",
+      "kind": "derived",
+      "value": 12.8,
+      "unit": "%",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: frontier separation margin (pair-ratio LOO p90)",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "verify-physics --full: p90 (nearest rank) of |LOO ratio / measured ratio - 1| over the row's option pairs; docs/physics/decisions.json"
+      },
+      "boundary": "δ_sep of decision-level H1 (spec §7.0): over the 92 pairs of this row's frontier options (TP × concurrency 4, 16 and 64, inside the box, one shape at a time) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), the 90th percentile of the error of the ratio of their tok/s per GPU, each side predicted by a leave-one-out refit. A frontier scene is gradeable only when its winner beats the runner-up by at least 1 ÷ (1 − δ_sep). Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.frontier-sep-p90",
+      "kind": "derived",
+      "value": 10.9,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · FP8: frontier separation margin (pair-ratio LOO p90)",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "verify-physics --full: p90 (nearest rank) of |LOO ratio / measured ratio - 1| over the row's option pairs; docs/physics/decisions.json"
+      },
+      "boundary": "δ_sep of decision-level H1 (spec §7.0): over the 176 pairs of this row's frontier options (TP × concurrency 4, 16 and 64, inside the box, one shape at a time) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), the 90th percentile of the error of the ratio of their tok/s per GPU, each side predicted by a leave-one-out refit. A frontier scene is gradeable only when its winner beats the runner-up by at least 1 ÷ (1 − δ_sep). Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.finding.b200-cheaper-per-token",
+      "kind": "derived",
+      "value": 100,
+      "unit": "%",
+      "label": "Share of measured FP8 frontier scenes where B200 is cheaper per output token than H100",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 90,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "price.h100.median",
+          "price.b200.median"
+        ],
+        "formula": "verify-physics --full: scenes where price.b200.median ÷ B200's best tok/s per GPU < price.h100.median ÷ H100's; docs/physics/decisions.json"
+      },
+      "boundary": "Measured values only: in each of the 2,715 frontier scenes (a shape and a floor from 15.0 to 120.0 tok/s per user by 0.1) where both rows have a published option meeting the floor, each chip's best option (most output tok/s per GPU) is priced at the median on-demand GPU-hour of 2026-10-04 ($3.49 H100, $7.01 B200). B200 is cheaper in all of them, by 1.13× to 12.7× (H100's cost ÷ B200's). Llama-3.3-70B FP8 on vLLM 0.10.2 (InferenceX 2025-10-29); the prices go stale first, so this claim has their 90-day life."
+    },
+    {
+      "id": "phys.finding.nvfp4-tpot-gain",
+      "kind": "derived",
+      "value": 1.32,
+      "unit": "×",
+      "label": "Largest measured B200 TPOT gain from FP8 to NVFP4 weights at TP 1-4",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c4.tpot",
+          "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c4.tpot"
+        ],
+        "formula": "verify-physics --full: max over pairs of TPOT(FP8) ÷ TPOT(NVFP4); docs/physics/decisions.json"
+      },
+      "boundary": "Measured mean TPOT at FP8 ÷ at NVFP4 on B200, over the 43 configurations both rows kept at TP 1, 2 and 4 (every concurrency and shape): 1.01× to 1.32×, while the weight bytes fall 1.78× (model.llama3-70b.weight-bytes-fp8 ÷ -nvfp4). For example 16.34 → 13.07 ms (1.25×) at TP 1, 4 users, ~1k/~1k (ids 40624 → 40085). Some per-step cost does not scale with weight bytes; how a fit splits it is not a hardware fact. vLLM 0.10.2, InferenceX 2025-10-29."
+    },
+    {
+      "id": "phys.finding.tp2-to-tp8",
+      "kind": "derived",
+      "value": 1.91,
+      "unit": "×",
+      "label": "Measured H100 TPOT speedup from TP 2 to TP 8 at 4 users, ~1k/~1k",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c4.tpot",
+          "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c4.tpot"
+        ],
+        "formula": "verify-physics --full: TPOT(TP 2) ÷ TPOT(TP 8); docs/physics/decisions.json"
+      },
+      "boundary": "Measured mean TPOT 17.41 ms at TP 2 and 9.11 ms at TP 8 (ids 42017 → 41625), Llama-3.3-70B FP8 on H100, 4 users, ~1k prompts and outputs, vLLM 0.10.2 (InferenceX 2025-10-29). The datasheet bound (η = 1, bytes ÷ bandwidth) divides by TP and predicts 4.0×: something per step does not divide by TP; how much of it is fixed cost is a fit's split, not a hardware fact."
+    },
+    {
+      "id": "phys.nim.h100-tp2.itl-mean",
+      "kind": "derived",
+      "value": 4.9,
+      "unit": "%",
+      "label": "NIM cross-harness: Llama-3.3-70B FP8, TP 2, mean ITL error",
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "phys.h100-vllm-0-10-2-fp8.eta-mem",
+          "phys.h100-vllm-0-10-2-fp8.eta-flop",
+          "phys.h100-vllm-0-10-2-fp8.layer-us",
+          "phys.h100-vllm-0-10-2-fp8.seq-us",
+          "phys.h100-vllm-0-10-2-fp8.link-gbs",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "model.llama3-70b.weight-bytes-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "physics-controls: mean |EngineV2 mean TPOT ÷ NIM ITL - 1| over the group; docs/physics/controls.json"
+      },
+      "boundary": "Printed, never gated (spec §4.4, R2). Llama-3.3-70B on H100 at FP8 from NVIDIA's NIM 1.8.0 benchmark page (https://docs.nvidia.com/nim/benchmarking/llm/1.0.0/performance.html; vendor numbers, backend unstated): the 27 rows that pass the protocol's KV and 3 s TTFT filters, each replayed through EngineV2 with the H100 · vLLM 0.10.2 · FP8 table's parameters (fitted on InferenceX), fixed lengths, FP8 weights and KV. Another harness and engine, so this is transfer error, not the gate's."
+    },
+    {
+      "id": "phys.nim.h100-tp4.itl-mean",
+      "kind": "derived",
+      "value": 15.4,
+      "unit": "%",
+      "label": "NIM cross-harness: Llama-3.x-70B FP8, TP 4, mean ITL error",
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "phys.h100-vllm-0-10-2-fp8.eta-mem",
+          "phys.h100-vllm-0-10-2-fp8.eta-flop",
+          "phys.h100-vllm-0-10-2-fp8.layer-us",
+          "phys.h100-vllm-0-10-2-fp8.seq-us",
+          "phys.h100-vllm-0-10-2-fp8.link-gbs",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "model.llama3-70b.weight-bytes-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "physics-controls: mean |EngineV2 mean TPOT ÷ NIM ITL - 1| over the group; docs/physics/controls.json"
+      },
+      "boundary": "Printed, never gated (spec §4.4, R2). Llama-3.3-70B and Llama-3.1-70B (one architecture) on H100 at FP8 from NVIDIA's NIM 1.8.0 benchmark page (https://docs.nvidia.com/nim/benchmarking/llm/1.0.0/performance.html; vendor numbers, backend unstated): the 66 rows that pass the protocol's KV and 3 s TTFT filters, each replayed through EngineV2 with the H100 · vLLM 0.10.2 · FP8 table's parameters (fitted on InferenceX), fixed lengths, FP8 weights and KV. Another harness and engine, so this is transfer error, not the gate's."
+    },
+    {
+      "id": "phys.nim.8b-tp1.itl-mean",
+      "kind": "derived",
+      "value": 27.1,
+      "unit": "%",
+      "label": "NIM cross-harness: Llama-3.1-8B FP8, TP 1, mean ITL error",
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "phys.h100-vllm-0-10-2-fp8.eta-mem",
+          "phys.h100-vllm-0-10-2-fp8.eta-flop",
+          "phys.h100-vllm-0-10-2-fp8.layer-us",
+          "phys.h100-vllm-0-10-2-fp8.seq-us",
+          "phys.h100-vllm-0-10-2-fp8.link-gbs",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-8b.params",
+          "model.llama3-8b.layers",
+          "model.llama3-8b.hidden-size",
+          "model.llama3-8b.kv-bytes-per-token",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "physics-controls: mean |EngineV2 mean TPOT ÷ NIM ITL - 1| over the group; docs/physics/controls.json"
+      },
+      "boundary": "Printed, never gated (spec §4.4, R2). Llama-3.1-8B on H100 at FP8 from NVIDIA's NIM 1.8.0 benchmark page (https://docs.nvidia.com/nim/benchmarking/llm/1.0.0/performance.html; vendor numbers, backend unstated): the 59 rows that pass the protocol's KV and 3 s TTFT filters, each replayed through EngineV2 with the H100 · vLLM 0.10.2 · FP8 table's parameters (fitted on InferenceX), fixed lengths, FP8 weights and KV. Another harness and engine, so this is transfer error, not the gate's."
+    },
+    {
+      "id": "phys.control.mi325x.loo-tpot-mean",
+      "kind": "derived",
+      "value": 8.3,
+      "unit": "%",
+      "label": "Out-of-sample control, MI325X · vLLM · FP8: TPOT leave-one-out mean error",
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.mi325x.hbm-bw",
+          "hw.mi325x.fp8-dense",
+          "hw.mi325x.hbm-capacity",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "model.llama3-70b.weight-bytes-fp8",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "physics-controls: G1's statistic on the mi325x rows, the card form refitted by the protocol's procedure; docs/physics/controls.json"
+      },
+      "boundary": "Printed, never gated (spec §4.4, R2): the step card's form, frozen, refitted on the 36 fit points (concurrency 4, 16 and 64) of the 60 MI325X vLLM FP8 rows of the same InferenceX sweep (2025-10-29), rows no design looked at when the form was chosen, replayed at their own token budget of 131,072, each point predicted by a refit without it (G1's population: gate G1 asks mean at most 10 %, p90 at most 15 %). The prospective test of the form, not a calibration: no AMD row is in the Fleet."
+    },
+    {
+      "id": "phys.control.mi325x.loo-tpot-p90",
+      "kind": "derived",
+      "value": 17,
+      "unit": "%",
+      "label": "Out-of-sample control, MI325X · vLLM · FP8: TPOT leave-one-out p90 error",
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.mi325x.hbm-bw",
+          "hw.mi325x.fp8-dense",
+          "hw.mi325x.hbm-capacity",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "model.llama3-70b.weight-bytes-fp8",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "physics-controls: G1's statistic on the mi325x rows, the card form refitted by the protocol's procedure; docs/physics/controls.json"
+      },
+      "boundary": "Printed, never gated (spec §4.4, R2): the step card's form, frozen, refitted on the 36 fit points (concurrency 4, 16 and 64) of the 60 MI325X vLLM FP8 rows of the same InferenceX sweep (2025-10-29), rows no design looked at when the form was chosen, replayed at their own token budget of 131,072, each point predicted by a refit without it (G1's population: gate G1 asks mean at most 10 %, p90 at most 15 %). The prospective test of the form, not a calibration: no AMD row is in the Fleet."
+    },
+    {
+      "id": "phys.control.mi355x.loo-tpot-mean",
+      "kind": "derived",
+      "value": 6.1,
+      "unit": "%",
+      "label": "Out-of-sample control, MI355X · vLLM · FP8: TPOT leave-one-out mean error",
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.mi355x.hbm-bw",
+          "hw.mi355x.fp8-dense",
+          "hw.mi355x.hbm-capacity",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "model.llama3-70b.weight-bytes-fp8",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "physics-controls: G1's statistic on the mi355x rows, the card form refitted by the protocol's procedure; docs/physics/controls.json"
+      },
+      "boundary": "Printed, never gated (spec §4.4, R2): the step card's form, frozen, refitted on the 36 fit points (concurrency 4, 16 and 64) of the 60 MI355X vLLM FP8 rows of the same InferenceX sweep (2025-10-29), rows no design looked at when the form was chosen, replayed at their own token budget of 131,072, each point predicted by a refit without it (G1's population: gate G1 asks mean at most 10 %, p90 at most 15 %). The prospective test of the form, not a calibration: no AMD row is in the Fleet."
+    },
+    {
+      "id": "phys.control.mi355x.loo-tpot-p90",
+      "kind": "derived",
+      "value": 13.7,
+      "unit": "%",
+      "label": "Out-of-sample control, MI355X · vLLM · FP8: TPOT leave-one-out p90 error",
+      "verifiedAt": "2026-10-19",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.mi355x.hbm-bw",
+          "hw.mi355x.fp8-dense",
+          "hw.mi355x.hbm-capacity",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "model.llama3-70b.weight-bytes-fp8",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "physics-controls: G1's statistic on the mi355x rows, the card form refitted by the protocol's procedure; docs/physics/controls.json"
+      },
+      "boundary": "Printed, never gated (spec §4.4, R2): the step card's form, frozen, refitted on the 36 fit points (concurrency 4, 16 and 64) of the 60 MI355X vLLM FP8 rows of the same InferenceX sweep (2025-10-29), rows no design looked at when the form was chosen, replayed at their own token budget of 131,072, each point predicted by a refit without it (G1's population: gate G1 asks mean at most 10 %, p90 at most 15 %). The prospective test of the form, not a calibration: no AMD row is in the Fleet."
     },
     {
       "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c16.tpot",
