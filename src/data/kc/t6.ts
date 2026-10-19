@@ -117,6 +117,8 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'procedure',
     lessons: ['t6.l4'],
     requires: ['t5.parallelism-axes', 't6.all-to-all'],
+    // `step` (s5 §7.3): the TP speedup of a decode step, with the engine's numbers
+    gen: ['step'],
     since,
   },
   {

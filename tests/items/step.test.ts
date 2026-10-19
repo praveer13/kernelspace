@@ -1,22 +1,34 @@
 /**
- * The `step` family, η-free variants (docs/specs/s5.md §7.2, §7.4-7.5; task S5-10). Every truth is checked against an
- * oracle written here from the claims and the lessons' formulas alone (not from the family's code), the scenes against
- * the capacity rule, the fairness of §7.2 is printed and asserted over 2,000 instances per variant, and the forms'
- * blueprints are shown unchanged by the family's presence (S5-D51).
+ * The `step` family (docs/specs/s5.md §7.2-7.5): the η-free variants (task S5-10) and the calibrated ones (S5-14). Every
+ * truth is checked against an oracle written here from the claims and the lessons' formulas alone (not from the
+ * family's code), the scenes against the capacity rule or the row's box and envelope, the fairness of §7.2 is printed and
+ * asserted over 2,000 instances per variant (ratio variants by the protocol's ratio rule), the cut calibrated variants
+ * are shown to fail it, and the forms' blueprints are shown unchanged by the family's presence (S5-D51).
  */
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { checkFamily, checkHashes, genSeeds, lintLiterals, readHashRows } from '../../scripts/verify-generators'
-import { claimNumber } from '../../src/data/claims'
+import { claimNumber, getClaim } from '../../src/data/claims'
+import { lazyGroupFor } from '../../src/data/claims/homes'
 import { KCS } from '../../src/data/kc'
 import { deriveBoot } from '../../src/lib/boot/model'
 import { partsText } from '../../src/lib/items/core'
-import step from '../../src/lib/items/families/step'
+import * as stepModule from '../../src/lib/items/families/step'
 import { gradeResponse } from '../../src/lib/items/grade'
 import { loadAllFamilies } from '../../src/lib/items/registry'
 import type { Gen, Instance, Level, Response } from '../../src/lib/items/types'
 import { formBlueprint } from '../../src/lib/learner/forms'
+import { BOX_BLOCK_SIZE, BOX_RANGE_RATIO, exceeds, inBox, kvRoomTokens } from '../../src/lib/world/physics/box'
+import { stepCard } from '../../src/lib/world/physics/card'
+import { checkEligibility, familyConsumers } from '../../src/lib/world/physics/consumers'
+import { IX_INBOX, PHYS_ID, PHYSICS_ROWS } from '../../src/lib/world/physics/table'
+import type { CalibratedRow, StepLoad } from '../../src/lib/world/physics/types'
 
+const step = stepModule.default
+const ETA_FREE = ['decode-ms', 'prefill-ms', 'ridge-kv', 'quant-bytes']
+const CALIBRATED = ['prefill-ms-v2', 'tp-speedup']
+/** Ratio variants: the protocol's ratio rule, constant cover only (no span bound; `items.ratioRule`, S5-D57). */
+const RATIOS = new Set(['tp-speedup'])
 const FILE = new URL('../../src/lib/items/families/step.ts', import.meta.url)
 const hashes = readHashRows('step') // tests/fixtures/items/hashes/step.json
 const TOL = 0.02
@@ -92,12 +104,21 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     expect(r.cues).toEqual([])
   })
 
-  test('declares the four variants on the five KCs, each without level 2, and every answer is numeric', () => {
-    expect(step.variants.map((v) => v.id)).toEqual(['decode-ms', 'prefill-ms', 'ridge-kv', 'quant-bytes'])
-    expect(step.variants.map((v) => v.kcs)).toEqual([['t4.decode-bandwidth', 't5.latency-metrics'], ['t5.prefill-vs-decode'], ['t4.ridge-point'], ['t6.fp4-capacity']])
-    expect([...step.kcs].sort()).toEqual(['t4.decode-bandwidth', 't4.ridge-point', 't5.latency-metrics', 't5.prefill-vs-decode', 't6.fp4-capacity'])
+  test('declares the six variants on the six KCs, each without level 2, and every answer is numeric', () => {
+    expect(step.variants.map((v) => v.id)).toEqual([...ETA_FREE, ...CALIBRATED])
+    expect(step.variants.map((v) => v.kcs)).toEqual([
+      ['t4.decode-bandwidth', 't5.latency-metrics'],
+      ['t5.prefill-vs-decode'],
+      ['t4.ridge-point'],
+      ['t6.fp4-capacity'],
+      ['t5.prefill-vs-decode'],
+      ['t6.parallelism-composition'],
+    ])
+    expect([...step.kcs].sort()).toEqual(['t4.decode-bandwidth', 't4.ridge-point', 't5.latency-metrics', 't5.prefill-vs-decode', 't6.fp4-capacity', 't6.parallelism-composition'])
     // quant-bytes also stops before level 3, so the placement walk's confirmation on t6.fp4-capacity stays with `memory`
-    expect(step.variants.map((v) => v.levels)).toEqual([[0, 1, 3], [0, 1, 3], [0, 1, 3], [0, 1]])
+    expect(step.variants.map((v) => v.levels)).toEqual([[0, 1, 3], [0, 1, 3], [0, 1, 3], [0, 1], [0, 1, 3], [0, 1, 3]])
+    // the generator version moved with the calibrated variants, so every stored instance of version 1 stays itself
+    expect(step.version).toBe(2)
     for (const v of step.variants) {
       expect(() => step.make(1, 2, v.id)).toThrow()
       for (const l of v.levels) expect(step.make(7, l, v.id).answer.kind).toBe('numeric')
@@ -110,19 +131,38 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     expect(checkHashes(step, hashes)).toEqual([])
   })
 
-  test('its source passes the literal lint, and reads no lazy claim group, no table and no engine', () => {
+  test('its source passes the literal lint; it imports the card, the table and three lazy claim groups, never the engine', () => {
     const text = readFileSync(FILE, 'utf8')
     expect(lintLiterals(FILE.pathname, text)).toEqual([])
-    const imports = [...text.matchAll(/from '([^']+)'/g)].map((m) => m[1])
-    expect(imports.filter((x) => /physics|lazy|ix-points|claims\//.test(x)).sort()).toEqual(['@/lib/world/physics/card', '@/lib/world/physics/types'])
-    expect(text).not.toMatch(/lazy\/|table\.ts|engine-v2|ix-points/)
+    const imports = [...text.matchAll(/(?:from |import )'([^']+)'/g)].map((m) => m[1])
+    expect(imports.filter((x) => /physics|lazy|ix-points|claims\//.test(x)).sort()).toEqual([
+      '@/data/claims/lazy/ix-points',
+      '@/data/claims/lazy/physics',
+      '@/data/claims/lazy/tiling',
+      '@/lib/world/physics/card',
+      '@/lib/world/physics/consumers',
+      '@/lib/world/physics/table',
+      '@/lib/world/physics/types',
+    ])
+    // the consumer contract is a type here: its module loads the registries, so it must not reach the chunk
+    expect(text).toContain("import type { PhysicsConsumer } from '@/lib/world/physics/consumers'")
+  })
+
+  test('the η-free variants still read no lazy claim group and no table: every claim they list is eager (S5-D61)', () => {
+    for (const v of ETA_FREE) {
+      for (const l of step.variants.find((x) => x.id === v)!.levels) {
+        for (const s of seeds.slice(0, 200)) {
+          for (const c of step.make(s, l, v).claims) expect(lazyGroupFor(c.split('@')[0]), `${v} ${c}`).toBeUndefined()
+        }
+      }
+    }
   })
 
   test('make is a pure function of (seed, level, variant); an unspecified variant is chosen by the seed', () => {
     for (const level of [0, 1, 3] as const) {
       for (const s of seeds.slice(0, 20)) expect(step.make(s, level)).toEqual(step.make(s, level))
       // quant-bytes stops before level 3
-      expect(new Set(seeds.map((s) => step.make(s, level).variant)).size).toBe(level === 3 ? 3 : 4)
+      expect(new Set(seeds.map((s) => step.make(s, level).variant)).size).toBe(level === 3 ? 5 : 6)
     }
   })
 
@@ -142,7 +182,7 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
 /* ------------------------------ truth, scenes and labels ------------------------------ */
 
 describe('truth: the card at η = 1, from the claims', () => {
-  for (const v of ['decode-ms', 'prefill-ms', 'ridge-kv', 'quant-bytes']) {
+  for (const v of ETA_FREE) {
     test(`${v}: every one of 2,000 instances equals the oracle to 1e-9 relative, in the unit it names`, () => {
       for (const i of instances(v)) {
         expect(Math.abs(truthOf(i) / oracle(i) - 1)).toBeLessThan(1e-9)
@@ -214,8 +254,8 @@ describe('truth: the card at η = 1, from the claims', () => {
     }
   })
 
-  test('every stem is labelled "datasheet bound", and no stem or solution names a fitted term (S5-D5)', () => {
-    for (const v of step.variants) {
+  test('every η-free stem is labelled "datasheet bound", and no stem or solution names a fitted term (S5-D5)', () => {
+    for (const v of step.variants.filter((x) => ETA_FREE.includes(x.id))) {
       for (const l of v.levels) {
         for (const s of seeds.slice(0, 100)) {
           const i = step.make(s, l, v.id)
@@ -313,7 +353,7 @@ function bestConstant(ts: number[], tol: number): { c: number; share: number } {
   return best
 }
 
-describe('fairness (§7.2): over 2,000 instances per variant the best constant is within 2 % on at most 10 %, and the answers span at least 10×', () => {
+describe('fairness (§7.2): over 2,000 instances per variant the best constant is within 2 % on at most 10 %, and absolute answers span at least 10× (ratios: no span bound)', () => {
   for (const v of step.variants) {
     test(v.id, () => {
       const all = instances(v.id)
@@ -328,14 +368,352 @@ describe('fairness (§7.2): over 2,000 instances per variant the best constant i
         const lv = seeds.map((s) => truthOf(step.make(s, l, v.id)))
         return { l, ...bestConstant(lv, TOL), span: Math.max(...lv) / Math.min(...lv) }
       })
-      const line = `fairness ${v.id.padEnd(11)} ${all.length} instances, answers ${Math.min(...ts).toPrecision(4)}..${Math.max(...ts).toPrecision(5)} ${unit} (span ${span.toFixed(1)}x), best constant ${best.c.toPrecision(5)} covers ${(best.share * 100).toFixed(1)} % | per level: ${perLevel.map((x) => `L${x.l} ${(x.share * 100).toFixed(1)} % span ${x.span.toFixed(0)}x`).join(', ')}`
-      console.log(line)
+      const line = `fairness ${v.id.padEnd(13)} ${all.length} instances, answers ${Math.min(...ts).toPrecision(4)}..${Math.max(...ts).toPrecision(5)} ${unit} (span ${span.toFixed(1)}x), best constant ${best.c.toPrecision(5)} covers ${(best.share * 100).toFixed(1)} % | per level: ${perLevel.map((x) => `L${x.l} ${(x.share * 100).toFixed(1)} % span ${x.span.toFixed(0)}x`).join(', ')}`
+      console.log(`${line}${RATIOS.has(v.id) ? ' (ratio rule: no span bound)' : ''}`)
       expect(best.share).toBeLessThanOrEqual(0.1)
-      expect(span).toBeGreaterThanOrEqual(10)
+      if (!RATIOS.has(v.id)) expect(span).toBeGreaterThanOrEqual(10)
       for (const x of perLevel) {
         expect(x.share, `${v.id} L${x.l}`).toBeLessThanOrEqual(0.1)
-        expect(x.span, `${v.id} L${x.l}`).toBeGreaterThanOrEqual(10)
+        if (!RATIOS.has(v.id)) expect(x.span, `${v.id} L${x.l}`).toBeGreaterThanOrEqual(10)
       }
     })
   }
+})
+
+/* ------------------------------ the calibrated variants (S5-14) ------------------------------ */
+
+const rowOf = (i: Instance): CalibratedRow => PHYSICS_ROWS.find((r) => r.key === i.params.row)!
+const METRIC: Record<string, 'tpot' | 'ttft'> = { 'prefill-ms-v2': 'ttft', 'tp-speedup': 'tpot' }
+
+/** The claim ids of a row's chip, peak and weights, as protocol.md's rows name them. */
+function rowClaims(key: string) {
+  const hw = key.startsWith('h100') ? 'hw.h100-sxm' : 'hw.b200'
+  const prec = key.endsWith('nvfp4') ? 'nvfp4' : 'fp8'
+  return { bw: `${hw}.hbm-bw`, peak: `${hw}.${prec === 'nvfp4' ? 'fp4' : 'fp8'}-dense`, hbm: `${hw}.hbm-capacity`, weights: `model.llama3-70b.weight-bytes-${prec}` }
+}
+
+/** A scene's step, in ms, from the claims the stem shows (the phys.* parameters among them) and §3.2's formulas. */
+function calOracleMs(key: string, tp: number, users: number, ctx: number, prompt: number): number {
+  const c = rowClaims(key)
+  const ph = (k: string) => claimNumber(`phys.${key}.${k}`)
+  const [P, L, H] = [claimNumber('model.llama3-70b.params', GB), claimNumber('model.llama3-70b.layers'), claimNumber('model.llama3-70b.hidden-size')]
+  const kv = claimNumber('model.llama3-70b.kv-bytes-per-token-fp8')
+  const d = prompt > 0 ? users - 1 : users
+  const T = d + prompt
+  const K = d * ctx + prompt
+  const A = d * ctx + (prompt * (prompt + 1)) / 2
+  const mem = (claimNumber(c.weights) + kv * K) / tp / (ph('eta-mem') * claimNumber(c.bw, 1e12))
+  const flop = (2 * P * T + 4 * L * H * A) / tp / (ph('eta-flop') * claimNumber(c.peak, 1e12))
+  const link = tp > 1 ? (2 * L * T * H * 2 * 2 * (tp - 1)) / tp / (ph('link-gbs') * GB) : 0
+  return ((L * ph('layer-us') + users * ph('seq-us')) / 1e6 + link + Math.max(mem, flop)) * 1e3
+}
+
+function calOracle(i: Instance): number {
+  const at = (tp: number) => calOracleMs(String(i.params.row), tp, p(i, 'users'), p(i, 'ctx'), i.params.prompt === undefined ? 0 : p(i, 'prompt'))
+  return i.variant === 'tp-speedup' ? at(p(i, 'tp')) / at(p(i, 'tpTo')) : at(p(i, 'tp'))
+}
+
+/** The scene's step load and its decoding sequences, as §3.1 counts them. */
+function calLoad(i: Instance): { load: StepLoad; decoding: number } {
+  const n = i.params.prompt === undefined ? 0 : p(i, 'prompt')
+  const d = n > 0 ? p(i, 'users') - 1 : p(i, 'users')
+  const k = d * p(i, 'ctx')
+  return { load: { seqs: p(i, 'users'), tokens: d + n, kvTokens: k + n, attnPairs: k + (n * (n + 1)) / 2 }, decoding: d }
+}
+
+const calInstances = new Map(CALIBRATED.map((v) => [v, instances(v)]))
+/** The H4 label: the stem's parts from the one that opens it. */
+const labelOf = (i: Instance) => i.prompt.stem.slice(i.prompt.stem.findIndex((x) => x.t === 'text' && x.text.startsWith('[v2 physics')))
+const pct = (fraction: number): string => String(Math.round(fraction * 1000) / 10)
+/** Every string an instance shows: stem, givens, the solution and the slip messages. */
+const textOf = (i: Instance): string =>
+  [
+    partsText(i.prompt.stem),
+    ...(i.prompt.givens ?? []).flatMap((g) => [g.label, partsText([g.value])]),
+    ...step.solution(i).map((x) => partsText(x.text)),
+    ...step.ratioRules.map((r) => (typeof r.message === 'string' ? r.message : r.message(i))),
+  ].join(' ')
+
+describe('calibrated variants: rows, box and the table (S5-14)', () => {
+  test("the table's parameters are the phys.* claims the stems show, at the claims' precision, and its chips and model are the input claims", () => {
+    for (const r of PHYSICS_ROWS) {
+      const q = r.spec.params
+      const ph = (k: string) => claimNumber(`phys.${r.key}.${k}`)
+      // η to 0.01 and µs, GB/s and ms to 0.1, the precision the claims print and the family shows
+      expect(Math.round(q.etaMem * 100) / 100, r.key).toBe(ph('eta-mem'))
+      expect(Math.round(q.etaFlop * 100) / 100, r.key).toBe(ph('eta-flop'))
+      expect(Math.round(q.layerUs * 10) / 10, r.key).toBe(ph('layer-us'))
+      expect(Math.round(q.seqUs * 10) / 10, r.key).toBe(ph('seq-us'))
+      expect(Math.round(q.linkGBs! * 10) / 10, r.key).toBe(ph('link-gbs'))
+      expect(Math.round(r.harnessMs * 10) / 10, r.key).toBe(ph('harness-ms'))
+      // the H4 figures (fractions in the table, percent in the claims)
+      expect(pct(r.label.tpot.p90), r.key).toBe(String(ph('loo-tpot-p90')))
+      expect(pct(r.label.ttft.p90), r.key).toBe(String(ph('loo-ttft8k-p90')))
+      expect(pct(r.label.ttft.mean), r.key).toBe(String(ph('loo-ttft8k-mean')))
+      const c = rowClaims(r.key)
+      expect(r.spec.chip).toEqual({ bwBps: claimNumber(c.bw, 1e12), peakFlops: claimNumber(c.peak, 1e12), hbmBytes: claimNumber(c.hbm, GB) })
+      expect(r.spec.model).toEqual({
+        params: claimNumber('model.llama3-70b.params', GB),
+        layers: claimNumber('model.llama3-70b.layers'),
+        hidden: claimNumber('model.llama3-70b.hidden-size'),
+        kvBytesPerToken: claimNumber('model.llama3-70b.kv-bytes-per-token-fp8'),
+        weightBytes: claimNumber(c.weights),
+      })
+    }
+    // the S5-D70 figures the TTFT labels print: H100 20.7 %, B200 FP8 19.1 %, NVFP4 26.1 %
+    expect(PHYSICS_ROWS.map((r) => [r.key, claimNumber(`phys.${r.key}.loo-ttft8k-p90`)])).toEqual([
+      ['h100-vllm-0-10-2-fp8', 20.7],
+      ['b200-vllm-0-10-2-fp8', 19.1],
+      ['b200-vllm-0-10-2-nvfp4', 26.1],
+    ])
+  })
+
+  for (const v of CALIBRATED) {
+    test(`${v}: every one of 2,000 instances equals the card worked from the stem's claims, to 1e-9 relative`, () => {
+      for (const i of calInstances.get(v)!) {
+        expect(Math.abs(truthOf(i) / calOracle(i) - 1), JSON.stringify(i.params)).toBeLessThan(1e-9)
+        expect(i.answer.kind === 'numeric' && i.answer.unit).toBe(v === 'tp-speedup' ? '×' : 'ms')
+        expect(i.answer.kind === 'numeric' && i.answer.tolerance).toEqual({ rel: TOL })
+      }
+    })
+
+    test(`${v}: the claims' rounding is far inside the tolerance: the table's unrounded parameters move no answer by 0.2 %`, () => {
+      let worst = 0
+      for (const i of calInstances.get(v)!) {
+        const r = rowOf(i)
+        const exact = (tp: number) => stepCard(r.spec, tp, calLoad(i).load).stepS * 1e3
+        const t = v === 'tp-speedup' ? exact(p(i, 'tp')) / exact(p(i, 'tpTo')) : exact(p(i, 'tp'))
+        worst = Math.max(worst, Math.abs(t / truthOf(i) - 1))
+      }
+      console.log(`${v}: the largest move from the table's unrounded parameters is ${(worst * 100).toFixed(3)} %`)
+      expect(worst).toBeLessThan(0.002)
+    })
+
+    test(`${v}: only rows the table marks calibrated and ${METRIC[v]}-eligible, in the box (box.ts) and the envelope at every TP the item names`, () => {
+      const rows = new Set<string>()
+      for (const i of calInstances.get(v)!) {
+        const r = rowOf(i)
+        rows.add(r.key)
+        expect(r.status).toBe('calibrated')
+        expect(r.eligible[METRIC[v]]).toBe(true)
+        const isl = p(i, 'isl')
+        const osl = p(i, 'osl')
+        expect(p(i, 'ctx')).toBeGreaterThanOrEqual(BOX_RANGE_RATIO * isl)
+        expect(p(i, 'ctx')).toBeLessThanOrEqual(isl + osl)
+        if (v === 'prefill-ms-v2') {
+          expect(p(i, 'prompt')).toBeGreaterThanOrEqual(BOX_RANGE_RATIO * isl)
+          expect(p(i, 'prompt')).toBeLessThanOrEqual(isl)
+        }
+        const { load, decoding } = calLoad(i)
+        for (const tp of v === 'tp-speedup' ? [p(i, 'tp'), p(i, 'tpTo')] : [p(i, 'tp')]) {
+          const box = inBox(r, { tp, maxNumSeqs: p(i, 'users'), batchTokens: r.box.batchTokens, blockSize: BOX_BLOCK_SIZE, shape: { isl, osl, ratio: BOX_RANGE_RATIO } })
+          expect(box, JSON.stringify(i.params)).toEqual({ ok: true, reason: '' })
+          expect(exceeds(r.envelope, load, tp, decoding), JSON.stringify(i.params)).toBe(false)
+          expect(load.kvTokens).toBeLessThanOrEqual(kvRoomTokens(r, tp))
+        }
+        if (v === 'tp-speedup') expect(p(i, 'tpTo')).toBeGreaterThan(p(i, 'tp'))
+      }
+      // every eligible row is drawn, and PHYSICS_CONSUMERS names exactly those
+      expect([...rows].sort()).toEqual(PHYSICS_ROWS.filter((r) => r.status === 'calibrated' && r.eligible[METRIC[v]]).map((r) => r.key).sort())
+      expect([...stepModule.PHYSICS_CONSUMERS.find((c) => c.id === `step/${v}`)!.rows].sort()).toEqual([...rows].sort())
+    })
+  }
+
+  test('PHYSICS_CONSUMERS names each calibrated variant with its rows and metric, and every one is eligible (S5-D54)', () => {
+    expect(stepModule.PHYSICS_CONSUMERS).toEqual([
+      { id: 'step/prefill-ms-v2', rows: ['h100-vllm-0-10-2-fp8', 'b200-vllm-0-10-2-fp8', 'b200-vllm-0-10-2-nvfp4'], metric: 'ttft' },
+      { id: 'step/tp-speedup', rows: ['h100-vllm-0-10-2-fp8', 'b200-vllm-0-10-2-fp8', 'b200-vllm-0-10-2-nvfp4'], metric: 'tpot' },
+    ])
+    // what collectConsumers() reads from this module, and what verify:physics then checks
+    expect(familyConsumers('step', stepModule).map((c) => ({ id: c.id, rows: c.rows, metric: c.metric }))).toEqual(stepModule.PHYSICS_CONSUMERS)
+    expect(checkEligibility(stepModule.PHYSICS_CONSUMERS, PHYSICS_ROWS, PHYS_ID)).toEqual([])
+    for (const c of stepModule.PHYSICS_CONSUMERS) expect(c.metric).toBe(METRIC[c.id.slice('step/'.length)])
+    // a row the table did not calibrate would fail the same check
+    const failed = PHYSICS_ROWS.map((r) => (r.key === 'b200-vllm-0-10-2-nvfp4' ? { ...r, status: 'failed' as const } : r))
+    expect(checkEligibility(stepModule.PHYSICS_CONSUMERS, failed)).toHaveLength(2)
+  })
+})
+
+describe('calibrated variants: labels, givens and whys (S5-14)', () => {
+  test("every stem ends with §7.0's H4 label for its metric: TTFT's p90 for prefill-ms-v2, no '9 in 10' on the tp-speedup ratio (S5-D58)", () => {
+    for (const v of CALIBRATED) {
+      for (const i of calInstances.get(v)!.slice(0, 400)) {
+        const r = rowOf(i)
+        const label = labelOf(i)
+        const text = partsText(label)
+        const name = r.key.startsWith('h100') ? 'H100 SXM' : 'B200'
+        const prec = r.key.endsWith('nvfp4') ? 'NVFP4' : 'FP8'
+        expect(text.startsWith(`[v2 physics · ${name} · vLLM 0.10.2 · ${prec} · fitted on ${r.label.tpot.n} InferenceX points (2025-10-29)`)).toBe(true)
+        expect(text.endsWith(` · ${PHYS_ID}]`)).toBe(true)
+        // the label's metric: the claim it carries is the item's metric's leave-one-out p90, or none on a ratio
+        const claims = label.flatMap((x) => (x.t === 'claim' ? [x.claim] : []))
+        if (RATIOS.has(v)) {
+          expect(claims).toEqual([])
+          expect(text).not.toContain('9 in 10')
+        } else {
+          expect(METRIC[v]).toBe('ttft')
+          expect(claims).toEqual([`phys.${r.key}.loo-ttft8k-p90`])
+          expect(text).toContain(`TTFT 9 in 10 within ${pct(r.label.ttft.p90)} % on the ${r.label.ttft.n} with ~8k prompts (leave-one-out, plus the harness term)`)
+          expect(text).not.toContain('TPOT')
+        }
+        // H4 only: no decision-level H1 figure, and the parameters are "the engine's numbers", not hardware facts
+        expect(textOf(i)).not.toMatch(/frontier|\bH1\b|separation/)
+        expect(partsText(i.prompt.stem)).toContain("the engine's numbers: this fit's split of one benchmark sweep, not hardware facts")
+      }
+    }
+  })
+
+  test("the givens show the row's inputs and the engine's numbers as claim chips, β only where a link term runs", () => {
+    for (const v of CALIBRATED) {
+      for (const i of calInstances.get(v)!.slice(0, 200)) {
+        const r = rowOf(i)
+        const c = rowClaims(r.key)
+        const ids = i.prompt.givens!.map((g) => (g.value.t === 'claim' ? g.value.claim : null))
+        const link = Math.max(p(i, 'tp'), i.params.tpTo === undefined ? 1 : p(i, 'tpTo')) > 1
+        expect(ids).toEqual([
+          c.bw,
+          c.peak,
+          c.weights,
+          'model.llama3-70b.params',
+          'model.llama3-70b.layers',
+          'model.llama3-70b.hidden-size',
+          'model.llama3-70b.kv-bytes-per-token-fp8',
+          ...['eta-mem', 'eta-flop', 'layer-us', 'seq-us', ...(link ? ['link-gbs'] : [])].map((k) => `phys.${r.key}.${k}`),
+        ])
+        // each listed claim resolves, and the capacity and the harness settings that decide the box are listed too
+        for (const ref of i.claims) expect(getClaim(ref.split('@')[0]).verifiedAt).toBe(ref.split('@')[1])
+        const listed = i.claims.map((x) => x.split('@')[0])
+        for (const id of [c.hbm, 'bench.inferencex.llama70b-2025-10-29', 'status.inferencex.harness.gpu-mem-util', 'status.inferencex.harness.range-ratio']) expect(listed).toContain(id)
+      }
+    }
+  })
+
+  test('tp-speedup whys show the measured TPOT at both TPs exactly when both are fit points in the box (a point claim each); prefill-ms-v2 whys show none', () => {
+    let shown = 0
+    for (const i of calInstances.get('tp-speedup')!) {
+      const sol = step.solution(i)
+      const pts = sol.flatMap((x) => x.text).flatMap((x) => (x.t === 'claim' && x.claim.startsWith('bench.ix-l70.') ? [x.claim] : []))
+      const at = (tp: number) => IX_INBOX[String(i.params.row)].find((x) => x.tp === tp && x.conc === p(i, 'users') && x.isl === p(i, 'isl') && x.osl === p(i, 'osl'))
+      const a = at(p(i, 'tp'))
+      const b = at(p(i, 'tpTo'))
+      if (a && b) {
+        shown++
+        const ids = [p(i, 'tp'), p(i, 'tpTo')].map((tp) => `bench.ix-l70.${i.params.row}.tp${tp}.${i.params.isl}-${i.params.osl}.c${i.params.users}.tpot`)
+        expect(pts).toEqual(ids)
+        // the point claims hold the table's measured TPOT (the same published rows), and the why prints their ratio
+        expect([getClaim(ids[0]).value, getClaim(ids[1]).value]).toEqual([a.tpot, b.tpot])
+        expect(getClaim(ids[0]).source?.row).toBe(`id ${a.id}`)
+        const why = partsText(sol.at(-1)!.text)
+        expect(why).toContain(`(${String(Math.round((claimNumber(ids[0], 1e3) / claimNumber(ids[1], 1e3)) * 1000) / 1000)} ×)`)
+        expect(why).toContain('not this one step')
+      } else expect(pts).toEqual([])
+      // the measured value is a why, never the graded result
+      expect(sol.filter((x) => x.result).at(-1)!.result!.value).toBe(truthOf(i))
+    }
+    console.log(`tp-speedup: ${shown} of 2000 instances show InferenceX's measured TPOT at both TPs`)
+    // the why says measured TPOT falls short of the TP ratio on every published pair in the box: it does, on all of them
+    let pairs = 0
+    for (const pts of Object.values(IX_INBOX)) {
+      for (const a of pts) {
+        for (const b of pts.filter((x) => x.tp > a.tp && x.conc === a.conc && x.isl === a.isl && x.osl === a.osl)) {
+          pairs++
+          expect(a.tpot / b.tpot).toBeLessThan(b.tp / a.tp)
+        }
+      }
+    }
+    expect(pairs).toBe(98)
+    expect(shown).toBeGreaterThan(100)
+    for (const i of calInstances.get('prefill-ms-v2')!) {
+      const sol = step.solution(i)
+      expect(sol.flatMap((x) => x.text).some((x) => x.t === 'claim' && x.claim.startsWith('bench.'))).toBe(false)
+      expect(sol.map((x) => partsText(x.text)).join(' ')).not.toMatch(/measured/i)
+    }
+  })
+
+  test('no copy names a fitted term as the cause (S5-D5): the forbidden phrasings appear in no stem, given, solution or slip message', () => {
+    const FORBIDDEN = [/because the fixed/i, /because t_seq/i, /η_m is/i]
+    for (const v of step.variants) {
+      for (const l of v.levels) {
+        for (const s of seeds.slice(0, 100)) {
+          const text = textOf(step.make(s, l, v.id))
+          for (const f of FORBIDDEN) expect(text, `${v.id}@L${l}`).not.toMatch(f)
+        }
+      }
+    }
+  })
+
+  test('worked by hand: H100 FP8, TP 2 → 8, 4 users of ~1k/~1k at context 1,400 speed up 1.983× on the card; InferenceX measured 1.910×', () => {
+    const i = find('tp-speedup', 3, (x) => x.params.row === 'h100-vllm-0-10-2-fp8' && p(x, 'tp') === 2 && p(x, 'tpTo') === 8 && p(x, 'users') === 4 && p(x, 'isl') === 1024 && p(x, 'osl') === 1024 && p(x, 'ctx') === 1400)
+    // K = 4 × 1,400 = 5,600; bytes = 70.55e9 + 163,840 × 5,600 = 71.4675e9
+    // TP 2: memory 71.4675e9 ÷ 2 ÷ (0.89 × 3.35e12) = 11.9852 ms; link 2·80·4·8192·4·1/2 = 10.49 MB ÷ 213.2 GB/s = 0.0492 ms;
+    //       fixed 80 × 72.3 + 4 × 61.1 = 6,028.4 µs; step 18.0627 ms (math 0.28 ms, hidden)
+    // TP 8: memory 2.9963 ms; link 18.35 MB ÷ 213.2 GB/s = 0.0861 ms; step 9.1108 ms; 18.0627 ÷ 9.1108 = 1.9826×
+    expect(truthOf(i)).toBeCloseTo(1.9826, 4)
+    // the measured pair is the tab's finding phys.finding.tp2-to-tp8: 17.41 → 9.11 ms (ids 42017 → 41625)
+    const why = partsText(step.solution(i).at(-1)!.text)
+    expect(why).toContain('17.41 ms at TP 2 and 9.114 ms at TP 8')
+    expect(why).toContain('(1.91 ×)')
+    expect(claimNumber('phys.finding.tp2-to-tp8')).toBe(1.91)
+  })
+
+  test('worked by hand: B200 FP8, TP 1, a 7,400-token prompt beside 3 users at context 7,800 takes 544.40 ms, compute-bound', () => {
+    // T = 7,403; K = 7,400 + 3 × 7,800 = 30,800; pairs = 7,400 × 7,401 ÷ 2 + 23,400 = 27,407,100
+    // FLOP = 2 × 70.55e9 × 7,403 + 4 × 80 × 8,192 × 27,407,100 = 1.116409e15; ÷ (0.46 × 4.5e15) = 539.328 ms
+    // memory (70.55e9 + 163,840 × 30,800) ÷ (0.84 × 8e12) = 11.249 ms; fixed 80 × 61.8 + 4 × 32.6 = 5,074.4 µs
+    expect(calOracleMs('b200-vllm-0-10-2-fp8', 1, 4, 7800, 7400)).toBeCloseTo(544.4026, 3)
+    const i = find('prefill-ms-v2', 3, (x) => x.params.row === 'b200-vllm-0-10-2-fp8' && p(x, 'tp') === 1 && p(x, 'isl') === 8192 && p(x, 'users') === 4)
+    expect(Math.abs(truthOf(i) / calOracle(i) - 1)).toBeLessThan(1e-9)
+    expect(partsText(step.solution(i).filter((x) => x.result).at(-1)!.text)).toContain('compute-bound')
+  })
+})
+
+/* ------------------------------ the cut variants ------------------------------ */
+
+/** Every in-box decode step of a row at a TP: the sweep's users, its shapes, and two-significant-digit contexts in range. */
+function decodeScenes(r: CalibratedRow, tp: number): StepLoad[] {
+  const ctxs: number[] = []
+  for (let m = 10; m <= 99; m++) ctxs.push(m * 10, m * 100)
+  const out: StepLoad[] = []
+  for (const users of [4, 8, 16, 32, 64]) {
+    for (const { isl, osl } of r.box.shapes) {
+      if (!inBox(r, { tp, maxNumSeqs: users, batchTokens: r.box.batchTokens, blockSize: BOX_BLOCK_SIZE, shape: { isl, osl, ratio: BOX_RANGE_RATIO } }).ok) continue
+      for (const ctx of ctxs.filter((x) => x >= BOX_RANGE_RATIO * isl && x <= isl + osl)) {
+        const load = { seqs: users, tokens: users, kvTokens: users * ctx, attnPairs: users * ctx }
+        if (!exceeds(r.envelope, load, tp, users)) out.push(load)
+      }
+    }
+  }
+  return out
+}
+
+describe('the cut calibrated variants fail the protocol whatever their sampling (§7.2, S5-D57)', () => {
+  test('calibrated decode-ms: every in-box decode step of every row lies within 10× of every other, so no draw can span 10×', () => {
+    const ms: number[] = []
+    for (const r of PHYSICS_ROWS.filter((x) => x.status === 'calibrated' && x.eligible.tpot)) {
+      for (const tp of r.box.tp) for (const load of decodeScenes(r, tp)) ms.push(stepCard(r.spec, tp, load).stepS * 1e3)
+    }
+    const span = Math.max(...ms) / Math.min(...ms)
+    console.log(`cut decode-ms (calibrated): ${ms.length} in-box decode steps, ${Math.min(...ms).toFixed(2)}..${Math.max(...ms).toFixed(2)} ms, span ${span.toFixed(2)}x < 10x (items.answerSpanMin)`)
+    expect(span).toBeLessThan(10)
+  })
+
+  test("quant-speedup: B200 FP8 → NVFP4 at TP 1-4 spans so little that some constant is right on more than 10 % under any sampling; it stays the tab's finding", () => {
+    const fp8 = PHYSICS_ROWS.find((r) => r.key === 'b200-vllm-0-10-2-fp8')!
+    const nv = PHYSICS_ROWS.find((r) => r.key === 'b200-vllm-0-10-2-nvfp4')!
+    const ratios: number[] = []
+    for (const tp of nv.box.tp) {
+      for (const load of decodeScenes(fp8, tp)) {
+        if (exceeds(nv.envelope, load, tp, load.seqs)) continue
+        ratios.push(stepCard(fp8.spec, tp, load).stepS / stepCard(nv.spec, tp, load).stepS)
+      }
+    }
+    const lo = Math.min(...ratios)
+    const hi = Math.max(...ratios)
+    // a constant c is right on [c ÷ 1.02, c ÷ 0.98]; k such windows cover [lo, hi], so one of them holds at least 1 / k of any draw
+    const k = Math.ceil(Math.log(hi / lo) / Math.log(1.02 / 0.98))
+    console.log(`cut quant-speedup: ${ratios.length} in-box scenes, ratios ${lo.toFixed(3)}..${hi.toFixed(3)}x; ${k} tolerance windows cover them, so the best constant covers at least ${(100 / k).toFixed(1)} % of any draw (max 10 %)`)
+    expect(1 / k).toBeGreaterThan(0.1)
+    // the measured finding the tab keeps: 1.01-1.32x at TP 1-4
+    expect(claimNumber('phys.finding.nvfp4-tpot-gain')).toBe(1.32)
+  })
 })
