@@ -9,7 +9,7 @@
  * a11y harness.
  */
 import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { createElement } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -158,12 +158,11 @@ const textOf = (el: MiniElement | null) => (el?.textContent ?? '').replace(/\s+/
 
 describe('the tab on /freshness', () => {
   test('is the fourth, after claims; the arrow keys walk errata, field notes, claims, physics and wrap, and the panel loads lazily', async () => {
-    // The errata index lists its files with Vite's import.meta.glob, which bun lacks (no test could load it until now):
-    // hand the page the same list, read from the same files in the same order.
-    const dir = join(root, 'src/data/errata')
-    const errata = await Promise.all(readdirSync(dir).filter((f) => /^[0-9].*\.ts$/.test(f)).map(async (f) => (await import(join(dir, f))).default as { id: string; date: string }))
-    errata.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
-    mock.module(join(dir, 'index.ts'), () => ({ ERRATA: errata }))
+    // The errata index lists its files with Vite's import.meta.glob, which bun lacks, so the page gets a stand-in errata tab:
+    // this test is about the tab list. Not a mock of the index: DoneCard's import('@/data/errata') fails under bun and is
+    // swallowed (tests/forge/panels.test.ts mounts it), and bun keeps that failed module, which mock.module cannot replace,
+    // so a run that takes that file first would fail here (CI did). Nothing else loads ErrataTab.
+    mock.module(join(root, 'src/pages/changes/ErrataTab.tsx'), () => ({ default: () => createElement('p', { 'data-errata-stub': '' }, 'errata') }))
     const { default: Changes } = await import('../../src/pages/Changes')
     const m = await dom.mount(createElement(MemoryRouter, { initialEntries: ['/freshness?tab=claims'] }, createElement(Changes)))
     const tabs = () => m.container.querySelectorAll('[role="tab"]')
@@ -189,6 +188,8 @@ describe('the tab on /freshness', () => {
     await press('ArrowRight')
     expect(selected()).toBe('changes-tab-errata')
     expect((dom.document.activeElement as unknown as MiniElement).id).toBe('changes-tab-errata')
+    expect(m.container.querySelector('[role="tabpanel"]')!.id).toBe('changes-panel-errata')
+    expect(m.container.querySelector('[data-errata-stub]')).not.toBeNull()
     await press('ArrowLeft')
     expect(selected()).toBe('changes-tab-physics')
     await press('ArrowLeft')
