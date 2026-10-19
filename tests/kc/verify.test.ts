@@ -91,8 +91,8 @@ describe('verify-kc on the committed graph', () => {
       },
       { id: 'prefill', kcs: ['t6.epd-phases', 't6.kv-tiering', 't6.cache-timing-oracle'] },
       { id: 'rollout', kcs: ['t6.rollout-bound-rl', 't6.weight-sync'] },
-      // S5 (s5.md §7.2-7.5): the η-free `step` variants; S5-14 adds t6.parallelism-composition
-      { id: 'step', kcs: [KC.decodeBandwidth, 't5.latency-metrics', 't5.prefill-vs-decode', KC.ridgePoint, KC.fp4Capacity] },
+      // S5 (s5.md §7.2-7.5): the η-free `step` variants, and the calibrated tp-speedup on t6.parallelism-composition (S5-14)
+      { id: 'step', kcs: [KC.decodeBandwidth, 't5.latency-metrics', 't5.prefill-vs-decode', KC.ridgePoint, KC.fp4Capacity, 't6.parallelism-composition'] },
     ]
     const r = verifyKc(input({ families }))
     expect(r.errors).toEqual([])
