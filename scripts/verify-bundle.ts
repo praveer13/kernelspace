@@ -15,7 +15,8 @@
  * scene chunk above 40 KB (3s-01); which pages may reach three at all is tests/boot/imports.test.ts's job.
  * S5 (docs/specs/s5.md §8.1, S5-15) holds the entry at wave 3's 115.7 KB (S5-D50: +0 B, compared at 0.1 KB precision, and in raw bytes
  * beside it) and prints the v2 lines: the FleetExercise chunk, fleet.worker, the physics tab with the data and claim groups it
- * loads, the claims tab with public/claims.json (S5-D71), and, with the generator families, the step family against its 4 KB.
+ * loads, the claims tab with public/claims.json (S5-D71), and, with the generator families, the step family, which FAILS above its
+ * 4 KB (B10), and its calibrated part with the claim groups that part loads.
  * Wave 2 (§22.1) reports the compile bank: each group's chunk and "compile bank data (all groups)" against its
  * 30 KB figure. One check here does fail: no chunk may hold a compile bank file's data (a snippet's source hash or
  * the rustc version line from src/data/rust-items/bank/*.json). Those stay with the scripts and tests; the app
@@ -340,8 +341,8 @@ if (!existsSync(new URL(`../${SCENE_SRC}`, import.meta.url))) {
 const chunksFor = (match: (key: string, chunk: ManifestChunk) => boolean) =>
   Object.entries(manifest).filter(([key, chunk]) => match(key, chunk))
 
-// A family that imports lazy claim groups statically (rollout's serving3; step's physics and ix-points, s5.md §8.1) loads
-// them with it, so its line names each group's chunk and gzip. A group's chunk is its own manifest entry when something
+// A family that imports lazy claim groups statically (rollout's serving3) loads them with it, so its line names each group's
+// chunk and gzip; so does a family part's line (step's calibrated part: physics, ix-points and tiling, s5.md §8.1). A group's chunk is its own manifest entry when something
 // imports it dynamically; otherwise Rollup merged it into a shared chunk named after it (the tiling family's code may share
 // the name), and it is the one of those holding at least half of its ids, the most of them.
 const LAZY_GROUPS = new URL('../src/data/claims/lazy/', import.meta.url)
@@ -369,18 +370,31 @@ async function staticGroups(chunk: ManifestChunk): Promise<string[]> {
   }
   return out
 }
-/** A family whose spec sets its own figure (s5.md §8.1 and B10: `step` ≤ 4 KB), reported against it, not gated. */
-const FAMILY_OWN_KB: Record<string, number> = { 'step.ts': 4 }
+/** A family whose spec gates its chunk (s5.md §8.1 and B10: `step` ≤ 4 KB gzip): it FAILS above the figure. */
+const FAMILY_GATE_KB: Record<string, number> = { 'step.ts': 4 }
+const PART_PREFIX = 'src/lib/items/families/lazy/'
 
-const families = chunksFor((key) => key.startsWith('src/lib/items/families/'))
+// A family part (families/lazy/<name>.ts, which the registry's `familyPart` loads when a variant that reads it is drawn) is no
+// family: it is not in /today's family fetch, so it is printed on its own line with the claim groups it brings.
+const families = chunksFor((key) => key.startsWith('src/lib/items/families/') && !key.startsWith(PART_PREFIX))
 if (families.length === 0) console.log('skip generator families: no src/lib/items/families/* chunks yet')
 for (const [key, chunk] of families) {
   const kb = (await gzipSize(chunk.file)) / KB
   const name = key.split('/').pop()!
-  const report = FAMILY_OWN_KB[name] ?? FAMILY_REPORT_KB
+  const gate = FAMILY_GATE_KB[name]
   const groups = await staticGroups(chunk)
   const beside = groups.length > 0 ? `; static claim groups ${groups.join(', ')} gzip` : ''
-  console.log(`${kb <= report ? 'ok  ' : 'warn'} family ${name} is ${kb.toFixed(1)} KB gzip (report ${report} KB, not gated)${beside}`)
+  if (gate === undefined) console.log(`${kb <= FAMILY_REPORT_KB ? 'ok  ' : 'warn'} family ${name} is ${kb.toFixed(1)} KB gzip (report ${FAMILY_REPORT_KB} KB, not gated)${beside}`)
+  else if (kb > gate) {
+    console.error(`FAIL family ${name} is ${kb.toFixed(1)} KB gzip, over its ${gate} KB budget (s5.md §8.1, B10)${beside}`)
+    failed = true
+  } else console.log(`ok   family ${name} is ${kb.toFixed(1)} KB gzip (budget ${gate} KB)${beside}`)
+}
+for (const [key, chunk] of chunksFor((key) => key.startsWith(PART_PREFIX))) {
+  const kb = (await gzipSize(chunk.file)) / KB
+  const groups = await staticGroups(chunk)
+  const beside = groups.length > 0 ? `; with its static claim groups ${groups.join(', ')} gzip` : ''
+  console.log(`info family part ${key.slice(PART_PREFIX.length)} is ${kb.toFixed(1)} KB gzip, loaded only when a variant that reads it is drawn (reported, not gated)${beside}`)
 }
 
 // S5 (s5.md §8.1, S5-15): the v2 lines. Reported, not gated, except the entry above. A chunk S5 would grow is printed with its Wave 3 figure
