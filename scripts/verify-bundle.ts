@@ -390,6 +390,14 @@ for (const [key, chunk] of families) {
     failed = true
   } else console.log(`ok   family ${name} is ${kb.toFixed(1)} KB gzip (budget ${gate} KB)${beside}`)
 }
+// A gated family Rollup merged into another chunk has no manifest entry of its own, and the loop above would print nothing for
+// it and pass (S5-D78): its budget cannot be measured, so it FAILS.
+for (const name of Object.keys(FAMILY_GATE_KB)) {
+  const key = `src/lib/items/families/${name}`
+  if (!existsSync(new URL(`../${key}`, import.meta.url)) || families.some(([k]) => k === key)) continue
+  console.error(`FAIL family ${name} has no chunk of its own in the manifest, so its ${FAMILY_GATE_KB[name]} KB budget cannot be measured (s5.md §8.1, B10, S5-D78)`)
+  failed = true
+}
 for (const [key, chunk] of chunksFor((key) => key.startsWith(PART_PREFIX))) {
   const kb = (await gzipSize(chunk.file)) / KB
   const groups = await staticGroups(chunk)
