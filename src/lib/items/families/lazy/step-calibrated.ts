@@ -178,16 +178,18 @@ const CARD =
   " A user decoding at context C adds 1 token, C KV tokens and C pairs; a prompt of P tokens adds P tokens, P KV tokens and P(P + 1) ÷ 2 pairs. The η, t and β below are the engine's numbers: this fit's split of one benchmark sweep, not hardware facts. "
 
 /**
- * The H4 label (§7.0, S5-D58) for the metric the answer reads; a ratio prints no "9 in 10" clause. "Fitted on" is the fit
- * set's size, n_F (TPOT's population, as the tab's "fit points"), for every metric: the fit read all of them, so a TTFT
- * label gives its own n, the ~8k-prompt points its p90 is over, in its clause instead.
+ * The H4 label (§7.0, S5-D58) for the metric the answer reads: its n and p90 are that metric's. A TPOT label (and a ratio's,
+ * which prints no "9 in 10" clause) gives n_F, the points the fit read; a TTFT label gives G3's population, the fit points
+ * with ~8k prompts its p90 is over. The fit read all n_F points for TTFT too, so that n is the points the TTFT error was
+ * checked on, and the label says so instead of "fitted on".
  */
 function h4(r: CalibratedRow, metric: 'tpot' | 'ttft' | null): PromptPart[] {
   const { name, prec } = rowIds(r)
   const lab = (m: string, k: string, rest: string): PromptPart[] => [t(` · ${m} 9 in 10 within `), claim(`phys.${r.key}.${k}`), t(rest)]
+  const points = metric === 'ttft' ? `checked on ${r.label.ttft.n} InferenceX points with ~8k prompts` : `fitted on ${r.label.tpot.n} InferenceX points`
   return [
-    t(`[v2 physics · ${name} · vLLM 0.10.2 · ${prec.toUpperCase()} · fitted on ${r.label.tpot.n} InferenceX points (2025-10-29)`),
-    ...(metric === 'tpot' ? lab('TPOT', 'loo-tpot-p90', ' (leave-one-out)') : metric === 'ttft' ? lab('TTFT', 'loo-ttft8k-p90', ` on the ${r.label.ttft.n} with ~8k prompts (leave-one-out, plus the harness term)`) : []),
+    t(`[v2 physics · ${name} · vLLM 0.10.2 · ${prec.toUpperCase()} · ${points} (2025-10-29)`),
+    ...(metric === 'tpot' ? lab('TPOT', 'loo-tpot-p90', ' (leave-one-out)') : metric === 'ttft' ? lab('TTFT', 'loo-ttft8k-p90', ' (leave-one-out, plus the harness term)') : []),
     t(` · ${PHYS_ID}]`),
   ]
 }

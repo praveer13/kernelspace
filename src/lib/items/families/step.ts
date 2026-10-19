@@ -243,7 +243,7 @@ function stemOf(vid: string, p: Params): PromptPart[] {
     case 'decode-ms':
       return [t(`${lead}: ${users}. A decode step ${COUNT}. ${BOUND} How long is the step, in ms?`)]
     case 'prefill-ms':
-      return [t(`${lead}: one ${formatNumber(num(p, 'prompt'))}-token prompt is prefilled in one step, which reads the weights once plus the prompt's KV bytes and does 2 × parameters FLOP per token plus 4 × layers × hidden × P(P + 1) ÷ 2 for attention. ${BOUND} How long is the step, in ms?`)]
+      return [t(`${lead}: one ${formatNumber(num(p, 'prompt'))}-token prompt is prefilled in one step, which reads the weights once and writes the prompt's KV bytes, and does 2 × parameters FLOP per token plus 4 × layers × hidden × P(P + 1) ÷ 2 for attention. ${BOUND} How long is the step, in ms?`)]
     default:
       return [t(`${lead}: ${users}. A decode step ${COUNT}. Counted at the datasheet bound, what is its arithmetic intensity, in FLOP per byte?`)]
   }
@@ -328,7 +328,7 @@ const RATIO_RULES: RatioRule[] = [
 
 const gen: Gen = {
   id: 'step',
-  version: 2,
+  version: 3, // gen-literal-ok: the generator version
   title: 'The step card',
   kcs: [KC.decodeBandwidth, LATENCY_METRICS, PREFILL_VS_DECODE, KC.ridgePoint, KC.fp4Capacity, PARALLELISM],
   variants: VARIANTS,
