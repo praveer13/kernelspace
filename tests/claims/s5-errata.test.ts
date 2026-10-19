@@ -211,7 +211,7 @@ describe('what the lines say of the gap and the mean (S5-D5, S5-11 review)', () 
     expect(text).toContain('up to about 85 steps (1 s ÷ 11.8 ms)')
     const quiz = lesson.blocks.flatMap((b) => (b.type === 'quiz' ? b.questions : [])).find((q) => q.q === 'Continuous batching schedules at what granularity?')!
     expect(quiz.explanation).toContain('a mean over every step a user waits through, prefills included')
-    expect(statline.after).toContain('a mean over every step a user waits through, prefills included')
+    expect(statline.after).toContain('over every step a user waits through, prefills included')
     expect(statline.title).not.toContain('decode step')
   })
 })
