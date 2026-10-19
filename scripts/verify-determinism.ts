@@ -6,7 +6,7 @@
  * comments and strings never trip it) of every file in scope and fails on:
  *   - everywhere in scope: Math.random, Date.now, new Date(, Date(), performance.now and
  *     crypto.getRandomValues (time arrives as a parameter, randomness as a seed);
- *   - also in families/** and world/**: Math.exp, log, log2, log10, pow, sin, cos, tan, atan2, cbrt
+ *   - also in families/**, world/** and fleet-*.ts (S5-02): Math.exp, log, log2, log10, pow, sin, cos, tan, atan2, cbrt
  *     and hypot, whose last-bit results differ between engines;
  *   - aliasing that would hide either: a bare `Math` or `Date` value, `const { random } = Math`,
  *     and computed access such as `Math[name]`.
@@ -151,13 +151,13 @@ function lintSource(fileName: string, text: string, numeric: boolean): Finding[]
 /* ------------------------------ scope ------------------------------ */
 
 /** Whether a repo-relative posix path is linted, and whether the engine-dependent Math ban applies. */
-function scopeOf(rel: string): { numeric: boolean } | null {
+export function scopeOf(rel: string): { numeric: boolean } | null {
   if (!/\.tsx?$/.test(rel) || rel.endsWith('.d.ts')) return null
   if (EXEMPT_FILES.has(path.posix.basename(rel))) return null
   if (rel.startsWith('src/lib/items/families/') || rel.startsWith('src/lib/world/')) return { numeric: true }
   if (rel === 'src/lib/items/core.ts') return { numeric: false }
   if (rel === 'src/lib/kv-zoo.ts') return { numeric: true }
-  if (/^src\/lib\/fleet-[^/]*\.tsx?$/.test(rel)) return { numeric: false }
+  if (/^src\/lib\/fleet-[^/]*\.tsx?$/.test(rel)) return { numeric: true }
   if (/^src\/lib\/learner\/(composer|placement|ticket|paths|recommend|item-block)\.tsx?$/.test(rel)) return { numeric: false }
   // Wave 3 (docs/specs/wave-3.md §17.3, 3a-05b): the pure learner files, and Prove-it v2's seeded question templates.
   if (/^src\/lib\/learner\/(provenance|vrk|competence|cold-checks|forms|iso)\.tsx?$/.test(rel)) return { numeric: false }
@@ -214,29 +214,32 @@ function selfTest(): string[] {
 
 /* ------------------------------ main ------------------------------ */
 
-const rootArg = process.argv.indexOf('--root')
-const root = rootArg >= 0 ? path.resolve(process.argv[rootArg + 1] ?? '') : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+/** Only a direct run lints the tree and exits: tests import `scopeOf` without running it (S5-02, tests/physics/scope.test.ts). */
+if (import.meta.main) {
+  const rootArg = process.argv.indexOf('--root')
+  const root = rootArg >= 0 ? path.resolve(process.argv[rootArg + 1] ?? '') : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-const selfFailures = selfTest()
-if (selfFailures.length > 0) {
-  for (const f of selfFailures) console.error(f)
-  console.error('verify-determinism: the lint itself is broken')
-  process.exit(1)
+  const selfFailures = selfTest()
+  if (selfFailures.length > 0) {
+    for (const f of selfFailures) console.error(f)
+    console.error('verify-determinism: the lint itself is broken')
+    process.exit(1)
+  }
+
+  const all: string[] = []
+  walk('src/lib', root, all)
+  const files = all.filter((rel) => scopeOf(rel)).sort()
+
+  let failures = 0
+  for (const rel of files) {
+    const found = lintSource(rel, readFileSync(path.join(root, rel), 'utf8'), scopeOf(rel)!.numeric)
+    for (const f of found) console.error(`${rel}:${f.line}:${f.col} ${f.message}`)
+    failures += found.length
+  }
+
+  if (failures > 0) {
+    console.error(`verify-determinism: ${failures} finding(s) in ${files.length} file(s) (docs/specs/wave-1.md §16.3)`)
+    process.exit(1)
+  }
+  console.log(`verify-determinism: ${files.length} file(s) in scope, 0 findings`)
 }
-
-const all: string[] = []
-walk('src/lib', root, all)
-const files = all.filter((rel) => scopeOf(rel)).sort()
-
-let failures = 0
-for (const rel of files) {
-  const found = lintSource(rel, readFileSync(path.join(root, rel), 'utf8'), scopeOf(rel)!.numeric)
-  for (const f of found) console.error(`${rel}:${f.line}:${f.col} ${f.message}`)
-  failures += found.length
-}
-
-if (failures > 0) {
-  console.error(`verify-determinism: ${failures} finding(s) in ${files.length} file(s) (docs/specs/wave-1.md §16.3)`)
-  process.exit(1)
-}
-console.log(`verify-determinism: ${files.length} file(s) in scope, 0 findings`)
