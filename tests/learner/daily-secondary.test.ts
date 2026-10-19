@@ -13,8 +13,9 @@ import sig from '../../src/lib/items/families/sig'
 import { correctResponse, gradeResponse } from '../../src/lib/items/grade'
 import { resultFor } from '../../src/lib/items/play'
 import type { Instance, PlayableItem } from '../../src/lib/items/types'
-import { DAILY_FAULT_KCS, formatDailySecondary, selectDailySecondary, type DailyCheck } from '../../src/lib/learner/daily-secondary'
-import { buildWave3Report, DAILY_MIN_DAYS, DAILY_MIN_LEARNERS, formatWave3Report, selectDailyVsOther, type PartnerLedger } from '../../src/lib/learner/outcomes'
+import { DAILY_FAULT_KCS, dailySecondaryJson, formatDailySecondary, selectDailySecondary, type DailyCheck } from '../../src/lib/learner/daily-secondary'
+import { heldBack } from '../../src/lib/learner/hint-secondary'
+import { buildWave3Report, DAILY_MIN_DAYS, DAILY_MIN_LEARNERS, formatWave3Report, selectDailyVsOther, wave3ReportJson, type PartnerLedger } from '../../src/lib/learner/outcomes'
 import { ledgerOfDonation, parseDonation, redactForPartner } from '../../src/lib/learner/redact'
 import { addDays } from '../../src/lib/learner/reentry'
 import { itemResponseOf, seenInstances } from '../../src/lib/learner/today'
@@ -107,10 +108,10 @@ function donated(events: readonly LedgerEvent[]): PartnerLedger {
 }
 
 /** Runs the primary with a sink, then the secondary on the checks it counted. */
-function both(ledgers: readonly PartnerLedger[]) {
+function both(ledgers: readonly PartnerLedger[], afterDecision = false) {
   const checks: DailyCheck[] = []
   const primary = selectDailyVsOther(ledgers, CONTENT, (c) => checks.push(c))
-  return { primary, checks, secondary: selectDailySecondary(ledgers, checks, primary) }
+  return { primary, checks, secondary: selectDailySecondary(ledgers, checks, primary, afterDecision) }
 }
 
 /*
@@ -281,11 +282,14 @@ describe('selectDailySecondary', () => {
     expect(b.secondary).toEqual(a.secondary)
     expect(formatDailySecondary(b.secondary)).toEqual(formatDailySecondary(a.secondary))
     expect(both(crew.map((l) => donated(l.events))).secondary).toEqual(both(crew).secondary)
+    expect(dailySecondaryJson(both(crew.map((l) => donated(l.events))).secondary)).toEqual(dailySecondaryJson(both(crew).secondary))
   })
 })
 
 describe('the report prints every line', () => {
-  const report = (ledgers: readonly PartnerLedger[], fleetDaily = true) => formatWave3Report(buildWave3Report(ledgers, { cards: CONTENT, signed: { hintLadders: false, fleetDaily } }))
+  const build = (ledgers: readonly PartnerLedger[], fleetDaily = true, afterDecision = false) =>
+    buildWave3Report(ledgers, { cards: CONTENT, signed: { hintLadders: false, fleetDaily }, afterDecision })
+  const report = (ledgers: readonly PartnerLedger[], fleetDaily = true, afterDecision = false) => formatWave3Report(build(ledgers, fleetDaily, afterDecision))
   const block = (text: string) => {
     const lines = text.split('\n')
     const at = lines.findIndex((line) => line.startsWith('F3  '))
@@ -308,25 +312,61 @@ describe('the report prints every line', () => {
     ])
   })
 
-  test('underpowered: the counts, and "not enough data" in place of every accuracy', () => {
+  test('underpowered: the counts, and in place of every accuracy that it is held back until the decision, in F2\'s words', () => {
     const lines = block(report(crew))
     expect(lines).toEqual([
       '      secondary outputs, reported and not decisive (docs/prereg/fleet-daily.md §3 and §5), among 5 donors (self-selected; observational, no causal claim):',
       '        learners with a Daily: 4 of 5 donors',
       '        eligible checks per group: 6 checks on Daily KCs, 9 checks on other KCs',
-      '        pooled accuracy of each group: not enough data (n = 2 of 197 learners with a check in both groups; fleet-daily.md §4 shows no accuracy below that, so only counts); Daily KCs n = 6 checks, 3 learners; other KCs n = 9 checks, 4 learners',
+      '        pooled accuracy of each group: held back until the decision (§5: no interim looks at outcomes; n = 2 of 197 learners with a check in both groups); Daily KCs n = 6 checks, 3 learners; other KCs n = 9 checks, 4 learners',
       '        learners with a check in only one group: 1 with Daily-KC checks only, 2 with other-KC checks only (2 with both)',
-      '        the table per fault KC (an answer counts once for each fault KC it carries): not enough data (n = 2 of 197 learners with a check in both groups; fleet-daily.md §4 shows no accuracy below that, so only counts)',
+      '        the table per fault KC (an answer counts once for each fault KC it carries): held back until the decision (§5: no interim looks at outcomes; n = 2 of 197 learners with a check in both groups)',
       '          t5.kv-capacity                  Daily KCs n = 3 checks, 2 learners | other KCs n = 3 checks, 3 learners',
       '          t2.admission-scheduling         Daily KCs n = 1 check, 1 learner | other KCs n = 2 checks, 2 learners',
       '          t7.capacity-planning            Daily KCs n = 1 check, 1 learner | other KCs n = 2 checks, 2 learners',
       '          t5.prefill-decode-interference  Daily KCs n = 1 check, 1 learner | other KCs n = 2 checks, 2 learners',
     ])
     expect(lines.join('\n')).not.toMatch(/\d %/)
+    expect(lines.join('\n')).toContain(heldBack(2, DAILY_MIN_LEARNERS, 'with a check in both groups'))
+  })
+
+  test('with --after-decision below the minimum: every accuracy, as once powered, and F3\'s row says it was read after the decision', () => {
+    const after = block(report(crew, true, true))
+    expect(after.join('\n')).not.toContain('held back')
+    expect(after[3]).toBe('        pooled accuracy of each group: Daily KCs 4 of 6 = 66.7 %, Wilson 95 % interval 30.0 % to 90.3 % (n = 6 checks, 3 learners); other KCs 6 of 9 = 66.7 %, Wilson 95 % interval 35.4 % to 87.9 % (n = 9 checks, 4 learners)')
+    expect(after[5]).toBe('        the table per fault KC (an answer counts once for each fault KC it carries)')
+    expect(after[6]).toContain('Daily KCs 2 of 3 = 66.7 %')
+    expect(both(crew, true).secondary.shown).toBe(true)
+    expect(formatDailySecondary(both(crew, true).secondary).map((l) => `      ${l}`)).toEqual(after)
+    const lines = report(crew, true, true).split('\n')
+    const at = lines.findIndex((line) => line.startsWith('F3  '))
+    expect(lines.slice(at, at + 2)).toEqual([
+      'F3  Fleet Daily keep-or-kill → NOT ENOUGH DATA (read after the decision was recorded: --after-decision)',
+      '      not enough data (n = 2 of 197 learners with a 30-day sig check on a Daily KC and on another, 5 partners; 6 Daily and 9 other checks)',
+    ])
+    // powered, the flag changes nothing but the row's note
+    expect(block(report(powered, true, true))).toEqual(block(report(powered)))
+  })
+
+  test('--json holds back what the text holds back, keeps the verdict and each n, and shows it all once powered or after the decision', () => {
+    const r = build(crew)
+    const view = JSON.parse(JSON.stringify(wave3ReportJson(r)))
+    // the primary: its accuracies and d are held, its verdict, learners and counts stay
+    expect(view.daily).toEqual({ ...r.daily, daily: { n: 6, held: true }, other: { n: 9, held: true }, diff: { n: 2, held: true } })
+    expect(view.daily.verdict).toBe('underpowered')
+    // the secondary: each accuracy is its n and learners; the counts stay
+    expect(view.dailySecondary.daily).toEqual({ n: 6, learners: 3, held: true })
+    expect(view.dailySecondary.perKc[0]).toEqual({ kc: KV, daily: { n: 3, learners: 2, held: true }, other: { n: 3, learners: 3, held: true } })
+    expect([view.dailySecondary.withDaily, view.dailySecondary.onlyDaily, view.dailySecondary.onlyOther, view.dailySecondary.both]).toEqual([4, 1, 2, 2])
+    expect(JSON.stringify([view.daily, view.dailySecondary])).not.toMatch(/"(?:rate|correct|ci95|mean|lower|upper)":/)
+    expect(dailySecondaryJson(both(crew).secondary)).toEqual(view.dailySecondary)
+    for (const shown of [build(powered), build(crew, true, true)]) expect(JSON.stringify(wave3ReportJson(shown))).toBe(JSON.stringify(shown))
   })
 
   test('nothing while the file is unsigned; the block reproduces byte for byte, and a donation prints the same block', () => {
-    expect(report(crew, false)).not.toContain('fleet-daily.md §3 and §5')
+    // neither F2's block nor F3's prints while its file is unsigned (both are, here): the row says so
+    expect(report(crew, false)).not.toContain('secondary outputs')
+    expect(report(crew, false, true)).toBe(report(crew, false))
     expect(report(powered)).toBe(report(powered))
     for (const ledgers of [crew, powered]) expect(block(report(ledgers.map((l) => donated(l.events))))).toEqual(block(report(ledgers)))
   })

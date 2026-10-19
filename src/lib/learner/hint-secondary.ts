@@ -21,10 +21,21 @@
  * Every per-arm line reads `ladder` and `packet` only, so §6.3's exclusion applies to each of them as to the primary;
  * the header counts what each line leaves out.
  *
- * The primary's window and bootstrap are handed in (`PrimaryRules`) rather than imported, so this module and
- * outcomes.ts do not import each other (D53's rule for the learner modules).
+ * The intention-to-treat population's armed checks are the primary's by construction (D80), so its d is the primary's
+ * own: it is not computed again here, and one d never prints with two sets of bounds.
  *
- * Pure: no clock, no randomness (the bootstrap is seeded), so a report reproduces byte for byte.
+ * hint-ladders.md §5 allows no interim look at outcomes and lets help-seeking counts be read for safety (D97). So until
+ * the decision (the primary reaches its required n, or the owner reads the report after recording the decision, the
+ * report's `--after-decision`) the report shows the counts and help-seeking measures only: the population, the share of
+ * red checks with any help, packet use, rungs reached, bottom-outs and their windows, the release order and the
+ * help-seeking counts. Every outcome, pooled or by arm, is held back: the first cold checks (the never-helped checks' and
+ * the lab-by-arm table's), attempts to green, the unseen-seed gap, minutes to green and the Prove-it attempt rate. A
+ * held-back line prints its name and its n. `hintSecondaryJson` holds the same values back from `--json`.
+ *
+ * The primary's window and decision are handed in (`PrimaryRules`, `HintDecision`) rather than imported, so this module
+ * and outcomes.ts do not import each other (D53's rule for the learner modules).
+ *
+ * Pure: no clock, no randomness, so a report reproduces byte for byte.
  */
 
 import { SYSTEMS_FORGE_LABS } from '@/data/labs'
@@ -33,10 +44,9 @@ import type { Kc } from '@/lib/kc/types'
 import { compareEvents } from '@/lib/ledger/merge'
 import { parseHintRef } from '@/lib/ledger/refs'
 import type { LedgerEvent, LocalDay } from '@/lib/ledger/types'
-import { hash32 } from '@/lib/rng'
 import type { CardsContent } from './cards'
 import { RANDOMIZED_LABS } from './experiments'
-import type { MeanDifference } from './outcomes'
+import type { HintArms } from './outcomes'
 import { proportionOf, type Proportion } from './proportion'
 import { daysBetween } from './reentry'
 
@@ -49,12 +59,13 @@ export type Standing = ArmName | 'both' | 'unarmed' | 'none'
 export const RUNG_ORDER = ['R0', 'R1', 'R2', 'R3', 'R4', 'bottom'] as const
 export type RungName = (typeof RUNG_ORDER)[number]
 
-/** What the primary fixes and this module reuses: outcomes.ts `HINT_WINDOW_DAYS`, `bootstrapDraws` and `percentile`. */
+/** What the primary fixes and this module reuses: outcomes.ts `HINT_WINDOW_DAYS`. */
 export interface PrimaryRules {
   window: readonly [number, number]
-  bootstrapDraws(items: readonly number[], stat: (sample: readonly number[]) => number | null, seed: number): number[]
-  percentile(ascending: readonly number[], p: number): number | null
 }
+
+/** The primary's sample, its minimum and its verdict (`selectHintArms`): whether the outcomes here may be shown. */
+export type HintDecision = Pick<HintArms, 'learners' | 'required' | 'verdict'>
 
 /** A median with the number of values behind it. */
 export interface MedianOf {
@@ -101,6 +112,8 @@ export type ProveMix = ArmName | 'mixed' | 'none'
 export const PROVE_MIXES: readonly ProveMix[] = ['ladder', 'packet', 'mixed', 'none']
 
 export interface HintSecondary {
+  /** Ledgers read: the donors the results are "among" (§5). */
+  donors: number
   /** Learners with a check of the randomized labs that was ever red. */
   partners: number
   /** Every check ever red: red in a recorded run, or helped (help shows only under a red check). */
@@ -108,12 +121,14 @@ export interface HintSecondary {
   standing: Record<Standing, number>
   /** Runs of the randomized labs with no `passed` list (a donation made before it was kept): no check is red or green in them. */
   runsWithoutDetail: number
-  /** (1) The intention-to-treat population, by recorded arm: the primary's d, outcome and bootstrap over these checks. */
+  /**
+   * (1) The intention-to-treat population, by recorded arm: its armed checks are the primary's (D80), so these counts are
+   * the primary's and its d is the primary's own, which this module does not compute again.
+   */
   itt: {
     learners: number
     partners: number
     checks: Record<ArmName, number>
-    diff: MeanDifference
     /** The red checks never helped, which carry no arm: their outcome, pooled. */
     unhelped: Proportion
   }
@@ -133,6 +148,11 @@ export interface HintSecondary {
   /** Ledgers that went into `release` (full exports), and donations, which carry no calendar day (wave-3.md §15.2). */
   releaseLedgers: number
   releaseDonations: number
+  /** Whether the outcomes are shown: the primary reached its required n, or the report is read after the decision (§5, D97). */
+  shown: boolean
+  /** The primary's learners with a cold check in both arms, and the minimum it needs. */
+  learners: number
+  required: number
 }
 
 type Ledger = readonly LedgerEvent[]
@@ -148,7 +168,6 @@ const msOf = (e: LedgerEvent): number | null => {
   const ms = (e as { ms?: unknown }).ms
   return typeof ms === 'number' && Number.isFinite(ms) && ms >= 0 ? ms : null
 }
-const meanOf = (xs: readonly number[]): number | null => (xs.length === 0 ? null : xs.reduce((s, x) => s + x, 0) / xs.length)
 const medianOf = (xs: readonly number[]): MedianOf => {
   if (xs.length === 0) return { n: 0, median: null }
   const s = [...xs].sort((a, b) => a - b)
@@ -198,14 +217,16 @@ function standingOf(arms: ReadonlySet<string>, unarmed: boolean, helped: boolean
 const emptyRungs = (): Record<RungName | 'none', number> => ({ R0: 0, R1: 0, R2: 0, R3: 0, R4: 0, bottom: 0, none: 0 })
 
 /**
- * The secondary outputs over the partners' ledgers. `rules` carries the primary's window and bootstrap; `opts` names
- * the labs and the KC graph, as `selectHintArms` takes them.
+ * The secondary outputs over the partners' ledgers. `rules` carries the primary's window and `primary` its decision;
+ * `opts` names the labs and the KC graph, as `selectHintArms` takes them, and whether the report is read after the
+ * decision (`afterDecision`, the report's `--after-decision`).
  */
 export function selectHintSecondary(
   ledgers: readonly { events: Ledger }[],
   content: CardsContent,
   rules: PrimaryRules,
-  opts: { labs?: typeof SYSTEMS_FORGE_LABS; kcs?: readonly Kc[] } = {},
+  primary: HintDecision,
+  opts: { labs?: typeof SYSTEMS_FORGE_LABS; kcs?: readonly Kc[]; afterDecision?: boolean } = {},
 ): HintSecondary {
   const labs = (opts.labs ?? SYSTEMS_FORGE_LABS).filter((l) => RANDOMIZED_LABS.includes(l.id))
   const labIds = new Set(labs.map((l) => l.id))
@@ -220,7 +241,7 @@ export function selectHintSecondary(
   const releasePacket = new Map<string, LocalDay>()
   let releaseLedgers = 0
   let releaseDonations = 0
-  const ittDs: number[] = []
+  let ittLearners = 0
   let ittPartners = 0
 
   ledgers.forEach((ledger, learner) => {
@@ -357,7 +378,7 @@ export function selectHintSecondary(
       }
     }
     if (outcomes.ladder.length + outcomes.packet.length > 0) ittPartners += 1
-    if (outcomes.ladder.length > 0 && outcomes.packet.length > 0) ittDs.push((meanOf(outcomes.ladder) as number) - (meanOf(outcomes.packet) as number))
+    if (outcomes.ladder.length > 0 && outcomes.packet.length > 0) ittLearners += 1
   })
 
   const of = (s: Standing) => rows.filter((r) => r.standing === s)
@@ -396,11 +417,6 @@ export function selectHintSecondary(
   const redInRun = rows.filter((r) => r.redInRun)
   const unhelpedRows = of('none')
   const unhelpedOutcomes = unhelpedRows.filter((r) => r.outcome !== null)
-  const draws = rules.bootstrapDraws(ittDs, meanOf, hash32('hint-ladders:itt'))
-  const lo = rules.percentile(draws, 0.025)
-  const hi = rules.percentile(draws, 0.975)
-  const diff: MeanDifference =
-    ittDs.length === 0 ? { n: 0, mean: null, lower: null, upper: null, ci95: null } : { n: ittDs.length, mean: meanOf(ittDs), lower: lo, upper: hi, ci95: lo === null || hi === null ? null : [lo, hi] }
 
   const cell = (lab: string, arm: ArmName): LabArmCell => {
     const list = rows.filter((r) => r.lab === lab && r.standing === arm)
@@ -418,15 +434,15 @@ export function selectHintSecondary(
     .map(({ lab, day }) => ({ lab, day }))
 
   return {
+    donors: ledgers.length,
     partners: new Set(rows.map((r) => r.learner)).size,
     everRed: rows.length,
     standing,
     runsWithoutDetail,
     itt: {
-      learners: diff.n,
+      learners: ittLearners,
       partners: ittPartners,
       checks: { ladder: of('ladder').filter((r) => r.outcome !== null).length, packet: of('packet').filter((r) => r.outcome !== null).length },
-      diff,
       unhelped: proportionOf(unhelpedOutcomes.filter((r) => r.outcome).length, unhelpedOutcomes.length),
     },
     arms: { ladder: armSecondary('ladder'), packet: armSecondary('packet') },
@@ -444,6 +460,9 @@ export function selectHintSecondary(
     release,
     releaseLedgers,
     releaseDonations,
+    shown: primary.verdict !== 'underpowered' || opts.afterDecision === true,
+    learners: primary.learners,
+    required: primary.required,
   }
 }
 
@@ -455,37 +474,93 @@ const pct = (x: number | null): string => (x === null ? 'n/a' : `${(x * 100).toF
 const share = (p: Proportion, noun = ''): string =>
   p.n === 0 ? 'n/a (n = 0)' : `${p.correct} of ${p.n}${noun === '' ? '' : ` ${noun}`} = ${pct(p.rate)}${p.ci95 === null ? '' : `, Wilson 95 % interval ${pct(p.ci95[0])} to ${pct(p.ci95[1])}`}`
 const num = (x: number | null, digits = 1): string => (x === null ? 'n/a' : Number.isInteger(x) ? String(x) : x.toFixed(digits))
-const points = (x: number | null): string => (x === null ? 'n/a' : `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1)} points`)
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`
 const byArm = (f: (arm: ArmName) => string): string => ARMS.map((a) => `${a} ${f(a)}`).join('; ')
 
 /**
- * F2's secondary outputs as report lines, each named by the pre-registration's own words and section. Null (the file is
- * unsigned) prints that they are not read, as the primary does.
+ * What a held-back line of F2's or F3's block says in place of its reading (both files' §5: no interim look at outcomes),
+ * with the primary's n and minimum (`who` names its learners). daily-secondary.ts prints the same words.
  */
-export function formatHintSecondary(s: HintSecondary | null): string[] {
-  if (s === null) return ['F2 secondary outputs (docs/prereg/hint-ladders.md §3 and §5): not read, the pre-registration is unsigned']
+export const heldBack = (learners: number, required: number, who: string): string =>
+  `held back until the decision (§5: no interim looks at outcomes; n = ${learners} of ${required} learners ${who})`
+
+/**
+ * F2's secondary outputs as report lines, each named by the pre-registration's own words and section; the report prints
+ * them under F2's row once the file is signed, as it prints F3's under F3's. Until the decision (`s.shown` false) each
+ * outcome line prints its name, its n and that it is held back (§5, D97), and no reading.
+ */
+export function formatHintSecondary(s: HintSecondary): string[] {
   const a = s.arms
   const u = s.unhelped
   const itt = s.itt
+  const held = heldBack(s.learners, s.required, 'with a cold check in both arms')
   const median = (m: MedianOf, unit = '', units = unit): string => (m.n === 0 ? 'n/a (n = 0)' : `median ${num(m.median)}${m.median === 1 ? unit : units} (n = ${m.n})`)
   const rungs = (arm: ArmName): string => `${[...RUNG_ORDER, 'none' as const].map((r) => `${r === 'bottom' ? 'bottom-out' : r === 'none' ? 'packet only' : r} ${a[arm].rungs[r]}`).join(', ')} (n = ${a[arm].checks})`
-  const labCell = (c: LabArmCell): string => `${plural(c.checks, 'check')}, ${plural(c.help, 'help ack')}, accuracy ${c.accuracy.n === 0 ? 'no outcome' : share(c.accuracy)}`
+  const accuracy = (c: LabArmCell): string => (!s.shown ? `n = ${c.accuracy.n}` : c.accuracy.n === 0 ? 'no outcome' : share(c.accuracy))
+  const labCell = (c: LabArmCell): string => `${plural(c.checks, 'check')}, ${plural(c.help, 'help ack')}, accuracy ${accuracy(c)}`
+  const untimed = (n: number): string => (n > 0 ? `, ${n} without recorded time` : '')
+  const attempts = "§3 attempts to green (recorded runs from a check's first red run to its first green, inclusive)"
+  const gap = "§3 the unseen-seed gap (of the runs after a check's first green, each on newly drawn seeds, those in which it was red again)"
+  const minutes = "§3 minutes to green (the recorded time of the lab's runs, their `ms`, from a check's first red run to its first green; no event records the coding time between runs) and whole days"
+  const prove = "§3 Prove-it attempt rate (all-green randomized labs followed by a Prove-it attempt, by the arms of the lab's helped checks)"
+  const proveLine = (f: (p: Proportion) => string): string =>
+    `ladder only ${f(s.prove.ladder)}; packet only ${f(s.prove.packet)}; both arms ${f(s.prove.mixed)}; no armed help ${f(s.prove.none)}; all ${f(s.prove.all)}`
   return [
-    'F2 secondary outputs (docs/prereg/hint-ladders.md §3 and §5): reported, never decisive; by the recorded arm of the check, labs 01 to 03',
-    `  population: ${plural(s.everRed, 'check')} ever red (red in a recorded run, or helped) over ${plural(s.partners, 'learner')}: ladder ${s.standing.ladder}, packet ${s.standing.packet}; in no arm: ${s.standing.none} never helped (the page records an arm only on a help ack), ${s.standing.unarmed} helped before the arm was known (§6.3) and ${s.standing.both} with both arms (§2), which every per-arm line leaves out as the primary does${s.runsWithoutDetail > 0 ? `; ${plural(s.runsWithoutDetail, 'run')} without per-check results (a donation made before it kept them) mark no check red or green` : ''}`,
-    `  §3 intention to treat (secondary), every check that was ever red, by recorded arm: ladder − packet ${points(itt.diff.mean)}, one-sided 97.5 % bootstrap bounds ${points(itt.diff.lower)} and ${points(itt.diff.upper)} (10,000 resamples over learners); n = ${itt.learners} learners with a cold check in both arms, ${plural(itt.partners, 'learner')} with any; ${itt.checks.ladder} ladder and ${itt.checks.packet} packet checks. Its armed checks are the primary's; the ${plural(s.standing.none, 'red check')} never helped carry no arm and are in no d: their first cold check ${share(itt.unhelped)}`,
-    `  §3 attempts to green (recorded runs from a check's first red run to its first green, inclusive): ${byArm((x) => `${median(a[x].attempts)}, ${a[x].notGreen} not green yet`)}; never helped ${median(u.attempts)}, ${u.notGreen} not green yet`,
-    `  §3 the unseen-seed gap (of the runs after a check's first green, each on newly drawn seeds, those in which it was red again): ${byArm((x) => `${plural(a[x].gap.checks, 'check')}, red again in ${share(a[x].gap, 'later runs')}`)}; never helped ${plural(u.gap.checks, 'check')}, red again in ${share(u.gap, 'later runs')}`,
-    `  §3 minutes to green (the recorded time of the lab's runs, their \`ms\`, from a check's first red run to its first green; no event records the coding time between runs) and whole days: ${byArm((x) => `${median(a[x].minutes, ' min')}, ${median(a[x].days, ' day', ' days')}${a[x].untimed > 0 ? `, ${a[x].untimed} without recorded time` : ''}`)}; never helped ${median(u.minutes, ' min')}, ${median(u.days, ' day', ' days')}${u.untimed > 0 ? `, ${u.untimed} without recorded time` : ''}`,
+    `secondary outputs, reported and not decisive (docs/prereg/hint-ladders.md §3 and §5), among ${plural(s.donors, 'donor')} (self-selected; no causal claim beyond the randomization within them), by the recorded arm of the check, labs 01 to 03:`,
+    `  population: ${plural(s.everRed, 'check')} ever red (red in a recorded run, or helped), from ${s.partners} of the ${plural(s.donors, 'donor')}: ladder ${s.standing.ladder}, packet ${s.standing.packet}; in no arm: ${s.standing.none} never helped (the page records an arm only on a help ack), ${s.standing.unarmed} helped before the arm was known (§6.3) and ${s.standing.both} with both arms (§2), which every per-arm line leaves out as the primary does${s.runsWithoutDetail > 0 ? `; ${plural(s.runsWithoutDetail, 'run')} without per-check results (a donation made before it kept them) mark no check red or green` : ''}`,
+    `  §3 intention to treat (secondary), every check that was ever red, by recorded arm: its armed checks are the primary's population, so its d is the primary's own (D80) and is not computed twice; n = ${itt.learners} learners with a cold check in both arms, ${plural(itt.partners, 'learner')} with any; ${itt.checks.ladder} ladder and ${itt.checks.packet} packet checks. The ${plural(s.standing.none, 'red check')} never helped carry no arm and are in no d: their first cold check ${s.shown ? share(itt.unhelped) : `is ${held}; n = ${plural(itt.unhelped.n, 'check')} with one`}`,
+    s.shown
+      ? `  ${attempts}: ${byArm((x) => `${median(a[x].attempts)}, ${a[x].notGreen} not green yet`)}; never helped ${median(u.attempts)}, ${u.notGreen} not green yet`
+      : `  ${attempts}: ${held}; ${byArm((x) => `n = ${a[x].attempts.n}`)}; never helped n = ${u.attempts.n}`,
+    s.shown
+      ? `  ${gap}: ${byArm((x) => `${plural(a[x].gap.checks, 'check')}, red again in ${share(a[x].gap, 'later runs')}`)}; never helped ${plural(u.gap.checks, 'check')}, red again in ${share(u.gap, 'later runs')}`
+      : `  ${gap}: ${held}; ${byArm((x) => `${plural(a[x].gap.checks, 'check')}, n = ${plural(a[x].gap.n, 'later run')}`)}; never helped ${plural(u.gap.checks, 'check')}, n = ${plural(u.gap.n, 'later run')}`,
+    s.shown
+      ? `  ${minutes}: ${byArm((x) => `${median(a[x].minutes, ' min')}, ${median(a[x].days, ' day', ' days')}${untimed(a[x].untimed)}`)}; never helped ${median(u.minutes, ' min')}, ${median(u.days, ' day', ' days')}${untimed(u.untimed)}`
+      : `  ${minutes}: ${held}; ${byArm((x) => `n = ${a[x].days.n}${untimed(a[x].untimed)}`)}; never helped n = ${u.days.n}${untimed(u.untimed)}`,
     `  §3 the share of red checks with any help (a \`hint:\` or \`packet:\` ack; pooled, since a check with no help records no arm): ${share(s.helped, 'red checks')}`,
     `  §3 packet use per red check by arm, which is also §5's contamination check (packet use per arm): ${byArm((x) => `${plural(a[x].packetUses, 'use')}, ${num(a[x].checks === 0 ? null : a[x].packetUses / a[x].checks, 2)} a check; ${share(a[x].packetChecks, 'checks')} with any`)}`,
     `  §3 rungs reached (the highest rung opened per check): ${byArm(rungs)}`,
     `  §3 bottom-outs and the 24 h "assisted" windows they open (one each; windows on one lab may overlap): ${byArm((x) => `${plural(a[x].bottomOuts, 'bottom-out')}, ${plural(a[x].assistedRuns, 'run')} credited assisted inside them`)}${s.bottomOutsElsewhere > 0 ? `; ${s.bottomOutsElsewhere} on checks in no arm` : ''}`,
-    `  §3 Prove-it attempt rate (all-green randomized labs followed by a Prove-it attempt, by the arms of the lab's helped checks): ladder only ${share(s.prove.ladder, 'labs')}; packet only ${share(s.prove.packet, 'labs')}; both arms ${share(s.prove.mixed, 'labs')}; no armed help ${share(s.prove.none, 'labs')}; all ${share(s.prove.all, 'labs')}`,
-    '  §5 lab-by-arm table, the carry-over check (checks; help acks, rungs opened and packet uses; first cold-check accuracy where there is an outcome):',
+    s.shown ? `  ${prove}: ${proveLine((p) => share(p, 'labs'))}` : `  ${prove}: ${held}; ${proveLine((p) => `n = ${plural(p.n, 'lab')}`)}`,
+    `  §5 lab-by-arm table, the carry-over check (checks; help acks, rungs opened and packet uses; first cold-check accuracy where there is an outcome)${s.shown ? '' : `, the accuracy ${held}, its n the checks with an outcome`}:`,
     ...s.labs.map((l) => `      ${l.lab}: ${byArm((x) => labCell(l.arms[x]))}`),
     `  §5 release order of the randomized labs (descriptive, never an instrument): the first day the full exports show an armed hint and an armed packet for the lab, ${s.release.map((r) => `${r.lab} ${r.day ?? 'not seen'}`).join(', ')} (from ${plural(s.releaseLedgers, 'full export')})${s.releaseDonations > 0 ? `; not available from donations: ${plural(s.releaseDonations, 'donation')} carry day offsets from the learner's first event and no calendar day (wave-3.md §15.2), so they are not in it` : ''}`,
     `  §5 help-seeking counts per arm, the safety read: ${byArm((x) => `${plural(a[x].hintAcks, 'rung')} opened and ${plural(a[x].packetUses, 'packet use')} on ${plural(a[x].checks, 'check')} of ${plural(a[x].learners, 'learner')}, ${a[x].notGreen} not green yet`)}; "ask a human" is a link and records nothing`,
   ]
+}
+
+/* ------------------------------------------------------------------ */
+/* The JSON view                                                       */
+/* ------------------------------------------------------------------ */
+
+/** A value `--json` holds back until the decision: the marker, and the value's n where it has one. */
+export interface Held {
+  held: true
+  n?: number
+}
+export const held = (n?: number): Held => (n === undefined ? { held: true } : { n, held: true })
+
+/**
+ * What `partner-report --json` prints for F2's secondary outputs: the report's own object once the outcomes are shown,
+ * and until then the same object with every value the text holds back replaced by `held(n)`. Nothing is computed again.
+ */
+export function hintSecondaryJson(s: HintSecondary): object {
+  if (s.shown) return s
+  const outcomesOf = (x: Pick<ArmSecondary, 'attempts' | 'gap' | 'minutes' | 'days'>) => ({
+    attempts: held(x.attempts.n),
+    gap: { ...held(x.gap.n), checks: x.gap.checks },
+    minutes: held(x.minutes.n),
+    days: held(x.days.n),
+  })
+  const labCell = (c: LabArmCell) => ({ ...c, accuracy: held(c.accuracy.n) })
+  return {
+    ...s,
+    itt: { ...s.itt, unhelped: held(s.itt.unhelped.n) },
+    arms: { ladder: { ...s.arms.ladder, ...outcomesOf(s.arms.ladder) }, packet: { ...s.arms.packet, ...outcomesOf(s.arms.packet) } },
+    // the never-helped checks' "not green yet" is printed only beside their attempts to green
+    unhelped: { ...s.unhelped, ...outcomesOf(s.unhelped), notGreen: held() },
+    prove: { ladder: held(s.prove.ladder.n), packet: held(s.prove.packet.n), mixed: held(s.prove.mixed.n), none: held(s.prove.none.n), all: held(s.prove.all.n) },
+    labs: s.labs.map((l) => ({ lab: l.lab, arms: { ladder: labCell(l.arms.ladder), packet: labCell(l.arms.packet) } })),
+  }
 }

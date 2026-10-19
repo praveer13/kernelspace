@@ -38,10 +38,10 @@ import type { IsoInstant, LedgerEvent, LocalDay, WorkingKey, WorkingRecord } fro
 import { hash32, splitmix32 } from '@/lib/rng'
 import { wilson } from './calibration'
 import { DEFAULT_SLO, deriveCardsDetailed, type CardsContent, type CardsExtra, type CardsPlan, type FirstReview } from './cards'
-import { formatDailySecondary, selectDailySecondary, type DailyCheck, type DailySecondary } from './daily-secondary'
+import { dailySecondaryJson, formatDailySecondary, selectDailySecondary, type DailyCheck, type DailySecondary } from './daily-secondary'
 import { RANDOMIZED_LABS } from './experiments'
 import { FORM_SLOTS, type FormId } from './forms'
-import { formatHintSecondary, selectHintSecondary, type HintSecondary } from './hint-secondary'
+import { formatHintSecondary, held, hintSecondaryJson, selectHintSecondary, type HintSecondary } from './hint-secondary'
 import { weekStartOf } from './planner'
 import { proportionOf, type Proportion } from './proportion'
 import { daysBetween } from './reentry'
@@ -2273,6 +2273,12 @@ export interface Wave3Inputs {
   /** Whether the owner signed `docs/prereg/hint-ladders.md` and `docs/prereg/fleet-daily.md`; unsigned means the arms and the Daily are not read. */
   signed?: { hintLadders: boolean; fleetDaily: boolean }
   watcher?: WatcherState
+  /**
+   * The report is read after the owner recorded the F2 and F3 decisions (`partner-report --after-decision`): the outcomes
+   * their secondary outputs hold back until the decision are shown even below the primary's minimum (D97, D94), and the
+   * two rows say so. Nothing a verdict reads changes.
+   */
+  afterDecision?: boolean
 }
 
 export interface Wave3Report {
@@ -2286,6 +2292,8 @@ export interface Wave3Report {
   daily: DailyVsOther | null
   /** F3's secondary outputs (fleet-daily.md §3 and §5), reported and never decisive; null while the file is unsigned. */
   dailySecondary: DailySecondary | null
+  /** Read after the decision (`Wave3Inputs.afterDecision`). */
+  afterDecision: boolean
   proveV2: ProveV2
   provedInUse: ProvedInUse
   discrimination: Discrimination30
@@ -2311,11 +2319,12 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
   const signed = inputs.signed ?? { hintLadders: false, fleetDaily: false }
   const watcher = inputs.watcher ?? 'unsigned'
   const surface = selectSurfaceMinutes(events)
+  const afterDecision = inputs.afterDecision === true
   const hint = signed.hintLadders ? selectHintArms(ledgers, cards) : null
-  const hintSecondary = signed.hintLadders ? selectHintSecondary(ledgers, cards, { window: HINT_WINDOW_DAYS, bootstrapDraws, percentile }) : null
+  const hintSecondary = hint ? selectHintSecondary(ledgers, cards, { window: HINT_WINDOW_DAYS }, hint, { afterDecision }) : null
   const dailyChecks: DailyCheck[] = []
   const daily = signed.fleetDaily ? selectDailyVsOther(ledgers, cards, (c) => dailyChecks.push(c)) : null
-  const dailySecondary = daily ? selectDailySecondary(ledgers, dailyChecks, daily) : null
+  const dailySecondary = daily ? selectDailySecondary(ledgers, dailyChecks, daily, afterDecision) : null
   const proveV2 = selectProveV2(events, inputs.v2Labs ?? new Set())
   const provedInUse = selectProvedInUse(events)
   const discrimination = selectDiscrimination30(ledgers, cards, { lures: inputs.lures })
@@ -2490,6 +2499,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
     hintSecondary,
     daily,
     dailySecondary,
+    afterDecision,
     proveV2,
     provedInUse,
     discrimination,
@@ -2533,9 +2543,11 @@ export function formatWave3Report(r: Wave3Report): string {
     `Wave 3 field gates over ${plural(r.partners, 'export')} (one per partner; day offsets only, no calendar dates)`,
     '',
     ...r.gates.flatMap((g) => [
-      `${g.id}  ${g.label} → ${STATUS_LABEL[g.status]}`,
+      `${g.id}  ${g.label} → ${STATUS_LABEL[g.status]}${r.afterDecision && ((g.id === 'F2' && r.hint) || (g.id === 'F3' && r.daily)) ? ' (read after the decision was recorded: --after-decision)' : ''}`,
       `      ${g.status === 'owner' || g.status === 'insufficient' ? '' : `n = ${g.n}, ${plural(g.partners, 'partner')}: `}${g.detail}`,
-      // F3's secondary outputs (fleet-daily.md §3 and §5) under its row: reported, never decisive, once the file is signed
+      // F2's and F3's secondary outputs (each file's §3 and §5) under their rows: reported, never decisive, and nothing
+      // while the file is unsigned (the row says so)
+      ...(g.id === 'F2' && r.hintSecondary ? formatHintSecondary(r.hintSecondary).map((line) => `      ${line}`) : []),
       ...(g.id === 'F3' && r.dailySecondary ? formatDailySecondary(r.dailySecondary).map((line) => `      ${line}`) : []),
     ]),
     '',
@@ -2543,8 +2555,6 @@ export function formatWave3Report(r: Wave3Report): string {
     ...r.keepOrKill.map(
       (k) => `  ${k.label}: ${k.verdict === 'unsigned' ? `NOT READ, the pre-registration is unsigned; default: ${k.fallback}` : k.verdict === 'underpowered' ? `UNDERPOWERED, default: ${k.fallback}` : k.verdict === 'keep' ? 'KEEP' : `KILL, default: ${k.fallback}`}`,
     ),
-    '',
-    ...formatHintSecondary(r.hintSecondary),
     '',
     'the journey re-cut (F1): active minutes per week, median over partners, beside PLAN §4.D',
     s.partners < SURFACE_MIN_PARTNERS
@@ -2558,4 +2568,21 @@ export function formatWave3Report(r: Wave3Report): string {
       : `Fleet Week receipts (${plural(ra.partners, 'partner')}): ${FLEET_ACTS.map((a) => `${a} ${ra.acts[a].verified} of ${ra.acts[a].cited} verified, ${ra.acts[a].uncited} uncited (${plural(ra.acts[a].acts, 'act')})`).join('; ')}; rubric self-scores (0 / 1 / 2 / 3) over ${plural(ra.rubricActs, 'act')}: ${RUBRIC_KEYS.map((k) => `${k} ${ra.rubric[k].join(' / ')}`).join(', ')}`,
   ]
   return lines.join('\n')
+}
+
+/**
+ * The Wave 3 report as `partner-report --json` prints it: the report's object, with F2's and F3's outcomes held back as
+ * the text holds them back. Until the decision (the primary below its minimum and the report not read after the
+ * decision), the primary's d and bounds (`diff`), F3's pooled accuracies (`daily`, `other`) and every outcome of the two
+ * secondary blocks are replaced by `held(n)`; the verdicts, the counts and each n stay. Nothing is computed again.
+ */
+export function wave3ReportJson(r: Wave3Report): object {
+  const decided = (verdict: string) => verdict !== 'underpowered' || r.afterDecision
+  return {
+    ...r,
+    hint: r.hint && !decided(r.hint.verdict) ? { ...r.hint, diff: held(r.hint.diff.n) } : r.hint,
+    hintSecondary: r.hintSecondary && hintSecondaryJson(r.hintSecondary),
+    daily: r.daily && !decided(r.daily.verdict) ? { ...r.daily, daily: held(r.daily.daily.n), other: held(r.daily.other.n), diff: held(r.daily.diff.n) } : r.daily,
+    dailySecondary: r.dailySecondary && dailySecondaryJson(r.dailySecondary),
+  }
 }
