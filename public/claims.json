@@ -3879,6 +3879,942 @@
       "boundary": "Every parameter at NVFP4's 4.5 bits (4-bit value plus an FP8 scale per 16 values), the per-tensor FP32 scale and any tensors a checkpoint keeps at higher precision ignored; the fitted efficiency absorbs the difference."
     },
     {
+      "id": "phys.h100-vllm-0-10-2-fp8.eta-mem",
+      "kind": "derived",
+      "value": 0.89,
+      "unit": "ratio",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: η_m, share of datasheet bandwidth reached",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the share of the datasheet HBM bandwidth the step reaches reading weights and KV, fitted on the 25 fit points; docs/physics/report.json"
+      },
+      "boundary": "The share of the datasheet HBM bandwidth the step reaches reading weights and KV, under the step card's form (docs/specs/s5.md §3.2), fitted on the 25 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.eta-flop",
+      "kind": "derived",
+      "value": 0.52,
+      "unit": "ratio",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: η_f, share of dense peak reached",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the share of the dense peak the step reaches in long prefills, fitted on the 25 fit points; docs/physics/report.json"
+      },
+      "boundary": "The share of the dense peak the step reaches in long prefills, under the step card's form (docs/specs/s5.md §3.2), fitted on the 25 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.layer-us",
+      "kind": "derived",
+      "value": 72.3,
+      "unit": "µs",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: t_layer, fixed cost per layer per step",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the fixed cost per layer per engine step, fitted on the 25 fit points; docs/physics/report.json"
+      },
+      "boundary": "The fixed cost per layer per engine step, under the step card's form (docs/specs/s5.md §3.2), fitted on the 25 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.seq-us",
+      "kind": "derived",
+      "value": 61.1,
+      "unit": "µs",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: t_seq, host work per running request per step",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the host work per running request per engine step, fitted on the 25 fit points; docs/physics/report.json"
+      },
+      "boundary": "The host work per running request per engine step, under the step card's form (docs/specs/s5.md §3.2), fitted on the 25 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.link-gbs",
+      "kind": "derived",
+      "value": 213.2,
+      "unit": "GB/s",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: β, effective all-reduce bandwidth",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the effective all-reduce bandwidth at TP above 1 (a fitted number, not NVLink), fitted on the 25 fit points; docs/physics/report.json"
+      },
+      "boundary": "The effective all-reduce bandwidth at TP above 1 (a fitted number, not NVLink), under the step card's form (docs/specs/s5.md §3.2), fitted on the 25 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.harness-ms",
+      "kind": "derived",
+      "value": 21.5,
+      "unit": "ms",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: TTFT residual (fitted, not physics)",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the TTFT residual: what the engine's admission-to-first-token window misses (client overhead, the wait for an in-flight step, any prefill misfit); it lives outside the engine, fitted on the 25 fit points; docs/physics/report.json"
+      },
+      "boundary": "The TTFT residual: what the engine's admission-to-first-token window misses (client overhead, the wait for an in-flight step, any prefill misfit); it lives outside the engine, under the step card's form (docs/specs/s5.md §3.2), fitted on the 25 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.loo-tpot-mean",
+      "kind": "derived",
+      "value": 5,
+      "unit": "%",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: TPOT leave-one-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT leave-one-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 25 fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1: mean at most 10 %, p90 at most 15 %). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.loo-tpot-p90",
+      "kind": "derived",
+      "value": 11.3,
+      "unit": "%",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: TPOT leave-one-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT leave-one-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 25 fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.heldout-tpot-mean",
+      "kind": "derived",
+      "value": 3.8,
+      "unit": "%",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: TPOT held-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT held-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 17 held-out points (concurrency 8 and 32, never fitted) of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2: mean at most 10 %, p90 at most 15 %). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.heldout-tpot-p90",
+      "kind": "derived",
+      "value": 11,
+      "unit": "%",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: TPOT held-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT held-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 17 held-out points of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.loo-ttft8k-mean",
+      "kind": "derived",
+      "value": 11.1,
+      "unit": "%",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: median TTFT leave-one-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: median TTFT leave-one-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 8 fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (gate G3: mean at most 15 %; it decides TTFT eligibility only). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.h100-vllm-0-10-2-fp8.loo-ttft8k-p90",
+      "kind": "derived",
+      "value": 20.7,
+      "unit": "%",
+      "label": "H100 SXM · vLLM 0.10.2 · FP8: median TTFT leave-one-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.h100-sxm.hbm-bw",
+          "hw.h100-sxm.fp8-dense",
+          "hw.h100-sxm.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: median TTFT leave-one-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 8 fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (printed beside gate G3). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.eta-mem",
+      "kind": "derived",
+      "value": 0.84,
+      "unit": "ratio",
+      "label": "B200 · vLLM 0.10.2 · FP8: η_m, share of datasheet bandwidth reached",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the share of the datasheet HBM bandwidth the step reaches reading weights and KV, fitted on the 34 fit points; docs/physics/report.json"
+      },
+      "boundary": "The share of the datasheet HBM bandwidth the step reaches reading weights and KV, under the step card's form (docs/specs/s5.md §3.2), fitted on the 34 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.eta-flop",
+      "kind": "derived",
+      "value": 0.46,
+      "unit": "ratio",
+      "label": "B200 · vLLM 0.10.2 · FP8: η_f, share of dense peak reached",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the share of the dense peak the step reaches in long prefills, fitted on the 34 fit points; docs/physics/report.json"
+      },
+      "boundary": "The share of the dense peak the step reaches in long prefills, under the step card's form (docs/specs/s5.md §3.2), fitted on the 34 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.layer-us",
+      "kind": "derived",
+      "value": 61.8,
+      "unit": "µs",
+      "label": "B200 · vLLM 0.10.2 · FP8: t_layer, fixed cost per layer per step",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the fixed cost per layer per engine step, fitted on the 34 fit points; docs/physics/report.json"
+      },
+      "boundary": "The fixed cost per layer per engine step, under the step card's form (docs/specs/s5.md §3.2), fitted on the 34 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.seq-us",
+      "kind": "derived",
+      "value": 32.6,
+      "unit": "µs",
+      "label": "B200 · vLLM 0.10.2 · FP8: t_seq, host work per running request per step",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the host work per running request per engine step, fitted on the 34 fit points; docs/physics/report.json"
+      },
+      "boundary": "The host work per running request per engine step, under the step card's form (docs/specs/s5.md §3.2), fitted on the 34 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.link-gbs",
+      "kind": "derived",
+      "value": 291.1,
+      "unit": "GB/s",
+      "label": "B200 · vLLM 0.10.2 · FP8: β, effective all-reduce bandwidth",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the effective all-reduce bandwidth at TP above 1 (a fitted number, not NVLink), fitted on the 34 fit points; docs/physics/report.json"
+      },
+      "boundary": "The effective all-reduce bandwidth at TP above 1 (a fitted number, not NVLink), under the step card's form (docs/specs/s5.md §3.2), fitted on the 34 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.harness-ms",
+      "kind": "derived",
+      "value": 52.3,
+      "unit": "ms",
+      "label": "B200 · vLLM 0.10.2 · FP8: TTFT residual (fitted, not physics)",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the TTFT residual: what the engine's admission-to-first-token window misses (client overhead, the wait for an in-flight step, any prefill misfit); it lives outside the engine, fitted on the 34 fit points; docs/physics/report.json"
+      },
+      "boundary": "The TTFT residual: what the engine's admission-to-first-token window misses (client overhead, the wait for an in-flight step, any prefill misfit); it lives outside the engine, under the step card's form (docs/specs/s5.md §3.2), fitted on the 34 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), FP8 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.loo-tpot-mean",
+      "kind": "derived",
+      "value": 3.6,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · FP8: TPOT leave-one-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT leave-one-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 34 fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1: mean at most 10 %, p90 at most 15 %). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.loo-tpot-p90",
+      "kind": "derived",
+      "value": 7.3,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · FP8: TPOT leave-one-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT leave-one-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 34 fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.heldout-tpot-mean",
+      "kind": "derived",
+      "value": 3.1,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · FP8: TPOT held-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT held-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 24 held-out points (concurrency 8 and 32, never fitted) of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2: mean at most 10 %, p90 at most 15 %). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.heldout-tpot-p90",
+      "kind": "derived",
+      "value": 6,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · FP8: TPOT held-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT held-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 24 held-out points of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.loo-ttft8k-mean",
+      "kind": "derived",
+      "value": 11.1,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · FP8: median TTFT leave-one-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: median TTFT leave-one-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 11 fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (gate G3: mean at most 15 %; it decides TTFT eligibility only). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-fp8.loo-ttft8k-p90",
+      "kind": "derived",
+      "value": 19.1,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · FP8: median TTFT leave-one-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp8-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-fp8",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: median TTFT leave-one-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 11 fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (printed beside gate G3). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.eta-mem",
+      "kind": "derived",
+      "value": 0.76,
+      "unit": "ratio",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: η_m, share of datasheet bandwidth reached",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the share of the datasheet HBM bandwidth the step reaches reading weights and KV, fitted on the 36 fit points; docs/physics/report.json"
+      },
+      "boundary": "The share of the datasheet HBM bandwidth the step reaches reading weights and KV, under the step card's form (docs/specs/s5.md §3.2), fitted on the 36 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), NVFP4 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.eta-flop",
+      "kind": "derived",
+      "value": 0.34,
+      "unit": "ratio",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: η_f, share of dense peak reached",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the share of the dense peak the step reaches in long prefills, fitted on the 36 fit points; docs/physics/report.json"
+      },
+      "boundary": "The share of the dense peak the step reaches in long prefills, under the step card's form (docs/specs/s5.md §3.2), fitted on the 36 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), NVFP4 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.layer-us",
+      "kind": "derived",
+      "value": 70,
+      "unit": "µs",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: t_layer, fixed cost per layer per step",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the fixed cost per layer per engine step, fitted on the 36 fit points; docs/physics/report.json"
+      },
+      "boundary": "The fixed cost per layer per engine step, under the step card's form (docs/specs/s5.md §3.2), fitted on the 36 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), NVFP4 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.seq-us",
+      "kind": "derived",
+      "value": 28.9,
+      "unit": "µs",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: t_seq, host work per running request per step",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the host work per running request per engine step, fitted on the 36 fit points; docs/physics/report.json"
+      },
+      "boundary": "The host work per running request per engine step, under the step card's form (docs/specs/s5.md §3.2), fitted on the 36 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), NVFP4 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.link-gbs",
+      "kind": "derived",
+      "value": 283.7,
+      "unit": "GB/s",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: β, effective all-reduce bandwidth",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the effective all-reduce bandwidth at TP above 1 (a fitted number, not NVLink), fitted on the 36 fit points; docs/physics/report.json"
+      },
+      "boundary": "The effective all-reduce bandwidth at TP above 1 (a fitted number, not NVLink), under the step card's form (docs/specs/s5.md §3.2), fitted on the 36 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), NVFP4 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.harness-ms",
+      "kind": "derived",
+      "value": 41.8,
+      "unit": "ms",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: TTFT residual (fitted, not physics)",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: the TTFT residual: what the engine's admission-to-first-token window misses (client overhead, the wait for an in-flight step, any prefill misfit); it lives outside the engine, fitted on the 36 fit points; docs/physics/report.json"
+      },
+      "boundary": "The TTFT residual: what the engine's admission-to-first-token window misses (client overhead, the wait for an in-flight step, any prefill misfit); it lives outside the engine, under the step card's form (docs/specs/s5.md §3.2), fitted on the 36 fit points (concurrency 4, 16 and 64) of one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29), NVFP4 weights and FP8 KV, Llama-3-70B architecture. This is this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. Stale from 2027-04-16 with the sweep; a refit is a new physics id. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.loo-tpot-mean",
+      "kind": "derived",
+      "value": 4.5,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: TPOT leave-one-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT leave-one-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 36 fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1: mean at most 10 %, p90 at most 15 %). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.loo-tpot-p90",
+      "kind": "derived",
+      "value": 7.3,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: TPOT leave-one-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT leave-one-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 36 fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.heldout-tpot-mean",
+      "kind": "derived",
+      "value": 2.8,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: TPOT held-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT held-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 24 held-out points (concurrency 8 and 32, never fitted) of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2: mean at most 10 %, p90 at most 15 %). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.heldout-tpot-p90",
+      "kind": "derived",
+      "value": 5.2,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: TPOT held-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: TPOT held-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 24 held-out points of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.loo-ttft8k-mean",
+      "kind": "derived",
+      "value": 13.5,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: median TTFT leave-one-out mean error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: median TTFT leave-one-out mean error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "Mean over the 12 fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (gate G3: mean at most 15 %; it decides TTFT eligibility only). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "phys.b200-vllm-0-10-2-nvfp4.loo-ttft8k-p90",
+      "kind": "derived",
+      "value": 26.1,
+      "unit": "%",
+      "label": "B200 · vLLM 0.10.2 · NVFP4: median TTFT leave-one-out p90 error",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "derived": {
+        "from": [
+          "bench.inferencex.llama70b-2025-10-29",
+          "hw.b200.hbm-bw",
+          "hw.b200.fp4-dense",
+          "hw.b200.hbm-capacity",
+          "model.llama3-70b.weight-bytes-nvfp4",
+          "model.llama3-70b.params",
+          "model.llama3-70b.layers",
+          "model.llama3-70b.hidden-size",
+          "model.llama3-70b.kv-bytes-per-token-fp8",
+          "status.inferencex.harness.batch-tokens",
+          "status.vllm-0-10-2.block-size"
+        ],
+        "formula": "fit-physics: median TTFT leave-one-out p90 error, error = |predicted / measured - 1|; docs/physics/report.json"
+      },
+      "boundary": "The 90th percentile (nearest rank) over the 12 fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (printed beside gate G3). Error is |predicted ÷ measured − 1| on one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29); the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. Fit status: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
       "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c16.tpot",
       "kind": "benchmark",
       "value": 0.013192185948816437,
