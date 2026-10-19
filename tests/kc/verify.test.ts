@@ -54,7 +54,7 @@ describe('verify-kc on the committed graph', () => {
   test('passes, with only the pending-family warnings', () => {
     const r = verifyKc(input())
     expect(r.errors).toEqual([])
-    expect(r.warnings.every((w) => /^family (frag|kv|roofline|goodput|cost|memory|spec|sig|compile|tiling|prefill|rollout):/.test(w))).toBe(true)
+    expect(r.warnings.every((w) => /^family (frag|kv|roofline|goodput|cost|memory|spec|sig|compile|tiling|prefill|rollout|step):/.test(w))).toBe(true)
     expect(r.stats.pairing.every((p) => p.edges.length > 0)).toBe(true)
   })
 
@@ -67,7 +67,7 @@ describe('verify-kc on the committed graph', () => {
     const r = verifyKc(input({ families }))
     expect(r.errors).toEqual([])
     // only the Wave 2 and Wave 3 families are still pending
-    expect(r.warnings.every((w) => /^family (goodput|cost|memory|spec|sig|compile|tiling|prefill|rollout):/.test(w))).toBe(true)
+    expect(r.warnings.every((w) => /^family (goodput|cost|memory|spec|sig|compile|tiling|prefill|rollout|step):/.test(w))).toBe(true)
   })
 
   test('passes with no warnings once every family lands with its §4.2 row', () => {
@@ -91,6 +91,8 @@ describe('verify-kc on the committed graph', () => {
       },
       { id: 'prefill', kcs: ['t6.epd-phases', 't6.kv-tiering', 't6.cache-timing-oracle'] },
       { id: 'rollout', kcs: ['t6.rollout-bound-rl', 't6.weight-sync'] },
+      // S5 (s5.md §7.2-7.5): the η-free `step` variants; S5-14 adds t6.parallelism-composition
+      { id: 'step', kcs: [KC.decodeBandwidth, 't5.latency-metrics', 't5.prefill-vs-decode', KC.ridgePoint, KC.fp4Capacity] },
     ]
     const r = verifyKc(input({ families }))
     expect(r.errors).toEqual([])

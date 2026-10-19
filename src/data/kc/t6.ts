@@ -139,7 +139,8 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'procedure',
     lessons: ['t6.l5'],
     requires: [KC.quantizedBytes],
-    gen: ['memory'],
+    // `step` (s5 §7.4): the weight GB at BF16, FP8 and NVFP4
+    gen: ['memory', 'step'],
     since,
   },
   // t6.l5's "re-derive the roofline for a B200" is t4.decode-bandwidth on a second chip, so the lesson revisits
