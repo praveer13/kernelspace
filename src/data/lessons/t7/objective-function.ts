@@ -22,7 +22,7 @@ Why the distinction is not pedantry: as batch grows, throughput rises and then f
       md: `## The metrics, hardened
 
 - **TTFT** (arrival → first token): queue + prefill (+ KV transfer when disaggregated). The "is it alive" signal. Production SLOs: Meta's app targets **<350 ms**; typical chat SLOs 0.5–2 s depending on prompt class.
-- **TPOT/ITL** (per-token decode period): bandwidth ÷ (weight+KV bytes), divided by batch efficiency. The "is it fast" signal. Meta targets **<25 ms TTIT**; chat comfort is <50–80 ms.
+- **TPOT/ITL** (per-token decode period, seconds per token): at least (weight + KV bytes each GPU reads per step) ÷ its bandwidth, the datasheet bound; bandwidth ÷ bytes is the inverse, a rate. Measured periods sit above the bound: Llama-3.3-70B FP8 on 4 H100s ran 2.2× it at 4 users and 3.1× at 64 (InferenceX ids 41187, 41821). The "is it fast" signal. Meta targets **<25 ms TTIT**; chat comfort is <50–80 ms.
 - **E2E latency** and its percentiles: what the user feels; **p50 for design, p95/p99 for contracts**. Never one number.
 - **Goodput**: throughput *subject to* the above — e.g. req/s with TTFT < 2 s AND TPOT < 100 ms. Capacity planning's only honest input.
 - **Interactivity** (tok/s/user) vs **throughput** (tok/s/GPU): the two ends of the dial T7.L3 turns. Benchmarks that don't name which end they're showing are marketing.
