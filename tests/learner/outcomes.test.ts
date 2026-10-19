@@ -2796,6 +2796,24 @@ describe('scripts/partner-report.ts: the Wave 3 field gates', () => {
       const both = run('--wave1', '--wave2', file)
       expect(both.status).toBe(2)
       expect(both.stderr).toContain('usage')
+      // F2 and F3 are signed: below their minimum the JSON holds back their d (and F3's accuracies), keeping the verdict and n
+      expect(report.hint).toMatchObject({ verdict: 'underpowered', learners: 0, diff: { n: 0, held: true } })
+      expect(report.daily).toMatchObject({ verdict: 'underpowered', daily: { n: 0, held: true }, other: { n: 0, held: true }, diff: { n: 0, held: true } })
+      expect(report.daily.daily.rate).toBeUndefined()
+      expect(report.afterDecision).toBe(false)
+      // --after-decision shows them, and the rows say the report was read after the decision; it is a Wave 3 flag only
+      const after = JSON.parse(run('--json', '--after-decision', file).stdout)
+      expect(after.afterDecision).toBe(true)
+      expect(after.hint.diff).toEqual({ n: 0, mean: null, lower: null, upper: null, ci95: null })
+      expect(after.daily.daily).toEqual({ n: 0, correct: 0, rate: null, ci95: null })
+      const text = run('--after-decision', file).stdout
+      for (const row of ['F2  hint ladders keep-or-kill', 'F3  Fleet Daily keep-or-kill']) expect(text).toContain(`${row} → NOT ENOUGH DATA (read after the decision was recorded: --after-decision)\n`)
+      expect(run(file).stdout).not.toContain('--after-decision')
+      for (const wave of ['--wave1', '--wave2']) {
+        const r = run('--after-decision', wave, file)
+        expect(r.status).toBe(2)
+        expect(r.stderr).toContain('usage')
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

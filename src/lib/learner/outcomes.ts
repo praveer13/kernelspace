@@ -38,8 +38,10 @@ import type { IsoInstant, LedgerEvent, LocalDay, WorkingKey, WorkingRecord } fro
 import { hash32, splitmix32 } from '@/lib/rng'
 import { wilson } from './calibration'
 import { DEFAULT_SLO, deriveCardsDetailed, type CardsContent, type CardsExtra, type CardsPlan, type FirstReview } from './cards'
+import { dailySecondaryJson, formatDailySecondary, selectDailySecondary, type DailyCheck, type DailySecondary } from './daily-secondary'
 import { RANDOMIZED_LABS } from './experiments'
 import { FORM_SLOTS, type FormId } from './forms'
+import { formatHintSecondary, held, hintSecondaryJson, selectHintSecondary, type HintSecondary } from './hint-secondary'
 import { weekStartOf } from './planner'
 import { proportionOf, type Proportion } from './proportion'
 import { daysBetween } from './reentry'
@@ -1641,14 +1643,15 @@ export interface DailyVsOther {
  * (provenance `unseen`, not assisted) on a KC the signature items serve other than the diagnosis skill itself, at least
  * `DAILY_MIN_DAYS` local days after that KC's card was created. It is a *Daily* check when the learner had played a Daily
  * that trained the KC (an `inc:daily/` event carrying it in `kcs`) before the answer, and an *other* check otherwise. The
- * skill `t7.incident-diagnosis` is in every Daily, so it has no contrast and is left out.
+ * skill `t7.incident-diagnosis` is in every Daily, so it has no contrast and is left out. `onCheck` receives each check as
+ * it is counted, so the secondary outputs (daily-secondary.ts) read the primary's own classification.
  */
-export function selectDailyVsOther(ledgers: readonly PartnerLedger[], content: CardsContent): DailyVsOther {
+export function selectDailyVsOther(ledgers: readonly PartnerLedger[], content: CardsContent, onCheck?: (check: DailyCheck) => void): DailyVsOther {
   const sig = new Set(content.kcs.filter((k) => k.gen?.includes('sig') && k.id !== KC.incidentDiagnosis).map((k) => k.id))
   const counts = { daily: { n: 0, correct: 0 }, other: { n: 0, correct: 0 } }
   const ds: number[] = []
   let partners = 0
-  for (const l of ledgers) {
+  for (const [learner, l] of ledgers.entries()) {
     const cards = cardsOf(l, content)
     if (cards === null) continue
     const met = new Set<string>()
@@ -1665,6 +1668,7 @@ export function selectDailyVsOther(ledgers: readonly PartnerLedger[], content: C
         const group = met.has(kc) ? mine.daily : mine.other
         group.n += 1
         if (isOk(e)) group.correct += 1
+        onCheck?.({ learner, kc, group: group === mine.daily ? 'daily' : 'other', ok: isOk(e) })
       }
     }
     for (const g of ['daily', 'other'] as const) {
@@ -2269,6 +2273,12 @@ export interface Wave3Inputs {
   /** Whether the owner signed `docs/prereg/hint-ladders.md` and `docs/prereg/fleet-daily.md`; unsigned means the arms and the Daily are not read. */
   signed?: { hintLadders: boolean; fleetDaily: boolean }
   watcher?: WatcherState
+  /**
+   * The report is read after the owner recorded the F2 and F3 decisions (`partner-report --after-decision`): the outcomes
+   * their secondary outputs hold back until the decision are shown even below the primary's minimum (D97, D94), and the
+   * two rows say so. Nothing a verdict reads changes.
+   */
+  afterDecision?: boolean
 }
 
 export interface Wave3Report {
@@ -2276,8 +2286,14 @@ export interface Wave3Report {
   surface: SurfaceMinutes
   /** Null while docs/prereg/hint-ladders.md is unsigned. */
   hint: HintArms | null
+  /** F2's secondary outputs (hint-secondary.ts; prereg §3 and §5), reported and never decisive; null while unsigned, as `hint` is. */
+  hintSecondary: HintSecondary | null
   /** Null while docs/prereg/fleet-daily.md is unsigned. */
   daily: DailyVsOther | null
+  /** F3's secondary outputs (fleet-daily.md §3 and §5), reported and never decisive; null while the file is unsigned. */
+  dailySecondary: DailySecondary | null
+  /** Read after the decision (`Wave3Inputs.afterDecision`). */
+  afterDecision: boolean
   proveV2: ProveV2
   provedInUse: ProvedInUse
   discrimination: Discrimination30
@@ -2303,8 +2319,12 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
   const signed = inputs.signed ?? { hintLadders: false, fleetDaily: false }
   const watcher = inputs.watcher ?? 'unsigned'
   const surface = selectSurfaceMinutes(events)
+  const afterDecision = inputs.afterDecision === true
   const hint = signed.hintLadders ? selectHintArms(ledgers, cards) : null
-  const daily = signed.fleetDaily ? selectDailyVsOther(ledgers, cards) : null
+  const hintSecondary = hint ? selectHintSecondary(ledgers, cards, { window: HINT_WINDOW_DAYS }, hint, { afterDecision }) : null
+  const dailyChecks: DailyCheck[] = []
+  const daily = signed.fleetDaily ? selectDailyVsOther(ledgers, cards, (c) => dailyChecks.push(c)) : null
+  const dailySecondary = daily ? selectDailySecondary(ledgers, dailyChecks, daily, afterDecision) : null
   const proveV2 = selectProveV2(events, inputs.v2Labs ?? new Set())
   const provedInUse = selectProvedInUse(events)
   const discrimination = selectDiscrimination30(ledgers, cards, { lures: inputs.lures })
@@ -2476,7 +2496,10 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
     partners: ledgers.length,
     surface,
     hint,
+    hintSecondary,
     daily,
+    dailySecondary,
+    afterDecision,
     proveV2,
     provedInUse,
     discrimination,
@@ -2520,8 +2543,12 @@ export function formatWave3Report(r: Wave3Report): string {
     `Wave 3 field gates over ${plural(r.partners, 'export')} (one per partner; day offsets only, no calendar dates)`,
     '',
     ...r.gates.flatMap((g) => [
-      `${g.id}  ${g.label} → ${STATUS_LABEL[g.status]}`,
+      `${g.id}  ${g.label} → ${STATUS_LABEL[g.status]}${r.afterDecision && ((g.id === 'F2' && r.hint) || (g.id === 'F3' && r.daily)) ? ' (read after the decision was recorded: --after-decision)' : ''}`,
       `      ${g.status === 'owner' || g.status === 'insufficient' ? '' : `n = ${g.n}, ${plural(g.partners, 'partner')}: `}${g.detail}`,
+      // F2's and F3's secondary outputs (each file's §3 and §5) under their rows: reported, never decisive, and nothing
+      // while the file is unsigned (the row says so)
+      ...(g.id === 'F2' && r.hintSecondary ? formatHintSecondary(r.hintSecondary).map((line) => `      ${line}`) : []),
+      ...(g.id === 'F3' && r.dailySecondary ? formatDailySecondary(r.dailySecondary).map((line) => `      ${line}`) : []),
     ]),
     '',
     'keep-or-kill',
@@ -2541,4 +2568,21 @@ export function formatWave3Report(r: Wave3Report): string {
       : `Fleet Week receipts (${plural(ra.partners, 'partner')}): ${FLEET_ACTS.map((a) => `${a} ${ra.acts[a].verified} of ${ra.acts[a].cited} verified, ${ra.acts[a].uncited} uncited (${plural(ra.acts[a].acts, 'act')})`).join('; ')}; rubric self-scores (0 / 1 / 2 / 3) over ${plural(ra.rubricActs, 'act')}: ${RUBRIC_KEYS.map((k) => `${k} ${ra.rubric[k].join(' / ')}`).join(', ')}`,
   ]
   return lines.join('\n')
+}
+
+/**
+ * The Wave 3 report as `partner-report --json` prints it: the report's object, with F2's and F3's outcomes held back as
+ * the text holds them back. Until the decision (the primary below its minimum and the report not read after the
+ * decision), the primary's d and bounds (`diff`), F3's pooled accuracies (`daily`, `other`) and every outcome of the two
+ * secondary blocks are replaced by `held(n)`; the verdicts, the counts and each n stay. Nothing is computed again.
+ */
+export function wave3ReportJson(r: Wave3Report): object {
+  const decided = (verdict: string) => verdict !== 'underpowered' || r.afterDecision
+  return {
+    ...r,
+    hint: r.hint && !decided(r.hint.verdict) ? { ...r.hint, diff: held(r.hint.diff.n) } : r.hint,
+    hintSecondary: r.hintSecondary && hintSecondaryJson(r.hintSecondary),
+    daily: r.daily && !decided(r.daily.verdict) ? { ...r.daily, daily: held(r.daily.daily.n), other: held(r.daily.other.n), diff: held(r.daily.diff.n) } : r.daily,
+    dailySecondary: r.dailySecondary && dailySecondaryJson(r.dailySecondary),
+  }
 }
