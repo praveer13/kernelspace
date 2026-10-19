@@ -384,6 +384,8 @@ export const ttftClaimId = (p: ClaimPoint) =>
 
 const HARDWARE_NAMES: Record<string, string> = { h100: 'H100 SXM', b200: 'B200' }
 const PRECISION_NAMES: Record<string, string> = { fp8: 'FP8', fp4: 'NVFP4' }
+/** The checkpoint each precision's job serves (70b-tmpl.yml at the harness commit: bmk-*-fp8 and bmk-b200-fp4). */
+const MODEL_NAMES: Record<string, string> = { fp8: 'nvidia/Llama-3.3-70B-Instruct-FP8', fp4: 'nvidia/Llama-3.3-70B-Instruct-FP4' }
 
 /** Single-quoted TypeScript string literal. */
 const lit = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
@@ -394,6 +396,8 @@ function claimSource(p: ClaimPoint, protocol: Protocol, member: 'mean_tpot' | 'm
   const value = row[member]
   const hw = HARDWARE_NAMES[row.hardware] ?? row.hardware.toUpperCase()
   const prec = PRECISION_NAMES[row.precision] ?? row.precision.toUpperCase()
+  const model = MODEL_NAMES[row.precision]
+  if (!model) throw new Error(`row ${row.id}: no served model known for precision ${row.precision}`)
   const run = /\/actions\/runs\/(\d+)\/attempts\/(\d+)$/.exec(row.run_url)
   if (!run) throw new Error(`row ${row.id}: run_url is not a GitHub Actions run with an attempt: ${row.run_url}`)
   const what = member === 'mean_tpot' ? 'mean TPOT' : 'median TTFT'
@@ -401,7 +405,7 @@ function claimSource(p: ClaimPoint, protocol: Protocol, member: 'mean_tpot' | 'm
   const label = `InferenceX ${row.id}: ${hw} ${prec} TP ${row.decode_tp}, ${row.isl}/${row.osl} tokens, ${row.conc} users, ${what}`
   const r = protocol.replay
   const boundary =
-    `InferenceX row ${row.id} (run ${run[1]}, attempt ${run[2]}): ${hw}, ${prec} weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit ` +
+    `InferenceX row ${row.id} (run ${run[1]}, attempt ${run[2]}): ${hw}, ${prec} weights, ${model}, vLLM at the harness commit ` +
     `${protocol.snapshot.harness.ref.slice(0, 7)} (0.10.2), TP ${row.decode_tp}, one node, no speculative decoding. ${row.isl} tokens in and ${row.osl} out nominal ` +
     `(lengths drawn from ${r.rangeRatio} to 1 times nominal), ${row.conc} concurrent requests, ${r.promptsPerConc * row.conc} prompts; the ${what} of those requests. ` +
     `Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own.`

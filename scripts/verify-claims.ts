@@ -7,6 +7,8 @@
  * Expiry never fails: stale claims are only listed. `--write` regenerates public/claims.json,
  * and a plain run fails if that file has drifted from the registry. `--online` also re-reads each such
  * config.json at its pinned revision and finds the quote in it exactly once (the one network step; bare runs stay offline).
+ * A `phys.*` claim (the fitted physics v2 values) is reproduced by docs/physics/report.json, decisions.json or controls.json
+ * (`physProblems`, spec s5 §4.5); a `phys.*` claim none of them carries fails.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { ALL_CLAIMS, pinProblems, staleSince, type Claim } from '../src/data/claims/all'
@@ -50,6 +52,8 @@ const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'hw.b200.hbm-capacity': (n) => n('hw.dgx-b200.hbm-total') / 8,
   'hw.b200.hbm-bw': (n) => n('hw.dgx-b200.hbm-bw') / 8,
   'hw.b200.bf16-dense': (n) => (n('hw.hgx-b200.bf16-sparse-system') * 1000) / 8 / 2,
+  'hw.b200.fp8-dense': (n) => (n('hw.hgx-b200.fp8-sparse-system') * 1000) / 8 / 2,
+  'hw.b200.fp4-dense': (n) => (n('hw.hgx-b200.fp4-sparse-system') * 1000) / 8 / 2,
   'hw.b300.hbm-bw': (n) => n('hw.gb300-nvl72.hbm-bw') / 72,
   'model.llama3-8b.head-dim': (n) => n('model.llama3-8b.hidden-size') / n('model.llama3-8b.attn-heads'),
   'model.llama3-70b.head-dim': (n) => n('model.llama3-70b.hidden-size') / n('model.llama3-70b.attn-heads'),
@@ -71,6 +75,10 @@ const DERIVATIONS: Record<string, (n: Reader) => number> = {
   'model.mixtral-8x7b.params': (n) => mixtralParams(n, n('model.mixtral-8x7b.experts')),
   'model.mixtral-8x7b.active-params': (n) => mixtralParams(n, n('model.mixtral-8x7b.experts-per-token')),
   'model.kv.static-utilization': (n) => (n('model.kv.static-utilization-low') + n('model.kv.static-utilization-high')) / 2,
+  'model.llama3-70b.kv-bytes-per-token-fp8': (n) =>
+    2 * n('model.llama3-70b.layers') * n('model.llama3-70b.kv-heads') * n('model.llama3-70b.head-dim') * 1,
+  'model.llama3-70b.weight-bytes-fp8': (n) => n('model.llama3-70b.params') * 1e9 * 1,
+  'model.llama3-70b.weight-bytes-nvfp4': (n) => (n('model.llama3-70b.params') * 1e9 * n('serving.nvfp4.bits-per-weight')) / 8,
   'model.llama3-8b.kv-bytes-per-token': (n) =>
     2 * n('model.llama3-8b.layers') * n('model.llama3-8b.kv-heads') * n('model.llama3-8b.head-dim') * 2,
   'price.act3.b200-node-hourly': (n) => 4 * n('price.b200.median'),
@@ -130,115 +138,187 @@ function zooProblems(c: Claim): string[] {
   return out
 }
 
-const byId = new Map<string, Claim>()
-for (const c of ALL_CLAIMS) {
-  if (byId.has(c.id)) fail(c.id, 'duplicate id')
-  byId.set(c.id, c)
-}
+/** The reports a `phys.*` claim can be reproduced from (spec s5 §4.5, S5-D18, S5-D65), in `docs/physics/`. */
+export const PHYS_REPORTS = ['report.json', 'decisions.json', 'controls.json'] as const
+const PHYS_TOLERANCE = 1e-9
 
-for (const c of ALL_CLAIMS) {
-  if (!ID.test(c.id)) fail(c.id, 'id must be dotted lowercase, e.g. hw.h100-sxm.hbm-bw')
-  if (!c.label.trim()) fail(c.id, 'missing label')
-  if (typeof c.value === 'number' ? !Number.isFinite(c.value) : !c.value.trim()) fail(c.id, 'bad value')
-  if (!validDate(c.verifiedAt)) fail(c.id, `bad verifiedAt "${c.verifiedAt}" (want a real YYYY-MM-DD)`)
-  else if (Date.parse(`${c.verifiedAt}T00:00:00Z`) > Date.now() + 86_400_000) fail(c.id, 'verifiedAt is in the future')
-  if (!Number.isInteger(c.ttlDays) || c.ttlDays <= 0) fail(c.id, `ttlDays missing or not a positive integer: ${c.ttlDays}`)
-
-  const needsSource = c.kind !== 'derived' && c.kind !== 'synthetic'
-  if (needsSource) {
-    if (!c.source) fail(c.id, `kind ${c.kind} needs a source`)
-    else {
-      if (!validUrl(c.source.url)) fail(c.id, `source.url is not an https URL: ${c.source.url}`)
-      if (!c.source.title.trim()) fail(c.id, 'source.title is empty')
-      // a spec or a price is only as good as the words it was read from
-      if ((c.kind === 'spec' || c.kind === 'price') && !c.source.quote?.trim()) fail(c.id, `kind ${c.kind} needs source.quote (the source's own words)`)
+/**
+ * What is wrong with the `phys.*` claims, given the parsed reports (a name from `PHYS_REPORTS` to its JSON, or undefined
+ * when the file does not exist). A report reproduces a claim by carrying its value under `claimValues["<claim id>"]`;
+ * the fit (S5-07) writes the value of every `phys.<row>.*` claim it owns there, the decision tables (S5-08) the findings
+ * and `frontier-sep-p90`, and the controls the `phys.control.*` and `phys.nim.*` claims. A claim fails when no report
+ * carries it, and when every report that does disagrees with it by more than 1e-9 relative (the tolerance `DERIVATIONS`
+ * use). With no `phys.*` claim registered, nothing is checked, so the rule passes before any report exists.
+ */
+export function physProblems(claims: readonly Claim[], reports: Partial<Record<(typeof PHYS_REPORTS)[number], unknown>>): string[] {
+  const out: string[] = []
+  const values = new Map<string, Map<string, number>>()
+  for (const name of PHYS_REPORTS) {
+    const report = reports[name]
+    if (report === undefined) continue
+    const held = (report as { claimValues?: unknown } | null)?.claimValues
+    if (held === undefined) continue
+    if (typeof held !== 'object' || held === null || Array.isArray(held)) {
+      out.push(`docs/physics/${name}: claimValues is not an object of claim id to number`)
+      continue
+    }
+    const map = new Map<string, number>()
+    for (const [id, v] of Object.entries(held)) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) out.push(`docs/physics/${name}: claimValues["${id}"] is not a finite number`)
+      else map.set(id, v)
+    }
+    values.set(name, map)
+  }
+  for (const c of claims) {
+    if (!c.id.startsWith('phys.')) continue
+    if (typeof c.value !== 'number') {
+      out.push(`${c.id}: a phys.* claim is a number, not ${JSON.stringify(c.value)}`)
+      continue
+    }
+    const found = [...values].filter(([, map]) => map.has(c.id)).map(([name, map]) => ({ name, got: map.get(c.id) as number }))
+    if (found.length === 0) {
+      out.push(`${c.id}: no reproducer: none of ${PHYS_REPORTS.map((n) => `docs/physics/${n}`).join(', ')} carries claimValues["${c.id}"]`)
+    } else if (!found.some(({ got }) => Math.abs(got - (c.value as number)) <= PHYS_TOLERANCE * Math.max(1, Math.abs(got)))) {
+      out.push(`${c.id}: drift: registry says ${c.value}, ${found.map(({ name, got }) => `docs/physics/${name} gives ${got}`).join('; ')}`)
     }
   }
-  // a fact tied to one release carries its ref, and its source url must point at it (W13)
-  for (const p of pinProblems(c)) fail(c.id, p)
-  for (const p of zooProblems(c)) fail(c.id, p)
-  if (c.kind === 'synthetic' && c.source) fail(c.id, 'synthetic claims must not carry a source')
-  if (c.kind === 'derived') {
-    if (!c.derived) fail(c.id, 'derived claim needs derived.from and derived.formula')
-    else {
-      if (!c.derived.formula.trim() || c.derived.from.length === 0) fail(c.id, 'derived needs a formula and at least one input')
-      for (const dep of c.derived.from) if (!byId.has(dep)) fail(c.id, `derived.from names unknown claim ${dep}`)
+  return out
+}
+
+export function readPhysReports(dir = 'docs/physics'): { reports: Partial<Record<(typeof PHYS_REPORTS)[number], unknown>>; problems: string[] } {
+  const reports: Partial<Record<(typeof PHYS_REPORTS)[number], unknown>> = {}
+  const problems: string[] = []
+  for (const name of PHYS_REPORTS) {
+    const file = `${dir}/${name}`
+    if (!existsSync(file)) continue
+    try {
+      reports[name] = JSON.parse(readFileSync(file, 'utf8'))
+    } catch (e) {
+      problems.push(`${file}: not valid JSON (${e instanceof Error ? e.message : String(e)})`)
     }
-  } else if (c.derived) fail(c.id, `only derived claims carry derived (kind is ${c.kind})`)
+  }
+  return { reports, problems }
 }
 
-// Derived formulas must reproduce, and must read exactly the inputs they declare.
-const unreproduced: string[] = []
-for (const c of ALL_CLAIMS) {
-  if (c.kind !== 'derived' || !c.derived) continue
-  const derive = DERIVATIONS[c.id]
-  if (!derive) {
-    unreproduced.push(c.id)
-    continue
-  }
-  const read = new Set<string>()
-  const n: Reader = (id) => {
-    const dep = byId.get(id)
-    if (!dep || typeof dep.value !== 'number') throw new Error(`${id} is not a numeric claim`)
-    read.add(id)
-    return dep.value
-  }
-  let got: number
-  try {
-    got = derive(n)
-  } catch (e) {
-    fail(c.id, `derivation threw: ${e instanceof Error ? e.message : String(e)}`)
-    continue
-  }
-  if (typeof c.value !== 'number' || Math.abs(got - c.value) > 1e-9 * Math.max(1, Math.abs(got))) {
-    fail(c.id, `drift: registry says ${c.value}, formula "${c.derived.formula}" gives ${got}`)
-  }
-  const declared = [...c.derived.from].sort().join(',')
-  if ([...read].sort().join(',') !== declared) fail(c.id, `derived.from (${declared}) differs from the inputs the formula reads (${[...read].sort().join(',')})`)
-}
-for (const id of Object.keys(DERIVATIONS)) if (!byId.has(id)) fail(id, 'DERIVATIONS entry has no claim')
-
-// --online: each Hugging Face config.json (the zoo's and the DeepSeek-V3 expert counts'), read again at its pinned revision, contains the quote exactly once.
-if (process.argv.includes('--online') && errors.length === 0) {
-  const files = new Map<string, string>()
+/** The whole check; the script runs it when started directly, and tests import the pure helpers above without running it. */
+async function main(): Promise<void> {
+  const byId = new Map<string, Claim>()
   for (const c of ALL_CLAIMS) {
-    if (!readsHfConfig(c) || !c.source || !HF_CONFIG.test(c.source.url)) continue
-    let text = files.get(c.source.url)
-    if (text === undefined) {
-      const res = await fetch(c.source.url)
-      if (!res.ok) {
-        fail(c.id, `HTTP ${res.status} reading ${c.source.url}`)
-        continue
+    if (byId.has(c.id)) fail(c.id, 'duplicate id')
+    byId.set(c.id, c)
+  }
+
+  for (const c of ALL_CLAIMS) {
+    if (!ID.test(c.id)) fail(c.id, 'id must be dotted lowercase, e.g. hw.h100-sxm.hbm-bw')
+    if (!c.label.trim()) fail(c.id, 'missing label')
+    if (typeof c.value === 'number' ? !Number.isFinite(c.value) : !c.value.trim()) fail(c.id, 'bad value')
+    if (!validDate(c.verifiedAt)) fail(c.id, `bad verifiedAt "${c.verifiedAt}" (want a real YYYY-MM-DD)`)
+    else if (Date.parse(`${c.verifiedAt}T00:00:00Z`) > Date.now() + 86_400_000) fail(c.id, 'verifiedAt is in the future')
+    if (!Number.isInteger(c.ttlDays) || c.ttlDays <= 0) fail(c.id, `ttlDays missing or not a positive integer: ${c.ttlDays}`)
+
+    const needsSource = c.kind !== 'derived' && c.kind !== 'synthetic'
+    if (needsSource) {
+      if (!c.source) fail(c.id, `kind ${c.kind} needs a source`)
+      else {
+        if (!validUrl(c.source.url)) fail(c.id, `source.url is not an https URL: ${c.source.url}`)
+        if (!c.source.title.trim()) fail(c.id, 'source.title is empty')
+        // a spec or a price is only as good as the words it was read from
+        if ((c.kind === 'spec' || c.kind === 'price') && !c.source.quote?.trim()) fail(c.id, `kind ${c.kind} needs source.quote (the source's own words)`)
       }
-      text = (await res.text()).replace(/\s+/g, ' ')
-      files.set(c.source.url, text)
     }
-    const times = text.split((c.source.quote ?? '').replace(/\s+/g, ' ')).length - 1
-    if (times !== 1) fail(c.id, `the quote appears ${times} times in ${c.source.url} (want exactly 1)`)
+    // a fact tied to one release carries its ref, and its source url must point at it (W13)
+    for (const p of pinProblems(c)) fail(c.id, p)
+    for (const p of zooProblems(c)) fail(c.id, p)
+    if (c.kind === 'synthetic' && c.source) fail(c.id, 'synthetic claims must not carry a source')
+    if (c.kind === 'derived') {
+      if (!c.derived) fail(c.id, 'derived claim needs derived.from and derived.formula')
+      else {
+        if (!c.derived.formula.trim() || c.derived.from.length === 0) fail(c.id, 'derived needs a formula and at least one input')
+        for (const dep of c.derived.from) if (!byId.has(dep)) fail(c.id, `derived.from names unknown claim ${dep}`)
+      }
+    } else if (c.derived) fail(c.id, `only derived claims carry derived (kind is ${c.kind})`)
   }
-  console.log(`online: read ${files.size} config.json files at their pinned revisions`)
-}
 
-// public/claims.json mirrors the registry, in ALL_CLAIMS's fixed order, so non-bundled consumers (llms.txt, the freshness issue) can read it.
-const json = `${JSON.stringify({ claims: ALL_CLAIMS }, null, 2)}\n`
-if (process.argv.includes('--write')) {
-  if (errors.length === 0) {
-    writeFileSync(OUT, json)
-    console.log(`wrote ${OUT} (${ALL_CLAIMS.length} claims)`)
+  // Derived formulas must reproduce, and must read exactly the inputs they declare.
+  const unreproduced: string[] = []
+  for (const c of ALL_CLAIMS) {
+    if (c.kind !== 'derived' || !c.derived || c.id.startsWith('phys.')) continue
+    const derive = DERIVATIONS[c.id]
+    if (!derive) {
+      unreproduced.push(c.id)
+      continue
+    }
+    const read = new Set<string>()
+    const n: Reader = (id) => {
+      const dep = byId.get(id)
+      if (!dep || typeof dep.value !== 'number') throw new Error(`${id} is not a numeric claim`)
+      read.add(id)
+      return dep.value
+    }
+    let got: number
+    try {
+      got = derive(n)
+    } catch (e) {
+      fail(c.id, `derivation threw: ${e instanceof Error ? e.message : String(e)}`)
+      continue
+    }
+    if (typeof c.value !== 'number' || Math.abs(got - c.value) > 1e-9 * Math.max(1, Math.abs(got))) {
+      fail(c.id, `drift: registry says ${c.value}, formula "${c.derived.formula}" gives ${got}`)
+    }
+    const declared = [...c.derived.from].sort().join(',')
+    if ([...read].sort().join(',') !== declared) fail(c.id, `derived.from (${declared}) differs from the inputs the formula reads (${[...read].sort().join(',')})`)
   }
-} else if (!existsSync(OUT) || readFileSync(OUT, 'utf8') !== json) {
-  fail(OUT, 'out of date; run: bun scripts/verify-claims.ts --write')
+  for (const id of Object.keys(DERIVATIONS)) if (!byId.has(id)) fail(id, 'DERIVATIONS entry has no claim')
+
+  // A phys.* claim is reproduced by a report under docs/physics/ (S5-D18), never by a formula here.
+  const physReports = readPhysReports()
+  for (const p of physReports.problems) errors.push(p)
+  for (const p of physProblems(ALL_CLAIMS, physReports.reports)) errors.push(p)
+
+  // --online: each Hugging Face config.json (the zoo's and the DeepSeek-V3 expert counts'), read again at its pinned revision, contains the quote exactly once.
+  if (process.argv.includes('--online') && errors.length === 0) {
+    const files = new Map<string, string>()
+    for (const c of ALL_CLAIMS) {
+      if (!readsHfConfig(c) || !c.source || !HF_CONFIG.test(c.source.url)) continue
+      let text = files.get(c.source.url)
+      if (text === undefined) {
+        const res = await fetch(c.source.url)
+        if (!res.ok) {
+          fail(c.id, `HTTP ${res.status} reading ${c.source.url}`)
+          continue
+        }
+        text = (await res.text()).replace(/\s+/g, ' ')
+        files.set(c.source.url, text)
+      }
+      const times = text.split((c.source.quote ?? '').replace(/\s+/g, ' ')).length - 1
+      if (times !== 1) fail(c.id, `the quote appears ${times} times in ${c.source.url} (want exactly 1)`)
+    }
+    console.log(`online: read ${files.size} config.json files at their pinned revisions`)
+  }
+
+  // public/claims.json mirrors the registry, in ALL_CLAIMS's fixed order, so non-bundled consumers (llms.txt, the freshness issue) can read it.
+  const json = `${JSON.stringify({ claims: ALL_CLAIMS }, null, 2)}\n`
+  if (process.argv.includes('--write')) {
+    if (errors.length === 0) {
+      writeFileSync(OUT, json)
+      console.log(`wrote ${OUT} (${ALL_CLAIMS.length} claims)`)
+    }
+  } else if (!existsSync(OUT) || readFileSync(OUT, 'utf8') !== json) {
+    fail(OUT, 'out of date; run: bun scripts/verify-claims.ts --write')
+  }
+
+  if (unreproduced.length > 0) console.log(`note: no reproducer for derived claim(s): ${unreproduced.join(', ')}`)
+  const stale = ALL_CLAIMS.filter((c) => staleSince(c) !== null)
+  if (stale.length > 0) console.log(`stale (informational): ${stale.map((c) => `${c.id} since ${staleSince(c)}`).join('; ')}`)
+
+  if (errors.length > 0) {
+    console.error(`verify-claims: ${errors.length} problem(s)`)
+    for (const e of errors) console.error(`  ${e}`)
+    process.exit(1)
+  }
+  const kinds = new Map<string, number>()
+  for (const c of ALL_CLAIMS) kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1)
+  console.log(`verify-claims: ok, ${ALL_CLAIMS.length} claims (${[...kinds].map(([k, v]) => `${v} ${k}`).join(', ')})`)
 }
 
-if (unreproduced.length > 0) console.log(`note: no reproducer for derived claim(s): ${unreproduced.join(', ')}`)
-const stale = ALL_CLAIMS.filter((c) => staleSince(c) !== null)
-if (stale.length > 0) console.log(`stale (informational): ${stale.map((c) => `${c.id} since ${staleSince(c)}`).join('; ')}`)
-
-if (errors.length > 0) {
-  console.error(`verify-claims: ${errors.length} problem(s)`)
-  for (const e of errors) console.error(`  ${e}`)
-  process.exit(1)
-}
-const kinds = new Map<string, number>()
-for (const c of ALL_CLAIMS) kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1)
-console.log(`verify-claims: ok, ${ALL_CLAIMS.length} claims (${[...kinds].map(([k, v]) => `${v} ${k}`).join(', ')})`)
+if (import.meta.main) await main()

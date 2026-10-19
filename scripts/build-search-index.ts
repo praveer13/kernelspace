@@ -12,7 +12,7 @@
  */
 import { writeFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
-import { ALL_CLAIMS } from '../src/data/claims/all'
+import { ALL_CLAIMS, lazyGroupFor } from '../src/data/claims/all'
 import { PAIRS } from '../src/data/glossary'
 import { KCS } from '../src/data/kc'
 import { PLAYS } from '../src/data/plays'
@@ -22,6 +22,12 @@ import { extractHeadings, slugify } from '../src/pages/lesson/markdown'
 import type { SearchIndex } from '../src/lib/search'
 
 export const INDEX_PATH = 'src/data/search-index.json'
+
+/**
+ * The claim groups the index leaves out (S5-D36): the physics inputs and the generated per-point claims are reached from the
+ * physics tab and /freshness?tab=claims, and about 150 more rows would add several KB to an index that has 757 B of headroom.
+ */
+export const UNINDEXED_GROUPS: readonly string[] = ['lazy/physics', 'lazy/ix-points']
 
 /**
  * Hooks and competence statements are crumbs in the palette; the full text is one click away. Cut to keep the chunk
@@ -97,7 +103,7 @@ export function buildSearchIndex(hookMax = HOOK_MAX, canMax = CAN_MAX): SearchIn
       return lesson ? [[k.id, k.title, canClause(k.can, canMax), lesson.id, kcAnchor(k.id, k.title, k.can, lesson), k.claims ?? []]] : []
     }),
     plays: Object.values(PLAYS).map((p) => [p.id, p.title, p.lessonId, p.minutes]),
-    claims: ALL_CLAIMS.map((c) => [c.id, c.label, c.value, c.unit ?? '']),
+    claims: ALL_CLAIMS.filter((c) => !UNINDEXED_GROUPS.includes(lazyGroupFor(c.id) ?? '')).map((c) => [c.id, c.label, c.value, c.unit ?? '']),
     glossary: PAIRS.map((p) => [p.slug, p.os, p.llm, p.lesson, p.syn.join(', ')]),
   }
 }

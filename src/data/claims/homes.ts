@@ -28,6 +28,21 @@ export const LAZY_GROUP_HOMES: Record<string, string> = {
   'bench.megascale-infer.': 'lazy/serving3',
   'twin.': 'lazy/twins',
   'field.': 'lazy/field',
+  // Fleet physics v2 (spec s5 §4.5): every prefix the S5 tasks use, so the tasks that add the claims need no edit here.
+  'bench.inferencex.': 'lazy/physics',
+  'status.inferencex.': 'lazy/physics',
+  'status.vllm-0-10-2.': 'lazy/physics',
+  'hw.hgx-b200.fp8': 'lazy/physics',
+  'hw.hgx-b200.fp4': 'lazy/physics',
+  'hw.b200.fp8-dense': 'lazy/physics',
+  'hw.b200.fp4-dense': 'lazy/physics',
+  'zoo.llama-3-3-70b.': 'lazy/physics',
+  'model.llama3-70b.kv-bytes': 'lazy/physics',
+  'model.llama3-70b.weight-bytes': 'lazy/physics',
+  'phys.': 'lazy/physics',
+  'hw.mi325x.': 'lazy/physics',
+  'hw.mi355x.': 'lazy/physics',
+  'bench.ix-l70.': 'lazy/ix-points',
 }
 
 /** The module to import for an id that is not registered: the longest matching prefix of `LAZY_GROUP_HOMES`, or undefined. */
