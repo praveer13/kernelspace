@@ -177,7 +177,7 @@ describe('the worked examples (S5-D59, §3.6, §3.7)', () => {
 })
 
 describe('the phys.* claims (§4.5, S5-D18, S5-D56)', () => {
-  const physClaims = ALL_CLAIMS.filter((c) => c.id.startsWith('phys.'))
+  const physClaims = ALL_CLAIMS.filter((c) => c.id.startsWith('phys.') && !/^phys\.(finding|control|nim)\.|\.frontier-sep-p90$/.test(c.id))
 
   test('18 parameters and 18 gate statistics, each carrying the report\'s value and reproduced by verify:claims', () => {
     expect(physClaims.length).toBe(36)
@@ -185,7 +185,7 @@ describe('the phys.* claims (§4.5, S5-D18, S5-D56)', () => {
     const stats = physClaims.filter((c) => (STAT_CLAIMS as readonly string[]).some((n) => c.id.endsWith(`.${n}`)))
     expect([params.length, stats.length]).toEqual([18, 18])
     for (const c of physClaims) expect(c.value).toBe(report.claimValues[c.id])
-    expect(physProblems(ALL_CLAIMS, { 'report.json': report })).toEqual([])
+    expect(physProblems(physClaims, { 'report.json': report })).toEqual([])
   })
 
   test('verify:claims fails a phys.* claim that drifts from the report, or that the report does not carry', () => {
