@@ -15,7 +15,14 @@
  * two gates that read a pre-registration (F2 hint ladders, F3 the Fleet Daily) are not read until the owner has signed
  * docs/prereg/hint-ladders.md and docs/prereg/fleet-daily.md, and F4 is §14's rule over the watcher's files.
  *
- *   bun scripts/partner-report.ts [--json] [--wave1 | --wave2] <file.json>...
+ *   bun scripts/partner-report.ts [--json] [--wave1 | --wave2 | --after-decision] <file.json>...
+ *
+ * F2's and F3's secondary outputs hold back every outcome until the decision (each file's §5: no interim looks at
+ * outcomes), in the text and in `--json`: until the primary reaches its required n, they print counts, help-seeking
+ * measures and each held-back line's n. The owner passes `--after-decision` only once the F2 and F3 decisions are
+ * recorded (the underpowered default included), and the report then shows them and says on F2's and F3's rows that it
+ * was read after the decision. The primaries' own text lines do not change with it (pinned): an underpowered primary's
+ * d prints only in `--json --after-decision`.
  *
  * `--wave1` prints the Wave 1 report instead; it reads lab stages, so it needs full exports.
  */
@@ -33,6 +40,7 @@ import {
   formatWave3Report,
   isPreregSigned,
   stripFreeText,
+  wave3ReportJson,
   type DonatedLedger,
   type PartnerLedger,
   type WatcherState,
@@ -43,14 +51,15 @@ import { placementOf } from '../src/lib/learner/summary'
 import { loadTodayContent } from '../src/lib/learner/today'
 import { parseImport } from '../src/lib/ledger/codec'
 
-const FLAGS = new Set(['--json', '--wave1', '--wave2'])
+const FLAGS = new Set(['--json', '--wave1', '--wave2', '--after-decision'])
 const args = process.argv.slice(2)
 const json = args.includes('--json')
 const wave1 = args.includes('--wave1')
 const wave2 = args.includes('--wave2')
+const afterDecision = args.includes('--after-decision')
 const files = args.filter((a) => !a.startsWith('--'))
-if (files.length === 0 || (wave1 && wave2) || args.some((a) => a.startsWith('--') && !FLAGS.has(a))) {
-  console.error('usage: bun scripts/partner-report.ts [--json] [--wave1 | --wave2] <file.json>...')
+if (files.length === 0 || [wave1, wave2, afterDecision].filter(Boolean).length > 1 || args.some((a) => a.startsWith('--') && !FLAGS.has(a))) {
+  console.error('usage: bun scripts/partner-report.ts [--json] [--wave1 | --wave2 | --after-decision] <file.json>...')
   process.exit(2)
 }
 
@@ -138,8 +147,9 @@ if (wave1) {
     v2Labs,
     signed: { hintLadders: isPreregSigned(repoText('docs/prereg/hint-ladders.md')), fleetDaily: isPreregSigned(repoText('docs/prereg/fleet-daily.md')) },
     watcher: watcherState(),
+    afterDecision,
   })
-  console.log(json ? JSON.stringify(report, null, 2) : formatWave3Report(report))
+  console.log(json ? JSON.stringify(wave3ReportJson(report), null, 2) : formatWave3Report(report))
   if (donations > 0 && !json) {
     console.log(donationNote("Today's session minutes count answer times only, and every time is rounded to a second; it keeps no unit, so F7 leaves out the cube's byte-unit question. F2 reads every ledger from the lab's first all-green run, so a donation and its export agree there."))
   }

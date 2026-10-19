@@ -12,7 +12,9 @@
  * play's per-level results and metric; a Prove-it v2 attempt's template, return flag and call count (never its `answer`
  * or `actual`); a Fleet Week act's receipt counts and rubric; a `miss` only when it is a `confuse.<kcId>` id (every
  * other misconception id still goes); and the `value` and `truth` of numeric items, numbers only and never on an event
- * of provenance `field`, so a learner's own GPU or device measurements stay on the device.
+ * of provenance `field`, so a learner's own GPU or device measurements stay on the device. F2's secondary outputs
+ * (hint-secondary.ts) add a lab run's `passed`: the ids of the required checks that passed, check-id-shaped strings only
+ * and only on a `lab-check` event, so attempts to green and the red checks read from a donation as from its export.
  *
  * A `field` event (a field lab's reading, the real-engine run's `predict` and `item`) keeps one bit and nothing else
  * (`fieldOnly`): its `kind`, `ref`, `dayOffset`, `provenance`, `ok` and `data.src`. Its `score` goes too, because a field
@@ -61,7 +63,7 @@ export const FIELD_DATA_KEYS = ['src'] as const
  * The Wave 3 fields (§15.2). Each has its own shape check (`redactStructure`), because a value of the wrong shape under a
  * whitelisted name is as dangerous as a field nobody listed.
  */
-const STRUCTURE_KEYS = ['sinceDays', 'formId', 'formSet', 'formSlot', 'track', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth'] as const
+const STRUCTURE_KEYS = ['sinceDays', 'formId', 'formSet', 'formSlot', 'track', 'levels', 'metric', 'qid', 'return', 'calls', 'receipts', 'rubric', 'miss', 'value', 'truth', 'passed'] as const
 
 /** The `data` fields a donation keeps (§20.2, §15.2). `grp` is re-numbered, and `probes` becomes the probe count. */
 export const DATA_KEYS = [
@@ -161,12 +163,16 @@ export const DONATION_TRACKS: readonly string[] = ['r', 't0', 't1', 't2', 't3', 
 
 const nonNegInt = (v: unknown, max = Number.MAX_SAFE_INTEGER): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max
 
+/** A lab check id (`labs.ts`: `no_overlap`, `fork_shares`): lowercase, digits and underscores. A lab has at most 7 today. */
+const CHECK_ID_RE = /^[a-z][a-z0-9_]{0,47}$/
+const MAX_PASSED = 32
+
 /**
  * The Wave 3 fields of `d` (§15.2), each held to its own shape or left out. `provenance` is the event's: a numeric
  * answer (`value`) and the truth it was graded against (`truth`) are kept on any event but a `field` one, so a learner's
- * own GPU or device measurements never leave the device.
+ * own GPU or device measurements never leave the device. `kind` is the event's too: `passed` is kept on a `lab-check` only.
  */
-function redactStructure(d: Rec, provenance: unknown): Partial<Record<DonationDataKey, Json>> {
+function redactStructure(d: Rec, provenance: unknown, kind: string): Partial<Record<DonationDataKey, Json>> {
   const out: Partial<Record<DonationDataKey, Json>> = {}
   if (finite(d.sinceDays) && d.sinceDays >= 0) out.sinceDays = Math.round(d.sinceDays)
   if (d.formId === 'A' || d.formId === 'B' || d.formId === 'C') out.formId = d.formId
@@ -206,6 +212,11 @@ function redactStructure(d: Rec, provenance: unknown): Partial<Record<DonationDa
     if (finite(d.value)) out.value = d.value
     if (finite(d.truth)) out.truth = d.truth
   }
+  // which required checks a run passed: curriculum ids, as `kcs` are, never the learner's code or its messages
+  if (kind === 'lab-check' && Array.isArray(d.passed)) {
+    const ids = d.passed.filter((x): x is string => typeof x === 'string' && CHECK_ID_RE.test(x) && !LONG_HEX_RE.test(x))
+    out.passed = [...new Set(ids)].slice(0, MAX_PASSED)
+  }
   return out
 }
 
@@ -225,9 +236,9 @@ function fieldOnly(e: { kind: string; ref: string; dayOffset: number; ok?: unkno
 }
 
 /** One `data` object through the whitelist. `grpId` numbers attempt groups across the whole donation. */
-function redactData(raw: unknown, provenance: unknown, grpId: (grp: string) => number): DonatedEvent['data'] | undefined {
+function redactData(raw: unknown, provenance: unknown, kind: string, grpId: (grp: string) => number): DonatedEvent['data'] | undefined {
   const d = asRec(raw)
-  const out: Partial<Record<DonationDataKey, Json>> = { ...redactStructure(d, provenance) }
+  const out: Partial<Record<DonationDataKey, Json>> = { ...redactStructure(d, provenance, kind) }
   for (const key of ['src', 'form', 'variant', 'phase', 'reason', 'fault', 'arm', 'via'] as const) {
     const t = safeToken(d[key])
     if (t !== null) out[key] = t
@@ -296,7 +307,7 @@ export function redactForPartner(input: Pick<ExportV3, 'events' | 'working'>): D
     const provenance = safeToken(r.provenance)
     if (provenance !== null) kept.provenance = provenance
     if (finite(r.ms) && r.ms >= 0) kept.ms = Math.round(r.ms / 1000) * 1000
-    const data = redactData(r.data, r.provenance, grpId) ?? {}
+    const data = redactData(r.data, r.provenance, e.kind, grpId) ?? {}
     if (i === lastPlacement && solid.length > 0) data.kcs = solid.slice(0, 200)
     if (Object.keys(data).length > 0) kept.data = data
     return kept
@@ -376,7 +387,7 @@ export function parseDonation(text: string): ParsedDonation {
     const data: Partial<Record<DonationDataKey, Json>> = {}
     for (const key of DATA_KEYS) if (d[key] !== undefined && !(STRUCTURE_KEYS as readonly string[]).includes(key)) data[key] = d[key] as Json
     // the Wave 3 fields meet their shape checks again, so a hand-edited file cannot put a miss id or a number where it does not belong
-    Object.assign(data, redactStructure(d, kept.provenance))
+    Object.assign(data, redactStructure(d, kept.provenance, kept.kind))
     if (Object.keys(data).length > 0) kept.data = data
     events.push(kept)
   }
