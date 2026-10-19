@@ -374,7 +374,7 @@ async function staticGroups(chunk: ManifestChunk): Promise<string[]> {
 const FAMILY_GATE_KB: Record<string, number> = { 'step.ts': 4 }
 const PART_PREFIX = 'src/lib/items/families/lazy/'
 
-// A family part (families/lazy/<name>.ts, which the registry's `familyPart` loads when a variant that reads it is drawn) is no
+// A family part (families/lazy/<name>.ts, which on-demand.ts's `familyPart` loads when a variant that reads it is drawn) is no
 // family: it is not in /today's family fetch, so it is printed on its own line with the claim groups it brings.
 const families = chunksFor((key) => key.startsWith('src/lib/items/families/') && !key.startsWith(PART_PREFIX))
 if (families.length === 0) console.log('skip generator families: no src/lib/items/families/* chunks yet')
