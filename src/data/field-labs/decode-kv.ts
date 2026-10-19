@@ -151,7 +151,7 @@ const LAB: FieldLab = {
         conversion: 'tokens per second = 1000 ÷ TPOT in ms',
       },
       below:
-        'The prediction counts only the weights streaming from HBM, so it is a ceiling. Reaching half of it is ordinary; under half means something else is on the critical path, such as a launch gap between kernels, sampling or the Python loop, and the TPOT of a second run on the same server shows whether it is steady.',
+        'The prediction counts only the weights streaming from HBM, so it is a ceiling. How much of it a serving engine reaches depends on the engine and the batch; the physics tab on /freshness shows this fit\'s split, which other equally good fits split differently. This far under it, look for something else on the critical path, such as a launch gap between kernels, sampling or the Python loop, and the TPOT of a second run on the same server shows whether it is steady.',
       near: 'Within the 2× band of the roofline, and under it as a ceiling should be: the gap is what streaming the weights does not account for.',
       above:
         'A ceiling should not be beaten. Check that the card is the H100 SXM the claims describe (nvidia-smi), that the model is the 8B one in BF16, and that the number is the TPOT in milliseconds, not the throughput line.',

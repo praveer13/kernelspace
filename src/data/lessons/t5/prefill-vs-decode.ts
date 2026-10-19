@@ -92,7 +92,7 @@ Within inference there are exactly two phases, and T4.L3 already classified them
       md: `## The metrics, defined properly
 
 - **TTFT (time to first token):** from request arrival to the first generated token. Driven by queue time + prefill compute (∝ prompt tokens, compute-bound) + any KV transfers (disaggregated setups, T5.L9). The user's "is it alive?" signal.
-- **ITL / TPOT (inter-token latency / time per output token):** the decode loop's period per token — bandwidth-bound (∝ weight+KV bytes ÷ bandwidth, divided by batch efficiency). The user's "is it fast?" signal: streaming feels instant below ~50–80 ms/token and broken above ~200 ms.
+- **ITL / TPOT (inter-token latency / time per output token):** the decode loop's period per token — bandwidth-bound (at least the weight + KV bytes read per step ÷ bandwidth, and every user in the batch waits the whole step). The user's "is it fast?" signal: streaming feels instant below ~50–80 ms/token and broken above ~200 ms.
 - **Throughput:** tokens/s aggregate (the provider's margin) and its normalized form, **tok/s/GPU** or **tok/s/$**.
 - **Goodput:** throughput *subject to SLOs* — e.g., requests/s with TTFT < 2 s and ITL < 100 ms. **The only honest capacity metric**: raw throughput numbers hide the latency collapse that produced them.
 
@@ -123,7 +123,7 @@ Notice what just happened: a *systems scheduling* question (T2.L4) fell out of a
     {
       type: 'callout',
       variant: 'info',
-      md: `A quick estimation kit. TTFT ≈ queue + (prompt_tokens × 2 × params) / effective_FLOPs. ITL ≈ (weight_bytes + KV_bytes_per_token × batch) / bandwidth / batch … i.e., per-token time stays ~flat while throughput × batch — until the compute roof interrupts. These two lines get you within ~2× of any real system, which is enough to kill bad capacity plans in the meeting room instead of the postmortem.`,
+      md: `A quick estimation kit. TTFT ≈ queue + (prompt_tokens × 2 × params) / effective_FLOPs. ITL is the whole decode step, since every user in the batch waits for it: ITL ≥ (weight_bytes + KV_bytes_per_token × Σ context) / (GPUs × datasheet bandwidth), with Σ context the context tokens of every user in the batch added up — not that divided by batch. Per-user time rises with the batch's total context, while throughput rises with the batch until the compute roof interrupts. The ITL line is a floor, not an estimate: Llama-3.3-70B FP8 on 4 H100s, 1k tokens in and 1k out, measured 11.78 ms per token at 4 users and 19.51 ms at 64 (InferenceX 2025-10-29, ids 41187 and 41821), 2.2× and 3.1× its floor. A plan that misses its SLO even at the floor dies in the meeting room instead of the postmortem.`,
     },
     {
       type: 'prose',
