@@ -20,14 +20,18 @@
  * `kcs`, provenance, `ok` and day offsets are kept).
  *
  * §4 shows nothing before the minimum: below `DAILY_MIN_LEARNERS` learners with a check in both groups the primary prints
- * no difference, and §5 lets only counts be read before the decision. So below it the accuracies here are not shown
- * either (two groups' accuracies side by side are the difference), and the counts are: checks and learners per group and
- * per KC, learners with a Daily, learners in one group only.
+ * no difference, and §5 lets only counts be read before the decision (D94). So until the decision the accuracies here
+ * are held back too (two groups' accuracies side by side are the difference), and the counts are shown: checks and
+ * learners per group and per KC, learners with a Daily, learners in one group only. The decision is the primary
+ * reaching its minimum, or the owner reading the report after recording the underpowered default (the report's
+ * `--after-decision`), F2's rule (hint-secondary.ts, D97), so a decision taken underpowered still gets its promised
+ * outputs. `dailySecondaryJson` holds the same values back from `--json`.
  *
  * Pure: no clock, no randomness. This module imports outcomes.ts for types only, so the two do not import each other.
  */
 
 import { KC } from '@/data/kc/ids'
+import { held, heldBack } from './hint-secondary'
 import type { DailyVsOther, PartnerLedger } from './outcomes'
 import { proportionOf, type Proportion } from './proportion'
 
@@ -67,7 +71,7 @@ export interface DailySecondary {
   both: number
   /** The table per fault KC (§3): the four fault KCs, then any other KC a check named, so the rows add up to the pooled groups. */
   perKc: DailyKcRow[]
-  /** Whether accuracies are shown: the primary reached its minimum (§4). Below it only counts are. */
+  /** Whether accuracies are shown: the primary reached its minimum (§4), or the report is read after the decision. Until then only counts are. */
   shown: boolean
   /** The primary's learners with a check in both groups, and the minimum it needs. */
   learners: number
@@ -81,9 +85,9 @@ function cellOf(checks: readonly DailyCheck[]): DailyCell {
 
 /**
  * F3's secondary outputs over the checks `selectDailyVsOther` counted (`checks`, from its sink, on the same `ledgers`),
- * beside the primary it gave (`primary`).
+ * beside the primary it gave (`primary`); `afterDecision` is the report's `--after-decision`.
  */
-export function selectDailySecondary(ledgers: readonly PartnerLedger[], checks: readonly DailyCheck[], primary: DailyVsOther): DailySecondary {
+export function selectDailySecondary(ledgers: readonly PartnerLedger[], checks: readonly DailyCheck[], primary: DailyVsOther, afterDecision = false): DailySecondary {
   const withDaily = ledgers.filter((l) => l.events.some((e) => e.kind === 'incident' && e.ref.startsWith('inc:daily/'))).length
   const groups = new Map<number, Set<DailyCheck['group']>>()
   for (const c of checks) groups.set(c.learner, (groups.get(c.learner) ?? new Set()).add(c.group))
@@ -110,7 +114,7 @@ export function selectDailySecondary(ledgers: readonly PartnerLedger[], checks: 
     onlyOther,
     both,
     perKc,
-    shown: primary.verdict !== 'underpowered',
+    shown: primary.verdict !== 'underpowered' || afterDecision,
     learners: primary.learners,
     required: primary.required,
   }
@@ -127,12 +131,12 @@ const accuracy = (c: DailyCell): string =>
   c.n === 0 ? `no check (${counted(c)})` : `${c.correct} of ${c.n} = ${pct(c.rate)}${c.ci95 ? `, Wilson 95 % interval ${pct(c.ci95[0])} to ${pct(c.ci95[1])}` : ''} (${counted(c)})`
 
 /**
- * The secondary block `formatWave3Report` prints under F3's row, each line named by fleet-daily.md's own words. Below
- * the primary's minimum, the counts and "not enough data" in place of each accuracy.
+ * The secondary block `formatWave3Report` prints under F3's row, each line named by fleet-daily.md's own words. Until
+ * the decision, the counts, and in place of each accuracy the words F2's block uses (`heldBack`).
  */
 export function formatDailySecondary(s: DailySecondary): string[] {
   const cell = (c: DailyCell): string => (s.shown ? accuracy(c) : counted(c))
-  const thin = `not enough data (n = ${s.learners} of ${s.required} learners with a check in both groups; fleet-daily.md §4 shows no accuracy below that, so only counts)`
+  const thin = heldBack(s.learners, s.required, 'with a check in both groups')
   const width = Math.max(...s.perKc.map((r) => r.kc.length))
   return [
     `secondary outputs, reported and not decisive (docs/prereg/fleet-daily.md §3 and §5), among ${plural(s.donors, 'donor')} (self-selected; observational, no causal claim):`,
@@ -145,4 +149,15 @@ export function formatDailySecondary(s: DailySecondary): string[] {
     `  the table per fault KC (an answer counts once for each fault KC it carries)${s.shown ? '' : `: ${thin}`}`,
     ...s.perKc.map((r) => `    ${r.kc.padEnd(width)}  Daily KCs ${cell(r.daily)} | other KCs ${cell(r.other)}`),
   ]
+}
+
+/**
+ * What `partner-report --json` prints for F3's secondary outputs: the report's own object once the accuracies are shown,
+ * and until then the same object with each accuracy (its correct count, rate and interval) replaced by `held(n)`, its
+ * learners kept. Nothing is computed again.
+ */
+export function dailySecondaryJson(s: DailySecondary): object {
+  if (s.shown) return s
+  const hold = (c: DailyCell) => ({ ...held(c.n), learners: c.learners })
+  return { ...s, daily: hold(s.daily), other: hold(s.other), perKc: s.perKc.map((r) => ({ kc: r.kc, daily: hold(r.daily), other: hold(r.other) })) }
 }
