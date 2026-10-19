@@ -558,7 +558,8 @@ export function hintSecondaryJson(s: HintSecondary): object {
     ...s,
     itt: { ...s.itt, unhelped: held(s.itt.unhelped.n) },
     arms: { ladder: { ...s.arms.ladder, ...outcomesOf(s.arms.ladder) }, packet: { ...s.arms.packet, ...outcomesOf(s.arms.packet) } },
-    // the never-helped checks' "not green yet" is printed only beside their attempts to green
+    // the never-helped checks' "not green yet" is printed only beside their attempts to green; each arm's stays shown,
+    // as the text's help-seeking safety line prints it (§5: help-seeking counts may be read for safety, D97)
     unhelped: { ...s.unhelped, ...outcomesOf(s.unhelped), notGreen: held() },
     prove: { ladder: held(s.prove.ladder.n), packet: held(s.prove.packet.n), mixed: held(s.prove.mixed.n), none: held(s.prove.none.n), all: held(s.prove.all.n) },
     labs: s.labs.map((l) => ({ lab: l.lab, arms: { ladder: labCell(l.arms.ladder), packet: labCell(l.arms.packet) } })),

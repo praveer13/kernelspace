@@ -21,7 +21,8 @@
  * outcomes), in the text and in `--json`: until the primary reaches its required n, they print counts, help-seeking
  * measures and each held-back line's n. The owner passes `--after-decision` only once the F2 and F3 decisions are
  * recorded (the underpowered default included), and the report then shows them and says on F2's and F3's rows that it
- * was read after the decision.
+ * was read after the decision. The primaries' own text lines do not change with it (pinned): an underpowered primary's
+ * d prints only in `--json --after-decision`.
  *
  * `--wave1` prints the Wave 1 report instead; it reads lab stages, so it needs full exports.
  */
