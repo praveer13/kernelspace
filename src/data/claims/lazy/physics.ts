@@ -4,8 +4,9 @@ import type { Claim } from '../schema'
 /**
  * The inputs of the Fleet's physics v2 (spec s5 §4.5, S5-03): the dataset claim, the harness's settings, the HGX B200
  * peaks, the Llama-3.3-70B config the benchmark served, and the model byte claims the step card reads. The measured
- * points are in `ix-points.ts` (generated from the extract); the fitted `phys.*` claims and the controls are added by the
- * tasks that produce them (S5-07, S5-08), and `homes.ts` already lists every prefix they use.
+ * points are in `ix-points.ts` (generated from the extract). The fitted `phys.<row>.*` claims (S5-07) are at the end: their
+ * values are the fit's, reproduced from `docs/physics/report.json` by `verify:claims` (S5-D18); the decision-table findings
+ * and the controls are added by S5-08, and `homes.ts` already lists every prefix they use.
  *
  * Every quote was fetched on 2026-10-18 with curl, from the raw file at its pin (or from the vendor page), and is a
  * single line copied from it. The harness and vLLM claims are `status` claims pinned to the commit or tag the benchmark
@@ -69,7 +70,8 @@ function harness(suffix: string, value: number | string, unit: string | undefine
   }
 }
 
-export const PHYSICS_CLAIMS: Claim[] = [
+/** The inputs: the dataset, the harness, the peaks, the zoo and the model byte claims. */
+const PHYSICS_INPUT_CLAIMS: Claim[] = [
   {
     id: 'bench.inferencex.llama70b-2025-10-29',
     kind: 'benchmark',
@@ -282,5 +284,144 @@ export const PHYSICS_CLAIMS: Claim[] = [
       'Every parameter at NVFP4\'s 4.5 bits (4-bit value plus an FP8 scale per 16 values), the per-tensor FP32 scale and any tensors a checkpoint keeps at higher precision ignored; the fitted efficiency absorbs the difference.',
   },
 ]
+
+/**
+ * The fit's claims (S5-07, spec §4.5): six parameters and six gate statistics for each calibrated row. Their values are the
+ * report's `claimValues` at the report's rounding (`CLAIM_ROUNDING` in scripts/fit-physics.ts): `verify:claims` reproduces
+ * each from docs/physics/report.json at 1e-9 relative and fails a `phys.*` claim the report does not carry, so a refit that
+ * moves a number fails there until these are updated (tests/physics/verify-physics.test.ts also holds the counts in the
+ * boundary text to the report). Adopted by the build on 2026-10-18, unsigned: the owner signs the fit (field gate F1).
+ */
+const SPLIT_CAVEAT = "this fit's split of one snapshot; not a hardware fact; other equally good forms split it differently"
+const FIT_STATUS_NOTE = 'Fit status: adopted by the build on 2026-10-18, unsigned.'
+
+type ParamName = 'eta-mem' | 'eta-flop' | 'layer-us' | 'seq-us' | 'link-gbs' | 'harness-ms'
+type StatName = 'loo-tpot-mean' | 'loo-tpot-p90' | 'heldout-tpot-mean' | 'heldout-tpot-p90' | 'loo-ttft8k-mean' | 'loo-ttft8k-p90'
+
+interface PhysRow {
+  key: string
+  /** the chip, engine release and weight precision, as the row's label reads */
+  name: string
+  /** the protocol row's chip bandwidth, dense peak, capacity and weight-byte claims */
+  inputs: { bw: string; peak: string; hbm: string; weightBytes: string }
+  /** F points, H points, and F's 8,192-token-prompt points (G3's population) */
+  nFit: number
+  nHeld: number
+  nTtft: number
+  /** the weight precision in words, for the boundary */
+  precision: string
+  /** the registered values: report.json's `claimValues` for this row */
+  v: Record<ParamName | StatName, number>
+}
+
+const PHYS_ROWS: PhysRow[] = [
+  {
+    key: 'h100-vllm-0-10-2-fp8',
+    name: 'H100 SXM · vLLM 0.10.2 · FP8',
+    inputs: { bw: 'hw.h100-sxm.hbm-bw', peak: 'hw.h100-sxm.fp8-dense', hbm: 'hw.h100-sxm.hbm-capacity', weightBytes: 'model.llama3-70b.weight-bytes-fp8' },
+    nFit: 25,
+    nHeld: 17,
+    nTtft: 8,
+    precision: 'FP8 weights and FP8 KV',
+    v: {
+      'eta-mem': 0.89, 'eta-flop': 0.52, 'layer-us': 72.3, 'seq-us': 61.1, 'link-gbs': 213.2, 'harness-ms': 21.5,
+      'loo-tpot-mean': 5, 'loo-tpot-p90': 11.3, 'heldout-tpot-mean': 3.8, 'heldout-tpot-p90': 11, 'loo-ttft8k-mean': 11.1, 'loo-ttft8k-p90': 20.7,
+    },
+  },
+  {
+    key: 'b200-vllm-0-10-2-fp8',
+    name: 'B200 · vLLM 0.10.2 · FP8',
+    inputs: { bw: 'hw.b200.hbm-bw', peak: 'hw.b200.fp8-dense', hbm: 'hw.b200.hbm-capacity', weightBytes: 'model.llama3-70b.weight-bytes-fp8' },
+    nFit: 34,
+    nHeld: 24,
+    nTtft: 11,
+    precision: 'FP8 weights and FP8 KV',
+    v: {
+      'eta-mem': 0.84, 'eta-flop': 0.46, 'layer-us': 61.8, 'seq-us': 32.6, 'link-gbs': 291.1, 'harness-ms': 52.3,
+      'loo-tpot-mean': 3.6, 'loo-tpot-p90': 7.3, 'heldout-tpot-mean': 3.1, 'heldout-tpot-p90': 6, 'loo-ttft8k-mean': 11.1, 'loo-ttft8k-p90': 19.1,
+    },
+  },
+  {
+    key: 'b200-vllm-0-10-2-nvfp4',
+    name: 'B200 · vLLM 0.10.2 · NVFP4',
+    inputs: { bw: 'hw.b200.hbm-bw', peak: 'hw.b200.fp4-dense', hbm: 'hw.b200.hbm-capacity', weightBytes: 'model.llama3-70b.weight-bytes-nvfp4' },
+    nFit: 36,
+    nHeld: 24,
+    nTtft: 12,
+    precision: 'NVFP4 weights and FP8 KV',
+    v: {
+      'eta-mem': 0.76, 'eta-flop': 0.34, 'layer-us': 70, 'seq-us': 28.9, 'link-gbs': 283.7, 'harness-ms': 41.8,
+      'loo-tpot-mean': 4.5, 'loo-tpot-p90': 7.3, 'heldout-tpot-mean': 2.8, 'heldout-tpot-p90': 5.2, 'loo-ttft8k-mean': 13.5, 'loo-ttft8k-p90': 26.1,
+    },
+  },
+]
+
+/** The claims every fitted number of a row is derived from: the dataset, the chip, the model and the harness settings the replay read. */
+const physInputs = (r: PhysRow): string[] => [
+  'bench.inferencex.llama70b-2025-10-29',
+  r.inputs.bw,
+  r.inputs.peak,
+  r.inputs.hbm,
+  r.inputs.weightBytes,
+  'model.llama3-70b.params',
+  'model.llama3-70b.layers',
+  'model.llama3-70b.hidden-size',
+  'model.llama3-70b.kv-bytes-per-token-fp8',
+  'status.inferencex.harness.batch-tokens',
+  'status.vllm-0-10-2.block-size',
+]
+
+const PHYS_TTL = 180
+const PHYS_SNAPSHOT = 'one InferenceX sweep (Llama-3.3-70B, vLLM 0.10.2, 2025-10-29)'
+
+function physParam(r: PhysRow, name: ParamName, unit: string, label: string, what: string): Claim {
+  return {
+    id: `phys.${r.key}.${name}`,
+    kind: 'derived',
+    value: r.v[name],
+    unit,
+    label: `${r.name}: ${label}`,
+    verifiedAt: VERIFIED,
+    ttlDays: PHYS_TTL,
+    derived: { from: physInputs(r), formula: `fit-physics: ${what}, fitted on the ${r.nFit} fit points; docs/physics/report.json` },
+    boundary:
+      `${what[0].toUpperCase()}${what.slice(1)}, under the step card's form (docs/specs/s5.md §3.2), fitted on the ${r.nFit} fit points (concurrency 4, 16 and 64) of ${PHYS_SNAPSHOT}, ${r.precision}, ` +
+      `Llama-3-70B architecture. This is ${SPLIT_CAVEAT}. Only the card's predictions are validated (the leave-one-out and held-out claims of this row), never its split into terms. ` +
+      `Stale from 2027-04-16 with the sweep; a refit is a new physics id. ${FIT_STATUS_NOTE}`,
+  }
+}
+
+function physStat(r: PhysRow, name: StatName, label: string, population: string): Claim {
+  return {
+    id: `phys.${r.key}.${name}`,
+    kind: 'derived',
+    value: r.v[name],
+    unit: '%',
+    label: `${r.name}: ${label}`,
+    verifiedAt: VERIFIED,
+    ttlDays: PHYS_TTL,
+    derived: { from: physInputs(r), formula: `fit-physics: ${label}, error = |predicted / measured - 1|; docs/physics/report.json` },
+    boundary:
+      `${population} Error is |predicted ÷ measured − 1| on ${PHYS_SNAPSHOT}; the gates are in docs/physics/protocol.md (pre-registered 2026-10-18). ` +
+      `The form was chosen on this same snapshot before the gate was written, so in-sample margins are optimistic (the protocol's selection disclosure). Stale from 2027-04-16. ${FIT_STATUS_NOTE}`,
+  }
+}
+
+const PHYS_FIT_CLAIMS: Claim[] = PHYS_ROWS.flatMap((r): Claim[] => [
+  physParam(r, 'eta-mem', 'ratio', 'η_m, share of datasheet bandwidth reached', 'the share of the datasheet HBM bandwidth the step reaches reading weights and KV'),
+  physParam(r, 'eta-flop', 'ratio', 'η_f, share of dense peak reached', 'the share of the dense peak the step reaches in long prefills'),
+  physParam(r, 'layer-us', 'µs', 't_layer, fixed cost per layer per step', 'the fixed cost per layer per engine step'),
+  physParam(r, 'seq-us', 'µs', 't_seq, host work per running request per step', 'the host work per running request per engine step'),
+  physParam(r, 'link-gbs', 'GB/s', 'β, effective all-reduce bandwidth', 'the effective all-reduce bandwidth at TP above 1 (a fitted number, not NVLink)'),
+  physParam(r, 'harness-ms', 'ms', 'TTFT residual (fitted, not physics)', "the TTFT residual: what the engine's admission-to-first-token window misses (client overhead, the wait for an in-flight step, any prefill misfit); it lives outside the engine"),
+  physStat(r, 'loo-tpot-mean', 'TPOT leave-one-out mean error', `Mean over the ${r.nFit} fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1: mean at most 10 %, p90 at most 15 %).`),
+  physStat(r, 'loo-tpot-p90', 'TPOT leave-one-out p90 error', `The 90th percentile (nearest rank) over the ${r.nFit} fit points of the error of mean TPOT, each point predicted by a refit without it (leave-one-out, gate G1).`),
+  physStat(r, 'heldout-tpot-mean', 'TPOT held-out mean error', `Mean over the ${r.nHeld} held-out points (concurrency 8 and 32, never fitted) of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2: mean at most 10 %, p90 at most 15 %).`),
+  physStat(r, 'heldout-tpot-p90', 'TPOT held-out p90 error', `The 90th percentile (nearest rank) over the ${r.nHeld} held-out points of the error of mean TPOT, scored by the table fitted on the fit subset (gate G2).`),
+  physStat(r, 'loo-ttft8k-mean', 'median TTFT leave-one-out mean error', `Mean over the ${r.nTtft} fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (gate G3: mean at most 15 %; it decides TTFT eligibility only).`),
+  physStat(r, 'loo-ttft8k-p90', 'median TTFT leave-one-out p90 error', `The 90th percentile (nearest rank) over the ${r.nTtft} fit points with 8,192-token prompts of the error of median TTFT (engine plus the fitted TTFT residual), each predicted by a refit without it (printed beside gate G3).`),
+])
+
+export const PHYSICS_CLAIMS: Claim[] = [...PHYSICS_INPUT_CLAIMS, ...PHYS_FIT_CLAIMS]
 
 registerClaims(PHYSICS_CLAIMS)
