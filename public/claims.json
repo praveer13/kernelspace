@@ -3430,6 +3430,1845 @@
       "verifiedAt": "2026-10-14",
       "ttlDays": 365,
       "boundary": "Mean of the Response tokens column over the same 215,127 rows. The median is 65, the 90th percentile 650 and the 99.9th 1,489; 0.026 % of the kept rows need more than 8,192 tokens of prompt plus response."
+    },
+    {
+      "id": "bench.inferencex.llama70b-2025-10-29",
+      "kind": "benchmark",
+      "value": 165,
+      "unit": "rows",
+      "label": "InferenceX Llama-3.3-70B sweep of 2025-10-29: the vLLM H100 and B200 rows the physics v2 fit uses",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"hardware\":\"b200\",\"framework\":\"vllm\",\"model\":\"llama70b\",\"precision\":\"fp8\",\"spec_method\":\"none\",\"disagg\":false,\"is_multinode\":false",
+        "row": "id 40518 (the response lists one object per run, with its metrics inside)"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The pinned query returned 681 rows, 1,026,817 bytes, sha256 d2ce48fdbd84936994d68bb28413f0e842da3b01a2c7a0958e4041699dc19792, on 2026-10-18. Selection (docs/physics/protocol.md): framework vllm, no speculative decoding, not disaggregated, one node; H100 and B200; FP8 and FP4 (NVFP4): 165 rows (H100 FP8 45, B200 FP8 60, B200 NVFP4 60). Filters: a row whose requests do not fit the KV cache at 0.9 of memory, or whose median TTFT is 3 s or more (the server preempted), is dropped: ids 40752, 41507, 42070, 42140 and 44119, which leaves 160 (42, 58, 60). The extract the repository commits (src/data/physics/points/inferencex-l70-2025-10-29.json, 285 rows: these 165 plus 60 MI325X and 60 MI355X rows kept as an out-of-sample control) has sha256 541121788a076dab9df631321e6c692bf357523177c0f1425bcb11a018b74843. Official InferenceX results as published 2025-10-29 (SemiAnalysisAI/InferenceX, Apache-2.0; InferenceX is a trademark of SemiAnalysis), copied unmodified for the selected fields. The fitted model and its predictions are this course's own, not InferenceX results. It describes vLLM 0.10.2 from almost a year before it goes stale (2027-04-16); a refit on a newer sweep is a new physics version, not an edit of this claim. Quotes of this group: adopted by the build on 2026-10-18, unsigned."
+    },
+    {
+      "id": "status.inferencex.harness.vllm-version",
+      "kind": "status",
+      "value": "0.10.2",
+      "label": "InferenceX harness: vLLM release the Llama-70B H100 and B200 jobs run",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/.github/workflows/70b-tmpl.yml",
+        "title": "InferenceX at 9596d23: .github/workflows/70b-tmpl.yml (Llama 70B job template)",
+        "quote": "image: 'vllm/vllm-openai:v0.10.2'",
+        "row": "jobs.bmk-b200-fp8.with.image"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The H100 FP8 job (bmk-h100-fp8) and the B200 FP4 job (bmk-b200-fp4) name the same image. vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults. The response rows carry \"image\":null, so the release is known from the harness commit, not from the data."
+    },
+    {
+      "id": "status.inferencex.harness.batch-tokens",
+      "kind": "status",
+      "value": 8192,
+      "unit": "tokens",
+      "label": "InferenceX harness: vLLM max-num-batched-tokens (the per-step token budget)",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/benchmarks/70b_fp8_b200_docker.sh",
+        "title": "InferenceX at 9596d23: benchmarks/70b_fp8_b200_docker.sh (vllm serve, B200 FP8)",
+        "quote": "max-num-batched-tokens: 8192",
+        "row": "config.yaml written by the launch script"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The H100 FP8 script writes the same line, and the B200 FP4 script too. This is the benchmark's budget, not vLLM's default for a 180 GB GPU (the In-production claims quote today's defaults). vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults."
+    },
+    {
+      "id": "status.inferencex.harness.range-ratio",
+      "kind": "status",
+      "value": 0.8,
+      "unit": "ratio",
+      "label": "InferenceX harness: random-range-ratio of the prompt and output lengths",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/.github/workflows/full-sweep-tmpl.yml",
+        "title": "InferenceX at 9596d23: .github/workflows/full-sweep-tmpl.yml (full-sweep template)",
+        "quote": "random-range-ratio: 0.8",
+        "row": "jobs._70b-1k1k.with.random-range-ratio (_70b-8k1k and _70b-1k8k are the same)"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The client (kimbochen/bench_serving, which the runners clone unpinned; its sample_uniform read on 2026-10-18) draws each request's input and output length uniformly between this ratio and 1 times the nominal length (1,024 or 8,192), so a \"1k/1k\" row averages about 0.9 of 1,024 tokens each way. The 70b template passes the value on to the benchmark. vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults."
+    },
+    {
+      "id": "status.inferencex.harness.prompts-per-conc",
+      "kind": "status",
+      "value": 10,
+      "unit": "prompts per user",
+      "label": "InferenceX harness: prompts sent per unit of concurrency",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/runners/launch_h100-cr.sh",
+        "title": "InferenceX at 9596d23: runners/launch_h100-cr.sh (benchmark_serving client)",
+        "quote": "--num-prompts=$(( $CONC * 10 )) --max-concurrency=$CONC",
+        "row": "benchmark_serving.py arguments"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The B200 launchers that run the Llama jobs (launch_b200-tg.sh, launch_b200-nvd.sh) pass the same product for Llama (launch_b200-nvd.sh uses 20 and 50 for DeepSeek-R1 only). The client sends --request-rate=inf with --ignore-eos, so every request runs to its sampled output length. vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults."
+    },
+    {
+      "id": "status.inferencex.harness.gpu-mem-util",
+      "kind": "status",
+      "value": 0.9,
+      "unit": "fraction",
+      "label": "InferenceX harness: vLLM gpu-memory-utilization",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/benchmarks/70b_fp8_h100_docker.sh",
+        "title": "InferenceX at 9596d23: benchmarks/70b_fp8_h100_docker.sh (vllm serve, H100 FP8)",
+        "quote": "--gpu-memory-utilization=0.9",
+        "row": "vllm serve arguments"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The B200 FP8 script writes the same value. It sets the KV room: 0.9 of the GPU's memory times the TP, minus the weights. vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults."
+    },
+    {
+      "id": "status.inferencex.harness.prefix-caching",
+      "kind": "status",
+      "value": "off",
+      "label": "InferenceX harness: automatic prefix caching",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/benchmarks/70b_fp8_h100_docker.sh",
+        "title": "InferenceX at 9596d23: benchmarks/70b_fp8_h100_docker.sh (vllm serve, H100 FP8)",
+        "quote": "no-enable-prefix-caching: true",
+        "row": "config.yaml written by the launch script"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The B200 scripts write the same line, so no request reuses another's KV. vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults."
+    },
+    {
+      "id": "status.inferencex.harness.kv-dtype",
+      "kind": "status",
+      "value": "fp8",
+      "label": "InferenceX harness: KV cache dtype",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/benchmarks/70b_fp8_h100_docker.sh",
+        "title": "InferenceX at 9596d23: benchmarks/70b_fp8_h100_docker.sh (vllm serve, H100 FP8)",
+        "quote": "kv-cache-dtype: fp8",
+        "row": "config.yaml written by the launch script"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "One byte per K or V element, whatever the weight precision (H100 and B200 FP8, B200 FP4 all write it). vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults."
+    },
+    {
+      "id": "status.inferencex.harness.max-num-seqs",
+      "kind": "status",
+      "value": "= concurrency (H100); 512 (B200)",
+      "label": "InferenceX harness: vLLM max-num-seqs",
+      "source": {
+        "url": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/9596d23d74e9e1e4f4bcdb27572c87cafb746a02/benchmarks/70b_fp8_h100_docker.sh",
+        "title": "InferenceX at 9596d23: benchmarks/70b_fp8_h100_docker.sh (vllm serve, H100 FP8)",
+        "quote": "--max-num-seqs=$CONC",
+        "row": "vllm serve arguments"
+      },
+      "pin": {
+        "repo": "SemiAnalysisAI/InferenceX",
+        "ref": "9596d23d74e9e1e4f4bcdb27572c87cafb746a02"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The H100 script sets it to the run's concurrency; the B200 FP8 and FP4 scripts pass 512 (--max-num-seqs=512). With the client holding at most the run's concurrency (64 or fewer in the fit) requests in flight, the server never holds more than that many either way, so 512 never binds there. vLLM 0.10.2 at InferenceX 9596d23, the sweep of 2025-10-29 (read 2026-10-18); the benchmark, not today's engine defaults."
+    },
+    {
+      "id": "status.vllm-0-10-2.block-size",
+      "kind": "status",
+      "value": 16,
+      "unit": "tokens per block",
+      "label": "vLLM v0.10.2: KV cache block size when none is given",
+      "source": {
+        "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.10.2/vllm/platforms/cuda.py",
+        "title": "vLLM v0.10.2 source: vllm/platforms/cuda.py (CudaPlatformBase.check_and_update_config)",
+        "quote": "cache_config.block_size = 16",
+        "row": "CudaPlatformBase.check_and_update_config (if cache_config.block_size is None)"
+      },
+      "pin": {
+        "repo": "vllm-project/vllm",
+        "ref": "v0.10.2"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "The default the CUDA platform sets in v0.10.2 when --block-size is not passed; the InferenceX scripts do not pass it. Some attention backends then override it (MLA backends use 64 or 128, which Llama does not use). vLLM v0.31.0, the release the In-production rows quote, also defaults to 16 (production.vllm.block-size); this claim is the 0.10.2 benchmark's."
+    },
+    {
+      "id": "hw.hgx-b200.fp8-sparse-system",
+      "kind": "spec",
+      "value": 72,
+      "unit": "PFLOPS",
+      "label": "HGX B200 FP8/FP6, with sparsity, 8 GPUs",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/hgx/",
+        "title": "NVIDIA HGX Platform",
+        "quote": "72 PFLOPS",
+        "row": "HGX B200 > FP8/FP6 Tensor Core"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Per 8-GPU baseboard and with sparsity. The page's footnote: \"Specification in Sparse. Dense is ½ sparse spec shown.\" The HGX B300 column lists the same figure."
+    },
+    {
+      "id": "hw.hgx-b200.fp4-sparse-system",
+      "kind": "spec",
+      "value": 144,
+      "unit": "PFLOPS",
+      "label": "HGX B200 FP4, with sparsity, 8 GPUs",
+      "source": {
+        "url": "https://www.nvidia.com/en-us/data-center/hgx/",
+        "title": "NVIDIA HGX Platform",
+        "quote": "144 PFLOPS | 72 PFLOPS",
+        "row": "HGX B200 > FP4 Tensor Core (sparse | dense)"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Per 8-GPU baseboard. The page's footnote for this row: \"Specification in Sparse | Dense\", so 144 PFLOPS is with sparsity and the same cell's 72 PFLOPS is dense (72 / 8 = 9 PFLOPS per GPU, what hw.b200.fp4-dense derives)."
+    },
+    {
+      "id": "hw.b200.fp8-dense",
+      "kind": "derived",
+      "value": 4500,
+      "unit": "TFLOPS",
+      "label": "B200 FP8 Tensor Core, dense, per GPU",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.hgx-b200.fp8-sparse-system"
+        ],
+        "formula": "sparsePflops * 1000 / 8 / 2"
+      },
+      "boundary": "Sparse system figure divided across 8 GPUs, then halved for dense, as hw.b200.bf16-dense is. Twice hw.b200.bf16-dense (2,250), the ratio FP8 has to BF16 on this chip family. A wrong peak rescales the fitted efficiency only."
+    },
+    {
+      "id": "hw.b200.fp4-dense",
+      "kind": "derived",
+      "value": 9000,
+      "unit": "TFLOPS",
+      "label": "B200 FP4 Tensor Core, dense, per GPU",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "hw.hgx-b200.fp4-sparse-system"
+        ],
+        "formula": "sparsePflops * 1000 / 8 / 2"
+      },
+      "boundary": "Sparse system figure divided across 8 GPUs, then halved for dense; the page's own dense figure for the same row (72 PFLOPS per 8 GPUs) gives the same 9,000. Four times hw.b200.bf16-dense. A wrong peak rescales the fitted efficiency only."
+    },
+    {
+      "id": "zoo.llama-3-3-70b.layers",
+      "kind": "spec",
+      "value": 80,
+      "unit": "layers",
+      "label": "Llama-3.3-70B transformer layers",
+      "source": {
+        "url": "https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP8/raw/fde04ee76a27704c88f569542ef023b57d4d0362/config.json",
+        "title": "nvidia/Llama-3.3-70B-Instruct-FP8 config.json at a pinned revision (the checkpoint the InferenceX harness served; NVIDIA, Hugging Face)",
+        "quote": "\"num_hidden_layers\": 80,",
+        "row": "num_hidden_layers"
+      },
+      "pin": {
+        "repo": "nvidia/Llama-3.3-70B-Instruct-FP8",
+        "ref": "fde04ee76a27704c88f569542ef023b57d4d0362"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Read from NVIDIA's FP8 checkpoint of Llama-3.3-70B-Instruct, the model the InferenceX harness served on H100 and B200 FP8 (Meta's own config.json is gated, HTTP 401). Its architecture fields equal the Llama-3-70B claims (model.llama3-70b.*) the step card reads; tests/claims/physics.test.ts holds them equal."
+    },
+    {
+      "id": "zoo.llama-3-3-70b.hidden",
+      "kind": "spec",
+      "value": 8192,
+      "unit": "dims",
+      "label": "Llama-3.3-70B hidden size",
+      "source": {
+        "url": "https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP8/raw/fde04ee76a27704c88f569542ef023b57d4d0362/config.json",
+        "title": "nvidia/Llama-3.3-70B-Instruct-FP8 config.json at a pinned revision (the checkpoint the InferenceX harness served; NVIDIA, Hugging Face)",
+        "quote": "\"hidden_size\": 8192,",
+        "row": "hidden_size"
+      },
+      "pin": {
+        "repo": "nvidia/Llama-3.3-70B-Instruct-FP8",
+        "ref": "fde04ee76a27704c88f569542ef023b57d4d0362"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Read from NVIDIA's FP8 checkpoint of Llama-3.3-70B-Instruct, the model the InferenceX harness served on H100 and B200 FP8 (Meta's own config.json is gated, HTTP 401). Its architecture fields equal the Llama-3-70B claims (model.llama3-70b.*) the step card reads; tests/claims/physics.test.ts holds them equal."
+    },
+    {
+      "id": "zoo.llama-3-3-70b.kv-heads",
+      "kind": "spec",
+      "value": 8,
+      "unit": "KV heads",
+      "label": "Llama-3.3-70B key/value heads (GQA)",
+      "source": {
+        "url": "https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP8/raw/fde04ee76a27704c88f569542ef023b57d4d0362/config.json",
+        "title": "nvidia/Llama-3.3-70B-Instruct-FP8 config.json at a pinned revision (the checkpoint the InferenceX harness served; NVIDIA, Hugging Face)",
+        "quote": "\"num_key_value_heads\": 8,",
+        "row": "num_key_value_heads"
+      },
+      "pin": {
+        "repo": "nvidia/Llama-3.3-70B-Instruct-FP8",
+        "ref": "fde04ee76a27704c88f569542ef023b57d4d0362"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Read from NVIDIA's FP8 checkpoint of Llama-3.3-70B-Instruct, the model the InferenceX harness served on H100 and B200 FP8 (Meta's own config.json is gated, HTTP 401). Its architecture fields equal the Llama-3-70B claims (model.llama3-70b.*) the step card reads; tests/claims/physics.test.ts holds them equal."
+    },
+    {
+      "id": "zoo.llama-3-3-70b.head-dim",
+      "kind": "spec",
+      "value": 128,
+      "unit": "dims",
+      "label": "Llama-3.3-70B head dimension",
+      "source": {
+        "url": "https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP8/raw/fde04ee76a27704c88f569542ef023b57d4d0362/config.json",
+        "title": "nvidia/Llama-3.3-70B-Instruct-FP8 config.json at a pinned revision (the checkpoint the InferenceX harness served; NVIDIA, Hugging Face)",
+        "quote": "\"head_dim\": 128,",
+        "row": "head_dim"
+      },
+      "pin": {
+        "repo": "nvidia/Llama-3.3-70B-Instruct-FP8",
+        "ref": "fde04ee76a27704c88f569542ef023b57d4d0362"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Read from NVIDIA's FP8 checkpoint of Llama-3.3-70B-Instruct, the model the InferenceX harness served on H100 and B200 FP8 (Meta's own config.json is gated, HTTP 401). Its architecture fields equal the Llama-3-70B claims (model.llama3-70b.*) the step card reads; tests/claims/physics.test.ts holds them equal."
+    },
+    {
+      "id": "zoo.llama-3-3-70b.heads",
+      "kind": "spec",
+      "value": 64,
+      "unit": "heads",
+      "label": "Llama-3.3-70B attention (query) heads",
+      "source": {
+        "url": "https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP8/raw/fde04ee76a27704c88f569542ef023b57d4d0362/config.json",
+        "title": "nvidia/Llama-3.3-70B-Instruct-FP8 config.json at a pinned revision (the checkpoint the InferenceX harness served; NVIDIA, Hugging Face)",
+        "quote": "\"num_attention_heads\": 64,",
+        "row": "num_attention_heads"
+      },
+      "pin": {
+        "repo": "nvidia/Llama-3.3-70B-Instruct-FP8",
+        "ref": "fde04ee76a27704c88f569542ef023b57d4d0362"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Read from NVIDIA's FP8 checkpoint of Llama-3.3-70B-Instruct, the model the InferenceX harness served on H100 and B200 FP8 (Meta's own config.json is gated, HTTP 401). Its architecture fields equal the Llama-3-70B claims (model.llama3-70b.*) the step card reads; tests/claims/physics.test.ts holds them equal."
+    },
+    {
+      "id": "zoo.llama-3-3-70b.intermediate",
+      "kind": "spec",
+      "value": 28672,
+      "unit": "dims",
+      "label": "Llama-3.3-70B FFN intermediate size",
+      "source": {
+        "url": "https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP8/raw/fde04ee76a27704c88f569542ef023b57d4d0362/config.json",
+        "title": "nvidia/Llama-3.3-70B-Instruct-FP8 config.json at a pinned revision (the checkpoint the InferenceX harness served; NVIDIA, Hugging Face)",
+        "quote": "\"intermediate_size\": 28672,",
+        "row": "intermediate_size"
+      },
+      "pin": {
+        "repo": "nvidia/Llama-3.3-70B-Instruct-FP8",
+        "ref": "fde04ee76a27704c88f569542ef023b57d4d0362"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Read from NVIDIA's FP8 checkpoint of Llama-3.3-70B-Instruct, the model the InferenceX harness served on H100 and B200 FP8 (Meta's own config.json is gated, HTTP 401). Its architecture fields equal the Llama-3-70B claims (model.llama3-70b.*) the step card reads; tests/claims/physics.test.ts holds them equal."
+    },
+    {
+      "id": "zoo.llama-3-3-70b.vocab",
+      "kind": "spec",
+      "value": 128256,
+      "unit": "tokens",
+      "label": "Llama-3.3-70B vocabulary size",
+      "source": {
+        "url": "https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP8/raw/fde04ee76a27704c88f569542ef023b57d4d0362/config.json",
+        "title": "nvidia/Llama-3.3-70B-Instruct-FP8 config.json at a pinned revision (the checkpoint the InferenceX harness served; NVIDIA, Hugging Face)",
+        "quote": "\"vocab_size\": 128256",
+        "row": "vocab_size"
+      },
+      "pin": {
+        "repo": "nvidia/Llama-3.3-70B-Instruct-FP8",
+        "ref": "fde04ee76a27704c88f569542ef023b57d4d0362"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "boundary": "Read from NVIDIA's FP8 checkpoint of Llama-3.3-70B-Instruct, the model the InferenceX harness served on H100 and B200 FP8 (Meta's own config.json is gated, HTTP 401). Its architecture fields equal the Llama-3-70B claims (model.llama3-70b.*) the step card reads; tests/claims/physics.test.ts holds them equal."
+    },
+    {
+      "id": "model.llama3-70b.kv-bytes-per-token-fp8",
+      "kind": "derived",
+      "value": 163840,
+      "unit": "bytes/token",
+      "label": "Llama-3-70B KV cache per token (FP8)",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-70b.layers",
+          "model.llama3-70b.kv-heads",
+          "model.llama3-70b.head-dim"
+        ],
+        "formula": "2 * layers * kvHeads * headDim * 1"
+      },
+      "boundary": "FP8 K and V (the harness runs kv-cache-dtype fp8), one byte per element, no scales and no paging overhead: 2 (K and V) x 80 x 8 x 128 x 1 B = 160 KiB per token, half the BF16 figure."
+    },
+    {
+      "id": "model.llama3-70b.weight-bytes-fp8",
+      "kind": "derived",
+      "value": 70550000000,
+      "unit": "B",
+      "label": "Llama-3-70B weight bytes at FP8",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-70b.params"
+        ],
+        "formula": "paramsB * 1e9 * 1"
+      },
+      "boundary": "Every parameter at one byte, scales and any higher-precision tensors ignored: a checkpoint that keeps lm_head in BF16 would add 1.05e9 B (128,256 x 8,192 x 1 extra byte), which the fitted efficiency absorbs. Weights streamed per step at TP 1; a TP group streams a TP-th of it per GPU."
+    },
+    {
+      "id": "model.llama3-70b.weight-bytes-nvfp4",
+      "kind": "derived",
+      "value": 39684375000,
+      "unit": "B",
+      "label": "Llama-3-70B weight bytes at NVFP4",
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 365,
+      "derived": {
+        "from": [
+          "model.llama3-70b.params",
+          "serving.nvfp4.bits-per-weight"
+        ],
+        "formula": "paramsB * 1e9 * bitsPerWeight / 8"
+      },
+      "boundary": "Every parameter at NVFP4's 4.5 bits (4-bit value plus an FP8 scale per 16 values), the per-tensor FP32 scale and any tensors a checkpoint keeps at higher precision ignored; the fitted efficiency absorbs the difference."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.013192185948816437,
+      "unit": "s",
+      "label": "InferenceX 41181: H100 SXM FP8 TP 4, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.013192185948816437",
+        "row": "id 41181"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41181 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.011776147370379336,
+      "unit": "s",
+      "label": "InferenceX 41187: H100 SXM FP8 TP 4, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011776147370379336",
+        "row": "id 41187"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41187 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.023406749752637908,
+      "unit": "s",
+      "label": "InferenceX 41369: H100 SXM FP8 TP 4, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.023406749752637908",
+        "row": "id 41369"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41369 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.014094837221545944,
+      "unit": "s",
+      "label": "InferenceX 41425: H100 SXM FP8 TP 4, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.014094837221545944",
+        "row": "id 41425"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41425 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.019740010395602685,
+      "unit": "s",
+      "label": "InferenceX 41533: H100 SXM FP8 TP 2, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.019740010395602685",
+        "row": "id 41533"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41533 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.017971309306706262,
+      "unit": "s",
+      "label": "InferenceX 41617: H100 SXM FP8 TP 2, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.017971309306706262",
+        "row": "id 41617"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41617 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.00911388713190063,
+      "unit": "s",
+      "label": "InferenceX 41625: H100 SXM FP8 TP 8, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.00911388713190063",
+        "row": "id 41625"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41625 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.01648915841245971,
+      "unit": "s",
+      "label": "InferenceX 41703: H100 SXM FP8 TP 8, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01648915841245971",
+        "row": "id 41703"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41703 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.009195374587034077,
+      "unit": "s",
+      "label": "InferenceX 41708: H100 SXM FP8 TP 8, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.009195374587034077",
+        "row": "id 41708"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41708 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.011583957083446606,
+      "unit": "s",
+      "label": "InferenceX 41710: H100 SXM FP8 TP 8, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011583957083446606",
+        "row": "id 41710"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41710 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.011995474820029195,
+      "unit": "s",
+      "label": "InferenceX 41759: H100 SXM FP8 TP 4, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011995474820029195",
+        "row": "id 41759"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41759 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.0210640703730332,
+      "unit": "s",
+      "label": "InferenceX 41775: H100 SXM FP8 TP 4, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.0210640703730332",
+        "row": "id 41775"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41775 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.022130283086979487,
+      "unit": "s",
+      "label": "InferenceX 41812: H100 SXM FP8 TP 2, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.022130283086979487",
+        "row": "id 41812"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41812 (run 18924543242, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.01951460483344175,
+      "unit": "s",
+      "label": "InferenceX 41821: H100 SXM FP8 TP 4, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01951460483344175",
+        "row": "id 41821"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41821 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.013274234163387794,
+      "unit": "s",
+      "label": "InferenceX 41953: H100 SXM FP8 TP 4, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.013274234163387794",
+        "row": "id 41953"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41953 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp4.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.05349472631709694,
+      "unit": "s",
+      "label": "InferenceX 42004: H100 SXM FP8 TP 4, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.05349472631709694",
+        "row": "id 42004"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42004 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.017407217876067922,
+      "unit": "s",
+      "label": "InferenceX 42017: H100 SXM FP8 TP 2, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.017407217876067922",
+        "row": "id 42017"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42017 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.028768600911294722,
+      "unit": "s",
+      "label": "InferenceX 42096: H100 SXM FP8 TP 2, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.028768600911294722",
+        "row": "id 42096"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42096 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.011391704482655638,
+      "unit": "s",
+      "label": "InferenceX 42130: H100 SXM FP8 TP 8, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011391704482655638",
+        "row": "id 42130"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42130 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.0344826479783977,
+      "unit": "s",
+      "label": "InferenceX 42149: H100 SXM FP8 TP 8, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.0344826479783977",
+        "row": "id 42149"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42149 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.01021780269800912,
+      "unit": "s",
+      "label": "InferenceX 42299: H100 SXM FP8 TP 8, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01021780269800912",
+        "row": "id 42299"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42299 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.01545499440302193,
+      "unit": "s",
+      "label": "InferenceX 42335: H100 SXM FP8 TP 8, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01545499440302193",
+        "row": "id 42335"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42335 (run 18924448230, attempt 2): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.03462533664177535,
+      "unit": "s",
+      "label": "InferenceX 42685: H100 SXM FP8 TP 2, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.03462533664177535",
+        "row": "id 42685"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42685 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp2.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.020615537434245056,
+      "unit": "s",
+      "label": "InferenceX 42691: H100 SXM FP8 TP 2, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.020615537434245056",
+        "row": "id 42691"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42691 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.h100-vllm-0-10-2-fp8.tp8.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.01585264566657153,
+      "unit": "s",
+      "label": "InferenceX 44154: H100 SXM FP8 TP 8, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01585264566657153",
+        "row": "id 44154"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 44154 (run 18924487526, attempt 3): H100 SXM, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.023101786167630478,
+      "unit": "s",
+      "label": "InferenceX 39409: B200 FP8 TP 1, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.023101786167630478",
+        "row": "id 39409"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39409 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.015887478473743534,
+      "unit": "s",
+      "label": "InferenceX 39458: B200 FP8 TP 2, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.015887478473743534",
+        "row": "id 39458"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39458 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.007609429561126693,
+      "unit": "s",
+      "label": "InferenceX 39779: B200 FP8 TP 8, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.007609429561126693",
+        "row": "id 39779"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39779 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.01359193267492726,
+      "unit": "s",
+      "label": "InferenceX 39919: B200 FP8 TP 4, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01359193267492726",
+        "row": "id 39919"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39919 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.008042216991168374,
+      "unit": "s",
+      "label": "InferenceX 40041: B200 FP8 TP 4, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.008042216991168374",
+        "row": "id 40041"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40041 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.01767291094630351,
+      "unit": "s",
+      "label": "InferenceX 40077: B200 FP8 TP 1, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01767291094630351",
+        "row": "id 40077"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40077 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.010637766567796445,
+      "unit": "s",
+      "label": "InferenceX 40087: B200 FP8 TP 2, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.010637766567796445",
+        "row": "id 40087"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40087 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.012544234115035396,
+      "unit": "s",
+      "label": "InferenceX 40166: B200 FP8 TP 8, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.012544234115035396",
+        "row": "id 40166"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40166 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.00976988419333295,
+      "unit": "s",
+      "label": "InferenceX 40260: B200 FP8 TP 8, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.00976988419333295",
+        "row": "id 40260"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40260 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.022277864127435053,
+      "unit": "s",
+      "label": "InferenceX 40338: B200 FP8 TP 8, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.022277864127435053",
+        "row": "id 40338"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40338 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.011372750940119858,
+      "unit": "s",
+      "label": "InferenceX 40352: B200 FP8 TP 2, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011372750940119858",
+        "row": "id 40352"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40352 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.011752254651128403,
+      "unit": "s",
+      "label": "InferenceX 40435: B200 FP8 TP 2, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011752254651128403",
+        "row": "id 40435"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40435 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.006318136471278868,
+      "unit": "s",
+      "label": "InferenceX 40483: B200 FP8 TP 8, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.006318136471278868",
+        "row": "id 40483"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40483 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.018341295891140703,
+      "unit": "s",
+      "label": "InferenceX 40518: B200 FP8 TP 1, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.018341295891140703",
+        "row": "id 40518"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40518 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.00871441611499844,
+      "unit": "s",
+      "label": "InferenceX 40555: B200 FP8 TP 4, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.00871441611499844",
+        "row": "id 40555"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40555 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.00898021841896684,
+      "unit": "s",
+      "label": "InferenceX 40571: B200 FP8 TP 4, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.00898021841896684",
+        "row": "id 40571"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40571 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.016336672415144134,
+      "unit": "s",
+      "label": "InferenceX 40624: B200 FP8 TP 1, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.016336672415144134",
+        "row": "id 40624"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40624 (run 18924448230, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.027706724988177465,
+      "unit": "s",
+      "label": "InferenceX 40668: B200 FP8 TP 1, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.027706724988177465",
+        "row": "id 40668"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40668 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.017457259732727992,
+      "unit": "s",
+      "label": "InferenceX 40741: B200 FP8 TP 2, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.017457259732727992",
+        "row": "id 40741"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40741 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.007181885904678309,
+      "unit": "s",
+      "label": "InferenceX 40747: B200 FP8 TP 8, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.007181885904678309",
+        "row": "id 40747"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40747 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.027780663665277594,
+      "unit": "s",
+      "label": "InferenceX 40815: B200 FP8 TP 4, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.027780663665277594",
+        "row": "id 40815"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40815 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.012071169169474299,
+      "unit": "s",
+      "label": "InferenceX 40818: B200 FP8 TP 4, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.012071169169474299",
+        "row": "id 40818"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40818 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.04200622065793791,
+      "unit": "s",
+      "label": "InferenceX 40877: B200 FP8 TP 2, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.04200622065793791",
+        "row": "id 40877"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40877 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.01038084843538897,
+      "unit": "s",
+      "label": "InferenceX 41294: B200 FP8 TP 2, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01038084843538897",
+        "row": "id 41294"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41294 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.015677398847333383,
+      "unit": "s",
+      "label": "InferenceX 41424: B200 FP8 TP 2, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.015677398847333383",
+        "row": "id 41424"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41424 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.01789299534381616,
+      "unit": "s",
+      "label": "InferenceX 41472: B200 FP8 TP 1, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01789299534381616",
+        "row": "id 41472"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41472 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.011500293662460592,
+      "unit": "s",
+      "label": "InferenceX 41706: B200 FP8 TP 4, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011500293662460592",
+        "row": "id 41706"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41706 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.010453019377017507,
+      "unit": "s",
+      "label": "InferenceX 41717: B200 FP8 TP 8, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.010453019377017507",
+        "row": "id 41717"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41717 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.006519630837511817,
+      "unit": "s",
+      "label": "InferenceX 41737: B200 FP8 TP 8, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.006519630837511817",
+        "row": "id 41737"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41737 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp8.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.0070346015878713,
+      "unit": "s",
+      "label": "InferenceX 41787: B200 FP8 TP 8, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.0070346015878713",
+        "row": "id 41787"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41787 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 8, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.008399696667740892,
+      "unit": "s",
+      "label": "InferenceX 41992: B200 FP8 TP 4, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.008399696667740892",
+        "row": "id 41992"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41992 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp2.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.01132335250388355,
+      "unit": "s",
+      "label": "InferenceX 42027: B200 FP8 TP 2, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01132335250388355",
+        "row": "id 42027"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42027 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.016670736488500447,
+      "unit": "s",
+      "label": "InferenceX 42028: B200 FP8 TP 1, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.016670736488500447",
+        "row": "id 42028"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42028 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp4.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.008366643705958429,
+      "unit": "s",
+      "label": "InferenceX 42134: B200 FP8 TP 4, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.008366643705958429",
+        "row": "id 42134"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42134 (run 18924543242, attempt 2): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.008800759451515167,
+      "unit": "s",
+      "label": "InferenceX 39515: B200 NVFP4 TP 4, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.008800759451515167",
+        "row": "id 39515"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39515 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.013690351874495313,
+      "unit": "s",
+      "label": "InferenceX 39536: B200 NVFP4 TP 2, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.013690351874495313",
+        "row": "id 39536"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39536 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.007234912949786916,
+      "unit": "s",
+      "label": "InferenceX 39563: B200 NVFP4 TP 4, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.007234912949786916",
+        "row": "id 39563"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39563 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.01415219549281905,
+      "unit": "s",
+      "label": "InferenceX 39588: B200 NVFP4 TP 1, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01415219549281905",
+        "row": "id 39588"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39588 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.0130752578765089,
+      "unit": "s",
+      "label": "InferenceX 39641: B200 NVFP4 TP 4, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.0130752578765089",
+        "row": "id 39641"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 39641 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.05034475963454964,
+      "unit": "s",
+      "label": "InferenceX 40030: B200 NVFP4 TP 1, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.05034475963454964",
+        "row": "id 40030"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40030 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.01456308992357196,
+      "unit": "s",
+      "label": "InferenceX 40059: B200 NVFP4 TP 2, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.01456308992357196",
+        "row": "id 40059"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40059 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.013071160093486068,
+      "unit": "s",
+      "label": "InferenceX 40085: B200 NVFP4 TP 1, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.013071160093486068",
+        "row": "id 40085"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40085 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.011040995279626143,
+      "unit": "s",
+      "label": "InferenceX 40124: B200 NVFP4 TP 4, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011040995279626143",
+        "row": "id 40124"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40124 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.021767409659583504,
+      "unit": "s",
+      "label": "InferenceX 40186: B200 NVFP4 TP 1, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.021767409659583504",
+        "row": "id 40186"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40186 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.013549694428368463,
+      "unit": "s",
+      "label": "InferenceX 40287: B200 NVFP4 TP 1, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.013549694428368463",
+        "row": "id 40287"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40287 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.010672074106200937,
+      "unit": "s",
+      "label": "InferenceX 40291: B200 NVFP4 TP 2, 1024/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.010672074106200937",
+        "row": "id 40291"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40291 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.008092805188188014,
+      "unit": "s",
+      "label": "InferenceX 40300: B200 NVFP4 TP 4, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.008092805188188014",
+        "row": "id 40300"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40300 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.011341161435739999,
+      "unit": "s",
+      "label": "InferenceX 40361: B200 NVFP4 TP 4, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.011341161435739999",
+        "row": "id 40361"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40361 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.010731015907022964,
+      "unit": "s",
+      "label": "InferenceX 40407: B200 NVFP4 TP 2, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.010731015907022964",
+        "row": "id 40407"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40407 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.009667559092225504,
+      "unit": "s",
+      "label": "InferenceX 40415: B200 NVFP4 TP 2, 1024/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.009667559092225504",
+        "row": "id 40415"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40415 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.014377599486642861,
+      "unit": "s",
+      "label": "InferenceX 40436: B200 NVFP4 TP 1, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.014377599486642861",
+        "row": "id 40436"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40436 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.017842657499759267,
+      "unit": "s",
+      "label": "InferenceX 40482: B200 NVFP4 TP 1, 1024/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.017842657499759267",
+        "row": "id 40482"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40482 (run 18924448230, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.007976555415466853,
+      "unit": "s",
+      "label": "InferenceX 40498: B200 NVFP4 TP 4, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.007976555415466853",
+        "row": "id 40498"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40498 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-8192.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.02089892901121676,
+      "unit": "s",
+      "label": "InferenceX 40507: B200 NVFP4 TP 1, 1024/8192 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.02089892901121676",
+        "row": "id 40507"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40507 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.007464780910375318,
+      "unit": "s",
+      "label": "InferenceX 40549: B200 NVFP4 TP 4, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.007464780910375318",
+        "row": "id 40549"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40549 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.8192-1024.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.010397310371980353,
+      "unit": "s",
+      "label": "InferenceX 40701: B200 NVFP4 TP 2, 8192/1024 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.010397310371980353",
+        "row": "id 40701"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40701 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.1024-8192.c4.tpot",
+      "kind": "benchmark",
+      "value": 0.009461090266727198,
+      "unit": "s",
+      "label": "InferenceX 40725: B200 NVFP4 TP 2, 1024/8192 tokens, 4 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.009461090266727198",
+        "row": "id 40725"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40725 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.03363686275987711,
+      "unit": "s",
+      "label": "InferenceX 40754: B200 NVFP4 TP 2, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.03363686275987711",
+        "row": "id 40754"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40754 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp2.8192-1024.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.014819955878565777,
+      "unit": "s",
+      "label": "InferenceX 40816: B200 NVFP4 TP 2, 8192/1024 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.014819955878565777",
+        "row": "id 40816"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40816 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 2, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp1.1024-8192.c16.tpot",
+      "kind": "benchmark",
+      "value": 0.014678575882916156,
+      "unit": "s",
+      "label": "InferenceX 41370: B200 NVFP4 TP 1, 1024/8192 tokens, 16 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.014678575882916156",
+        "row": "id 41370"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 41370 (run 18924543242, attempt 2): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 1024 tokens in and 8192 out nominal (lengths drawn from 0.8 to 1 times nominal), 16 concurrent requests, 160 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-nvfp4.tp4.8192-1024.c64.tpot",
+      "kind": "benchmark",
+      "value": 0.024904034741117204,
+      "unit": "s",
+      "label": "InferenceX 42068: B200 NVFP4 TP 4, 8192/1024 tokens, 64 users, mean TPOT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"mean_tpot\":0.024904034741117204",
+        "row": "id 42068"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 42068 (run 18924487526, attempt 3): B200, NVFP4 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 4, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 64 concurrent requests, 640 prompts; the mean TPOT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
+    },
+    {
+      "id": "bench.ix-l70.b200-vllm-0-10-2-fp8.tp1.8192-1024.c4.ttft-median",
+      "kind": "benchmark",
+      "value": 0.654017546446994,
+      "unit": "s",
+      "label": "InferenceX 40518: B200 FP8 TP 1, 8192/1024 tokens, 4 users, median TTFT",
+      "source": {
+        "url": "https://inferencex.semianalysis.com/api/v1/benchmarks?model=Llama-3.3-70B-Instruct-FP8&date=2025-10-29&exact=true",
+        "title": "InferenceX API: Llama-3.3-70B-Instruct-FP8 benchmarks of 2025-10-29 (exact date)",
+        "quote": "\"median_ttft\":0.654017546446994",
+        "row": "id 40518"
+      },
+      "verifiedAt": "2026-10-18",
+      "ttlDays": 180,
+      "boundary": "InferenceX row 40518 (run 18924487526, attempt 3): B200, FP8 weights, Llama-3.3-70B-Instruct-FP8, vLLM at the harness commit 9596d23 (0.10.2), TP 1, one node, no speculative decoding. 8192 tokens in and 1024 out nominal (lengths drawn from 0.8 to 1 times nominal), 4 concurrent requests, 40 prompts; the median TTFT of those requests. Copied unmodified from the pinned response (bench.inferencex.llama70b-2025-10-29 names it and the extract). Official InferenceX result as published 2025-10-29; the course's fit is its own."
     }
   ]
 }
