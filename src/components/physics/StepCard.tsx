@@ -1,23 +1,17 @@
 /**
  * StepCard: one engine step through the step card (docs/specs/s5.md §3.2, §8.3; S5-11), drawn as a bar per card (the
  * fixed term, the link term and the larger of memory and compute, which is what the step pays) with the terms beside
- * it, and a `SimMirror` table of the same numbers. It shows a card's arithmetic, never a split as fact: the caller
- * labels a fitted card "this fit's" (S5-D5).
+ * it, and a `SimMirror` table of the same numbers. The list under each bar is the bar's legend (a swatch in the bar's
+ * colour by each term's name), and the bar's label reads its segments out. It shows a card's arithmetic, never a split
+ * as fact: the caller labels a fitted card "this fit's" (S5-D5).
  *
  * `Val` is how the physics tab prints a report value: the number, formatted, inside a span whose `data-report` names
  * where it came from (`report:workedExamples.0.card.memS`), so tests/changes/physics-tab.test.ts can resolve every
  * number on the tab back to its file.
  */
 import SimMirror from '@/components/sims/SimMirror'
+import { fmtNum } from '@/lib/physics-format'
 import type { StepCard as CardTerms } from '@/lib/world/physics/types'
-
-/** A number as text: `digits` decimals, thousands separators, a real minus sign, and `+` when asked. */
-// eslint-disable-next-line react-refresh/only-export-components -- the physics tab formats its claim chips the same way
-export function fmtNum(x: number, digits: number, sign = false): string {
-  const text = Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
-  const zero = Number(text.replace(/,/g, '')) === 0
-  return (x < 0 && !zero ? '−' : sign && x > 0 && !zero ? '+' : '') + text
-}
 
 interface ValProps {
   /** where the value lives, `<file>:<path>` (file: report, decisions or controls) */
@@ -73,7 +67,7 @@ export default function StepCard({ id, caption, columns }: { id: string; caption
             </p>
             <div
               role="img"
-              aria-label={`${label}: ${ms(card.stepS)}, ${card.bound === 'mem' ? 'memory' : 'compute'}-bound`}
+              aria-label={`${label}: ${ms(card.stepS)}, ${card.bound === 'mem' ? 'memory' : 'compute'}-bound; ${bar.map((t) => `${t.name} ${ms(card[t.key])}`).join(', ')}`}
               aria-describedby={id}
               className="flex h-3 overflow-hidden rounded-sm bg-surface-2"
               style={{ width: `${(card.stepS / longest) * 100}%` }}
@@ -85,7 +79,10 @@ export default function StepCard({ id, caption, columns }: { id: string; caption
             <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-[11px] text-text-2 sm:grid-cols-4">
               {TERMS.map((t) => (
                 <div key={t.key} className="flex items-baseline gap-1.5">
-                  <dt className="text-text-3">{t.name}</dt>
+                  <dt className="text-text-3">
+                    <span aria-hidden="true" className={`mr-1 inline-block size-2 rounded-[2px] ${t.tone}`} />
+                    {t.name}
+                  </dt>
                   <dd>
                     <Val at={`${at}.${t.key}`} v={card[t.key]} scale={1000} digits={3} unit=" ms" />
                   </dd>

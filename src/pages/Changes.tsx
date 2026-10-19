@@ -51,7 +51,7 @@ export default function Changes() {
         What changed, and which lesson it changes
       </h1>
 
-      <div role="tablist" aria-label="Changes" className="mt-8 flex flex-wrap gap-x-5 border-b border-line sm:gap-x-6">
+      <div role="tablist" aria-label="Changes" className="mt-8 flex flex-wrap gap-x-3 border-b border-line min-[360px]:gap-x-4 sm:gap-x-6">
         {TABS.map((tab, index) => (
           <button
             key={tab.id}
@@ -64,7 +64,7 @@ export default function Changes() {
             onClick={() => select(tab.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              '-mb-px border-b-2 py-3 font-mono text-body-sm transition-colors duration-150',
+              '-mb-px min-h-11 whitespace-nowrap border-b-2 py-3 font-mono text-[12px] transition-colors duration-150 min-[360px]:text-body-sm',
               active === tab.id
                 ? 'border-accent text-text-1'
                 : 'border-transparent text-text-3 hover:text-text-1',
