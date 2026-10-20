@@ -144,6 +144,7 @@ export const R_KCS: readonly Kc[] = [
     lessons: ['r.l5'],
     requires: ['r.control-flow-match'],
     labs: ['rust-allocator'],
+    gen: ['compile'],
     since,
   },
   {
@@ -166,6 +167,7 @@ export const R_KCS: readonly Kc[] = [
     kind: 'skill',
     lessons: ['r.l6'],
     requires: [KC.ownershipMoves, KC.borrowRules],
+    gen: ['compile'],
     since,
   },
   {
@@ -176,6 +178,7 @@ export const R_KCS: readonly Kc[] = [
     kind: 'skill',
     lessons: ['r.l6'],
     requires: [KC.ownershipMoves],
+    gen: ['compile'],
     since,
   },
 
@@ -189,6 +192,7 @@ export const R_KCS: readonly Kc[] = [
     lessons: ['r.l7'],
     requires: [KC.ownershipMoves],
     confusable: ['r.interior-mutability'],
+    gen: ['compile'],
     since,
   },
 

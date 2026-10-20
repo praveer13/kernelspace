@@ -158,6 +158,50 @@
       [["r.ownership-moves","r.clone-copy-drop"],["","E0507pf","E0507p","E0596p"]],
       [["r.ownership-moves"],["E0381f","E0384p","E0381"]]
     ],
+    "reading-closures": [
+      [["r.closures-collections"],["","E0596f","E0308f","E0308"]],
+      [["r.closures-collections"],["","E0502","E0596f","E0502f","E0382f"]],
+      [["r.closures-collections"],["","E0594f","E0596f","E0594f"]],
+      [["r.closures-collections"],["","E0507f","E0596f","E0596"]],
+      [["r.closures-collections"],["","E0502","E0382f","E0596f"]],
+      [["r.closures-collections"],["","E0373f","E0382","E0308f"]],
+      [["r.closures-collections"],["","E0277f","E0277","E0308f"]],
+      [["r.closures-collections"],["","E0308f","E0596f","E0308"]]
+    ],
+    "reading-enums": [
+      [["r.enums-option-result"],["","E0308f","E0277f","E0596f"]],
+      [["r.enums-option-result"],["","E0004f","E0308f","E0308"]],
+      [["r.enums-option-result"],["","E0004","E0308f","E0004"]],
+      [["r.enums-option-result"],["","E0382f","E0004f","E0308"]],
+      [["r.enums-option-result"],["","E0382f","E0004f","E0308"]],
+      [["r.enums-option-result"],["","E0277f","E0277f","E0308f"]],
+      [["r.enums-option-result"],["","E0507f","E0596f","E0308"]],
+      [["r.enums-option-result"],["","E0308f","E0004f","E0308","E0308f"]],
+      [["r.enums-option-result","r.smart-pointers"],["","E0308f","E0004f","E0507f"]],
+      [["r.iterators-ownership","r.enums-option-result"],["","E0308f","E0308f","E0308"]]
+    ],
+    "reading-iter": [
+      [["r.iterators-ownership"],["","E0507f","E0596f","E0596"]],
+      [["r.iterators-ownership"],["","E0382f","E0596","E0308f"]],
+      [["r.iterators-ownership"],["","E0308f","E0277f","E0596"]],
+      [["r.iterators-ownership"],["","E0502","E0507f","E0382f"]],
+      [["r.iterators-ownership"],["","E0596f","E0596f","E0507"]],
+      [["r.iterators-ownership"],["","E0502","E0308f"]],
+      [["r.iterators-ownership"],["","E0507f","E0596f","E0596"]],
+      [["r.iterators-ownership"],["","E0594f","E0382f","E0499"]],
+      [["r.iterators-ownership"],["","E0277f","E0308","E0277f"]]
+    ],
+    "reading-pointers": [
+      [["r.smart-pointers"],["","E0594f","E0507f","E0308"]],
+      [["r.smart-pointers"],["","E0382f","E0507f","E0594"]],
+      [["r.smart-pointers"],["","E0277f","E0373f","E0521"]],
+      [["r.smart-pointers"],["","E0277f","E0521f","E0373"]],
+      [["r.smart-pointers"],["","E0596f","E0507f","E0596"]],
+      [["r.smart-pointers"],["","E0382f","E0373f","E0308"]],
+      [["r.smart-pointers"],["","E0507f","E0596f"]],
+      [["r.smart-pointers"],["E0277f","E0277f","E0277"]],
+      [["r.smart-pointers","r.enums-option-result"],["","E0507f","E0507","E0596f"]]
+    ],
     "seed": [
       [["r.borrow-rules","r.ownership-moves"],["","E0502pf","E0499","E0507p","E0596p"]],
       [["r.slices","r.borrow-rules"],["","E0502pf","E0502","E0507p","E0596p"]],
