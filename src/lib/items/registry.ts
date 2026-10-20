@@ -10,9 +10,11 @@
  * so scripts and tests list the directory with `readdir` and `import()` the files, as
  * verify-errata does. The Bun path is only reached when the glob is absent, and its Node imports
  * are written so the browser build neither bundles nor warns about them.
+ *
+ * A family's on-demand parts (`families/lazy/<name>.ts`) are not families, and their loader is `on-demand.ts`'s, not
+ * this module's (docs/specs/s5.md S5-D79).
  */
 
-import { NotReady, want } from './on-demand'
 import type { Gen } from './types'
 
 type Loader = () => Promise<unknown>
@@ -94,73 +96,4 @@ export function loadFamily(id: string): Promise<Gen> {
 /** Every family, loaded. For verify-generators and tests; the app loads the families it needs by id. */
 export async function loadAllFamilies(): Promise<Gen[]> {
   return Promise.all((await familyIds()).map(loadFamily))
-}
-
-/* ------------------------------ a family's on-demand parts ------------------------------ */
-
-/** A part whose load failed is not asked for again for this long (offline: the caller falls back), as compile's groups. */
-const PART_RETRY_MS = 30_000
-
-/**
- * Vite's lazy glob of the parts, or undefined where the runtime has none (Bun). A part is `families/lazy/<name>.ts`: code
- * and data only some of a family's variants read, in a module (and chunk) of its own that is no family, since the family
- * glob above does not reach the directory. This module issues the `import()`, so a family that awaits its part under Bun
- * (top-level await) holds no dynamic import itself: Rollup treats an `import()` in a module with top-level await as a
- * static one, and would move modules out of the entry chunk to serve it.
- */
-function vitePartLoaders(): Record<string, Loader> | undefined {
-  try {
-    return import.meta.glob('./families/lazy/*.ts')
-  } catch {
-    return undefined
-  }
-}
-
-const PART_LOADERS = vitePartLoaders()
-
-/** Whether parts load on demand (the app) rather than when their family's module evaluates (Bun: scripts and tests). */
-export const PARTS_ON_DEMAND = PART_LOADERS !== undefined
-
-const parts = new Map<string, unknown>()
-const partLoads = new Map<string, Promise<unknown>>()
-const partFailedAt = new Map<string, number>()
-
-/** Load one part (once; a failed load is retried by the next call). An unknown name throws. */
-export function loadFamilyPart<T>(name: string): Promise<T> {
-  let p = partLoads.get(name)
-  if (!p) {
-    const load = PART_LOADERS
-      ? PART_LOADERS[`./families/lazy/${name}.ts`]
-      : () => import(/* @vite-ignore */ new URL(`${name}.ts`, new URL(/* @vite-ignore */ './families/lazy/', import.meta.url)).href)
-    if (!load) throw new Error(`unknown family part: ${name}`)
-    p = load().then((m) => {
-      parts.set(name, m)
-      return m
-    })
-    p.catch(() => {
-      partLoads.delete(name)
-      partFailedAt.set(name, Date.now())
-    })
-    partLoads.set(name, p)
-  }
-  return p as Promise<T>
-}
-
-/**
- * A part that has loaded, now, for a family's synchronous `make`. Otherwise it starts loading (unless it failed in the last
- * PART_RETRY_MS) and throws `NotReady`, which `collect` and `settle` (on-demand.ts) turn into a second run once it lands.
- */
-export function familyPart<T>(name: string): T {
-  if (parts.has(name)) return parts.get(name) as T
-  const what = `family part ${name}`
-  const failed = partFailedAt.get(name)
-  if (failed !== undefined && Date.now() - failed < PART_RETRY_MS) throw new NotReady(what)
-  return want(what, loadFamilyPart(name))
-}
-
-/** Tests only: forget every loaded part, so the on-demand path can be exercised under Bun. */
-export function forgetFamilyParts(): void {
-  parts.clear()
-  partLoads.clear()
-  partFailedAt.clear()
 }

@@ -15,8 +15,8 @@ import { deriveBoot } from '../../src/lib/boot/model'
 import { partsText } from '../../src/lib/items/core'
 import * as stepModule from '../../src/lib/items/families/step'
 import { gradeResponse } from '../../src/lib/items/grade'
-import { collect, NotReady, settle } from '../../src/lib/items/on-demand'
-import { forgetFamilyParts, loadAllFamilies, loadFamilyPart } from '../../src/lib/items/registry'
+import { collect, forgetFamilyParts, loadFamilyPart, NotReady, settle } from '../../src/lib/items/on-demand'
+import { loadAllFamilies } from '../../src/lib/items/registry'
 import type { Gen, Instance, Level, Response } from '../../src/lib/items/types'
 import { formBlueprint } from '../../src/lib/learner/forms'
 import { BOX_BLOCK_SIZE, BOX_RANGE_RATIO, exceeds, inBox, kvRoomTokens } from '../../src/lib/world/physics/box'
@@ -138,9 +138,9 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     const text = readFileSync(FILE, 'utf8')
     expect(lintLiterals(FILE.pathname, text)).toEqual([])
     const imports = [...text.matchAll(/(?:from |import )'([^']+)'/g)].map((m) => m[1])
-    expect(imports.filter((x) => /physics|lazy|ix-points|claims\/|registry/.test(x)).sort()).toEqual([
+    expect(imports.filter((x) => /physics|lazy|ix-points|claims\/|registry|on-demand/.test(x)).sort()).toEqual([
       './lazy/step-calibrated',
-      '@/lib/items/registry',
+      '@/lib/items/on-demand',
       '@/lib/world/physics/card',
       '@/lib/world/physics/consumers',
       '@/lib/world/physics/types',
@@ -149,7 +149,7 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     expect(text).toContain("import type { PhysicsConsumer } from '@/lib/world/physics/consumers'")
     expect(text).toContain("import type * as Calibrated from './lazy/step-calibrated'")
     // nor does it import the part by `import()`: under Bun it awaits the part (top-level await), and Rollup treats an
-    // `import()` in such a module as a static import; the registry's `familyPart` issues it
+    // `import()` in such a module as a static import; on-demand.ts's `familyPart` issues it
     expect(text).not.toMatch(/import\(/)
   })
 
@@ -169,6 +169,16 @@ describe('the step family, η-free variants (§7.2, §7.4-7.5)', () => {
     expect(text).toContain("import type { PhysicsConsumer } from '@/lib/world/physics/consumers'")
     // it never imports the family (step.ts awaits it under Bun: a cycle would deadlock)
     expect(imports.some((x) => /families\/step|\.\.\/step/.test(x))).toBe(false)
+  })
+
+  test("the part's loader is on-demand.ts's, not the registry's: the registry holds no part glob and imports no on-demand (S5-D79)", () => {
+    // the registry rides in every closure that holds it statically (/play/tiling-cube); on-demand.ts is a chunk of its own
+    const registry = readFileSync(new URL('../../src/lib/items/registry.ts', import.meta.url), 'utf8')
+    expect(registry).not.toMatch(/import\.meta\.glob\('\.\/families\/lazy\//)
+    expect(registry).not.toMatch(/export (?:function|const) (?:familyPart|loadFamilyPart|PARTS_ON_DEMAND)\b/)
+    expect(registry).not.toMatch(/from '\.\/on-demand'/)
+    const onDemand = readFileSync(new URL('../../src/lib/items/on-demand.ts', import.meta.url), 'utf8')
+    expect(onDemand).toContain("import.meta.glob('./families/lazy/*.ts')")
   })
 
   test('a calibrated draw before the part loads throws NotReady and starts the load; after settle it is the eager build, solution included', async () => {
