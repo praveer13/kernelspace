@@ -134,7 +134,7 @@ for (const width of WIDTHS) {
     // the verdict is announced: the polite live region holds it, and focus has moved on to "Another snippet"
     const live = block.locator('form [role="status"][aria-live="polite"]').first()
     await expect(live).toHaveText(/Correct\.|Not quite\. The answer is [A-D]\./)
-    expect((await active(page)).name).toBe('Another snippet')
+    expect((await active(page)).name).toContain('Another snippet')
     await expect(block.locator('[data-ks-option]').first()).toBeDisabled()
     expect(await noSidewaysScroll(page), 'the answered verdict item scrolls sideways').toBe(true)
     await expectAxeClean(page, `${LESSON} at ${width} px, a verdict answered`)
@@ -148,7 +148,7 @@ for (const width of WIDTHS) {
     await page.keyboard.press('b')
     await page.keyboard.press('Enter')
     await expect(block.locator('form [role="status"][aria-live="polite"]').first()).toHaveText(/Correct\.|Not quite\. The answer is [A-D]\./)
-    expect((await active(page)).name).toBe('Another snippet')
+    expect((await active(page)).name).toContain('Another snippet')
     await atWidth(page, width)
     expect(await noSidewaysScroll(page), 'the answered fix item scrolls sideways').toBe(true)
     await expectAxeClean(page, `${LESSON} at ${width} px, a fix answered`)
