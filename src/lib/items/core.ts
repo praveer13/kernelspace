@@ -89,9 +89,15 @@ export function resolveVariant(gen: Pick<Gen, 'id' | 'variants'>, seed: number, 
     if (!v.levels.includes(level)) throw new RangeError(`${gen.id}/${variant}: no level ${level}`)
     return v
   }
-  const offered = gen.variants.filter((x) => x.levels.includes(level))
+  const offered = gen.variants.filter((x) => x.levels.includes(level) && !x.blockOnly)
   if (offered.length === 0) throw new RangeError(`${gen.id}: no variant offers level ${level}`)
   return offered[splitmix32u((seed ^ 0x5bd1e995 ^ Math.imul(level + 1, 0x27d4eb2f)) | 0)() % offered.length]
+}
+
+/** Whether every variant of `gen` that teaches `kc` is drawn only by lesson blocks (serving-reading §3.4). */
+export function blockOnlyFor(gen: Pick<Gen, 'variants'>, kc: string): boolean {
+  const on = gen.variants.filter((v) => v.kcs.includes(kc))
+  return on.length > 0 && on.every((v) => v.blockOnly === true)
 }
 
 /** `id@verifiedAt` for a claim an instance used, so a claim update changes the fingerprint. */

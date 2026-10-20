@@ -106,6 +106,13 @@ def bpe_train(corpus: list[bytes], vocab_size: int):
       chips: ['greedy merge', '256-byte floor', 'lossless'],
     },
     {
+      type: 'reading',
+      title: 'Read it in Rust: the pair counter',
+      lead: 'The pair counter above, in Rust: a `HashMap` keyed by the pair, where `entry(p).or_insert(0)` finds or adds a count and lends it for changing. A tokenizer\'s bytes can also stop mid-character, and Rust says so with a `Result`.',
+      variants: ['verdict.closures-collections', 'fix.enums-option-result', 'fix.closures-collections', 'verdict.enums-option-result'],
+      count: 2,
+    },
+    {
       type: 'prose',
       md: `## The systems-relevant consequences
 

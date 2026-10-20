@@ -42,6 +42,13 @@ RadixAttention (T5.L10's SGLang lesson) was built for exactly this traffic: the 
 A BPE token can contain \`"tool","arguments":{\` — several grammar terminals and transitions in one model step. A mask that checks only the first character admits tokens whose suffix is impossible and rejects legal tokens that cross state boundaries. The constraint engine must speculatively consume the **whole token byte string** from the current parser stack. That is Forge lab 08: schema → pushdown state → whole-token mask → cached compilation.`,
     },
     {
+      type: 'reading',
+      title: 'Read it in Rust: the mask walk',
+      lead: 'A mask walks the vocabulary: XGrammar prechecks the tokens that do not depend on context and checks the rest against a persistent pushdown stack. How the walk borrows decides what it may do: `iter` lends each item for reading, `iter_mut` for changing, and a chain of adapters does nothing until something like `collect` runs it.',
+      variants: ['verdict.iterators-ownership', 'fix.iterators-ownership'],
+      count: 2,
+    },
+    {
       type: 'callout',
       variant: 'info',
       title: 'Build this',

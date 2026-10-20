@@ -163,7 +163,7 @@ function optionsOf(kc: Kc, input: FormsInput, run: Run): Option[] {
     const gen = input.gens.get(family)
     if (!gen) continue
     for (const v of gen.variants) {
-      if (!v.kcs.includes(kc.id) || !v.levels.includes(FORM_LEVEL)) continue
+      if (!v.kcs.includes(kc.id) || !v.levels.includes(FORM_LEVEL) || v.blockOnly) continue
       const o = { family, variant: v.id }
       if (guarded(run, () => drawOnKcAt(gen, v.id, kc.id, probeSeed(kc.id, o)) !== null, true)) out.push(o)
     }

@@ -7,7 +7,7 @@
  * `completePlacement` once. Nothing is written before that: leaving earlier saves nothing.
  *
  * Nothing locks (W8). **Not sure** skips an item as a miss, the Rust questions can be skipped on
- * `serving-first` (where R arrives as reading items only), and the result says in words where the learner
+ * `serving-first` (where R arrives as `reading` blocks inside T5 and T6 lessons, never as R lessons), and the result says in words where the learner
  * starts and why, never a score. The Rust items' Java analogue lives in each item's explanation, which the
  * player shows after the answer and not before.
  *
@@ -54,6 +54,7 @@ import { useProgress } from '@/lib/progress'
 import { freshSeed } from '@/lib/rng'
 import { getTrack } from '@/lib/tracks'
 import { cn } from '@/lib/utils'
+import { anchorLine } from './anchor-line'
 
 export interface PlacementWalkProps {
   /** `boot:path`: the Rust questions are optional on `serving-first`. */
@@ -251,12 +252,6 @@ export default function PlacementWalk({ path, onClose, className }: PlacementWal
 
 /* ------------------------------ the result ------------------------------ */
 
-const ANCHOR_LINE: Record<WalkOutcome['result']['rustAnchor'], string> = {
-  solid: 'Rust reading: solid. The Rust Zero lessons are offered as test-outs instead of lessons.',
-  missed: 'Rust reading: not yet. Rust Zero stays in your plan, braided in just before the lessons that need it.',
-  skipped: 'Rust reading: not asked. The Rust Zero lessons are offered as test-outs.',
-}
-
 function titles(kcs: readonly string[]): string {
   return kcs.map((kc) => kcById(kc)?.title ?? kc).join(', ')
 }
@@ -300,7 +295,7 @@ function Result({ outcome, path, headingRef, onClose }: { outcome: WalkOutcome; 
         </div>
       </div>
 
-      <p className="max-w-measure text-body-sm text-text-2">{ANCHOR_LINE[result.rustAnchor]}</p>
+      <p className="max-w-measure text-body-sm text-text-2">{anchorLine(result.rustAnchor, path)}</p>
 
       {slips.length > 0 && (
         <div>

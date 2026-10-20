@@ -3,7 +3,7 @@
  * Renders every ContentBlock type: prose (markdown-lite), code compare tabs,
  * five callout variants, step-through SVG diagrams, statlines, quizzes,
  * exercise embed cards, isomorphism panels, collapsible deep-dives, and the
- * Wave 1 prequestion, play and exit-ticket blocks, the Wave 2 item block (lazy), the stretch protégé block (lazy), and on code blocks
+ * Wave 1 prequestion, play and exit-ticket blocks, the Wave 2 item block and the serving-first `reading` block (both lazy ItemBlock), the stretch protégé block (lazy), and on code blocks
  * F4's language switch, permission diagram and alignment items (lazy). ProseView, DiagramView
  * and ExerciseView live in their own modules beside this one.
  */
@@ -32,7 +32,9 @@ import type {
   ContentBlock,
   DeepdiveBlock,
   FieldNoteBlock,
+  ItemBlock as ItemBlockData,
   Lesson,
+  ReadingBlock,
   StatlineBlock,
 } from '@/data/lessons/types'
 import { DiagramView } from './diagram'
@@ -45,6 +47,21 @@ const PlayBlock = lazy(() => import('@/components/blocks/PlayBlock'))
 const ExitTicketBlock = lazy(() => import('@/components/learner/ExitTicketBlock'))
 // Wave 2: generated items inside a lesson (a stub until 2a-12).
 const ItemBlock = lazy(() => import('@/components/blocks/ItemBlock'))
+
+/**
+ * A `reading` block (docs/specs/serving-reading.md §5.2) is a compile-bank item block under its own title and lead. Its item spec is
+ * derived once per block object (SR-D22): ItemBlock's load effect keys on the spec's identity, so a literal built in each render
+ * would reload the block forever.
+ */
+const READING_ITEMS = new WeakMap<ReadingBlock, ItemBlockData>()
+function readingItem(block: ReadingBlock): ItemBlockData {
+  let item = READING_ITEMS.get(block)
+  if (!item) {
+    item = { type: 'item', title: block.title, family: 'compile', variants: block.variants, count: block.count, predict: false }
+    READING_ITEMS.set(block, item)
+  }
+  return item
+}
 // Stretch P4 (wave-3 §16.9): a protégé block loads only in a lesson that has one.
 const ProtegeBlock = lazy(() => import('@/components/blocks/ProtegeBlock'))
 // F4 (wave-2 §17): permission diagrams and alignment items load only with a code block that has them.
@@ -421,6 +438,15 @@ export function RenderBlock({ block, lesson, trackColor, h2Start }: RenderBlockP
         <Suspense fallback={<BlockFallback />}>
           <ItemBlock lessonId={lesson.id} blockIndex={lesson.blocks.indexOf(block)} block={block} trackColor={trackColor} />
         </Suspense>
+      )
+    case 'reading':
+      return (
+        <>
+          <ProseView md={block.lead} trackColor={trackColor} compact />
+          <Suspense fallback={<BlockFallback />}>
+            <ItemBlock lessonId={lesson.id} blockIndex={lesson.blocks.indexOf(block)} block={readingItem(block)} trackColor={trackColor} reading />
+          </Suspense>
+        </>
       )
     case 'protege':
       return (

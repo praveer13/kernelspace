@@ -7,6 +7,7 @@
  */
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { KCS } from '../../src/data/kc'
+import { blockOnlyFor } from '../../src/lib/items/core'
 import { loadAllFamilies } from '../../src/lib/items/registry'
 import type { Gen, Instance, Level } from '../../src/lib/items/types'
 import type { KcId } from '../../src/lib/kc/types'
@@ -106,7 +107,8 @@ describe('the pools', () => {
         if (!gen) continue
         const pool = makeGenPool(gens, () => [fam])
         for (const level of LEVELS) {
-          const offered = gen.variants.filter((v) => v.kcs.includes(k.id) && v.levels.includes(level))
+          // what Today and tickets serve: a block-only variant (serving-reading.md §3.4) is a lesson block's alone, and both pools skip it (SR-D27)
+          const offered = gen.variants.filter((v) => v.kcs.includes(k.id) && v.levels.includes(level) && !v.blockOnly)
           if (offered.length === 0) continue
           for (let i = 0; i < (fam === 'sig' ? 6 : 20); i++) {
             const seed = (i * 2654435761) >>> 0
@@ -127,7 +129,7 @@ describe('the pools', () => {
         const gen = gens.get(fam)
         if (!gen) continue
         for (const level of LEVELS) {
-          const offered = gen.variants.filter((v) => v.kcs.includes(k.id) && v.levels.includes(level))
+          const offered = gen.variants.filter((v) => v.kcs.includes(k.id) && v.levels.includes(level) && !v.blockOnly)
           for (let i = 0; i < (fam === 'sig' ? 12 : 20) && offered.length > 0; i++) {
             const seed = (i * 2654435761) >>> 0
             if (!gen.make(seed, level, offered[seed % offered.length].id).kcs.includes(k.id)) misses.add(`${k.id} ${fam}`)
@@ -159,6 +161,23 @@ describe('the pools', () => {
             const b = pool.make(fam, k.id, level, seed)
             if (b?.source === 'gen') expect(b.inst.kcs).toContain(k.id)
           }
+        }
+      }
+    }
+  })
+
+  test('a link whose variants are all block-only (the serving-first reading KCs) serves nothing in either pool', () => {
+    const reading = KCS.filter((k) => (k.gen ?? []).some((f) => gens.has(f) && blockOnlyFor(gens.get(f) as Gen, k.id))).map((k) => k.id)
+    expect(reading.sort()).toEqual(['r.closures-collections', 'r.enums-option-result', 'r.iterators-ownership', 'r.smart-pointers'])
+    const compile = gens.get('compile') as Gen
+    const pool = makeGenPool(gens, () => ['compile'])
+    for (const kc of reading) {
+      expect(pool.families(kc)).toEqual([])
+      for (const level of LEVELS) {
+        for (let i = 0; i < 20; i++) {
+          const seed = (i * 2654435761) >>> 0
+          expect(makeInstance(compile, kc, level, seed)).toBeNull()
+          expect(pool.make('compile', kc, level, seed)).toBeNull()
         }
       }
     }

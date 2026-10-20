@@ -71,6 +71,7 @@ describe('verify-kc on the committed graph', () => {
   })
 
   test('passes with no warnings once every family lands with its §4.2 row', () => {
+    const READING = [KC.enumsOptionResult, 'r.iterators-ownership', 'r.closures-collections', 'r.smart-pointers']
     const families = [
       { id: 'frag', kcs: [KC.internalFrag, KC.externalFrag, KC.fixedBlocks, KC.placementPolicy] },
       { id: 'kv', kcs: [KC.kvBytesPerToken, KC.kvCapacity, KC.gqaKvHeads] },
@@ -82,7 +83,12 @@ describe('verify-kc on the committed graph', () => {
       { id: 'sig', kcs: [KC.incidentDiagnosis, KC.kvCapacity, KC.admissionScheduling, KC.capacityPlanning, KC.prefillDecodeInterference] },
       {
         id: 'compile',
-        kcs: [KC.ownershipMoves, 'r.clone-copy-drop', KC.borrowRules, 'r.slices', 'r.lifetimes', 'r.interior-mutability', KC.permissions, KC.analyzerLimits],
+        kcs: [
+          ...[KC.ownershipMoves, 'r.clone-copy-drop', KC.borrowRules, 'r.slices', 'r.lifetimes', 'r.interior-mutability', KC.permissions, KC.analyzerLimits],
+          // the serving-first reading KCs (serving-reading.md SR-D2): block-only, so genCovers ignores them (SR-D27)
+          ...READING,
+        ],
+        blockOnlyKcs: READING,
       },
       // Wave 3 (§4.3)
       {

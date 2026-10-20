@@ -142,6 +142,13 @@ Two refinements complete the picture. **Waiting-queue policy** is a research are
 Two dials decide most of what steps 1 and 2 do. **Order** picks who goes first: FCFS is fair but lets one huge prompt hold up the line, while shortest-prompt-first cuts the average wait and can starve a long request while short ones keep arriving, so it needs a **starvation guard** that moves any request that has waited past a set age to the front. **Headroom** decides whether to admit at all: decode grows every sequence by a token per iteration, so admit a request only when free blocks cover its prompt *plus* some tokens of room to decode, or a cache that is full at admission starts preempting mid-flight. Lab 06's reference policy sets exactly these dials: shortest prompt first, a guard at 2,000 iterations, 48 tokens of headroom and no preemption.`,
     },
     {
+      type: 'reading',
+      title: 'Read it in Rust: admission',
+      lead: 'The headroom dial above admits a request only when free blocks cover its prompt plus room to decode. In Rust that answer has a type: an allocator returns `Some(block)` or `None`, a full queue hands the request back inside `Some`, and every `match` must say what each case means before the code compiles.',
+      variants: ['verdict.enums-option-result', 'fix.enums-option-result'],
+      count: 2,
+    },
+    {
       type: 'statline',
       stats: [
         { value: '11.8 ms', label: 'mean time per output token', hint: 'Llama-3.3-70B FP8 on 4 H100s with 4 users, InferenceX 2025-10-29, id 41187: a mean over the steps after a user\'s first token, other requests\' prefills included, not one step, but the scale of this timesharing system\'s quantum. The Fleet\'s flat 50 ms tick is a teaching unit, physics v1.' },

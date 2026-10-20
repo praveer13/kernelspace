@@ -13,7 +13,11 @@
  * merge, then export once). The report prints the field-gate table with each gate's n, the number of partners behind
  * it and Wilson or bootstrap 95 % intervals; a gate with too little data prints "not enough data", never a pass. The
  * two gates that read a pre-registration (F2 hint ladders, F3 the Fleet Daily) are not read until the owner has signed
- * docs/prereg/hint-ladders.md and docs/prereg/fleet-daily.md, and F4 is §14's rule over the watcher's files.
+ * docs/prereg/hint-ladders.md and docs/prereg/fleet-daily.md, and F4 is §14's rule over the watcher's files. M2 of
+ * docs/specs/serving-reading.md (the serving-first reading figures) is not read until the owner has signed
+ * docs/prereg/serving-reading.md: until then the report says "NOT READ: docs/prereg/serving-reading.md is not signed", in
+ * the text and in `--json`. A full export's `boot:path` says whether its learner is on serving-first; a donation keeps no
+ * path and is read through the prereg's off-R proxy.
  *
  *   bun scripts/partner-report.ts [--json] [--wave1 | --wave2 | --after-decision] <file.json>...
  *
@@ -39,12 +43,14 @@ import {
   formatOutcomeReport,
   formatWave3Report,
   isPreregSigned,
+  servingReadingCounts,
   stripFreeText,
   wave3ReportJson,
   type DonatedLedger,
   type PartnerLedger,
   type WatcherState,
 } from '../src/lib/learner/outcomes'
+import { pathOf } from '../src/lib/learner/paths'
 import { normalizeWeekPlan } from '../src/lib/learner/planner'
 import { isDonationText, ledgerOfDonation, parseDonation } from '../src/lib/learner/redact'
 import { placementOf } from '../src/lib/learner/summary'
@@ -102,6 +108,7 @@ for (const file of files) {
     events,
     plan: normalizeWeekPlan(record('boot:week')),
     placement: placementOf(record('placement:result')),
+    path: pathOf(record('boot:path')),
   })
 }
 
@@ -145,7 +152,12 @@ if (wave1) {
     cards: cc,
     lures: discriminationLures(content.lessons),
     v2Labs,
-    signed: { hintLadders: isPreregSigned(repoText('docs/prereg/hint-ladders.md')), fleetDaily: isPreregSigned(repoText('docs/prereg/fleet-daily.md')) },
+    signed: {
+      hintLadders: isPreregSigned(repoText('docs/prereg/hint-ladders.md')),
+      fleetDaily: isPreregSigned(repoText('docs/prereg/fleet-daily.md')),
+      servingReading: isPreregSigned(repoText('docs/prereg/serving-reading.md')),
+    },
+    readingCounts: servingReadingCounts(content.lessons),
     watcher: watcherState(),
     afterDecision,
   })

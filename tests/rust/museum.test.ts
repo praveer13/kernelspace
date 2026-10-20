@@ -21,7 +21,7 @@ import { codeCounts, codeProblems, MIN_SNIPPETS_PER_CODE } from '../../scripts/v
 import ErrorEntry, { practiceResponse, traceFor, traceIsEmpty, traceRejects, type PracticeItem } from '../../src/components/rust/ErrorEntry'
 import { traceProblems, type PermissionTraceFile } from '../../src/data/aquascope/types'
 import { ALL_LESSONS } from '../../src/data/lessons'
-import { bankUnits, loadRustGroups, PERMISSION_CODES } from '../../src/data/rust-items'
+import { bankUnits, isReadingSnippet, loadRustGroups, PERMISSION_CODES } from '../../src/data/rust-items'
 import type { RustGroup } from '../../src/data/rust-items/types'
 import compile, { practiceInstance, unitOf } from '../../src/lib/items/families/compile'
 import { correctResponse, gradeResponse } from '../../src/lib/items/grade'
@@ -39,7 +39,8 @@ const GROUPS = await loadRustGroups()
 const UNITS = bankUnits(GROUPS).units
 const ENTRIES = museumEntries(UNITS)
 const PAYLOAD = JSON.parse(readFileSync(path.join(ROOT, 'src/data/rust-items/museum.json'), 'utf8')) as unknown
-const BANK_CODES = [...new Set(UNITS.flatMap((u) => (u.result === 'compiles' ? [] : [u.result.code])))].sort()
+/** The codes the Museum's units hold: every unit but the reading groups', which serve lesson blocks only (serving-reading.md SR-D8). */
+const BANK_CODES = [...new Set(UNITS.filter((u) => !isReadingSnippet(u.snippet)).flatMap((u) => (u.result === 'compiles' ? [] : [u.result.code])))].sort()
 
 const lessonText = (id: string): string => JSON.stringify(ALL_LESSONS.find((l) => l.id === id)?.blocks ?? [])
 
@@ -150,7 +151,7 @@ describe('the museum lists one entry per error code in the bank', () => {
     expect(html.split('Try an item on ').length - 1).toBe(ENTRIES.length)
   })
 
-  test('every code the bank holds, each once', () => {
+  test('every code the bank holds outside the reading groups, each once', () => {
     expect(ENTRIES.map((e) => e.code).sort()).toEqual(BANK_CODES)
     expect(new Set(ENTRIES.map((e) => e.code)).size).toBe(ENTRIES.length)
   })
@@ -227,7 +228,7 @@ describe('each entry links the R lessons that teach it', () => {
     expect(missing).toEqual([])
   })
 
-  test('TAUGHT_IN names only codes the bank holds', () => {
+  test('TAUGHT_IN names only codes the bank holds outside the reading groups', () => {
     expect(Object.keys(TAUGHT_IN).sort()).toEqual(BANK_CODES)
   })
 })

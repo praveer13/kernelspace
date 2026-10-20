@@ -18,7 +18,7 @@
  * Pure: no DOM, no clock, no randomness.
  */
 
-import { ERROR_CODES, PANIC_CODES, PERMISSION_CODES, type CodeCluster } from '@/data/rust-items/constants'
+import { ERROR_CODES, isReadingSnippet, PANIC_CODES, PERMISSION_CODES, type CodeCluster } from '@/data/rust-items/constants'
 import type { BankUnit, Permission, SnippetFocus } from '@/data/rust-items/types'
 
 type Unit = BankUnit
@@ -157,7 +157,9 @@ export function codesOf(units: readonly Unit[]): string[] {
 }
 
 /** The museum: one entry per code the bank holds at least `MIN_SNIPPETS_PER_CODE` times. */
-export function museumEntries(units: readonly Unit[]): MuseumEntry[] {
+export function museumEntries(all: readonly Unit[]): MuseumEntry[] {
+  // the reading groups serve serving-first lesson blocks only (docs/specs/serving-reading.md)
+  const units = all.filter((u) => !isReadingSnippet(u.snippet))
   const out: MuseumEntry[] = []
   for (const code of codesOf(units)) {
     const mine = units.filter((u) => codeOf(u) === code)

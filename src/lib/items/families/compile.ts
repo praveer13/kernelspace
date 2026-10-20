@@ -42,7 +42,7 @@
  */
 
 import { KC } from '@/data/kc/ids'
-import { CLONE_MISS, ERROR_CODES, PANIC_CODES, variantCode } from '@/data/rust-items/constants'
+import { CLONE_MISS, ERROR_CODES, isReadingSnippet, PANIC_CODES, READING_KCS, variantCode } from '@/data/rust-items/constants'
 import { LAZY, loadGroups, servedGroup } from '@/data/rust-items/groups'
 import manifest from '@/data/rust-items/manifest.json'
 import type { Outcome, Permission, RustManifest, RustSnippet, ServedGroup, SnippetFix, SnippetVariant } from '@/data/rust-items/types'
@@ -61,7 +61,8 @@ export const MIN_POOL = 4 // gen-literal-ok: smallest pool a variant draws from
 const VERDICT_OPTIONS = 4 // gen-literal-ok: the key and three distractors
 
 /** The KCs whose `gen` lists `compile` (verify-kc holds Gen.kcs and the graph to each other). */
-export const COMPILE_KCS = [KC.ownershipMoves, 'r.clone-copy-drop', KC.permissions, KC.borrowRules, 'r.slices', KC.analyzerLimits, 'r.interior-mutability', 'r.lifetimes'] as const
+export const COMPILE_KCS = [KC.ownershipMoves, 'r.clone-copy-drop', KC.permissions, KC.borrowRules, 'r.slices', KC.analyzerLimits, 'r.interior-mutability', 'r.lifetimes', ...READING_KCS] as const
+const isReadingKc = (kc: string): boolean => (READING_KCS as readonly string[]).includes(kc)
 
 export type CompileKind = 'verdict' | 'permission' | 'fix'
 
@@ -183,7 +184,7 @@ for (const kc of COMPILE_KCS) {
     if (pool.length < MIN_POOL) continue
     POOLS.set(id, pool)
     const topic = kc.replace(/^r\./, '').replace(/-/g, ' ')
-    VARIANTS.push({ id, title: kind === 'permission' ? KIND_TITLE[kind] : `${KIND_TITLE[kind]} (${topic})`, kcs: [kc], levels: ALL_LEVELS, nsec: NSEC[kind] })
+    VARIANTS.push({ id, title: kind === 'permission' ? KIND_TITLE[kind] : `${KIND_TITLE[kind]} (${topic})`, kcs: [kc], levels: ALL_LEVELS, nsec: NSEC[kind], ...(isReadingKc(kc) ? { blockOnly: true as const } : {}) })
   }
 }
 
@@ -221,7 +222,8 @@ function verdictOptions(u: Unit, rng: Rng): string[] {
   // the key's cluster; for "compiles", the clusters of the errors the snippet's other variants hit
   const near = key === 'compiles' || isPanic(key) ? u.snippet.variants.flatMap((v) => (v.expect === 'compiles' ? [] : [v.expect.code])) : [key]
   const clusters = new Set(near.map((c) => ERROR_CODES[c]?.cluster))
-  const codes = BANK_CODES.filter((c) => !isPanic(c) && !chosen.includes(c))
+  // a `types` code is a distractor only for a key whose clusters include `types`, so every legacy unit's list is as before
+  const codes = BANK_CODES.filter((c) => !isPanic(c) && !chosen.includes(c) && (ERROR_CODES[c]?.cluster !== 'types' || clusters.has('types')))
   const same = codes.filter((c) => clusters.has(ERROR_CODES[c]?.cluster))
   const other = codes.filter((c) => !clusters.has(ERROR_CODES[c]?.cluster))
   const need = VERDICT_OPTIONS - chosen.length
@@ -240,7 +242,13 @@ function verdictWhy(u: Unit, id: string): string {
   return `${id} is ${ERROR_CODES[id]?.means ?? 'another error'}. Here ${here}`
 }
 
-function makeVerdict(u: Unit, rng: Rng): Pick<Instance, 'prompt' | 'answer' | 'params'> {
+/** The reading legend (serving-reading §3.2): each code among the options, glossed in the same words a wrong pick's why uses. */
+const legendOf = (ids: readonly string[]): PromptPart[] => {
+  const codes = ids.filter((id) => id !== 'compiles' && !isPanic(id))
+  return codes.length === 0 ? [] : [{ t: 'text', text: `Codes: ${codes.map((c) => `${c} is ${ERROR_CODES[c]?.means ?? 'another error'}`).join('; ')}.` }]
+}
+
+function makeVerdict(u: Unit, rng: Rng, legend = false): Pick<Instance, 'prompt' | 'answer' | 'params'> {
   const run = Boolean(u.snippet.run)
   const ids = verdictOptions(u, rng)
   const key = u.result === 'compiles' ? 'compiles' : u.result.code
@@ -248,7 +256,7 @@ function makeVerdict(u: Unit, rng: Rng): Pick<Instance, 'prompt' | 'answer' | 'p
   const ask = run ? 'Build and run this program. Which error does it hit, if any?' : 'Which error does rustc report for this code, if any?'
   return {
     params: { unit: u.key, options: ids.join(' ') },
-    prompt: { stem: [{ t: 'text', text: `${ask} ` }, { t: 'code', code: u.code, lang: 'rust', lines: true }] },
+    prompt: { stem: [{ t: 'text', text: `${ask} ` }, { t: 'code', code: u.code, lang: 'rust', lines: true }, ...(legend ? legendOf(ids) : [])] },
     answer: { kind: 'choice', options, correct: [key] },
   }
 }
@@ -296,12 +304,13 @@ function fixWhy(u: Unit, f: SnippetFix): string {
   return `It still fails: ${outcomeClause(r, run)}. ${f.why}`
 }
 
-function makeFix(u: Unit): Pick<Instance, 'prompt' | 'answer' | 'params'> {
+function makeFix(u: Unit, legend = false): Pick<Instance, 'prompt' | 'answer' | 'params'> {
   const fixes = u.variant.fixes!
   const r = u.result as Exclude<Outcome, 'compiles'>
+  const gloss = legend && ERROR_CODES[r.code] ? ` (${ERROR_CODES[r.code].means})` : ''
   const ask = isPanic(r.code)
     ? `This panics with ${r.code} at run time. Which one-line change stops the panic without changing what it does? `
-    : `rustc rejects this with ${r.code}. Which one-line change makes it compile without changing what it does? `
+    : `rustc rejects this with ${r.code}${gloss}. Which one-line change makes it compile without changing what it does? `
   const options: ChoiceOption[] = fixes.map((f) => {
     const miss = f.miss ?? (f.lure === 'clone' ? CLONE_MISS : undefined)
     return { id: f.id, text: `line ${f.edit.line}: ${f.edit.text.trim()}`, why: fixWhy(u, f), ...(miss && !f.ok ? { miss } : {}) }
@@ -323,7 +332,8 @@ function make(seed: number, level: Level, variant?: string): Instance {
   const rng = rngFor(ID, spec.id, level, seed)
   const u = unitAt(rng.pick(pool))
   const kind = kindOf(spec.id)
-  const built = kind === 'verdict' ? makeVerdict(u, rng) : kind === 'permission' ? makePermission(u) : makeFix(u)
+  const legend = spec.blockOnly === true
+  const built = kind === 'verdict' ? makeVerdict(u, rng, legend) : kind === 'permission' ? makePermission(u) : makeFix(u, legend)
   return finishInstance(gen, { variant: spec.id, seed, level, kcs: [...spec.kcs], nsec: spec.nsec, ...built })
 }
 
@@ -338,7 +348,7 @@ function make(seed: number, level: Level, variant?: string): Instance {
 export function practiceInstance(code: string, seed: number): Instance | undefined {
   const level: Level = 2 // gen-literal-ok: the independent level
   const rng = rngFor(ID, `practice.${code}`, level, seed)
-  const refs = REFS.filter((r) => r.outcome !== 'compiles' && r.outcome === code)
+  const refs = REFS.filter((r) => r.outcome !== 'compiles' && r.outcome === code && !isReadingSnippet(r))
   const kindsOf = (r: UnitRef): CompileKind[] => ['verdict', ...(r.permission ? (['permission'] as const) : []), ...(r.fixes ? (['fix'] as const) : [])]
   const variantOf = (r: UnitRef, kind: CompileKind): string | undefined =>
     kind === 'permission' ? (POOLS.has('permission') ? 'permission' : undefined) : r.kcs.map((kc) => compileVariantId(kind, kc)).find((id) => POOLS.has(id))

@@ -198,6 +198,13 @@ class BlockManager:
       chips: ['16-token blocks', 'O(1) alloc/free', 'refcounted sharing'],
     },
     {
+      type: 'reading',
+      title: 'Read it in Rust: the block manager',
+      lead: '`alloc` above raises `OutOfBlocks`; a Rust manager returns an `Option` instead: `None` is an empty pool, and `?` hands it to the caller, which can preempt. `share` becomes a second handle to the block (`Arc::clone`), which bumps a count and copies no KV.',
+      variants: ['verdict.enums-option-result', 'fix.smart-pointers', 'verdict.iterators-ownership', 'fix.enums-option-result', 'verdict.smart-pointers', 'fix.iterators-ownership'],
+      count: 3,
+    },
+    {
       type: 'callout',
       variant: 'analogy',
       md: `This is your **copy-on-write filesystem** — ZFS/Btrfs share *blocks* across snapshots with refcounts, diverge on write, and never defrag because extents are fixed-size. It's also your **Java string dedup / shared immutable DTOs** with reference counting, and your **Redis maxmemory** with a perfect free list. The vLLM authors' genius was recognizing that the KV cache is a *storage workload* — and reaching for fifty years of storage-engineering answers.`,

@@ -1,0 +1,98 @@
+{
+  "group": "reading-enums",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "edition": "2024",
+  "snippets": {
+    "alloc-option-admit": {
+      "hash": "3b874ea8890d28028f26f2a9ed473b4a5cd86763730824a690da1406e6e540fe",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-q": {"result":{"code":"E0308","line":15,"message":"mismatched types"},"fixes":{"question":"compiles","unwrap":"compiles","some-q":{"code":"E0277","line":15}}},
+        "ok-or-q": {"result":{"code":"E0277","line":13,"message":"the `?` operator can only be used on `Option`s, not `Result`s, in a function that returns `Option`"},"fixes":{"question":"compiles","plain":{"code":"E0308","line":15},"unwrap":"compiles"}},
+        "shared-self": {"result":{"code":"E0596","line":5,"message":"cannot borrow `self.free` as mutable, as it is behind a `&` reference"},"fixes":{"mut-self":"compiles","clone-pop":"compiles","none":"compiles"}}
+      }
+    },
+    "translate-get-match": {
+      "hash": "29775ffd1e42ab63f746f727751db2c4956170fddcb6c2b732fcdf5ab5f7862d",
+      "variants": {
+        "base": {"result":"compiles"},
+        "drop-none": {"result":{"code":"E0004","line":2,"message":"non-exhaustive patterns: `None` not covered"},"fixes":{"none-max":"compiles","none-zero":"compiles","some-max":{"code":"E0004","line":2}}},
+        "index": {"result":{"code":"E0308","line":3,"message":"mismatched types"},"fixes":{"get":"compiles","ref-index":{"code":"E0308","line":3},"some-index":{"code":"E0614","line":3}}},
+        "no-deref": {"result":{"code":"E0308","line":3,"message":"mismatched types"}}
+      }
+    },
+    "request-state-held": {
+      "hash": "e151379f4449d0532b998906bfbea1595edc70d60072a3cf5e1aea360f8fa71e",
+      "variants": {
+        "base": {"result":"compiles"},
+        "new-state": {"result":{"code":"E0004","line":8,"message":"non-exhaustive patterns: `&Req::Swapped` not covered"}},
+        "no-deref": {"result":{"code":"E0308","line":9,"message":"mismatched types"},"fixes":{"deref":"compiles","one":"compiles","tuple":{"code":"E0164","line":9}}},
+        "dup-arm": {"result":{"code":"E0004","line":8,"message":"non-exhaustive patterns: `&Req::Preempted` not covered"}}
+      }
+    },
+    "push-hands-back": {
+      "hash": "5614df626917887d8e0cbfe94d2f7ef4414319d560155a2862841b3419f260d2",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-moved": {"result":{"code":"E0382","line":13,"message":"use of moved value: `r`"},"fixes":{"bind-back":"compiles","fake-id":"compiles","none-r":{"code":"E0004","line":11}}},
+        "drop-none": {"result":{"code":"E0004","line":11,"message":"non-exhaustive patterns: `None` not covered"},"fixes":{"none":"compiles","wild":"compiles","none-b":{"code":"E0425","line":12}}},
+        "bool-ret": {"result":{"code":"E0308","line":5,"message":"mismatched types"}}
+      }
+    },
+    "sync-channel-offer": {
+      "hash": "cc059f54918a6ef8de6957d46fc9648c99c934e1508163b4735e7c0ed26c8509",
+      "variants": {
+        "base": {"result":"compiles"},
+        "use-moved": {"result":{"code":"E0382","line":10,"message":"use of moved value: `r`"},"fixes":{"bind-back":"compiles","drop-it":"compiles","fresh":{"code":"E0382","line":10}}},
+        "drop-disc": {"result":{"code":"E0004","line":8,"message":"non-exhaustive patterns: `Err(TrySendError::Disconnected(_))` not covered"},"fixes":{"disc-back":"compiles","err-any":"compiles","disc-r":{"code":"E0382","line":11}}},
+        "blocking": {"result":{"code":"E0308","line":10,"message":"mismatched types"}}
+      }
+    },
+    "admit-two-pins": {
+      "hash": "f4c9eca827da3862d5e71fcdecbc0ae67c90484715ab49f6d059b21326c51c23",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ok-q": {"result":{"code":"E0277","line":13,"message":"the `?` operator can only be used on `Result`s, not `Option`s, in a function that returns `Result`"},"fixes":{"question":"compiles","ok-a":{"code":"E0308","line":15},"ok-unwrap":"compiles"}},
+        "string-err": {"result":{"code":"E0277","line":13,"message":"`?` couldn't convert the error to `String`"},"fixes":{"pressure-err":"compiles","unwrap":{"code":"E0277","line":13},"box-err":{"code":"E0277","line":13}}},
+        "no-q": {"result":{"code":"E0308","line":15,"message":"mismatched types"},"fixes":{"question":"compiles","ok-a":{"code":"E0308","line":15},"pin-ref":{"code":"E0308","line":15}}}
+      }
+    },
+    "slot-take": {
+      "hash": "71069d15ca46054ee9da3356dd34f23e4538c81aae7f88042bcab6d952d4e3a9",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-out": {"result":{"code":"E0507","line":8,"message":"cannot move out of `s.req` which is behind a mutable reference"},"fixes":{"take":"compiles","clone":{"code":"E0599","line":8},"ref":{"code":"E0308","line":8}}},
+        "shared": {"result":{"code":"E0596","line":8,"message":"cannot borrow `s.req` as mutable, as it is behind a `&` reference"},"fixes":{"mut":"compiles","none":"compiles","take-spelled":{"code":"E0596","line":8}}},
+        "as-ref": {"result":{"code":"E0308","line":8,"message":"mismatched types"}}
+      }
+    },
+    "utf8-ready": {
+      "hash": "9ac05c9d52f496dd4601794b1af4b0affa1471324ed97b9edfe8e11e52cb5398",
+      "variants": {
+        "base": {"result":"compiles"},
+        "ok-raw": {"result":{"code":"E0308","line":7,"message":"mismatched types"},"fixes":{"some":"compiles","owned":{"code":"E0308","line":7},"q":{"code":"E0308","line":7}}},
+        "drop-err": {"result":{"code":"E0004","line":6,"message":"non-exhaustive patterns: `Err(_)` not covered"},"fixes":{"err-none":"compiles","empty":"compiles","ok-none":{"code":"E0308","line":8}}},
+        "str-ret": {"result":{"code":"E0308","line":7,"message":"mismatched types"}},
+        "owned-from": {"result":{"code":"E0308","line":6,"message":"mismatched types"},"fixes":{"str-from":"compiles","to-vec":{"code":"E0308","line":7},"deref":{"code":"E0308","line":6}}}
+      }
+    },
+    "parent-upgrade": {
+      "hash": "2030fe2d6e52d02a9d561249a626c4bc60814f7a94d704c560103038b3cc327c",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-upgrade": {"result":{"code":"E0308","line":10,"message":"mismatched types"},"fixes":{"upgrade":"compiles","get":{"code":"E0599","line":9},"some-weak":{"code":"E0609","line":10}}},
+        "drop-none": {"result":{"code":"E0004","line":9,"message":"non-exhaustive patterns: `None` not covered"},"fixes":{"none-zero":"compiles","wild-one":"compiles","none-len":{"code":"E0425","line":11}}},
+        "move-out": {"result":{"code":"E0507","line":10,"message":"cannot move out of an `Rc`"},"fixes":{"len":"compiles","clone-ids":"compiles","drain":{"code":"E0596","line":10}}}
+      }
+    },
+    "router-choose": {
+      "hash": "a2ac618849dfedd83e10cb5ce9574a01aa51c13bcee7a33d004b1e694dd08d59",
+      "variants": {
+        "base": {"result":"compiles"},
+        "unwrap-tail": {"result":{"code":"E0308","line":9,"message":"mismatched types"},"fixes":{"keep-option":"compiles","unwrap-or":{"code":"E0308","line":9},"some-and":{"code":"E0308","line":9}}},
+        "worker-out": {"result":{"code":"E0308","line":9,"message":"mismatched types"},"fixes":{"index":"compiles","hit":"compiles","deref":{"code":"E0308","line":9}}},
+        "own-workers": {"result":{"code":"E0308","line":9,"message":"mismatched types"}}
+      }
+    }
+  }
+}
