@@ -11,7 +11,7 @@ import { StepBtn, StepTitle } from './ui'
 
 const PATHS: { id: LearningPath; name: string; blurb: string }[] = [
   { id: 'full-ramp', name: 'Full ramp', blurb: 'Every track, Track 0 up through serving, with each Rust Zero lesson woven in just before the lesson that first needs it. Best if systems are new to you.' },
-  { id: 'serving-first', name: 'Serving first', blurb: 'Two Track 0 lessons and the roofline (T4.L3), then batching, the KV cache and engines (T5 to T7). Rust Zero is not on this path; its lessons stay open in the Curriculum.' },
+  { id: 'serving-first', name: 'Serving first', blurb: 'Two Track 0 lessons and the roofline (T4.L3), then batching, the KV cache and engines (T5 to T7). Rust Zero is not on this path: Rust arrives as short reading items inside the T5 and T6 lessons that use it, and Rust Zero stays open in the Curriculum.' },
   { id: 'rust-systems', name: 'Rust systems', blurb: 'Half of Rust Zero, then Track 1, the other half, then Tracks 2 and 3, with Systems Forge labs 01, 04 and 05 (the allocator, the intake ring, the executor). Serving (Tracks 4 to 7) is not on this path; switch to the full ramp to reach it.' },
 ]
 
