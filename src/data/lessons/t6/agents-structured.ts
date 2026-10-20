@@ -44,7 +44,7 @@ A BPE token can contain \`"tool","arguments":{\` — several grammar terminals a
     {
       type: 'reading',
       title: 'Read it in Rust: the mask walk',
-      lead: 'A mask walks the vocabulary: XGrammar prechecks the tokens that do not depend on context and asks a grammar matcher about the rest. How the walk borrows decides what it may do: `iter` lends each item for reading, `iter_mut` for changing, and a chain of adapters does nothing until something like `collect` runs it.',
+      lead: 'A mask walks the vocabulary: XGrammar prechecks the tokens that do not depend on context and checks the rest against a persistent pushdown stack. How the walk borrows decides what it may do: `iter` lends each item for reading, `iter_mut` for changing, and a chain of adapters does nothing until something like `collect` runs it.',
       variants: ['verdict.iterators-ownership', 'fix.iterators-ownership'],
       count: 2,
     },

@@ -6,7 +6,7 @@ import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import type { TrackId } from '../../src/data/lessons/types'
 import { PLAYS } from '../../src/data/plays'
-import { readingCoverage } from '../kc/reading-blocks.test'
+import { readingCoverage } from '../kc/reading-coverage'
 import { PATHS, firstLessons, pathPlan, playStep } from '../../src/lib/learner/paths'
 import {
   BOOT_WHY,

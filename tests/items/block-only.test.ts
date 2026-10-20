@@ -9,7 +9,7 @@ import { CLAIMS } from '../../src/data/claims/all'
 import { KC, KC_GRAPH, REF_KCS, RUST_ANCHOR_KC, THRESHOLD_KCS } from '../../src/data/kc'
 import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
-import { ERROR_CODES } from '../../src/data/rust-items/constants'
+import { ERROR_CODES, READING_KCS } from '../../src/data/rust-items/constants'
 import { loadGroups } from '../../src/data/rust-items/groups'
 import { blockOnlyFor, finishInstance, resolveVariant } from '../../src/lib/items/core'
 import { GROUP_IDS, practiceInstance } from '../../src/lib/items/families/compile'
@@ -267,9 +267,11 @@ describe('verify-kc: genCovers', () => {
     expect(errs.map((e) => e.split(':')[0])).toEqual(['r.analyzer-limits'])
   })
 
-  test('discoverFamilies marks no committed KC block-only until a task links a reading variant', () => {
-    // SR-04 changes this: the four reading KCs become block-only for compile, and each needs 2 tagged items
-    for (const f of families) for (const kc of f.blockOnlyKcs ?? []) expect(f.kcs, `${f.id}/${kc}`).toContain(kc)
+  test('discoverFamilies marks exactly the four reading KCs block-only for compile, and nothing for any other family', () => {
+    for (const f of families) {
+      const want = f.id === 'compile' ? [...READING_KCS].sort() : []
+      expect([...(f.blockOnlyKcs ?? [])].sort(), f.id).toEqual(want)
+    }
   })
 })
 

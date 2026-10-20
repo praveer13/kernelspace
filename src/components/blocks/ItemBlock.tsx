@@ -137,11 +137,13 @@ export default function ItemBlock({ lessonId, blockIndex, block, trackColor, rea
         const deps = depsFrom(useProgress)
         const [g, evs] = await Promise.all([loadFamily(block.family), deps.events({ refPrefix: familyPrefix(block.family) })])
         const s = readBlock(evs, at)
-        draw.current = s.served.length
         const fresh = s.predict === null && s.served.length === 0
         // a reading block is for the serving-first path: anywhere else, a fresh one asks first (and is not an expert skip)
         const offpath = fresh && reading && pathOf(deps.working['boot:path']) !== 'serving-first'
         const expert = fresh && !offpath && (await expertFor(itemBlockKcs(g, block), deps))
+        // a superseded load stops before it touches the shared draw, so the live load's first plan is draw served.length
+        if (!live) return
+        draw.current = s.served.length
         const next: Stage = s.done ? { kind: 'idle' } : offpath ? { kind: 'offpath' } : expert ? { kind: 'expert' } : await nextStage(g, evs, s, false, true)
         if (!live) return
         setGen(g)

@@ -46,7 +46,8 @@ export const isReadingSnippet = (s: { kcs: readonly string[] }): boolean => s.kc
 /**
  * Every outcome code the bank may expect, with the cluster its verdict distractors come from and one
  * clause on what it means (shown when a learner picks it and it is wrong). Codes rustc reports for
- * ownership, borrowing and lifetimes, so the three content groups (§15.5) never need to edit this file.
+ * ownership, borrowing and lifetimes, so the three content groups (§15.5) never need to edit this file,
+ * and the type errors serving-first reading items need (serving-reading.md SR-D6).
  */
 export const ERROR_CODES: Readonly<Record<string, { cluster: CodeCluster; means: string }>> = {
   E0106: { cluster: 'lifetimes', means: 'a returned or stored reference with no lifetime to tie it to' },
