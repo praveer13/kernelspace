@@ -240,6 +240,19 @@ export interface ItemBlock {
   predict?: boolean
 }
 
+/** Serving-first Rust reading (docs/specs/serving-reading.md): compile-bank items on R KCs this lesson needs. */
+export interface ReadingBlock {
+  type: 'reading'
+  /** "Read it in Rust: the block manager" */
+  title: string
+  /** One to three sentences (Markdown) tying the block to the code or idea above it. */
+  lead: string
+  /** Block-only compile variants, kinds interleaved; the first `count` cover every KC the host's direct edges name. */
+  variants: string[]
+  /** Correct answers on distinct fresh seeds that finish the block. */
+  count: number
+}
+
 /**
  * P4 (stretch, docs/specs/wave-3.md §16.9): a protégé block, the plan's fourth new block type. "Sam" explains an idea in
  * 4-6 sentences and exactly one is false; the learner finds it, tags the misconception behind it and picks the sentence that
@@ -329,6 +342,7 @@ export type ContentBlock =
   | PredictBlock
   | PlayBlock
   | ItemBlock
+  | ReadingBlock
   | ProtegeBlock
 
 /* ------------------------------ lesson ------------------------------ */
