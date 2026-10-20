@@ -4,7 +4,7 @@ import path from 'node:path'
 import { derivedFiles, firstError, formatBank, limiter, panicOutcome } from '../../scripts/build-rust-items'
 import { checkFamily, genSeeds, lintLiterals } from '../../scripts/verify-generators'
 import { checkBanks, checkSnippets, compareSnippet, derivedProblems, COMPILE_KCS as GRAPH_COMPILE_KCS, phoneProblems, quotaProblems, snippetHash, verdictQuota } from '../../scripts/verify-rust-items'
-import { addsClone, bankUnits, CLONE_MISS, ERROR_CODES, loadRustGroups, MAX_COLS, MAX_LINES, variantCode } from '../../src/data/rust-items'
+import { addsClone, bankUnits, CLONE_MISS, ERROR_CODES, isReadingSnippet, loadRustGroups, MAX_COLS, MAX_LINES, READING_KCS, variantCode } from '../../src/data/rust-items'
 import { forgetGroups, groupLoaded, loadGroups } from '../../src/data/rust-items/groups'
 import type { BankFile, BankSnippet, RustGroup, RustSnippet } from '../../src/data/rust-items/types'
 import { rs } from '../../src/data/rust-items/types'
@@ -140,9 +140,11 @@ describe('compile: the bank', () => {
     }
   })
 
-  test('the seed group covers every compile KC but r.permissions, both build modes and every kind of item', () => {
+  test('the seed group covers every compile KC but r.permissions and the reading KCs, both build modes and every kind of item', () => {
     const kcs = new Set(SEED.snippets.flatMap((s) => s.kcs))
-    expect([...kcs].sort()).toEqual(GRAPH_COMPILE_KCS.filter((k) => k !== 'r.permissions').sort())
+    // the reading KCs have their own reader-voice groups (serving-reading.md §4)
+    const reading: readonly string[] = READING_KCS
+    expect([...kcs].sort()).toEqual(GRAPH_COMPILE_KCS.filter((k) => k !== 'r.permissions' && !reading.includes(k)).sort())
     expect(SEED.snippets.some((s) => s.run)).toBe(true)
     expect(SEED.snippets.some((s) => !s.run)).toBe(true)
     const variants = SEED.snippets.flatMap((s) => s.variants)
@@ -152,11 +154,14 @@ describe('compile: the bank', () => {
     for (const s of SEED.snippets) expect(s.variants.find((v) => !v.edit)?.expect).toBe('compiles')
   })
 
-  test('every group serves verdict, permission and fix items', () => {
+  test('every legacy group serves verdict, permission and fix items; every reading group serves verdict and fix', () => {
+    const readingGroups = GROUPS.filter((g) => g.snippets.every(isReadingSnippet))
+    expect(readingGroups.map((g) => g.id)).toEqual(['reading-closures', 'reading-enums', 'reading-iter', 'reading-pointers'])
     for (const g of GROUPS) {
       const served = new Set<string>()
       for (const [id, pool] of POOLS) if (pool.some((r) => r.group === g.id)) served.add(id.split('.')[0])
-      expect([...served].sort()).toEqual(['fix', 'permission', 'verdict'])
+      // reading items carry no permission label (serving-reading.md SR-D1, SR-D9)
+      expect({ group: g.id, served: [...served].sort() }).toEqual({ group: g.id, served: readingGroups.includes(g) ? ['fix', 'verdict'] : ['fix', 'permission', 'verdict'] })
     }
   })
 

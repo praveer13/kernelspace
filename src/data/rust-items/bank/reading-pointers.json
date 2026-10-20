@@ -1,0 +1,86 @@
+{
+  "group": "reading-pointers",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "edition": "2024",
+  "snippets": {
+    "arc-block-share": {
+      "hash": "28f25bc53af504f499bb56059fbdbd4ee0cf6975e1520c151a99e124c9286167",
+      "variants": {
+        "base": {"result":"compiles"},
+        "bump-field": {"result":{"code":"E0594","line":10,"message":"cannot assign to data in an `Arc`"},"fixes":{"arc-count":"compiles","mut-handle":{"code":"E0594","line":10},"get-mut":{"code":"E0596","line":10}}},
+        "deep-copy": {"result":{"code":"E0507","line":9,"message":"cannot move out of an `Arc`"},"fixes":{"handle":"compiles","arc-of-arc":{"code":"E0308","line":11},"deep":{"code":"E0599","line":9}}},
+        "own-param": {"result":{"code":"E0308","line":9,"message":"mismatched types"}}
+      }
+    },
+    "prefix-node-share": {
+      "hash": "68cfed67eb4c881c1ef3ee4caee8f9a232f47d1340f356dc7054b7a74bfbce82",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-twice": {"result":{"code":"E0382","line":11,"message":"the type `Rc` does not implement `Copy`"},"fixes":{"rc-clone":"compiles","fresh":"compiles","deref":{"code":"E0507","line":10}}},
+        "deref-copy": {"result":{"code":"E0507","line":10,"message":"cannot move out of an `Rc`"},"fixes":{"rc-clone":"compiles","rc-of-rc":{"code":"E0308","line":10},"borrow":{"code":"E0308","line":10}}},
+        "write-shared": {"result":{"code":"E0594","line":11,"message":"cannot assign to data in an `Rc`"}}
+      }
+    },
+    "plan-to-worker": {
+      "hash": "2e90122e4e8c9b74cec81cf7eee8282f6721df2e78bde710387a9a4b788f1030",
+      "variants": {
+        "base": {"result":"compiles"},
+        "rc": {"result":{"code":"E0277","line":8,"message":"`Rc<Plan>` cannot be sent between threads safely"},"fixes":{"arc":"compiles","ref":{"code":"E0521","line":8},"rc-arc":{"code":"E0277","line":8}}},
+        "no-move": {"result":{"code":"E0373","line":8,"message":"closure may outlive the current function, but it borrows `plan`, which is owned by the current function"},"fixes":{"move":"compiles","const":"compiles","typed":{"code":"E0373","line":8}}},
+        "ref-plan": {"result":{"code":"E0521","line":8,"message":"borrowed data escapes outside of function"}}
+      }
+    },
+    "pool-handle-thread": {
+      "hash": "f65d4a1d2531d928f36e578954d327769e45416909dbe93c8438a656fdfe31b8",
+      "variants": {
+        "base": {"result":"compiles"},
+        "rc": {"result":{"code":"E0277","line":8,"message":"`Rc<std::sync::Mutex<Vec<u32>>>` cannot be sent between threads safely"},"fixes":{"arc":"compiles","box":{"code":"E0277","line":7},"rc-vec":{"code":"E0599","line":9}}},
+        "no-clone": {"result":{"code":"E0521","line":8,"message":"borrowed data escapes outside of function"},"fixes":{"handle":"compiles","deref":{"code":"E0507","line":7},"guard":{"code":"E0599","line":9}}},
+        "no-move": {"result":{"code":"E0373","line":8,"message":"closure may outlive the current function, but it borrows `p`, which is owned by the current function"}}
+      }
+    },
+    "cow-block-table": {
+      "hash": "3262cf3125923a796dd1c24dfd899e77c3b35f0eb670036fdc0ec188135a8aa3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-shared": {"result":{"code":"E0596","line":12,"message":"cannot borrow data in an `Rc` as mutable"},"fixes":{"make-mut":"compiles","to-vec":"compiles","deref":{"code":"E0596","line":12}}},
+        "move-out": {"result":{"code":"E0507","line":8,"message":"cannot move out of `t.blocks` which is behind a shared reference"},"fixes":{"rc-clone":"compiles","empty":"compiles","deref-clone":{"code":"E0308","line":8}}},
+        "shared-grow": {"result":{"code":"E0596","line":12,"message":"cannot borrow `t.blocks` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "weights-to-workers": {
+      "hash": "8f622439a4725185a21a5b69c9f3fd8d915e7616ef1f9f321f86e51f011f115a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-arc": {"result":{"code":"E0382","line":10,"message":"the type `Arc` does not implement `Copy`"},"fixes":{"arc-clone":"compiles","downgrade":{"code":"E0609","line":11},"into-inner":{"code":"E0609","line":11}}},
+        "no-move": {"result":{"code":"E0373","line":11,"message":"closure may outlive the current function, but it borrows `w`, which is owned by the current function"},"fixes":{"move":"compiles","ref":{"code":"E0373","line":11},"plus-zero":{"code":"E0373","line":11}}},
+        "ref-weights": {"result":{"code":"E0308","line":10,"message":"mismatched types"}}
+      }
+    },
+    "lease-returns-blocks": {
+      "hash": "1830d96a50f2bd09c332462699df70b62a31de1657e960f37c5fa930f728ab8a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "extend-move": {"result":{"code":"E0507","line":11,"message":"cannot move out of `self` which is behind a mutable reference"},"fixes":{"append":"compiles","clone":"compiles","push":{"code":"E0308","line":11}}},
+        "no-mut-guard": {"result":{"code":"E0596","line":11,"message":"cannot borrow `p` as mutable, as it is not declared as mutable"},"fixes":{"mut-guard":"compiles","expect":{"code":"E0596","line":11},"no-unwrap":{"code":"E0599","line":11}}}
+      }
+    },
+    "fork-block-handles": {
+      "hash": "0d353f3152cd75ef77bb0ee0ec7afed50d554fb55d7179ca8ea3b07441c926de",
+      "variants": {
+        "owned-blocks": {"result":{"code":"E0277","line":8,"message":"a value of type `Vec<Block>` cannot be built from an iterator over elements of type `Rc<Block>`"},"fixes":{"handles":"compiles","move-blocks":{"code":"E0507","line":8},"borrowed":{"code":"E0277","line":8}}},
+        "by-ref": {"result":{"code":"E0277","line":8,"message":"a value of type `Vec<Rc<Block>>` cannot be built from an iterator over elements of type `&Rc<Block>`"},"fixes":{"map-clone":"compiles","rc-new":{"code":"E0507","line":8},"downgrade":{"code":"E0277","line":8}}},
+        "deref-block": {"result":{"code":"E0277","line":8,"message":"a value of type `Vec<Rc<Block>>` cannot be built from an iterator over elements of type `Block`"}}
+      }
+    },
+    "box-next-block": {
+      "hash": "8786607f26a53a57417fa747176f914d7dc5cbe6d2ca5b40ae79d3357752aca4",
+      "variants": {
+        "base": {"result":"compiles"},
+        "move-next": {"result":{"code":"E0507","line":7,"message":"cannot move out of `b.next` which is behind a shared reference"},"fixes":{"as-ref":"compiles","unwrap-deref":"compiles","clone-ref":{"code":"E0277","line":7}}},
+        "unbox": {"result":{"code":"E0507","line":7,"message":"cannot move out of a shared reference"}},
+        "take-next": {"result":{"code":"E0596","line":7,"message":"cannot borrow `b.next` as mutable, as it is behind a `&` reference"},"fixes":{"as-ref":"compiles","mut-block":"compiles","deref":{"code":"E0507","line":7}}}
+      }
+    }
+  }
+}

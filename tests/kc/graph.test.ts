@@ -261,6 +261,11 @@ describe('the Wave 2 contract ids (§4.2)', () => {
         'r.interior-mutability',
         'r.permissions',
         'r.analyzer-limits',
+        // serving-first reading items (serving-reading.md SR-D2): block-only, so Today and tickets never draw them
+        'r.enums-option-result',
+        'r.iterators-ownership',
+        'r.closures-collections',
+        'r.smart-pointers',
       ],
     }
     for (const [family, ids] of Object.entries(families)) {

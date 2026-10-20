@@ -1,0 +1,80 @@
+{
+  "group": "reading-closures",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "edition": "2024",
+  "snippets": {
+    "pair-counts-entry": {
+      "hash": "e4faa688f35632314bfdfe2a3c695c10fdcf672564ace16139a86ff4affebfba",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-mut": {"result":{"code":"E0596","line":9,"message":"cannot borrow `c` as mutable, as it is not declared as mutable"},"fixes":{"mut-map":"compiles","insert-one":{"code":"E0596","line":9},"ref":{"code":"E0308","line":11}}},
+        "ref-return": {"result":{"code":"E0308","line":11,"message":"mismatched types"},"fixes":{"owned-return":"compiles","static-ref":{"code":"E0308","line":11},"mut-ref":{"code":"E0308","line":11}}},
+        "key-ref": {"result":{"code":"E0308","line":9,"message":"mismatched types"}}
+      }
+    },
+    "bump-closure": {
+      "hash": "a69c16fdea7e09aa40e37411e93135e900d8f0e32190213dd2c225d100ee3ee6",
+      "variants": {
+        "base": {"result":"compiles"},
+        "peek-in-head": {"result":{"code":"E0502","line":8,"message":"cannot borrow `seen` as immutable because it is also borrowed as mutable"}},
+        "not-mut": {"result":{"code":"E0596","line":9,"message":"cannot borrow `bump` as mutable, as it is not declared as mutable"},"fixes":{"mut-bump":"compiles","mut-param":{"code":"E0596","line":9},"ref-call":{"code":"E0596","line":9}}},
+        "len-in-loop": {"result":{"code":"E0502","line":9,"message":"cannot borrow `seen` as immutable because it is also borrowed as mutable"},"fixes":{"call-only":"compiles","clone-map":{"code":"E0502","line":9},"drop-bump":{"code":"E0382","line":9}}},
+        "move-closure": {"result":{"code":"E0382","line":11,"message":"borrow of moved value: `seen`"},"fixes":{"borrow":"compiles","lend-move":{"code":"E0382","line":11},"take-back":{"code":"E0382","line":11}}}
+      }
+    },
+    "admit-policy-fnmut": {
+      "hash": "b0e2ed5be0ba6f3522c9c7e624da4a096b6079bddc652af94153e24eaf025d1a",
+      "variants": {
+        "base": {"result":"compiles"},
+        "fn-bound": {"result":{"code":"E0594","line":11,"message":"cannot assign to `budget`, as it is a captured variable in a `Fn` closure"},"fixes":{"fnmut":"compiles","fnonce":{"code":"E0382","line":3},"no-spend":"compiles"}},
+        "no-mut-param": {"result":{"code":"E0596","line":3,"message":"cannot borrow `f` as mutable, as it is not declared as mutable"},"fixes":{"mut-f":"compiles","fn-f":{"code":"E0594","line":11},"fnonce":{"code":"E0382","line":3}}},
+        "no-mut-budget": {"result":{"code":"E0594","line":11,"message":"cannot assign to `budget`, as it is not declared as mutable"},"fixes":{"mut-budget":"compiles","no-spend":"compiles","deref":{"code":"E0614","line":11}}}
+      }
+    },
+    "sort-by-team": {
+      "hash": "800f1e5d602c13aa13945ca684fddf8853bb2e33aab37a3690ae40632a3c1fd2",
+      "variants": {
+        "base": {"result":"compiles"},
+        "key-owned": {"result":{"code":"E0507","line":7,"message":"cannot move out of `r.team` which is behind a shared reference"},"fixes":{"cmp":"compiles","clone-key":"compiles","by-id":"compiles"}},
+        "shared-vec": {"result":{"code":"E0596","line":7,"message":"cannot borrow `*w` as mutable, as it is behind a `&` reference"},"fixes":{"mut-vec":"compiles","slice":{"code":"E0596","line":7},"mut-binding":{"code":"E0596","line":7}}},
+        "owned-vec": {"result":{"code":"E0596","line":7,"message":"cannot borrow `w` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "hit-scorer": {
+      "hash": "2704bf391ad7a3860da36e2afb4b950658e6fa58cd9d9c15889136233fcb1e68",
+      "variants": {
+        "base": {"result":"compiles"},
+        "score-after": {"result":{"code":"E0502","line":11,"message":"cannot borrow `*hits` as mutable because it is also borrowed as immutable"}},
+        "move-closure": {"result":{"code":"E0382","line":11,"message":"borrow of moved value: `hits`"},"fixes":{"borrow":"compiles","clone-map":"compiles","move-sum":{"code":"E0382","line":11}}},
+        "shared-map": {"result":{"code":"E0596","line":11,"message":"cannot borrow `*hits` as mutable, as it is behind a `&` reference"},"fixes":{"mut-map":"compiles","mut-binding":{"code":"E0596","line":11},"clone-insert":"compiles"}}
+      }
+    },
+    "spawn-sum-batch": {
+      "hash": "33863ea5f1b95dc39e5652f934c079e1f238fdd05ea5ef619aebe43067e3b9b3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "no-move": {"result":{"code":"E0373","line":4,"message":"closure may outlive the current function, but it borrows `batch`, which is owned by the current function"},"fixes":{"move":"compiles","clone-sum":{"code":"E0373","line":4},"ref-batch":{"code":"E0373","line":4}}},
+        "use-after": {"result":{"code":"E0382","line":7,"message":"borrow of moved value: `batch`"}},
+        "handle-tail": {"result":{"code":"E0308","line":7,"message":"mismatched types"},"fixes":{"join":"compiles","join-ok":{"code":"E0308","line":7},"thread":{"code":"E0308","line":7}}}
+      }
+    },
+    "p99-sort-floats": {
+      "hash": "f9da3a59f6ae5f677f64a4222f1c501022c1229ed8bee6f1e73eca8a8988dc2b",
+      "variants": {
+        "base": {"result":"compiles"},
+        "plain-sort": {"result":{"code":"E0277","line":2,"message":"the trait bound `f64: Ord` is not satisfied"},"fixes":{"total-cmp":"compiles","key":{"code":"E0277","line":2},"reverse":"compiles"}},
+        "sort-key": {"result":{"code":"E0277","line":2,"message":"the trait bound `f64: Ord` is not satisfied"}},
+        "partial": {"result":{"code":"E0308","line":2,"message":"mismatched types"},"fixes":{"total":"compiles","partial-q":{"code":"E0277","line":2},"reverse":"compiles"}}
+      }
+    },
+    "tenant-usage": {
+      "hash": "9526990d3def247591fe6d46638977b2f68b45af0ebb66785cf74521c2bfa04f",
+      "variants": {
+        "base": {"result":"compiles"},
+        "key-owned": {"result":{"code":"E0308","line":11,"message":"mismatched types"},"fixes":{"as-str":"compiles","clone-key":{"code":"E0515","line":11},"by-len":{"code":"E0308","line":11}}},
+        "no-mut": {"result":{"code":"E0596","line":8,"message":"cannot borrow `m` as mutable, as it is not declared as mutable"},"fixes":{"mut":"compiles","ref":{"code":"E0308","line":11},"mut-r":{"code":"E0596","line":8}}},
+        "ret-owned": {"result":{"code":"E0308","line":11,"message":"mismatched types"}}
+      }
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "group": "reading-iter",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "edition": "2024",
+  "snippets": {
+    "free-list-sum": {
+      "hash": "ca89ae8c78d7f3a078a2ff7599842786fe2416ad9ba447ef2967903d023dbd2d",
+      "variants": {
+        "base": {"result":"compiles"},
+        "into-iter": {"result":{"code":"E0507","line":8,"message":"cannot move out of `p.free` which is behind a shared reference"},"fixes":{"borrow":"compiles","clone":"compiles","mut-ref":{"code":"E0277","line":9}}},
+        "drain": {"result":{"code":"E0596","line":8,"message":"cannot borrow `p.free` as mutable, as it is behind a `&` reference"},"fixes":{"borrow":"compiles","mut-pool":"compiles","mut-ref":{"code":"E0277","line":9}}},
+        "sort-first": {"result":{"code":"E0596","line":7,"message":"cannot borrow `p.free` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "batch-ids-loop": {
+      "hash": "5d097e6a18b9ab6387ecb5dad3b045dc7f3bd6951f9d3e16d0bb37dfada22132",
+      "variants": {
+        "base": {"result":"compiles"},
+        "by-value": {"result":{"code":"E0382","line":10,"message":"borrow of moved value: `b`"},"fixes":{"borrow-loop":"compiles","drain":{"code":"E0596","line":7},"clone-loop":{"code":"E0599","line":7},"mut-ref":{"code":"E0596","line":7}}},
+        "iter-mut": {"result":{"code":"E0596","line":7,"message":"cannot borrow `b` as mutable, as it is not declared as mutable"}},
+        "push-ref": {"result":{"code":"E0308","line":10,"message":"mismatched types"},"fixes":{"push-id":"compiles","push-ref-ref":{"code":"E0308","line":10},"push-deref":{"code":"E0308","line":10}}}
+      }
+    },
+    "live-ids-chain": {
+      "hash": "5dfdac1283a649a52c448e09e13ed2b929a9d364fe0787b65e911fe7f85cd977",
+      "variants": {
+        "base": {"result":"compiles"},
+        "lazy-rev": {"result":{"code":"E0308","line":7,"message":"mismatched types"},"fixes":{"collect":"compiles","rev-collect":"compiles","collect-box":{"code":"E0308","line":7}}},
+        "owned-items": {"result":{"code":"E0277","line":10,"message":"a value of type `Vec<u32>` cannot be built from an iterator over elements of type `Req`"},"fixes":{"id":"compiles","ref-id":{"code":"E0277","line":10},"same":{"code":"E0277","line":10}}},
+        "iter-mut": {"result":{"code":"E0596","line":7,"message":"cannot borrow `*w` as mutable, as it is behind a `&` reference"}}
+      }
+    },
+    "reap-finished": {
+      "hash": "43576be9ba735dc95ab8dd976c83cd3a83ad4e4927750713c5eb742d64bc430d",
+      "variants": {
+        "base": {"result":"compiles"},
+        "retain-in-loop": {"result":{"code":"E0502","line":7,"message":"cannot borrow `*run` as mutable because it is also borrowed as immutable"}},
+        "extend-move": {"result":{"code":"E0507","line":7,"message":"cannot move out of `s.blocks` which is behind a shared reference"},"fixes":{"extend-ref":"compiles","clone":"compiles","append":{"code":"E0596","line":7}}},
+        "into-run": {"result":{"code":"E0382","line":10,"message":"borrow of moved value: `run`"},"fixes":{"iter":"compiles","drain":"compiles","deref":{"code":"E0507","line":5}}}
+      }
+    },
+    "matcher-step": {
+      "hash": "a50895c38cadfaaaacdb8ddce378dd55c3d8b76757a0dd39270590cd67339610",
+      "variants": {
+        "base": {"result":"compiles"},
+        "iter": {"result":{"code":"E0596","line":14,"message":"cannot borrow `*m` as mutable, as it is behind a `&` reference"},"fixes":{"iter-mut":"compiles","clone-step":"compiles","cloned-iter":"compiles"}},
+        "shared-slice": {"result":{"code":"E0596","line":13,"message":"cannot borrow `*ms` as mutable, as it is behind a `&` reference"},"fixes":{"mut-slice":"compiles","iter":{"code":"E0596","line":14},"to-vec":"compiles"}},
+        "move-out": {"result":{"code":"E0507","line":14,"message":"cannot move out of `*m` which is behind a mutable reference"}}
+      }
+    },
+    "admissible-count": {
+      "hash": "8a70f9719668d42272ca85381a18ea416e277d7896f4e32cb3b11987106a7a0d",
+      "variants": {
+        "base": {"result":"compiles"},
+        "push-early": {"result":{"code":"E0502","line":3,"message":"cannot borrow `*w` as mutable because it is also borrowed as immutable"}},
+        "no-deref": {"result":{"code":"E0308","line":2,"message":"mismatched types"},"fixes":{"deref-twice":"compiles","deref-once":{"code":"E0308","line":2},"strict":"compiles"}}
+      }
+    },
+    "batch-drain": {
+      "hash": "739296079c4e897562a93cff8a39259e843a3680a463c35f676abbc5e8b395f3",
+      "variants": {
+        "base": {"result":"compiles"},
+        "index-move": {"result":{"code":"E0507","line":8,"message":"cannot move out of index of `Vec<Req>`"},"fixes":{"drain":"compiles","ref":{"code":"E0308","line":8},"split-off":"compiles"}},
+        "shared": {"result":{"code":"E0596","line":8,"message":"cannot borrow `*w` as mutable, as it is behind a `&` reference"},"fixes":{"mut-queue":"compiles","take-refs":{"code":"E0277","line":8},"mut-binding":{"code":"E0596","line":8}}},
+        "owned": {"result":{"code":"E0596","line":8,"message":"cannot borrow `w` as mutable, as it is not declared as mutable"}}
+      }
+    },
+    "decode-step": {
+      "hash": "1c9ee95fb3c16266f6496cea7960965cd184874beaa1b9c6d7520587282699b7",
+      "variants": {
+        "base": {"result":"compiles"},
+        "iter-shared": {"result":{"code":"E0594","line":7,"message":"cannot assign to `s.left`, which is behind a `&` reference"},"fixes":{"iter-mut":"compiles","no-step":"compiles","mut-binding":{"code":"E0594","line":7}}},
+        "by-value": {"result":{"code":"E0382","line":9,"message":"borrow of moved value: `run`"},"fixes":{"iter-mut":"compiles","shared":{"code":"E0594","line":7},"drain":"compiles"}},
+        "retain-inside": {"result":{"code":"E0499","line":7,"message":"cannot borrow `*run` as mutable more than once at a time"}}
+      }
+    },
+    "prune-finished": {
+      "hash": "1c262c9e7d857d21c36feac075c12c5d1c6d45f51d3f9d2e5f34826f2bf30654",
+      "variants": {
+        "base": {"result":"compiles"},
+        "iter-refs": {"result":{"code":"E0277","line":9,"message":"a value of type `Vec<Req>` cannot be built from an iterator over elements of type `&Req`"},"fixes":{"into-iter":"compiles","drain":{"code":"E0596","line":7},"iter-mut":{"code":"E0277","line":9}}},
+        "count": {"result":{"code":"E0308","line":7,"message":"mismatched types"}},
+        "borrow-q": {"result":{"code":"E0277","line":9,"message":"a value of type `Vec<Req>` cannot be built from an iterator over elements of type `&Req`"},"fixes":{"owned":"compiles","mut-ref":{"code":"E0277","line":9},"slice":{"code":"E0277","line":9}}}
+      }
+    }
+  }
+}

@@ -8,7 +8,8 @@
  * only needs an `Instance` or a `QuizQuestion` to carry, never to render.
  */
 import { BOOT_KCS, KCS } from '../../src/data/kc'
-import { seedFor } from '../../src/lib/items/core'
+import { blockOnlyFor, seedFor } from '../../src/lib/items/core'
+import { loadAllFamilies } from '../../src/lib/items/registry'
 import type { Level, PlayableItem } from '../../src/lib/items/types'
 import type { Kc, KcId } from '../../src/lib/kc/types'
 import { cardsContent, deriveCards, recentReviewRefs, type CardsContent, type CardsPlan, type DerivedCards } from '../../src/lib/learner/cards'
@@ -33,6 +34,9 @@ export const LESSONS: { id: string; kcs: KcId[] }[] = (() => {
 export const resolveTag = (e: LedgerEvent): readonly KcId[] => (e as { data?: { kcs?: KcId[] } }).data?.kcs ?? []
 
 export const CONTENT: CardsContent = cardsContent({ kcs: KCS, lessons: LESSONS, bootKcs: BOOT_KCS, resolve: resolveTag })
+
+/** The real families, read only for `blockOnlyFor`: the simulated Today drops what `buildPool` drops (serving-reading.md SR-D27). */
+const GENS = new Map((await loadAllFamilies()).map((g) => [g.id, g]))
 
 /* ------------------------------------------------------------------ */
 /* Items                                                               */
@@ -68,10 +72,17 @@ export function constructedItem(kc: KcId, index = 0): PlayableItem {
   return { source: 'cr', lessonId, index, cr: { prompt: 'p', model: 'm', ideas: ['a', 'b', 'c'], kcs: [kc] } }
 }
 
-/** A pool over the real graph: a KC with `gen` is served by its first family, every KC has two authored items. */
+/**
+ * A pool over the real graph: a KC with `gen` is served by its first family, every KC has two authored items. A family
+ * whose variants on the KC are all block-only (the serving-first reading items) is a lesson block's alone, so it is
+ * dropped here as `buildPool.families` drops it.
+ */
 export function makePool(recent: ReadonlyMap<KcId, string[]> = new Map(), over: Partial<ItemPool> = {}): ItemPool {
   return {
-    families: (kc) => KC_BY_ID.get(kc)?.gen ?? [],
+    families: (kc) => (KC_BY_ID.get(kc)?.gen ?? []).filter((f) => {
+      const gen = GENS.get(f)
+      return gen === undefined || !blockOnlyFor(gen, kc)
+    }),
     level: () => 1,
     make: (family, kc, level, seed) => genItem(kc, family, level, seed),
     authored: (kc) => [quizItem(kc, 0), quizItem(kc, 1)],

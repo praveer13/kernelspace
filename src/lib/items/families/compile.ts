@@ -61,7 +61,7 @@ export const MIN_POOL = 4 // gen-literal-ok: smallest pool a variant draws from
 const VERDICT_OPTIONS = 4 // gen-literal-ok: the key and three distractors
 
 /** The KCs whose `gen` lists `compile` (verify-kc holds Gen.kcs and the graph to each other). */
-export const COMPILE_KCS = [KC.ownershipMoves, 'r.clone-copy-drop', KC.permissions, KC.borrowRules, 'r.slices', KC.analyzerLimits, 'r.interior-mutability', 'r.lifetimes'] as const
+export const COMPILE_KCS = [KC.ownershipMoves, 'r.clone-copy-drop', KC.permissions, KC.borrowRules, 'r.slices', KC.analyzerLimits, 'r.interior-mutability', 'r.lifetimes', ...READING_KCS] as const
 const isReadingKc = (kc: string): boolean => (READING_KCS as readonly string[]).includes(kc)
 
 export type CompileKind = 'verdict' | 'permission' | 'fix'

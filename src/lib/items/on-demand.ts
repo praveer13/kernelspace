@@ -55,7 +55,7 @@ export function collect<T>(work: () => T): Collected<T> {
   return { value, ...(stopped ? { stopped } : {}), ready: mine.size === 0 ? null : Promise.allSettled(mine).then(() => undefined) }
 }
 
-/** The most runs `settle` makes: each run can only add data (the bank has four groups), so this is never reached. */
+/** The most runs `settle` makes: each run can only add data (the bank has eight groups, and one run collects every group a plan wants), so this is never reached. */
 const MAX_RUNS = 8
 
 /**
