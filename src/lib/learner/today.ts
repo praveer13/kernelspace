@@ -23,7 +23,7 @@ import type { Gen, Instance, Level, PlayableItem } from '@/lib/items/types'
 import type { Kc, KcId } from '@/lib/kc/types'
 import { CATCH_UP_COPY, WELCOME_BACK_COPY, dayNumber, weekdayOf } from '@/lib/learner/reentry'
 import type { ItemData, ItemRef, ItemResponse, Json, LedgerEvent, LocalDay } from '@/lib/ledger/types'
-import { seedFor } from '@/lib/items/core'
+import { blockOnlyFor, seedFor } from '@/lib/items/core'
 import { budgetLine, itemSeconds, type ItemPool } from './composer'
 import { drawOnKc } from './on-kc'
 import type { FirstReviewCalibration, SessionMode, SessionPlan, SessionSlot, SlotReason, WeekStatus } from './types'
@@ -281,7 +281,7 @@ export interface PoolInput {
  */
 function servableLevel(gen: Gen, kc: KcId, level: Level): Level | null {
   const offered = new Set<Level>()
-  for (const v of gen.variants) if (v.kcs.includes(kc)) for (const l of v.levels) offered.add(l)
+  for (const v of gen.variants) if (v.kcs.includes(kc) && !v.blockOnly) for (const l of v.levels) offered.add(l)
   if (offered.size === 0) return null
   if (offered.has(level)) return level
   return [...offered].sort((a, b) => Math.abs(a - level) - Math.abs(b - level) || a - b)[0]
@@ -295,7 +295,7 @@ function servableLevel(gen: Gen, kc: KcId, level: Level): Level | null {
 export function makeInstance(gen: Gen, kc: KcId, level: Level, seed: number): Instance | null {
   const at = servableLevel(gen, kc, level)
   if (at === null) return null
-  const variants = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(at))
+  const variants = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(at) && !v.blockOnly)
   try {
     return drawOnKc(kc, seed >>> 0, (s) => gen.make(s, at, variants[s % variants.length].id))
   } catch {
@@ -306,7 +306,7 @@ export function makeInstance(gen: Gen, kc: KcId, level: Level, seed: number): In
 export function buildPool(input: PoolInput): ItemPool {
   const byId = new Map<KcId, Kc>(input.kcs.map((k) => [k.id, k]))
   return {
-    families: (kc) => (byId.get(kc)?.gen ?? []).filter((f) => input.gens.has(f)),
+    families: (kc) => (byId.get(kc)?.gen ?? []).filter((f) => input.gens.has(f) && !blockOnlyFor(input.gens.get(f) as Gen, kc)),
     level: (kc, family) => levelFor(input.stair, kc, family),
     make(family, kc, level, seed) {
       const gen = input.gens.get(family)

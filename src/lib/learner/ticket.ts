@@ -22,7 +22,7 @@
 import type { QuizQuestion } from '@/components/QuizBlock'
 import { kcById } from '@/data/kc'
 import type { Lesson, QuizBlockData, TrackId } from '@/data/lessons/types'
-import { seedFor } from '@/lib/items/core'
+import { blockOnlyFor, seedFor } from '@/lib/items/core'
 import type { ItemResult } from '@/lib/items/play'
 import { MEASURE_LEVEL } from '@/lib/items/staircase'
 import type { AuthoredItem, ConstructedPrompt, Gen, Level, PlayableItem } from '@/lib/items/types'
@@ -91,11 +91,11 @@ export interface PlanOptions {
  */
 export function makeGenPool(gens: ReadonlyMap<string, Gen>, familiesOf: (kc: KcId) => readonly string[]): TicketPool {
   return {
-    families: (kc) => familiesOf(kc).filter((f) => gens.has(f)),
+    families: (kc) => familiesOf(kc).filter((f) => gens.has(f) && !blockOnlyFor(gens.get(f) as Gen, kc)),
     make: (family, kc, level: Level, seed) => {
       const gen = gens.get(family)
       if (!gen) return null
-      const offered = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(level))
+      const offered = gen.variants.filter((v) => v.kcs.includes(kc) && v.levels.includes(level) && !v.blockOnly)
       if (offered.length === 0) return null
       try {
         const inst = drawOnKc(kc, seed, (s) => gen.make(s, level, offered[s % offered.length].id))

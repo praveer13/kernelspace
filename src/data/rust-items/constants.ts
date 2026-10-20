@@ -35,7 +35,13 @@ export const isCompiles = (o: Outcome | { code: string }): o is 'compiles' => o 
 export const PANIC_CODES = ['BorrowMutError', 'BorrowError'] as const
 
 /** The clusters verdict options are drawn from (§15.3: "the key plus three from the same KC cluster"). */
-export type CodeCluster = 'moves' | 'borrows' | 'lifetimes' | 'cells'
+export type CodeCluster = 'moves' | 'borrows' | 'lifetimes' | 'cells' | 'types'
+
+/** The R KCs only serving-first reading blocks draw (docs/specs/serving-reading.md): block-only, reader voice, no labels. */
+export const READING_KCS = ['r.enums-option-result', 'r.iterators-ownership', 'r.closures-collections', 'r.smart-pointers'] as const
+
+/** Whether a snippet belongs to the reading groups: every KC it lists is a reading KC. */
+export const isReadingSnippet = (s: { kcs: readonly string[] }): boolean => s.kcs.length > 0 && s.kcs.every((k) => (READING_KCS as readonly string[]).includes(k))
 
 /**
  * Every outcome code the bank may expect, with the cluster its verdict distractors come from and one
@@ -64,6 +70,9 @@ export const ERROR_CODES: Readonly<Record<string, { cluster: CodeCluster; means:
   E0716: { cluster: 'lifetimes', means: 'a temporary dropped at the end of its statement while still borrowed' },
   BorrowMutError: { cluster: 'cells', means: 'a `borrow_mut` on a RefCell that is already borrowed, a panic at run time' },
   BorrowError: { cluster: 'cells', means: 'a `borrow` on a RefCell that is already mutably borrowed, a panic at run time' },
+  E0004: { cluster: 'types', means: 'a `match` that leaves a case uncovered' },
+  E0277: { cluster: 'types', means: 'a type that lacks a trait the code needs (Send, Ord, a `?` conversion)' },
+  E0308: { cluster: 'types', means: 'a value of one type where the code expects another' },
 }
 
 /**
