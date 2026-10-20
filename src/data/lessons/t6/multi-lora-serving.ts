@@ -141,6 +141,13 @@ fn admit(request: &Request, pool: &mut PagePool) -> Result<Lease, Pressure> {
       chips: ['one HBM pool', 'two object classes', 'the lab: admit all or nothing'],
     },
     {
+      type: 'reading',
+      title: 'Read it in Rust: admit',
+      lead: '`admit` returns `Result<Lease, Pressure>` and uses `?` twice. Each `?` hands a `Pressure` back at once; if the second fails, the adapter pinned on the line before is dropped on the way out, and whether its pages return depends on that drop, which the code does not show.',
+      variants: ['fix.enums-option-result', 'verdict.enums-option-result'],
+      count: 2,
+    },
+    {
       type: 'callout',
       variant: 'warning',
       title: 'Dynamic adapter loading is a code-loading boundary',

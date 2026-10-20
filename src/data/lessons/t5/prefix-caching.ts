@@ -171,6 +171,13 @@ Eviction operates from the leaves. Removing an internal node would invalidate ev
       chips: ['longest prefix first', 'bounded imbalance', 'JSQ fallback'],
     },
     {
+      type: 'reading',
+      title: 'Read it in Rust: the router',
+      lead: '`choose_worker`\'s main chain is one expression. `enumerate` and `filter` only describe the work; `max_by_key` runs it and answers with an `Option`, since a chain may yield nothing, and `unwrap_or_else` runs its fallback only on `None`. The closures borrow what they read (`guard`, `workers`).',
+      variants: ['verdict.iterators-ownership', 'fix.closures-collections', 'verdict.enums-option-result', 'fix.iterators-ownership', 'verdict.closures-collections', 'fix.enums-option-result'],
+      count: 3,
+    },
+    {
       type: 'prose',
       md: `## The cluster is part of the cache
 

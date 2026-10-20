@@ -278,6 +278,13 @@ The four: **vLLM** (the open-source reference), **SGLang** (the structured-gener
 | **Runs on** | any CUDA (+AMD/TPU ports) | any CUDA | NVIDIA | wraps the other three |`,
     },
     {
+      type: 'reading',
+      title: 'Read it in Rust: the data plane',
+      lead: 'The table lists Dynamo\'s core as Rust. A data plane hands shared state to worker threads, and its types say what may cross: an `Arc` handle may, an `Rc` may not, and `Arc::clone` copies a handle, never the data behind it.',
+      variants: ['verdict.smart-pointers', 'fix.smart-pointers'],
+      count: 2,
+    },
+    {
       type: 'callout',
       variant: 'analogy',
       md: `Map them to the world you know: **vLLM ≈ Postgres** (the default, everything works, extensible), **SGLang ≈ Redis with a query language** (a specialist whose cache semantics *are* the product), **TRT-LLM ≈ a hand-tuned C++ storage engine** (vendor-tuned kernels, fastest on its hardware, NVIDIA-shaped), **Dynamo ≈ Vitess/ProxySQL** (the fleet layer that makes the engines a cluster). And notice the meta-pattern one last time: every one of these is T0–T4 ideas — paging, scheduling, allocators, zero-copy, roofline, quantization — assembled with different priorities. You didn't learn four products. You learned the one design space they all live in.`,
