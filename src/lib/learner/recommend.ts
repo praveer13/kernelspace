@@ -206,7 +206,8 @@ function todayRule(today: TodaySummary | null): Recommendation | null {
 function resumeRule(state: RecommendState, content: RecommendContent, plan: PathPlanDetail, now: IsoInstant): Recommendation | null {
   const nowMs = Date.parse(now)
   // a placed learner is not resumed into an R lesson outside the plan (offered as a test-out, or on
-  // serving-first, where R is reading items only): the K3 metric "nobody placed lands on R.L1"
+  // serving-first, where R arrives as `reading` blocks inside T5 and T6 lessons, never as R lessons:
+  // serving-reading.md): the K3 metric "nobody placed lands on R.L1"
   const inPlan = new Set(plan.lessons)
   const offPlanR = (lesson: RecommendLesson) => state.placement !== null && lesson.trackId === 'r' && !inPlan.has(lesson.id)
   let best: { lesson: RecommendLesson; at: number; pct: number | undefined } | null = null

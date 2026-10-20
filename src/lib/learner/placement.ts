@@ -83,7 +83,7 @@ export const FRONTIER_PROBES: readonly { kc: KcId; variant: string }[] = [
 /** Whether `kc` is a frontier probe. */
 export const isFrontier = (kc: KcId): boolean => FRONTIER_PROBES.some((f) => f.kc === kc)
 
-/** On `serving-first` the anchor is optional (R arrives as reading items only there). */
+/** On `serving-first` the anchor is optional (R arrives as `reading` blocks inside T5 and T6 lessons, never as R lessons: serving-reading.md). */
 export const anchorOptional = (path: LearningPath): boolean => path === 'serving-first'
 
 /* ------------------------------------------------------------------ */

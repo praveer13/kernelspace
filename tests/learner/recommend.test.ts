@@ -6,6 +6,7 @@ import { FORGE_LABS } from '../../src/data/labs'
 import { ALL_LESSONS } from '../../src/data/lessons'
 import type { TrackId } from '../../src/data/lessons/types'
 import { PLAYS } from '../../src/data/plays'
+import { readingCoverage } from '../kc/reading-blocks.test'
 import { PATHS, firstLessons, pathPlan, playStep } from '../../src/lib/learner/paths'
 import {
   BOOT_WHY,
@@ -500,10 +501,21 @@ describe('Boot and Today name where the path begins', () => {
     expect(runs('serving-first')).toEqual(['t0', 't4', 't5', 't6', 't7'])
     expect(lineOf(loaded, 'serving-first', undefined).line).toBe(`Your first lesson is T0.L1 · ${title('t0.l1')}.`)
     const you = readFileSync(join(import.meta.dir, '../../src/pages/boot/You.tsx'), 'utf8')
-    for (const gone of ['Rust Zero, then Track 0', 'serving later', 'Rust arrives as short reading items']) expect(you).not.toContain(gone)
-    for (const said of ['each Rust Zero lesson woven in', 'Rust Zero is not on this path', 'Serving (Tracks 4 to 7) is not on this path', 'Systems Forge labs 01, 04 and 05']) {
+    for (const gone of ['Rust Zero, then Track 0', 'serving later', 'its lessons stay open in the Curriculum']) expect(you).not.toContain(gone)
+    for (const said of [
+      'each Rust Zero lesson woven in',
+      'Rust Zero is not on this path',
+      'Rust arrives as short reading items inside the T5 and T6 lessons that use it, and Rust Zero stays open in the Curriculum.',
+      'Serving (Tracks 4 to 7) is not on this path',
+      'Systems Forge labs 01, 04 and 05',
+    ]) {
       expect(you).toContain(said)
     }
+    // the blurb promises reading items in T5 and T6 lessons: the blocks must be there, or the copy has drifted (PR 16)
+    const { problems, hosts } = readingCoverage()
+    expect(problems).toEqual([])
+    expect(hosts.length).toBeGreaterThan(0)
+    for (const id of hosts) expect(['t5', 't6']).toContain(id.split('.')[0])
   })
 
   test("a placement moves where Rust starts, and Boot's line follows the placed plan, never the blurb", async () => {
