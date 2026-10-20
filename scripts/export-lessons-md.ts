@@ -124,6 +124,8 @@ export function blockToMd(
       return `**Play: ${b.title}**\n\n_Interactive: ${SITE}/play/${b.playId}. Ask the learner to play it before discussing; the reference run stays hidden until the debrief._`
     case 'item':
       return `**Practice: ${b.title}**\n\n_Practice with new numbers in the lesson._`
+    case 'reading':
+      return `**Rust reading: ${b.title}**\n\n${b.lead}\n\n_Read short Rust in the lesson: name rustc's verdict or the one-line fix._`
     case 'exercise':
       // A Fleet exercise (wave-3.md §5.3) is a prediction on a seeded sweep, so its note stays in the lesson.
       if ('fleet' in b) return `**Exercise: ${b.title}**\n\n_Run it in the lesson: ${SITE}/lesson/${lessonId}. Ask the learner to predict the sweep before discussing._`
