@@ -41,7 +41,7 @@ export const traceRejects = (t: PermissionTrace): boolean => t.uses.some((u) => 
 
 const PERMISSION_NAME: Record<Permission, string> = { read: 'Read (R)', write: 'Write (W)', own: 'Own (O)' }
 
-const KIND_LABEL: Record<MuseumEntry['cluster'], string> = { moves: 'moves', borrows: 'borrows', lifetimes: 'lifetimes', cells: 'cells' }
+const KIND_LABEL: Record<MuseumEntry['cluster'], string> = { moves: 'moves', borrows: 'borrows', lifetimes: 'lifetimes', cells: 'cells', types: 'types' }
 
 const MAX_KCS = 6
 

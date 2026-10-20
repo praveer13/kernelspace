@@ -145,6 +145,8 @@ export interface VariantSpec {
   kcs: KcId[]
   levels: readonly Level[]
   nsec: number
+  /** Drawn only by a lesson block that names it: Today, tickets, the placement walk, forms and the Museum skip it. */
+  blockOnly?: true
 }
 
 /** A lesson worked example the family must reproduce exactly (verify-generators fails on drift). */

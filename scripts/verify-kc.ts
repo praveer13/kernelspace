@@ -30,7 +30,8 @@ import { existsSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import type { ForgeLab } from '../src/data/labs'
 import type { Lesson } from '../src/data/lessons/types'
-import type { AuthoredItem } from '../src/lib/items/types'
+import { blockOnlyFor } from '../src/lib/items/core'
+import type { AuthoredItem, VariantSpec } from '../src/lib/items/types'
 import type { Kc, KcGraph } from '../src/lib/kc/types'
 import { findCycle, indexKcs, prerequisitesOf, requiresAndContains } from '../src/lib/kc/graph'
 
@@ -50,6 +51,8 @@ export const PENDING_FAMILIES = ['frag', 'kv', 'roofline', 'goodput', 'cost', 'm
 export interface KcFamily {
   id: string
   kcs: readonly string[]
+  /** The KCs in `kcs` whose every variant is block-only: only a lesson block draws them, so they serve no Today card (serving-reading SR-D27). */
+  blockOnlyKcs?: readonly string[]
 }
 
 export interface VerifyKcInput {
@@ -267,8 +270,10 @@ export function verifyKc(input: VerifyKcInput): VerifyKcResult {
 
   const itemCount = new Map<string, number>()
   for (const s of sites) for (const id of new Set(s.kcs ?? [])) itemCount.set(id, (itemCount.get(id) ?? 0) + 1)
+  // a family that serves a KC only through block-only variants does not cover it: Today could never draw its card
+  const blockOnly = (family: string, kc: string) => input.families.find((f) => f.id === family)?.blockOnlyKcs?.includes(kc) === true
   const genCovers = (k: Kc) =>
-    (k.gen ?? []).some((f) => familyIds.has(f) || pending.has(f)) || input.families.some((f) => f.kcs.includes(k.id))
+    (k.gen ?? []).some((f) => (familyIds.has(f) && !blockOnly(f, k.id)) || pending.has(f)) || input.families.some((f) => f.kcs.includes(k.id) && !blockOnly(f.id, k.id))
   const inScope = new Set(optedIn.flatMap((l) => l.kcs ?? []))
   for (const id of inScope) {
     const k = index.get(id)
@@ -382,7 +387,7 @@ export function verifyKc(input: VerifyKcInput): VerifyKcResult {
 
 /* ---------------- discovery (Bun has no import.meta.glob; spec §5.1) ---------------- */
 
-const isFamily = (x: unknown): x is KcFamily & { variants: unknown[] } =>
+const isFamily = (x: unknown): x is KcFamily & { variants: VariantSpec[] } =>
   !!x && typeof x === 'object' && typeof (x as KcFamily).id === 'string' && Array.isArray((x as KcFamily).kcs) && Array.isArray((x as { variants?: unknown }).variants)
 
 /** Generator families: any export of src/lib/items/families/*.ts shaped like a Gen. */
@@ -391,7 +396,7 @@ export async function discoverFamilies(root = new URL('../src/lib/items/families
   const out = new Map<string, KcFamily>()
   for (const name of (await readdir(root)).filter((n) => n.endsWith('.ts')).sort()) {
     const mod = (await import(new URL(name, root).href)) as Record<string, unknown>
-    for (const value of Object.values(mod)) if (isFamily(value)) out.set(value.id, { id: value.id, kcs: [...value.kcs] })
+    for (const value of Object.values(mod)) if (isFamily(value)) out.set(value.id, { id: value.id, kcs: [...value.kcs], blockOnlyKcs: value.kcs.filter((kc) => blockOnlyFor(value, kc)) })
   }
   return [...out.values()]
 }

@@ -8,8 +8,7 @@
  * 2. all 9 form blueprints against `tests/fixtures/forms/blueprints.json`;
  * 3. Error Museum practice draws (every `museum.json` code x 60 seeds) against
  *    `tests/fixtures/items/museum-practice.json`, and a sha256 of `museum.json`;
- * 4. Today's and the tickets' family lists for the four reading KCs are empty (a literal list, because `READING_KCS`
- *    lands with SR-03, which asserts that the literal equals it), and a legacy R KC keeps its pool and its draw;
+ * 4. Today's and the tickets' family lists for the four reading KCs are empty (a literal list, asserted equal to `READING_KCS`), and a legacy R KC keeps its pool and its draw;
  * 5. H3: `selectHintArms`, `selectHintSecondary` and `selectDailySecondary` over a fixture ledger equal literals
  *    captured at the base, and equal their own output with the reading-block `item` events removed.
  *
@@ -21,6 +20,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { KCS } from '../../src/data/kc'
 import { SYSTEMS_FORGE_LABS } from '../../src/data/labs'
+import { READING_KCS } from '../../src/data/rust-items/constants'
 import museum from '../../src/data/rust-items/museum.json'
 import { loadGroups } from '../../src/data/rust-items/groups'
 import { GROUP_IDS, practiceInstance } from '../../src/lib/items/families/compile'
@@ -148,7 +148,7 @@ describe('I3: the Error Museum', () => {
 /* 4. Today and the tickets do not serve the reading KCs               */
 /* ------------------------------------------------------------------ */
 
-/** The four reading KCs (SR-D2). A literal: `READING_KCS` lands with SR-03, which asserts that it equals this list. */
+/** The four reading KCs (SR-D2). A literal, so the list the production code exports is checked against it. */
 const READING_KC_IDS = ['r.enums-option-result', 'r.iterators-ownership', 'r.closures-collections', 'r.smart-pointers']
 
 /** A legacy R KC's pool and one draw of it, at the base (`level 2`, seed 12345): `variant|unit|rev`. */
@@ -167,6 +167,10 @@ describe('I4: the reading KCs are not served by Today or tickets', () => {
   const pool = () =>
     buildPool({ kcs: KCS, gens, stair: [], authored: new Map(), constructed: new Map(), recent: new Map() })
   const tickets = () => makeGenPool(gens, (kc) => KCS.find((k) => k.id === kc)?.gen ?? [])
+
+  test('the literal equals READING_KCS', () => {
+    expect([...READING_KCS]).toEqual(READING_KC_IDS)
+  })
 
   test('the four ids are KCs of the graph', () => {
     for (const id of READING_KC_IDS) expect(KCS.some((k) => k.id === id), id).toBe(true)
