@@ -1,6 +1,6 @@
 # Serving-first Rust reading items: spec (PR sr)
 
-**Status:** draft for owner review. The build proceeds on the defaults in "Owner questions" (SR-D19). Nothing here is signed.
+**Status:** draft for owner review. The build proceeds on the defaults in "Owner questions" (SR-D19). Nothing here is signed. SR-D25 to SR-D29 apply the verified critique of the first draft (477542b).
 **Drafted:** 2026-10-19.
 **Picked up.** The owner picked up serving-first Rust reading items on 2026-10-19, a Wave 3 leftover. PR #16 (`fix/path-descriptions`) removed the claim because nothing delivered it. It is not a new wave, and every other item keeps its gate and date.
 **Base:** `wave-hk` at `2e0d2ce`: PR #23's housekeeping on top of PR #22 (`wave-s5b`), with `master` (PRs #20 and #21) merged in (SR-D20). The design read the code at `00d0c0a`, the same tree without #20's files. So `file:line` cites hold there. In `outcomes.ts`, `partner-report.ts`, `redact.ts` and the other files #20 touched, the symbol is the anchor, and line numbers are only hints.
@@ -54,7 +54,12 @@ SR-D1 to SR-D18 are the design's decisions. SR-D19 onward are the orchestrator's
 | SR-D21 | **The parallel-task restriction is lifted.** The design kept `on-demand.ts`, `registry.ts` and `step.ts` off limits while HK2 was in flight. HK2 merged at `00d0c0a`. SR-04 updates one comment in `on-demand.ts` (`MAX_RUNS`: "the bank has four groups" becomes eight). No other edit to those three files. | The comment would otherwise be stale. `MAX_RUNS = 8` still holds, because one run collects every group a plan wants (§5.2). | §5.2 |
 | SR-D22 | **A stable block object.** The `reading` renderer passes `ItemBlock` an item spec derived once per `ReadingBlock` object (a module-level `WeakMap`), never an inline literal. | `ItemBlock`'s load effect keys on `block` identity (`ItemBlock.tsx`, effect deps `[at, block, attempt]`). A fresh object on each render would reload forever. | §5.2 |
 | SR-D23 | **M0 also covers #20's secondary analyses.** `selectHintSecondary` and `selectDailySecondary` give identical output with and without reading-block events. | They read `probe gen:` events (hint-secondary) and Daily events. Reading blocks write neither, and the test keeps it that way. | §8 |
-| SR-D24 | **The snippets are ported verbatim.** SR-04 copies `sr/rustc-final/snippets/reading-*.ts` byte for byte. Any edit (a review fix) re-runs `build-rust-items`, `verify:rust-items` and `verify:generators --family compile`, and the PR states the edit. | Fix pools sit 5.8–8.6 points above chance. A one-word change can move a cue (§11). | §4 |
+| SR-D24 | **The snippets are ported verbatim, except for the edits SR-D25 and SR-D26 name.** SR-04 copies `sr/rustc-final/snippets/reading-*.ts` byte for byte, then makes exactly those edits. Any edit re-runs `build-rust-items`, `verify:rust-items` and `verify:generators --family compile`, and the PR lists each edit. | Fix pools sit 5.8–8.6 points above chance. A one-word change can move a cue (§11). | §4 |
+| SR-D25 | **One code per failure (content rule 9).** A failing variant, and every wrong fix, makes rustc report exactly one distinct error code. Three [proto] variants break the rule:<br>• `alloc-option-admit/ret-vec` reports E0277 then E0308. It is replaced by `ok-or-q`: line 13 becomes `got.push(p.alloc().ok_or(0u32)?);`, which gives E0277 alone, and the ok fix restores `got.push(p.alloc()?);`.<br>• `admit-two-pins/option-ret` reports E0277 then E0308. It is replaced by the variant `ok-q`: line 13 becomes `let a = pin(free, 4).ok()?;`, which gives E0277 alone, and the ok fix restores `let a = pin(free, 4)?;`. The old wrong fix `ok-q` is dropped, because it is now the variant itself.<br>• `admissible-count/count-late` reports E0502 and E0382. It is dropped.<br>SR-04 sweeps every reading variant and fix through rustc and reports each one's distinct codes. | A second code is a true answer to "Which error does rustc report", and the verdict would still mark it wrong. In the three-code `types` cluster every other code is drawn as a distractor, so the second code is always on screen. | §4.1, §4.2 |
+| SR-D26 | **Corrected Rust explanations.** In `router-choose`, the filter can never leave no worker: `min()?` has already returned for an empty fleet, and the least-loaded worker always passes `w.load <= min + 4`. `max_by_key` returns an `Option` because of its signature: a chain may yield nothing. The base why, the `unwrap-or` fix's why and B3's lead say so (§4.2, §5.3). B4's lead no longer calls t5.l7's step 2 admission: step 2 is the capacity check that preempts, and the Headroom dial admits. | The first draft taught a false reason, and contradicted the numbered list above the block. | §4.2, §5.3 |
+| SR-D27 | **The test suite's own pools follow the filters.** `tests/learner/ledger-gen.ts` (`makePool.families`, a simulated Today used by about 20 test files) drops a family that is block-only for the KC (`blockOnlyFor`), as `today.ts` does. `tests/learner/on-kc.test.ts`'s `offered` skips block-only variants. `scripts/verify-kc.ts`'s `genCovers` counts a family for a KC only through a variant that is not block-only. | Without the first two, SR-04 fails `bun run test` (`reentry.test.ts`, `on-kc.test.ts`; measured on the full suite on the prototype). Without the third, `verify:kc` would accept an R KC with no servable item, and Today could strand its card. | §3.4, §7, §10 |
+| SR-D28 | **M2 follows the repo's prereg rules.** `docs/prereg/serving-reading.md` is a draft in the form of `docs/prereg/protege.md`. Its status reads "DRAFT for the owner to sign … The drafter has not signed or dated it", and section 7 is a `Signed: (pending owner)` line plus an Owner / Date signed / Amendments table. The report prints "NOT READ" until `isPreregSigned` is true. `KEPT_WORKING` gains `'boot:path'` (a path id, never free text), so the population can include full exports. One eligibility rule covers both inputs. | Every other prereg selector waits for the signature (PLAN:753). Without `boot:path`, `stripFreeText` drops the path, and the full-export population is always empty. | §8 |
+| SR-D29 | **Carded learners on other paths.** A reading answer on an R KC that already has a card reviews that card: its due day, the optimism offset and the recent-item window move. If the answer comes 30 or more days after the card was created, it counts as a VRK30 check, as every item block's answers do. No new draw comes from it. | The first draft said these figures do not move on other paths, and they do. | §5.4, §6.1, §6.4 |
 
 ---
 
@@ -205,6 +210,9 @@ Under the narrow rule, t5.l7 reaches only enums. D(t5.l10) is {enums, iterators,
 | `src/lib/learner/forms.ts:166` (`optionsOf`) | skip block-only | 9/9 track blueprints identical, and `r.lifetimes` stays in the R form |
 | `src/lib/items/families/compile.ts:341` (`practiceInstance`) | drop reading units from `refs` | Museum draws: 0 of 1,260 (21 codes × 60 seeds) changed, `rev` included |
 | `src/lib/rust/museum.ts:160` (`museumEntries`) | drop reading snippets | `museum.json` byte-identical; 21 exhibits (`tests/rust/museum.test.ts:145`) |
+| `scripts/verify-kc.ts:270` (`genCovers`) | a family covers a KC only through a variant that is not block-only | an R KC whose only variants are block-only still needs 2 tagged items, so Today never strands its card (SR-D27) |
+| `tests/learner/ledger-gen.ts:74` (`makePool.families`, the simulated Today) | drop a family when `blockOnlyFor(gen, kc)` | every `simulate()` ledger stays identical to the base; `tests/learner/reentry.test.ts:217` stays green (SR-D27) |
+| `tests/learner/on-kc.test.ts:109, :130` (`offered`) | skip block-only variants | the test checks what Today and tickets serve; a reading link serves null from both pools by design (SR-D27) |
 
 Blocks are served through `item-block.ts:56` (`variantsOf`) and `:208` (`makeAt`), which read the variants by id, so blocks can draw them. `src/lib/kc/resolve.ts:123` only resolves events, and the `data.kcs` written at write time wins.
 
@@ -238,6 +246,7 @@ The groups are `reading-enums`, `reading-iter`, `reading-closures` and `reading-
 8. Balance fix texts against the cue gate (`scripts/item-cues.ts:23, 211-238`).
    - No option may be the only one with, or the only one without, a semicolon, a parenthesis, 2 or more commas, an absolute word (`None` counts) or an acronym (`MAX` counts).
    - Key length ranks should be roughly even. The key may be strictly longest in at most 30 % of instances (`scripts/verify-generators.ts:50`).
+9. **One code per failure** (SR-D25). A failing variant, and every wrong fix, makes rustc report exactly one distinct error code. A second code would be a true answer that the verdict marks wrong.
 
 ### 4.2 The snippet plan (36 snippets; every one confirmed by rustc 1.96.0, edition 2024 [proto])
 
@@ -249,22 +258,22 @@ The groups are `reading-enums`, `reading-iter`, `reading-closures` and `reading-
 
 | # | id (group) | KC | Serving context | Rust point | Variants: rustc 1.96.0 outcome [fix set] |
 |---|---|---|---|---|---|
-| 1 | `alloc-option-admit` (enums) | E | BlockPool: t5.l5 `block_manager.py`, where `alloc` raises `OutOfBlocks` | `Option` for an empty pool; `?` returns `None` early | base compiles; **no-q E0308@15** [ok question; unwrap(other) compiles, some-q E0277]; **ret-vec E0277@13** [ok ret-option; unwrap-push E0308, plain-got E0277]; **shared-self E0596@5** [ok mut-self; clone-pop(clone) compiles, none(other) compiles] |
+| 1 | `alloc-option-admit` (enums) | E | BlockPool: t5.l5 `block_manager.py`, where `alloc` raises `OutOfBlocks` | `Option` for an empty pool; `?` returns `None` early | base compiles; **no-q E0308@15** [ok question; unwrap(other) compiles, some-q E0277]; **ok-or-q E0277@13** (replaces `ret-vec`, SR-D25) [ok question; wrong fixes authored by SR-04, each failing with one code or a labelled lure]; **shared-self E0596@5** [ok mut-self; clone-pop(clone) compiles, none(other) compiles] |
 | 2 | `translate-get-match` (enums) | E | KvBlockTable: t5.l5 block tables; lab 02 `translate` | `get` returns `Option`; `match` must cover `None` | base compiles; **drop-none E0004@2** [ok none-max; none-zero(other) compiles, some-max E0004]; **index E0308@3** [ok get; ref-index E0308, some-index E0614]; no-deref E0308@3 |
 | 3 | `request-state-held` (enums) | E | Request: t5.l7 request states (waiting, running, preempted) | an `enum` state; exhaustive `match` | base compiles; new-state E0004@8; **no-deref E0308@9** [ok deref; one(other) compiles, tuple E0164]; dup-arm E0004@8 |
 | 4 | `push-hands-back` (enums) | E | AdmissionQueue: t5.l7 admission, a full queue | `Option` hands ownership back to the caller | base compiles; **use-moved E0382@13** [ok bind-back; fake-id(other) compiles, none-r E0004]; **drop-none E0004@11** [ok none; wild(other) compiles, none-b E0425]; bool-ret E0308@5 |
 | 5 | `sync-channel-offer` (enums) | E | AdmissionQueue: t5.l10 full-channel spiral; t5.l7 admission | `try_send`'s error carries the request back; every case named | base compiles; **use-moved E0382@10** [ok bind-back; drop-it(other) compiles, fresh E0382]; **drop-disc E0004@8** [ok disc-back; err-any(other) compiles, disc-r E0382]; blocking E0308@10 |
-| 6 | `admit-two-pins` (enums) | E | Lease: t6.l9 `unified_pager.rs` `admit` | `Result` + `?`: an early return, not a rollback | base compiles; **option-ret E0277@13** [ok result-ret; ok-q E0277, opt-count E0277]; **string-err E0277@13** [ok pressure-err; unwrap E0277, box-err E0277]; **no-q E0308@15** [ok question; ok-a E0308, pin-ref E0308] |
+| 6 | `admit-two-pins` (enums) | E | Lease: t6.l9 `unified_pager.rs` `admit` | `Result` + `?`: an early return, not a rollback | base compiles; **ok-q E0277@13** (replaces `option-ret`, SR-D25) [ok question; wrong fixes authored by SR-04, each failing with one code or a labelled lure]; **string-err E0277@13** [ok pressure-err; unwrap E0277, box-err E0277]; **no-q E0308@15** [ok question; ok-a E0308, pin-ref E0308] |
 | 7 | `slot-take` (enums) | E | Scheduler: t5.l7 preemption, evicting a slot | `Option::take` through `&mut` | base compiles; **move-out E0507@8** [ok take; clone(clone) E0599, ref E0308]; **shared E0596@8** [ok mut; none(other) compiles, take-spelled E0596]; as-ref E0308@8 |
 | 8 | `utf8-ready` (enums) | E | Tokenizer: t5.l2 streaming detokenization callout | `from_utf8` returns `Result`; arms give one type | base compiles; **ok-raw E0308@7** [ok some; owned E0308, q E0308]; **drop-err E0004@6** [ok err-none; empty(other) compiles, ok-none E0308]; str-ret E0308@7; **owned-from E0308@6** [ok str-from; to-vec E0308, deref E0308] |
 | 9 | `parent-upgrade` (enums) | E+S | PrefixCache: t5.l6 radix tree, a node's parent | `Weak::upgrade` is an `Option`; data behind `Rc` is shared | base compiles; **no-upgrade E0308@10** [ok upgrade; get E0599, some-weak E0609]; **drop-none E0004@9** [ok none-zero; wild-one(other) compiles, none-len E0425]; **move-out E0507@10** [ok len; clone-ids(clone) compiles, drain E0596] |
-| 10 | `router-choose` (enums) | I+E | Router: t5.l6 `prefix_router.rs` | `min()?`; a lazy chain that `max_by_key` runs; `Option<usize>` | base compiles; **unwrap-tail E0308@9** [ok keep-option; unwrap-or E0308, some-and E0308]; **worker-out E0308@9** [ok index; hit(other) compiles, deref E0308]; own-workers E0308@9 |
+| 10 | `router-choose` (enums) | I+E | Router: t5.l6 `prefix_router.rs` | `min()?`; a lazy chain that `max_by_key` runs; its `Option` comes from the signature (SR-D26) | base compiles; **unwrap-tail E0308@9** [ok keep-option; unwrap-or E0308, some-and E0308]; **worker-out E0308@9** [ok index; hit(other) compiles, deref E0308]; own-workers E0308@9 |
 | 11 | `free-list-sum` (iter) | I | BlockPool: t5.l5 free queue; lab 02 conservation check | `for b in &v` lends; `for b in v` moves | base compiles; **into-iter E0507@8** [ok borrow; clone(clone) compiles, mut-ref E0277]; **drain E0596@8** [ok borrow; mut-pool(other) compiles, mut-ref E0277]; sort-first E0596@7 |
 | 12 | `batch-ids-loop` (iter) | I | Batch: t5.l7 batch bookkeeping | a loop that consumes vs one that lends | base compiles; **by-value E0382@10** [ok borrow-loop; drain E0596, clone-loop(clone) E0599, mut-ref E0596]; iter-mut E0596@7; **push-ref E0308@10** [ok push-id; push-ref-ref E0308, push-deref E0308] |
 | 13 | `live-ids-chain` (iter) | I | Batch: t5.l7 / t6.l8 running set | adapters are lazy until `collect` | base compiles; **lazy-rev E0308@7** [ok collect; rev-collect(other) compiles, collect-refs E0277]; **owned-items E0277@10** [ok id; ref-id E0277, same E0277]; iter-mut E0596@7 |
 | 14 | `reap-finished` (iter) | I | Scheduler: t5.l7 loop step 4, freeing the finished | no `retain` while `iter()` still lends the list | base compiles; retain-in-loop E0502@7; **extend-move E0507@7** [ok extend-ref; clone(clone) compiles, append E0596]; **into-run E0382@10** [ok iter; drain(other) compiles, deref E0507] |
 | 15 | `matcher-step` (iter) | I | Sampler: t6.l8 grammar matchers per token | `iter_mut` to advance; a clone advances a copy | base compiles; **iter E0596@14** [ok iter-mut; clone-step(clone) compiles, cloned-iter(other) compiles]; **shared-slice E0596@13** [ok mut-slice; iter E0596, to-vec(other) compiles]; move-out E0507@14 |
-| 16 | `admissible-count` (iter) | I | Batch: t5.l7 admission count | a `filter` chain borrows until it runs; `&&u32` items | base compiles; count-late E0502@4; push-early E0502@3; **no-deref E0308@2** [ok deref-twice; deref-once E0308, strict(other) compiles] |
+| 16 | `admissible-count` (iter) | I | Batch: t5.l7 admission count | a `filter` chain borrows until it runs; `&&u32` items | base compiles; push-early E0502@3 (`count-late` dropped, SR-D25); **no-deref E0308@2** [ok deref-twice; deref-once E0308, strict(other) compiles] |
 | 17 | `batch-drain` (iter) | I | Batch: t5.l7 waiting queue to batch | `drain(..k)` moves the head out; indexing cannot | base compiles; **index-move E0507@8** [ok drain; ref E0308, split-off(other) compiles]; **shared E0596@8** [ok mut-queue; take-refs E0277, mut-binding E0596]; owned E0596@8 |
 | 18 | `decode-step` (iter) | I | Batch: t5.l7 one decode step | `iter_mut`, then `retain` after the loop | base compiles; **iter-shared E0594@7** [ok iter-mut; no-step(other) compiles, mut-binding E0594]; **by-value E0382@9** [ok iter-mut; shared E0594, drain(other) compiles]; retain-inside E0499@7 |
 | 19 | `prune-finished` (iter) | I | AdmissionQueue: t5.l7 admission queue | `into_iter` moves items; `iter` lends them | base compiles; **iter-refs E0277@9** [ok into-iter; drain E0596, iter-mut E0277]; count E0308@7; **borrow-q E0277@9** [ok owned; mut-ref E0277, slice E0277] |
@@ -286,14 +295,17 @@ The groups are `reading-enums`, `reading-iter`, `reading-closures` and `reading-
 | 35 | `fork-block-handles` (pointers) | S | KvBlockTable: t5.l5 beam fork shares every block | `map(Rc::clone)`: handles, not blocks | **owned-blocks E0277@8** [ok handles; move-blocks E0507, borrowed E0277]; **by-ref E0277@8** [ok map-clone; rc-new E0507, downgrade E0277]; deref-block E0277@8 |
 | 36 | `box-next-block` (pointers) | S+E | KvBlockTable: a chained block table | `Option<Box<_>>` behind `&`: `as_ref` | base compiles; **move-next E0507@7** [ok as-ref; unwrap-deref(other) compiles, clone-ref(clone) E0277]; unbox E0507@7; **take-next E0596@7** [ok as-ref; mut-block(other) compiles, deref E0507] |
 
-**Totals [proto].**
+**Totals [proto], before SR-D25's edits** (SR-04 re-measures them: one verdict unit fewer in `r.iterators-ownership`, and the two replacement variants keep E0277 and their fix sets).
 - 36 snippets, 144 variants and 229 fixes. 35 bases compile. `fork-block-handles` has no compiling base, following the precedent of the lifetimes group's header (`snippets/lifetimes.ts:12-15`).
 - Snippets per new code: E0004 6, E0277 8, E0308 20, against a floor of 3 (`museum.ts:27`).
 - The bank after: 198 snippets, 802 variants (280 labelled, 261 with fixes) and 24 codes. The quota is 198/802 = **24.7 %**, inside the 20–30 % band (`verify-rust-items.ts:37`).
 
-**Two teaching points the design had to get right:**
+**Teaching points the content must get right:**
 - `admit-two-pins`' base why says what the code does: "Each `?` hands a `Pressure` to the caller at once. If the second pin fails, `a` is dropped on the way out, and `Lease` has no `Drop`, so its 4 pages stay taken: `?` returns early, it does not undo."
-- `router-choose`'s base why says that `max_by_key` pulls the chain through. It describes `Option` only where the function returns one.
+- `router-choose` (SR-D26):
+  - Its base why ends: "`min()` gives `None` for an empty fleet, and `?` returns it at once. The chain does nothing until `max_by_key` pulls it through. `max_by_key` answers with an `Option` because a chain may yield nothing; here the least-loaded worker always passes the guard, so it is `Some`."
+  - The `unwrap-or` fix's why reads: "That gives a plain `usize`, and the function promises an `Option<usize>`."
+  - SR-04 re-checks the cue balance of that fix pool after the edit.
 
 ---
 
@@ -314,7 +326,7 @@ The groups are `reading-enums`, `reading-iter`, `reading-closures` and `reading-
 | 22 | t6.l9 Multi-LoRA Serving (30; 595) | B7 |
 
 The estimate for finishing every block:
-- Every block takes 16 correct answers.
+- The seven blocks together take 16 correct answers (2 + 3 + 3 + 2 + 2 + 2 + 2).
 - At the nominal 30 s per verdict and 45 s per fix (`compile.ts:57`), plus reading and misses, that is about 15–18 minutes.
 - No `minutes` field changes (SR-D13).
 
@@ -345,7 +357,7 @@ export interface ReadingBlock {
 - `item-block.ts` itself is unchanged.
 
 **`src/components/blocks/ItemBlock.tsx`** imports `settle` from `on-demand.ts` and changes as follows.
-1. **Cold load.** `nextStage` becomes async and plans with `await settle(() => planItem(g, block, evs, sessionSeed, at))`. The restore branch also runs under `settle`.
+1. **Cold load.** `nextStage` becomes async. It takes the draw number before awaiting (`const d = draw.current; draw.current += 1`), then plans with `await settle(() => planItem(g, block, evs, sessionSeed, d))`. The restore branch also runs under `settle`.
    - The draw counter moves once per plan, outside the rerun work, so a plan stays a pure function of `(sessionSeed, draw)`.
    - It works because `want` records the load before `makeAt` swallows the throw (`on-demand.ts` `want`; `item-block.ts:212-216`). One run collects the groups that all of `planItem`'s seed tries (at most 32) want, so a block settles in two runs.
    - The same fix covers a future item block on `step`, whose calibrated part also loads through `want` (S5-D79).
@@ -358,6 +370,7 @@ export interface ReadingBlock {
 5. **Off-path collapse.** When `reading` is set and the block is fresh (no answer yet), the effect reads `pathOf(deps.working['boot:path'])` (`paths.ts` `pathOf`, which falls back to `DEFAULT_PATH`). If the path is not `serving-first`:
    - the block starts in a new `offpath` stage: "Rust Zero covers this on your path. Practice anyway?", with a "Practice anyway" button that calls `more`;
    - nothing is written until the learner opens it;
+   - the header's status stays empty in `offpath`, as it does in `expert`, so the collapsed block is one line;
    - this check comes before the existing expert collapse.
 6. **Attribute.** `data-block` is `reading` for reading blocks and `item` otherwise, so the e2e selectors (`e2e/item-block.spec.ts:8`) stay unambiguous.
 
@@ -386,11 +399,13 @@ Protégé and isomorphism blocks key on their ordinal, not their index (`protege
 |---|---|---|---|---|---|
 | B1 | t5.l2 @3, right after `bpe.py` at 2 (none keyed) | Read it in Rust: the pair counter | `verdict.closures-collections`, `fix.enums-option-result`, `fix.closures-collections`, `verdict.enums-option-result` (2) | C verdict, E fix | "The pair counter above, in Rust: a `HashMap` keyed by the pair, where `entry(p).or_insert(0)` finds or adds a count and lends it for changing. A tokenizer's bytes can also stop mid-character, and Rust says so with a `Result`." |
 | B2 | t5.l5 @6, right after `block_manager.py` at 5 (diagram 3) | Read it in Rust: the block manager | `verdict.enums-option-result`, `fix.smart-pointers`, `verdict.iterators-ownership`, `fix.enums-option-result`, `verdict.smart-pointers`, `fix.iterators-ownership` (3) | E verdict, S fix, I verdict | "`alloc` above raises `OutOfBlocks`; a Rust manager returns an `Option` instead: `None` is an empty pool, and `?` hands it to the caller, which can preempt. `share` becomes a second handle to the block (`Arc::clone`), which bumps a count and copies no KV." |
-| B3 | t5.l6 @8, right after `prefix_router.rs` at 7 (diagram 4) | Read it in Rust: the router | `verdict.iterators-ownership`, `fix.closures-collections`, `verdict.enums-option-result`, `fix.iterators-ownership`, `verdict.closures-collections`, `fix.enums-option-result` (3) | I verdict, C fix, E verdict | "`choose_worker` is one iterator chain. `enumerate` and `filter` only describe the work; `max_by_key` runs it and answers with an `Option`, because the filter may leave no worker, and `unwrap_or_else` runs its fallback only on `None`. The closures borrow what they read (`guard`, `workers`)." |
-| B4 | t5.l7 @5, after the scheduler-loop prose at 4 (play 2, diagram 3) | Read it in Rust: admission | `verdict.enums-option-result`, `fix.enums-option-result` (2) | E verdict, E fix | "Step 2 admits a request only if free blocks cover it. In Rust that answer has a type: an allocator returns `Some(block)` or `None`, a full queue hands the request back inside `Some`, and every `match` must say what each case means before the code compiles." |
+| B3 | t5.l6 @8, right after `prefix_router.rs` at 7 (diagram 4) | Read it in Rust: the router | `verdict.iterators-ownership`, `fix.closures-collections`, `verdict.enums-option-result`, `fix.iterators-ownership`, `verdict.closures-collections`, `fix.enums-option-result` (3) | I verdict, C fix, E verdict | "`choose_worker`'s main chain is one expression. `enumerate` and `filter` only describe the work; `max_by_key` runs it and answers with an `Option`, since a chain may yield nothing, and `unwrap_or_else` runs its fallback only on `None`. The closures borrow what they read (`guard`, `workers`)." |
+| B4 | t5.l7 @5, after the scheduler-loop prose at 4 (play 2, diagram 3) | Read it in Rust: admission | `verdict.enums-option-result`, `fix.enums-option-result` (2) | E verdict, E fix | "The headroom dial above admits a request only when free blocks cover its prompt plus room to decode. In Rust that answer has a type: an allocator returns `Some(block)` or `None`, a full queue hands the request back inside `Some`, and every `match` must say what each case means before the code compiles." |
 | B5 | t5.l10 @7, after the comparison table at 6 (none keyed) | Read it in Rust: the data plane | `verdict.smart-pointers`, `fix.smart-pointers` (2) | S verdict, S fix | "The table lists Dynamo's core as Rust. A data plane hands shared state to worker threads, and its types say what may cross: an `Arc` handle may, an `Rc` may not, and `Arc::clone` copies a handle, never the data behind it." |
 | B6 | t6.l8 @4, after "The token mask is not a string mask" at 3 (item 2) | Read it in Rust: the mask walk | `verdict.iterators-ownership`, `fix.iterators-ownership` (2) | I verdict, I fix | "A mask walks the vocabulary and asks each grammar matcher about every token. How the walk borrows decides what it may do: `iter` lends each item for reading, `iter_mut` for changing, and a chain of adapters does nothing until something like `collect` runs it." |
 | B7 | t6.l9 @8, right after `unified_pager.rs` at 7 (item 4) | Read it in Rust: admit | `fix.enums-option-result`, `verdict.enums-option-result` (2) | E fix, E verdict | "`admit` returns `Result<Lease, Pressure>` and uses `?` twice. Each `?` hands a `Pressure` back at once; if the second fails, the adapter pinned on the line before is dropped on the way out, and whether its pages return depends on that drop, which the code does not show." |
+
+**A block draws from its KC's whole pool.** Its items are not limited to the code above it, so an early host can show a `Weak` or `Box` snippet before B2 teaches smart pointers (accepted, §11). The leads therefore describe the Rust idea at that point of the page. They never say the items below are "this code".
 
 **Checks the task makes:**
 - The index columns are the design's reading at `00d0c0a`. SR-06 re-reads each host and keeps the rule (after every keyed block, before the quiz). If a host changed, it records the actual index.
@@ -411,8 +426,8 @@ Protégé and isomorphism blocks key on their ordinal, not their index (`protege
 
 **/me:** reading answers are fresh `gen:` items with provenance `unseen`.
 - They count toward the R KC's competence line under the existing rule (Q7).
-- No card, VRK30 check or cold check comes from them.
-- On full ramp, an answer on an R KC that already has a card reviews that card, as every item block does (`cards.ts:375-379`).
+- For a serving-first learner, no card, VRK30 check or cold check comes from them.
+- On the other paths, an answer on an R KC that already has a card reviews that card, as every item block does (`cards.ts:375-379`; SR-D29, §6.1).
 
 ### 5.5 Copy (exact strings)
 
@@ -421,7 +436,7 @@ Protégé and isomorphism blocks key on their ordinal, not their index (`protege
 | `src/pages/boot/You.tsx:14` | "Two Track 0 lessons and the roofline (T4.L3), then batching, the KV cache and engines (T5 to T7). Rust Zero is not on this path; its lessons stay open in the Curriculum." | "Two Track 0 lessons and the roofline (T4.L3), then batching, the KV cache and engines (T5 to T7). Rust Zero is not on this path: Rust arrives as short reading items inside the T5 and T6 lessons that use it, and Rust Zero stays open in the Curriculum." |
 | `tests/learner/recommend.test.ts:502-507` | forbids "Rust arrives as short reading items" | moves it to `said` and keeps "Rust Zero is not on this path". Adds an assertion that `readingCoverage()` (exported by `tests/kc/reading-blocks.test.ts`) passes and that every host is a T5 or T6 lesson, so the blurb and the blocks cannot drift apart. |
 | `src/lib/learner/paths.ts:17-20` (header comment) | "… R is not on this path, and nothing serves its lessons as reading items either (PR 16 found none) …" | "`serving-first`: t0.l1, t0.l2, t4.l3, T5, T6, T7 (785 declared minutes). R lessons are not steps: Rust arrives as compile-bank reading items, `reading` blocks inside t5.l2, t5.l5, t5.l6, t5.l7, t5.l10, t6.l8 and t6.l9 (docs/specs/serving-reading.md). Labs are optional, so they are not steps. A registered play is a step after its host lesson (the scheduler play after t5.l7), on every path that has the host." |
-| `src/components/learner/PlacementWalk.tsx` (`ANCHOR_LINE`; `Result` already receives `path`) | path-blind | `anchorLine(rustAnchor, path)`. On serving-first: **solid** "Rust reading: solid. Serving first has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6."; **missed** "Rust reading: not yet. That is fine on Serving first: short reading items inside T5 and T6 cover the Rust those lessons use, and Rust Zero stays open in the Curriculum."; **skipped** "Rust reading: not asked. Serving first has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6." Other paths keep today's lines. |
+| `src/components/learner/PlacementWalk.tsx` (`ANCHOR_LINE`; `Result` already receives `path`) | path-blind | `anchorLine(rustAnchor, path)`. On serving-first: **solid** "Rust reading: solid. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6."; **missed** "Rust reading: not yet. That is fine on this path: short reading items inside T5 and T6 cover the Rust those lessons use, and Rust Zero stays open in the Curriculum."; **skipped** "Rust reading: not asked. This path has no Rust Zero lessons; its Rust comes as short reading items inside T5 and T6." Other paths keep today's lines. |
 | `src/lib/learner/placement.ts:86`, `src/lib/learner/recommend.ts:208-209`, `src/components/learner/PlacementWalk.tsx:10` (comments) | "R arrives as reading items only" | "R arrives as `reading` blocks inside T5 and T6 lessons, never as R lessons (serving-reading.md)" |
 
 No learner copy names a persona.
@@ -437,7 +452,7 @@ No learner copy names a persona.
 | Plan, steps, minutes, braid, test-outs | none: no `requires`, `Lesson.kcs` or `Kc.lessons` edit, so `needEdge` sees the same graph | none |
 | The 7 host lessons | one collapsed line each; nothing written unless opened | not on the path; the same collapsed line if opened from the Curriculum |
 | If opened | items like any item block: `src: 'lesson'`, staircase per (R KC, compile), competence evidence, and a card review if an R card exists | same |
-| Today, extra, cold checks, VRK30, tickets, spirals, walk, forms, Museum | none (I2–I4) | none |
+| Today, extra, cold checks, VRK30, tickets, spirals, walk, forms, Museum | no new draws (I2–I4). A reading answer on a KC that already has a card reviews it: its due day, the optimism offset and the recent-item window move, as with any item block. It counts as a VRK30 check when it falls 30 or more days after the card's creation (SR-D29). | same |
 | K3 ("nobody placed lands on R.L1") | none: items write no `lesson:` ref | none |
 
 ### 6.2 KCs
@@ -451,7 +466,7 @@ No learner copy names a persona.
 ### 6.3 Ledger
 
 - A reading block writes `item` events:
-  - the ref is `gen:compile/<verdict|fix>.<kc>`;
+  - the ref is `gen:compile/<verdict|fix>.<kc without the r. prefix>` (`compileVariantId`), for example `gen:compile/verdict.enums-option-result`;
   - the data is `{ src: 'lesson', lessonId, grp: '<lessonId>#<blockIndex>', kcs: ['r.…'], level, variant }` (`item-block.ts:320-329`).
 - Provenance is `unseen` on a fresh seed. There is no `predict` event.
 - There is no new `ItemSrc`, no new ref grammar and no schema bump (`SCHEMA_VERSION` stays 6).
@@ -462,7 +477,7 @@ No learner copy names a persona.
 |---|---|---|
 | H3 hint ladders (signed) and #20's hint and Daily secondary outputs | none | SR-D16, SR-D23; M0 |
 | The R form blueprint, and the parallelism of forms A/B/C | none | the `optionsOf` filter; I2 |
-| VRK30, cold checks, the Today mix, "Keep going" order | none | SR-D5; I4 |
+| VRK30, cold checks, the Today mix, "Keep going" order | no new draws; reading answers on carded R KCs count as reviews and checks, as every item block's do (SR-D29) | SR-D5; I4 |
 | Error Museum exhibits and practice draws | none | SR-D8; I3 |
 | The compile hash fixture | 15 rows identical, 8 new | SR-D6, SR-D12; I1 |
 | K3 | none | no `lesson:` refs |
@@ -497,13 +512,15 @@ Each row gives the base (measured at `00d0c0a`) and the expected figure after ([
 | determinism | — | `settle` reruns are deterministic; the draw counter moves outside them | `verify:determinism` |
 | a11y | — | `/lesson/t5.l5`, `/lesson/t6.l9` and `/boot` at 360, 320 and 1280 px | 0 serious, no sideways scroll, targets ≥ 44 px |
 
-**Tests whose pins move** (the first seven failed as expected on the prototype; 752 passed):
+**Tests whose pins move.** On a 21-file run of the prototype, 7 tests failed and 752 passed. The full suite on the prototype also fails `tests/learner/on-kc.test.ts:101-120` and `tests/learner/reentry.test.ts:187-218` (the latter through `tests/learner/ledger-gen.ts:74`) until SR-D27's filters land. SR-04 runs the whole suite, not a subset.
 - `tests/items/compile.test.ts:143-153`: the seed group covers every compile KC except `r.permissions` **and `READING_KCS`**.
 - `tests/items/compile.test.ts:155-161`: legacy groups serve verdict, permission and fix; **reading groups serve verdict and fix**.
 - `tests/kc/graph.test.ts:248-270` and `tests/kc/verify.test.ts:80-88`: the compile list gains the four KCs.
 - `tests/rust/museum.test.ts:153-154, 221-227, 230-231`: "codes the bank holds" becomes the Museum's units (non-reading). The 21 at `:145` holds.
 - `tests/fixtures/items/hashes/compile.json`: +8 rows.
 - `tests/learner/recommend.test.ts:502-507` (§5.5).
+- `tests/learner/on-kc.test.ts:109, :130`: `offered` gains `&& !v.blockOnly`, matching `makeInstance` and `makeGenPool`. Do not loosen the `today.ts` or `ticket.ts` filters to make it pass.
+- `tests/learner/ledger-gen.ts:74`: `makePool.families` applies `blockOnlyFor` (SR-D27). `reentry.test.ts` then passes unchanged.
 
 **Tests that must not move:**
 - `tests/learner/paths.test.ts:236-246` (785 minutes);
@@ -523,10 +540,13 @@ Each row gives the base (measured at `00d0c0a`) and the expected figure after ([
 3. Museum practice draws, against `tests/fixtures/items/museum-practice.json`.
    - The fixture holds `${variant}|${unit}|${rev}` for every `museum.json` code × 60 seeds, captured at the base.
    - The test also checks a sha256 literal of `museum.json`.
-4. For each `READING_KCS` KC, `buildPool(...).families(kc)` and `makeGenPool(...).families(kc)` are `[]`. At the base, where the KCs have no `gen`, this holds trivially. SR-04's merge makes it bite.
-5. H3: `selectHintArms` over a fixture ledger is the same with and without reading-block `item` events on `r.enums-option-result`.
-   - Those events fall inside the 25–45-day window after a `rust-allocator` all-green.
-   - The same holds for `selectHintSecondary` and `selectDailySecondary` (SR-D23).
+4. For each of the four reading KCs, `buildPool(...).families(kc)` and `makeGenPool(...).families(kc)` are `[]`. The test writes the four ids as a literal, because `READING_KCS` lands with SR-03, and SR-03 asserts that the literal equals `READING_KCS`. At the base, where the KCs have no `gen`, this holds trivially. SR-04's merge makes it bite.
+5. H3. The fixture ledger holds:
+   - a `rust-allocator` all-green `lab-check`;
+   - armed `hint:` or `packet:` acks on `rust-allocator/boot` and on one check whose KC already has a generator. SR-04 grows `rust-allocator/boot`'s covered set from ∅ to {r.enums-option-result} (`labs.ts:509`; `covered` comes from `Kc.gen` in `selectHintArms` and `hint-secondary.ts`);
+   - Today cold `probe`s in the 25–45-day window, one of which resolves to the legacy KC;
+   - reading-block `item` events on `r.enums-option-result` in the same window.
+   `selectHintArms`, `selectHintSecondary` and `selectDailySecondary` over this ledger equal literals captured at the base, with at least one arm non-empty. They also equal their own output with the reading events removed (SR-D23).
 
 ### M1. The items are where the promise says (CI and e2e)
 
@@ -548,9 +568,10 @@ Each row gives the base (measured at `00d0c0a`) and the expected figure after ([
 3. **`tests/learner/item-block-cold.test.ts`** checks:
    - with `forgetGroups()` (`groups.ts:122`), `planItem` alone returns null, and under `settle` it equals the warm plan;
    - a DOM test: a full-ramp working record yields the `offpath` stage and writes nothing;
-   - a DOM test: a reading block rendered twice loads its family once (SR-D22).
-4. **`e2e/reading-block.spec.ts`**, at 360 px:
+   - a DOM test: the parent `RenderBlock` re-renders with the same `ReadingBlock` object after an answer is written. The `ItemBlock` load effect runs once (spy on `loadFamily`, or count `loading` stages), and the stage never returns to `loading` (SR-D22).
+4. **`e2e/reading-block.spec.ts`**, at 360 and 320 px:
    - with a stored serving-first path and a cold cache, `/lesson/t5.l5` shows a Rust item, never "no question";
+   - with a verdict item and then a fix item on screen, there is no sideways scroll and axe reports nothing serious;
    - the learner answers a verdict and a fix by keyboard, and the verdict is announced in `aria-live`;
    - there is no sideways scroll, and axe reports nothing serious;
    - with a stored full-ramp path, the learner sees the collapsed line, and no `gen:compile/` event is written until "Practice anyway".
@@ -558,7 +579,11 @@ Each row gives the base (measured at `00d0c0a`) and the expected figure after ([
 
 ### M2. Field: can serving-first learners read the Rust?
 
-M2 is pre-registered in `docs/prereg/serving-reading.md`. The document says "adopted by the build on 2026-10-19, unsigned", and the owner signs it before the release that ships SR-06 (Q11).
+M2 is pre-registered in `docs/prereg/serving-reading.md`, in the draft form of `docs/prereg/protege.md` (SR-D28).
+- Its Status line reads "DRAFT for the owner to sign … The drafter has not signed or dated it".
+- It has sections 1–7: Question, Design, Outcome, Decision rule, Data and limits, Choices this draft makes for the owner, and Sign-off.
+- Section 7 holds both signature forms: `Signed: (pending owner)`, and the Owner / Date signed / Amendments table (`protege.md:79-87`).
+- The owner signs it before the release that ships SR-06 (Q11). Until `isPreregSigned` finds a signature, the report prints "NOT READ: docs/prereg/serving-reading.md is not signed" for this section, in text and in `--json`.
 
 **The decision instrument is a think-aloud read.** It is realistic for OD10's n: PLAN-100X.md:826 says "≥8 [partners], including … ≥2 ML engineers".
 - **Who and when:** at least 2 ML-engineer partners on serving-first, after t6.l9.
@@ -572,25 +597,32 @@ M2 is pre-registered in `docs/prereg/serving-reading.md`. The document says "ado
   5. What does `Arc::clone` cost here? (S)
   6. Why `Arc` and not `Rc` for this handle? (S)
 - **Go:** each partner scores at least 4/6.
-- **Revise:** both partners score 2/6 or less. Rewrite the pools and leads first; removal is the owner's call.
+- **Revise:** more than half of the partners score 2/6 or less (with 2 partners, both). Rewrite the pools and leads first; removal is the owner's call.
 - **Otherwise:** report.
 
-**Ledger descriptives.** Their thresholds are pre-registered too. They inform the decision and never kill anything automatically. The selector `selectServingReading(ledgers)` lives in `src/lib/learner/outcomes.ts`, and `scripts/partner-report.ts` prints it.
-- **Population:**
-  - Full exports whose `boot:path` is `serving-first`. `PartnerLedger` gains `path?`, read from the working record next to `plan` and `placement`.
-  - **Donations**, through the off-R proxy: at least one ok `quiz` on a host `lesson:` ref, and no event whose ref starts with `lesson:r.`. Donations keep `ref`, `ok`, `provenance`, `ms`, `dayOffset`, data `src`, `kcs` and `variant`, and a first-appearance `grp` (`src/lib/learner/redact.ts`).
-  - The two populations are reported separately and pooled.
-- **Reading answers** are `item` events whose ref is one of the 8 reading variants and whose `data.src` is `'lesson'`. No other surface can produce them.
+**Ledger descriptives.** Their thresholds are pre-registered too. They inform the decision and never kill anything automatically.
+- **Where the code lives:**
+  - The selector `selectServingReading(ledgers)` lives in `src/lib/learner/outcomes.ts`, and `scripts/partner-report.ts` prints it.
+  - `outcomes.ts` holds its own literals `SERVING_READING_KCS` (the four ids) and `SERVING_READING_HOSTS` (the seven lesson ids). It imports nothing from SR-03's files. `tests/kc/reading-blocks.test.ts` (SR-06) asserts they equal `READING_KCS` and the mounted hosts.
+- **Eligible learners.** One definition covers both inputs: at least one ok `quiz` whose ref is a host `lesson:` ref (`lesson:t5.l2`, `lesson:t5.l5`, `lesson:t5.l6`, `lesson:t5.l7`, `lesson:t5.l10`, `lesson:t6.l8`, `lesson:t6.l9`), plus one more condition per input.
+  - **Full exports** also need `boot:path` = `serving-first`.
+    - `PartnerLedger` gains `path?: LearningPath`.
+    - `KEPT_WORKING` gains `'boot:path'`, which holds a path id and never free text, and the doc comments of `KEPT_WORKING` and `stripFreeText` say so.
+    - `partner-report.ts` sets `path: pathOf(record('boot:path'))` next to `plan` and `placement`.
+  - **Donations** keep no working path, so they use the off-R proxy instead: no event whose ref starts with `lesson:r.`. Donations keep `ref`, `ok`, `provenance`, `ms` (rounded to seconds), `dayOffset`, data `src`, `kcs` and `variant`, and a first-appearance `grp` (`src/lib/learner/redact.ts`).
+  - The two inputs are reported separately and pooled under this one definition.
+  - Serving-first full exports with no ok host quiz are counted and printed as "not yet at a host", and are left out of every figure.
+- **Reading answers** are `item` events whose ref is one of the 8 reading refs (built with `compileVariantId`, §6.3) and whose `data.src` is `'lesson'`. No other surface can produce them.
 - **Figures:**
 
   | Figure | Definition | Threshold |
   |---|---|---|
-  | Reach | share of the population with at least 1 reading answer | ≥ 0.80 |
-  | Completion | share of reading `grp`s with at least 2 correct | ≥ 0.60 |
-  | Difficulty band | first-answer accuracy per KC × kind on `unseen` answers, with a Wilson 95 % interval | 0.35–0.85; outside it, rewrite the pool |
-  | Later vs first | per learner and per KC with 2 or more `grp`s: first-answer accuracy in the KC's last `grp` minus its first (`grp` order is time order) | "not enough data" below 8 learners |
+  | Reach | share of eligible learners with at least 1 reading answer | ≥ 0.80 |
+  | Completion | share of reading `grp`s (a `grp` with at least one reading answer) that hold at least the block's `count` correct answers of provenance `unseen`. A full export reads `count` from the host block named by the answer's `data.lessonId`. A donation keeps no `lessonId`, so its `grp`s use 2, the smallest count; that figure is labelled "≥ 2 correct" and reported beside the full-export one. | ≥ 0.60 |
+  | Difficulty band | per variant (KC × kind, read from the ref): each learner's first `unseen` answer on it, as k/n with `wilson(k, n)` | a pool is flagged for a rewrite when the point estimate is outside 0.35–0.85 and n ≥ 20 |
+  | Later vs first | `grp`s are ordered by their first event in ledger order (`at`, then `id`), never by the `grp` string. For each learner and KC with 2 or more `grp`s, d = ok of the first answer on that KC in the last `grp` − ok of the first answer on that KC in the first `grp`. Report the mean of d over learners (each learner's KCs averaged first). | "not enough data" below 8 learners |
   | Time | median `ms` per answer | verdict ≤ 60 s, fix ≤ 90 s |
-  | Clone lure | `r.clone-to-silence` rate | reported |
+  | Clone lure | `r.clone-to-silence` rate among fix answers, **full exports only** (a donation keeps `miss` only for `confuse.` ids, so donations are left out, and the report says so) | reported |
 
 - **If underpowered, the default is to keep.** The items are content only and fulfil a plan promise.
 - **Proposed PLAN §9 keep/kill row** (the owner adds it; agents never edit PLAN): "Serving-first reading items: think-aloud ≥ 4/6 per ML-engineer partner. Default if underpowered: keep."
@@ -610,7 +642,7 @@ M2 is pre-registered in `docs/prereg/serving-reading.md`. The document says "ado
 | B5 | the copy of §5.5, tied to the blocks by a test | SR-07 |
 | B6 | entry +0 B raw; `/boot` and `/today` within 200 KB; the bundle report matches §7 within 0.5 KB per figure | SR-03 to SR-07 |
 | B7 | a11y clean on `/lesson/t5.l5`, `/lesson/t6.l9` and `/boot` at 360, 320 and 1280 px | SR-06, SR-07 |
-| B8 | the prereg file present and unsigned; the selector's fixture figures exact | SR-08 |
+| B8 | the prereg file present, and `isPreregSigned` false on it; the report prints NOT READ; the selector's fixture figures exact when it is called directly | SR-08 |
 
 ### 9.2 Field and owner steps (never build acceptance)
 
@@ -631,13 +663,13 @@ M2 is pre-registered in `docs/prereg/serving-reading.md`. The document says "ado
 | ID | Title | Model | Hours | Depends | Files (all, tests included) | Acceptance |
 |---|---|---|---|---|---|---|
 | SR-01 | Spec | Opus (orchestrator) | 3 | — | `docs/specs/serving-reading.md` | This file. |
-| SR-02 | Invariance fixtures at the base | Sonnet | 3 | SR-01 | `tests/items/reading-invariance.test.ts`, `tests/fixtures/forms/blueprints.json`, `tests/fixtures/items/museum-practice.json` (all new) | Green at the base. Flipping any fixture value fails it (shown in a scratch copy). Nothing in `src/` is touched. Covers M0 items 1–5, including SR-D23. |
-| SR-03 | Family, constants, block-only, legend, Museum filter (no KC links yet) | Sonnet | 6 | SR-02 | `src/data/rust-items/constants.ts`, `src/lib/items/types.ts`, `src/lib/items/core.ts`, `src/lib/learner/today.ts`, `src/lib/learner/ticket.ts`, `src/lib/learner/forms.ts`, `src/lib/items/families/compile.ts`, `src/lib/rust/museum.ts`, `src/components/rust/ErrorEntry.tsx`, `tests/items/block-only.test.ts` (new) | The reference is `sr/rustc-final/proto-code.diff`, minus its `COMPILE_KCS` and `r.ts` hunks, which belong to SR-04. No behaviour moves. A synthetic block-only variant is skipped by Today, `composeExtra`, tickets, the walk, forms and `resolveVariant`, and served by `planItem`. The distractor filter and legend are scoped exactly as §3.2 says. SR-02 green. `compile.json` unchanged. Entry +0 B. |
-| SR-04 | The four reading groups and their KC links | **Opus** | 6 | SR-03 | `src/data/kc/r.ts` (the four KCs' `gen`), `src/lib/items/families/compile.ts` (`COMPILE_KCS` only); `src/data/rust-items/snippets/reading-{enums,iter,closures,pointers}.ts` (verbatim, SR-D24); regenerated `bank/reading-*.json`, `served/reading-*.ts`, `manifest.json` (`museum.json` unchanged); `src/lib/items/on-demand.ts` (the `MAX_RUNS` comment only, SR-D21); `tests/fixtures/items/hashes/compile.json` (+8); `tests/items/compile.test.ts`; `tests/kc/graph.test.ts`; `tests/kc/verify.test.ts`; `tests/rust/museum.test.ts`; `tests/rust/reading-groups.test.ts` (new) | `build-rust-items --check` ok. `verify-rust-items` at 0 problems, 198/802. `verify-generators --family compile` at 0 problems, with 15 legacy rows identical and 8 new ones. Pools and quotas as in §3.5. `museum.json` byte-identical. SR-02 green, now biting on item 4. The implementer reads every why for rule 3 and every fix for rule 4, and lists in notes anything they changed (with re-run gates) or would flag. |
+| SR-02 | Invariance fixtures at the base | Sonnet | 3 | SR-01 | `tests/items/reading-invariance.test.ts`, `tests/fixtures/forms/blueprints.json`, `tests/fixtures/items/museum-practice.json` (all new) | Green at the base. Flipping any fixture value fails it (shown in a scratch copy). Nothing in `src/` is touched. Covers M0 items 1–5, including SR-D23. The four reading KCs are a literal (M0 item 4). The H3 fixture follows item 5 exactly, and its literals are captured at the base. |
+| SR-03 | Family, constants, block-only, legend, Museum filter (no KC links yet) | Sonnet | 6 | SR-02 | `src/data/rust-items/constants.ts`, `src/lib/items/types.ts`, `src/lib/items/core.ts`, `src/lib/learner/today.ts`, `src/lib/learner/ticket.ts`, `src/lib/learner/forms.ts`, `src/lib/items/families/compile.ts`, `src/lib/rust/museum.ts`, `src/components/rust/ErrorEntry.tsx`, `scripts/verify-kc.ts` (`genCovers` only, SR-D27), `tests/items/block-only.test.ts` (new), `tests/items/reading-invariance.test.ts` (one assertion: its literal equals `READING_KCS`) | The reference is `sr/rustc-final/proto-code.diff`, minus its `COMPILE_KCS` and `r.ts` hunks, which belong to SR-04. No behaviour moves. A synthetic block-only variant is skipped by Today, `composeExtra`, tickets, the walk, forms and `resolveVariant`, and served by `planItem`. The distractor filter and legend are scoped exactly as §3.2 says. `genCovers` ignores block-only variants, with a case in `block-only.test.ts`. SR-02 green. `compile.json` unchanged. Entry +0 B. |
+| SR-04 | The four reading groups and their KC links | **Opus** | 6 | SR-03 | `src/data/kc/r.ts` (the four KCs' `gen`), `src/lib/items/families/compile.ts` (`COMPILE_KCS` only); `src/data/rust-items/snippets/reading-{enums,iter,closures,pointers}.ts` (verbatim, SR-D24); regenerated `bank/reading-*.json`, `served/reading-*.ts`, `manifest.json` (`museum.json` unchanged); `src/lib/items/on-demand.ts` (the `MAX_RUNS` comment only, SR-D21); `tests/fixtures/items/hashes/compile.json` (+8); `tests/items/compile.test.ts`; `tests/kc/graph.test.ts`; `tests/kc/verify.test.ts`; `tests/rust/museum.test.ts`; `tests/learner/on-kc.test.ts` and `tests/learner/ledger-gen.ts` (SR-D27); `tests/rust/reading-groups.test.ts` (new) | `build-rust-items --check` ok. `verify-rust-items` at 0 problems, 198/802. `verify-generators --family compile` at 0 problems, with 15 legacy rows identical and 8 new ones. Pools and quotas as in §3.5. `museum.json` byte-identical. SR-02 green, now biting on item 4. It makes SR-D25's and SR-D26's edits. It sweeps every reading variant and fix through rustc 1.96.0 (`--error-format=json`) and reports each one's distinct codes, re-editing any that break rule 9. It reads every why for rule 3 and every fix for rule 4. Its notes list each content edit, with the re-run gates, and anything it would flag. `bun run test` over all of `./tests` is green. |
 | SR-05 | The `reading` block type, the renderer and `ItemBlock` | Sonnet | 6 | SR-01 | `src/data/lessons/types.ts`, `src/pages/lesson/blocks.tsx`, `src/components/blocks/ItemBlock.tsx`, `scripts/export-lessons-md.ts`, `tests/learner/item-block-cold.test.ts` (new) | A cold `planItem` is null, and under `settle` it equals the warm plan (legacy variants suffice). `broken` shows "Try again". A stale `more` never overwrites a newer stage. The compile copy shows only for `family === 'compile'`. The `offpath` DOM test writes nothing. The two-render test loads once (SR-D22). No lesson content changes, and `lessons-md` is unchanged. Entry +0 B. `e2e/item-block.spec.ts` passes in a built tree. |
-| SR-06 | Mount B1–B7; coverage and e2e | Sonnet | 5 | SR-04, SR-05 | `src/data/lessons/t5/{tokenization,pagedattention-deep-dive,prefix-caching,continuous-batching,production-stack}.ts`, `src/data/lessons/t6/{agents-structured,multi-lora-serving}.ts` (the files that hold those lessons, whatever their names), `tests/kc/reading-blocks.test.ts` (new), `e2e/reading-block.spec.ts` (new), regenerated `public/lessons-md/{t5.l2,t5.l5,t5.l6,t5.l7,t5.l10,t6.l8,t6.l9}.md` | M1 items 1–4 green; e2e 3 runs in a built tree. Keyed indices unchanged. `paths.test.ts`'s 785 and the K3 tests untouched and green. `npm run a11y` on `/lesson/t5.l5` and `/lesson/t6.l9` at 360, 320 and 1280 px is clean. The search index is byte-identical. Export freshness clean. Every lead checked against its host page (§5.3). |
+| SR-06 | Mount B1–B7; coverage and e2e | Sonnet | 5 | SR-04, SR-05 | `src/data/lessons/t5/{tokenization,pagedattention-deep-dive,prefix-caching,continuous-batching,production-stack}.ts`, `src/data/lessons/t6/{agents-structured,multi-lora-serving}.ts` (the files that hold those lessons, whatever their names), `tests/kc/reading-blocks.test.ts` (new), `e2e/reading-block.spec.ts` (new), regenerated `public/lessons-md/{t5.l2,t5.l5,t5.l6,t5.l7,t5.l10,t6.l8,t6.l9}.md` | M1 items 1–4 green; e2e 3 runs in a built tree. Keyed indices unchanged. `paths.test.ts`'s 785 and the K3 tests untouched and green. `npm run a11y` on `/lesson/t5.l5` and `/lesson/t6.l9` at 360, 320 and 1280 px is clean. The search index is byte-identical. Export freshness clean. Every lead checked against its host page (§5.3). `reading-blocks.test.ts` asserts that `SERVING_READING_HOSTS` equals the hosts of the mounted `reading` blocks and that `SERVING_READING_KCS` equals `READING_KCS`. `npm run a11y` with no stored path audits the collapsed state; the open item is audited by `reading-block.spec.ts` at 360 and 320 px. |
 | SR-07 | Copy that tells the truth | Sonnet | 3 | SR-06 | `src/pages/boot/You.tsx`, `src/lib/learner/paths.ts` (header comment only), `src/components/learner/PlacementWalk.tsx`, `src/lib/learner/placement.ts` (comment), `src/lib/learner/recommend.ts` (comment), `tests/learner/recommend.test.ts`, `tests/learner/anchor-line.test.ts` (new) | The strings of §5.5. The blurb assertion runs `readingCoverage()`. The serving-first anchor lines never promise R lessons or test-outs, and other paths keep theirs. `e2e/boot.spec.ts` green. `/boot` within 200 KB. |
-| SR-08 | Measurement: the prereg and the selector | **Opus** | 5 | SR-01 | `docs/prereg/serving-reading.md` (new), `src/lib/learner/outcomes.ts` (`PartnerLedger.path?`, `selectServingReading`), `scripts/partner-report.ts`, `tests/learner/serving-reading.test.ts` (new) | The prereg holds §8 M2 and says "adopted by the build on 2026-10-19, unsigned". Fixture ledgers (one full export, one donation, one R learner) give known reach, completion, band and time figures. "Not enough data" below 8 learners. Donations are counted through the proxy. The report heads the section with the prereg's status ("unsigned" until the owner signs). |
+| SR-08 | Measurement: the prereg and the selector | **Opus** | 5 | SR-01 | `docs/prereg/serving-reading.md` (new), `src/lib/learner/outcomes.ts` (`KEPT_WORKING` += `'boot:path'`, `PartnerLedger.path?`, `SERVING_READING_KCS`, `SERVING_READING_HOSTS`, `selectServingReading`), `scripts/partner-report.ts`, `tests/learner/serving-reading.test.ts` (new) | The prereg holds §8 M2 in the draft form of SR-D28. The test checks that the committed file reads as unsigned, and that either signature form reads as signed. `partner-report.ts` adds `servingReading: isPreregSigned(repoText('docs/prereg/serving-reading.md'))` next to `hintLadders` and `fleetDaily`, and calls `selectServingReading` only when that is true. Otherwise it prints "NOT READ: docs/prereg/serving-reading.md is not signed", in text and in `--json`. Fixture ledgers give known reach, completion, band and time figures when the selector is called directly: one full export that goes through `stripFreeText` (not hand-built), one donation, one R learner, and one serving-first learner with no host quiz ("not yet at a host"). `boot:value` is still removed. "Not enough data" below 8 learners. It imports nothing from SR-03's files. |
 | SR-09 | Final review | Opus | 2 | SR-07, SR-08 | none (review only) | Full suite and every `verify:*` green at the tip. The bundle report matches §7. A walk of the path at 360 px meets all seven blocks. |
 
 **Levels** (no two tasks in a level share a file):
@@ -668,4 +700,5 @@ Never cut the `settle` fix in SR-05. Without it every reading block is broken on
 | Learners skip the optional blocks | medium / reach | M2 reach ≥ 0.80; the blocks sit at the point of use; nothing locks |
 | The enums competence line overclaims "model absence … and match on both" | low / an overclaim | Q7; fix items do test the choosing; the owner may exclude reading answers from competence (one filter) |
 | An insertion shifts a keyed block's index | certain if misplaced | the frozen index map in M1 |
+| An early host draws a `Weak`, `Box` or iterator snippet before the block that teaches it (B1's E pools include `parent-upgrade`, `box-next-block` and `router-choose`) | certain, low impact | accepted: each item's why explains its own code, and the leads frame the idea rather than promise "this code" (§5.3) |
 | rustc pin drift | low | the pin is unchanged; `--check` runs in CI |
