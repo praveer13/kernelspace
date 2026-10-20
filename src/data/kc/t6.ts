@@ -117,6 +117,8 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'procedure',
     lessons: ['t6.l4'],
     requires: ['t5.parallelism-axes', 't6.all-to-all'],
+    // `step` (s5 §7.3): the TP speedup of a decode step, with the engine's numbers
+    gen: ['step'],
     since,
   },
   {
@@ -139,7 +141,8 @@ export const T6_KCS: readonly Kc[] = [
     kind: 'procedure',
     lessons: ['t6.l5'],
     requires: [KC.quantizedBytes],
-    gen: ['memory'],
+    // `step` (s5 §7.4): the weight GB at BF16, FP8 and NVFP4
+    gen: ['memory', 'step'],
     since,
   },
   // t6.l5's "re-derive the roofline for a B200" is t4.decode-bandwidth on a second chip, so the lesson revisits

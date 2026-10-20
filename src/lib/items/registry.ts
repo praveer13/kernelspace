@@ -10,6 +10,9 @@
  * so scripts and tests list the directory with `readdir` and `import()` the files, as
  * verify-errata does. The Bun path is only reached when the glob is absent, and its Node imports
  * are written so the browser build neither bundles nor warns about them.
+ *
+ * A family's on-demand parts (`families/lazy/<name>.ts`) are not families, and their loader is `on-demand.ts`'s, not
+ * this module's (docs/specs/s5.md S5-D79).
  */
 
 import type { Gen } from './types'

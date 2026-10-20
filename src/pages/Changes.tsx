@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 
 // The registry table pulls in the whole claims dataset; load it only when the tab opens.
 const ClaimsTable = lazy(() => import('@/components/ClaimsTable'))
+// The physics tab (docs/specs/s5.md §5.8) loads its report, decision tables and controls with its own chunk.
+const PhysicsTab = lazy(() => import('@/pages/changes/PhysicsTab'))
 
 /**
  * Changes surface (PLAN-100X §5.2 S1, §7.3): `/freshness`. The active tab lives in `?tab=`
@@ -17,6 +19,7 @@ const TABS = [
   { id: 'errata', label: 'Errata' },
   { id: 'field-notes', label: 'Field Notes' },
   { id: 'claims', label: 'Claims' },
+  { id: 'physics', label: 'Physics' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -42,13 +45,13 @@ export default function Changes() {
   return (
     <div className="mx-auto max-w-app px-6 pb-24 pt-16 lg:px-12">
       <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">
-        changes · errata, field notes and claims
+        changes · errata, field notes, claims and physics
       </p>
       <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight text-text-1 sm:text-5xl">
         What changed, and which lesson it changes
       </h1>
 
-      <div role="tablist" aria-label="Changes" className="mt-8 flex gap-6 border-b border-line">
+      <div role="tablist" aria-label="Changes" className="mt-8 flex flex-wrap gap-x-3 border-b border-line min-[360px]:gap-x-4 sm:gap-x-6">
         {TABS.map((tab, index) => (
           <button
             key={tab.id}
@@ -61,7 +64,7 @@ export default function Changes() {
             onClick={() => select(tab.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              '-mb-px border-b-2 py-3 font-mono text-body-sm transition-colors duration-150',
+              '-mb-px min-h-11 min-w-11 whitespace-nowrap border-b-2 py-3 font-mono text-[12px] transition-colors duration-150 min-[360px]:text-body-sm',
               active === tab.id
                 ? 'border-accent text-text-1'
                 : 'border-transparent text-text-3 hover:text-text-1',
@@ -84,6 +87,13 @@ export default function Changes() {
           <ErrorBoundary label="the claims table">
             <Suspense fallback={<RouteFallback label="loading claims" />}>
               <ClaimsTable />
+            </Suspense>
+          </ErrorBoundary>
+        )}
+        {active === 'physics' && (
+          <ErrorBoundary label="the physics tab">
+            <Suspense fallback={<RouteFallback label="loading the physics tab" />}>
+              <PhysicsTab />
             </Suspense>
           </ErrorBoundary>
         )}

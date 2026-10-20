@@ -30,7 +30,7 @@
       },
       "verifiedAt": "2026-10-04",
       "ttlDays": 365,
-      "boundary": "Peak datasheet figure; real kernels reach roughly 80-90% of it."
+      "boundary": "Peak datasheet figure; how much an engine reaches: physics tab."
     },
     {
       "id": "hw.h100-sxm.bf16-sparse",

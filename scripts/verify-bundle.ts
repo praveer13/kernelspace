@@ -13,6 +13,10 @@
  * chunks, the search index and the FSRS + cards + composer figure are reported. A route whose page file does not exist yet is skipped.
  * Wave 3 stretch (docs/specs/wave-3.md §16.1, §17.1) reports the three + R3F chunk against 240 KB and fails the cube's 3D
  * scene chunk above 40 KB (3s-01); which pages may reach three at all is tests/boot/imports.test.ts's job.
+ * S5 (docs/specs/s5.md §8.1, S5-15) holds the entry at wave 3's 115.7 KB (S5-D50: +0 B, compared at 0.1 KB precision, and in raw bytes
+ * beside it) and prints the v2 lines: the FleetExercise chunk, fleet.worker, the physics tab with the data and claim groups it
+ * loads, the claims tab with public/claims.json (S5-D71), and, with the generator families, the step family, which FAILS above its
+ * 4 KB (B10), and its calibrated part with the claim groups that part loads.
  * Wave 2 (§22.1) reports the compile bank: each group's chunk and "compile bank data (all groups)" against its
  * 30 KB figure. One check here does fail: no chunk may hold a compile bank file's data (a snippet's source hash or
  * the rustc version line from src/data/rust-items/bank/*.json). Those stay with the scripts and tests; the app
@@ -36,6 +40,17 @@ const LEARNER_REPORT_KB = 6
 /** The compile bank's groups together (spec §22.1): reported, not gated. */
 const BANK_REPORT_KB = 30
 const KB = 1000
+/**
+ * S5 (s5.md §8.1, S5-D50): the entry at the end of Wave 3 (wave-3.md D72, measured at d31a770, the tree of 9aa27de), in gzip KB at
+ * the gate's 0.1 KB precision and in raw bytes. Its gzip moves by tens of bytes when other chunks are renamed, so the gate is the
+ * rounded figure, and the raw count (which does not move with a hash) is printed beside it.
+ */
+const S5_ENTRY_KB = 115.7
+const S5_ENTRY_RAW_BYTES = 349_812
+/** s5.md §8.1's figures for the chunks S5 may grow, with the room it gave each (reported, not gated). */
+const S5_FLEET_EXERCISE_KB = { base: 24.5, room: 3 }
+const S5_FLEET_WORKER_KB = { base: 44.2, room: 12 }
+const S5_PHYSICS_TAB_KB = 10
 /** Stretch 1a (spec §16.1): three + R3F is reported against this (ParticleField's lazy chunk was 242.4 KB); the cube's own scene code is gated. */
 const THREE_REPORT_KB = 240
 const SCENE_GATE_KB = 40
@@ -134,6 +149,21 @@ if (entryKb > BUDGET_KB) {
   console.log(`ok   entry chunk ${entry} is ${entryKb.toFixed(1)} KB gzip (budget ${BUDGET_KB} KB)`)
 }
 console.log(`${entryKb <= ENTRY_TARGET_KB ? 'ok  ' : 'warn'} entry chunk target ${ENTRY_TARGET_KB} KB (not gated): ${entryKb.toFixed(1)} KB`)
+
+// S5-D50: the entry adds 0 B. The gate is the rounded figure; the raw count is printed beside it, since it moves only when the code does.
+{
+  const raw = (await readFile(new URL(`assets/${entry}`, dist))).length
+  const rounded = Number(entryKb.toFixed(1))
+  const rawDelta = raw - S5_ENTRY_RAW_BYTES
+  const rawNote = `${raw.toLocaleString('en-US')} raw bytes against ${S5_ENTRY_RAW_BYTES.toLocaleString('en-US')} (${rawDelta >= 0 ? '+' : ''}${rawDelta} B)`
+  if (rounded > S5_ENTRY_KB) {
+    console.error(`FAIL entry chunk ${entry} is ${rounded.toFixed(1)} KB gzip, over S5's ${S5_ENTRY_KB} KB (S5-D50: +0 B; ${rawNote})`)
+    failed = true
+  } else {
+    console.log(`ok   entry chunk is ${rounded.toFixed(1)} KB gzip against S5's ${S5_ENTRY_KB} KB at 0.1 KB precision (S5-D50: +0 B); ${rawNote}`)
+    if (rawDelta !== 0) console.log(`warn entry chunk raw size differs from the Wave 3 count by ${rawDelta} B (its gzip still rounds to ${S5_ENTRY_KB} KB; wave-3.md D72 allows no growth)`)
+  }
+}
 
 interface ManifestChunk {
   file: string
@@ -311,11 +341,124 @@ if (!existsSync(new URL(`../${SCENE_SRC}`, import.meta.url))) {
 const chunksFor = (match: (key: string, chunk: ManifestChunk) => boolean) =>
   Object.entries(manifest).filter(([key, chunk]) => match(key, chunk))
 
-const families = chunksFor((key) => key.startsWith('src/lib/items/families/'))
+// A family that imports lazy claim groups statically (rollout's serving3) loads them with it, so its line names each group's
+// chunk and gzip; so does a family part's line (step's calibrated part: physics, ix-points and tiling, s5.md §8.1). A group's chunk is its own manifest entry when something
+// imports it dynamically; otherwise Rollup merged it into a shared chunk named after it (the tiling family's code may share
+// the name), and it is the one of those holding at least half of its ids, the most of them.
+const LAZY_GROUPS = new URL('../src/data/claims/lazy/', import.meta.url)
+const groupOf = new Map<string, string>()
+for (const f of readdirSync(LAZY_GROUPS).filter((x) => x.endsWith('.ts')).sort()) {
+  const name = f.replace(/\.ts$/, '')
+  let file = manifest[`src/data/claims/lazy/${f}`]?.file
+  if (!file) {
+    const mod = (await import(new URL(f, LAZY_GROUPS).href)) as Record<string, unknown>
+    const ids = ((Object.entries(mod).find(([k]) => k.endsWith('_CLAIMS'))?.[1] ?? []) as { id: string }[]).map((c) => c.id)
+    let most = ids.length / 2
+    for (const [, c] of chunksFor((key, c) => key.startsWith('_') && c.name === name)) {
+      const text = await readFile(new URL(c.file, dist), 'utf8')
+      const held = ids.filter((id) => text.includes(id)).length
+      if (held >= most) [most, file] = [held, c.file]
+    }
+  }
+  if (file) groupOf.set(file, name)
+}
+async function staticGroups(chunk: ManifestChunk): Promise<string[]> {
+  const out: string[] = []
+  for (const file of (chunk.imports ?? []).map((k) => manifest[k]?.file)) {
+    const name = file && groupOf.get(file)
+    if (name) out.push(`${name} ${((await gzipSize(file)) / KB).toFixed(1)} KB`)
+  }
+  return out
+}
+/** A family whose spec gates its chunk (s5.md §8.1 and B10: `step` ≤ 4 KB gzip): it FAILS above the figure. */
+const FAMILY_GATE_KB: Record<string, number> = { 'step.ts': 4 }
+const PART_PREFIX = 'src/lib/items/families/lazy/'
+
+// A family part (families/lazy/<name>.ts, which on-demand.ts's `familyPart` loads when a variant that reads it is drawn) is no
+// family: it is not in /today's family fetch, so it is printed on its own line with the claim groups it brings.
+const families = chunksFor((key) => key.startsWith('src/lib/items/families/') && !key.startsWith(PART_PREFIX))
 if (families.length === 0) console.log('skip generator families: no src/lib/items/families/* chunks yet')
 for (const [key, chunk] of families) {
   const kb = (await gzipSize(chunk.file)) / KB
-  console.log(`${kb <= FAMILY_REPORT_KB ? 'ok  ' : 'warn'} family ${key.split('/').pop()} is ${kb.toFixed(1)} KB gzip (report ${FAMILY_REPORT_KB} KB, not gated)`)
+  const name = key.split('/').pop()!
+  const gate = FAMILY_GATE_KB[name]
+  const groups = await staticGroups(chunk)
+  const beside = groups.length > 0 ? `; static claim groups ${groups.join(', ')} gzip` : ''
+  if (gate === undefined) console.log(`${kb <= FAMILY_REPORT_KB ? 'ok  ' : 'warn'} family ${name} is ${kb.toFixed(1)} KB gzip (report ${FAMILY_REPORT_KB} KB, not gated)${beside}`)
+  else if (kb > gate) {
+    console.error(`FAIL family ${name} is ${kb.toFixed(1)} KB gzip, over its ${gate} KB budget (s5.md §8.1, B10)${beside}`)
+    failed = true
+  } else console.log(`ok   family ${name} is ${kb.toFixed(1)} KB gzip (budget ${gate} KB)${beside}`)
+}
+// A gated family Rollup merged into another chunk has no manifest entry of its own, and the loop above would print nothing for
+// it and pass (S5-D78): its budget cannot be measured, so it FAILS.
+for (const name of Object.keys(FAMILY_GATE_KB)) {
+  const key = `src/lib/items/families/${name}`
+  if (!existsSync(new URL(`../${key}`, import.meta.url)) || families.some(([k]) => k === key)) continue
+  console.error(`FAIL family ${name} has no chunk of its own in the manifest, so its ${FAMILY_GATE_KB[name]} KB budget cannot be measured (s5.md §8.1, B10, S5-D78)`)
+  failed = true
+}
+for (const [key, chunk] of chunksFor((key) => key.startsWith(PART_PREFIX))) {
+  const kb = (await gzipSize(chunk.file)) / KB
+  const groups = await staticGroups(chunk)
+  const beside = groups.length > 0 ? `; with its static claim groups ${groups.join(', ')} gzip` : ''
+  console.log(`info family part ${key.slice(PART_PREFIX.length)} is ${kb.toFixed(1)} KB gzip, loaded only when a variant that reads it is drawn (reported, not gated)${beside}`)
+}
+
+// S5 (s5.md §8.1, S5-15): the v2 lines. Reported, not gated, except the entry above. A chunk S5 would grow is printed with its Wave 3 figure
+// and the room §8.1 gave it; Level 2 (the v2 exercise contract, `frontier`) is not built (S5-D69), so the two have nothing to hold yet.
+{
+  const kbOf = async (file: string) => (await gzipSize(file)) / KB
+  const fleetKey = 'src/components/fleet-ex/FleetExercise.tsx'
+  if (!manifest[fleetKey]) console.log(`skip FleetExercise chunk: no ${fleetKey} in the manifest`)
+  else {
+    const kb = await kbOf(manifest[fleetKey].file)
+    const top = S5_FLEET_EXERCISE_KB.base + S5_FLEET_EXERCISE_KB.room
+    console.log(`${kb <= top ? 'ok  ' : 'warn'} FleetExercise chunk ${manifest[fleetKey].file.split('/').pop()} is ${kb.toFixed(1)} KB gzip (Wave 3 ${S5_FLEET_EXERCISE_KB.base} KB, room +${S5_FLEET_EXERCISE_KB.room} KB for v2 metadata; not gated)`)
+  }
+  const worker = sizes.find((s) => /^fleet\.worker-/.test(s.name))
+  if (!worker) console.log('skip fleet.worker: no fleet.worker chunk in dist/assets')
+  else {
+    const kb = worker.gzip / KB
+    const top = S5_FLEET_WORKER_KB.base + S5_FLEET_WORKER_KB.room
+    console.log(`${kb <= top ? 'ok  ' : 'warn'} fleet.worker ${worker.name} is ${kb.toFixed(1)} KB gzip (Wave 3 ${S5_FLEET_WORKER_KB.base} KB, room +${S5_FLEET_WORKER_KB.room} KB for EngineV2 and the card; not gated)`)
+  }
+
+  // The physics tab: its own lazy chunk, and what it loads on top (report.json, decisions.json, controls.json and the two claim groups).
+  const tabKey = 'src/pages/changes/PhysicsTab.tsx'
+  if (!manifest[tabKey]) console.log(`skip physics tab: no ${tabKey} in the manifest`)
+  else {
+    const tab = manifest[tabKey]
+    const kb = await kbOf(tab.file)
+    console.log(`${kb <= S5_PHYSICS_TAB_KB ? 'ok  ' : 'warn'} physics tab ${tab.file.split('/').pop()} is ${kb.toFixed(1)} KB gzip (figure ${S5_PHYSICS_TAB_KB} KB; not gated)`)
+    const loads: string[] = []
+    for (const dyn of tab.dynamicImports ?? []) {
+      const chunk = manifest[dyn]
+      if (chunk) loads.push(`${dyn.split('/').pop()!.replace(/\.(json|ts)$/, '')} ${((await gzipSize(chunk.file)) / KB).toFixed(1)} KB`)
+    }
+    if (loads.length > 0) console.log(`info physics tab loads on demand, outside its chunk: ${loads.join(', ')} gzip`)
+  }
+
+  // S5-D71: the claims tab loads the two physics groups on demand, so its own chunk stays small; public/claims.json (the served
+  // registry, every claim listed) is the file that grew.
+  const claimsKey = 'src/components/ClaimsTable.tsx'
+  if (!manifest[claimsKey]) console.log(`skip claims tab: no ${claimsKey} in the manifest`)
+  else {
+    const table = manifest[claimsKey]
+    const kb = await kbOf(table.file)
+    const held = new Set(closure(['index.html']).map((c) => c.chunk.file))
+    let beyond = 0
+    for (const { chunk } of closure([claimsKey])) if (!held.has(chunk.file)) beyond += await gzipSize(chunk.file)
+    const groups: string[] = []
+    for (const dyn of table.dynamicImports ?? []) {
+      const chunk = manifest[dyn]
+      if (chunk) groups.push(`${dyn.split('/').pop()!.replace(/\.ts$/, '')} ${((await gzipSize(chunk.file)) / KB).toFixed(1)} KB`)
+    }
+    console.log(`info claims tab ${table.file.split('/').pop()} is ${kb.toFixed(1)} KB gzip, ${(beyond / KB).toFixed(1)} KB with the static imports the entry does not hold; on demand: ${groups.join(', ') || 'none'} gzip (reported, not gated; S5-D71)`)
+  }
+  const claimsJson = new URL('../public/claims.json', import.meta.url)
+  if (!existsSync(claimsJson)) console.log('skip public/claims.json: file does not exist')
+  else console.log(`info public/claims.json is ${readFileSync(claimsJson).length.toLocaleString('en-US')} B (reported, not gated; S5-D71)`)
 }
 
 // Reported only: the compile bank (spec §22.1). Each group is one chunk the compile family loads when an item draws

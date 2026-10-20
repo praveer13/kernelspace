@@ -26,7 +26,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 // The default sweep (docs/specs/wave-3.md §17.2). A task that adds a page adds it here, or passes --routes for its
 // own check. Wave 2's pages (/daily, /play/scheduler, /errors, /forge/kv-block-manager) and two lessons that carry its
 // panels (/lesson/t7.l2, /lesson/t2.l4) are in the sweep below, and so are Wave 3's stretch pages (/drills,
-// /capstone/service; the 3s final review's G9 found the nightly sweep skipped them).
+// /capstone/service; the 3s final review's G9 found the nightly sweep skipped them). S5 adds the physics tab
+// (docs/specs/s5.md §8.3), which loads its own chunk and data after /freshness does.
 const DEFAULT_ROUTES = [
   '/',
   '/boot',
@@ -40,6 +41,7 @@ const DEFAULT_ROUTES = [
   '/forge/rust-allocator',
   '/fleet',
   '/freshness',
+  '/freshness?tab=physics',
   '/week',
   '/lab/kv-calc',
   '/play/tiling-cube',
