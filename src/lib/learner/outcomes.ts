@@ -24,6 +24,10 @@
  * Wave 3 (docs/specs/wave-3.md §15, §18.2, task 3c-03) adds, at the end, the selectors of §15.1 (`selectSurfaceMinutes`
  * … `selectReceiptStats`), the pre-registered rules they decide under (docs/prereg/hint-ladders.md, fleet-daily.md) and
  * the F1 to F12 table (`buildWave3Report`). Wave 2's F1 to F9 are a different list and stay (`buildFieldReport`).
+ *
+ * Serving-first reading (docs/specs/serving-reading.md §8 M2, task SR-08) adds `selectServingReading`, the ledger
+ * descriptives of docs/prereg/serving-reading.md. The Wave 3 report reads them only once that file is signed, and keeps
+ * `boot:path` through `stripFreeText` so a full export can say its learner is on serving-first.
  */
 
 import { SYSTEMS_FORGE_LABS } from '@/data/labs'
@@ -34,7 +38,7 @@ import { RUBRIC_KEYS } from '@/lib/ledger/constants'
 import { compareEvents } from '@/lib/ledger/merge'
 import { parseHintRef } from '@/lib/ledger/refs'
 import { dayOf } from '@/lib/ledger/time'
-import type { IsoInstant, LedgerEvent, LocalDay, WorkingKey, WorkingRecord } from '@/lib/ledger/types'
+import type { IsoInstant, LearningPath, LedgerEvent, LocalDay, WorkingKey, WorkingRecord } from '@/lib/ledger/types'
 import { hash32, splitmix32 } from '@/lib/rng'
 import { wilson } from './calibration'
 import { DEFAULT_SLO, deriveCardsDetailed, type CardsContent, type CardsExtra, type CardsPlan, type FirstReview } from './cards'
@@ -42,6 +46,7 @@ import { dailySecondaryJson, formatDailySecondary, selectDailySecondary, type Da
 import { RANDOMIZED_LABS } from './experiments'
 import { FORM_SLOTS, type FormId } from './forms'
 import { formatHintSecondary, held, hintSecondaryJson, selectHintSecondary, type HintSecondary } from './hint-secondary'
+import { PATHS } from './paths'
 import { weekStartOf } from './planner'
 import { proportionOf, type Proportion } from './proportion'
 import { daysBetween } from './reentry'
@@ -97,10 +102,12 @@ const lastDay = (events: Ledger): LocalDay | null => events.reduce<LocalDay | nu
 /* ------------------------------------------------------------------ */
 
 /**
- * The working records a report may read: the week plan and placement result that cards replay from, and the
- * Today preferences. Everything else is dropped, `boot:value` (Boot's free-text answer) and `fw:doc` among it.
+ * The working records a report may read: the week plan and placement result that cards replay from, the Today
+ * preferences, and `boot:path`, the learner's path, which M2 of docs/specs/serving-reading.md reads (SR-D28). `boot:path`
+ * holds a path id and never free text, and `stripFreeText` keeps it only while it is one. Everything else is dropped,
+ * `boot:value` (Boot's free-text answer) and `fw:doc` among it.
  */
-const KEPT_WORKING: ReadonlySet<WorkingKey> = new Set<WorkingKey>(['boot:week', 'placement:result', 'today:prefs'])
+const KEPT_WORKING: ReadonlySet<WorkingKey> = new Set<WorkingKey>(['boot:week', 'boot:path', 'placement:result', 'today:prefs'])
 
 /** The only `data` fields a constructed-response event keeps: structure, never what the learner wrote. */
 const CR_KEPT: ReadonlySet<string> = new Set(['src', 'grp', 'lessonId', 'form', 'reason', 'slot', 'of', 'kcs', 'nsec', 'ideas', 'level', 'sinceDays'])
@@ -115,7 +122,8 @@ export interface Stripped {
 /**
  * A copy of a ledger with its free text removed, before any selector sees it: `data.explain` on any event
  * (sim-task one-line explanations), every `cr:` event's `data` fields beyond structure, and every working
- * record outside `KEPT_WORKING` (`boot:value` among them). The input is not modified.
+ * record outside `KEPT_WORKING` (`boot:value` among them). `boot:path` is kept only when its value is a path id
+ * (paths.ts `PATHS`), so no text can ride on it. The input is not modified.
  */
 export function stripFreeText(input: { events: Ledger; working?: readonly WorkingRecord[] }): Stripped {
   const removed = { explain: 0, bootValue: 0, crText: 0, otherWorking: 0 }
@@ -143,7 +151,7 @@ export function stripFreeText(input: { events: Ledger; working?: readonly Workin
   })
   const working: WorkingRecord[] = []
   for (const r of input.working ?? []) {
-    if (KEPT_WORKING.has(r.key)) working.push(r)
+    if (KEPT_WORKING.has(r.key) && (r.key !== 'boot:path' || (PATHS as readonly unknown[]).includes(r.value))) working.push(r)
     else if (r.key === 'boot:value') removed.bootValue += 1
     else removed.otherWorking += 1
   }
@@ -296,6 +304,11 @@ export interface PartnerLedger {
   plan?: CardsPlan | null
   /** `placement:result`'s solid KCs (summary.ts `placementOf`). */
   placement?: CardsExtra['placement']
+  /**
+   * A full export's `boot:path` (paths.ts `pathOf`, so a learner who never chose one reads as the default path). A
+   * donation keeps no path, so it has none, and `selectServingReading` reads a ledger without one as a donation.
+   */
+  path?: LearningPath
 }
 
 export interface FirstReviewGate extends FirstReviewCalibration {
@@ -2270,8 +2283,13 @@ export interface Wave3Inputs {
   lures?: Readonly<Record<string, number>>
   /** The labs that ship a Prove-it v2 bundle (`prove2`). */
   v2Labs?: ReadonlySet<string>
-  /** Whether the owner signed `docs/prereg/hint-ladders.md` and `docs/prereg/fleet-daily.md`; unsigned means the arms and the Daily are not read. */
-  signed?: { hintLadders: boolean; fleetDaily: boolean }
+  /**
+   * Whether the owner signed `docs/prereg/hint-ladders.md`, `docs/prereg/fleet-daily.md` and
+   * `docs/prereg/serving-reading.md`; unsigned means the arms, the Daily and M2's reading figures are not read.
+   */
+  signed?: { hintLadders: boolean; fleetDaily: boolean; servingReading?: boolean }
+  /** Each host lesson's `reading` block `count` (`servingReadingCounts`), which M2's completion reads. */
+  readingCounts?: Readonly<Record<string, number>>
   watcher?: WatcherState
   /**
    * The report is read after the owner recorded the F2 and F3 decisions (`partner-report --after-decision`): the outcomes
@@ -2292,6 +2310,8 @@ export interface Wave3Report {
   daily: DailyVsOther | null
   /** F3's secondary outputs (fleet-daily.md §3 and §5), reported and never decisive; null while the file is unsigned. */
   dailySecondary: DailySecondary | null
+  /** M2 of docs/specs/serving-reading.md: "NOT READ" while docs/prereg/serving-reading.md is unsigned, its figures once signed. */
+  servingReading: ServingReadingView
   /** Read after the decision (`Wave3Inputs.afterDecision`). */
   afterDecision: boolean
   proveV2: ProveV2
@@ -2312,6 +2332,320 @@ const range = (s: ReturnType<typeof spreadOf>, unit = ''): string => (s === null
 const medianCi = (ci: [number, number] | null, unit = ''): string => (ci === null ? '' : `, the median's 95 % bootstrap interval ${fmtNum(ci[0], unit)} to ${fmtNum(ci[1], unit)}`)
 const minutes = (x: number | null): string => (x === null ? 'n/a' : `${x.toFixed(0)} min`)
 
+/* ------------------------------------------------------------------ */
+/* M2: serving-first Rust reading (docs/prereg/serving-reading.md)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The four R KCs the `reading` blocks teach (docs/specs/serving-reading.md §3.3). A literal, so that this file imports
+ * nothing from the item bank: tests/kc/reading-blocks.test.ts holds it to `READING_KCS`.
+ */
+export const SERVING_READING_KCS = ['r.enums-option-result', 'r.iterators-ownership', 'r.closures-collections', 'r.smart-pointers'] as const
+/** The seven lessons that host a `reading` block (§5.3, B1 to B7), in path order. The same test holds it to the mounted blocks. */
+export const SERVING_READING_HOSTS = ['t5.l2', 't5.l5', 't5.l6', 't5.l7', 't5.l10', 't6.l8', 't6.l9'] as const
+
+export type ReadingKind = 'verdict' | 'fix'
+
+/** The pre-registered thresholds (prereg §3): descriptives that inform the think-aloud's decision and never decide it. */
+export const SERVING_READING_MIN_REACH = 0.8
+export const SERVING_READING_MIN_COMPLETION = 0.6
+/** A pool is flagged for a rewrite when its first-answer accuracy is outside this band with at least `SERVING_READING_BAND_MIN_N` answers. */
+export const SERVING_READING_BAND: readonly [number, number] = [0.35, 0.85]
+export const SERVING_READING_BAND_MIN_N = 20
+/** Later vs first prints "not enough data" below this many learners. */
+export const SERVING_READING_MIN_LEARNERS = 8
+/** The median time per answer, per kind. */
+export const SERVING_READING_MAX_MS: Readonly<Record<ReadingKind, number>> = { verdict: 60_000, fix: 90_000 }
+/** The smallest block `count` (§5.3): what a donation's `grp`s, which keep no `lessonId`, are held to ("≥ 2 correct"). */
+export const SERVING_READING_DONATION_COUNT = 2
+/** What the report says, in its text and in `--json`, while the pre-registration is unsigned. */
+export const SERVING_READING_NOT_READ = 'NOT READ: docs/prereg/serving-reading.md is not signed'
+
+const READING_KINDS: readonly ReadingKind[] = ['verdict', 'fix']
+/** The clone lure's misconception id (rust-items constants `CLONE_MISS`), a literal for the same reason as the KCs. */
+const READING_CLONE_MISS = 'r.clone-to-silence'
+
+interface ReadingVariant {
+  /** `verdict.enums-option-result`: compile.ts `compileVariantId`. */
+  variant: string
+  kc: string
+  kind: ReadingKind
+}
+
+/** The eight reading variants, KC by KC, and the ref each one's answers carry (`gen:compile/<variant>`, §6.3). */
+const READING_VARIANTS: readonly ReadingVariant[] = SERVING_READING_KCS.flatMap((kc) => READING_KINDS.map((kind) => ({ variant: `${kind}.${kc.slice('r.'.length)}`, kc, kind })))
+const READING_BY_REF: ReadonlyMap<string, ReadingVariant> = new Map(READING_VARIANTS.map((v) => [`gen:compile/${v.variant}`, v]))
+const HOST_QUIZ_REFS: ReadonlySet<string> = new Set(SERVING_READING_HOSTS.map((id) => `lesson:${id}`))
+
+/** One reading answer: an `item` event on a reading ref, written by a lesson block (`data.src` `lesson`). */
+interface ReadingAnswer extends ReadingVariant {
+  ok: boolean
+  unseen: boolean
+  ms: number | null
+  grp: string | null
+  /** A full export's host lesson; a donation keeps none. */
+  lessonId: string | null
+  clone: boolean
+}
+
+interface ReadingLearner {
+  donation: boolean
+  /** In ledger order (`at`, then `id`). */
+  answers: ReadingAnswer[]
+}
+
+function readingAnswersOf(events: Ledger): ReadingAnswer[] {
+  const out: ReadingAnswer[] = []
+  for (const e of sorted(events)) {
+    const v = e.kind === 'item' ? READING_BY_REF.get(e.ref) : undefined
+    const d = dataOf(e)
+    if (v === undefined || d.src !== 'lesson') continue
+    const ms = (e as { ms?: unknown }).ms
+    out.push({
+      ...v,
+      ok: (e as { ok?: unknown }).ok === true,
+      unseen: (e as { provenance?: unknown }).provenance === 'unseen',
+      ms: typeof ms === 'number' && Number.isFinite(ms) && ms >= 0 ? ms : null,
+      grp: typeof d.grp === 'string' && d.grp !== '' ? d.grp : null,
+      lessonId: typeof d.lessonId === 'string' ? d.lessonId : null,
+      clone: d.miss === READING_CLONE_MISS,
+    })
+  }
+  return out
+}
+
+/** Who was read, per kind of file. A ledger with a `path` is a full export; one without is a donation. */
+export interface ServingReadingInputs {
+  exports: {
+    files: number
+    eligible: number
+    /** Serving-first, with no ok host quiz yet: counted, and left out of every figure. */
+    notYetAtHost: number
+    /** On another path. */
+    otherPath: number
+  }
+  donations: {
+    files: number
+    eligible: number
+    /** No ok host quiz, or an event on an R lesson (the off-R proxy). */
+    leftOut: number
+  }
+}
+
+/** One variant's first-answer accuracy: each learner's first `unseen` answer on it. */
+export interface ReadingBandRow extends Proportion {
+  variant: string
+  kc: string
+  kind: ReadingKind
+  /** Outside `SERVING_READING_BAND` with at least `SERVING_READING_BAND_MIN_N` answers: the pool is flagged for a rewrite. */
+  flagged: boolean
+}
+
+export interface ReadingLater {
+  /** Learners with 2 or more `grp`s on some KC. */
+  learners: number
+  enough: boolean
+  /** The mean of d over those learners, each learner's KCs averaged first; null below `SERVING_READING_MIN_LEARNERS` ("not enough data"). */
+  mean: number | null
+}
+
+export interface ReadingTime {
+  answers: number
+  medianMs: number | null
+  /** The median against its bar; null with no answer. */
+  within: boolean | null
+}
+
+/** The figures that read the same over both kinds of file: reported per kind and pooled. */
+export interface ServingReadingFigures {
+  learners: number
+  /** Eligible learners with at least 1 reading answer. */
+  reach: Proportion
+  band: ReadingBandRow[]
+  later: ReadingLater
+  time: Record<ReadingKind, ReadingTime>
+}
+
+/** M2's ledger descriptives (prereg §3), once the pre-registration is signed. */
+export interface ServingReading {
+  read: true
+  inputs: ServingReadingInputs
+  pooled: ServingReadingFigures
+  exports: ServingReadingFigures
+  donations: ServingReadingFigures
+  /**
+   * Reading `grp`s that hold their block's `count` correct `unseen` answers. Never pooled: a full export reads the count of
+   * the host block its `lessonId` names, a donation uses 2 ("≥ 2 correct").
+   */
+  completion: { exports: Proportion; donations: Proportion }
+  /** Fix answers that record `r.clone-to-silence`, full exports only: a donation keeps a `miss` only for `confuse.` ids. */
+  clone: Proportion
+}
+
+/** What the report holds while docs/prereg/serving-reading.md is unsigned. */
+export interface ServingReadingUnread {
+  read: false
+  note: typeof SERVING_READING_NOT_READ
+}
+
+export type ServingReadingView = ServingReading | ServingReadingUnread
+
+/** A lesson as `servingReadingCounts` reads it: `Lesson` from src/data/lessons satisfies it. */
+export interface ReadingCountLesson {
+  id: string
+  blocks: readonly { type: string }[]
+}
+
+/** Each host lesson's `reading` block `count` (the correct answers that finish it), from the lesson content. */
+export function servingReadingCounts(lessons: readonly ReadingCountLesson[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const lesson of lessons) {
+    for (const block of lesson.blocks) {
+      const count = (block as { count?: unknown }).count
+      if (block.type === 'reading' && typeof count === 'number' && Number.isInteger(count) && count > 0) out[lesson.id] = count
+    }
+  }
+  return out
+}
+
+function readingFigures(learners: readonly ReadingLearner[]): ServingReadingFigures {
+  const band = READING_VARIANTS.map((v): ReadingBandRow => {
+    let k = 0
+    let n = 0
+    for (const l of learners) {
+      const first = l.answers.find((a) => a.variant === v.variant && a.unseen)
+      if (first === undefined) continue
+      n += 1
+      if (first.ok) k += 1
+    }
+    const p = proportionOf(k, n)
+    const flagged = n >= SERVING_READING_BAND_MIN_N && p.rate !== null && (p.rate < SERVING_READING_BAND[0] || p.rate > SERVING_READING_BAND[1])
+    return { variant: v.variant, kc: v.kc, kind: v.kind, ...p, flagged }
+  })
+
+  // later vs first: a learner's `grp`s in the order of their first answer, never by the `grp` string
+  const ds: number[] = []
+  for (const l of learners) {
+    const order = new Map<string, number>()
+    for (const a of l.answers) if (a.grp !== null && !order.has(a.grp)) order.set(a.grp, order.size)
+    const perKc: number[] = []
+    for (const kc of SERVING_READING_KCS) {
+      const firstIn = new Map<string, ReadingAnswer>()
+      for (const a of l.answers) if (a.kc === kc && a.grp !== null && !firstIn.has(a.grp)) firstIn.set(a.grp, a)
+      if (firstIn.size < 2) continue
+      const grps = [...firstIn.keys()].sort((x, y) => (order.get(x) as number) - (order.get(y) as number))
+      const first = firstIn.get(grps[0]) as ReadingAnswer
+      const last = firstIn.get(grps[grps.length - 1]) as ReadingAnswer
+      perKc.push(Number(last.ok) - Number(first.ok))
+    }
+    if (perKc.length > 0) ds.push(perKc.reduce((s, x) => s + x, 0) / perKc.length)
+  }
+  const enough = ds.length >= SERVING_READING_MIN_LEARNERS
+
+  const time = Object.fromEntries(
+    READING_KINDS.map((kind) => {
+      const ms = learners.flatMap((l) => l.answers.filter((a) => a.kind === kind && a.ms !== null).map((a) => a.ms as number))
+      const medianMs = median(ms)
+      return [kind, { answers: ms.length, medianMs, within: medianMs === null ? null : medianMs <= SERVING_READING_MAX_MS[kind] }]
+    }),
+  ) as Record<ReadingKind, ReadingTime>
+
+  return {
+    learners: learners.length,
+    reach: proportionOf(learners.filter((l) => l.answers.length > 0).length, learners.length),
+    band,
+    later: { learners: ds.length, enough, mean: enough ? ds.reduce((s, x) => s + x, 0) / ds.length : null },
+    time,
+  }
+}
+
+/**
+ * M2's ledger descriptives (docs/prereg/serving-reading.md §3; docs/specs/serving-reading.md §8). One eligibility rule
+ * covers both kinds of file: an ok `quiz` on a host lesson, plus `boot:path` = `serving-first` for a full export (a
+ * ledger with `path`) or, for a donation (no `path`), no event on an R lesson (`lesson:r.`). Only eligible learners'
+ * reading answers count. `counts` gives each host lesson's block `count` (`servingReadingCounts`); a full export's `grp`
+ * whose host is not in it is held to 2, as a donation's are. Called only once the pre-registration is signed.
+ */
+export function selectServingReading(ledgers: readonly PartnerLedger[], counts: Readonly<Record<string, number>> = {}): ServingReading {
+  const inputs: ServingReadingInputs = { exports: { files: 0, eligible: 0, notYetAtHost: 0, otherPath: 0 }, donations: { files: 0, eligible: 0, leftOut: 0 } }
+  const learners: ReadingLearner[] = []
+  for (const l of ledgers) {
+    const atHost = l.events.some((e) => e.kind === 'quiz' && (e as { ok?: unknown }).ok === true && HOST_QUIZ_REFS.has(e.ref))
+    if (l.path !== undefined) {
+      inputs.exports.files += 1
+      if (l.path !== 'serving-first') inputs.exports.otherPath += 1
+      else if (!atHost) inputs.exports.notYetAtHost += 1
+      else {
+        inputs.exports.eligible += 1
+        learners.push({ donation: false, answers: readingAnswersOf(l.events) })
+      }
+      continue
+    }
+    inputs.donations.files += 1
+    if (atHost && !l.events.some((e) => e.ref.startsWith('lesson:r.'))) {
+      inputs.donations.eligible += 1
+      learners.push({ donation: true, answers: readingAnswersOf(l.events) })
+    } else inputs.donations.leftOut += 1
+  }
+
+  const completion = { exports: { k: 0, n: 0 }, donations: { k: 0, n: 0 } }
+  for (const l of learners) {
+    const grps = new Map<string, { need: number; correct: number }>()
+    for (const a of l.answers) {
+      if (a.grp === null) continue
+      let g = grps.get(a.grp)
+      if (g === undefined) {
+        const need = !l.donation && a.lessonId !== null ? (counts[a.lessonId] ?? SERVING_READING_DONATION_COUNT) : SERVING_READING_DONATION_COUNT
+        g = { need, correct: 0 }
+        grps.set(a.grp, g)
+      }
+      if (a.ok && a.unseen) g.correct += 1
+    }
+    const into = l.donation ? completion.donations : completion.exports
+    for (const g of grps.values()) {
+      into.n += 1
+      if (g.correct >= g.need) into.k += 1
+    }
+  }
+  const fixes = learners.filter((l) => !l.donation).flatMap((l) => l.answers.filter((a) => a.kind === 'fix'))
+
+  return {
+    read: true,
+    inputs,
+    pooled: readingFigures(learners),
+    exports: readingFigures(learners.filter((l) => !l.donation)),
+    donations: readingFigures(learners.filter((l) => l.donation)),
+    completion: { exports: proportionOf(completion.exports.k, completion.exports.n), donations: proportionOf(completion.donations.k, completion.donations.n) },
+    clone: proportionOf(fixes.filter((a) => a.clone).length, fixes.length),
+  }
+}
+
+const seconds = (ms: number | null): string => (ms === null ? 'n/a' : `${fmtNum(Math.round(ms / 100) / 10)} s`)
+const share = (p: Proportion): string => `${p.correct} of ${p.n} = ${fmtPct(p.rate)}${fmtCi(p)}`
+const against = (p: Proportion, min: number): string => (p.rate === null ? 'no data' : p.rate >= min ? 'meets it' : 'below it')
+
+/** M2's lines of the Wave 3 report: "NOT READ" while the pre-registration is unsigned, then the figures of prereg §3. */
+export function formatServingReading(v: ServingReadingView): string[] {
+  const head = 'M2  serving-first Rust reading (docs/prereg/serving-reading.md): ledger descriptives; the think-aloud decides, and these never do'
+  if (!v.read) return [head, `  ${v.note}`]
+  const { exports: ex, donations: dn } = v.inputs
+  const p = v.pooled
+  const later = p.later.enough
+    ? `mean d ${points(p.later.mean)} over ${plural(p.later.learners, 'learner')} (full exports ${points(v.exports.later.mean)}, donations ${points(v.donations.later.mean)})`
+    : `not enough data (n = ${p.later.learners} of ${SERVING_READING_MIN_LEARNERS} learners with 2 or more blocks on a KC)`
+  return [
+    head,
+    `  learners: ${p.learners} eligible; full exports ${ex.files} (${ex.eligible} eligible, ${ex.notYetAtHost} not yet at a host, ${ex.otherPath} on another path); donations ${dn.files} (${dn.eligible} eligible, ${dn.leftOut} left out: no host quiz or an R lesson)`,
+    `  reach: ${share(p.reach)} (full exports ${v.exports.reach.correct} of ${v.exports.reach.n}, donations ${v.donations.reach.correct} of ${v.donations.reach.n}); at least ${SERVING_READING_MIN_REACH * 100} %: ${against(p.reach, SERVING_READING_MIN_REACH)}`,
+    `  completion, blocks with their count of correct unseen answers (at least ${SERVING_READING_MIN_COMPLETION * 100} %): full exports ${share(v.completion.exports)}, ${against(v.completion.exports, SERVING_READING_MIN_COMPLETION)}; donations, ≥ 2 correct, ${share(v.completion.donations)}, ${against(v.completion.donations, SERVING_READING_MIN_COMPLETION)}`,
+    `  difficulty band, each learner's first unseen answer (flagged outside ${SERVING_READING_BAND[0] * 100} % to ${SERVING_READING_BAND[1] * 100} % at n ≥ ${SERVING_READING_BAND_MIN_N}):`,
+    ...p.band.map((b) => `    ${b.variant}: ${b.n === 0 ? 'no answer' : share(b)}${b.flagged ? ' FLAGGED: rewrite the pool' : ''}`),
+    `  later vs first: ${later}`,
+    `  time, median per answer: ${READING_KINDS.map((k) => `${k} ${seconds(p.time[k].medianMs)} (n = ${p.time[k].answers}; at most ${seconds(SERVING_READING_MAX_MS[k])}: ${p.time[k].within === null ? 'no data' : p.time[k].within ? 'within' : 'over'})`).join(', ')}`,
+    `  clone lure, full exports only (a donation keeps no such miss): ${v.clone.n === 0 ? 'no fix answer' : `${v.clone.correct} of ${v.clone.n} fix answers = ${fmtPct(v.clone.rate)}${fmtCi(v.clone)}`}`,
+  ]
+}
+
 /** Every selector over the partners' ledgers, then F1 to F12 and the keep-or-kill lines. One ledger is one partner. */
 export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave3Inputs): Wave3Report {
   const { cards } = inputs
@@ -2325,6 +2659,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
   const dailyChecks: DailyCheck[] = []
   const daily = signed.fleetDaily ? selectDailyVsOther(ledgers, cards, (c) => dailyChecks.push(c)) : null
   const dailySecondary = daily ? selectDailySecondary(ledgers, dailyChecks, daily, afterDecision) : null
+  const servingReading: ServingReadingView = signed.servingReading === true ? selectServingReading(ledgers, inputs.readingCounts) : { read: false, note: SERVING_READING_NOT_READ }
   const proveV2 = selectProveV2(events, inputs.v2Labs ?? new Set())
   const provedInUse = selectProvedInUse(events)
   const discrimination = selectDiscrimination30(ledgers, cards, { lures: inputs.lures })
@@ -2499,6 +2834,7 @@ export function buildWave3Report(ledgers: readonly PartnerLedger[], inputs: Wave
     hintSecondary,
     daily,
     dailySecondary,
+    servingReading,
     afterDecision,
     proveV2,
     provedInUse,
@@ -2555,6 +2891,8 @@ export function formatWave3Report(r: Wave3Report): string {
     ...r.keepOrKill.map(
       (k) => `  ${k.label}: ${k.verdict === 'unsigned' ? `NOT READ, the pre-registration is unsigned; default: ${k.fallback}` : k.verdict === 'underpowered' ? `UNDERPOWERED, default: ${k.fallback}` : k.verdict === 'keep' ? 'KEEP' : `KILL, default: ${k.fallback}`}`,
     ),
+    '',
+    ...formatServingReading(r.servingReading),
     '',
     'the journey re-cut (F1): active minutes per week, median over partners, beside PLAN §4.D',
     s.partners < SURFACE_MIN_PARTNERS
