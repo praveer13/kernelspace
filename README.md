@@ -101,3 +101,9 @@ submissions/    opt-in leaderboard entries (WASM + manifest PRs)
 
 Deployment is automatic: pushes to `master` build and publish to GitHub
 Pages (custom domain `kernelspace.naigap.com`).
+
+## License
+
+- **Code**, meaning the site, the lab crates, the scripts, the tests and the configuration, is under the [MIT License](LICENSE).
+- **Course content**, meaning lesson text, exercises, quiz items, figures and documentation, is under [Creative Commons Attribution 4.0 International](LICENSE-CONTENT) (CC BY 4.0). Where a file holds both, as lesson data written in TypeScript does, its prose and figures are content and the rest is code.
+- **Third-party material keeps its own terms.** `src/lib/learner/fsrs.ts` and its reference vectors come from ts-fsrs, which is MIT licensed ([NOTICE](NOTICE)); text saved from other projects, such as the release notes under `docs/backtest/`, belongs to its authors.
