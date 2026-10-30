@@ -12,7 +12,6 @@ import {
   BOOT_WHY,
   EXTRA_WHY,
   currentLessonFor,
-  RESUME_DAYS,
   WHY_MAX,
   fit,
   inline,
@@ -112,25 +111,25 @@ describe('recommend(): the six rules in order', () => {
     const rec = recommend(fresh({ today, lessons: reading }), CONTENT, NOW, 'laptop')
     expect(rec).toEqual({ kind: 'today', ref: 'session', to: '/today', title: 'Today', why: '9 cards are near your recall SLO (~10 min)', minutes: 10 })
     expect(recommend(fresh({ today: { due: 0, priority: 1, minutes: 2, sessionDone: false } }), CONTENT, NOW, 'phone').why).toBe('1 card is near your recall SLO (~2 min)')
-    // the session done, or nothing due: on to rule 3
-    expect(recommend(fresh({ today: { ...today, sessionDone: true }, lessons: reading }), CONTENT, NOW, 'phone').ref).toBe('t1.l4')
-    expect(recommend(fresh({ today: { ...today, due: 0 }, lessons: reading }), CONTENT, NOW, 'phone').ref).toBe('t1.l4')
+    // the session done, or nothing due: on to the path (a lesson being read off the path does not jump it)
+    expect(recommend(fresh({ today: { ...today, sessionDone: true }, lessons: reading }), CONTENT, NOW, 'phone').ref).toBe('t0.l1')
+    expect(recommend(fresh({ today: { ...today, due: 0 }, lessons: reading }), CONTENT, NOW, 'phone').ref).toBe('t0.l1')
   })
 
-  test('3. a lesson being read, visited in the last 14 days: resume it', () => {
-    const lessons = {
-      ...doneUpTo('full-ramp', 14),
-      't1.l4': { status: 'reading' as const, lastVisitedAt: daysAgo(3), scrollPct: 60 },
-      't0.l6': { status: 'reading' as const, lastVisitedAt: daysAgo(5), scrollPct: 20 },
-    }
-    const rec = recommend(fresh({ lessons }), CONTENT, NOW, 'laptop')
-    expect(rec).toMatchObject({ kind: 'lesson', ref: 't1.l4', to: '/lesson/t1.l4', why: 'You were 60 % through T1.L4', minutes: 8 })
-    // without a scroll position
-    const noPct = recommend(fresh({ lessons: { 't0.l2': { status: 'reading', lastVisitedAt: daysAgo(1) } } }), CONTENT, NOW, 'phone')
-    expect(noPct.why).toBe('Pick up T0.L2 where you left off')
-    // older than 14 days: the path takes over
-    const stale = recommend(fresh({ lessons: { 't0.l2': { status: 'reading', lastVisitedAt: daysAgo(RESUME_DAYS + 1), scrollPct: 50 } } }), CONTENT, NOW, 'phone')
-    expect(stale.ref).toBe('t0.l1')
+  test('3. retired: a lesson opened off the path never takes Up Next; the path lesson being read says how far in', () => {
+    // a curious click on a later lesson (T6.L8 before T0 is done) leaves the path alone
+    const curious = recommend(fresh({ lessons: { 't6.l8': { status: 'reading', lastVisitedAt: daysAgo(0), scrollPct: 3 } } }), CONTENT, NOW, 'phone')
+    expect(curious).toMatchObject({ kind: 'lesson', ref: 't0.l1' })
+    expect(currentLessonFor(fresh({ lessons: { 't6.l8': { status: 'reading', lastVisitedAt: daysAgo(0) } } }), CONTENT)).toBe('t0.l1')
+    // the path's own next lesson, being read: its % why and the minutes left
+    const plan = pathPlan('full-ramp', CONTENT).lessons
+    const i = plan.indexOf('t1.l4')
+    const lessons = { ...doneUpTo('full-ramp', i), 't1.l4': { status: 'reading' as const, lastVisitedAt: daysAgo(30), scrollPct: 60 } }
+    expect(recommend(fresh({ lessons }), CONTENT, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't1.l4', why: 'You were 60 % through T1.L4', minutes: 8 })
+    // without a scroll position, the path's own why
+    const noPct = recommend(fresh({ lessons: { 't0.l1': { status: 'reading', lastVisitedAt: daysAgo(1) } } }), CONTENT, NOW, 'phone')
+    expect(noPct.ref).toBe('t0.l1')
+    expect(noPct.why).not.toContain('through')
   })
 
   test('4. a laptop day and an open lab whose host lesson is done: the lab', () => {
@@ -370,11 +369,12 @@ describe('rule 5 proposes a registered, undebriefed play after its host lesson',
     expect(recommend(fresh({ lessons: read }), WITH_PLAY, NOW, 'phone').kind).toBe('lesson')
   })
 
-  test('a learner who went on past the play is not nagged, and a lesson being read outranks it', () => {
+  test('a learner who went on past the play is not nagged; the play still comes first while its next lesson is being read', () => {
     const past = { ...upTo('full-ramp', 't5.l7'), 't5.l8': done() }
     expect(recommend(fresh({ lessons: past }), WITH_PLAY, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't5.l9' })
     const reading = { ...upTo('full-ramp', 't5.l7'), 't5.l8': { status: 'reading' as const, lastVisitedAt: daysAgo(1), scrollPct: 30 } }
-    expect(recommend(fresh({ lessons: reading }), WITH_PLAY, NOW, 'phone')).toMatchObject({ kind: 'lesson', ref: 't5.l8' })
+    // reading is not done: the path's next step is still the play before T5.L8
+    expect(recommend(fresh({ lessons: reading }), WITH_PLAY, NOW, 'phone')).toMatchObject({ kind: 'play' })
     // due cards still come first
     const due = { due: 4, priority: 0, minutes: 5, sessionDone: false }
     expect(recommend(fresh({ lessons: upTo('full-ramp', 't5.l7'), today: due }), WITH_PLAY, NOW, 'phone').kind).toBe('today')
@@ -412,35 +412,35 @@ describe('rule 5 proposes a registered, undebriefed play after its host lesson',
 /* ------------------------------------------------------------------ */
 
 describe('currentLessonFor: the lesson Up Next stands on', () => {
-  test('it is the plan lesson of rule 5, the lesson being read of rule 3, and never a lab, a play or Today', () => {
-    expect(currentLessonFor(fresh(), CONTENT, NOW)).toBe('t0.l1')
-    expect(currentLessonFor(fresh({ lessons: doneUpTo('full-ramp', 1) }), CONTENT, NOW)).toBe('r.l1')
+  test('it is the plan lesson of rule 5, never a lesson opened off the path, a lab, a play or Today', () => {
+    expect(currentLessonFor(fresh(), CONTENT)).toBe('t0.l1')
+    expect(currentLessonFor(fresh({ lessons: doneUpTo('full-ramp', 1) }), CONTENT)).toBe('r.l1')
     const reading = { 't0.l3': { status: 'reading' as const, lastVisitedAt: daysAgo(1), scrollPct: 10 } }
-    expect(currentLessonFor(fresh({ lessons: reading }), CONTENT, NOW)).toBe('t0.l3')
+    expect(currentLessonFor(fresh({ lessons: reading }), CONTENT)).toBe('t0.l1')
     const lessons = doneUpTo('full-ramp', 1 + pathPlan('full-ramp', CONTENT).lessons.indexOf('t1.l3'))
     expect(recommend(fresh({ lessons }), CONTENT, NOW, 'laptop').kind).toBe('lab')
-    expect(currentLessonFor(fresh({ lessons }), CONTENT, NOW)).toBe('t1.l4')
+    expect(currentLessonFor(fresh({ lessons }), CONTENT)).toBe('t1.l4')
     const t5 = doneUpTo('full-ramp', 1 + pathPlan('full-ramp', CONTENT).lessons.indexOf('t5.l7'))
-    expect(currentLessonFor(fresh({ lessons: t5 }), WITH_PLAY, NOW)).toBe('t5.l8')
+    expect(currentLessonFor(fresh({ lessons: t5 }), WITH_PLAY)).toBe('t5.l8')
     const due = { due: 9, priority: 1, minutes: 8, sessionDone: false }
-    expect(currentLessonFor(fresh({ lessons: t5, today: due }), WITH_PLAY, NOW)).toBe('t5.l8')
+    expect(currentLessonFor(fresh({ lessons: t5, today: due }), WITH_PLAY)).toBe('t5.l8')
   })
 
   test('it goes to the prerequisite first, as the lesson footer does, and is null when the plan is done', () => {
     const lessons = doneUpTo('full-ramp', 3)
     delete lessons[pathPlan('full-ramp', CONTENT).lessons[1]]
     for (const path of PATHS) {
-      expect(currentLessonFor(fresh({ path, lessons }), CONTENT, NOW)).toBe(recommend(fresh({ path, lessons }), CONTENT, NOW, 'phone').ref)
+      expect(currentLessonFor(fresh({ path, lessons }), CONTENT)).toBe(recommend(fresh({ path, lessons }), CONTENT, NOW, 'phone').ref)
     }
     const all = Object.fromEntries(ALL_LESSONS.map((l) => [l.id, done()]))
-    expect(currentLessonFor(fresh({ lessons: all }), CONTENT, NOW)).toBeNull()
+    expect(currentLessonFor(fresh({ lessons: all }), CONTENT)).toBeNull()
   })
 
   test('over the real content, a placed learner is never put on an R lesson off the plan', async () => {
     const loaded = await loadUpNext()
     const raw = { v: 1, at: daysAgo(1), entryTrack: 't2', solidKcs: [], missedKcs: [], misconceptions: [], rustAnchor: 'solid', items: 12 } as Json
     const input: UpNextInput = { bootDone: true, lessons: {}, labs: {}, path: undefined, placement: raw, week: undefined }
-    expect(currentLessonNow(loaded, input, new Date(NOW))).toBe('t2.l1')
+    expect(currentLessonNow(loaded, input)).toBe('t2.l1')
   })
 })
 

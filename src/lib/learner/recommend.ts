@@ -124,9 +124,6 @@ export interface RecommendContent extends PathGraph {
 /* ------------------------------------------------------------------ */
 
 export const WHY_MAX = 90
-/** Rule 3: a lesson being read counts as "in progress" for this long after the last visit. */
-export const RESUME_DAYS = 14
-const DAY_MS = 86_400_000
 export const BOOT_MINUTES = 10
 /** Rule 6's extra set: five generated items. */
 export const EXTRA_MINUTES = 5
@@ -202,29 +199,17 @@ function todayRule(today: TodaySummary | null): Recommendation | null {
   return { kind: 'today', ref: 'session', to: '/today', title: 'Today', why, minutes: min }
 }
 
-/** Rule 3: the most recently visited lesson being read, if within `RESUME_DAYS`. */
-function resumeRule(state: RecommendState, content: RecommendContent, plan: PathPlanDetail, now: IsoInstant): Recommendation | null {
-  const nowMs = Date.parse(now)
-  // a placed learner is not resumed into an R lesson outside the plan (offered as a test-out, or on
-  // serving-first, where R arrives as `reading` blocks inside T5 and T6 lessons, never as R lessons:
-  // serving-reading.md): the K3 metric "nobody placed lands on R.L1"
-  const inPlan = new Set(plan.lessons)
-  const offPlanR = (lesson: RecommendLesson) => state.placement !== null && lesson.trackId === 'r' && !inPlan.has(lesson.id)
-  let best: { lesson: RecommendLesson; at: number; pct: number | undefined } | null = null
-  for (const lesson of content.lessons) {
-    if (offPlanR(lesson)) continue
-    const l = state.lessons[lesson.id]
-    if (l?.status !== 'reading' || !l.lastVisitedAt) continue
-    const at = Date.parse(l.lastVisitedAt)
-    if (!Number.isFinite(at) || nowMs - at > RESUME_DAYS * DAY_MS) continue
-    // the latest visit wins; on a tie, curriculum order (content order) keeps the earlier lesson
-    if (!best || at > best.at) best = { lesson, at, pct: l.scrollPct }
-  }
-  if (!best) return null
-  const code = lessonCode(best.lesson.id)
-  const pct = best.pct !== undefined && Number.isFinite(best.pct) ? Math.round(Math.min(99, Math.max(0, best.pct))) : 0
-  const why = pct >= 1 ? fit(`You were ${pct} % through ${code}`) : fit(`Pick up ${code} where you left off`)
-  return lessonRec(best.lesson, why, best.lesson.minutes * (1 - pct / 100))
+/**
+ * The path lesson as a recommendation. A lesson opened off the path never takes Up Next (a curious click on
+ * T6.L8 used to pin it for two weeks); when the path's own next lesson is the one being read, the why says
+ * how far in the learner is and the minutes count what is left.
+ */
+function pathLessonRec(lesson: RecommendLesson, state: RecommendState, why: string): Recommendation {
+  const l = state.lessons[lesson.id]
+  if (l?.status !== 'reading') return lessonRec(lesson, why)
+  const pct = l.scrollPct !== undefined && Number.isFinite(l.scrollPct) ? Math.round(Math.min(99, Math.max(0, l.scrollPct))) : 0
+  const code = lessonCode(lesson.id)
+  return pct >= 1 ? lessonRec(lesson, fit(`You were ${pct} % through ${code}`), lesson.minutes * (1 - pct / 100)) : lessonRec(lesson, why)
 }
 
 /** The lowest stage with a required check not yet passed, or null when the lab is unstaged or finished. */
@@ -438,7 +423,7 @@ function pathLesson(state: RecommendState, content: RecommendContent, plan: Path
       : fit(`${needer} needs ${kc} from ${code} first`, `${needer} needs ${code} first`)
     return lessonRec(lesson, why)
   }
-  return lessonRec(lesson, nextWhy(lesson, state, content, plan, index))
+  return pathLessonRec(lesson, state, nextWhy(lesson, state, content, plan, index))
 }
 
 /** Rule 5. */
@@ -446,20 +431,20 @@ const pathRule = (state: RecommendState, content: RecommendContent, plan: PathPl
   playRule(state, content, plan) ?? pathLesson(state, content, plan)
 
 /**
- * The lesson Up Next stands on, for Curriculum's "current" marker: the lesson being read (rule 3), else the
- * next one of the plan, prerequisite first (rule 5). Due cards, labs and plays are not lessons, so they
+ * The lesson Up Next stands on, for Curriculum's "current" marker: the next one of the plan, prerequisite
+ * first (rule 5). Due cards, labs and plays are not lessons, so they
  * never move the marker. Null when the plan is finished.
  */
-export function currentLessonFor(state: RecommendState, content: RecommendContent, now: IsoInstant): string | null {
+export function currentLessonFor(state: RecommendState, content: RecommendContent): string | null {
   const plan = cachedPathPlan(state.path, content, state.placement)
-  return (resumeRule(state, content, plan, now) ?? pathLesson(state, content, plan))?.ref ?? null
+  return pathLesson(state, content, plan)?.ref ?? null
 }
 
 /**
  * The one Up Next. `day` is the planner's kind of day (`dayKindOf`); only a laptop day reaches for a lab.
  * Deterministic: the same arguments always give a deep-equal result.
  */
-export function recommend(state: RecommendState, content: RecommendContent, now: IsoInstant, day: DayKind): Recommendation {
+export function recommend(state: RecommendState, content: RecommendContent, _now: IsoInstant, day: DayKind): Recommendation {
   // 1. a first visit: Boot
   if (!state.bootDone && !hasLessons(state) && !state.placement) {
     return { kind: 'boot', ref: 'boot', to: '/boot', title: 'Boot', why: BOOT_WHY, minutes: BOOT_MINUTES }
@@ -467,10 +452,8 @@ export function recommend(state: RecommendState, content: RecommendContent, now:
   // 2. due cards before anything new
   const today = todayRule(state.today)
   if (today) return today
-  // 3. finish what is open
+  // 3. (retired: a lesson opened off the path no longer takes Up Next; the path's own lesson keeps its % why)
   const plan = cachedPathPlan(state.path, content, state.placement)
-  const resume = resumeRule(state, content, plan, now)
-  if (resume) return resume
   // 4. a laptop day suits a lab
   const lab = labRule(state, content, plan, day)
   if (lab) return lab
