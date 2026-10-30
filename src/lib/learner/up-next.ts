@@ -105,8 +105,8 @@ function stateOf(loaded: UpNextContent, input: UpNextInput): RecommendState {
 }
 
 /** The lesson Up Next stands on (Curriculum's "current" marker), or null when the plan is finished. */
-export function currentLessonNow(loaded: UpNextContent, input: UpNextInput, now: Date): string | null {
-  return loaded.currentLessonFor(stateOf(loaded, input), loaded.content, now.toISOString())
+export function currentLessonNow(loaded: UpNextContent, input: UpNextInput): string | null {
+  return loaded.currentLessonFor(stateOf(loaded, input), loaded.content)
 }
 
 /** A lesson as a sentence names it: "T1.L4", and its title. */
@@ -195,7 +195,7 @@ export function useCurrentLesson(): { status: 'loading' | 'error' } | { status: 
   return useMemo(() => {
     if (load.status !== 'ready') return { status: load.status }
     try {
-      return { status: 'ready' as const, id: currentLessonNow(load.loaded, input, new Date()) }
+      return { status: 'ready' as const, id: currentLessonNow(load.loaded, input) }
     } catch {
       return { status: 'error' as const }
     }
