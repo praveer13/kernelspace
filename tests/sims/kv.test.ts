@@ -22,6 +22,7 @@ import type { SimExerciseBlock } from '../../src/data/lessons/types'
 import { gradePrediction, splitCanonical } from '../../src/lib/sims/host'
 import {
   BLOCK_SIZE,
+  CTX_STEPS,
   CUSTOM_PARAMS_B,
   DEFAULT_STATE,
   DTYPES,
@@ -130,6 +131,8 @@ describe('every number comes from a claim (W4)', () => {
   test('the tuning constants are claims, and the unsourced ones are marked synthetic', () => {
     expect(BLOCK_SIZE).toBe(claimNumber('production.vllm.block-size'))
     expect(PAGED_WASTE_PCT).toBe(claimNumber('synthetic.kv.paged-waste'))
+    // the stand-in holds while the default block moves: the mean tail (half a block) at the shortest context stays within it
+    expect((100 * (BLOCK_SIZE / 2)) / CTX_STEPS[0]).toBeLessThanOrEqual(PAGED_WASTE_PCT)
     expect(ITL_SLO_MS).toBe(claimNumber('synthetic.kv.itl-slo'))
     expect(CUSTOM_PARAMS_B).toBe(claimNumber('synthetic.kv.custom-params'))
     for (const id of ['synthetic.kv.paged-waste', 'synthetic.kv.runtime-base', 'synthetic.kv.runtime-overhead', 'synthetic.kv.itl-slo', 'synthetic.kv.custom-params']) {
