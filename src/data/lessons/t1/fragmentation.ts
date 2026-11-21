@@ -1,4 +1,15 @@
+import { claimNumber } from '@/data/claims'
+import { claimCite } from '@/data/claims/cite'
+import '@/data/claims/lazy/kvpool'
 import type { Lesson } from '../types'
+
+// The 2023 paper's block size and vLLM's default today are two claims; prose reads each from the registry.
+const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
+const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
+const ENGINE_CITE = claimCite('production.vllm.block-size')
+/** Blocks a sequence of `tokens` occupies at `block` tokens each, and the slots left unused in its tail. */
+const blocksFor = (tokens: number, block: number) => Math.ceil(tokens / block)
+const tailWaste = (tokens: number, block: number) => blocksFor(tokens, block) * block - tokens
 
 const lesson: Lesson = {
   id: 't1.l4',
@@ -63,13 +74,13 @@ const lesson: Lesson = {
         },
         {
           kind: 'numeric',
-          q: 'A sequence holds 200 tokens, and its KV cache is stored in blocks of 16 tokens each. How many blocks does it occupy?',
+          q: 'A sequence holds 200 tokens, and its KV cache is stored in blocks of 16 tokens each, the block size the 2023 vLLM paper chose. How many blocks does it occupy?',
           unit: 'blocks',
           truth: 13,
           okWithinFactor: 1.05,
           revealAt: 'The fixed-block maneuver',
           kcs: ['t1.fixed-blocks'],
-          claims: ['production.vllm.block-size'],
+          claims: ['serving.pagedattention.paper-block-size'],
         },
       ],
     },
@@ -103,7 +114,7 @@ The metric that matters is: \`largest_free_block / total_free\`. When that ratio
     {
       type: 'statline',
       stats: [
-        { value: '<4%', label: 'vLLM KV waste', hint: 'Fixed 16-token blocks: waste is the tail block only — the vLLM paper\'s headline number.' },
+        { value: '<4%', label: 'KV waste (course estimate)', hint: 'Fixed blocks (16 tokens in the paper): waste is the tail block only. The course\'s estimate for a mixed batch, not a figure the paper reports; the paper says near-zero waste.' },
         { value: '60%+', label: 'pre-vLLM waste', hint: 'Contiguous per-sequence KV reservation: over-booking + fragmentation before PagedAttention.' },
         { value: '~50%', label: 'pow2 worst case', hint: 'Power-of-two size classes bound internal waste below 50% — by construction.' },
         { value: '0', label: 'external frag (fixed)', hint: 'One block size ⇒ any free block fits any request. External fragmentation cannot exist.' },
@@ -164,7 +175,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
 - **OS page frames** — RAM is managed as 4 KiB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
 - **Slab/slab-like allocators** — one object size per cache; freeing is O(1); the slab *is* a fixed-block design.
 - **Database buffer pools** — everything is an 8 KiB page, full stop.
-- **vLLM KV blocks** — every block holds the same number of tokens (default 16). A 300-token sequence needs ⌈300/16⌉ = 19 blocks; waste is at most 15 tokens of KV in the tail, under 4% in practice. Before this, engines reserved *contiguous* KV per sequence sized to max length: 60%+ of HBM stranded. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
+- **vLLM KV blocks** — every block holds the same number of tokens: ${PAPER_BLOCK} in the 2023 paper, ${ENGINE_CITE} as vLLM's default now. A 300-token sequence needs ⌈300/${PAPER_BLOCK}⌉ = ${blocksFor(300, PAPER_BLOCK)} blocks at the paper's ${PAPER_BLOCK}, with ${tailWaste(300, PAPER_BLOCK)} slots wasted, and ⌈300/${ENGINE_BLOCK}⌉ = ${blocksFor(300, ENGINE_BLOCK)} blocks at ${ENGINE_BLOCK}, with ${tailWaste(300, ENGINE_BLOCK)} slots wasted. Waste is at most block_size − 1 tokens of KV in the tail, which is arithmetic; the course's estimate for a mixed batch is under 4%, a figure the paper does not report (its words are near-zero waste). Before this, engines reserved *contiguous* KV per sequence sized to max length: the paper's profiling found only 20.4% to 38.2% of KV cache memory holding token states. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
     },
     {
       type: 'callout',
@@ -174,7 +185,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
     {
       type: 'callout',
       variant: 'warning',
-      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; vLLM's 16-token default is a balance, not a proven optimum: the PagedAttention paper's sweep found 16 to 128 tokens best on ShareGPT). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KiB frames fragments huge (2 MiB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
+      md: `Fixed blocks are not a free lunch — they are a *priced* lunch. Internal waste scales with block size; too-large blocks strand memory in tails, too-small blocks multiply metadata (block tables grow; the paper's ${PAPER_BLOCK} was a balance, not a proven optimum: its sweep found 16 to 128 tokens best on ShareGPT; vLLM's default now is ${ENGINE_CITE}). And fixed-block systems still fragment at the *next layer up*: an OS with 4 KiB frames fragments huge (2 MiB) pages; vLLM fragments nothing at token level but still schedules whole sequences. Fragmentation is never destroyed — it is relocated to a layer where you can afford it.`,
     },
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: a pool of equal blocks still needs malloc's
     // coalescing. The evidence names it: "the real lesson is that fixed blocks remove the need for coalescing" (content.md §3,
@@ -345,7 +356,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
           kcs: ['t1.external-frag'],
         },
         {
-          q: 'vLLM\'s reported <4% KV-cache waste comes primarily from…',
+          q: 'vLLM\'s near-zero KV-cache waste comes primarily from…',
           options: [
             'Compressing KV to lower precision, halving the bytes each token needs',
             'Fixed-size KV token blocks, confining waste to the partly filled tail block',
@@ -354,7 +365,7 @@ In the exercise you will run adversarial traces against your toy allocator and w
           ],
           correct: [1],
           explanation:
-            'The vLLM paper\'s headline: paging KV into fixed blocks caps waste at the tail (≤ block_size−1 tokens per sequence) — versus 60%+ stranded by contiguous max-length reservation before PagedAttention.',
+            'The paper\'s claim is near-zero waste: paging KV into fixed blocks caps waste at the tail (≤ block_size−1 tokens per sequence) — versus only 20.4% to 38.2% of KV cache memory holding token states in the systems before PagedAttention.',
           why: [
             'Quantization shrinks bytes per token but not the reserved-but-unused share. A contiguous max-length reservation wastes the same fraction whatever the precision.',
             'Right: blocks are allocated on demand, so the only unused space is the unfilled tail block, at most block_size minus 1 tokens per sequence.',
