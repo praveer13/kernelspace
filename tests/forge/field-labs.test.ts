@@ -135,7 +135,8 @@ describe('the commands are pinned claims', () => {
     expect(b).not.toContain('default 0.92')
     expect(b).toContain('resolves to 1.0 with the extensible KV cache')
     expect(b).toContain('0.92 otherwise')
-    expect(b).toContain('opt-out')
+    expect(b).toContain('overrides the 1.0 default')
+    expect(b).not.toContain('logs a warning')
   })
 
   test('every flag in the vLLM commands was found at the pin', () => {
