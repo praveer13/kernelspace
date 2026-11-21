@@ -486,8 +486,8 @@ export default function AllocatorSim() {
               The meter watches <span className="font-mono text-text-1">largest free ÷ total free</span>{' '}
               — when it craters, plenty of bytes exist but none are usable. That is external
               fragmentation. Flip on <span className="font-mono text-text-1">fixed blocks</span>{' '}
-              and it becomes impossible — exactly why vLLM pages the KV cache in uniform 16-token
-              blocks.
+              and it becomes impossible — exactly why vLLM pages the KV cache in uniform fixed-size
+              token blocks.
             </p>
           </>
         )
