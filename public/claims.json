@@ -3238,9 +3238,9 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py (default 0.92, so 0.90 is given on purpose and Boot-sized arithmetic uses it). 4,096 is Boot's chat length, so the log's concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step)."
+      "boundary": "The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py: unset, it resolves to 1.0 with the extensible KV cache (on by default on CUDA and ROCm) and 0.92 otherwise, so the explicit 0.90 is an opt-out that logs a warning; kept so the log matches Boot's arithmetic. 4,096 is Boot's chat length, so the log's concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step)."
     },
     {
       "id": "field.decode-kv.bench",
@@ -3257,7 +3257,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "With --max-concurrency 1 the server holds one request at a time, so every decode step is batch 1. --input-len and --output-len map to the random dataset's lengths, and the random dataset sets ignore_eos on the OpenAI-compatible backends, so each request generates exactly 256 tokens. Run it in a second terminal while the server from field.decode-kv.serve is up."
     },
@@ -3276,7 +3276,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Printed once while the server starts, before it accepts requests. The first %s is \"GPU\" on CUDA, the second is the token count with thousands separators, the third is --max-model-len; the concurrency is get_max_concurrency_for_kv_cache_config, so it equals the token count divided by --max-model-len. Enter the number before the x."
     },
@@ -3295,7 +3295,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "TPOT is computed once per request as (end-to-end latency - TTFT) / (output tokens - 1), then averaged, so it leaves out the first token (the prefill). At batch 1, 1000 / TPOT in ms is the tokens per second one user gets."
     },
@@ -3332,7 +3332,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "As field.decode-kv.serve, with --max-model-len 8192, the longest context the model's config.json allows (max_position_embeddings 8192). A request whose prompt plus output exceeds it is refused and counts under \"Failed requests\"."
     },
@@ -3351,7 +3351,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "--request-rate inf sends every request at time 0 (the flag's default), so the run measures saturation, not arrival bursts. --ignore-eos makes each request generate exactly the response length its BurstGPT row records. 480 matches the Fleet slice's request count. --seed 0 is the default, written out so the draw is the same on every run.",
       "discrepancy": "vLLM's docs point at BurstGPT v1.1's BurstGPT_without_fails_2.csv. This lab pins v2.0's BurstGPT_without_fails_1.csv, the file the Fleet's trace is cut from; the loader needs a Model column and the request and response token counts as the third and fourth columns, which the v2.0 file has (header: Timestamp,Model,Request tokens,Response tokens,Total tokens,Log Type)."
@@ -3371,7 +3371,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "load_data keeps Model == \"GPT-4\" and Response tokens > 0, then sample() draws num_requests rows at random (pandas sample, random_state = --seed) and reads only the third and fourth columns of each, the request and response token counts. The Timestamp column is never read: the CLI replays BurstGPT's token lengths, not its arrival times. The prompt it sends is made-up token ids of the right length."
     },
@@ -3390,7 +3390,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Generated tokens divided by the benchmark duration, which runs from the first request sent to the last one finished, so it includes the slow tail of the longest responses and the prefill of every prompt. \"Failed requests\" prints just above it and should read 0."
     },

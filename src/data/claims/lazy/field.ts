@@ -8,7 +8,7 @@ import type { Claim } from '../schema'
  * so the labs show "stale since" when the engine moves. Each command's flags were looked up at that tag: the serve
  * flags in vllm/config/model.py (`dtype`, `max_model_len`) and vllm/config/cache.py (`gpu_memory_utilization`), the
  * bench flags in vllm/benchmarks/serve.py and vllm/benchmarks/datasets/datasets.py. The quotes were copied from the
- * files at that tag on 2026-10-14 with runs of whitespace collapsed to one space. tests/forge/field-labs.test.ts holds
+ * files at that tag on 2026-10-14 with runs of whitespace collapsed to one space; the eight vLLM claims were re-read at v0.34.0 on 2026-11-21. tests/forge/field-labs.test.ts holds
  * each command to the flags this file names.
  *
  * Nobody has run these commands on a GPU yet. The owner signs them off and runs each once (spec §16.5, owner step); until
@@ -53,10 +53,10 @@ export const FIELD_CLAIMS: Claim[] = [
     label: 'Field lab 1: start vLLM on Llama-3-8B with 4,096-token requests',
     source: { ...VLLM_CLI_DOC, quote: 'Starts the vLLM OpenAI Compatible API server.', row: 'serve' },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      'The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py (default 0.92, so 0.90 is given on purpose and Boot-sized arithmetic uses it). 4,096 is Boot\'s chat length, so the log\'s concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step).',
+      'The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py: unset, it resolves to 1.0 with the extensible KV cache (on by default on CUDA and ROCm) and 0.92 otherwise, so the explicit 0.90 is an opt-out that logs a warning; kept so the log matches Boot\'s arithmetic. 4,096 is Boot\'s chat length, so the log\'s concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step).',
   },
   {
     id: 'field.decode-kv.bench',
@@ -69,7 +69,7 @@ export const FIELD_CLAIMS: Claim[] = [
       row: 'Parameters: --max-concurrency',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'With --max-concurrency 1 the server holds one request at a time, so every decode step is batch 1. --input-len and --output-len map to the random dataset\'s lengths, and the random dataset sets ignore_eos on the OpenAI-compatible backends, so each request generates exactly 256 tokens. Run it in a second terminal while the server from field.decode-kv.serve is up.',
@@ -85,7 +85,7 @@ export const FIELD_CLAIMS: Claim[] = [
       row: 'update_kv_cache_capacity (logger.info_once)',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'Printed once while the server starts, before it accepts requests. The first %s is "GPU" on CUDA, the second is the token count with thousands separators, the third is --max-model-len; the concurrency is get_max_concurrency_for_kv_cache_config, so it equals the token count divided by --max-model-len. Enter the number before the x.',
@@ -101,7 +101,7 @@ export const FIELD_CLAIMS: Claim[] = [
       row: 'the TPOT block of the Serving Benchmark Result',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'TPOT is computed once per request as (end-to-end latency - TTFT) / (output tokens - 1), then averaged, so it leaves out the first token (the prefill). At batch 1, 1000 / TPOT in ms is the tokens per second one user gets.',
@@ -124,7 +124,7 @@ export const FIELD_CLAIMS: Claim[] = [
     label: 'Field lab 2: start vLLM on Llama-3-8B with 8,192-token requests',
     source: { ...VLLM_CLI_DOC, quote: 'Starts the vLLM OpenAI Compatible API server.', row: 'serve' },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'As field.decode-kv.serve, with --max-model-len 8192, the longest context the model\'s config.json allows (max_position_embeddings 8192). A request whose prompt plus output exceeds it is refused and counts under "Failed requests".',
@@ -140,7 +140,7 @@ export const FIELD_CLAIMS: Claim[] = [
       row: 'Supported datasets table: BurstGPT',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       '--request-rate inf sends every request at time 0 (the flag\'s default), so the run measures saturation, not arrival bursts. --ignore-eos makes each request generate exactly the response length its BurstGPT row records. 480 matches the Fleet slice\'s request count. --seed 0 is the default, written out so the draw is the same on every run.',
@@ -158,7 +158,7 @@ export const FIELD_CLAIMS: Claim[] = [
       row: 'BurstGPTDataset',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'load_data keeps Model == "GPT-4" and Response tokens > 0, then sample() draws num_requests rows at random (pandas sample, random_state = --seed) and reads only the third and fourth columns of each, the request and response token counts. The Timestamp column is never read: the CLI replays BurstGPT\'s token lengths, not its arrival times. The prompt it sends is made-up token ids of the right length.',
@@ -174,7 +174,7 @@ export const FIELD_CLAIMS: Claim[] = [
       row: 'the Serving Benchmark Result block',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'Generated tokens divided by the benchmark duration, which runs from the first request sent to the last one finished, so it includes the slow tail of the longest responses and the prefill of every prompt. "Failed requests" prints just above it and should read 0.',
