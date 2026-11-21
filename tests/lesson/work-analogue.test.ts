@@ -28,7 +28,7 @@ afterAll(() => dom.uninstall())
 /** The four pairs of §11.3's table: lesson, the LLM label the work row shares, the work concept, backgrounds. */
 const TABLE: { lesson: string; llm: string; os: string; backgrounds: Background[]; breakHas: string[] }[] = [
   { lesson: 't2.l7', llm: 'KV block', os: 'connection pool', backgrounds: ['backend', 'jvm'], breakHas: ['returns to the pool whole', 'reference count'] },
-  { lesson: 't1.l3', llm: 'fixed 16-token blocks', os: 'G1 regions', backgrounds: ['jvm'], breakHas: ['evacuates', 'never moves'] },
+  { lesson: 't1.l3', llm: 'fixed-size token blocks', os: 'G1 regions', backgrounds: ['jvm'], breakHas: ['evacuates', 'never moves'] },
   { lesson: 't2.l4', llm: 'waiting → running queue', os: 'backpressure', backgrounds: ['sre', 'backend'], breakHas: ['slows the producer', 'decode keeps running'] },
   { lesson: 't5.l6', llm: 'token-prefix key', os: 'CDN entry with a TTL', backgrounds: ['sre', 'backend'], breakHas: ['go stale', 'never be wrong', 're-prefill'] },
 ]
