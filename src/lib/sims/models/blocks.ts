@@ -5,8 +5,9 @@
  * BlockTableExplorer renders this, the four `blk.*` outcome tasks (src/components/sims/blockTableExplorer.tasks.ts)
  * read it through the observations the sim emits, and phone mode draws the canonical outcome from `PHONE_MODELS`
  * without the sim. Every function takes a state and returns a new one, so the sim's handlers log and observe
- * outside React's updaters. The scenario is synthetic: a pool of 10 physical blocks of 16 tokens (the vLLM
- * default), two sequences sharing a 48-token prompt, and a 64-token request that needs 4 blocks.
+ * outside React's updaters. The scenario is synthetic: a pool of 10 physical blocks of 16 tokens (the 2023
+ * paper's size; a model setting, not vLLM's current default), two sequences sharing a 48-token prompt, and a
+ * 64-token request that needs 4 blocks.
  * No React, no DOM, no clock: it runs under `bun test`.
  */
 

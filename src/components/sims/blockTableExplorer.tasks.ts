@@ -123,13 +123,13 @@ export const BLOCK_TABLE_EXPLORER_TASKS: SimTaskDef[] = [
     },
     observe: 'blk.sweep-tail-64',
     explain: {
-      prompt: 'In one line: why is 16 tokens the default block size, and not 4 or 64?',
+      prompt: 'In one line: what does a 64-token block save over a 16-token one, and what does it cost?',
       model:
-        'Block size trades two costs. A bigger block leaves more unused slots in a sequence\'s last block (this prompt wastes 16 slots at 64 tokens and none at 16; across random lengths about half a block), while a smaller block needs more table entries (12 at 4 tokens against 3 at 16), each a lookup in the attention kernel. 16 tokens keeps both small.',
+        'A bigger block needs fewer table entries (one per 64 tokens instead of one per 16) and less per-block bookkeeping, each entry being a lookup in the attention kernel. It costs more unused slots in a sequence\'s last block (up to 63 against up to 15), and prefix sharing only in whole 64-token blocks, so a shared prefix shorter than a block is not shared.',
       ideas: [
+        'A bigger block needs fewer table entries and less bookkeeping',
         'A bigger block leaves more unused slots in the last block',
-        'A smaller block needs more block-table entries, so more lookups per sequence',
-        '16 tokens keeps both the tail waste and the table small',
+        'Prefix sharing happens in whole blocks, so bigger blocks share less',
       ],
     },
     note: 'Sweep the slider from 4 to 64: the waste column is zero until the block is larger than the 16 tokens that divide the prompt evenly, while the entry count falls from 12 to 1. A different prompt length moves the waste but not the shape of the trade.',
