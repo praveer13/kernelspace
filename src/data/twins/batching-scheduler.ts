@@ -1,9 +1,11 @@
 import { KC } from '@/data/kc/ids'
+import { VLLM_PIN } from '@/data/claims/engines'
 import type { TwinItem, TwinModule } from './types'
 
 /**
  * Lab 06 against vLLM v1's scheduler (docs/specs/wave-3.md §9, task 3b-15). The claim `twin.vllm.scheduler` pins
- * vllm-project/vllm at v0.31.0; every statement below was read in these files at that tag:
+ * vllm-project/vllm at VLLM_PIN.ref (src/data/claims/engines.ts; v0.34.0 on 2026-11-21, when each statement below was
+ * re-read in these files at that tag, and the three keyed answers held; the stems name the release from VLLM_PIN.ref):
  *   vllm/v1/core/sched/scheduler.py        Scheduler.schedule (the running loop, the waiting loop, the NOTE on the
  *                                           algorithm), Scheduler._preempt_request, the default FCFS queue
  *                                           (vllm/v1/core/sched/request_queue.py: FCFSRequestQueue.peek_request)
@@ -29,7 +31,7 @@ const q1: TwinItem = {
   id: 'lab06.twin.1',
   kcs: [KC.schedOrder, KC.admissionHeadroom],
   q: {
-    q: 'vLLM v0.31.0 is configured with max_num_batched_tokens 2,048 and 16-token KV blocks, and its policy flags are at their defaults: first-come-first-served, chunked prefill on, no KV connector. Other requests hold most of the pool, so 200 blocks (3,200 tokens) are free, and the running requests need no new block this step. The waiting queue, oldest first, is W1 (a 4,000-token prompt), W2 (300 tokens) and W3 (200 tokens); none has a prefix-cache hit. Which of them does schedule() admit this step?',
+    q: `vLLM ${VLLM_PIN.ref} is configured with max_num_batched_tokens 2,048 and 16-token KV blocks, and its policy flags are at their defaults: first-come-first-served, chunked prefill on, no KV connector. Other requests hold most of the pool, so 200 blocks (3,200 tokens) are free, and the running requests need no new block this step. The waiting queue, oldest first, is W1 (a 4,000-token prompt), W2 (300 tokens) and W3 (200 tokens); none has a prefix-cache hit. Which of them does schedule() admit this step?`,
     options: [
       'W3 and then W2, as the loop admits the smallest prompts first and leaves the 4,000-token whale for when memory frees',
       'W2 and W3, as W1 does not fit and the loop skips it and keeps walking the queue, just like your reference scheduler',
@@ -50,7 +52,7 @@ const q2: TwinItem = {
   id: 'lab06.twin.2',
   kcs: [KC.admissionHeadroom, KC.continuousBatching],
   q: {
-    q: "vLLM v0.31.0 with its policy flags at their defaults (first-come-first-served, no KV connector). Three requests are running, admitted in this order: R1, R2, R3. The KV pool is full. This step R1's decode token crosses a block boundary and needs one new block; R2 needs none. R2 holds 40 blocks (the most) and R3 holds 5. schedule() reaches R1 first and allocate_slots returns None. What does it do?",
+    q: `vLLM ${VLLM_PIN.ref} with its policy flags at their defaults (first-come-first-served, no KV connector). Three requests are running, admitted in this order: R1, R2, R3. The KV pool is full. This step R1's decode token crosses a block boundary and needs one new block; R2 needs none. R2 holds 40 blocks (the most) and R3 holds 5. schedule() reaches R1 first and allocate_slots returns None. What does it do?`,
     options: [
       'It preempts R2, the request holding the most blocks, as freeing 40 blocks at once ends the memory pressure fastest on the next step, and R1 and R3 keep running',
       'It preempts R1, the request that asked for the block and cannot get it, and lets R2 and R3 carry on with their decode tokens as before',
@@ -71,7 +73,7 @@ const q3: TwinItem = {
   id: 'lab06.twin.3',
   kcs: [KC.continuousBatching, KC.batchingThroughput],
   q: {
-    q: "vLLM v0.31.0 with max_num_batched_tokens set to 2,048 and its policy flags at their defaults (chunked prefill on). 40 requests are decoding, one token each this step. The head of the waiting queue is a 6,000-token prompt with no prefix-cache hit, whose whole sequence fits in the free KV blocks. How many of its prompt tokens does this step's schedule() give it?",
+    q: `vLLM ${VLLM_PIN.ref} with max_num_batched_tokens set to 2,048 and its policy flags at their defaults (chunked prefill on). 40 requests are decoding, one token each this step. The head of the waiting queue is a 6,000-token prompt with no prefix-cache hit, whose whole sequence fits in the free KV blocks. How many of its prompt tokens does this step's schedule() give it?`,
     options: [
       '2,048 tokens, as prefill and decode draw on separate budgets and the 40 decode tokens do not shrink the chunk the prompt gets in this step',
       '6,000 tokens, the whole prompt in one step, as it fits in the free KV blocks and nothing else in the loop limits how much of it goes in',

@@ -6,7 +6,8 @@ import type { Claim } from '../schema'
  * The two production twins' pinned facts (spec wave-3 §4.4 and §9, 3a-08): the lab 07 twin reads SGLang's radix-tree
  * core, the lab 06 twin vLLM's scheduler. Both are `status` claims pinned to the release the In-production claims
  * use (engines.ts), with ttlDays 60, so the twin shows "stale since" when the engines move. Quotes were copied from
- * the files at those refs on 2026-10-14.
+ * the files at those refs on 2026-10-14; the vLLM scheduler's was read again at v0.34.0 on 2026-11-21 (scheduler.py:719),
+ * and the SGLang one is not touched here.
  */
 const SGLANG_ENVIRON = {
   url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/environ.py`,
@@ -41,7 +42,7 @@ export const TWIN_CLAIMS: Claim[] = [
       row: 'Scheduler.schedule (NOTE on the scheduling algorithm)',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'Each request has a count of computed tokens that catches up with its tokens to compute; schedule() spends one token budget per step across running and waiting requests, so chunked prefill, prefix caching and speculative decoding fall out of one rule.',
