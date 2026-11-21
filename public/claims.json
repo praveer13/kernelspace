@@ -1490,7 +1490,7 @@
       },
       "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "When --block-size is not given. Attention backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size wins. Hybrid and Mamba models track their own (mamba_block_size). 16 through v0.33.0.",
+      "boundary": "When --block-size is not given. Attention backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size wins. Hybrid and Mamba models track their own (mamba_block_size). 16 before v0.34.0 (its release notes: \"was 16\").",
       "discrepancy": "The 2023 paper's default was 16 (serving.pagedattention.paper-block-size)."
     },
     {
@@ -1676,7 +1676,7 @@
       "source": {
         "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/managers/scheduler.py",
         "title": "SGLang v0.5.23 source: srt/managers/scheduler.py (Scheduler)",
-        "quote": "kv_full_retract_flag = not batch.check_decode_mem() if kv_full_retract_flag and finishing_reqs: # The queued result frees the finishing requests' KV at the end of this step; decode the rest next step instead of retracting them. batch.batch_is_full = False return None # Check if decode out of memory if kv_full_retract_flag or (",
+        "quote": "kv_full_retract_flag = not batch.check_decode_mem() if kv_full_retract_flag and finishing_reqs: # The queued result frees the finishing requests' KV at the end of # this step; decode the rest next step instead of retracting them. batch.batch_is_full = False return None # Check if decode out of memory if kv_full_retract_flag or (",
         "row": "Scheduler.update_running_batch"
       },
       "pin": {
@@ -1685,7 +1685,7 @@
       },
       "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "When a decode step cannot get KV memory the scheduler calls batch.retract_decode() and puts the retracted requests back on the waiting queue (_add_request_to_queue(req, is_retracted=True)). Since v0.5.23, if requests are about to finish and would free KV this step, it decodes the rest next step instead of retracting. --retraction-policy chooses the victims: \"length\" (the default) retracts short-output, long-input requests first, and \"priority\" retracts lower-priority requests first."
+      "boundary": "When a decode step cannot get KV memory the scheduler calls batch.retract_decode() and puts the retracted requests back on the waiting queue (_add_request_to_queue(req, is_retracted=True)). At v0.5.23, if requests are about to finish and would free KV this step, it decodes the rest next step instead of retracting. --retraction-policy chooses the victims: \"length\" (the default) retracts short-output, long-input requests first, and \"priority\" retracts lower-priority requests first."
     },
     {
       "id": "production.vllm.max-num-seqs",
@@ -3240,7 +3240,7 @@
       },
       "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py: unset, it resolves to 1.0 with the extensible KV cache (on by default on CUDA and ROCm) and 0.92 otherwise, so the explicit 0.90 is an opt-out that logs a warning; kept so the log matches Boot's arithmetic. 4,096 is Boot's chat length, so the log's concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step)."
+      "boundary": "The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py: unset, it resolves to 1.0 with the extensible KV cache (on by default on CUDA and ROCm) and 0.92 otherwise, so the explicit 0.90 overrides the 1.0 default (cache.py advises leaving it unset); kept so the log matches Boot's arithmetic. 4,096 is Boot's chat length, so the log's concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step)."
     },
     {
       "id": "field.decode-kv.bench",
@@ -6607,7 +6607,7 @@
       "unit": "tokens/block",
       "label": "PagedAttention paper (SOSP 2023): vLLM's default block size",
       "source": {
-        "url": "https://arxiv.org/abs/2309.06180v1",
+        "url": "https://arxiv.org/pdf/2309.06180v1",
         "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1)",
         "quote": "Accordingly, vLLM sets its default block size as 16.",
         "row": "Section 7.2, Impact of block size"

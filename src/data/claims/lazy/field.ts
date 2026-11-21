@@ -56,7 +56,7 @@ export const FIELD_CLAIMS: Claim[] = [
     verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      'The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py: unset, it resolves to 1.0 with the extensible KV cache (on by default on CUDA and ROCm) and 0.92 otherwise, so the explicit 0.90 is an opt-out that logs a warning; kept so the log matches Boot\'s arithmetic. 4,096 is Boot\'s chat length, so the log\'s concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step).',
+      'The page documents `vllm serve <model>`. The flags exist at this tag: --dtype and --max-model-len are fields of vllm/config/model.py, --gpu-memory-utilization of vllm/config/cache.py: unset, it resolves to 1.0 with the extensible KV cache (on by default on CUDA and ROCm) and 0.92 otherwise, so the explicit 0.90 overrides the 1.0 default (cache.py advises leaving it unset); kept so the log matches Boot\'s arithmetic. 4,096 is Boot\'s chat length, so the log\'s concurrency counts the same chats Boot counted. Needs an 80 GB-class GPU; nobody has run it yet (owner step).',
   },
   {
     id: 'field.decode-kv.bench',

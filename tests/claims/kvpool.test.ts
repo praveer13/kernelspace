@@ -5,13 +5,23 @@ import { VLLM_PIN } from '../../src/data/claims/engines'
 import { KVPOOL_CLAIMS } from '../../src/data/claims/lazy/kvpool'
 
 describe('lazy/kvpool', () => {
-  test('the paper claim is 16, a spec, unpinned, and cites an arXiv version', () => {
+  test('the paper claim is 16, a spec, unpinned, and cites the arXiv PDF (the sentence is in Section 7.2, not on the abstract page)', () => {
     const c = getClaim('serving.pagedattention.paper-block-size')
     expect(c.value).toBe(16)
     expect(c.kind).toBe('spec')
     expect(c.pin).toBeUndefined()
-    expect(c.source?.url).toMatch(/arxiv\.org\/abs\/2309\.06180v\d+$/)
+    expect(c.source?.url).toMatch(/arxiv\.org\/pdf\/2309\.06180v\d+$/)
     expect(c.source?.quote).toContain('default block size as 16')
+  })
+
+  test('the SGLang retract quote keeps the wrapped comment\'s second # (copied verbatim from scheduler.py)', () => {
+    const q = getClaim('production.sglang.retract').source?.quote ?? ''
+    expect(q).toContain("KV at the end of # this step; decode the rest")
+  })
+
+  test('the erratum on the paper\'s waste figure cites the PDF, where 20.4% to 38.2% is printed', async () => {
+    const e = (await import('../../src/data/errata/2026-11-21-paged-waste-not-the-papers-figure')).default
+    expect(e.source.url).toBe('https://arxiv.org/pdf/2309.06180v1')
   })
 
   test.each(['production.vllm.extensible-kv-cache', 'production.vllm.gpu-memory-utilization'])('%s is pinned to VLLM_PIN and its url names the tag', (id) => {

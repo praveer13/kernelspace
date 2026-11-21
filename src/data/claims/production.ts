@@ -40,7 +40,7 @@ export const PRODUCTION_CLAIMS: Claim[] = [
     verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      'When --block-size is not given. Attention backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size wins. Hybrid and Mamba models track their own (mamba_block_size). 16 through v0.33.0.',
+      'When --block-size is not given. Attention backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size wins. Hybrid and Mamba models track their own (mamba_block_size). 16 before v0.34.0 (its release notes: "was 16").',
     discrepancy: "The 2023 paper's default was 16 (serving.pagedattention.paper-block-size).",
   },
   {
