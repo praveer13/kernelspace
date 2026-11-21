@@ -1,5 +1,12 @@
 import type { AuthoredItem } from '@/lib/items/types'
+import { claimNumber } from '@/data/claims'
+import { claimCite } from '@/data/claims/cite'
+import '@/data/claims/lazy/kvpool'
 import type { Lesson } from '../types'
+
+// The paper's block size and vLLM's default today are two claims; this lesson reads each from the registry.
+const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
+const ENGINE_CITE = claimCite('production.vllm.block-size')
 
 /**
  * Spiral items (spec §8.6): authored questions on earlier T0-T2 KCs, drawn by the t2.l7 checkpoint beside the
@@ -226,12 +233,12 @@ You already know this bug — you built it in T1. Contiguous, worst-case, per-cl
       type: 'prose',
       md: `## §3: PagedAttention — paging, verbatim
 
-The fix, section 3: partition each sequence's KV cache into **blocks** of a fixed number of tokens (default 16). Blocks live anywhere in GPU memory; each sequence keeps a **block table** mapping its logical blocks to physical blocks; the attention kernel reads keys/values *through* the block table.
+The fix, section 3: partition each sequence's KV cache into **blocks** of a fixed number of tokens (${PAPER_BLOCK} in the paper). Blocks live anywhere in GPU memory; each sequence keeps a **block table** mapping its logical blocks to physical blocks; the attention kernel reads keys/values *through* the block table.
 
 Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; the block table is a **page table** (one level, since sequences are small); the attention kernel walking it is the **MMU** doing translation. Every property follows for free, exactly as in 1962:
 
 - **Fixed-size blocks ⇒ no external fragmentation.** Any free block fits any sequence (T1.L4's fixed-block maneuver).
-- **Waste is bounded to the tail block**: ≤15 tokens per sequence. The paper reports **<4% waste** — bounded internal fragmentation by construction.
+- **Waste is bounded to the tail block**: at most block_size − 1 tokens per sequence (${PAPER_BLOCK - 1} at the paper's ${PAPER_BLOCK}). The paper's own words are **near-zero waste**, against only 20.4% to 38.2% of KV memory holding token states in earlier systems — bounded internal fragmentation by construction.
 - **Growth is lazy**: blocks are allocated on demand as tokens generate, like demand paging — no more worst-case reservation.
 - **Sharing is block-granular**: two sequences with a common prefix (the system prompt, parallel samples, beam branches) *share physical blocks*, reference-counted. When one branch writes to a shared block, it is copied — **copy-on-write**, the fork() trick from T2.L2, with the same refcounts.`,
     },
@@ -243,8 +250,8 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
           os: 'page / frame',
           osLine: 'Fixed 4 KiB units of virtual/physical memory; any frame backs any page.',
           llm: 'KV block',
-          llmLine: 'Fixed 16-token units of logical/physical KV; any physical block serves any sequence.',
-          breaks: 'A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (16 tokens) whose byte size depends on the model\'s layers, heads and dtype.',
+          llmLine: `Fixed-size token units (${PAPER_BLOCK} in the paper) of logical/physical KV; any physical block serves any sequence.`,
+          breaks: `A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (${PAPER_BLOCK} tokens in the paper, ${ENGINE_CITE} as vLLM's default) whose byte size depends on the model's layers, heads and dtype.`,
           work: {
             backgrounds: ['backend', 'jvm'],
             os: 'connection pool',
@@ -350,7 +357,7 @@ You are ready for the checkpoint when you can answer, without notes: What three 
           miss: ['t2.waste-is-leaks', '', 't2.waste-is-runtime-pathology', 't2.waste-is-memory-safety'],
         },
         {
-          q: 'PagedAttention bounds KV waste to <4% primarily because…',
+          q: 'PagedAttention bounds KV waste to near zero primarily because…',
           options: [
             'Compressing KV tensors to a lower precision shrinks each reservation, with the unused part shrinking along with it',
             'Fixed-size KV token blocks remove external fragmentation, with internal waste capped at the tail block of each sequence',
@@ -362,8 +369,8 @@ You are ready for the checkpoint when you can answer, without notes: What three 
             'The fixed-block maneuver from T1.L4: any free block fits any sequence (no external fragmentation), and waste is ≤ block_size−1 tokens in the tail — the same physics as OS page frames.',
           why: [
             'Misconception: compression fixes waste. FP8 shrinks the bytes per token, but a worst-case reservation shrinks proportionally; the unused fraction stays the same, and PagedAttention does not require it.',
-            'Right: any free block fits any sequence, so no gaps are stranded, and each sequence wastes at most the unfilled part of one block (up to 15 tokens at block size 16).',
-            'Misconception: eviction does the work. Offload helps under pressure, but waste comes from how memory is reserved and laid out; the <4% figure holds without any swapping.',
+            'Right: any free block fits any sequence, so no gaps are stranded, and each sequence wastes at most the unfilled part of one block (up to 15 tokens at the paper\'s block size of 16).',
+            'Misconception: eviction does the work. Offload helps under pressure, but waste comes from how memory is reserved and laid out; the bound holds without any swapping.',
             'Misconception: more free HBM means less waste. Extra headroom is capacity, not efficiency; the waste fraction is defined by the allocation scheme, and weights sit in a separate region.',
           ],
           kcs: ['t2.pagedattention-as-paging', 't1.fixed-blocks'],
