@@ -20,7 +20,7 @@ export const KVPOOL_CLAIMS: Claim[] = [
     unit: 'tokens/block',
     label: "PagedAttention paper (SOSP 2023): vLLM's default block size",
     source: {
-      url: 'https://arxiv.org/abs/2309.06180v1',
+      url: 'https://arxiv.org/pdf/2309.06180v1',
       title: 'Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1)',
       quote: 'Accordingly, vLLM sets its default block size as 16.',
       row: 'Section 7.2, Impact of block size',

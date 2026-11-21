@@ -105,14 +105,14 @@ export const ENGINE_CLAIMS: Claim[] = [
     source: {
       ...SGLANG_SCHEDULER,
       quote:
-        "kv_full_retract_flag = not batch.check_decode_mem() if kv_full_retract_flag and finishing_reqs: # The queued result frees the finishing requests' KV at the end of this step; decode the rest next step instead of retracting them. batch.batch_is_full = False return None # Check if decode out of memory if kv_full_retract_flag or (",
+        "kv_full_retract_flag = not batch.check_decode_mem() if kv_full_retract_flag and finishing_reqs: # The queued result frees the finishing requests' KV at the end of # this step; decode the rest next step instead of retracting them. batch.batch_is_full = False return None # Check if decode out of memory if kv_full_retract_flag or (",
       row: 'Scheduler.update_running_batch',
     },
     pin: SGLANG_PIN,
     verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      'When a decode step cannot get KV memory the scheduler calls batch.retract_decode() and puts the retracted requests back on the waiting queue (_add_request_to_queue(req, is_retracted=True)). Since v0.5.23, if requests are about to finish and would free KV this step, it decodes the rest next step instead of retracting. --retraction-policy chooses the victims: "length" (the default) retracts short-output, long-input requests first, and "priority" retracts lower-priority requests first.',
+      'When a decode step cannot get KV memory the scheduler calls batch.retract_decode() and puts the retracted requests back on the waiting queue (_add_request_to_queue(req, is_retracted=True)). At v0.5.23, if requests are about to finish and would free KV this step, it decodes the rest next step instead of retracting. --retraction-policy chooses the victims: "length" (the default) retracts short-output, long-input requests first, and "priority" retracts lower-priority requests first.',
   },
   {
     id: 'production.vllm.max-num-seqs',

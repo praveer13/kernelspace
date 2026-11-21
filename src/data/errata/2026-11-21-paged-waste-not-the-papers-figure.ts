@@ -12,7 +12,7 @@ export default {
     'The paper says near-zero waste and measured only 20.4% to 38.2% of KV memory holding token states in earlier systems. The tail bound (at most block_size - 1 tokens per sequence) is arithmetic.',
   why: 'A figure the paper never printed was taught as its result. The capstone line and the glossary pair now separate the paper\'s words from the course\'s arithmetic.',
   source: {
-    url: 'https://arxiv.org/abs/2309.06180v1',
+    url: 'https://arxiv.org/pdf/2309.06180v1',
     title: 'Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention (abstract and Section 1)',
   },
   items: [
