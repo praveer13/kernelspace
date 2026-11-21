@@ -9,10 +9,17 @@
  */
 import { ENGINE_CLAIMS } from './engines'
 import { HARDWARE_CLAIMS } from './hardware'
+import { ECONOMICS_CLAIMS } from './lazy/economics'
+import { ENGINES_STATUS_CLAIMS } from './lazy/engines-status'
 import { FIELD_CLAIMS } from './lazy/field'
+import { GPU_LIMITS_CLAIMS } from './lazy/gpu-limits'
 import { IX_POINT_CLAIMS } from './lazy/ix-points'
+import { KVPOOL_CLAIMS } from './lazy/kvpool'
+import { LANDSCAPE_T6_CLAIMS } from './lazy/landscape-t6'
 import { MOE_CLAIMS } from './lazy/moe'
 import { PHYSICS_CLAIMS } from './lazy/physics'
+import { PLATFORMS_CLAIMS } from './lazy/platforms'
+import { RUST_LANG_CLAIMS } from './lazy/rust-lang'
 import { SERVING3_CLAIMS } from './lazy/serving3'
 import { TILING_CLAIMS } from './lazy/tiling'
 import { TWIN_CLAIMS } from './lazy/twins'
@@ -30,7 +37,7 @@ export * from './registry'
 /** The eager groups, as `index.ts` lists them. */
 const EAGER: readonly Claim[] = [...HARDWARE_CLAIMS, ...MODEL_CLAIMS, ...PRICE_CLAIMS, ...PRODUCTION_CLAIMS, ...ENGINE_CLAIMS, ...SERVING_CLAIMS, ...ZOO_CLAIMS]
 /** The lazy groups, in the order they were added (a new group goes last, so the claims before it keep their place in claims.json). */
-const LAZY: readonly Claim[] = [...MOE_CLAIMS, ...SERVING3_CLAIMS, ...TILING_CLAIMS, ...TWIN_CLAIMS, ...FIELD_CLAIMS, ...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS]
+const LAZY: readonly Claim[] = [...MOE_CLAIMS, ...SERVING3_CLAIMS, ...TILING_CLAIMS, ...TWIN_CLAIMS, ...FIELD_CLAIMS, ...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS, ...GPU_LIMITS_CLAIMS, ...PLATFORMS_CLAIMS, ...ENGINES_STATUS_CLAIMS, ...LANDSCAPE_T6_CLAIMS, ...ECONOMICS_CLAIMS, ...RUST_LANG_CLAIMS]
 
 /**
  * Every claim in one fixed order, the registry a fresh process builds: the eager groups, then each lazy group, with a
