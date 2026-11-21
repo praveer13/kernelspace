@@ -113,7 +113,7 @@ export const FIELD_CLAIMS: Claim[] = [
     label: 'Field lab 2: download the pinned BurstGPT file and check its hash',
     source: { ...BURSTGPT_ASSET, row: `release asset ${BURSTGPT_FILE}` },
     pin: BURSTGPT_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary: `A 51,429,517-byte CSV, 1,404,294 rows. Its SHA-256 is the one public/traces/burstgpt-v2-busiest-hour.json records as sourceSha256: the Fleet's recorded hour is cut from this very file. sha256sum -c prints "${BURSTGPT_FILE}: OK" or fails; do not benchmark a file that fails.`,
   },

@@ -120,7 +120,7 @@ export const TILING_CLAIMS: Claim[] = [
       row: 'get_cuda_autotune_config > GROUP_SIZE_M',
     },
     pin: TRITON_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'Every config the tutorial lists for CUDA sets GROUP_SIZE_M to 8; the HIP list sets 4 or 6. The tutorial launches blocks in groups of GROUP_SIZE_M rows before moving to the next column, which is the cube\'s grouped raster.',

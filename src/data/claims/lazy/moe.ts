@@ -62,7 +62,7 @@ export const MOE_CLAIMS: Claim[] = [
     label: 'DeepSeek EPLB replication rule',
     source: { ...EPLB_SOURCE, quote: 'redundant_indices = (weight / logcnt).max(dim=-1).indices', row: 'replicate_experts' },
     pin: DEEPSEEK_EPLB_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'rebalance_experts adds one replica at a time to the logical expert whose load divided by its replica count is highest. It then packs the replicas onto GPUs heaviest first, each onto the lightest GPU that still has a free slot (balanced_packing), within nodes when the expert-group count divides the node count. The repository publishes no release; the pin is a commit.',
