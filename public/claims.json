@@ -2909,7 +2909,7 @@
         "repo": "deepseek-ai/EPLB",
         "ref": "d52c72d5b2f2fb4c41afbf8eb21366820239913d"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "rebalance_experts adds one replica at a time to the logical expert whose load divided by its replica count is highest. It then packs the replicas onto GPUs heaviest first, each onto the lightest GPU that still has a free slot (balanced_packing), within nodes when the expert-group count divides the node count. The repository publishes no release; the pin is a commit."
     },
@@ -3181,7 +3181,7 @@
         "repo": "triton-lang/triton",
         "ref": "v3.8.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Every config the tutorial lists for CUDA sets GROUP_SIZE_M to 8; the HIP list sets 4 or 6. The tutorial launches blocks in groups of GROUP_SIZE_M rows before moving to the next column, which is the cube's grouped raster."
     },
@@ -3313,7 +3313,7 @@
         "repo": "HPMLL/BurstGPT",
         "ref": "v2.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "A 51,429,517-byte CSV, 1,404,294 rows. Its SHA-256 is the one public/traces/burstgpt-v2-busiest-hour.json records as sourceSha256: the Fleet's recorded hour is cut from this very file. sha256sum -c prints \"BurstGPT_without_fails_1.csv: OK\" or fails; do not benchmark a file that fails."
     },

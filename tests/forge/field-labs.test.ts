@@ -104,13 +104,13 @@ describe('the commands are pinned claims', () => {
   })
 
   test('commands carry a 60-day TTL, so the labs show "stale since" when the engine moves', () => {
-    // The four vLLM commands were re-read at v0.34.0 on 2026-11-21 (+ 60 days = 2027-01-20); the BurstGPT download keeps its own date.
+    // The four vLLM commands were re-read at v0.34.0 on 2026-11-21 (+ 60 days = 2027-01-20); the BurstGPT download was re-read the same day (asset size and SHA-256 matched).
     const lapses: Record<string, [string, string, string]> = {
       'field.decode-kv.serve': ['2027-01-20', '2027-01-21', '2027-01-20'],
       'field.decode-kv.bench': ['2027-01-20', '2027-01-21', '2027-01-20'],
       'field.burstgpt.serve': ['2027-01-20', '2027-01-21', '2027-01-20'],
       'field.burstgpt.bench': ['2027-01-20', '2027-01-21', '2027-01-20'],
-      'field.burstgpt.fetch': ['2026-12-13', '2026-12-14', '2026-12-13'],
+      'field.burstgpt.fetch': ['2027-01-20', '2027-01-21', '2027-01-20'],
     }
     for (const [id, [last, after, since]] of Object.entries(lapses)) {
       const c = getClaim(id)
