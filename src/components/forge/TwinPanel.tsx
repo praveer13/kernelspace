@@ -66,7 +66,7 @@ export function twinResponse(r: ItemResult): ItemResponse {
   }
 }
 
-/** "sgl-project/sglang@v0.5.21": the repository and the ref the claim pins. */
+/** "<repo>@<ref>": the repository and the ref the claim pins. */
 const pinLabel = (pin: { repo: string; ref: string }) => `${pin.repo}@${pin.ref}`
 
 const sectionLabel = 'font-mono text-[11px] uppercase tracking-[0.14em] text-text-3'
