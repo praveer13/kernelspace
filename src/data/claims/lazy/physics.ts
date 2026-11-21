@@ -170,7 +170,7 @@ const PHYSICS_INPUT_CLAIMS: Claim[] = [
     verifiedAt: VERIFIED,
     ttlDays: STATUS_TTL,
     boundary:
-      'The default the CUDA platform sets in v0.10.2 when --block-size is not passed; the InferenceX scripts do not pass it. Some attention backends then override it (MLA backends use 64 or 128, which Llama does not use). vLLM v0.31.0, the release the In-production rows quote, also defaults to 16 (production.vllm.block-size); this claim is the 0.10.2 benchmark\'s.',
+      'The default the CUDA platform sets in v0.10.2 when --block-size is not passed; the InferenceX scripts do not pass it. Some attention backends then override it (MLA backends use 64 or 128, which Llama does not use). vLLM\'s own default is production.vllm.block-size (64 since v0.34.0); this claim is the 0.10.2 benchmark\'s and stays 16.',
   },
 
   {

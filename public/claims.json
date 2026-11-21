@@ -1475,22 +1475,23 @@
     {
       "id": "production.vllm.block-size",
       "kind": "status",
-      "value": 16,
+      "value": 64,
       "unit": "tokens/block",
       "label": "vLLM default KV cache block size",
       "source": {
         "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/cache.py",
         "title": "vLLM v0.34.0 source: vllm/config/cache.py (CacheConfig)",
-        "quote": "DEFAULT_BLOCK_SIZE: ClassVar[int] = 16",
+        "quote": "DEFAULT_BLOCK_SIZE: ClassVar[int] = 64",
         "row": "CacheConfig.DEFAULT_BLOCK_SIZE"
       },
       "pin": {
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "When --block-size is not given. Hybrid and Mamba models track their own block sizes (mamba_block_size)."
+      "boundary": "When --block-size is not given. Attention backends with a preferred block size still override it (ROCm paged attention keeps 16), and an explicit --block-size wins. Hybrid and Mamba models track their own (mamba_block_size). 16 through v0.33.0.",
+      "discrepancy": "The 2023 paper's default was 16 (serving.pagedattention.paper-block-size)."
     },
     {
       "id": "production.vllm.v1-preemption",
@@ -1507,7 +1508,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-05",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "V1 engine: a preempted request is recomputed, not swapped to CPU."
     },
@@ -3621,7 +3622,7 @@
       },
       "verifiedAt": "2026-10-18",
       "ttlDays": 180,
-      "boundary": "The default the CUDA platform sets in v0.10.2 when --block-size is not passed; the InferenceX scripts do not pass it. Some attention backends then override it (MLA backends use 64 or 128, which Llama does not use). vLLM v0.31.0, the release the In-production rows quote, also defaults to 16 (production.vllm.block-size); this claim is the 0.10.2 benchmark's."
+      "boundary": "The default the CUDA platform sets in v0.10.2 when --block-size is not passed; the InferenceX scripts do not pass it. Some attention backends then override it (MLA backends use 64 or 128, which Llama does not use). vLLM's own default is production.vllm.block-size (64 since v0.34.0); this claim is the 0.10.2 benchmark's and stays 16."
     },
     {
       "id": "hw.hgx-b200.fp8-sparse-system",
