@@ -1017,7 +1017,7 @@
       "label": "KV calculator: memory lost to PagedAttention block rounding (course stand-in)",
       "verifiedAt": "2026-10-05",
       "ttlDays": 365,
-      "boundary": "No source for this exact figure: a round upper bound. The paper reports \"near-zero waste\"; the tail of one 16-token block per sequence is far below 4% at any context the calculator offers."
+      "boundary": "No source for this exact figure: a round upper bound. The paper reports \"near-zero waste\"; the tail averages half a block per sequence: at vLLM's default block (production.vllm.block-size) about 3% at the calculator's shortest context of 1,024 tokens, and far less beyond."
     },
     {
       "id": "synthetic.kv.runtime-overhead",
