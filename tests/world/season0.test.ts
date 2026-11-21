@@ -229,7 +229,7 @@ describe('the card on /me', () => {
     let settled = 0
     let tries = 0
     const read = () => (++tries === 1 ? Promise.reject(new Error('no ledger')) : Promise.resolve([] as LedgerEvent[]))
-    const page = await dom.mount(createElement(MemoryRouter, null, createElement(Season0Card, { read, onSettled: () => void settled++ })))
+    const page = await dom.mount(createElement(MemoryRouter, null, createElement(Season0Card, { read, today: '2026-10-15', onSettled: () => void settled++ })))
     await dom.until(() => page.container.querySelector('[role="alert"]') !== null)
     expect(settled).toBe(1)
     const retry = page.container.querySelector('[role="alert"] button') as MiniElement
