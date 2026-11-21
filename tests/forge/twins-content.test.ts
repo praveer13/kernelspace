@@ -23,7 +23,7 @@ import { collectTwinItems, discoverTwins } from '../../scripts/item-pools'
 
 const TWINS: { twin: TwinModule; items: readonly TwinModule['items'][number][]; claimId: string; repo: string; ref: string; path: string }[] = [
   { twin: radixCache, items: RADIX_ITEMS, claimId: 'twin.sglang.treecore', repo: 'sgl-project/sglang', ref: 'v0.5.21', path: 'rust/sglang-radix-tree/src/unified_tree_core.rs' },
-  { twin: batchingScheduler, items: SCHEDULER_ITEMS, claimId: 'twin.vllm.scheduler', repo: 'vllm-project/vllm', ref: 'v0.31.0', path: 'vllm/v1/core/sched/scheduler.py' },
+  { twin: batchingScheduler, items: SCHEDULER_ITEMS, claimId: 'twin.vllm.scheduler', repo: 'vllm-project/vllm', ref: 'v0.34.0', path: 'vllm/v1/core/sched/scheduler.py' },
 ]
 
 /* ------------------------------ what each twin names ------------------------------ */

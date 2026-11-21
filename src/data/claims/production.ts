@@ -4,11 +4,11 @@ import { VLLM_PIN } from './engines'
 /** Pinned to the release the other engine claims use (engines.ts, Q10), so the whole In-production card reads one vLLM. */
 const VLLM_CACHE_CONFIG = {
   url: `https://raw.githubusercontent.com/${VLLM_PIN.repo}/${VLLM_PIN.ref}/vllm/config/cache.py`,
-  title: 'vLLM v0.31.0 source: vllm/config/cache.py (CacheConfig)',
+  title: `vLLM ${VLLM_PIN.ref} source: vllm/config/cache.py (CacheConfig)`,
 }
 const VLLM_OPTIMIZATION = {
   url: `https://docs.vllm.ai/en/${VLLM_PIN.ref}/configuration/optimization/`,
-  title: 'vLLM v0.31.0 docs: Optimization and Tuning (Preemption)',
+  title: `vLLM ${VLLM_PIN.ref} docs: Optimization and Tuning (Preemption)`,
 }
 const GLIBC_MALLOPT = {
   url: 'https://man7.org/linux/man-pages/man3/mallopt.3.html',

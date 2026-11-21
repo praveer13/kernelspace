@@ -13,7 +13,7 @@ import type { Claim } from '../schema'
  */
 const VLLM_KV_TRANSFER = {
   url: `https://raw.githubusercontent.com/${VLLM_PIN.repo}/${VLLM_PIN.ref}/vllm/config/kv_transfer.py`,
-  title: 'vLLM v0.31.0 source: vllm/config/kv_transfer.py (KVTransferConfig)',
+  title: `vLLM ${VLLM_PIN.ref} source: vllm/config/kv_transfer.py (KVTransferConfig)`,
 }
 const SGLANG_DISAGG = {
   url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/arg_groups/fields/disagg.py`,

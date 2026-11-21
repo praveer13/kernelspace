@@ -15,16 +15,16 @@ import type { Claim } from '../schema'
  * then the labs say so (`ranBy` in the lab modules is null).
  */
 const VLLM_RAW = `https://raw.githubusercontent.com/${VLLM_PIN.repo}/${VLLM_PIN.ref}`
-const VLLM_BENCH_DOC = { url: `${VLLM_RAW}/docs/benchmarking/cli.md`, title: 'vLLM v0.31.0 docs: benchmarking/cli.md (vllm bench serve)' }
-const VLLM_CLI_DOC = { url: `${VLLM_RAW}/docs/cli/README.md`, title: 'vLLM v0.31.0 docs: cli/README.md (vllm serve)' }
+const VLLM_BENCH_DOC = { url: `${VLLM_RAW}/docs/benchmarking/cli.md`, title: `vLLM ${VLLM_PIN.ref} docs: benchmarking/cli.md (vllm bench serve)` }
+const VLLM_CLI_DOC = { url: `${VLLM_RAW}/docs/cli/README.md`, title: `vLLM ${VLLM_PIN.ref} docs: cli/README.md (vllm serve)` }
 const VLLM_KV_UTILS = {
   url: `${VLLM_RAW}/vllm/v1/core/kv_cache_utils.py`,
-  title: 'vLLM v0.31.0 source: vllm/v1/core/kv_cache_utils.py (update_kv_cache_capacity)',
+  title: `vLLM ${VLLM_PIN.ref} source: vllm/v1/core/kv_cache_utils.py (update_kv_cache_capacity)`,
 }
-const VLLM_BENCH_SERVE = { url: `${VLLM_RAW}/vllm/benchmarks/serve.py`, title: 'vLLM v0.31.0 source: vllm/benchmarks/serve.py (vllm bench serve)' }
+const VLLM_BENCH_SERVE = { url: `${VLLM_RAW}/vllm/benchmarks/serve.py`, title: `vLLM ${VLLM_PIN.ref} source: vllm/benchmarks/serve.py (vllm bench serve)` }
 const VLLM_DATASETS = {
   url: `${VLLM_RAW}/vllm/benchmarks/datasets/datasets.py`,
-  title: 'vLLM v0.31.0 source: vllm/benchmarks/datasets/datasets.py (BurstGPTDataset)',
+  title: `vLLM ${VLLM_PIN.ref} source: vllm/benchmarks/datasets/datasets.py (BurstGPTDataset)`,
 }
 
 /** BurstGPT's v2.0 release asset: the file the Fleet's `burstgpt-v2-busiest-hour` trace is cut from (public/traces/README.md). */

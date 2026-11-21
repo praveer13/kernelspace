@@ -55,7 +55,7 @@ const rowOf = (rows: { id: string; value: number }[], id: string) => rows.find((
 
 /* ------------------------------ the pinned commands ------------------------------ */
 
-/** Every flag the five commands use, as found in vLLM v0.31.0's source on 2026-10-14 (config fields for `serve`, argparse names for `bench serve`). */
+/** Every flag the five commands use, as found in vLLM's source (read at v0.31.0 on 2026-10-14, to be re-read at the current pin) (config fields for `serve`, argparse names for `bench serve`). */
 const FLAGS_AT_PIN = new Set([
   '--dtype', // vllm/config/model.py: dtype
   '--max-model-len', // vllm/config/model.py: max_model_len
@@ -100,7 +100,7 @@ describe('the commands are pinned claims', () => {
       const expected = c.id.startsWith('field.burstgpt.fetch') || c.id.includes('mean-') ? BURSTGPT_PIN : VLLM_PIN
       expect(c.pin, c.id).toEqual(expected)
     }
-    expect(VLLM_PIN).toEqual({ repo: 'vllm-project/vllm', ref: 'v0.31.0' })
+    expect(VLLM_PIN).toEqual({ repo: 'vllm-project/vllm', ref: 'v0.34.0' })
   })
 
   test('commands carry a 60-day TTL, so the labs show "stale since" when the engine moves', () => {

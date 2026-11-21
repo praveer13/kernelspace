@@ -561,8 +561,8 @@ describe('the copy and the In-production rows', () => {
         expect(`${PRODUCTION_ROWS[id].lead} ${PRODUCTION_ROWS[id].tail}`).not.toMatch(/(^|[^A-Za-z0-9])\d/) // H100 and H200 are names, not figures
       }
     }
-    expect(pinnedReleases(knee.productionClaims)).toEqual(['vllm-project/vllm v0.31.0', 'sgl-project/sglang v0.5.21'])
-    expect(pinnedReleases(pd.productionClaims)).toEqual(['vllm-project/vllm v0.31.0', 'sgl-project/sglang v0.5.21'])
+    expect(pinnedReleases(knee.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.21'])
+    expect(pinnedReleases(pd.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.21'])
   })
 })
 
@@ -1107,7 +1107,7 @@ describe('the panel, mounted', () => {
     const page = await open(rig([]))
     const rows = page.container.querySelectorAll('[data-production] li')
     expect(rows.map((li) => li.getAttribute('data-claim'))).toEqual(knee.productionClaims)
-    expect(page.container.querySelector('[data-production]')!.textContent).toContain('vllm-project/vllm v0.31.0')
+    expect(page.container.querySelector('[data-production]')!.textContent).toContain('vllm-project/vllm v0.34.0')
     expect(rows[0].textContent).toContain('1,024 sequences')
     expect(rows[1].textContent).toContain('2,048 to 4,096, sized from KV capacity')
     await page.unmount()
