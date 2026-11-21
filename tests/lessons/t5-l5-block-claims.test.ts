@@ -43,7 +43,9 @@ describe('t5.l5 block-size claims (K0-D12)', () => {
     expect(text).not.toContain('**<4%**')
     expect(text).toContain('near-zero waste in the paper')
     expect(text).toContain('20.4%–38.2%')
-    expect(text).toMatch(/under 4%, a figure the paper does not report/)
+    expect(text).toContain("1.4% at the paper's 16-token blocks, under 4%, and 8.1% at vLLM's 64")
+    expect(text).toContain("is not in the paper's text")
+    expect(text).not.toContain('does not report')
   })
 
   test('the block-size quiz keeps correct [1]', () => {
