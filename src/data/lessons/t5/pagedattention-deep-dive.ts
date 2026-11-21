@@ -1,4 +1,17 @@
+import { claimNumber } from '@/data/claims'
+import { claimCite, claimRelease } from '@/data/claims/cite'
+import '@/data/claims/lazy/kvpool'
 import type { Lesson } from '../types'
+
+// The lesson works the 2023 paper's block; vLLM's default today is its own claim, and so are the pool claims. Prose reads each from the registry.
+const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
+const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
+const ENGINE_CITE = claimCite('production.vllm.block-size')
+const ENGINE_RELEASE = claimRelease('production.vllm.block-size')
+const KV_KIB_PER_TOKEN = 128 // T5.L4's 8B model
+const mib = (tokens: number) => (tokens * KV_KIB_PER_TOKEN) / 1024
+const POOL_RELEASE = claimRelease('production.vllm.extensible-kv-cache')
+const GPU_UTIL = claimNumber('production.vllm.gpu-memory-utilization')
 
 const lesson: Lesson = {
   id: 't5.l5',
@@ -56,7 +69,7 @@ const lesson: Lesson = {
             'Appending goes into each sequence\'s own tail blocks. The prefix blocks are identical and read-only, so there is nothing to protect by copying them.',
             'Right: 48 tokens fill three 16-token blocks, and both block tables map to the same physical blocks with refcount 2. The prefix is paid for once.',
             'Paging exists so that sequences need no contiguous placement. A block table can point anywhere in the pool, so nothing has to sit next to anything.',
-            'Blocks have a fixed size, 16 tokens by default. A longer prefix takes more blocks; it never makes a block bigger.',
+            `Blocks have a fixed size (${PAPER_BLOCK} tokens in the paper, ${ENGINE_CITE} as vLLM's default now). A longer prefix takes more blocks; it never makes a block bigger.`,
           ],
           revealAt: 'The data structures, concretely',
           kcs: ['t5.block-tables'],
@@ -90,7 +103,7 @@ const lesson: Lesson = {
       type: 'prose',
       md: `## The data structures, concretely
 
-The block manager splits GPU KV memory into fixed-size **blocks** — default 16 tokens per block. Using T5.L4's 8B model (128 KiB of KV per token, so one block holds 16 × 128 KiB = 2 MiB), a pool of N blocks is the entire serving capacity. Two structures run the show:
+The block manager splits GPU KV memory into fixed-size **blocks**. This lesson works the 2023 paper's block of ${PAPER_BLOCK} tokens; vLLM's default today is ${ENGINE_CITE}. Using T5.L4's 8B model (${KV_KIB_PER_TOKEN} KiB of KV per token, so one paper block holds ${PAPER_BLOCK} × ${KV_KIB_PER_TOKEN} KiB = ${mib(PAPER_BLOCK)} MiB, and one block at vLLM's default holds ${ENGINE_BLOCK} × ${KV_KIB_PER_TOKEN} KiB = ${mib(ENGINE_BLOCK)} MiB), a pool of N blocks is the entire serving capacity. N is what is left of the GPU after the weights and warmup. Since ${POOL_RELEASE}, vLLM reserves the cache's address range with the driver's virtual-memory API (T2.L2's move) and commits physical memory only once the size is known after warmup, so \`gpu_memory_utilization\` defaults to ${GPU_UTIL} with it on (0.92 where the cache is sized from an estimate instead). Two structures run the show:
 
 - **The free-block queue** — your T1.L3 free list, minus the fit search (all blocks identical), kept in eviction order: \`alloc()\` pops the head, \`free()\` pushes the tail, O(1), no fragmentation between blocks ever.
 - **Per-sequence block tables** — a growable array of physical block ids: logical block \`i\` (tokens \`16i..16i+15\`) lives in physical block \`table[i]\`. The attention kernel translates per block as it reads — the MMU walk, one level deep.
@@ -161,7 +174,7 @@ Watch one request through the manager:
       lang: 'python',
       code: `from collections import OrderedDict
 
-BLOCK = 16                      # tokens per block (vLLM default)
+BLOCK = ${PAPER_BLOCK}                      # tokens per block (the paper's; ${ENGINE_RELEASE} defaults to ${ENGINE_BLOCK})
 
 class BlockManager:
     def __init__(self, num_blocks: int):
@@ -212,13 +225,13 @@ class BlockManager:
     {
       type: 'callout',
       variant: 'warning',
-      md: `The design has real edges. **Block size is a trade:** 16 tokens balances internal waste (bigger blocks → fatter tails) against metadata and kernel efficiency (smaller blocks → longer tables, more translation overhead per token). **Sharing is token-block granular:** a one-token shift in the prefix misaligns every block and shares nothing (the T5.L2 tokenizer footgun returns). **And the free queue is the capacity truth:** dashboards that track "GPU memory %" instead of *free blocks* lie to you during traffic spikes.`,
+      md: `The design has real edges. **Block size is a trade:** The paper chose ${PAPER_BLOCK} tokens, and ${ENGINE_RELEASE} defaults to ${ENGINE_BLOCK}. Bigger blocks mean fatter tails (up to block size − 1 empty slots per sequence) and prefix hits only on whole blocks; smaller blocks mean longer tables and more per-block bookkeeping (block tables, allocator metadata, prefix-cache hashing), which is the reason the change to ${ENGINE_BLOCK} gives. **Sharing is token-block granular:** a one-token shift in the prefix misaligns every block and shares nothing (the T5.L2 tokenizer footgun returns). **And the free queue is the capacity truth:** dashboards that track "GPU memory %" instead of *free blocks* lie to you during traffic spikes.`,
     },
     {
       type: 'prose',
       md: `## What the indirection costs — and buys
 
-The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% → **<4%**, batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
+The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% (the paper measured only 20.4%–38.2% of KV memory holding token states in earlier systems) → near-zero waste in the paper's words (the course's own estimate for a mixed batch is under 4%, a figure the paper does not report), batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
     },
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: paging copies KV, "confusing block-table indirection
     // with copying KV", the evidence's own example of a seeded error in a protégé explanation of PagedAttention
@@ -289,7 +302,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
         'Predict how many blocks stay free when beam C forks from B, then fork it: the prefix blocks gain a reference and memory is paid once.',
         'Predict how many tokens of KV the copy-on-write copies when B writes into the shared block, then diverge B at L2.',
         'Predict how many blocks preempting seq A returns to the free queue, then drive the free queue to zero and preempt it: compare swap-to-CPU (the V0 option) with recompute (all V1 does).',
-        'Predict the tail waste at 64-token blocks for a 48-token prompt, then sweep block size 4 → 64 and locate why 16 is the default.',
+        `Predict the tail waste at ${ENGINE_BLOCK}-token blocks for a 48-token prompt, then sweep block size 4 → ${ENGINE_BLOCK}: name what a ${ENGINE_BLOCK}-token block saves and what it costs.`,
       ],
       note: `You have now operated the exact machinery from the SOSP paper: free list (T1), paging (T2.L2), COW sharing (T2.L2), eviction/preemption (T2.L3), admission control (T2.L4) — one Python class's worth of logic that doubled the industry's effective GPU capacity.`,
     },
@@ -320,7 +333,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
           ],
         },
         {
-          q: 'The block size (default 16 tokens) trades off…',
+          q: `The block size (the paper's ${PAPER_BLOCK} tokens; vLLM's default is ${ENGINE_BLOCK}, ${ENGINE_RELEASE}) trades off…`,
           options: [
             'Model quality, against kernel speed from fewer lookups as larger blocks coarsen attention',
             'Internal waste in the half-empty tail block, against table length and lookup overhead in the kernel',
@@ -330,7 +343,7 @@ The PagedAttention kernel reads K/V through the block table: per block, one extr
           correct: [1],
           kcs: ['t5.block-tables'],
           explanation:
-            'The classic fixed-block pricing from T1.L4: waste lives in the tail, metadata lives in the table. 16 is the default because it is large enough to use the GPU efficiently and small enough to avoid much internal fragmentation.',
+            `The classic fixed-block pricing from T1.L4: waste lives in the tail, metadata lives in the table. The paper chose ${PAPER_BLOCK} as large enough to use the GPU efficiently and small enough to avoid significant internal fragmentation; vLLM's default is now ${ENGINE_BLOCK} (${ENGINE_RELEASE}), which cuts per-block bookkeeping at the price of fatter tails.`,
           why: [
             'Block size is purely a storage layout. Attention still covers every cached token exactly, so output is identical at any block size.',
             'Right: on average half the last block is empty, so larger blocks waste more; smaller blocks mean longer tables and more per-block translation in the kernel.',
