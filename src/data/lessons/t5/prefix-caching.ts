@@ -1,6 +1,5 @@
-import { claimNumber } from '@/data/claims'
-import { claimRelease } from '@/data/claims/cite'
 import type { Lesson } from '../types'
+import { claimNumber, claimRelease } from '../claims'
 
 // The worked setup uses 16-token blocks; vLLM's default block is its own claim, and the sentence below computes from it.
 const PROMPT = 130
