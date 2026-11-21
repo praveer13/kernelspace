@@ -5,7 +5,7 @@ export default {
   date: '2026-11-21',
   kind: 'error',
   lessons: ['t1.l3', 't1.l4', 't2.l7', 't5.l5'],
-  title: '"<4% waste" is not in the PagedAttention paper\'s text',
+  title: 'The "<4% waste" figure is not in the PagedAttention paper\'s text',
   before:
     'The lessons called "<4%" KV waste the PagedAttention paper\'s headline number.',
   after:
