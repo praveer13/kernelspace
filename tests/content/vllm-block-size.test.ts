@@ -15,7 +15,7 @@ const NAMES_SOURCE = /\bpaper|\b2023\b|v?0\.10\.2/i
 
 /** '<4%' presented as the paper's figure: a sentence that names the paper and the 4% bound and does not disclaim it. */
 const FOUR_PERCENT = /(<\s?4\s?%|\b(?:under|below|less than|at most|capped at)\s+4\s?%)/i
-const DISCLAIMS = /(does not report|do not report|not report|never the paper|not a figure|not the paper|course'?s (?:own )?estimate|course estimate)/i
+const DISCLAIMS = /(does not report|do not report|not report|never the paper|not a figure|not the paper|not in (?:the|its) (?:paper|text)|not in the paper.s text|course'?s (?:own )?estimate|course estimate)/i
 
 export function strings(v: unknown, out: string[] = []): string[] {
   if (typeof v === 'string') out.push(v)

@@ -44,7 +44,14 @@ describe('t1.l4 block-size claims (K0-D14)', () => {
     if (chip?.type !== 'statline') throw new Error('no statline block')
     const waste = chip.stats.find((x) => x.value === '<4%')
     expect(waste?.label).toContain('course estimate')
-    expect(waste?.hint).toContain('not a figure the paper reports')
+    expect(waste?.hint).toContain('is not in the paper\'s text')
+  })
+
+  test("the mixed-batch waste names its block size and is computed for both: 1.4% at 16, 8.1% at 64", () => {
+    const text = all.join('\n')
+    expect(text).toContain("1.4% at the paper's 16-token blocks, under 4%, and 8.1% at vLLM's 64")
+    expect(text).not.toMatch(/a figure the paper does not report|came from the course/)
+    expect(JSON.stringify(ALL_LESSONS.find((l) => l.id === 't5.l5'))).toContain("1.4% at the paper's 16-token blocks, under 4%, and 8.1% at vLLM's 64")
   })
 
   test('no string types vLLM default as 16', () => {

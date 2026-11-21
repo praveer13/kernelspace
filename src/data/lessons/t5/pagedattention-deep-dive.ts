@@ -1,5 +1,6 @@
 import type { Lesson } from '../types'
 import { claimCite, claimNumber, claimRelease } from '../claims'
+import { mixWastePct } from '../pagedMix'
 
 // The lesson works the 2023 paper's block; vLLM's default today is its own claim, and so are the pool claims. Prose reads each from the registry.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
@@ -229,7 +230,7 @@ class BlockManager:
       type: 'prose',
       md: `## What the indirection costs — and buys
 
-The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% (the paper measured only 20.4%–38.2% of KV memory holding token states in earlier systems) → near-zero waste in the paper's words (the course's own estimate for a mixed batch is under 4%, a figure the paper does not report), batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
+The PagedAttention kernel reads K/V through the block table: per block, one extra table lookup and a non-contiguous gather. Measured overhead: the paper reports **20–26% higher attention-kernel latency** than FasterTransformer (table lookups, extra branches) — a real cost, not a rounding error. It is repaid because attention is only one part of a decode step and the memory it frees allows much larger batches. What it buys, from the paper and every deployment since: waste from 60–80% (the paper measured only 20.4%–38.2% of KV memory holding token states in earlier systems) → near-zero waste in the paper's words (the course's own estimate for a mixed batch of eight sequences is ${mixWastePct(PAPER_BLOCK)}% at the paper's ${PAPER_BLOCK}-token blocks, under 4%, and ${mixWastePct(ENGINE_BLOCK)}% at vLLM's ${ENGINE_BLOCK}; "<4%" is not in the paper's text), batch sizes 2–4× larger on the same GPU, prefix sharing as a free side effect, and preemption as a metadata operation. In the simulator you'll operate the manager itself: allocate, share, fork with COW, preempt, and watch the free-block count — the single most instructive dial in LLM serving.`,
     },
     // P4 protégé block (wave-3.md §16.9, task 3s-12). The misconception: paging copies KV, "confusing block-table indirection
     // with copying KV", the evidence's own example of a seeded error in a protégé explanation of PagedAttention
