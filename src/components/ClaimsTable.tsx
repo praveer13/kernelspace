@@ -5,7 +5,7 @@
  *
  * It lists `ALL_CLAIMS` (all.ts) in the same order, but all.ts imports every group statically, and the physics groups
  * (`lazy/physics`, `lazy/ix-points`) would put about 13 KB gzip into this chunk (S5-D71). So the table imports the
- * groups before them itself, shows those at once, and loads the two physics groups by `await import()` when it mounts;
+ * groups before them itself, shows those at once, and loads the two physics groups, then the groups after them (all.ts order), by `await import()` when it mounts;
  * tests/changes/physics-tab.test.ts holds the mounted table to `ALL_CLAIMS`, id for id. A new lazy group goes in both lists.
  */
 import { useEffect, useState } from 'react'
@@ -48,8 +48,12 @@ function inOrder(groups: readonly Claim[]): Claim[] {
 }
 
 async function loadPhysicsGroups(): Promise<readonly Claim[]> {
-  const [{ PHYSICS_CLAIMS }, { IX_POINT_CLAIMS }] = await Promise.all([import('@/data/claims/lazy/physics'), import('@/data/claims/lazy/ix-points')])
-  return [...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS]
+  const [{ PHYSICS_CLAIMS }, { IX_POINT_CLAIMS }, { KVPOOL_CLAIMS }] = await Promise.all([
+    import('@/data/claims/lazy/physics'),
+    import('@/data/claims/lazy/ix-points'),
+    import('@/data/claims/lazy/kvpool'),
+  ])
+  return [...PHYSICS_CLAIMS, ...IX_POINT_CLAIMS, ...KVPOOL_CLAIMS]
 }
 
 export function ClaimsTable({ className }: { className?: string }) {
