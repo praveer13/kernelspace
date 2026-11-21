@@ -159,8 +159,8 @@ describe('twinProblems', () => {
   })
 
   test('the file link reads the claim’s pinned ref', () => {
-    expect(twinFileUrl({ repo: 'sgl-project/sglang', ref: 'v0.5.21' }, 'a/b.rs')).toBe('https://github.com/sgl-project/sglang/blob/v0.5.21/a/b.rs')
-    expect(claim.pin).toEqual({ repo: 'sgl-project/sglang', ref: 'v0.5.21' })
+    expect(twinFileUrl({ repo: 'sgl-project/sglang', ref: 'v0.5.23' }, 'a/b.rs')).toBe('https://github.com/sgl-project/sglang/blob/v0.5.23/a/b.rs')
+    expect(claim.pin).toEqual({ repo: 'sgl-project/sglang', ref: 'v0.5.23' })
     expect(claim.ttlDays).toBe(60)
   })
 })
@@ -258,11 +258,11 @@ describe('a done lab with a twin', () => {
     expect(root.querySelector('h2')!.textContent).toBe('the production twin')
     expect(root.querySelector('[data-twin-line]')!.textContent).toBe(FIXTURE.youWrote)
     const link = root.querySelector('[data-twin-source] a')!
-    expect(link.getAttribute('href')).toBe('https://github.com/sgl-project/sglang/blob/v0.5.21/fixture/tree.rs')
+    expect(link.getAttribute('href')).toBe('https://github.com/sgl-project/sglang/blob/v0.5.23/fixture/tree.rs')
     expect(link.getAttribute('rel')).toContain('noopener')
     expect(link.textContent).toContain('fixture/tree.rs')
-    expect(link.textContent).toContain('sgl-project/sglang@v0.5.21')
-    expect(root.querySelector('[data-twin-pin]')!.textContent).toBe('pinned at sgl-project/sglang@v0.5.21')
+    expect(link.textContent).toContain('sgl-project/sglang@v0.5.23')
+    expect(root.querySelector('[data-twin-pin]')!.textContent).toBe('pinned at sgl-project/sglang@v0.5.23')
     expect(root.querySelector('[data-twin-verified]')!.textContent).toBe(`checked ${claim.verifiedAt}`)
     expect(root.querySelector('[data-twin-stale]')).toBeNull()
     expect(root.textContent).toContain('match_prefix, insert and evict')
@@ -270,20 +270,20 @@ describe('a done lab with a twin', () => {
   })
 
   test('past the claim’s 60-day TTL it says "stale since", on the day the TTL ended, and not a day earlier', () => {
-    // verified 2026-10-14 + 60 days = 2026-12-13
-    expect(staleSince(claim, new Date('2026-12-13T00:00:00Z'))).toBeNull()
-    expect(staleSince(claim, new Date('2026-12-14T00:00:00Z'))).toBe('2026-12-13')
+    // verified 2026-11-21 + 60 days = 2027-01-20
+    expect(staleSince(claim, new Date('2027-01-20T00:00:00Z'))).toBeNull()
+    expect(staleSince(claim, new Date('2027-01-21T00:00:00Z'))).toBe('2027-01-20')
   })
 
   test('the badge is on the page once the clock is past it', async () => {
-    const fresh = await mountPanel({ done: true, find: async () => FIXTURE, now: new Date('2026-12-13T00:00:00Z') })
+    const fresh = await mountPanel({ done: true, find: async () => FIXTURE, now: new Date('2027-01-20T00:00:00Z') })
     await dom.until(() => fresh.container.querySelector('[data-twin]') !== null)
     expect(fresh.container.querySelector('[data-twin-stale]')).toBeNull()
     await fresh.unmount()
 
-    const page = await mountPanel({ done: true, find: async () => FIXTURE, now: new Date('2026-12-14T00:00:00Z') })
+    const page = await mountPanel({ done: true, find: async () => FIXTURE, now: new Date('2027-01-21T00:00:00Z') })
     await dom.until(() => page.container.querySelector('[data-twin]') !== null)
-    expect(page.container.querySelector('[data-twin-stale]')!.textContent).toBe('stale since 2026-12-13')
+    expect(page.container.querySelector('[data-twin-stale]')!.textContent).toBe('stale since 2027-01-20')
     expect(page.container.querySelector('[data-twin-stale-note]')!.textContent).toContain('60 days')
     await page.unmount()
   })

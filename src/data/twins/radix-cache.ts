@@ -3,7 +3,7 @@ import type { TwinItem, TwinModule } from './types'
 
 /**
  * Lab 07 against SGLang's Rust radix-tree core (docs/specs/wave-3.md §9, task 3b-15). The claim `twin.sglang.treecore`
- * pins sgl-project/sglang at v0.5.21; every statement below was read in these files at that tag:
+ * pins sgl-project/sglang at v0.5.23; every statement below was read in these files at that tag:
  *   rust/sglang-radix-tree/src/unified_tree_core.rs   match_prefix / match_prefix_helper_ / match_post_processor_,
  *                                                      insert / insert_walk_step_ / insert_commit_step_, split_node_,
  *                                                      evict_device_next_node, is_evictable_device_leaf_, CacheInitParams::default
@@ -58,8 +58,8 @@ const q2: TwinItem = {
     ],
     correct: [0],
     why: [
-      "Right. insert_walk_step_ splits [1,2,3,4] at 2 and finds [1,2] already cached, so the request's slots 20 and 21 for those tokens are duplicates. They leave in CacheAction::FreeDeviceKV (the window starts at prev_prefix_len minus the cursor, 0). insert_commit_step_ then hangs a new leaf [5,6] on the split node with slots 22 and 23. A cached slot has one owner, the tree, and its lock count guards it from eviction.",
-      "That is the lab's refcount design: a second reference keeps the request's table alive next to the cached one. The core frees the duplicate at once instead (FreeDeviceKV), because the cached node already holds KV for those tokens and the tree is the one owner of a cached slot.",
+      "Right. insert_walk_step_ splits [1,2,3,4] at 2 and finds [1,2] already cached, so the request's slots 20 and 21 for those tokens are duplicates. They leave in the FreeDeviceKV cache action (the window starts at prev_prefix_len minus the cursor, 0). insert_commit_step_ then hangs a new leaf [5,6] on the split node with slots 22 and 23. A cached slot has one owner, the tree, and its lock count guards it from eviction.",
+      "That is the lab's refcount design: a second reference keeps the request's table alive next to the cached one. The core frees the duplicate at once instead (the FreeDeviceKV action), because the cached node already holds KV for those tokens and the tree is the one owner of a cached slot.",
       "The cached node keeps its original KV. update_component_on_insert_overlap returns prefix_len, the whole overlap, so the duplicate is cut from the new request's value slice, never from the node already in the tree. Nothing in insert swaps newer KV into a cached node.",
       "insert is a radix insert. The walk finds the cached child on the page [1], splits it at the common length and shares [1,2]; it does not add a second root edge. Keeping slots 20 and 21 as well would cache two copies of the same prefix KV.",
     ],

@@ -3191,16 +3191,16 @@
       "value": "rust",
       "label": "SGLang radix-tree core default",
       "source": {
-        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.21/python/sglang/srt/environ.py",
-        "title": "SGLang v0.5.21 source: srt/environ.py (SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND)",
+        "url": "https://raw.githubusercontent.com/sgl-project/sglang/v0.5.23/python/sglang/srt/environ.py",
+        "title": "SGLang v0.5.23 source: srt/environ.py (SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND)",
         "quote": "SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND = EnvStr(\"rust\")",
         "row": "envs.SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND"
       },
       "pin": {
         "repo": "sgl-project/sglang",
-        "ref": "v0.5.21"
+        "ref": "v0.5.23"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "The Rust TreeCore became the default with sgl-project/sglang PR #39627, merged 2026-09-29. The registry falls back to the Python core when its checks fail (Linux only, a supported PyTorch, a supported device, a toolchain or the bundled extension)."
     },
