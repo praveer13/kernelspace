@@ -329,7 +329,7 @@
     ["synthetic.fleet.worker-hourly","Fleet dashboard cost per worker-hour (course stand-in)",7.5,"USD/worker-hr"],
     ["synthetic.cost.gpu-hourly","The lessons' GPU-hour price in the unit-economics worked examples (course stand-in)",2,"USD/GPU-hr"],
     ["price.codespaces.free-core-hours","GitHub Codespaces free compute per month, GitHub Free personal account",120,"core-hours/month"],
-    ["production.vllm.block-size","vLLM default KV cache block size",16,"tokens/block"],
+    ["production.vllm.block-size","vLLM default KV cache block size",64,"tokens/block"],
     ["production.vllm.v1-preemption","vLLM V1 default preemption mode","recompute",""],
     ["production.glibc.mmap-threshold","glibc malloc initial mmap threshold (128 KiB)",131072,"bytes"],
     ["production.glibc.bins","glibc malloc free-chunk bin kinds","fast, unsorted, small, large",""],
