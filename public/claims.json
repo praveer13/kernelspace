@@ -3219,7 +3219,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Each request has a count of computed tokens that catches up with its tokens to compute; schedule() spends one token budget per step across running and waiting requests, so chunked prefill, prefix caching and speculative decoding fall out of one rule."
     },

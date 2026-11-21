@@ -1,6 +1,6 @@
 /**
  * The shipped twin content (docs/specs/wave-3.md §9, task 3b-15): lab 07 against SGLang's Rust TreeCore at v0.5.21 and
- * lab 06 against vLLM's scheduler at v0.31.0. tests/forge/twin.test.ts holds the panel and the registry to a fixture;
+ * lab 06 against vLLM's scheduler at the pinned release (VLLM_PIN.ref). tests/forge/twin.test.ts holds the panel and the registry to a fixture;
  * this file holds the real questions to what the spec asks of them:
  *  - each twin names its file and symbols at its claim's pinned ref, and passes the registry's rules (`twinProblems`);
  *  - three questions each, a why per option, KCs that sit on the lab's own checks, the key never the longest option;
@@ -14,6 +14,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { getClaim } from '../../src/data/claims'
+import { VLLM_PIN } from '../../src/data/claims/engines'
 import '../../src/data/claims/lazy/twins'
 import { FORGE_LABS } from '../../src/data/labs'
 import { findTwin, loadTwin, twinFileUrl, twinItemId, twinLabIds, twinProblems, TWIN_ITEMS_PER_LAB, type TwinModule } from '../../src/data/twins'
@@ -25,6 +26,24 @@ const TWINS: { twin: TwinModule; items: readonly TwinModule['items'][number][]; 
   { twin: radixCache, items: RADIX_ITEMS, claimId: 'twin.sglang.treecore', repo: 'sgl-project/sglang', ref: 'v0.5.21', path: 'rust/sglang-radix-tree/src/unified_tree_core.rs' },
   { twin: batchingScheduler, items: SCHEDULER_ITEMS, claimId: 'twin.vllm.scheduler', repo: 'vllm-project/vllm', ref: 'v0.34.0', path: 'vllm/v1/core/sched/scheduler.py' },
 ]
+
+/* ------------------------------ lab 06 names its release from the pin ------------------------------ */
+
+describe('lab 06 stems name the release from VLLM_PIN.ref, never a typed one', () => {
+  test('each stem opens with the pinned release and none types another vLLM release', () => {
+    expect(SCHEDULER_ITEMS).toHaveLength(3)
+    for (const item of SCHEDULER_ITEMS) {
+      expect(item.q.q.startsWith(`vLLM ${VLLM_PIN.ref} `)).toBe(true)
+      expect(item.q.q).not.toContain('v0.31.0')
+      expect(item.q.q.match(/v0\.\d+\.\d+/g)).toEqual([VLLM_PIN.ref])
+    }
+  })
+
+  test('the twin claim was re-read at the pin on 2026-11-21', () => {
+    expect(getClaim('twin.vllm.scheduler').pin?.ref).toBe(VLLM_PIN.ref)
+    expect(getClaim('twin.vllm.scheduler').verifiedAt).toBe('2026-11-21')
+  })
+})
 
 /* ------------------------------ what each twin names ------------------------------ */
 
@@ -377,7 +396,7 @@ describe('lab 07 question 3: the evict walk’s first node after a partial looku
 const cdiv = (a: number, b: number) => Math.ceil(a / b)
 
 /**
- * The waiting loop of `Scheduler.schedule` (vllm/v1/core/sched/scheduler.py at v0.31.0), full-attention model, no connector,
+ * The waiting loop of `Scheduler.schedule` (vllm/v1/core/sched/scheduler.py at VLLM_PIN.ref), full-attention model, no connector,
  * watermark 0 (vllm/config/scheduler.py): peek the head of the FCFS queue; `allocate_slots` with `full_sequence_must_fit`
  * (kv_cache_manager.py) needs cdiv(num_tokens, block_size) blocks for the whole sequence when scheduler_reserve_full_isl is
  * True (the default), else only the blocks of this step's chunk; `if new_blocks is None: break`.
