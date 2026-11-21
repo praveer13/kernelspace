@@ -39,3 +39,15 @@ describe('the mixed-batch estimate names one figure per block size', () => {
     })
   }
 })
+
+describe("'<4%' is tied to the paper's Figure 2, as the paged-waste erratum's after says", () => {
+  for (const id of ['t1.l4', 't5.l5']) {
+    test(`${id}: says the text never prints it and Figure 2 shows vLLM under 4%, for one experiment`, () => {
+      const t = text(id)
+      expect(t).toContain(`"<4%" is not in the paper's text, though its Figure 2 shows vLLM with under 4% of KV memory not holding token states, in one experiment`)
+    })
+  }
+  test("t1.l4's chip hint names Figure 2 too", () => {
+    expect(text('t1.l4')).toContain("its Figure 2 puts vLLM's waste under 4% in one experiment")
+  })
+})

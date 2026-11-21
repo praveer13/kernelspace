@@ -49,9 +49,9 @@ describe('t1.l4 block-size claims (K0-D14)', () => {
 
   test("the mixed-batch waste names its block size and is computed for both: 1.4% at 16, 8.1% at 64", () => {
     const text = all.join('\n')
-    expect(text).toContain("1.4% at the paper's 16-token blocks, under 4%, and 8.1% at vLLM's 64")
+    expect(text).toContain("1.4% at the paper's 16-token blocks (under 4%) and 8.1% at vLLM's 64")
     expect(text).not.toMatch(/a figure the paper does not report|came from the course/)
-    expect(JSON.stringify(ALL_LESSONS.find((l) => l.id === 't5.l5'))).toContain("1.4% at the paper's 16-token blocks, under 4%, and 8.1% at vLLM's 64")
+    expect(JSON.stringify(ALL_LESSONS.find((l) => l.id === 't5.l5'))).toContain("1.4% at the paper's 16-token blocks (under 4%) and 8.1% at vLLM's 64")
   })
 
   test('no string types vLLM default as 16', () => {
