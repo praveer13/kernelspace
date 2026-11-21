@@ -13,9 +13,24 @@ import { PAIRS } from '@/data/glossary'
  * the sentence names the paper (the 2023 figure) or v0.10.2 (the benchmark's pin).
  */
 
-const NAMES_SOURCE = /\bpaper|\b2023\b/i
-/** A release old enough to carry the paper's 16: v0.10.2 (the benchmark's pin) or anything through v0.33.x. */
+/**
+ * The paper's own figure: the word paper (or 2023) right before the number with no engine, 'and' or 'unlike' between them
+ * ("the paper's 16", "In the paper, blocks hold 16 tokens"), or right after it ("16 in the paper", "16 (the 2023 paper").
+ * "(see the paper)" and "The paper and vLLM both default to 16" are not the paper's figure.
+ */
+const PAPER_BEFORE = /\b(?:paper|2023)\b([^;:\u2014()]{0,40})$/i
+const PAPER_BEFORE_BREAKS = /\bvLLM\b|\bengine|\band\b|\bunlike\b|\bboth\b|\bnow\b|\btoday\b/i
+const PAPER_AFTER = /^([^;:\u2014)]{0,60}?)\b(?:paper|2023)\b/i
+const PAPER_AFTER_BREAKS = /\bvLLM\b|\bengine|\band\b|\bboth\b|\bsee\b|\bcf\b|\blike\b/i
+/**
+ * A vLLM release old enough to carry the paper's 16, in the number's clause: v0.10.2 (the benchmark's pin) or anything
+ * through v0.33.x. An SGLang release is not vLLM's, and 'since v0.1' says the number still holds.
+ */
 const OLD_RELEASE = /\bv0\.(?:10\.2|\d|[12]\d|3[0-3])\b/i
+const NOT_VLLM_RELEASE = /\b(?:SGLang|TensorRT-LLM|TGI|llama\.cpp)\s+v?\d+(?:\.\d+)*|\b(?:since|from|as of)\s+(?:vLLM\s+)?v\d+(?:\.\d+)*/gi
+/** Spelled-out block sizes, read as digits. */
+const WORD_NUMBERS: Record<string, string> = { four: '4', eight: '8', sixteen: '16', 'thirty-two': '32', 'sixty-four': '64', 'one hundred twenty-eight': '128' }
+const WORD_NUMBER = new RegExp(`\\b(?:${Object.keys(WORD_NUMBERS).join('|')})\\b`, 'gi')
 /** vLLM the engine: the name, unless it is the paper's ('the vLLM paper', 'the 2023 vLLM paper'). */
 const ENGINE = /\bvLLM\b/
 /** A default phrase, then the number: 'default 16', 'defaults to 16', 'default of 16', 'the default block in vLLM v0.34.0 is 16'. */
@@ -35,13 +50,18 @@ const OTHER_UNIT = /^\s*(?:B|bytes?|%|GiB|GB|MiB|KiB|sequences|seqs|experts|ms|s
  *   - a block-size phrase ends just before it and the sentence names the engine ('vLLM's block size is 16', '--block-size 16'), or
  *   - it is a token count ('16-token', '16 tokens', '16 tok') within 45 characters of 'default' or the engine's name
  *     ('vLLM uses 16-token blocks', '16 tokens is the vLLM default'), or
- *   - a token count after 'KV token block (' or 'uniform' / 'fixed' ('KV token block (16 tok)', 'Uniform 16-token blocks').
+ *   - a token count after 'KV token block (' or 'uniform' / 'fixed' ('KV token block (16 tok)', 'Uniform 16-token blocks'), or
+ *   - a token count in parentheses after a block is named ('a KV block is a software choice (16 tokens)'), or
+ *   - a token count in a sentence that names --block-size ('Unless --block-size is passed, each block is 16 tokens').
+ * Spelled-out sizes ('sixteen tokens') count as digits. Each number carries whether the paper is named next to it and
+ * whether its clause names a vLLM release before v0.34.0.
  */
-export function blockNumbers(sentence: string): Array<{ n: number; clause: string }> {
+export function blockNumbers(text: string): Array<{ n: number; clause: string; paper: boolean; oldRelease: boolean }> {
+  const sentence = text.replace(WORD_NUMBER, (w) => WORD_NUMBERS[w.toLowerCase()] ?? w)
   const masked = sentence
-    .replace(/\bvLLM['’]?s? paper\b/gi, 'paper')
+    .replace(/\bvLLM['’]?s? paper\b/gi, (m) => `${' '.repeat(m.length - 5)}paper`)
     .replace(/\bv?\d+\.\d+(?:\.\d+)*/g, (m) => 'V'.repeat(m.length))
-  const out: Array<{ n: number; clause: string }> = []
+  const out: Array<{ n: number; clause: string; paper: boolean; oldRelease: boolean }> = []
   for (const m of masked.matchAll(/(?<![\w.-])(\d{1,4})(?!\w|\.\d|,\d)/g)) {
     const i = m.index ?? 0
     if (!POWERS.has(Number(m[1]))) continue
@@ -57,12 +77,21 @@ export function blockNumbers(sentence: string): Array<{ n: number; clause: strin
     const asSize = SIZE_BEFORE.test(before) && ENGINE.test(masked)
     const asTokens = tokens && (/default/i.test(near) || ENGINE.test(near))
     const asGlossary = tokens && (/\bKV (?:token )?blocks?\s*\($/i.test(before) || /\b(?:uniform|fixed)[- ]$/i.test(before))
-    if (!asDefault && !asDefaultAfter && !asSize && !asTokens && !asGlossary) continue
+    // 'A KV block is a software choice (16 tokens)': a parenthesised token count after a block is named.
+    const asAside = tokens && /\bblock\s+(?:is|size)\b[^.()]{0,40}\(\s*$/i.test(before)
+    // 'Unless --block-size is passed, each block is 16 tokens': the flag's unset value.
+    const asFlag = tokens && /--block-size/i.test(masked)
+    if (!asDefault && !asDefaultAfter && !asSize && !asTokens && !asGlossary && !asAside && !asFlag) continue
     const cut = (c: string, from: number, dir: 'back' | 'fwd') => (dir === 'back' ? masked.lastIndexOf(c, from) : masked.indexOf(c, from))
     const start = Math.max(...[',', ';', ':', '—', '('].map((c) => cut(c, i, 'back')))
     const ends = [',', ';', ':', '—', ')'].map((c) => cut(c, i, 'fwd')).filter((x) => x >= 0)
     const end = ends.length ? Math.min(...ends) : masked.length
-    out.push({ n: Number(m[1]), clause: sentence.slice(start + 1, end) })
+    const clause = sentence.slice(start + 1, end)
+    const pb = PAPER_BEFORE.exec(masked.slice(0, i))
+    const pa = PAPER_AFTER.exec(after)
+    const paper = (pb !== null && !PAPER_BEFORE_BREAKS.test(pb[1] ?? '')) || (pa !== null && !PAPER_AFTER_BREAKS.test(pa[1] ?? ''))
+    const oldRelease = OLD_RELEASE.test(clause.replace(NOT_VLLM_RELEASE, ''))
+    out.push({ n: Number(m[1]), clause, paper, oldRelease })
   }
   return out
 }
@@ -94,9 +123,8 @@ export function typedDefaults(text: string, n: number, paper = PAPER): string[] 
   for (const s of sentences(text)) {
     const found = blockNumbers(s).filter((b) => b.n !== n)
     if (found.length === 0) continue
-    if (OLD_RELEASE.test(s)) continue
-    // The paper's own figure is allowed where the word paper (or 2023) sits in the same clause as the number.
-    if (found.every((b) => b.n === paper && NAMES_SOURCE.test(b.clause))) continue
+    // An old vLLM release in the number's clause dates it; the paper's own figure is allowed where the paper is named next to it.
+    if (found.every((b) => b.oldRelease || (b.n === paper && b.paper))) continue
     bad.push(s.trim())
   }
   return bad
@@ -202,6 +230,15 @@ describe('no learner-facing text types vLLM default block size', () => {
       'The default block in vLLM v0.34.0 is 16 tokens.',
       "Unlike the 2023 paper's sweep, vLLM's default is 16 tokens.",
       "vLLM's block size is 16.",
+      // K0-FIX2-RULES: the closing check's probes, and master's t2.l7 sentence the guard missed.
+      'Like SGLang v0.5.23, vLLM\'s default block size is 16.',
+      "vLLM's default block size is 16, the same since v0.1.",
+      "vLLM's default block size is 16 (see the paper).",
+      'The paper and vLLM both default to 16 tokens.',
+      'Unless --block-size is passed, each block is 16 tokens.',
+      'vLLM ships with a block size of sixteen tokens.',
+      'A KV block is a software choice (16 tokens).',
+      "a KV block is a software choice (16 tokens) whose byte size depends on the model's layers, heads and dtype",
     ]
     for (const t of typed) expect(typedDefaults(t, 64).length, t).toBe(1)
     // JSX text split across source lines is one sentence once the markup is joined.
@@ -221,6 +258,9 @@ describe('no learner-facing text types vLLM default block size', () => {
       'Waste is at most block_size \u2212 1 tokens.',
       'JSON text is UTF-8 by default (RFC 8259).',
       'the small-tier defaults (256 sequences, 2,048 tokens).',
+      // K0-FIX2-RULES: a correct sentence the closing check found firing.
+      "In the paper, blocks hold 16 tokens; vLLM's default is now 64 tokens per block.",
+      'This lesson works the 2023 paper\'s block of 16 tokens; vLLM\'s default today is 64 tokens/block on CUDA (ROCm\'s paged attention keeps its own size, and an explicit `--block-size` wins).',
     ]
     for (const t of ok) expect(typedDefaults(t, 64), t).toEqual([])
   })

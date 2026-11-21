@@ -8,6 +8,7 @@ const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
 const ENGINE_CITE = claimCite('production.vllm.block-size')
 const ENGINE_RELEASE = claimRelease('production.vllm.block-size')
 // The block-table explorer's slider tops out at 64 and its graded task blk.sweep asks for 64: the sim's own number, not vLLM's default.
+// tests/lessons/k0-fix2-rules.test.ts holds it equal to the top of SWEEP_SIZES in lib/sims/models/blocks.ts.
 const SIM_BLOCK = 64
 const KV_KIB_PER_TOKEN = 128 // T5.L4's 8B model
 const mib = (tokens: number) => (tokens * KV_KIB_PER_TOKEN) / 1024

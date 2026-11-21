@@ -1,11 +1,12 @@
 import type { Lesson } from '../types'
 import { claimCite, claimNumber } from '../claims'
-import { mixWastePct } from '../pagedMix'
+import { mixRange, mixWastePct } from '../pagedMix'
 
 // The 2023 paper's block size and vLLM's default today are two claims; prose reads each from the registry.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
 const ENGINE_BLOCK = claimNumber('production.vllm.block-size')
 const ENGINE_CITE = claimCite('production.vllm.block-size')
+const MIX_RANGE = mixRange()
 /** Blocks a sequence of `tokens` occupies at `block` tokens each, and the slots left unused in its tail. */
 const blocksFor = (tokens: number, block: number) => Math.ceil(tokens / block)
 const tailWaste = (tokens: number, block: number) => blocksFor(tokens, block) * block - tokens
@@ -174,7 +175,7 @@ So: variable sizes give you external fragmentation you cannot fully control; fix
 - **OS page frames** — RAM is managed as 4 KiB frames. Any free frame can back any allocation. External fragmentation of physical memory: zero. Internal: up to one page per mapping. (T2.)
 - **Slab/slab-like allocators** — one object size per cache; freeing is O(1); the slab *is* a fixed-block design.
 - **Database buffer pools** — everything is an 8 KiB page, full stop.
-- **vLLM KV blocks** — every block holds the same number of tokens: ${PAPER_BLOCK} in the 2023 paper, vLLM's default is ${ENGINE_CITE}. A 300-token sequence needs ⌈300/${PAPER_BLOCK}⌉ = ${blocksFor(300, PAPER_BLOCK)} blocks at the paper's ${PAPER_BLOCK}, with ${tailWaste(300, PAPER_BLOCK)} slots wasted, and ⌈300/${ENGINE_BLOCK}⌉ = ${blocksFor(300, ENGINE_BLOCK)} blocks at ${ENGINE_BLOCK}, with ${tailWaste(300, ENGINE_BLOCK)} slots wasted. Waste is at most block_size − 1 tokens of KV in the tail, which is arithmetic; the course's estimate for a mixed batch of eight sequences (190 to 455 tokens) is ${mixWastePct(PAPER_BLOCK)}% at the paper's ${PAPER_BLOCK}-token blocks, under 4%, and ${mixWastePct(ENGINE_BLOCK)}% at vLLM's ${ENGINE_BLOCK}. The paper's words are near-zero waste; "<4%" is not in its text. Before this, engines reserved *contiguous* KV per sequence sized to max length: the paper's profiling found only 20.4% to 38.2% of KV cache memory holding token states. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
+- **vLLM KV blocks** — every block holds the same number of tokens: ${PAPER_BLOCK} in the 2023 paper, vLLM's default on CUDA is ${ENGINE_CITE} (ROCm's paged attention keeps its own size, and an explicit \`--block-size\` wins). A 300-token sequence needs ⌈300/${PAPER_BLOCK}⌉ = ${blocksFor(300, PAPER_BLOCK)} blocks at the paper's ${PAPER_BLOCK}, with ${tailWaste(300, PAPER_BLOCK)} slots wasted, and ⌈300/${ENGINE_BLOCK}⌉ = ${blocksFor(300, ENGINE_BLOCK)} blocks at ${ENGINE_BLOCK}, with ${tailWaste(300, ENGINE_BLOCK)} slots wasted. Waste is at most block_size − 1 tokens of KV in the tail, which is arithmetic; the course's estimate for a mixed batch of eight sequences (${MIX_RANGE} tokens) is ${mixWastePct(PAPER_BLOCK)}% at the paper's ${PAPER_BLOCK}-token blocks, under 4%, and ${mixWastePct(ENGINE_BLOCK)}% at vLLM's ${ENGINE_BLOCK}. The paper's words are near-zero waste; "<4%" is not in its text. Before this, engines reserved *contiguous* KV per sequence sized to max length: the paper's profiling found only 20.4% to 38.2% of KV cache memory holding token states. The fixed-block maneuver is the entire reason vLLM could serve ~2–4× more requests on the same GPU.`,
     },
     {
       type: 'callout',
