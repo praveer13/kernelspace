@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { CLAIMS, byId, isEngineSetting, pinProblems, type Claim } from '../../src/data/claims'
+import { VLLM_PIN } from '../../src/data/claims/engines'
 import { TOKEN_CORPUS, TOKEN_CORPUS_IDS } from '../../src/data/engine/token-corpus'
 
 const base: Claim = {
@@ -71,8 +72,20 @@ describe('the registry', () => {
 
   test('the In-production card reads one vLLM release and one SGLang release', () => {
     const refs = (prefix: string) => new Set(CLAIMS.filter((c) => isEngineSetting(c) && c.id.startsWith(prefix)).map((c) => `${c.pin!.repo}@${c.pin!.ref}`))
-    expect([...refs('production.vllm.')]).toEqual(['vllm-project/vllm@v0.31.0'])
+    expect([...refs('production.vllm.')]).toEqual(['vllm-project/vllm@v0.34.0'])
     expect([...refs('production.sglang.')]).toEqual(['sgl-project/sglang@v0.5.21'])
+  })
+
+  test('no source title names a vLLM release other than the pin, unless its own url is read at that release', () => {
+    const named = /vLLM v(\d+\.\d+\.\d+)/g
+    const stray: string[] = []
+    for (const c of CLAIMS) {
+      for (const m of (c.source?.title ?? '').matchAll(named)) {
+        const tag = `v${m[1]}`
+        if (tag !== VLLM_PIN.ref && !c.source!.url.includes(`/${tag}/`)) stray.push(`${c.id}: ${c.source!.title}`)
+      }
+    }
+    expect(stray).toEqual([])
   })
 
   /** A claim a learner-facing card or family quotes must carry its source, its words and the day a person checked them. */

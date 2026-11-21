@@ -23,7 +23,7 @@ const EPLB_SOURCE = {
 }
 const VLLM_EP_DOCS = {
   url: `https://docs.vllm.ai/en/${VLLM_PIN.ref}/serving/expert_parallel_deployment/`,
-  title: 'vLLM v0.31.0 docs: Expert Parallel Deployment (EPLB)',
+  title: `vLLM ${VLLM_PIN.ref} docs: Expert Parallel Deployment (EPLB)`,
 }
 const SGLANG_EXEC = {
   url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/arg_groups/fields/exec_.py`,

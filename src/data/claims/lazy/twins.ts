@@ -14,7 +14,7 @@ const SGLANG_ENVIRON = {
 }
 const VLLM_SCHEDULER = {
   url: `https://raw.githubusercontent.com/${VLLM_PIN.repo}/${VLLM_PIN.ref}/vllm/v1/core/sched/scheduler.py`,
-  title: 'vLLM v0.31.0 source: vllm/v1/core/sched/scheduler.py (Scheduler.schedule)',
+  title: `vLLM ${VLLM_PIN.ref} source: vllm/v1/core/sched/scheduler.py (Scheduler.schedule)`,
 }
 
 export const TWIN_CLAIMS: Claim[] = [
