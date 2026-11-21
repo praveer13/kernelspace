@@ -449,7 +449,7 @@
     ["copy-on-write","Copy-on-write","Prefix sharing across sequences","t5.l5","cow, fork, prefix, sharing, beam"],
     ["malloc","malloc / free list","KV block allocator (vLLM)","t1.l3","allocator, heap, free list, vllm"],
     ["external-fragmentation","External fragmentation","Reserved-context waste in naive KV","t1.l4","fragmentation, waste, reservation"],
-    ["fixed-size-pages","Fixed-size pages","Fixed token blocks (<4% waste)","t5.l5","internal fragmentation, uniform, block size"],
+    ["fixed-size-pages","Fixed-size pages","Fixed token blocks (near-zero waste)","t5.l5","internal fragmentation, uniform, block size"],
     ["process","Process","Request / sequence","t2.l1","request, sequence, isolation"],
     ["thread","Thread","Sequence in a batch","t2.l1","sequence, parallel, batch"],
     ["context-switch","Context switch","Iteration-level preemption","t5.l7","preemption, swap, scheduling"],
