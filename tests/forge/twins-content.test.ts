@@ -1,5 +1,5 @@
 /**
- * The shipped twin content (docs/specs/wave-3.md §9, task 3b-15): lab 07 against SGLang's Rust TreeCore at v0.5.21 and
+ * The shipped twin content (docs/specs/wave-3.md §9, task 3b-15): lab 07 against SGLang's Rust TreeCore at v0.5.23 and
  * lab 06 against vLLM's scheduler at the pinned release (VLLM_PIN.ref). tests/forge/twin.test.ts holds the panel and the registry to a fixture;
  * this file holds the real questions to what the spec asks of them:
  *  - each twin names its file and symbols at its claim's pinned ref, and passes the registry's rules (`twinProblems`);
@@ -14,7 +14,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { getClaim } from '../../src/data/claims'
-import { VLLM_PIN } from '../../src/data/claims/engines'
+import { SGLANG_PIN, VLLM_PIN } from '../../src/data/claims/engines'
 import '../../src/data/claims/lazy/twins'
 import { FORGE_LABS } from '../../src/data/labs'
 import { findTwin, loadTwin, twinFileUrl, twinItemId, twinLabIds, twinProblems, TWIN_ITEMS_PER_LAB, type TwinModule } from '../../src/data/twins'
@@ -23,7 +23,7 @@ import radixCache, { TWIN_ITEMS as RADIX_ITEMS } from '../../src/data/twins/radi
 import { collectTwinItems, discoverTwins } from '../../scripts/item-pools'
 
 const TWINS: { twin: TwinModule; items: readonly TwinModule['items'][number][]; claimId: string; repo: string; ref: string; path: string }[] = [
-  { twin: radixCache, items: RADIX_ITEMS, claimId: 'twin.sglang.treecore', repo: 'sgl-project/sglang', ref: 'v0.5.21', path: 'rust/sglang-radix-tree/src/unified_tree_core.rs' },
+  { twin: radixCache, items: RADIX_ITEMS, claimId: 'twin.sglang.treecore', repo: 'sgl-project/sglang', ref: 'v0.5.23', path: 'rust/sglang-radix-tree/src/unified_tree_core.rs' },
   { twin: batchingScheduler, items: SCHEDULER_ITEMS, claimId: 'twin.vllm.scheduler', repo: 'vllm-project/vllm', ref: 'v0.34.0', path: 'vllm/v1/core/sched/scheduler.py' },
 ]
 
@@ -39,7 +39,9 @@ describe('lab 06 stems name the release from VLLM_PIN.ref, never a typed one', (
     }
   })
 
-  test('the twin claim was re-read at the pin on 2026-11-21', () => {
+  test('the twin claims were re-read at their pins on 2026-11-21', () => {
+    expect(getClaim('twin.sglang.treecore').pin?.ref).toBe(SGLANG_PIN.ref)
+    expect(getClaim('twin.sglang.treecore').verifiedAt).toBe('2026-11-21')
     expect(getClaim('twin.vllm.scheduler').pin?.ref).toBe(VLLM_PIN.ref)
     expect(getClaim('twin.vllm.scheduler').verifiedAt).toBe('2026-11-21')
   })
@@ -145,7 +147,7 @@ describe('the questions: ids, whys, KCs from the lab’s own checks', () => {
 /* ------------------------------ lab 07: the Rust tree core ------------------------------ */
 
 /**
- * The Full-only paths of rust/sglang-radix-tree/src/unified_tree_core.rs at v0.5.21, as far as the three questions go:
+ * The Full-only paths of rust/sglang-radix-tree/src/unified_tree_core.rs at v0.5.23, as far as the three questions go:
  * `ChildKeyType::match_len` (page-quantised), `match_prefix_helper_` and `match_post_processor_` (split on a partial
  * edge, restamp the matched path newest leaf-ward), `insert_walk_step_` / `insert_commit_step_` (touch, split, duplicate
  * window, new leaf), `split_node_` (the remainder gets a new tick) and the evict heap (lowest `last_access_counter`
