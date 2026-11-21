@@ -440,7 +440,7 @@
     ["production.vllm.gpu-memory-utilization","vLLM gpu_memory_utilization default with the extensible KV cache",1,""]
   ],
   "glossary": [
-    ["page","Page","KV token block (16 tok)","t2.l2","block, chunk, memory unit"],
+    ["page","Page","KV token block (tens of tokens)","t2.l2","block, chunk, memory unit"],
     ["page-table","Page table","Block table","t5.l5","pagedattention, vllm, address translation"],
     ["tlb","TLB","Block-table lookup cache","t2.l2","translation lookaside buffer, cache"],
     ["page-fault","Page fault","KV block miss + fetch","t2.l2","fault, miss, trap"],

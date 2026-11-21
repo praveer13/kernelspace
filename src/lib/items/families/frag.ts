@@ -626,7 +626,7 @@ const pins = [
     truth: SYNTHETIC.pin.oneWaste,
   },
   {
-    name: "<4 % KV waste, the paper's 16-token blocks",
+    name: '<4 % KV waste at 16-token blocks (the chip)',
     source: 't1.l4 chip',
     make: () => build('kv-block-waste', SYNTHETIC.transfer, 1, { block: SYNTHETIC.pin.block, lens: SYNTHETIC.pin.mix, ask: 'percent' }),
     truth: SYNTHETIC.pin.mixWaste,
