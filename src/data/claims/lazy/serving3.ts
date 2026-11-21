@@ -17,7 +17,7 @@ const VLLM_KV_TRANSFER = {
 }
 const SGLANG_DISAGG = {
   url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/arg_groups/fields/disagg.py`,
-  title: 'SGLang v0.5.21 source: srt/arg_groups/fields/disagg.py (Disagg fields)',
+  title: `SGLang ${SGLANG_PIN.ref} source: srt/arg_groups/fields/disagg.py (Disagg fields)`,
 }
 /** checkpoint-engine's README at its v0.4.2 tag, the latest release on 2026-10-14 (the README line is older than the tag). */
 const CHECKPOINT_ENGINE = {
@@ -68,7 +68,7 @@ export const SERVING3_CLAIMS: Claim[] = [
       row: 'Disagg.disaggregation_mode',
     },
     pin: SGLANG_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary: 'Off by default ("null"). The transfer backend is a second flag (disaggregation_transfer_backend, default mooncake).',
   },

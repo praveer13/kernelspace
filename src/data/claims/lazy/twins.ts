@@ -9,8 +9,13 @@ import type { Claim } from '../schema'
  * the files at those refs on 2026-10-14; the vLLM scheduler's was read again at v0.34.0 on 2026-11-21 (scheduler.py:719),
  * and the SGLang one is not touched here.
  */
+/**
+ * The twin claim stays read at v0.5.21, the tag its quote was copied at on 2026-10-14, until K0-D9 re-reads environ.py and the
+ * four Rust files at SGLANG_PIN.ref and moves this back to SGLANG_PIN. The In-production claims moved to v0.5.23 first (K0-D8).
+ */
+const SGLANG_TWIN_PIN = { repo: SGLANG_PIN.repo, ref: 'v0.5.21' } as const
 const SGLANG_ENVIRON = {
-  url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/environ.py`,
+  url: `https://raw.githubusercontent.com/${SGLANG_TWIN_PIN.repo}/${SGLANG_TWIN_PIN.ref}/python/sglang/srt/environ.py`,
   title: 'SGLang v0.5.21 source: srt/environ.py (SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND)',
 }
 const VLLM_SCHEDULER = {
@@ -25,7 +30,7 @@ export const TWIN_CLAIMS: Claim[] = [
     value: 'rust',
     label: 'SGLang radix-tree core default',
     source: { ...SGLANG_ENVIRON, quote: 'SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND = EnvStr("rust")', row: 'envs.SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND' },
-    pin: SGLANG_PIN,
+    pin: SGLANG_TWIN_PIN,
     verifiedAt: '2026-10-14',
     ttlDays: 60,
     boundary:

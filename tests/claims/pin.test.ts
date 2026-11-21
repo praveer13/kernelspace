@@ -73,7 +73,14 @@ describe('the registry', () => {
   test('the In-production card reads one vLLM release and one SGLang release', () => {
     const refs = (prefix: string) => new Set(CLAIMS.filter((c) => isEngineSetting(c) && c.id.startsWith(prefix)).map((c) => `${c.pin!.repo}@${c.pin!.ref}`))
     expect([...refs('production.vllm.')]).toEqual(['vllm-project/vllm@v0.34.0'])
-    expect([...refs('production.sglang.')]).toEqual(['sgl-project/sglang@v0.5.21'])
+    expect([...refs('production.sglang.')]).toEqual(['sgl-project/sglang@v0.5.23'])
+  })
+
+  test('the SGLang retract quote is the v0.5.23 lines, with the finishing-requests wait before the retraction', () => {
+    const c = CLAIMS.find((x) => x.id === 'production.sglang.retract')!
+    expect(c.source.quote).toContain('kv_full_retract_flag = not batch.check_decode_mem() if kv_full_retract_flag and finishing_reqs:')
+    expect(c.source.quote).not.toContain(':= not batch.check_decode_mem()')
+    expect(c.boundary).toContain('short-output, long-input requests first')
   })
 
   test('no source title names a vLLM release other than the pin, unless its own url is read at that release', () => {
