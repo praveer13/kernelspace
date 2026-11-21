@@ -6605,7 +6605,7 @@
       "kind": "spec",
       "value": 16,
       "unit": "tokens/block",
-      "label": "PagedAttention paper (SOSP 2023): vLLM's default block size",
+      "label": "PagedAttention paper (SOSP 2023): the block size it chose (its default then)",
       "source": {
         "url": "https://arxiv.org/pdf/2309.06180v1",
         "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention (arXiv 2309.06180v1)",

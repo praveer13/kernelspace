@@ -435,7 +435,7 @@
     ["field.burstgpt.out-tps","Field lab 2: the benchmark line that gives the saturated output rate","Output token throughput (tok/s)",""],
     ["field.burstgpt.mean-request-tokens","BurstGPT v2.0: mean request tokens over the rows vLLM keeps",660.7,"tokens"],
     ["field.burstgpt.mean-response-tokens","BurstGPT v2.0: mean response tokens over the rows vLLM keeps",218.8,"tokens"],
-    ["serving.pagedattention.paper-block-size","PagedAttention paper (SOSP 2023): vLLM's default block size",16,"tokens/block"],
+    ["serving.pagedattention.paper-block-size","PagedAttention paper (SOSP 2023): the block size it chose (its default then)",16,"tokens/block"],
     ["production.vllm.extensible-kv-cache","vLLM extensible KV cache (reserve the address range, commit physical pages after warmup)","on",""],
     ["production.vllm.gpu-memory-utilization","vLLM gpu_memory_utilization default with the extensible KV cache",1,""]
   ],
