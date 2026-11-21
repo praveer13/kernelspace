@@ -2,16 +2,16 @@
 export const LESSON_CLAIM_VALUES: Record<string, { value?: number; cite: string; release?: string }> = {
   "production.vllm.block-size": {
     value: 64,
-    cite: "64 tokens/block (vLLM v0.34.0, checked 2026-11-21)",
+    cite: "64 tokens/block as of vLLM v0.34.0, read 2026-11-21",
     release: "vLLM v0.34.0",
   },
   "production.vllm.extensible-kv-cache": {
-    cite: "on (vLLM v0.34.0, checked 2026-11-21)",
+    cite: "on as of vLLM v0.34.0, read 2026-11-21",
     release: "vLLM v0.34.0",
   },
   "production.vllm.gpu-memory-utilization": {
     value: 1,
-    cite: "1 (vLLM v0.34.0, checked 2026-11-21)",
+    cite: "1 as of vLLM v0.34.0, read 2026-11-21",
     release: "vLLM v0.34.0",
   },
   "serving.pagedattention.paper-block-size": {

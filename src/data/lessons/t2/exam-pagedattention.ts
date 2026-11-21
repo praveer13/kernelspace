@@ -249,7 +249,7 @@ Now translate with T2.L2: blocks are **pages**; physical blocks are **frames**; 
           osLine: 'Fixed 4 KiB units of virtual/physical memory; any frame backs any page.',
           llm: 'KV block',
           llmLine: `Fixed-size token units (${PAPER_BLOCK} in the paper) of logical/physical KV; any physical block serves any sequence.`,
-          breaks: `A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (${PAPER_BLOCK} tokens in the paper, ${ENGINE_CITE} as vLLM's default) whose byte size depends on the model's layers, heads and dtype.`,
+          breaks: `A page is sized by hardware (4 KiB) and backs bytes; a KV block is a software choice (${PAPER_BLOCK} tokens in the paper, vLLM's default is ${ENGINE_CITE}) whose byte size depends on the model's layers, heads and dtype.`,
           work: {
             backgrounds: ['backend', 'jvm'],
             os: 'connection pool',

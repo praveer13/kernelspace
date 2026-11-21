@@ -24,7 +24,7 @@ describe('claim helpers for lesson strings', () => {
     expect(cite).toContain(String(claimNumber(PINNED)))
     expect(cite).toContain(claim.pin!.ref)
     expect(cite).toContain(claim.verifiedAt)
-    expect(cite).toBe(`${claimNumber(PINNED)} ${claim.unit} (vLLM ${claim.pin!.ref}, checked ${claim.verifiedAt})`)
+    expect(cite).toBe(`${claimNumber(PINNED)} ${claim.unit} as of vLLM ${claim.pin!.ref}, read ${claim.verifiedAt}`)
   })
 
   test('claimRelease and claimCite throw on an unpinned claim', () => {
