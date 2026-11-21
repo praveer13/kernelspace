@@ -24,8 +24,8 @@ export function claimRelease(id: string): string {
   return `${REPO_NAMES[pin.repo] ?? pin.repo} ${pin.ref}`
 }
 
-/** The value, its release and the day it was read, e.g. "64 tokens/block (vLLM v0.34.0, checked 2026-11-21)". */
+/** The value, its release and the day it was read, e.g. "64 tokens/block as of vLLM v0.34.0, read 2026-11-21". */
 export function claimCite(id: string): string {
   const claim = getClaim(id)
-  return `${formatClaimValue(claim)} (${claimRelease(id)}, checked ${claim.verifiedAt})`
+  return `${formatClaimValue(claim)} as of ${claimRelease(id)}, read ${claim.verifiedAt}`
 }

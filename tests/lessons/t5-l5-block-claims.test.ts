@@ -36,7 +36,7 @@ describe('t5.l5 block-size claims (K0-D12)', () => {
   test('the pool sentence names where N comes from, with both pool claims', () => {
     expect(text).toContain('N is what is left of the GPU after the weights and warmup')
     expect(text).toContain(claimRelease('production.vllm.extensible-kv-cache'))
-    expect(text).toContain(`defaults to ${claimNumber('production.vllm.gpu-memory-utilization')} with it on`)
+    expect(text).toContain(`defaults to ${claimNumber('production.vllm.gpu-memory-utilization').toFixed(1)} with it on`)
   })
 
   test("<4% is not called the paper's figure", () => {
@@ -53,6 +53,6 @@ describe('t5.l5 block-size claims (K0-D12)', () => {
     if (quiz?.type !== 'quiz') throw new Error('no quiz block')
     const q = quiz.questions.find((x) => x.q.startsWith('The block size ('))
     expect(q?.correct).toEqual([1])
-    expect(q?.q).toContain(`vLLM's default is ${engine}`)
+    expect(q?.q).toContain(`${engine} by default in ${claimRelease('production.vllm.block-size')}`)
   })
 })

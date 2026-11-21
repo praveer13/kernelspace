@@ -24,6 +24,6 @@ describe('t5.l6 block boundary at vLLM default (K0-D13)', () => {
   })
 
   test('the 16-token setup stays as the worked case', () => {
-    expect(text).toContain('With 16-token blocks, 130 identical leading tokens produce eight reusable blocks (128 tokens)')
+    expect(text).toContain("With the paper's 16-token blocks, 130 identical leading tokens produce eight reusable blocks (128 tokens)")
   })
 })
