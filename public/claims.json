@@ -2928,7 +2928,7 @@
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
       "boundary": "Off by default. --eplb-config takes a JSON string; the docs table gives num_redundant_experts as \"Additional global experts per EP rank beyond equal distribution\", default 0, and the example sets 2. EPLB needs expert parallelism (--enable-expert-parallel)."
     },
@@ -2959,16 +2959,16 @@
       "source": {
         "url": "https://raw.githubusercontent.com/vllm-project/vllm/v0.34.0/vllm/config/kv_transfer.py",
         "title": "vLLM v0.34.0 source: vllm/config/kv_transfer.py (KVTransferConfig)",
-        "quote": "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.\"\"\"",
+        "quote": "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.",
         "row": "KVTransferConfig.kv_role"
       },
       "pin": {
         "repo": "vllm-project/vllm",
         "ref": "v0.34.0"
       },
-      "verifiedAt": "2026-10-14",
+      "verifiedAt": "2026-11-21",
       "ttlDays": 60,
-      "boundary": "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes."
+      "boundary": "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes. With MultiConnector, the roles of its connectors decide the instance's role."
     },
     {
       "id": "production.sglang.disagg",
