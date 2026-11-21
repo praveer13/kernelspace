@@ -87,7 +87,9 @@ describe('the §4.4 table', () => {
 
   test('the engine claims are read at the releases the other In-production claims use', () => {
     for (const id of ['production.vllm.eplb', 'production.vllm.disagg', 'twin.vllm.scheduler']) expect(byId[id].pin).toEqual(VLLM_PIN)
-    for (const id of ['production.sglang.eplb', 'production.sglang.disagg', 'twin.sglang.treecore']) expect(byId[id].pin).toEqual(SGLANG_PIN)
+    for (const id of ['production.sglang.eplb', 'production.sglang.disagg']) expect(byId[id].pin).toEqual(SGLANG_PIN)
+    // K0-D9 re-reads the lab 07 twin at SGLANG_PIN.ref and puts it back in the list above
+    expect(byId['twin.sglang.treecore'].pin).toEqual({ repo: SGLANG_PIN.repo, ref: 'v0.5.21' })
   })
 
   test('the checkpoint-engine line is a benchmark that carries no pin', () => {

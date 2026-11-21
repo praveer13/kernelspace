@@ -561,8 +561,8 @@ describe('the copy and the In-production rows', () => {
         expect(`${PRODUCTION_ROWS[id].lead} ${PRODUCTION_ROWS[id].tail}`).not.toMatch(/(^|[^A-Za-z0-9])\d/) // H100 and H200 are names, not figures
       }
     }
-    expect(pinnedReleases(knee.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.21'])
-    expect(pinnedReleases(pd.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.21'])
+    expect(pinnedReleases(knee.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.23'])
+    expect(pinnedReleases(pd.productionClaims)).toEqual(['vllm-project/vllm v0.34.0', 'sgl-project/sglang v0.5.23'])
   })
 })
 

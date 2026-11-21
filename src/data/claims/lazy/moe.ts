@@ -27,7 +27,7 @@ const VLLM_EP_DOCS = {
 }
 const SGLANG_EXEC = {
   url: `https://raw.githubusercontent.com/${SGLANG_PIN.repo}/${SGLANG_PIN.ref}/python/sglang/srt/arg_groups/fields/exec_.py`,
-  title: 'SGLang v0.5.21 source: srt/arg_groups/fields/exec_.py (Exec fields)',
+  title: `SGLang ${SGLANG_PIN.ref} source: srt/arg_groups/fields/exec_.py (Exec fields)`,
 }
 
 export const MOE_CLAIMS: Claim[] = [
@@ -95,7 +95,7 @@ export const MOE_CLAIMS: Claim[] = [
       row: 'Exec.ep_num_redundant_experts, Exec.enable_eplb',
     },
     pin: SGLANG_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary: 'Both default off (0 redundant experts, EPLB disabled). The field names are the flags with underscores for hyphens.',
   },

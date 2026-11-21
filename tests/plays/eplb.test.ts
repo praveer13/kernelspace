@@ -796,7 +796,7 @@ describe('the In-production card (§5.2)', () => {
     expect(text).toMatch(/Each MoE layer of DeepSeek-V3 has 256 experts routed by its router, plus one shared expert\./)
     expect(text).toMatch(/The router sends each token to 8 experts chosen from those\./)
     expect(html).toContain('--enable-eplb')
-    expect(html).toContain('deepseek-ai/DeepSeek-V3 e815299, deepseek-ai/EPLB d52c72d, vllm-project/vllm v0.34.0 and sgl-project/sglang v0.5.21')
+    expect(html).toContain('deepseek-ai/DeepSeek-V3 e815299, deepseek-ai/EPLB d52c72d, vllm-project/vllm v0.34.0 and sgl-project/sglang v0.5.23')
   })
 })
 
