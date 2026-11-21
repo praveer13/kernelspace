@@ -1,7 +1,5 @@
-import { claimNumber } from '@/data/claims'
-import { claimCite } from '@/data/claims/cite'
-import '@/data/claims/lazy/kvpool'
 import type { Lesson } from '../types'
+import { claimCite, claimNumber } from '../claims'
 
 // The 2023 paper's block size and vLLM's default today are two claims; prose reads each from the registry.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')

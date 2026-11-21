@@ -1,7 +1,5 @@
-import { claimNumber } from '@/data/claims'
-import { claimCite, claimRelease } from '@/data/claims/cite'
-import '@/data/claims/lazy/kvpool'
 import type { Lesson } from '../types'
+import { claimCite, claimNumber, claimRelease } from '../claims'
 
 // The lesson works the 2023 paper's block; vLLM's default today is its own claim, and so are the pool claims. Prose reads each from the registry.
 const PAPER_BLOCK = claimNumber('serving.pagedattention.paper-block-size')
