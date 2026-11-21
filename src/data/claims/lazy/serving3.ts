@@ -47,14 +47,14 @@ export const SERVING3_CLAIMS: Claim[] = [
     source: {
       ...VLLM_KV_TRANSFER,
       quote:
-        "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.\"\"\"",
+        "kv_role: KVRole | None = None \"\"\"Whether this vLLM instance produces, consumes KV cache, or both. Choices are 'kv_producer', 'kv_consumer', and 'kv_both'.",
       row: 'KVTransferConfig.kv_role',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
-      "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes.",
+      "kv_role says whether an instance produces KV cache, consumes it, or both: kv_producer, kv_consumer or kv_both. The docstring lists the three choices and does not say which role a prefill or a decode instance takes. With MultiConnector, the roles of its connectors decide the instance's role.",
   },
   {
     id: 'production.sglang.disagg',

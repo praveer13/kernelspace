@@ -78,7 +78,7 @@ export const MOE_CLAIMS: Claim[] = [
       row: 'EPLB Parameters > example',
     },
     pin: VLLM_PIN,
-    verifiedAt: '2026-10-14',
+    verifiedAt: '2026-11-21',
     ttlDays: 60,
     boundary:
       'Off by default. --eplb-config takes a JSON string; the docs table gives num_redundant_experts as "Additional global experts per EP rank beyond equal distribution", default 0, and the example sets 2. EPLB needs expert parallelism (--enable-expert-parallel).',
