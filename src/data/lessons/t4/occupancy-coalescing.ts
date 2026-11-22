@@ -44,7 +44,7 @@ const lesson: Lesson = {
       items: [
         {
           kind: 'choice',
-          q: 'A kernel uses so many registers per thread that only four warps fit on each multiprocessor, and all four wait on HBM loads. What does the multiprocessor do?',
+          q: 'A kernel uses blocks with so much shared memory that only four warps fit on each multiprocessor, and all four wait on HBM loads. What does the multiprocessor do?',
           options: [
             'It idles until a load returns, with no other warp resident to take over',
             'It speculates past the loads, with the hardware running ahead until the data arrives',
@@ -92,7 +92,7 @@ Both are, at heart, T0 ideas reincarnated on the GPU: occupancy is your I/O-boun
       type: 'prose',
       md: `## Occupancy: warps in residence
 
-An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KiB ÷ per-thread usage), shared memory per SM (228 KiB ÷ per-block usage), and block/warp slots. A kernel using 128 registers/thread and 100 KiB shared/block might fit only 4 warps per SM: 6% occupancy. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
+An SM can host a hardware-limited number of warps (64 on recent NVIDIA parts). How many *actually* fit — the **occupancy** — is throttled by three budgets: registers per SM (256 KiB ÷ per-thread usage), shared memory per SM (228 KiB ÷ per-block usage), and block/warp slots. Take a kernel with 128 registers per thread, 100 KiB of shared memory per block and blocks of 64 threads (2 warps each). Registers alone would allow 65,536 ÷ (128 × 32) = 16 warps, but shared memory fits only 2 blocks (228 ÷ 100), so 4 warps are resident: 4 ÷ 64 = 6% occupancy. Shared memory is the binding budget here, not registers. When those warps stall on HBM (~400–800 cycles), the SM idles — there is nobody else to run. Throughput craters, not because the code is wrong but because the latency has no cover.
 
 The tuning loop is mechanical: check occupancy (nsight-compute or compiler stats), find the binding budget, relax it — fewer live registers (smaller tiles), less shared per block, smaller blocks. **But** high occupancy is a means, not a goal: some of the fastest kernels run at 25% occupancy with heavy instruction-level parallelism. The rule that survives: *enough* warps (or enough ILP) to keep the memory pipeline full — measure, don't worship.`,
     },
