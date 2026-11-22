@@ -262,7 +262,7 @@ let canonical: SweepResult | undefined
 
 export const kneeExercise: FleetExerciseDef = {
   id: 'knee',
-  title: 'Find the knee',
+  title: 'Find the goodput peak',
   lessonId: 't7.l2',
   kcs: ['t7.goodput-curve', 't7.benchmark-hygiene'],
   unit: 'the load multiplier where goodput peaks',
