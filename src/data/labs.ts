@@ -473,7 +473,7 @@ export const RUST_ZERO_LABS: ForgeLab[] = [
       { id: 'ordering_choice', label: 'classify counter vs publication orderings' },
     ],
     brief: [
-      'The checks can verify outcomes; the source signatures and tests also inspect the ordering choices. Write the protocol down: Relaxed for an independent ticket, Release to publish, Acquire to observe.',
+      'The checks run on one thread, so they verify outcomes on one thread, plus one check that asks you to name the ordering for each use; they do not see which Ordering you put in an atomic call, and the lab 04 stress test on x86-64 may not either. Write the protocol down: Relaxed for an independent ticket, Release to publish, Acquire to observe.',
       'R10 is required readiness for MPMC queue lab 04. Do not start the lock-free queue until compare-exchange failure and success orderings make sense.',
     ],
   },
@@ -497,7 +497,7 @@ export const SYSTEMS_FORGE_LABS: ForgeLab[] = [
     },
     completion: {
       title: 'all six green — you built a real allocator.',
-      next: 'next: T2.L7 reads the actual vLLM paper — you now know why its block manager coalesces.',
+      next: "next: T2.L7 reads the actual vLLM paper — you now know why a general allocator coalesces, and why vLLM's fixed-size block manager does not need to.",
     },
     profile: {
       command: 'cargo flamegraph --test allocator_tests',
