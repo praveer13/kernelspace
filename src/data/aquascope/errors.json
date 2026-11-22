@@ -72,7 +72,7 @@
         {"line":5,"path":"(*v)[_]","before":"R","after":""}
       ],
       "uses": [
-        {"line":5,"col":5,"path":"v","needs":"R","has":"R"},
+        {"line":5,"col":5,"path":"*v","needs":"R","has":"R"},
         {"line":5,"col":24,"path":"**x","needs":"R","has":"RO"},
         {"line":5,"col":30,"path":"min","needs":"R","has":"RO"}
       ],
@@ -110,7 +110,7 @@
       ],
       "uses": [
         {"line":2,"col":12,"path":"*b","needs":"RO","has":"R"},
-        {"line":3,"col":13,"path":"b","needs":"R","has":""}
+        {"line":3,"col":13,"path":"*b","needs":"R","has":""}
       ],
       "code": "fn take(b: Box<Vec<u32>>) -> usize {\n    let v = *b;\n    let n = b.len() + v.len();\n    n\n}"
     },
@@ -142,8 +142,8 @@
         {"line":1,"path":"*v","before":"","after":"RW"}
       ],
       "uses": [
-        {"line":2,"col":5,"path":"v","needs":"RW","has":"RW"},
-        {"line":2,"col":12,"path":"v","needs":"RW","has":""}
+        {"line":2,"col":5,"path":"*v","needs":"RW","has":"RW"},
+        {"line":2,"col":12,"path":"*v","needs":"RW","has":""}
       ],
       "code": "fn append_len(v: &mut Vec<usize>) {\n    v.push(v.pop().unwrap());\n}"
     },
@@ -161,8 +161,8 @@
         {"line":2,"path":"*q","before":"RW","after":"R"}
       ],
       "uses": [
-        {"line":2,"col":15,"path":"q","needs":"R","has":"RW"},
-        {"line":3,"col":5,"path":"q","needs":"RW","has":"R"},
+        {"line":2,"col":15,"path":"*q","needs":"R","has":"RW"},
+        {"line":3,"col":5,"path":"*q","needs":"RW","has":"R"},
         {"line":3,"col":13,"path":"ids","needs":"RO","has":"RO"}
       ],
       "code": "fn mirror(q: &mut Vec<u64>) {\n    let ids = q.iter().copied();\n    q.extend(ids);\n}"
@@ -204,7 +204,7 @@
       ],
       "uses": [
         {"line":2,"col":13,"path":"b","needs":"R","has":"RO"},
-        {"line":3,"col":5,"path":"o","needs":"RW","has":"RW"},
+        {"line":3,"col":5,"path":"*o","needs":"RW","has":"RW"},
         {"line":3,"col":11,"path":"b","needs":"RO","has":"R"}
       ],
       "code": "fn send(o: &mut Vec<Vec<u8>>, b: Vec<u8>) {\n    let n = &b[0];\n    o.push(b);\n    println!(\"{n:?}\");\n}"
@@ -225,7 +225,7 @@
         {"line":2,"path":"*q","before":"RW","after":"R"}
       ],
       "uses": [
-        {"line":2,"col":16,"path":"q","needs":"R","has":"RW"},
+        {"line":2,"col":16,"path":"*q","needs":"R","has":"RW"},
         {"line":3,"col":4,"path":"*q","needs":"RW","has":"R"}
       ],
       "code": "fn reset(q: &mut Vec<u32>) {\n    let head = q.first();\n    *q = Vec::new();\n    println!(\"{head:?}\");\n}"
@@ -284,7 +284,7 @@
         {"line":13,"path":"c.open","before":"RW","after":""}
       ],
       "uses": [
-        {"line":13,"col":4,"path":"c","needs":"RO","has":"RW"}
+        {"line":13,"col":4,"path":"c.addr","needs":"RO","has":"RW"}
       ],
       "code": "struct Conn {\n    addr: String,\n    open: bool,\n}\n\nimpl Drop for Conn {\n    fn drop(&mut self) {\n        self.open = false;\n    }\n}\n\nfn addr_of(mut c: Conn) -> String {\n    c.addr\n}"
     },
@@ -348,7 +348,7 @@
         {"line":7,"path":"(*self).epoch","before":"","after":"R"}
       ],
       "uses": [
-        {"line":8,"col":8,"path":"self","needs":"RW","has":"R"}
+        {"line":8,"col":8,"path":"(*self).epoch","needs":"RW","has":"R"}
       ],
       "code": "struct Table {\n    blocks: Vec<u32>,\n    epoch: u64,\n}\n\nimpl Table {\n    fn flush(&self) -> Vec<u32> {\n        self.epoch += 1;\n        std::mem::take(&mut self.blocks)\n    }\n}"
     },
@@ -367,8 +367,8 @@
         {"line":3,"path":"(*b).ids","before":"","after":"R"}
       ],
       "uses": [
-        {"line":4,"col":24,"path":"a","needs":"RW","has":"RW"},
-        {"line":4,"col":36,"path":"b","needs":"RW","has":"R"}
+        {"line":4,"col":24,"path":"(*a).ids","needs":"RW","has":"RW"},
+        {"line":4,"col":36,"path":"(*b).ids","needs":"RW","has":"R"}
       ],
       "code": "struct Table { ids: Vec<u32> }\n\nfn swap_ids(a: &mut Table, b: &Table) {\n    std::mem::swap(&mut a.ids, &mut b.ids);\n}"
     },

@@ -156,7 +156,7 @@ for (String entry : log) {
 | 4 | \`seen\` | 1 reader | \`borrow_mut\` needs 0 readers |
 | 5 | none new | 1 reader | panic: RefCell already borrowed |
 
-The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The panic message is "RefCell already borrowed" (older compilers printed "already borrowed: BorrowMutError"). \`BorrowMutError\` is a real type: it is the error \`try_borrow_mut\` returns instead of panicking. The [Error Museum](/errors#BorrowMutError) keeps this one beside the compile-time codes, with the wrong fix that tempts people and the right one.
+The panic is the Rust version of the Java exception, with the same cause: a reader and a writer on one value at once. The panic message is "RefCell already borrowed". \`BorrowMutError\` is a real type: it is the error \`try_borrow_mut\` returns instead of panicking. The [Error Museum](/errors#BorrowMutError) keeps this one beside the compile-time codes, with the wrong fix that tempts people and the right one.
 
 ## Make the guard shorter
 
@@ -186,9 +186,9 @@ println!("{count} {}", log.borrow().len());`,
     },
     {
       type: 'prose',
-      md: `## Mutex: the same rule across threads
+      md: `## Mutex and RwLock: the rule across threads
 
-**Mutex<T>** is the thread-safe cousin of RefCell, with one simplification: it never shares. \`lock\` also takes \`&self\`, so it too needs only R on the path. Instead of a counter it takes an operating-system lock, and instead of panicking it makes the second thread wait. The exact cross-thread counterpart of RefCell is **RwLock<T>**: \`read\` admits many readers and \`write\` needs exactly one writer. Mutex is the simpler case, exclusive for readers too. The \`MutexGuard\` it returns holds the exclusive access, and dropping the guard (its O ending) releases the lock.`,
+**Mutex<T>** is the thread-safe cousin of RefCell, with one simplification: it never shares. \`lock\` also takes \`&self\`, so it too needs only R on the path. Instead of a counter it takes an operating-system lock, and instead of panicking it makes the second thread wait. The exact cross-thread counterpart of RefCell is **RwLock<T>**: \`read\` admits many readers and \`write\` admits one writer and no readers. Mutex is the simpler case, exclusive for readers too. The \`MutexGuard\` it returns holds the exclusive access, and dropping the guard (its O ending) releases the lock.`,
     },
     {
       type: 'code',
